@@ -63,6 +63,27 @@
     </fieldset>
   }
 
+  @if (presets().length > 0) {
+    <fieldset class="modifier-dialog__group">
+      <legend class="q-body-sm modifier-dialog__legend">
+        {{ 'orders.newOrder.presets.title' | t }}
+      </legend>
+      @for (preset of presets(); track preset.code) {
+        <div class="modifier-dialog__option">
+          <label class="modifier-dialog__option-label">
+            <input
+              type="checkbox"
+              [checked]="isPresetChecked(preset.code)"
+              (change)="togglePreset(preset.code)"
+              data-testid="item-modifier-preset-checkbox"
+            />
+            <span class="q-body-sm">{{ presetLabel(preset) }}</span>
+          </label>
+        </div>
+      }
+    </fieldset>
+  }
+
   <ng-container qModalActions>
     <button type="button" class="modifier-dialog__dismiss q-body-sm" (click)="close()">
       {{ 'orders.newOrder.modifiers.cancel' | t }}

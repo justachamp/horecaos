@@ -221,6 +221,13 @@
                         @if (line.variantName) {
                           <div class="q-caption">{{ line.variantName }}</div>
                         }
+                        @if (line.commentPresets.length > 0) {
+                          <ul class="ticket__line-presets" data-testid="kitchen-line-presets">
+                            @for (preset of line.commentPresets; track preset.code) {
+                              <li class="chip ticket__preset-chip">{{ presetLabel(preset) }}</li>
+                            }
+                          </ul>
+                        }
                         @if (line.hasNote) {
                           @if (revealedNote(item.orderLineId) !== undefined) {
                             <div

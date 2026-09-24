@@ -26,7 +26,7 @@ const REQUEST: PlaceOrderRequest = {
   customerAccountId: 'acct-1',
   channelCode: 'PHONE',
   fulfillmentMode: 'PICKUP',
-  lines: [{ variantId: 'v-1', quantity: 1, modifierOptionIds: [] }],
+  lines: [{ variantId: 'v-1', quantity: 1, modifierOptionIds: [], commentPresetCodes: [] }],
   paymentMethodCode: 'CASH',
 };
 

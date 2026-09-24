@@ -47,8 +47,10 @@ describe('i18n key parity: uz, ru and en carry exactly the same keys', () => {
 
   it('no locale carries a key none of the others have (a typo or a leftover)', () => {
     for (const [id, keys] of Object.entries(keysByLocale)) {
-      const extra = [...keys].filter((key) => !union.has(key) || !Object.entries(keysByLocale)
-        .every(([, other]) => other.has(key)));
+      const extra = [...keys].filter(
+        (key) =>
+          !union.has(key) || !Object.entries(keysByLocale).every(([, other]) => other.has(key)),
+      );
       expect(extra, `${id}.json has keys the others lack: ${extra.join(', ')}`).toEqual([]);
     }
   });
@@ -101,6 +103,8 @@ describe('i18n content: every REASON_MESSAGE_KEYS target resolves in every local
     'OUTSIDE_SERVICE_HOURS',
     'NO_LIVE_MENU',
     'AT_CAPACITY',
+    'ITEM_OUT_OF_SALE_WINDOW',
+    'COMMENT_PRESET_NOT_OFFERED',
   ] as const;
 
   it.each(REASON_CODES)('%s maps to a key every locale actually has', (reason) => {

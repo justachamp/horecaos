@@ -1671,11 +1671,18 @@ public class OperationsOrderController {
             @NotNull UUID variantId,
             @Positive @Max(999) int quantity,
             @Size(max = 20) List<UUID> modifierOptionIds,
+            // Row 2.1b: the coded kitchen-instruction presets the operator
+            // picked from the product's own offered subset.
+            @Size(max = 20) List<String> commentPresetCodes,
             @Size(max = 500) @Nullable String customerNote) {
 
         OperatorOrderingService.OrderLine toLine() {
             return new OperatorOrderingService.OrderLine(
-                    variantId, quantity, modifierOptionIds == null ? List.of() : modifierOptionIds, customerNote);
+                    variantId,
+                    quantity,
+                    modifierOptionIds == null ? List.of() : modifierOptionIds,
+                    commentPresetCodes == null ? List.of() : commentPresetCodes,
+                    customerNote);
         }
     }
 
@@ -2512,6 +2519,9 @@ public class OperationsOrderController {
                             line.line().quantity(),
                             line.line().finalAmountMinor(),
                             line.modifiers().stream().map(m -> m.optionName()).toList(),
+                            line.commentPresets().stream()
+                                    .map(p -> new CommentPresetChip(p.code(), p.labelRu(), p.labelUz(), p.labelEn()))
+                                    .toList(),
                             line.line().lineId(),
                             line.line().hasNote()))
                     .toList();
@@ -2734,8 +2744,15 @@ public class OperationsOrderController {
             int quantity,
             long finalAmountMinor,
             List<String> modifiers,
+            // Row 2.1b: the coded kitchen-instruction presets this line was
+            // checked out carrying, chips ahead of the free note — every
+            // locale, so the console renders whichever the operator is in.
+            List<CommentPresetChip> commentPresets,
             UUID lineId,
             boolean hasNote) {}
+
+    /** Row 2.1b. Matches {@code CommentPresetController.PresetResponse}'s own locale shape. */
+    public record CommentPresetChip(String code, String labelRu, String labelUz, String labelEn) {}
 
     public record NoteResponse(UUID lineId, @Nullable String note) {}
 

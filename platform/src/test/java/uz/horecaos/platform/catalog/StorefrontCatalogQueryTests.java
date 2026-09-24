@@ -71,6 +71,8 @@ class StorefrontCatalogQueryTests {
     private CatalogAuthoringService authoring;
     private CatalogPublicationService publication;
     private StorefrontCatalogQuery storefront;
+    private uz.horecaos.platform.catalog.application.CatalogTenantContext tenantContext;
+    private uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCommentPresetStore commentPresetStore;
 
     @BeforeAll
     static void startDatabase() {
@@ -122,8 +124,15 @@ class StorefrontCatalogQueryTests {
                 new JdbcSalesChannelStore(jdbc),
                 Clock.fixed(Instant.parse("2026-08-21T10:00:00Z"), ZoneOffset.UTC));
         menuStore = new JdbcMenuStore(jdbc);
+        tenantContext = new uz.horecaos.platform.catalog.infrastructure.tenancy.JdbcCatalogTenantContext(jdbc);
+        commentPresetStore = new uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCommentPresetStore(jdbc);
         storefront = new StorefrontCatalogQuery(
-                store, (tenantId, brandId, locationId, channel, variantIds, optionIds) -> Optional.empty(), menuStore);
+                store,
+                (tenantId, brandId, locationId, channel, variantIds, optionIds) -> Optional.empty(),
+                menuStore,
+                tenantContext,
+                Clock.systemUTC(),
+                commentPresetStore);
     }
 
     @Test
@@ -317,7 +326,10 @@ class StorefrontCatalogQueryTests {
                 store,
                 (tenantId, brandId, locationId, channel, variantIds, optionIds) -> Optional.of(
                         new MenuPriceLookup.MenuPrices("UZS", Map.of(somePricedVariantElsewhere, 15_000L), Map.of())),
-                menuStore);
+                menuStore,
+                tenantContext,
+                Clock.systemUTC(),
+                commentPresetStore);
 
         var menu = pricedStorefront
                 .menuFor(TENANT, BRAND, LOCATION, LOCALE, "STOREFRONT")
@@ -329,6 +341,75 @@ class StorefrontCatalogQueryTests {
                 .satisfies(product -> assertThat(product.variants())
                         .singleElement()
                         .satisfies(variant -> assertThat(variant.amountMinor()).isNull()));
+    }
+
+    @Test
+    @DisplayName("row 4.2g: a variant outside its own sale window is marked, never dropped")
+    void anOutOfWindowVariantIsMarkedNotDropped() {
+        UUID catalogId = authoring.createCatalog(TENANT, BRAND, "MAIN", "Main menu", LOCALE);
+        var breakfast = authoring.createProduct(
+                TENANT,
+                BRAND,
+                catalogId,
+                "BREAKFAST",
+                "Nonushta",
+                null,
+                LOCALE,
+                "SKU-BF",
+                "PIECE",
+                UNCLASSIFIED,
+                ACTOR);
+        authoring.setOffering(
+                TENANT, BRAND, LOCATION, breakfast.defaultVariantId(), OfferingStatus.AVAILABLE, List.of("DELIVERY"));
+        var anytime = authoring.createProduct(
+                TENANT, BRAND, catalogId, "ANYTIME", "Har doim", null, LOCALE, "SKU-AT", "PIECE", UNCLASSIFIED, ACTOR);
+        authoring.setOffering(
+                TENANT, BRAND, LOCATION, anytime.defaultVariantId(), OfferingStatus.AVAILABLE, List.of("DELIVERY"));
+
+        // 2026-08-21T10:00:00Z is 15:00 in Asia/Tashkent on a Friday
+        // (ISO day 5) -- the same fixed instant CatalogPublicationTests already
+        // uses elsewhere in this suite. A 09:00-11:00 Friday window therefore
+        // excludes it.
+        authoring.replaceItemSaleWindows(
+                TENANT,
+                BRAND,
+                LOCATION,
+                breakfast.defaultVariantId(),
+                List.of(new uz.horecaos.platform.catalog.domain.ItemSaleSchedule.Window(
+                        5, java.time.LocalTime.of(9, 0), java.time.LocalTime.of(11, 0))),
+                ACTOR.toString());
+
+        publication.publish(TENANT, BRAND, catalogId, "STOREFRONT", null);
+
+        StorefrontCatalogQuery atThreePm = new StorefrontCatalogQuery(
+                store,
+                (tenantId, brandId, locationId, channel, variantIds, optionIds) -> Optional.empty(),
+                menuStore,
+                tenantContext,
+                Clock.fixed(Instant.parse("2026-08-21T10:00:00Z"), ZoneOffset.UTC),
+                commentPresetStore);
+
+        var menu =
+                atThreePm.menuFor(TENANT, BRAND, LOCATION, LOCALE, "STOREFRONT").orElseThrow();
+
+        // Marked, not dropped: the dish is still on the menu, still orderable by
+        // ADR 0016's own availability fact -- onSaleNow is the only thing this
+        // row changes.
+        assertThat(menu.products())
+                .filteredOn(product -> product.code().equals("BREAKFAST"))
+                .singleElement()
+                .satisfies(product -> assertThat(product.variants())
+                        .singleElement()
+                        .satisfies(variant -> {
+                            assertThat(variant.onSaleNow()).isFalse();
+                            assertThat(variant.orderable()).isTrue();
+                        }));
+        assertThat(menu.products())
+                .filteredOn(product -> product.code().equals("ANYTIME"))
+                .singleElement()
+                .satisfies(product -> assertThat(product.variants())
+                        .singleElement()
+                        .satisfies(variant -> assertThat(variant.onSaleNow()).isTrue()));
     }
 
     @Test

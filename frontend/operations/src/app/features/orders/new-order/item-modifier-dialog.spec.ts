@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { I18n } from '../../../core/i18n/i18n';
 import { ItemModifierDialog, ModifierDialogConfirmation } from './item-modifier-dialog';
-import { MenuModifierGroup } from './new-order-api';
+import { CommentPresetOption, MenuModifierGroup } from './new-order-api';
 
 const SIZE_GROUP: MenuModifierGroup = {
   modifierGroupId: 'g-size',
@@ -45,12 +45,28 @@ const SHOTS_GROUP: MenuModifierGroup = {
   options: [{ optionId: 'o-shot', code: 'EXTRA_SHOT', maximumQuantity: 3, amountMinor: 2_000 }],
 };
 
+const NO_ONIONS_PRESET: CommentPresetOption = {
+  code: 'NO_ONIONS',
+  labelRu: 'Без лука',
+  labelUz: 'Piyozsiz',
+  labelEn: 'No onions',
+};
+
+const EXTRA_SPICY_PRESET: CommentPresetOption = {
+  code: 'EXTRA_SPICY',
+  labelRu: 'Поострее',
+  labelUz: 'Achchiqroq',
+  labelEn: 'Extra spicy',
+};
+
 function render(
   groups: readonly MenuModifierGroup[],
+  presets: readonly CommentPresetOption[] = [],
 ): ReturnType<typeof TestBed.createComponent<ItemModifierDialog>> {
   const fixture = TestBed.createComponent(ItemModifierDialog);
   fixture.componentRef.setInput('productName', 'Cheeseburger');
   fixture.componentRef.setInput('groups', groups);
+  fixture.componentRef.setInput('presets', presets);
   fixture.componentRef.setInput('currency', 'UZS');
   fixture.detectChanges();
   return fixture;
@@ -160,6 +176,9 @@ describe('ItemModifierDialog', () => {
       ]),
     );
     expect(confirmations[0].selections).toHaveLength(2);
+    // No presets input, no checkboxes — an ordinary modifier confirm still
+    // carries the field, just empty (row 2.1b).
+    expect(confirmations[0].commentPresetCodes).toEqual([]);
   });
 
   it('dismiss clears every selection, so reopening the dialog for a different item starts clean', () => {
@@ -173,5 +192,105 @@ describe('ItemModifierDialog', () => {
 
     fixture.componentInstance['close']();
     expect(fixture.componentInstance['quantityOf']('o-small')).toBe(0);
+  });
+
+  // ------------------------------------------------------------- row 2.1b: presets
+
+  it('renders a product with no modifier groups but comment presets, and confirm needs no group at all', () => {
+    const fixture = render([], [NO_ONIONS_PRESET, EXTRA_SPICY_PRESET]);
+    const host: HTMLElement = fixture.nativeElement;
+    const confirmations: ModifierDialogConfirmation[] = [];
+    fixture.componentInstance.confirm.subscribe((c) => confirmations.push(c));
+
+    const checkboxes = host.querySelectorAll<HTMLInputElement>(
+      '[data-testid="item-modifier-preset-checkbox"]',
+    );
+    expect(checkboxes).toHaveLength(2);
+    expect(host.textContent).toContain('No onions');
+    expect(host.textContent).toContain('Extra spicy');
+
+    (host.querySelector('[data-testid="item-modifier-confirm"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    // Optional: no group, nothing checked, submit succeeds with an empty list.
+    expect(confirmations).toEqual([{ selections: [], commentPresetCodes: [] }]);
+  });
+
+  it('checking a preset adds its code to the confirmation, in the product’s own offered order', () => {
+    const fixture = render([], [NO_ONIONS_PRESET, EXTRA_SPICY_PRESET]);
+    const host: HTMLElement = fixture.nativeElement;
+    const confirmations: ModifierDialogConfirmation[] = [];
+    fixture.componentInstance.confirm.subscribe((c) => confirmations.push(c));
+    const checkboxes = host.querySelectorAll<HTMLInputElement>(
+      '[data-testid="item-modifier-preset-checkbox"]',
+    );
+
+    // Checked out of order (spicy first, then onions) — the emitted list
+    // must still follow the product's own offered order, not click order.
+    checkboxes[1].dispatchEvent(new Event('change'));
+    checkboxes[0].dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    (host.querySelector('[data-testid="item-modifier-confirm"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    expect(confirmations).toHaveLength(1);
+    expect(confirmations[0].commentPresetCodes).toEqual(['NO_ONIONS', 'EXTRA_SPICY']);
+  });
+
+  it('unchecking a preset removes it from the confirmation', () => {
+    const fixture = render([], [NO_ONIONS_PRESET]);
+    const host: HTMLElement = fixture.nativeElement;
+    const box = host.querySelector<HTMLInputElement>(
+      '[data-testid="item-modifier-preset-checkbox"]',
+    )!;
+    box.dispatchEvent(new Event('change'));
+    box.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    const confirmations: ModifierDialogConfirmation[] = [];
+    fixture.componentInstance.confirm.subscribe((c) => confirmations.push(c));
+    (host.querySelector('[data-testid="item-modifier-confirm"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    expect(confirmations[0].commentPresetCodes).toEqual([]);
+  });
+
+  it('a required modifier group still blocks confirm even with presets checked, and the checked preset survives the retry', () => {
+    const fixture = render([SIZE_GROUP], [NO_ONIONS_PRESET]);
+    const host: HTMLElement = fixture.nativeElement;
+    host
+      .querySelector<HTMLInputElement>('[data-testid="item-modifier-preset-checkbox"]')!
+      .dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    const confirmations: ModifierDialogConfirmation[] = [];
+    fixture.componentInstance.confirm.subscribe((c) => confirmations.push(c));
+    (host.querySelector('[data-testid="item-modifier-confirm"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    expect(confirmations).toEqual([]);
+    expect(host.querySelector('[data-testid="item-modifier-group-error"]')).not.toBeNull();
+
+    host
+      .querySelectorAll<HTMLInputElement>('[data-testid="item-modifier-radio"]')[0]
+      .dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    (host.querySelector('[data-testid="item-modifier-confirm"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    expect(confirmations).toHaveLength(1);
+    expect(confirmations[0].commentPresetCodes).toEqual(['NO_ONIONS']);
+  });
+
+  it('close clears the checked presets too, so reopening for a different item starts clean', () => {
+    const fixture = render([], [NO_ONIONS_PRESET]);
+    const host: HTMLElement = fixture.nativeElement;
+    host
+      .querySelector<HTMLInputElement>('[data-testid="item-modifier-preset-checkbox"]')!
+      .dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    expect(fixture.componentInstance['isPresetChecked']('NO_ONIONS')).toBe(true);
+
+    fixture.componentInstance['close']();
+    expect(fixture.componentInstance['isPresetChecked']('NO_ONIONS')).toBe(false);
   });
 });

@@ -110,10 +110,16 @@ public interface PosOrderSource {
                 @Nullable String variantNameSnapshot,
                 int quantity,
                 long unitAmountMinor,
-                List<UUID> modifierOptionIds) {
+                List<UUID> modifierOptionIds,
+                // Row 2.1b: catalog.comment_presets.id for every preset this
+                // line was checked out carrying — mapped to a provider
+                // modifier code through ADR 0026 exactly as modifierOptionIds
+                // already is.
+                List<UUID> commentPresetIds) {
 
             public Line {
                 modifierOptionIds = List.copyOf(modifierOptionIds == null ? List.of() : modifierOptionIds);
+                commentPresetIds = List.copyOf(commentPresetIds == null ? List.of() : commentPresetIds);
             }
         }
     }

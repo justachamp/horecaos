@@ -10,8 +10,10 @@ function line(overrides: Partial<BasketLine> = {}): BasketLine {
     quantity: 1,
     unitAmountMinor: 30_000,
     modifiers: [],
+    commentPresetCodes: [],
     customerNote: null,
     orderable: true,
+    onSaleNow: true,
     ...overrides,
   };
 }
@@ -96,6 +98,13 @@ describe('computeBasketTotal', () => {
     expect(total.allAvailable).toBe(false);
     // Still priced — availability and pricing are independent facts, and the
     // screen must be able to tell "stopped" from "not priced" apart.
+    expect(total.fullyPriced).toBe(true);
+  });
+
+  it('row 4.2g: flags allAvailable false when a line left its sale window, independent of pricing', () => {
+    const lines = [line({ onSaleNow: false })];
+    const total = computeBasketTotal(lines, 'UZS');
+    expect(total.allAvailable).toBe(false);
     expect(total.fullyPriced).toBe(true);
   });
 

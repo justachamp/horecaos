@@ -74,6 +74,9 @@ class OrderPosExportControllerTests {
     private static final UUID PUBLICATION = UUID.fromString("018f6f4e-7200-7000-8000-0000000b0008");
     private static final UUID VARIANT = UUID.fromString("018f6f4e-7200-7000-8000-0000000b0010");
 
+    /** Row 2.1b: the preset every fixture line is checked out carrying. */
+    private static final UUID COMMENT_PRESET = UUID.fromString("018f6f4e-7200-7000-8000-0000000b0011");
+
     private static final Instant NOW = Instant.parse("2026-09-15T09:00:00Z");
 
     private static TestDatabase.Handle db;
@@ -195,6 +198,67 @@ class OrderPosExportControllerTests {
         assertThat(export.permitsAmendment())
                 .as("REJECTED is one of the states ExportState#permitsAmendment names as settled")
                 .isTrue();
+    }
+
+    /**
+     * Row 2.1b: a preset with no {@code integration.provider_entity_mappings}
+     * row refuses the export through the identical {@code MODIFIER_UNMAPPED}
+     * code a priced modifier option already gets — the till has no separate
+     * notion of a kitchen instruction, only of a modifier on a line, so
+     * neither does this refusal path.
+     */
+    @Test
+    @DisplayName(
+            "an unmapped comment preset refuses the export with MODIFIER_UNMAPPED, exactly as an unmapped modifier does")
+    void anUnmappedCommentPresetRefusesTheExport() {
+        UUID orderId = insertConfirmedOrder("A-3020");
+
+        var json = JsonMapper.builder().build();
+        TransactionTemplate unitOfWork = new TransactionTemplate(new DataSourceTransactionManager(db.dataSource()));
+        // Maps the variant (VARIANT_ENTITY-equivalent id) but refuses every
+        // COMMENT_PRESET lookup — the one gap this fixture's own
+        // StubProviderEntityMappingLookup never has.
+        PosOrderExportService serviceWithNoPresetMapping = new PosOrderExportService(
+                new PosAdapterRegistry(List.of(adapter)),
+                installations,
+                new ProviderEntityMappingLookup() {
+                    @Override
+                    public Optional<String> externalIdFor(UUID bindingId, String entityType, UUID horecaosEntityId) {
+                        return "COMMENT_PRESET".equals(entityType)
+                                ? Optional.empty()
+                                : Optional.of("ext-" + horecaosEntityId);
+                    }
+
+                    @Override
+                    public Optional<UUID> horecaosIdFor(UUID bindingId, String entityType, String externalId) {
+                        return Optional.empty();
+                    }
+                },
+                new JdbcPosBindingConfiguration(jdbc, json),
+                exportStore,
+                new JdbcPosCapabilityStore(jdbc, json),
+                new StubPosOrderSource(),
+                (tenantId, brandId, priceableIds) -> Map.of(),
+                event -> {},
+                new RecordingProviderActivityRecorder(),
+                clock,
+                unitOfWork);
+        var controllerWithNoPresetMapping = new OrderPosExportController(
+                new StubOrderDirectory(),
+                installations,
+                serviceWithNoPresetMapping,
+                exportStore,
+                new JdbcAuditRecorder(jdbc, json),
+                () -> new AuthenticatedActor("operator-1", Set.of(), Map.of()),
+                clock);
+
+        controllerWithNoPresetMapping.push(TENANT, orderId, new OrderPosExportController.PushRequest("test push"));
+
+        var response = Objects.requireNonNull(
+                controllerWithNoPresetMapping.forOrder(TENANT, orderId).getBody());
+        var export = Objects.requireNonNull(response.export());
+        assertThat(export.state()).isEqualTo("REJECTED");
+        assertThat(export.lastErrorCode()).isEqualTo("MODIFIER_UNMAPPED");
     }
 
     @Test
@@ -673,7 +737,14 @@ class OrderPosExportControllerTests {
                     null,
                     null,
                     List.of(new ExportableOrder.Line(
-                            UUID.randomUUID(), VARIANT, "Fake dish", null, 1, 50_000L, List.of()))));
+                            UUID.randomUUID(),
+                            VARIANT,
+                            "Fake dish",
+                            null,
+                            1,
+                            50_000L,
+                            List.of(),
+                            List.of(COMMENT_PRESET)))));
         }
     }
 

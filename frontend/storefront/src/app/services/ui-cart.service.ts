@@ -2,7 +2,12 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 
 import { APP_CONFIG } from '../core/config/app-config';
 import { reasonMessageKey } from '../core/api/problem-details';
-import type { CartResponse, CartResponseItem, CartResponseModifierSelection } from '../types/cart.types';
+import type {
+  CartResponse,
+  CartResponseCommentPresetSelection,
+  CartResponseItem,
+  CartResponseModifierSelection,
+} from '../types/cart.types';
 import {
   CartService,
   modifierOptionIdsFromLineKey,
@@ -12,7 +17,11 @@ import {
   type PlatformCart,
   type PricedCart,
 } from './cart.service';
-import { MenuService, type PublishedModifierGroup } from './menu.service';
+import {
+  MenuService,
+  type PublishedCommentPreset,
+  type PublishedModifierGroup,
+} from './menu.service';
 import { LangService } from './lang.service';
 import { DeliverySelectionService } from './delivery-selection.service';
 import { TranslateService } from './translate.service';
@@ -311,6 +320,10 @@ export class UiCartService {
         variantId: line.variantId,
         quantity: line.quantity,
         modifierOptionIds: modifierOptionIdsFromLineKey(line.lineKey, line.variantId),
+        // Row 2.1b: carried across the same as the modifiers above -- a mode
+        // switch rebuilds every line from scratch and must not drop what the
+        // customer already picked.
+        commentPresetCodes: line.commentPresetCodes,
       })) ?? [];
 
     this.fulfillmentModeDefault.set(mode);
@@ -329,6 +342,7 @@ export class UiCartService {
           variantId: line.variantId,
           quantity: line.quantity,
           modifierOptionIds: line.modifierOptionIds,
+          commentPresetCodes: line.commentPresetCodes,
         });
       }
       await this.project(this.carts.cart());
@@ -367,12 +381,19 @@ export class UiCartService {
    *        (`CartService.lineKeyFor`), so "osh" and "osh with extra meat" are
    *        two lines and never one whose modifiers depend on which request
    *        landed last.
+   * @param commentPresetCodes row 2.1b: the coded presets the customer picked
+   *        from the product's own offered subset. Unlike `modifierOptionIds`,
+   *        never part of the line's own identity -- checking a different
+   *        preset for the same variant and modifiers replaces the line's
+   *        presets the same way a second note replaces the first (`CartService
+   *        .putLine`'s own doc).
    */
   async add(
     variantId: string,
     quantity = 1,
     note?: string,
     modifierOptionIds?: readonly string[],
+    commentPresetCodes?: readonly string[],
   ): Promise<void> {
     this.updating.set(true);
     this.error.set(null);
@@ -383,6 +404,7 @@ export class UiCartService {
         quantity,
         customerNote: note,
         modifierOptionIds,
+        commentPresetCodes,
       });
       await this.project(cart);
     } catch {
@@ -403,7 +425,8 @@ export class UiCartService {
    * replaces the whole line, so leaving it out on a quantity change would send
    * an empty list and strip whatever the customer chose -- the cart would still
    * hold the right variant and quantity, and the modifiers would simply be
-   * gone.
+   * gone. `item.commentPresetCodes` (row 2.1b) is resent for the identical
+   * reason.
    */
   async setQuantity(item: CartResponseItem, quantity: number): Promise<void> {
     this.updating.set(true);
@@ -416,6 +439,7 @@ export class UiCartService {
               variantId: item.variant_id,
               quantity,
               modifierOptionIds: item.modifierOptionIds,
+              commentPresetCodes: item.commentPresetCodes,
             });
       await this.project(cart);
     } catch {
@@ -525,8 +549,19 @@ export class UiCartService {
       return true;
     }
 
-    const cart = await this.carts.setDestination({ addressId, recipientName, recipientPhone, deliveryNote });
-    this.lastAppliedDestination = { cartId: cart.cartId, addressId, recipientName, recipientPhone, deliveryNote };
+    const cart = await this.carts.setDestination({
+      addressId,
+      recipientName,
+      recipientPhone,
+      deliveryNote,
+    });
+    this.lastAppliedDestination = {
+      cartId: cart.cartId,
+      addressId,
+      recipientName,
+      recipientPhone,
+      deliveryNote,
+    };
     await this.project(cart);
     return true;
   }
@@ -599,13 +634,22 @@ export class UiCartService {
     }
 
     const menu = await this.menu.menu(this.lang.langId(), cart.locationId);
-    const byVariant = new Map<string, { name: string; image: string | null; price: number }>();
+    const byVariant = new Map<
+      string,
+      {
+        name: string;
+        image: string | null;
+        price: number;
+        commentPresets: readonly PublishedCommentPreset[];
+      }
+    >();
     for (const product of menu.products) {
       for (const variant of product.variants) {
         byVariant.set(variant.variantId, {
           name: product.name,
           image: product.imageUrls[0] ?? null,
           price: variant.amountMinor ?? 0,
+          commentPresets: product.commentPresets,
         });
       }
     }
@@ -635,10 +679,25 @@ export class UiCartService {
           .map((optionId) => {
             const resolved = modifierOptionsById.get(optionId);
             return resolved
-              ? { optionId, groupName: resolved.groupName, label: resolved.label, amountMinor: resolved.amountMinor }
+              ? {
+                  optionId,
+                  groupName: resolved.groupName,
+                  label: resolved.label,
+                  amountMinor: resolved.amountMinor,
+                }
               : null;
           })
           .filter((selection): selection is CartResponseModifierSelection => selection !== null);
+        // Row 2.1b: the line's own codes, resolved to the product's offered
+        // presets for display -- a code the product no longer offers (the
+        // catalogue changed since the line was added) still round-trips on
+        // the wire, but is dropped from the label list rather than shown as
+        // a raw code, the same rule `modifierOptionsById` above already
+        // applies to a modifier option that vanished from the menu.
+        const presetsByCode = new Map(known.commentPresets.map((preset) => [preset.code, preset]));
+        const commentPresets: CartResponseCommentPresetSelection[] = line.commentPresetCodes
+          .map((code) => presetsByCode.get(code))
+          .filter((preset): preset is PublishedCommentPreset => preset !== undefined);
         const projected: CartResponseItem = {
           variant_id: line.variantId,
           // The line key, which is what an update or a removal addresses. The
@@ -654,6 +713,8 @@ export class UiCartService {
           note: null,
           modifierOptionIds,
           modifiers,
+          commentPresetCodes: line.commentPresetCodes,
+          commentPresets,
         };
         return projected;
       })
@@ -667,7 +728,15 @@ export class UiCartService {
       total: { price: this.priced()?.totalMinor ?? 0, discount: 0 },
       delivery: zero,
       packaging: zero,
-      vendor: { id: '', name: '', phone: '', active: true, pre_order: false, start: '', finish: '' },
+      vendor: {
+        id: '',
+        name: '',
+        phone: '',
+        active: true,
+        pre_order: false,
+        start: '',
+        finish: '',
+      },
       address: null,
       delivery_time: null,
       delivery_distance: 0,

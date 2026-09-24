@@ -92,6 +92,17 @@ public class PosOrderExportService {
     private static final String MODIFIER_ENTITY = "MODIFIER";
 
     /**
+     * Row 2.1b's own mapping entity type, alongside {@link #MODIFIER_ENTITY}:
+     * a preset is a distinct vocabulary (kitchen instructions, not a priced
+     * modifier), so it gets its own entity type in {@code
+     * integration.provider_entity_mappings} rather than being folded into
+     * {@code MODIFIER}'s own id space — the identical reasoning {@link
+     * #OPERATOR_ENTITY}'s own doc gives for not reusing {@code MODIFIER}
+     * there either.
+     */
+    private static final String COMMENT_PRESET_ENTITY = "COMMENT_PRESET";
+
+    /**
      * The ADR 0026 mapping entity type a HorecaOS staff principal resolves
      * through, for {@link OrderExport#operatorExternalId} (operations-gap-map.md
      * {@code 9.2c}). Shares the one generic {@code
@@ -760,12 +771,24 @@ public class PosOrderExportService {
                             "Order line %s has no provider mapping, and a provider product ".formatted(line.lineId())
                                     + "must never be guessed from a name"));
 
-            List<String> modifiers = line.modifierOptionIds().stream()
+            List<String> modifiers = new ArrayList<>(line.modifierOptionIds().stream()
                     .map(optionId -> mappings.externalIdFor(binding.bindingId(), MODIFIER_ENTITY, optionId)
                             .orElseThrow(() -> new ExportNotPossible(
                                     "MODIFIER_UNMAPPED",
                                     "A modifier on line %s has no provider mapping".formatted(line.lineId()))))
-                    .toList();
+                    .toList());
+
+            // Row 2.1b: a preset chip travels to the till as a modifier code,
+            // through the identical ADR 0026 table and the identical
+            // MODIFIER_UNMAPPED refusal a priced modifier already gets —
+            // the till has no separate notion of a kitchen instruction, only
+            // of a modifier on a line.
+            line.commentPresetIds().stream()
+                    .map(presetId -> mappings.externalIdFor(binding.bindingId(), COMMENT_PRESET_ENTITY, presetId)
+                            .orElseThrow(() -> new ExportNotPossible(
+                                    "MODIFIER_UNMAPPED",
+                                    "A comment preset on line %s has no provider mapping".formatted(line.lineId()))))
+                    .forEach(modifiers::add);
 
             lines.add(new OrderExport.Line(
                     externalId,

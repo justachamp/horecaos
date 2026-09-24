@@ -14,6 +14,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
@@ -2536,6 +2537,41 @@ public class JdbcCatalogStore {
                         row.getObject("opens_at", LocalTime.class),
                         row.getObject("closes_at", LocalTime.class)))
                 .list();
+    }
+
+    /**
+     * Every variant at this location that carries at least one sale window,
+     * grouped by variant.
+     *
+     * <p>One query for the whole menu rather than one per variant — {@link
+     * uz.horecaos.platform.catalog.application.StorefrontCatalogQuery#menuFor}'s
+     * own reason for reading {@code offeringsFor} in bulk applies identically
+     * here. A variant absent from the map has no window at all and is
+     * unrestricted, exactly as {@link #listItemSaleWindows} returning an empty
+     * list means for one variant at a time.
+     */
+    public Map<UUID, List<ItemSaleSchedule.Window>> itemSaleWindowsForLocation(UUID tenantId, UUID locationId) {
+        return jdbc
+                .sql("""
+                SELECT variant_id, day_of_week, opens_at, closes_at
+                FROM catalog.item_sale_windows
+                WHERE tenant_id = :tenantId AND location_id = :locationId
+                ORDER BY variant_id, day_of_week, opens_at
+                """)
+                .param("tenantId", tenantId)
+                .param("locationId", locationId)
+                .query((row, number) -> Map.entry(
+                        row.getObject("variant_id", UUID.class),
+                        new ItemSaleSchedule.Window(
+                                row.getInt("day_of_week"),
+                                row.getObject("opens_at", LocalTime.class),
+                                row.getObject("closes_at", LocalTime.class))))
+                .list()
+                .stream()
+                .collect(Collectors.groupingBy(
+                        Map.Entry::getKey,
+                        LinkedHashMap::new,
+                        Collectors.mapping(Map.Entry::getValue, Collectors.toList())));
     }
 
     /**

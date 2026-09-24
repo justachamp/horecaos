@@ -6,7 +6,9 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -69,6 +71,24 @@ public class JdbcCommentPresetStore {
                 .param("id", presetId)
                 .query(JdbcCommentPresetStore::mapPreset)
                 .optional();
+    }
+
+    /**
+     * Every preset among {@code codes} that still exists for this tenant, by
+     * its own stable code — what {@code CommentPresetLookupAdapter} resolves
+     * a cart line's chosen codes through at checkout, so the label text
+     * snapshotted onto the order is the tenant's current wording rather than
+     * whatever was true when the line was first added.
+     */
+    public List<PresetRow> findByCodes(UUID tenantId, java.util.Set<String> codes) {
+        if (codes.isEmpty()) {
+            return List.of();
+        }
+        return jdbc.sql(SELECT_PRESET + " WHERE tenant_id = :tenantId AND code = ANY(:codes)")
+                .param("tenantId", tenantId)
+                .param("codes", codes.toArray(String[]::new))
+                .query(JdbcCommentPresetStore::mapPreset)
+                .list();
     }
 
     /**
@@ -181,6 +201,49 @@ public class JdbcCommentPresetStore {
                         row.getString("pos_modifier_code"),
                         row.getString("status")))
                 .list();
+    }
+
+    /**
+     * Every {@code ACTIVE} preset among several products' own offered subset,
+     * grouped by product — one query for a whole menu read rather than one
+     * per product, the same discipline {@code StorefrontCatalogQuery}'s own
+     * bulk offering reads already follow.
+     */
+    public Map<UUID, List<ProductPresetRow>> listForProducts(UUID tenantId, UUID brandId, Set<UUID> productIds) {
+        if (productIds.isEmpty()) {
+            return Map.of();
+        }
+        return jdbc
+                .sql("""
+                SELECT pp.product_id, pp.preset_id, pp.sort_order,
+                       p.code, p.label_ru, p.label_uz, p.label_en, p.pos_modifier_code, p.status
+                FROM catalog.product_comment_presets pp
+                JOIN catalog.comment_presets p ON p.id = pp.preset_id AND p.tenant_id = pp.tenant_id
+                WHERE pp.tenant_id = :tenantId AND pp.brand_id = :brandId AND pp.product_id = ANY(:productIds)
+                  AND p.status = 'ACTIVE'
+                ORDER BY pp.product_id, pp.sort_order, p.code
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("productIds", productIds.toArray(UUID[]::new))
+                .query((row, number) -> Map.entry(
+                        row.getObject("product_id", UUID.class),
+                        new ProductPresetRow(
+                                row.getObject("preset_id", UUID.class),
+                                row.getInt("sort_order"),
+                                row.getString("code"),
+                                row.getString("label_ru"),
+                                row.getString("label_uz"),
+                                row.getString("label_en"),
+                                row.getString("pos_modifier_code"),
+                                row.getString("status"))))
+                .list()
+                .stream()
+                .collect(java.util.stream.Collectors.groupingBy(
+                        Map.Entry::getKey,
+                        java.util.LinkedHashMap::new,
+                        java.util.stream.Collectors.mapping(
+                                Map.Entry::getValue, java.util.stream.Collectors.toList())));
     }
 
     // ------------------------------------------------------------------- mapping

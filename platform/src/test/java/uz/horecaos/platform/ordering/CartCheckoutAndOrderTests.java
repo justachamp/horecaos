@@ -213,6 +213,8 @@ class CartCheckoutAndOrderTests {
     private uz.horecaos.platform.ordering.infrastructure.JdbcDeliveryOrderPort deliveryOrders;
     private java.util.function.Function<PaymentIntentPort, CheckoutService> checkoutWith;
     private JdbcPaymentIntentStore intentStore;
+    private uz.horecaos.platform.ordering.application.CartSaleWindowRules saleWindowRules;
+    private uz.horecaos.platform.catalog.api.CommentPresetLookup commentPresetLookup;
     private JdbcPaymentAttemptStore paymentAttemptStore;
     private JdbcFiscalDocumentStore fiscalStore;
     private JdbcSettlementStore settlementStore;
@@ -442,6 +444,17 @@ class CartCheckoutAndOrderTests {
                         (keyCode, scope) -> {}));
 
         orderingConfig = new MutableConfigurationResolver();
+        // Row 4.2g: the real per-item sale window read, over the real
+        // catalog.item_sale_windows table, for the same reason serviceability
+        // above is real — whether an item is inside its own schedule is exactly
+        // the property this suite's sale-window tests exist to check.
+        saleWindowRules = new uz.horecaos.platform.ordering.infrastructure.catalog.JdbcCartSaleWindowRules(jdbc);
+        // Row 2.1b: the real adapter, over the real catalog.comment_presets
+        // and catalog.product_comment_presets tables, for the identical
+        // reason saleWindowRules above is real.
+        commentPresetLookup = new uz.horecaos.platform.catalog.application.CommentPresetLookupAdapter(
+                new uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore(jdbc, objectMapper),
+                new uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCommentPresetStore(jdbc));
         carts = new CartService(
                 cartStore,
                 channelStore,
@@ -456,7 +469,9 @@ class CartCheckoutAndOrderTests {
                 clock,
                 customerBlacklist,
                 new PromoCodeEligibilityService(promoCodeStore),
-                new FakeConfigurationResolver());
+                new FakeConfigurationResolver(),
+                saleWindowRules,
+                commentPresetLookup);
         inventoryProcess = new OrderInventoryProcess(processStore, inventory, objectMapper, clock);
         paymentProcess = new OrderPaymentProcess(processStore, objectMapper);
         orderState = new OrderStateService(
@@ -560,7 +575,9 @@ class CartCheckoutAndOrderTests {
                 published,
                 clock,
                 customerBlacklist,
-                orderingConfig);
+                orderingConfig,
+                saleWindowRules,
+                commentPresetLookup);
 
         checkout = checkoutWith.apply(UNWIRED_PAYMENTS);
         // ADR 0075's port over the same services, so a bot repeat and a
@@ -778,7 +795,7 @@ class CartCheckoutAndOrderTests {
                         "STOREFRONT",
                         FulfillmentMode.PICKUP,
                         List.of(new uz.horecaos.platform.ordering.application.OperatorOrderingService.OrderLine(
-                                burgerVariant, 2, List.of(), null)),
+                                burgerVariant, 2, List.of(), List.of(), null)),
                         null,
                         "CASH",
                         null,
@@ -821,7 +838,7 @@ class CartCheckoutAndOrderTests {
                 "STOREFRONT",
                 FulfillmentMode.PICKUP,
                 List.of(new uz.horecaos.platform.ordering.application.OperatorOrderingService.OrderLine(
-                        burgerVariant, 1, List.of(), null)),
+                        burgerVariant, 1, List.of(), List.of(), null)),
                 null,
                 "CLICK",
                 null,
@@ -856,7 +873,7 @@ class CartCheckoutAndOrderTests {
                 "STOREFRONT",
                 FulfillmentMode.PICKUP,
                 List.of(new uz.horecaos.platform.ordering.application.OperatorOrderingService.OrderLine(
-                        burgerVariant, 1, List.of(), null)),
+                        burgerVariant, 1, List.of(), List.of(), null)),
                 null,
                 "BANK_TRANSFER",
                 null,
@@ -943,7 +960,7 @@ class CartCheckoutAndOrderTests {
                 "STOREFRONT",
                 FulfillmentMode.PICKUP,
                 List.of(new uz.horecaos.platform.ordering.application.OperatorOrderingService.OrderLine(
-                        burgerVariant, 1, List.of(), null)),
+                        burgerVariant, 1, List.of(), List.of(), null)),
                 null,
                 "CASH",
                 "operator10",
@@ -1125,7 +1142,7 @@ class CartCheckoutAndOrderTests {
                         "STOREFRONT",
                         FulfillmentMode.DELIVERY,
                         List.of(new uz.horecaos.platform.ordering.application.OperatorOrderingService.OrderLine(
-                                burgerVariant, 1, List.of(), null)),
+                                burgerVariant, 1, List.of(), List.of(), null)),
                         null,
                         "CASH",
                         null,
@@ -1149,7 +1166,7 @@ class CartCheckoutAndOrderTests {
                         "STOREFRONT",
                         FulfillmentMode.PICKUP,
                         List.of(new uz.horecaos.platform.ordering.application.OperatorOrderingService.OrderLine(
-                                burgerVariant, 1, List.of(), null)),
+                                burgerVariant, 1, List.of(), List.of(), null)),
                         new uz.horecaos.platform.ordering.application.OperatorOrderingService.Destination(
                                 UUID.randomUUID(), "A Customer", "+998901234567", null),
                         "CASH",
@@ -1284,6 +1301,50 @@ class CartCheckoutAndOrderTests {
                 null)));
 
         assertThat(((CartService.CartRefusedException) refused).code()).isEqualTo("MODIFIER_NOT_OFFERED");
+    }
+
+    /**
+     * Row 4.2g: {@code CatalogAuthoringService#isOnSaleNow} had no caller in
+     * ordering before this test. Named so the New Order screen and the
+     * storefront can show the operator or the customer exactly why, rather
+     * than a generic validation failure.
+     */
+    @Test
+    @DisplayName("row 4.2g: adding a variant outside its own sale window is refused")
+    void addingAVariantOutsideItsSaleWindowIsRefused() {
+        seedOutOfWindowSchedule(burgerVariant);
+        var cart = openCart();
+
+        var refused = catchThrowable(() -> tx(() -> carts.putLine(
+                TENANT, BRAND, CUSTOMER, cart, cartVersion(cart), "a", burgerVariant, 1, List.of(), null)));
+
+        assertThat(((CartService.CartRefusedException) refused).code()).isEqualTo("ITEM_OUT_OF_SALE_WINDOW");
+    }
+
+    /**
+     * "Flagged, not silently dropped": a line added while its item was
+     * unrestricted must not vanish from the total the moment the schedule
+     * moves on without it — the cart still holds it, and pricing refuses by
+     * name rather than pricing the basket as if the line were never there.
+     */
+    @Test
+    @DisplayName("row 4.2g: a line whose item left its window is flagged at pricing, not dropped")
+    void aLineThatLeftItsWindowIsFlaggedAtPricingNotDropped() {
+        UUID cart = openCart();
+        putLine(cart, "a", burgerVariant, 1);
+
+        // The schedule changes after the line was added, exactly as an
+        // operator editing a window mid-service would.
+        seedOutOfWindowSchedule(burgerVariant);
+
+        var refused = catchThrowable(() -> tx(() -> carts.price(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart))));
+
+        assertThat(((CartService.CartRefusedException) refused).code()).isEqualTo("ITEM_OUT_OF_SALE_WINDOW");
+        // Still in the basket — refusing pricing is not the same as removing
+        // the line the refusal is about.
+        assertThat(carts.lines(TENANT, cart))
+                .extracting(JdbcCartStore.CartLineRow::lineKey)
+                .containsExactly("a");
     }
 
     @Test
@@ -2358,6 +2419,23 @@ class CartCheckoutAndOrderTests {
     }
 
     @Test
+    @DisplayName("row 4.2g: a schedule that ends between pricing and checkout refuses at checkout too")
+    void aScheduleThatEndsBetweenPricingAndCheckoutRefusesAtCheckout() {
+        var cart = readyCart();
+
+        // Re-checked here for the same reason serviceability is: putLine and
+        // price both already refused this at add time, but nothing stops a
+        // manager from editing the schedule in the gap between an accepted
+        // quote and the checkout call that spends it.
+        seedOutOfWindowSchedule(burgerVariant);
+
+        var refused = tx(() -> checkout.checkout(checkoutCommand(cart, "idem-out-of-window")));
+
+        assertThat(refused.rejectionCode()).isEqualTo("ITEM_OUT_OF_SALE_WINDOW");
+        assertThat(countOrders()).isZero();
+    }
+
+    @Test
     @DisplayName("a menu republished between pricing and checkout refuses rather than repricing")
     void aRepublishedMenuRefusesCheckout() {
         var cart = readyCart();
@@ -2491,6 +2569,74 @@ class CartCheckoutAndOrderTests {
         assertThat(detail.lines().getFirst().line().hasNote()).isTrue();
         assertThat(orderQuery.revealLineNote(TENANT, orderIdOf(result), lineId, "KITCHEN_TICKET", "support-1"))
                 .contains("No onions, ring the top bell");
+    }
+
+    /**
+     * Row 2.1b's own headline capability, cart to order: an operator or
+     * customer attaches a preset to a line, and it round-trips to the order
+     * detail line with the label text of the moment — the KDS ticket itself
+     * renders no name at all (ADR 0041, {@code KitchenOrderSource}'s own
+     * doc), so the order detail read this asserts against is the identical
+     * authorized read the kitchen display resolves a ticket's chips through.
+     */
+    @Test
+    @DisplayName("row 2.1b: a line's chosen presets round-trip cart -> order with the label text of the moment")
+    void commentPresetsRoundTripFromCartToOrder() {
+        UUID noOnions = seedCommentPresetForBurger("NO_ONIONS", "Без лука");
+        UUID extraSpicy = seedCommentPresetForBurger("EXTRA_SPICY", "Поострее");
+
+        UUID cart = openCart();
+        var view = tx(() -> carts.putLine(
+                TENANT,
+                BRAND,
+                CUSTOMER,
+                cart,
+                cartVersion(cart),
+                "a",
+                burgerVariant,
+                1,
+                List.of(),
+                List.of("NO_ONIONS", "EXTRA_SPICY"),
+                null));
+        assertThat(view.lines())
+                .singleElement()
+                .satisfies(line -> assertThat(line.commentPresetCodes()).containsExactly("NO_ONIONS", "EXTRA_SPICY"));
+
+        tx(() -> carts.price(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart)));
+        var result = tx(() -> checkout.checkout(checkoutCommand(cart, "idem-comment-presets")));
+
+        var detail = orderQuery.detail(TENANT, orderIdOf(result)).orElseThrow();
+        assertThat(detail.lines())
+                .singleElement()
+                .satisfies(line -> assertThat(line.commentPresets())
+                        .extracting(
+                                JdbcOrderStore.OrderCommentPresetRow::sourcePresetId,
+                                JdbcOrderStore.OrderCommentPresetRow::code,
+                                JdbcOrderStore.OrderCommentPresetRow::labelRu)
+                        .containsExactly(
+                                tuple(noOnions, "NO_ONIONS", "Без лука"),
+                                tuple(extraSpicy, "EXTRA_SPICY", "Поострее")));
+    }
+
+    @Test
+    @DisplayName("row 2.1b: a preset the product does not offer is refused")
+    void aPresetTheProductDoesNotOfferIsRefused() {
+        var cart = openCart();
+
+        var refused = catchThrowable(() -> tx(() -> carts.putLine(
+                TENANT,
+                BRAND,
+                CUSTOMER,
+                cart,
+                cartVersion(cart),
+                "a",
+                burgerVariant,
+                1,
+                List.of(),
+                List.of("NEVER_ATTACHED"),
+                null)));
+
+        assertThat(((CartService.CartRefusedException) refused).code()).isEqualTo("COMMENT_PRESET_NOT_OFFERED");
     }
 
     @Test
@@ -6608,6 +6754,59 @@ class CartCheckoutAndOrderTests {
                 .update();
         productIdByCode.put(code, productId);
         return variantId;
+    }
+
+    /**
+     * Row 4.2g: a weekly window that excludes {@link #NOW}. {@code
+     * Asia/Tashkent} (this suite's own {@code insertLocation}) is UTC+5, so
+     * {@code NOW} ("2026-08-21T07:00:00Z", a Friday) reads as Friday noon
+     * local — a 13:00-14:00 Friday window therefore never covers it.
+     */
+    private void seedOutOfWindowSchedule(UUID variantId) {
+        jdbc.sql("""
+                INSERT INTO catalog.item_sale_windows (
+                    id, tenant_id, brand_id, location_id, variant_id, day_of_week, opens_at, closes_at)
+                VALUES (:id, :tenantId, :brandId, :locationId, :variantId, 5, '13:00', '14:00')
+                """)
+                .param("id", UUID.randomUUID())
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("locationId", LOCATION)
+                .param("variantId", variantId)
+                .update();
+    }
+
+    /**
+     * Row 2.1b: a preset the burger product offers, coded and labelled exactly
+     * as the authoring screen would leave it. Presets are tenant-scoped
+     * (V0378's own migration doc); attaching one to a product is brand-scoped.
+     */
+    private UUID seedCommentPresetForBurger(String code, String labelRu) {
+        UUID presetId = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO catalog.comment_presets (
+                    id, tenant_id, code, label_ru, label_uz, label_en, sort_order, status, version)
+                VALUES (:id, :tenantId, :code, :labelRu, :labelUz, :labelEn, 0, 'ACTIVE', 1)
+                """)
+                .param("id", presetId)
+                .param("tenantId", TENANT)
+                .param("code", code)
+                .param("labelRu", labelRu)
+                .param("labelUz", labelRu + " (uz)")
+                .param("labelEn", labelRu + " (en)")
+                .update();
+        jdbc.sql("""
+                INSERT INTO catalog.product_comment_presets (
+                    id, tenant_id, brand_id, product_id, preset_id, sort_order, version)
+                VALUES (:id, :tenantId, :brandId, :productId, :presetId, 0, 1)
+                """)
+                .param("id", UUID.randomUUID())
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("productId", java.util.Objects.requireNonNull(productIdByCode.get("BURGER")))
+                .param("presetId", presetId)
+                .update();
+        return presetId;
     }
 
     private void seedPricingAndStock() {

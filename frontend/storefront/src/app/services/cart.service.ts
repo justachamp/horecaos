@@ -60,9 +60,11 @@ export class CartService {
    * @param create when false, a customer with no cart yet gets null rather than
    *        an empty cart. Browsing must not mint a cart per visit.
    */
-  async ensure(locationId: string, fulfillmentMode: FulfillmentMode,
-      create = true): Promise<PlatformCart | null> {
-
+  async ensure(
+    locationId: string,
+    fulfillmentMode: FulfillmentMode,
+    create = true,
+  ): Promise<PlatformCart | null> {
     const stored = readCartId(locationId);
     if (stored) {
       try {
@@ -112,6 +114,8 @@ export class CartService {
     variantId: string;
     quantity: number;
     modifierOptionIds?: readonly string[];
+    /** Row 2.1b: the coded presets the customer picked, resent on every write like `modifierOptionIds` — see this method's own doc. */
+    commentPresetCodes?: readonly string[];
     customerNote?: string;
   }): Promise<PlatformCart> {
     const lineKey = lineKeyFor(input.variantId, input.modifierOptionIds ?? []);
@@ -124,6 +128,7 @@ export class CartService {
             variantId: input.variantId,
             quantity: input.quantity,
             modifierOptionIds: input.modifierOptionIds ?? [],
+            commentPresetCodes: input.commentPresetCodes ?? [],
             customerNote: input.customerNote,
           },
           expectedVersion: version,
@@ -214,20 +219,16 @@ export class CartService {
     deliveryNote?: string;
   }): Promise<PlatformCart> {
     return this.withVersion((cart, version) =>
-      this.api.mutate<PlatformCart>(
-        'PUT',
-        `${this.brandPath}/carts/${cart.cartId}/destination`,
-        {
-          body: {
-            addressId: input.addressId,
-            recipientName: input.recipientName,
-            recipientPhone: input.recipientPhone,
-            deliveryNote: input.deliveryNote,
-          },
-          expectedVersion: version,
-          idempotencyKey: newIdempotencyKey(),
+      this.api.mutate<PlatformCart>('PUT', `${this.brandPath}/carts/${cart.cartId}/destination`, {
+        body: {
+          addressId: input.addressId,
+          recipientName: input.recipientName,
+          recipientPhone: input.recipientPhone,
+          deliveryNote: input.deliveryNote,
         },
-      ),
+        expectedVersion: version,
+        idempotencyKey: newIdempotencyKey(),
+      }),
     );
   }
 
@@ -399,6 +400,8 @@ export interface PlatformCartLine {
   readonly lineKey: string;
   readonly variantId: string;
   readonly quantity: number;
+  /** Row 2.1b: the coded presets this line currently carries. */
+  readonly commentPresetCodes: readonly string[];
   /** Whether a note exists. Never the note itself. */
   readonly hasCustomerNote: boolean;
 }

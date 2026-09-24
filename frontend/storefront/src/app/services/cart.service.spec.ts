@@ -72,7 +72,15 @@ describe('CartService (withVersion, via putLine)', () => {
     service.cart.set(baseCart({ version: 1 }));
     const updated = baseCart({
       version: 2,
-      lines: [{ lineKey: 'v1', variantId: 'v1', quantity: 1, hasCustomerNote: false }],
+      lines: [
+        {
+          lineKey: 'v1',
+          variantId: 'v1',
+          quantity: 1,
+          commentPresetCodes: [],
+          hasCustomerNote: false,
+        },
+      ],
     });
     api.mutate.mockResolvedValue(updated);
 
@@ -84,13 +92,51 @@ describe('CartService (withVersion, via putLine)', () => {
     expect(api.get).not.toHaveBeenCalled();
   });
 
+  it('row 2.1b: sends the given commentPresetCodes through in the request body', async () => {
+    const { service, api } = setUp();
+    service.cart.set(baseCart({ version: 1 }));
+    api.mutate.mockResolvedValue(baseCart({ version: 2 }));
+
+    await service.putLine({ variantId: 'v1', quantity: 1, commentPresetCodes: ['NO_ONIONS'] });
+
+    expect(api.mutate).toHaveBeenCalledWith(
+      'PUT',
+      expect.any(String),
+      expect.objectContaining({
+        body: expect.objectContaining({ commentPresetCodes: ['NO_ONIONS'] }),
+      }),
+    );
+  });
+
+  it('row 2.1b: defaults commentPresetCodes to an empty list rather than omitting it — an omitted field would strip whatever the customer already picked, the same failure `modifierOptionIds` guards against', async () => {
+    const { service, api } = setUp();
+    service.cart.set(baseCart({ version: 1 }));
+    api.mutate.mockResolvedValue(baseCart({ version: 2 }));
+
+    await service.putLine({ variantId: 'v1', quantity: 2 });
+
+    expect(api.mutate).toHaveBeenCalledWith(
+      'PUT',
+      expect.any(String),
+      expect.objectContaining({ body: expect.objectContaining({ commentPresetCodes: [] }) }),
+    );
+  });
+
   it('reloads the cart and retries exactly once on STALE_VERSION, then succeeds', async () => {
     const { service, api } = setUp();
     service.cart.set(baseCart({ version: 1 }));
     const refreshed = baseCart({ version: 2 });
     const succeeded = baseCart({
       version: 3,
-      lines: [{ lineKey: 'v1', variantId: 'v1', quantity: 1, hasCustomerNote: false }],
+      lines: [
+        {
+          lineKey: 'v1',
+          variantId: 'v1',
+          quantity: 1,
+          commentPresetCodes: [],
+          hasCustomerNote: false,
+        },
+      ],
     });
     api.mutate.mockRejectedValueOnce(staleVersion(2)).mockResolvedValueOnce(succeeded);
     api.get.mockResolvedValueOnce(refreshed);
@@ -254,12 +300,15 @@ describe('modifierOptionIdsFromLineKey (inverse of lineKeyFor)', () => {
         'dddddddd-0000-0000-0000-000000000002',
       ],
     ],
-  ] as const)('round-trips variant %s with selection %j through encode -> decode', (variantId, ids) => {
-    const key = lineKeyFor(variantId, ids);
-    const decoded = modifierOptionIdsFromLineKey(key, variantId);
+  ] as const)(
+    'round-trips variant %s with selection %j through encode -> decode',
+    (variantId, ids) => {
+      const key = lineKeyFor(variantId, ids);
+      const decoded = modifierOptionIdsFromLineKey(key, variantId);
 
-    // The key sorts, so the round trip is compared against a sorted copy --
-    // decode does not (and cannot) recover the original selection order.
-    expect(decoded).toEqual([...ids].sort());
-  });
+      // The key sorts, so the round trip is compared against a sorted copy --
+      // decode does not (and cannot) recover the original selection order.
+      expect(decoded).toEqual([...ids].sort());
+    },
+  );
 });

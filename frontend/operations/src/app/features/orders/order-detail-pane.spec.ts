@@ -81,6 +81,7 @@ function detail(overrides: Partial<OrderDetailResponse> = {}): OrderDetailRespon
         quantity: 2,
         finalAmountMinor: 146_000,
         modifiers: [],
+        commentPresets: [],
         lineId: 'line-1',
         hasNote: false,
       },
@@ -268,6 +269,38 @@ describe('OrderDetailPane: rendering the loaded order', () => {
     expect(host.textContent).toContain('0142');
     expect(host.textContent).toContain('Awaiting approval');
     expect(host.textContent).toContain('Version 3');
+  });
+
+  it('row 2.1b: renders a line\'s comment presets as chips ahead of the note', async () => {
+    configure({
+      get: apiGet({
+        value: detail({
+          lines: [
+            {
+              lineNumber: 1,
+              productName: 'Лагман',
+              quantity: 2,
+              finalAmountMinor: 146_000,
+              modifiers: [],
+              commentPresets: [
+                { code: 'NO_ONIONS', labelRu: 'Без лука', labelUz: 'Piyozsiz', labelEn: 'No onions' },
+                { code: 'EXTRA_SPICY', labelRu: 'Поострее', labelUz: 'Achchiqroq', labelEn: 'Extra spicy' },
+              ],
+              lineId: 'line-1',
+              hasNote: false,
+            },
+          ],
+        }),
+        version: 3,
+      }),
+    });
+    const fixture = await render();
+    const host: HTMLElement = fixture.nativeElement;
+
+    const presets = host.querySelector('[data-testid="order-detail-line-presets"]');
+    expect(presets).not.toBeNull();
+    expect(presets?.textContent).toContain('No onions');
+    expect(presets?.textContent).toContain('Extra spicy');
   });
 
   it('always shows the raw route order id, even before the fetch settles', () => {
@@ -604,6 +637,7 @@ describe('OrderDetailPane: money reconciliation (§1.3)', () => {
           quantity: 1,
           finalAmountMinor: 100_000,
           modifiers: [],
+          commentPresets: [],
           lineId: 'line-1',
           hasNote: false,
         },

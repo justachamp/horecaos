@@ -1,8 +1,11 @@
 package uz.horecaos.platform.ordering.infrastructure.persistence;
 
+import java.sql.Array;
+import java.sql.SQLException;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -144,7 +147,8 @@ public class JdbcCartStore {
     public List<CartLineRow> lines(UUID tenantId, UUID cartId) {
         return jdbc.sql("""
                 SELECT id, line_key, variant_id, quantity,
-                       selected_modifier_snapshot::text AS modifiers, customer_note_encrypted
+                       selected_modifier_snapshot::text AS modifiers, comment_preset_codes,
+                       customer_note_encrypted
                 FROM ordering.cart_lines
                 WHERE tenant_id = :tenantId AND cart_id = :cartId
                 ORDER BY line_key
@@ -157,8 +161,26 @@ public class JdbcCartStore {
                         row.getObject("variant_id", UUID.class),
                         row.getInt("quantity"),
                         row.getString("modifiers"),
+                        commentPresetCodes(row.getArray("comment_preset_codes")),
                         row.getString("customer_note_encrypted")))
                 .list();
+    }
+
+    /** {@code text[]} reads back as a JDBC {@link Array}; empty rather than null when absent. */
+    private static List<String> commentPresetCodes(@Nullable Array raw) {
+        if (raw == null) {
+            return List.of();
+        }
+        try {
+            Object[] elements = (Object[]) raw.getArray();
+            List<String> codes = new ArrayList<>(elements.length);
+            for (Object element : elements) {
+                codes.add((String) element);
+            }
+            return List.copyOf(codes);
+        } catch (SQLException failure) {
+            throw new IllegalStateException("Could not read comment_preset_codes", failure);
+        }
     }
 
     /**
@@ -176,19 +198,21 @@ public class JdbcCartStore {
             UUID variantId,
             int quantity,
             String modifiersJson,
+            List<String> commentPresetCodes,
             @Nullable String noteEncrypted,
             Instant now) {
         jdbc.sql("""
                 INSERT INTO ordering.cart_lines (
                     id, tenant_id, cart_id, line_key, variant_id, quantity,
-                    selected_modifier_snapshot, customer_note_encrypted, version,
+                    selected_modifier_snapshot, comment_preset_codes, customer_note_encrypted, version,
                     created_at, updated_at)
                 VALUES (:id, :tenantId, :cartId, :lineKey, :variantId, :quantity,
-                    CAST(:modifiers AS jsonb), :note, 1, :now, :now)
+                    CAST(:modifiers AS jsonb), :presetCodes, :note, 1, :now, :now)
                 ON CONFLICT (cart_id, line_key) DO UPDATE
                 SET variant_id = EXCLUDED.variant_id,
                     quantity = EXCLUDED.quantity,
                     selected_modifier_snapshot = EXCLUDED.selected_modifier_snapshot,
+                    comment_preset_codes = EXCLUDED.comment_preset_codes,
                     customer_note_encrypted = EXCLUDED.customer_note_encrypted,
                     version = ordering.cart_lines.version + 1,
                     updated_at = EXCLUDED.updated_at
@@ -200,6 +224,7 @@ public class JdbcCartStore {
                 .param("variantId", variantId)
                 .param("quantity", quantity)
                 .param("modifiers", modifiersJson)
+                .param("presetCodes", commentPresetCodes.toArray(String[]::new))
                 .param("note", noteEncrypted)
                 .param("now", utc(now))
                 .update();
@@ -588,6 +613,7 @@ public class JdbcCartStore {
             UUID variantId,
             int quantity,
             String selectedModifiersJson,
+            List<String> commentPresetCodes,
             @Nullable String customerNoteEncrypted) {}
 
     /**

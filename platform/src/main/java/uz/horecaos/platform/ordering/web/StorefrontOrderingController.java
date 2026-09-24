@@ -177,6 +177,7 @@ public class StorefrontOrderingController {
                     body.variantId(),
                     body.quantity(),
                     body.modifierOptionIds(),
+                    body.commentPresetCodes(),
                     body.customerNote());
             return ResponseEntity.ok(CartResponse.of(view));
         } catch (CartService.StaleCartException stale) {
@@ -644,7 +645,11 @@ public class StorefrontOrderingController {
                             "CODE_NOT_YET_ACTIVE",
                             "CODE_EXPIRED",
                             "REDEMPTION_LIMIT_REACHED",
-                            "PER_CUSTOMER_LIMIT_REACHED" -> ErrorCode.RESOURCE_CONFLICT;
+                            "PER_CUSTOMER_LIMIT_REACHED",
+                            // Row 4.2g: a well-formed line against an item whose own
+                            // schedule currently refuses it — nothing in the request
+                            // is wrong, the same shape as NOT_SERVICEABLE beside it.
+                            "ITEM_OUT_OF_SALE_WINDOW" -> ErrorCode.RESOURCE_CONFLICT;
                     default -> ErrorCode.VALIDATION_FAILED;
                 };
         return new ApiException(code, refused.getMessage(), java.util.Map.of("reason", refused.code()));
@@ -717,6 +722,10 @@ public class StorefrontOrderingController {
             @NotNull UUID variantId,
             @Positive @Max(999) int quantity,
             @Size(max = 20) List<UUID> modifierOptionIds,
+            // Row 2.1b: the coded kitchen-instruction presets the customer
+            // picked from the product's own offered subset (@Size null-safe
+            // below, matching modifierOptionIds' own optional shape).
+            @Size(max = 20) List<String> commentPresetCodes,
             @Size(max = 500) String customerNote) {}
 
     public record MoveLocationRequest(@NotNull UUID locationId) {}
@@ -849,6 +858,7 @@ public class StorefrontOrderingController {
                                     line.lineKey(),
                                     line.variantId(),
                                     line.quantity(),
+                                    line.commentPresetCodes(),
                                     line.customerNoteEncrypted() != null))
                             .toList(),
                     view.cart().appliedCouponCode());
@@ -862,7 +872,13 @@ public class StorefrontOrderingController {
      *                        text is personal data and is revealed only through
      *                        the endpoint that records a purpose for it
      */
-    public record CartLineResponse(String lineKey, UUID variantId, int quantity, boolean hasCustomerNote) {}
+    public record CartLineResponse(
+            String lineKey,
+            UUID variantId,
+            int quantity,
+            // Row 2.1b: the coded presets this line currently carries.
+            List<String> commentPresetCodes,
+            boolean hasCustomerNote) {}
 
     /**
      * The destination just set on this cart.

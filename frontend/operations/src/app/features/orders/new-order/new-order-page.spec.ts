@@ -48,14 +48,39 @@ const MENU: StorefrontMenu = {
           unitCode: null,
           isDefault: true,
           orderable: true,
+          onSaleNow: true,
           amountMinor: 30_000,
         },
       ],
       modifierGroupIds: [],
+      commentPresets: [],
     },
   ],
   modifierGroups: [],
 };
+
+/** Row 2.1b's fixture: two presets `v-1`'s product offers. */
+const PRESETS: StorefrontMenu['products'][number]['commentPresets'] = [
+  { code: 'NO_ONIONS', labelRu: 'Без лука', labelUz: 'Piyozsiz', labelEn: 'No onions' },
+  { code: 'EXTRA_SPICY', labelRu: 'Поострее', labelUz: 'Achchiqroq', labelEn: 'Extra spicy' },
+];
+
+/** {@link MENU}, with `v-1`'s own variant/product fields overridden — rows 2.1b/4.2g's own fixtures. */
+function menuWith(
+  variantOverrides: Partial<StorefrontMenu['products'][number]['variants'][number]>,
+  commentPresets: StorefrontMenu['products'][number]['commentPresets'] = [],
+): StorefrontMenu {
+  return {
+    ...MENU,
+    products: [
+      {
+        ...MENU.products[0],
+        commentPresets,
+        variants: [{ ...MENU.products[0].variants[0], ...variantOverrides }],
+      },
+    ],
+  };
+}
 
 function candidate(overrides: Partial<CustomerLookupCandidate> = {}): CustomerLookupCandidate {
   return {
@@ -297,7 +322,13 @@ describe('NewOrderPage', () => {
     expect(request.paymentMethodCode).toBe('CASH');
     expect(request.fulfillmentMode).toBe('PICKUP');
     expect(request.lines).toEqual([
-      { variantId: 'v-1', quantity: 1, modifierOptionIds: [], customerNote: null },
+      {
+        variantId: 'v-1',
+        quantity: 1,
+        modifierOptionIds: [],
+        commentPresetCodes: [],
+        customerNote: null,
+      },
     ]);
     expect(navigateSpy).toHaveBeenCalledWith(['/orders', 'order-1']);
   });
@@ -583,6 +614,119 @@ describe('NewOrderPage', () => {
     expect(fixture.componentInstance['submitError']()).toBe(
       TestBed.inject(I18n).t('orders.newOrder.address.notLocated'),
     );
+  });
+
+  it('row 4.2g: an ITEM_OUT_OF_SALE_WINDOW refusal at submit is shown in words, and the line stays in the basket', async () => {
+    const refusal = new ApiError(
+      ApiErrorCode.RESOURCE_CONFLICT,
+      409,
+      { status: 409, reason: 'ITEM_OUT_OF_SALE_WINDOW' },
+      null,
+    );
+    const placeOrder = vi.fn().mockRejectedValue(refusal);
+    await render({ placeOrder });
+
+    fixture.componentInstance['selectCandidate'](candidate());
+    fixture.componentInstance['onItemSelected']({ id: 'v-1', label: 'Cheeseburger' });
+    fixture.detectChanges();
+
+    await fixture.componentInstance['submit']();
+
+    expect(fixture.componentInstance['submitError']()).toBe(
+      TestBed.inject(I18n).t('orders.newOrder.menu.itemOutOfSaleWindow'),
+    );
+    // Not silently dropped — the basket still holds the line the operator added.
+    expect(fixture.componentInstance['basket']()).toHaveLength(1);
+  });
+
+  // ------------------------------------------------------- row 2.1b/4.2g: presets and sale window
+
+  it("row 4.2g: refuses adding a variant outside its own sale window, the same way an 86'd one is refused", async () => {
+    const showSpy = vi.fn();
+    await render(
+      { menu: vi.fn().mockResolvedValue(menuWith({ onSaleNow: false })) },
+      {},
+      [],
+      { paymentMethods: {} },
+      {},
+    );
+    // Re-provide Toasts with a spy — `render`'s own default discards messages.
+    TestBed.inject(Toasts).show = showSpy;
+
+    fixture.componentInstance['onItemSelected']({ id: 'v-1', label: 'Cheeseburger' });
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance['basket']()).toHaveLength(0);
+    expect(showSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: TestBed.inject(I18n).t('orders.newOrder.menu.itemOutOfSaleWindow'),
+      }),
+    );
+  });
+
+  it('row 2.1b: a product with comment presets but no modifier groups still opens the dialog, and the checked preset lands on the basket line', async () => {
+    await render({ menu: vi.fn().mockResolvedValue(menuWith({}, PRESETS)) });
+
+    fixture.componentInstance['onItemSelected']({ id: 'v-1', label: 'Cheeseburger' });
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance['pendingModifiers']()).not.toBeNull();
+    expect(fixture.componentInstance['basket']()).toHaveLength(0);
+
+    fixture.componentInstance['onModifierConfirm']({
+      selections: [],
+      commentPresetCodes: ['NO_ONIONS'],
+    });
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance['basket']()).toHaveLength(1);
+    expect(fixture.componentInstance['basket']()[0].commentPresetCodes).toEqual(['NO_ONIONS']);
+    expect(fixture.componentInstance['pendingModifiers']()).toBeNull();
+  });
+
+  it('row 2.1b: a product with neither modifier groups nor presets skips the dialog and adds straight to the basket', async () => {
+    await render();
+
+    fixture.componentInstance['onItemSelected']({ id: 'v-1', label: 'Cheeseburger' });
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance['pendingModifiers']()).toBeNull();
+    expect(fixture.componentInstance['basket']()).toHaveLength(1);
+    expect(fixture.componentInstance['basket']()[0].commentPresetCodes).toEqual([]);
+  });
+
+  it("row 2.1b: submit carries each line's checked preset codes", async () => {
+    const result: PlaceOrderResult = {
+      orderId: 'order-9',
+      publicOrderNumber: '#0009',
+      status: 'CONFIRMED',
+      version: 1,
+      outcome: 'PLACED',
+      warnings: [],
+    };
+    const placeOrder = vi.fn().mockResolvedValue(result);
+    await render(
+      { placeOrder, menu: vi.fn().mockResolvedValue(menuWith({}, PRESETS)) },
+      {},
+      [],
+      { paymentMethods: {} },
+      {},
+    );
+    vi.spyOn(router, 'navigate').mockResolvedValue(true);
+
+    fixture.componentInstance['selectCandidate'](candidate());
+    fixture.componentInstance['onItemSelected']({ id: 'v-1', label: 'Cheeseburger' });
+    fixture.detectChanges();
+    fixture.componentInstance['onModifierConfirm']({
+      selections: [],
+      commentPresetCodes: ['NO_ONIONS', 'EXTRA_SPICY'],
+    });
+    fixture.detectChanges();
+
+    await fixture.componentInstance['submit']();
+
+    const [, request] = placeOrder.mock.calls[0];
+    expect(request.lines[0].commentPresetCodes).toEqual(['NO_ONIONS', 'EXTRA_SPICY']);
   });
 
   // ---------------------------------------------------------- delivery fee preview (row 1.3)

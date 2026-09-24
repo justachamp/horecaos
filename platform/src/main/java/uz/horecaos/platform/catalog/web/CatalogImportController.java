@@ -66,6 +66,28 @@ public class CatalogImportController {
         return csvResponse("catalog-import-template.csv", imports.template());
     }
 
+    @GetMapping(
+            path = "/imports/template.xlsx",
+            produces = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    @RequiresCapability(value = Capability.CATALOG_READ, scope = ScopeType.BRAND)
+    @Operation(
+            summary = "The empty import template, as a workbook",
+            description = "Row 4.5b: an Import sheet (header row only), an Examples sheet with two filled "
+                    + "rows, and a Reference sheet naming the closed vocabularies status and unit_code "
+                    + "accept. Upload it back, filled, to POST /imports -- the same dry-run/apply pipeline "
+                    + "the CSV template already goes through.")
+    public ResponseEntity<byte[]> templateWorkbook(@PathVariable UUID tenantId, @PathVariable UUID brandId) {
+        return ResponseEntity.ok()
+                .contentType(new MediaType("application", "vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .header(
+                        HttpHeaders.CONTENT_DISPOSITION,
+                        ContentDisposition.attachment()
+                                .filename("catalog-import-template.xlsx")
+                                .build()
+                                .toString())
+                .body(imports.templateWorkbook());
+    }
+
     @GetMapping(path = "/export", produces = "text/csv")
     @RequiresCapability(value = Capability.CATALOG_READ, scope = ScopeType.BRAND)
     @Operation(

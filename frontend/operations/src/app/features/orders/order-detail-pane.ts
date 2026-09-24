@@ -67,6 +67,7 @@ import {
   OrderDeliveryResponse,
   OrderDetailResponse,
   OrderLine,
+  OrderLineCommentPreset,
   OrderTimelineEntry,
   RevisionResponse,
 } from './order-detail';
@@ -1796,6 +1797,18 @@ export class OrderDetailPane {
 
   protected lineName(line: OrderLine): string {
     return line.productName;
+  }
+
+  /** Row 2.1b: a preset's label in the console's own locale, matching `data-privacy-page.ts`'s own `consentLabel` selection. */
+  protected presetLabel(preset: OrderLineCommentPreset): string {
+    switch (this.i18n.locale()) {
+      case 'ru':
+        return preset.labelRu;
+      case 'uz-Latn':
+        return preset.labelUz;
+      default:
+        return preset.labelEn;
+    }
   }
 
   /** §3.6's «Комментарий клиента к позиции» pointer: whether any line has one to reveal, above. */

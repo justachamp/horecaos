@@ -93,7 +93,13 @@ class ChannelOfferingExclusionsReaderTests {
         catalogStore = new JdbcCatalogStore(jdbc, objectMapper);
         MenuPriceLookup noPrices =
                 (tenantId, brandId, locationId, channelCode, variantIds, optionIds) -> Optional.empty();
-        menu = new StorefrontCatalogQuery(catalogStore, noPrices, new JdbcMenuStore(jdbc));
+        menu = new StorefrontCatalogQuery(
+                catalogStore,
+                noPrices,
+                new JdbcMenuStore(jdbc),
+                new uz.horecaos.platform.catalog.infrastructure.tenancy.JdbcCatalogTenantContext(jdbc),
+                java.time.Clock.systemUTC(),
+                new uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCommentPresetStore(jdbc));
 
         seedTenancy();
         variant1 = seedProductAndVariant("BURGER");

@@ -5373,11 +5373,13 @@ export const messagesUzLatn: MessageCatalogue = {
   'orders.newOrder.menu.itemStopped': 'Bu taom endi mavjud emas',
   'orders.newOrder.menu.unpricedResult':
     'Taom narxini aniqlab boʻlmadi — birozdan keyin qayta urinib koʻring',
+  'orders.newOrder.menu.itemOutOfSaleWindow': 'Bu taom hozir sotuvda emas',
   'orders.newOrder.modifiers.title': '«{product}» uchun variantlarni tanlang',
   'orders.newOrder.modifiers.required': 'majburiy',
   'orders.newOrder.modifiers.selectAtLeast': 'Kamida {min} tani tanlang',
   'orders.newOrder.modifiers.confirm': 'Buyurtmaga qoʻshish',
   'orders.newOrder.modifiers.cancel': 'Bekor qilish',
+  'orders.newOrder.presets.title': 'Izohlar',
   'orders.newOrder.basket.title': 'Savat',
   'orders.newOrder.basket.empty': 'Hozircha boʻsh',
   'orders.newOrder.basket.remove': 'Olib tashlash',

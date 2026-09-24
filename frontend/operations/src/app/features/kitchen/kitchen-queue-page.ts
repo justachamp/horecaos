@@ -38,7 +38,7 @@ import { OrderChangePaymentMethodDialog } from '../orders/order-change-payment-m
 import { describeApiError } from '../orders/order-errors';
 import { OrderAmendmentsApi } from '../orders/order-amendments-api';
 import { OrderDeliveryApi } from '../orders/order-delivery-api';
-import { OrderDetailResponse, OrderLine } from '../orders/order-detail';
+import { OrderDetailResponse, OrderLine, OrderLineCommentPreset } from '../orders/order-detail';
 import { OrderRevealApi } from '../orders/order-reveal-api';
 import { SalesChannelsApi } from '../settings/sales-channels/sales-channels-api';
 import {
@@ -130,8 +130,15 @@ const PLACEHOLDER_TIME_ZONE: TimeZone = 'Asia/Tashkent';
  * proactively greyed-out option — no read exists yet that would answer
  * "will this refuse" without guessing.
  *
- * **Not built, honestly**: preset product comments (no backend vocabulary
- * exists at all — see the wave's report).
+ * **Row 2.1b (this wave)**: preset comments now render as chips ahead of the
+ * free note, resolved off the same order-detail read {@link lineFor} already
+ * joins for the product name and `hasNote` — ADR 0041 keeps both off
+ * `TicketItemView` itself, so this screen has always had to resolve a line's
+ * display text this way, and presets are no different. Both prior gaps this
+ * paragraph used to name — preset product comments and changing payment type
+ * from the kitchen — are now built (the latter by wave 10's own
+ * `CHANGE_PAYMENT_METHOD` paragraph above); nothing is left unbuilt in this
+ * doc comment as of wave 10.
  */
 @Component({
   selector: 'q-kitchen-queue-page',
@@ -479,6 +486,18 @@ export class KitchenQueuePage implements OnInit {
 
   protected kitchenNoteFor(ticket: TicketResponse): string | null {
     return this.kitchenNoteByOrderId().get(ticket.orderId) ?? null;
+  }
+
+  /** Row 2.1b: a preset's label in the console's own locale — matches `order-detail-pane.ts`'s own `presetLabel`. */
+  protected presetLabel(preset: OrderLineCommentPreset): string {
+    switch (this.i18n.locale()) {
+      case 'ru':
+        return preset.labelRu;
+      case 'uz-Latn':
+        return preset.labelUz;
+      default:
+        return preset.labelEn;
+    }
   }
 
   // ------------------------------------------------------- P16: line notes
