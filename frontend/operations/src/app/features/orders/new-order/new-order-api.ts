@@ -84,15 +84,32 @@ export interface MenuProduct {
   readonly imageUrls: readonly string[];
   readonly variants: readonly MenuVariant[];
   readonly modifierGroupIds: readonly string[];
+  /** Row 2.1b: the coded kitchen-instruction presets this product offers on a line, in display order. */
+  readonly commentPresets: readonly CommentPresetOption[];
 }
 
-/** @property amountMinor null means unpriced — see `new-order-total.ts`'s own doc for why that is never treated as zero. */
+/**
+ * Row 2.1b: one preset a product offers, every locale so the screen renders
+ * its own — matches `StorefrontCatalogQuery.CommentPresetOption`.
+ */
+export interface CommentPresetOption {
+  readonly code: string;
+  readonly labelRu: string;
+  readonly labelUz: string;
+  readonly labelEn: string;
+}
+
+/**
+ * @property amountMinor null means unpriced — see `new-order-total.ts`'s own doc for why that is never treated as zero.
+ * @property onSaleNow row 4.2g: false means this variant's own sale schedule excludes the current moment — shown, but the New Order screen must refuse adding it, distinct from `orderable` (86'd).
+ */
 export interface MenuVariant {
   readonly variantId: string;
   readonly sku: string | null;
   readonly unitCode: string | null;
   readonly isDefault: boolean;
   readonly orderable: boolean;
+  readonly onSaleNow: boolean;
   readonly amountMinor: number | null;
 }
 
@@ -120,6 +137,8 @@ export interface PlaceOrderLine {
   readonly variantId: string;
   readonly quantity: number;
   readonly modifierOptionIds: readonly string[];
+  /** Row 2.1b: the coded presets the operator picked from the product's own offered subset. */
+  readonly commentPresetCodes: readonly string[];
   readonly customerNote?: string | null;
 }
 

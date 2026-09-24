@@ -162,6 +162,13 @@
                     }
                   </ul>
                 }
+                @if (line.commentPresets.length > 0) {
+                  <ul class="pane__line-presets" data-testid="order-detail-line-presets">
+                    @for (preset of line.commentPresets; track preset.code) {
+                      <li class="pane__preset-chip">{{ presetLabel(preset) }}</li>
+                    }
+                  </ul>
+                }
                 @if (line.hasNote) {
                   @if (revealedNote(line.lineId); as note) {
                     <p class="q-caption pane__line-note">{{ note }}</p>
