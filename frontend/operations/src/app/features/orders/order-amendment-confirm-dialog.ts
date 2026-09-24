@@ -37,6 +37,14 @@ const CHANNEL_LABEL_KEYS: Readonly<Record<AmendmentConfirmationChannel, MessageK
  * confirm button still calls the identical endpoint, because no other one
  * exists to move a `PRICED` amendment forward (the approval decision itself
  * is out of this screen's scope — see the wave's own report).
+ *
+ * <p>ADR 0039 §3.11 ties the customer's recorded agreement to an increase
+ * only, so the channel picker below only renders for `deltaMinor() > 0` — a
+ * decrease-only (or zero-delta) confirm still hits the same endpoint, but
+ * never asks the operator how a customer they were never meant to consult
+ * "agreed". The server side of this gate is
+ * `OrderAmendmentService#attestConfirmation`, which likewise only persists
+ * `confirmation_attested_by`/`_at`/`_channel` for a positive delta.
  */
 @Component({
   selector: 'q-order-amendment-confirm-dialog',

@@ -27,19 +27,25 @@
     </p>
   }
 
-  <label class="amend-confirm-dialog__field">
-    <span class="q-body-sm">{{ 'orders.dialog.amendConfirm.channel' | t }}</span>
-    <select
-      class="amend-confirm-dialog__select q-body-sm"
-      [value]="channel()"
-      (change)="setChannel($any($event.target).value)"
-      data-testid="order-amendment-confirm-channel"
-    >
-      @for (option of channels; track option) {
-        <option [value]="option">{{ channelLabelKey(option) | t }}</option>
-      }
-    </select>
-  </label>
+  @if (deltaMinor() > 0) {
+    <!-- ADR 0039 §3.11: the customer's recorded agreement is only for an
+         increase. A decrease (or a zero-delta reprice) is never presented as
+         one, so the console never collects -- or looks like it collects -- a
+         "how did the customer agree" answer nobody was ever asked. -->
+    <label class="amend-confirm-dialog__field">
+      <span class="q-body-sm">{{ 'orders.dialog.amendConfirm.channel' | t }}</span>
+      <select
+        class="amend-confirm-dialog__select q-body-sm"
+        [value]="channel()"
+        (change)="setChannel($any($event.target).value)"
+        data-testid="order-amendment-confirm-channel"
+      >
+        @for (option of channels; track option) {
+          <option [value]="option">{{ channelLabelKey(option) | t }}</option>
+        }
+      </select>
+    </label>
+  }
 
   <ng-container qModalActions>
     <button
