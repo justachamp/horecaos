@@ -9,6 +9,17 @@ import { settingsPaths } from '../../../core/api/settings-paths';
 
 export type CoordinateSource = 'NOT_GEOCODED' | 'GEOCODER' | 'MERCHANT_PIN' | 'OPERATOR_PIN';
 
+/** `uz.horecaos.platform.tenancy.domain.BrandProfile.KNOWN_LOCALES`, mirrored — same closed set brand-profile.locale editing uses. */
+export type LocationLocaleCode = 'ru' | 'uz-Latn' | 'en';
+export const LOCATION_KNOWN_LOCALES: readonly LocationLocaleCode[] = ['ru', 'uz-Latn', 'en'];
+
+/** One locale's own localized content for a branch (10.2b). Mirrors ...TenantControlPlaneService.LocationLocaleView. */
+export interface LocationLocaleView {
+  readonly locale: LocationLocaleCode;
+  readonly displayName: string | null;
+  readonly description: string | null;
+}
+
 /** Mirrors uz.horecaos.platform.tenancy.application.TenantControlPlaneService.LocationView. */
 export interface LocationView {
   readonly id: string;
@@ -27,6 +38,24 @@ export interface LocationView {
   readonly latitude: number | null;
   readonly longitude: number | null;
   readonly coordinateSource: CoordinateSource;
+  /** 10.2b: the branch list's own manual ordering, lowest first. */
+  readonly sortOrder: number;
+  readonly seats: number | null;
+  /** Minor units of {@link averageChequeCurrency}; both null or both set. */
+  readonly averageChequeAmount: number | null;
+  readonly averageChequeCurrency: string | null;
+  readonly hasParking: boolean;
+  readonly hasPlayground: boolean;
+  readonly virtualTourUrl: string | null;
+  /** This branch's own localized content, one entry per locale it has been given content in. */
+  readonly locales: readonly LocationLocaleView[];
+}
+
+/** One locale's own localized display name/description for a branch, as authored (10.2b). */
+export interface LocationLocaleRequest {
+  readonly locale: LocationLocaleCode;
+  readonly displayName?: string;
+  readonly description?: string;
 }
 
 export interface DescribeLocationRequest {
@@ -46,6 +75,21 @@ export interface DescribeLocationRequest {
    * through unchanged — see `DescribeLocationCommand.toPlace`'s own doc.
    */
   readonly clearLandmark?: boolean;
+  /**
+   * 10.2b: sort order and the venue attributes. Omitted means untouched —
+   * the same silent-carry-through rule `clearLandmark`'s own doc names,
+   * boxed server-side (`DescribeLocationCommand.toVenue`) for exactly the
+   * same reason.
+   */
+  readonly sortOrder?: number;
+  readonly seats?: number;
+  readonly averageChequeAmount?: number;
+  readonly averageChequeCurrency?: string;
+  readonly hasParking?: boolean;
+  readonly hasPlayground?: boolean;
+  readonly virtualTourUrl?: string;
+  /** 10.2b: a whole-set write when present — replaces the branch's entire localized-content set. Omitted leaves it untouched. */
+  readonly locales?: readonly LocationLocaleRequest[];
 }
 
 export interface RuleView {

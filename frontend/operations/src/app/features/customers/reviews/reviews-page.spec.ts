@@ -49,6 +49,14 @@ function location(overrides: Partial<LocationView> = {}): LocationView {
     latitude: null,
     longitude: null,
     coordinateSource: 'NOT_GEOCODED',
+    sortOrder: 0,
+    seats: null,
+    averageChequeAmount: null,
+    averageChequeCurrency: null,
+    hasParking: false,
+    hasPlayground: false,
+    virtualTourUrl: null,
+    locales: [],
     ...overrides,
   };
 }

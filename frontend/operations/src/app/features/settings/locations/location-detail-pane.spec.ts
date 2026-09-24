@@ -32,6 +32,14 @@ const LOCATION: LocationView = {
   latitude: 41.3,
   longitude: 69.2,
   coordinateSource: 'MERCHANT_PIN',
+  sortOrder: 0,
+  seats: null,
+  averageChequeAmount: null,
+  averageChequeCurrency: null,
+  hasParking: false,
+  hasPlayground: false,
+  virtualTourUrl: null,
+  locales: [],
 };
 
 const SUMMARY: ServiceSummaryResponse = {
@@ -255,6 +263,94 @@ describe('LocationDetailPane', () => {
     expect(api.describePlace).toHaveBeenCalledWith(
       SCOPE,
       expect.objectContaining({ landmark: undefined, clearLandmark: true }),
+    );
+  });
+
+  // ------------------------------------------------------------ 10.2b: venue facts
+
+  it('sends sort order and the venue attributes typed into Tab 1', async () => {
+    const editButton = fixture.nativeElement.querySelector('.primary') as HTMLButtonElement;
+    editButton.click();
+    fixture.detectChanges();
+
+    const sortOrderInput = fixture.nativeElement.querySelector(
+      '#place-sort-order',
+    ) as HTMLInputElement;
+    sortOrderInput.value = '4';
+    sortOrderInput.dispatchEvent(new Event('input'));
+
+    const seatsInput = fixture.nativeElement.querySelector('#place-seats') as HTMLInputElement;
+    seatsInput.value = '60';
+    seatsInput.dispatchEvent(new Event('input'));
+
+    const parkingCheckbox = fixture.nativeElement.querySelector(
+      'input[type="checkbox"]',
+    ) as HTMLInputElement;
+    parkingCheckbox.checked = true;
+    parkingCheckbox.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    const saveButton = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('.form__actions button'),
+    ).find((button) => button.textContent?.includes('Save')) as HTMLButtonElement;
+    saveButton.click();
+    await flushMicrotasks();
+
+    expect(api.describePlace).toHaveBeenCalledWith(
+      SCOPE,
+      expect.objectContaining({ sortOrder: 4, seats: 60, hasParking: true }),
+    );
+  });
+
+  it('prefills the venue section and localized-content grid from the loaded profile, and omits a locale left entirely blank', async () => {
+    const described: LocationView = {
+      ...LOCATION,
+      sortOrder: 2,
+      seats: 40,
+      averageChequeAmount: 85000,
+      averageChequeCurrency: 'UZS',
+      hasParking: true,
+      hasPlayground: false,
+      virtualTourUrl: 'https://tour.example/branch',
+      locales: [{ locale: 'ru', displayName: 'Филиал', description: 'Описание' }],
+    };
+    // A fresh `locationId` re-triggers the constructor's own load effect
+    // (the same RouteReuseStrategy re-load the class doc names), which is
+    // simpler here than reconfiguring TestBed a second time.
+    api.profile.mockResolvedValue(described);
+    fixture.componentRef.setInput('locationId', 'location-1-described');
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    const editButton = fixture.nativeElement.querySelector('.primary') as HTMLButtonElement;
+    editButton.click();
+    fixture.detectChanges();
+
+    expect(
+      (fixture.nativeElement.querySelector('#place-sort-order') as HTMLInputElement).value,
+    ).toBe('2');
+    expect((fixture.nativeElement.querySelector('#place-seats') as HTMLInputElement).value).toBe(
+      '40',
+    );
+    const localeInputs = fixture.nativeElement.querySelectorAll(
+      '.locale-row input',
+    ) as NodeListOf<HTMLInputElement>;
+    // ru is the first known locale and comes pre-filled; uz-Latn and en stay blank.
+    expect(localeInputs[0].value).toBe('Филиал');
+    expect(localeInputs[1].value).toBe('Описание');
+
+    const saveButton = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('.form__actions button'),
+    ).find((button) => button.textContent?.includes('Save')) as HTMLButtonElement;
+    saveButton.click();
+    await flushMicrotasks();
+
+    expect(api.describePlace).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        locales: [{ locale: 'ru', displayName: 'Филиал', description: 'Описание' }],
+      }),
     );
   });
 

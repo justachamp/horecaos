@@ -17,6 +17,7 @@ public final class Location {
     private String displayName;
     private OperatingUnitStatus status;
     private LocationPlace place;
+    private LocationVenue venue;
     private final long version;
 
     private Location(
@@ -29,6 +30,7 @@ public final class Location {
             ZoneId timezone,
             OperatingUnitStatus status,
             LocationPlace place,
+            LocationVenue venue,
             long version) {
         this.id = Objects.requireNonNull(id, "Location ID is required");
         this.tenantId = Objects.requireNonNull(tenantId, "Tenant ID is required");
@@ -39,6 +41,7 @@ public final class Location {
         this.timezone = Objects.requireNonNull(timezone, "Location timezone is required");
         this.status = Objects.requireNonNull(status, "Location status is required");
         this.place = Objects.requireNonNull(place, "Location place is required");
+        this.venue = Objects.requireNonNull(venue, "Location venue is required");
         this.version = version;
     }
 
@@ -63,6 +66,7 @@ public final class Location {
                 // address arrives during onboarding, and until it does the gap is
                 // stated rather than implied by a scatter of nulls.
                 LocationPlace.unknown(),
+                LocationVenue.unknown(),
                 0);
     }
 
@@ -77,8 +81,9 @@ public final class Location {
             ZoneId timezone,
             OperatingUnitStatus status,
             LocationPlace place,
+            LocationVenue venue,
             long version) {
-        return new Location(id, tenantId, brandId, code, slug, displayName, timezone, status, place, version);
+        return new Location(id, tenantId, brandId, code, slug, displayName, timezone, status, place, venue, version);
     }
 
     /**
@@ -121,6 +126,17 @@ public final class Location {
      */
     public void describePlace(LocationPlace described) {
         this.place = Objects.requireNonNull(described, "Location place is required");
+    }
+
+    /**
+     * Records the branch's own venue facts (row 10.2b) — sort order, seats,
+     * average cheque, parking, playground, virtual tour. Allowed in every
+     * status, for the same reason {@link #describePlace} is: a closed branch
+     * still had these facts, and refusing the correction would leave stale
+     * ones behind on a screen that otherwise reflects reality.
+     */
+    public void describeVenue(LocationVenue described) {
+        this.venue = Objects.requireNonNull(described, "Location venue is required");
     }
 
     public void activate() {
@@ -172,6 +188,10 @@ public final class Location {
 
     public LocationPlace place() {
         return place;
+    }
+
+    public LocationVenue venue() {
+        return venue;
     }
 
     /** The version this branch was read at; a write that persists it moves the stored one on. */

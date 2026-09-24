@@ -21,6 +21,9 @@ import {
   BandRequest,
   BandView,
   ExceptionRequest,
+  LOCATION_KNOWN_LOCALES,
+  LocationLocaleCode,
+  LocationLocaleRequest,
   LocationsApi,
   LocationView,
   ModeBindingView,
@@ -30,6 +33,13 @@ import {
 
 type LocationTab =
   'basics' | 'hours' | 'load' | 'fiscal' | 'channels' | 'notifications' | 'floorplan';
+
+/** One row of Tab 1's localized-content editor, over the fixed set `brand-profile-page.ts`'s own locale grid already authors. */
+interface LocaleContentDraft {
+  readonly locale: LocationLocaleCode;
+  displayName: string;
+  description: string;
+}
 
 /** ADR 0036 — `uz.horecaos.platform.tenancy.api.FulfillmentMode`'s three values, fixed. */
 const FULFILLMENT_MODES = ['DELIVERY', 'PICKUP', 'DINE_IN'] as const;
@@ -100,6 +110,17 @@ export class LocationDetailPane {
   protected readonly draftCity = signal('');
   protected readonly draftContactPhone = signal('');
   protected readonly draftLandmark = signal('');
+
+  // ------------------------------------------------------- 10.2b: venue facts
+  protected readonly knownLocales = LOCATION_KNOWN_LOCALES;
+  protected readonly draftSortOrder = signal(0);
+  protected readonly draftSeats = signal('');
+  protected readonly draftAverageChequeAmount = signal('');
+  protected readonly draftAverageChequeCurrency = signal('');
+  protected readonly draftHasParking = signal(false);
+  protected readonly draftHasPlayground = signal(false);
+  protected readonly draftVirtualTourUrl = signal('');
+  protected readonly draftLocaleContent = signal<readonly LocaleContentDraft[]>([]);
 
   protected readonly stateSaving = signal(false);
   protected readonly stateError = signal<string | null>(null);
@@ -180,8 +201,39 @@ export class LocationDetailPane {
     this.draftCity.set(current?.city ?? '');
     this.draftContactPhone.set(current?.contactPhone ?? '');
     this.draftLandmark.set(current?.landmark ?? '');
+    this.draftSortOrder.set(current?.sortOrder ?? 0);
+    this.draftSeats.set(current?.seats != null ? String(current.seats) : '');
+    this.draftAverageChequeAmount.set(
+      current?.averageChequeAmount != null ? String(current.averageChequeAmount) : '',
+    );
+    this.draftAverageChequeCurrency.set(current?.averageChequeCurrency ?? '');
+    this.draftHasParking.set(current?.hasParking ?? false);
+    this.draftHasPlayground.set(current?.hasPlayground ?? false);
+    this.draftVirtualTourUrl.set(current?.virtualTourUrl ?? '');
+    this.draftLocaleContent.set(
+      this.knownLocales.map((locale) => {
+        const existing = current?.locales.find((entry) => entry.locale === locale);
+        return {
+          locale,
+          displayName: existing?.displayName ?? '',
+          description: existing?.description ?? '',
+        };
+      }),
+    );
     this.placeError.set(null);
     this.editingPlace.set(true);
+  }
+
+  protected setLocaleDisplayName(locale: LocationLocaleCode, displayName: string): void {
+    this.draftLocaleContent.update((rows) =>
+      rows.map((row) => (row.locale === locale ? { ...row, displayName } : row)),
+    );
+  }
+
+  protected setLocaleDescription(locale: LocationLocaleCode, description: string): void {
+    this.draftLocaleContent.update((rows) =>
+      rows.map((row) => (row.locale === locale ? { ...row, description } : row)),
+    );
   }
 
   /**
@@ -212,6 +264,21 @@ export class LocationDetailPane {
     try {
       const trimmedLandmark = this.draftLandmark().trim();
       const clearLandmark = trimmedLandmark === '' && !!this.profile()?.landmark;
+      const seats = this.draftSeats().trim();
+      const averageChequeAmount = this.draftAverageChequeAmount().trim();
+      const averageChequeCurrency = this.draftAverageChequeCurrency().trim();
+      // A whole-set write, always sent — the same reason brand-profile.ts's
+      // own saveProfile always sends its whole `locales` array: the grid
+      // already knows the full set it wants. A row both fields left blank is
+      // dropped rather than sent as an empty entry, so clearing every field
+      // for a locale actually removes it from the branch's content set.
+      const locales: LocationLocaleRequest[] = this.draftLocaleContent()
+        .filter((row) => row.displayName.trim() !== '' || row.description.trim() !== '')
+        .map((row) => ({
+          locale: row.locale,
+          displayName: row.displayName.trim() || undefined,
+          description: row.description.trim() || undefined,
+        }));
       const updated = await this.api.describePlace(scope, {
         addressLine: this.draftAddressLine().trim() || undefined,
         district: this.draftDistrict().trim() || undefined,
@@ -219,6 +286,14 @@ export class LocationDetailPane {
         contactPhone: this.draftContactPhone().trim() || undefined,
         landmark: trimmedLandmark || undefined,
         clearLandmark: clearLandmark || undefined,
+        sortOrder: this.draftSortOrder(),
+        seats: seats === '' ? undefined : Number(seats),
+        averageChequeAmount: averageChequeAmount === '' ? undefined : Number(averageChequeAmount),
+        averageChequeCurrency: averageChequeCurrency || undefined,
+        hasParking: this.draftHasParking(),
+        hasPlayground: this.draftHasPlayground(),
+        virtualTourUrl: this.draftVirtualTourUrl().trim() || undefined,
+        locales,
       });
       this.profile.set(updated);
       this.editingPlace.set(false);
@@ -226,6 +301,17 @@ export class LocationDetailPane {
       this.placeError.set(this.describe(error));
     } finally {
       this.placeSaving.set(false);
+    }
+  }
+
+  protected localeLabel(locale: LocationLocaleCode): string {
+    switch (locale) {
+      case 'ru':
+        return this.i18n.t('settings.brandProfile.locale.ru');
+      case 'uz-Latn':
+        return this.i18n.t('settings.brandProfile.locale.uzLatn');
+      case 'en':
+        return this.i18n.t('settings.brandProfile.locale.en');
     }
   }
 
