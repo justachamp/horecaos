@@ -405,7 +405,11 @@ public class JdbcPosMappingStore {
      * as-is instead, which is at minimum what an operator needs to cross-check
      * against the till's own admin screen.
      *
-     * @param brandId unused for every type but {@link MappingEntityType#PRODUCT}; null is fine for the rest
+     * @param brandId required for {@link MappingEntityType#PRODUCT}, {@link
+     *                MappingEntityType#VARIANT} and {@link MappingEntityType#MODIFIER}
+     *                (each brand-owned data); null is fine for the rest, and
+     *                for those three a null brandId simply resolves nothing
+     *                rather than reaching across the whole tenant
      */
     public Map<UUID, String> resolveHorecaosNames(
             UUID tenantId, @Nullable UUID brandId, MappingEntityType type, Set<UUID> ids) {
@@ -420,16 +424,18 @@ public class JdbcPosMappingStore {
             case CANCELLATION_REASON -> resolveById(tenantId, "ordering.order_outcome_reasons", "internal_name", ids);
             case CHANNEL_POS_CODE -> resolveById(tenantId, "tenant.sales_channels", "display_name", ids);
             case VARIANT -> resolveVariantNames(tenantId, brandId, ids);
-            case MODIFIER -> resolveById(tenantId, "catalog.modifier_options", "code", ids);
+            case MODIFIER -> resolveModifierNames(tenantId, brandId, ids);
         };
     }
 
     /**
      * Whether {@code horecaosEntityId} names a real row of this {@code type}
-     * in this tenant (and, for {@link MappingEntityType#PRODUCT}, this brand)
-     * — the same per-type resolution {@link #resolveHorecaosNames} already
-     * knows, run for one id rather than a batch so {@code create} can refuse
-     * a nonexistent or cross-tenant id before it ever reaches the INSERT.
+     * in this tenant (and, for {@link MappingEntityType#PRODUCT}, {@link
+     * MappingEntityType#VARIANT} and {@link MappingEntityType#MODIFIER}, this
+     * brand) — the same per-type resolution {@link #resolveHorecaosNames}
+     * already knows, run for one id rather than a batch so {@code create} can
+     * refuse a nonexistent, cross-tenant, or (for those three brand-owned
+     * types) cross-brand id before it ever reaches the INSERT.
      */
     public boolean horecaosEntityExists(
             UUID tenantId, @Nullable UUID brandId, MappingEntityType type, UUID horecaosEntityId) {
@@ -471,6 +477,32 @@ public class JdbcPosMappingStore {
                      ON t.entity_type = 'VARIANT' AND t.entity_id = v.id
                     AND t.locale = 'uz-UZ' AND t.tenant_id = v.tenant_id
                  WHERE v.tenant_id = :tenantId AND v.brand_id = :brandId AND v.id = ANY(:ids)
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("ids", ids.toArray(UUID[]::new))
+                .query((row, number) -> Map.entry(row.getObject("id", UUID.class), row.getString("name")))
+                .list()
+                .stream()
+                .collect(java.util.stream.Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+    }
+
+    /**
+     * Brand-scoped, exactly like {@link #resolveVariantNames} and for the same
+     * reason: {@code catalog.modifier_options} is brand-owned data (V0016,
+     * {@code brand_id uuid NOT NULL}), and a binding always belongs to one
+     * specific brand, so a plain tenant-wide {@link #resolveById} would let a
+     * {@code MODIFIER} mapping resolve -- and {@link #horecaosEntityExists}
+     * accept -- a modifier option from a brand other than the binding's own.
+     */
+    private Map<UUID, String> resolveModifierNames(UUID tenantId, @Nullable UUID brandId, Set<UUID> ids) {
+        if (brandId == null) {
+            return Map.of();
+        }
+        return jdbc
+                .sql("""
+                SELECT id, code AS name FROM catalog.modifier_options
+                 WHERE tenant_id = :tenantId AND brand_id = :brandId AND id = ANY(:ids)
                 """)
                 .param("tenantId", tenantId)
                 .param("brandId", brandId)

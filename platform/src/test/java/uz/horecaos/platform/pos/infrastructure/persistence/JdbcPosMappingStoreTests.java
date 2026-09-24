@@ -259,8 +259,35 @@ class JdbcPosMappingStoreTests {
 
         assertThat(store.resolveHorecaosNames(TENANT, BRAND, MappingEntityType.VARIANT, Set.of(variant)))
                 .containsEntry(variant, "SKU-NAMED");
-        assertThat(store.resolveHorecaosNames(TENANT, null, MappingEntityType.MODIFIER, Set.of(option)))
+        // Brand-scoped exactly like VARIANT above, not tenant-wide: catalog.modifier_options
+        // is brand-owned data, so a binding's own brand must be supplied.
+        assertThat(store.resolveHorecaosNames(TENANT, BRAND, MappingEntityType.MODIFIER, Set.of(option)))
                 .containsEntry(option, "SPICY");
+    }
+
+    @Test
+    @DisplayName("resolveHorecaosNames finds nothing for a MODIFIER id when no brandId is supplied, rather than "
+            + "resolving it tenant-wide across every brand's own modifier options")
+    void resolveHorecaosNamesForModifierRequiresABrand() {
+        UUID option = insertModifierOption("NO_BRAND_LOOKUP");
+
+        assertThat(store.resolveHorecaosNames(TENANT, null, MappingEntityType.MODIFIER, Set.of(option)))
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("resolveHorecaosNames does not resolve a MODIFIER id that belongs to a different brand of the same "
+            + "tenant, matching horecaosEntityExists' own cross-brand refusal")
+    void resolveHorecaosNamesForModifierIsBrandScoped() {
+        UUID otherBrand = Ids.newId();
+        jdbc.sql("""
+                INSERT INTO tenant.brands (id, tenant_id, code, slug, display_name, status, version)
+                VALUES (:id, :t, 'STORE_OTHER_BRAND', 'store-other-brand', 'Other brand', 'ACTIVE', 0)
+                """).param("id", otherBrand).param("t", TENANT).update();
+        UUID option = insertModifierOption("CROSS_BRAND_OPTION");
+
+        assertThat(store.resolveHorecaosNames(TENANT, otherBrand, MappingEntityType.MODIFIER, Set.of(option)))
+                .doesNotContainKey(option);
     }
 
     @Test
