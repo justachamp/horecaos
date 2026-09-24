@@ -311,10 +311,29 @@ export const routes: Routes = [
               ),
           },
           {
+            // Row 10.5 (wave10-w8-channel-setup): the per-channel setup hub.
+            // :channelId is required -- the hub has nothing to show without
+            // one -- so a bare /settings/channel-setup visit (no channel
+            // selected yet) falls through to the same NotBuiltPage the
+            // whole section used to resolve to, rather than a blank page or
+            // a route error. The sales-channels list links each row here.
             path: 'channel-setup',
-            loadComponent: () =>
-              import('./features/not-built/not-built-page').then((m) => m.NotBuiltPage),
-            data: { spec: 'operations-spec/settings.md §10.5 (Channel setup)' },
+            children: [
+              {
+                path: '',
+                pathMatch: 'full',
+                loadComponent: () =>
+                  import('./features/not-built/not-built-page').then((m) => m.NotBuiltPage),
+                data: { spec: 'operations-spec/settings.md §10.5 (Channel setup)' },
+              },
+              {
+                path: ':channelId',
+                loadComponent: () =>
+                  import('./features/settings/channel-setup/channel-setup-page').then(
+                    (m) => m.ChannelSetupPage,
+                  ),
+              },
+            ],
           },
           {
             path: 'order-policy',

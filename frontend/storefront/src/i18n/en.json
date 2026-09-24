@@ -280,6 +280,16 @@
     "iAgree": "I agree",
     "acceptError": "Something went wrong. Please try again."
   },
+  "pages": {
+    "notFound": "This page is not available.",
+    "loadError": "Could not load this page.",
+    "slug": {
+      "about": "About",
+      "contacts": "Contacts",
+      "deliveryTerms": "Delivery terms",
+      "privacyOffer": "Privacy / offer"
+    }
+  },
   "action": {
     "yourAddress": "Your address",
     "balance": "Balance",

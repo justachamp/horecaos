@@ -1,0 +1,252 @@
+<div class="channel-setup-page">
+  <a routerLink="/settings/sales-channels" class="back-link q-body-sm">
+    {{ 'settings.channelSetup.back' | t }}
+  </a>
+
+  @if (loading()) {
+    <p class="q-body-sm ink-subtle">{{ 'settings.integrations.loading' | t }}</p>
+  } @else if (denied()) {
+    <p class="q-body-sm ink-subtle" data-testid="channel-setup-denied">{{ 'settings.scope.denied' | t }}</p>
+  } @else if (loadError()) {
+    <p class="q-body-sm error">{{ loadError() }}</p>
+  } @else if (channel(); as ch) {
+    <h1 class="q-headline">{{ 'settings.channelSetup.title' | t: { name: ch.displayName } }}</h1>
+    <p class="q-body-sm ink-subtle">{{ ch.systemType }} · {{ ch.code }}</p>
+
+    <!-- (a) Telegram bot -->
+    @if (ch.systemType === 'TELEGRAM') {
+      <section class="facet-card">
+        <h2 class="q-subhead">{{ 'settings.channelSetup.telegram.title' | t }}</h2>
+        @if (installation(); as inst) {
+          <p class="q-body-sm status" [class.configured]="inst.webhookRegistered" [class.not-configured]="!inst.webhookRegistered">
+            {{
+              (inst.webhookRegistered
+                ? 'settings.channelSetup.status.configured'
+                : 'settings.channelSetup.status.notConfigured') | t
+            }}
+            — {{ inst.displayName }}
+          </p>
+        } @else {
+          <p class="q-body-sm status not-configured">{{ 'settings.channelSetup.status.notConfigured' | t }}</p>
+        }
+        <a routerLink="/settings/integrations" class="q-body-sm link">
+          → {{ 'settings.nav.integrations' | t }}
+        </a>
+      </section>
+    }
+
+    <!-- (b) Web storefront hostname -->
+    @if (ch.systemType === 'WEB') {
+      <section class="facet-card">
+        <h2 class="q-subhead">{{ 'settings.channelSetup.hostname.title' | t }}</h2>
+        @if (hostname(); as host) {
+          @if (host.configured) {
+            <p class="q-body-sm status configured">
+              {{ host.hostname }} —
+              {{
+                host.verified
+                  ? ('settings.channelSetup.hostname.verified' | t)
+                  : ('settings.channelSetup.hostname.unverified' | t)
+              }}
+            </p>
+            @if (!host.verified) {
+              <button type="button" class="q-body-sm link" [disabled]="hostnameSaving()" (click)="verifyHostname()">
+                {{ 'settings.channelSetup.hostname.markVerified' | t }}
+              </button>
+            }
+            <button type="button" class="q-body-sm link" [disabled]="hostnameSaving()" (click)="clearHostname()">
+              {{ 'settings.channelSetup.hostname.release' | t }}
+            </button>
+          } @else {
+            <p class="q-body-sm status not-configured">{{ 'settings.channelSetup.status.notConfigured' | t }}</p>
+
+            <div class="hostname-form">
+              <label class="q-body-sm">
+                <input type="radio" name="hostnameMode" [checked]="hostnameMode() === 'subdomain'" (change)="hostnameMode.set('subdomain')" />
+                {{ 'settings.channelSetup.hostname.subdomain.label' | t }}
+              </label>
+              <label class="q-body-sm">
+                <input type="radio" name="hostnameMode" [checked]="hostnameMode() === 'custom'" (change)="hostnameMode.set('custom')" />
+                {{ 'settings.channelSetup.hostname.custom.label' | t }}
+              </label>
+
+              @if (hostnameMode() === 'subdomain') {
+                <div class="subdomain-row">
+                  <input
+                    type="text"
+                    class="q-input"
+                    [value]="hostnameSlug()"
+                    (input)="hostnameSlug.set($any($event.target).value)"
+                    [placeholder]="'settings.channelSetup.hostname.subdomain.placeholder' | t"
+                    data-testid="hostname-slug-input"
+                  />
+                  <span class="q-body-sm ink-subtle">.{{ baseDomain() }}</span>
+                  <button
+                    type="button"
+                    class="q-body-sm link"
+                    [disabled]="!canClaimSubdomain()"
+                    (click)="claimSubdomain()"
+                    data-testid="claim-subdomain"
+                  >
+                    {{ 'settings.channelSetup.hostname.claim' | t }}
+                  </button>
+                </div>
+              } @else {
+                <div class="subdomain-row">
+                  <input
+                    type="text"
+                    class="q-input"
+                    [value]="hostnameCustom()"
+                    (input)="hostnameCustom.set($any($event.target).value)"
+                    [placeholder]="'settings.channelSetup.hostname.custom.placeholder' | t"
+                  />
+                  <button type="button" class="q-body-sm link" [disabled]="!canClaimCustom()" (click)="claimCustomHostname()">
+                    {{ 'settings.channelSetup.hostname.claim' | t }}
+                  </button>
+                </div>
+              }
+            </div>
+          }
+        }
+        @if (hostnameError(); as err) {
+          <p class="q-body-sm error">{{ err }}</p>
+        }
+      </section>
+
+      <!-- (c) Presentation -->
+      <section class="facet-card">
+        <h2 class="q-subhead">{{ 'settings.channelSetup.presentation.title' | t }}</h2>
+        <label class="q-caption">{{ 'settings.channelSetup.presentation.seoTitle' | t }}</label>
+        <input
+          type="text"
+          class="q-input"
+          [value]="seoTitle()"
+          (input)="seoTitle.set($any($event.target).value)"
+          maxlength="200"
+        />
+        <label class="q-caption">{{ 'settings.channelSetup.presentation.seoDescription' | t }}</label>
+        <textarea
+          class="q-input"
+          [value]="seoDescription()"
+          (input)="seoDescription.set($any($event.target).value)"
+          maxlength="500"
+          rows="2"
+        ></textarea>
+
+        <label class="q-caption">{{ 'settings.channelSetup.presentation.ogImage' | t }}</label>
+        <div class="media-editor">
+          @if (ogImagePreviewUrl(); as url) {
+            <img [src]="url" [alt]="'settings.channelSetup.presentation.ogImage' | t" class="og-preview" />
+          }
+          <q-media-uploader
+            [aspectRatios]="['3:2']"
+            [accept]="'image/jpeg,image/png,image/webp'"
+            [uploading]="uploadingOgImage()"
+            (cropped)="uploadOgImage($event)"
+            (selected)="uploadOgImage($event)"
+            (rejected)="onMediaRejected($event)"
+            data-testid="og-image-uploader"
+          />
+        </div>
+
+        <button
+          type="button"
+          class="q-body-sm link"
+          [disabled]="presentationSaving()"
+          (click)="savePresentation()"
+          data-testid="save-presentation"
+        >
+          {{ 'settings.channelSetup.presentation.save' | t }}
+        </button>
+        @if (presentationError(); as err) {
+          <p class="q-body-sm error">{{ err }}</p>
+        }
+      </section>
+
+      <!-- (c) Static pages -->
+      <section class="facet-card">
+        <h2 class="q-subhead">{{ 'settings.channelSetup.pages.title' | t }}</h2>
+        @for (slug of pageSlugs; track slug) {
+          <div class="page-row">
+            <span class="q-body-sm">{{ pageSlugLabel(slug) }}</span>
+            @if (pages()[slug]?.published) {
+              <span class="q-body-sm status configured">
+                {{ 'settings.channelSetup.pages.published' | t: { version: pages()[slug]!.version! } }}
+              </span>
+            } @else {
+              <span class="q-body-sm status not-configured">{{ 'settings.channelSetup.status.notConfigured' | t }}</span>
+            }
+            <button type="button" class="q-body-sm link" (click)="editPage(slug)" [attr.data-testid]="'edit-page-' + slug">
+              {{ 'settings.channelSetup.pages.edit' | t }}
+            </button>
+          </div>
+          @if (editingSlug() === slug) {
+            <div class="page-editor">
+              @for (locale of locales; track locale) {
+                <label class="q-caption">{{ locale }}</label>
+                <textarea
+                  class="q-input"
+                  rows="4"
+                  [value]="draftFor(slug, locale)"
+                  (input)="setDraft(slug, locale, $any($event.target).value)"
+                ></textarea>
+              }
+              <button
+                type="button"
+                class="q-body-sm link"
+                [disabled]="pageSaving() || !canPublish(slug)"
+                (click)="publishPage(slug)"
+                data-testid="publish-page"
+              >
+                {{ 'settings.channelSetup.pages.publish' | t }}
+              </button>
+              <button type="button" class="q-body-sm link" (click)="cancelEditPage()">
+                {{ 'settings.channelSetup.pages.cancel' | t }}
+              </button>
+            </div>
+          }
+        }
+        @if (pageError(); as err) {
+          <p class="q-body-sm error">{{ err }}</p>
+        }
+      </section>
+    }
+
+    <!-- (d) QR dine-in mode -->
+    @if (ch.systemType === 'QR_TABLE') {
+      <section class="facet-card">
+        <h2 class="q-subhead">{{ 'settings.channelSetup.dineIn.title' | t }}</h2>
+        @if (locationQrModes().length === 0) {
+          <p class="q-body-sm status not-configured">{{ 'settings.channelSetup.status.notConfigured' | t }}</p>
+        } @else {
+          @for (row of locationQrModes(); track row.locationId) {
+            <div class="page-row">
+              <span class="q-body-sm">{{ row.locationName }}</span>
+              <span class="q-body-sm status configured">{{ row.qrMode }}</span>
+              <a [routerLink]="['/settings/locations', row.locationId]" class="q-body-sm link">
+                {{ 'settings.channelSetup.dineIn.edit' | t }}
+              </a>
+            </div>
+          }
+        }
+      </section>
+    }
+
+    <!-- (e) Kiosk pairing -->
+    @if (ch.systemType === 'KIOSK') {
+      <section class="facet-card">
+        <h2 class="q-subhead">{{ 'settings.channelSetup.kiosk.title' | t }}</h2>
+        <p class="q-body-sm status locked">{{ 'settings.channelSetup.kiosk.locked' | t }}</p>
+      </section>
+    }
+
+    @if (
+      ch.systemType !== 'TELEGRAM' &&
+      ch.systemType !== 'WEB' &&
+      ch.systemType !== 'QR_TABLE' &&
+      ch.systemType !== 'KIOSK'
+    ) {
+      <p class="q-body-sm ink-subtle">{{ 'settings.channelSetup.noFacets' | t }}</p>
+    }
+  }
+</div>

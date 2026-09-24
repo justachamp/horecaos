@@ -34,7 +34,15 @@ import uz.horecaos.platform.web.api.ErrorCode;
             // the control-plane controller and had no handler here to catch
             // them — an unknown entity or a stale version on the operations
             // surface fell straight through to an unmapped 500.
-            OperationsLegalEntityController.class
+            OperationsLegalEntityController.class,
+            // Row 10.5 (wave10-w8-channel-setup): ChannelSetupService#require
+            // and #hostname/#presentation each raise the same
+            // TenantResourceNotFoundException/TenantResourceConflictException
+            // as SalesChannelService, and JdbcChannelSetupStore#markVerified
+            // raises the bare IllegalStateException this class already maps
+            // for LegalEntity's own business conflicts.
+            ChannelSetupController.class,
+            ChannelPagesController.class
         })
 public class TenantApiErrorHandler {
 

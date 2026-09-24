@@ -280,6 +280,16 @@
     "iAgree": "Roziman",
     "acceptError": "Xatolik yuz berdi. Qayta urinib ko'ring."
   },
+  "pages": {
+    "notFound": "Bu sahifa mavjud emas.",
+    "loadError": "Sahifani yuklab boʻlmadi.",
+    "slug": {
+      "about": "Biz haqimizda",
+      "contacts": "Aloqa",
+      "deliveryTerms": "Yetkazib berish shartlari",
+      "privacyOffer": "Maxfiylik / oferta"
+    }
+  },
   "action": {
     "yourAddress": "Sizning manzil",
     "balance": "Balans",

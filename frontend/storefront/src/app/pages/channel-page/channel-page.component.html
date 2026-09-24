@@ -1,0 +1,40 @@
+<div class="min-h-screen bg-surface-base pb-24 text-text-primary">
+  <div class="mx-auto max-w-[420px] px-4 py-6">
+    <header class="flex shrink-0 flex-col gap-2 pb-6">
+      <button
+        type="button"
+        appBack="/home"
+        class="app-back flex items-center gap-2 text-sm transition-opacity hover:opacity-90"
+      >
+        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+        </svg>
+        {{ 'common.back' | t }}
+      </button>
+      @if (state() === 'ready') {
+        <p class="text-center text-base font-semibold text-text-primary">{{ titleKey() | t }}</p>
+      }
+    </header>
+
+    @switch (state()) {
+      @case ('loading') {
+        <div class="flex justify-center py-10">
+          <span class="h-6 w-6 animate-spin rounded-full border-2 border-brand-accent border-t-transparent"></span>
+        </div>
+      }
+      @case ('not-found') {
+        <p class="text-center text-sm text-zinc-400">{{ 'pages.notFound' | t }}</p>
+      }
+      @case ('error') {
+        <p class="text-center text-sm text-red-400">{{ 'pages.loadError' | t }}</p>
+      }
+      @case ('ready') {
+        <div class="channel-page-content text-sm leading-relaxed text-zinc-300" [attr.lang]="selectedLangId()">
+          @for (paragraph of body() | channelPageContent; track $index) {
+            <p class="mt-4 first:mt-0">{{ paragraph }}</p>
+          }
+        </div>
+      }
+    }
+  </div>
+</div>
