@@ -78,7 +78,7 @@ public class JdbcCampaignStore {
             estimated_cost_high_minor, estimated_delivery_seconds, cost_ceiling_minor,
             reserved_cost_minor, spent_cost_minor, reserved_recipients, currency,
             benefit_offer_id, loyalty_accrual_rule_id, created_by, approved_by,
-            blocked_count, paused_at, scheduled_at, created_at, updated_at, version
+            blocked_count, paused_at, scheduled_at, halted_reason, created_at, updated_at, version
             """;
 
     public Optional<CampaignRow> find(UUID tenantId, UUID campaignId) {
@@ -180,6 +180,51 @@ public class JdbcCampaignStore {
                         .param("now", utc(now))
                         .update()
                 == 1;
+    }
+
+    /**
+     * Row 6.4 (wave 10 w5-reports-exports): re-arms a campaign {@link #clearFailedSchedule} halted
+     * — {@code status = 'SCHEDULED'} with {@code scheduled_at} already cleared — for a new future
+     * moment, and clears {@code halted_reason} since it no longer describes the row's current
+     * state. Scoped to exactly that halted shape (never a campaign already armed with a live {@code
+     * scheduled_at}): the row's own brief asks for a "re-schedule" affordance on a halted send, not
+     * a general reschedule of an already-working one, and {@code CampaignStatus}'s own transition
+     * table needs no new entry because {@code status} never changes here.
+     */
+    public boolean reschedule(UUID tenantId, UUID campaignId, Instant newScheduledAt, Instant now) {
+        return jdbc.sql("""
+                UPDATE marketing.campaigns
+                   SET scheduled_at = :scheduledAt, halted_reason = NULL, version = version + 1, updated_at = :now
+                 WHERE tenant_id = :tenantId AND id = :id AND status = 'SCHEDULED' AND scheduled_at IS NULL
+                """)
+                        .param("tenantId", tenantId)
+                        .param("id", campaignId)
+                        .param("scheduledAt", utc(newScheduledAt))
+                        .param("now", utc(now))
+                        .update()
+                == 1;
+    }
+
+    /**
+     * Row 6.4: the campaign history/statistics view's own breakdown — every {@code REFUSED}
+     * recipient's reason, including {@code SUPPRESSED} by name. From {@code
+     * marketing.campaign_recipients} alone, the same table {@link #recipientCounts} already reads;
+     * never a reporting fact.
+     */
+    public Map<String, Integer> refusalBreakdown(UUID tenantId, UUID campaignId) {
+        return jdbc
+                .sql("""
+                SELECT refusal_reason, COUNT(*) AS total
+                  FROM marketing.campaign_recipients
+                 WHERE tenant_id = :tenantId AND campaign_id = :campaignId AND status = 'REFUSED'
+                 GROUP BY refusal_reason
+                """)
+                .param("tenantId", tenantId)
+                .param("campaignId", campaignId)
+                .query((ResultSet row, int number) -> Map.entry(row.getString("refusal_reason"), row.getInt("total")))
+                .list()
+                .stream()
+                .collect(java.util.stream.Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
     }
 
     /**
@@ -637,6 +682,7 @@ public class JdbcCampaignStore {
                 row.getInt("blocked_count"),
                 instant(row.getObject("paused_at", OffsetDateTime.class)),
                 instant(row.getObject("scheduled_at", OffsetDateTime.class)),
+                row.getString("halted_reason"),
                 // Both NOT NULL DEFAULT now() (V0043), read directly rather than
                 // through the null-forwarding instant() helper.
                 row.getObject("created_at", OffsetDateTime.class).toInstant(),
@@ -700,6 +746,8 @@ public class JdbcCampaignStore {
             int blockedCount,
             @Nullable Instant pausedAt,
             @Nullable Instant scheduledAt,
+            /** Row 6.4: why a scheduled send did not go out (or a pause/stop reason) — null on a campaign that never halted. */
+            @Nullable String haltedReason,
             Instant createdAt,
             Instant updatedAt,
             int version) {}
