@@ -263,6 +263,10 @@ export const messagesRu: MessageCatalogue = {
   'orders.dialog.changePaymentMethod.label': 'Новый способ оплаты',
   'orders.dialog.changePaymentMethod.empty': 'Для этого канала не включён ни один способ оплаты.',
 
+  'orders.dialog.changeQuantity.title': 'Изменить количество позиции',
+  'orders.dialog.changeQuantity.line': 'Позиция',
+  'orders.dialog.changeQuantity.newQuantity': 'Новое количество (не менее {min})',
+
   // Конфирмация цены при вызове внешнего курьера (карта пробелов 1.2f, волна P44).
   'orders.dialog.externalCourier.title': 'Вызвать курьера',
   'orders.dialog.externalCourier.noPartners':

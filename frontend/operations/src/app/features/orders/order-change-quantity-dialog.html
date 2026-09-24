@@ -1,0 +1,57 @@
+<q-modal
+  [title]="'orders.dialog.changeQuantity.title' | t"
+  [dismissible]="!busy()"
+  (dismiss)="dismiss.emit()"
+  data-testid="order-change-quantity-dialog"
+>
+  <label class="change-quantity-dialog__field">
+    <span class="q-body-sm">{{ 'orders.dialog.changeQuantity.line' | t }}</span>
+    <select
+      class="change-quantity-dialog__select q-body-sm"
+      [value]="selectedLineId()"
+      (change)="selectLine($any($event.target).value)"
+      data-testid="order-change-quantity-dialog-line"
+    >
+      @for (line of lines(); track line.lineId) {
+        <option [value]="line.lineId">
+          {{ line.productName }} ({{ 'orders.detail.lines.column.quantity' | t }}:
+          {{ line.quantity }})
+        </option>
+      }
+    </select>
+  </label>
+
+  <label class="change-quantity-dialog__field">
+    <span class="q-body-sm">{{
+      'orders.dialog.changeQuantity.newQuantity' | t: { min: minQuantity() }
+    }}</span>
+    <input
+      type="number"
+      class="change-quantity-dialog__input q-body-sm"
+      [min]="minQuantity()"
+      [value]="quantity()"
+      (input)="setQuantity($any($event.target).value)"
+      data-testid="order-change-quantity-dialog-quantity"
+    />
+  </label>
+
+  <ng-container qModalActions>
+    <button
+      type="button"
+      class="change-quantity-dialog__dismiss q-body-sm"
+      (click)="dismiss.emit()"
+      [disabled]="busy()"
+    >
+      {{ 'orders.dialog.dismiss' | t }}
+    </button>
+    <button
+      type="button"
+      class="change-quantity-dialog__confirm q-body-sm"
+      (click)="submit()"
+      [disabled]="busy() || !canSubmit()"
+      data-testid="order-change-quantity-dialog-confirm"
+    >
+      {{ 'orders.dialog.note.save' | t }}
+    </button>
+  </ng-container>
+</q-modal>

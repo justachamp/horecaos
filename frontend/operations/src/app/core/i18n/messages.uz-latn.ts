@@ -265,6 +265,10 @@ export const messagesUzLatn: MessageCatalogue = {
   'orders.dialog.changePaymentMethod.label': 'Yangi toʻlov usuli',
   'orders.dialog.changePaymentMethod.empty': 'Bu kanal uchun hech qanday toʻlov usuli yoqilmagan.',
 
+  'orders.dialog.changeQuantity.title': 'Pozitsiya miqdorini oʻzgartirish',
+  'orders.dialog.changeQuantity.line': 'Pozitsiya',
+  'orders.dialog.changeQuantity.newQuantity': 'Yangi miqdor (kamida {min})',
+
   // Tashqi kuryer chaqirishda narx tasdigʻi (boʻshliqlar xaritasi 1.2f, P44 toʻlqini).
   'orders.dialog.externalCourier.title': 'Tashqi kuryer chaqirish',
   'orders.dialog.externalCourier.noPartners': 'Bu filial uchun kuryerlik xizmati sozlanmagan.',

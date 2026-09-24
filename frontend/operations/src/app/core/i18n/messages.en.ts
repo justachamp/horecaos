@@ -277,6 +277,10 @@ export const messagesEn = {
   'orders.dialog.changePaymentMethod.label': 'New payment method',
   'orders.dialog.changePaymentMethod.empty': 'No payment method is enabled for this channel.',
 
+  'orders.dialog.changeQuantity.title': 'Change item quantity',
+  'orders.dialog.changeQuantity.line': 'Item',
+  'orders.dialog.changeQuantity.newQuantity': 'New quantity (at least {min})',
+
   // The Millenium pattern's own confirmation seam (gap map row 1.2f, wave P44).
   'orders.dialog.externalCourier.title': 'Call an external courier',
   'orders.dialog.externalCourier.noPartners':
