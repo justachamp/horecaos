@@ -269,6 +269,13 @@ export const messagesUzLatn: MessageCatalogue = {
   'orders.dialog.changeQuantity.line': 'Pozitsiya',
   'orders.dialog.changeQuantity.newQuantity': 'Yangi miqdor (kamida {min})',
 
+  'orders.dialog.changeAddress.title': 'Yetkazib berish manzilini oʻzgartirish',
+  'orders.dialog.changeAddress.line2': 'Manzil, 2-qator',
+  'orders.dialog.changeAddress.city': 'Shahar',
+  'orders.dialog.changeAddress.district': 'Tuman',
+  'orders.dialog.changeAddress.latitude': 'Kenglik',
+  'orders.dialog.changeAddress.longitude': 'Uzunlik',
+
   // Tashqi kuryer chaqirishda narx tasdigʻi (boʻshliqlar xaritasi 1.2f, P44 toʻlqini).
   'orders.dialog.externalCourier.title': 'Tashqi kuryer chaqirish',
   'orders.dialog.externalCourier.noPartners': 'Bu filial uchun kuryerlik xizmati sozlanmagan.',

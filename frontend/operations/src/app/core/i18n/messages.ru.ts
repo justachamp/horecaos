@@ -267,6 +267,13 @@ export const messagesRu: MessageCatalogue = {
   'orders.dialog.changeQuantity.line': 'Позиция',
   'orders.dialog.changeQuantity.newQuantity': 'Новое количество (не менее {min})',
 
+  'orders.dialog.changeAddress.title': 'Изменить адрес доставки',
+  'orders.dialog.changeAddress.line2': 'Адрес, строка 2',
+  'orders.dialog.changeAddress.city': 'Город',
+  'orders.dialog.changeAddress.district': 'Район',
+  'orders.dialog.changeAddress.latitude': 'Широта',
+  'orders.dialog.changeAddress.longitude': 'Долгота',
+
   // Конфирмация цены при вызове внешнего курьера (карта пробелов 1.2f, волна P44).
   'orders.dialog.externalCourier.title': 'Вызвать курьера',
   'orders.dialog.externalCourier.noPartners':

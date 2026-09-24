@@ -281,6 +281,13 @@ export const messagesEn = {
   'orders.dialog.changeQuantity.line': 'Item',
   'orders.dialog.changeQuantity.newQuantity': 'New quantity (at least {min})',
 
+  'orders.dialog.changeAddress.title': 'Change delivery address',
+  'orders.dialog.changeAddress.line2': 'Address line 2',
+  'orders.dialog.changeAddress.city': 'City',
+  'orders.dialog.changeAddress.district': 'District',
+  'orders.dialog.changeAddress.latitude': 'Latitude',
+  'orders.dialog.changeAddress.longitude': 'Longitude',
+
   // The Millenium pattern's own confirmation seam (gap map row 1.2f, wave P44).
   'orders.dialog.externalCourier.title': 'Call an external courier',
   'orders.dialog.externalCourier.noPartners':
