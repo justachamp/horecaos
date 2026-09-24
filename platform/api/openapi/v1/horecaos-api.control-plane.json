@@ -3248,7 +3248,16 @@
             "minLength" : 0,
             "type" : "string"
           },
+          "clearAverageCheque" : {
+            "type" : "boolean"
+          },
           "clearLandmark" : {
+            "type" : "boolean"
+          },
+          "clearSeats" : {
+            "type" : "boolean"
+          },
+          "clearVirtualTourUrl" : {
             "type" : "boolean"
           },
           "contactPhone" : {

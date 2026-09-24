@@ -2653,7 +2653,10 @@ export interface DescribeLocationRequest {
   averageChequeAmount?: number;
   averageChequeCurrency?: string;
   city?: string;
+  clearAverageCheque?: boolean;
   clearLandmark?: boolean;
+  clearSeats?: boolean;
+  clearVirtualTourUrl?: boolean;
   contactPhone?: string;
   coordinateSource?: "NOT_GEOCODED" | "GEOCODER" | "MERCHANT_PIN" | "OPERATOR_PIN";
   district?: string;
