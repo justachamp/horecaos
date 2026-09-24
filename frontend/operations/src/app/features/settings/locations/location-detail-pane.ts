@@ -21,6 +21,9 @@ import {
   BandRequest,
   BandView,
   ExceptionRequest,
+  LOCATION_KNOWN_LOCALES,
+  LocationLocaleCode,
+  LocationLocaleRequest,
   LocationsApi,
   LocationView,
   ModeBindingView,
@@ -30,6 +33,13 @@ import {
 
 type LocationTab =
   'basics' | 'hours' | 'load' | 'fiscal' | 'channels' | 'notifications' | 'floorplan';
+
+/** One row of Tab 1's localized-content editor, over the fixed set `brand-profile-page.ts`'s own locale grid already authors. */
+interface LocaleContentDraft {
+  readonly locale: LocationLocaleCode;
+  displayName: string;
+  description: string;
+}
 
 /** ADR 0036 — `uz.horecaos.platform.tenancy.api.FulfillmentMode`'s three values, fixed. */
 const FULFILLMENT_MODES = ['DELIVERY', 'PICKUP', 'DINE_IN'] as const;
@@ -101,6 +111,17 @@ export class LocationDetailPane {
   protected readonly draftContactPhone = signal('');
   protected readonly draftLandmark = signal('');
 
+  // ------------------------------------------------------- 10.2b: venue facts
+  protected readonly knownLocales = LOCATION_KNOWN_LOCALES;
+  protected readonly draftSortOrder = signal(0);
+  protected readonly draftSeats = signal('');
+  protected readonly draftAverageChequeAmount = signal('');
+  protected readonly draftAverageChequeCurrency = signal('');
+  protected readonly draftHasParking = signal(false);
+  protected readonly draftHasPlayground = signal(false);
+  protected readonly draftVirtualTourUrl = signal('');
+  protected readonly draftLocaleContent = signal<readonly LocaleContentDraft[]>([]);
+
   protected readonly stateSaving = signal(false);
   protected readonly stateError = signal<string | null>(null);
   protected readonly draftMode = signal<'FOLLOW_SCHEDULE' | 'FORCE_OPEN' | 'FORCE_CLOSED'>(
@@ -123,6 +144,16 @@ export class LocationDetailPane {
   /** The loaded binding's own rules/exceptions, to diff against on save — see `changedExceptions`. */
   private originalRules: readonly ScheduleRule[] = [];
   private originalExceptionsByDate = new Map<string, ScheduleException>();
+  /**
+   * The bound schedule's version at the moment the editor opened — the
+   * `If-Match` token every `deleteScheduleException` call in {@link
+   * saveHours} needs, since an exception carries no version of its own.
+   * Advanced after each successful delete to the version that delete
+   * produced, so a second removed row in the same save sends the version the
+   * first delete actually left behind rather than the stale one the editor
+   * opened with.
+   */
+  private scheduleVersion = 0;
   protected readonly hoursSaving = signal(false);
   protected readonly hoursError = signal<string | null>(null);
 
@@ -170,8 +201,39 @@ export class LocationDetailPane {
     this.draftCity.set(current?.city ?? '');
     this.draftContactPhone.set(current?.contactPhone ?? '');
     this.draftLandmark.set(current?.landmark ?? '');
+    this.draftSortOrder.set(current?.sortOrder ?? 0);
+    this.draftSeats.set(current?.seats != null ? String(current.seats) : '');
+    this.draftAverageChequeAmount.set(
+      current?.averageChequeAmount != null ? String(current.averageChequeAmount) : '',
+    );
+    this.draftAverageChequeCurrency.set(current?.averageChequeCurrency ?? '');
+    this.draftHasParking.set(current?.hasParking ?? false);
+    this.draftHasPlayground.set(current?.hasPlayground ?? false);
+    this.draftVirtualTourUrl.set(current?.virtualTourUrl ?? '');
+    this.draftLocaleContent.set(
+      this.knownLocales.map((locale) => {
+        const existing = current?.locales.find((entry) => entry.locale === locale);
+        return {
+          locale,
+          displayName: existing?.displayName ?? '',
+          description: existing?.description ?? '',
+        };
+      }),
+    );
     this.placeError.set(null);
     this.editingPlace.set(true);
+  }
+
+  protected setLocaleDisplayName(locale: LocationLocaleCode, displayName: string): void {
+    this.draftLocaleContent.update((rows) =>
+      rows.map((row) => (row.locale === locale ? { ...row, displayName } : row)),
+    );
+  }
+
+  protected setLocaleDescription(locale: LocationLocaleCode, description: string): void {
+    this.draftLocaleContent.update((rows) =>
+      rows.map((row) => (row.locale === locale ? { ...row, description } : row)),
+    );
   }
 
   /**
@@ -191,6 +253,15 @@ export class LocationDetailPane {
    * blank *and* the loaded profile actually had a landmark to clear, so an
    * operator who empties the field and saves gets what the console already
    * showed as having happened.
+   *
+   * **Clearing seats, the average cheque and the virtual tour url.** The
+   * same trap as the landmark: an emptied field collapses to `undefined` on
+   * the wire, which the backend reads as "this write did not touch it" and
+   * carries the stale value through unchanged. `clearSeats`,
+   * `clearAverageCheque` and `clearVirtualTourUrl` are sent, true, only when
+   * the relevant draft field(s) are blank *and* the loaded profile actually
+   * had a value to clear — `averageChequeAmount` and `averageChequeCurrency`
+   * share one flag because the backend requires them both null or both set.
    */
   protected async savePlace(): Promise<void> {
     const scope = this.scope();
@@ -202,6 +273,28 @@ export class LocationDetailPane {
     try {
       const trimmedLandmark = this.draftLandmark().trim();
       const clearLandmark = trimmedLandmark === '' && !!this.profile()?.landmark;
+      const seats = this.draftSeats().trim();
+      const clearSeats = seats === '' && this.profile()?.seats != null;
+      const averageChequeAmount = this.draftAverageChequeAmount().trim();
+      const averageChequeCurrency = this.draftAverageChequeCurrency().trim();
+      const clearAverageCheque =
+        averageChequeAmount === '' &&
+        averageChequeCurrency === '' &&
+        (this.profile()?.averageChequeAmount != null || this.profile()?.averageChequeCurrency != null);
+      const trimmedVirtualTourUrl = this.draftVirtualTourUrl().trim();
+      const clearVirtualTourUrl = trimmedVirtualTourUrl === '' && !!this.profile()?.virtualTourUrl;
+      // A whole-set write, always sent — the same reason brand-profile.ts's
+      // own saveProfile always sends its whole `locales` array: the grid
+      // already knows the full set it wants. A row both fields left blank is
+      // dropped rather than sent as an empty entry, so clearing every field
+      // for a locale actually removes it from the branch's content set.
+      const locales: LocationLocaleRequest[] = this.draftLocaleContent()
+        .filter((row) => row.displayName.trim() !== '' || row.description.trim() !== '')
+        .map((row) => ({
+          locale: row.locale,
+          displayName: row.displayName.trim() || undefined,
+          description: row.description.trim() || undefined,
+        }));
       const updated = await this.api.describePlace(scope, {
         addressLine: this.draftAddressLine().trim() || undefined,
         district: this.draftDistrict().trim() || undefined,
@@ -209,6 +302,17 @@ export class LocationDetailPane {
         contactPhone: this.draftContactPhone().trim() || undefined,
         landmark: trimmedLandmark || undefined,
         clearLandmark: clearLandmark || undefined,
+        sortOrder: this.draftSortOrder(),
+        seats: seats === '' ? undefined : Number(seats),
+        clearSeats: clearSeats || undefined,
+        averageChequeAmount: averageChequeAmount === '' ? undefined : Number(averageChequeAmount),
+        averageChequeCurrency: averageChequeCurrency || undefined,
+        clearAverageCheque: clearAverageCheque || undefined,
+        hasParking: this.draftHasParking(),
+        hasPlayground: this.draftHasPlayground(),
+        virtualTourUrl: trimmedVirtualTourUrl || undefined,
+        clearVirtualTourUrl: clearVirtualTourUrl || undefined,
+        locales,
       });
       this.profile.set(updated);
       this.editingPlace.set(false);
@@ -216,6 +320,17 @@ export class LocationDetailPane {
       this.placeError.set(this.describe(error));
     } finally {
       this.placeSaving.set(false);
+    }
+  }
+
+  protected localeLabel(locale: LocationLocaleCode): string {
+    switch (locale) {
+      case 'ru':
+        return this.i18n.t('settings.brandProfile.locale.ru');
+      case 'uz-Latn':
+        return this.i18n.t('settings.brandProfile.locale.uzLatn');
+      case 'en':
+        return this.i18n.t('settings.brandProfile.locale.en');
     }
   }
 
@@ -267,6 +382,7 @@ export class LocationDetailPane {
   protected startEditingHours(binding: ModeBindingView): void {
     this.editingMode.set(binding.fulfillmentMode);
     this.originalRules = binding.rules;
+    this.scheduleVersion = binding.scheduleVersion;
     this.draftRules.set(binding.rules);
     // `ExceptionResponse` (what `binding.exceptions` is read from) carries
     // neither `label` nor `reason` -- see `ScheduleException`'s own doc --
@@ -291,16 +407,20 @@ export class LocationDetailPane {
 
   /**
    * Saves the weekly grid (whole-set `PUT .../rules`, only when it actually
-   * changed) and every dated exception the operator touched (one `PUT
-   * .../exceptions` per row, upsert).
+   * changed), deletes every dated exception the operator removed from the
+   * grid, and upserts every one they touched (one `PUT .../exceptions` per
+   * row).
    *
-   * **A row removed from the grid and then saved is not deleted.**
-   * `ServiceScheduleController` has no delete for a dated exception — only
-   * `closeForDay`/`shortenDay`, both upserts by date — so a row taken out of
-   * `q-schedule-grid`'s local draft simply is not re-sent; it stays exactly
-   * as it was on the server until it is edited back over. Naming that here
-   * rather than pretending removal works is deliberate (see this class's own
-   * "code first" review culture on that point).
+   * **A row removed from the grid and then saved is actually deleted.**
+   * `ServiceScheduleController.deleteException` (row 10.2c) closed the gap a
+   * prior wave named here: before it existed, only `closeForDay`/
+   * `shortenDay` — both upserts by date — were offered, so a row taken out
+   * of `q-schedule-grid`'s local draft was never re-sent and simply stayed
+   * on the server until it was edited back over. Deletes run first, each
+   * with `If-Match` carrying {@link scheduleVersion}, advanced to the
+   * version each delete returns so a second removed row in the same save
+   * sends the version the first delete actually left the schedule at rather
+   * than the stale one the editor opened with.
    *
    * **The shared-schedule warning.** `binding.sharedWithLocationCount` is
    * "how many locations bind this schedule right now, including this one"
@@ -320,7 +440,8 @@ export class LocationDetailPane {
 
     const rulesChanged = JSON.stringify(this.originalRules) !== JSON.stringify(this.draftRules());
     const toUpsert = this.changedExceptions();
-    if (!rulesChanged && toUpsert.length === 0) {
+    const toDelete = this.removedExceptionDates();
+    if (!rulesChanged && toUpsert.length === 0 && toDelete.length === 0) {
       this.editingMode.set(null);
       return;
     }
@@ -345,6 +466,14 @@ export class LocationDetailPane {
     this.hoursSaving.set(true);
     this.hoursError.set(null);
     try {
+      for (const date of toDelete) {
+        this.scheduleVersion = await this.api.deleteScheduleException(
+          scope,
+          binding.scheduleId,
+          date,
+          this.scheduleVersion,
+        );
+      }
       if (rulesChanged) {
         await this.api.replaceScheduleRules(scope, binding.scheduleId, this.draftRules());
       }
@@ -366,6 +495,12 @@ export class LocationDetailPane {
     } finally {
       this.hoursSaving.set(false);
     }
+  }
+
+  /** Every date the operator removed from the grid's draft — deleted server-side rather than merely dropped from the PUT. */
+  private removedExceptionDates(): readonly string[] {
+    const draftDates = new Set(this.draftExceptions().map((exception) => exception.date));
+    return [...this.originalExceptionsByDate.keys()].filter((date) => !draftDates.has(date));
   }
 
   /** A row counts as an edit worth a `PUT` when it is new, its hours changed, or a label/reason was typed. */

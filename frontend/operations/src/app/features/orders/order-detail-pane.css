@@ -246,6 +246,27 @@
   color: var(--q-ink-muted);
 }
 
+/* Row 2.1b: presets render as chips ahead of the free note, list-style
+   already reset by this same rule .pane__line-modifiers relies on to sit
+   flush with the product name. */
+.pane__line-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pane__preset-chip {
+  padding: 1px 8px;
+  border: 1px solid var(--q-hairline);
+  border-radius: 999px;
+  background: var(--q-canvas);
+  color: var(--q-ink-muted);
+  font-size: var(--q-type-caption);
+}
+
 .pane__reveal-link {
   margin-top: 4px;
   padding: 2px 8px;
@@ -260,6 +281,11 @@
 .pane__reveal-link:disabled {
   opacity: 0.6;
   cursor: default;
+}
+
+.pane__reveal-link--destructive {
+  color: var(--q-error-text);
+  border-color: var(--q-error-text);
 }
 
 /* ---- money (§3.5, §1.3) -------------------------------------------------- */

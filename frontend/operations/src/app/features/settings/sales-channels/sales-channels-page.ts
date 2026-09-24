@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { RouterLink } from '@angular/router';
 
 import { ApiError } from '../../../core/api/problem-details';
 import { CurrentLocation } from '../../../core/auth/current-location';
@@ -69,7 +70,7 @@ type Severity = 0 | 1 | 2 | 3 | 4;
  */
 @Component({
   selector: 'q-sales-channels-page',
-  imports: [TPipe, MatrixGrid, ColorInput],
+  imports: [TPipe, MatrixGrid, ColorInput, RouterLink],
   templateUrl: './sales-channels-page.html',
   styleUrl: './sales-channels-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,

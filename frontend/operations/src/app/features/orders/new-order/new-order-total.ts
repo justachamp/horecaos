@@ -41,9 +41,19 @@ export interface BasketLine {
   readonly quantity: number;
   readonly unitAmountMinor: number | null;
   readonly modifiers: readonly BasketModifierSelection[];
+  /** Row 2.1b: the coded presets the operator checked when this line was added. */
+  readonly commentPresetCodes: readonly string[];
   readonly customerNote: string | null;
   /** Whether the menu still lists this variant as sellable — orders.md §5.7's "item became unavailable" state. */
   readonly orderable: boolean;
+  /**
+   * Row 4.2g: the variant's own sale-window state as of the last menu read.
+   * Snapshotted at add time exactly like {@link orderable} — this screen has
+   * no live menu poll, so a window that closes after the line was added is
+   * only caught at submit, where the server's own `ITEM_OUT_OF_SALE_WINDOW`
+   * refusal is what actually flags it (see `submit`'s own doc).
+   */
+  readonly onSaleNow: boolean;
 }
 
 export interface BasketTotal {
@@ -51,7 +61,7 @@ export interface BasketTotal {
   readonly subtotalMinor: number;
   /** False when any line or selected modifier has no price on file. */
   readonly fullyPriced: boolean;
-  /** False when any line's variant is no longer orderable. */
+  /** False when any line's variant is no longer orderable, or is outside its own sale window (row 4.2g). */
   readonly allAvailable: boolean;
 }
 
@@ -84,7 +94,7 @@ export function computeBasketTotal(
   let fullyPriced = true;
   let allAvailable = true;
   for (const line of lines) {
-    if (!line.orderable) {
+    if (!line.orderable || !line.onSaleNow) {
       allAvailable = false;
     }
     const amount = lineAmountMinor(line);

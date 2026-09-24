@@ -262,6 +262,21 @@
   background: var(--q-info-tint);
 }
 
+/* Row 2.1b: chips ahead of the free note — list-style reset the same way
+   `order-detail-pane.css`'s own `.pane__line-presets` resets it. */
+.ticket__line-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ticket__preset-chip {
+  color: var(--q-ink-muted);
+}
+
 .ticket__reveal-note,
 .ticket__note-revealed {
   margin-top: 2px;
@@ -286,7 +301,8 @@
   color: var(--q-info-text);
 }
 
-.ticket__assign {
+.ticket__assign,
+.ticket__payment-change {
   position: relative;
   padding: 0 12px 8px;
 }

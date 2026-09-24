@@ -770,7 +770,7 @@ class PosOrderExportCrossInstanceDispatchTests {
                     null,
                     null,
                     List.of(new ExportableOrder.Line(
-                            UUID.randomUUID(), VARIANT, "Fake dish", null, 1, 50_000L, List.of()))));
+                            UUID.randomUUID(), VARIANT, "Fake dish", null, 1, 50_000L, List.of(), List.of()))));
         }
     }
 

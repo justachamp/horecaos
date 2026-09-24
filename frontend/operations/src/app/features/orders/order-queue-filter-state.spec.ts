@@ -1,3 +1,4 @@
+import { convertToParamMap } from '@angular/router';
 import { TestBed } from '@angular/core/testing';
 import { beforeEach, describe, expect, it } from 'vitest';
 
@@ -5,6 +6,9 @@ import {
   EMPTY_ORDER_QUEUE_FILTERS,
   OrderQueueFilterState,
   boardQueryParams,
+  filtersFromQueryParams,
+  filtersToQueryParams,
+  hasFilterQueryParams,
 } from './order-queue-filter-state';
 
 function service(): OrderQueueFilterState {
@@ -166,6 +170,90 @@ describe('OrderQueueFilterState', () => {
     const fresh = TestBed.inject(OrderQueueFilterState);
     fresh.loadForTab('all');
     expect(fresh.current().origin).toBe('MARKETPLACE');
+  });
+
+  it('boardQueryParams: passes paymentStatus («Оплата», wave 10 row 1.1c) straight through', () => {
+    expect(
+      boardQueryParams({ ...EMPTY_ORDER_QUEUE_FILTERS, paymentStatus: 'CAPTURED' }, null),
+    ).toEqual({ paymentStatus: 'CAPTURED' });
+  });
+
+  it('paymentStatus counts toward hasActive and survives a reload like the other filters', () => {
+    const state = service();
+    state.loadForTab('all');
+    state.update({ paymentStatus: 'FAILED' });
+    expect(state.hasActive()).toBe(true);
+
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({});
+    const fresh = TestBed.inject(OrderQueueFilterState);
+    fresh.loadForTab('all');
+    expect(fresh.current().paymentStatus).toBe('FAILED');
+  });
+
+  it('setFilters replaces the tab’s state outright (never merged with what localStorage held) and persists it', () => {
+    const first = service();
+    first.loadForTab('all');
+    first.update({ mineOnly: true, channelCode: 'wolt' });
+
+    // A pasted link naming only origin: the old mineOnly/channelCode must
+    // not survive the switch to setFilters — a link is the whole state, not
+    // a patch.
+    first.setFilters('all', { ...EMPTY_ORDER_QUEUE_FILTERS, origin: 'MARKETPLACE' });
+    expect(first.current()).toEqual({ ...EMPTY_ORDER_QUEUE_FILTERS, origin: 'MARKETPLACE' });
+
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({});
+    const fresh = TestBed.inject(OrderQueueFilterState);
+    fresh.loadForTab('all');
+    expect(fresh.current().origin).toBe('MARKETPLACE');
+    expect(fresh.current().mineOnly).toBe(false);
+  });
+
+  // ------------------------------------------------------- URL round-trip (gap map 1.1c)
+
+  it('hasFilterQueryParams is false for a plain tab-only URL, true once any filter parameter is present', () => {
+    expect(hasFilterQueryParams(convertToParamMap({ tab: 'attention' }))).toBe(false);
+    expect(hasFilterQueryParams(convertToParamMap({ tab: 'attention', origin: 'MARKETPLACE' }))).toBe(
+      true,
+    );
+    expect(hasFilterQueryParams(convertToParamMap({ mine: '1' }))).toBe(true);
+  });
+
+  it('filtersFromQueryParams / filtersToQueryParams round-trip every field', () => {
+    const filters = {
+      ...EMPTY_ORDER_QUEUE_FILTERS,
+      dateRange: { start: '2026-09-01', end: '2026-09-07' },
+      channelCode: 'wolt',
+      origin: 'MARKETPLACE' as const,
+      fulfillmentMode: 'DELIVERY' as const,
+      courierId: 'courier-1',
+      paymentMethodCode: 'CASH',
+      paymentStatus: 'CAPTURED',
+      mineOnly: true,
+      reference: '0911-142',
+    };
+
+    const params = convertToParamMap(filtersToQueryParams(filters));
+    expect(filtersFromQueryParams(params)).toEqual(filters);
+  });
+
+  it('filtersToQueryParams clears every field back to null for the empty filter set — selectTab reuses this to reset the URL', () => {
+    const params = filtersToQueryParams(EMPTY_ORDER_QUEUE_FILTERS);
+    expect(Object.values(params).every((value) => value === null)).toBe(true);
+  });
+
+  it('filtersToQueryParams sends mine as "1"/null, never the boolean itself, and trims the search text', () => {
+    expect(filtersToQueryParams({ ...EMPTY_ORDER_QUEUE_FILTERS, mineOnly: true })['mine']).toBe('1');
+    expect(
+      filtersToQueryParams({ ...EMPTY_ORDER_QUEUE_FILTERS, mineOnly: false })['mine'],
+    ).toBeNull();
+    expect(
+      filtersToQueryParams({ ...EMPTY_ORDER_QUEUE_FILTERS, reference: '  0911-142  ' })['q'],
+    ).toBe('0911-142');
+    expect(
+      filtersToQueryParams({ ...EMPTY_ORDER_QUEUE_FILTERS, reference: '   ' })['q'],
+    ).toBeNull();
   });
 
   it('never throws when localStorage is unavailable, and simply does not persist', () => {

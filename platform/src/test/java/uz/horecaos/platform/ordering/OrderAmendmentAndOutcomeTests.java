@@ -32,6 +32,7 @@ import tools.jackson.databind.json.JsonMapper;
 import uz.horecaos.platform.audit.infrastructure.persistence.JdbcAuditRecorder;
 import uz.horecaos.platform.customers.application.CustomerBlacklistService;
 import uz.horecaos.platform.customers.infrastructure.persistence.JdbcCustomerStore;
+import uz.horecaos.platform.fulfillment.api.ActiveCourierAssignmentsPort;
 import uz.horecaos.platform.iam.api.protection.FieldProtection;
 import uz.horecaos.platform.iam.infrastructure.protection.DataEncryptionKeyProvider;
 import uz.horecaos.platform.iam.infrastructure.protection.EnvelopeFieldProtection;
@@ -284,6 +285,10 @@ class OrderAmendmentAndOutcomeTests {
                 clock,
                 new uz.horecaos.platform.fiscal.infrastructure.persistence.JdbcFiscalTerminalStore(jdbc, objectMapper));
 
+        var saleWindowRules = new uz.horecaos.platform.ordering.infrastructure.catalog.JdbcCartSaleWindowRules(jdbc);
+        var commentPresetLookup = new uz.horecaos.platform.catalog.application.CommentPresetLookupAdapter(
+                new uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore(jdbc, objectMapper),
+                new uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCommentPresetStore(jdbc));
         carts = new CartService(
                 cartStore,
                 channelStore,
@@ -298,7 +303,9 @@ class OrderAmendmentAndOutcomeTests {
                 clock,
                 customerBlacklist,
                 new PromoCodeEligibilityService(promoCodeStore),
-                new FakeConfigurationResolver());
+                new FakeConfigurationResolver(),
+                saleWindowRules,
+                commentPresetLookup);
         inventoryProcess = new OrderInventoryProcess(processStore, inventory, objectMapper, clock);
         paymentProcess = new OrderPaymentProcess(processStore, objectMapper);
         orderStateWith = store -> new OrderStateService(
@@ -314,7 +321,14 @@ class OrderAmendmentAndOutcomeTests {
                 new PromoCodeRedemptionService(promoCodeStore, clock));
         orderState = orderStateWith.apply(orderStore);
         orderQuery = new OrderQueryService(
-                orderStore, processStore, UNWIRED_PAYMENTS, protection, objectMapper, auditRecorder, clock);
+                orderStore,
+                processStore,
+                UNWIRED_PAYMENTS,
+                NO_COURIER_ASSIGNMENTS,
+                protection,
+                objectMapper,
+                auditRecorder,
+                clock);
         reasons = new OrderOutcomeReasonService(reasonStore, clock);
         rejectReasons = new RejectReasonQueryService(new JdbcRejectReasonStore(jdbc));
         outcomes = new OrderOutcomeService(orderState, reasons, rejectReasons, orderStore, protection, objectMapper);
@@ -329,7 +343,15 @@ class OrderAmendmentAndOutcomeTests {
                 clock,
                 new JdbcPosExportStatus(jdbc),
                 published,
-                new TransactionTemplate(new DataSourceTransactionManager(dataSource)));
+                new TransactionTemplate(new DataSourceTransactionManager(dataSource)),
+                quotes,
+                quotes,
+                inventory,
+                new uz.horecaos.platform.audit.infrastructure.persistence.JdbcApprovalService(
+                        jdbc, auditRecorder, clock, new SimpleMeterRegistry(), objectMapper),
+                UNWIRED_PAYMENTS,
+                protection,
+                new FakeConfigurationResolver());
         bulkActions = new OrderBulkActionService(
                 orderStore, new JdbcBulkOperationStore(jdbc), orderState, outcomes, auditRecorder, clock);
 
@@ -365,7 +387,9 @@ class OrderAmendmentAndOutcomeTests {
                 published,
                 clock,
                 customerBlacklist,
-                new FakeConfigurationResolver());
+                new FakeConfigurationResolver(),
+                saleWindowRules,
+                commentPresetLookup);
 
         seedTenancyAndCatalog();
         seedPricingAndStock();
@@ -435,45 +459,52 @@ class OrderAmendmentAndOutcomeTests {
     }
 
     /**
-     * The claim {@code OrderAmendmentService} makes in a comment, asserted.
+     * The claim {@code OrderAmendmentService} makes in a comment, asserted —
+     * for the commands that still make none of it, now that wave 10 built the
+     * seven financial ones.
      *
-     * <p>ADR 0046 plans a settlement at checkout and nothing re-plans it. An
-     * amendment that raised the order total would therefore leave the settlement
-     * short by the increase for ever: the refund ceiling, the courier's cash
-     * figure and every reconciliation would be computed from a total the customer
-     * no longer owes. The service says that cannot happen because none of the
-     * three built commands touches money — and until now that was a sentence in a
-     * comment, true of this build and load-bearing for another module.
+     * <p>ADR 0046 plans a settlement at checkout and nothing re-plans it. A
+     * financial amendment that moves the total now does exist, and this suite's
+     * own financial-command tests (see {@code OrderFinancialAmendmentHttpTests})
+     * cover it moving the total by design — that is the whole point of {@code
+     * ADD_LINES}. What this test still asserts is narrower and still true: a
+     * command with no consequence in the ADR 0039 matrix's Quote column leaves
+     * {@code ordering.orders.total_minor} exactly where it was, and the closed
+     * set of financial commands is exactly what the matrix names — nothing
+     * built here is financial <em>and</em> silent about it.
      *
-     * <p>Two assertions and they close two different doors. The first is about
-     * today: an applied amendment leaves {@code ordering.orders.total_minor}
-     * exactly where it was. The second is about tomorrow: the set of commands the
-     * application can carry out contains nothing ADR 0039 calls financial, so the
-     * day somebody builds {@code ADD_LINES} this test goes red and the settlement
-     * question is asked before the money is wrong rather than after.
+     * <p>{@code OrderSettlementPort} not re-planning after a financial amendment
+     * is a real, open gap this wave does not close — no order in this suite (or
+     * in production today) redeems loyalty points on a checkout an amendment
+     * later touches, so the ceiling has never yet been wrong in practice, but it
+     * would be the day one does. Tracked, not silently accepted.
      */
     @Test
-    @DisplayName("an amendment cannot move the order total, so a settlement planned before it "
-            + "still agrees with the order")
-    void anAmendmentLeavesTheSettledTotalAlone() {
+    @DisplayName("a non-financial amendment cannot move the order total")
+    void aNonFinancialAmendmentLeavesTheSettledTotalAlone() {
         UUID orderId = orderIdOf(placeOrder("idem-total"));
         long before = orderStore.find(TENANT, orderId).orElseThrow().totalMinor();
 
         amend("k-total-1", OrderAmendmentService.AmendmentCommand.kitchenNote("Острее"));
 
         assertThat(orderStore.find(TENANT, orderId).orElseThrow().totalMinor())
-                .as("nothing a built command does reaches total_minor, subtotal_minor, "
-                        + "fee_minor or tax_minor, and applyRevision has no column for them")
+                .as("SET_KITCHEN_NOTE reaches no money column, and applyRevision has no field "
+                        + "patch that could touch total_minor, subtotal_minor, fee_minor or tax_minor "
+                        + "for it")
                 .isEqualTo(before);
 
         assertThat(java.util.Arrays.stream(AmendmentCommandType.values())
-                        .filter(AmendmentCommandType::built)
-                        .filter(AmendmentCommandType::financial)
+                        .filter(type -> type.built() && !type.financial())
                         .toList())
-                .as("the moment a financial command becomes buildable, a settlement planned at "
-                        + "checkout stops being the whole of what the customer owes, and "
-                        + "OrderSettlementPort needs a re-plan before that ships")
-                .isEmpty();
+                .as("SET_KITCHEN_NOTE, SET_CALLBACK_REQUESTED, SET_CASH_TENDERED, SET_COURIER_NOTE and "
+                        + "SET_INTERNAL_NOTE are the only built commands ADR 0039's own matrix marks "
+                        + "with no money, inventory, payment or fiscal consequence")
+                .containsExactlyInAnyOrder(
+                        AmendmentCommandType.SET_KITCHEN_NOTE,
+                        AmendmentCommandType.SET_CALLBACK_REQUESTED,
+                        AmendmentCommandType.SET_CASH_TENDERED,
+                        AmendmentCommandType.SET_COURIER_NOTE,
+                        AmendmentCommandType.SET_INTERNAL_NOTE);
     }
 
     @Test
@@ -1024,13 +1055,18 @@ class OrderAmendmentAndOutcomeTests {
         UUID orderId = orderIdOf(placeOrder("idem-1"));
         int version = orderStore.find(TENANT, orderId).orElseThrow().version();
 
+        // REMOVE_LINES (wave 10, gap map rows 1.2c/2.1d): the last of the
+        // twelve commands still declared and refused — every other financial
+        // command is built now, and this is the one whose consequence
+        // (releasing or writing off already-committed stock) needs a fourth
+        // ADR 0017 primitive the inventory port does not expose yet.
         assertThatThrownBy(() -> tx(() -> amendments.propose(
                         TENANT,
                         orderId,
                         new OrderAmendmentService.ProposeCommand(
                                 version,
                                 List.of(new OrderAmendmentService.AmendmentCommand(
-                                        AmendmentCommandType.ADD_LINES, Map.of())),
+                                        AmendmentCommandType.REMOVE_LINES, Map.of())),
                                 true,
                                 "k-1",
                                 "OPERATOR_EDIT",
@@ -1038,7 +1074,7 @@ class OrderAmendmentAndOutcomeTests {
                                 "sharif",
                                 null))))
                 .isInstanceOf(OrderAmendmentService.AmendmentNotPermittedException.class)
-                .hasMessageContaining("ADD_LINES");
+                .hasMessageContaining("REMOVE_LINES");
 
         assertThat(amendments.forOrder(TENANT, orderId))
                 .as("a refused command leaves no half-built amendment behind")
@@ -1075,6 +1111,573 @@ class OrderAmendmentAndOutcomeTests {
         assertThat(order.currentRevision())
                 .as("both still append a revision, exactly like every other built command")
                 .isEqualTo(3);
+    }
+
+    // ------------------------------------------------ wave 10: financial commands
+
+    @Test
+    @DisplayName("CHANGE_CONTACT applies directly and protects the value")
+    void changeContactAppliesAndProtectsTheValue() {
+        UUID orderId = orderIdOf(placeOrder("idem-contact"));
+
+        var result = amend(
+                "k-contact-1",
+                OrderAmendmentService.AmendmentCommand.changeContact("Бахтиёр Каримов", "+998901234567"));
+        assertThat(result.amendment().status()).isEqualTo(AmendmentStatus.APPLIED);
+        assertThat(result.amendment().deltaTotalMinor())
+                .as("CHANGE_CONTACT touches no money")
+                .isZero();
+
+        String nameCiphertext = jdbc.sql(
+                        "SELECT display_name_encrypted FROM ordering.order_customer_snapshots WHERE order_id = :id")
+                .param("id", orderId)
+                .query(String.class)
+                .single();
+        assertThat(nameCiphertext).isNotNull();
+        String decrypted = protection.reveal(
+                TENANT,
+                uz.horecaos.platform.iam.api.protection.ProtectedValue.deserialize(nameCiphertext),
+                new FieldProtection.RecordRef("ordering.order_customer_snapshots", "display_name_encrypted", orderId),
+                "TEST");
+        assertThat(decrypted).isEqualTo("Бахтиёр Каримов");
+
+        // ADR 0029: never in the event, never in the audit's changed map.
+        assertThat(published.events)
+                .noneSatisfy(event -> assertThat(event.toString()).contains("Каримов"));
+    }
+
+    @Test
+    @DisplayName("CHANGE_FULFILLMENT_TIME reschedules the promise and never reprices")
+    void changeFulfillmentTimeReschedulesThePromise() {
+        UUID orderId = orderIdOf(placeOrder("idem-time"));
+        long before = orderStore.find(TENANT, orderId).orElseThrow().totalMinor();
+        Instant newPromise = NOW.plus(Duration.ofHours(2));
+
+        var result = amend("k-time-1", OrderAmendmentService.AmendmentCommand.changeFulfillmentTime(newPromise));
+        assertThat(result.amendment().status()).isEqualTo(AmendmentStatus.APPLIED);
+        assertThat(result.amendment().deltaTotalMinor())
+                .as("no price plane in this build varies by time, so this never reprices")
+                .isZero();
+
+        var order = orderStore.find(TENANT, orderId).orElseThrow();
+        assertThat(order.totalMinor()).isEqualTo(before);
+        assertThat(order.promise().promisedAt()).isEqualTo(newPromise);
+        assertThat(order.promise().basis()).isEqualTo(uz.horecaos.platform.ordering.domain.PromiseBasis.SCHEDULED_SLOT);
+    }
+
+    @Test
+    @DisplayName("CHANGE_PAYMENT_METHOD from CASH to CASH is a harmless no-op")
+    void changePaymentMethodCashToCashIsANoOp() {
+        UUID orderId = orderIdOf(placeOrder("idem-pay-cash"));
+
+        var result = amend("k-pay-1", OrderAmendmentService.AmendmentCommand.changePaymentMethod("CASH"));
+        assertThat(result.amendment().status()).isEqualTo(AmendmentStatus.APPLIED);
+        assertThat(orderStore.find(TENANT, orderId).orElseThrow().paymentStatusProjection())
+                .isEqualTo("NOT_REQUIRED");
+    }
+
+    @Test
+    @DisplayName("CHANGE_PAYMENT_METHOD is refused once the order's money already runs through a provider")
+    void changePaymentMethodIsRefusedForAnOnlinePaidOrder() {
+        UUID orderId = orderIdOf(placeOrder("idem-pay-online"));
+        jdbc.sql("UPDATE ordering.orders SET payment_status_projection = 'CAPTURED' WHERE id = :id")
+                .param("id", orderId)
+                .update();
+        int version = orderStore.find(TENANT, orderId).orElseThrow().version();
+
+        assertThatThrownBy(() -> tx(() -> amendments.propose(
+                        TENANT,
+                        orderId,
+                        propose(
+                                "k-pay-2",
+                                version,
+                                OrderAmendmentService.AmendmentCommand.changePaymentMethod("CASH")))))
+                .isInstanceOf(OrderAmendmentService.AmendmentRefusedException.class)
+                .satisfies(thrown -> assertThat(((OrderAmendmentService.AmendmentRefusedException) thrown).code())
+                        .isEqualTo("PAYMENT_METHOD_CHANGE_REQUIRES_VOID_REFUND"));
+        assertThat(orderQuery.revisions(TENANT, orderId)).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("CHANGE_DELIVERY_ADDRESS is refused on a pickup order")
+    void changeDeliveryAddressIsRefusedOnAPickupOrder() {
+        UUID orderId = orderIdOf(placeOrder("idem-addr-pickup"));
+        int version = orderStore.find(TENANT, orderId).orElseThrow().version();
+
+        assertThatThrownBy(() -> tx(() -> amendments.propose(
+                        TENANT,
+                        orderId,
+                        propose(
+                                "k-addr-1",
+                                version,
+                                OrderAmendmentService.AmendmentCommand.changeDeliveryAddress(
+                                        new uz.horecaos.platform.ordering.domain.DeliveryDestination(
+                                                "15 Amir Temur",
+                                                "",
+                                                "Tashkent",
+                                                "",
+                                                "",
+                                                "",
+                                                "",
+                                                "",
+                                                "",
+                                                41.311081,
+                                                69.240562),
+                                        null,
+                                        "Бахтиёр",
+                                        "+998901234567")))))
+                .isInstanceOf(OrderAmendmentService.AmendmentRefusedException.class)
+                .satisfies(thrown -> assertThat(((OrderAmendmentService.AmendmentRefusedException) thrown).code())
+                        .isEqualTo("DELIVERY_ADDRESS_NOT_APPLICABLE"));
+    }
+
+    /**
+     * The finding this regression test exists for: {@code
+     * OperationsOrderController#confirmAmendment} routes every blocked
+     * {@code PRICED} amendment through {@code attestConfirmation} — increase
+     * or decrease — because it is the only action that can move one forward.
+     * ADR 0039 §3.11 ties the customer's recorded agreement to an increase
+     * only; a decrease needs at most the ADR 0027 four-eyes review, never a
+     * customer consultation. Before the guard in {@code
+     * OrderAmendmentService#attestConfirmation}, calling it on a decrease
+     * still wrote {@code confirmation_attested_by}/{@code _at}/{@code
+     * _channel} — fabricating a "customer agreed by phone" fact nobody ever
+     * attested to.
+     */
+    @Test
+    @DisplayName("attesting a decrease-only amendment records no customer confirmation")
+    void attestingADecreaseRecordsNoCustomerConfirmation() {
+        seedDeliveryZone(1_000L);
+        UUID orderId = seedDeliveryOrderForReprice("idem-decrease-attest-1", 150_000L);
+
+        var proposed = proposeOnly(orderId, "k-decrease-attest-1", changeAddressIntoZoneCommand());
+        assertThat(proposed.amendment().deltaTotalMinor())
+                .as("the fabricated base total (150 000) comfortably exceeds the real reprice")
+                .isNegative();
+        assertThat(proposed.amendment().requiresApproval())
+                .as("this decrease is under the ADR 0027 threshold; it needs no second signature either")
+                .isFalse();
+
+        int amendmentVersion = amendmentStore
+                .find(TENANT, proposed.amendment().id())
+                .orElseThrow()
+                .version();
+        // Mirrors OperationsOrderController#confirmAmendment exactly: the one
+        // call the console's history-table RESOLVE action makes for every
+        // blocked amendment, regardless of sign (see that endpoint's own doc).
+        tx(() -> amendments.attestConfirmation(TENANT, proposed.amendment().id(), amendmentVersion, "sharif", "PHONE"));
+
+        var stored = amendmentStore.find(TENANT, proposed.amendment().id()).orElseThrow();
+        assertThat(stored.confirmationAttestedBy())
+                .as("nobody consulted the customer about a decrease; this column must stay empty")
+                .isNull();
+        assertThat(stored.confirmationAttestedAt()).isNull();
+        assertThat(stored.confirmationChannel()).isNull();
+
+        // The decrease still applies -- apply()'s own guard (deltaTotalMinor() >
+        // 0) only ever required an attestation for an increase.
+        int orderVersion = orderStore.find(TENANT, orderId).orElseThrow().version();
+        var applied = tx(() -> amendments.apply(
+                TENANT, orderId, proposed.amendment().id(), orderVersion, "USER", "sharif", "confirmed", null));
+        assertThat(applied.amendment().status()).isEqualTo(AmendmentStatus.APPLIED);
+    }
+
+    /**
+     * ADR 0027's own maker-checker for a financial decrease: {@code
+     * requiresDecreaseApproval} (propose) and the {@code ApprovalOutcome}
+     * switch that consumes it ({@code apply}) implement it, but before this
+     * test nothing anywhere exercised the threshold, the {@code Pending}
+     * refusal, or that a spent grant lands on {@code approval_request_id}.
+     */
+    @Test
+    @DisplayName("ADR 0027: a decrease at or above the threshold is blocked until a second signature approves it")
+    void decreaseAboveThresholdNeedsFourEyesApproval() {
+        seedDeliveryZone(1_000L);
+        UUID orderId = seedDeliveryOrderForReprice("idem-decrease-approve-1", 600_000L);
+        seedDecreaseApprovalPolicy();
+
+        var proposed = proposeOnly(orderId, "k-decrease-approve-1", changeAddressIntoZoneCommand());
+        assertThat(proposed.amendment().deltaTotalMinor())
+                .as("the fabricated base total (600 000) comfortably clears the 200 000 threshold")
+                .isLessThan(-200_000L);
+        assertThat(proposed.amendment().requiresApproval()).isTrue();
+
+        int orderVersion = orderStore.find(TENANT, orderId).orElseThrow().version();
+        assertThatThrownBy(() -> tx(() -> amendments.apply(
+                        TENANT, orderId, proposed.amendment().id(), orderVersion, "USER", "sharif", "reason", null)))
+                .as("propose() raised the request; apply() must not proceed while it is still Pending")
+                .isInstanceOf(OrderAmendmentService.AmendmentRefusedException.class)
+                .satisfies(thrown -> assertThat(((OrderAmendmentService.AmendmentRefusedException) thrown).code())
+                        .isEqualTo("AMENDMENT_PENDING_APPROVAL"));
+        assertThat(orderQuery.revisions(TENANT, orderId)).hasSize(1);
+
+        UUID requestId = pendingDecreaseApprovalRequestId();
+        approvalService()
+                .decide(
+                        requestId,
+                        uz.horecaos.platform.audit.api.ApprovalService.Decision.APPROVE,
+                        uz.horecaos.platform.audit.api.ActorRef.user("nozima-manager", null),
+                        "Checked the fee difference, approved");
+
+        var applied = tx(() -> amendments.apply(
+                TENANT, orderId, proposed.amendment().id(), orderVersion, "USER", "sharif", "reason", null));
+        assertThat(applied.amendment().status()).isEqualTo(AmendmentStatus.APPLIED);
+        assertThat(applied.amendment().approvalRequestId())
+                .as(
+                        "ck_amendment_approval_recorded's own contract: an approval-gated APPLIED row names the spent request")
+                .isEqualTo(requestId);
+        assertThat(orderStore.find(TENANT, orderId).orElseThrow().totalMinor()).isLessThan(600_000L);
+    }
+
+    @Test
+    @DisplayName("ADR 0027: a declined decrease stays refused, not silently applied")
+    void declinedDecreaseApprovalRefusesTheApply() {
+        seedDeliveryZone(1_000L);
+        UUID orderId = seedDeliveryOrderForReprice("idem-decrease-decline-1", 600_000L);
+        seedDecreaseApprovalPolicy();
+
+        var proposed = proposeOnly(orderId, "k-decrease-decline-1", changeAddressIntoZoneCommand());
+        assertThat(proposed.amendment().requiresApproval()).isTrue();
+
+        int orderVersion = orderStore.find(TENANT, orderId).orElseThrow().version();
+        // The first apply raises the ADR 0027 request (still Pending).
+        assertThatThrownBy(() -> tx(() -> amendments.apply(
+                        TENANT, orderId, proposed.amendment().id(), orderVersion, "USER", "sharif", "reason", null)))
+                .isInstanceOf(OrderAmendmentService.AmendmentRefusedException.class);
+
+        UUID requestId = pendingDecreaseApprovalRequestId();
+        approvalService()
+                .decide(
+                        requestId,
+                        uz.horecaos.platform.audit.api.ApprovalService.Decision.DECLINE,
+                        uz.horecaos.platform.audit.api.ActorRef.user("nozima-manager", null),
+                        "Too large to approve without a manager present");
+
+        assertThatThrownBy(() -> tx(() -> amendments.apply(
+                        TENANT, orderId, proposed.amendment().id(), orderVersion, "USER", "sharif", "reason", null)))
+                .isInstanceOf(OrderAmendmentService.AmendmentRefusedException.class)
+                .satisfies(thrown -> assertThat(((OrderAmendmentService.AmendmentRefusedException) thrown).code())
+                        .isEqualTo("AMENDMENT_APPROVAL_DECLINED"));
+        assertThat(orderQuery.revisions(TENANT, orderId))
+                .as("a declined decrease never appends a revision")
+                .hasSize(1);
+        assertThat(amendmentStore
+                        .find(TENANT, proposed.amendment().id())
+                        .orElseThrow()
+                        .status())
+                .isEqualTo(AmendmentStatus.PRICED);
+    }
+
+    /**
+     * Before this test, every {@code changeDeliveryAddress(...)} call in this
+     * class tripped {@code repriceFor}'s pickup-order guard or (the two
+     * tests above) produced a synthetic decrease -- never reached a real
+     * ADR 0037 zone re-quote that <em>raises</em> the total, never asserted
+     * {@code fiscal_correction_required}, and never applied one at all.
+     */
+    @Test
+    @DisplayName("CHANGE_DELIVERY_ADDRESS re-quotes the real ADR 0037 zone fee, marks the revision for "
+            + "fiscal correction, and needs the customer's agreement to apply")
+    void changeDeliveryAddressRepricesAndAppliesWithAFiscalCorrectionMarker() {
+        seedDeliveryZone(30_000L);
+        // A base total with no delivery fee baked in at all, so moving into
+        // the zone is a genuine increase, not the decrease the two tests
+        // above already cover.
+        UUID orderId = seedDeliveryOrderForReprice("idem-address-increase-1", 100_000L);
+        long before = orderStore.find(TENANT, orderId).orElseThrow().totalMinor();
+
+        var proposed = proposeOnly(orderId, "k-address-increase-1", changeAddressIntoZoneCommand());
+        assertThat(proposed.amendment().deltaTotalMinor()).isPositive();
+        assertThat(orderStore.find(TENANT, orderId).orElseThrow().totalMinor())
+                .as("PRICED is not APPLIED -- nothing about the order has moved yet")
+                .isEqualTo(before);
+
+        int amendmentVersion = amendmentStore
+                .find(TENANT, proposed.amendment().id())
+                .orElseThrow()
+                .version();
+        int orderVersion = orderStore.find(TENANT, orderId).orElseThrow().version();
+        // apply()'s own guard: an increase needs the customer's recorded
+        // agreement first, exactly like every other repricing command.
+        assertThatThrownBy(() -> tx(() -> amendments.apply(
+                        TENANT, orderId, proposed.amendment().id(), orderVersion, "USER", "sharif", "reason", null)))
+                .isInstanceOf(OrderAmendmentService.CustomerConfirmationRequiredException.class);
+
+        tx(() -> amendments.attestConfirmation(TENANT, proposed.amendment().id(), amendmentVersion, "sharif", "PHONE"));
+        var applied = tx(() -> amendments.apply(
+                TENANT, orderId, proposed.amendment().id(), orderVersion, "USER", "sharif", "reason", null));
+        assertThat(applied.amendment().status()).isEqualTo(AmendmentStatus.APPLIED);
+
+        var order = orderStore.find(TENANT, orderId).orElseThrow();
+        assertThat(order.totalMinor()).isGreaterThan(before);
+
+        var revisions = orderStore.revisions(TENANT, orderId);
+        assertThat(revisions).hasSize(2);
+        var appliedRevision = revisions.stream()
+                .filter(row -> row.revision() == 2)
+                .findFirst()
+                .orElseThrow();
+        assertThat(appliedRevision.fiscalCorrectionRequired())
+                .as("a repriced revision always needs a fiscal correction (ADR 0039)")
+                .isTrue();
+        assertThat(appliedRevision.deltaTotalMinor()).isPositive();
+    }
+
+    @Test
+    @DisplayName("ADD_LINES reprices, reserves the added stock, and needs the customer's agreement first")
+    void addLinesRepricesReservesAndNeedsConfirmation() {
+        UUID orderId = orderIdOf(placeOrder("idem-add-1"));
+        long before = orderStore.find(TENANT, orderId).orElseThrow().totalMinor();
+
+        // applyOnPrice=true throws and leaves no trace: the whole propose+apply
+        // ran in one transaction, and the customer has not agreed to the increase
+        // yet.
+        int version = orderStore.find(TENANT, orderId).orElseThrow().version();
+        assertThatThrownBy(() -> tx(() -> amendments.propose(
+                        TENANT,
+                        orderId,
+                        propose(
+                                "k-add-1",
+                                version,
+                                OrderAmendmentService.AmendmentCommand.addLines(
+                                        List.of(new OrderAmendmentService.AmendmentCommand.LineRequest(
+                                                burgerVariant, 1, List.of())))))))
+                .isInstanceOf(OrderAmendmentService.CustomerConfirmationRequiredException.class);
+        assertThat(orderQuery.revisions(TENANT, orderId)).hasSize(1);
+
+        var proposed = proposeOnly(
+                orderId,
+                "k-add-2",
+                OrderAmendmentService.AmendmentCommand.addLines(
+                        List.of(new OrderAmendmentService.AmendmentCommand.LineRequest(burgerVariant, 1, List.of()))));
+        assertThat(proposed.amendment().status()).isEqualTo(AmendmentStatus.PRICED);
+        assertThat(proposed.amendment().deltaTotalMinor()).isPositive();
+        assertThat(orderStore.find(TENANT, orderId).orElseThrow().totalMinor())
+                .as("PRICED is not APPLIED — nothing about the order has moved yet")
+                .isEqualTo(before);
+
+        var applied = confirmAndApply(orderId, proposed.amendment().id());
+        assertThat(applied.amendment().status()).isEqualTo(AmendmentStatus.APPLIED);
+        assertThat(orderStore.find(TENANT, orderId).orElseThrow().totalMinor()).isGreaterThan(before);
+        assertThat(orderStore.lines(TENANT, orderId)).hasSize(2);
+
+        // The reservation for the added quantity was taken under the amendment's
+        // own quote id and committed — the same ADR 0017 hold/commit path
+        // checkout itself uses, never a second copy of it.
+        assertThat(jdbc.sql("SELECT status FROM inventory.reservations WHERE owner_id = :id")
+                        .param("id", proposed.amendment().quoteId())
+                        .query(String.class)
+                        .single())
+                .isEqualTo("COMMITTED");
+    }
+
+    @Test
+    @DisplayName("ADD_LINES with a modifier is refused: not built in this release")
+    void addLinesWithAModifierIsRefused() {
+        UUID orderId = orderIdOf(placeOrder("idem-add-mod"));
+        int version = orderStore.find(TENANT, orderId).orElseThrow().version();
+
+        assertThatThrownBy(() -> tx(() -> amendments.propose(
+                        TENANT,
+                        orderId,
+                        propose(
+                                "k-add-mod-1",
+                                version,
+                                OrderAmendmentService.AmendmentCommand.addLines(
+                                        List.of(new OrderAmendmentService.AmendmentCommand.LineRequest(
+                                                burgerVariant, 1, List.of(UUID.randomUUID()))))))))
+                .isInstanceOf(OrderAmendmentService.AmendmentRefusedException.class)
+                .satisfies(thrown -> assertThat(((OrderAmendmentService.AmendmentRefusedException) thrown).code())
+                        .isEqualTo("LINE_MODIFIERS_NOT_SUPPORTED"));
+    }
+
+    /**
+     * ADR 0039's own Testing section: "An amendment whose added line is
+     * unavailable applies nothing: no reservation, no quote acceptance, no
+     * revision." {@code reserveIncrease}'s {@code INVENTORY_UNAVAILABLE}
+     * refusal implements this, but nothing exercised an out-of-stock
+     * scenario through {@code apply} before this test.
+     */
+    @Test
+    @DisplayName("ADD_LINES applies nothing when the added variant goes unavailable between propose and apply")
+    void addLinesAppliesNothingWhenInventoryGoesUnavailable() {
+        UUID orderId = orderIdOf(placeOrder("idem-unavail-1"));
+
+        var proposed = proposeOnly(
+                orderId,
+                "k-unavail-1",
+                OrderAmendmentService.AmendmentCommand.addLines(
+                        List.of(new OrderAmendmentService.AmendmentCommand.LineRequest(burgerVariant, 1, List.of()))));
+        assertThat(proposed.amendment().status()).isEqualTo(AmendmentStatus.PRICED);
+        assertThat(proposed.amendment().deltaTotalMinor()).isPositive();
+
+        // The kitchen sells out between the operator pricing the addition and
+        // the customer agreeing to it.
+        inventory.setAvailability(TENANT, LOCATION, burgerVariant, false, "SOLD_OUT", null);
+
+        int amendmentVersion = amendmentStore
+                .find(TENANT, proposed.amendment().id())
+                .orElseThrow()
+                .version();
+        tx(() -> amendments.attestConfirmation(TENANT, proposed.amendment().id(), amendmentVersion, "sharif", "PHONE"));
+
+        int orderVersion = orderStore.find(TENANT, orderId).orElseThrow().version();
+        assertThatThrownBy(() -> tx(() -> amendments.apply(
+                        TENANT, orderId, proposed.amendment().id(), orderVersion, "USER", "sharif", "confirmed", null)))
+                .isInstanceOf(OrderAmendmentService.AmendmentRefusedException.class)
+                .satisfies(thrown -> assertThat(((OrderAmendmentService.AmendmentRefusedException) thrown).code())
+                        .isEqualTo("INVENTORY_UNAVAILABLE"));
+
+        assertThat(orderStore.lines(TENANT, orderId))
+                .as("no order_lines row was inserted for the unavailable addition")
+                .hasSize(1);
+        assertThat(orderQuery.revisions(TENANT, orderId))
+                .as("apply's own transaction rolled back; only the base revision exists")
+                .hasSize(1);
+        assertThat(jdbc.sql("SELECT count(*) FROM inventory.reservations WHERE owner_id = :id")
+                        .param("id", proposed.amendment().quoteId())
+                        .query(Integer.class)
+                        .single())
+                .as("no reservation was ever held for the amendment's own quote")
+                .isZero();
+        assertThat(amendmentStore
+                        .find(TENANT, proposed.amendment().id())
+                        .orElseThrow()
+                        .status())
+                .isEqualTo(AmendmentStatus.PRICED);
+    }
+
+    @Test
+    @DisplayName("CHANGE_LINE_QUANTITY increases, closes the old line and appends the new one")
+    void changeLineQuantityIncreaseClosesAndAppends() {
+        UUID orderId = orderIdOf(placeOrder("idem-qty-1"));
+        UUID lineId = orderStore.lines(TENANT, orderId).getFirst().lineId();
+
+        var proposed =
+                proposeOnly(orderId, "k-qty-1", OrderAmendmentService.AmendmentCommand.changeLineQuantity(lineId, 3));
+        assertThat(proposed.amendment().deltaTotalMinor()).isPositive();
+        var applied = confirmAndApply(orderId, proposed.amendment().id());
+        assertThat(applied.amendment().status()).isEqualTo(AmendmentStatus.APPLIED);
+
+        var liveLines = orderStore.lines(TENANT, orderId);
+        assertThat(liveLines).hasSize(1);
+        assertThat(liveLines.getFirst().lineId()).isNotEqualTo(lineId);
+        assertThat(liveLines.getFirst().quantity()).isEqualTo(3);
+
+        // V0022's own rule: the old line's row is never edited, only closed.
+        assertThat(jdbc.sql("SELECT quantity, revision_to FROM ordering.order_lines WHERE id = :id")
+                        .param("id", lineId)
+                        .query()
+                        .singleRow())
+                .containsEntry("quantity", 2)
+                .containsEntry("revision_to", 2);
+    }
+
+    @Test
+    @DisplayName("CHANGE_LINE_QUANTITY refuses a decrease: no ADR 0017 return/waste primitive exists yet")
+    void changeLineQuantityDecreaseIsRefused() {
+        UUID orderId = orderIdOf(placeOrder("idem-qty-dec"));
+        UUID lineId = orderStore.lines(TENANT, orderId).getFirst().lineId();
+        int version = orderStore.find(TENANT, orderId).orElseThrow().version();
+
+        assertThatThrownBy(() -> tx(() -> amendments.propose(
+                        TENANT,
+                        orderId,
+                        propose(
+                                "k-qty-dec-1",
+                                version,
+                                OrderAmendmentService.AmendmentCommand.changeLineQuantity(lineId, 1)))))
+                .isInstanceOf(OrderAmendmentService.AmendmentRefusedException.class)
+                .satisfies(thrown -> assertThat(((OrderAmendmentService.AmendmentRefusedException) thrown).code())
+                        .isEqualTo("QUANTITY_DECREASE_NOT_SUPPORTED"));
+        assertThat(orderQuery.revisions(TENANT, orderId)).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("a financial amendment is refused past the ADR 0039 cut point; a non-financial one is not")
+    void aFinancialAmendmentIsRefusedPastTheCutPoint() {
+        UUID orderId = orderIdOf(placeOrder("idem-cutpoint"));
+        advance(orderId, OrderStatus.PREPARING);
+        advance(orderId, OrderStatus.READY);
+        int version = orderStore.find(TENANT, orderId).orElseThrow().version();
+
+        assertThatThrownBy(() -> tx(() -> amendments.propose(
+                        TENANT,
+                        orderId,
+                        propose(
+                                "k-cut-1",
+                                version,
+                                OrderAmendmentService.AmendmentCommand.changeContact("Бахтиёр", "+998901234567")))))
+                .isInstanceOf(OrderAmendmentService.AmendmentRefusedException.class)
+                .satisfies(thrown -> assertThat(((OrderAmendmentService.AmendmentRefusedException) thrown).code())
+                        .isEqualTo("AMENDMENT_PAST_CUT_POINT"));
+
+        // A non-financial command (a kitchen note) is not subject to the cut
+        // point at all, and still applies at READY.
+        var kitchenNoteResult = amend("k-cut-2", OrderAmendmentService.AmendmentCommand.kitchenNote("Без соли"));
+        assertThat(kitchenNoteResult.amendment().status()).isEqualTo(AmendmentStatus.APPLIED);
+    }
+
+    @Test
+    @DisplayName("a financial amendment never applies underneath an unacknowledged POS export")
+    void aFinancialAmendmentIsBlockedByAnUnacknowledgedPosExport() {
+        UUID orderId = orderIdOf(placeOrder("idem-pos-fin"));
+        int version = orderStore.find(TENANT, orderId).orElseThrow().version();
+        exportRow(orderId, "SENT");
+
+        assertThatThrownBy(() -> tx(() -> amendments.propose(
+                        TENANT,
+                        orderId,
+                        propose(
+                                "k-pos-fin-1",
+                                version,
+                                OrderAmendmentService.AmendmentCommand.changeFulfillmentTime(
+                                        NOW.plus(Duration.ofHours(1)))))))
+                .isInstanceOf(OrderAmendmentService.PosExportUnacknowledgedException.class);
+        assertThat(orderQuery.revisions(TENANT, orderId)).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("a financial amendment is invisible from another tenant")
+    void aFinancialAmendmentIsTenantIsolated() {
+        UUID orderId = orderIdOf(placeOrder("idem-iso-1"));
+        UUID otherTenant = UUID.randomUUID();
+        int version = orderStore.find(TENANT, orderId).orElseThrow().version();
+
+        assertThatThrownBy(() -> tx(() -> amendments.propose(
+                        otherTenant,
+                        orderId,
+                        propose(
+                                "k-iso-1",
+                                version,
+                                OrderAmendmentService.AmendmentCommand.changeContact("Бахтиёр", "+998901234567")))))
+                .as("the order does not resolve at all under a tenant id that never owned it")
+                .isInstanceOf(OrderStateService.OrderNotFoundException.class);
+
+        assertThat(orderQuery.revisions(TENANT, orderId))
+                .as("nothing about the real order moved")
+                .hasSize(1);
+    }
+
+    /** Proposes without applying — a financial amendment that raises the total needs this. */
+    private OrderAmendmentService.AmendmentResult proposeOnly(
+            UUID orderId, String key, OrderAmendmentService.AmendmentCommand command) {
+        int version = orderStore.find(TENANT, orderId).orElseThrow().version();
+        return tx(() -> amendments.propose(
+                TENANT,
+                orderId,
+                new OrderAmendmentService.ProposeCommand(
+                        version, List.of(command), false, key, "OPERATOR_EDIT", "USER", "sharif", null)));
+    }
+
+    /** Attests the customer's agreement and applies in the next transaction, mirroring {@code confirmAmendment}. */
+    private OrderAmendmentService.AmendmentResult confirmAndApply(UUID orderId, UUID amendmentId) {
+        int amendmentVersion =
+                amendmentStore.find(TENANT, amendmentId).orElseThrow().version();
+        tx(() -> amendments.attestConfirmation(TENANT, amendmentId, amendmentVersion, "sharif", "PHONE"));
+        int orderVersion = orderStore.find(TENANT, orderId).orElseThrow().version();
+        return tx(() ->
+                amendments.apply(TENANT, orderId, amendmentId, orderVersion, "USER", "sharif", "confirmed", null));
     }
 
     @Test
@@ -1973,6 +2576,270 @@ class OrderAmendmentAndOutcomeTests {
         return orderId;
     }
 
+    // -------------------------------- CHANGE_DELIVERY_ADDRESS reprice fixtures (ADR 0037 zone/tariff)
+
+    /**
+     * Gives LOCATION real coordinates and activates one flat-fee ADR 0037
+     * circle zone (radius 8 km) around it — every other test in this class
+     * reprices with no delivery fee at all, so this stays out of the shared
+     * {@link #setUp()} rather than slowing every test down for the few that
+     * need a real zone. {@code TRUNCATE TABLE tenant.tenants CASCADE} in
+     * {@link #setUp()} already wipes {@code fulfillment.*} between tests: both
+     * schemas carry a real foreign key back to {@code tenant.brands}/{@code
+     * tenant.locations}, so Postgres cascades the truncate through them the
+     * same way it already does for {@code audit.approval_policies}.
+     */
+    private void seedDeliveryZone(long feeMinor) {
+        jdbc.sql("""
+                UPDATE tenant.locations
+                SET latitude = :lat, longitude = :lon, coordinate_source = 'MERCHANT_PIN'
+                WHERE id = :id
+                """)
+                .param("lat", 41.311081)
+                .param("lon", 69.240562)
+                .param("id", LOCATION)
+                .update();
+
+        var mapper = JsonMapper.builder().build();
+        uz.horecaos.platform.iam.api.CurrentActor actor = () -> new uz.horecaos.platform.iam.api.AuthenticatedActor(
+                "amendment-zone-fixture", java.util.Set.of(), Map.of());
+        var zoneStore = new uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcServiceZoneStore(jdbc);
+        var tariffStore = new uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcDeliveryTariffStore(jdbc);
+        var zoneService = new uz.horecaos.platform.fulfillment.application.ServiceZoneService(
+                zoneStore, mapper, clock, new JdbcAuditRecorder(jdbc, mapper), actor);
+        var tariffService = new uz.horecaos.platform.fulfillment.application.DeliveryTariffService(
+                tariffStore, clock, new JdbcAuditRecorder(jdbc, mapper), actor);
+        UUID actorId = UUID.randomUUID();
+
+        UUID tariffId = tariffService.createTariff(TENANT, BRAND, "AMEND-FLAT", "Flat", false);
+        var draftedTariff = tariffService.draftVersion(
+                TENANT,
+                BRAND,
+                new uz.horecaos.platform.fulfillment.domain.tariff.DeliveryTariff(
+                        tariffId,
+                        0,
+                        uz.horecaos.platform.fulfillment.domain.VersionStatus.DRAFT,
+                        "UZS",
+                        uz.horecaos.platform.fulfillment.domain.tariff.FeeSource.TARIFF,
+                        uz.horecaos.platform.fulfillment.domain.tariff.DistanceMode.RADIUS,
+                        13_000,
+                        null,
+                        15_000,
+                        0L,
+                        null,
+                        List.of(new uz.horecaos.platform.fulfillment.domain.tariff.TariffBand(
+                                0, 0, 15_000, feeMinor, 0L)),
+                        List.of()),
+                actorId);
+        tariffService.activate(TENANT, BRAND, tariffId, draftedTariff.version(), actorId);
+
+        UUID zoneId = zoneService.createZone(
+                TENANT,
+                BRAND,
+                uz.horecaos.platform.fulfillment.domain.zone.ZoneRole.DELIVERY,
+                "AMEND-ZONE",
+                "Zone",
+                "Zone",
+                "Zone");
+        var draftedZone = zoneService.draftCircleVersion(
+                new uz.horecaos.platform.fulfillment.application.ServiceZoneService.NewVersion(
+                        TENANT,
+                        BRAND,
+                        zoneId,
+                        uz.horecaos.platform.fulfillment.domain.zone.ZoneRole.DELIVERY,
+                        null,
+                        0,
+                        "UZS",
+                        tariffId,
+                        null,
+                        null,
+                        actorId),
+                LOCATION,
+                8_000);
+        zoneService.activate(TENANT, BRAND, zoneId, draftedZone.version(), actorId);
+        zoneService.bindLocation(TENANT, BRAND, zoneId, LOCATION);
+    }
+
+    /**
+     * An ADR 0027 policy for {@code ordering.amendment.decrease} at TENANT
+     * scope, so {@code requiresDecreaseApproval}'s own {@code
+     * approvals.requireApproval} call resolves a real policy instead of
+     * {@code ApprovalAction#ALLOW_WITHOUT_APPROVAL}'s default of "no policy,
+     * no review".
+     */
+    private void seedDecreaseApprovalPolicy() {
+        jdbc.sql("""
+                INSERT INTO audit.approval_policies (
+                    id, tenant_id, action_code, scope_type, threshold_json,
+                    required_approver_capability, valid_from, version, approved_by)
+                VALUES (:id, :tenantId, 'ordering.amendment.decrease', 'TENANT',
+                        CAST('{"description":"ADR 0027 decrease approval fixture"}' AS jsonb),
+                        'ordering.amendment.approve', :from, 1, 'test-fixture')
+                """)
+                .param("id", UUID.randomUUID())
+                .param("tenantId", TENANT)
+                .param("from", clock.instant().minus(Duration.ofDays(1)).atOffset(ZoneOffset.UTC))
+                .update();
+    }
+
+    /** The request {@link #seedDecreaseApprovalPolicy} plus a proposed decrease together raised. */
+    private UUID pendingDecreaseApprovalRequestId() {
+        return jdbc.sql("""
+                SELECT id FROM audit.approval_requests
+                WHERE tenant_id = :tenantId AND action_code = 'ordering.amendment.decrease'
+                  AND status = 'PENDING'
+                ORDER BY requested_at DESC LIMIT 1
+                """).param("tenantId", TENANT).query(UUID.class).single();
+    }
+
+    /** The real ADR 0027 decision path, wired by hand for the same reason every other collaborator here is. */
+    private uz.horecaos.platform.audit.infrastructure.persistence.JdbcApprovalService approvalService() {
+        var mapper = JsonMapper.builder().build();
+        return new uz.horecaos.platform.audit.infrastructure.persistence.JdbcApprovalService(
+                jdbc, new JdbcAuditRecorder(jdbc, mapper), clock, new SimpleMeterRegistry(), mapper);
+    }
+
+    /**
+     * The command every {@code CHANGE_DELIVERY_ADDRESS} reprice test here
+     * issues: a point about 1.8 km from LOCATION, comfortably inside {@link
+     * #seedDeliveryZone}'s 8 km circle.
+     */
+    private OrderAmendmentService.AmendmentCommand changeAddressIntoZoneCommand() {
+        return OrderAmendmentService.AmendmentCommand.changeDeliveryAddress(
+                new uz.horecaos.platform.ordering.domain.DeliveryDestination(
+                        "12 Nearby", "", "Tashkent", "", "", "", "", "", "", 41.326500, 69.234100),
+                null,
+                "Client",
+                "+998901234567");
+    }
+
+    /**
+     * A DELIVERY order at CONFIRMED (before the READY cut point), with one
+     * live line and a base-revision total set directly rather than through a
+     * real checkout — reaching one for real would need a saved customer
+     * address and a live zone before {@code propose} ever runs, and the
+     * reprice path under test here only needs the amendment's own fresh quote
+     * to be real, never the base revision it is compared against.
+     *
+     * @param baseTotalMinor the order's starting total, freely chosen so a
+     *                       caller can produce an increase or a decrease of
+     *                       whatever size it needs against the real reprice
+     *                       {@link #seedDeliveryZone}'s tariff produces
+     */
+    private UUID seedDeliveryOrderForReprice(String idempotencyKey, long baseTotalMinor) {
+        UUID orderId = UUID.randomUUID();
+        UUID cartId = UUID.randomUUID();
+        UUID quoteId = UUID.randomUUID();
+        UUID publicationId =
+                jdbc.sql("""
+                SELECT id FROM catalog.publications WHERE catalog_id = :catalogId AND channel = 'STOREFRONT'
+                """).param("catalogId", catalogId).query(UUID.class).single();
+        Instant now = clock.instant();
+        // Two burgers at the seeded price-book amount (seedPricingAndStock) --
+        // matched here only so the fabricated base revision is internally
+        // consistent, never read back by repriceFor, which always prices the
+        // live order_lines fresh against the real price book.
+        long baseSubtotal = 100_000L;
+        long baseFee = baseTotalMinor - baseSubtotal;
+
+        jdbc.sql("""
+                INSERT INTO ordering.carts (id, tenant_id, brand_id, location_id, channel_id,
+                    fulfillment_mode, currency, status, guest_reference_hash, expires_at)
+                VALUES (:id, :t, :b, :loc, :ch, 'DELIVERY', 'UZS', 'ACTIVE', :guest,
+                    now() + interval '1 hour')
+                """)
+                .param("id", cartId)
+                .param("t", TENANT)
+                .param("b", BRAND)
+                .param("loc", LOCATION)
+                .param("ch", storefrontChannel)
+                .param("guest", "guest-" + orderId)
+                .update();
+
+        jdbc.sql("""
+                INSERT INTO pricing.quotes (id, tenant_id, brand_id, location_id, currency,
+                    catalog_publication_id, calculation_version, context_hash, subtotal_minor,
+                    tax_minor, total_minor, expires_at)
+                VALUES (:id, :t, :b, :loc, 'UZS', :pub, 1, :hash, :subtotal, 0, :total,
+                    now() + interval '1 hour')
+                """)
+                .param("id", quoteId)
+                .param("t", TENANT)
+                .param("b", BRAND)
+                .param("loc", LOCATION)
+                .param("pub", publicationId)
+                .param("hash", "hash-" + orderId)
+                .param("subtotal", baseSubtotal)
+                .param("total", baseTotalMinor)
+                .update();
+
+        jdbc.sql("""
+                INSERT INTO ordering.orders (id, public_order_number, tenant_id, brand_id,
+                    location_id, channel_id, channel_code_snapshot, guest_reference_hash,
+                    fulfillment_mode, acceptance_mode_snapshot, approval_channel_snapshot, status,
+                    currency, subtotal_minor, tax_minor, fee_minor, total_minor, pricing_quote_id,
+                    pricing_context_hash, catalog_publication_id, cart_id, idempotency_key, version,
+                    current_revision, created_at, confirmed_at)
+                VALUES (:id, :number, :t, :b, :loc, :ch, 'STOREFRONT', :guest, 'DELIVERY',
+                    'AUTO_CONFIRM', 'HORECAOS_OPERATIONS', 'CONFIRMED', 'UZS', :subtotal, 0, :fee,
+                    :total, :quote, :hash, :pub, :cart, :key, 1, 1, :at, :at)
+                """)
+                .param("id", orderId)
+                .param("number", idempotencyKey)
+                .param("t", TENANT)
+                .param("b", BRAND)
+                .param("loc", LOCATION)
+                .param("ch", storefrontChannel)
+                .param("guest", "guest-" + orderId)
+                .param("subtotal", baseSubtotal)
+                .param("fee", baseFee)
+                .param("total", baseTotalMinor)
+                .param("quote", quoteId)
+                .param("hash", "hash-" + orderId)
+                .param("pub", publicationId)
+                .param("cart", cartId)
+                .param("key", idempotencyKey)
+                .param("at", now.atOffset(ZoneOffset.UTC))
+                .update();
+
+        jdbc.sql("""
+                INSERT INTO ordering.order_revisions (order_id, revision, tenant_id, source,
+                    pricing_quote_id, pricing_context_hash, currency, subtotal_minor, tax_minor,
+                    discount_minor, fee_minor, total_minor, delta_total_minor,
+                    created_by_actor_type, created_at)
+                VALUES (:id, 1, :t, 'CHECKOUT', :quote, :hash, 'UZS', :subtotal, 0, 0, :fee, :total,
+                    0, 'USER', :at)
+                """)
+                .param("id", orderId)
+                .param("t", TENANT)
+                .param("quote", quoteId)
+                .param("hash", "hash-" + orderId)
+                .param("subtotal", baseSubtotal)
+                .param("fee", baseFee)
+                .param("total", baseTotalMinor)
+                .param("at", now.atOffset(ZoneOffset.UTC))
+                .update();
+
+        jdbc.sql("""
+                INSERT INTO ordering.order_lines (id, tenant_id, order_id, line_number,
+                    source_variant_id, product_name_snapshot, quantity, unit_amount_minor,
+                    base_amount_minor, final_amount_minor, tax_amount_minor)
+                VALUES (:id, :t, :order, 1, :variant, 'Burger', 2, 50000, 100000, 100000, 0)
+                """)
+                .param("id", UUID.randomUUID())
+                .param("t", TENANT)
+                .param("order", orderId)
+                .param("variant", burgerVariant)
+                .update();
+
+        jdbc.sql("INSERT INTO ordering.order_customer_snapshots (order_id, tenant_id) VALUES (:id, :t)")
+                .param("id", orderId)
+                .param("t", TENANT)
+                .update();
+
+        return orderId;
+    }
+
     // -------------------------------- reasoned cancellation reaches PREPARING/READY (wave P09, gap map 1.2k)
 
     /**
@@ -2791,6 +3658,9 @@ class OrderAmendmentAndOutcomeTests {
                     throw new UnsupportedOperationException("No order here redeems points");
                 }
             };
+
+    /** No order in this suite has a courier assigned; nothing here exercises the board's Курьер column. */
+    private static final ActiveCourierAssignmentsPort NO_COURIER_ASSIGNMENTS = (tenantId, orderIds) -> Map.of();
 
     /** The unwired payments port, which is a stand-in in production too. */
     private static final PaymentIntentPort UNWIRED_PAYMENTS = new PaymentIntentPort() {

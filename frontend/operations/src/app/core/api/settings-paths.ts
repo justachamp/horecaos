@@ -90,6 +90,18 @@ export const settingsPaths = {
     return `${this.brandRevise(scope)}/profile`;
   },
 
+  /**
+   * `TenantProfileController.tenantProfile` (row 10.1) — the tenant's own
+   * country/currency/timezone, read-only, shown beside the brand's editable
+   * fields. Operations-native (`BRAND_READ` at `TENANT` scope, the same
+   * capability {@link brands} already requires), not the control-plane
+   * `.../residency` board, which is `PLATFORM_ADMIN`-only and answers for
+   * every tenant at once.
+   */
+  tenantProfile(tenantId: string): string {
+    return `${OPERATIONS}/tenants/${enc(tenantId)}/profile`;
+  },
+
   // ---------------------------------------------------------- 10.2 Locations
 
   /** `OperationsBrandController.locations` — the branch list and the scope bar's location picker. */
@@ -191,6 +203,11 @@ export const settingsPaths = {
     return `${this.brandServiceSchedules(scope)}/${enc(scheduleId)}/exceptions`;
   },
 
+  /** `ServiceScheduleController.deleteException` (row 10.2c) — `date` is an ISO `yyyy-MM-dd`. */
+  scheduleException(scope: LocationScope, scheduleId: string, date: string): string {
+    return `${this.scheduleExceptions(scope, scheduleId)}/${enc(date)}`;
+  },
+
   // ---------------------------------------------------------- 10.3 Order policy
 
   /** `OrderAcceptancePolicyController` (control-plane surface). */
@@ -240,6 +257,46 @@ export const settingsPaths = {
 
   salesChannelReactivate(scope: LocationScope, channelId: string): string {
     return `${this.salesChannel(scope, channelId)}/reactivate`;
+  },
+
+  // ------------------------------------------------------------- 10.5 Channel setup
+
+  /** `ChannelSetupController` (control-plane surface), nested under the channel itself. */
+  channelSetup(scope: LocationScope, channelId: string): string {
+    return `${this.salesChannel(scope, channelId)}/setup`;
+  },
+
+  channelHostname(scope: LocationScope, channelId: string): string {
+    return `${this.channelSetup(scope, channelId)}/hostname`;
+  },
+
+  channelHostnameSubdomain(scope: LocationScope, channelId: string): string {
+    return `${this.channelHostname(scope, channelId)}/subdomain`;
+  },
+
+  channelHostnameCustom(scope: LocationScope, channelId: string): string {
+    return `${this.channelHostname(scope, channelId)}/custom`;
+  },
+
+  channelHostnameVerify(scope: LocationScope, channelId: string): string {
+    return `${this.channelHostname(scope, channelId)}/verify`;
+  },
+
+  channelPresentation(scope: LocationScope, channelId: string): string {
+    return `${this.channelSetup(scope, channelId)}/presentation`;
+  },
+
+  /** `ChannelPagesController` (control-plane surface). */
+  channelPages(scope: LocationScope, channelId: string): string {
+    return `${this.channelSetup(scope, channelId)}/pages`;
+  },
+
+  channelPageCurrent(scope: LocationScope, channelId: string, slug: string): string {
+    return `${this.channelPages(scope, channelId)}/${enc(slug)}/current`;
+  },
+
+  channelPagePublish(scope: LocationScope, channelId: string, slug: string): string {
+    return `${this.channelPages(scope, channelId)}/${enc(slug)}`;
   },
 
   // ---------------------------------------------------------------- 10.6 Payment methods
@@ -466,6 +523,20 @@ export const settingsPaths = {
   },
 
   /**
+   * `OperationsProviderInstallationController.capabilityCatalogue` — gap-map
+   * row 10.8a's fix path: the vendor ceiling this installation's own
+   * provider declares, before any reconciliation has run. Backs the
+   * branch-binding dialog's own capability-assignment picker, which
+   * defaults to every capability this read returns.
+   */
+  integrationInstallationCapabilityCatalogue(
+    scope: LocationScope,
+    installationId: string,
+  ): string {
+    return `${this.integrationInstallations(scope)}/${enc(installationId)}/capability-catalogue`;
+  },
+
+  /**
    * `OperationsProviderInstallationController.settings`/`updateSettings` —
    * ADR 0106, gap-map row 10.8a. Today's one field is Clopos's own
    * order-acceptance toggle (Q7); refused for any other provider type, so
@@ -638,6 +709,11 @@ export const settingsPaths = {
 
   orderOutcomeReason(scope: LocationScope, reasonId: string): string {
     return `${this.orderOutcomeReasons(scope)}/${enc(reasonId)}`;
+  },
+
+  /** Row 10.10a — ranks every active reason of one kind. */
+  orderOutcomeReasonReorder(scope: LocationScope): string {
+    return `${this.orderOutcomeReasons(scope)}/reorder`;
   },
 
   // ---------------------------------------------------------- 10.10d Branch tags

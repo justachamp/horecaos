@@ -162,6 +162,13 @@
                     }
                   </ul>
                 }
+                @if (line.commentPresets.length > 0) {
+                  <ul class="pane__line-presets" data-testid="order-detail-line-presets">
+                    @for (preset of line.commentPresets; track preset.code) {
+                      <li class="pane__preset-chip">{{ presetLabel(preset) }}</li>
+                    }
+                  </ul>
+                }
                 @if (line.hasNote) {
                   @if (revealedNote(line.lineId); as note) {
                     <p class="q-caption pane__line-note">{{ note }}</p>
@@ -553,6 +560,7 @@
                   <th>{{ 'orders.detail.revisions.column.createdAt' | t }}</th>
                   <th>{{ 'orders.detail.revisions.column.source' | t }}</th>
                   <th>{{ 'orders.detail.comments.history.open' | t }}</th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody>
@@ -562,6 +570,21 @@
                       <td class="q-tnum">{{ formatOccurredAt(entry.createdAt) }}</td>
                       <td>{{ amendmentCommandLabel(cmd.type) }}</td>
                       <td class="q-body-sm">{{ cmd.text ?? '—' }}</td>
+                      <td>
+                        <!-- RESOLVE (wave 10, rows 1.2c/2.1d): once per amendment, on its first
+                             command row only — this console never proposes more than one command
+                             per amendment, so the guard is defensive rather than load-bearing. -->
+                        @if ($index === 0 && entry.actions?.includes('RESOLVE')) {
+                          <button
+                            type="button"
+                            class="pane__reveal-link"
+                            (click)="resolveAmendment(entry)"
+                            data-testid="order-detail-amendment-history-resolve"
+                          >
+                            {{ 'orders.detail.comments.history.resolve' | t }}
+                          </button>
+                        }
+                      </td>
                     </tr>
                   }
                 }
@@ -838,6 +861,20 @@
                 {{ 'orders.dialog.externalCourier.title' | t }}
               </button>
             }
+
+            <!-- The dedicated, provider-notifying cancel (gap map row 1.2g) --
+                 distinct from unassign, which never tells a PARTNER
+                 shipment's provider anything. -->
+            @if (canCancelShipment()) {
+              <button
+                type="button"
+                class="pane__reveal-link pane__reveal-link--destructive"
+                (click)="openShipmentCancelDialog()"
+                data-testid="order-detail-shipment-cancel"
+              >
+                {{ 'delivery.dispatch.action.cancelShipment' | t }}
+              </button>
+            }
           </div>
         }
       </section>
@@ -1006,6 +1043,17 @@
             </p>
           }
 
+          @if (posExportHasMappingDeepLink()) {
+            <button
+              type="button"
+              class="pane__reveal-link"
+              (click)="openPosExportMapping()"
+              data-testid="order-detail-pos-export-fix-mapping"
+            >
+              {{ 'orders.detail.posExport.action.fixMapping' | t }}
+            </button>
+          }
+
           @if (!posExportPushOpen()) {
             <button
               type="button"
@@ -1079,7 +1127,11 @@
           <dt class="q-caption">{{ 'orders.detail.attribution.createdBy' | t }}</dt>
           <dd class="q-body-sm" data-testid="order-detail-created-by">
             {{
-              actorDisplay(detail.value.createdByActorType, detail.value.createdByActorId) ?? '—'
+              actorDisplay(
+                detail.value.createdByActorType,
+                detail.value.createdByActorId,
+                detail.value.createdByDisplayName
+              ) ?? '—'
             }}
           </dd>
         </div>
@@ -1087,7 +1139,11 @@
           <dt class="q-caption">{{ 'orders.detail.attribution.acceptedBy' | t }}</dt>
           <dd class="q-body-sm" data-testid="order-detail-accepted-by">
             @if (
-              actorDisplay(detail.value.acceptedByActorType, detail.value.acceptedByActorId);
+              actorDisplay(
+                detail.value.acceptedByActorType,
+                detail.value.acceptedByActorId,
+                detail.value.acceptedByDisplayName
+              );
               as actor
             ) {
               {{ actor }}
@@ -1194,6 +1250,85 @@
       (accepted)="acceptExternalBooking($event)"
       (abandoned)="abandonExternalBooking($event)"
       (dismiss)="onDialogDismiss()"
+    />
+  }
+
+  <!-- wave 10 financial commands (rows 1.2c/2.1d) -->
+  @if (dialog() === 'addLines') {
+    <q-order-add-lines-dialog
+      [options]="addLinesOptions()"
+      [searching]="addLinesSearching()"
+      [busy]="busy()"
+      (search)="onAddLinesSearch($event)"
+      (confirm)="onAddLinesConfirm($event)"
+      (dismiss)="onDialogDismiss()"
+    />
+  }
+  @if (dialog() === 'changeQuantity' && order(); as detail) {
+    <q-order-change-quantity-dialog
+      [lines]="detail.value.lines"
+      [busy]="busy()"
+      (confirm)="onChangeQuantityConfirm($event)"
+      (dismiss)="onDialogDismiss()"
+    />
+  }
+  @if (dialog() === 'changePaymentMethod') {
+    <q-order-change-payment-method-dialog
+      [methods]="paymentMethods()"
+      [busy]="busy()"
+      (confirm)="onChangePaymentMethodConfirm($event)"
+      (dismiss)="onDialogDismiss()"
+    />
+  }
+  @if (dialog() === 'changeAddress') {
+    <q-order-change-address-dialog
+      [initial]="revealedAddress()"
+      [initialRecipientName]="changeContactInitialName()"
+      [initialRecipientPhone]="revealedPhone() ?? ''"
+      [busy]="busy()"
+      (confirm)="onChangeAddressConfirm($event)"
+      (dismiss)="onDialogDismiss()"
+    />
+  }
+  @if (dialog() === 'changeTime') {
+    <q-order-change-time-dialog
+      [initialValueIso]="order()?.value.summary?.promisedAt ?? null"
+      [busy]="busy()"
+      (confirm)="onChangeTimeConfirm($event)"
+      (dismiss)="onDialogDismiss()"
+    />
+  }
+  @if (dialog() === 'changeContact') {
+    <q-order-change-contact-dialog
+      [initialName]="changeContactInitialName()"
+      [initialPhone]="revealedPhone() ?? ''"
+      [busy]="busy()"
+      (confirm)="onChangeContactConfirm($event)"
+      (dismiss)="onDialogDismiss()"
+    />
+  }
+  @if (dialog() === 'amendConfirm' && pendingAmendment(); as pending) {
+    <q-order-amendment-confirm-dialog
+      [deltaMinor]="pending.deltaMinor"
+      [currency]="order()?.value.summary?.currency ?? 'UZS'"
+      [requiresApproval]="pending.requiresApproval"
+      [locale]="locale()"
+      [busy]="busy()"
+      (confirm)="onAmendConfirmDialogConfirm($event)"
+      (dismiss)="onDialogDismiss()"
+    />
+  }
+  @if (dialog() === 'shipmentCancel') {
+    <q-confirm-dialog
+      [title]="'delivery.dispatch.cancelShipment.confirmTitle' | t"
+      [body]="'delivery.dispatch.cancelShipment.confirmBody' | t"
+      [confirmLabel]="'delivery.dispatch.cancelShipment.confirm' | t"
+      [cancelLabel]="'delivery.dispatch.cancelShipment.keep' | t"
+      tone="destructive"
+      [busy]="shipmentCancelBusy()"
+      (confirm)="confirmShipmentCancel()"
+      (cancel)="onDialogDismiss()"
+      data-testid="order-detail-shipment-cancel-dialog"
     />
   }
 </div>

@@ -142,6 +142,64 @@ public class OrderOutcomeReasonService {
         return reasons.list(tenantId, kind, activeOnly);
     }
 
+    /**
+     * Ranks every active reason of one kind (gap-map row {@code 10.10a}) —
+     * before this existed a reason's position in the list was an alphabetic
+     * accident ({@code system_category, internal_name}), not a deliberate
+     * choice of which reasons a dispatcher reaches for first.
+     *
+     * <p>Whole-set, the same contract {@code ServiceScheduleService
+     * #replaceRules} and {@code q-schedule-grid}'s own writes use elsewhere
+     * in this codebase: {@code orderedReasonIds} must name every currently
+     * active reason of this kind exactly once, so a caller working from a
+     * stale list (one missing a reason someone else just created, or still
+     * naming one somebody else just archived) is refused rather than
+     * silently reordering a subset and leaving the rest's rank undefined.
+     *
+     * <p>{@code expectedVersion} guards the whole list rather than one row:
+     * a dated exception's delete borrows its owning schedule's version for
+     * the same reason ({@code ServiceScheduleService#deleteException}) —
+     * there is no separate "the list itself" aggregate to version, so a
+     * single number computed from every reason being reordered stands in
+     * for it. That number is the <strong>sum</strong> of their versions,
+     * not the max: {@code version} only ever increments by one row's own
+     * write ({@code update}, {@code archive}, {@code setDisplayOrder} — see
+     * {@code JdbcOutcomeReasonStore}), never decrements, so the sum strictly
+     * increases whenever any one active reason changes, whichever row it is
+     * — a concurrent rename of a reason that happens not to hold the
+     * current max would otherwise still read as "nothing changed" and let a
+     * stale reorder through, which the max alone could not catch. The
+     * console already holds every reason's own version from the list it
+     * rendered and computes this the same way; a concurrent edit, archive
+     * or reorder of any one of them changes the sum and the whole reorder
+     * is refused rather than partially applied over stale data.
+     */
+    @Transactional
+    public void reorder(UUID tenantId, OutcomeReasonKind kind, List<UUID> orderedReasonIds, int expectedVersion) {
+        List<ReasonRow> active = reasons.list(tenantId, kind, true);
+
+        Set<UUID> activeIds = active.stream().map(ReasonRow::id).collect(Collectors.toUnmodifiableSet());
+        Set<UUID> requestedIds = Set.copyOf(orderedReasonIds);
+        if (requestedIds.size() != orderedReasonIds.size()) {
+            throw new IllegalArgumentException("A reorder cannot name the same reason twice");
+        }
+        if (!requestedIds.equals(activeIds)) {
+            throw new IllegalArgumentException(
+                    "A reorder must name every active reason of this kind exactly once — reload the list and retry");
+        }
+
+        int currentFingerprint = active.stream().mapToInt(ReasonRow::version).sum();
+        if (currentFingerprint != expectedVersion) {
+            throw new StaleReasonException(expectedVersion, currentFingerprint);
+        }
+
+        Instant now = clock.instant();
+        int position = 0;
+        for (UUID reasonId : orderedReasonIds) {
+            reasons.setDisplayOrder(tenantId, reasonId, position++, now);
+        }
+    }
+
     public Optional<ReasonRow> find(UUID tenantId, UUID reasonId) {
         return reasons.find(tenantId, reasonId);
     }

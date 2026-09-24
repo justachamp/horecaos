@@ -38,6 +38,18 @@ export interface CartResponseModifierSelection {
   readonly amountMinor: number | null;
 }
 
+/**
+ * Row 2.1b: one preset the line currently carries, resolved against the menu
+ * for display -- the wire's own `CartLineResponse.commentPresetCodes` is
+ * codes only, no label.
+ */
+export interface CartResponseCommentPresetSelection {
+  readonly code: string;
+  readonly labelRu: string;
+  readonly labelUz: string;
+  readonly labelEn: string;
+}
+
 /** Cart item from GET /customers/carts/ response */
 export interface CartResponseItem {
   variant_id: string;
@@ -56,6 +68,15 @@ export interface CartResponseItem {
   modifierOptionIds: readonly string[];
   /** The same selections, resolved against the menu for display. */
   modifiers: readonly CartResponseModifierSelection[];
+  /**
+   * Row 2.1b: the line's own coded presets, straight off the platform's
+   * `CartLineResponse`. Resent on every write to this line -- see
+   * `UiCartService.setQuantity`'s own doc -- the same rule `modifierOptionIds`
+   * above already follows.
+   */
+  commentPresetCodes: readonly string[];
+  /** The same codes, resolved against the menu for display. */
+  commentPresets: readonly CartResponseCommentPresetSelection[];
 }
 
 /** Vendor from cart response */

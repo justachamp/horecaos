@@ -82,11 +82,9 @@ section:first-of-type {
   margin-bottom: 8px;
 }
 
-.geography__unavailable {
+.geography__histogram-formula {
+  margin-top: 8px;
   color: var(--q-ink-muted);
-  padding: 12px;
-  border: 1px dashed var(--q-hairline);
-  border-radius: var(--q-radius);
 }
 
 .geography__sample-size {

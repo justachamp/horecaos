@@ -58,6 +58,7 @@ function campaign(overrides: Partial<CampaignView> = {}): CampaignView {
     blockedCount: 0,
     pausedAt: null,
     scheduledAt: null,
+    haltedReason: null,
     isWired: true,
     createdAt: '2026-09-01T08:00:00Z',
     updatedAt: '2026-09-01T08:00:00Z',
@@ -121,6 +122,26 @@ describe('CampaignsPage', () => {
     const host = fixture.nativeElement as HTMLElement;
 
     expect(host.querySelector('.row-hint')?.textContent?.toLowerCase()).toContain('awaiting');
+  });
+
+  it('6.4: hints that a scheduled send did not go out, without opening the campaign', async () => {
+    await render([
+      campaign({
+        status: 'SCHEDULED',
+        scheduledAt: null,
+        haltedReason: 'channel unwired at due moment',
+      }),
+    ]);
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(host.querySelector('[data-testid="campaign-row-halted-hint"]')).not.toBeNull();
+  });
+
+  it('6.4: shows no halted hint for a campaign armed and waiting, not halted', async () => {
+    await render([campaign({ status: 'SCHEDULED', scheduledAt: '2026-10-01T10:00:00Z' })]);
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(host.querySelector('[data-testid="campaign-row-halted-hint"]')).toBeNull();
   });
 
   it('T18: disables a channel option the read model says is not wired', async () => {

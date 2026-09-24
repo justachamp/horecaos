@@ -1,17 +1,20 @@
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
 
 import { ApiClient } from '../../core/api/api-client';
 import { LocationScope } from '../../core/api/operations-paths';
+import { ApiError, ApiErrorCode } from '../../core/api/problem-details';
 import { CurrentLocation } from '../../core/auth/current-location';
 import { I18n } from '../../core/i18n/i18n';
 import { RosterEntryResponse, CouriersApi } from '../couriers/couriers-api';
 import { DispatchApi, PlanQueueResponse } from '../delivery/dispatch-api';
+import { OrderAmendmentsApi } from '../orders/order-amendments-api';
 import { OrderDeliveryApi } from '../orders/order-delivery-api';
 import { OrderRevealApi } from '../orders/order-reveal-api';
+import { ChannelView, SalesChannelsApi } from '../settings/sales-channels/sales-channels-api';
 import { LocationsApi } from '../settings/locations/locations-api';
 import { BoardResponse, KitchenApi, TicketResponse } from './kitchen-api';
 import { KitchenQueuePage } from './kitchen-queue-page';
@@ -248,6 +251,7 @@ describe('KitchenQueuePage', () => {
                       quantity: 1,
                       finalAmountMinor: 5000000,
                       modifiers: [],
+                      commentPresets: [],
                       lineId: 'line-1',
                       hasNote: true,
                     },
@@ -298,6 +302,97 @@ describe('KitchenQueuePage', () => {
     );
     const revealed = host.querySelector('[data-testid="kitchen-line-note"]');
     expect(revealed?.textContent).toContain('без лука');
+  });
+
+  // ------------------------------------------------------------- row 2.1b: presets
+
+  it("renders a line's comment presets as chips ahead of the free note, resolved off the order-detail join", async () => {
+    await TestBed.configureTestingModule({
+      imports: [KitchenQueuePage],
+      providers: [
+        {
+          provide: CurrentLocation,
+          useValue: {
+            scope: signal<LocationScope | null>(SCOPE),
+            denied: signal(false),
+            ensureLoaded: () => Promise.resolve(),
+          },
+        },
+        {
+          provide: KitchenApi,
+          useValue: {
+            board: () => Promise.resolve(board([DELIVERY_TICKET])),
+            stations: () => Promise.resolve([]),
+          },
+        },
+        {
+          provide: LocationsApi,
+          useValue: { serviceSummary: () => Promise.reject(new Error('n/a')) },
+        },
+        {
+          provide: ApiClient,
+          useValue: {
+            get: () =>
+              of({
+                value: {
+                  lines: [
+                    {
+                      lineNumber: 1,
+                      productName: 'Lagman',
+                      quantity: 1,
+                      finalAmountMinor: 5000000,
+                      modifiers: [],
+                      commentPresets: [
+                        {
+                          code: 'NO_ONIONS',
+                          labelRu: 'Без лука',
+                          labelUz: 'Piyozsiz',
+                          labelEn: 'No onions',
+                        },
+                        {
+                          code: 'EXTRA_SPICY',
+                          labelRu: 'Поострее',
+                          labelUz: 'Achchiqroq',
+                          labelEn: 'Extra spicy',
+                        },
+                      ],
+                      lineId: 'line-1',
+                      hasNote: false,
+                    },
+                  ],
+                  kitchenNote: null,
+                },
+                version: null,
+              }),
+          },
+        },
+        { provide: OrderRevealApi, useValue: { revealLineNote: vi.fn() } },
+        {
+          provide: DispatchApi,
+          useValue: { queue: vi.fn(() => Promise.resolve([])), assign: vi.fn() },
+        },
+        { provide: CouriersApi, useValue: { roster: vi.fn(() => Promise.resolve([])) } },
+        { provide: Router, useValue: { navigateByUrl: vi.fn() } },
+      ],
+    }).compileComponents();
+    TestBed.inject(I18n).setLocale('en');
+    fixture = TestBed.createComponent(KitchenQueuePage);
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    const header = host.querySelector('.ticket__header') as HTMLElement;
+    header.click();
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    const chips = host.querySelector('[data-testid="kitchen-line-presets"]');
+    expect(chips).not.toBeNull();
+    expect(chips?.textContent).toContain('No onions');
+    expect(chips?.textContent).toContain('Extra spicy');
+    // No note on this line, so no reveal affordance renders beside the chips.
+    expect(host.querySelector('[data-testid="kitchen-reveal-note"]')).toBeNull();
   });
 
   // ------------------------------------------------------- P16: aggregator tab
@@ -755,5 +850,231 @@ describe('KitchenQueuePage', () => {
     counterSale.click();
 
     expect(navigateByUrl).toHaveBeenCalledWith('/orders/new');
+  });
+});
+
+// ================================================================ wave 10: «Изменить оплату» (row 2.1d)
+
+const CHANNEL_FIXTURE: ChannelView = {
+  id: 'chan-1',
+  code: 'telegram-bot',
+  systemType: 'WEB',
+  displayName: 'Telegram bot',
+  status: 'ACTIVE',
+  pricePlaneChannelId: null,
+  externallyPriced: false,
+  guestOrdersAllowed: false,
+  providerInstallationId: null,
+  version: 1,
+  locationCount: 1,
+  enabledPaymentMethodCount: 2,
+  enabledFulfillmentModes: ['DELIVERY'],
+};
+
+describe('KitchenQueuePage: wave 10 «Изменить оплату» (row 2.1d)', () => {
+  /**
+   * A dedicated `TestBed.configureTestingModule` call, mirroring "reveals a
+   * line note" above, rather than the shared `render()` above (whose
+   * `ApiClient` stub ignores the path and answers a lines-only shape that
+   * has no `summary` for this feature's own read to destructure).
+   */
+  async function renderWithPaymentChange(options: {
+    orderVersion?: number;
+    channelCode?: string | null;
+    getOrder?: ReturnType<typeof vi.fn>;
+    listChannels?: ReturnType<typeof vi.fn>;
+    matrices?: ReturnType<typeof vi.fn>;
+    changePaymentMethod?: ReturnType<typeof vi.fn>;
+  }): Promise<{ fixture: ComponentFixture<KitchenQueuePage>; host: HTMLElement }> {
+    const getOrder =
+      options.getOrder ??
+      vi.fn(() =>
+        of({
+          value: {
+            lines: [],
+            kitchenNote: null,
+            summary: {
+              orderId: 'order-1',
+              version: options.orderVersion ?? 4,
+              channelCode: options.channelCode === undefined ? 'telegram-bot' : options.channelCode,
+              currency: 'UZS',
+            },
+          },
+          version: null,
+        }),
+      );
+    const listChannels = options.listChannels ?? vi.fn().mockResolvedValue([CHANNEL_FIXTURE]);
+    const matrices =
+      options.matrices ??
+      vi.fn().mockResolvedValue({ paymentMethods: { CASH: true, CLICK: true, PAYME: false } });
+    const changePaymentMethod =
+      options.changePaymentMethod ??
+      vi.fn().mockReturnValue(
+        of({
+          amendmentId: 'amendment-1',
+          orderId: 'order-1',
+          status: 'APPLIED',
+          baseRevision: 1,
+          appliedRevision: 2,
+          deltaTotalMinor: 0,
+          requiresApproval: false,
+          expiresAt: new Date().toISOString(),
+          amendmentVersion: 1,
+          orderVersion: 5,
+          commands: ['CHANGE_PAYMENT_METHOD'],
+          warnings: [],
+          replayed: false,
+          commandDetails: [],
+          createdAt: new Date().toISOString(),
+          createdByActorType: 'USER',
+        }),
+      );
+
+    await TestBed.configureTestingModule({
+      imports: [KitchenQueuePage],
+      providers: [
+        {
+          provide: CurrentLocation,
+          useValue: {
+            scope: signal<LocationScope | null>(SCOPE),
+            denied: signal(false),
+            ensureLoaded: () => Promise.resolve(),
+          },
+        },
+        {
+          provide: KitchenApi,
+          useValue: {
+            board: () => Promise.resolve(board([DELIVERY_TICKET])),
+            stations: () => Promise.resolve([]),
+          },
+        },
+        {
+          provide: LocationsApi,
+          useValue: { serviceSummary: () => Promise.reject(new Error('no summary in this test')) },
+        },
+        { provide: ApiClient, useValue: { get: getOrder } },
+        { provide: OrderRevealApi, useValue: { revealLineNote: vi.fn() } },
+        { provide: DispatchApi, useValue: { queue: vi.fn(), assign: vi.fn() } },
+        { provide: CouriersApi, useValue: { roster: vi.fn(() => Promise.resolve([])) } },
+        { provide: Router, useValue: { navigateByUrl: vi.fn() } },
+        { provide: OrderAmendmentsApi, useValue: { changePaymentMethod } },
+        { provide: SalesChannelsApi, useValue: { list: listChannels, matrices } },
+      ],
+    }).compileComponents();
+    TestBed.inject(I18n).setLocale('en');
+    const localFixture = TestBed.createComponent(KitchenQueuePage);
+    localFixture.detectChanges();
+    await flushMicrotasks();
+    localFixture.detectChanges();
+    return { fixture: localFixture, host: localFixture.nativeElement as HTMLElement };
+  }
+
+  it('opens with the order’s fresh channel matrix and proposes CHANGE_PAYMENT_METHOD against the order’s fresh version', async () => {
+    const changePaymentMethod = vi.fn().mockReturnValue(
+      of({
+        amendmentId: 'amendment-1',
+        orderId: 'order-1',
+        status: 'APPLIED',
+        baseRevision: 1,
+        appliedRevision: 2,
+        deltaTotalMinor: 0,
+        requiresApproval: false,
+        expiresAt: new Date().toISOString(),
+        amendmentVersion: 1,
+        orderVersion: 5,
+        commands: ['CHANGE_PAYMENT_METHOD'],
+        warnings: [],
+        replayed: false,
+        commandDetails: [],
+        createdAt: new Date().toISOString(),
+        createdByActorType: 'USER',
+      }),
+    );
+    const { fixture, host } = await renderWithPaymentChange({
+      orderVersion: 7,
+      changePaymentMethod,
+    });
+
+    (
+      host.querySelector('[data-testid="kitchen-change-payment-method"]') as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(host.querySelector('[data-testid="order-change-payment-method-dialog"]')).not.toBeNull();
+    expect(
+      host.querySelector('[data-testid="order-change-payment-method-dialog-option-CLICK"]'),
+    ).not.toBeNull();
+    // PAYME is disabled on the channel matrix — never offered.
+    expect(
+      host.querySelector('[data-testid="order-change-payment-method-dialog-option-PAYME"]'),
+    ).toBeNull();
+
+    (
+      host.querySelector(
+        '[data-testid="order-change-payment-method-dialog-option-CLICK"]',
+      ) as HTMLInputElement
+    ).click();
+    (
+      host.querySelector(
+        '[data-testid="order-change-payment-method-dialog-confirm"]',
+      ) as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+
+    expect(changePaymentMethod).toHaveBeenCalledWith(SCOPE, 'order-1', 7, 'CLICK');
+  });
+
+  it('falls back to CASH only when the channel read is denied, still offering something rather than nothing', async () => {
+    const { fixture, host } = await renderWithPaymentChange({
+      listChannels: vi.fn().mockRejectedValue(new Error('CHANNEL_READ denied')),
+    });
+
+    (
+      host.querySelector('[data-testid="kitchen-change-payment-method"]') as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(
+      host.querySelector('[data-testid="order-change-payment-method-dialog-option-CASH"]'),
+    ).not.toBeNull();
+    expect(
+      host.querySelector('[data-testid="order-change-payment-method-dialog-option-CLICK"]'),
+    ).toBeNull();
+  });
+
+  it('surfaces a refusal (e.g. an online-paid order changing method) as the pass’s own action notice, dialog left open', async () => {
+    const changePaymentMethod = vi
+      .fn()
+      .mockReturnValue(
+        throwError(
+          () =>
+            new ApiError(
+              ApiErrorCode.RESOURCE_CONFLICT,
+              409,
+              { status: 409, detail: 'PAYMENT_METHOD_CHANGE_REQUIRES_VOID_REFUND' },
+              'corr-1',
+            ),
+        ),
+      );
+    const { fixture, host } = await renderWithPaymentChange({ changePaymentMethod });
+
+    (
+      host.querySelector('[data-testid="kitchen-change-payment-method"]') as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+    (
+      host.querySelector(
+        '[data-testid="order-change-payment-method-dialog-confirm"]',
+      ) as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(host.querySelector('.kitchen__notice-band')?.textContent).toContain(
+      'PAYMENT_METHOD_CHANGE_REQUIRES_VOID_REFUND',
+    );
   });
 });

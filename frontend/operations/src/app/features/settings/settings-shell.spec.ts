@@ -46,10 +46,17 @@ class FakeSettingsScope {
   readonly locations = signal<readonly LocationView[]>([]);
   readonly brandId = signal('brand-1');
   readonly locationId = signal<string | null>(null);
-  readonly level = signal<'BRAND' | 'LOCATION'>('BRAND');
+  readonly level = signal<'TENANT' | 'BRAND' | 'LOCATION'>('BRAND');
+  readonly tenantWide = signal(false);
   readonly showBrandPicker = signal(true);
   setBrand = (): void => {};
   setLocation = (): void => {};
+  setTenantLevel = (): void => {
+    this.tenantWide.set(true);
+  };
+  leaveTenantLevel = (): void => {
+    this.tenantWide.set(false);
+  };
 }
 
 describe('SettingsShell', () => {
@@ -88,5 +95,30 @@ describe('SettingsShell', () => {
     for (const link of links) {
       expect(link.getAttribute('queryParamsHandling')).toBe('preserve');
     }
+  });
+
+  // Row 10.3b: the scope bar's TENANT/per-brand pill pair.
+
+  it('switches to TENANT level when the company-wide pill is clicked', () => {
+    (
+      fixture.nativeElement.querySelector(
+        '[data-testid="scope-bar-tenant-wide"]',
+      ) as HTMLButtonElement
+    ).click();
+    fixture.detectChanges();
+
+    expect(scope.tenantWide()).toBe(true);
+  });
+
+  it('leaves TENANT level when the per-brand pill is clicked', () => {
+    scope.tenantWide.set(true);
+    fixture.detectChanges();
+
+    (
+      fixture.nativeElement.querySelector('[data-testid="scope-bar-per-brand"]') as HTMLButtonElement
+    ).click();
+    fixture.detectChanges();
+
+    expect(scope.tenantWide()).toBe(false);
   });
 });

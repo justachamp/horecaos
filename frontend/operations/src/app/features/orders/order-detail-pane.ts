@@ -7,10 +7,12 @@ import {
   input,
   signal,
 } from '@angular/core';
+import { Router } from '@angular/router';
 import { Observable, firstValueFrom } from 'rxjs';
 
 import { ApiClient } from '../../core/api/api-client';
 import { Versioned } from '../../core/api/aggregate-version';
+import { firstPage } from '../../core/api/page';
 import { LocationScope, operationsPaths } from '../../core/api/operations-paths';
 import { ApiError, ApiErrorCode } from '../../core/api/problem-details';
 import { CurrentLocation } from '../../core/auth/current-location';
@@ -18,13 +20,15 @@ import { TimeZone, formatClock, formatDateTime, formatDuration } from '../../cor
 import { LatenessPolicy, PLATFORM_DEFAULT_LATENESS_POLICY } from '../../core/lateness-policy';
 import { LatenessPolicyApi } from '../../core/lateness-policy-api';
 import { formatMoney } from '../../core/format/money';
-import { I18n } from '../../core/i18n/i18n';
+import { I18n, Locale } from '../../core/i18n/i18n';
 import { MessageKey } from '../../core/i18n/messages.en';
 import { TPipe } from '../../core/i18n/t.pipe';
 import { Combobox, ComboboxOption } from '../../shared/ui/combobox';
+import { ConfirmDialog } from '../../shared/ui/confirm-dialog';
 import { StepItem, Steps } from '../../shared/ui/steps';
 import { Timeline, TimelineEntry } from '../../shared/ui/timeline';
 import { ReasonResponse, ReferenceDataApi } from '../settings/reference-data/reference-data-api';
+import { SalesChannelsApi } from '../settings/sales-channels/sales-channels-api';
 import { CouriersApi, RosterEntryResponse } from '../couriers/couriers-api';
 import {
   DispatchApi,
@@ -41,20 +45,31 @@ import {
   decisionOutcomeLabel,
 } from './order-actions';
 import { DecisionResponse, OrderActionsApi, OrderCancellationResponse } from './order-actions-api';
+import { OrderAddLinesDialog, AddLinesSelection } from './order-add-lines-dialog';
 import { OrderAmendMenu } from './order-amend-menu';
+import {
+  AmendmentConfirmationChannel,
+  OrderAmendmentConfirmDialog,
+} from './order-amendment-confirm-dialog';
 import {
   AmendmentResponse,
   BuiltAmendmentCommandType,
   amendmentCommandLabel,
 } from './order-amendments';
-import { OrderAmendmentsApi } from './order-amendments-api';
+import { AmendmentAddLine, OrderAmendmentsApi } from './order-amendments-api';
 import { OrderCashTenderedDialog } from './order-cash-tendered-dialog';
+import { AddressSubmission, OrderChangeAddressDialog } from './order-change-address-dialog';
+import { ContactSubmission, OrderChangeContactDialog } from './order-change-contact-dialog';
+import { OrderChangePaymentMethodDialog } from './order-change-payment-method-dialog';
+import { QuantitySubmission, OrderChangeQuantityDialog } from './order-change-quantity-dialog';
+import { OrderChangeTimeDialog } from './order-change-time-dialog';
 import {
   OrderAddressReveal,
   OrderApprovalDecision,
   OrderDeliveryResponse,
   OrderDetailResponse,
   OrderLine,
+  OrderLineCommentPreset,
   OrderTimelineEntry,
   RevisionResponse,
 } from './order-detail';
@@ -64,6 +79,7 @@ import { OrderFiscalPanel } from './order-fiscal-panel';
 import { OrderHandoverPanel } from './order-handover-panel';
 import { orderLifecycleSteps } from './order-lifecycle-steps';
 import { MoneyReconciliation, reconcileMoney } from './order-money';
+import { NewOrderApi } from './new-order/new-order-api';
 import { OrderNoteDialog } from './order-note-dialog';
 import { ExternalBookingSubmission, ExternalCourierDialog } from './external-courier-dialog';
 import {
@@ -104,6 +120,12 @@ const REVEAL_PURPOSE = {
   phoneCopy: 'Operations console: copy the phone number',
   address: 'Operations console: view the delivery address',
   lineNote: 'Operations console: view a line note',
+  // Wave 10 (rows 1.2c/2.1d): the amendment dialogs' own reveals, distinct
+  // from the read-only ones above for the identical reason phoneCall and
+  // phoneCopy are distinct — the audit log should say the reveal preceded an
+  // edit, not merely a look.
+  contactAmend: 'Operations console: amend recipient contact',
+  addressAmend: 'Operations console: amend delivery address',
 } as const;
 
 /**
@@ -113,6 +135,12 @@ const REVEAL_PURPOSE = {
  */
 const ORDER_DETAIL_ASSIGN_REASON = 'OPERATIONS_ORDER_DETAIL_ASSIGN';
 const ORDER_DETAIL_UNASSIGN_REASON = 'OPERATIONS_ORDER_DETAIL_UNASSIGN';
+
+/** `DispatchApi.cancelShipment`'s own reason code from this pane (gap map row 1.2g) — distinct from the dispatch board's own. */
+const ORDER_DETAIL_SHIPMENT_CANCEL_REASON = 'OPERATIONS_ORDER_DETAIL_SHIPMENT_CANCEL';
+
+/** A shipment past these statuses is already settled — cancelling it again is refused server-side, so the action is not offered. */
+const SHIPMENT_CANCEL_TERMINAL_STATUSES: ReadonlySet<string> = new Set(['DELIVERED', 'CANCELLED']);
 
 /** Which reason dialog is open, if any. */
 type DialogKind =
@@ -125,7 +153,16 @@ type DialogKind =
   | 'courierNote'
   | 'internalNote'
   | 'cashTendered'
-  | 'externalCourier';
+  | 'externalCourier'
+  // ---------------------------------------------------- wave 10 financial commands
+  | 'addLines'
+  | 'changeQuantity'
+  | 'changePaymentMethod'
+  | 'changeAddress'
+  | 'changeTime'
+  | 'changeContact'
+  | 'amendConfirm'
+  | 'shipmentCancel';
 
 /**
  * The order detail — `docs/operations-spec/orders.md` §3, docked beside the
@@ -162,11 +199,20 @@ type DialogKind =
     OrderRejectReasonDialog,
     OrderHandoverPanel,
     ExternalCourierDialog,
+    ConfirmDialog,
     OrderPaymentPanel,
     OrderFiscalPanel,
     Steps,
     Timeline,
     Combobox,
+    // ---------------------------------------------------- wave 10 financial commands
+    OrderAddLinesDialog,
+    OrderChangeQuantityDialog,
+    OrderChangePaymentMethodDialog,
+    OrderChangeAddressDialog,
+    OrderChangeTimeDialog,
+    OrderChangeContactDialog,
+    OrderAmendmentConfirmDialog,
   ],
   templateUrl: './order-detail-pane.html',
   styleUrl: './order-detail-pane.css',
@@ -186,6 +232,9 @@ export class OrderDetailPane {
   private readonly couriersApi = inject(CouriersApi);
   private readonly kitchenApi = inject(KitchenApi);
   private readonly posExportApi = inject(OrderPosExportApi);
+  private readonly newOrderApi = inject(NewOrderApi);
+  private readonly channelsApi = inject(SalesChannelsApi);
+  private readonly router = inject(Router);
   private readonly i18n = inject(I18n);
 
   /** Bound from the route parameter by `withComponentInputBinding()`. */
@@ -241,6 +290,9 @@ export class OrderDetailPane {
   protected readonly externalPartners = signal<readonly ExternalPartnerResponse[]>([]);
   protected readonly externalQuote = signal<ExternalQuoteResponse | null>(null);
   protected readonly externalCourierBusy = signal(false);
+
+  /** Cancel shipment (gap map row 1.2g) — `DispatchController.cancelShipment`'s first console caller on this pane. */
+  protected readonly shipmentCancelBusy = signal(false);
 
   /**
    * `q-timeline`'s own shape, row `X.26` — the same idea as the staff
@@ -390,6 +442,31 @@ export class OrderDetailPane {
    */
   protected readonly cashTenderedWarning = signal(false);
 
+  // ---------------------------------------------------- wave 10 financial commands (rows 1.2c/2.1d)
+
+  /** `q-order-add-lines-dialog`'s own search results and loading flag — fully controlled, see that component's own doc. */
+  protected readonly addLinesOptions = signal<readonly ComboboxOption[]>([]);
+  protected readonly addLinesSearching = signal(false);
+
+  /** The operator channel's enabled payment methods, read fresh each time `CHANGE_PAYMENT_METHOD` opens — `new-order-page.ts`'s own `paymentMethods` reads the identical matrix the identical way. */
+  protected readonly paymentMethods = signal<readonly string[]>(['CASH']);
+
+  /**
+   * The amendment `q-order-amendment-confirm-dialog` is currently open for —
+   * set either by a repricing command's own propose response ({@link
+   * submitRepricingAmendment}) or by the RESOLVE row action on an already
+   * `PRICED` history entry. `amendmentVersion` is the amendment row's own
+   * optimistic version, the exact field `POST .../confirmation`'s `If-Match`
+   * needs — never the order's version, which the confirmation endpoint has
+   * no opinion about.
+   */
+  protected readonly pendingAmendment = signal<{
+    readonly amendmentId: string;
+    readonly amendmentVersion: number;
+    readonly deltaMinor: number;
+    readonly requiresApproval: boolean;
+  } | null>(null);
+
   protected readonly revealedPhone = signal<string | null>(null);
   protected readonly revealingPhone = signal(false);
   protected readonly revealedAddress = signal<OrderAddressReveal | null>(null);
@@ -439,6 +516,10 @@ export class OrderDetailPane {
     this.amendmentHistory.set(null);
     this.amendmentHistoryOpen.set(false);
     this.amendmentHistoryError.set(false);
+    this.addLinesOptions.set([]);
+    this.addLinesSearching.set(false);
+    this.paymentMethods.set(['CASH']);
+    this.pendingAmendment.set(null);
 
     await this.location.ensureLoaded();
     const scope = this.location.scope();
@@ -573,6 +654,11 @@ export class OrderDetailPane {
     return formatMoney({ amountMinor, currency }, this.i18n.locale(), { withUnit: true });
   }
 
+  /** `q-order-amendment-confirm-dialog`'s own `locale` input — the template has no other access to the private `i18n` field. */
+  protected locale(): Locale {
+    return this.i18n.locale();
+  }
+
   protected formatOccurredAt(occurredAt: string): string {
     return formatDateTime(new Date(occurredAt), PLACEHOLDER_TIME_ZONE);
   }
@@ -608,6 +694,45 @@ export class OrderDetailPane {
   protected posExportShowsReassurance(): boolean {
     const state = this.posExport()?.export?.state;
     return state !== undefined && !posExportReachedTheTill(state);
+  }
+
+  /**
+   * Gap-map row 1.2i's fix path: true exactly when the read named a
+   * currently-unmapped variant or modifier to pre-select on the ADR 0012
+   * mapping screen -- never merely because {@link
+   * OrderPosExportApi.PosExportView.lastErrorCode} names a mapping gap,
+   * since the live re-check behind it may have found nothing left unmapped.
+   */
+  protected posExportHasMappingDeepLink(): boolean {
+    const exportView = this.posExport()?.export;
+    return (
+      exportView !== undefined &&
+      exportView !== null &&
+      exportView.unmappedEntityType !== null &&
+      exportView.unmappedHorecaosEntityId !== null
+    );
+  }
+
+  /**
+   * Opens the ADR 0012 mapping screen with the offending item already chosen
+   * -- see `MappingPane.focusHorecaosId`. Also carries `bindingId`, when the
+   * server resolved one, so `catalog-import-page.ts` lands on the same
+   * binding the id was checked against rather than defaulting to whichever
+   * POS binding happens to be first in the tenant's own list -- the wrong
+   * one for any tenant with more than one.
+   */
+  protected openPosExportMapping(): void {
+    const exportView = this.posExport()?.export;
+    if (!exportView || exportView.unmappedEntityType === null || exportView.unmappedHorecaosEntityId === null) {
+      return;
+    }
+    void this.router.navigate(['/catalog/import'], {
+      queryParams: {
+        entityType: exportView.unmappedEntityType,
+        focusHorecaosId: exportView.unmappedHorecaosEntityId,
+        ...(exportView.unmappedBindingId === null ? {} : { bindingId: exportView.unmappedBindingId }),
+      },
+    });
   }
 
   protected openPosExportPush(): void {
@@ -834,10 +959,13 @@ export class OrderDetailPane {
 
   /**
    * Routes an `OrderAmendMenu` selection to the specific dialog each of the
-   * five built commands needs — or, for the callback flag, straight to
+   * eleven built commands needs — or, for the callback flag, straight to
    * {@link toggleCallback}, which has no dialog because §4.4's own table
    * marks its "Consequences the dialog must state before confirm" column
-   * "none".
+   * "none". The six wave-10 financial commands (rows `1.2c`/`2.1d`) each
+   * open their own dialog below, three of them ({@link openChangeContactDialog},
+   * {@link openChangeAddressDialog}) after an ADR 0029 reveal the command's
+   * own dialog needs seeded.
    */
   protected onAmendMenuSelect(type: BuiltAmendmentCommandType): void {
     switch (type) {
@@ -856,6 +984,24 @@ export class OrderDetailPane {
       case 'SET_CALLBACK_REQUESTED':
         this.dialog.set(null);
         this.toggleCallback();
+        return;
+      case 'ADD_LINES':
+        this.openAddLinesDialog();
+        return;
+      case 'CHANGE_LINE_QUANTITY':
+        this.dialog.set('changeQuantity');
+        return;
+      case 'CHANGE_PAYMENT_METHOD':
+        void this.openChangePaymentMethodDialog();
+        return;
+      case 'CHANGE_DELIVERY_ADDRESS':
+        void this.openChangeAddressDialog();
+        return;
+      case 'CHANGE_FULFILLMENT_TIME':
+        this.dialog.set('changeTime');
+        return;
+      case 'CHANGE_CONTACT':
+        void this.openChangeContactDialog();
         return;
     }
   }
@@ -991,6 +1137,371 @@ export class OrderDetailPane {
     }
   }
 
+  // ------------------------------------------------------------ wave 10 financial commands (rows 1.2c/2.1d)
+
+  /** `catalog.md` §4.6's `locale` — the menu endpoint speaks `ru`/`uz`/`en`, `new-order-page.ts`'s own `menuLocale` maps `uz-Latn` the same way. */
+  private menuLocale(): string {
+    return this.i18n.locale() === 'uz-Latn' ? 'uz' : this.i18n.locale();
+  }
+
+  protected openAddLinesDialog(): void {
+    this.addLinesOptions.set([]);
+    this.dialog.set('addLines');
+  }
+
+  /**
+   * `NewOrderApi.searchItems` — the identical call `new-order-page.ts`'s own
+   * `onItemSearch` makes (catalog.md §4.6), reused rather than a second
+   * client. `q-order-add-lines-dialog` is fully controlled: this is the
+   * caller `search` output it documents.
+   */
+  protected async onAddLinesSearch(query: string): Promise<void> {
+    const scope = this.location.scope();
+    if (!scope) {
+      return;
+    }
+    this.addLinesSearching.set(true);
+    try {
+      const page = await this.newOrderApi.searchItems(
+        scope,
+        firstPage(20),
+        query,
+        this.menuLocale(),
+      );
+      this.addLinesOptions.set(
+        page.items.map((row) => ({
+          id: row.variantId,
+          label: row.productName ?? row.variantId,
+          sublabel: row.available
+            ? row.category
+            : `${row.category ? row.category + ' · ' : ''}${this.i18n.t('orders.newOrder.menu.stopped')}`,
+        })),
+      );
+    } catch (error) {
+      this.addLinesOptions.set([]);
+      this.noticeFromRevealError(error);
+    } finally {
+      this.addLinesSearching.set(false);
+    }
+  }
+
+  /** `ADD_LINES` — increase only, no modifiers (the server's own refusal; see the dialog's doc). Reprices, so this always goes through {@link submitRepricingAmendment}. */
+  protected onAddLinesConfirm(selections: readonly AddLinesSelection[]): void {
+    const detail = this.order();
+    const scope = this.location.scope();
+    if (!detail || !scope) {
+      return;
+    }
+    const lines: readonly AmendmentAddLine[] = selections.map((selection) => ({
+      variantId: selection.variantId,
+      quantity: selection.quantity,
+      modifierOptionIds: [],
+    }));
+    void this.submitRepricingAmendment(
+      this.amendmentsApi.addLines(
+        scope,
+        detail.value.summary.orderId,
+        detail.value.summary.version ?? 0,
+        lines,
+      ),
+    );
+  }
+
+  /** `CHANGE_LINE_QUANTITY` — increase only. Reprices, so this always goes through {@link submitRepricingAmendment}. */
+  protected onChangeQuantityConfirm(submission: QuantitySubmission): void {
+    const detail = this.order();
+    const scope = this.location.scope();
+    if (!detail || !scope) {
+      return;
+    }
+    void this.submitRepricingAmendment(
+      this.amendmentsApi.changeLineQuantity(
+        scope,
+        detail.value.summary.orderId,
+        detail.value.summary.version ?? 0,
+        submission.orderLineId,
+        submission.quantity,
+      ),
+    );
+  }
+
+  /**
+   * `CHANGE_PAYMENT_METHOD` — reads the order's own channel's matrix
+   * (`SalesChannelsApi.matrices`), the identical read `new-order-page.ts`'s
+   * own `loadPaymentMethods` performs, falling back to the cash-only default
+   * {@link paymentMethods} already carries on a denied or empty read — the
+   * same capability-model gap that method's own doc documents, so the
+   * dialog still offers something rather than nothing.
+   */
+  protected async openChangePaymentMethodDialog(): Promise<void> {
+    const detail = this.order();
+    const scope = this.location.scope();
+    const channelCode = detail?.value.summary.channelCode;
+    if (detail && scope && channelCode) {
+      try {
+        const channels = await this.channelsApi.list(scope);
+        const channel = channels.find((candidate) => candidate.code === channelCode);
+        if (channel) {
+          const matrices = await this.channelsApi.matrices(scope, channel.id);
+          const enabled = Object.entries(matrices.paymentMethods)
+            .filter(([, isEnabled]) => isEnabled)
+            .map(([code]) => code)
+            .sort();
+          if (enabled.length > 0) {
+            this.paymentMethods.set(enabled);
+          }
+        }
+      } catch {
+        // CHANNEL_READ gap `new-order-page.ts`'s own `loadPaymentMethods` already
+        // documents — the cash-only default this signal already carries stands.
+      }
+    }
+    this.dialog.set('changePaymentMethod');
+  }
+
+  /** `CHANGE_PAYMENT_METHOD` — `CASH` at either end never reprices, so this applies in the same call as the five original commands. */
+  protected onChangePaymentMethodConfirm(paymentMethodCode: string): void {
+    const detail = this.order();
+    const scope = this.location.scope();
+    if (!detail || !scope) {
+      return;
+    }
+    void this.submitAmendment(
+      this.amendmentsApi.changePaymentMethod(
+        scope,
+        detail.value.summary.orderId,
+        detail.value.summary.version ?? 0,
+        paymentMethodCode,
+      ),
+    ).finally(() => this.dialog.set(null));
+  }
+
+  /**
+   * `CHANGE_DELIVERY_ADDRESS` — reveals the order's *current* address first,
+   * through the dedicated `contactAmend`-sibling `addressAmend` ADR 0029
+   * purpose (distinct from the read-only "view the delivery address" reveal
+   * the address panel's own control uses, for the identical reason
+   * `phoneCall`/`phoneCopy` are distinct), so the dialog opens pre-filled
+   * rather than blank.
+   */
+  protected async openChangeAddressDialog(): Promise<void> {
+    const detail = this.order();
+    const scope = this.location.scope();
+    if (!detail || !scope) {
+      return;
+    }
+    this.revealingAddress.set(true);
+    try {
+      const result = await firstValueFrom(
+        this.revealApi.revealAddress(
+          scope,
+          detail.value.summary.orderId,
+          REVEAL_PURPOSE.addressAmend,
+        ),
+      );
+      this.revealedAddress.set(result);
+    } catch (error) {
+      this.noticeFromRevealError(error);
+    } finally {
+      this.revealingAddress.set(false);
+    }
+    this.dialog.set('changeAddress');
+  }
+
+  /** `CHANGE_DELIVERY_ADDRESS` — can lower the total as well as raise it, so this always goes through {@link submitRepricingAmendment}. */
+  protected onChangeAddressConfirm(submission: AddressSubmission): void {
+    const detail = this.order();
+    const scope = this.location.scope();
+    if (!detail || !scope) {
+      return;
+    }
+    void this.submitRepricingAmendment(
+      this.amendmentsApi.changeDeliveryAddress(
+        scope,
+        detail.value.summary.orderId,
+        detail.value.summary.version ?? 0,
+        {
+          line1: submission.line1,
+          line2: submission.line2,
+          city: submission.city,
+          district: submission.district,
+          postalCode: submission.postalCode,
+          entrance: submission.entrance,
+          floor: submission.floor,
+          apartment: submission.apartment,
+          landmark: submission.landmark,
+          latitude: submission.latitude,
+          longitude: submission.longitude,
+          deliveryInstructions: submission.deliveryInstructions,
+        },
+        submission.recipientName,
+        submission.recipientPhone,
+      ),
+    );
+  }
+
+  /** `CHANGE_FULFILLMENT_TIME` — a field update, never reprices, so this applies in the same call as the five original commands. */
+  protected onChangeTimeConfirm(promisedAtIso: string): void {
+    const detail = this.order();
+    const scope = this.location.scope();
+    if (!detail || !scope) {
+      return;
+    }
+    void this.submitAmendment(
+      this.amendmentsApi.changeFulfillmentTime(
+        scope,
+        detail.value.summary.orderId,
+        detail.value.summary.version ?? 0,
+        promisedAtIso,
+      ),
+    ).finally(() => this.dialog.set(null));
+  }
+
+  /**
+   * `CHANGE_CONTACT` — reveals the order's current phone first (the
+   * dedicated `contactAmend` purpose), so the dialog opens with a real
+   * starting point rather than blank; the recipient name seeds from the
+   * account's own display name, the closest fact this read has to it.
+   */
+  protected async openChangeContactDialog(): Promise<void> {
+    const detail = this.order();
+    const scope = this.location.scope();
+    if (!detail || !scope) {
+      return;
+    }
+    this.revealingPhone.set(true);
+    try {
+      const result = await firstValueFrom(
+        this.revealApi.revealPhone(
+          scope,
+          detail.value.summary.orderId,
+          REVEAL_PURPOSE.contactAmend,
+        ),
+      );
+      this.revealedPhone.set(result.phone);
+    } catch (error) {
+      this.noticeFromRevealError(error);
+    } finally {
+      this.revealingPhone.set(false);
+    }
+    this.dialog.set('changeContact');
+  }
+
+  protected changeContactInitialName(): string {
+    return this.order()?.value.customer.displayName ?? '';
+  }
+
+  /** `CHANGE_CONTACT` — ADR 0029-protected, never reprices, so this applies in the same call as the five original commands. */
+  protected onChangeContactConfirm(submission: ContactSubmission): void {
+    const detail = this.order();
+    const scope = this.location.scope();
+    if (!detail || !scope) {
+      return;
+    }
+    void this.submitAmendment(
+      this.amendmentsApi.changeContact(
+        scope,
+        detail.value.summary.orderId,
+        detail.value.summary.version ?? 0,
+        submission.recipientName,
+        submission.recipientPhone,
+      ),
+    ).finally(() => this.dialog.set(null));
+  }
+
+  /**
+   * The three repricing commands' shared submit path (`ADD_LINES`,
+   * `CHANGE_LINE_QUANTITY`, `CHANGE_DELIVERY_ADDRESS`): each is proposed with
+   * `applyImmediately: false` (see each `OrderAmendmentsApi` method's own
+   * doc), so `propose()` never applies it — the priced-delta confirmation
+   * dialog is not one outcome among several here, it is the only way
+   * forward, and this method always opens it on a successful proposal
+   * rather than gating on `AmendmentResponse.actions` the way the RESOLVE
+   * row action does for an *already*-proposed amendment.
+   */
+  private async submitRepricingAmendment(request: Observable<AmendmentResponse>): Promise<void> {
+    const orderId = this.order()?.value.summary.orderId;
+    if (!orderId) {
+      return;
+    }
+    this.busy.set(true);
+    try {
+      const result = await firstValueFrom(request);
+      this.openAmendmentConfirmDialog(result);
+    } catch (error) {
+      this.handleMutationError(orderId, error, false);
+      this.dialog.set(null);
+    } finally {
+      this.busy.set(false);
+    }
+  }
+
+  /**
+   * Opens `q-order-amendment-confirm-dialog` for one amendment — a freshly
+   * proposed one ({@link submitRepricingAmendment}) or an older one still
+   * `PRICED`, reopened by the history table's own RESOLVE action
+   * ({@link resolveAmendment}). Both read the identical three fields off an
+   * `AmendmentResponse`, because the history's own `GET .../amendments` and a
+   * fresh `POST .../amendments` answer with the same shape.
+   */
+  private openAmendmentConfirmDialog(amendment: AmendmentResponse): void {
+    this.pendingAmendment.set({
+      amendmentId: amendment.amendmentId,
+      amendmentVersion: amendment.amendmentVersion,
+      deltaMinor: amendment.deltaTotalMinor,
+      requiresApproval: amendment.requiresApproval,
+    });
+    this.dialog.set('amendConfirm');
+  }
+
+  /**
+   * The history table's own RESOLVE action (wave 10): reopens the
+   * confirmation dialog for an amendment `AmendmentResponse.actions` marks
+   * open and blocked, whether that is the customer's recorded agreement, an
+   * ADR 0027 approval still pending, or both — `q-order-amendment-confirm
+   * -dialog`'s own doc explains why the same one dialog and the same one
+   * `POST .../confirmation` call handle every case: it is the only endpoint
+   * that can move a `PRICED` amendment forward.
+   */
+  protected resolveAmendment(amendment: AmendmentResponse): void {
+    this.openAmendmentConfirmDialog(amendment);
+  }
+
+  /**
+   * `POST .../amendments/{id}/confirmation` — attests the operator's record
+   * of how the customer agreed (or, for a pure ADR 0027 approval-pending
+   * amendment with no increase, simply attempts the only apply path that
+   * exists) and applies the amendment in the same call. `pendingAmendment`'s
+   * `amendmentVersion` is the amendment row's own optimistic version, not
+   * the order's.
+   */
+  protected onAmendConfirmDialogConfirm(channel: AmendmentConfirmationChannel): void {
+    const detail = this.order();
+    const scope = this.location.scope();
+    const pending = this.pendingAmendment();
+    if (!detail || !scope || !pending) {
+      return;
+    }
+    void this.submitAmendment(
+      this.amendmentsApi.confirm(
+        scope,
+        detail.value.summary.orderId,
+        pending.amendmentId,
+        pending.amendmentVersion,
+        channel,
+      ),
+    ).finally(() => {
+      this.pendingAmendment.set(null);
+      this.dialog.set(null);
+      // `submitAmendment`'s own success path already called `load()`, whose
+      // full reset (see that method's own doc) closes the history table —
+      // exactly like every one of the five original commands' own mutation
+      // already does. A RESOLVE click's own row is stale after that anyway
+      // (its RESOLVE action is gone once applied), so the operator reopens
+      // the table to see the resolved state, the same as any other change.
+    });
+  }
+
   // ------------------------------------------------------------ §3.6/§3.10 amendment history
 
   /**
@@ -1005,6 +1516,18 @@ export class OrderDetailPane {
     if (!opening || this.amendmentHistory() !== null) {
       return;
     }
+    await this.loadAmendmentHistory();
+  }
+
+  /**
+   * The fetch half of {@link toggleAmendmentHistory}, split out so {@link
+   * onAmendConfirmDialogConfirm} can force a fresh read after RESOLVE
+   * without the toggle's own "only fetch once" guard standing in the way —
+   * a resolved amendment's row (and its now-gone RESOLVE action) needs to
+   * reflect what just happened, not the list `toggleAmendmentHistory`
+   * already cached before the operator clicked RESOLVE.
+   */
+  private async loadAmendmentHistory(): Promise<void> {
     const detail = this.order();
     const scope = this.location.scope();
     if (!detail || !scope) {
@@ -1158,6 +1681,7 @@ export class OrderDetailPane {
   protected onDialogDismiss(): void {
     this.dialog.set(null);
     this.pendingOverrideTarget.set(null);
+    this.pendingAmendment.set(null);
   }
 
   protected onCancelDialogConfirm(submission: OutcomeReasonSubmission): void {
@@ -1326,6 +1850,18 @@ export class OrderDetailPane {
 
   protected lineName(line: OrderLine): string {
     return line.productName;
+  }
+
+  /** Row 2.1b: a preset's label in the console's own locale, matching `data-privacy-page.ts`'s own `consentLabel` selection. */
+  protected presetLabel(preset: OrderLineCommentPreset): string {
+    switch (this.i18n.locale()) {
+      case 'ru':
+        return preset.labelRu;
+      case 'uz-Latn':
+        return preset.labelUz;
+      default:
+        return preset.labelEn;
+    }
   }
 
   /** §3.6's «Комментарий клиента к позиции» pointer: whether any line has one to reveal, above. */
@@ -1751,6 +2287,55 @@ export class OrderDetailPane {
     }
   }
 
+  // ------------------------------------------------------------ §1.2g cancel shipment
+
+  /** Whether the current plan's shipment may be cancelled at all — a `DELIVERED`/`CANCELLED` one is already settled. */
+  protected canCancelShipment(): boolean {
+    const shipment = this.delivery()?.shipment;
+    return !!shipment && !SHIPMENT_CANCEL_TERMINAL_STATUSES.has(shipment.status);
+  }
+
+  protected openShipmentCancelDialog(): void {
+    this.dialog.set('shipmentCancel');
+  }
+
+  /**
+   * The dedicated, provider-notifying cancel (gap map row 1.2g) —
+   * `DispatchController.cancelShipment`'s first console caller on this pane,
+   * distinct from {@link unassignCourier}: a `PARTNER` shipment's provider is
+   * actually called, and an uncertain or chargeable answer opens
+   * `fulfillment.delivery_exceptions`, which the {@link loadDelivery} reload
+   * below picks straight back up into the delivery-exception band.
+   */
+  protected async confirmShipmentCancel(): Promise<void> {
+    const scope = this.location.scope();
+    const plan = this.delivery();
+    const orderId = this.order()?.value.summary.orderId;
+    if (!scope || !plan?.shipment || !orderId) {
+      return;
+    }
+    this.shipmentCancelBusy.set(true);
+    try {
+      const result = await this.dispatchApi.cancelShipment(
+        scope,
+        plan.shipment.shipmentId,
+        plan.shipment.version,
+        ORDER_DETAIL_SHIPMENT_CANCEL_REASON,
+      );
+      if (!result.applied) {
+        this.notice.set(
+          this.i18n.t('orders.detail.courier.refused', { reason: result.conflictReason ?? '' }),
+        );
+      }
+      this.dialog.set(null);
+      await this.loadDelivery(orderId);
+    } catch (error) {
+      this.noticeFromRevealError(error);
+    } finally {
+      this.shipmentCancelBusy.set(false);
+    }
+  }
+
   // ------------------------------------------------------------ §3.9 revisions (row 1.2p)
 
   /**
@@ -1817,16 +2402,23 @@ export class OrderDetailPane {
   }
 
   /**
-   * `createdByActorType`/`acceptedByActorType` name a bare wire tag with no
-   * resolvable display name behind it — same limitation the commercial
-   * timeline's own doc comment names for `actorType` — so this renders the
-   * type and the raw id together rather than pretending a name exists.
-   * Machine principals (`"SYSTEM"`) carry no id and render as the type alone.
+   * Gap map row 9.2d: prefers the server-resolved `displayName` (`StaffDisplayNames`)
+   * over the raw `${actorType} · ${actorId}` pair this pane showed before —
+   * an operator or a manager, not a UUID, took or accepted the order. Falls
+   * back to the type/id pair for a non-`"USER"` actor (a machine principal
+   * has no Keycloak identity to resolve) or a subject with no name on file,
+   * the same limitation the commercial timeline's own doc comment names for
+   * `actorType`. Machine principals (`"SYSTEM"`) carry no id and render as
+   * the type alone.
    */
   protected actorDisplay(
     actorType: string | null | undefined,
     actorId: string | null | undefined,
+    displayName?: string | null,
   ): string | null {
+    if (displayName) {
+      return displayName;
+    }
     if (!actorType) {
       return null;
     }

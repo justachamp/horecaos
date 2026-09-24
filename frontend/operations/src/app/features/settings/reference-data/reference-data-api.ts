@@ -110,6 +110,36 @@ export class ReferenceDataApi {
     return response.version;
   }
 
+  /**
+   * Row 10.10a — ranks every active reason of one kind, in the order given.
+   * `expectedVersion` is the **sum** of `version` across the reasons being
+   * reordered, not the highest one — the caller (the drag-reorder list,
+   * which already holds every row's own version from `list`) computes it
+   * with `reasons.reduce((sum, r) => sum + r.version, 0)`, the same "there
+   * is no separate list aggregate to version" rule the endpoint's own doc
+   * names. A sum, not a max: `version` only ever increments, so the sum
+   * strictly increases whenever any one reason changes underneath the
+   * caller, whichever row it is — the max alone misses a concurrent edit to
+   * a reason that never held the highest version.
+   * Returns the reordered list, versions already bumped, so the caller
+   * never needs a second read before its next write.
+   */
+  async reorder(
+    scope: LocationScope,
+    kind: OutcomeReasonKind,
+    orderedReasonIds: readonly string[],
+    expectedVersion: number,
+  ): Promise<readonly ReasonResponse[]> {
+    const response = await firstValueFrom(
+      this.api.put<{ kind: OutcomeReasonKind; orderedReasonIds: readonly string[] }, readonly ReasonResponse[]>(
+        settingsPaths.orderOutcomeReasonReorder(scope),
+        command({ kind, orderedReasonIds }),
+        { expectedVersion },
+      ),
+    );
+    return response;
+  }
+
   async archive(scope: LocationScope, reasonId: string, expectedVersion: number): Promise<void> {
     await firstValueFrom(
       this.api.send<null, void>(

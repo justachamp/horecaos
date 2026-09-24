@@ -38,10 +38,20 @@
               </div>
             </div>
             <div class="flex min-h-0 min-w-0 flex-1 flex-col gap-1.5 py-0.5">
-              <h2 class="pr-1 text-[15px] font-bold leading-snug text-text-primary">{{ item.name }}</h2>
+              <h2 class="pr-1 text-[15px] font-bold leading-snug text-text-primary">
+                {{ item.name }}
+              </h2>
               @if (item.modifiers.length > 0) {
                 <p class="pr-1 text-[12px] leading-snug text-zinc-400">
                   {{ modifiersSummary(item) }}
+                </p>
+              }
+              @if (item.commentPresets.length > 0) {
+                <p
+                  class="pr-1 text-[12px] leading-snug text-zinc-400"
+                  data-testid="cart-line-presets"
+                >
+                  {{ presetsSummary(item) }}
                 </p>
               }
               <div class="mt-auto flex items-center gap-1.5 pt-2">
@@ -149,11 +159,13 @@
             </span>
             <div class="min-w-0 flex-1">
               <p class="text-sm font-bold text-text-primary">{{ 'cart.deliveryCost' | t }}</p>
-              <p class="mt-2 text-lg font-bold leading-tight text-text-primary">{{ cart.deliveryFee() }}</p>
+              <p class="mt-2 text-lg font-bold leading-tight text-text-primary">
+                {{ cart.deliveryFee() }}
+              </p>
               @if (cart.deliveryUnresolvedMessage(); as reason) {
                 <p class="mt-1 text-xs leading-snug text-amber-400">{{ reason }}</p>
               } @else {
-                <p class="mt-1 text-xs leading-snug text-zinc-400"> {{ cart.deliveryTime() }}</p>
+                <p class="mt-1 text-xs leading-snug text-zinc-400">{{ cart.deliveryTime() }}</p>
               }
             </div>
             <svg
@@ -197,7 +209,9 @@
           </span>
           <div class="min-w-0 flex-1">
             <p class="text-sm font-bold text-text-primary">{{ 'cart.totalAmount' | t }}</p>
-            <p class="mt-2 text-lg font-bold leading-tight text-text-primary">{{ cart.totalAmount() }}</p>
+            <p class="mt-2 text-lg font-bold leading-tight text-text-primary">
+              {{ cart.totalAmount() }}
+            </p>
           </div>
           <svg
             class="mt-1 h-5 w-5 shrink-0 text-text-muted"

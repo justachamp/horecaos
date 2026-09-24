@@ -94,17 +94,66 @@ public class ReorderPlanService {
     @Transactional(readOnly = true)
     public Optional<ReorderPlan> planFor(UUID tenantId, UUID orderId, UUID customerAccountId) {
         return orders.detailForCustomer(tenantId, orderId, customerAccountId, null)
-                .map(this::plan);
+                .map(detail -> plan(detail, detail.order().locationId()));
     }
 
-    private ReorderPlan plan(OrderQueryService.OrderDetail detail) {
+    /**
+     * The same plan, resolved against a caller-supplied location rather than
+     * the order's own (gap map rows 1.3f/1.3a) — the New Order screen's own
+     * operator-staffed branch, which the customer's original order may not
+     * have anything to do with: a LOCATION_STAFF operator taking a call at
+     * branch B has no read grant on branch A's own {@code ORDER_READ} scope
+     * at all, and even a manager who does would want branch B's own menu,
+     * offering rows and stock checked — the same honest "this branch, right
+     * now" the New Order screen's own phone-lookup history peek already
+     * promises for every other panel it renders.
+     *
+     * <p>{@code channelCode} is deliberately still the order's own — {@link
+     * ReorderMenu#at}'s own doc warns that resolving one channel's order
+     * against a different channel's menu "answers a question nobody asked",
+     * and nothing about *where* the operator is sitting changes *which*
+     * price plane and publication ADR 0036 says this order's channel reads.
+     * Only the location moves.
+     *
+     * <p>The returned {@link ReorderPlan#locationId()} is {@code
+     * resolveAgainstLocationId}, not the order's own — it names the branch
+     * this plan is actually valid at, which is where {@code POST /carts}
+     * needs to open the new one.
+     *
+     * <p>{@code requiredBrandId} is checked against the order's own {@code
+     * brandId} and the read refuses (returns empty, exactly like an order
+     * that does not exist) when they differ. {@link OrderQueryService#detailForCustomer}
+     * scopes only by tenant and customer account — deliberately, since {@code
+     * planFor} above needs no brand check, the account already owns the whole
+     * read. This caller is different: {@code
+     * uz.horecaos.platform.ordering.web.CustomerOrderReorderController}
+     * reaches this method with {@code ORDER_READ} granted at one {@code
+     * LOCATION}, and a location's grant never widens past its own brand
+     * (ADR 0025). Skipping this check would let that LOCATION-scoped read
+     * return another brand's order in full — line items, quantities, and what
+     * the customer paid — to an operator who holds no grant on that brand at
+     * all, resolved only against a location that happens to share a tenant
+     * with it.
+     *
+     * @return empty when the order is not this account's, does not belong to
+     *     {@code requiredBrandId}, or does not exist
+     */
+    @Transactional(readOnly = true)
+    public Optional<ReorderPlan> planForAtLocation(
+            UUID tenantId, UUID requiredBrandId, UUID orderId, UUID customerAccountId, UUID resolveAgainstLocationId) {
+        return orders.detailForCustomer(tenantId, orderId, customerAccountId, null)
+                .filter(detail -> requiredBrandId.equals(detail.order().brandId()))
+                .map(detail -> plan(detail, resolveAgainstLocationId));
+    }
+
+    private ReorderPlan plan(OrderQueryService.OrderDetail detail, UUID resolveAgainstLocationId) {
         OrderRow order = detail.order();
 
         Set<UUID> variantIds = new LinkedHashSet<>();
         detail.lines().forEach(line -> variantIds.add(line.line().sourceVariantId()));
 
         ReorderMenu.Snapshot offers =
-                menu.at(order.tenantId(), order.brandId(), order.locationId(), order.channelCode(), variantIds);
+                menu.at(order.tenantId(), order.brandId(), resolveAgainstLocationId, order.channelCode(), variantIds);
 
         // One price read for the whole order, keyed on what actually survived:
         // asking for a withdrawn variant's price would be asking the price book
@@ -122,7 +171,7 @@ public class ReorderPlanService {
                 : prices.pricesFor(
                         order.tenantId(),
                         order.brandId(),
-                        order.locationId(),
+                        resolveAgainstLocationId,
                         order.channelCode(),
                         survivingVariants,
                         survivingOptions);
@@ -133,7 +182,7 @@ public class ReorderPlanService {
         // that would fail at reservation.
         Map<UUID, String> blocked = survivingVariants.isEmpty()
                 ? Map.of()
-                : blockedBy(inventory.checkAvailability(order.tenantId(), order.locationId(), survivingVariants));
+                : blockedBy(inventory.checkAvailability(order.tenantId(), resolveAgainstLocationId, survivingVariants));
 
         List<PlannedLine> lines = new ArrayList<>(detail.lines().size());
         for (OrderQueryService.DetailLine detailLine : detail.lines()) {
@@ -143,7 +192,7 @@ public class ReorderPlanService {
         return new ReorderPlan(
                 order.orderId(),
                 order.publicOrderNumber(),
-                order.locationId(),
+                resolveAgainstLocationId,
                 order.channelCode(),
                 verdictOf(lines),
                 priced.map(MenuPrices::currency).orElse(order.currency()),

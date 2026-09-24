@@ -262,4 +262,56 @@ describe('MappingPane', () => {
       el(fixture, 'q-mapping-pane-right')!.querySelector('[data-testid="q-combobox-create-row"]'),
     ).toBeNull();
   });
+
+  // ---------------------------------------------------------------- row 1.2i's fix path: focusHorecaosId
+
+  it('auto-selects the left candidate a console deep link names, the moment it appears among horecaosCandidates', () => {
+    const fixture = render();
+    fixture.componentRef.setInput('focusHorecaosId', 'h2');
+    fixture.detectChanges();
+    // horecaosCandidates arrives after focusHorecaosId, the same order a real
+    // caller's async load produces -- the effect must still catch it.
+    fixture.componentRef.setInput('horecaosCandidates', HORECAOS_CANDIDATES);
+    fixture.detectChanges();
+
+    const leftInput = el(fixture, 'q-mapping-pane-left')!.querySelector<HTMLInputElement>(
+      '[data-testid="q-combobox-input"]',
+    )!;
+    expect(leftInput.value).toBe('Card');
+  });
+
+  it('leaves the left side alone when focusHorecaosId names nothing among the current candidates', () => {
+    const fixture = render();
+    fixture.componentRef.setInput('focusHorecaosId', 'no-such-id');
+    fixture.componentRef.setInput('horecaosCandidates', HORECAOS_CANDIDATES);
+    fixture.detectChanges();
+
+    const leftInput = el(fixture, 'q-mapping-pane-left')!.querySelector<HTMLInputElement>(
+      '[data-testid="q-combobox-input"]',
+    )!;
+    expect(leftInput.value).toBe('');
+  });
+
+  it('does not re-select after a manual deselect once the same focusHorecaosId has already been applied', () => {
+    const fixture = render();
+    fixture.componentRef.setInput('focusHorecaosId', 'h1');
+    fixture.componentRef.setInput('horecaosCandidates', HORECAOS_CANDIDATES);
+    fixture.detectChanges();
+
+    const leftInput = el(fixture, 'q-mapping-pane-left')!.querySelector<HTMLInputElement>(
+      '[data-testid="q-combobox-input"]',
+    )!;
+    expect(leftInput.value).toBe('Cash');
+
+    // The operator clears the field by hand (chooseLeft/onLeftQueryInput's
+    // own path) -- a later, unrelated change-detection pass must not snap it
+    // back, since the effect only re-applies on a genuinely new focus id.
+    leftInput.value = '';
+    leftInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    fixture.componentRef.setInput('horecaosCandidates', [...HORECAOS_CANDIDATES]);
+    fixture.detectChanges();
+
+    expect(leftInput.value).toBe('');
+  });
 });

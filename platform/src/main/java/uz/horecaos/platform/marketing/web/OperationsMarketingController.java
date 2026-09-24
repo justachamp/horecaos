@@ -379,6 +379,28 @@ public class OperationsMarketingController {
         return ResponseEntity.accepted().build();
     }
 
+    @PostMapping("/campaigns/{campaignId}/reschedules")
+    @RequiresCapability(value = Capability.CAMPAIGN_APPROVE, scope = ScopeType.BRAND, mutating = true)
+    @Operation(
+            summary = "Re-arm a halted scheduled send for a new future moment (row 6.4)",
+            description = "Only a campaign CampaignScheduledSendScheduler halted (SCHEDULED with "
+                    + "scheduled_at cleared, haltedReason set) can be re-armed here -- a "
+                    + "campaign already scheduled for a live moment is refused, not silently "
+                    + "moved. No new approval: status stays SCHEDULED throughout.")
+    public ResponseEntity<Void> reschedule(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID campaignId,
+            @Valid @RequestBody RescheduleRequest body) {
+
+        if (!campaigns.reschedule(tenantId, campaignId, body.scheduledAt(), actor(), correlationId())) {
+            throw new ApiException(
+                    ErrorCode.RESOURCE_CONFLICT,
+                    "This campaign is not a halted scheduled send, so there is nothing to re-schedule");
+        }
+        return ResponseEntity.accepted().build();
+    }
+
     @PostMapping("/campaigns/{campaignId}/halts")
     @RequiresCapability(value = Capability.CAMPAIGN_APPROVE, scope = ScopeType.BRAND, mutating = true)
     @Operation(
@@ -461,7 +483,7 @@ public class OperationsMarketingController {
     @GetMapping("/campaigns/{campaignId}/recipients/counts")
     @RequiresCapability(value = Capability.CAMPAIGN_AUTHOR, scope = ScopeType.BRAND)
     @Operation(
-            summary = "How many recipients ended each way (row 7.9b)",
+            summary = "How many recipients ended each way (rows 7.9b/6.4) — the campaign history/statistics view",
             description = "The aggregate `recipients` itself makes a caller build by paging: "
                     + "pending, queued (handed to ADR 0020 for delivery), deferred (held past a "
                     + "quiet-hours boundary) and refused, plus the total attempted. Grouped by "
@@ -470,7 +492,9 @@ public class OperationsMarketingController {
                     + "add, so 'delivered' vs 'failed' is not answerable from here yet. Read "
                     + "receipts have no data source at all: NotificationStatus has no READ and "
                     + "V0043 has no read_at, so the campaign tab that reads this says so rather "
-                    + "than rendering a zero.")
+                    + "than rendering a zero. Row 6.4 adds refusedByReason: the same REFUSED "
+                    + "total, broken down by marketing.campaign_recipients.refusal_reason, so a "
+                    + "'suppressed' count is nameable (SUPPRESSED) without a reporting fact.")
     public ResponseEntity<RecipientCountsResponse> recipientCounts(
             @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID campaignId) {
 
@@ -485,8 +509,9 @@ public class OperationsMarketingController {
         int queued = counts.getOrDefault("QUEUED", 0);
         int deferred = counts.getOrDefault("DEFERRED", 0);
         int refused = counts.getOrDefault("REFUSED", 0);
-        return ResponseEntity.ok(
-                new RecipientCountsResponse(pending, queued, deferred, refused, pending + queued + deferred + refused));
+        Map<String, Integer> refusedByReason = campaignStore.refusalBreakdown(tenantId, campaignId);
+        return ResponseEntity.ok(new RecipientCountsResponse(
+                pending, queued, deferred, refused, pending + queued + deferred + refused, refusedByReason));
     }
 
     @PostMapping("/suppressions")
@@ -670,6 +695,9 @@ public class OperationsMarketingController {
 
     public record ReasonRequest(@NotBlank @Size(max = 512) String reason) {}
 
+    /** Row 6.4: the new moment for a halted scheduled send to re-arm for. */
+    public record RescheduleRequest(@NotNull Instant scheduledAt) {}
+
     public record EstimateResponse(
             UUID snapshotId,
             int members,
@@ -695,7 +723,9 @@ public class OperationsMarketingController {
      * values; {@code total} sums them and is never a fifth independent count
      * that could disagree with its own parts.
      */
-    public record RecipientCountsResponse(int pending, int queued, int deferred, int refused, int total) {}
+    /** @param refusedByReason row 6.4: {@code refused}'s own breakdown by {@code RefusalReason} name, e.g. {@code SUPPRESSED}. */
+    public record RecipientCountsResponse(
+            int pending, int queued, int deferred, int refused, int total, Map<String, Integer> refusedByReason) {}
 
     public record SuppressionRequest(
             @NotNull UUID customerAccountId,
@@ -855,6 +885,12 @@ public class OperationsMarketingController {
      *                 blockedCount is what a resume reports the cost of
      * @param scheduledAt when a launch call arms SENDING for, or null for
      *                    "immediately, on an operator's word"
+     * @param haltedReason row 6.4: why a scheduled send did not go out (set by
+     *                     {@code CampaignScheduledSendScheduler}'s own refusal
+     *                     handling), or a pause/stop reason — null on a
+     *                     campaign that never halted. {@code scheduledAt ==
+     *                     null && status == SCHEDULED && haltedReason != null}
+     *                     is exactly the shape {@code POST .../reschedules} re-arms.
      * @param isWired whether {@code channel} has a real ADR 0020 delivery
      *                path today — the read model row 6.4 asked for, so the
      *                detail pane can explain a launch refusal before it
@@ -887,6 +923,7 @@ public class OperationsMarketingController {
             int blockedCount,
             @Nullable Instant pausedAt,
             @Nullable Instant scheduledAt,
+            @Nullable String haltedReason,
             boolean isWired,
             Instant createdAt,
             Instant updatedAt,
@@ -920,6 +957,7 @@ public class OperationsMarketingController {
                     row.blockedCount(),
                     row.pausedAt(),
                     row.scheduledAt(),
+                    row.haltedReason(),
                     isWired,
                     row.createdAt(),
                     row.updatedAt(),

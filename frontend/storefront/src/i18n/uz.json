@@ -268,7 +268,9 @@
     "modifiersTitle": "Moslashtirish",
     "modifierRequired": "Majburiy",
     "modifierOption": "Variant",
-    "modifiersIncomplete": "Savatga qo'shishdan oldin yuqoridagi majburiy variantlarni tanlang."
+    "modifiersIncomplete": "Savatga qo'shishdan oldin yuqoridagi majburiy variantlarni tanlang.",
+    "presetsTitle": "Izohlar",
+    "outOfSaleWindow": "Bu taom hozir sotuvda emas."
   },
   "terms": {
     "agreementTitle": "Ommaviy oferta bo'yicha shartnoma",
@@ -277,6 +279,16 @@
     "mustAcceptNotice": "Bizning foydalanish shartlarimiz yangilandi. Davom etish uchun ular bilan tanishib, qabul qiling.",
     "iAgree": "Roziman",
     "acceptError": "Xatolik yuz berdi. Qayta urinib ko'ring."
+  },
+  "pages": {
+    "notFound": "Bu sahifa mavjud emas.",
+    "loadError": "Sahifani yuklab boʻlmadi.",
+    "slug": {
+      "about": "Biz haqimizda",
+      "contacts": "Aloqa",
+      "deliveryTerms": "Yetkazib berish shartlari",
+      "privacyOffer": "Maxfiylik / oferta"
+    }
   },
   "action": {
     "yourAddress": "Sizning manzil",
@@ -326,7 +338,9 @@
       "closed": "Filial hozir yopiq.",
       "outsideHours": "Filial ish vaqtidan tashqarida.",
       "noLiveMenu": "Hozircha menyu mavjud emas.",
-      "atCapacity": "Oshxona hozir band. Birozdan so'ng qayta urinib ko'ring."
+      "atCapacity": "Oshxona hozir band. Birozdan so'ng qayta urinib ko'ring.",
+      "itemOutOfSaleWindow": "Bu taom hozir sotuvda emas.",
+      "presetNotOffered": "Bu izoh endi ushbu taom uchun taklif etilmaydi."
     }
   },
   "money": {

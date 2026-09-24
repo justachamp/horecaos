@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { Router } from '@angular/router';
 import { of, throwError } from 'rxjs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -7,6 +8,7 @@ import { CurrentLocation } from '../../core/auth/current-location';
 import { ApiError, ApiErrorCode } from '../../core/api/problem-details';
 import { I18n } from '../../core/i18n/i18n';
 import { ReasonResponse, ReferenceDataApi } from '../settings/reference-data/reference-data-api';
+import { SalesChannelsApi } from '../settings/sales-channels/sales-channels-api';
 import { CouriersApi, RosterEntryResponse } from '../couriers/couriers-api';
 import { DispatchApi, DispatchResponse } from '../delivery/dispatch-api';
 import { KitchenApi, KitchenEventsResponse } from '../kitchen/kitchen-api';
@@ -23,6 +25,7 @@ import {
   RevisionResponse,
 } from './order-detail';
 import { OrderHandoverApi } from './order-handover-api';
+import { NewOrderApi } from './new-order/new-order-api';
 import { OrderPosExportApi, OrderPosExportView, PosExportView } from './order-pos-export-api';
 import { RejectReasonOption } from './order-reject-reason-dialog';
 import { RejectReasonsApi } from './order-reject-reasons-api';
@@ -79,6 +82,7 @@ function detail(overrides: Partial<OrderDetailResponse> = {}): OrderDetailRespon
         quantity: 2,
         finalAmountMinor: 146_000,
         modifiers: [],
+        commentPresets: [],
         lineId: 'line-1',
         hasNote: false,
       },
@@ -161,6 +165,9 @@ function configure(options: {
   couriersApi?: Partial<CouriersApi>;
   kitchenApi?: Partial<KitchenApi>;
   posExportApi?: Partial<OrderPosExportApi>;
+  newOrderApi?: Partial<NewOrderApi>;
+  channelsApi?: Partial<SalesChannelsApi>;
+  router?: Partial<Router>;
   scope?: typeof FAKE_SCOPE | null;
 }): void {
   TestBed.configureTestingModule({
@@ -227,6 +234,27 @@ function configure(options: {
           forOrder: () => Promise.resolve({ posCapable: false, export: null }),
         },
       },
+      // Wave 10 (rows 1.2c/2.1d): ADD_LINES's own search reuses NewOrderApi,
+      // CHANGE_PAYMENT_METHOD's own picker reuses SalesChannelsApi's matrix —
+      // every test not focused on either gets a harmless empty answer, the
+      // same rule OrderHandoverApi's own comment above states.
+      {
+        provide: NewOrderApi,
+        useValue: options.newOrderApi ?? {
+          searchItems: () => Promise.resolve({ items: [], nextCursor: null }),
+        },
+      },
+      {
+        provide: SalesChannelsApi,
+        useValue: options.channelsApi ?? { list: () => Promise.resolve([]) },
+      },
+      // Row 1.2i's deep link (openPosExportMapping): every test not focused
+      // on it gets a harmless no-op, the same rule the collaborators above
+      // follow.
+      {
+        provide: Router,
+        useValue: options.router ?? { navigate: () => Promise.resolve(true) },
+      },
     ],
   });
   TestBed.inject(I18n).setLocale('en');
@@ -250,6 +278,38 @@ describe('OrderDetailPane: rendering the loaded order', () => {
     expect(host.textContent).toContain('0142');
     expect(host.textContent).toContain('Awaiting approval');
     expect(host.textContent).toContain('Version 3');
+  });
+
+  it('row 2.1b: renders a line\'s comment presets as chips ahead of the note', async () => {
+    configure({
+      get: apiGet({
+        value: detail({
+          lines: [
+            {
+              lineNumber: 1,
+              productName: 'Лагман',
+              quantity: 2,
+              finalAmountMinor: 146_000,
+              modifiers: [],
+              commentPresets: [
+                { code: 'NO_ONIONS', labelRu: 'Без лука', labelUz: 'Piyozsiz', labelEn: 'No onions' },
+                { code: 'EXTRA_SPICY', labelRu: 'Поострее', labelUz: 'Achchiqroq', labelEn: 'Extra spicy' },
+              ],
+              lineId: 'line-1',
+              hasNote: false,
+            },
+          ],
+        }),
+        version: 3,
+      }),
+    });
+    const fixture = await render();
+    const host: HTMLElement = fixture.nativeElement;
+
+    const presets = host.querySelector('[data-testid="order-detail-line-presets"]');
+    expect(presets).not.toBeNull();
+    expect(presets?.textContent).toContain('No onions');
+    expect(presets?.textContent).toContain('Extra spicy');
   });
 
   it('always shows the raw route order id, even before the fetch settles', () => {
@@ -586,6 +646,7 @@ describe('OrderDetailPane: money reconciliation (§1.3)', () => {
           quantity: 1,
           finalAmountMinor: 100_000,
           modifiers: [],
+          commentPresets: [],
           lineId: 'line-1',
           hasNote: false,
         },
@@ -926,6 +987,42 @@ describe('OrderDetailPane: the whole OutcomeResponse, not the 13-of-19 slice (ro
     expect(host.querySelector('[data-testid="order-detail-accepted-by"]')?.textContent).toContain(
       'operator-7',
     );
+  });
+
+  it('gap map 9.2d: prefers the resolved display name over the raw actor id', async () => {
+    const attributed = detail({
+      createdByActorType: 'USER',
+      createdByActorId: 'operator-7',
+      createdByDisplayName: 'Шахзод Каримов',
+      acceptedByActorType: 'USER',
+      acceptedByActorId: 'operator-9',
+      acceptedByDisplayName: 'Дилноза Юсупова',
+      acceptedAt: '2026-08-30T09:02:00Z',
+    });
+    configure({ get: apiGet({ value: attributed, version: 3 }) });
+    const fixture = await render();
+    const host: HTMLElement = fixture.nativeElement;
+
+    const createdBy = host.querySelector('[data-testid="order-detail-created-by"]')?.textContent;
+    expect(createdBy).toContain('Шахзод Каримов');
+    expect(createdBy).not.toContain('operator-7');
+    const acceptedBy = host.querySelector('[data-testid="order-detail-accepted-by"]')?.textContent;
+    expect(acceptedBy).toContain('Дилноза Юсупова');
+    expect(acceptedBy).not.toContain('operator-9');
+  });
+
+  it('9.2d: falls back to the raw type/id pair when no display name was resolved', async () => {
+    const attributed = detail({
+      createdByActorType: 'USER',
+      createdByActorId: 'operator-7',
+      createdByDisplayName: null,
+    });
+    configure({ get: apiGet({ value: attributed, version: 3 }) });
+    const fixture = await render();
+
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="order-detail-created-by"]')?.textContent,
+    ).toContain('operator-7');
   });
 
   it('renders an honest "not yet accepted" rather than a blank cell', async () => {
@@ -1565,7 +1662,7 @@ describe('OrderDetailPane: §3.6 Комментарии — the amendment client
     expect(host.querySelector('[data-testid="order-detail-cash-tendered-warning"]')).toBeNull();
   });
 
-  it('AMEND opens the same five-command menu the row’s own edit affordances use', async () => {
+  it('AMEND opens the eleven-command menu the row’s own edit affordances use', async () => {
     configure({
       get: apiGet({
         value: detail({
@@ -1586,9 +1683,11 @@ describe('OrderDetailPane: §3.6 Комментарии — the amendment client
     fixture.detectChanges();
 
     expect(host.querySelector('[data-testid="order-amend-menu"]')).not.toBeNull();
-    // The seven financial commands ADR 0039 declares and refuses by name never
-    // reach this menu — see `order-amend-menu.spec.ts` for the exhaustive check.
-    expect(host.querySelector('[data-testid="order-amend-menu-ADD_LINES"]')).toBeNull();
+    // Wave 10 (rows 1.2c/2.1d): six of the seven financial commands are built
+    // and do reach this menu now — only REMOVE_LINES, still refused by name,
+    // never does. See `order-amend-menu.spec.ts` for the exhaustive check.
+    expect(host.querySelector('[data-testid="order-amend-menu-ADD_LINES"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="order-amend-menu-REMOVE_LINES"]')).toBeNull();
 
     (
       host.querySelector('[data-testid="order-amend-menu-SET_KITCHEN_NOTE"]') as HTMLButtonElement
@@ -1596,6 +1695,182 @@ describe('OrderDetailPane: §3.6 Комментарии — the amendment client
     fixture.detectChanges();
 
     expect(host.querySelector('[data-testid="order-note-dialog"]')).not.toBeNull();
+  });
+
+  it('wires ADD_LINES: search via NewOrderApi, propose applyImmediately:false, then confirm-and-apply', async () => {
+    const addLines = vi.fn().mockReturnValue(
+      of(
+        amendmentResult({
+          status: 'PRICED',
+          deltaTotalMinor: 18_000,
+          requiresApproval: false,
+          amendmentVersion: 1,
+        }),
+      ),
+    );
+    const confirm = vi.fn().mockReturnValue(of(amendmentResult({ status: 'APPLIED' })));
+    const searchItems = vi.fn().mockResolvedValue({
+      items: [
+        {
+          variantId: 'variant-1',
+          productName: 'Лагман',
+          category: 'Горячие блюда',
+          available: true,
+          trackingMode: null,
+        },
+      ],
+      nextCursor: null,
+    });
+    configure({
+      get: apiGet({
+        value: detail({
+          summary: { ...detail().summary, status: 'CONFIRMED', actions: [{ action: 'AMEND' }] },
+        }),
+        version: 3,
+      }),
+      amendmentsApi: { addLines, confirm },
+      newOrderApi: { searchItems },
+    });
+    const fixture = await render();
+    const host: HTMLElement = fixture.nativeElement;
+
+    (
+      host.querySelector('[data-testid="order-detail-primary-action"]') as HTMLButtonElement
+    )?.click();
+    fixture.detectChanges();
+    (host.querySelector('[data-testid="order-amend-menu-ADD_LINES"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    expect(host.querySelector('[data-testid="order-add-lines-dialog"]')).not.toBeNull();
+
+    // `q-combobox` debounces `search` by 250ms real time (its own doc) — fake
+    // timers only around the debounce itself, real ones again for the
+    // resulting promise chain, matching `combobox.spec.ts`'s own pattern.
+    const searchField = host.querySelector('[data-testid="q-combobox-input"]') as HTMLInputElement;
+    vi.useFakeTimers();
+    searchField.value = 'Лагман';
+    searchField.dispatchEvent(new Event('input'));
+    vi.advanceTimersByTime(250);
+    vi.useRealTimers();
+    await flushMicrotasks();
+    fixture.detectChanges();
+    expect(searchItems).toHaveBeenCalled();
+
+    searchField.dispatchEvent(new Event('focus'));
+    fixture.detectChanges();
+    (host.querySelector('[data-testid="q-combobox-option"]') as HTMLLIElement).click();
+    fixture.detectChanges();
+    (
+      host.querySelector('[data-testid="order-add-lines-dialog-confirm"]') as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(addLines).toHaveBeenCalledWith(FAKE_SCOPE, 'order-1', 3, [
+      { variantId: 'variant-1', quantity: 1, modifierOptionIds: [] },
+    ]);
+    // The propose call never applied it (applyImmediately: false) — the
+    // priced-delta confirmation dialog is what the pane opens next.
+    expect(host.querySelector('[data-testid="order-amendment-confirm-dialog"]')).not.toBeNull();
+    expect(
+      host.querySelector('[data-testid="order-amendment-confirm-delta"]')?.textContent,
+    ).toContain('18');
+
+    (
+      host.querySelector('[data-testid="order-amendment-confirm-submit"]') as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+
+    expect(confirm).toHaveBeenCalledWith(FAKE_SCOPE, 'order-1', 'amendment-1', 1, 'PHONE');
+  });
+
+  it('wires CHANGE_FULFILLMENT_TIME as a direct apply, no confirmation step', async () => {
+    const changeFulfillmentTime = vi.fn().mockReturnValue(of(amendmentResult()));
+    configure({
+      get: apiGet({
+        value: detail({
+          summary: { ...detail().summary, status: 'CONFIRMED', actions: [{ action: 'AMEND' }] },
+        }),
+        version: 3,
+      }),
+      amendmentsApi: { changeFulfillmentTime },
+    });
+    const fixture = await render();
+    const host: HTMLElement = fixture.nativeElement;
+
+    (
+      host.querySelector('[data-testid="order-detail-primary-action"]') as HTMLButtonElement
+    )?.click();
+    fixture.detectChanges();
+    (
+      host.querySelector(
+        '[data-testid="order-amend-menu-CHANGE_FULFILLMENT_TIME"]',
+      ) as HTMLButtonElement
+    ).click();
+    fixture.detectChanges();
+
+    const input = host.querySelector(
+      '[data-testid="order-change-time-dialog-input"]',
+    ) as HTMLInputElement;
+    input.value = '2026-10-01T18:00';
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    (
+      host.querySelector('[data-testid="order-change-time-dialog-confirm"]') as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+
+    expect(changeFulfillmentTime).toHaveBeenCalledWith(
+      FAKE_SCOPE,
+      'order-1',
+      3,
+      new Date('2026-10-01T18:00').toISOString(),
+    );
+    expect(host.querySelector('[data-testid="order-amendment-confirm-dialog"]')).toBeNull();
+  });
+
+  it('wires the RESOLVE row action to reopen the confirmation dialog for a still-pending amendment', async () => {
+    const confirm = vi.fn().mockReturnValue(of(amendmentResult({ status: 'APPLIED' })));
+    const history = vi.fn().mockResolvedValue([
+      amendmentResult({
+        amendmentId: 'amendment-9',
+        status: 'PRICED',
+        deltaTotalMinor: 25_000,
+        requiresApproval: false,
+        amendmentVersion: 2,
+        commandDetails: [{ type: 'ADD_LINES', text: null }],
+        actions: ['RESOLVE'],
+      }),
+    ]);
+    configure({
+      get: apiGet({ value: detail(), version: 3 }),
+      amendmentsApi: { confirm, history },
+    });
+    const fixture = await render();
+    const host: HTMLElement = fixture.nativeElement;
+
+    (
+      host.querySelector(
+        '[data-testid="order-detail-amendment-history-toggle"]',
+      ) as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    const resolveButton = host.querySelector(
+      '[data-testid="order-detail-amendment-history-resolve"]',
+    ) as HTMLButtonElement;
+    expect(resolveButton).not.toBeNull();
+    resolveButton.click();
+    fixture.detectChanges();
+
+    expect(host.querySelector('[data-testid="order-amendment-confirm-dialog"]')).not.toBeNull();
+
+    (
+      host.querySelector('[data-testid="order-amendment-confirm-submit"]') as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+
+    expect(confirm).toHaveBeenCalledWith(FAKE_SCOPE, 'order-1', 'amendment-9', 2, 'PHONE');
   });
 });
 
@@ -1794,6 +2069,181 @@ describe('OrderDetailPane: assign/unassign courier (wave P11, row 1.2e)', () => 
   });
 });
 
+describe('OrderDetailPane: cancel shipment (gap map row 1.2g)', () => {
+  it('offers a cancel-shipment action for a carried, not-yet-terminal shipment', async () => {
+    configure({
+      get: apiGet({ value: detail(), version: 3 }),
+      deliveryApi: {
+        delivery: () =>
+          Promise.resolve(
+            deliveryResponse({
+              shipment: {
+                shipmentId: 'shipment-1',
+                status: 'ASSIGNED',
+                sourceType: 'INTERNAL',
+                courierId: 'courier-1',
+                version: 4,
+              },
+            }),
+          ),
+      },
+    });
+    const fixture = await render();
+
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="order-detail-shipment-cancel"]'),
+    ).not.toBeNull();
+  });
+
+  it('offers no cancel-shipment action once the shipment is already DELIVERED', async () => {
+    configure({
+      get: apiGet({ value: detail(), version: 3 }),
+      deliveryApi: {
+        delivery: () =>
+          Promise.resolve(
+            deliveryResponse({
+              shipment: {
+                shipmentId: 'shipment-1',
+                status: 'DELIVERED',
+                sourceType: 'INTERNAL',
+                courierId: 'courier-1',
+                version: 4,
+              },
+            }),
+          ),
+      },
+    });
+    const fixture = await render();
+
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="order-detail-shipment-cancel"]'),
+    ).toBeNull();
+  });
+
+  it('cancels the shipment through DispatchApi against the shipment id and version, then reloads the delivery band', async () => {
+    const cancelShipment = vi.fn().mockResolvedValue({
+      applied: true,
+      outcome: 'INTERNAL_CANCELLED',
+    });
+    let deliveryCallCount = 0;
+    configure({
+      get: apiGet({ value: detail(), version: 3 }),
+      deliveryApi: {
+        delivery: () => {
+          deliveryCallCount += 1;
+          return Promise.resolve(
+            deliveryResponse({
+              shipment: {
+                shipmentId: 'shipment-1',
+                status: deliveryCallCount === 1 ? 'ASSIGNED' : 'CANCELLED',
+                sourceType: 'INTERNAL',
+                courierId: 'courier-1',
+                version: 4,
+              },
+            }),
+          );
+        },
+      },
+      dispatchApi: { cancelShipment },
+    });
+    const fixture = await render();
+    const host: HTMLElement = fixture.nativeElement;
+
+    (
+      host.querySelector('[data-testid="order-detail-shipment-cancel"]') as HTMLButtonElement
+    ).click();
+    fixture.detectChanges();
+    expect(
+      host.querySelector('[data-testid="order-detail-shipment-cancel-dialog"]'),
+    ).not.toBeNull();
+
+    (host.querySelector('[data-testid="q-confirm-confirm"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(cancelShipment).toHaveBeenCalledWith(
+      FAKE_SCOPE,
+      'shipment-1',
+      4,
+      'OPERATIONS_ORDER_DETAIL_SHIPMENT_CANCEL',
+    );
+    // The delivery band reloaded -- a second read, and the dialog is gone.
+    expect(deliveryCallCount).toBe(2);
+    expect(host.querySelector('[data-testid="order-detail-shipment-cancel-dialog"]')).toBeNull();
+  });
+
+  it('surfaces a refused cancel (STALE_VERSION) as a notice, never a thrown error', async () => {
+    const cancelShipment = vi.fn().mockResolvedValue({
+      applied: false,
+      conflictReason: 'STALE_VERSION',
+    });
+    configure({
+      get: apiGet({ value: detail(), version: 3 }),
+      deliveryApi: {
+        delivery: () =>
+          Promise.resolve(
+            deliveryResponse({
+              shipment: {
+                shipmentId: 'shipment-1',
+                status: 'ASSIGNED',
+                sourceType: 'INTERNAL',
+                courierId: 'courier-1',
+                version: 4,
+              },
+            }),
+          ),
+      },
+      dispatchApi: { cancelShipment },
+    });
+    const fixture = await render();
+    const host: HTMLElement = fixture.nativeElement;
+
+    (
+      host.querySelector('[data-testid="order-detail-shipment-cancel"]') as HTMLButtonElement
+    ).click();
+    fixture.detectChanges();
+    (host.querySelector('[data-testid="q-confirm-confirm"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(host.textContent).toContain('STALE_VERSION');
+  });
+
+  it('dismisses the confirm dialog without cancelling on Cancel/Keep', async () => {
+    const cancelShipment = vi.fn();
+    configure({
+      get: apiGet({ value: detail(), version: 3 }),
+      deliveryApi: {
+        delivery: () =>
+          Promise.resolve(
+            deliveryResponse({
+              shipment: {
+                shipmentId: 'shipment-1',
+                status: 'ASSIGNED',
+                sourceType: 'INTERNAL',
+                courierId: 'courier-1',
+                version: 4,
+              },
+            }),
+          ),
+      },
+      dispatchApi: { cancelShipment },
+    });
+    const fixture = await render();
+    const host: HTMLElement = fixture.nativeElement;
+
+    (
+      host.querySelector('[data-testid="order-detail-shipment-cancel"]') as HTMLButtonElement
+    ).click();
+    fixture.detectChanges();
+    (host.querySelector('[data-testid="q-confirm-cancel"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    expect(cancelShipment).not.toHaveBeenCalled();
+    expect(host.querySelector('[data-testid="order-detail-shipment-cancel-dialog"]')).toBeNull();
+  });
+});
+
 describe('OrderDetailPane: call an external courier (gap map rows 1.2e/2.1c)', () => {
   it('requests a quote and accepts it through the order-keyed path OrderDeliveryController.externalCourier exposes, not the plan-keyed DispatchController route', async () => {
     const externalPartners = vi
@@ -1809,14 +2259,12 @@ describe('OrderDetailPane: call an external courier (gap map rows 1.2e/2.1c)', (
       customerDeliveryFeeMinor: 12_000,
       deltaMinor: 0,
     });
-    const decideExternalCourier = vi
-      .fn()
-      .mockResolvedValue({
-        applied: true,
-        abandoned: false,
-        planVersion: 3,
-        shipmentId: 'shipment-1',
-      });
+    const decideExternalCourier = vi.fn().mockResolvedValue({
+      applied: true,
+      abandoned: false,
+      planVersion: 3,
+      shipmentId: 'shipment-1',
+    });
     configure({
       get: apiGet({ value: detail(), version: 3 }),
       deliveryApi: {
@@ -2094,6 +2542,9 @@ function posExportView(overrides: Partial<PosExportView> = {}): PosExportView {
     resolutionKind: null,
     resolutionReason: null,
     resolvedAt: null,
+    unmappedEntityType: null,
+    unmappedHorecaosEntityId: null,
+    unmappedBindingId: null,
     ...overrides,
   };
 }
@@ -2157,6 +2608,111 @@ describe('OrderDetailPane: POS export and its §3.11 amendment interlock (wave P
     expect(
       host.querySelector('[data-testid="order-detail-pos-export-last-error"]')?.textContent,
     ).toContain('no provider mapping');
+    // lastErrorCode names a mapping gap here, but the fixture leaves the
+    // live-recheck fields null -- no deep-link target, no button.
+    expect(host.querySelector('[data-testid="order-detail-pos-export-fix-mapping"]')).toBeNull();
+  });
+
+  it('shows a deep link to the ADR 0012 mapping screen and navigates with the offending entity pre-selected (row 1.2i)', async () => {
+    const navigate = vi.fn().mockResolvedValue(true);
+    configure({
+      get: apiGet({ value: amendableDetail(), version: 3 }),
+      posExportApi: {
+        forOrder: () =>
+          Promise.resolve({
+            posCapable: true,
+            export: posExportView({
+              state: 'REJECTED',
+              permitsAmendment: true,
+              lastErrorCode: 'LINE_UNMAPPED',
+              lastError: 'no provider mapping',
+              unmappedEntityType: 'VARIANT',
+              unmappedHorecaosEntityId: 'variant-42',
+            }),
+          }),
+      },
+      router: { navigate },
+    });
+    const fixture = await render();
+    await flushMicrotasks();
+    fixture.detectChanges();
+    const host: HTMLElement = fixture.nativeElement;
+
+    const link = host.querySelector(
+      '[data-testid="order-detail-pos-export-fix-mapping"]',
+    ) as HTMLButtonElement;
+    expect(link).not.toBeNull();
+
+    link.click();
+
+    expect(navigate).toHaveBeenCalledWith(['/catalog/import'], {
+      queryParams: { entityType: 'VARIANT', focusHorecaosId: 'variant-42' },
+    });
+  });
+
+  /**
+   * Without this, a tenant with more than one POS binding sends the deep
+   * link's own `focusHorecaosId` to whatever binding `catalog-import-page.ts`
+   * defaults to (the tenant-wide first one), not the binding the server
+   * actually checked the id against.
+   */
+  it('includes the resolved bindingId in the deep link when the server sent one', async () => {
+    const navigate = vi.fn().mockResolvedValue(true);
+    configure({
+      get: apiGet({ value: amendableDetail(), version: 3 }),
+      posExportApi: {
+        forOrder: () =>
+          Promise.resolve({
+            posCapable: true,
+            export: posExportView({
+              state: 'REJECTED',
+              permitsAmendment: true,
+              lastErrorCode: 'LINE_UNMAPPED',
+              lastError: 'no provider mapping',
+              unmappedEntityType: 'VARIANT',
+              unmappedHorecaosEntityId: 'variant-42',
+              unmappedBindingId: 'binding-7',
+            }),
+          }),
+      },
+      router: { navigate },
+    });
+    const fixture = await render();
+    await flushMicrotasks();
+    fixture.detectChanges();
+    const host: HTMLElement = fixture.nativeElement;
+
+    (host.querySelector('[data-testid="order-detail-pos-export-fix-mapping"]') as HTMLButtonElement).click();
+
+    expect(navigate).toHaveBeenCalledWith(['/catalog/import'], {
+      queryParams: { entityType: 'VARIANT', focusHorecaosId: 'variant-42', bindingId: 'binding-7' },
+    });
+  });
+
+  it('shows no deep-link button once the export settles with nothing left unmapped', async () => {
+    configure({
+      get: apiGet({ value: amendableDetail(), version: 3 }),
+      posExportApi: {
+        forOrder: () =>
+          Promise.resolve({
+            posCapable: true,
+            export: posExportView({
+              state: 'ACCEPTED',
+              permitsAmendment: false,
+              lastErrorCode: null,
+              lastError: null,
+              unmappedEntityType: null,
+              unmappedHorecaosEntityId: null,
+            }),
+          }),
+      },
+    });
+    const fixture = await render();
+    await flushMicrotasks();
+    fixture.detectChanges();
+    const host: HTMLElement = fixture.nativeElement;
+
+    expect(host.querySelector('[data-testid="order-detail-pos-export-fix-mapping"]')).toBeNull();
   });
 
   it('disables AMEND and shows the reason while an export is unacknowledged', async () => {

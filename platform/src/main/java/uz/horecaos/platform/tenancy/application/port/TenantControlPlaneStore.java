@@ -5,12 +5,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import uz.horecaos.platform.tenancy.api.BrandId;
+import uz.horecaos.platform.tenancy.api.LocationId;
 import uz.horecaos.platform.tenancy.api.TenantId;
 import uz.horecaos.platform.tenancy.domain.Brand;
 import uz.horecaos.platform.tenancy.domain.BrandProfile;
 import uz.horecaos.platform.tenancy.domain.CustomerIdentityMode;
 import uz.horecaos.platform.tenancy.domain.CustomerIdentityPolicy;
 import uz.horecaos.platform.tenancy.domain.Location;
+import uz.horecaos.platform.tenancy.domain.LocationLocale;
 import uz.horecaos.platform.tenancy.domain.Slug;
 import uz.horecaos.platform.tenancy.domain.Tenant;
 
@@ -181,6 +183,25 @@ public interface TenantControlPlaneStore {
      * and it must not carry that branch's identity columns along with it.
      */
     void updateLocationPlace(Location location);
+
+    /**
+     * Persists the branch's venue facts: sort order, seats, average cheque,
+     * parking, playground, virtual tour (row 10.2b). Narrow like {@link
+     * #updateLocationPlace}, and separate from it for the same reason: a
+     * correction here must not carry the branch's address and point along.
+     */
+    void updateLocationVenue(Location location);
+
+    /**
+     * One branch's own localized content, one entry per locale it has been
+     * given a display name or description in. Empty for a branch that has
+     * configured none of this yet — a normal, expected state, not an absent
+     * row (the same reasoning {@link #findBrandProfile} gives for a brand).
+     */
+    List<LocationLocale> findLocationContent(TenantId tenantId, LocationId locationId);
+
+    /** Replaces a branch's whole localized-content set — a whole-set write, like {@link #updateBrandProfile}'s locales. */
+    void updateLocationContent(TenantId tenantId, LocationId locationId, List<LocationLocale> content);
 
     /** Persists the location's current status (activate/suspend/archive). */
     void updateLocationStatus(Location location);

@@ -7,6 +7,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
@@ -38,6 +39,7 @@ import uz.horecaos.platform.tenancy.application.TenantControlPlaneService.Create
 import uz.horecaos.platform.tenancy.application.TenantControlPlaneService.CreateLocationCommand;
 import uz.horecaos.platform.tenancy.application.TenantControlPlaneService.CreateTenantCommand;
 import uz.horecaos.platform.tenancy.application.TenantControlPlaneService.DescribeLocationCommand;
+import uz.horecaos.platform.tenancy.application.TenantControlPlaneService.LocationLocaleInput;
 import uz.horecaos.platform.tenancy.application.TenantControlPlaneService.LocationView;
 import uz.horecaos.platform.tenancy.application.TenantControlPlaneService.ReviseBrandCommand;
 import uz.horecaos.platform.tenancy.application.TenantControlPlaneService.ReviseLocationCommand;
@@ -323,15 +325,20 @@ public class TenantControlPlaneController {
     }
 
     /**
-     * Records the branch's address, telephone and point.
+     * Records the branch's address, telephone, point, and — row 10.2b — its
+     * sort order, venue attributes and localized content.
      *
-     * <p>{@code PUT}, and the whole place at once. A {@code PATCH} of individual
+     * <p>{@code PUT}, and the whole thing at once. A {@code PATCH} of individual
      * fields would let a caller move a pin while leaving a contradicting address
      * behind it, and the two are read together by everything that uses them.
+     * Sort order and the venue attributes joined this endpoint rather than
+     * getting one of their own: Tab 1's edit form already saves address, phone
+     * and landmark as one act, and these are the rest of what that same tab
+     * asks for.
      */
     @PutMapping("/{tenantId}/brands/{brandId}/locations/{locationId}/place")
     @RequiresCapability(value = Capability.LOCATION_WRITE, scope = ScopeType.BRAND, mutating = true)
-    @Operation(summary = "Record where a location is, and how to reach it")
+    @Operation(summary = "Record where a location is, how to reach it, and its venue facts (10.2b)")
     LocationView describeLocation(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
@@ -350,7 +357,23 @@ public class TenantControlPlaneController {
                         request.latitude(),
                         request.longitude(),
                         request.coordinateSource(),
-                        Boolean.TRUE.equals(request.clearLandmark())));
+                        Boolean.TRUE.equals(request.clearLandmark()),
+                        request.sortOrder(),
+                        request.seats(),
+                        Boolean.TRUE.equals(request.clearSeats()),
+                        request.averageChequeAmount(),
+                        request.averageChequeCurrency(),
+                        Boolean.TRUE.equals(request.clearAverageCheque()),
+                        request.hasParking(),
+                        request.hasPlayground(),
+                        request.virtualTourUrl(),
+                        Boolean.TRUE.equals(request.clearVirtualTourUrl()),
+                        request.locales() == null
+                                ? null
+                                : request.locales().stream()
+                                        .map(locale -> new LocationLocaleInput(
+                                                locale.locale(), locale.displayName(), locale.description()))
+                                        .toList()));
     }
 
     @PostMapping("/{tenantId}/brands/{brandId}/locations/{locationId}/activate")
@@ -430,6 +453,16 @@ public class TenantControlPlaneController {
      *                       turned {@code FAIL_ON_NULL_FOR_PRIMITIVES} on), so as
      *                       {@code boolean} every ordinary address or phone edit
      *                       answered 400 MALFORMED_BODY
+     * @param clearSeats true to remove a previously-set seat count. The same
+     *                    escape hatch {@code clearLandmark} is, and boxed for
+     *                    the same reason
+     * @param clearAverageCheque true to remove a previously-set average cheque
+     *                            amount and currency together — {@link
+     *                            uz.horecaos.platform.tenancy.domain.LocationVenue}
+     *                            requires both null or both set, so one flag
+     *                            clears the pair
+     * @param clearVirtualTourUrl true to remove a previously-set virtual tour
+     *                             link
      */
     record DescribeLocationRequest(
             @Size(max = 200) String addressLine,
@@ -448,7 +481,36 @@ public class TenantControlPlaneController {
 
             CoordinateSource coordinateSource,
 
-            @Nullable Boolean clearLandmark) {}
+            @Nullable Boolean clearLandmark,
+
+            @Min(0) @Nullable Integer sortOrder,
+
+            @Min(0) @Nullable Integer seats,
+
+            @Nullable Boolean clearSeats,
+
+            @Min(0) @Nullable Long averageChequeAmount,
+
+            @Pattern(regexp = "[A-Z]{3}") @Nullable String averageChequeCurrency,
+
+            @Nullable Boolean clearAverageCheque,
+
+            @Nullable Boolean hasParking,
+
+            @Nullable Boolean hasPlayground,
+
+            @Size(max = 500) @Pattern(regexp = "https?://.+") @Nullable
+            String virtualTourUrl,
+
+            @Nullable Boolean clearVirtualTourUrl,
+
+            @Nullable List<LocationLocaleRequest> locales) {}
+
+    /** One locale's own localized display name/description for a branch (10.2b). A whole-set write, like {@link BrandLocaleRequest}. */
+    record LocationLocaleRequest(
+            @NotBlank @Size(max = 16) String locale,
+            @Size(max = 200) @Nullable String displayName,
+            @Size(max = 2000) @Nullable String description) {}
 
     record CreateTenantRequest(
             @NotBlank @Size(max = 63) @Pattern(regexp = "[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?")

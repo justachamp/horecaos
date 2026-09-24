@@ -25,6 +25,12 @@ export interface OrderLine {
   /** The line's own total, snapshotted at checkout — not a unit price. */
   readonly finalAmountMinor: number;
   readonly modifiers: readonly string[];
+  /**
+   * Row 2.1b: the coded kitchen-instruction presets this line was checked
+   * out carrying, chips ahead of the free note — every locale, so the
+   * console renders whichever the operator is in. `CommentPresetChip`.
+   */
+  readonly commentPresets: readonly OrderLineCommentPreset[];
   readonly lineId: string;
   /**
    * Whether the customer left a note on this line. The text itself is
@@ -32,6 +38,14 @@ export interface OrderLine {
    * is the separate, audited call that returns it (§3.4).
    */
   readonly hasNote: boolean;
+}
+
+/** `OperationsOrderController.CommentPresetChip`. */
+export interface OrderLineCommentPreset {
+  readonly code: string;
+  readonly labelRu: string;
+  readonly labelUz: string;
+  readonly labelEn: string;
 }
 
 /** `CustomerResponse` — orders.md §3.7-§3.8, exactly as far as `ORDER_READ` may see. */
@@ -72,8 +86,18 @@ export interface OrderDetailResponse {
   readonly currentRevision: number;
   readonly createdByActorType?: string | null;
   readonly createdByActorId?: string | null;
+  /**
+   * Gap map row 9.2d: `createdByActorId` resolved to a name server-side
+   * (`StaffDisplayNames`, the same cached lookup the staff activity log
+   * already uses) — null for a non-`"USER"` actor or a subject with no name
+   * on file, in which case {@link actorDisplay} still falls back to the raw
+   * type/id pair rather than showing nothing.
+   */
+  readonly createdByDisplayName?: string | null;
   readonly acceptedByActorType?: string | null;
   readonly acceptedByActorId?: string | null;
+  /** {@link createdByDisplayName}, for {@link acceptedByActorId}. */
+  readonly acceptedByDisplayName?: string | null;
   readonly acceptedAt?: string | null;
   readonly callbackRequested: boolean;
   readonly callbackResolvedAt?: string | null;

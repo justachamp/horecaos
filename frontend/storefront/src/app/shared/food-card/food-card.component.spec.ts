@@ -66,9 +66,18 @@ function menuItem(overrides: Partial<MenuItem> = {}): MenuItem {
     is_favourite: false,
     delivery_duration: 0,
     variants: [
-      { id: 'variant-1', name: '', active: true, preparation_time: 0, price: 25000, price_without_discount: 25000 },
+      {
+        id: 'variant-1',
+        name: '',
+        active: true,
+        preparation_time: 0,
+        price: 25000,
+        price_without_discount: 25000,
+        onSaleNow: true,
+      },
     ],
     modifierGroups: [],
+    commentPresets: [],
     ...overrides,
   };
 }

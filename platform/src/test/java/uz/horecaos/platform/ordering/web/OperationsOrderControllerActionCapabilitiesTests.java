@@ -17,6 +17,7 @@ import uz.horecaos.platform.iam.api.AuthorizationService;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope;
+import uz.horecaos.platform.iam.api.accounts.StaffDisplayNames;
 import uz.horecaos.platform.ordering.application.AggregatorOrderIntakeService;
 import uz.horecaos.platform.ordering.application.LiveBoardQueryService;
 import uz.horecaos.platform.ordering.application.MyWorkQueryService;
@@ -72,7 +73,8 @@ class OperationsOrderControllerActionCapabilitiesTests {
                 mock(LiveBoardQueryService.class),
                 mock(AggregatorOrderIntakeService.class),
                 mock(ShipmentCancellationPort.class),
-                mock(MyWorkQueryService.class));
+                mock(MyWorkQueryService.class),
+                mock(StaffDisplayNames.class));
     }
 
     @Test
@@ -111,6 +113,20 @@ class OperationsOrderControllerActionCapabilitiesTests {
         assertThat(granted).containsExactly(Capability.ORDER_STATE_OVERRIDE);
     }
 
+    /** Gap map row 1.1e: the sixth policy capability, read exactly like the other five. */
+    @Test
+    void grantingOnlyDeliveryManualAssignYieldsExactlyThatOneCapability() {
+        AuthorizationService authorization = mock(AuthorizationService.class);
+        when(authorization.has(any(), any(), any())).thenReturn(false);
+        when(authorization.has(
+                        SUBJECT, Capability.DELIVERY_MANUAL_ASSIGN, ResourceScope.location(TENANT, BRAND, LOCATION)))
+                .thenReturn(true);
+
+        Set<Capability> granted = controllerFor(authorization).grantedOrderActionCapabilities(TENANT, BRAND, LOCATION);
+
+        assertThat(granted).containsExactly(Capability.DELIVERY_MANUAL_ASSIGN);
+    }
+
     @Test
     void grantingEveryPolicyCapabilityYieldsAllOfThem() {
         AuthorizationService authorization = mock(AuthorizationService.class);
@@ -125,7 +141,9 @@ class OperationsOrderControllerActionCapabilitiesTests {
                         Capability.ORDER_CANCEL,
                         Capability.ORDER_AMEND,
                         // ADR 0019 amendment (ADR 0110), wave P41.
-                        Capability.ORDER_STATE_OVERRIDE);
+                        Capability.ORDER_STATE_OVERRIDE,
+                        // Gap map row 1.1e.
+                        Capability.DELIVERY_MANUAL_ASSIGN);
     }
 
     /**
@@ -153,6 +171,11 @@ class OperationsOrderControllerActionCapabilitiesTests {
                 .has(
                         eq(SUBJECT),
                         eq(Capability.ORDER_STATE_OVERRIDE),
+                        eq(ResourceScope.location(TENANT, BRAND, LOCATION)));
+        verify(authorization)
+                .has(
+                        eq(SUBJECT),
+                        eq(Capability.DELIVERY_MANUAL_ASSIGN),
                         eq(ResourceScope.location(TENANT, BRAND, LOCATION)));
     }
 }

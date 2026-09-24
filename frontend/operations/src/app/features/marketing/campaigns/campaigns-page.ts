@@ -370,6 +370,19 @@ export class CampaignsPage implements OnInit {
     return 'marketing.campaigns.list.awaitingSignature';
   }
 
+  /**
+   * Row 6.4: the list-level nudge toward the "re-schedule" affordance —
+   * exactly the shape `CampaignDetailPane.isHaltedScheduledSend` checks, so a
+   * halted send is visible without opening every SCHEDULED row to find it.
+   */
+  protected isHaltedScheduledSend(campaign: CampaignView): boolean {
+    return (
+      campaign.status === 'SCHEDULED' &&
+      campaign.scheduledAt === null &&
+      campaign.haltedReason !== null
+    );
+  }
+
   protected openCampaign(campaign: CampaignView): void {
     void this.router.navigate(['/marketing/campaigns', campaign.campaignId]);
   }

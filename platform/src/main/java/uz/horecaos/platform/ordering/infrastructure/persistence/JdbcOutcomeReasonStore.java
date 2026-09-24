@@ -158,18 +158,47 @@ public class JdbcOutcomeReasonStore {
                 .optional();
     }
 
-    /** The reasons an operator may pick from, newest configuration first. */
+    /**
+     * The reasons an operator may pick from, in the tenant's own ranking
+     * (gap-map row {@code 10.10a}) — {@code display_order} first, then
+     * {@code internal_name} to break a tie stably (every row shares {@code 0}
+     * until its first reorder; see {@code V0400}'s own backfill).
+     */
     public List<ReasonRow> list(UUID tenantId, OutcomeReasonKind kind, boolean activeOnly) {
         return jdbc.sql(SELECT_REASON + """
                  WHERE tenant_id = :tenantId AND kind = :kind
                    AND (:activeOnly = false OR status = 'ACTIVE')
-                 ORDER BY system_category, internal_name
+                 ORDER BY display_order, internal_name
                 """)
                 .param("tenantId", tenantId)
                 .param("kind", kind.name())
                 .param("activeOnly", activeOnly)
                 .query(JdbcOutcomeReasonStore::mapReason)
                 .list();
+    }
+
+    /**
+     * Writes one reason's rank (row {@code 10.10a}) and bumps its version,
+     * the same "every write bumps the version" rule {@link #update} and
+     * {@link #archive} already follow — a reorder is a write like any other,
+     * and a snapshot taken mid-reorder must be able to tell a row apart from
+     * the one it was before.
+     *
+     * <p>Restricted to {@code status = 'ACTIVE'} — an archived reason cannot
+     * be reordered, matching {@link OrderOutcomeReasonService#reorder}'s own
+     * guard that the caller named exactly the active set.
+     */
+    public void setDisplayOrder(UUID tenantId, UUID reasonId, int displayOrder, Instant now) {
+        jdbc.sql("""
+                UPDATE ordering.order_outcome_reasons
+                SET display_order = :displayOrder, version = version + 1, updated_at = :now
+                WHERE tenant_id = :tenantId AND id = :id AND status = 'ACTIVE'
+                """)
+                .param("tenantId", tenantId)
+                .param("id", reasonId)
+                .param("displayOrder", displayOrder)
+                .param("now", utc(now))
+                .update();
     }
 
     /** What the customer is told, per locale. Never the internal name. */

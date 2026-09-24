@@ -101,7 +101,18 @@ public enum ApprovalAction {
      * scope.
      */
     REPORTING_BUSINESS_DAY_BOUNDARY_CHANGE(
-            "reporting.business-day-boundary.change", MissingPolicyMode.ALLOW_WITHOUT_APPROVAL);
+            "reporting.business-day-boundary.change", MissingPolicyMode.ALLOW_WITHOUT_APPROVAL),
+
+    /**
+     * ADR 0039 §3.11: "A decrease above a configured amount needs ADR 0027
+     * four-eyes approval, or 'remove the two most expensive lines' is an
+     * unreviewed refund path." A brand-new action with no prior single-signature
+     * behaviour to preserve, so {@code ALLOW_WITHOUT_APPROVAL} is the honest
+     * starting mode ADR 0050 asks of a new action — a tenant wanting a second
+     * signature on every decrease, not only ones above the threshold, authors
+     * an {@code audit.approval_policies} row naming this code.
+     */
+    ORDERING_AMENDMENT_DECREASE("ordering.amendment.decrease", MissingPolicyMode.ALLOW_WITHOUT_APPROVAL);
 
     /** What an action does when no valid policy resolves at the requested scope. */
     public enum MissingPolicyMode {

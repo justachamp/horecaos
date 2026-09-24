@@ -1,0 +1,61 @@
+/* Chrome is `q-modal` (ADR 0101); see `order-reason-dialog.css`'s identical note. */
+
+.add-lines-dialog__list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.add-lines-dialog__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+}
+
+.add-lines-dialog__label {
+  flex: 1 1 auto;
+}
+
+.add-lines-dialog__quantity {
+  width: 4em;
+  padding: 4px 6px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+}
+
+.add-lines-dialog__remove {
+  border: none;
+  background: none;
+  color: var(--q-error-text);
+  cursor: pointer;
+}
+
+.add-lines-dialog__dismiss,
+.add-lines-dialog__confirm {
+  padding: 6px 14px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  cursor: pointer;
+}
+
+.add-lines-dialog__confirm {
+  border-color: var(--q-primary);
+  background: var(--q-primary);
+  color: var(--q-inverse-ink);
+}
+
+.add-lines-dialog__confirm:disabled,
+.add-lines-dialog__dismiss:disabled {
+  opacity: 0.6;
+  cursor: default;
+}

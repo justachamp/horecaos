@@ -3,6 +3,7 @@ package uz.horecaos.platform.ordering.application;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -15,6 +16,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
+import uz.horecaos.platform.catalog.api.CommentPresetLookup;
 import uz.horecaos.platform.customers.api.CustomerBlacklistPort;
 import uz.horecaos.platform.fulfillment.api.PricingAuthority;
 import uz.horecaos.platform.iam.api.ResourceScope;
@@ -108,6 +110,8 @@ public class CartService {
     private final CustomerBlacklistPort blacklist;
     private final PromoCodeQueryPort promoCodes;
     private final ConfigurationResolver configuration;
+    private final CartSaleWindowRules saleWindows;
+    private final CommentPresetLookup commentPresets;
 
     @SuppressWarnings("checkstyle:ParameterNumber")
     public CartService(
@@ -123,7 +127,9 @@ public class CartService {
             Clock clock,
             CustomerBlacklistPort blacklist,
             PromoCodeQueryPort promoCodes,
-            ConfigurationResolver configuration) {
+            ConfigurationResolver configuration,
+            CartSaleWindowRules saleWindows,
+            CommentPresetLookup commentPresets) {
         this.carts = carts;
         this.channels = channels;
         this.menu = menu;
@@ -137,6 +143,8 @@ public class CartService {
         this.blacklist = blacklist;
         this.promoCodes = promoCodes;
         this.configuration = configuration;
+        this.saleWindows = saleWindows;
+        this.commentPresets = commentPresets;
     }
 
     /**
@@ -248,6 +256,10 @@ public class CartService {
      * holds two sizes of one drink, or a burger with no bun chosen from a required
      * group, is a basket the kitchen cannot make, and discovering that at the
      * payment step is the worst moment to learn it.
+     *
+     * <p>Carries no comment presets (row 2.1b) — the four-argument overload every
+     * caller before this row used, still exactly what a line with no kitchen
+     * instruction on it needs.
      */
     @Transactional
     public CartView putLine(
@@ -261,10 +273,50 @@ public class CartService {
             int quantity,
             List<UUID> modifierOptionIds,
             @Nullable String customerNote) {
+        return putLine(
+                tenantId,
+                brandId,
+                callerAccountId,
+                cartId,
+                expectedVersion,
+                lineKey,
+                variantId,
+                quantity,
+                modifierOptionIds,
+                List.of(),
+                customerNote);
+    }
+
+    /**
+     * Adds or replaces one line, with the coded kitchen-instruction presets
+     * (row 2.1b) the customer or operator chose for it.
+     *
+     * <p>{@code commentPresetCodes} is validated against {@link
+     * CommentPresetLookup#offeredCodesForVariant} exactly as {@code
+     * modifierOptionIds} is validated against {@link CartMenuRules} —
+     * refused by name here, at add time, rather than discovered as an
+     * unrenderable chip on a kitchen ticket.
+     */
+    @Transactional
+    public CartView putLine(
+            UUID tenantId,
+            UUID brandId,
+            UUID callerAccountId,
+            UUID cartId,
+            int expectedVersion,
+            String lineKey,
+            UUID variantId,
+            int quantity,
+            List<UUID> modifierOptionIds,
+            @Nullable List<String> commentPresetCodes,
+            @Nullable String customerNote) {
 
         CartRow cart = requireEditable(tenantId, brandId, callerAccountId, cartId);
         requireSelectionRules(tenantId, brandId, cart, variantId, modifierOptionIds);
         Instant now = clock.instant();
+        requireOnSaleNow(tenantId, cart, variantId, now);
+        List<String> presetCodes = commentPresetCodes == null ? List.of() : commentPresetCodes;
+        requireOfferedCommentPresets(tenantId, brandId, variantId, presetCodes);
 
         UUID lineId = lines(tenantId, cartId).stream()
                 .filter(line -> line.lineKey().equals(lineKey))
@@ -290,6 +342,7 @@ public class CartService {
                 variantId,
                 quantity,
                 modifiersJson(modifierOptionIds),
+                List.copyOf(new java.util.LinkedHashSet<>(presetCodes)),
                 noteEncrypted,
                 now);
 
@@ -526,6 +579,15 @@ public class CartService {
         if (lines.isEmpty()) {
             throw new CartRefusedException("CART_EMPTY", "An empty cart has nothing to price");
         }
+        // Row 4.2g: re-checked here, not only at putLine. A line added inside its
+        // window is flagged rather than silently dropped once the schedule moves
+        // on without it — the refusal below names the line, exactly as
+        // requireSelectionRules' own doc says a menu-state refusal belongs at
+        // pricing, where it can.
+        Instant priceNow = clock.instant();
+        for (CartLineRow line : lines) {
+            requireOnSaleNow(tenantId, cart, line.variantId(), priceNow);
+        }
 
         SalesChannel channel = channels.byId(tenantId, cart.channelId())
                 .orElseThrow(() ->
@@ -701,6 +763,11 @@ public class CartService {
                     line.variantId(),
                     line.quantity(),
                     line.selectedModifiersJson(),
+                    // Row 2.1b: presets carry across a rebuild exactly as the
+                    // modifier selection does — unlike the note, a preset code
+                    // is not personal data bound to the old row's encryption,
+                    // so there is nothing stopping the copy.
+                    line.commentPresetCodes(),
                     null,
                     now);
         }
@@ -818,6 +885,44 @@ public class CartService {
      */
     private static boolean ownedBy(CartRow cart, UUID callerAccountId) {
         return callerAccountId != null && callerAccountId.equals(cart.customerAccountId());
+    }
+
+    /**
+     * Row 4.2g: refuses a variant outside its own per-item sale schedule.
+     *
+     * <p>Named {@code ITEM_OUT_OF_SALE_WINDOW} so the storefront and the New
+     * Order screen can show the customer or operator exactly why this dish is
+     * refused, rather than a generic validation failure.
+     */
+    private void requireOnSaleNow(UUID tenantId, CartRow cart, UUID variantId, Instant at) {
+        ZoneId zone = tenancy.timezoneOf(tenantId, cart.locationId())
+                .orElseThrow(() -> new IllegalStateException("Location " + cart.locationId() + " has no timezone"));
+        if (!saleWindows.isOnSaleAt(tenantId, cart.locationId(), variantId, zone, at)) {
+            throw new CartRefusedException(
+                    "ITEM_OUT_OF_SALE_WINDOW", "Variant " + variantId + " is outside its sale window right now");
+        }
+    }
+
+    /**
+     * Row 2.1b: refuses a preset code this line's product does not offer.
+     *
+     * <p>Duplicates within {@code codes} are tolerated rather than refused —
+     * a repeated tap on the same chip is a client bug worth ignoring, not an
+     * order worth refusing — and the duplicate is written once: {@code
+     * carts.upsertLine} stores exactly what is passed, so this method
+     * de-duplicates before it ever reaches the column.
+     */
+    private void requireOfferedCommentPresets(UUID tenantId, UUID brandId, UUID variantId, List<String> codes) {
+        if (codes.isEmpty()) {
+            return;
+        }
+        List<String> offered = commentPresets.offeredCodesForVariant(tenantId, brandId, variantId);
+        for (String code : codes) {
+            if (!offered.contains(code)) {
+                throw new CartRefusedException(
+                        "COMMENT_PRESET_NOT_OFFERED", "Preset '%s' is not offered by this product".formatted(code));
+            }
+        }
     }
 
     /**

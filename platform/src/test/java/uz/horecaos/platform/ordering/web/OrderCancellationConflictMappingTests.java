@@ -21,6 +21,7 @@ import uz.horecaos.platform.fulfillment.api.ShipmentCancellationPort;
 import uz.horecaos.platform.iam.api.AuthenticatedActor;
 import uz.horecaos.platform.iam.api.AuthorizationService;
 import uz.horecaos.platform.iam.api.CurrentActor;
+import uz.horecaos.platform.iam.api.accounts.StaffDisplayNames;
 import uz.horecaos.platform.ordering.application.AggregatorOrderIntakeService;
 import uz.horecaos.platform.ordering.application.CartPaymentOptions;
 import uz.horecaos.platform.ordering.application.CartService;
@@ -94,7 +95,8 @@ class OrderCancellationConflictMappingTests {
                 mock(LiveBoardQueryService.class),
                 mock(AggregatorOrderIntakeService.class),
                 mock(ShipmentCancellationPort.class),
-                mock(MyWorkQueryService.class));
+                mock(MyWorkQueryService.class),
+                mock(StaffDisplayNames.class));
 
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.addHeader("If-Match", "\"3\"");

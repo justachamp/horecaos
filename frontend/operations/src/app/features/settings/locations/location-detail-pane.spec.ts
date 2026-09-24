@@ -32,6 +32,14 @@ const LOCATION: LocationView = {
   latitude: 41.3,
   longitude: 69.2,
   coordinateSource: 'MERCHANT_PIN',
+  sortOrder: 0,
+  seats: null,
+  averageChequeAmount: null,
+  averageChequeCurrency: null,
+  hasParking: false,
+  hasPlayground: false,
+  virtualTourUrl: null,
+  locales: [],
 };
 
 const SUMMARY: ServiceSummaryResponse = {
@@ -50,6 +58,7 @@ const SUMMARY: ServiceSummaryResponse = {
       sharedWithLocationCount: 3,
       rules: [{ dayOfWeek: 1, opensAt: '09:00', closesAt: '23:00' }],
       exceptions: [],
+      scheduleVersion: 4,
     },
   ],
   preparationBands: [
@@ -76,8 +85,20 @@ async function flushMicrotasks(): Promise<void> {
 }
 
 const SCHEDULES: readonly ScheduleSummaryView[] = [
-  { id: 'schedule-1', name: 'Standard hours', acceptsScheduledOrders: true, boundLocationCount: 3 },
-  { id: 'schedule-2', name: 'Ramadan hours', acceptsScheduledOrders: true, boundLocationCount: 1 },
+  {
+    id: 'schedule-1',
+    name: 'Standard hours',
+    acceptsScheduledOrders: true,
+    boundLocationCount: 3,
+    version: 4,
+  },
+  {
+    id: 'schedule-2',
+    name: 'Ramadan hours',
+    acceptsScheduledOrders: true,
+    boundLocationCount: 1,
+    version: 1,
+  },
 ];
 
 describe('LocationDetailPane', () => {
@@ -91,6 +112,7 @@ describe('LocationDetailPane', () => {
     listSchedules: ReturnType<typeof vi.fn>;
     replaceScheduleRules: ReturnType<typeof vi.fn>;
     upsertScheduleException: ReturnType<typeof vi.fn>;
+    deleteScheduleException: ReturnType<typeof vi.fn>;
     bindSchedule: ReturnType<typeof vi.fn>;
     replacePreparationBands: ReturnType<typeof vi.fn>;
   };
@@ -105,6 +127,7 @@ describe('LocationDetailPane', () => {
       listSchedules: vi.fn().mockResolvedValue(SCHEDULES),
       replaceScheduleRules: vi.fn().mockResolvedValue(undefined),
       upsertScheduleException: vi.fn().mockResolvedValue(undefined),
+      deleteScheduleException: vi.fn().mockResolvedValue(5),
       bindSchedule: vi.fn().mockResolvedValue(undefined),
       replacePreparationBands: vi.fn().mockResolvedValue(undefined),
     };
@@ -243,6 +266,161 @@ describe('LocationDetailPane', () => {
     );
   });
 
+  // ------------------------------------------------------------ 10.2b: venue facts
+
+  it('sends sort order and the venue attributes typed into Tab 1', async () => {
+    const editButton = fixture.nativeElement.querySelector('.primary') as HTMLButtonElement;
+    editButton.click();
+    fixture.detectChanges();
+
+    const sortOrderInput = fixture.nativeElement.querySelector(
+      '#place-sort-order',
+    ) as HTMLInputElement;
+    sortOrderInput.value = '4';
+    sortOrderInput.dispatchEvent(new Event('input'));
+
+    const seatsInput = fixture.nativeElement.querySelector('#place-seats') as HTMLInputElement;
+    seatsInput.value = '60';
+    seatsInput.dispatchEvent(new Event('input'));
+
+    const parkingCheckbox = fixture.nativeElement.querySelector(
+      'input[type="checkbox"]',
+    ) as HTMLInputElement;
+    parkingCheckbox.checked = true;
+    parkingCheckbox.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    const saveButton = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('.form__actions button'),
+    ).find((button) => button.textContent?.includes('Save')) as HTMLButtonElement;
+    saveButton.click();
+    await flushMicrotasks();
+
+    expect(api.describePlace).toHaveBeenCalledWith(
+      SCOPE,
+      expect.objectContaining({ sortOrder: 4, seats: 60, hasParking: true }),
+    );
+  });
+
+  it('prefills the venue section and localized-content grid from the loaded profile, and omits a locale left entirely blank', async () => {
+    const described: LocationView = {
+      ...LOCATION,
+      sortOrder: 2,
+      seats: 40,
+      averageChequeAmount: 85000,
+      averageChequeCurrency: 'UZS',
+      hasParking: true,
+      hasPlayground: false,
+      virtualTourUrl: 'https://tour.example/branch',
+      locales: [{ locale: 'ru', displayName: 'Филиал', description: 'Описание' }],
+    };
+    // A fresh `locationId` re-triggers the constructor's own load effect
+    // (the same RouteReuseStrategy re-load the class doc names), which is
+    // simpler here than reconfiguring TestBed a second time.
+    api.profile.mockResolvedValue(described);
+    fixture.componentRef.setInput('locationId', 'location-1-described');
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    const editButton = fixture.nativeElement.querySelector('.primary') as HTMLButtonElement;
+    editButton.click();
+    fixture.detectChanges();
+
+    expect(
+      (fixture.nativeElement.querySelector('#place-sort-order') as HTMLInputElement).value,
+    ).toBe('2');
+    expect((fixture.nativeElement.querySelector('#place-seats') as HTMLInputElement).value).toBe(
+      '40',
+    );
+    const localeInputs = fixture.nativeElement.querySelectorAll(
+      '.locale-row input',
+    ) as NodeListOf<HTMLInputElement>;
+    // ru is the first known locale and comes pre-filled; uz-Latn and en stay blank.
+    expect(localeInputs[0].value).toBe('Филиал');
+    expect(localeInputs[1].value).toBe('Описание');
+
+    const saveButton = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('.form__actions button'),
+    ).find((button) => button.textContent?.includes('Save')) as HTMLButtonElement;
+    saveButton.click();
+    await flushMicrotasks();
+
+    expect(api.describePlace).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        locales: [{ locale: 'ru', displayName: 'Филиал', description: 'Описание' }],
+      }),
+    );
+  });
+
+  /**
+   * Batch 10 finding: seats/average-cheque/virtual-tour-url had no clear
+   * signal of their own, unlike the landmark's `clearLandmark` -- an emptied
+   * field collapsed to an omitted key, which the backend read as "untouched"
+   * and kept the stale value forever while the console reported success.
+   */
+  it('sends explicit clear signals when seats, average cheque and the virtual tour url are emptied and saved', async () => {
+    const described: LocationView = {
+      ...LOCATION,
+      seats: 40,
+      averageChequeAmount: 85000,
+      averageChequeCurrency: 'UZS',
+      virtualTourUrl: 'https://tour.example/branch',
+    };
+    api.profile.mockResolvedValue(described);
+    fixture.componentRef.setInput('locationId', 'location-1-venued');
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    const editButton = fixture.nativeElement.querySelector('.primary') as HTMLButtonElement;
+    editButton.click();
+    fixture.detectChanges();
+
+    const seatsInput = fixture.nativeElement.querySelector('#place-seats') as HTMLInputElement;
+    seatsInput.value = '';
+    seatsInput.dispatchEvent(new Event('input'));
+
+    const averageChequeAmountInput = fixture.nativeElement.querySelector(
+      '#place-average-cheque',
+    ) as HTMLInputElement;
+    averageChequeAmountInput.value = '';
+    averageChequeAmountInput.dispatchEvent(new Event('input'));
+
+    const averageChequeCurrencyInput = fixture.nativeElement.querySelector(
+      '#place-average-cheque-currency',
+    ) as HTMLInputElement;
+    averageChequeCurrencyInput.value = '';
+    averageChequeCurrencyInput.dispatchEvent(new Event('input'));
+
+    const virtualTourUrlInput = fixture.nativeElement.querySelector(
+      '#place-virtual-tour',
+    ) as HTMLInputElement;
+    virtualTourUrlInput.value = '';
+    virtualTourUrlInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    const saveButton = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('.form__actions button'),
+    ).find((button) => button.textContent?.includes('Save')) as HTMLButtonElement;
+    saveButton.click();
+    await flushMicrotasks();
+
+    expect(api.describePlace).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        seats: undefined,
+        clearSeats: true,
+        averageChequeAmount: undefined,
+        averageChequeCurrency: undefined,
+        clearAverageCheque: true,
+        virtualTourUrl: undefined,
+        clearVirtualTourUrl: true,
+      }),
+    );
+  });
+
   it('warns with the shared-location count before saving a shared schedule’s hours, then saves', async () => {
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
     const tabs = fixture.nativeElement.querySelectorAll('.tab');
@@ -343,6 +521,111 @@ describe('LocationDetailPane', () => {
 
     expect(api.upsertScheduleException).not.toHaveBeenCalled();
     expect(fixture.nativeElement.querySelector('[role="alert"]')).toBeTruthy();
+  });
+
+  // Row 10.2c: `ServiceScheduleController.deleteException` closed the gap
+  // where a row taken out of the grid's local draft was hidden rather than
+  // deleted. These two prove the console actually calls it, with the
+  // schedule's own version as `If-Match`.
+
+  it('deletes an exception removed from the grid, using the bound schedule’s version as If-Match', async () => {
+    api.serviceSummary.mockResolvedValueOnce({
+      ...SUMMARY,
+      bindings: [
+        {
+          ...SUMMARY.bindings[0],
+          exceptions: [{ date: '2026-12-31', closedAllDay: true, opensAt: null, closesAt: null }],
+        },
+      ],
+    });
+    const fresh = TestBed.createComponent(LocationDetailPane);
+    fresh.componentRef.setInput('locationId', 'location-1');
+    fresh.detectChanges();
+    await flushMicrotasks();
+    fresh.detectChanges();
+
+    const tabs = fresh.nativeElement.querySelectorAll('.tab');
+    (tabs[1] as HTMLButtonElement).click();
+    fresh.detectChanges();
+    (
+      fresh.nativeElement.querySelector('[data-testid="edit-hours-DELIVERY"]') as HTMLButtonElement
+    ).click();
+    fresh.detectChanges();
+    (
+      fresh.nativeElement.querySelector(
+        '[data-testid="q-schedule-grid-remove-exception"]',
+      ) as HTMLButtonElement
+    ).click();
+    fresh.detectChanges();
+
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    (
+      fresh.nativeElement.querySelector('[data-testid="save-hours"]') as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+
+    expect(api.deleteScheduleException).toHaveBeenCalledWith(SCOPE, 'schedule-1', '2026-12-31', 4);
+    // Re-reads the summary after the save so the grid reflects the delete —
+    // the same refresh every other saveHours path in this suite relies on.
+    expect(api.serviceSummary).toHaveBeenCalledTimes(3);
+    confirmSpy.mockRestore();
+  });
+
+  it('sends the second delete in one save with the version the first delete returned', async () => {
+    api.serviceSummary.mockResolvedValueOnce({
+      ...SUMMARY,
+      bindings: [
+        {
+          ...SUMMARY.bindings[0],
+          exceptions: [
+            { date: '2026-12-25', closedAllDay: true, opensAt: null, closesAt: null },
+            { date: '2026-12-31', closedAllDay: true, opensAt: null, closesAt: null },
+          ],
+        },
+      ],
+    });
+    api.deleteScheduleException.mockResolvedValueOnce(5).mockResolvedValueOnce(6);
+    const fresh = TestBed.createComponent(LocationDetailPane);
+    fresh.componentRef.setInput('locationId', 'location-1');
+    fresh.detectChanges();
+    await flushMicrotasks();
+    fresh.detectChanges();
+
+    const tabs = fresh.nativeElement.querySelectorAll('.tab');
+    (tabs[1] as HTMLButtonElement).click();
+    fresh.detectChanges();
+    (
+      fresh.nativeElement.querySelector('[data-testid="edit-hours-DELIVERY"]') as HTMLButtonElement
+    ).click();
+    fresh.detectChanges();
+    for (const button of Array.from(
+      fresh.nativeElement.querySelectorAll('[data-testid="q-schedule-grid-remove-exception"]'),
+    )) {
+      (button as HTMLButtonElement).click();
+      fresh.detectChanges();
+    }
+
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    (
+      fresh.nativeElement.querySelector('[data-testid="save-hours"]') as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+
+    expect(api.deleteScheduleException).toHaveBeenNthCalledWith(
+      1,
+      SCOPE,
+      'schedule-1',
+      '2026-12-25',
+      4,
+    );
+    expect(api.deleteScheduleException).toHaveBeenNthCalledWith(
+      2,
+      SCOPE,
+      'schedule-1',
+      '2026-12-31',
+      5,
+    );
+    confirmSpy.mockRestore();
   });
 
   it('rebinds a fulfilment mode to a different timetable from the picker', async () => {

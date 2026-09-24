@@ -28,6 +28,21 @@ const CANCELLATION_REASON: ReasonResponse = {
   updatedAt: '2026-08-01T00:00:00Z',
 };
 
+const CANCELLATION_REASON_2: ReasonResponse = {
+  id: 'reason-1b',
+  kind: 'CANCELLATION',
+  systemCategory: 'OUT_OF_STOCK',
+  internalName: 'Дубликат заказа',
+  stockDisposition: 'RELEASE',
+  liabilityParty: 'TENANT',
+  customerRefund: 'FULL',
+  allowedFulfillmentModes: null,
+  customerTexts: { ru: 'Дубликат', 'uz-Latn': '...', en: '...' },
+  status: 'ACTIVE',
+  version: 3,
+  updatedAt: '2026-08-01T00:00:00Z',
+};
+
 const COMPLETION_REASON: ReasonResponse = {
   id: 'reason-2',
   kind: 'COMPLETION',
@@ -93,6 +108,14 @@ const LOCATION_VIEW: LocationView = {
   latitude: null,
   longitude: null,
   coordinateSource: 'NOT_GEOCODED',
+  sortOrder: 0,
+  seats: null,
+  averageChequeAmount: null,
+  averageChequeCurrency: null,
+  hasParking: false,
+  hasPlayground: false,
+  virtualTourUrl: null,
+  locales: [],
 };
 
 class FakeCurrentLocation {
@@ -115,6 +138,7 @@ describe('ReferenceDataPage', () => {
     create: ReturnType<typeof vi.fn>;
     update: ReturnType<typeof vi.fn>;
     archive: ReturnType<typeof vi.fn>;
+    reorder: ReturnType<typeof vi.fn>;
     slaBucketSet: ReturnType<typeof vi.fn>;
   };
   let calendarApi: { get: ReturnType<typeof vi.fn>; setWeekend: ReturnType<typeof vi.fn> };
@@ -130,12 +154,22 @@ describe('ReferenceDataPage', () => {
       list: vi
         .fn()
         .mockImplementation((_scope: LocationScope, kind: string) =>
-          Promise.resolve(kind === 'CANCELLATION' ? [CANCELLATION_REASON] : [COMPLETION_REASON]),
+          Promise.resolve(
+            kind === 'CANCELLATION'
+              ? [CANCELLATION_REASON, CANCELLATION_REASON_2]
+              : [COMPLETION_REASON],
+          ),
         ),
       categories: vi.fn().mockResolvedValue(['OUT_OF_STOCK', 'CUSTOMER_UNREACHABLE']),
       create: vi.fn().mockResolvedValue('reason-3'),
       update: vi.fn().mockResolvedValue(2),
       archive: vi.fn().mockResolvedValue(undefined),
+      reorder: vi
+        .fn()
+        .mockResolvedValue([
+          { ...CANCELLATION_REASON_2, version: 4 },
+          { ...CANCELLATION_REASON, version: 2 },
+        ]),
       slaBucketSet: vi.fn().mockResolvedValue(SLA_BUCKET_SET),
     };
     calendarApi = {
@@ -298,5 +332,66 @@ describe('ReferenceDataPage', () => {
       expect.objectContaining({ internalName: 'Не дозвонились' }),
       1,
     );
+  });
+
+  // Row 10.10a: reasons can be reordered.
+
+  it('moves a reason down and persists the whole new order, with the version sum as If-Match', async () => {
+    (
+      fixture.nativeElement.querySelector(
+        '[data-testid="reason-move-down-CANCELLATION"]',
+      ) as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+
+    // reason-1 is version 1, reason-1b is version 3 -- the sum (4), not the
+    // max (3), is what catches a concurrent edit to either one.
+    expect(api.reorder).toHaveBeenCalledWith(SCOPE, 'CANCELLATION', ['reason-1b', 'reason-1'], 4);
+  });
+
+  it('renders the server’s reordered list, versions already bumped, without a second read', async () => {
+    (
+      fixture.nativeElement.querySelector(
+        '[data-testid="reason-move-down-CANCELLATION"]',
+      ) as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(api.list).toHaveBeenCalledTimes(2); // the initial load only (CANCELLATION + COMPLETION)
+    const rows = Array.from(
+      fixture.nativeElement.querySelectorAll('[data-testid="reason-row-CANCELLATION"]'),
+    ) as HTMLElement[];
+    expect(rows[0].textContent).toContain('Дубликат заказа');
+    expect(rows[1].textContent).toContain('Не дозвонились');
+  });
+
+  it('disables move-up on the first row and move-down on the last row', () => {
+    const rows = Array.from(
+      fixture.nativeElement.querySelectorAll('[data-testid="reason-row-CANCELLATION"]'),
+    ) as HTMLElement[];
+    const firstUp = rows[0].querySelector(
+      '[data-testid="reason-move-up-CANCELLATION"]',
+    ) as HTMLButtonElement;
+    const lastDown = rows[1].querySelector(
+      '[data-testid="reason-move-down-CANCELLATION"]',
+    ) as HTMLButtonElement;
+    expect(firstUp.disabled).toBe(true);
+    expect(lastDown.disabled).toBe(true);
+  });
+
+  it('reloads the list and shows an error when a reorder is refused', async () => {
+    api.reorder.mockRejectedValueOnce(new Error('STALE_VERSION'));
+    (
+      fixture.nativeElement.querySelector(
+        '[data-testid="reason-move-down-CANCELLATION"]',
+      ) as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    // initial CANCELLATION+COMPLETION, then reload() re-reads both kinds.
+    expect(api.list).toHaveBeenCalledTimes(4);
+    expect(fixture.nativeElement.querySelector('[role="alert"]')).toBeTruthy();
   });
 });

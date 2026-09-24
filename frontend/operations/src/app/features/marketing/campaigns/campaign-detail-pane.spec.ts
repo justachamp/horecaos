@@ -8,7 +8,7 @@ import { Auth } from '../../../core/auth/auth';
 import { CurrentBrand } from '../../../core/auth/current-brand';
 import { ApiError, ApiErrorCode } from '../../../core/api/problem-details';
 import { I18n } from '../../../core/i18n/i18n';
-import { CampaignView, MarketingApi } from '../marketing-api';
+import { CampaignView, MarketingApi, RecipientCountsView } from '../marketing-api';
 import { CampaignDetailPane } from './campaign-detail-pane';
 
 const SCOPE: BrandScope = { tenantId: 'tenant-1', brandId: 'brand-1' };
@@ -44,6 +44,7 @@ function campaign(overrides: Partial<CampaignView> = {}): CampaignView {
     blockedCount: 0,
     pausedAt: null,
     scheduledAt: null,
+    haltedReason: null,
     isWired: true,
     createdAt: '2026-09-01T08:00:00Z',
     updatedAt: '2026-09-01T08:00:00Z',
@@ -61,16 +62,29 @@ describe('CampaignDetailPane', () => {
   let fixture: ComponentFixture<CampaignDetailPane>;
   let api: Record<string, ReturnType<typeof vi.fn>>;
 
-  async function render(subject: string, campaignView: CampaignView): Promise<void> {
+  async function render(
+    subject: string,
+    campaignView: CampaignView,
+    counts: RecipientCountsView = {
+      pending: 0,
+      queued: 0,
+      deferred: 0,
+      refused: 0,
+      total: 0,
+      refusedByReason: {},
+    },
+  ): Promise<void> {
     api = {
       getCampaign: vi.fn().mockResolvedValue(campaignView),
       recipients: vi.fn().mockResolvedValue([]),
+      recipientCounts: vi.fn().mockResolvedValue(counts),
       estimate: vi.fn(),
       submit: vi.fn(),
       approve: vi.fn(),
       launch: vi.fn(),
       halt: vi.fn(),
       resume: vi.fn(),
+      reschedule: vi.fn(),
     };
     await TestBed.configureTestingModule({
       imports: [CampaignDetailPane],
@@ -194,5 +208,122 @@ describe('CampaignDetailPane', () => {
     expect(
       host.querySelector('[data-testid="campaign-scheduled-at-value"]')?.textContent,
     ).toContain('2026-10-01');
+  });
+
+  // ------------------------------------------------- row 6.4: halted scheduled send
+
+  it('6.4: shows no halted banner on a campaign that is armed and waiting, not halted', async () => {
+    await render(
+      OTHER_ID,
+      campaign({ status: 'SCHEDULED', scheduledAt: '2026-10-01T10:00:00Z', haltedReason: null }),
+    );
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(host.querySelector('[data-testid="campaign-halted-banner"]')).toBeNull();
+  });
+
+  it('6.4: surfaces haltedReason and a re-schedule affordance for a disarmed scheduled send', async () => {
+    await render(
+      OTHER_ID,
+      campaign({
+        status: 'SCHEDULED',
+        scheduledAt: null,
+        haltedReason: 'No ADR 0020 delivery path is wired for SMS yet',
+      }),
+    );
+    const host = fixture.nativeElement as HTMLElement;
+
+    const banner = host.querySelector('[data-testid="campaign-halted-banner"]');
+    expect(banner).not.toBeNull();
+    expect(banner?.textContent).toContain('No ADR 0020 delivery path is wired for SMS yet');
+    expect(host.querySelector('[data-testid="reschedule-action"]')).not.toBeNull();
+  });
+
+  it('6.4: re-schedules a halted send for a new future moment and reloads the campaign', async () => {
+    await render(
+      OTHER_ID,
+      campaign({
+        status: 'SCHEDULED',
+        scheduledAt: null,
+        haltedReason: 'channel unwired at due moment',
+      }),
+    );
+    api['reschedule'] = vi.fn().mockResolvedValue(undefined);
+    api['getCampaign'] = vi
+      .fn()
+      .mockResolvedValue(
+        campaign({ status: 'SCHEDULED', scheduledAt: '2026-10-05T09:00:00Z', haltedReason: null }),
+      );
+    const host = fixture.nativeElement as HTMLElement;
+
+    (host.querySelector('[data-testid="reschedule-action"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    const input = host.querySelector('[data-testid="reschedule-at-input"]') as HTMLInputElement;
+    input.value = '2026-10-05T09:00';
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    (host.querySelector('[data-testid="reschedule-confirm"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(api['reschedule']).toHaveBeenCalledWith(
+      SCOPE,
+      'campaign-1',
+      new Date('2026-10-05T09:00').toISOString(),
+    );
+    expect(host.querySelector('[data-testid="campaign-halted-banner"]')).toBeNull();
+    expect(
+      host.querySelector('[data-testid="campaign-scheduled-at-value"]')?.textContent,
+    ).toContain('2026-10-05');
+  });
+
+  it('6.4: a reschedule refusal is shown inside the dialog rather than silently dropped', async () => {
+    await render(
+      OTHER_ID,
+      campaign({
+        status: 'SCHEDULED',
+        scheduledAt: null,
+        haltedReason: 'channel unwired at due moment',
+      }),
+    );
+    api['reschedule'] = vi
+      .fn()
+      .mockRejectedValue(new ApiError(ApiErrorCode.RESOURCE_CONFLICT, 409, { status: 409 }, null));
+    const host = fixture.nativeElement as HTMLElement;
+
+    (host.querySelector('[data-testid="reschedule-action"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    const input = host.querySelector('[data-testid="reschedule-at-input"]') as HTMLInputElement;
+    input.value = '2026-10-05T09:00';
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    (host.querySelector('[data-testid="reschedule-confirm"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(host.querySelector('.dialog .error-band')).not.toBeNull();
+  });
+
+  // --------------------------------------------- row 6.4: history/statistics view
+
+  it('6.4: renders the campaign history/statistics view from recipientCounts, including the refused-by-reason breakdown', async () => {
+    await render(OTHER_ID, campaign({ status: 'SENT' }), {
+      pending: 1,
+      queued: 40,
+      deferred: 2,
+      refused: 3,
+      total: 46,
+      refusedByReason: { SUPPRESSED: 2, CONSENT_WITHHELD: 1 },
+    });
+    const host = fixture.nativeElement as HTMLElement;
+
+    const stats = host.querySelector('[data-testid="campaign-stats"]') as HTMLElement;
+    expect(stats.textContent).toContain('40');
+    expect(stats.textContent).toContain('46');
+    expect(stats.textContent).toContain('Suppressed');
+    expect(stats.textContent).toContain('2');
+    expect(stats.textContent).toContain('No marketing consent on file');
   });
 });

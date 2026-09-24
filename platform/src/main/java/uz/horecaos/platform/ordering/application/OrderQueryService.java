@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
@@ -17,6 +18,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.fulfillment.api.ActiveCourierAssignmentsPort;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.protection.FieldProtection;
@@ -28,6 +30,7 @@ import uz.horecaos.platform.ordering.domain.DeliveryDestination;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderProcessStore;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore.CustomerSnapshotRow;
+import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore.OrderCommentPresetRow;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore.OrderCountsRow;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore.OrderLineRow;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore.OrderModifierRow;
@@ -70,6 +73,7 @@ public class OrderQueryService implements OrderCountsQuery {
     private final JdbcOrderStore orders;
     private final JdbcOrderProcessStore processes;
     private final PaymentIntentPort payments;
+    private final ActiveCourierAssignmentsPort courierAssignments;
     private final FieldProtection protection;
     private final ObjectMapper objectMapper;
     private final AuditRecorder audit;
@@ -79,6 +83,7 @@ public class OrderQueryService implements OrderCountsQuery {
             JdbcOrderStore orders,
             JdbcOrderProcessStore processes,
             PaymentIntentPort payments,
+            ActiveCourierAssignmentsPort courierAssignments,
             FieldProtection protection,
             ObjectMapper objectMapper,
             AuditRecorder audit,
@@ -86,6 +91,7 @@ public class OrderQueryService implements OrderCountsQuery {
         this.orders = orders;
         this.processes = processes;
         this.payments = payments;
+        this.courierAssignments = courierAssignments;
         this.protection = protection;
         this.objectMapper = objectMapper;
         this.audit = audit;
@@ -150,10 +156,17 @@ public class OrderQueryService implements OrderCountsQuery {
             List<OrderLineRow> lines = orders.lines(tenantId, orderId, revision);
             Map<UUID, List<OrderModifierRow>> modifiers = orders.lineModifiers(tenantId, orderId).stream()
                     .collect(Collectors.groupingBy(OrderModifierRow::orderLineId));
+            // Row 2.1b: the presets a line was checked out carrying, beside its
+            // modifiers — the order detail line renders both.
+            Map<UUID, List<OrderCommentPresetRow>> commentPresets =
+                    orders.lineCommentPresets(tenantId, orderId).stream()
+                            .collect(Collectors.groupingBy(OrderCommentPresetRow::orderLineId));
 
             List<DetailLine> detailLines = new ArrayList<>(lines.size());
-            lines.forEach(
-                    line -> detailLines.add(new DetailLine(line, modifiers.getOrDefault(line.lineId(), List.of()))));
+            lines.forEach(line -> detailLines.add(new DetailLine(
+                    line,
+                    modifiers.getOrDefault(line.lineId(), List.of()),
+                    commentPresets.getOrDefault(line.lineId(), List.of()))));
 
             return new OrderDetail(order, detailLines, warnings(), customerDetail(tenantId, order));
         });
@@ -401,7 +414,30 @@ public class OrderQueryService implements OrderCountsQuery {
             before = orders.locationOrderCursor(query.tenantId(), query.brandId(), query.locationId(), cursorOrderId)
                     .orElseThrow(UnknownCursorException::new);
         }
-        return orders.listForLocation(query, before, cursorOrderId, limit);
+        List<JdbcOrderStore.OrderBoardRow> rows = orders.listForLocation(query, before, cursorOrderId, limit);
+        return withCourierAssignments(query.tenantId(), rows);
+    }
+
+    /**
+     * Fills in {@link JdbcOrderStore.OrderBoardRow#courierId()} for a page of
+     * board rows (gap map row 1.1): one round trip through {@link
+     * ActiveCourierAssignmentsPort} rather than {@code JdbcOrderStore} joining
+     * {@code fulfillment.shipments} directly, which ADR 0102 permits only for
+     * the board's own filter predicates, not for a second field on every row.
+     */
+    private List<JdbcOrderStore.OrderBoardRow> withCourierAssignments(
+            UUID tenantId, List<JdbcOrderStore.OrderBoardRow> rows) {
+        if (rows.isEmpty()) {
+            return rows;
+        }
+        Set<UUID> orderIds = rows.stream().map(row -> row.order().orderId()).collect(Collectors.toSet());
+        Map<UUID, UUID> courierByOrder = courierAssignments.assignedCouriers(tenantId, orderIds);
+        if (courierByOrder.isEmpty()) {
+            return rows;
+        }
+        return rows.stream()
+                .map(row -> row.withCourierId(courierByOrder.get(row.order().orderId())))
+                .toList();
     }
 
     /**
@@ -453,6 +489,19 @@ public class OrderQueryService implements OrderCountsQuery {
         }
     }
 
+    /**
+     * The in-house courier carrying this order's active shipment right now
+     * (gap map row 1.1e's detail-screen counterpart to {@link #forLocation}'s
+     * board-wide read), or null for none. The detail read's own {@code
+     * actions[]} needs this single-order answer too, so {@code
+     * OrderActionsPolicy}'s {@code ASSIGN_COURIER} branch never disagrees
+     * with the board about whether an order's plan is actually unassigned.
+     */
+    @Transactional(readOnly = true)
+    public @Nullable UUID courierIdFor(UUID tenantId, UUID orderId) {
+        return courierAssignments.assignedCouriers(tenantId, Set.of(orderId)).get(orderId);
+    }
+
     /** The transition log: the answer to "why is this order in this state". */
     @Transactional(readOnly = true)
     public List<TransitionRow> timeline(UUID tenantId, UUID orderId) {
@@ -495,7 +544,8 @@ public class OrderQueryService implements OrderCountsQuery {
 
     public record OrderDetail(OrderRow order, List<DetailLine> lines, List<String> warnings, CustomerDetail customer) {}
 
-    public record DetailLine(OrderLineRow line, List<OrderModifierRow> modifiers) {}
+    public record DetailLine(
+            OrderLineRow line, List<OrderModifierRow> modifiers, List<OrderCommentPresetRow> commentPresets) {}
 
     /**
      * The customer block an ordinary detail read may show (orders.md

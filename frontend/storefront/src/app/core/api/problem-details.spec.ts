@@ -40,7 +40,10 @@ describe('toHorecaOSApiError', () => {
 
   it('falls back to title when detail is absent, and to statusText when both are', () => {
     const withTitle = toHorecaOSApiError(
-      new HttpErrorResponse({ status: 400, error: { status: 400, code: 'VALIDATION_FAILED', title: 'Bad input' } }),
+      new HttpErrorResponse({
+        status: 400,
+        error: { status: 400, code: 'VALIDATION_FAILED', title: 'Bad input' },
+      }),
     );
     expect(withTitle.detail).toBe('Bad input');
 
@@ -109,7 +112,11 @@ describe('toHorecaOSApiError', () => {
     expect(noCodeOrTitle.code).toBe('INTERNAL_ERROR');
 
     const noStatusField = toHorecaOSApiError(
-      new HttpErrorResponse({ status: 400, error: { code: 'VALIDATION_FAILED' }, statusText: 'Bad Request' }),
+      new HttpErrorResponse({
+        status: 400,
+        error: { code: 'VALIDATION_FAILED' },
+        statusText: 'Bad Request',
+      }),
     );
     expect(noStatusField.code).toBe('INTERNAL_ERROR');
     expect(noStatusField.status).toBe(400);
@@ -118,9 +125,9 @@ describe('toHorecaOSApiError', () => {
 
 describe('isUnauthenticated / isSessionExpired / isNotFound', () => {
   it('isUnauthenticated is true for status 401, for UNAUTHENTICATED, and for SESSION_EXPIRED', () => {
-    expect(isUnauthenticated(new HorecaOSApiError({ status: 401, code: 'INTERNAL_ERROR', detail: '' }))).toBe(
-      true,
-    );
+    expect(
+      isUnauthenticated(new HorecaOSApiError({ status: 401, code: 'INTERNAL_ERROR', detail: '' })),
+    ).toBe(true);
     expect(
       isUnauthenticated(new HorecaOSApiError({ status: 200, code: 'UNAUTHENTICATED', detail: '' })),
     ).toBe(true);
@@ -131,7 +138,9 @@ describe('isUnauthenticated / isSessionExpired / isNotFound', () => {
 
   it('isUnauthenticated is false for an unrelated error, and for a non-HorecaOSApiError', () => {
     expect(
-      isUnauthenticated(new HorecaOSApiError({ status: 404, code: 'RESOURCE_NOT_FOUND', detail: '' })),
+      isUnauthenticated(
+        new HorecaOSApiError({ status: 404, code: 'RESOURCE_NOT_FOUND', detail: '' }),
+      ),
     ).toBe(false);
     expect(isUnauthenticated(new Error('plain'))).toBe(false);
     expect(isUnauthenticated(null)).toBe(false);
@@ -141,9 +150,9 @@ describe('isUnauthenticated / isSessionExpired / isNotFound', () => {
     expect(
       isSessionExpired(new HorecaOSApiError({ status: 401, code: 'SESSION_EXPIRED', detail: '' })),
     ).toBe(true);
-    expect(isSessionExpired(new HorecaOSApiError({ status: 401, code: 'INTERNAL_ERROR', detail: '' }))).toBe(
-      false,
-    );
+    expect(
+      isSessionExpired(new HorecaOSApiError({ status: 401, code: 'INTERNAL_ERROR', detail: '' })),
+    ).toBe(false);
     expect(
       isSessionExpired(new HorecaOSApiError({ status: 401, code: 'UNAUTHENTICATED', detail: '' })),
     ).toBe(false);
@@ -171,7 +180,11 @@ describe('isUnauthenticated / isSessionExpired / isNotFound', () => {
     const expired = new HorecaOSApiError({ status: 401, code: 'SESSION_EXPIRED', detail: '' });
     expect(isNotFound(expired)).toBe(false);
 
-    const unauthenticated401 = new HorecaOSApiError({ status: 401, code: 'INTERNAL_ERROR', detail: '' });
+    const unauthenticated401 = new HorecaOSApiError({
+      status: 401,
+      code: 'INTERNAL_ERROR',
+      detail: '',
+    });
     expect(isNotFound(unauthenticated401)).toBe(false);
   });
 
@@ -249,6 +262,8 @@ describe('reasonMessageKey', () => {
     ['OUTSIDE_SERVICE_HOURS', 'errors.reason.outsideHours'],
     ['NO_LIVE_MENU', 'errors.reason.noLiveMenu'],
     ['AT_CAPACITY', 'errors.reason.atCapacity'],
+    ['ITEM_OUT_OF_SALE_WINDOW', 'errors.reason.itemOutOfSaleWindow'],
+    ['COMMENT_PRESET_NOT_OFFERED', 'errors.reason.presetNotOffered'],
   ] as const)('maps %s to %s', (reason, key) => {
     expect(reasonMessageKey(reason)).toBe(key);
   });

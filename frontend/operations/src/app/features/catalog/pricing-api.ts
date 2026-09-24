@@ -1,9 +1,10 @@
 import { Injectable, inject } from '@angular/core';
-import { Observable, map } from 'rxjs';
+import { Observable, catchError, map, of, throwError } from 'rxjs';
 
 import { ApiClient } from '../../core/api/api-client';
 import { BrandScope, pricingPaths } from '../../core/api/catalog-paths';
 import { command } from '../../core/api/idempotency';
+import { ApiError } from '../../core/api/problem-details';
 import {
   BulkPriceChangeItem,
   BulkPriceChangeReport,
@@ -156,8 +157,8 @@ export class PricingApi {
 
   /**
    * Sets the brand's VAT rate for a jurisdiction (IA 4.8a's tax-profile
-   * screen). Basis points: 1200 is 12%. There is no read endpoint yet — the
-   * response is the only place a caller learns what is now in force.
+   * screen). Basis points: 1200 is 12%. The response is the profile now in
+   * force, the same shape {@link taxProfile} reads back.
    */
   setTaxProfile(
     scope: BrandScope,
@@ -167,6 +168,27 @@ export class PricingApi {
     return this.api.put<SetTaxProfileRequest, TaxProfile>(
       pricingPaths.taxProfile(scope, jurisdictionCode),
       command(request),
+    );
+  }
+
+  /**
+   * Row 4.8a — every jurisdiction this brand currently has a VAT rate in
+   * force for, read before the edit form opens so an operator never
+   * overwrites one blind.
+   */
+  taxProfiles(scope: BrandScope): Observable<readonly TaxProfile[]> {
+    return this.api
+      .get<readonly TaxProfile[]>(pricingPaths.taxProfiles(scope))
+      .pipe(map((result) => result.value));
+  }
+
+  /** Row 4.8a — the single in-force profile for one jurisdiction, or `null` when none is set yet. */
+  taxProfile(scope: BrandScope, jurisdictionCode: string): Observable<TaxProfile | null> {
+    return this.api.get<TaxProfile>(pricingPaths.taxProfile(scope, jurisdictionCode)).pipe(
+      map((result) => result.value),
+      catchError((error: unknown) =>
+        error instanceof ApiError && error.status === 404 ? of(null) : throwError(() => error),
+      ),
     );
   }
 }

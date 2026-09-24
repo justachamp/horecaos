@@ -119,7 +119,8 @@ public class LocationServiceOperationsController {
                                     entry.getValue().closedAllDay(),
                                     entry.getValue().opensAt(),
                                     entry.getValue().closesAt()))
-                            .toList())));
+                            .toList(),
+                    schedule.version())));
         }
 
         List<BandResponse> bands = schedules.preparationBands(tenantId, locationId).stream()
@@ -257,7 +258,13 @@ public class LocationServiceOperationsController {
             List<ModeBindingResponse> bindings,
             List<BandResponse> preparationBands) {}
 
-    /** One fulfilment mode's bound timetable, named and with its full grid, read-only. */
+    /**
+     * One fulfilment mode's bound timetable, named and with its full grid, read-only.
+     *
+     * @param scheduleVersion the schedule's own version — the {@code If-Match}
+     *                        token {@code ServiceScheduleController#deleteException}
+     *                        needs, since a dated exception carries none of its own
+     */
     public record ModeBindingResponse(
             FulfillmentMode fulfillmentMode,
             UUID scheduleId,
@@ -265,7 +272,8 @@ public class LocationServiceOperationsController {
             boolean acceptsScheduledOrders,
             long sharedWithLocationCount,
             List<RuleResponse> rules,
-            List<ExceptionResponse> exceptions) {}
+            List<ExceptionResponse> exceptions,
+            int scheduleVersion) {}
 
     public record RuleResponse(int dayOfWeek, LocalTime opensAt, LocalTime closesAt) {}
 

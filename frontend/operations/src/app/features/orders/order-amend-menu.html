@@ -57,6 +57,22 @@
     </li>
   </ul>
 
+  <!-- wave 10 financial commands (rows 1.2c/2.1d) — REMOVE_LINES is deliberately absent, see the class doc. -->
+  <ul class="amend-menu__list amend-menu__list--financial">
+    @for (type of financialCommands; track type) {
+      <li>
+        <button
+          type="button"
+          class="amend-menu__item q-body-sm"
+          (click)="select.emit(type)"
+          [attr.data-testid]="'order-amend-menu-' + type"
+        >
+          {{ financialCommandLabelKey(type) | t }}
+        </button>
+      </li>
+    }
+  </ul>
+
   <ng-container qModalActions>
     <button type="button" class="amend-menu__dismiss q-body-sm" (click)="dismiss.emit()">
       {{ 'orders.dialog.dismiss' | t }}

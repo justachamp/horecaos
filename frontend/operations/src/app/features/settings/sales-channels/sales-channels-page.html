@@ -177,6 +177,14 @@
               }}
             </td>
             <td class="q-body-sm actions">
+              <a
+                [routerLink]="['/settings/channel-setup', channel.id]"
+                class="q-body-sm link"
+                (click)="$event.stopPropagation()"
+                data-testid="channel-setup-link"
+              >
+                {{ 'settings.salesChannels.setup.action' | t }}
+              </a>
               <button
                 type="button"
                 class="q-body-sm link"

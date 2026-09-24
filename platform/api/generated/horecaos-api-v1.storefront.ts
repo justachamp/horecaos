@@ -75,6 +75,7 @@ export interface BalanceResponse {
 }
 
 export interface CartLineResponse {
+  commentPresetCodes?: Array<string>;
   hasCustomerNote?: boolean;
   lineKey?: string;
   quantity?: number;
@@ -118,6 +119,13 @@ export interface CheckoutResponse {
   status?: string;
   version?: number;
   warnings?: Array<string>;
+}
+
+export interface CommentPresetOption {
+  code?: string;
+  labelEn?: string;
+  labelRu?: string;
+  labelUz?: string;
 }
 
 export interface ContactPointSummary {
@@ -233,6 +241,12 @@ export interface GuestBillResponse {
   totalMinor?: number;
 }
 
+export interface HostnameLookupView {
+  channelId?: string;
+  tenantId?: string;
+  verified?: boolean;
+}
+
 export interface LocationProfile {
   addressLine?: string;
   city?: string;
@@ -283,6 +297,7 @@ export interface MenuModifierOption {
 
 export interface MenuProduct {
   code?: string;
+  commentPresets?: Array<CommentPresetOption>;
   description?: string;
   imageUrls?: Array<string>;
   mediaAssetIds?: Array<string>;
@@ -295,6 +310,7 @@ export interface MenuProduct {
 export interface MenuVariant {
   amountMinor?: number;
   isDefault?: boolean;
+  onSaleNow?: boolean;
   orderable?: boolean;
   sku?: string;
   unitCode?: string;
@@ -360,6 +376,13 @@ export interface PageStorefrontOrderingControllerOrderSummaryResponse {
 export interface PageStorefrontReviewControllerReviewResponse {
   items?: Array<StorefrontReviewControllerReviewResponse>;
   nextCursor?: string;
+}
+
+export interface PageView {
+  body?: string;
+  locale?: string;
+  slug?: string;
+  version?: number;
 }
 
 export interface PaymentMethodsResponse {
@@ -435,6 +458,7 @@ export interface ProfileResponse {
 }
 
 export interface PutLineRequest {
+  commentPresetCodes?: Array<string>;
   customerNote?: string;
   modifierOptionIds?: Array<string>;
   quantity?: number;
@@ -527,6 +551,12 @@ export interface SocialLinkResponse {
   linkId?: string;
   platform?: string;
   url?: string;
+}
+
+export interface StorefrontChannelSetupControllerPresentationView {
+  ogImageAssetId?: string;
+  seoDescription?: string;
+  seoTitle?: string;
 }
 
 export interface StorefrontCustomerControllerAddressResponse {
@@ -628,6 +658,7 @@ export interface TermsView {
 }
 
 export interface Operations {
+  "resolve_1": { method: "GET"; path: "/api/v1/storefront/channel-hostnames/{hostname}"; request: { parameters: { path: { hostname: string } } }; responses: { "200": HostnameLookupView } };
   "exchange": { method: "POST"; path: "/api/v1/storefront/dine-in/qr/token-exchanges"; request: { parameters: Record<string, never>; body: ExchangeRequest }; responses: { "200": AdmissionResponse } };
   "bill": { method: "GET"; path: "/api/v1/storefront/dine-in/sessions/{sessionId}"; request: { parameters: { header: { "X-Dine-In-Token": string }; path: { sessionId: string } } }; responses: { "200": GuestBillResponse } };
   "requestBill": { method: "POST"; path: "/api/v1/storefront/dine-in/sessions/{sessionId}/bill-requests"; request: { parameters: { header: { "X-Dine-In-Token": string }; path: { sessionId: string } } }; responses: { "200": GuestBillResponse } };
@@ -690,6 +721,8 @@ export interface Operations {
   "current": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/terms"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { brandName: string; locale: string } } }; responses: { "200": TermsView } };
   "accept": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/terms/accept"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: AcceptRequest }; responses: { "200": AcceptResponse } };
   "acceptanceStatus": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/terms/acceptance-status"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { brandName: string; locale: string } } }; responses: { "200": AcceptanceStatusView } };
+  "page": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/channels/{channel}/pages/{slug}"; request: { parameters: { path: { channel: string; slug: string; tenantId: string }; query: { locale: string } } }; responses: { "200": PageView } };
+  "presentation": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/channels/{channel}/presentation"; request: { parameters: { path: { channel: string; tenantId: string } } }; responses: { "200": StorefrontChannelSetupControllerPresentationView } };
   "image": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/media/{assetId}"; request: { parameters: { path: { assetId: string; tenantId: string } } }; responses: { "200": unknown } };
 }
 

@@ -268,7 +268,9 @@
     "modifiersTitle": "Customize",
     "modifierRequired": "Required",
     "modifierOption": "Option",
-    "modifiersIncomplete": "Choose the required options above before adding to cart."
+    "modifiersIncomplete": "Choose the required options above before adding to cart.",
+    "presetsTitle": "Comments",
+    "outOfSaleWindow": "This item is not on sale right now."
   },
   "terms": {
     "agreementTitle": "Public offer agreement",
@@ -277,6 +279,16 @@
     "mustAcceptNotice": "Our terms of service have been updated. Please review and accept them to continue.",
     "iAgree": "I agree",
     "acceptError": "Something went wrong. Please try again."
+  },
+  "pages": {
+    "notFound": "This page is not available.",
+    "loadError": "Could not load this page.",
+    "slug": {
+      "about": "About",
+      "contacts": "Contacts",
+      "deliveryTerms": "Delivery terms",
+      "privacyOffer": "Privacy / offer"
+    }
   },
   "action": {
     "yourAddress": "Your address",
@@ -326,7 +338,9 @@
       "closed": "This branch is closed right now.",
       "outsideHours": "This branch is outside its opening hours.",
       "noLiveMenu": "No menu is available right now.",
-      "atCapacity": "The kitchen is at capacity. Please try again shortly."
+      "atCapacity": "The kitchen is at capacity. Please try again shortly.",
+      "itemOutOfSaleWindow": "This item is not on sale right now.",
+      "presetNotOffered": "That comment is no longer offered for this item."
     }
   },
   "money": {

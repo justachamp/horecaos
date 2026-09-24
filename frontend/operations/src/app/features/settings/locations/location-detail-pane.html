@@ -97,7 +97,59 @@
           <dt class="q-caption">{{ 'settings.locations.field.landmark' | t }}</dt>
           <dd class="q-body">{{ location.landmark ?? '—' }}</dd>
         </div>
+        <div class="field">
+          <dt class="q-caption">{{ 'settings.locations.field.sortOrder' | t }}</dt>
+          <dd class="q-body">{{ location.sortOrder }}</dd>
+        </div>
+        <div class="field">
+          <dt class="q-caption">{{ 'settings.locations.field.seats' | t }}</dt>
+          <dd class="q-body">{{ location.seats ?? '—' }}</dd>
+        </div>
+        <div class="field">
+          <dt class="q-caption">{{ 'settings.locations.field.averageCheque' | t }}</dt>
+          <dd class="q-body">
+            @if (location.averageChequeAmount != null) {
+              {{ location.averageChequeAmount }} {{ location.averageChequeCurrency }}
+            } @else {
+              —
+            }
+          </dd>
+        </div>
+        <div class="field">
+          <dt class="q-caption">{{ 'settings.locations.field.hasParking' | t }}</dt>
+          <dd class="q-body">
+            {{ (location.hasParking ? 'settings.locations.field.yes' : 'settings.locations.field.no') | t }}
+          </dd>
+        </div>
+        <div class="field">
+          <dt class="q-caption">{{ 'settings.locations.field.hasPlayground' | t }}</dt>
+          <dd class="q-body">
+            {{ (location.hasPlayground ? 'settings.locations.field.yes' : 'settings.locations.field.no') | t }}
+          </dd>
+        </div>
+        <div class="field">
+          <dt class="q-caption">{{ 'settings.locations.field.virtualTourUrl' | t }}</dt>
+          <dd class="q-body">
+            @if (location.virtualTourUrl) {
+              <a [href]="location.virtualTourUrl" target="_blank" rel="noopener">{{ location.virtualTourUrl }}</a>
+            } @else {
+              —
+            }
+          </dd>
+        </div>
       </dl>
+
+      @if (location.locales.length > 0) {
+        <h3 class="q-subhead">{{ 'settings.locations.content.title' | t }}</h3>
+        <dl class="fields">
+          @for (entry of location.locales; track entry.locale) {
+            <div class="field">
+              <dt class="q-caption">{{ localeLabel(entry.locale) }}</dt>
+              <dd class="q-body">{{ entry.displayName ?? '—' }}</dd>
+            </div>
+          }
+        </dl>
+      }
 
       @if (!editingPlace()) {
         <button type="button" class="q-body primary" (click)="startEditingPlace()">
@@ -165,6 +217,117 @@
             (input)="draftLandmark.set($any($event.target).value)"
             [disabled]="placeSaving()"
           />
+
+          <h3 class="q-subhead">{{ 'settings.locations.venue.title' | t }}</h3>
+
+          <label class="q-caption" for="place-sort-order">{{
+            'settings.locations.field.sortOrder' | t
+          }}</label>
+          <input
+            id="place-sort-order"
+            class="q-body field"
+            type="number"
+            [value]="draftSortOrder()"
+            (input)="draftSortOrder.set($any($event.target).valueAsNumber || 0)"
+            [disabled]="placeSaving()"
+          />
+
+          <label class="q-caption" for="place-seats">{{ 'settings.locations.field.seats' | t }}</label>
+          <input
+            id="place-seats"
+            class="q-body field"
+            type="number"
+            min="0"
+            [value]="draftSeats()"
+            (input)="draftSeats.set($any($event.target).value)"
+            [disabled]="placeSaving()"
+          />
+
+          <label class="q-caption" for="place-average-cheque">{{
+            'settings.locations.field.averageCheque' | t
+          }}</label>
+          <input
+            id="place-average-cheque"
+            class="q-body field"
+            type="number"
+            min="0"
+            [value]="draftAverageChequeAmount()"
+            (input)="draftAverageChequeAmount.set($any($event.target).value)"
+            [disabled]="placeSaving()"
+          />
+
+          <label class="q-caption" for="place-average-cheque-currency">{{
+            'settings.locations.field.averageChequeCurrency' | t
+          }}</label>
+          <input
+            id="place-average-cheque-currency"
+            class="q-body field"
+            type="text"
+            maxlength="3"
+            placeholder="UZS"
+            [value]="draftAverageChequeCurrency()"
+            (input)="draftAverageChequeCurrency.set($any($event.target).value)"
+            [disabled]="placeSaving()"
+          />
+
+          <label class="q-body">
+            <input
+              type="checkbox"
+              [checked]="draftHasParking()"
+              (change)="draftHasParking.set($any($event.target).checked)"
+              [disabled]="placeSaving()"
+            />
+            {{ 'settings.locations.field.hasParking' | t }}
+          </label>
+
+          <label class="q-body">
+            <input
+              type="checkbox"
+              [checked]="draftHasPlayground()"
+              (change)="draftHasPlayground.set($any($event.target).checked)"
+              [disabled]="placeSaving()"
+            />
+            {{ 'settings.locations.field.hasPlayground' | t }}
+          </label>
+
+          <label class="q-caption" for="place-virtual-tour">{{
+            'settings.locations.field.virtualTourUrl' | t
+          }}</label>
+          <input
+            id="place-virtual-tour"
+            class="q-body field"
+            type="text"
+            placeholder="https://"
+            [value]="draftVirtualTourUrl()"
+            (input)="draftVirtualTourUrl.set($any($event.target).value)"
+            [disabled]="placeSaving()"
+          />
+
+          <h3 class="q-subhead">{{ 'settings.locations.content.title' | t }}</h3>
+
+          @for (row of draftLocaleContent(); track row.locale) {
+            <fieldset class="locale-row">
+              <legend class="q-caption">{{ localeLabel(row.locale) }}</legend>
+              <input
+                class="q-body field"
+                type="text"
+                [attr.aria-label]="'settings.locations.content.displayName' | t"
+                [placeholder]="'settings.locations.content.displayName' | t"
+                [value]="row.displayName"
+                (input)="setLocaleDisplayName(row.locale, $any($event.target).value)"
+                [disabled]="placeSaving()"
+              />
+              <input
+                class="q-body field"
+                type="text"
+                [attr.aria-label]="'settings.locations.content.description' | t"
+                [placeholder]="'settings.locations.content.description' | t"
+                [value]="row.description"
+                (input)="setLocaleDescription(row.locale, $any($event.target).value)"
+                [disabled]="placeSaving()"
+              />
+            </fieldset>
+          }
 
           @if (placeError(); as message) {
             <p class="q-body-sm error" role="alert">{{ message }}</p>

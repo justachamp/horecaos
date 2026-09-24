@@ -525,15 +525,17 @@ class OrderActionsPolicyTests {
     /**
      * {@link OrderActionCode}'s widened set named four routes that did not
      * exist from an order when wave P05 declared them. {@code COMPLETE} is
-     * wired now (wave P09, gap map {@code 1.2j}); {@code RESOLVE} still needs
+     * wired (wave P09, gap map {@code 1.2j}); {@code ASSIGN_COURIER} is wired
+     * too as of this wave (gap map {@code 1.1e}) — the four-argument {@code
+     * availableFor} overload emits it, and the console opens the order to
+     * reach the existing assign control there. {@code RESOLVE} still needs
      * per-amendment state {@code availableFor} does not carry, and {@code
-     * ASSIGN_COURIER}/{@code ISSUE_INVOICE} still have no endpoint at all
-     * (gap map {@code P11}/{@code P12}). This switch is exhaustive on purpose:
-     * adding a ninth {@link OrderActionCode} constant without adding a branch
-     * here fails to <em>compile</em>, so a future change cannot silently start
-     * emitting a code from {@link OrderActionsPolicy#availableFor} without
-     * this test being forced to take a position on whether that code has a
-     * real route.
+     * ISSUE_INVOICE} still has no endpoint at all (gap map {@code P12}). This
+     * switch is exhaustive on purpose: adding a ninth {@link OrderActionCode}
+     * constant without adding a branch here fails to <em>compile</em>, so a
+     * future change cannot silently start emitting a code from {@link
+     * OrderActionsPolicy#availableFor} without this test being forced to take
+     * a position on whether that code has a real route.
      *
      * <p>{@code AMEND} answers {@code true} here — its route ({@code POST
      * .../amendments}) genuinely exists and its gate is built, and as of wave
@@ -551,7 +553,8 @@ class OrderActionsPolicyTests {
             case AMEND -> true; // POST .../amendments
             case OVERRIDE -> true; // POST .../state-overrides (ADR 0110, wave P41)
             case COMPLETE -> true; // POST .../completion (wave P09)
-            case RESOLVE, ASSIGN_COURIER, ISSUE_INVOICE -> false;
+            case ASSIGN_COURIER -> true; // DispatchController .../dispatch/plans/{id}/assign (gap map 1.1e)
+            case RESOLVE, ISSUE_INVOICE -> false;
         };
     }
 
@@ -565,13 +568,19 @@ class OrderActionsPolicyTests {
                         OrderActionCode.CANCEL,
                         OrderActionCode.AMEND,
                         OrderActionCode.OVERRIDE,
-                        OrderActionCode.COMPLETE);
+                        OrderActionCode.COMPLETE,
+                        OrderActionCode.ASSIGN_COURIER);
     }
 
     /**
      * The property orders.md §4.2 exists for: {@code availableFor} never
      * offers a code with no endpoint behind it, at any status, mode or grant —
-     * the array cannot lead an operator to a dead end.
+     * the array cannot lead an operator to a dead end. Swept over the
+     * four-argument overload (the maximal case: it only ever adds to the
+     * three-argument form's own result — see {@link
+     * #theFourArgumentOverloadAddsOnlyAssignCourierOnTopOfTheThreeArgumentForm})
+     * so {@code ASSIGN_COURIER} is covered by the same sweep as everything
+     * else.
      */
     @Test
     void theArrayNeverOffersAnActionWithNoRoute() {
@@ -581,12 +590,92 @@ class OrderActionsPolicyTests {
                 // actions for a capability present, so anything offered with less
                 // than the full grant is offered with the full grant too. Sweeping
                 // the maximum is exhaustive for "is this code ever emitted at all".
-                for (OrderAction action : OrderActionsPolicy.availableFor(status, mode, ALL_ACTION_CAPS)) {
+                for (OrderAction action :
+                        OrderActionsPolicy.availableFor(status, mode, ALL_ACTION_CAPS_WITH_COURIER_ASSIGN, true)) {
                     assertThat(hasRealRouteToday(action.code()))
                             .as("%s offered at %s/%s must have a real route", action.code(), status, mode)
                             .isTrue();
                 }
             }
+        }
+    }
+
+    // -------------------------------------------------- assign courier (gap map 1.1e)
+
+    private static final Set<Capability> ALL_ACTION_CAPS_WITH_COURIER_ASSIGN;
+
+    static {
+        EnumSet<Capability> caps = EnumSet.copyOf(ALL_ACTION_CAPS);
+        caps.add(Capability.DELIVERY_MANUAL_ASSIGN);
+        ALL_ACTION_CAPS_WITH_COURIER_ASSIGN = caps;
+    }
+
+    /**
+     * The four-argument overload never widens what the three-argument form
+     * already offers — it only ever adds {@code ASSIGN_COURIER} on top.
+     */
+    @Test
+    void theFourArgumentOverloadAddsOnlyAssignCourierOnTopOfTheThreeArgumentForm() {
+        for (OrderStatus status : OrderStatus.values()) {
+            for (FulfillmentMode mode : FulfillmentMode.values()) {
+                for (boolean courierUnassigned : new boolean[] {true, false}) {
+                    List<OrderAction> base = OrderActionsPolicy.availableFor(status, mode, ALL_ACTION_CAPS);
+                    List<OrderAction> withCourier =
+                            OrderActionsPolicy.availableFor(status, mode, ALL_ACTION_CAPS, courierUnassigned);
+
+                    List<OrderAction> withoutAssignCourier = withCourier.stream()
+                            .filter(a -> a.code() != OrderActionCode.ASSIGN_COURIER)
+                            .toList();
+                    assertThat(withoutAssignCourier)
+                            .as("%s/%s courierUnassigned=%s, minus ASSIGN_COURIER", status, mode, courierUnassigned)
+                            .isEqualTo(base);
+                }
+            }
+        }
+    }
+
+    /**
+     * {@code ASSIGN_COURIER} is offered exactly for a {@code DELIVERY} order
+     * from {@code CONFIRMED} through {@code FULFILLING} (the window {@code
+     * DeliveryPlanTrigger} keeps a plan open in) when nobody is carrying it
+     * yet and the caller holds {@code DELIVERY_MANUAL_ASSIGN} — never for a
+     * pickup or dine-in order, never once a courier is already assigned, and
+     * never without the capability.
+     */
+    @Test
+    void assignCourierAppearsExactlyForAnUnassignedOpenDeliveryPlanWhenGranted() {
+        EnumSet<OrderStatus> planOpenWindow =
+                EnumSet.of(OrderStatus.CONFIRMED, OrderStatus.PREPARING, OrderStatus.READY, OrderStatus.FULFILLING);
+
+        for (OrderStatus status : OrderStatus.values()) {
+            for (FulfillmentMode mode : FulfillmentMode.values()) {
+                boolean offered =
+                        OrderActionsPolicy.availableFor(status, mode, ALL_ACTION_CAPS_WITH_COURIER_ASSIGN, true)
+                                .stream()
+                                .anyMatch(a -> a.code() == OrderActionCode.ASSIGN_COURIER);
+                boolean expected = mode == FulfillmentMode.DELIVERY && planOpenWindow.contains(status);
+
+                assertThat(offered).as("ASSIGN_COURIER for %s/%s", status, mode).isEqualTo(expected);
+            }
+        }
+    }
+
+    @Test
+    void assignCourierNeverAppearsOnceACourierIsAlreadyAssigned() {
+        for (OrderStatus status : OrderStatus.values()) {
+            assertThat(OrderActionsPolicy.availableFor(
+                            status, FulfillmentMode.DELIVERY, ALL_ACTION_CAPS_WITH_COURIER_ASSIGN, false))
+                    .as("%s, courier already assigned", status)
+                    .noneMatch(a -> a.code() == OrderActionCode.ASSIGN_COURIER);
+        }
+    }
+
+    @Test
+    void assignCourierNeverAppearsWithoutTheDeliveryManualAssignCapability() {
+        for (OrderStatus status : OrderStatus.values()) {
+            assertThat(OrderActionsPolicy.availableFor(status, FulfillmentMode.DELIVERY, ALL_ACTION_CAPS, true))
+                    .as("%s, ungranted", status)
+                    .noneMatch(a -> a.code() == OrderActionCode.ASSIGN_COURIER);
         }
     }
 

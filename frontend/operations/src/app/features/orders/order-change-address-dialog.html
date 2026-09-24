@@ -1,0 +1,148 @@
+<q-modal
+  [title]="'orders.amendment.command.CHANGE_DELIVERY_ADDRESS' | t"
+  [dismissible]="!busy()"
+  (dismiss)="dismiss.emit()"
+  data-testid="order-change-address-dialog"
+>
+  <div class="change-address-dialog__grid">
+    <label class="change-address-dialog__field change-address-dialog__field--wide">
+      <span class="q-body-sm">{{ 'orders.detail.address.line' | t }}</span>
+      <input
+        type="text"
+        [value]="draft().line1"
+        (input)="setField('line1', $any($event.target).value)"
+        data-testid="order-change-address-dialog-line1"
+      />
+    </label>
+    <label class="change-address-dialog__field change-address-dialog__field--wide">
+      <span class="q-body-sm">{{ 'orders.dialog.changeAddress.line2' | t }}</span>
+      <input
+        type="text"
+        [value]="draft().line2"
+        (input)="setField('line2', $any($event.target).value)"
+        data-testid="order-change-address-dialog-line2"
+      />
+    </label>
+    <label class="change-address-dialog__field">
+      <span class="q-body-sm">{{ 'orders.dialog.changeAddress.city' | t }}</span>
+      <input
+        type="text"
+        [value]="draft().city"
+        (input)="setField('city', $any($event.target).value)"
+        data-testid="order-change-address-dialog-city"
+      />
+    </label>
+    <label class="change-address-dialog__field">
+      <span class="q-body-sm">{{ 'orders.dialog.changeAddress.district' | t }}</span>
+      <input
+        type="text"
+        [value]="draft().district"
+        (input)="setField('district', $any($event.target).value)"
+        data-testid="order-change-address-dialog-district"
+      />
+    </label>
+    <label class="change-address-dialog__field">
+      <span class="q-body-sm">{{ 'orders.detail.address.entrance' | t }}</span>
+      <input
+        type="text"
+        [value]="draft().entrance"
+        (input)="setField('entrance', $any($event.target).value)"
+        data-testid="order-change-address-dialog-entrance"
+      />
+    </label>
+    <label class="change-address-dialog__field">
+      <span class="q-body-sm">{{ 'orders.detail.address.floor' | t }}</span>
+      <input
+        type="text"
+        [value]="draft().floor"
+        (input)="setField('floor', $any($event.target).value)"
+        data-testid="order-change-address-dialog-floor"
+      />
+    </label>
+    <label class="change-address-dialog__field">
+      <span class="q-body-sm">{{ 'orders.detail.address.apartment' | t }}</span>
+      <input
+        type="text"
+        [value]="draft().apartment"
+        (input)="setField('apartment', $any($event.target).value)"
+        data-testid="order-change-address-dialog-apartment"
+      />
+    </label>
+    <label class="change-address-dialog__field">
+      <span class="q-body-sm">{{ 'orders.detail.address.landmark' | t }}</span>
+      <input
+        type="text"
+        [value]="draft().landmark"
+        (input)="setField('landmark', $any($event.target).value)"
+        data-testid="order-change-address-dialog-landmark"
+      />
+    </label>
+    <label class="change-address-dialog__field">
+      <span class="q-body-sm">{{ 'orders.dialog.changeAddress.latitude' | t }}</span>
+      <input
+        type="text"
+        inputmode="decimal"
+        [value]="draft().latitude"
+        (input)="setField('latitude', $any($event.target).value)"
+        data-testid="order-change-address-dialog-latitude"
+      />
+    </label>
+    <label class="change-address-dialog__field">
+      <span class="q-body-sm">{{ 'orders.dialog.changeAddress.longitude' | t }}</span>
+      <input
+        type="text"
+        inputmode="decimal"
+        [value]="draft().longitude"
+        (input)="setField('longitude', $any($event.target).value)"
+        data-testid="order-change-address-dialog-longitude"
+      />
+    </label>
+    <label class="change-address-dialog__field change-address-dialog__field--wide">
+      <span class="q-body-sm">{{ 'orders.detail.address.instructions' | t }}</span>
+      <textarea
+        rows="2"
+        [value]="draft().deliveryInstructions"
+        (input)="setField('deliveryInstructions', $any($event.target).value)"
+        data-testid="order-change-address-dialog-instructions"
+      ></textarea>
+    </label>
+    <label class="change-address-dialog__field">
+      <span class="q-body-sm">{{ 'orders.dialog.changeContact.name' | t }}</span>
+      <input
+        type="text"
+        [value]="recipientName()"
+        (input)="setRecipientName($any($event.target).value)"
+        data-testid="order-change-address-dialog-recipient-name"
+      />
+    </label>
+    <label class="change-address-dialog__field">
+      <span class="q-body-sm">{{ 'orders.dialog.changeContact.phone' | t }}</span>
+      <input
+        type="tel"
+        [value]="recipientPhone()"
+        (input)="setRecipientPhone($any($event.target).value)"
+        data-testid="order-change-address-dialog-recipient-phone"
+      />
+    </label>
+  </div>
+
+  <ng-container qModalActions>
+    <button
+      type="button"
+      class="change-address-dialog__dismiss q-body-sm"
+      (click)="dismiss.emit()"
+      [disabled]="busy()"
+    >
+      {{ 'orders.dialog.dismiss' | t }}
+    </button>
+    <button
+      type="button"
+      class="change-address-dialog__confirm q-body-sm"
+      (click)="submit()"
+      [disabled]="busy() || !canSubmit()"
+      data-testid="order-change-address-dialog-confirm"
+    >
+      {{ 'orders.dialog.note.save' | t }}
+    </button>
+  </ng-container>
+</q-modal>

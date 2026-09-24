@@ -147,7 +147,10 @@ class CatalogPublicationTests {
         storefront = new StorefrontCatalogQuery(
                 store,
                 (tenantId, brandId, locationId, channel, variantIds, optionIds) -> Optional.empty(),
-                new JdbcMenuStore(jdbc));
+                new JdbcMenuStore(jdbc),
+                new uz.horecaos.platform.catalog.infrastructure.tenancy.JdbcCatalogTenantContext(jdbc),
+                Clock.systemUTC(),
+                new uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCommentPresetStore(jdbc));
     }
 
     @Test

@@ -3,6 +3,7 @@ package uz.horecaos.platform.tenancy.web;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 
 import java.time.Duration;
@@ -33,6 +34,7 @@ import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.PlatformRole;
 import uz.horecaos.platform.iam.infrastructure.authorization.RoleRegistrySynchronizer;
 import uz.horecaos.platform.support.TestDatabase;
+import uz.horecaos.platform.web.idempotency.IdempotencyInterceptor;
 
 /**
  * Wave P43 (gap map row {@code 10.2c}): {@code ServiceScheduleController} had
@@ -134,6 +136,89 @@ class ServiceScheduleControllerEndpointTests {
         assertThat(result.getResponse().getContentAsString())
                 .contains("INSUFFICIENT_CAPABILITY")
                 .contains(Capability.LOCATION_READ.code());
+    }
+
+    // ---------------------------------------------------- 10.2c: delete an exception
+
+    @Test
+    void deletingADatedExceptionRemovesItAndBumpsTheScheduleVersion() throws Exception {
+        java.time.LocalDate date = java.time.LocalDate.of(2026, 12, 31);
+        insertException(SOLO_SCHEDULE, date);
+        assertThat(exceptionCount(SOLO_SCHEDULE, date)).isEqualTo(1);
+
+        MvcResult deleted = mvc.perform(delete(SCHEDULES + "/" + SOLO_SCHEDULE + "/exceptions/" + date)
+                        .with(tokenFor(FULL))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "delete-exception-ok")
+                        .header("If-Match", "W/\"1\""))
+                .andReturn();
+
+        assertThat(deleted.getResponse().getStatus()).isEqualTo(204);
+        assertThat(deleted.getResponse().getHeader("ETag")).isEqualTo("W/\"2\"");
+        assertThat(exceptionCount(SOLO_SCHEDULE, date)).isZero();
+        assertThat(scheduleVersion(SOLO_SCHEDULE)).isEqualTo(2);
+    }
+
+    @Test
+    void deletingWithAStaleIfMatchIsRefusedAndLeavesTheRowInPlace() throws Exception {
+        java.time.LocalDate date = java.time.LocalDate.of(2026, 12, 31);
+        insertException(SOLO_SCHEDULE, date);
+
+        MvcResult refused = mvc.perform(delete(SCHEDULES + "/" + SOLO_SCHEDULE + "/exceptions/" + date)
+                        .with(tokenFor(FULL))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "delete-exception-stale")
+                        .header("If-Match", "W/\"99\""))
+                .andReturn();
+
+        assertThat(refused.getResponse().getStatus()).isEqualTo(409);
+        assertThat(refused.getResponse().getContentAsString()).contains("STALE_VERSION");
+        assertThat(exceptionCount(SOLO_SCHEDULE, date))
+                .as("a lost optimistic-lock race must never delete the row underneath the caller who lost it")
+                .isEqualTo(1);
+    }
+
+    @Test
+    void deletingADateWithNoExceptionIsNotFound() throws Exception {
+        MvcResult missing = mvc.perform(delete(SCHEDULES + "/" + SOLO_SCHEDULE + "/exceptions/2026-01-01")
+                        .with(tokenFor(FULL))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "delete-exception-missing")
+                        .header("If-Match", "W/\"1\""))
+                .andReturn();
+
+        assertThat(missing.getResponse().getStatus()).isEqualTo(404);
+        assertThat(scheduleVersion(SOLO_SCHEDULE))
+                .as("a not-found delete must not have bumped the version either")
+                .isEqualTo(1);
+    }
+
+    @Test
+    void deletingWithoutIfMatchIsRejected() throws Exception {
+        java.time.LocalDate date = java.time.LocalDate.of(2026, 12, 31);
+        insertException(SOLO_SCHEDULE, date);
+
+        MvcResult rejected = mvc.perform(delete(SCHEDULES + "/" + SOLO_SCHEDULE + "/exceptions/" + date)
+                        .with(tokenFor(FULL))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "delete-exception-no-if-match"))
+                .andReturn();
+
+        assertThat(rejected.getResponse().getStatus()).isEqualTo(400);
+        assertThat(rejected.getResponse().getContentAsString()).contains("INVALID_REQUEST");
+    }
+
+    @Test
+    void deletingWithoutServiceabilityManageIsRefused() throws Exception {
+        java.time.LocalDate date = java.time.LocalDate.of(2026, 12, 31);
+        insertException(SOLO_SCHEDULE, date);
+
+        MvcResult refused = mvc.perform(delete(SCHEDULES + "/" + SOLO_SCHEDULE + "/exceptions/" + date)
+                        .with(tokenFor(UNGRANTED))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "delete-exception-ungranted")
+                        .header("If-Match", "W/\"1\""))
+                .andReturn();
+
+        assertThat(refused.getResponse().getStatus()).isEqualTo(403);
+        assertThat(refused.getResponse().getContentAsString())
+                .contains("INSUFFICIENT_CAPABILITY")
+                .contains(Capability.SERVICEABILITY_MANAGE.code());
     }
 
     // ------------------------------------------------------------------ fixtures
@@ -253,6 +338,36 @@ class ServiceScheduleControllerEndpointTests {
                 .param("mode", mode)
                 .param("scheduleId", scheduleId)
                 .update();
+    }
+
+    private void insertException(UUID scheduleId, java.time.LocalDate date) {
+        jdbc.sql("""
+                INSERT INTO tenant.service_schedule_exceptions (
+                    id, schedule_id, exception_date, closed_all_day, label, reason)
+                VALUES (:id, :scheduleId, :date, true, 'Holiday', 'Public holiday')
+                """)
+                .param("id", UUID.randomUUID())
+                .param("scheduleId", scheduleId)
+                .param("date", date)
+                .update();
+    }
+
+    private long exceptionCount(UUID scheduleId, java.time.LocalDate date) {
+        return jdbc.sql("""
+                SELECT count(*) FROM tenant.service_schedule_exceptions
+                WHERE schedule_id = :scheduleId AND exception_date = :date
+                """)
+                .param("scheduleId", scheduleId)
+                .param("date", date)
+                .query(Long.class)
+                .single();
+    }
+
+    private int scheduleVersion(UUID scheduleId) {
+        return jdbc.sql("SELECT version FROM tenant.service_schedules WHERE id = :id")
+                .param("id", scheduleId)
+                .query(Integer.class)
+                .single();
     }
 
     private void grant(String subject, PlatformRole role, String scopeType, UUID scopeId) {

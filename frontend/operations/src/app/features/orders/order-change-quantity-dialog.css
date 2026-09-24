@@ -1,0 +1,43 @@
+/* Chrome is `q-modal` (ADR 0101); see `order-reason-dialog.css`'s identical note. */
+
+.change-quantity-dialog__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.change-quantity-dialog__field + .change-quantity-dialog__field {
+  margin-top: 8px;
+}
+
+.change-quantity-dialog__select,
+.change-quantity-dialog__input {
+  padding: 8px 10px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  font-family: var(--q-font-sans);
+}
+
+.change-quantity-dialog__dismiss,
+.change-quantity-dialog__confirm {
+  padding: 6px 14px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  cursor: pointer;
+}
+
+.change-quantity-dialog__confirm {
+  border-color: var(--q-primary);
+  background: var(--q-primary);
+  color: var(--q-inverse-ink);
+}
+
+.change-quantity-dialog__confirm:disabled,
+.change-quantity-dialog__dismiss:disabled {
+  opacity: 0.6;
+  cursor: default;
+}

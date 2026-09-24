@@ -10,6 +10,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -47,7 +48,9 @@ import uz.horecaos.platform.tenancy.domain.CoordinateSource;
 import uz.horecaos.platform.tenancy.domain.CustomerIdentityMode;
 import uz.horecaos.platform.tenancy.domain.CustomerIdentityPolicy;
 import uz.horecaos.platform.tenancy.domain.Location;
+import uz.horecaos.platform.tenancy.domain.LocationLocale;
 import uz.horecaos.platform.tenancy.domain.LocationPlace;
+import uz.horecaos.platform.tenancy.domain.LocationVenue;
 import uz.horecaos.platform.tenancy.domain.OperatingUnitStatus;
 import uz.horecaos.platform.tenancy.domain.Slug;
 import uz.horecaos.platform.tenancy.domain.Tenant;
@@ -754,6 +757,21 @@ public class TenantControlPlaneService {
         location.describePlace(place);
         store.updateLocationPlace(location);
 
+        LocationVenue venue = command.toVenue(location.venue());
+        location.describeVenue(venue);
+        store.updateLocationVenue(location);
+
+        if (command.locales() != null) {
+            List<LocationLocale> content = command.locales().stream()
+                    .map(input -> new LocationLocale(input.locale(), input.displayName(), input.description()))
+                    .toList();
+            List<String> codes = content.stream().map(LocationLocale::locale).toList();
+            if (codes.size() != Set.copyOf(codes).size()) {
+                throw new IllegalArgumentException("A location cannot list the same locale twice");
+            }
+            store.updateLocationContent(tenantId, locationId, content);
+        }
+
         // The point is audited as a value, not as "the address changed". Where a
         // branch claims to be is the fact somebody will later need to reconstruct
         // — when a zone stops matching, or when a courier was sent to the wrong
@@ -779,15 +797,21 @@ public class TenantControlPlaneService {
         if (place.district() != null) {
             audited.put("district", place.district());
         }
+        audited.put("sortOrder", venue.sortOrder());
+        audited.put("hasParking", venue.hasParking());
+        audited.put("hasPlayground", venue.hasPlayground());
+        if (venue.seats() != null) {
+            audited.put("seats", venue.seats());
+        }
         recordAudit(
                 "location.described",
                 ResourceScope.brand(tenantId.value(), brandId.value()),
                 "Location",
                 location.id().value(),
-                "Control-plane location address and point",
+                "Control-plane location address, point and venue facts",
                 audited);
 
-        return toView(location);
+        return toView(location, store.findLocationContent(tenantId, locationId));
     }
 
     /**
@@ -809,7 +833,7 @@ public class TenantControlPlaneService {
                 .findFirst()
                 .orElseThrow(() -> new TenantResourceNotFoundException("Location was not found in this brand"));
         if (location.status() == OperatingUnitStatus.ACTIVE) {
-            return toView(location);
+            return toView(location, store.findLocationContent(tenantId, locationId));
         }
         location.activate();
         store.updateLocationStatus(location);
@@ -821,7 +845,7 @@ public class TenantControlPlaneService {
                 "Control-plane location activation",
                 Map.of("status", location.status().name()));
         // Re-read, for the reason activateBrand gives.
-        return toView(requireLocation(brand, locationId));
+        return toView(requireLocation(brand, locationId), store.findLocationContent(tenantId, locationId));
     }
 
     /**
@@ -882,7 +906,7 @@ public class TenantControlPlaneService {
                                 location.slug(),
                                 location.displayName(),
                                 location.timezone().getId())));
-        return toView(requireLocation(brand, locationId));
+        return toView(requireLocation(brand, locationId), store.findLocationContent(tenantId, locationId));
     }
 
     /**
@@ -951,7 +975,7 @@ public class TenantControlPlaneService {
                 .filter(candidate -> candidate.id().equals(locationId))
                 .findFirst()
                 .orElseThrow(() -> new TenantResourceNotFoundException("Location was not found in this brand"));
-        return toView(location);
+        return toView(location, store.findLocationContent(tenantId, locationId));
     }
 
     private Tenant requireTenant(TenantId tenantId) {
@@ -1063,7 +1087,12 @@ public class TenantControlPlaneService {
                 brand.version());
     }
 
+    /** The branch list's own row shape — no per-locale content, see {@link LocationView#locales} own doc. */
     private static LocationView toView(Location location) {
+        return toView(location, List.of());
+    }
+
+    private static LocationView toView(Location location, List<LocationLocale> content) {
         return new LocationView(
                 location.id().value(),
                 location.tenantId().value(),
@@ -1081,6 +1110,17 @@ public class TenantControlPlaneService {
                 location.place().point().map(GeoPoint::latitude).orElse(null),
                 location.place().point().map(GeoPoint::longitude).orElse(null),
                 location.place().coordinateSource(),
+                location.venue().sortOrder(),
+                location.venue().seats(),
+                location.venue().averageChequeAmount(),
+                location.venue().averageChequeCurrency(),
+                location.venue().hasParking(),
+                location.venue().hasPlayground(),
+                location.venue().virtualTourUrl(),
+                content.stream()
+                        .map(locale ->
+                                new LocationLocaleView(locale.locale(), locale.displayName(), locale.description()))
+                        .toList(),
                 location.version());
     }
 
@@ -1228,7 +1268,18 @@ public class TenantControlPlaneService {
             @Nullable Double latitude,
             @Nullable Double longitude,
             @Nullable CoordinateSource coordinateSource,
-            boolean clearLandmark) {
+            boolean clearLandmark,
+            @Nullable Integer sortOrder,
+            @Nullable Integer seats,
+            boolean clearSeats,
+            @Nullable Long averageChequeAmount,
+            @Nullable String averageChequeCurrency,
+            boolean clearAverageCheque,
+            @Nullable Boolean hasParking,
+            @Nullable Boolean hasPlayground,
+            @Nullable String virtualTourUrl,
+            boolean clearVirtualTourUrl,
+            @Nullable List<LocationLocaleInput> locales) {
 
         /**
          * @param existing the location's place before this write, carried through
@@ -1277,9 +1328,76 @@ public class TenantControlPlaneService {
             String resolvedLandmark = clearLandmark ? null : (landmark != null ? landmark : existing.landmark());
             return new LocationPlace(addressLine, district, city, resolvedLandmark, contactPhone, point, source);
         }
+
+        /**
+         * @param existing the location's venue facts before this write. Every
+         *                 field this command is silent about (null) carries the
+         *                 existing value through, the same "omitted means
+         *                 untouched" rule {@link #toPlace} follows for the point
+         *                 and the landmark — {@code hasParking}/{@code
+         *                 hasPlayground} are boxed {@link Boolean} rather than
+         *                 {@code boolean} for exactly this reason: a console
+         *                 write that never opened the venue section must not
+         *                 read as "clear every flag". {@code clearSeats},
+         *                 {@code clearAverageCheque} and {@code
+         *                 clearVirtualTourUrl} are {@code clearLandmark}'s own
+         *                 escape hatch, one per field (or field pair): an
+         *                 emptied form field collapses to an absent key on the
+         *                 wire, indistinguishable from "never touched", so
+         *                 without an explicit clear signal the silent-carry-
+         *                 through below kept a blanked field's stale value
+         *                 forever — {@code averageChequeAmount} and {@code
+         *                 averageChequeCurrency} share one flag because {@link
+         *                 LocationVenue}'s own invariant requires them to be
+         *                 both null or both set.
+         */
+        public LocationVenue toVenue(LocationVenue existing) {
+            Objects.requireNonNull(existing, "Existing location venue is required");
+            return new LocationVenue(
+                    sortOrder != null ? sortOrder : existing.sortOrder(),
+                    clearSeats ? null : (seats != null ? seats : existing.seats()),
+                    clearAverageCheque
+                            ? null
+                            : (averageChequeAmount != null ? averageChequeAmount : existing.averageChequeAmount()),
+                    clearAverageCheque
+                            ? null
+                            : (averageChequeCurrency != null
+                                    ? averageChequeCurrency
+                                    : existing.averageChequeCurrency()),
+                    hasParking != null ? hasParking : existing.hasParking(),
+                    hasPlayground != null ? hasPlayground : existing.hasPlayground(),
+                    clearVirtualTourUrl ? null : (virtualTourUrl != null ? virtualTourUrl : existing.virtualTourUrl()));
+        }
     }
 
-    /** @param version what a correction or deletion sends back as {@code If-Match} (ADR 0031) */
+    /**
+     * One locale's own localized display name/description for a branch, as a
+     * caller states it — the input shape of {@link LocationLocale}. A
+     * whole-set write, the same reason {@link UpdateBrandProfileCommand
+     * #locales} is: the console's own per-locale form already knows the full
+     * set it wants.
+     */
+    public record LocationLocaleInput(
+            String locale,
+            @Nullable String displayName,
+            @Nullable String description) {}
+
+    /** One entry of {@link LocationView#locales}. */
+    public record LocationLocaleView(
+            String locale,
+            @Nullable String displayName,
+            @Nullable String description) {}
+
+    /**
+     * @param version what a correction or deletion sends back as {@code If-Match} (ADR 0031)
+     * @param locales this branch's own localized display name/description, one
+     *                 entry per locale it has been given content in (row
+     *                 10.2b). Empty for the branch list's own batched read
+     *                 ({@code TenantControlPlaneService#getLocations}) — that
+     *                 screen never renders per-locale content, so it is not
+     *                 fetched there to avoid an N+1 the branch list's own
+     *                 service-state read already had to close once (wave P32)
+     */
     public record LocationView(
             UUID id,
             UUID tenantId,
@@ -1297,5 +1415,13 @@ public class TenantControlPlaneService {
             @Nullable Double latitude,
             @Nullable Double longitude,
             CoordinateSource coordinateSource,
+            int sortOrder,
+            @Nullable Integer seats,
+            @Nullable Long averageChequeAmount,
+            @Nullable String averageChequeCurrency,
+            boolean hasParking,
+            boolean hasPlayground,
+            @Nullable String virtualTourUrl,
+            List<LocationLocaleView> locales,
             long version) {}
 }

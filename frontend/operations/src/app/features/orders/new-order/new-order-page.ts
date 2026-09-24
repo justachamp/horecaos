@@ -41,6 +41,7 @@ import { accessRefusal, describeApiError } from '../order-errors';
 import { ItemModifierDialog, ModifierDialogConfirmation } from './item-modifier-dialog';
 import {
   AggregatorOrderLine,
+  CommentPresetOption,
   CustomerLookupCandidate,
   DeliveryFeeQuote,
   MenuCategory,
@@ -166,11 +167,8 @@ interface PendingModifierSelection {
  * and change-due is a live client-side computation only — `cash_tendered_expected_minor`
  * is still written after creation through an amendment (`SET_CASH_TENDERED`,
  * deferred), not at creation, so nothing here persists it. «Повторить»
- * (row `1.3f`) calls the new staff reorder-plan wrapper
- * (`GET .../customers/{accountId}/orders/{orderId}/reorder`, `ORDER_READ`
- * at `BRAND` scope — `LOCATION_STAFF` does not hold that either, an
- * existing, unwidened gap this wave inherits rather than fixes) and adds
- * every `AVAILABLE` line straight to the basket. A «Заказ агрегатора»
+ * (row `1.3f`) calls the staff reorder-plan wrapper and adds every
+ * `AVAILABLE` line straight to the basket. A «Заказ агрегатора»
  * toggle (row `1.3g`) records an aggregator's own phoned-through order under
  * its `AGGREGATOR`-type channel with externally-set totals, bypassing the
  * customer pane entirely — ADR 0040 is explicit that a marketplace order
@@ -209,6 +207,27 @@ interface PendingModifierSelection {
  * `OperatorOrderingService.place` opens the cart, prices it and checks out
  * in one atomic call, so there is no server-side draft cart that can expire
  * out from under the operator the way a storefront cart can.
+ *
+ * <p><b>Wave 10 (rows 1.3f/1.3a).</b> «Повторить» used to call
+ * `CustomerOrderHistoryController.reorderPlan` (`ORDER_READ` at `BRAND`
+ * scope), which `LOCATION_STAFF` — this screen's own persona — does not
+ * hold, 403ing every time. `CustomersApi#reorderPlan` now calls
+ * `CustomerOrderReorderController` instead (`operationsPaths.customerOrderReorder`,
+ * `ORDER_READ` at `LOCATION`), resolved against {@link CurrentLocation}'s
+ * own branch rather than the order's original one — the same honest "this
+ * branch, right now" rule §5.4's address pane and §5.6's menu already
+ * apply. The Customers section's own order-history tab keeps reading the
+ * brand-scoped wrapper for its wider, `LOCATION_MANAGER`-or-broader
+ * audience; only this screen's button moved.
+ *
+ * **Row 2.1b/4.2g (this wave).** `q-item-modifier-dialog` now also offers a
+ * product's coded comment presets — see its own doc — carried onto the
+ * placed line as `commentPresetCodes` and rendered on the order detail and
+ * kitchen ticket the same order creates. Selecting a variant outside its own
+ * sale window is refused client-side ({@link selectVariant}) the same way an
+ * 86'd one already was; a window that closes after the line was added is
+ * caught server-side at `Создать` and shown through {@link
+ * describeDeliveryRefusal} rather than silently dropping the line.
  */
 @Component({
   selector: 'q-new-order-page',
@@ -391,6 +410,40 @@ export class NewOrderPage implements OnInit {
       .join(', ');
   }
 
+  /** Row 2.1b: every offered preset across the whole menu, by code — a code means the same preset on every product that offers it. */
+  private readonly commentPresetIndex = computed(() => {
+    const index = new Map<string, CommentPresetOption>();
+    for (const product of this.menu()?.products ?? []) {
+      for (const preset of product.commentPresets) {
+        index.set(preset.code, preset);
+      }
+    }
+    return index;
+  });
+
+  /** The console's own locale label for a checked preset code, matching `item-modifier-dialog.ts`'s own `presetLabel`. */
+  private presetLabel(preset: CommentPresetOption): string {
+    switch (this.i18n.locale()) {
+      case 'ru':
+        return preset.labelRu;
+      case 'uz-Latn':
+        return preset.labelUz;
+      default:
+        return preset.labelEn;
+    }
+  }
+
+  /** «Без лука, Поострее» — a basket line's checked presets, resolved to the console's own locale. */
+  protected presetSummary(line: BasketLine): string {
+    const index = this.commentPresetIndex();
+    return line.commentPresetCodes
+      .map((code) => {
+        const preset = index.get(code);
+        return preset ? this.presetLabel(preset) : code;
+      })
+      .join(', ');
+  }
+
   // -------------------------------------------------------------- §5.3 customer
 
   protected readonly phone = signal('');
@@ -517,7 +570,16 @@ export class NewOrderPage implements OnInit {
     }
     this.historyLoading.set(true);
     try {
-      const page = await this.customersApi.ordersPage(scope, selected.accountId, firstPage(5));
+      // Row 1.3f/1.3a (major fix): the LOCATION-scoped route, not `ordersPage`
+      // — this screen's primary persona, LOCATION_STAFF, holds ORDER_READ
+      // only at LOCATION scope and 403s against the BRAND-scoped one, the
+      // same reason `reorder` below already calls `reorderPlan`'s own
+      // LOCATION-scoped route rather than the Customers section's twin.
+      const page = await this.customersApi.ordersPageAtLocation(
+        scope,
+        selected.accountId,
+        firstPage(5),
+      );
       this.historyOrders.set(page.items);
     } catch {
       // orders.md §5.3 point 4 is a convenience peek, not the record of
@@ -586,8 +648,17 @@ export class NewOrderPage implements OnInit {
         quantity: line.quantity,
         unitAmountMinor: line.unitAmountMinor,
         modifiers: [],
+        // Row 2.1b: `ReorderPlan`'s own line carries no preset codes — a
+        // repeat order starts from the product's plain state, same as it
+        // already drops the original line's modifiers above.
+        commentPresetCodes: [],
         customerNote: null,
         orderable: true,
+        // Row 4.2g: `plan.verdict`/`line.status` answer whether the item
+        // still exists to reorder, not whether its own sale schedule
+        // currently excludes it — `submit`'s server-side check is what
+        // actually catches that, the same as every other line here.
+        onSaleNow: true,
       }));
       this.basket.set([...this.basket(), ...added]);
       this.historyOpen.set(false);
@@ -831,9 +902,19 @@ export class NewOrderPage implements OnInit {
       this.toasts.show({ message: this.i18n.t('orders.newOrder.menu.itemStopped'), tone: 'error' });
       return;
     }
+    // Row 4.2g: the same client-side mirror of the server rule `orderable`
+    // above already gets — refused before a dialog ever opens, distinct from
+    // 86'd (see `MenuVariant.onSaleNow`'s own doc).
+    if (!variant.onSaleNow) {
+      this.toasts.show({
+        message: this.i18n.t('orders.newOrder.menu.itemOutOfSaleWindow'),
+        tone: 'error',
+      });
+      return;
+    }
     const groups = this.modifierGroupsFor(product);
-    if (groups.length === 0) {
-      this.addToBasket(product, variant, []);
+    if (groups.length === 0 && product.commentPresets.length === 0) {
+      this.addToBasket(product, variant, [], []);
       return;
     }
     this.pendingModifiers.set({ product, variant, groups });
@@ -844,7 +925,12 @@ export class NewOrderPage implements OnInit {
     if (!pending) {
       return;
     }
-    this.addToBasket(pending.product, pending.variant, confirmation.selections);
+    this.addToBasket(
+      pending.product,
+      pending.variant,
+      confirmation.selections,
+      confirmation.commentPresetCodes,
+    );
     this.pendingModifiers.set(null);
   }
 
@@ -856,6 +942,7 @@ export class NewOrderPage implements OnInit {
     product: MenuProduct,
     variant: MenuVariant,
     modifiers: BasketLine['modifiers'],
+    commentPresetCodes: readonly string[],
   ): void {
     const line: BasketLine = {
       lineKey: nextLineKey(),
@@ -864,8 +951,10 @@ export class NewOrderPage implements OnInit {
       quantity: 1,
       unitAmountMinor: variant.amountMinor,
       modifiers,
+      commentPresetCodes,
       customerNote: null,
       orderable: variant.orderable,
+      onSaleNow: variant.onSaleNow,
     };
     this.basket.set([...this.basket(), line]);
   }
@@ -1186,6 +1275,7 @@ export class NewOrderPage implements OnInit {
         variantId: line.variantId,
         quantity: line.quantity,
         modifierOptionIds: flattenModifiers(line),
+        commentPresetCodes: line.commentPresetCodes,
         customerNote: line.customerNote,
       }));
       const request: PlaceOrderRequest = {
@@ -1268,6 +1358,12 @@ export class NewOrderPage implements OnInit {
    * in {@link submit} itself, because they set a different signal than this
    * one's plain string — only `BRANCH_CLOSED_AT_REQUESTED_TIME`, the hard
    * refusal with no confirmation to offer, reaches this method.
+   *
+   * Row 4.2g also lands here: `ITEM_OUT_OF_SALE_WINDOW`, a basket line whose
+   * variant left its sale window in the gap between adding it and pressing
+   * `Создать` — {@link selectVariant} refuses the same fact up front, this
+   * is the race that check cannot see. The basket line stays exactly as the
+   * operator left it; nothing here removes it.
    */
   private describeDeliveryRefusal(error: ApiError): string {
     const reason = error.problem?.['reason'];
@@ -1279,6 +1375,9 @@ export class NewOrderPage implements OnInit {
     }
     if (reason === 'BRANCH_CLOSED_AT_REQUESTED_TIME') {
       return this.i18n.t('orders.newOrder.order.preOrder.closedNoOverride');
+    }
+    if (reason === 'ITEM_OUT_OF_SALE_WINDOW') {
+      return this.i18n.t('orders.newOrder.menu.itemOutOfSaleWindow');
     }
     return describeApiError(error, (key, values) => this.i18n.t(key, values));
   }

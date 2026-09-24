@@ -9,7 +9,7 @@ import { BrandView } from './brand-profile/brand-profile-api';
 import { LocationView } from './locations/locations-api';
 
 /** The level a settings screen is currently writing to (settings.md §1.1's "Уровень редактирования"). */
-export type SettingsEditingLevel = 'BRAND' | 'LOCATION';
+export type SettingsEditingLevel = 'TENANT' | 'BRAND' | 'LOCATION';
 
 /**
  * settings.md §1.1's scope bar, as shared state: which brand and which
@@ -21,6 +21,17 @@ export type SettingsEditingLevel = 'BRAND' | 'LOCATION';
  * own branch, with no way to change it and no brand-level option at all,
  * which is exactly the gap this class closes. `q-scope-bar` is the
  * presentational half; this is the state and the API calls behind it.
+ *
+ * **Row 10.3b — TENANT level.** `?level=tenant` in the query string is a
+ * third state orthogonal to `brand`/`location`: an operator authoring the
+ * tenant-wide default for a `q-inherited-field` consumer (order policy cards
+ * 2-5 first; the same key ladder applies to any other screen that declares
+ * `TENANT` a settable scope). `OperationsConfigurationController.scopeOf`
+ * already resolved `TENANT` to `ResourceScope.tenant(tenantId)` regardless of
+ * `brandId`/`locationId` before this existed — the console simply had no way
+ * to ask for it. Picking a brand or a location leaves TENANT level the same
+ * way picking a location already leaves BRAND level: a positive choice of a
+ * narrower scope, not a toggle a screen has to remember to clear.
  *
  * **Resolution**, deliberately simple rather than mirroring `CurrentLocation`'s
  * fallback ladder: this screen is for people who administer settings, who by
@@ -41,6 +52,7 @@ export class SettingsScope {
 
   private readonly queryBrandId = signal<string | null>(null);
   private readonly queryLocationId = signal<string | null>(null);
+  private readonly queryTenantWide = signal(false);
   private readonly brandsSig = signal<readonly BrandView[]>([]);
   private readonly locationsSig = signal<readonly LocationView[]>([]);
   private readonly loadingBrands = signal(false);
@@ -73,9 +85,15 @@ export class SettingsScope {
     return this.locationsSig().some((location) => location.id === requested) ? requested : null;
   });
 
-  readonly level: Signal<SettingsEditingLevel> = computed(() =>
-    this.locationId() ? 'LOCATION' : 'BRAND',
-  );
+  /** Whether the bar is currently set to the tenant-wide (row 10.3b) level. */
+  readonly tenantWide: Signal<boolean> = this.queryTenantWide.asReadonly();
+
+  readonly level: Signal<SettingsEditingLevel> = computed(() => {
+    if (this.queryTenantWide()) {
+      return 'TENANT';
+    }
+    return this.locationId() ? 'LOCATION' : 'BRAND';
+  });
 
   readonly loading: Signal<boolean> = this.loadingBrands.asReadonly();
   readonly denied: Signal<boolean> = this.deniedSig.asReadonly();
@@ -84,6 +102,7 @@ export class SettingsScope {
     this.route.queryParamMap.subscribe((params) => {
       this.queryBrandId.set(params.get('brand'));
       this.queryLocationId.set(params.get('location'));
+      this.queryTenantWide.set(params.get('level') === 'tenant');
     });
 
     void this.loadBrands();
@@ -102,18 +121,50 @@ export class SettingsScope {
     });
   }
 
-  /** Switches the brand, clearing any location selection — a different brand's branches are a different set. */
+  /**
+   * Switches the brand, clearing any location selection — a different
+   * brand's branches are a different set — and leaves TENANT level, the
+   * same "a narrower scope is a positive choice" rule {@link setLocation}
+   * follows.
+   */
   setBrand(brandId: string): void {
     void this.router.navigate([], {
-      queryParams: { brand: brandId, location: null },
+      queryParams: { brand: brandId, location: null, level: null },
       queryParamsHandling: 'merge',
     });
   }
 
-  /** Switches the location, or pass `null` for "Все филиалы" (brand-level editing). */
+  /**
+   * Switches the location, or pass `null` for "Все филиалы" (brand-level
+   * editing). Also leaves TENANT level: choosing a location is choosing
+   * BRAND or LOCATION, never both TENANT and something narrower at once.
+   */
   setLocation(locationId: string | null): void {
     void this.router.navigate([], {
-      queryParams: { location: locationId },
+      queryParams: { location: locationId, level: null },
+      queryParamsHandling: 'merge',
+    });
+  }
+
+  /**
+   * Row 10.3b — switches to the tenant-wide default level. The current
+   * brand/location stay in the URL as display context (the scope bar's own
+   * pickers still show them), but {@link level} answers `TENANT` and every
+   * `q-inherited-field` consumer that reads it writes/resolves at
+   * `ResourceScope.tenant(tenantId)` until {@link setBrand} or {@link
+   * setLocation} is called.
+   */
+  setTenantLevel(): void {
+    void this.router.navigate([], {
+      queryParams: { level: 'tenant' },
+      queryParamsHandling: 'merge',
+    });
+  }
+
+  /** Leaves TENANT level, returning to whatever BRAND/LOCATION the pickers already show. */
+  leaveTenantLevel(): void {
+    void this.router.navigate([], {
+      queryParams: { level: null },
       queryParamsHandling: 'merge',
     });
   }

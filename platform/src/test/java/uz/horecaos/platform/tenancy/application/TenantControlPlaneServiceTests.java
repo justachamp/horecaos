@@ -708,7 +708,18 @@ class TenantControlPlaneServiceTests {
                         41.311081,
                         69.240562,
                         uz.horecaos.platform.tenancy.domain.CoordinateSource.MERCHANT_PIN,
-                        false));
+                        false,
+                        null,
+                        null,
+                        false,
+                        null,
+                        null,
+                        false,
+                        null,
+                        null,
+                        null,
+                        false,
+                        null));
 
         // Only the phone changes; address, landmark and the point are silent
         // in this write, the exact shape `location-detail-pane.ts`'s
@@ -718,7 +729,26 @@ class TenantControlPlaneServiceTests {
                 brandId,
                 locationId,
                 new TenantControlPlaneService.DescribeLocationCommand(
-                        "Amir Temur 1", "Yunusabad", "Tashkent", null, "+998712009999", null, null, null, false));
+                        "Amir Temur 1",
+                        "Yunusabad",
+                        "Tashkent",
+                        null,
+                        "+998712009999",
+                        null,
+                        null,
+                        null,
+                        false,
+                        null,
+                        null,
+                        false,
+                        null,
+                        null,
+                        false,
+                        null,
+                        null,
+                        null,
+                        false,
+                        null));
 
         assertThat(after.contactPhone()).isEqualTo("+998712009999");
         assertThat(after.latitude())
@@ -753,7 +783,18 @@ class TenantControlPlaneServiceTests {
                         41.0,
                         69.0,
                         uz.horecaos.platform.tenancy.domain.CoordinateSource.MERCHANT_PIN,
-                        false));
+                        false,
+                        null,
+                        null,
+                        false,
+                        null,
+                        null,
+                        false,
+                        null,
+                        null,
+                        null,
+                        false,
+                        null));
 
         var cleared = h.service.describeLocation(
                 h.tenantId,
@@ -768,7 +809,18 @@ class TenantControlPlaneServiceTests {
                         null,
                         null,
                         uz.horecaos.platform.tenancy.domain.CoordinateSource.NOT_GEOCODED,
-                        false));
+                        false,
+                        null,
+                        null,
+                        false,
+                        null,
+                        null,
+                        false,
+                        null,
+                        null,
+                        null,
+                        false,
+                        null));
 
         assertThat(cleared.latitude()).isNull();
         assertThat(cleared.longitude()).isNull();
@@ -796,7 +848,26 @@ class TenantControlPlaneServiceTests {
                 brandId,
                 locationId,
                 new TenantControlPlaneService.DescribeLocationCommand(
-                        "Address", null, null, "Next to the blue mosque", null, null, null, null, false));
+                        "Address",
+                        null,
+                        null,
+                        "Next to the blue mosque",
+                        null,
+                        null,
+                        null,
+                        null,
+                        false,
+                        null,
+                        null,
+                        false,
+                        null,
+                        null,
+                        false,
+                        null,
+                        null,
+                        null,
+                        false,
+                        null));
 
         // A write that is silent about landmark (clearLandmark left at its
         // default false) still carries the existing one through — the
@@ -807,7 +878,26 @@ class TenantControlPlaneServiceTests {
                 brandId,
                 locationId,
                 new TenantControlPlaneService.DescribeLocationCommand(
-                        "Address", null, null, null, "+998712009999", null, null, null, false));
+                        "Address",
+                        null,
+                        null,
+                        null,
+                        "+998712009999",
+                        null,
+                        null,
+                        null,
+                        false,
+                        null,
+                        null,
+                        false,
+                        null,
+                        null,
+                        false,
+                        null,
+                        null,
+                        null,
+                        false,
+                        null));
         assertThat(untouched.landmark()).isEqualTo("Next to the blue mosque");
 
         var cleared = h.service.describeLocation(
@@ -815,10 +905,109 @@ class TenantControlPlaneServiceTests {
                 brandId,
                 locationId,
                 new TenantControlPlaneService.DescribeLocationCommand(
-                        "Address", null, null, null, null, null, null, null, true));
+                        "Address", null, null, null, null, null, null, null, true, null, null, false, null, null, false,
+                        null, null, null, false, null));
 
         assertThat(cleared.landmark())
                 .as("clearLandmark=true must actually remove the stale landmark")
+                .isNull();
+    }
+
+    /**
+     * Batch 10 finding: {@code toVenue} merged {@code seats}, {@code
+     * averageChequeAmount}/{@code averageChequeCurrency} and {@code
+     * virtualTourUrl} with "null means omitted, carry the existing value
+     * through" and no equivalent of {@code clearLandmark} for any of them —
+     * so once an operator set one of these on a branch, blanking the field
+     * and saving silently kept the stale value forever. {@code clearSeats},
+     * {@code clearAverageCheque} and {@code clearVirtualTourUrl} are the same
+     * escape hatch {@code clearLandmark} already is for the landmark.
+     */
+    @Test
+    @DisplayName("explicit clear flags actually clear seats, average cheque and the virtual tour url")
+    void explicitClearFlagsClearVenueFacts() {
+        Harness h = new Harness();
+        BrandId brandId = h.brand("VENUED", "venued");
+        LocationId locationId = h.location(brandId, "MALL");
+
+        h.service.describeLocation(
+                h.tenantId,
+                brandId,
+                locationId,
+                new TenantControlPlaneService.DescribeLocationCommand(
+                        "Address",
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        false,
+                        null,
+                        40,
+                        false,
+                        85000L,
+                        "UZS",
+                        false,
+                        null,
+                        null,
+                        "https://tour.example/branch",
+                        false,
+                        null));
+
+        // A write silent about the venue facts (every clear flag at its
+        // default false) must still carry them through unchanged -- the
+        // control for the explicit-clear calls below.
+        var untouched = h.service.describeLocation(
+                h.tenantId,
+                brandId,
+                locationId,
+                new TenantControlPlaneService.DescribeLocationCommand(
+                        "Address",
+                        null,
+                        null,
+                        null,
+                        "+998712009999",
+                        null,
+                        null,
+                        null,
+                        false,
+                        null,
+                        null,
+                        false,
+                        null,
+                        null,
+                        false,
+                        null,
+                        null,
+                        null,
+                        false,
+                        null));
+        assertThat(untouched.seats()).isEqualTo(40);
+        assertThat(untouched.averageChequeAmount()).isEqualTo(85000L);
+        assertThat(untouched.averageChequeCurrency()).isEqualTo("UZS");
+        assertThat(untouched.virtualTourUrl()).isEqualTo("https://tour.example/branch");
+
+        var cleared = h.service.describeLocation(
+                h.tenantId,
+                brandId,
+                locationId,
+                new TenantControlPlaneService.DescribeLocationCommand(
+                        "Address", null, null, null, null, null, null, null, false, null, null, true, null, null, true,
+                        null, null, null, true, null));
+
+        assertThat(cleared.seats())
+                .as("clearSeats=true must actually remove the stale seat count")
+                .isNull();
+        assertThat(cleared.averageChequeAmount())
+                .as("clearAverageCheque=true must actually remove the stale cheque amount")
+                .isNull();
+        assertThat(cleared.averageChequeCurrency())
+                .as("clearAverageCheque=true must actually remove the stale cheque currency")
+                .isNull();
+        assertThat(cleared.virtualTourUrl())
+                .as("clearVirtualTourUrl=true must actually remove the stale tour url")
                 .isNull();
     }
 
@@ -949,6 +1138,8 @@ class TenantControlPlaneServiceTests {
         private final Map<BrandId, uz.horecaos.platform.tenancy.domain.BrandProfile> brandProfiles =
                 new LinkedHashMap<>();
         private final List<Location> locations = new ArrayList<>();
+        private final Map<LocationId, List<uz.horecaos.platform.tenancy.domain.LocationLocale>> locationContent =
+                new LinkedHashMap<>();
 
         @Override
         public boolean tenantSlugExists(Slug slug) {
@@ -1131,6 +1322,24 @@ class TenantControlPlaneServiceTests {
          */
         @Override
         public void updateLocationPlace(Location location) {}
+
+        /** Same reasoning as {@link #updateLocationPlace}. */
+        @Override
+        public void updateLocationVenue(Location location) {}
+
+        @Override
+        public List<uz.horecaos.platform.tenancy.domain.LocationLocale> findLocationContent(
+                TenantId tenantId, LocationId locationId) {
+            return locationContent.getOrDefault(locationId, List.of());
+        }
+
+        @Override
+        public void updateLocationContent(
+                TenantId tenantId,
+                LocationId locationId,
+                List<uz.horecaos.platform.tenancy.domain.LocationLocale> content) {
+            locationContent.put(locationId, List.copyOf(content));
+        }
 
         /** Same reasoning as {@link #updateLocationPlace}. */
         @Override

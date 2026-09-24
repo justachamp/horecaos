@@ -2,6 +2,7 @@ package uz.horecaos.platform.tenancy.web;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -13,7 +14,9 @@ import java.time.LocalTime;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -26,6 +29,7 @@ import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.tenancy.application.ServiceScheduleService;
 import uz.horecaos.platform.tenancy.domain.channel.WeeklySchedule;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcServiceabilityStore;
+import uz.horecaos.platform.web.api.AggregateVersion;
 import uz.horecaos.platform.web.authorization.RequiresCapability;
 
 /**
@@ -149,6 +153,40 @@ public class ServiceScheduleController {
         return ResponseEntity.noContent().build();
     }
 
+    /**
+     * Actually removes a dated exception — gap map row {@code 10.2c}.
+     *
+     * <p>Before this endpoint existed, a dated exception taken out of the
+     * Hours grid and saved was never deleted server-side: {@link
+     * #upsertException} is an upsert by date, with no matching delete, so the
+     * row simply reappeared on the next reload. The console's local draft is
+     * now wired to call this for every removed row rather than silently
+     * dropping it from the PUT.
+     *
+     * <p>{@code If-Match} carries the owning schedule's version — an
+     * exception has no version of its own — and the response's {@code ETag}
+     * carries the version this delete produced, for the caller's next write.
+     */
+    @DeleteMapping("/{scheduleId}/exceptions/{date}")
+    @RequiresCapability(value = Capability.SERVICEABILITY_MANAGE, scope = ScopeType.BRAND, mutating = true)
+    @Operation(
+            summary = "Delete a dated exception",
+            description =
+                    "If-Match carries the owning schedule's version, since a dated " + "exception has none of its own.")
+    public ResponseEntity<Void> deleteException(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID scheduleId,
+            @PathVariable @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            HttpServletRequest request) {
+
+        long expected = AggregateVersion.requireIfMatch(request);
+        int newVersion = schedules.deleteException(tenantId, brandId, scheduleId, date, (int) expected);
+        return ResponseEntity.noContent()
+                .header(HttpHeaders.ETAG, AggregateVersion.toETag(newVersion))
+                .build();
+    }
+
     record CreateScheduleRequest(
             @NotBlank @Size(max = 200) String name,
             boolean acceptsScheduledOrders,
@@ -182,13 +220,23 @@ public class ServiceScheduleController {
 
     public record ScheduleView(UUID id, String name, boolean acceptsScheduledOrders) {}
 
-    /** One brand-owned timetable, named, for the rebind picker — {@link #list}. */
+    /**
+     * One brand-owned timetable, named, for the rebind picker — {@link #list}.
+     *
+     * @param version the schedule's own version — the {@code If-Match} token
+     *                {@link #deleteException} needs, since a dated exception
+     *                carries none of its own
+     */
     public record ScheduleSummaryResponse(
-            UUID id, String name, boolean acceptsScheduledOrders, long boundLocationCount) {
+            UUID id, String name, boolean acceptsScheduledOrders, long boundLocationCount, int version) {
 
         static ScheduleSummaryResponse of(JdbcServiceabilityStore.ScheduleSummary summary) {
             return new ScheduleSummaryResponse(
-                    summary.id(), summary.name(), summary.acceptsScheduledOrders(), summary.boundLocationCount());
+                    summary.id(),
+                    summary.name(),
+                    summary.acceptsScheduledOrders(),
+                    summary.boundLocationCount(),
+                    summary.version());
         }
     }
 }

@@ -239,6 +239,62 @@ public class JdbcPosMappingStore {
                 .list();
     }
 
+    /**
+     * Not-yet-mapped, active variants, for {@link MappingEntityType#VARIANT}'s
+     * HorecaOS side (gap-map row 1.2i's fix path) — the exact granularity
+     * {@code PosOrderExportService} exports an order line against, one level
+     * finer than {@link MappingEntityType#PRODUCT}'s own {@code VARIANT_PARENT}.
+     */
+    public List<NamedCandidate> unmappedVariants(UUID tenantId, UUID bindingId, UUID brandId, String locale) {
+        return jdbc.sql("""
+                SELECT v.id, coalesce(t.name, v.sku, v.id::text) AS name
+                  FROM catalog.variants v
+             LEFT JOIN catalog.translations t
+                     ON t.entity_type = 'VARIANT' AND t.entity_id = v.id
+                    AND t.locale = :locale AND t.tenant_id = v.tenant_id
+                 WHERE v.tenant_id = :tenantId AND v.brand_id = :brandId AND v.status = 'ACTIVE'
+                   AND NOT EXISTS (
+                       SELECT 1 FROM integration.provider_entity_mappings m
+                        WHERE m.tenant_id = :tenantId AND m.binding_id = :bindingId
+                          AND m.entity_type = 'VARIANT' AND m.status = 'ACTIVE'
+                          AND m.horecaos_entity_id = v.id)
+                """)
+                .param("tenantId", tenantId)
+                .param("bindingId", bindingId)
+                .param("brandId", brandId)
+                .param("locale", locale)
+                .query((row, number) -> new NamedCandidate(row.getObject("id", UUID.class), row.getString("name")))
+                .list();
+    }
+
+    /**
+     * Not-yet-mapped, active modifier options, for {@link
+     * MappingEntityType#MODIFIER}'s HorecaOS side (gap-map row 1.2i's fix
+     * path) — {@code catalog.modifier_options}, the same table {@code
+     * PosOrderExportService} resolves a line's {@code modifierOptionIds}
+     * against. Brand-scoped, like {@link #unmappedVariants}, rather than
+     * folded into {@link #unmappedByTenant}: that helper has no parameter slot
+     * for a second scoping id, only a literal filter clause, and a literal
+     * cannot carry a caller-supplied brand id without building SQL by hand.
+     */
+    public List<NamedCandidate> unmappedModifierOptions(UUID tenantId, UUID bindingId, UUID brandId) {
+        return jdbc.sql("""
+                SELECT mo.id, mo.code AS name
+                  FROM catalog.modifier_options mo
+                 WHERE mo.tenant_id = :tenantId AND mo.brand_id = :brandId AND mo.status = 'ACTIVE'
+                   AND NOT EXISTS (
+                       SELECT 1 FROM integration.provider_entity_mappings m
+                        WHERE m.tenant_id = :tenantId AND m.binding_id = :bindingId
+                          AND m.entity_type = 'MODIFIER' AND m.status = 'ACTIVE'
+                          AND m.horecaos_entity_id = mo.id)
+                """)
+                .param("tenantId", tenantId)
+                .param("bindingId", bindingId)
+                .param("brandId", brandId)
+                .query((row, number) -> new NamedCandidate(row.getObject("id", UUID.class), row.getString("name")))
+                .list();
+    }
+
     /** Not-yet-mapped, active payment methods, for {@link MappingEntityType#PAYMENT_TYPE}'s HorecaOS side. */
     public List<NamedCandidate> unmappedPaymentMethods(UUID tenantId, UUID bindingId) {
         return unmappedByTenant(
@@ -349,7 +405,11 @@ public class JdbcPosMappingStore {
      * as-is instead, which is at minimum what an operator needs to cross-check
      * against the till's own admin screen.
      *
-     * @param brandId unused for every type but {@link MappingEntityType#PRODUCT}; null is fine for the rest
+     * @param brandId required for {@link MappingEntityType#PRODUCT}, {@link
+     *                MappingEntityType#VARIANT} and {@link MappingEntityType#MODIFIER}
+     *                (each brand-owned data); null is fine for the rest, and
+     *                for those three a null brandId simply resolves nothing
+     *                rather than reaching across the whole tenant
      */
     public Map<UUID, String> resolveHorecaosNames(
             UUID tenantId, @Nullable UUID brandId, MappingEntityType type, Set<UUID> ids) {
@@ -363,15 +423,19 @@ public class JdbcPosMappingStore {
             case COURIER -> resolveById(tenantId, "fulfillment.couriers", "display_reference", ids);
             case CANCELLATION_REASON -> resolveById(tenantId, "ordering.order_outcome_reasons", "internal_name", ids);
             case CHANNEL_POS_CODE -> resolveById(tenantId, "tenant.sales_channels", "display_name", ids);
+            case VARIANT -> resolveVariantNames(tenantId, brandId, ids);
+            case MODIFIER -> resolveModifierNames(tenantId, brandId, ids);
         };
     }
 
     /**
      * Whether {@code horecaosEntityId} names a real row of this {@code type}
-     * in this tenant (and, for {@link MappingEntityType#PRODUCT}, this brand)
-     * — the same per-type resolution {@link #resolveHorecaosNames} already
-     * knows, run for one id rather than a batch so {@code create} can refuse
-     * a nonexistent or cross-tenant id before it ever reaches the INSERT.
+     * in this tenant (and, for {@link MappingEntityType#PRODUCT}, {@link
+     * MappingEntityType#VARIANT} and {@link MappingEntityType#MODIFIER}, this
+     * brand) — the same per-type resolution {@link #resolveHorecaosNames}
+     * already knows, run for one id rather than a batch so {@code create} can
+     * refuse a nonexistent, cross-tenant, or (for those three brand-owned
+     * types) cross-brand id before it ever reaches the INSERT.
      */
     public boolean horecaosEntityExists(
             UUID tenantId, @Nullable UUID brandId, MappingEntityType type, UUID horecaosEntityId) {
@@ -391,6 +455,54 @@ public class JdbcPosMappingStore {
                      ON t.entity_type = 'PRODUCT' AND t.entity_id = p.id
                     AND t.locale = 'uz-UZ' AND t.tenant_id = p.tenant_id
                  WHERE p.tenant_id = :tenantId AND p.brand_id = :brandId AND p.id = ANY(:ids)
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("ids", ids.toArray(UUID[]::new))
+                .query((row, number) -> Map.entry(row.getObject("id", UUID.class), row.getString("name")))
+                .list()
+                .stream()
+                .collect(java.util.stream.Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+    }
+
+    private Map<UUID, String> resolveVariantNames(UUID tenantId, @Nullable UUID brandId, Set<UUID> ids) {
+        if (brandId == null) {
+            return Map.of();
+        }
+        return jdbc
+                .sql("""
+                SELECT v.id, coalesce(t.name, v.sku, v.id::text) AS name
+                  FROM catalog.variants v
+             LEFT JOIN catalog.translations t
+                     ON t.entity_type = 'VARIANT' AND t.entity_id = v.id
+                    AND t.locale = 'uz-UZ' AND t.tenant_id = v.tenant_id
+                 WHERE v.tenant_id = :tenantId AND v.brand_id = :brandId AND v.id = ANY(:ids)
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("ids", ids.toArray(UUID[]::new))
+                .query((row, number) -> Map.entry(row.getObject("id", UUID.class), row.getString("name")))
+                .list()
+                .stream()
+                .collect(java.util.stream.Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+    }
+
+    /**
+     * Brand-scoped, exactly like {@link #resolveVariantNames} and for the same
+     * reason: {@code catalog.modifier_options} is brand-owned data (V0016,
+     * {@code brand_id uuid NOT NULL}), and a binding always belongs to one
+     * specific brand, so a plain tenant-wide {@link #resolveById} would let a
+     * {@code MODIFIER} mapping resolve -- and {@link #horecaosEntityExists}
+     * accept -- a modifier option from a brand other than the binding's own.
+     */
+    private Map<UUID, String> resolveModifierNames(UUID tenantId, @Nullable UUID brandId, Set<UUID> ids) {
+        if (brandId == null) {
+            return Map.of();
+        }
+        return jdbc
+                .sql("""
+                SELECT id, code AS name FROM catalog.modifier_options
+                 WHERE tenant_id = :tenantId AND brand_id = :brandId AND id = ANY(:ids)
                 """)
                 .param("tenantId", tenantId)
                 .param("brandId", brandId)

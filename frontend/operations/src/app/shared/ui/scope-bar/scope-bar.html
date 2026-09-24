@@ -19,7 +19,7 @@
     <select
       class="scopeBar__select q-body-sm"
       [value]="selectedLocationId() ?? ''"
-      [disabled]="locationDisabledReason() !== null"
+      [disabled]="locationDisabledReason() !== null || tenantWide()"
       (change)="onLocationChange($any($event.target).value)"
     >
       <option value="">{{ 'scopeBar.allLocations' | t }}</option>
@@ -36,6 +36,29 @@
       <span class="scopeBar__chip q-caption">{{ reason }}</span>
     }
   </label>
+
+  <div class="scopeBar__tenantToggle" role="group" [attr.aria-label]="'scopeBar.tenantWide.groupLabel' | t">
+    <button
+      type="button"
+      class="scopeBar__tenantToggle-btn"
+      [class.scopeBar__tenantToggle-btn--active]="!tenantWide()"
+      [attr.aria-pressed]="!tenantWide()"
+      data-testid="scope-bar-per-brand"
+      (click)="tenantWideChange.emit(false)"
+    >
+      {{ 'scopeBar.tenantWide.perBrand' | t }}
+    </button>
+    <button
+      type="button"
+      class="scopeBar__tenantToggle-btn"
+      [class.scopeBar__tenantToggle-btn--active]="tenantWide()"
+      [attr.aria-pressed]="tenantWide()"
+      data-testid="scope-bar-tenant-wide"
+      (click)="tenantWideChange.emit(true)"
+    >
+      {{ 'scopeBar.tenantWide.tenant' | t }}
+    </button>
+  </div>
 
   <div class="scopeBar__level q-caption">
     {{ 'scopeBar.level' | t }}: <strong>{{ levelKey() | t }}</strong>

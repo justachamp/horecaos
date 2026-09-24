@@ -333,6 +333,47 @@ public class CampaignService {
     }
 
     /**
+     * Row 6.4 (wave 10 w5-reports-exports): re-arms a campaign {@link
+     * JdbcCampaignStore#clearFailedSchedule} halted — the channel became
+     * unwired at its due moment, so the sweeper disarmed it rather than
+     * retrying forever — for a new future send, without a fresh approval.
+     * {@code CampaignStatus} stays {@code SCHEDULED} throughout; only {@code
+     * scheduled_at} moves and {@code halted_reason} clears, the same "no new
+     * transition needed" shape {@link JdbcCampaignStore#clearFailedSchedule}'s
+     * own doc argues in reverse.
+     *
+     * @return false only when the campaign is not currently halted (not
+     *         {@code SCHEDULED}, or {@code SCHEDULED} with a live {@code
+     *         scheduledAt} already) — a refusal rather than an error, the
+     *         same posture {@link #halt} takes
+     * @throws IllegalArgumentException {@code newScheduledAt} is not in the future
+     */
+    @Transactional
+    public boolean reschedule(
+            UUID tenantId, UUID campaignId, Instant newScheduledAt, ActorRef actor, String correlationId) {
+        if (!newScheduledAt.isAfter(clock.instant())) {
+            throw new IllegalArgumentException("scheduledAt must be in the future, not " + newScheduledAt);
+        }
+        CampaignRow campaign = require(tenantId, campaignId);
+        Instant now = clock.instant();
+        boolean rescheduled = campaigns.reschedule(tenantId, campaignId, newScheduledAt, now);
+
+        audit.record(AuditFact.of("MARKETING_CAMPAIGN_RESCHEDULED", AuditClass.BUSINESS)
+                .by(actor)
+                .at(ResourceScope.brand(tenantId, campaign.brandId()))
+                .target("MarketingCampaign", campaignId)
+                .outcome(rescheduled ? AuditFact.Outcome.SUCCEEDED : AuditFact.Outcome.REJECTED)
+                .because(campaign.haltedReason() == null ? "operator re-schedule" : campaign.haltedReason())
+                .changed(Map.of("scheduledAt", newScheduledAt.toString()))
+                .usingCapability("campaign.approve")
+                .correlatedBy(correlationId)
+                .occurredAt(now)
+                .build());
+
+        return rescheduled;
+    }
+
+    /**
      * Stops a campaign on an operator's word.
      *
      * <p>Terminal rather than resumable. A campaign that stopped and can be

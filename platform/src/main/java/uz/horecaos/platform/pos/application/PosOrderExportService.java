@@ -92,6 +92,17 @@ public class PosOrderExportService {
     private static final String MODIFIER_ENTITY = "MODIFIER";
 
     /**
+     * Row 2.1b's own mapping entity type, alongside {@link #MODIFIER_ENTITY}:
+     * a preset is a distinct vocabulary (kitchen instructions, not a priced
+     * modifier), so it gets its own entity type in {@code
+     * integration.provider_entity_mappings} rather than being folded into
+     * {@code MODIFIER}'s own id space — the identical reasoning {@link
+     * #OPERATOR_ENTITY}'s own doc gives for not reusing {@code MODIFIER}
+     * there either.
+     */
+    private static final String COMMENT_PRESET_ENTITY = "COMMENT_PRESET";
+
+    /**
      * The ADR 0026 mapping entity type a HorecaOS staff principal resolves
      * through, for {@link OrderExport#operatorExternalId} (operations-gap-map.md
      * {@code 9.2c}). Shares the one generic {@code
@@ -718,6 +729,79 @@ public class PosOrderExportService {
      */
     public record ApprovalObservation(PosAdapter.ApprovalRead read, String providerType) {}
 
+    /**
+     * Which of this order's lines or modifiers still lacks a provider mapping
+     * — gap-map row 1.2i's fix path, the entity id the console's deep link
+     * into the ADR 0012 mapping screen pre-selects.
+     *
+     * <p>Derived fresh rather than read back from a stored {@code
+     * LINE_UNMAPPED}/{@code MODIFIER_UNMAPPED} attempt: the same lookup
+     * {@link #prepare} runs before ever building an export, so an operator
+     * who has since mapped the first offender sees the next one — or none —
+     * rather than a snapshot from whenever the last attempt happened to run.
+     * Side-effect free and never sent anywhere: no adapter is called, and
+     * this never opens, claims, or settles an export row.
+     *
+     * @return empty when the order cannot be read, has no POS binding for
+     *         {@link PosCapability#ORDER_EXPORT}, or every line and modifier
+     *         already resolves
+     */
+    public Optional<UnmappedEntity> findUnmappedEntity(UUID tenantId, UUID orderId) {
+        Optional<PosOrderSource.ExportableOrder> maybeOrder = orders.find(tenantId, orderId, REVEAL_PURPOSE);
+        if (maybeOrder.isEmpty()) {
+            return Optional.empty();
+        }
+        PosOrderSource.ExportableOrder order = maybeOrder.get();
+        Optional<BindingRef> binding = installations.primaryBinding(
+                tenantId, order.brandId(), order.locationId(), PosCapability.ORDER_EXPORT.code());
+        if (binding.isEmpty()) {
+            return Optional.empty();
+        }
+        UUID bindingId = binding.get().bindingId();
+        for (PosOrderSource.ExportableOrder.Line line : order.lines()) {
+            if (mappings.externalIdFor(bindingId, VARIANT_ENTITY, line.sourceVariantId())
+                    .isEmpty()) {
+                return Optional.of(new UnmappedEntity("VARIANT", line.sourceVariantId(), bindingId));
+            }
+            for (UUID optionId : line.modifierOptionIds()) {
+                if (mappings.externalIdFor(bindingId, MODIFIER_ENTITY, optionId).isEmpty()) {
+                    return Optional.of(new UnmappedEntity("MODIFIER", optionId, bindingId));
+                }
+            }
+            // Row 2.1b: a comment preset travels to the till as a modifier
+            // code through COMMENT_PRESET_ENTITY, the same table prepare()
+            // checks before refusing an export with MODIFIER_UNMAPPED — this
+            // live re-check has to see the identical gap, or the console's
+            // deep link dead-ends whenever a preset is the actual cause.
+            for (UUID presetId : line.commentPresetIds()) {
+                if (mappings.externalIdFor(bindingId, COMMENT_PRESET_ENTITY, presetId)
+                        .isEmpty()) {
+                    return Optional.of(new UnmappedEntity("COMMENT_PRESET", presetId, bindingId));
+                }
+            }
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * @param entityType     {@code "VARIANT"}, {@code "MODIFIER"} or {@code
+     *                       "COMMENT_PRESET"} — matches
+     *                       {@link uz.horecaos.platform.integration.api.provider.MappingEntityType#VARIANT}
+     *                       and {@code #MODIFIER}'s own {@code storedAs()}, and
+     *                       {@link #COMMENT_PRESET_ENTITY}
+     * @param horecaosEntityId never a provider id or free text — an internal
+     *                         id only, safe for a URL query string (ADR 0029)
+     * @param bindingId      the {@code ORDER_EXPORT} binding this order's
+     *                       branch currently resolves to (the same one the id
+     *                       above was checked against) -- a deep link built
+     *                       from only {@code entityType}/{@code
+     *                       horecaosEntityId} lets the ADR 0012 mapping
+     *                       screen default to the wrong binding for any
+     *                       tenant with more than one POS binding, so the
+     *                       caller must thread this through too
+     */
+    public record UnmappedEntity(String entityType, UUID horecaosEntityId, UUID bindingId) {}
+
     private Prepared prepare(UUID tenantId, JdbcPosExportStore.ExportRow export) {
         PosOrderSource.ExportableOrder order = orders.find(tenantId, export.orderId(), REVEAL_PURPOSE)
                 .orElseThrow(
@@ -760,12 +844,24 @@ public class PosOrderExportService {
                             "Order line %s has no provider mapping, and a provider product ".formatted(line.lineId())
                                     + "must never be guessed from a name"));
 
-            List<String> modifiers = line.modifierOptionIds().stream()
+            List<String> modifiers = new ArrayList<>(line.modifierOptionIds().stream()
                     .map(optionId -> mappings.externalIdFor(binding.bindingId(), MODIFIER_ENTITY, optionId)
                             .orElseThrow(() -> new ExportNotPossible(
                                     "MODIFIER_UNMAPPED",
                                     "A modifier on line %s has no provider mapping".formatted(line.lineId()))))
-                    .toList();
+                    .toList());
+
+            // Row 2.1b: a preset chip travels to the till as a modifier code,
+            // through the identical ADR 0026 table and the identical
+            // MODIFIER_UNMAPPED refusal a priced modifier already gets —
+            // the till has no separate notion of a kitchen instruction, only
+            // of a modifier on a line.
+            line.commentPresetIds().stream()
+                    .map(presetId -> mappings.externalIdFor(binding.bindingId(), COMMENT_PRESET_ENTITY, presetId)
+                            .orElseThrow(() -> new ExportNotPossible(
+                                    "MODIFIER_UNMAPPED",
+                                    "A comment preset on line %s has no provider mapping".formatted(line.lineId()))))
+                    .forEach(modifiers::add);
 
             lines.add(new OrderExport.Line(
                     externalId,

@@ -18,26 +18,46 @@ package uz.horecaos.platform.ordering.domain;
  * for the two note channels the legacy dashboard had and this platform did
  * not.
  *
- * <p>Five are built. The other seven are declared — the set is code-owned like
- * {@link OrderStatus}, and a set that is open at the edges cannot express
- * "closed" — and {@code built()} is false for them, so the application refuses
- * each by name rather than accepting a command it would carry out in the quote
- * and forget in the fiscal receipt.
+ * <p>Wave 10 (gap map rows {@code 1.2c}/{@code 2.1d}) built six of the seven
+ * financial commands: {@link #ADD_LINES} and {@link #CHANGE_LINE_QUANTITY} for
+ * an increase only, {@link #CHANGE_PAYMENT_METHOD} for {@code CASH} at either
+ * end or opening a fresh online intent, {@link #CHANGE_DELIVERY_ADDRESS},
+ * {@link #CHANGE_FULFILLMENT_TIME} and {@link #CHANGE_CONTACT}. Eleven of the
+ * twelve are built in total; only {@link #REMOVE_LINES} is still declared and
+ * refused — the set is code-owned like {@link OrderStatus}, and a set that is
+ * open at the edges cannot express "closed" — because releasing or writing off
+ * already-committed stock needs a fourth ADR 0017 primitive (return-to-stock
+ * or write-off) beyond the port's deliberate three (hold, commit, release),
+ * and inventing one is that module's decision, not this one's. {@code
+ * built()} is false for it, so the application refuses it by name rather than
+ * accepting a command it would carry out in the quote and forget in the
+ * inventory ledger.
  */
 public enum AmendmentCommandType {
-    ADD_LINES(true, false),
-    CHANGE_LINE_QUANTITY(true, false),
+    /** Wave 10 (gap map rows {@code 1.2c}/{@code 2.1d}): increases only, no modifiers. */
+    ADD_LINES(true, true),
+
+    /** Wave 10: increases only — a decrease has no ADR 0017 return/waste primitive yet. */
+    CHANGE_LINE_QUANTITY(true, true),
+
+    /** Still refused: removing a line needs the same missing ADR 0017 primitive as a decrease. */
     REMOVE_LINES(true, false),
-    CHANGE_PAYMENT_METHOD(true, false),
-    CHANGE_DELIVERY_ADDRESS(true, false),
-    CHANGE_FULFILLMENT_TIME(true, false),
+
+    /** Wave 10: {@code CASH} at either end direct; anything else needs a void/refund this build cannot do. */
+    CHANGE_PAYMENT_METHOD(true, true),
+
+    /** Wave 10: reprices through the same path {@code CartService#price} uses; refused out of zone. */
+    CHANGE_DELIVERY_ADDRESS(true, true),
+
+    /** Wave 10: a field update. Never reprices — no price plane in this build varies by time. */
+    CHANGE_FULFILLMENT_TIME(true, true),
 
     /**
      * Financial in ADR 0039's matrix only in the sense that it touches the
      * customer snapshot, which is ADR 0029 protected data with its own row
-     * binding. Unbuilt for that reason rather than for a money reason.
+     * binding — never a money consequence. Built (wave 10).
      */
-    CHANGE_CONTACT(true, false),
+    CHANGE_CONTACT(true, true),
 
     SET_KITCHEN_NOTE(false, true),
 

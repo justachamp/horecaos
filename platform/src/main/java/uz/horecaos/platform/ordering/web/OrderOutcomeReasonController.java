@@ -156,6 +156,31 @@ public class OrderOutcomeReasonController {
         }
     }
 
+    @PutMapping("/reorder")
+    @RequiresCapability(value = Capability.ORDER_OUTCOME_REASON_MANAGE, scope = ScopeType.TENANT, mutating = true)
+    @Operation(
+            summary = "Rank every active reason of one kind (gap-map row 10.10a)",
+            description = "Whole-set: orderedReasonIds must name every currently active reason of "
+                    + "this kind exactly once. If-Match carries the highest version among those "
+                    + "reasons — there is no separate list-level aggregate to version — the same "
+                    + "value the caller can compute from the list it already rendered. Returns the "
+                    + "reordered list, each reason's version now bumped, so the caller never needs "
+                    + "a second read before its next write.")
+    public ResponseEntity<List<ReasonResponse>> reorder(
+            @PathVariable UUID tenantId, @Valid @RequestBody ReorderRequest body, HttpServletRequest request) {
+        try {
+            reasons.reorder(
+                    tenantId, body.kind(), body.orderedReasonIds(), (int) AggregateVersion.requireIfMatch(request));
+        } catch (OrderOutcomeReasonService.StaleReasonException stale) {
+            throw ApiException.staleVersion(stale.expected(), stale.actual());
+        } catch (IllegalArgumentException refused) {
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, refused.getMessage());
+        }
+        return ResponseEntity.ok(reasons.list(tenantId, body.kind(), true).stream()
+                .map(row -> ReasonResponse.of(row, reasons.texts(row.id())))
+                .toList());
+    }
+
     /**
      * A reason to author or update, in every required locale at once.
      *
@@ -186,6 +211,17 @@ public class OrderOutcomeReasonController {
                     customerTexts);
         }
     }
+
+    /**
+     * The full, ordered set of active reason ids for one kind (row 10.10a).
+     *
+     * @param orderedReasonIds every active reason of {@code kind}, in the
+     *                         rank the caller wants — see {@link
+     *                         OrderOutcomeReasonService#reorder}'s own doc
+     *                         for why a partial list is refused
+     */
+    public record ReorderRequest(
+            @NotNull OutcomeReasonKind kind, @NotEmpty List<UUID> orderedReasonIds) {}
 
     public record IdResponse(UUID id) {}
 

@@ -1,31 +1,46 @@
 package uz.horecaos.platform.catalog.application;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.StringReader;
 import java.io.StringWriter;
 import java.io.UncheckedIOException;
+import java.util.ArrayList;
+import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.stream.Stream;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVPrinter;
+import org.dhatim.fastexcel.Workbook;
+import org.dhatim.fastexcel.Worksheet;
+import org.dhatim.fastexcel.reader.ReadableWorkbook;
+import org.dhatim.fastexcel.reader.Row;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 
 /**
- * A UTF-8 CSV reading and template for the catalog import (row 4.5b),
- * modelled on {@code CustomerCsvImportParser}: header-driven, tolerant of
- * column naming, one row per parsed input line, 1-based.
+ * A UTF-8 CSV and {@code .xlsx} reading and template for the catalog import
+ * (row 4.5b), modelled on {@code CustomerCsvImportParser}: header-driven,
+ * tolerant of column naming, one row per parsed input line, 1-based.
  *
- * <p><b>CSV only.</b> {@code platform/pom.xml} carries no spreadsheet library
- * (no Apache POI, no equivalent) at the time this wave was built — checked
- * directly rather than assumed — and this wave does not add one, per the
- * brief's own instruction to say so rather than reach for a new dependency.
- * A merchant exporting from Excel or Google Sheets as CSV/UTF-8 is the
- * supported path; native {@code .xlsx} is a follow-up once a library is
- * actually chosen.
+ * <p><b>Format is decided by the file name's extension</b> ({@link
+ * #parse(String, String)}), never sniffed from the bytes: a merchant who
+ * renames a CSV to {@code .xlsx} gets a clear parse failure rather than a
+ * guess. {@code .xlsx} content travels the identical {@code content} string
+ * field CSV always has — this endpoint has never taken a multipart body —
+ * Base64-encoded by the caller, since an {@code .xlsx} is a binary zip
+ * archive and the field is JSON text.
+ *
+ * <p>fastexcel (org.dhatim) rather than Apache POI: a small, actively
+ * maintained streaming reader/writer, chosen over POI's much larger surface
+ * for a job that only ever needs one sheet of text and number cells. See
+ * {@code pom.xml}'s own dependency comment for the version and the excluded
+ * test-scoped POI transitive.
  */
 @Component
 public class CatalogImportParser {
@@ -44,8 +59,51 @@ public class CatalogImportParser {
             "status",
             "image_url");
 
-    /** Parses the whole document, rows in source order, 1-based. */
+    /**
+     * The largest decoded {@code .xlsx} this parser will build a workbook
+     * from. Independent of any limit an HTTP layer happens to apply (ADR
+     * 0031's {@code CachedBodyRequestFilter} currently caps the whole
+     * encoded request body, JSON envelope included, at 1 MiB) — this parser
+     * has no visibility into that, and a future direct caller (a batch job,
+     * a test) may never go through it at all.
+     */
+    public static final int MAX_DECODED_XLSX_BYTES = 8 * 1024 * 1024;
+
+    /**
+     * The largest number of sheet rows this parser will ever materialize.
+     * {@code .xlsx}'s zip container uses DEFLATE, which can amplify a small,
+     * highly repetitive upload into a sheet many hundreds of times its
+     * compressed size — a byte-size check on the compressed upload alone
+     * (see {@link #MAX_DECODED_XLSX_BYTES}) does not bound that. Reading
+     * through {@link org.dhatim.fastexcel.reader.Sheet#openStream()} rather
+     * than {@link org.dhatim.fastexcel.reader.Sheet#read()}, and refusing
+     * once this many rows have been pulled, bounds the work done regardless
+     * of how the archive was built. Comfortably above any real brand
+     * catalog.
+     */
+    public static final int MAX_XLSX_ROWS = 20_000;
+
+    /**
+     * Parses the whole document, rows in source order, 1-based.
+     *
+     * @param sourceFileName decides the format: a name ending {@code .xlsx}
+     *                       (case-insensitive) is read as a Base64-encoded
+     *                       workbook, everything else as CSV text
+     */
+    public List<CatalogImportRow> parse(String sourceFileName, String content) {
+        return isXlsx(sourceFileName) ? parseXlsx(content) : parseCsv(content);
+    }
+
+    /** CSV only — kept for the handful of call sites (tests, mainly) that never carry a file name. */
     public List<CatalogImportRow> parse(String content) {
+        return parseCsv(content);
+    }
+
+    private static boolean isXlsx(String sourceFileName) {
+        return sourceFileName.toLowerCase(Locale.ROOT).endsWith(".xlsx");
+    }
+
+    private List<CatalogImportRow> parseCsv(String content) {
         CSVFormat format = CSVFormat.DEFAULT
                 .builder()
                 .setHeader()
@@ -67,6 +125,85 @@ public class CatalogImportParser {
     }
 
     /**
+     * Reads the workbook's first sheet: row 1 is the header (matched the same
+     * tolerant way {@link #normalizeKey} already matches a CSV header), every
+     * row after it one import row. An entirely blank row (every cell empty)
+     * is skipped rather than parsed as a row with no product code, the same
+     * forgiveness a merchant's own copy-paste habits need — a trailing blank
+     * row under the last real one is the single most common shape a filled
+     * template comes back in.
+     *
+     * <p>Two caps guard against a small, maliciously crafted upload
+     * expanding into an unreasonable amount of work: {@link
+     * #MAX_DECODED_XLSX_BYTES} refuses before a workbook is even opened, and
+     * {@link #MAX_XLSX_ROWS} bounds how many rows are ever pulled from the
+     * sheet's own streaming reader, regardless of the archive's compression
+     * ratio.
+     */
+    private List<CatalogImportRow> parseXlsx(String base64Content) {
+        byte[] bytes;
+        try {
+            bytes = Base64.getDecoder().decode(base64Content);
+        } catch (IllegalArgumentException notBase64) {
+            throw new CatalogImportFormatException("The .xlsx document is not valid Base64: " + notBase64.getMessage());
+        }
+        if (bytes.length > MAX_DECODED_XLSX_BYTES) {
+            throw new CatalogImportFormatException("The .xlsx document is larger than the %d MB this import accepts"
+                    .formatted(MAX_DECODED_XLSX_BYTES / (1024 * 1024)));
+        }
+        try (ReadableWorkbook workbook = new ReadableWorkbook(new ByteArrayInputStream(bytes))) {
+            List<Row> all;
+            try (Stream<Row> rows = workbook.getFirstSheet().openStream()) {
+                all = rows.limit(MAX_XLSX_ROWS + 1L).toList();
+            }
+            if (all.size() > MAX_XLSX_ROWS) {
+                throw new CatalogImportFormatException(
+                        "The .xlsx document has more than the %d rows this import accepts".formatted(MAX_XLSX_ROWS));
+            }
+            if (all.isEmpty()) {
+                return List.of();
+            }
+            Row header = all.get(0);
+            Map<Integer, String> columnByIndex = new LinkedHashMap<>();
+            for (int c = 0; c < header.getCellCount(); c++) {
+                String cell = header.getCellText(c).strip();
+                if (!cell.isEmpty()) {
+                    columnByIndex.put(c, cell);
+                }
+            }
+            List<CatalogImportRow> parsed = new ArrayList<>();
+            int rowNumber = 0;
+            for (int r = 1; r < all.size(); r++) {
+                Row row = all.get(r);
+                rowNumber++;
+                Map<String, String> raw = new LinkedHashMap<>();
+                columnByIndex.forEach((index, columnName) -> {
+                    String text = row.getCellText(index).strip();
+                    if (!text.isEmpty()) {
+                        raw.put(columnName, text);
+                    }
+                });
+                if (raw.isEmpty()) {
+                    continue;
+                }
+                parsed.add(toRow(raw, rowNumber));
+            }
+            return parsed;
+        } catch (CatalogImportFormatException refused) {
+            // Already the right exception, carrying its own specific
+            // message (the row-count cap above) -- rethrown as-is rather
+            // than wrapped a second time by the generic case below.
+            throw refused;
+        } catch (IOException | RuntimeException malformed) {
+            // fastexcel-reader throws a range of unchecked exceptions for a
+            // document that is not actually a valid OOXML workbook (a
+            // renamed CSV, a corrupted upload); all land here as the same
+            // per-document parse failure the CSV path already has.
+            throw new CatalogImportFormatException("The .xlsx document could not be parsed: " + malformed.getMessage());
+        }
+    }
+
+    /**
      * The empty template a merchant downloads and fills — header row only,
      * UTF-8, this import's own column order.
      *
@@ -84,6 +221,84 @@ public class CatalogImportParser {
      */
     public String template() {
         return writeCsv(List.of());
+    }
+
+    /**
+     * The same template as {@link #template}, as a real {@code .xlsx}
+     * workbook rather than CSV text (row 4.5b's own "template download as a
+     * workbook" ask): a first {@code Import} sheet with the header row only
+     * — ready to fill and re-upload — an {@code Examples} sheet showing two
+     * filled rows (a plain create and a price-only correction, the two
+     * shapes {@link CatalogImportRowService}'s own class doc names as the
+     * ones a blank cell means something different on), and a {@code
+     * Reference} sheet naming the closed vocabularies {@code status} and
+     * {@code unit_code} accept — the two columns a merchant is otherwise
+     * left guessing at from the CSV template alone.
+     */
+    public byte[] templateWorkbook() {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        try (Workbook workbook = new Workbook(out, "HorecaOS", "1.0")) {
+            writeHeaderRow(workbook.newWorksheet("Import"));
+
+            Worksheet examples = workbook.newWorksheet("Examples");
+            writeHeaderRow(examples);
+            writeRow(
+                    examples,
+                    1,
+                    List.of(
+                            "BURGER-CLASSIC",
+                            "MAIN",
+                            "Основные блюда",
+                            "Классический бургер",
+                            "Говяжья котлета, сыр, соус",
+                            "SKU-BURGER-001",
+                            "PIECE",
+                            "45000",
+                            "UZS",
+                            "ACTIVE",
+                            ""));
+            writeRow(examples, 2, List.of("BURGER-CLASSIC", "", "", "", "", "", "", "48000", "UZS", "", ""));
+
+            Worksheet reference = workbook.newWorksheet("Reference");
+            reference.value(0, 0, "column");
+            reference.value(0, 1, "allowed values");
+            writeReferenceRow(reference, 1, "status", "DRAFT, ACTIVE, ARCHIVED");
+            writeReferenceRow(reference, 2, "unit_code", "PIECE, KG, LITER, PORTION (tenant's own configured units)");
+            writeReferenceRow(
+                    reference,
+                    3,
+                    "price_currency",
+                    "ISO 4217, e.g. UZS -- present only together with price_amount_minor");
+            writeReferenceRow(
+                    reference,
+                    4,
+                    "price_amount_minor",
+                    "Integer minor units (som, not tiyin) -- present only together with price_currency");
+        } catch (IOException impossible) {
+            // A ByteArrayOutputStream never throws IOException.
+            throw new IllegalStateException(impossible);
+        }
+        return out.toByteArray();
+    }
+
+    private static void writeHeaderRow(Worksheet sheet) {
+        for (int c = 0; c < COLUMNS.size(); c++) {
+            sheet.value(0, c, COLUMNS.get(c));
+        }
+    }
+
+    private static void writeRow(Worksheet sheet, int rowIndex, List<String> values) {
+        for (int c = 0; c < values.size(); c++) {
+            String value = values.get(c);
+            if (!value.isEmpty()) {
+                sheet.value(rowIndex, c, value);
+            }
+        }
+    }
+
+    private static void writeReferenceRow(Worksheet sheet, int rowIndex, String column, String allowedValues) {
+        sheet.value(rowIndex, 0, column);
+        sheet.value(rowIndex, 1, allowedValues);
     }
 
     /** The brand's catalog, filled into the same template {@link #template} hands out — export/import share one shape by construction. */

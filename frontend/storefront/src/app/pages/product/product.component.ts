@@ -1,10 +1,4 @@
-import {
-  ChangeDetectionStrategy,
-  Component,
-  computed,
-  inject,
-  signal,
-} from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -14,18 +8,35 @@ import { FoodCarouselComponent } from '../../shared/food-carousel/food-carousel.
 import { MenuService } from '../../services/menu.service';
 import { LangService } from '../../services/lang.service';
 import { UiCartService } from '../../services/ui-cart.service';
-import type { MenuItem, MenuItemModifierGroup, MenuItemVariant, PopularCategory } from '../../types/home.types';
+import type {
+  MenuItem,
+  MenuItemCommentPreset,
+  MenuItemModifierGroup,
+  MenuItemVariant,
+  PopularCategory,
+} from '../../types/home.types';
 import { TranslatePipe } from '../../shared/translate/translate.pipe';
 import { TranslateService } from '../../services/translate.service';
 import { FavouritesService } from '../../services/favourites.service';
 import { NavigationHistoryService } from '../../services/navigation-history.service';
 import { FEATURES } from '../../core/config/features';
 import { Session } from '../../core/auth/session';
+import { EcommerceItem, pushEcommerceEvent } from '../../core/analytics/ecommerce-events';
+
+/** Matches `CartOrderStatusComponent`'s own fallback -- the storefront's launch scope is UZS-only. */
+const FALLBACK_CURRENCY = 'UZS';
 
 export interface ProductVariantDisplay {
   id: string;
   label: string;
   price: number;
+  /**
+   * Row 4.2g: false means this variant's own sale schedule excludes the
+   * current moment. Shown (unlike an unorderable variant, which never
+   * reaches this display at all -- see {@link menuItemToDisplay}'s own
+   * filter), but add-to-cart must refuse it.
+   */
+  onSaleNow: boolean;
 }
 
 export interface ProductDisplay {
@@ -45,7 +56,12 @@ function menuItemToDisplay(item: MenuItem, formatPriceFn: (n: number) => string)
       : undefined;
   const variants: ProductVariantDisplay[] = (item.variants ?? [])
     .filter((v: MenuItemVariant) => v.active)
-    .map((v: MenuItemVariant) => ({ id: v.id, label: v.name, price: v.price }));
+    .map((v: MenuItemVariant) => ({
+      id: v.id,
+      label: v.name,
+      price: v.price,
+      onSaleNow: v.onSaleNow,
+    }));
   return {
     id: item.id,
     title: item.name,
@@ -109,10 +125,76 @@ export class ProductComponent {
   });
 
   /** The modifier groups this product offers (add-ons, sizes-of-topping, and so on). */
-  readonly modifierGroups = computed<MenuItemModifierGroup[]>(() => this.rawItem()?.modifierGroups ?? []);
+  readonly modifierGroups = computed<MenuItemModifierGroup[]>(
+    () => this.rawItem()?.modifierGroups ?? [],
+  );
+
+  /** Row 2.1b: the coded comment presets this product offers, in the catalogue's own order. */
+  readonly commentPresets = computed<MenuItemCommentPreset[]>(
+    () => this.rawItem()?.commentPresets ?? [],
+  );
 
   /** groupId -> the option ids currently chosen within it. */
   private readonly selectedOptions = signal<Record<string, readonly string[]>>({});
+
+  /** Row 2.1b: the preset codes currently checked. */
+  private readonly selectedPresetCodes = signal<ReadonlySet<string>>(new Set());
+
+  isPresetSelected(code: string): boolean {
+    return this.selectedPresetCodes().has(code);
+  }
+
+  togglePreset(code: string): void {
+    this.selectedPresetCodes.update((current) => {
+      const next = new Set(current);
+      if (next.has(code)) {
+        next.delete(code);
+      } else {
+        next.add(code);
+      }
+      return next;
+    });
+  }
+
+  /** The checked codes, in the product's own offered order -- never click order. */
+  private flattenedPresetSelection(): readonly string[] {
+    const checked = this.selectedPresetCodes();
+    return this.commentPresets()
+      .filter((preset) => checked.has(preset.code))
+      .map((preset) => preset.code);
+  }
+
+  /**
+   * Row 4.2g: whether the given variant is currently sellable at all --
+   * `active` (86'd) is already the display's own filter (see {@link
+   * menuItemToDisplay}), so this only ever answers the sale-window half.
+   */
+  private variantOnSaleNow(variantId: string): boolean {
+    return this.variants().find((variant) => variant.id === variantId)?.onSaleNow ?? true;
+  }
+
+  /** Row 4.2g: shown next to a blocked add-to-cart control, the sale-window twin of `modifiersIncomplete`. */
+  isOutOfSaleWindow(variantId: string): boolean {
+    return !this.variantOnSaleNow(variantId);
+  }
+
+  /** Row 4.2g: the single-variant bottom bar's own guard -- `variantId()` is null before the menu loads, never treated as "out of window". */
+  readonly soleVariantOutOfSaleWindow = computed(() => {
+    const id = this.variantId();
+    return id !== null && this.isOutOfSaleWindow(id);
+  });
+
+  /** A preset's label in the customer's own language, matching `MenuService`'s own locale selection. */
+  presetLabel(preset: MenuItemCommentPreset): string {
+    switch (this.langService.langId()) {
+      case 'ru':
+        return preset.labelRu;
+      case 'en':
+        return preset.labelEn;
+      default:
+        return preset.labelUz;
+    }
+  }
 
   /**
    * Whether every required group has a selection within its min/max bounds.
@@ -180,9 +262,9 @@ export class ProductComponent {
     if (!vid) return null;
     const selection = this.flattenedSelection();
     return (
-      this.cartService.items().find(
-        (i) => i.variant_id === vid && sameOptionIds(i.modifierOptionIds, selection),
-      ) ?? null
+      this.cartService
+        .items()
+        .find((i) => i.variant_id === vid && sameOptionIds(i.modifierOptionIds, selection)) ?? null
     );
   });
 
@@ -237,7 +319,7 @@ export class ProductComponent {
               return item;
             }),
           );
-        })
+        }),
       )
       .subscribe({
         next: (item) => {
@@ -247,15 +329,15 @@ export class ProductComponent {
           // from the previous item on this route could name an option id that
           // does not even exist on this one.
           this.selectedOptions.set({});
+          this.selectedPresetCodes.set(new Set());
           this.product.set(menuItemToDisplay(item, (n) => this.formatPrice(n)));
           this.loadRecommendations(item.id, item);
+          this.trackViewItem(item);
           if (typeof window !== 'undefined') window.scrollTo(0, 0);
         },
         error: (err) => {
           this.loading.set(false);
-          this.error.set(
-            err?.error?.message ?? err?.message ?? "Ma'lumot yuklanmadi"
-          );
+          this.error.set(err?.error?.message ?? err?.message ?? "Ma'lumot yuklanmadi");
         },
       });
   }
@@ -320,10 +402,20 @@ export class ProductComponent {
    *
    * Blocked while a required group is unsatisfied -- the template disables
    * the button on `!modifiersValid()`, and this is the second guard, since a
-   * disabled button is not a security boundary against a stray call.
+   * disabled button is not a security boundary against a stray call. Row
+   * 4.2g adds a second block, for the identical reason: a variant outside
+   * its own sale window is shown but must not reach the cart from here --
+   * the platform's own `ITEM_OUT_OF_SALE_WINDOW` refusal is the last line,
+   * not the first.
    */
   increaseVariant(variantId: string): void {
-    if (!variantId || this.cartService.updating() || !this.modifiersValid()) return;
+    if (
+      !variantId ||
+      this.cartService.updating() ||
+      !this.modifiersValid() ||
+      !this.variantOnSaleNow(variantId)
+    )
+      return;
     // No anonymous cart on the platform: POST /carts requires a session. See
     // app.routes.ts's comment on /cart for the other half of this boundary.
     if (!this.session.isAuthenticated()) {
@@ -331,14 +423,21 @@ export class ProductComponent {
       return;
     }
     const selection = this.flattenedSelection();
+    const presetSelection = this.flattenedPresetSelection();
     const run = (): void => {
       const line = this.cartService
         .items()
         .find((i) => i.variant_id === variantId && sameOptionIds(i.modifierOptionIds, selection));
+      // ADR 0106, gap-map row 10.8e: fired for both branches below -- a
+      // bumped existing line and a brand-new one are the same customer
+      // action, one more unit of this variant landing in the cart -- right
+      // here rather than earlier in increaseVariant(), so a call the
+      // session/modifier guards above refuse never counts as an add.
+      this.trackAddToCart(variantId);
       if (line) {
         this.cartService.increaseQuantity(line);
       } else {
-        void this.cartService.add(variantId, 1, undefined, selection);
+        void this.cartService.add(variantId, 1, undefined, selection, presetSelection);
       }
     };
     if (!this.cartService.cartData()) {
@@ -380,17 +479,76 @@ export class ProductComponent {
     // Optimistic: the heart flips at once and is put back if the platform
     // refuses, so the screen never keeps a state the server rejected.
     const marked = this.isFavourite();
-    const change = marked
-      ? this.favourites.remove(item.id)
-      : this.favourites.add(item.id);
-    change.catch(() => {
-      // Reported by the error interceptor; the flip has already been undone.
-    }).finally(() => this.favouriting.set(false));
+    const change = marked ? this.favourites.remove(item.id) : this.favourites.add(item.id);
+    change
+      .catch(() => {
+        // Reported by the error interceptor; the flip has already been undone.
+      })
+      .finally(() => this.favouriting.set(false));
   }
 
   formatPrice(value: number): string {
     const c = this.translate.get('common.currency') || "so'm";
     return `${value.toLocaleString('uz-UZ')} ${c}`;
+  }
+
+  /**
+   * ADR 0106, gap-map row 10.8e: `view_item`, GA4 ecommerce event contract
+   * v1, fired once per product load. No PII -- an id, a name and a price,
+   * the same three fields {@link CartOrderStatusComponent}'s own `purchase`
+   * event carries per line.
+   */
+  private trackViewItem(item: MenuItem): void {
+    const ecommerceItem: EcommerceItem = {
+      item_id: item.id,
+      item_name: item.name,
+      price: item.price,
+      quantity: 1,
+    };
+    pushEcommerceEvent('view_item', {
+      currency: this.menuService.currency() ?? FALLBACK_CURRENCY,
+      value: item.price,
+      items: [ecommerceItem],
+    });
+  }
+
+  /**
+   * ADR 0106, gap-map row 10.8e: `add_to_cart`, fired once per unit the
+   * customer actually commits to adding -- `increaseVariant` always adds
+   * exactly one, so `quantity` is always `1` here regardless of how many are
+   * now in the line.
+   */
+  private trackAddToCart(variantId: string): void {
+    const ecommerceItem = this.ecommerceItemForVariant(variantId);
+    if (!ecommerceItem) {
+      return;
+    }
+    pushEcommerceEvent('add_to_cart', {
+      currency: this.menuService.currency() ?? FALLBACK_CURRENCY,
+      value: ecommerceItem.price,
+      items: [ecommerceItem],
+    });
+  }
+
+  /**
+   * Resolves a variant id to its own name and price for the GA4 event
+   * contract -- a product with variants names one of them; a product with
+   * none uses {@link variantId}'s own fallback to the item's own id, so the
+   * item's own name and price are the right answer for that case too.
+   */
+  private ecommerceItemForVariant(variantId: string): EcommerceItem | null {
+    const item = this.rawItem();
+    if (!item) {
+      return null;
+    }
+    const variant = (item.variants ?? []).find((v: MenuItemVariant) => v.id === variantId);
+    if (variant) {
+      return { item_id: variant.id, item_name: variant.name, price: variant.price, quantity: 1 };
+    }
+    if (variantId === item.id) {
+      return { item_id: item.id, item_name: item.name, price: item.price, quantity: 1 };
+    }
+    return null;
   }
 
 }

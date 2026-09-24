@@ -19,6 +19,11 @@ describe('TaxProfilePage', () => {
   let fixture: ComponentFixture<TaxProfilePage>;
 
   async function render(scope: BrandScope | null, api: Partial<PricingApi>): Promise<void> {
+    const merged: Partial<PricingApi> = {
+      taxProfiles: vi.fn().mockReturnValue(of([])),
+      taxProfile: vi.fn().mockReturnValue(of(null)),
+      ...api,
+    };
     await TestBed.configureTestingModule({
       imports: [TaxProfilePage],
       providers: [
@@ -30,7 +35,7 @@ describe('TaxProfilePage', () => {
             ensureLoaded: () => Promise.resolve(),
           },
         },
-        { provide: PricingApi, useValue: api },
+        { provide: PricingApi, useValue: merged },
       ],
     }).compileComponents();
     TestBed.inject(I18n).setLocale('en');
@@ -95,5 +100,63 @@ describe('TaxProfilePage', () => {
     await render(null, { setTaxProfile: vi.fn() });
     const host = fixture.nativeElement as HTMLElement;
     expect(host.querySelector('[data-testid="tax-profile-denied"]')).not.toBeNull();
+  });
+
+  // Row 4.8a: the screen used to be write-only. These two prove the read
+  // side actually renders before an operator can overwrite a rate blind.
+
+  it('lists every jurisdiction already in force, and shows what is in force for the default jurisdiction', async () => {
+    const uzProfile = {
+      taxProfileId: 'tp-1',
+      jurisdictionCode: 'UZ',
+      mode: 'INCLUSIVE' as const,
+      rateBasisPoints: 1200,
+      validFrom: new Date().toISOString(),
+      version: 3,
+    };
+    const taxProfiles = vi.fn().mockReturnValue(of([uzProfile]));
+    const taxProfile = vi.fn().mockReturnValue(of(uzProfile));
+    await render(SCOPE, { setTaxProfile: vi.fn(), taxProfiles, taxProfile });
+
+    const host = fixture.nativeElement as HTMLElement;
+    expect(taxProfiles).toHaveBeenCalledWith(SCOPE);
+    expect(taxProfile).toHaveBeenCalledWith(SCOPE, 'UZ');
+    expect(host.querySelector('[data-testid="tax-profile-existing-UZ"]')?.textContent).toContain('UZ');
+    expect(host.querySelector('[data-testid="tax-profile-in-force"]')?.textContent).toContain('UZ');
+    expect(host.querySelector('[data-testid="tax-profile-none-yet"]')).toBeNull();
+  });
+
+  it('shows no-profile-yet for a jurisdiction the brand has never set', async () => {
+    const taxProfiles = vi.fn().mockReturnValue(of([]));
+    const taxProfile = vi.fn().mockReturnValue(of(null));
+    await render(SCOPE, { setTaxProfile: vi.fn(), taxProfiles, taxProfile });
+
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('[data-testid="tax-profile-none-yet"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="tax-profile-in-force-none"]')?.textContent).toContain('UZ');
+  });
+
+  it('loads a different jurisdiction’s in-force rate into the form when it is selected from the list', async () => {
+    const uzProfile = {
+      taxProfileId: 'tp-1',
+      jurisdictionCode: 'RU',
+      mode: 'EXCLUSIVE' as const,
+      rateBasisPoints: 2000,
+      validFrom: new Date().toISOString(),
+      version: 1,
+    };
+    const taxProfiles = vi.fn().mockReturnValue(of([uzProfile]));
+    const taxProfile = vi.fn().mockReturnValue(of(null)).mockReturnValueOnce(of(null)).mockReturnValueOnce(of(uzProfile));
+    await render(SCOPE, { setTaxProfile: vi.fn(), taxProfiles, taxProfile });
+
+    const host = fixture.nativeElement as HTMLElement;
+    (host.querySelector('[data-testid="tax-profile-existing-RU"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(taxProfile).toHaveBeenLastCalledWith(SCOPE, 'RU');
+    expect(host.querySelector('[data-testid="tax-profile-mode-exclusive"]')?.className).toContain(
+      'tax-profile__mode-btn--active',
+    );
   });
 });

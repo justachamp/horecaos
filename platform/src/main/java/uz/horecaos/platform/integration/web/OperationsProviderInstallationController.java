@@ -121,6 +121,18 @@ public class OperationsProviderInstallationController {
         return delegate.bind(tenantId, installationId, request);
     }
 
+    @GetMapping("/{installationId}/capability-catalogue")
+    @RequiresCapability(Capability.INTEGRATION_INSTALLATION_MANAGE)
+    @Operation(
+            summary = "The vendor ceiling this installation's own provider declares (gap-map row 10.8a)",
+            description = "Identical to the control-plane-prefixed path's own operation; see "
+                    + "ProviderInstallationController.capabilityCatalogue. Backs the branch-binding "
+                    + "dialog's own capability-assignment picker.")
+    ResponseEntity<ProviderInstallationController.CapabilityCatalogueView> capabilityCatalogue(
+            @PathVariable UUID tenantId, @PathVariable UUID installationId) {
+        return delegate.capabilityCatalogue(tenantId, installationId);
+    }
+
     @PostMapping("/{installationId}/capability-reconciliation")
     @RequiresCapability(value = Capability.INTEGRATION_INSTALLATION_MANAGE, mutating = true)
     @Operation(

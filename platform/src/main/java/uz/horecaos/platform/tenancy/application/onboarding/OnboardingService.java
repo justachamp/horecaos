@@ -688,7 +688,65 @@ public class OnboardingService implements OnboardingHealthQuery {
             }
             results.addAll(validationResultsFor(step, outcome));
         }
+        // Row 10.0: a check with no OnboardingStep of its own — see that
+        // method's own doc for why it is folded in here rather than given a
+        // formal, persisted step.
+        results.addAll(notificationTemplateModerationFindings(tenantId));
         return new ValidationOutcome(results.stream().allMatch(ValidationResult::passed), results);
+    }
+
+    /**
+     * Row 10.0 (gap map): the readiness panel had no notification-template
+     * check at all. An SMS template version this tenant currently has {@code
+     * ACTIVE} — the one that would actually send — whose gateway review is
+     * {@code PENDING} or {@code REJECTED} (ADR 0091's own {@code
+     * TemplateProviderReviewService.withheld} vocabulary) is silently held
+     * back from dispatch, and until this existed nothing on a tenant's own
+     * readiness panel could say so — {@code TemplateProviderReviewController
+     * .list} is a {@code PLATFORM}-scope queue for HorecaOS support, not a
+     * tenant-facing read.
+     *
+     * <p>Read directly against {@code notifications.template_versions}/{@code
+     * templates} rather than through {@code TemplateProviderReviewService},
+     * the same cross-module "raw SQL, not that module's service" pattern
+     * {@code OnboardingStepHandlers.PaymentConfigurationValidate} already
+     * uses for {@code payments.merchant_bindings} — that class's own doc
+     * explains why a {@code tenancy -> payments.api} dependency is not safe
+     * to add, and {@code notifications.application} is an even narrower
+     * target, being internal to its own module rather than a published API.
+     *
+     * <p>Ad hoc, not a formal {@link OnboardingStep}: ADR 0008's step
+     * catalogue is a released contract, and a new required step needs a
+     * migration, a sequence number, and a decision about whether it
+     * retroactively blocks an already-activated tenant — none of which this
+     * check needs answered to be useful today. It rides in the same
+     * informational, read-only {@link #validate} response every other check
+     * already returns without persisting anything.
+     */
+    private List<ValidationResult> notificationTemplateModerationFindings(UUID tenantId) {
+        return jdbc.sql("""
+                        SELECT tpl.template_key, v.locale, v.provider_review
+                          FROM notifications.template_versions v
+                          JOIN notifications.templates tpl
+                            ON tpl.id = v.template_id AND tpl.tenant_id = v.tenant_id
+                         WHERE v.tenant_id = :tenantId AND tpl.channel = 'SMS'
+                           AND v.status = 'ACTIVE' AND v.provider_review IN ('PENDING', 'REJECTED')
+                         ORDER BY tpl.template_key, v.locale
+                        """)
+                .param("tenantId", tenantId)
+                .query((row, number) -> {
+                    boolean pending = "PENDING".equals(row.getString("provider_review"));
+                    return new ValidationResult(
+                            "NOTIFICATION_TEMPLATE_MODERATION_VALIDATE",
+                            false,
+                            pending ? "TEMPLATE_AWAITING_PROVIDER_REVIEW" : "TEMPLATE_REJECTED_BY_PROVIDER",
+                            (pending
+                                            ? "SMS template %s (%s) is awaiting the gateway's approval"
+                                            : "SMS template %s (%s) was rejected by the gateway")
+                                    .formatted(row.getString("template_key"), row.getString("locale")),
+                            null);
+                })
+                .list();
     }
 
     /**

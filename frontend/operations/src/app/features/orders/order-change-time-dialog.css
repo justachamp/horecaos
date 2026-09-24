@@ -1,0 +1,38 @@
+/* Chrome is `q-modal` (ADR 0101); see `order-reason-dialog.css`'s identical note. */
+
+.change-time-dialog__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.change-time-dialog__input {
+  padding: 8px 10px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  font-family: var(--q-font-sans);
+}
+
+.change-time-dialog__dismiss,
+.change-time-dialog__confirm {
+  padding: 6px 14px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  cursor: pointer;
+}
+
+.change-time-dialog__confirm {
+  border-color: var(--q-primary);
+  background: var(--q-primary);
+  color: var(--q-inverse-ink);
+}
+
+.change-time-dialog__confirm:disabled,
+.change-time-dialog__dismiss:disabled {
+  opacity: 0.6;
+  cursor: default;
+}

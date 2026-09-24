@@ -35,6 +35,14 @@ const OPEN_LOCATION: LocationView = {
   latitude: 41.3,
   longitude: 69.2,
   coordinateSource: 'MERCHANT_PIN',
+  sortOrder: 0,
+  seats: null,
+  averageChequeAmount: null,
+  averageChequeCurrency: null,
+  hasParking: false,
+  hasPlayground: false,
+  virtualTourUrl: null,
+  locales: [],
 };
 
 const CLOSED_LOCATION: LocationView = {

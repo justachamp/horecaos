@@ -1,17 +1,22 @@
 /**
- * ADR 0039's amendment client (wave P10, gap map `1.2h`) — the first console
- * caller of `POST/GET .../orders/{orderId}/amendments`. Mirrors
+ * ADR 0039's amendment client (wave P10, gap map `1.2h`; financial commands
+ * wave 10, rows `1.2c`/`2.1d`) — the first console caller of
+ * `POST/GET .../orders/{orderId}/amendments`. Mirrors
  * `OperationsOrderController`'s own records directly, the same rule
  * `order-detail.ts`'s own file doc states for why this is not generated from
  * `platform/api/openapi/v1/horecaos-api.json`.
  *
- * Five of ADR 0039's ten (now twelve) commands are built:
- * `SET_KITCHEN_NOTE`, `SET_CALLBACK_REQUESTED`, `SET_CASH_TENDERED` and, as of
- * ADR 0113, `SET_COURIER_NOTE` and `SET_INTERNAL_NOTE`. The other seven — every
- * command that touches money, the basket or the address — are declared by
- * {@link AMENDMENT_COMMAND_TYPES} for the history view's labels, but no dialog
- * here ever proposes one: `OrderAmendmentService.requireBuilt` refuses each by
- * name, and orders.md §11.1's whole trap is a client that offers one anyway.
+ * Eleven of ADR 0039's twelve commands are built: the five non-financial ones
+ * from wave P10 (`SET_KITCHEN_NOTE`, `SET_CALLBACK_REQUESTED`,
+ * `SET_CASH_TENDERED`, `SET_COURIER_NOTE`, `SET_INTERNAL_NOTE`) and, as of
+ * wave 10, six of the seven financial ones (`ADD_LINES`,
+ * `CHANGE_LINE_QUANTITY` increase-only, `CHANGE_PAYMENT_METHOD`,
+ * `CHANGE_DELIVERY_ADDRESS`, `CHANGE_FULFILLMENT_TIME`, `CHANGE_CONTACT`).
+ * Only `REMOVE_LINES` stays declared and refused by name at the server
+ * (`AmendmentCommandType.built() == false` — no ADR 0017 return/write-off
+ * primitive exists yet), so {@link BUILT_AMENDMENT_COMMAND_TYPES} still omits
+ * it: `order-amend-menu.ts`'s own trap ("never offer a command the server
+ * refuses") applies to it exactly as it used to apply to all seven.
  */
 import { MessageKey } from '../../core/i18n/messages.en';
 
@@ -21,25 +26,33 @@ export const BUILT_AMENDMENT_COMMAND_TYPES = [
   'SET_CASH_TENDERED',
   'SET_COURIER_NOTE',
   'SET_INTERNAL_NOTE',
-] as const;
-export type BuiltAmendmentCommandType = (typeof BUILT_AMENDMENT_COMMAND_TYPES)[number];
-
-/**
- * Every command type ADR 0039 names, built or not — for rendering a history
- * entry's label honestly rather than only the five this client can propose.
- * The seven financial ones can still appear in a history entry once a future
- * wave builds one of them; this client just never sends one.
- */
-export const AMENDMENT_COMMAND_TYPES = [
-  ...BUILT_AMENDMENT_COMMAND_TYPES,
+  // ---------------------------------------------------- wave 10 financial commands
   'ADD_LINES',
   'CHANGE_LINE_QUANTITY',
-  'REMOVE_LINES',
   'CHANGE_PAYMENT_METHOD',
   'CHANGE_DELIVERY_ADDRESS',
   'CHANGE_FULFILLMENT_TIME',
   'CHANGE_CONTACT',
 ] as const;
+export type BuiltAmendmentCommandType = (typeof BUILT_AMENDMENT_COMMAND_TYPES)[number];
+
+/** The six wave-10 financial commands, in the amend menu's own display order. */
+export const FINANCIAL_AMENDMENT_COMMAND_TYPES = [
+  'ADD_LINES',
+  'CHANGE_LINE_QUANTITY',
+  'CHANGE_PAYMENT_METHOD',
+  'CHANGE_DELIVERY_ADDRESS',
+  'CHANGE_FULFILLMENT_TIME',
+  'CHANGE_CONTACT',
+] as const satisfies readonly BuiltAmendmentCommandType[];
+
+/**
+ * Every command type ADR 0039 names, built or not — for rendering a history
+ * entry's label honestly rather than only the eleven this client can
+ * propose. `REMOVE_LINES` can still appear in a history entry once a future
+ * wave builds it; this client just never sends one.
+ */
+export const AMENDMENT_COMMAND_TYPES = [...BUILT_AMENDMENT_COMMAND_TYPES, 'REMOVE_LINES'] as const;
 
 /**
  * `AmendmentResponse` — what `amend`, `confirmAmendment` and the amendment
@@ -62,6 +75,13 @@ export const AMENDMENT_COMMAND_TYPES = [
  *   `CASH_TENDERED_INSUFFICIENT` is the one this wave's dialog renders (§3.5,
  *   §4.4): change due fell short of the total after a later amendment, and the
  *   customer can simply hand over more.
+ * @property actions wave 10: `["RESOLVE"]` when this amendment is open and
+ *   blocked on either the customer's recorded agreement (an increase awaiting
+ *   `POST .../confirmation`) or an ADR 0027 approval still pending, `[]`
+ *   otherwise — including for every amendment a pre-wave-10 server answered
+ *   with, since the field is simply absent there. Absent, not empty, is what
+ *   this client treats as "no action", the same rule `OrderSummaryResponse
+ *   .actions` already documents for the order-level actions array.
  */
 export interface AmendmentResponse {
   readonly amendmentId: string;
@@ -82,6 +102,7 @@ export interface AmendmentResponse {
   readonly createdAt: string;
   readonly createdByActorType: string;
   readonly createdByActorId?: string | null;
+  readonly actions?: readonly string[];
 }
 
 /** `AmendmentCommandDetail` — one command's type, and its free text where it set one. */
@@ -96,6 +117,14 @@ const COMMAND_LABEL_KEYS: Readonly<Record<string, MessageKey>> = {
   SET_CASH_TENDERED: 'orders.detail.details.cashTendered',
   SET_COURIER_NOTE: 'orders.detail.comments.courier',
   SET_INTERNAL_NOTE: 'orders.detail.comments.internal',
+  // ---------------------------------------------------- wave 10 financial commands
+  ADD_LINES: 'orders.amendment.command.ADD_LINES',
+  CHANGE_LINE_QUANTITY: 'orders.amendment.command.CHANGE_LINE_QUANTITY',
+  REMOVE_LINES: 'orders.amendment.command.REMOVE_LINES',
+  CHANGE_PAYMENT_METHOD: 'orders.amendment.command.CHANGE_PAYMENT_METHOD',
+  CHANGE_DELIVERY_ADDRESS: 'orders.amendment.command.CHANGE_DELIVERY_ADDRESS',
+  CHANGE_FULFILLMENT_TIME: 'orders.amendment.command.CHANGE_FULFILLMENT_TIME',
+  CHANGE_CONTACT: 'orders.amendment.command.CHANGE_CONTACT',
 };
 
 /**

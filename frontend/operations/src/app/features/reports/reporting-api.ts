@@ -151,6 +151,29 @@ export interface MedianResponse {
   readonly provenance: ProvenanceResponse;
 }
 
+/** Row 7.10b (wave 10 w5-reports-exports): one distance bucket's delivery count — mirrors `ReportingController.DistanceBucketResponse`. */
+export interface DistanceBucketResponse {
+  readonly bucketCode: string;
+  readonly deliveryCount: number;
+}
+
+export interface DistanceBucketsResponse {
+  readonly buckets: readonly DistanceBucketResponse[];
+  readonly provenance: ProvenanceResponse;
+}
+
+/** Row 7.10b: one bucket's published definition, in meters — mirrors `ReportingController.DistanceBucketDefinitionResponse`. */
+export interface DistanceBucketDefinitionResponse {
+  readonly code: string;
+  readonly fromMeters: number;
+  readonly toMetersExclusive: number | null;
+}
+
+export interface DistanceBucketSetResponse {
+  readonly version: number;
+  readonly buckets: readonly DistanceBucketDefinitionResponse[];
+}
+
 /** Wave 9 w4-reports-distance-crm (7.1): delivery_distance.average.v1 — see {@link ReportingApi.deliveryDistance}. */
 export interface DistanceResponse {
   readonly averageMeters: number | null;
@@ -274,6 +297,17 @@ export interface VariantSalesListResponse {
   readonly rows: readonly VariantSalesRowResponse[];
   readonly maybeMore: boolean;
   readonly provenance: ProvenanceResponse;
+}
+
+/** Row 7.7: server-side sort for {@link ReportingApi.variantSales} — mirrors `JdbcReportingStore.VariantSalesSort`. */
+export type VariantSalesSort = 'QUANTITY_DESC' | 'REVENUE_DESC' | 'NAME_ASC';
+
+/** Row 7.7: the previous page's last row, in whichever field matches the active {@link VariantSalesSort} — the other two are ignored server-side. */
+export interface VariantSalesCursor {
+  readonly afterQuantity?: number;
+  readonly afterRevenueSom?: number;
+  readonly afterProductName?: string;
+  readonly afterVariantId: string;
 }
 
 /**
@@ -700,6 +734,24 @@ export class ReportingApi {
     return result.value;
   }
 
+  /** Row 7.10b: the geography page's distance histogram — live over reporting.fact_delivery. */
+  async distanceBuckets(tenantId: string, params: RangeParams): Promise<DistanceBucketsResponse> {
+    const result = await firstValueFrom(
+      this.api.get<DistanceBucketsResponse>(reportsPaths.distanceBuckets(tenantId), {
+        params: { from: params.from, to: params.to, locationId: params.locationId },
+      }),
+    );
+    return result.value;
+  }
+
+  /** Row 7.10b: the published bucket boundaries and version — the distance histogram's own formula panel. */
+  async distanceBucketSet(tenantId: string): Promise<DistanceBucketSetResponse> {
+    const result = await firstValueFrom(
+      this.api.get<DistanceBucketSetResponse>(reportsPaths.distanceBucketSet(tenantId)),
+    );
+    return result.value;
+  }
+
   async preparationTime(tenantId: string, params: RangeParams): Promise<MedianResponse> {
     const result = await firstValueFrom(
       this.api.get<MedianResponse>(reportsPaths.preparationTime(tenantId), {
@@ -913,10 +965,18 @@ export class ReportingApi {
    * Wave T14 (7.7): `fulfilmentType` now reaches the query, previously
    * accepted nowhere and the filter bar's control read by nothing — see
    * `product-analytics-page.ts`'s own doc for the defect this replaced.
+   *
+   * Wave 10 w5-reports-exports (7.7): `sort` and `cursor` — the page's own
+   * hard-coded revenue order and 200-row cap it could never see past.
    */
   async variantSales(
     tenantId: string,
-    params: RangeParams & { readonly fulfilmentType?: readonly string[]; readonly limit?: number },
+    params: RangeParams & {
+      readonly fulfilmentType?: readonly string[];
+      readonly limit?: number;
+      readonly sort?: VariantSalesSort;
+      readonly cursor?: VariantSalesCursor;
+    },
   ): Promise<VariantSalesListResponse> {
     const result = await firstValueFrom(
       this.api.get<VariantSalesListResponse>(reportsPaths.variantSales(tenantId), {
@@ -926,6 +986,11 @@ export class ReportingApi {
           locationId: params.locationId,
           fulfilmentType: params.fulfilmentType,
           limit: params.limit,
+          sort: params.sort,
+          afterQuantity: params.cursor?.afterQuantity,
+          afterRevenueSom: params.cursor?.afterRevenueSom,
+          afterProductName: params.cursor?.afterProductName,
+          afterVariantId: params.cursor?.afterVariantId,
         },
       }),
     );

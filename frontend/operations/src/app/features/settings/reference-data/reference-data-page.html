@@ -8,16 +8,20 @@
 } @else if (loadError(); as message) {
   <p class="q-body-sm error" role="alert">{{ message }}</p>
 } @else {
-  <section class="card">
+  <section class="card" id="cancellation-reasons">
     <div class="card__header">
       <h2 class="q-subhead">{{ 'settings.referenceData.cancellation.title' | t }}</h2>
       <button type="button" class="q-body-sm link" (click)="openCreateForm('CANCELLATION')">
         {{ 'settings.referenceData.add' | t }}
       </button>
     </div>
+    @if (reorderError(); as message) {
+      <p class="q-body-sm error" role="alert">{{ message }}</p>
+    }
     <table class="table">
       <thead>
         <tr>
+          <th class="q-caption">{{ 'settings.referenceData.field.order' | t }}</th>
           <th class="q-caption">{{ 'settings.referenceData.field.internalName' | t }}</th>
           <th class="q-caption">{{ 'settings.referenceData.field.customerText' | t }}</th>
           <th class="q-caption">{{ 'settings.referenceData.field.systemCategory' | t }}</th>
@@ -29,8 +33,37 @@
         </tr>
       </thead>
       <tbody>
-        @for (reason of cancellationReasons(); track reason.id) {
-          <tr>
+        @for (reason of cancellationReasons(); track reason.id; let i = $index) {
+          <tr
+            draggable="true"
+            data-testid="reason-row-CANCELLATION"
+            (dragstart)="onReasonDragStart('CANCELLATION', i, $event)"
+            (dragover)="onReasonDragOver($event)"
+            (drop)="onReasonDrop('CANCELLATION', i, $event)"
+            (dragend)="onReasonDragEnd()"
+          >
+            <td class="q-body-sm reorder-cell">
+              <button
+                type="button"
+                class="reorder-btn"
+                [attr.aria-label]="'settings.referenceData.moveUp' | t"
+                [disabled]="i === 0"
+                data-testid="reason-move-up-CANCELLATION"
+                (click)="moveReasonUp('CANCELLATION', i)"
+              >
+                ▲
+              </button>
+              <button
+                type="button"
+                class="reorder-btn"
+                [attr.aria-label]="'settings.referenceData.moveDown' | t"
+                [disabled]="i === cancellationReasons().length - 1"
+                data-testid="reason-move-down-CANCELLATION"
+                (click)="moveReasonDown('CANCELLATION', i)"
+              >
+                ▼
+              </button>
+            </td>
             <td class="q-body-sm">{{ reason.internalName }}</td>
             <td class="q-body-sm">{{ reason.customerTexts['ru'] }}</td>
             <td class="q-body-sm">{{ reason.systemCategory }}</td>
@@ -54,14 +87,14 @@
           </tr>
         } @empty {
           <tr>
-            <td class="q-body-sm empty" colspan="8">{{ 'settings.referenceData.empty' | t }}</td>
+            <td class="q-body-sm empty" colspan="9">{{ 'settings.referenceData.empty' | t }}</td>
           </tr>
         }
       </tbody>
     </table>
   </section>
 
-  <section class="card">
+  <section class="card" id="completion-reasons">
     <div class="card__header">
       <h2 class="q-subhead">{{ 'settings.referenceData.completion.title' | t }}</h2>
       <button type="button" class="q-body-sm link" (click)="openCreateForm('COMPLETION')">
@@ -71,6 +104,7 @@
     <table class="table">
       <thead>
         <tr>
+          <th class="q-caption">{{ 'settings.referenceData.field.order' | t }}</th>
           <th class="q-caption">{{ 'settings.referenceData.field.internalName' | t }}</th>
           <th class="q-caption">{{ 'settings.referenceData.field.customerText' | t }}</th>
           <th class="q-caption">{{ 'settings.referenceData.field.systemCategory' | t }}</th>
@@ -82,8 +116,37 @@
         </tr>
       </thead>
       <tbody>
-        @for (reason of completionReasons(); track reason.id) {
-          <tr>
+        @for (reason of completionReasons(); track reason.id; let i = $index) {
+          <tr
+            draggable="true"
+            data-testid="reason-row-COMPLETION"
+            (dragstart)="onReasonDragStart('COMPLETION', i, $event)"
+            (dragover)="onReasonDragOver($event)"
+            (drop)="onReasonDrop('COMPLETION', i, $event)"
+            (dragend)="onReasonDragEnd()"
+          >
+            <td class="q-body-sm reorder-cell">
+              <button
+                type="button"
+                class="reorder-btn"
+                [attr.aria-label]="'settings.referenceData.moveUp' | t"
+                [disabled]="i === 0"
+                data-testid="reason-move-up-COMPLETION"
+                (click)="moveReasonUp('COMPLETION', i)"
+              >
+                ▲
+              </button>
+              <button
+                type="button"
+                class="reorder-btn"
+                [attr.aria-label]="'settings.referenceData.moveDown' | t"
+                [disabled]="i === completionReasons().length - 1"
+                data-testid="reason-move-down-COMPLETION"
+                (click)="moveReasonDown('COMPLETION', i)"
+              >
+                ▼
+              </button>
+            </td>
             <td class="q-body-sm">{{ reason.internalName }}</td>
             <td class="q-body-sm">{{ reason.customerTexts['ru'] }}</td>
             <td class="q-body-sm">{{ reason.systemCategory }}</td>
@@ -109,7 +172,7 @@
           </tr>
         } @empty {
           <tr>
-            <td class="q-body-sm empty" colspan="6">{{ 'settings.referenceData.empty' | t }}</td>
+            <td class="q-body-sm empty" colspan="7">{{ 'settings.referenceData.empty' | t }}</td>
           </tr>
         }
       </tbody>
@@ -463,7 +526,7 @@
     </q-modal>
   }
 
-  <section class="card">
+  <section class="card" id="business-calendar">
     <h2 class="q-subhead">{{ 'settings.referenceData.calendar.title' | t }}</h2>
     <p class="q-body-sm lead">{{ 'settings.referenceData.calendar.lead' | t }}</p>
 
@@ -633,7 +696,7 @@
     }
   </section>
 
-  <section class="card">
+  <section class="card" id="sla-boundaries">
     <h2 class="q-subhead">{{ 'settings.referenceData.slaBuckets.title' | t }}</h2>
     <p class="q-body-sm lead">{{ 'settings.referenceData.slaBuckets.lead' | t }}</p>
 
@@ -672,7 +735,7 @@
     }
   </section>
 
-  <section class="card">
+  <section class="card" id="branch-tags">
     <h2 class="q-subhead">{{ 'settings.referenceData.tags.title' | t }}</h2>
     <p class="q-body-sm lead">{{ 'settings.referenceData.tags.lead' | t }}</p>
 

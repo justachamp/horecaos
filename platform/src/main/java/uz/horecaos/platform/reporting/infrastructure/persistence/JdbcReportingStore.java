@@ -1059,6 +1059,53 @@ public class JdbcReportingStore {
             int lateCount) {}
 
     /**
+     * Row 7.10b (wave 10 w5-reports-exports): the geography page's distance
+     * histogram — a live bucket count over {@code reporting.fact_delivery.distance_meters},
+     * against {@link uz.horecaos.platform.reporting.domain.DistanceBucketSet}'s fixed
+     * boundaries. Bucketed in SQL with a {@code CASE} expression rather than in Java over
+     * every row, the same "narrow before it crosses the wire" reasoning {@link #readOrders}
+     * and {@link #readVariantSales} already apply. {@code locationIds} empty means every
+     * branch, matching every other reader's own convention in this class.
+     */
+    public List<DistanceBucketRow> readDistanceBuckets(
+            UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("tenantId", tenantId);
+        params.put("from", from);
+        params.put("to", to);
+
+        String locationFilter = "";
+        if (!locationIds.isEmpty()) {
+            locationFilter = " AND location_id IN (:locations)";
+            params.put("locations", locationIds);
+        }
+
+        return jdbc.sql("""
+                SELECT
+                       CASE
+                           WHEN distance_meters < 1000 THEN 'UNDER_1KM'
+                           WHEN distance_meters < 2000 THEN 'KM1_2'
+                           WHEN distance_meters < 3000 THEN 'KM2_3'
+                           WHEN distance_meters < 5000 THEN 'KM3_5'
+                           WHEN distance_meters < 8000 THEN 'KM5_8'
+                           ELSE 'OVER_8KM'
+                       END AS bucket_code,
+                       count(*)::integer AS delivery_count
+                  FROM reporting.fact_delivery
+                 WHERE tenant_id = :tenantId AND business_date BETWEEN :from AND :to
+                """ + locationFilter + """
+                 GROUP BY bucket_code
+                """)
+                .params(params)
+                .query((ResultSet row, int number) ->
+                        new DistanceBucketRow(row.getString("bucket_code"), row.getInt("delivery_count")))
+                .list();
+    }
+
+    /** One bucket's delivery count — see {@link #readDistanceBuckets}. Every bucket {@link uz.horecaos.platform.reporting.domain.DistanceBucketSet} defines that found no deliveries is simply absent, never a zero-count row. */
+    public record DistanceBucketRow(String bucketCode, int deliveryCount) {}
+
+    /**
      * T11 (7.4a): the {@code COURIER} scope of {@code agg_sla_bucket_day},
      * narrowed the way {@link #readSlaBuckets} deliberately is not — that
      * method reads every {@code scope_kind} in range for the {@code LOCATION}
@@ -1902,12 +1949,43 @@ public class JdbcReportingStore {
             List<UUID> locationIds,
             List<String> fulfilmentTypes,
             int limit) {
+        return readVariantSales(
+                tenantId, from, to, locationIds, fulfilmentTypes, VariantSalesSort.REVENUE_DESC, limit, null);
+    }
+
+    /**
+     * Wave 10 w5-reports-exports (7.7): server-side sort and cursor paging, past the
+     * hard-coded revenue-only order and the 200-row cap the page previously could not see past.
+     * A keyset cursor, on the same footing as {@link #readOrders}'s own {@code DATE_DESC} paging —
+     * {@code (sortExpr, variant_id)} as the comparison tuple, {@code variant_id} the tiebreak for
+     * both the sort and the cursor, exactly as the un-cursored query already tiebroke on it. A
+     * {@code HAVING} clause, not {@code WHERE}: the cursor filters the aggregated (summed) value,
+     * which does not exist until after {@code GROUP BY} — and unlike {@code ORDER BY}, {@code
+     * HAVING} cannot reference a {@code SELECT} alias in PostgreSQL, so every branch below repeats
+     * the raw aggregate expression rather than {@code total_quantity}/{@code total_net_som}.
+     *
+     * <p>{@code variant_id} is nullable (a line whose product carries no catalogue reference) and
+     * {@code GROUP BY} folds every such line into one row; {@link #NIL_VARIANT_ID} stands in for
+     * that null in both the tiebreak and the cursor comparison so the tuple comparison itself is
+     * never evaluated against a {@code NULL} — which in SQL is neither true nor false and would
+     * silently drop that bucket from every page after the one it first appeared on.
+     */
+    public List<VariantSalesRow> readVariantSales(
+            UUID tenantId,
+            LocalDate from,
+            LocalDate to,
+            List<UUID> locationIds,
+            List<String> fulfilmentTypes,
+            VariantSalesSort sort,
+            int limit,
+            @Nullable VariantSalesCursor cursor) {
 
         Map<String, Object> params = new HashMap<>();
         params.put("tenantId", tenantId);
         params.put("from", from);
         params.put("to", to);
         params.put("limit", limit);
+        params.put("nilVariantId", NIL_VARIANT_ID);
 
         String locationFilter = "";
         if (!locationIds.isEmpty()) {
@@ -1925,6 +2003,38 @@ public class JdbcReportingStore {
             params.put("fulfilmentTypes", fulfilmentTypes);
         }
 
+        String havingClause = "";
+        String orderClause =
+                switch (sort) {
+                    case QUANTITY_DESC -> {
+                        if (cursor != null) {
+                            havingClause =
+                                    " HAVING (sum(l.quantity), COALESCE(l.variant_id, :nilVariantId)) < (:afterQuantity, :afterVariantId)";
+                            params.put("afterQuantity", cursor.afterQuantity());
+                            params.put("afterVariantId", cursor.afterVariantId());
+                        }
+                        yield "ORDER BY total_quantity DESC, COALESCE(l.variant_id, :nilVariantId) ASC";
+                    }
+                    case REVENUE_DESC -> {
+                        if (cursor != null) {
+                            havingClause =
+                                    " HAVING (sum(l.net_som), COALESCE(l.variant_id, :nilVariantId)) < (:afterRevenueSom, :afterVariantId)";
+                            params.put("afterRevenueSom", cursor.afterRevenueSom());
+                            params.put("afterVariantId", cursor.afterVariantId());
+                        }
+                        yield "ORDER BY total_net_som DESC, COALESCE(l.variant_id, :nilVariantId) ASC";
+                    }
+                    case NAME_ASC -> {
+                        if (cursor != null) {
+                            havingClause =
+                                    " HAVING (max(l.product_name_snapshot), COALESCE(l.variant_id, :nilVariantId)) > (:afterProductName, :afterVariantId)";
+                            params.put("afterProductName", cursor.afterProductName());
+                            params.put("afterVariantId", cursor.afterVariantId());
+                        }
+                        yield "ORDER BY product_name ASC, COALESCE(l.variant_id, :nilVariantId) ASC";
+                    }
+                };
+
         return jdbc.sql("""
                 SELECT l.variant_id, l.category_id, max(l.product_name_snapshot) AS product_name,
                        sum(l.quantity)::integer AS total_quantity,
@@ -1940,7 +2050,8 @@ public class JdbcReportingStore {
                  WHERE l.tenant_id = :tenantId AND l.business_date BETWEEN :from AND :to
                 """ + locationFilter + fulfilmentFilter + """
                  GROUP BY l.variant_id, l.category_id
-                 ORDER BY total_net_som DESC, l.variant_id
+                """ + havingClause + " " + orderClause + """
+
                  LIMIT :limit
                 """)
                 .params(params)
@@ -1957,6 +2068,29 @@ public class JdbcReportingStore {
                         row.getObject("pickup_net_som", Long.class)))
                 .list();
     }
+
+    /** The sentinel {@link #readVariantSales} substitutes for a null {@code variant_id} in its own sort/cursor tiebreak — see that method's own doc. */
+    private static final UUID NIL_VARIANT_ID = new UUID(0L, 0L);
+
+    /** {@link #readVariantSales}'s own server-side sort — row 7.7: qty, revenue or name, never hard-coded to revenue again. */
+    public enum VariantSalesSort {
+        QUANTITY_DESC,
+        REVENUE_DESC,
+        NAME_ASC
+    }
+
+    /**
+     * The previous page's last row, in whichever field matches the active {@link VariantSalesSort}
+     * — the other two are simply unread by {@link #readVariantSales} for that call. {@code
+     * afterVariantId} is the row's own {@code variantId}, or {@link #NIL_VARIANT_ID} when it was
+     * null — see {@link #readVariantSales}'s own doc for why the caller, not just the query, has to
+     * make that substitution consistently.
+     */
+    public record VariantSalesCursor(
+            @Nullable Integer afterQuantity,
+            @Nullable Long afterRevenueSom,
+            @Nullable String afterProductName,
+            UUID afterVariantId) {}
 
     /** One product's summed sales in range — see {@link #readVariantSales}. */
     public record VariantSalesRow(

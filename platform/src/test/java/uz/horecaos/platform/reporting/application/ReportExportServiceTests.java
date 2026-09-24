@@ -7,12 +7,15 @@ import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import javax.sql.DataSource;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -39,6 +42,7 @@ import uz.horecaos.platform.iam.infrastructure.protection.EnvelopeFieldProtectio
 import uz.horecaos.platform.iam.infrastructure.secrets.EnvironmentSecretResolver;
 import uz.horecaos.platform.media.api.ObjectStorage;
 import uz.horecaos.platform.reporting.infrastructure.persistence.JdbcReportExportStore;
+import uz.horecaos.platform.reporting.infrastructure.persistence.JdbcReportingStore;
 import uz.horecaos.platform.support.TestDatabase;
 
 /**
@@ -56,6 +60,7 @@ class ReportExportServiceTests {
     private ReportExportService service;
     private RecordingObjectStorage storage;
     private JdbcReportExportStore exportStore;
+    private JdbcReportingStore reportingStore;
     private CustomerProfileService profiles;
     private FieldProtection protection;
     private UUID brandId;
@@ -81,6 +86,8 @@ class ReportExportServiceTests {
         DataSource dataSource = db.dataSource();
         jdbc = JdbcClient.create(dataSource);
         jdbc.sql("TRUNCATE TABLE reporting.report_exports").update();
+        jdbc.sql("TRUNCATE TABLE reporting.fact_order, reporting.agg_branch_day, reporting.business_day_policies")
+                .update();
         jdbc.sql("TRUNCATE TABLE customer.contact_points, customer.customer_accounts CASCADE")
                 .update();
         jdbc.sql("TRUNCATE TABLE tenant.tenants CASCADE").update();
@@ -119,6 +126,10 @@ class ReportExportServiceTests {
         uz.horecaos.platform.ordering.api.OrderCrmLogExportPort orderCrmLog =
                 new uz.horecaos.platform.ordering.application.OrderCrmLogExportAdapter(crmLogQueries);
 
+        reportingStore = new JdbcReportingStore(jdbc);
+        ReportQueryService reportQueries =
+                new ReportQueryService(reportingStore, new BusinessDayService(reportingStore), clock);
+
         exportStore = new JdbcReportExportStore(jdbc, objectMapper);
         storage = new RecordingObjectStorage();
         TransactionTemplate transactions = new TransactionTemplate(new DataSourceTransactionManager(dataSource));
@@ -127,6 +138,7 @@ class ReportExportServiceTests {
                 exportStore,
                 customerDirectory,
                 orderCrmLog,
+                reportQueries,
                 protection,
                 new JdbcAuditRecorder(jdbc, objectMapper),
                 storage,
@@ -534,6 +546,240 @@ class ReportExportServiceTests {
                 .param("phone", phoneCipher)
                 .update();
         return orderId;
+    }
+
+    // ------------------------------------------------------- ORDER_REPORT_LOG / ORDER_REPORT_SUMMARY (7.2e)
+
+    /** A minimal {@code reporting.fact_order} row — this suite's own fixture, same shape {@code OrderGrainReportingTests} seeds with. */
+    private UUID insertFactOrder(
+            LocalDate businessDate, String channelCode, String fulfilmentType, long grossRevenueSom, long discountSom) {
+        UUID orderId = UUID.randomUUID();
+        OffsetDateTime occurredAt = businessDate.atTime(10, 0).atOffset(ZoneOffset.UTC);
+        long deliveryFee = 5_000L;
+        long net = grossRevenueSom - discountSom;
+        jdbc.sql("""
+                        INSERT INTO reporting.fact_order (
+                            tenant_id, order_id, business_date, boundary_version, occurred_at, closed_at,
+                            brand_id, location_id, channel_code, fulfilment_type, terminal_status,
+                            gross_revenue_som, discount_som, delivery_fee_som, tax_som, net_revenue_som,
+                            line_count, item_count, metric_calculation_version, source_order_version)
+                        VALUES (
+                            :tenantId, :orderId, :businessDate, 1, :occurredAt, :occurredAt,
+                            :brandId, :locationId, :channelCode, :fulfilmentType, 'COMPLETED',
+                            :gross, :discount, :deliveryFee, 0, :net,
+                            1, 3, 1, 1)
+                        """)
+                .param("tenantId", TENANT)
+                .param("orderId", orderId)
+                .param("businessDate", businessDate)
+                .param("occurredAt", occurredAt)
+                .param("brandId", brandId)
+                .param("locationId", locationId)
+                .param("channelCode", channelCode)
+                .param("fulfilmentType", fulfilmentType)
+                .param("gross", grossRevenueSom)
+                .param("discount", discountSom)
+                .param("deliveryFee", deliveryFee)
+                .param("net", net)
+                .update();
+        return orderId;
+    }
+
+    @Test
+    @DisplayName("ORDER_REPORT_LOG requires both from and to at queue time")
+    void orderReportLogRequiresARange() {
+        assertThat(org.junit.jupiter.api.Assertions.assertThrows(
+                                uz.horecaos.platform.web.api.ApiException.class,
+                                () -> service.requestExport(
+                                        TENANT,
+                                        ReportExportRegistry.ORDER_REPORT_LOG,
+                                        List.of("orderId", "grossRevenueSom"),
+                                        null,
+                                        null,
+                                        null,
+                                        null,
+                                        List.of(),
+                                        "no-range-test",
+                                        SUBJECT,
+                                        true))
+                        .errorCode())
+                .isEqualTo(uz.horecaos.platform.web.api.ErrorCode.VALIDATION_FAILED);
+    }
+
+    @Test
+    @DisplayName("ORDER_REPORT_LOG produces the commercial order-grain rows straight off reporting.fact_order, "
+            + "and no column is redacted for a viewer lacking customer.pii.export because none of them is PII")
+    void orderReportLogProducesOrderGrainRowsWithNoPiiToRedact() {
+        UUID orderId = insertFactOrder(LocalDate.of(2026, 9, 10), "TELEGRAM", "DELIVERY", 100_000L, 10_000L);
+
+        UUID id = service.requestExport(
+                TENANT,
+                ReportExportRegistry.ORDER_REPORT_LOG,
+                List.of("orderId", "businessDate", "channelCode", "fulfilmentType", "grossRevenueSom", "netRevenueSom"),
+                null,
+                null,
+                Instant.parse("2026-09-01T00:00:00Z"),
+                Instant.parse("2026-09-30T00:00:00Z"),
+                List.of(),
+                "order-report-log-test",
+                SUBJECT,
+                // Deliberately the caller WITHOUT customer.pii.export — the export centre's own
+                // decision for CUSTOMER_DIRECTORY/ORDER_CRM_LOG columns this report carries none of.
+                false);
+
+        assertThat(service.processNextQueued()).isTrue();
+
+        ReportExportService.ExportStatusView view =
+                service.status(TENANT, id, false).orElseThrow();
+        assertThat(view.status()).isEqualTo("COMPLETE");
+        assertThat(view.includesPiiColumns())
+                .as("reporting.fact_order carries no PERSONAL field (ADR 0029) — nothing to gate here")
+                .isFalse();
+        assertThat(view.effectiveColumns())
+                .containsExactly(
+                        "orderId", "businessDate", "channelCode", "fulfilmentType", "grossRevenueSom", "netRevenueSom");
+        assertThat(view.rowCount()).isEqualTo(1);
+
+        String csv = new String(storage.puts.getLast().content(), StandardCharsets.UTF_8);
+        assertThat(csv)
+                .contains(orderId.toString())
+                .contains("TELEGRAM")
+                .contains("DELIVERY")
+                .contains("90000");
+
+        var fact = jdbc.sql("""
+                        SELECT change_document ->> 'reportKey', change_document ->> 'piiColumnGroup'
+                          FROM audit.audit_events
+                         WHERE action_code = 'report.export.completed' AND correlation_id = :id
+                        """)
+                .param("id", id.toString())
+                .query((row, number) -> new String[] {row.getString(1), row.getString(2)})
+                .single();
+        assertThat(fact[0]).isEqualTo(ReportExportRegistry.ORDER_REPORT_LOG);
+        assertThat(fact[1]).isEqualTo("EXCLUDED");
+    }
+
+    /**
+     * «Сводка»'s own source: {@code ReportQueryService#run} reads {@code reporting.agg_branch_day}
+     * (the pre-aggregated table the typed {@code /queries} pipeline groups), never {@code
+     * fact_order} directly — unlike {@link #insertFactOrder}'s own table, which only backs {@code
+     * /orders}.
+     */
+    private void insertAggBranchDay(
+            LocalDate businessDate, String channelCode, String fulfilmentType, int orderCount, long grossSom) {
+        insertAggBranchDay(businessDate, channelCode, fulfilmentType, orderCount, grossSom, null);
+    }
+
+    /** Overload naming the fiscal identity, for the two-legal-entity fold coverage below. */
+    private void insertAggBranchDay(
+            LocalDate businessDate,
+            String channelCode,
+            String fulfilmentType,
+            int orderCount,
+            long grossSom,
+            @Nullable UUID legalEntityId) {
+        jdbc.sql("""
+                        INSERT INTO reporting.agg_branch_day (
+                            tenant_id, business_date, location_id, legal_entity_id, channel_code, fulfilment_type,
+                            boundary_version, metric_calculation_version, order_count, cancelled_count,
+                            gross_som, discount_som, net_som, refunded_som, promised_count, late_count,
+                            distinct_customers, new_customers)
+                        VALUES (
+                            :tenantId, :businessDate, :locationId, :legalEntityId, :channelCode, :fulfilmentType,
+                            1, 1, :orderCount, 0,
+                            :gross, 0, :gross, 0, 0, 0,
+                            0, 0)
+                        """)
+                .param("tenantId", TENANT)
+                .param("businessDate", businessDate)
+                .param("locationId", locationId)
+                .param("legalEntityId", legalEntityId)
+                .param("channelCode", channelCode)
+                .param("fulfilmentType", fulfilmentType)
+                .param("orderCount", orderCount)
+                .param("gross", grossSom)
+                .update();
+    }
+
+    /**
+     * ADR 0038: a location reassigned from one legal entity to another partway through the
+     * exported range (an effective-dated, supported operation on {@code
+     * tenant.location_fiscal_assignments}) must never have its two taxpayers' revenue folded into
+     * one branch/channel/fulfilment row with no entity column to tell them apart — the same rule
+     * {@link ReportQueryService#run}'s own {@code CombinedEntityTotalException} already enforces
+     * for every other money read. Refusing the export (and writing nothing) beats a wrong number
+     * that reconciles to neither taxpayer's filing.
+     */
+    @Test
+    @DisplayName("ORDER_REPORT_SUMMARY refuses rather than silently sum money across two legal entities "
+            + "folded into the same branch/channel/fulfilment bucket")
+    void orderReportSummaryRefusesToMixTwoLegalEntitiesInOneBucket() {
+        UUID entityA = UUID.randomUUID();
+        UUID entityB = UUID.randomUUID();
+        insertAggBranchDay(LocalDate.of(2026, 9, 10), "TELEGRAM", "DELIVERY", 1, 100_000L, entityA);
+        insertAggBranchDay(LocalDate.of(2026, 9, 11), "TELEGRAM", "DELIVERY", 1, 50_000L, entityB);
+
+        UUID id = service.requestExport(
+                TENANT,
+                ReportExportRegistry.ORDER_REPORT_SUMMARY,
+                List.of("locationId", "channelCode", "fulfilmentType", "orderCount", "grossSom"),
+                null,
+                null,
+                Instant.parse("2026-09-01T00:00:00Z"),
+                Instant.parse("2026-09-30T00:00:00Z"),
+                List.of(),
+                "order-report-summary-two-entities-test",
+                SUBJECT,
+                false);
+
+        assertThat(service.processNextQueued()).isTrue();
+
+        ReportExportService.ExportStatusView view =
+                service.status(TENANT, id, false).orElseThrow();
+        assertThat(view.status())
+                .as("a wrong combined figure is worse than no figure (ADR 0038) -- the export must "
+                        + "fail rather than silently sum entity A's and entity B's revenue into one row")
+                .isEqualTo("FAILED");
+        assertThat(storage.puts)
+                .as("nothing combining two taxpayers' money may reach the object store")
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName(
+            "ORDER_REPORT_SUMMARY folds the day and legal-entity axes away into one row per branch/channel/fulfilment")
+    void orderReportSummaryFoldsAcrossDatesIntoOneBucketPerSlice() {
+        insertAggBranchDay(LocalDate.of(2026, 9, 10), "TELEGRAM", "DELIVERY", 1, 100_000L);
+        insertAggBranchDay(LocalDate.of(2026, 9, 11), "TELEGRAM", "DELIVERY", 1, 50_000L);
+        insertAggBranchDay(LocalDate.of(2026, 9, 10), "STOREFRONT", "PICKUP", 1, 20_000L);
+
+        UUID id = service.requestExport(
+                TENANT,
+                ReportExportRegistry.ORDER_REPORT_SUMMARY,
+                List.of("locationId", "channelCode", "fulfilmentType", "orderCount", "grossSom"),
+                null,
+                null,
+                Instant.parse("2026-09-01T00:00:00Z"),
+                Instant.parse("2026-09-30T00:00:00Z"),
+                List.of(),
+                "order-report-summary-test",
+                SUBJECT,
+                false);
+
+        assertThat(service.processNextQueued()).isTrue();
+
+        ReportExportService.ExportStatusView view =
+                service.status(TENANT, id, false).orElseThrow();
+        assertThat(view.status()).isEqualTo("COMPLETE");
+        assertThat(view.rowCount())
+                .as("TELEGRAM/DELIVERY across two dates folds into one row; STOREFRONT/PICKUP is a second")
+                .isEqualTo(2);
+
+        String csv = new String(storage.puts.getLast().content(), StandardCharsets.UTF_8);
+        assertThat(csv)
+                .as("the two TELEGRAM/DELIVERY orders (100000 + 50000) fold into one summed row")
+                .contains("150000");
+        assertThat(csv).contains("20000");
     }
 
     private long auditFactCount() {

@@ -26,8 +26,10 @@
       [selectedBrandId]="scope.brandId()"
       [locations]="scope.locations()"
       [selectedLocationId]="scope.locationId()"
+      [tenantWide]="scope.tenantWide()"
       (brandChange)="onBrandChange($event)"
       (locationChange)="onLocationChange($event)"
+      (tenantWideChange)="onTenantWideChange($event)"
     />
     <router-outlet />
   </div>

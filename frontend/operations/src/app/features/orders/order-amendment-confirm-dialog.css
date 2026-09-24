@@ -1,0 +1,43 @@
+/* Chrome is `q-modal` (ADR 0101); see `order-reason-dialog.css`'s identical note. */
+
+.amend-confirm-dialog__approval {
+  color: var(--q-error-text);
+}
+
+.amend-confirm-dialog__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.amend-confirm-dialog__select {
+  padding: 8px 10px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  font-family: var(--q-font-sans);
+}
+
+.amend-confirm-dialog__dismiss,
+.amend-confirm-dialog__confirm {
+  padding: 6px 14px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  cursor: pointer;
+}
+
+.amend-confirm-dialog__confirm {
+  border-color: var(--q-primary);
+  background: var(--q-primary);
+  color: var(--q-inverse-ink);
+}
+
+.amend-confirm-dialog__confirm:disabled,
+.amend-confirm-dialog__dismiss:disabled {
+  opacity: 0.6;
+  cursor: default;
+}

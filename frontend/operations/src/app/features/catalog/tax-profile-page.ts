@@ -15,17 +15,17 @@ type TaxMode = 'INCLUSIVE' | 'EXCLUSIVE';
 /**
  * IA 4.8a — the VAT / tax-profile screen.
  *
- * **Built this wave.** `PUT .../tax-profiles/{jurisdictionCode}` was real
- * (`PriceAuthoringService.setTaxProfile`, ADR 0018) and reachable from no
- * screen: `PricingApi` had no wrapper for it at all, and no route existed.
- * Without a profile every cart in the brand refuses with `NO_TAX_PROFILE` —
- * this is the one place an operator can set one.
+ * `PUT .../tax-profiles/{jurisdictionCode}` was real
+ * (`PriceAuthoringService.setTaxProfile`, ADR 0018) but reachable from no
+ * screen until this wave. Without a profile every cart in the brand refuses
+ * with `NO_TAX_PROFILE`.
  *
- * **Write-only, honestly.** There is no `GET` for a tax profile yet, so this
- * screen cannot list what is already in force; it can only author a new one
- * and show what the write itself returned. A jurisdiction code an operator
- * is unsure about is best confirmed against a fiscal receipt or Kassa
- * settings rather than guessed here.
+ * **No longer write-only.** `GET /tax-profiles` (every jurisdiction in
+ * force) and `GET /tax-profiles/{jurisdictionCode}` now back this screen: the
+ * jurisdiction list renders every profile the brand already has, and
+ * choosing one — or typing a jurisdiction code by hand — loads its current
+ * mode and rate into the form before the operator changes anything, so a
+ * write can no longer overwrite a rate nobody on this screen has seen.
  */
 @Component({
   selector: 'q-tax-profile-page',
@@ -44,17 +44,66 @@ export class TaxProfilePage implements OnInit {
   protected readonly error = signal<string | null>(null);
   protected readonly saved = signal<TaxProfile | null>(null);
 
+  protected readonly existingProfiles = signal<readonly TaxProfile[]>([]);
+  protected readonly listLoading = signal(false);
+  protected readonly listError = signal<string | null>(null);
+
   protected readonly jurisdictionCode = signal('UZ');
   protected readonly mode = signal<TaxMode>('INCLUSIVE');
   protected readonly rateBasisPoints = signal(1200);
 
+  /** The in-force profile for the jurisdiction currently typed in, or `undefined` before the lookup resolves. */
+  protected readonly inForce = signal<TaxProfile | null | undefined>(undefined);
+  protected readonly inForceLoading = signal(false);
+
   async ngOnInit(): Promise<void> {
     await this.brand.ensureLoaded();
-    this.denied.set(!this.brand.scope());
+    const scope = this.brand.scope();
+    this.denied.set(!scope);
+    if (!scope) {
+      return;
+    }
+    this.listLoading.set(true);
+    try {
+      this.existingProfiles.set(await firstValueFrom(this.api.taxProfiles(scope)));
+    } catch (error) {
+      this.listError.set(this.describe(error));
+    } finally {
+      this.listLoading.set(false);
+    }
+    await this.loadInForce();
   }
 
   protected setMode(mode: TaxMode): void {
     this.mode.set(mode);
+  }
+
+  /** Loads what is currently in force for the typed jurisdiction, shown above the edit form. */
+  protected async loadInForce(): Promise<void> {
+    const scope = this.brand.scope();
+    const code = this.jurisdictionCode().trim().toUpperCase();
+    if (!scope || code.length === 0) {
+      this.inForce.set(undefined);
+      return;
+    }
+    this.inForceLoading.set(true);
+    try {
+      const profile = await firstValueFrom(this.api.taxProfile(scope, code));
+      this.inForce.set(profile);
+      if (profile) {
+        this.mode.set(profile.mode);
+        this.rateBasisPoints.set(profile.rateBasisPoints);
+      }
+    } catch (error) {
+      this.error.set(this.describe(error));
+    } finally {
+      this.inForceLoading.set(false);
+    }
+  }
+
+  protected selectJurisdiction(code: string): void {
+    this.jurisdictionCode.set(code);
+    void this.loadInForce();
   }
 
   protected canSubmit(): boolean {
@@ -82,6 +131,12 @@ export class TaxProfilePage implements OnInit {
         }),
       );
       this.saved.set(profile);
+      this.inForce.set(profile);
+      this.existingProfiles.set(
+        [...this.existingProfiles().filter((p) => p.jurisdictionCode !== profile.jurisdictionCode), profile].sort(
+          (a, b) => a.jurisdictionCode.localeCompare(b.jurisdictionCode),
+        ),
+      );
     } catch (error) {
       this.error.set(this.describe(error));
     } finally {

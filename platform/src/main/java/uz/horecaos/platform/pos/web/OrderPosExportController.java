@@ -118,7 +118,7 @@ public class OrderPosExportController {
         // action below, never this read.
         ExportView export = exportStore
                 .findDetailByOrder(tenantId, orderId)
-                .map(ExportView::of)
+                .map(detail -> ExportView.of(detail, unmappedEntityFor(tenantId, orderId, detail.lastErrorCode())))
                 .orElse(null);
 
         return ResponseEntity.ok(new OrderPosExportResponse(posCapable, export));
@@ -229,6 +229,24 @@ public class OrderPosExportController {
         };
     }
 
+    /**
+     * Gap-map row 1.2i's fix path: only for the two codes it names, and never
+     * for any other state, this order's lines are re-checked live for the
+     * next unmapped entity a console deep link should pre-select on the ADR
+     * 0012 mapping screen. Gated on the error code rather than run on every
+     * read: {@link PosOrderExportService#findUnmappedEntity} reveals this
+     * order's protected contact fields for the lookup (ADR 0029), and that
+     * reveal belongs only to a screen that is actually showing a mapping
+     * refusal, not to every ordinary POS-export status check.
+     */
+    private PosOrderExportService.@Nullable UnmappedEntity unmappedEntityFor(
+            UUID tenantId, UUID orderId, @Nullable String lastErrorCode) {
+        if (!"LINE_UNMAPPED".equals(lastErrorCode) && !"MODIFIER_UNMAPPED".equals(lastErrorCode)) {
+            return null;
+        }
+        return exports.findUnmappedEntity(tenantId, orderId).orElse(null);
+    }
+
     private boolean posCapable(UUID tenantId, OrderDirectory.OrderSummary order) {
         return installations
                 .primaryBinding(tenantId, order.brandId(), order.locationId(), PosCapability.ORDER_EXPORT.code())
@@ -274,6 +292,26 @@ public class OrderPosExportController {
      *                         provider's own text, which has been observed to
      *                         echo request content, including a customer's
      *                         address, back at the caller
+     * @param unmappedEntityType gap-map row 1.2i's fix path: {@code "VARIANT"}
+     *                         or {@code "MODIFIER"} when {@code lastErrorCode}
+     *                         is {@code LINE_UNMAPPED}/{@code MODIFIER_UNMAPPED}
+     *                         and a currently-unmapped line or modifier was
+     *                         found live -- null otherwise, including when the
+     *                         error code names a mapping gap but every line now
+     *                         resolves (an operator may have already fixed it)
+     * @param unmappedHorecaosEntityId the id to pre-select on the ADR 0012
+     *                         mapping screen -- an internal id only, never a
+     *                         provider code or free text, paired one-to-one
+     *                         with {@code unmappedEntityType}
+     * @param unmappedBindingId the {@code ORDER_EXPORT} binding {@code
+     *                         unmappedHorecaosEntityId} was checked against
+     *                         (see {@link PosOrderExportService.UnmappedEntity#bindingId}) --
+     *                         without this a console deep link built from
+     *                         only the two fields above lands the ADR 0012
+     *                         mapping screen on whichever POS binding
+     *                         happens to be first in the tenant's own list,
+     *                         which is the wrong one for any tenant with more
+     *                         than one
      */
     public record ExportView(
             UUID exportId,
@@ -288,9 +326,12 @@ public class OrderPosExportController {
             @Nullable String lastError,
             @Nullable String resolutionKind,
             @Nullable String resolutionReason,
-            @Nullable Instant resolvedAt) {
+            @Nullable Instant resolvedAt,
+            @Nullable String unmappedEntityType,
+            @Nullable UUID unmappedHorecaosEntityId,
+            @Nullable UUID unmappedBindingId) {
 
-        static ExportView of(ExportDetail detail) {
+        static ExportView of(ExportDetail detail, PosOrderExportService.@Nullable UnmappedEntity unmapped) {
             return new ExportView(
                     detail.exportId(),
                     detail.state().name(),
@@ -304,7 +345,10 @@ public class OrderPosExportController {
                     safeErrorMessage(detail.lastErrorCode()),
                     detail.resolutionKind(),
                     detail.resolutionReason(),
-                    detail.resolvedAt());
+                    detail.resolvedAt(),
+                    unmapped == null ? null : unmapped.entityType(),
+                    unmapped == null ? null : unmapped.horecaosEntityId(),
+                    unmapped == null ? null : unmapped.bindingId());
         }
     }
 

@@ -1040,6 +1040,110 @@ class MarketingCampaignTests {
         assertThat(campaignStore.find(TENANT, campaign).orElseThrow().status()).isEqualTo(CampaignStatus.SCHEDULED);
     }
 
+    // --------------------------------------------------- row 6.4: re-schedule a halted send
+
+    /**
+     * Row 6.4 (wave 10 w5-reports-exports): the console had no way to re-arm a
+     * campaign {@code CampaignScheduledSendScheduler} halted — no console
+     * screen even surfaced {@code haltedReason}. This proves the read (the
+     * halted shape's own {@code haltedReason}) and the write (re-arming for a
+     * new future moment, without a fresh approval) both work.
+     */
+    @Test
+    @DisplayName("reschedule re-arms a halted scheduled send for a new future moment and clears haltedReason")
+    void rescheduleReArmsAHaltedSendAndClearsHaltedReason() {
+        Instant scheduledAt = NOW.plus(Duration.ofHours(2));
+        UUID campaign = campaigns.create(
+                TENANT,
+                BRAND,
+                "Halted then rescheduled " + UUID.randomUUID(),
+                MarketingChannel.SMS,
+                PURPOSE,
+                everybodyRegistered(),
+                "MARKETING_PROMOTION",
+                100,
+                10_000_000L,
+                "UZS",
+                null,
+                null,
+                scheduledAt,
+                UUID.fromString(author.subject()));
+        readyToLaunch(campaign);
+        assertThat(campaigns.start(TENANT, campaign)).isTrue();
+
+        port().unwire();
+        wire(scheduledAt.plusSeconds(1));
+        var dueScheduler = new CampaignScheduledSendScheduler(
+                campaignStore, campaigns, Clock.fixed(scheduledAt.plusSeconds(1), ZoneOffset.UTC), 50);
+        assertThat(dueScheduler.runOnce()).isEqualTo(1);
+        var halted = campaignStore.find(TENANT, campaign).orElseThrow();
+        assertThat(halted.status()).isEqualTo(CampaignStatus.SCHEDULED);
+        assertThat(halted.scheduledAt()).isNull();
+        assertThat(halted.haltedReason())
+                .as("row 6.4's own read model — the console now has something to surface")
+                .isNotNull();
+
+        Instant newMoment = scheduledAt.plusSeconds(1).plus(Duration.ofHours(3));
+        assertThat(campaigns.reschedule(TENANT, campaign, newMoment, approver, "corr-reschedule"))
+                .isTrue();
+
+        var rescheduled = campaignStore.find(TENANT, campaign).orElseThrow();
+        assertThat(rescheduled.status()).isEqualTo(CampaignStatus.SCHEDULED);
+        assertThat(rescheduled.scheduledAt()).isEqualTo(newMoment);
+        assertThat(rescheduled.haltedReason())
+                .as("no longer describes the row's current state once re-armed")
+                .isNull();
+    }
+
+    @Test
+    @DisplayName("reschedule refuses a campaign that is not a halted scheduled send")
+    void rescheduleRefusesACampaignThatIsNotHalted() {
+        UUID campaign = campaigns.create(
+                TENANT,
+                BRAND,
+                "Draft, never scheduled " + UUID.randomUUID(),
+                MarketingChannel.SMS,
+                PURPOSE,
+                everybodyRegistered(),
+                "MARKETING_PROMOTION",
+                100,
+                10_000_000L,
+                "UZS",
+                null,
+                null,
+                null,
+                UUID.fromString(author.subject()));
+
+        assertThat(campaigns.reschedule(
+                        TENANT, campaign, NOW.plus(Duration.ofHours(1)), approver, "corr-reschedule-refused"))
+                .as("DRAFT is not a halted scheduled send — nothing to re-arm")
+                .isFalse();
+    }
+
+    @Test
+    @DisplayName("reschedule refuses a moment that is not in the future")
+    void rescheduleRefusesAPastMoment() {
+        UUID campaign = campaigns.create(
+                TENANT,
+                BRAND,
+                "Past reschedule attempt " + UUID.randomUUID(),
+                MarketingChannel.SMS,
+                PURPOSE,
+                everybodyRegistered(),
+                "MARKETING_PROMOTION",
+                100,
+                10_000_000L,
+                "UZS",
+                null,
+                null,
+                NOW.plus(Duration.ofHours(2)),
+                UUID.fromString(author.subject()));
+
+        assertThatThrownBy(() ->
+                        campaigns.reschedule(TENANT, campaign, NOW.minusSeconds(1), approver, "corr-reschedule-past"))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
     /** Draft, estimate, submit, approve — everything short of the launch call itself. */
     private UUID readyToLaunch(UUID campaign) {
         campaigns.prepare(TENANT, campaign, author, "corr");

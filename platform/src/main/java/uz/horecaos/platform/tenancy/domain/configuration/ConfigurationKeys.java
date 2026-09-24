@@ -407,6 +407,33 @@ public final class ConfigurationKeys {
             .build();
 
     /**
+     * Wave 10 (gap map rows {@code 1.2c}/{@code 2.1d}): ADR 0039's financial
+     * amendment cut point. Declared identically in {@code
+     * ordering.api.OrderingConfigurationKeys}, which is where {@code
+     * OrderAmendmentService} actually resolves it, for the same cyclic-import
+     * reason as {@link #ORDERING_CART_RETENTION_DAYS}.
+     */
+    public static final ConfigurationKey<String> ORDERING_AMENDMENT_CUT_POINT_STATUS = ConfigurationKey.of(
+                    "ordering.amendment_cut_point_status", String.class)
+            .defaultValue("READY")
+            .ownedBy("ordering")
+            .tenantVisible()
+            .describedAs("The last order status at which a financial amendment (adding, changing "
+                    + "or removing lines, the address, the fulfilment time or the payment method) "
+                    + "may still be carried out. A location may stop earlier than READY, never later.")
+            .build();
+
+    /** Wave 10: the ADR 0027 four-eyes threshold on a decreasing amendment, declared identically. */
+    public static final ConfigurationKey<Long> ORDERING_AMENDMENT_DECREASE_APPROVAL_THRESHOLD_MINOR =
+            ConfigurationKey.of("ordering.amendment_decrease_approval_threshold_minor", Long.class)
+                    .defaultValue(200000L)
+                    .ownedBy("ordering")
+                    .tenantVisible()
+                    .describedAs("A financial amendment that lowers the order's total by at least this "
+                            + "many minor units needs a second signature (ADR 0027) before it may apply.")
+                    .build();
+
+    /**
      * Wave P46 (gap map row {@code 4.4d}): catalog base settings' first
      * switch. Declared identically in {@code
      * inventory.api.InventoryConfigurationKeys}, because {@code

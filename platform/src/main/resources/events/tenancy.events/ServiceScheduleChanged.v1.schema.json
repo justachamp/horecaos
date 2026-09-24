@@ -11,7 +11,7 @@
     "brandId": { "type": "string", "format": "uuid" },
     "changeKind": {
       "type": "string",
-      "enum": ["CREATED", "RULES_REPLACED", "EXCEPTION_UPSERTED"]
+      "enum": ["CREATED", "RULES_REPLACED", "EXCEPTION_UPSERTED", "EXCEPTION_DELETED"]
     }
   }
 }

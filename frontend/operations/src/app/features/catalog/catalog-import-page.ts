@@ -6,6 +6,7 @@ import {
   inject,
   signal,
 } from '@angular/core';
+import { ActivatedRoute } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 
 import { CurrentLocation } from '../../core/auth/current-location';
@@ -47,7 +48,12 @@ import {
   downloadCsvText,
 } from './catalog-import-file-api';
 import { PosSyncApi, SyncRunSummary, SyncRunDetail, ApplyItemOutcome } from './pos-sync-api';
-import { PosMappingApi, UnmappedExternalResponse, MappingView } from './pos-mapping-api';
+import {
+  PosMappingApi,
+  UnmappedExternalResponse,
+  MappingView,
+  MappingEntityType,
+} from './pos-mapping-api';
 
 /** See `order-queue.ts`'s identical constant — no location carries a timezone on any response this page reaches yet. */
 const PLACEHOLDER_TIME_ZONE: TimeZone = 'Asia/Tashkent';
@@ -115,6 +121,22 @@ function splitCsvLine(line: string): string[] {
   return cells.map((cell) => cell.trim());
 }
 
+/** Every value {@link MappingEntityType} declares -- a deep link's own `?entityType=` is untrusted input until checked against this. */
+const MAPPING_ENTITY_TYPES: readonly MappingEntityType[] = [
+  'PRODUCT',
+  'PAYMENT_TYPE',
+  'DISCOUNT',
+  'COURIER',
+  'CANCELLATION_REASON',
+  'CHANNEL_POS_CODE',
+  'VARIANT',
+  'MODIFIER',
+];
+
+function isMappingEntityType(value: string | null): value is MappingEntityType {
+  return value !== null && (MAPPING_ENTITY_TYPES as readonly string[]).includes(value);
+}
+
 function normalizeHeader(raw: string): string {
   return raw
     .trim()
@@ -167,6 +189,7 @@ export class CatalogImportPage implements OnInit {
   private readonly mappingApi = inject(PosMappingApi);
   private readonly catalogApi = inject(CatalogApi);
   private readonly fileApi = inject(CatalogImportFileApi);
+  private readonly route = inject(ActivatedRoute);
   protected readonly i18n = inject(I18n);
 
   protected readonly loading = signal(true);
@@ -198,6 +221,14 @@ export class CatalogImportPage implements OnInit {
   protected readonly mappingLoading = signal(false);
   protected readonly mappingBusy = signal(false);
   protected readonly mappingError = signal<string | null>(null);
+  /**
+   * Gap-map row 1.2i's fix path: which pairing the mapping tab shows,
+   * `'PRODUCT'` by default and overridden by a `?entityType=` deep link from
+   * a POS export's own `LINE_UNMAPPED`/`MODIFIER_UNMAPPED` refusal.
+   */
+  protected readonly mappingEntityType = signal<MappingEntityType>('PRODUCT');
+  /** The `?focusHorecaosId=` a deep link carries — {@link MappingPane.focusHorecaosId}'s own input. */
+  protected readonly mappingFocusHorecaosId = signal<string | null>(null);
 
   // ---------------------------------------------------------- row 4.5b: CSV import
 
@@ -210,9 +241,32 @@ export class CatalogImportPage implements OnInit {
 
   protected readonly hasBinding = computed(() => this.selectedBindingId() !== null);
 
+  /**
+   * Gap-map row 1.2i's fix path: a deep link from a POS export's own
+   * `LINE_UNMAPPED`/`MODIFIER_UNMAPPED` refusal carries `entityType`,
+   * `focusHorecaosId` and, optionally, `bindingId` as query params. Read
+   * once, before {@link load} runs, so `load()`'s own "keep the current
+   * selection if it is still valid" logic sees the deep-linked binding as
+   * the current one rather than overwriting it with the list's first entry.
+   */
   async ngOnInit(): Promise<void> {
+    const params = this.route.snapshot.queryParamMap;
+    const entityType = params.get('entityType');
+    if (isMappingEntityType(entityType)) {
+      this.mappingEntityType.set(entityType);
+      this.activeTab.set('mapping');
+    }
+    this.mappingFocusHorecaosId.set(params.get('focusHorecaosId'));
+    const bindingId = params.get('bindingId');
+    if (bindingId !== null) {
+      this.selectedBindingId.set(bindingId);
+    }
+
     await this.location.ensureLoaded();
     await this.load();
+    if (this.activeTab() === 'mapping') {
+      await this.loadMapping();
+    }
   }
 
   private async load(): Promise<void> {
@@ -355,18 +409,19 @@ export class CatalogImportPage implements OnInit {
     this.mappingLoading.set(true);
     this.mappingError.set(null);
     try {
+      const entityType = this.mappingEntityType();
       const [page, unmapped] = await Promise.all([
         firstValueFrom(
           this.mappingApi.list(
             { tenantId: scope.tenantId },
             bindingId,
-            'PRODUCT',
+            entityType,
             'ACTIVE',
             firstPage(),
           ),
         ),
         firstValueFrom(
-          this.mappingApi.unmapped({ tenantId: scope.tenantId }, bindingId, 'PRODUCT'),
+          this.mappingApi.unmapped({ tenantId: scope.tenantId }, bindingId, entityType),
         ),
       ]);
       this.mappingRows.set(page.items);
@@ -391,7 +446,7 @@ export class CatalogImportPage implements OnInit {
         this.mappingApi.create(
           { tenantId: scope.tenantId },
           bindingId,
-          'PRODUCT',
+          this.mappingEntityType(),
           intent.horecaosId,
           intent.externalId,
           null,
@@ -434,7 +489,7 @@ export class CatalogImportPage implements OnInit {
     this.mappingError.set(null);
     try {
       const result = await firstValueFrom(
-        this.mappingApi.bulkAutoMatch({ tenantId: scope.tenantId }, bindingId, 'PRODUCT'),
+        this.mappingApi.bulkAutoMatch({ tenantId: scope.tenantId }, bindingId, this.mappingEntityType()),
       );
       this.mappingConflicts.set(result.conflicts);
       await this.loadMapping();

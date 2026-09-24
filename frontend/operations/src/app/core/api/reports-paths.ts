@@ -106,6 +106,16 @@ export const reportsPaths = {
     return `${TENANT_REPORTING(tenantId)}/sla-bucket-set`;
   },
 
+  /** Row 7.10b (wave 10 w5-reports-exports): the geography page's distance histogram, live over reporting.fact_delivery. */
+  distanceBuckets(tenantId: string): string {
+    return `${TENANT_REPORTING(tenantId)}/distance-buckets`;
+  },
+
+  /** Row 7.10b: the published bucket boundaries and version — mirrors `/sla-bucket-set`. */
+  distanceBucketSet(tenantId: string): string {
+    return `${TENANT_REPORTING(tenantId)}/distance-bucket-set`;
+  },
+
   /**
    * P39 (7.1c/7.3b): takings split by payment method —
    * `payment_mix.amount.v1` over `reporting.fact_order_tender`. Its own

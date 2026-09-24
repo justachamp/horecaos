@@ -282,6 +282,35 @@ public class PriceAuthoringController {
         return respond(guarded(() -> authoring.activate(tenantId, brandId, priceBookId, (int) expected)));
     }
 
+    @GetMapping("/tax-profiles")
+    @RequiresCapability(value = Capability.PRICING_READ, scope = ScopeType.BRAND)
+    @Operation(
+            summary = "Every jurisdiction this brand has a VAT rate in force for",
+            description = "Gap map row 4.8a: the tax-profile screen's list, read before an "
+                    + "operator opens the editor for one jurisdiction, so a rate is never "
+                    + "overwritten blind.")
+    public List<TaxProfileResponse> listTaxProfiles(@PathVariable UUID tenantId, @PathVariable UUID brandId) {
+        return authoring.taxProfiles(tenantId, brandId).stream()
+                .map(TaxProfileResponse::of)
+                .toList();
+    }
+
+    @GetMapping("/tax-profiles/{jurisdictionCode}")
+    @RequiresCapability(value = Capability.PRICING_READ, scope = ScopeType.BRAND)
+    @Operation(
+            summary = "Read the brand's in-force VAT rate for a jurisdiction",
+            description = "Gap map row 4.8a: shown before the edit form, so an operator sees "
+                    + "what is currently in force instead of overwriting it blind.")
+    public ResponseEntity<TaxProfileResponse> readTaxProfile(
+            @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable String jurisdictionCode) {
+        return authoring
+                .taxProfile(tenantId, brandId, jurisdictionCode)
+                .map(TaxProfileResponse::of)
+                .map(ResponseEntity::ok)
+                .orElseThrow(() -> new ApiException(
+                        ErrorCode.RESOURCE_NOT_FOUND, "No tax profile for jurisdiction " + jurisdictionCode));
+    }
+
     @PutMapping("/tax-profiles/{jurisdictionCode}")
     @RequiresCapability(value = Capability.PRICING_AUTHOR, scope = ScopeType.BRAND, mutating = true)
     @Operation(

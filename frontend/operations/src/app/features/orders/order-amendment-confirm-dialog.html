@@ -1,0 +1,69 @@
+<q-modal
+  [title]="'orders.dialog.amendConfirm.title' | t"
+  [dismissible]="!busy()"
+  (dismiss)="dismiss.emit()"
+  data-testid="order-amendment-confirm-dialog"
+>
+  @if (deltaMinor() > 0) {
+    <p class="q-body-sm" data-testid="order-amendment-confirm-delta">
+      {{ 'orders.dialog.amendConfirm.increase' | t: { amount: formattedDelta() } }}
+    </p>
+  } @else if (deltaMinor() < 0) {
+    <p class="q-body-sm" data-testid="order-amendment-confirm-delta">
+      {{ 'orders.dialog.amendConfirm.decrease' | t: { amount: formattedDelta() } }}
+    </p>
+  } @else {
+    <p class="q-body-sm" data-testid="order-amendment-confirm-delta">
+      {{ 'orders.dialog.amendConfirm.noChange' | t }}
+    </p>
+  }
+
+  @if (requiresApproval()) {
+    <p
+      class="q-body-sm amend-confirm-dialog__approval"
+      data-testid="order-amendment-confirm-approval"
+    >
+      {{ 'orders.dialog.amendConfirm.requiresApproval' | t }}
+    </p>
+  }
+
+  @if (deltaMinor() > 0) {
+    <!-- ADR 0039 §3.11: the customer's recorded agreement is only for an
+         increase. A decrease (or a zero-delta reprice) is never presented as
+         one, so the console never collects -- or looks like it collects -- a
+         "how did the customer agree" answer nobody was ever asked. -->
+    <label class="amend-confirm-dialog__field">
+      <span class="q-body-sm">{{ 'orders.dialog.amendConfirm.channel' | t }}</span>
+      <select
+        class="amend-confirm-dialog__select q-body-sm"
+        [value]="channel()"
+        (change)="setChannel($any($event.target).value)"
+        data-testid="order-amendment-confirm-channel"
+      >
+        @for (option of channels; track option) {
+          <option [value]="option">{{ channelLabelKey(option) | t }}</option>
+        }
+      </select>
+    </label>
+  }
+
+  <ng-container qModalActions>
+    <button
+      type="button"
+      class="amend-confirm-dialog__dismiss q-body-sm"
+      (click)="dismiss.emit()"
+      [disabled]="busy()"
+    >
+      {{ 'orders.dialog.dismiss' | t }}
+    </button>
+    <button
+      type="button"
+      class="amend-confirm-dialog__confirm q-body-sm"
+      (click)="submit()"
+      [disabled]="busy()"
+      data-testid="order-amendment-confirm-submit"
+    >
+      {{ 'orders.dialog.amendConfirm.confirm' | t }}
+    </button>
+  </ng-container>
+</q-modal>
