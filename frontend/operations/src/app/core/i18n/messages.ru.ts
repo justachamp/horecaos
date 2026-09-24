@@ -274,6 +274,13 @@ export const messagesRu: MessageCatalogue = {
   'orders.dialog.changeAddress.latitude': 'Широта',
   'orders.dialog.changeAddress.longitude': 'Долгота',
 
+  'orders.dialog.addLines.title': 'Добавить позиции',
+  'orders.dialog.addLines.noModifiers':
+    'Без модификаторов — добавьте базовую позицию и укажите модификатор в заметке для кухни.',
+  'orders.dialog.addLines.searchPlaceholder': 'Поиск по меню…',
+  'orders.dialog.addLines.empty': 'Позиции ещё не выбраны.',
+  'orders.dialog.addLines.remove': 'Убрать',
+
   // Конфирмация цены при вызове внешнего курьера (карта пробелов 1.2f, волна P44).
   'orders.dialog.externalCourier.title': 'Вызвать курьера',
   'orders.dialog.externalCourier.noPartners':

@@ -1,0 +1,72 @@
+<q-modal
+  [title]="'orders.dialog.addLines.title' | t"
+  [dismissible]="!busy()"
+  (dismiss)="dismiss.emit()"
+  data-testid="order-add-lines-dialog"
+>
+  <p class="q-caption">{{ 'orders.dialog.addLines.noModifiers' | t }}</p>
+
+  <q-combobox
+    [query]="query()"
+    [options]="options()"
+    [loading]="searching()"
+    [placeholder]="'orders.dialog.addLines.searchPlaceholder' | t"
+    (queryChange)="onQueryChange($event)"
+    (search)="onSearch($event)"
+    (optionSelected)="onOptionSelected($event)"
+    data-testid="order-add-lines-dialog-search"
+  />
+
+  @if (selectedLines().length === 0) {
+    <p class="q-body-sm" data-testid="order-add-lines-dialog-empty">
+      {{ 'orders.dialog.addLines.empty' | t }}
+    </p>
+  } @else {
+    <ul class="add-lines-dialog__list">
+      @for (line of selectedLines(); track line.variantId) {
+        <li
+          class="add-lines-dialog__row"
+          [attr.data-testid]="'order-add-lines-dialog-row-' + line.variantId"
+        >
+          <span class="add-lines-dialog__label q-body-sm">{{ line.label }}</span>
+          <input
+            type="number"
+            min="1"
+            class="add-lines-dialog__quantity"
+            [value]="line.quantity"
+            (input)="setQuantity(line.variantId, $any($event.target).value)"
+            [attr.data-testid]="'order-add-lines-dialog-quantity-' + line.variantId"
+          />
+          <button
+            type="button"
+            class="add-lines-dialog__remove"
+            (click)="removeLine(line.variantId)"
+            [attr.data-testid]="'order-add-lines-dialog-remove-' + line.variantId"
+          >
+            {{ 'orders.dialog.addLines.remove' | t }}
+          </button>
+        </li>
+      }
+    </ul>
+  }
+
+  <ng-container qModalActions>
+    <button
+      type="button"
+      class="add-lines-dialog__dismiss q-body-sm"
+      (click)="dismiss.emit()"
+      [disabled]="busy()"
+    >
+      {{ 'orders.dialog.dismiss' | t }}
+    </button>
+    <button
+      type="button"
+      class="add-lines-dialog__confirm q-body-sm"
+      (click)="submit()"
+      [disabled]="busy() || !canSubmit()"
+      data-testid="order-add-lines-dialog-confirm"
+    >
+      {{ 'orders.dialog.note.save' | t }}
+    </button>
+  </ng-container>
+</q-modal>
