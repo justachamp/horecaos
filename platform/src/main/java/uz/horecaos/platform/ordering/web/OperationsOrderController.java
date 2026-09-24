@@ -1163,12 +1163,17 @@ public class OperationsOrderController {
     @PostMapping("/{orderId}/amendments/{amendmentId}/confirmation")
     @RequiresCapability(value = Capability.ORDER_AMEND, scope = ScopeType.LOCATION, mutating = true)
     @Operation(
-            summary = "Record that the customer agreed to the change",
+            summary = "Record that the customer agreed to the change, and apply it",
             description = "The operator attests it on the call, and the attestation carries who, "
                     + "when, and through which channel. An amendment that raises the total cannot "
                     + "commit without one: charging more than the customer agreed to is the "
-                    + "failure this prevents, and the database refuses the applied row as well.")
-    public ResponseEntity<Void> confirmAmendment(
+                    + "failure this prevents, and the database refuses the applied row as well. "
+                    + "Wave 10: once attested, this also applies the amendment in the same call — "
+                    + "the confirmation step closing the loop propose's own applyImmediately could "
+                    + "not, because the total was not yet agreed. If something else still blocks it "
+                    + "(an ADR 0027 approval, the POS export), the response is the amendment's "
+                    + "current state, not an error: the confirmation itself always still succeeded.")
+    public ResponseEntity<AmendmentResponse> confirmAmendment(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @PathVariable UUID locationId,
@@ -1185,11 +1190,39 @@ public class OperationsOrderController {
                     (int) AggregateVersion.requireIfMatch(request),
                     currentActor.get().subject(),
                     body.channel());
-            return ResponseEntity.noContent().build();
         } catch (OrderStateService.StaleOrderException stale) {
             throw ApiException.staleVersion(stale.expected(), stale.actual());
         } catch (OrderAmendmentService.AmendmentNotFoundException missing) {
             throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, missing.getMessage());
+        }
+
+        int orderVersion = orderQuery
+                .detail(tenantId, orderId)
+                .map(detail -> detail.order().version())
+                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such order"));
+        try {
+            var result = amendments.apply(
+                    tenantId,
+                    orderId,
+                    amendmentId,
+                    orderVersion,
+                    "USER",
+                    currentActor.get().subject(),
+                    "Applied after customer confirmation",
+                    null);
+            return ResponseEntity.ok(AmendmentResponse.of(result));
+        } catch (OrderAmendmentService.AmendmentNotFoundException missing) {
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, missing.getMessage());
+        } catch (OrderStateService.StaleOrderException
+                | OrderAmendmentService.AmendmentNotPermittedException
+                | OrderAmendmentService.AmendmentRefusedException
+                | OrderAmendmentService.PosExportUnacknowledgedException
+                | OrderAmendmentService.AmendmentExpiredException notYetApplied) {
+            return ResponseEntity.ok(amendments.forOrder(tenantId, orderId).stream()
+                    .filter(row -> row.id().equals(amendmentId))
+                    .findFirst()
+                    .map(row -> AmendmentResponse.of(row, List.of(), List.of(), List.of()))
+                    .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such amendment")));
         }
     }
 
@@ -1725,13 +1758,23 @@ public class OperationsOrderController {
      * say whether a given save re-fiscalized, released stock, or reprinted the
      * kitchen ticket.
      */
+    @SuppressWarnings("checkstyle:ParameterNumber")
     public record AmendmentCommandRequest(
             @NotNull AmendmentCommandType type,
             @Size(max = 1000) String kitchenNote,
             Boolean callbackRequested,
             @jakarta.validation.constraints.PositiveOrZero Long cashTenderedMinor,
             @Size(max = 1000) String courierNote,
-            @Size(max = 1000) String internalNote) {
+            @Size(max = 1000) String internalNote,
+            // ------------------------------------------------------ wave 10
+            @Size(max = 255) String recipientName,
+            @Size(max = 32) String recipientPhone,
+            Instant promisedAt,
+            @Size(max = 32) String paymentMethodCode,
+            @jakarta.validation.Valid DeliveryAddressRequest deliveryAddress,
+            @jakarta.validation.Valid @Size(max = 10) List<@jakarta.validation.Valid AddLineRequest> lines,
+            UUID orderLineId,
+            @Positive Integer quantity) {
 
         OrderAmendmentService.AmendmentCommand toCommand() {
             return switch (type) {
@@ -1748,12 +1791,108 @@ public class OperationsOrderController {
                 // ADR 0113 (wave P10).
                 case SET_COURIER_NOTE -> OrderAmendmentService.AmendmentCommand.courierNote(courierNote);
                 case SET_INTERNAL_NOTE -> OrderAmendmentService.AmendmentCommand.internalNote(internalNote);
+                // ------------------------------------------------ wave 10
+                case CHANGE_CONTACT -> {
+                    if (recipientName == null || recipientPhone == null) {
+                        throw new IllegalArgumentException(
+                                "CHANGE_CONTACT carries the corrected recipient name and phone");
+                    }
+                    yield OrderAmendmentService.AmendmentCommand.changeContact(recipientName, recipientPhone);
+                }
+                case CHANGE_FULFILLMENT_TIME -> {
+                    if (promisedAt == null) {
+                        throw new IllegalArgumentException("CHANGE_FULFILLMENT_TIME carries the new promised time");
+                    }
+                    yield OrderAmendmentService.AmendmentCommand.changeFulfillmentTime(promisedAt);
+                }
+                case CHANGE_PAYMENT_METHOD -> {
+                    if (paymentMethodCode == null || paymentMethodCode.isBlank()) {
+                        throw new IllegalArgumentException("CHANGE_PAYMENT_METHOD carries the target method code");
+                    }
+                    yield OrderAmendmentService.AmendmentCommand.changePaymentMethod(paymentMethodCode);
+                }
+                case CHANGE_DELIVERY_ADDRESS -> {
+                    if (deliveryAddress == null || recipientName == null || recipientPhone == null) {
+                        throw new IllegalArgumentException(
+                                "CHANGE_DELIVERY_ADDRESS carries the new address, recipient name and phone");
+                    }
+                    yield OrderAmendmentService.AmendmentCommand.changeDeliveryAddress(
+                            deliveryAddress.toDestination(),
+                            deliveryAddress.deliveryInstructions(),
+                            recipientName,
+                            recipientPhone);
+                }
+                case ADD_LINES -> {
+                    if (lines == null || lines.isEmpty()) {
+                        throw new IllegalArgumentException("ADD_LINES carries at least one line");
+                    }
+                    yield OrderAmendmentService.AmendmentCommand.addLines(
+                            lines.stream().map(AddLineRequest::toLineRequest).toList());
+                }
+                case CHANGE_LINE_QUANTITY -> {
+                    if (orderLineId == null || quantity == null) {
+                        throw new IllegalArgumentException(
+                                "CHANGE_LINE_QUANTITY carries the line it targets and the new quantity");
+                    }
+                    yield OrderAmendmentService.AmendmentCommand.changeLineQuantity(orderLineId, quantity);
+                }
                 // Declared by ADR 0039 and not built. Refused here as well as in
                 // the service, so the failure arrives before anything is written.
                 default ->
                     throw new OrderAmendmentService.AmendmentNotPermittedException(
                             "%s is declared by ADR 0039 and not built in this release".formatted(type));
             };
+        }
+    }
+
+    /**
+     * ADR 0039 {@code CHANGE_DELIVERY_ADDRESS}: the same structured fields
+     * {@link uz.horecaos.platform.ordering.domain.DeliveryDestination} carries
+     * — подъезд/этаж/квартира/ориентир are separate fields rather than free
+     * text for the identical reason that record gives.
+     */
+    public record DeliveryAddressRequest(
+            @NotBlank @Size(max = 255) String line1,
+            @Size(max = 255) String line2,
+            @NotBlank @Size(max = 120) String city,
+            @Size(max = 120) String district,
+            @Size(max = 20) String postalCode,
+            @Size(max = 32) String entrance,
+            @Size(max = 16) String floor,
+            @Size(max = 32) String apartment,
+            @Size(max = 255) String landmark,
+            double latitude,
+            double longitude,
+            @Size(max = 1000) String deliveryInstructions) {
+
+        uz.horecaos.platform.ordering.domain.DeliveryDestination toDestination() {
+            return new uz.horecaos.platform.ordering.domain.DeliveryDestination(
+                    line1,
+                    orEmpty(line2),
+                    city,
+                    orEmpty(district),
+                    orEmpty(postalCode),
+                    orEmpty(entrance),
+                    orEmpty(floor),
+                    orEmpty(apartment),
+                    orEmpty(landmark),
+                    latitude,
+                    longitude);
+        }
+
+        private static String orEmpty(@Nullable String value) {
+            return value == null ? "" : value;
+        }
+    }
+
+    /** One line {@code ADD_LINES} carries. */
+    public record AddLineRequest(
+            @NotNull UUID variantId,
+            @Positive int quantity,
+            @Size(max = 10) List<UUID> modifierOptionIds) {
+
+        OrderAmendmentService.AmendmentCommand.LineRequest toLineRequest() {
+            return new OrderAmendmentService.AmendmentCommand.LineRequest(variantId, quantity, modifierOptionIds);
         }
     }
 
@@ -1792,6 +1931,12 @@ public class OperationsOrderController {
      *                           controller carries with no resolvable name
      *                           behind it (see {@code actorDisplay} on the
      *                           Angular side)
+     * @param actions            wave 10: {@code ["RESOLVE"]} when this amendment
+     *                           is open and blocked on either the customer's
+     *                           recorded agreement (an increase awaiting {@code
+     *                           POST .../confirmation}) or an ADR 0027 approval
+     *                           still pending — {@code []} otherwise, including
+     *                           for every amendment this wave predates
      */
     public record AmendmentResponse(
             UUID amendmentId,
@@ -1811,7 +1956,8 @@ public class OperationsOrderController {
             List<AmendmentCommandDetail> commandDetails,
             Instant createdAt,
             String createdByActorType,
-            @Nullable String createdByActorId) {
+            @Nullable String createdByActorId,
+            List<String> actions) {
 
         static AmendmentResponse of(OrderAmendmentService.AmendmentResult result) {
             return of(result.amendment(), result.warnings(), List.of(), List.of())
@@ -1841,7 +1987,17 @@ public class OperationsOrderController {
                     commandDetails,
                     row.createdAt(),
                     row.createdByActorType(),
-                    row.createdByActorId());
+                    row.createdByActorId(),
+                    actionsFor(row));
+        }
+
+        private static List<String> actionsFor(JdbcOrderAmendmentStore.AmendmentRow row) {
+            if (row.status().terminal()) {
+                return List.of();
+            }
+            boolean awaitingConfirmation = row.deltaTotalMinor() > 0 && row.confirmationAttestedAt() == null;
+            boolean awaitingApproval = row.requiresApproval() && row.approvalRequestId() == null;
+            return awaitingConfirmation || awaitingApproval ? List.of("RESOLVE") : List.of();
         }
 
         AmendmentResponse withOrderVersion(int version, boolean wasReplayed) {
@@ -1863,7 +2019,8 @@ public class OperationsOrderController {
                     commandDetails,
                     createdAt,
                     createdByActorType,
-                    createdByActorId);
+                    createdByActorId,
+                    actions);
         }
     }
 

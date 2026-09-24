@@ -156,11 +156,11 @@ public class JdbcOrderStore {
                 INSERT INTO ordering.order_revisions (
                     order_id, revision, tenant_id, source, amendment_id, pricing_quote_id,
                     pricing_context_hash, currency, subtotal_minor, tax_minor, discount_minor,
-                    fee_minor, total_minor, delta_total_minor, created_by_actor_type,
-                    created_by_actor_id, created_at)
+                    fee_minor, total_minor, delta_total_minor, fiscal_correction_required,
+                    created_by_actor_type, created_by_actor_id, created_at)
                 VALUES (:orderId, :revision, :tenantId, :source, :amendmentId, :quoteId,
                     :contextHash, :currency, :subtotal, :tax, :discount,
-                    :fee, :total, :delta, :actorType,
+                    :fee, :total, :delta, :fiscalCorrectionRequired, :actorType,
                     :actorId, :now)
                 """)
                 .param("orderId", revision.orderId())
@@ -177,6 +177,7 @@ public class JdbcOrderStore {
                 .param("fee", revision.feeMinor())
                 .param("total", revision.totalMinor())
                 .param("delta", revision.deltaTotalMinor())
+                .param("fiscalCorrectionRequired", revision.fiscalCorrectionRequired())
                 .param("actorType", revision.createdByActorType())
                 .param("actorId", revision.createdByActorId())
                 .param("now", utc(revision.createdAt()))
@@ -187,8 +188,8 @@ public class JdbcOrderStore {
         return jdbc.sql("""
                 SELECT order_id, revision, source, amendment_id, pricing_quote_id,
                        pricing_context_hash, currency, subtotal_minor, tax_minor, discount_minor,
-                       fee_minor, total_minor, delta_total_minor, created_by_actor_type,
-                       created_by_actor_id, created_at
+                       fee_minor, total_minor, delta_total_minor, fiscal_correction_required,
+                       created_by_actor_type, created_by_actor_id, created_at
                 FROM ordering.order_revisions
                 WHERE tenant_id = :tenantId AND order_id = :orderId
                 ORDER BY revision
@@ -209,6 +210,7 @@ public class JdbcOrderStore {
                         row.getLong("fee_minor"),
                         row.getLong("total_minor"),
                         row.getLong("delta_total_minor"),
+                        row.getBoolean("fiscal_correction_required"),
                         row.getString("created_by_actor_type"),
                         row.getString("created_by_actor_id"),
                         row.getObject("created_at", OffsetDateTime.class).toInstant()))
@@ -249,6 +251,19 @@ public class JdbcOrderStore {
         params.put("resolvedBy", resolvedBy);
         params.put("setCash", patch.cashTenderedExpectedMinor() != null);
         params.put("cashTendered", patch.cashTenderedExpectedMinor());
+        params.put("setPromise", patch.promisedAt() != null);
+        params.put("promisedAt", patch.promisedAt() == null ? null : utc(patch.promisedAt()));
+        params.put("promiseBasis", patch.promiseBasis());
+        params.put("setPaymentProjection", patch.paymentStatusProjection() != null);
+        params.put("paymentProjection", patch.paymentStatusProjection());
+        params.put("setTotals", patch.newTotals() != null);
+        params.put(
+                "subtotal", patch.newTotals() == null ? null : patch.newTotals().subtotalMinor());
+        params.put("tax", patch.newTotals() == null ? null : patch.newTotals().taxMinor());
+        params.put(
+                "discount", patch.newTotals() == null ? null : patch.newTotals().discountMinor());
+        params.put("fee", patch.newTotals() == null ? null : patch.newTotals().feeMinor());
+        params.put("total", patch.newTotals() == null ? null : patch.newTotals().totalMinor());
         params.put("now", utc(now));
 
         return jdbc.sql("""
@@ -269,10 +284,115 @@ public class JdbcOrderStore {
                         THEN (CASE WHEN :callbackRequested THEN NULL ELSE :resolvedBy::varchar END)
                         ELSE callback_resolved_by END,
                     cash_tendered_expected_minor = CASE WHEN :setCash
-                        THEN :cashTendered::bigint ELSE cash_tendered_expected_minor END
+                        THEN :cashTendered::bigint ELSE cash_tendered_expected_minor END,
+                    -- ADR 0039 CHANGE_FULFILLMENT_TIME (wave 10): an operator-set
+                    -- promise is always a named time, never a duration, so the
+                    -- band components are cleared rather than left stale.
+                    promised_at = CASE WHEN :setPromise THEN :promisedAt ELSE promised_at END,
+                    promise_basis = CASE WHEN :setPromise THEN :promiseBasis::varchar ELSE promise_basis END,
+                    promise_prep_minutes = CASE WHEN :setPromise THEN NULL ELSE promise_prep_minutes END,
+                    promise_travel_minutes = CASE WHEN :setPromise THEN NULL ELSE promise_travel_minutes END,
+                    -- ADR 0039 CHANGE_PAYMENT_METHOD (wave 10).
+                    payment_status_projection = CASE WHEN :setPaymentProjection
+                        THEN :paymentProjection::varchar ELSE payment_status_projection END,
+                    -- ADR 0039 financial commands (wave 10): the order's own money
+                    -- columns are a live projection of the current revision, read
+                    -- by everything outside the revision history — the board, the
+                    -- receipts list, every report — and have to move with it.
+                    subtotal_minor = CASE WHEN :setTotals THEN :subtotal::bigint ELSE subtotal_minor END,
+                    tax_minor = CASE WHEN :setTotals THEN :tax::bigint ELSE tax_minor END,
+                    discount_minor = CASE WHEN :setTotals THEN :discount::bigint ELSE discount_minor END,
+                    fee_minor = CASE WHEN :setTotals THEN :fee::bigint ELSE fee_minor END,
+                    total_minor = CASE WHEN :setTotals THEN :total::bigint ELSE total_minor END
                 WHERE tenant_id = :tenantId AND id = :orderId AND version = :expectedVersion
                 RETURNING version
                 """).params(params).query(Integer.class).optional();
+    }
+
+    /**
+     * Closes a live line at a revision boundary (ADR 0039 {@code
+     * CHANGE_LINE_QUANTITY}).
+     *
+     * <p>The line row itself is never edited — {@code revision_to} is the only
+     * column V0394's amendment grant opens — so its quantity, prices and names
+     * stay exactly as they were snapshotted at every revision that came before
+     * this one. The caller inserts the replacement line separately.
+     *
+     * @return false when the line was not live at this order (already closed,
+     *         or belongs to another order/tenant) — the caller's own guard, not
+     *         a constraint, decides whether that is a bug or a race
+     */
+    public boolean closeLine(UUID tenantId, UUID orderId, UUID lineId, int revisionTo) {
+        return jdbc.sql("""
+                UPDATE ordering.order_lines
+                SET revision_to = :revisionTo
+                WHERE tenant_id = :tenantId AND order_id = :orderId AND id = :lineId
+                  AND revision_to IS NULL
+                """)
+                        .param("tenantId", tenantId)
+                        .param("orderId", orderId)
+                        .param("lineId", lineId)
+                        .param("revisionTo", revisionTo)
+                        .update()
+                == 1;
+    }
+
+    /**
+     * The next line number for a new row on this order (ADR 0039 {@code
+     * ADD_LINES}/{@code CHANGE_LINE_QUANTITY}).
+     *
+     * <p>{@code uq_order_line_number} is never reused (V0022): a quantity change
+     * closes the old row and appends a new one at the next number rather than
+     * editing the amount in place, so this always looks past every line the
+     * order has ever carried, not only the live ones.
+     */
+    public int nextLineNumber(UUID tenantId, UUID orderId) {
+        Integer max = jdbc.sql("""
+                SELECT max(line_number) FROM ordering.order_lines
+                WHERE tenant_id = :tenantId AND order_id = :orderId
+                """)
+                .param("tenantId", tenantId)
+                .param("orderId", orderId)
+                .query(Integer.class)
+                .single();
+        return (max == null ? 0 : max) + 1;
+    }
+
+    /**
+     * Patches the order's customer snapshot (ADR 0039 {@code CHANGE_CONTACT}/
+     * {@code CHANGE_DELIVERY_ADDRESS}). Every order carries a row from checkout
+     * ({@link #insertCustomerSnapshot}), so this is always an update, never an
+     * upsert.
+     *
+     * @return false only for a cross-tenant or unknown order — the caller's own
+     *         version compare-and-set on {@code ordering.orders} is what actually
+     *         serialises two amendments; this table carries no version of its own
+     */
+    public boolean updateCustomerSnapshot(UUID tenantId, UUID orderId, CustomerSnapshotPatch patch) {
+        if (patch.isEmpty()) {
+            return true;
+        }
+        Map<String, Object> params = new HashMap<>();
+        params.put("tenantId", tenantId);
+        params.put("orderId", orderId);
+        params.put("setName", patch.displayNameEncrypted() != null);
+        params.put("name", patch.displayNameEncrypted());
+        params.put("setContact", patch.contactEncrypted() != null);
+        params.put("contact", patch.contactEncrypted());
+        params.put("setAddress", patch.addressEncrypted() != null);
+        params.put("address", patch.addressEncrypted());
+        params.put("setInstructions", patch.deliveryInstructionsEncrypted() != null);
+        params.put("instructions", patch.deliveryInstructionsEncrypted());
+
+        return jdbc.sql("""
+                UPDATE ordering.order_customer_snapshots
+                SET display_name_encrypted = CASE WHEN :setName THEN :name::text ELSE display_name_encrypted END,
+                    contact_encrypted = CASE WHEN :setContact THEN :contact::text ELSE contact_encrypted END,
+                    address_encrypted = CASE WHEN :setAddress THEN :address::text ELSE address_encrypted END,
+                    delivery_instructions_encrypted = CASE WHEN :setInstructions
+                        THEN :instructions::text ELSE delivery_instructions_encrypted END
+                WHERE tenant_id = :tenantId AND order_id = :orderId
+                """).params(params).update() == 1;
     }
 
     /**
@@ -2076,9 +2196,51 @@ public class JdbcOrderStore {
             long feeMinor,
             long totalMinor,
             long deltaTotalMinor,
+            boolean fiscalCorrectionRequired,
             String createdByActorType,
             @Nullable String createdByActorId,
-            Instant createdAt) {}
+            Instant createdAt) {
+
+        /** Every call site that predates ADR 0039's wave 10 fiscal correction marker. */
+        public NewRevision(
+                UUID orderId,
+                int revision,
+                UUID tenantId,
+                String source,
+                @Nullable UUID amendmentId,
+                UUID pricingQuoteId,
+                String pricingContextHash,
+                String currency,
+                long subtotalMinor,
+                long taxMinor,
+                long discountMinor,
+                long feeMinor,
+                long totalMinor,
+                long deltaTotalMinor,
+                String createdByActorType,
+                @Nullable String createdByActorId,
+                Instant createdAt) {
+            this(
+                    orderId,
+                    revision,
+                    tenantId,
+                    source,
+                    amendmentId,
+                    pricingQuoteId,
+                    pricingContextHash,
+                    currency,
+                    subtotalMinor,
+                    taxMinor,
+                    discountMinor,
+                    feeMinor,
+                    totalMinor,
+                    deltaTotalMinor,
+                    false,
+                    createdByActorType,
+                    createdByActorId,
+                    createdAt);
+        }
+    }
 
     public record RevisionRow(
             UUID orderId,
@@ -2094,6 +2256,7 @@ public class JdbcOrderStore {
             long feeMinor,
             long totalMinor,
             long deltaTotalMinor,
+            boolean fiscalCorrectionRequired,
             String createdByActorType,
             @Nullable String createdByActorId,
             Instant createdAt) {}
@@ -2106,13 +2269,67 @@ public class JdbcOrderStore {
      * an earlier one recorded, and a patch record with three optional fields is
      * how that stays true without three separate conditional statements.
      */
+    /**
+     * @param promisedAt            ADR 0039 {@code CHANGE_FULFILLMENT_TIME}. Null
+     *                              means "leave alone"; travels with {@code
+     *                              promiseBasis}, which the caller always sets
+     *                              together with it
+     * @param promiseBasis          {@code OrderPromise.Basis} name, {@code
+     *                              "SCHEDULED_SLOT"} for every amendment-set
+     *                              promise today — an operator names a time, never
+     *                              a duration
+     * @param paymentStatusProjection ADR 0039 {@code CHANGE_PAYMENT_METHOD}. Null
+     *                              means "leave alone"; set only when the command
+     *                              actually opened or closed an online intent
+     */
+    /**
+     * @param newTotals ADR 0039 financial commands only: the freshly accepted
+     *                  quote's own five money columns, copied onto the order
+     *                  in the same statement that moves {@code
+     *                  current_revision} — {@code ordering.orders}' own
+     *                  {@code total_minor} et al. are a live projection of
+     *                  the current revision, not merely the checkout
+     *                  snapshot, and every reader outside the revision
+     *                  history (the board, the receipts list, every report)
+     *                  reads them from here. Null for every non-financial
+     *                  command, which never changes them
+     */
     public record OrderFieldPatch(
             @Nullable String kitchenNote,
             @Nullable Boolean callbackRequested,
-            @Nullable Long cashTenderedExpectedMinor) {
+            @Nullable Long cashTenderedExpectedMinor,
+            @Nullable Instant promisedAt,
+            @Nullable String promiseBasis,
+            @Nullable String paymentStatusProjection,
+            @Nullable RevisionTotals newTotals) {
 
         public static OrderFieldPatch none() {
-            return new OrderFieldPatch(null, null, null);
+            return new OrderFieldPatch(null, null, null, null, null, null, null);
+        }
+    }
+
+    /** The five money columns a repricing amendment writes onto both the revision and the order. */
+    public record RevisionTotals(
+            long subtotalMinor, long taxMinor, long discountMinor, long feeMinor, long totalMinor) {}
+
+    /**
+     * The order's customer snapshot fields one amendment changes (ADR 0039
+     * {@code CHANGE_CONTACT}/{@code CHANGE_DELIVERY_ADDRESS}). Null means "leave
+     * alone", the same convention {@link OrderFieldPatch} uses. Every value here
+     * is already envelope-encrypted ciphertext (ADR 0029) — this store never
+     * sees a plaintext name, phone or address.
+     */
+    public record CustomerSnapshotPatch(
+            @Nullable String displayNameEncrypted,
+            @Nullable String contactEncrypted,
+            @Nullable String addressEncrypted,
+            @Nullable String deliveryInstructionsEncrypted) {
+
+        public boolean isEmpty() {
+            return displayNameEncrypted == null
+                    && contactEncrypted == null
+                    && addressEncrypted == null
+                    && deliveryInstructionsEncrypted == null;
         }
     }
 
