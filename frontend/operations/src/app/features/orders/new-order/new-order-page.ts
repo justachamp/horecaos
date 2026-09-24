@@ -570,7 +570,16 @@ export class NewOrderPage implements OnInit {
     }
     this.historyLoading.set(true);
     try {
-      const page = await this.customersApi.ordersPage(scope, selected.accountId, firstPage(5));
+      // Row 1.3f/1.3a (major fix): the LOCATION-scoped route, not `ordersPage`
+      // — this screen's primary persona, LOCATION_STAFF, holds ORDER_READ
+      // only at LOCATION scope and 403s against the BRAND-scoped one, the
+      // same reason `reorder` below already calls `reorderPlan`'s own
+      // LOCATION-scoped route rather than the Customers section's twin.
+      const page = await this.customersApi.ordersPageAtLocation(
+        scope,
+        selected.accountId,
+        firstPage(5),
+      );
       this.historyOrders.set(page.items);
     } catch {
       // orders.md §5.3 point 4 is a convenience peek, not the record of
