@@ -4873,6 +4873,7 @@ export interface OrderPosExportControllerExportView {
   resolvedAt?: string;
   settledAt?: string;
   state?: string;
+  unmappedBindingId?: string;
   unmappedEntityType?: string;
   unmappedHorecaosEntityId?: string;
 }

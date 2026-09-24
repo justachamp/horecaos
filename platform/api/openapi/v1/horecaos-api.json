@@ -15403,6 +15403,10 @@
           "state" : {
             "type" : "string"
           },
+          "unmappedBindingId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
           "unmappedEntityType" : {
             "type" : "string"
           },

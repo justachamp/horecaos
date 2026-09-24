@@ -80,6 +80,14 @@ class PosMappingServiceCreateTests {
                 .param("t", TENANT)
                 .param("other", OTHER_TENANT)
                 .update();
+        jdbc.sql("DELETE FROM catalog.modifier_options WHERE tenant_id IN (:t, :other)")
+                .param("t", TENANT)
+                .param("other", OTHER_TENANT)
+                .update();
+        jdbc.sql("DELETE FROM catalog.modifier_groups WHERE tenant_id IN (:t, :other)")
+                .param("t", TENANT)
+                .param("other", OTHER_TENANT)
+                .update();
         jdbc.sql("DELETE FROM integration.bindings WHERE tenant_id IN (:t, :other)")
                 .param("t", TENANT)
                 .param("other", OTHER_TENANT)
@@ -170,6 +178,32 @@ class PosMappingServiceCreateTests {
         return id;
     }
 
+    /** Mirrors {@code JdbcPosMappingStoreTests#insertModifierOption}, parameterized by brand for the cross-brand test. */
+    private UUID insertModifierOption(UUID brandId, String code) {
+        UUID groupId = Ids.newId();
+        jdbc.sql("""
+                INSERT INTO catalog.modifier_groups (id, tenant_id, brand_id, code, status)
+                VALUES (:id, :t, :brandId, :code, 'ACTIVE')
+                """)
+                .param("id", groupId)
+                .param("t", TENANT)
+                .param("brandId", brandId)
+                .param("code", "GROUP-" + code)
+                .update();
+        UUID optionId = Ids.newId();
+        jdbc.sql("""
+                INSERT INTO catalog.modifier_options (id, tenant_id, brand_id, modifier_group_id, code, status)
+                VALUES (:id, :t, :brandId, :groupId, :code, 'ACTIVE')
+                """)
+                .param("id", optionId)
+                .param("t", TENANT)
+                .param("brandId", brandId)
+                .param("groupId", groupId)
+                .param("code", code)
+                .update();
+        return optionId;
+    }
+
     @Test
     @DisplayName("creating a mapping for a horecaosEntityId that does not exist at all is refused, not created")
     void createRefusesANonexistentHorecaosEntity() {
@@ -203,6 +237,31 @@ class PosMappingServiceCreateTests {
 
         assertThat(outcome.kind()).isEqualTo(CreateOutcome.Kind.NOT_FOUND);
         assertThat(mappingCount()).isZero();
+    }
+
+    @Test
+    @DisplayName("creating a MODIFIER mapping for a modifier option that belongs to a different brand of the same "
+            + "tenant is refused, exactly like the PRODUCT case above")
+    void createRefusesACrossBrandModifierOption() {
+        UUID othersOption = insertModifierOption(OTHER_BRAND, "OTHERS_EXTRA_CHEESE");
+
+        CreateOutcome outcome = service.create(
+                TENANT, BINDING, MappingEntityType.MODIFIER, othersOption, "ext-cross-brand-modifier", null);
+
+        assertThat(outcome.kind()).isEqualTo(CreateOutcome.Kind.NOT_FOUND);
+        assertThat(mappingCount()).isZero();
+    }
+
+    @Test
+    @DisplayName("creating a MODIFIER mapping for a modifier option that belongs to the binding's own brand succeeds")
+    void createSucceedsForAModifierOptionInTheBindingsOwnBrand() {
+        UUID option = insertModifierOption(BRAND, "EXTRA_CHEESE");
+
+        CreateOutcome outcome =
+                service.create(TENANT, BINDING, MappingEntityType.MODIFIER, option, "ext-extra-cheese", null);
+
+        assertThat(outcome.kind()).isEqualTo(CreateOutcome.Kind.CREATED);
+        assertThat(mappingCount()).isEqualTo(1);
     }
 
     @Test

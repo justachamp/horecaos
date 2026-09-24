@@ -761,11 +761,11 @@ public class PosOrderExportService {
         for (PosOrderSource.ExportableOrder.Line line : order.lines()) {
             if (mappings.externalIdFor(bindingId, VARIANT_ENTITY, line.sourceVariantId())
                     .isEmpty()) {
-                return Optional.of(new UnmappedEntity("VARIANT", line.sourceVariantId()));
+                return Optional.of(new UnmappedEntity("VARIANT", line.sourceVariantId(), bindingId));
             }
             for (UUID optionId : line.modifierOptionIds()) {
                 if (mappings.externalIdFor(bindingId, MODIFIER_ENTITY, optionId).isEmpty()) {
-                    return Optional.of(new UnmappedEntity("MODIFIER", optionId));
+                    return Optional.of(new UnmappedEntity("MODIFIER", optionId, bindingId));
                 }
             }
             // Row 2.1b: a comment preset travels to the till as a modifier
@@ -791,8 +791,16 @@ public class PosOrderExportService {
      *                       {@link #COMMENT_PRESET_ENTITY}
      * @param horecaosEntityId never a provider id or free text — an internal
      *                         id only, safe for a URL query string (ADR 0029)
+     * @param bindingId      the {@code ORDER_EXPORT} binding this order's
+     *                       branch currently resolves to (the same one the id
+     *                       above was checked against) -- a deep link built
+     *                       from only {@code entityType}/{@code
+     *                       horecaosEntityId} lets the ADR 0012 mapping
+     *                       screen default to the wrong binding for any
+     *                       tenant with more than one POS binding, so the
+     *                       caller must thread this through too
      */
-    public record UnmappedEntity(String entityType, UUID horecaosEntityId) {}
+    public record UnmappedEntity(String entityType, UUID horecaosEntityId, UUID bindingId) {}
 
     private Prepared prepare(UUID tenantId, JdbcPosExportStore.ExportRow export) {
         PosOrderSource.ExportableOrder order = orders.find(tenantId, export.orderId(), REVEAL_PURPOSE)

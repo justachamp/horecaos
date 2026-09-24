@@ -343,6 +343,11 @@ class OrderPosExportControllerTests {
         assertThat(export.lastErrorCode()).isEqualTo("LINE_UNMAPPED");
         assertThat(export.unmappedEntityType()).isEqualTo("VARIANT");
         assertThat(export.unmappedHorecaosEntityId()).isEqualTo(VARIANT);
+        assertThat(export.unmappedBindingId())
+                .as("the deep link must also carry which binding the id was checked against, "
+                        + "or the console's mapping screen can default to the wrong one for a "
+                        + "tenant with more than one POS binding")
+                .isEqualTo(BINDING);
     }
 
     @Test
@@ -364,6 +369,7 @@ class OrderPosExportControllerTests {
         assertThat(export.lastErrorCode()).isEqualTo("LINE_UNMAPPED");
         assertThat(export.unmappedEntityType()).isNull();
         assertThat(export.unmappedHorecaosEntityId()).isNull();
+        assertThat(export.unmappedBindingId()).isNull();
     }
 
     @Test
