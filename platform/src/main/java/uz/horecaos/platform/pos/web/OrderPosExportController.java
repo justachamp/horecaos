@@ -303,6 +303,15 @@ public class OrderPosExportController {
      *                         mapping screen -- an internal id only, never a
      *                         provider code or free text, paired one-to-one
      *                         with {@code unmappedEntityType}
+     * @param unmappedBindingId the {@code ORDER_EXPORT} binding {@code
+     *                         unmappedHorecaosEntityId} was checked against
+     *                         (see {@link PosOrderExportService.UnmappedEntity#bindingId}) --
+     *                         without this a console deep link built from
+     *                         only the two fields above lands the ADR 0012
+     *                         mapping screen on whichever POS binding
+     *                         happens to be first in the tenant's own list,
+     *                         which is the wrong one for any tenant with more
+     *                         than one
      */
     public record ExportView(
             UUID exportId,
@@ -319,7 +328,8 @@ public class OrderPosExportController {
             @Nullable String resolutionReason,
             @Nullable Instant resolvedAt,
             @Nullable String unmappedEntityType,
-            @Nullable UUID unmappedHorecaosEntityId) {
+            @Nullable UUID unmappedHorecaosEntityId,
+            @Nullable UUID unmappedBindingId) {
 
         static ExportView of(ExportDetail detail, PosOrderExportService.@Nullable UnmappedEntity unmapped) {
             return new ExportView(
@@ -337,7 +347,8 @@ public class OrderPosExportController {
                     detail.resolutionReason(),
                     detail.resolvedAt(),
                     unmapped == null ? null : unmapped.entityType(),
-                    unmapped == null ? null : unmapped.horecaosEntityId());
+                    unmapped == null ? null : unmapped.horecaosEntityId(),
+                    unmapped == null ? null : unmapped.bindingId());
         }
     }
 

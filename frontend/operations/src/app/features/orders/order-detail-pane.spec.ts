@@ -2544,6 +2544,7 @@ function posExportView(overrides: Partial<PosExportView> = {}): PosExportView {
     resolvedAt: null,
     unmappedEntityType: null,
     unmappedHorecaosEntityId: null,
+    unmappedBindingId: null,
     ...overrides,
   };
 }
@@ -2646,6 +2647,45 @@ describe('OrderDetailPane: POS export and its §3.11 amendment interlock (wave P
 
     expect(navigate).toHaveBeenCalledWith(['/catalog/import'], {
       queryParams: { entityType: 'VARIANT', focusHorecaosId: 'variant-42' },
+    });
+  });
+
+  /**
+   * Without this, a tenant with more than one POS binding sends the deep
+   * link's own `focusHorecaosId` to whatever binding `catalog-import-page.ts`
+   * defaults to (the tenant-wide first one), not the binding the server
+   * actually checked the id against.
+   */
+  it('includes the resolved bindingId in the deep link when the server sent one', async () => {
+    const navigate = vi.fn().mockResolvedValue(true);
+    configure({
+      get: apiGet({ value: amendableDetail(), version: 3 }),
+      posExportApi: {
+        forOrder: () =>
+          Promise.resolve({
+            posCapable: true,
+            export: posExportView({
+              state: 'REJECTED',
+              permitsAmendment: true,
+              lastErrorCode: 'LINE_UNMAPPED',
+              lastError: 'no provider mapping',
+              unmappedEntityType: 'VARIANT',
+              unmappedHorecaosEntityId: 'variant-42',
+              unmappedBindingId: 'binding-7',
+            }),
+          }),
+      },
+      router: { navigate },
+    });
+    const fixture = await render();
+    await flushMicrotasks();
+    fixture.detectChanges();
+    const host: HTMLElement = fixture.nativeElement;
+
+    (host.querySelector('[data-testid="order-detail-pos-export-fix-mapping"]') as HTMLButtonElement).click();
+
+    expect(navigate).toHaveBeenCalledWith(['/catalog/import'], {
+      queryParams: { entityType: 'VARIANT', focusHorecaosId: 'variant-42', bindingId: 'binding-7' },
     });
   });
 

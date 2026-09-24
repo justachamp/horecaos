@@ -539,8 +539,7 @@ class ProviderInstallationControllerTests {
         assertThatThrownBy(() -> withRealInstallationLookup.bind(
                         TENANT,
                         installation,
-                        new ProviderInstallationController.BindRequest(
-                                BRAND, location, null, List.of(), List.of())))
+                        new ProviderInstallationController.BindRequest(BRAND, location, null, List.of(), List.of())))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("needs at least one capability");
         assertThat(jdbc.sql("SELECT count(*) FROM integration.bindings WHERE installation_id = :id")
@@ -566,8 +565,7 @@ class ProviderInstallationControllerTests {
                 .bind(
                         TENANT,
                         installation,
-                        new ProviderInstallationController.BindRequest(
-                                BRAND, location, null, List.of(), List.of()))
+                        new ProviderInstallationController.BindRequest(BRAND, location, null, List.of(), List.of()))
                 .getBody();
 
         assertThat(body).containsEntry("status", "SUSPENDED");

@@ -713,7 +713,14 @@ export class OrderDetailPane {
     );
   }
 
-  /** Opens the ADR 0012 mapping screen with the offending item already chosen -- see `MappingPane.focusHorecaosId`. */
+  /**
+   * Opens the ADR 0012 mapping screen with the offending item already chosen
+   * -- see `MappingPane.focusHorecaosId`. Also carries `bindingId`, when the
+   * server resolved one, so `catalog-import-page.ts` lands on the same
+   * binding the id was checked against rather than defaulting to whichever
+   * POS binding happens to be first in the tenant's own list -- the wrong
+   * one for any tenant with more than one.
+   */
   protected openPosExportMapping(): void {
     const exportView = this.posExport()?.export;
     if (!exportView || exportView.unmappedEntityType === null || exportView.unmappedHorecaosEntityId === null) {
@@ -723,6 +730,7 @@ export class OrderDetailPane {
       queryParams: {
         entityType: exportView.unmappedEntityType,
         focusHorecaosId: exportView.unmappedHorecaosEntityId,
+        ...(exportView.unmappedBindingId === null ? {} : { bindingId: exportView.unmappedBindingId }),
       },
     });
   }

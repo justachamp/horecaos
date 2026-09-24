@@ -44,6 +44,13 @@ export interface PosExportView {
   readonly unmappedEntityType: 'VARIANT' | 'MODIFIER' | null;
   /** The id to pre-select on the ADR 0012 mapping screen, paired one-to-one with {@link unmappedEntityType}. */
   readonly unmappedHorecaosEntityId: string | null;
+  /**
+   * The `ORDER_EXPORT` binding {@link unmappedHorecaosEntityId} was checked against.
+   * Without this, a deep link built from only the two fields above lands the mapping
+   * screen on whichever POS binding happens to be first in the tenant's own list --
+   * the wrong one for any tenant with more than one POS binding.
+   */
+  readonly unmappedBindingId: string | null;
 }
 
 /** Mirrors `OrderPosExportController.OrderPosExportResponse`. */
