@@ -167,6 +167,54 @@ class ProviderInstallationControllerTests {
     }
 
     /**
+     * Gap-map row 10.8a's fix path, belt-and-braces half: a POS or DELIVERY
+     * binding with zero {@code integration.binding_capabilities} rows makes
+     * the "every enabled capability is verified" gate above vacuously true
+     * (its {@code EXISTS} ranges over zero rows), so a binding that somehow
+     * reached {@code SUSPENDED} with no capabilities -- a direct insert, or
+     * {@code bind()} before this fix -- must still be refused here rather than
+     * activating into a row {@code effectiveBindings}' INNER JOIN can never see.
+     */
+    @Test
+    void activationRefusesAPosBindingWithZeroEnabledCapabilities() {
+        UUID installation = fakePosInstallation("fake-pos-activate-empty-test");
+        UUID binding = binding(installation);
+        successfulPreflight(installation, "{}");
+
+        assertThatThrownBy(() -> controller.activateBinding(
+                        TENANT, installation, binding, new ProviderInstallationController.ReasonRequest("ready")))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("needs at least one enabled capability");
+        assertThat(status(binding))
+                .as("the dead binding must stay SUSPENDED, not activate invisibly")
+                .isEqualTo("SUSPENDED");
+    }
+
+    /**
+     * The other half of the same belt-and-braces rule: PAYMENT and NOTIFICATION
+     * have no wired capability catalogue and legitimately bind with an empty
+     * capability set (the console's connect drawer sends {@code []} for them
+     * unchanged), so the new zero-capability gate in {@code activateBinding}
+     * must not start refusing them.
+     */
+    @Test
+    void activationStillAllowsAZeroCapabilityBindingForACategoryWithNoCatalogue() {
+        UUID installation = installation("sms-zero-cap-activate-test");
+        UUID binding = binding(installation);
+        successfulPreflight(installation, "{}");
+
+        assertThat(controller
+                        .activateBinding(
+                                TENANT,
+                                installation,
+                                binding,
+                                new ProviderInstallationController.ReasonRequest("no catalogue for NOTIFICATION"))
+                        .getBody())
+                .containsEntry("outcome", "activated");
+        assertThat(status(binding)).isEqualTo("ACTIVE");
+    }
+
+    /**
      * ADR 0106: an analytics installation's one declared non-secret field
      * lands under its own key in {@code non_sensitive_config} — not appended
      * as a bare string, and not lost, which a test that only checked "the
@@ -471,6 +519,74 @@ class ProviderInstallationControllerTests {
 
         assertThatThrownBy(() -> withRealInstallationLookup.capabilityCatalogue(TENANT, UUID.randomUUID()))
                 .isInstanceOf(ApiException.class);
+    }
+
+    /**
+     * Gap-map row 10.8a's fix path, HTTP-level half: {@code bind()} must not
+     * accept an empty {@code capabilities} array for a POS or DELIVERY
+     * installation, because that is exactly the dead, INNER-JOIN-invisible
+     * binding the capability-catalogue endpoint and console picker exist to
+     * stop creating -- and {@code BindRequest.capabilities} carries no
+     * {@code @NotEmpty}, so nothing but this check enforces it for a caller
+     * other than the console (a script, a stale build, a future UI regression).
+     */
+    @Test
+    void bindRefusesAnEmptyCapabilitySetForAPosInstallation() {
+        UUID installation = fakePosInstallation("fake-pos-bind-empty-test");
+        UUID location = location("bind-empty-branch");
+        ProviderInstallationController withRealInstallationLookup = controllerWithRealInstallationLookup();
+
+        assertThatThrownBy(() -> withRealInstallationLookup.bind(
+                        TENANT,
+                        installation,
+                        new ProviderInstallationController.BindRequest(
+                                BRAND, location, null, List.of(), List.of())))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("needs at least one capability");
+        assertThat(jdbc.sql("SELECT count(*) FROM integration.bindings WHERE installation_id = :id")
+                        .param("id", installation)
+                        .query(Integer.class)
+                        .single())
+                .as("no dead binding row was left behind")
+                .isEqualTo(0);
+    }
+
+    /**
+     * The other half of the same rule: PAYMENT and NOTIFICATION have no wired
+     * capability catalogue, so {@code bind()} must keep accepting the connect
+     * drawer's own empty {@code capabilities} array for them, unchanged.
+     */
+    @Test
+    void bindStillAllowsAnEmptyCapabilitySetForACategoryWithNoCatalogue() {
+        UUID installation = installation("sms-zero-cap-bind-test");
+        UUID location = location("bind-no-catalogue-branch");
+        ProviderInstallationController withRealInstallationLookup = controllerWithRealInstallationLookup();
+
+        Map<String, Object> body = withRealInstallationLookup
+                .bind(
+                        TENANT,
+                        installation,
+                        new ProviderInstallationController.BindRequest(
+                                BRAND, location, null, List.of(), List.of()))
+                .getBody();
+
+        assertThat(body).containsEntry("status", "SUSPENDED");
+    }
+
+    /** Same fresh-controller wiring {@code capabilityCatalogueReturnsThePosAdaptersDeclaredCeilingSorted} builds by hand. */
+    private ProviderInstallationController controllerWithRealInstallationLookup() {
+        return new ProviderInstallationController(
+                jdbc,
+                fact -> {},
+                () -> new AuthenticatedActor("operator", Set.of(), Map.of()),
+                CLOCK,
+                new ProviderCapabilityReconciliationService(jdbc, List.of(), UNUSED_SECRETS, new ObjectMapper(), CLOCK),
+                new uz.horecaos.platform.integration.provider.JdbcProviderInstallationLookup(
+                        jdbc, CLOCK, new uz.horecaos.platform.integration.provider.JdbcProviderEnvironmentLookup(jdbc)),
+                UNUSED_SECRETS,
+                new TelegramBotApiClient(new ObjectMapper()),
+                new SecretIngressGateway(UNUSED_WRITER, "test"),
+                UNUSED_WEBHOOK_REGISTRATION);
     }
 
     private UUID installation(String code) {

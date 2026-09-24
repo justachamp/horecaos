@@ -99,6 +99,23 @@ public class ProviderInstallationController {
      */
     private static final String CLOPOS_REQUIRE_CLERK_APPROVAL_KEY = "clopos.requireClerkApproval";
 
+    /**
+     * Categories with a real backend capability catalogue ({@code PosCapability},
+     * {@code DeliveryCapability}) -- mirrors the operations console's own {@code
+     * CAPABILITY_CATALOGUED_CATEGORIES} (gap-map row 10.8a's fix path). {@code
+     * effectiveBindings}' INNER JOIN against {@code integration.binding_capabilities}
+     * makes a binding of one of these categories with zero capability rows dead --
+     * created, possibly even activated, but never resolvable by any branch. The
+     * console's own connect-and-bind flow already refuses to submit an empty
+     * picker for these categories; {@link #bind} and {@link #activateBinding}
+     * enforce the same rule here so a caller that skips the console -- a script,
+     * a stale build, or a future UI regression -- cannot create or activate one.
+     * PAYMENT and NOTIFICATION have no wired catalogue and still bind (and
+     * activate) with an empty capability set, unchanged.
+     */
+    private static final java.util.Set<ProviderCategory> CAPABILITY_CATALOGUED_CATEGORIES =
+            java.util.Set.of(ProviderCategory.POS, ProviderCategory.DELIVERY);
+
     private final JdbcClient jdbc;
     private final AuditRecorder audit;
     private final CurrentActor currentActor;
@@ -325,6 +342,19 @@ public class ProviderInstallationController {
                     + "before someone has confirmed it points at the intended restaurant.")
     ResponseEntity<Map<String, Object>> bind(
             @PathVariable UUID tenantId, @PathVariable UUID installationId, @Valid @RequestBody BindRequest request) {
+
+        InstallationSnapshot installation = installations
+                .installation(tenantId, installationId)
+                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "Installation is not available"));
+        if (CAPABILITY_CATALOGUED_CATEGORIES.contains(installation.category())
+                && request.capabilities().isEmpty()) {
+            // Gap-map row 10.8a: an empty capability set here would insert a
+            // binding row with zero integration.binding_capabilities rows --
+            // dead on arrival, invisible to effectiveBindings' INNER JOIN.
+            throw new ApiException(
+                    ErrorCode.INVALID_REQUEST,
+                    "A " + installation.category() + " binding needs at least one capability");
+        }
 
         UUID id = UUID.randomUUID();
         jdbc.sql("""
@@ -852,7 +882,7 @@ public class ProviderInstallationController {
             @Valid @RequestBody ReasonRequest request) {
 
         InstallationActivationGate gate = jdbc.sql("""
-                SELECT i.status, i.last_connection_status,
+                SELECT i.status, i.last_connection_status, i.provider_category,
                        EXISTS (
                            SELECT 1
                              FROM integration.binding_capabilities bc
@@ -861,7 +891,14 @@ public class ProviderInstallationController {
                               AND bc.enabled
                               AND coalesce(i.capability_snapshot -> bc.capability_code ->> 'support',
                                            'UNSUPPORTED') <> 'SUPPORTED'
-                       ) AS has_unverified_capability
+                       ) AS has_unverified_capability,
+                       NOT EXISTS (
+                           SELECT 1
+                             FROM integration.binding_capabilities bc
+                            WHERE bc.binding_id = :bindingId
+                              AND bc.tenant_id = i.tenant_id
+                              AND bc.enabled
+                       ) AS has_no_enabled_capabilities
                   FROM integration.installations i
                  WHERE i.id = :id AND i.tenant_id = :tenantId
                    AND EXISTS (
@@ -876,7 +913,9 @@ public class ProviderInstallationController {
                 .query((row, number) -> new InstallationActivationGate(
                         row.getString("status"),
                         row.getString("last_connection_status"),
-                        row.getBoolean("has_unverified_capability")))
+                        row.getBoolean("has_unverified_capability"),
+                        ProviderCategory.valueOf(row.getString("provider_category")),
+                        row.getBoolean("has_no_enabled_capabilities")))
                 .optional()
                 .orElseThrow(() ->
                         new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "Installation or binding is not available"));
@@ -895,6 +934,17 @@ public class ProviderInstallationController {
         if (gate.hasUnverifiedCapability()) {
             throw new ApiException(
                     ErrorCode.INVALID_REQUEST, "Every enabled binding capability must be verified before activation");
+        }
+        if (gate.hasNoEnabledCapabilities() && CAPABILITY_CATALOGUED_CATEGORIES.contains(gate.category())) {
+            // Belt-and-braces alongside bind()'s own guard: a zero-capability
+            // binding makes the "every enabled capability is verified" check
+            // above vacuously true (EXISTS over zero rows), so without this a
+            // row that somehow reached SUSPENDED with no capabilities -- bind()
+            // predating this fix, a direct insert, a future code path -- could
+            // still activate and remain dead, invisible to effectiveBindings.
+            throw new ApiException(
+                    ErrorCode.INVALID_REQUEST,
+                    "A " + gate.category() + " binding needs at least one enabled capability before activation");
         }
 
         int activated = jdbc.sql("""
@@ -1177,7 +1227,11 @@ public class ProviderInstallationController {
             @Nullable String botUsername) {}
 
     private record InstallationActivationGate(
-            String status, String connectionStatus, boolean hasUnverifiedCapability) {}
+            String status,
+            String connectionStatus,
+            boolean hasUnverifiedCapability,
+            ProviderCategory category,
+            boolean hasNoEnabledCapabilities) {}
 
     /**
      * One {@code integration.provider_environments} row a tenant may actually
