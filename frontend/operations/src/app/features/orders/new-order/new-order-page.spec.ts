@@ -125,7 +125,7 @@ describe('NewOrderPage', () => {
   };
   let customersApi: {
     create: ReturnType<typeof vi.fn>;
-    ordersPage: ReturnType<typeof vi.fn>;
+    ordersPageAtLocation: ReturnType<typeof vi.fn>;
     revealAddresses: ReturnType<typeof vi.fn>;
     addAddress: ReturnType<typeof vi.fn>;
     reorderPlan: ReturnType<typeof vi.fn>;
@@ -167,7 +167,7 @@ describe('NewOrderPage', () => {
     };
     customersApi = {
       create: vi.fn(),
-      ordersPage: vi.fn().mockResolvedValue({ items: [], nextCursor: null }),
+      ordersPageAtLocation: vi.fn().mockResolvedValue({ items: [], nextCursor: null }),
       revealAddresses: vi.fn().mockResolvedValue([]),
       addAddress: vi.fn().mockResolvedValue({ id: 'addr-new' }),
       reorderPlan: vi.fn().mockResolvedValue(null),
@@ -959,6 +959,44 @@ describe('NewOrderPage', () => {
 
   // ------------------------------------------------------------------- «Повторить» (1.3f)
 
+  /**
+   * Major fix: before this, `toggleHistory` called `customersApi.ordersPage`
+   * — the BRAND-scoped route — which always 403s for LOCATION_STAFF, this
+   * screen's own primary persona (its `ORDER_READ` grant never reaches past
+   * `LOCATION`), and the catch block silently rendered an empty popover. This
+   * proves the screen calls the LOCATION-scoped route instead, and that the
+   * popover actually fills in from it.
+   */
+  it('the history popover reads through the LOCATION-scoped route, not the BRAND-scoped one (1.3f/1.3a, major fix)', async () => {
+    const ordersPageAtLocation = vi.fn().mockResolvedValue({
+      items: [
+        {
+          orderId: 'order-old',
+          publicOrderNumber: '#0900',
+          locationId: 'l1',
+          fulfillmentMode: 'PICKUP',
+          status: 'COMPLETED',
+          paymentStatus: 'CAPTURED',
+          fulfillmentStatus: 'COLLECTED',
+          currency: 'UZS',
+          totalMinor: 60_000,
+          promisedAt: null,
+          version: 1,
+          placedAt: '2026-09-01T12:00:00Z',
+        },
+      ],
+      nextCursor: null,
+    });
+    await render({}, { ordersPageAtLocation });
+
+    fixture.componentInstance['selectCandidate'](candidate());
+    await fixture.componentInstance['toggleHistory']();
+
+    expect(ordersPageAtLocation).toHaveBeenCalledWith(SCOPE, 'acct-1', expect.anything());
+    expect(fixture.componentInstance['historyOrders']()).toHaveLength(1);
+    expect(fixture.componentInstance['historyOrders']()[0].orderId).toBe('order-old');
+  });
+
   it('«Повторить» adds every AVAILABLE reorder-plan line to the basket', async () => {
     const reorderPlan = vi.fn().mockResolvedValue({
       orderId: 'order-old',
@@ -986,7 +1024,7 @@ describe('NewOrderPage', () => {
       {},
       {
         reorderPlan,
-        ordersPage: vi.fn().mockResolvedValue({
+        ordersPageAtLocation: vi.fn().mockResolvedValue({
           items: [
             {
               orderId: 'order-old',

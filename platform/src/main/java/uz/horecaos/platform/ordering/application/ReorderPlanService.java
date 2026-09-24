@@ -120,12 +120,29 @@ public class ReorderPlanService {
      * this plan is actually valid at, which is where {@code POST /carts}
      * needs to open the new one.
      *
-     * @return empty when the order is not this account's, or does not exist
+     * <p>{@code requiredBrandId} is checked against the order's own {@code
+     * brandId} and the read refuses (returns empty, exactly like an order
+     * that does not exist) when they differ. {@link OrderQueryService#detailForCustomer}
+     * scopes only by tenant and customer account — deliberately, since {@code
+     * planFor} above needs no brand check, the account already owns the whole
+     * read. This caller is different: {@code
+     * uz.horecaos.platform.ordering.web.CustomerOrderReorderController}
+     * reaches this method with {@code ORDER_READ} granted at one {@code
+     * LOCATION}, and a location's grant never widens past its own brand
+     * (ADR 0025). Skipping this check would let that LOCATION-scoped read
+     * return another brand's order in full — line items, quantities, and what
+     * the customer paid — to an operator who holds no grant on that brand at
+     * all, resolved only against a location that happens to share a tenant
+     * with it.
+     *
+     * @return empty when the order is not this account's, does not belong to
+     *     {@code requiredBrandId}, or does not exist
      */
     @Transactional(readOnly = true)
     public Optional<ReorderPlan> planForAtLocation(
-            UUID tenantId, UUID orderId, UUID customerAccountId, UUID resolveAgainstLocationId) {
+            UUID tenantId, UUID requiredBrandId, UUID orderId, UUID customerAccountId, UUID resolveAgainstLocationId) {
         return orders.detailForCustomer(tenantId, orderId, customerAccountId, null)
+                .filter(detail -> requiredBrandId.equals(detail.order().brandId()))
                 .map(detail -> plan(detail, resolveAgainstLocationId));
     }
 

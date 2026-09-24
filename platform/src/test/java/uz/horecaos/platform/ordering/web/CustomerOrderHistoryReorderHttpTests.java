@@ -96,6 +96,14 @@ class CustomerOrderHistoryReorderHttpTests {
     private static final String OTHER_LOCATION_SCOPED_REORDER_PATH = "/api/v1/tenants/" + TENANT + "/brands/" + BRAND
             + "/locations/" + OTHER_LOCATION + "/customers/" + ACCOUNT + "/orders/" + MISSING_ORDER + "/reorder";
 
+    /**
+     * {@link CustomerOrderReorderController}'s own order-history list route
+     * (major fix, gap map rows 1.3f/1.3a) — the {@code LOCATION}-scoped twin
+     * of {@code CustomerOrderHistoryController.listOrders}, at {@link #LOCATION}.
+     */
+    private static final String LOCATION_SCOPED_HISTORY_PATH = "/api/v1/tenants/" + TENANT + "/brands/" + BRAND
+            + "/locations/" + LOCATION + "/customers/" + ACCOUNT + "/orders";
+
     @SuppressWarnings("NullAway")
     private static TestDatabase.Handle db;
 
@@ -225,6 +233,55 @@ class CustomerOrderHistoryReorderHttpTests {
     @Test
     void refusesAPrincipalWithNoOrderReadAtAllOnTheLocationScopedEndpoint() throws Exception {
         MvcResult refused = mvc.perform(get(LOCATION_SCOPED_REORDER_PATH).with(tokenFor(UNGRANTED)))
+                .andReturn();
+
+        assertThat(refused.getResponse().getStatus()).isEqualTo(403);
+        assertThat(refused.getResponse().getContentAsString())
+                .contains("INSUFFICIENT_CAPABILITY")
+                .contains(Capability.ORDER_READ.code());
+    }
+
+    /**
+     * Major fix, gap map rows {@code 1.3f}/{@code 1.3a}: before this route
+     * existed, the New Order screen's history popover ({@code
+     * toggleHistory()}, {@code customersApi.ordersPage}) called only {@code
+     * CustomerOrderHistoryController.listOrders}, {@code BRAND}-scoped, which
+     * {@link #aLocationScopedOrderReadGrantDoesNotSatisfyTheBrandScopedWrapper}
+     * already proves 403s for {@link #LOCATION_STAFF_SUBJECT} — the popover's
+     * catch block then silently rendered an empty list. This proves the exact
+     * grant shape reaches {@link CustomerOrderReorderController}'s own list
+     * route instead: not 403, and a well-formed page body (empty, since this
+     * fixture inserts no orders — the list's own resolution is {@code
+     * OrderQueryService#forCustomer}'s concern, already exercised elsewhere).
+     */
+    @Test
+    void aLocationScopedOrderReadGrantReachesTheLocationScopedHistoryList() throws Exception {
+        MvcResult result = mvc.perform(get(LOCATION_SCOPED_HISTORY_PATH).with(tokenFor(LOCATION_STAFF_SUBJECT)))
+                .andReturn();
+
+        assertThat(result.getResponse().getStatus()).isEqualTo(200);
+        assertThat(result.getResponse().getContentAsString()).contains("\"items\"");
+    }
+
+    /**
+     * A {@code BRAND}-scoped grant still reaches the {@code LOCATION}-scoped
+     * list too — {@code scope().covers(scope)} widens, never narrows, so a
+     * manager holding {@code ORDER_READ} at {@code BRAND} is not accidentally
+     * refused by this narrower route.
+     */
+    @Test
+    void aBrandScopedOrderReadGrantAlsoReachesTheLocationScopedHistoryList() throws Exception {
+        MvcResult result = mvc.perform(get(LOCATION_SCOPED_HISTORY_PATH).with(tokenFor(BRAND_READER)))
+                .andReturn();
+
+        assertThat(result.getResponse().getStatus()).isEqualTo(200);
+        assertThat(result.getResponse().getContentAsString()).contains("\"items\"");
+    }
+
+    /** {@link #UNGRANTED} holds no grant at all, so the location-scoped list refuses it too. */
+    @Test
+    void refusesAPrincipalWithNoOrderReadAtAllOnTheLocationScopedHistoryList() throws Exception {
+        MvcResult refused = mvc.perform(get(LOCATION_SCOPED_HISTORY_PATH).with(tokenFor(UNGRANTED)))
                 .andReturn();
 
         assertThat(refused.getResponse().getStatus()).isEqualTo(403);

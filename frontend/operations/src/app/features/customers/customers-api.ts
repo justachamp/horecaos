@@ -765,6 +765,29 @@ export class CustomersApi {
   }
 
   /**
+   * Rows 1.3f/1.3a (major fix): the New Order screen's own history peek —
+   * the `LOCATION`-scoped twin of {@link ordersPage}, reached through
+   * `CustomerOrderReorderController.listOrders` instead of the `BRAND`-scoped
+   * `CustomerOrderHistoryController.listOrders`. `LOCATION_STAFF`, that
+   * screen's primary persona, holds `ORDER_READ` only at `LOCATION` scope —
+   * {@link ordersPage} always 403s for it, silently rendering an empty
+   * popover, exactly the way {@link reorderPlan} below already avoids that
+   * trap for the plan itself.
+   */
+  ordersPageAtLocation(
+    scope: LocationScope,
+    accountId: string,
+    state: CursorState,
+  ): Promise<Page<CustomerOrderSummary>> {
+    return firstValueFrom(
+      this.api.page<CustomerOrderSummary>(
+        operationsPaths.customerOrderHistoryAtLocation(scope, accountId),
+        state,
+      ),
+    );
+  }
+
+  /**
    * Rows 1.3f/1.3a's «Повторить» — whether one of this customer's own orders
    * can be ordered again at {@link scope}'s own branch, and with what. `null`
    * when the order does not exist or is not this account's own (the server

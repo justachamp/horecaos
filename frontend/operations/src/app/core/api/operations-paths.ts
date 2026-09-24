@@ -842,6 +842,21 @@ export const operationsPaths = {
   },
 
   /**
+   * Rows 1.3f/1.3a (major fix): the New Order screen's own history peek,
+   * reached through `CustomerOrderReorderController.listOrders` — the
+   * `LOCATION`-scoped twin of {@link customerOrders} (`ORDER_READ` at
+   * `BRAND`, used only by the Customers section's own history tab).
+   * `LOCATION_STAFF`, this screen's primary persona, holds `ORDER_READ` only
+   * at `LOCATION` scope, so calling {@link customerOrders} from this screen
+   * always 403s and silently renders an empty popover — this is the one
+   * history route this screen may call, mirroring {@link customerOrderReorder}'s
+   * own relationship to {@link customerOrders}.
+   */
+  customerOrderHistoryAtLocation(scope: LocationScope, accountId: string): string {
+    return `${LEGACY_TENANT_PREFIX}${tenantBrandLocation(scope)}/customers/${encodeURIComponent(accountId)}/orders`;
+  },
+
+  /**
    * Every points (cashback) balance this customer holds, one per brand
    * (`LoyaltyOperationsController`, already on the ADR 0031 prefix).
    */
