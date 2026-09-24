@@ -764,6 +764,9 @@ export const messagesRu: MessageCatalogue = {
     'В опубликованном меню бренда нет доступных позиций.',
   'settings.home.readiness.code.MEDIA_NOT_AVAILABLE':
     'Одно из используемых изображений ещё не готово.',
+  'settings.home.readiness.code.TEMPLATE_AWAITING_PROVIDER_REVIEW':
+    'SMS-шаблон ожидает одобрения шлюза.',
+  'settings.home.readiness.code.TEMPLATE_REJECTED_BY_PROVIDER': 'SMS-шаблон отклонён шлюзом.',
   'settings.home.search.label': 'Найти настройку',
   'settings.home.search.placeholder': 'Найти настройку (нажмите /)',
   'settings.home.search.empty': 'Ничего не найдено по запросу «{query}».',

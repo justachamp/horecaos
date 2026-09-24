@@ -792,6 +792,9 @@ export const messagesEn = {
     "A brand's published menu has nothing available to order.",
   'settings.home.readiness.code.MEDIA_NOT_AVAILABLE':
     'A referenced photo or media file is not yet available.',
+  'settings.home.readiness.code.TEMPLATE_AWAITING_PROVIDER_REVIEW':
+    'An SMS template is awaiting the gateway’s approval.',
+  'settings.home.readiness.code.TEMPLATE_REJECTED_BY_PROVIDER': 'An SMS template was rejected by the gateway.',
   'settings.home.search.label': 'Find a setting',
   'settings.home.search.placeholder': 'Find a setting (press /)',
   'settings.home.search.empty': 'No setting matches "{query}".',

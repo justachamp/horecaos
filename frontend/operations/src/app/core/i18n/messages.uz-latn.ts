@@ -772,6 +772,9 @@ export const messagesUzLatn: MessageCatalogue = {
     'Brendning nashr etilgan menyusida buyurtma uchun mavjud narsa yoʻq.',
   'settings.home.readiness.code.MEDIA_NOT_AVAILABLE':
     'Ishlatilayotgan rasm yoki media fayl hali tayyor emas.',
+  'settings.home.readiness.code.TEMPLATE_AWAITING_PROVIDER_REVIEW':
+    'SMS shabloni shlyuz tasdigʻini kutmoqda.',
+  'settings.home.readiness.code.TEMPLATE_REJECTED_BY_PROVIDER': 'SMS shabloni shlyuz tomonidan rad etildi.',
   'settings.home.search.label': 'Sozlamani topish',
   'settings.home.search.placeholder': 'Sozlamani topish (/ bosing)',
   'settings.home.search.empty': '«{query}» boʻyicha hech narsa topilmadi.',

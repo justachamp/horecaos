@@ -8,7 +8,7 @@
 } @else if (loadError(); as message) {
   <p class="q-body-sm error" role="alert">{{ message }}</p>
 } @else {
-  <section class="card">
+  <section class="card" id="cancellation-reasons">
     <div class="card__header">
       <h2 class="q-subhead">{{ 'settings.referenceData.cancellation.title' | t }}</h2>
       <button type="button" class="q-body-sm link" (click)="openCreateForm('CANCELLATION')">
@@ -94,7 +94,7 @@
     </table>
   </section>
 
-  <section class="card">
+  <section class="card" id="completion-reasons">
     <div class="card__header">
       <h2 class="q-subhead">{{ 'settings.referenceData.completion.title' | t }}</h2>
       <button type="button" class="q-body-sm link" (click)="openCreateForm('COMPLETION')">
@@ -526,7 +526,7 @@
     </q-modal>
   }
 
-  <section class="card">
+  <section class="card" id="business-calendar">
     <h2 class="q-subhead">{{ 'settings.referenceData.calendar.title' | t }}</h2>
     <p class="q-body-sm lead">{{ 'settings.referenceData.calendar.lead' | t }}</p>
 
@@ -696,7 +696,7 @@
     }
   </section>
 
-  <section class="card">
+  <section class="card" id="sla-boundaries">
     <h2 class="q-subhead">{{ 'settings.referenceData.slaBuckets.title' | t }}</h2>
     <p class="q-body-sm lead">{{ 'settings.referenceData.slaBuckets.lead' | t }}</p>
 
@@ -735,7 +735,7 @@
     }
   </section>
 
-  <section class="card">
+  <section class="card" id="branch-tags">
     <h2 class="q-subhead">{{ 'settings.referenceData.tags.title' | t }}</h2>
     <p class="q-body-sm lead">{{ 'settings.referenceData.tags.lead' | t }}</p>
 
