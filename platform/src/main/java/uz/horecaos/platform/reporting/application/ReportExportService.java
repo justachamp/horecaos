@@ -13,11 +13,13 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.Base64;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVPrinter;
@@ -430,9 +432,16 @@ public class ReportExportService {
      * exactly as {@code order-summary-grid.ts}'s own doc describes for the console's identical
      * read — {@link ReportQueryService#run} grouped by {@code LOCATION}/{@code CHANNEL}/{@code
      * FULFILMENT_TYPE}/{@code LEGAL_ENTITY} (ADR 0038: a money metric always names the entity axis)
-     * and summed back across the date and entity axes in memory, since this report's own grain is
-     * neither of those. The group cardinality is bounded by the tenant's own branch × channel ×
-     * fulfilment-type combinations — small at pilot scale — but the row quota is still enforced
+     * and summed back across the date axis in memory, since this report's own grain has no date
+     * column. <strong>The entity axis is folded away only when it is safe to</strong>: {@link
+     * #refuseCombinedEntityTotal} refuses the whole export, the same way {@code
+     * ReportQueryService#run}'s own {@code CombinedEntityTotalException} refuses a combined money
+     * total everywhere else, the moment one branch/channel/fulfilment bucket would otherwise sum
+     * two legal entities' revenue into one row with no entity column to tell them apart — exactly
+     * what a location reassigned from one legal entity to another partway through the exported
+     * range (an effective-dated, supported operation) would otherwise produce silently. The group
+     * cardinality is bounded by the tenant's own branch × channel × fulfilment-type combinations —
+     * small at pilot scale — but the row quota is still enforced
      * rather than assumed unreachable.
      */
     private ExportOutcome runOrderReportSummary(ClaimedExport job) {
@@ -462,8 +471,9 @@ public class ReportExportService {
                     row.slice().channelCode(),
                     row.slice().fulfilmentType());
             SummaryBucketTotals totals = buckets.computeIfAbsent(key, unused -> new SummaryBucketTotals());
-            totals.add(row.values());
+            totals.add(row.values(), row.slice().legalEntityId());
         }
+        refuseCombinedEntityTotal(buckets);
 
         boolean truncated = buckets.size() > job.rowQuota();
         List<Map.Entry<SummaryBucketKey, SummaryBucketTotals>> bounded =
@@ -533,24 +543,52 @@ public class ReportExportService {
         return values;
     }
 
-    /** «Сводка»'s own fold key — one bucket per (branch, channel, fulfilment type), dates and legal entities folded away. */
+    /** «Сводка»'s own fold key — one bucket per (branch, channel, fulfilment type), dates folded away. */
     private record SummaryBucketKey(
             @Nullable UUID locationId,
             @Nullable String channelCode,
             @Nullable String fulfilmentType) {}
 
-    /** Mutable accumulator for one {@link SummaryBucketKey} — a null metric value (no data for that slice) adds zero. */
+    /**
+     * Mutable accumulator for one {@link SummaryBucketKey} — a null metric value (no data for that
+     * slice) adds zero. {@link #legalEntityIds} tracks every distinct fiscal identity {@link #add}
+     * has folded into this bucket so far, purely so {@link #refuseCombinedEntityTotal} can tell a
+     * clean bucket from one that would otherwise combine two taxpayers' money; it is never rendered.
+     */
     private static final class SummaryBucketTotals {
         private long orderCount;
         private long grossSom;
         private long deliveryFeeSom;
         private long netSom;
+        private final Set<UUID> legalEntityIds = new HashSet<>();
 
-        void add(Map<String, Long> values) {
+        void add(Map<String, Long> values, @Nullable UUID legalEntityId) {
             orderCount += values.getOrDefault("orders.count.v1", 0L);
             grossSom += values.getOrDefault("revenue.gross.v1", 0L);
             deliveryFeeSom += values.getOrDefault("delivery_fee.v1", 0L);
             netSom += values.getOrDefault("revenue.net.v1", 0L);
+            legalEntityIds.add(legalEntityId);
+        }
+    }
+
+    /**
+     * ADR 0038: a money metric is only meaningful once the taxpayer is named, the same rule {@code
+     * ReportQueryService#refuseCombinedEntityTotal} and {@link ProductClassificationService}'s own
+     * copy apply to every other money read. Checked per bucket rather than across the whole export:
+     * a tenant that legitimately trades as several legal entities has each one on its own branch
+     * (ADR 0038's location-level assignment), so distinct buckets naming distinct single entities is
+     * the ordinary case and must stay exportable — only a bucket that itself folds more than one
+     * entity together (a branch reassigned from one legal entity to another partway through the
+     * exported range) reconciles to neither taxpayer's filing.
+     */
+    private static void refuseCombinedEntityTotal(Map<SummaryBucketKey, SummaryBucketTotals> buckets) {
+        int maxEntitiesInOneBucket = buckets.values().stream()
+                .mapToInt(totals -> totals.legalEntityIds.size())
+                .max()
+                .orElse(0);
+        if (maxEntitiesInOneBucket > 1) {
+            throw new ReportingRefusals.CombinedEntityTotalException(
+                    List.of("revenue.gross.v1", "revenue.net.v1", "delivery_fee.v1"), maxEntitiesInOneBucket);
         }
     }
 
