@@ -266,6 +266,17 @@ export const messagesEn = {
   'orders.dialog.amendConfirm.channel.SMS': 'By SMS/app',
   'orders.dialog.amendConfirm.confirm': 'Confirm and apply',
 
+  'orders.dialog.changeTime.title': 'Change promised time',
+  'orders.dialog.changeTime.label': 'New promised time',
+
+  'orders.dialog.changeContact.title': 'Change recipient name/phone',
+  'orders.dialog.changeContact.name': 'Recipient name',
+  'orders.dialog.changeContact.phone': 'Recipient phone',
+
+  'orders.dialog.changePaymentMethod.title': 'Change payment method',
+  'orders.dialog.changePaymentMethod.label': 'New payment method',
+  'orders.dialog.changePaymentMethod.empty': 'No payment method is enabled for this channel.',
+
   // The Millenium pattern's own confirmation seam (gap map row 1.2f, wave P44).
   'orders.dialog.externalCourier.title': 'Call an external courier',
   'orders.dialog.externalCourier.noPartners':

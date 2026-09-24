@@ -254,6 +254,17 @@ export const messagesUzLatn: MessageCatalogue = {
   'orders.dialog.amendConfirm.channel.SMS': 'SMS/ilova orqali',
   'orders.dialog.amendConfirm.confirm': 'Tasdiqlash va qoʻllash',
 
+  'orders.dialog.changeTime.title': 'Vaʻda qilingan vaqtni oʻzgartirish',
+  'orders.dialog.changeTime.label': 'Yangi vaʻda qilingan vaqt',
+
+  'orders.dialog.changeContact.title': 'Qabul qiluvchi ism/telefonini oʻzgartirish',
+  'orders.dialog.changeContact.name': 'Qabul qiluvchi ismi',
+  'orders.dialog.changeContact.phone': 'Qabul qiluvchi telefoni',
+
+  'orders.dialog.changePaymentMethod.title': 'Toʻlov usulini oʻzgartirish',
+  'orders.dialog.changePaymentMethod.label': 'Yangi toʻlov usuli',
+  'orders.dialog.changePaymentMethod.empty': 'Bu kanal uchun hech qanday toʻlov usuli yoqilmagan.',
+
   // Tashqi kuryer chaqirishda narx tasdigʻi (boʻshliqlar xaritasi 1.2f, P44 toʻlqini).
   'orders.dialog.externalCourier.title': 'Tashqi kuryer chaqirish',
   'orders.dialog.externalCourier.noPartners': 'Bu filial uchun kuryerlik xizmati sozlanmagan.',

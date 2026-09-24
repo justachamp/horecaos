@@ -1,0 +1,37 @@
+<q-modal
+  [title]="'orders.dialog.changeTime.title' | t"
+  [dismissible]="!busy()"
+  (dismiss)="dismiss.emit()"
+  data-testid="order-change-time-dialog"
+>
+  <label class="change-time-dialog__field">
+    <span class="q-body-sm">{{ 'orders.dialog.changeTime.label' | t }}</span>
+    <input
+      type="datetime-local"
+      class="change-time-dialog__input q-body-sm"
+      [value]="localValue()"
+      (input)="setLocalValue($any($event.target).value)"
+      data-testid="order-change-time-dialog-input"
+    />
+  </label>
+
+  <ng-container qModalActions>
+    <button
+      type="button"
+      class="change-time-dialog__dismiss q-body-sm"
+      (click)="dismiss.emit()"
+      [disabled]="busy()"
+    >
+      {{ 'orders.dialog.dismiss' | t }}
+    </button>
+    <button
+      type="button"
+      class="change-time-dialog__confirm q-body-sm"
+      (click)="submit()"
+      [disabled]="busy() || !canSubmit()"
+      data-testid="order-change-time-dialog-confirm"
+    >
+      {{ 'orders.dialog.note.save' | t }}
+    </button>
+  </ng-container>
+</q-modal>

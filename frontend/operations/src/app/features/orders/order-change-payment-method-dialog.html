@@ -1,0 +1,49 @@
+<q-modal
+  [title]="'orders.dialog.changePaymentMethod.title' | t"
+  [dismissible]="!busy()"
+  (dismiss)="dismiss.emit()"
+  data-testid="order-change-payment-method-dialog"
+>
+  @if (methods().length === 0) {
+    <p class="q-body-sm" data-testid="order-change-payment-method-dialog-empty">
+      {{ 'orders.dialog.changePaymentMethod.empty' | t }}
+    </p>
+  } @else {
+    <fieldset class="change-payment-method-dialog__list">
+      <legend class="q-body-sm">{{ 'orders.dialog.changePaymentMethod.label' | t }}</legend>
+      @for (method of methods(); track method) {
+        <label class="change-payment-method-dialog__option q-body-sm">
+          <input
+            type="radio"
+            name="paymentMethod"
+            [value]="method"
+            [checked]="method === selected()"
+            (change)="select(method)"
+            [attr.data-testid]="'order-change-payment-method-dialog-option-' + method"
+          />
+          {{ method }}
+        </label>
+      }
+    </fieldset>
+  }
+
+  <ng-container qModalActions>
+    <button
+      type="button"
+      class="change-payment-method-dialog__dismiss q-body-sm"
+      (click)="dismiss.emit()"
+      [disabled]="busy()"
+    >
+      {{ 'orders.dialog.dismiss' | t }}
+    </button>
+    <button
+      type="button"
+      class="change-payment-method-dialog__confirm q-body-sm"
+      (click)="submit()"
+      [disabled]="busy() || !canSubmit()"
+      data-testid="order-change-payment-method-dialog-confirm"
+    >
+      {{ 'orders.dialog.note.save' | t }}
+    </button>
+  </ng-container>
+</q-modal>

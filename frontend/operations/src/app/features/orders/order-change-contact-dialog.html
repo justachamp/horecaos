@@ -1,0 +1,48 @@
+<q-modal
+  [title]="'orders.dialog.changeContact.title' | t"
+  [dismissible]="!busy()"
+  (dismiss)="dismiss.emit()"
+  data-testid="order-change-contact-dialog"
+>
+  <label class="change-contact-dialog__field">
+    <span class="q-body-sm">{{ 'orders.dialog.changeContact.name' | t }}</span>
+    <input
+      type="text"
+      class="change-contact-dialog__input q-body-sm"
+      [value]="recipientName()"
+      (input)="setRecipientName($any($event.target).value)"
+      data-testid="order-change-contact-dialog-name"
+    />
+  </label>
+
+  <label class="change-contact-dialog__field">
+    <span class="q-body-sm">{{ 'orders.dialog.changeContact.phone' | t }}</span>
+    <input
+      type="tel"
+      class="change-contact-dialog__input q-body-sm"
+      [value]="recipientPhone()"
+      (input)="setRecipientPhone($any($event.target).value)"
+      data-testid="order-change-contact-dialog-phone"
+    />
+  </label>
+
+  <ng-container qModalActions>
+    <button
+      type="button"
+      class="change-contact-dialog__dismiss q-body-sm"
+      (click)="dismiss.emit()"
+      [disabled]="busy()"
+    >
+      {{ 'orders.dialog.dismiss' | t }}
+    </button>
+    <button
+      type="button"
+      class="change-contact-dialog__confirm q-body-sm"
+      (click)="submit()"
+      [disabled]="busy() || !canSubmit()"
+      data-testid="order-change-contact-dialog-confirm"
+    >
+      {{ 'orders.dialog.note.save' | t }}
+    </button>
+  </ng-container>
+</q-modal>

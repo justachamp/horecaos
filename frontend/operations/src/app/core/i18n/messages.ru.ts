@@ -252,6 +252,17 @@ export const messagesRu: MessageCatalogue = {
   'orders.dialog.amendConfirm.channel.SMS': 'По SMS/приложению',
   'orders.dialog.amendConfirm.confirm': 'Подтвердить и применить',
 
+  'orders.dialog.changeTime.title': 'Изменить обещанное время',
+  'orders.dialog.changeTime.label': 'Новое обещанное время',
+
+  'orders.dialog.changeContact.title': 'Изменить имя/телефон получателя',
+  'orders.dialog.changeContact.name': 'Имя получателя',
+  'orders.dialog.changeContact.phone': 'Телефон получателя',
+
+  'orders.dialog.changePaymentMethod.title': 'Изменить способ оплаты',
+  'orders.dialog.changePaymentMethod.label': 'Новый способ оплаты',
+  'orders.dialog.changePaymentMethod.empty': 'Для этого канала не включён ни один способ оплаты.',
+
   // Конфирмация цены при вызове внешнего курьера (карта пробелов 1.2f, волна P44).
   'orders.dialog.externalCourier.title': 'Вызвать курьера',
   'orders.dialog.externalCourier.noPartners':
