@@ -15,14 +15,11 @@ import { OrderActionResponse } from './order-actions';
  * a table this response deliberately does not join — ADR 0029 PERSONAL data
  * belongs behind an audited reveal, not a list row every `ORDER_READ` holder
  * can page through; `customerAccountId`/`guestReferenceHash` below are the
- * opaque identifiers this response carries instead), **no line summary**
- * (`order_lines`, a per-order query this list read does not make), and
- * **no courier** (§2.5 column 12: `fulfillment.shipments.courier_id` is
- * built but, in its own words, "not read by ordering" — the ordering module
- * does not join the fulfilment module's assignment table into this
- * projection). `order-queue.ts` documents exactly which columns render
- * because the data exists and which are withheld because it does not — never
- * fabricated client-side.
+ * opaque identifiers this response carries instead), and **no line summary**
+ * (`order_lines`, a per-order query this list read does not make).
+ * `order-queue.ts` documents exactly which columns render because the data
+ * exists and which are withheld because it does not — never fabricated
+ * client-side.
  */
 export interface OrderSummaryResponse {
   readonly orderId: string;
@@ -97,4 +94,17 @@ export interface OrderSummaryResponse {
   /** §2.5's "behind the picker" Принял column — who accepted it, once decided. */
   readonly acceptedByActorType?: string | null;
   readonly acceptedByActorId?: string | null;
+  /**
+   * §2.5 column 12 (Курьер), gap map row 1.1: the in-house courier carrying
+   * this order's active shipment, read server-side through {@code
+   * ActiveCourierAssignmentsPort} rather than a raw join — null when none is
+   * assigned, the order is not a delivery, or it is carried by an external
+   * partner rather than the tenant's own fleet. An opaque id, never a name
+   * or a display reference (ADR 0029 keeps this response free of personal
+   * data even though a courier id is not personal data itself) — resolve it
+   * against the roster `order-queue.ts` already fetches for the toolbar's
+   * own Курьер filter, the same way `order-detail-pane.ts`'s
+   * `courierDisplayReference` resolves its own.
+   */
+  readonly courierId?: string | null;
 }

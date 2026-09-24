@@ -166,11 +166,8 @@ interface PendingModifierSelection {
  * and change-due is a live client-side computation only — `cash_tendered_expected_minor`
  * is still written after creation through an amendment (`SET_CASH_TENDERED`,
  * deferred), not at creation, so nothing here persists it. «Повторить»
- * (row `1.3f`) calls the new staff reorder-plan wrapper
- * (`GET .../customers/{accountId}/orders/{orderId}/reorder`, `ORDER_READ`
- * at `BRAND` scope — `LOCATION_STAFF` does not hold that either, an
- * existing, unwidened gap this wave inherits rather than fixes) and adds
- * every `AVAILABLE` line straight to the basket. A «Заказ агрегатора»
+ * (row `1.3f`) calls the staff reorder-plan wrapper and adds every
+ * `AVAILABLE` line straight to the basket. A «Заказ агрегатора»
  * toggle (row `1.3g`) records an aggregator's own phoned-through order under
  * its `AGGREGATOR`-type channel with externally-set totals, bypassing the
  * customer pane entirely — ADR 0040 is explicit that a marketplace order
@@ -209,6 +206,18 @@ interface PendingModifierSelection {
  * `OperatorOrderingService.place` opens the cart, prices it and checks out
  * in one atomic call, so there is no server-side draft cart that can expire
  * out from under the operator the way a storefront cart can.
+ *
+ * <p><b>Wave 10 (rows 1.3f/1.3a).</b> «Повторить» used to call
+ * `CustomerOrderHistoryController.reorderPlan` (`ORDER_READ` at `BRAND`
+ * scope), which `LOCATION_STAFF` — this screen's own persona — does not
+ * hold, 403ing every time. `CustomersApi#reorderPlan` now calls
+ * `CustomerOrderReorderController` instead (`operationsPaths.customerOrderReorder`,
+ * `ORDER_READ` at `LOCATION`), resolved against {@link CurrentLocation}'s
+ * own branch rather than the order's original one — the same honest "this
+ * branch, right now" rule §5.4's address pane and §5.6's menu already
+ * apply. The Customers section's own order-history tab keeps reading the
+ * brand-scoped wrapper for its wider, `LOCATION_MANAGER`-or-broader
+ * audience; only this screen's button moved.
  */
 @Component({
   selector: 'q-new-order-page',

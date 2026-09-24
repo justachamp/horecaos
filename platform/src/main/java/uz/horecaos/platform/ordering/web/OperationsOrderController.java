@@ -44,6 +44,7 @@ import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
+import uz.horecaos.platform.iam.api.accounts.StaffDisplayNames;
 import uz.horecaos.platform.ordering.application.AggregatorOrderIntakeService;
 import uz.horecaos.platform.ordering.application.CartService;
 import uz.horecaos.platform.ordering.application.CheckoutService;
@@ -115,6 +116,7 @@ public class OperationsOrderController {
     private final AggregatorOrderIntakeService aggregatorOrders;
     private final ShipmentCancellationPort deliveryCancellation;
     private final MyWorkQueryService myWork;
+    private final StaffDisplayNames staffDisplayNames;
 
     /**
      * Every capability {@link OrderActionsPolicy#availableFor} reads. Computed
@@ -129,7 +131,20 @@ public class OperationsOrderController {
             Capability.ORDER_AMEND,
             // ADR 0019 amendment (ADR 0110), wave P41: OrderActionsPolicy's
             // OVERRIDE branch reads this capability exactly like the other four.
-            Capability.ORDER_STATE_OVERRIDE);
+            Capability.ORDER_STATE_OVERRIDE,
+            // Gap map row 1.1e: OrderActionsPolicy's ASSIGN_COURIER branch reads
+            // this the same way — the exact capability DispatchController.assign
+            // itself declares.
+            Capability.DELIVERY_MANUAL_ASSIGN);
+
+    /**
+     * {@code ordering.orders.payment_status_projection}'s own seven values
+     * (V0022, {@code ck_order_payment_projection}, gap map row 1.1c) — the
+     * board's {@code paymentStatus} filter parameter refuses anything else
+     * rather than silently answering "no orders" for a typo.
+     */
+    private static final Set<String> KNOWN_PAYMENT_STATUS_PROJECTIONS =
+            Set.of("NOT_REQUIRED", "PENDING", "AUTHORIZED", "CAPTURED", "FAILED", "VOIDED", "REFUNDED");
 
     @SuppressWarnings("checkstyle:ParameterNumber")
     public OperationsOrderController(
@@ -148,7 +163,8 @@ public class OperationsOrderController {
             LiveBoardQueryService liveBoard,
             AggregatorOrderIntakeService aggregatorOrders,
             ShipmentCancellationPort deliveryCancellation,
-            MyWorkQueryService myWork) {
+            MyWorkQueryService myWork,
+            StaffDisplayNames staffDisplayNames) {
         this.orderQuery = orderQuery;
         this.orderState = orderState;
         this.outcomes = outcomes;
@@ -165,6 +181,7 @@ public class OperationsOrderController {
         this.aggregatorOrders = aggregatorOrders;
         this.deliveryCancellation = deliveryCancellation;
         this.myWork = myWork;
+        this.staffDisplayNames = staffDisplayNames;
     }
 
     /**
@@ -214,8 +231,8 @@ public class OperationsOrderController {
             @RequestParam(required = false) List<String> status,
             @RequestParam(defaultValue = "100") @jakarta.validation.constraints.Max(500) int limit) {
 
-        JdbcOrderStore.OrderListQuery query =
-                boardQuery(tenantId, brandId, locationId, status, null, null, null, null, null, null, null, null, null);
+        JdbcOrderStore.OrderListQuery query = boardQuery(
+                tenantId, brandId, locationId, status, null, null, null, null, null, null, null, null, null, null);
         Set<Capability> granted = grantedOrderActionCapabilities(tenantId, brandId, locationId);
         return ResponseEntity.ok(orderQuery.forLocation(query, null, limit).stream()
                 .map(row -> OrderSummaryResponse.of(row, granted))
@@ -241,10 +258,13 @@ public class OperationsOrderController {
                     + "`MARKETPLACE` for anything recorded under an aggregator's own binding "
                     + "(ADR 0040, wave 9 row `1.1c`) — the coarse «Источник» toggle orders.md §2.4 "
                     + "names; picking one specific aggregator binding when a tenant runs several "
-                    + "is not yet a filter here. Keyset-paginated "
+                    + "is not yet a filter here. `paymentStatus` narrows to `ordering.orders"
+                    + ".payment_status_projection` (V0022, gap map row 1.1c) — Оплата, never to be "
+                    + "confused with `paymentMethodCode`'s Способ оплаты. Keyset-paginated "
                     + "(ADR 0031): pass the previous page's `nextCursor` back as `cursor`. "
                     + "Changing a filter invalidates the cursor — start the list again — because "
                     + "a window cut for one filter set says nothing about another.")
+    @SuppressWarnings("checkstyle:ParameterNumber")
     public Page<OrderSummaryResponse> board(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
@@ -259,6 +279,7 @@ public class OperationsOrderController {
             @RequestParam(required = false) @Nullable String createdByActorId,
             @RequestParam(required = false) @Nullable String reference,
             @RequestParam(required = false) @Nullable String origin,
+            @RequestParam(required = false) @Nullable String paymentStatus,
             @RequestParam(required = false) @Nullable String cursor,
             @RequestParam(required = false) @Nullable Integer limit) {
 
@@ -275,7 +296,8 @@ public class OperationsOrderController {
                 paymentMethodCode,
                 createdByActorId,
                 reference,
-                origin);
+                origin,
+                paymentStatus);
 
         String filterHash = filterHashOf(query);
         @Nullable UUID cursorOrderId = null;
@@ -324,13 +346,15 @@ public class OperationsOrderController {
             @Nullable String paymentMethodCode,
             @Nullable String createdByActorId,
             @Nullable String reference,
-            @Nullable String origin) {
+            @Nullable String origin,
+            @Nullable String paymentStatus) {
 
         List<String> statuses = status == null ? List.of() : status;
         statuses.forEach(OperationsOrderController::requireKnownStatus);
         requireKnownFulfillmentMode(fulfillmentMode);
         requireSearchableReference(reference);
         requireKnownOrigin(origin);
+        requireKnownPaymentStatus(paymentStatus);
 
         return new JdbcOrderStore.OrderListQuery(
                 tenantId,
@@ -345,7 +369,8 @@ public class OperationsOrderController {
                 paymentMethodCode,
                 createdByActorId,
                 reference,
-                origin == null ? null : origin.toUpperCase(Locale.ROOT));
+                origin == null ? null : origin.toUpperCase(Locale.ROOT),
+                paymentStatus == null ? null : paymentStatus.toUpperCase(Locale.ROOT));
     }
 
     /**
@@ -396,6 +421,23 @@ public class OperationsOrderController {
         String normalised = origin.toUpperCase(Locale.ROOT);
         if (!normalised.equals("HORECAOS") && !normalised.equals("MARKETPLACE")) {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, "Unknown order origin \"%s\"".formatted(origin));
+        }
+    }
+
+    /**
+     * {@code ordering.orders.payment_status_projection}'s own seven values
+     * (V0022, {@code ck_order_payment_projection}, gap map row 1.1c) —
+     * dropping an unknown one would silently answer "no orders" for a typo,
+     * exactly the failure {@link #requireKnownOrigin} already refuses for its
+     * own parameter.
+     */
+    private static void requireKnownPaymentStatus(@Nullable String paymentStatus) {
+        if (paymentStatus == null) {
+            return;
+        }
+        if (!KNOWN_PAYMENT_STATUS_PROJECTIONS.contains(paymentStatus.toUpperCase(Locale.ROOT))) {
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED, "Unknown payment status \"%s\"".formatted(paymentStatus));
         }
     }
 
@@ -690,10 +732,15 @@ public class OperationsOrderController {
                 .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such order"));
 
         Set<Capability> granted = grantedOrderActionCapabilities(tenantId, brandId, locationId);
+        UUID courierId = orderQuery.courierIdFor(tenantId, orderId);
         return ResponseEntity.ok()
                 .eTag(AggregateVersion.toETag(detail.order().version()))
                 .body(OrderDetailResponse.of(
-                        detail, orderQuery.outcome(tenantId, orderId).orElse(null), granted));
+                        detail,
+                        orderQuery.outcome(tenantId, orderId).orElse(null),
+                        granted,
+                        courierId,
+                        staffDisplayNames));
     }
 
     @GetMapping("/{orderId}/revisions")
@@ -2073,6 +2120,14 @@ public class OperationsOrderController {
      *                   no process state was projected: absent means "not
      *                   asked", and the detail screen reads the processes
      *                   themselves
+     * @param courierId  the in-house courier carrying this order's active
+     *                   shipment (gap map row 1.1), or null when none is
+     *                   assigned or the order is not a delivery — an opaque id,
+     *                   never a name; the client resolves it against the
+     *                   roster it already fetches for the Курьер filter,
+     *                   exactly as the order detail pane resolves its own.
+     *                   Absent on a summary read outside the board for the
+     *                   same reason {@code processAttention} is
      */
     public record OrderSummaryResponse(
             UUID orderId,
@@ -2097,14 +2152,21 @@ public class OperationsOrderController {
             @Nullable String createdByActorId,
             @Nullable String acceptedByActorType,
             @Nullable String acceptedByActorId,
-            @Nullable String processAttention) {
+            @Nullable String processAttention,
+            @Nullable UUID courierId) {
 
         /**
          * The summary of an order read outside the board — the detail read's own
          * header — where no process state was projected alongside it.
+         *
+         * @param courierId resolved separately by the caller ({@link
+         *                   OrderQueryService#courierIdFor}), since a single-order
+         *                   read has no page of rows to batch a lookup over the
+         *                   way {@link OrderQueryService#forLocation} does
          */
-        static OrderSummaryResponse of(JdbcOrderStore.OrderRow order, Set<Capability> grantedCapabilities) {
-            return of(new JdbcOrderStore.OrderBoardRow(order, null), grantedCapabilities);
+        static OrderSummaryResponse of(
+                JdbcOrderStore.OrderRow order, Set<Capability> grantedCapabilities, @Nullable UUID courierId) {
+            return of(new JdbcOrderStore.OrderBoardRow(order, null, courierId), grantedCapabilities);
         }
 
         static OrderSummaryResponse of(JdbcOrderStore.OrderBoardRow row, Set<Capability> grantedCapabilities) {
@@ -2120,7 +2182,8 @@ public class OperationsOrderController {
                     order.version(),
                     order.createdAt(),
                     order.approvalDeadlineAt(),
-                    OrderActionResponse.allFor(order.status(), order.fulfillmentMode(), grantedCapabilities),
+                    OrderActionResponse.allFor(
+                            order.status(), order.fulfillmentMode(), grantedCapabilities, row.courierId()),
                     order.promise().promisedAt(),
                     order.promise().basis().name(),
                     order.paymentStatusProjection(),
@@ -2132,7 +2195,8 @@ public class OperationsOrderController {
                     order.createdByActorId(),
                     order.acceptedByActorType(),
                     order.acceptedByActorId(),
-                    row.processAttention());
+                    row.processAttention(),
+                    row.courierId());
         }
     }
 
@@ -2152,8 +2216,9 @@ public class OperationsOrderController {
         static List<OrderActionResponse> allFor(
                 OrderStatus status,
                 uz.horecaos.platform.tenancy.api.FulfillmentMode mode,
-                Set<Capability> grantedCapabilities) {
-            return OrderActionsPolicy.availableFor(status, mode, grantedCapabilities).stream()
+                Set<Capability> grantedCapabilities,
+                @Nullable UUID courierId) {
+            return OrderActionsPolicy.availableFor(status, mode, grantedCapabilities, courierId == null).stream()
                     .map(OrderActionResponse::of)
                     .toList();
         }
@@ -2179,6 +2244,17 @@ public class OperationsOrderController {
      *                       and address are never here — {@link #revealPhone}
      *                       and {@link #revealAddress} are the capability-gated
      *                       calls that return them
+     * @param createdByDisplayName  {@code createdByActorId} resolved to a name
+     *                       (gap map row 9.2d) through {@code StaffDisplayNames}
+     *                       — the same cached, read-time lookup {@code
+     *                       AuditQueryService} already uses for an audit row's
+     *                       actor — or null when the actor is not a {@code USER}
+     *                       (a system/integration actor has no Keycloak identity
+     *                       to resolve) or the subject has none on file. The
+     *                       raw {@code createdByActorId} stays on the response
+     *                       too, for a caller that still wants the subject id.
+     * @param acceptedByDisplayName the same resolution for {@code
+     *                       acceptedByActorId}
      */
     public record OrderDetailResponse(
             OrderSummaryResponse summary,
@@ -2190,8 +2266,10 @@ public class OperationsOrderController {
             int currentRevision,
             String createdByActorType,
             @Nullable String createdByActorId,
+            @Nullable String createdByDisplayName,
             @Nullable String acceptedByActorType,
             @Nullable String acceptedByActorId,
+            @Nullable String acceptedByDisplayName,
             @Nullable Instant acceptedAt,
             boolean callbackRequested,
             @Nullable Instant callbackResolvedAt,
@@ -2204,10 +2282,12 @@ public class OperationsOrderController {
         static OrderDetailResponse of(
                 OrderQueryService.OrderDetail detail,
                 JdbcOrderStore.@Nullable OutcomeRow outcomeRow,
-                Set<Capability> grantedCapabilities) {
+                Set<Capability> grantedCapabilities,
+                @Nullable UUID courierId,
+                StaffDisplayNames staffDisplayNames) {
             var order = detail.order();
             return new OrderDetailResponse(
-                    OrderSummaryResponse.of(order, grantedCapabilities),
+                    OrderSummaryResponse.of(order, grantedCapabilities, courierId),
                     order.subtotalMinor(),
                     order.taxMinor(),
                     order.acceptanceMode(),
@@ -2216,8 +2296,10 @@ public class OperationsOrderController {
                     order.currentRevision(),
                     order.createdByActorType(),
                     order.createdByActorId(),
+                    displayNameOf(staffDisplayNames, order.createdByActorType(), order.createdByActorId()),
                     order.acceptedByActorType(),
                     order.acceptedByActorId(),
+                    displayNameOf(staffDisplayNames, order.acceptedByActorType(), order.acceptedByActorId()),
                     order.acceptedAt(),
                     order.callbackRequested(),
                     order.callbackResolvedAt(),
@@ -2228,6 +2310,23 @@ public class OperationsOrderController {
                             : order.cashTenderedExpectedMinor() - order.totalMinor(),
                     outcomeRow == null ? null : OutcomeResponse.of(outcomeRow),
                     CustomerResponse.of(detail.customer()));
+        }
+
+        /**
+         * Gap map row 9.2d: a name for {@code actorId} instead of the UUID the
+         * screen showed before this wave — resolved only for a {@code "USER"}
+         * actor, the same restriction {@code AuditQueryService
+         * .withResolvedActorDisplay} applies for the same reason: a system job,
+         * an integration or a migration run has no Keycloak identity to look up,
+         * and {@code null} in means {@code null} out rather than a lookup for a
+         * subject that was never supplied.
+         */
+        private static @Nullable String displayNameOf(
+                StaffDisplayNames staffDisplayNames, @Nullable String actorType, @Nullable String actorId) {
+            if (actorId == null || !"USER".equals(actorType)) {
+                return null;
+            }
+            return staffDisplayNames.displayName(actorId);
         }
 
         private static List<LineResponse> lineResponses(OrderQueryService.OrderDetail detail) {

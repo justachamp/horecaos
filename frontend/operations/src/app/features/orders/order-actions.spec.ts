@@ -51,6 +51,12 @@ describe('actionLabel', () => {
     expect(actionLabel(action({ action: 'CANCEL' }), null, t, statusLabel)).toBe('Cancel');
   });
 
+  it('labels ASSIGN_COURIER (gap map row 1.1e), never falling to the raw code', () => {
+    expect(actionLabel(action({ action: 'ASSIGN_COURIER' }), 'DELIVERY', t, statusLabel)).toBe(
+      'Assign courier',
+    );
+  });
+
   it('labels an advance by its target status, not the status’s own noun', () => {
     expect(
       actionLabel(action({ action: 'ADVANCE', targetStatus: 'PREPARING' }), null, t, statusLabel),

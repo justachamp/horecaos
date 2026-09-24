@@ -72,8 +72,18 @@ export interface OrderDetailResponse {
   readonly currentRevision: number;
   readonly createdByActorType?: string | null;
   readonly createdByActorId?: string | null;
+  /**
+   * Gap map row 9.2d: `createdByActorId` resolved to a name server-side
+   * (`StaffDisplayNames`, the same cached lookup the staff activity log
+   * already uses) — null for a non-`"USER"` actor or a subject with no name
+   * on file, in which case {@link actorDisplay} still falls back to the raw
+   * type/id pair rather than showing nothing.
+   */
+  readonly createdByDisplayName?: string | null;
   readonly acceptedByActorType?: string | null;
   readonly acceptedByActorId?: string | null;
+  /** {@link createdByDisplayName}, for {@link acceptedByActorId}. */
+  readonly acceptedByDisplayName?: string | null;
   readonly acceptedAt?: string | null;
   readonly callbackRequested: boolean;
   readonly callbackResolvedAt?: string | null;

@@ -33,6 +33,13 @@ import { MessageKey } from '../../core/i18n/messages.en';
  * capability (`ORDER_STATE_OVERRIDE`), its own dialog, and a mandatory
  * registry reason with no reasonless path. `targetStatus` names the status it
  * restores, exactly as it does for `ADVANCE`.
+ *
+ * `ASSIGN_COURIER` (orders.md §4.7, gap map row 1.1e) is offered for a
+ * delivery order whose active plan has nobody carrying it yet
+ * (`Capability.DELIVERY_MANUAL_ASSIGN`). `order-queue.ts`'s handler opens the
+ * order rather than a second picker — the assign control already lives on
+ * the order detail pane (§1.2e), reusing `DispatchController`'s own
+ * manual-assignment endpoint.
  */
 export const ORDER_ACTION_CODES = [
   'APPROVE',
@@ -42,6 +49,7 @@ export const ORDER_ACTION_CODES = [
   'COMPLETE',
   'AMEND',
   'OVERRIDE',
+  'ASSIGN_COURIER',
 ] as const;
 export type OrderActionCode = (typeof ORDER_ACTION_CODES)[number];
 
@@ -128,6 +136,8 @@ export function actionLabel(
         : translate('orders.action.advance.completedPickup');
     case 'AMEND':
       return translate('orders.action.amend');
+    case 'ASSIGN_COURIER':
+      return translate('orders.action.assignCourier');
     case 'OVERRIDE': {
       const target = action.targetStatus ?? '';
       const key = OVERRIDE_LABEL_KEYS[target];

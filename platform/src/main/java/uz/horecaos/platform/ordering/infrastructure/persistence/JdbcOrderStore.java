@@ -1098,6 +1098,8 @@ public class JdbcOrderStore {
                                    WHERE r.tenant_id = orders.tenant_id AND r.order_id = orders.id
                                      AND r.reference_value_normalised = CAST(:reference AS varchar)))
                           AND (CAST(:origin AS varchar) IS NULL OR origin = CAST(:origin AS varchar))
+                          AND (CAST(:paymentStatus AS varchar) IS NULL
+                               OR payment_status_projection = CAST(:paymentStatus AS varchar))
                           AND (:unbounded
                                OR (created_at, id)
                                   < (CAST(:beforeCreatedAt AS timestamptz), CAST(:beforeId AS uuid)))
@@ -1120,6 +1122,7 @@ public class JdbcOrderStore {
                 .param("paymentMethodCode", query.paymentMethodCode())
                 .param("reference", query.normalisedReference())
                 .param("origin", query.origin())
+                .param("paymentStatus", query.paymentStatus())
                 .param("unbounded", beforeCreatedAt == null)
                 // Cast in the statement rather than typed here, so the null a
                 // first page sends is a typed null the row comparison can be
@@ -1127,7 +1130,8 @@ public class JdbcOrderStore {
                 .param("beforeCreatedAt", utcOrNull(beforeCreatedAt))
                 .param("beforeId", beforeId == null ? null : beforeId.toString())
                 .param("limit", limit)
-                .query((row, number) -> new OrderBoardRow(mapOrder(row, number), row.getString("process_attention")))
+                .query((row, number) ->
+                        new OrderBoardRow(mapOrder(row, number), row.getString("process_attention"), null))
                 .list();
     }
 
@@ -2195,8 +2199,24 @@ public class JdbcOrderStore {
      *                         will be retried, null when neither. The worse of
      *                         the two wins, decided here rather than by whoever
      *                         renders it
+     * @param courierId        the in-house courier carrying this order's active
+     *                         shipment, or null for an order with none (gap map
+     *                         row 1.1). Always null as this class constructs the
+     *                         row — {@code fulfillment.shipments} is not this
+     *                         store's to join — and filled in afterward by
+     *                         {@link uz.horecaos.platform.ordering.application.OrderQueryService#forLocation}
+     *                         through {@link uz.horecaos.platform.fulfillment.api.ActiveCourierAssignmentsPort}
      */
-    public record OrderBoardRow(OrderRow order, @Nullable String processAttention) {}
+    public record OrderBoardRow(
+            OrderRow order,
+            @Nullable String processAttention,
+            @Nullable UUID courierId) {
+
+        /** {@link #courierId} filled in, once the caller has resolved it through the port. */
+        public OrderBoardRow withCourierId(@Nullable UUID resolvedCourierId) {
+            return new OrderBoardRow(order, processAttention, resolvedCourierId);
+        }
+    }
 
     /**
      * The order board's filter set (ADR 0102, orders.md §2.4).
@@ -2218,6 +2238,11 @@ public class JdbcOrderStore {
      *                     {@code "HORECAOS"} or {@code "MARKETPLACE"} — the
      *                     coarse «Источник» toggle (wave 9, gap map row
      *                     `1.1c`), not a specific aggregator binding
+     * @param paymentStatus {@code ordering.orders.payment_status_projection}
+     *                     (V0022, {@code ck_order_payment_projection`}) — the
+     *                     Оплата column's own value (wave 10, gap map row
+     *                     `1.1c`), distinct from {@code paymentMethodCode}'s
+     *                     Способ оплаты
      */
     public record OrderListQuery(
             UUID tenantId,
@@ -2232,7 +2257,8 @@ public class JdbcOrderStore {
             @Nullable String paymentMethodCode,
             @Nullable String createdByActorId,
             @Nullable String reference,
-            @Nullable String origin) {
+            @Nullable String origin,
+            @Nullable String paymentStatus) {
 
         /** ASCII unit separator: not producible by any parameter of this query. */
         private static final String FINGERPRINT_SEPARATOR = "\u001f";
@@ -2283,7 +2309,8 @@ public class JdbcOrderStore {
                     String.valueOf(paymentMethodCode),
                     String.valueOf(createdByActorId),
                     String.valueOf(normalisedReference()),
-                    String.valueOf(origin));
+                    String.valueOf(origin),
+                    String.valueOf(paymentStatus));
         }
     }
 

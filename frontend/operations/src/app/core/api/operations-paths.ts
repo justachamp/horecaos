@@ -823,12 +823,22 @@ export const operationsPaths = {
   },
 
   /**
-   * Row 1.3f: the staff-capability twin of the storefront's own reorder
-   * plan (`CustomerOrderHistoryController`, `ORDER_READ` at `BRAND` scope) —
-   * never `@CustomerOwned`, unlike the storefront's identical read.
+   * Rows 1.3f/1.3a: the New Order screen's own «Повторить», reached through
+   * `CustomerOrderReorderController` — the `LOCATION`-scoped twin of
+   * `CustomerOrderHistoryController.reorderPlan` (`ORDER_READ` at `BRAND`,
+   * used only by {@link customerOrders}' own Customers-section history read).
+   * `LOCATION_STAFF`, this screen's primary persona, holds `ORDER_READ` only
+   * at `LOCATION` scope, so this is the one and only reorder route this
+   * console calls — pointed at {@link LocationScope.locationId} rather than
+   * {@link customerOrders}' brand-scoped path, and resolved server-side
+   * against that location's own menu and stock, not the order's original
+   * branch's.
    */
   customerOrderReorder(scope: LocationScope, accountId: string, orderId: string): string {
-    return `${this.customerOrders(scope, accountId)}/${encodeURIComponent(orderId)}/reorder`;
+    return (
+      `${LEGACY_TENANT_PREFIX}${tenantBrandLocation(scope)}` +
+      `/customers/${encodeURIComponent(accountId)}/orders/${encodeURIComponent(orderId)}/reorder`
+    );
   },
 
   /**

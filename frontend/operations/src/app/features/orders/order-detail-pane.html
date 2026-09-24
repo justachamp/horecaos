@@ -1079,7 +1079,11 @@
           <dt class="q-caption">{{ 'orders.detail.attribution.createdBy' | t }}</dt>
           <dd class="q-body-sm" data-testid="order-detail-created-by">
             {{
-              actorDisplay(detail.value.createdByActorType, detail.value.createdByActorId) ?? '—'
+              actorDisplay(
+                detail.value.createdByActorType,
+                detail.value.createdByActorId,
+                detail.value.createdByDisplayName
+              ) ?? '—'
             }}
           </dd>
         </div>
@@ -1087,7 +1091,11 @@
           <dt class="q-caption">{{ 'orders.detail.attribution.acceptedBy' | t }}</dt>
           <dd class="q-body-sm" data-testid="order-detail-accepted-by">
             @if (
-              actorDisplay(detail.value.acceptedByActorType, detail.value.acceptedByActorId);
+              actorDisplay(
+                detail.value.acceptedByActorType,
+                detail.value.acceptedByActorId,
+                detail.value.acceptedByDisplayName
+              );
               as actor
             ) {
               {{ actor }}

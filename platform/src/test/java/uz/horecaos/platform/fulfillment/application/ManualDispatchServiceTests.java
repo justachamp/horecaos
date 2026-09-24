@@ -157,6 +157,27 @@ class ManualDispatchServiceTests {
         assertThat(signal.resourceId()).isEqualTo(plan.id());
     }
 
+    /**
+     * {@link JdbcAssignmentStore#courierIdsByOrders} — the read {@code
+     * ActiveCourierAssignmentsPort} exposes to ordering's board (gap map row
+     * 1.1) — answers by order id, not plan id, and is absent for an order
+     * with no in-house courier assigned.
+     */
+    @Test
+    @DisplayName("courierIdsByOrders answers by order id, and is absent for an unassigned order")
+    void courierIdsByOrdersAnswersByOrderIdAndOmitsUnassignedOrders() {
+        DeliveryPlan assignedPlan = openPlan();
+        DeliveryPlan unassignedPlan = openPlan();
+        dispatch.assign(
+                TENANT, assignedPlan.id(), COURIER, assignedPlan.version(), "OPERATIONS_MANUAL_ASSIGN", OPERATOR);
+
+        var byOrder = assignments.courierIdsByOrders(
+                TENANT, java.util.Set.of(assignedPlan.orderId(), unassignedPlan.orderId()));
+
+        assertThat(byOrder).containsExactly(java.util.Map.entry(assignedPlan.orderId(), COURIER));
+        assertThat(byOrder).doesNotContainKey(unassignedPlan.orderId());
+    }
+
     @Test
     @DisplayName("a second assign on an already-carried plan is a conflict, not a second courier")
     void aSecondAssignDoesNotProduceASecondShipment() {

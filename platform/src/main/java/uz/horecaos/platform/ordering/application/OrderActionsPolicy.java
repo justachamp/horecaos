@@ -174,6 +174,65 @@ public final class OrderActionsPolicy {
     }
 
     /**
+     * {@link #availableFor(OrderStatus, FulfillmentMode, Set)}, with {@code
+     * ASSIGN_COURIER} added when this order's delivery plan has nobody
+     * carrying it yet (gap map row 1.1e).
+     *
+     * <p>A separate overload rather than a fifth parameter on the
+     * three-argument form above: that form is exercised by every status ×
+     * mode × grant combination in {@code OrderActionsPolicyTests} — over a
+     * hundred call sites, none of which has an opinion about a courier —
+     * and widening it would force each one to thread a value it does not
+     * test. The board read model ({@code OrderSummaryResponse.of}) is the
+     * one caller that has a {@code courierId} to check and calls this
+     * overload instead.
+     *
+     * @param courierUnassigned this order is a delivery whose active plan
+     *                          (read through {@code ActiveCourierAssignmentsPort},
+     *                          never a cross-module table join — see that
+     *                          port's own doc) carries no in-house courier.
+     *                          The caller already has this as {@code
+     *                          OrderSummaryResponse.courierId() == null}; it
+     *                          is meaningless for a non-{@code DELIVERY}
+     *                          order and ignored for one below, exactly like
+     *                          {@code ADVANCE}'s targets already ignore a
+     *                          mode-inappropriate transition
+     */
+    public static List<OrderAction> availableFor(
+            OrderStatus status, FulfillmentMode mode, Set<Capability> grantedCapabilities, boolean courierUnassigned) {
+        List<OrderAction> actions = new ArrayList<>(availableFor(status, mode, grantedCapabilities));
+
+        // ASSIGN_COURIER targets the existing DispatchController manual-
+        // assignment endpoint (orders.md §4.7). A plan only exists from
+        // CONFIRMED onward (DeliveryPlanTrigger opens one on OrderConfirmed),
+        // so canAssignCourier narrows to that window rather than the wider
+        // "not terminal" canAmend/canCancel already use — offering the action
+        // before a plan exists would be a button whose destination
+        // (order-detail-pane's own canManageCourier) has nothing to show yet.
+        if (mode == FulfillmentMode.DELIVERY
+                && canAssignCourier(status)
+                && courierUnassigned
+                && grantedCapabilities.contains(Capability.DELIVERY_MANUAL_ASSIGN)) {
+            actions.add(new OrderAction(OrderActionCode.ASSIGN_COURIER, null));
+        }
+
+        return List.copyOf(actions);
+    }
+
+    /**
+     * The window {@link DeliveryPlanTrigger} keeps a delivery plan open in:
+     * from {@code CONFIRMED}, when the plan is opened, through {@code
+     * FULFILLING}, the last non-terminal status a delivery order reaches
+     * before {@code COMPLETED} closes the plan out.
+     */
+    private static boolean canAssignCourier(OrderStatus status) {
+        return status == OrderStatus.CONFIRMED
+                || status == OrderStatus.PREPARING
+                || status == OrderStatus.READY
+                || status == OrderStatus.FULFILLING;
+    }
+
+    /**
      * Whether {@code POST .../cancellations} would be accepted right now with
      * <em>some</em> outcome — reasonless before {@code CONFIRMED} (see {@link
      * #canCancelWithoutReason}), a registry {@code reasonId} from {@code

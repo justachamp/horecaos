@@ -472,6 +472,40 @@ public class JdbcAssignmentStore {
         return byPlan;
     }
 
+    /**
+     * The in-house courier carrying each order's active shipment, keyed by
+     * order id and absent for an order with none — the order board's own
+     * Курьер column (gap map row 1.1), read for a whole page of orders in one
+     * round trip through {@link uz.horecaos.platform.fulfillment.api.ActiveCourierAssignmentsPort}
+     * rather than one query per row.
+     *
+     * <p>{@code courier_id} is null for a {@code PARTNER}-sourced shipment
+     * (it carries {@code provider_binding_id} instead) — those orders are
+     * simply absent from the result, exactly like an order with no shipment
+     * at all. A caller cannot tell "no shipment" from "partner-carried" from
+     * this map alone, which is fine for a column whose only job is naming an
+     * in-house courier.
+     */
+    public Map<UUID, UUID> courierIdsByOrders(UUID tenantId, java.util.Collection<UUID> orderIds) {
+        if (orderIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, UUID> byOrder = new HashMap<>();
+        jdbc.sql("""
+                SELECT order_id, courier_id
+                FROM fulfillment.shipments
+                WHERE tenant_id = :tenantId AND order_id IN (:orderIds)
+                  AND status <> 'CANCELLED' AND courier_id IS NOT NULL
+                """)
+                .param("tenantId", tenantId)
+                .param("orderIds", orderIds)
+                .query((row, number) ->
+                        Map.entry(row.getObject("order_id", UUID.class), row.getObject("courier_id", UUID.class)))
+                .list()
+                .forEach(entry -> byOrder.put(entry.getKey(), entry.getValue()));
+        return byOrder;
+    }
+
     public Optional<Shipment> findShipment(UUID tenantId, UUID planId) {
         return jdbc.sql("""
                 SELECT id, order_id, status, source_type, courier_id, provider_binding_id,
