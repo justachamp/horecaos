@@ -268,7 +268,9 @@
     "modifiersTitle": "Moslashtirish",
     "modifierRequired": "Majburiy",
     "modifierOption": "Variant",
-    "modifiersIncomplete": "Savatga qo'shishdan oldin yuqoridagi majburiy variantlarni tanlang."
+    "modifiersIncomplete": "Savatga qo'shishdan oldin yuqoridagi majburiy variantlarni tanlang.",
+    "presetsTitle": "Izohlar",
+    "outOfSaleWindow": "Bu taom hozir sotuvda emas."
   },
   "terms": {
     "agreementTitle": "Ommaviy oferta bo'yicha shartnoma",
@@ -326,7 +328,9 @@
       "closed": "Filial hozir yopiq.",
       "outsideHours": "Filial ish vaqtidan tashqarida.",
       "noLiveMenu": "Hozircha menyu mavjud emas.",
-      "atCapacity": "Oshxona hozir band. Birozdan so'ng qayta urinib ko'ring."
+      "atCapacity": "Oshxona hozir band. Birozdan so'ng qayta urinib ko'ring.",
+      "itemOutOfSaleWindow": "Bu taom hozir sotuvda emas.",
+      "presetNotOffered": "Bu izoh endi ushbu taom uchun taklif etilmaydi."
     }
   },
   "money": {

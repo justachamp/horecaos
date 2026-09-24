@@ -4,6 +4,7 @@ import { RouterLink, Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { UiCartService } from '../../../services/ui-cart.service';
 import { TranslateService } from '../../../services/translate.service';
+import { LangService } from '../../../services/lang.service';
 import { TranslatePipe } from '../../../shared/translate/translate.pipe';
 import type { CartResponseItem } from '../../../types/cart.types';
 
@@ -12,7 +13,7 @@ import type { CartResponseItem } from '../../../types/cart.types';
   standalone: true,
   imports: [CommonModule, FormsModule, RouterLink, TranslatePipe],
   templateUrl: './cart-items.component.html',
-  styleUrl: './cart-items.component.scss'
+  styleUrl: './cart-items.component.scss',
 })
 export class CartItemsComponent implements OnInit {
   showCommentInput = true;
@@ -22,6 +23,7 @@ export class CartItemsComponent implements OnInit {
   @ViewChild('scrollContainer') scrollContainerRef?: ElementRef<HTMLDivElement>;
 
   private readonly translate = inject(TranslateService);
+  private readonly lang = inject(LangService);
 
   formatPrice(n: number): string {
     const c = this.translate.get('common.currency') || "so'm";
@@ -33,9 +35,25 @@ export class CartItemsComponent implements OnInit {
     return item.modifiers.map((m) => m.label || m.groupName).join(', ');
   }
 
+  /** Row 2.1b: the line's checked comment presets, in the customer's own language. */
+  presetsSummary(item: CartResponseItem): string {
+    return item.commentPresets.map((preset) => this.presetLabel(preset)).join(', ');
+  }
+
+  private presetLabel(preset: CartResponseItem['commentPresets'][number]): string {
+    switch (this.lang.langId()) {
+      case 'ru':
+        return preset.labelRu;
+      case 'en':
+        return preset.labelEn;
+      default:
+        return preset.labelUz;
+    }
+  }
+
   constructor(
     public cart: UiCartService,
-    private router: Router
+    private router: Router,
   ) {}
 
   ngOnInit(): void {
@@ -79,11 +97,18 @@ export class CartItemsComponent implements OnInit {
       // it: there is no note-only endpoint. It cannot be read back afterwards --
       // a line reports that a note exists and never what it says.
       //
-      // The line's own modifierOptionIds are resent here too, and must be:
-      // this PUT replaces the whole line, so leaving them out would silently
-      // strip whatever the customer chose while only meaning to add a note.
+      // The line's own modifierOptionIds and commentPresetCodes (row 2.1b)
+      // are resent here too, and must be: this PUT replaces the whole line,
+      // so leaving either out would silently strip whatever the customer
+      // chose while only meaning to add a note.
       this.cart
-        .add(firstItem.variant_id, firstItem.quantity, comment, firstItem.modifierOptionIds)
+        .add(
+          firstItem.variant_id,
+          firstItem.quantity,
+          comment,
+          firstItem.modifierOptionIds,
+          firstItem.commentPresetCodes,
+        )
         .finally(() => this.router.navigate(['/cart/confirmation']));
     } else {
       this.router.navigate(['/cart/confirmation']);

@@ -7,6 +7,7 @@ import type {
   CategoryItemsResponse,
   CustomerUiResponse,
   MenuItem,
+  MenuItemCommentPreset,
   MenuItemModifierGroup,
   MenuItemVariant,
 } from '../types/home.types';
@@ -222,6 +223,7 @@ export class MenuService {
       preparation_time: 0,
       price: variant.amountMinor ?? 0,
       price_without_discount: variant.amountMinor ?? 0,
+      onSaleNow: variant.onSaleNow,
     }));
 
     return {
@@ -245,8 +247,18 @@ export class MenuService {
         .map((id) => modifierGroups.get(id))
         .filter((group): group is PublishedModifierGroup => group !== undefined)
         .map(toMenuItemModifierGroup),
+      commentPresets: product.commentPresets.map(toMenuItemCommentPreset),
     };
   }
+}
+
+function toMenuItemCommentPreset(preset: PublishedCommentPreset): MenuItemCommentPreset {
+  return {
+    code: preset.code,
+    labelRu: preset.labelRu,
+    labelUz: preset.labelUz,
+    labelEn: preset.labelEn,
+  };
 }
 
 /** Indexes a menu's modifier groups by id, for resolving a product's ids against. */
@@ -318,6 +330,16 @@ export interface PublishedProduct {
   readonly imageUrls: readonly string[];
   readonly variants: readonly PublishedVariant[];
   readonly modifierGroupIds: readonly string[];
+  /** Row 2.1b: the coded comment presets this product offers, in the catalogue's own order. */
+  readonly commentPresets: readonly PublishedCommentPreset[];
+}
+
+/** `StorefrontCatalogQuery.CommentPresetOption`, transcribed from the controller. */
+export interface PublishedCommentPreset {
+  readonly code: string;
+  readonly labelRu: string;
+  readonly labelUz: string;
+  readonly labelEn: string;
 }
 
 export interface PublishedVariant {
@@ -330,6 +352,12 @@ export interface PublishedVariant {
   readonly orderable: boolean;
   /** Null when unpriced. Never zero for "no price". */
   readonly amountMinor: number | null;
+  /**
+   * Row 4.2g: false means this variant's own sale schedule excludes the
+   * current moment -- shown, distinct from `orderable` (86'd). The product
+   * page must refuse adding a variant while this is false.
+   */
+  readonly onSaleNow: boolean;
 }
 
 export interface PublishedModifierGroup {

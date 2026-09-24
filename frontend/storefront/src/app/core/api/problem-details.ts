@@ -248,6 +248,15 @@ const REASON_MESSAGE_KEYS: Readonly<Record<string, string>> = {
   CODE_EXPIRED: 'errors.reason.codeExpired',
   REDEMPTION_LIMIT_REACHED: 'errors.reason.codeLimitReached',
   PER_CUSTOMER_LIMIT_REACHED: 'errors.reason.codeLimitReached',
+  // Row 4.2g: a well-formed line against an item whose own sale schedule
+  // currently excludes it -- shown, distinct from a product that vanished
+  // from the menu entirely.
+  ITEM_OUT_OF_SALE_WINDOW: 'errors.reason.itemOutOfSaleWindow',
+  // Row 2.1b: a checked preset code the product does not actually offer --
+  // the client's own picker only ever shows offered codes, so this is a
+  // catalogue change in the gap between page load and the write, not a bug
+  // a customer caused.
+  COMMENT_PRESET_NOT_OFFERED: 'errors.reason.presetNotOffered',
   // ServiceabilityReason (tenancy.api), from the fulfilment-modes read.
   CHANNEL_NOT_ENABLED: 'errors.reason.channelNotEnabled',
   FULFILMENT_MODE_UNAVAILABLE: 'errors.reason.modeUnavailable',

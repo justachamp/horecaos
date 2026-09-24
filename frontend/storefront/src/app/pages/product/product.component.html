@@ -26,7 +26,12 @@
           [attr.aria-label]="'common.back' | t"
         >
           <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M15 19l-7-7 7-7"
+            />
           </svg>
           {{ 'common.back' | t }}
         </button>
@@ -102,14 +107,18 @@
 
         @if (modifierGroups().length > 0) {
           <div class="border-b border-zinc-700 pb-4">
-            <h2 class="mb-3 text-sm font-bold text-text-primary">{{ 'product.modifiersTitle' | t }}</h2>
+            <h2 class="mb-3 text-sm font-bold text-text-primary">
+              {{ 'product.modifiersTitle' | t }}
+            </h2>
             <div class="flex flex-col gap-4">
               @for (group of modifierGroups(); track group.id) {
                 <div>
                   <div class="mb-2 flex items-center justify-between gap-2">
                     <span class="text-[13px] font-medium text-text-primary">{{ group.name }}</span>
                     @if (group.required) {
-                      <span class="shrink-0 rounded-full bg-brand-accent/15 px-2 py-0.5 text-[11px] font-semibold text-brand-accent">
+                      <span
+                        class="shrink-0 rounded-full bg-brand-accent/15 px-2 py-0.5 text-[11px] font-semibold text-brand-accent"
+                      >
                         {{ 'product.modifierRequired' | t }}
                       </span>
                     }
@@ -126,10 +135,14 @@
                             (change)="toggleOption(group, option.id)"
                             class="h-4 w-4 shrink-0 accent-brand-accent"
                           />
-                          <span class="truncate">{{ option.label || ('product.modifierOption' | t) }}</span>
+                          <span class="truncate">{{
+                            option.label || ('product.modifierOption' | t)
+                          }}</span>
                         </span>
                         @if (option.amountMinor) {
-                          <span class="shrink-0 text-[12px] text-zinc-400">+{{ formatPrice(option.amountMinor) }}</span>
+                          <span class="shrink-0 text-[12px] text-zinc-400"
+                            >+{{ formatPrice(option.amountMinor) }}</span
+                          >
                         }
                       </label>
                     }
@@ -143,13 +156,38 @@
           </div>
         }
 
+        @if (commentPresets().length > 0) {
+          <div class="border-b border-zinc-700 pb-4">
+            <h2 class="mb-3 text-sm font-bold text-text-primary">
+              {{ 'product.presetsTitle' | t }}
+            </h2>
+            <div class="flex flex-col gap-2">
+              @for (preset of commentPresets(); track preset.code) {
+                <label
+                  class="flex cursor-pointer items-center gap-2 rounded-xl bg-surface-base px-3 py-2.5 text-text-primary"
+                >
+                  <input
+                    type="checkbox"
+                    [checked]="isPresetSelected(preset.code)"
+                    (change)="togglePreset(preset.code)"
+                    class="h-4 w-4 shrink-0 accent-brand-accent"
+                  />
+                  <span class="truncate text-[13px]">{{ presetLabel(preset) }}</span>
+                </label>
+              }
+            </div>
+          </div>
+        }
+
         @if (hasActiveVariants()) {
           <div class="border-b border-zinc-700 pb-4">
             <h2 class="mb-3 text-sm font-bold text-text-primary">{{ 'product.variants' | t }}</h2>
             <div class="flex flex-col gap-3">
               @for (variant of variants(); track variant.id) {
                 <div class="flex flex-col gap-2 rounded-2xl bg-surface-base p-3">
-                  <span class="text-[13px] font-medium leading-snug text-text-primary">{{ variant.label }}</span>
+                  <span class="text-[13px] font-medium leading-snug text-text-primary">{{
+                    variant.label
+                  }}</span>
                   @if (qtyForVariant(variant.id); as qty) {
                     <div class="flex items-center gap-1.5">
                       <button
@@ -167,14 +205,18 @@
                         <span class="text-xs font-bold leading-tight text-text-primary">
                           {{ qty }} {{ 'common.itemsUnit' | t }}
                         </span>
-                        <span class="mt-0.5 text-[11px] font-medium leading-none text-[#d4af37] sm:text-xs">
+                        <span
+                          class="mt-0.5 text-[11px] font-medium leading-none text-[#d4af37] sm:text-xs"
+                        >
                           {{ lineTotalForVariant(variant.id) }}
                         </span>
                       </div>
                       <button
                         type="button"
                         class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface-raised-2 text-lg font-light leading-none text-text-primary transition-colors hover:bg-surface-hover disabled:opacity-50"
-                        [disabled]="cartService.updating() || !modifiersValid()"
+                        [disabled]="
+                          cartService.updating() || !modifiersValid() || !variant.onSaleNow
+                        "
                         [attr.aria-label]="'common.increase' | t"
                         (click)="increaseVariant(variant.id)"
                       >
@@ -185,13 +227,20 @@
                     <button
                       type="button"
                       class="flex w-full min-w-0 items-center justify-between gap-2 rounded-full bg-brand-accent px-4 py-3 text-left text-xs font-semibold leading-tight text-white transition-opacity hover:opacity-90 disabled:opacity-50 sm:text-[13px]"
-                      [disabled]="cartService.updating() || !modifiersValid()"
+                      [disabled]="cartService.updating() || !modifiersValid() || !variant.onSaleNow"
                       [attr.aria-label]="'cart.addToCart' | t"
                       (click)="increaseVariant(variant.id)"
                     >
                       <span class="min-w-0 truncate">{{ formatPrice(variant.price) }}</span>
-                      <span class="shrink-0 text-lg font-light leading-none" aria-hidden="true">+</span>
+                      <span class="shrink-0 text-lg font-light leading-none" aria-hidden="true"
+                        >+</span
+                      >
                     </button>
+                  }
+                  @if (!variant.onSaleNow) {
+                    <p class="text-[12px] text-red-400" data-testid="product-out-of-sale-window">
+                      {{ 'product.outOfSaleWindow' | t }}
+                    </p>
                   }
                 </div>
               }
@@ -213,58 +262,72 @@
       <div
         class="fixed bottom-0 left-1/2 z-40 w-[92%] max-w-[380px] -translate-x-1/2 px-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2"
       >
-      @if (qty() === 0) {
-        <button
-          type="button"
-          (click)="add()"
-          [disabled]="cartService.updating() || !modifiersValid()"
-          class="w-full rounded-t-2xl bg-brand-accent py-4 text-base font-bold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
-        >
-          {{ 'cart.addToCart' | t }}
-        </button>
-      } @else {
-        <div class="flex flex-col gap-2">
-          <div class="flex items-stretch gap-2 rounded-2xl bg-surface-base p-2 ring-1 ring-zinc-800/80">
-            <div class="flex min-w-0 flex-1 items-center gap-1.5">
-              <button
-                type="button"
-                (click)="remove()"
-                [disabled]="cartService.updating() || qty() <= 0"
-                class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-surface-raised-2 text-xl font-light leading-none text-text-primary transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-40"
-                [attr.aria-label]="'common.decrease' | t"
-              >
-                −
-              </button>
-              <div
-                class="flex min-h-[2.75rem] min-w-0 flex-1 flex-col items-center justify-center rounded-full bg-surface-raised-2 px-2 py-2 text-center"
-              >
-                <span class="text-xs font-bold leading-tight text-text-primary">
-                  {{ qty() }} {{ 'common.itemsUnit' | t }}
-                </span>
-                <span class="mt-0.5 text-[11px] font-medium leading-none text-[#d4af37] sm:text-xs">
-                  {{ variantLineTotal() }}
-                </span>
-              </div>
-              <button
-                type="button"
-                (click)="add()"
-                [disabled]="cartService.updating() || !modifiersValid()"
-                class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-surface-raised-2 text-xl font-light leading-none text-text-primary transition-colors hover:bg-surface-hover disabled:opacity-50"
-                [attr.aria-label]="'common.increase' | t"
-              >
-                +
-              </button>
-            </div>
-          </div>
-          <a
-            routerLink="/cart"
-            class="block w-full rounded-t-2xl bg-brand-accent py-4 text-center text-base font-bold text-white transition-opacity hover:opacity-90"
+        @if (soleVariantOutOfSaleWindow()) {
+          <p
+            class="mb-2 text-center text-[12px] text-red-400"
+            data-testid="product-out-of-sale-window"
           >
-            {{ 'product.goToPayment' | t }}
-          </a>
-        </div>
-      }
-    </div>
+            {{ 'product.outOfSaleWindow' | t }}
+          </p>
+        }
+        @if (qty() === 0) {
+          <button
+            type="button"
+            (click)="add()"
+            [disabled]="cartService.updating() || !modifiersValid() || soleVariantOutOfSaleWindow()"
+            class="w-full rounded-t-2xl bg-brand-accent py-4 text-base font-bold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+          >
+            {{ 'cart.addToCart' | t }}
+          </button>
+        } @else {
+          <div class="flex flex-col gap-2">
+            <div
+              class="flex items-stretch gap-2 rounded-2xl bg-surface-base p-2 ring-1 ring-zinc-800/80"
+            >
+              <div class="flex min-w-0 flex-1 items-center gap-1.5">
+                <button
+                  type="button"
+                  (click)="remove()"
+                  [disabled]="cartService.updating() || qty() <= 0"
+                  class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-surface-raised-2 text-xl font-light leading-none text-text-primary transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-40"
+                  [attr.aria-label]="'common.decrease' | t"
+                >
+                  −
+                </button>
+                <div
+                  class="flex min-h-[2.75rem] min-w-0 flex-1 flex-col items-center justify-center rounded-full bg-surface-raised-2 px-2 py-2 text-center"
+                >
+                  <span class="text-xs font-bold leading-tight text-text-primary">
+                    {{ qty() }} {{ 'common.itemsUnit' | t }}
+                  </span>
+                  <span
+                    class="mt-0.5 text-[11px] font-medium leading-none text-[#d4af37] sm:text-xs"
+                  >
+                    {{ variantLineTotal() }}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  (click)="add()"
+                  [disabled]="
+                    cartService.updating() || !modifiersValid() || soleVariantOutOfSaleWindow()
+                  "
+                  class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-surface-raised-2 text-xl font-light leading-none text-text-primary transition-colors hover:bg-surface-hover disabled:opacity-50"
+                  [attr.aria-label]="'common.increase' | t"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+            <a
+              routerLink="/cart"
+              class="block w-full rounded-t-2xl bg-brand-accent py-4 text-center text-base font-bold text-white transition-opacity hover:opacity-90"
+            >
+              {{ 'product.goToPayment' | t }}
+            </a>
+          </div>
+        }
+      </div>
     } @else if (hasCartItems()) {
       <div
         class="fixed bottom-0 left-1/2 z-40 w-[92%] max-w-[380px] -translate-x-1/2 px-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2"

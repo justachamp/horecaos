@@ -6,6 +6,14 @@ export interface MenuItemVariant {
   preparation_time: number;
   price: number;
   price_without_discount: number;
+  /**
+   * Row 4.2g: false means this variant's own sale schedule excludes the
+   * current moment -- shown (unlike `active`, which the platform already
+   * drops an unorderable variant off of before this shape is even built),
+   * but the product page must refuse adding it. Distinct from `active`
+   * (86'd): `MenuService.toMenuItem`'s own doc explains the difference.
+   */
+  onSaleNow: boolean;
 }
 
 /**
@@ -24,6 +32,19 @@ export interface MenuItemModifierOption {
   amountMinor: number | null;
   /** How many times this one option may be picked within its group. */
   maximumQuantity: number;
+}
+
+/**
+ * Row 2.1b: one coded kitchen-instruction preset a product offers on its
+ * line -- "without onions", "extra spicy". Every locale, so the storefront
+ * renders whichever the customer's own `langId` picked; matches
+ * `StorefrontCatalogQuery.CommentPresetOption`.
+ */
+export interface MenuItemCommentPreset {
+  code: string;
+  labelRu: string;
+  labelUz: string;
+  labelEn: string;
 }
 
 /** One group of modifier options a product offers (e.g. "Toppings"). */
@@ -57,6 +78,8 @@ export interface MenuItem {
   variants: MenuItemVariant[];
   /** The modifier groups this product offers, resolved from the publication. */
   modifierGroups: MenuItemModifierGroup[];
+  /** Row 2.1b: the coded comment presets this product offers, in the catalogue's own order. */
+  commentPresets: MenuItemCommentPreset[];
 }
 
 /** Menu category (id + name only) */

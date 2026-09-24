@@ -2,7 +2,12 @@ import { TestBed } from '@angular/core/testing';
 import { signal } from '@angular/core';
 
 import { UiCartService } from './ui-cart.service';
-import { CartService, type DeliveryCharge, type PlatformCart, type PricedCart } from './cart.service';
+import {
+  CartService,
+  type DeliveryCharge,
+  type PlatformCart,
+  type PricedCart,
+} from './cart.service';
 import { MenuService, type PublishedMenu } from './menu.service';
 import { DeliverySelectionService } from './delivery-selection.service';
 import { TranslateService } from './translate.service';
@@ -206,7 +211,11 @@ describe('UiCartService.applyDestination', () => {
 
     expect(result).toBe(true);
     expect(carts.setDestination).toHaveBeenCalledWith(
-      expect.objectContaining({ addressId: 'addr-1', recipientName: 'Aziz', recipientPhone: '+998901234567' }),
+      expect.objectContaining({
+        addressId: 'addr-1',
+        recipientName: 'Aziz',
+        recipientPhone: '+998901234567',
+      }),
     );
   });
 
@@ -256,8 +265,20 @@ describe('UiCartService project() (via load())', () => {
     const { service, carts, menu } = setUp();
     const cart = baseCart({
       lines: [
-        { lineKey: 'v-known', variantId: 'v-known', quantity: 2, hasCustomerNote: false },
-        { lineKey: 'v-gone', variantId: 'v-gone', quantity: 5, hasCustomerNote: false },
+        {
+          lineKey: 'v-known',
+          variantId: 'v-known',
+          quantity: 2,
+          commentPresetCodes: [],
+          hasCustomerNote: false,
+        },
+        {
+          lineKey: 'v-gone',
+          variantId: 'v-gone',
+          quantity: 5,
+          commentPresetCodes: [],
+          hasCustomerNote: false,
+        },
       ],
     });
     carts.ensure.mockResolvedValue(cart);
@@ -280,9 +301,11 @@ describe('UiCartService project() (via load())', () => {
                 isDefault: true,
                 orderable: true,
                 amountMinor: 25_000,
+                onSaleNow: true,
               },
             ],
             modifierGroupIds: [],
+            commentPresets: [],
           },
         ],
       }),
@@ -302,7 +325,15 @@ describe('UiCartService project() (via load())', () => {
   it('shows an empty basket, not an error, when every line has left the menu', async () => {
     const { service, carts, menu } = setUp();
     const cart = baseCart({
-      lines: [{ lineKey: 'v-gone', variantId: 'v-gone', quantity: 1, hasCustomerNote: false }],
+      lines: [
+        {
+          lineKey: 'v-gone',
+          variantId: 'v-gone',
+          quantity: 1,
+          commentPresetCodes: [],
+          hasCustomerNote: false,
+        },
+      ],
     });
     carts.ensure.mockResolvedValue(cart);
     carts.price.mockResolvedValue(pricedFor(cart));
@@ -311,6 +342,178 @@ describe('UiCartService project() (via load())', () => {
     await service.load();
 
     expect(service.cartData()?.items).toEqual([]);
+  });
+
+  it("row 2.1b: resolves a line's checked preset codes to the product's own offered presets for display", async () => {
+    const { service, carts, menu } = setUp();
+    const cart = baseCart({
+      lines: [
+        {
+          lineKey: 'v-known',
+          variantId: 'v-known',
+          quantity: 1,
+          commentPresetCodes: ['NO_ONIONS'],
+          hasCustomerNote: false,
+        },
+      ],
+    });
+    carts.ensure.mockResolvedValue(cart);
+    carts.price.mockResolvedValue(pricedFor(cart));
+    menu.menu.mockResolvedValue(
+      emptyMenu({
+        products: [
+          {
+            productId: 'p-known',
+            code: null,
+            name: 'Osh',
+            description: null,
+            mediaAssetIds: [],
+            imageUrls: [],
+            variants: [
+              {
+                variantId: 'v-known',
+                sku: null,
+                unitCode: null,
+                isDefault: true,
+                orderable: true,
+                amountMinor: 25_000,
+                onSaleNow: true,
+              },
+            ],
+            modifierGroupIds: [],
+            commentPresets: [
+              { code: 'NO_ONIONS', labelRu: 'Без лука', labelUz: 'Piyozsiz', labelEn: 'No onions' },
+            ],
+          },
+        ],
+      }),
+    );
+
+    await service.load();
+
+    const items = service.cartData()?.items ?? [];
+    expect(items[0].commentPresetCodes).toEqual(['NO_ONIONS']);
+    expect(items[0].commentPresets).toEqual([
+      { code: 'NO_ONIONS', labelRu: 'Без лука', labelUz: 'Piyozsiz', labelEn: 'No onions' },
+    ]);
+  });
+
+  it('row 2.1b: a checked code the product no longer offers round-trips on the wire but is dropped from the resolved label list', async () => {
+    const { service, carts, menu } = setUp();
+    const cart = baseCart({
+      lines: [
+        {
+          lineKey: 'v-known',
+          variantId: 'v-known',
+          quantity: 1,
+          commentPresetCodes: ['WITHDRAWN_CODE'],
+          hasCustomerNote: false,
+        },
+      ],
+    });
+    carts.ensure.mockResolvedValue(cart);
+    carts.price.mockResolvedValue(pricedFor(cart));
+    menu.menu.mockResolvedValue(
+      emptyMenu({
+        products: [
+          {
+            productId: 'p-known',
+            code: null,
+            name: 'Osh',
+            description: null,
+            mediaAssetIds: [],
+            imageUrls: [],
+            variants: [
+              {
+                variantId: 'v-known',
+                sku: null,
+                unitCode: null,
+                isDefault: true,
+                orderable: true,
+                amountMinor: 25_000,
+                onSaleNow: true,
+              },
+            ],
+            modifierGroupIds: [],
+            commentPresets: [],
+          },
+        ],
+      }),
+    );
+
+    await service.load();
+
+    const items = service.cartData()?.items ?? [];
+    expect(items[0].commentPresetCodes).toEqual(['WITHDRAWN_CODE']);
+    expect(items[0].commentPresets).toEqual([]);
+  });
+});
+
+describe('UiCartService.switchFulfillmentMode', () => {
+  it('row 2.1b: rebuilds every carried line with its own checked preset codes, not an empty list', async () => {
+    const { service, carts, menu } = setUp();
+    const existing = baseCart({
+      fulfillmentMode: 'DELIVERY',
+      lines: [
+        {
+          lineKey: 'v1',
+          variantId: 'v1',
+          quantity: 2,
+          commentPresetCodes: ['NO_ONIONS'],
+          hasCustomerNote: false,
+        },
+      ],
+    });
+    carts.cart.set(existing);
+    carts.create.mockResolvedValue(baseCart({ fulfillmentMode: 'PICKUP' }));
+    carts.putLine.mockResolvedValue(baseCart({ fulfillmentMode: 'PICKUP' }));
+    menu.menu.mockResolvedValue(emptyMenu());
+
+    await service.switchFulfillmentMode('PICKUP');
+
+    expect(carts.discard).toHaveBeenCalled();
+    expect(carts.putLine).toHaveBeenCalledWith({
+      variantId: 'v1',
+      quantity: 2,
+      modifierOptionIds: [],
+      commentPresetCodes: ['NO_ONIONS'],
+    });
+  });
+});
+
+describe('UiCartService.add', () => {
+  it('row 2.1b: threads the checked preset codes through to CartService.putLine', async () => {
+    const { service, carts, menu } = setUp();
+    carts.ensure.mockResolvedValue(baseCart());
+    carts.putLine.mockResolvedValue(baseCart());
+    menu.menu.mockResolvedValue(emptyMenu());
+
+    await service.add('v1', 1, undefined, [], ['NO_ONIONS', 'EXTRA_SPICY']);
+
+    expect(carts.putLine).toHaveBeenCalledWith({
+      variantId: 'v1',
+      quantity: 1,
+      customerNote: undefined,
+      modifierOptionIds: [],
+      commentPresetCodes: ['NO_ONIONS', 'EXTRA_SPICY'],
+    });
+  });
+
+  it('omits commentPresetCodes rather than inventing an empty list, when the caller names none -- CartService.putLine itself defaults it', async () => {
+    const { service, carts, menu } = setUp();
+    carts.ensure.mockResolvedValue(baseCart());
+    carts.putLine.mockResolvedValue(baseCart());
+    menu.menu.mockResolvedValue(emptyMenu());
+
+    await service.add('v1', 1);
+
+    expect(carts.putLine).toHaveBeenCalledWith({
+      variantId: 'v1',
+      quantity: 1,
+      customerNote: undefined,
+      modifierOptionIds: undefined,
+      commentPresetCodes: undefined,
+    });
   });
 });
 
@@ -326,9 +529,13 @@ describe('UiCartService.setQuantity', () => {
     note: null,
     modifierOptionIds: ['m1', 'm2'],
     modifiers: [],
+    commentPresetCodes: ['NO_ONIONS'],
+    commentPresets: [
+      { code: 'NO_ONIONS', labelRu: 'Без лука', labelUz: 'Piyozsiz', labelEn: 'No onions' },
+    ],
   };
 
-  it('resends the exact modifier selection on a quantity change, not an empty list', async () => {
+  it('resends the exact modifier selection and comment presets on a quantity change, not an empty list', async () => {
     const { service, carts } = setUp();
     carts.putLine.mockResolvedValue(baseCart());
 
@@ -338,6 +545,7 @@ describe('UiCartService.setQuantity', () => {
       variantId: 'v1',
       quantity: 3,
       modifierOptionIds: ['m1', 'm2'],
+      commentPresetCodes: ['NO_ONIONS'],
     });
     expect(carts.removeLine).not.toHaveBeenCalled();
   });
@@ -356,7 +564,15 @@ describe('UiCartService.setQuantity', () => {
 describe('UiCartService delivery charge (from the priced cart, never a coordinate call)', () => {
   function deliveryCart(): PlatformCart {
     return baseCart({
-      lines: [{ lineKey: 'v-known', variantId: 'v-known', quantity: 1, hasCustomerNote: false }],
+      lines: [
+        {
+          lineKey: 'v-known',
+          variantId: 'v-known',
+          quantity: 1,
+          commentPresetCodes: [],
+          hasCustomerNote: false,
+        },
+      ],
     });
   }
 
@@ -378,7 +594,7 @@ describe('UiCartService delivery charge (from the priced cart, never a coordinat
     expect(service.deliveryFee()).toBe(fmt(12_000));
   });
 
-  it('resolves the fee once the priced cart\'s delivery outcome is RESOLVED, and enables checkout', async () => {
+  it("resolves the fee once the priced cart's delivery outcome is RESOLVED, and enables checkout", async () => {
     const { service, carts, menu } = setUp();
     const cart = deliveryCart();
     carts.ensure.mockResolvedValue(cart);
@@ -475,7 +691,15 @@ describe('UiCartService delivery charge (from the priced cart, never a coordinat
     const { service, carts, menu } = setUp();
     const cart = baseCart({
       fulfillmentMode: 'PICKUP',
-      lines: [{ lineKey: 'v-known', variantId: 'v-known', quantity: 1, hasCustomerNote: false }],
+      lines: [
+        {
+          lineKey: 'v-known',
+          variantId: 'v-known',
+          quantity: 1,
+          commentPresetCodes: [],
+          hasCustomerNote: false,
+        },
+      ],
     });
     // Mirrors the real CartService.ensure, which sets its own `cart` signal
     // as a side effect -- fulfillmentMode now reads the cart's own fact
@@ -505,7 +729,15 @@ describe('UiCartService.fulfillmentMode reflects the loaded cart, not a stale de
     const { service, carts, menu } = setUp();
     const cart = baseCart({
       fulfillmentMode: 'PICKUP',
-      lines: [{ lineKey: 'v-known', variantId: 'v-known', quantity: 1, hasCustomerNote: false }],
+      lines: [
+        {
+          lineKey: 'v-known',
+          variantId: 'v-known',
+          quantity: 1,
+          commentPresetCodes: [],
+          hasCustomerNote: false,
+        },
+      ],
     });
     // Mirrors the real CartService.ensure, which sets its own `cart` signal
     // as a side effect of resolving -- the fake normally leaves it null
