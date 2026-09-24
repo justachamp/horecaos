@@ -239,6 +239,19 @@ export const messagesRu: MessageCatalogue = {
   'orders.dialog.note.save': 'Сохранить',
   'orders.dialog.amendMenu.title': 'Что нужно изменить?',
 
+  'orders.dialog.amendConfirm.title': 'Подтвердите изменение',
+  'orders.dialog.amendConfirm.increase':
+    'Это увеличивает сумму на {amount}. Прежде чем подтвердить, зафиксируйте, как клиент согласился.',
+  'orders.dialog.amendConfirm.decrease': 'Это уменьшает сумму на {amount}.',
+  'orders.dialog.amendConfirm.noChange': 'Сумма заказа не меняется.',
+  'orders.dialog.amendConfirm.requiresApproval':
+    'Это изменение также требует подтверждения руководителя, прежде чем вступит в силу.',
+  'orders.dialog.amendConfirm.channel': 'Как клиент согласился?',
+  'orders.dialog.amendConfirm.channel.PHONE': 'По телефону',
+  'orders.dialog.amendConfirm.channel.IN_PERSON': 'Лично',
+  'orders.dialog.amendConfirm.channel.SMS': 'По SMS/приложению',
+  'orders.dialog.amendConfirm.confirm': 'Подтвердить и применить',
+
   // Конфирмация цены при вызове внешнего курьера (карта пробелов 1.2f, волна P44).
   'orders.dialog.externalCourier.title': 'Вызвать курьера',
   'orders.dialog.externalCourier.noPartners':

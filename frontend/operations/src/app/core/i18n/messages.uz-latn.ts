@@ -241,6 +241,19 @@ export const messagesUzLatn: MessageCatalogue = {
   'orders.dialog.note.save': 'Saqlash',
   'orders.dialog.amendMenu.title': 'Nimani oʻzgartirmoqchisiz?',
 
+  'orders.dialog.amendConfirm.title': 'Oʻzgarishni tasdiqlang',
+  'orders.dialog.amendConfirm.increase':
+    'Bu summani {amount} ga oshiradi. Tasdiqlashdan oldin mijoz qanday rozi boʻlganini qayd eting.',
+  'orders.dialog.amendConfirm.decrease': 'Bu summani {amount} ga kamaytiradi.',
+  'orders.dialog.amendConfirm.noChange': 'Buyurtma summasi oʻzgarmaydi.',
+  'orders.dialog.amendConfirm.requiresApproval':
+    'Bu oʻzgarish kuchga kirishidan oldin rahbar tasdigʻini ham talab qiladi.',
+  'orders.dialog.amendConfirm.channel': 'Mijoz qanday rozi boʻldi?',
+  'orders.dialog.amendConfirm.channel.PHONE': 'Telefon orqali',
+  'orders.dialog.amendConfirm.channel.IN_PERSON': 'Shaxsan',
+  'orders.dialog.amendConfirm.channel.SMS': 'SMS/ilova orqali',
+  'orders.dialog.amendConfirm.confirm': 'Tasdiqlash va qoʻllash',
+
   // Tashqi kuryer chaqirishda narx tasdigʻi (boʻshliqlar xaritasi 1.2f, P44 toʻlqini).
   'orders.dialog.externalCourier.title': 'Tashqi kuryer chaqirish',
   'orders.dialog.externalCourier.noPartners': 'Bu filial uchun kuryerlik xizmati sozlanmagan.',

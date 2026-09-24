@@ -251,6 +251,21 @@ export const messagesEn = {
   'orders.dialog.note.save': 'Save',
   'orders.dialog.amendMenu.title': 'What would you like to change?',
 
+  // The priced-delta confirmation step every repricing wave-10 command shares,
+  // and the RESOLVE row action's own dialog (rows 1.2c/2.1d, `POST .../amendments/{id}/confirmation`).
+  'orders.dialog.amendConfirm.title': 'Confirm this change',
+  'orders.dialog.amendConfirm.increase':
+    'This adds {amount} to the total. Record how the customer agreed before confirming.',
+  'orders.dialog.amendConfirm.decrease': 'This lowers the total by {amount}.',
+  'orders.dialog.amendConfirm.noChange': 'This does not change the total.',
+  'orders.dialog.amendConfirm.requiresApproval':
+    'This change also needs a supervisor’s approval before it takes effect.',
+  'orders.dialog.amendConfirm.channel': 'How did the customer agree?',
+  'orders.dialog.amendConfirm.channel.PHONE': 'By phone',
+  'orders.dialog.amendConfirm.channel.IN_PERSON': 'In person',
+  'orders.dialog.amendConfirm.channel.SMS': 'By SMS/app',
+  'orders.dialog.amendConfirm.confirm': 'Confirm and apply',
+
   // The Millenium pattern's own confirmation seam (gap map row 1.2f, wave P44).
   'orders.dialog.externalCourier.title': 'Call an external courier',
   'orders.dialog.externalCourier.noPartners':
