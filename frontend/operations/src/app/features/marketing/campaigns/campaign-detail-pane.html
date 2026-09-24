@@ -95,6 +95,22 @@
         </div>
       }
 
+      @if (isHaltedScheduledSend()) {
+        <div class="error-band" role="alert" data-testid="campaign-halted-banner">
+          <span class="q-body-sm">
+            {{ 'marketing.campaign.halted.banner' | t: { reason: c.haltedReason ?? '' } }}
+          </span>
+          <button
+            type="button"
+            data-testid="reschedule-action"
+            [disabled]="actionSubmitting()"
+            (click)="openReschedulePrompt()"
+          >
+            {{ 'marketing.campaign.action.reschedule' | t }}
+          </button>
+        </div>
+      }
+
       @if (lastResumeCost(); as cost) {
         <div class="resume-note" role="status">
           {{ 'marketing.campaign.resume.suppressedCost' | t: { count: cost } }}
@@ -177,6 +193,42 @@
         }
       </section>
 
+      <section class="stats" data-testid="campaign-stats">
+        <h3 class="q-caption">{{ 'marketing.campaign.stats.title' | t }}</h3>
+        @if (recipientCounts(); as counts) {
+          <dl class="facts">
+            <dt>{{ 'marketing.campaign.stats.queued' | t }}</dt>
+            <dd class="q-tnum">{{ counts.queued }}</dd>
+
+            <dt>{{ 'marketing.campaign.stats.pending' | t }}</dt>
+            <dd class="q-tnum">{{ counts.pending }}</dd>
+
+            <dt>{{ 'marketing.campaign.stats.deferred' | t }}</dt>
+            <dd class="q-tnum">{{ counts.deferred }}</dd>
+
+            <dt>{{ 'marketing.campaign.stats.refused' | t }}</dt>
+            <dd class="q-tnum">{{ counts.refused }}</dd>
+
+            <dt>{{ 'marketing.campaign.stats.total' | t }}</dt>
+            <dd class="q-tnum">{{ counts.total }}</dd>
+          </dl>
+          @if (refusedByReasonEntries().length > 0) {
+            <h4 class="q-caption">{{ 'marketing.campaign.stats.refusedByReason.title' | t }}</h4>
+            <ul class="stats__reasons">
+              @for (entry of refusedByReasonEntries(); track entry[0]) {
+                <li>
+                  <span>{{ refusalLabelKey(entry[0]) | t }}</span>
+                  <span class="q-tnum">{{ entry[1] }}</span>
+                </li>
+              }
+            </ul>
+          }
+          <p class="q-caption stats__hint">
+            {{ 'marketing.campaign.stats.deliveryUnavailableHint' | t }}
+          </p>
+        }
+      </section>
+
       <section class="recipients">
         <h3 class="q-caption">{{ 'marketing.campaign.recipients.title' | t }}</h3>
         @if (recipients().length === 0) {
@@ -230,6 +282,41 @@
           (click)="confirmReasonPrompt()"
         >
           {{ 'marketing.campaign.reasonPrompt.confirm' | t }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+@if (showReschedulePrompt()) {
+  <div class="dialog-backdrop" (click)="closeReschedulePrompt()">
+    <div class="dialog" (click)="$event.stopPropagation()">
+      <h2 class="q-subhead">{{ 'marketing.campaign.reschedulePrompt.title' | t }}</h2>
+      <label class="field">
+        <span class="q-caption">{{ 'marketing.campaign.reschedulePrompt.label' | t }}</span>
+        <input
+          type="datetime-local"
+          data-testid="reschedule-at-input"
+          [value]="rescheduleAt()"
+          (input)="rescheduleAt.set($any($event.target).value)"
+        />
+      </label>
+      @if (rescheduleError(); as error) {
+        <div class="error-band" role="alert">
+          <span class="q-body-sm">{{ error }}</span>
+        </div>
+      }
+      <div class="dialog__actions">
+        <button type="button" (click)="closeReschedulePrompt()">
+          {{ 'marketing.dialog.cancel' | t }}
+        </button>
+        <button
+          type="button"
+          data-testid="reschedule-confirm"
+          [disabled]="actionSubmitting() || rescheduleAt().length === 0"
+          (click)="confirmReschedule()"
+        >
+          {{ 'marketing.campaign.reschedulePrompt.confirm' | t }}
         </button>
       </div>
     </div>

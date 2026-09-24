@@ -82,6 +82,11 @@ export const marketingPaths = {
     return `${this.campaign(scope, campaignId)}/resumptions`;
   },
 
+  /** Row 6.4: re-arms a halted scheduled send for a new future moment. */
+  campaignReschedules(scope: BrandScope, campaignId: string): string {
+    return `${this.campaign(scope, campaignId)}/reschedules`;
+  },
+
   campaignRecipients(scope: BrandScope, campaignId: string): string {
     return `${this.campaign(scope, campaignId)}/recipients`;
   },

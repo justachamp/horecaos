@@ -16,7 +16,7 @@ import { I18n } from '../../../core/i18n/i18n';
 import { MessageKey } from '../../../core/i18n/messages.en';
 import { TPipe } from '../../../core/i18n/t.pipe';
 import { describeApiError } from '../../orders/order-errors';
-import { CampaignView, MarketingApi, RecipientView } from '../marketing-api';
+import { CampaignView, MarketingApi, RecipientCountsView, RecipientView } from '../marketing-api';
 
 /**
  * One campaign's full lifecycle (ADR 0044, §6.4 Campaigns) — the dock
@@ -68,6 +68,8 @@ export class CampaignDetailPane implements OnInit {
   protected readonly loadError = signal<string | null>(null);
   protected readonly campaign = signal<CampaignView | null>(null);
   protected readonly recipients = signal<readonly RecipientView[]>([]);
+  /** Row 6.4: the campaign history/statistics view's own data — row 7.9b's aggregate, no call site until now. */
+  protected readonly recipientCounts = signal<RecipientCountsView | null>(null);
 
   protected readonly actionSubmitting = signal(false);
   protected readonly actionError = signal<string | null>(null);
@@ -75,6 +77,33 @@ export class CampaignDetailPane implements OnInit {
 
   protected readonly showReasonPrompt = signal<'approve' | 'halt' | 'resume' | null>(null);
   protected readonly reasonText = signal('');
+
+  protected readonly showReschedulePrompt = signal(false);
+  protected readonly rescheduleAt = signal('');
+  protected readonly rescheduleError = signal<string | null>(null);
+
+  /**
+   * Row 6.4: exactly the shape `POST .../reschedules` re-arms — a campaign
+   * `CampaignScheduledSendScheduler` disarmed at its due moment (the channel
+   * was still unwired), left `SCHEDULED` with `scheduledAt` cleared rather
+   * than moved to a new terminal state (`CampaignService#reschedule`'s own
+   * doc). Never true for a `PAUSED`/`HALTED_*` campaign, whose `haltedReason`
+   * means something else — a pause or an operator halt, not a disarmed send.
+   */
+  protected readonly isHaltedScheduledSend = computed(() => {
+    const c = this.campaign();
+    return (
+      c !== null && c.status === 'SCHEDULED' && c.scheduledAt === null && c.haltedReason !== null
+    );
+  });
+
+  /** Row 6.4: `refusedByReason`, as `[reasonKey, count]` pairs a template can iterate. */
+  protected readonly refusedByReasonEntries = computed<readonly (readonly [string, number])[]>(
+    () => {
+      const counts = this.recipientCounts();
+      return counts ? Object.entries(counts.refusedByReason) : [];
+    },
+  );
 
   /** True when the signed-in operator authored this campaign — the maker/checker split. */
   protected readonly isAuthor = computed(() => {
@@ -97,12 +126,14 @@ export class CampaignDetailPane implements OnInit {
       return;
     }
     try {
-      const [campaign, recipients] = await Promise.all([
+      const [campaign, recipients, recipientCounts] = await Promise.all([
         this.api.getCampaign(scope, this.campaignId()),
         this.api.recipients(scope, this.campaignId()).catch(() => []),
+        this.api.recipientCounts(scope, this.campaignId()).catch(() => null),
       ]);
       this.campaign.set(campaign);
       this.recipients.set(recipients);
+      this.recipientCounts.set(recipientCounts);
     } catch (error) {
       this.loadError.set(this.describe(error));
     } finally {
@@ -200,6 +231,37 @@ export class CampaignDetailPane implements OnInit {
       await this.load();
     } catch (error) {
       this.actionError.set(this.describe(error));
+    } finally {
+      this.actionSubmitting.set(false);
+    }
+  }
+
+  // --------------------------------------------------------------- reschedule
+
+  protected openReschedulePrompt(): void {
+    this.rescheduleAt.set('');
+    this.rescheduleError.set(null);
+    this.showReschedulePrompt.set(true);
+  }
+
+  protected closeReschedulePrompt(): void {
+    this.showReschedulePrompt.set(false);
+  }
+
+  protected async confirmReschedule(): Promise<void> {
+    const scope = this.brand.scope();
+    const value = this.rescheduleAt();
+    if (!scope || value.length === 0) {
+      return;
+    }
+    this.actionSubmitting.set(true);
+    this.rescheduleError.set(null);
+    try {
+      await this.api.reschedule(scope, this.campaignId(), new Date(value).toISOString());
+      this.showReschedulePrompt.set(false);
+      await this.load();
+    } catch (error) {
+      this.rescheduleError.set(this.describe(error));
     } finally {
       this.actionSubmitting.set(false);
     }

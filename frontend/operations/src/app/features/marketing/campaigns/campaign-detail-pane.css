@@ -92,6 +92,45 @@
   margin-bottom: 12px;
   background: var(--q-error-tint);
   color: var(--q-error-text);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.error-band button {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  border: 1px solid currentcolor;
+  background: none;
+  color: inherit;
+  border-radius: var(--q-radius);
+  cursor: pointer;
+  font-size: var(--q-type-body-sm);
+}
+
+.stats {
+  margin-bottom: 20px;
+}
+
+.stats__reasons {
+  list-style: none;
+  margin: 4px 0 8px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.stats__reasons li {
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--q-type-body-sm);
+}
+
+.stats__hint {
+  color: var(--q-ink-muted);
+  margin: 0;
 }
 
 .actions {

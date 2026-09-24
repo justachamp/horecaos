@@ -3966,6 +3966,8 @@ export const messagesEn = {
   'marketing.campaigns.denied': 'No access to this brand’s campaigns',
   'marketing.campaigns.empty': 'No campaigns drafted yet',
   'marketing.campaigns.list.awaitingSignature': 'Awaiting a second signature',
+  'marketing.campaigns.list.haltedScheduledSend':
+    'Scheduled send did not go out — needs re-scheduling',
   'marketing.campaigns.column.name': 'Name',
   'marketing.campaigns.column.channel': 'Channel',
   'marketing.campaigns.column.status': 'Status',
@@ -4043,6 +4045,7 @@ export const messagesEn = {
   'marketing.campaign.action.launch': 'Launch',
   'marketing.campaign.action.halt': 'Halt',
   'marketing.campaign.action.resume': 'Resume',
+  'marketing.campaign.action.reschedule': 'Re-schedule',
   'marketing.campaign.fourEyes.awaitingSignature':
     'Submitted for review. This campaign needs a second signature from somebody other than you.',
   'marketing.campaign.entitlement.telegramBroadcasts':
@@ -4056,6 +4059,22 @@ export const messagesEn = {
   'marketing.campaign.reasonPrompt.title.resume': 'Resume this campaign',
   'marketing.campaign.reasonPrompt.reason': 'Reason',
   'marketing.campaign.reasonPrompt.confirm': 'Confirm',
+
+  'marketing.campaign.halted.banner':
+    'This scheduled send did not go out: {reason}. Re-schedule it for a new moment, or launch it now.',
+  'marketing.campaign.reschedulePrompt.title': 'Re-schedule this send',
+  'marketing.campaign.reschedulePrompt.label': 'New moment',
+  'marketing.campaign.reschedulePrompt.confirm': 'Re-schedule',
+
+  'marketing.campaign.stats.title': 'History & statistics',
+  'marketing.campaign.stats.queued': 'Sent (queued for delivery)',
+  'marketing.campaign.stats.pending': 'Pending',
+  'marketing.campaign.stats.deferred': 'Deferred',
+  'marketing.campaign.stats.refused': 'Refused',
+  'marketing.campaign.stats.total': 'Total attempted',
+  'marketing.campaign.stats.refusedByReason.title': 'Refused, by reason',
+  'marketing.campaign.stats.deliveryUnavailableHint':
+    'Delivered vs. failed is not tracked yet — no read receipt reaches this campaign.',
 
   'marketing.refusal.ACCOUNT_NOT_ACTIVE': 'Account not active, merged, or anonymised',
   'marketing.refusal.CONSENT_WITHHELD': 'No marketing consent on file',

@@ -3965,6 +3965,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'marketing.campaigns.denied': 'Bu brendning kampaniyalariga kirish huquqi yoʻq',
   'marketing.campaigns.empty': 'Hali kampaniya yaratilmagan',
   'marketing.campaigns.list.awaitingSignature': 'Ikkinchi imzoni kutmoqda',
+  'marketing.campaigns.list.haltedScheduledSend':
+    'Rejalashtirilgan yuborish amalga oshmadi — qayta rejalashtirish kerak',
   'marketing.campaigns.column.name': 'Nomi',
   'marketing.campaigns.column.channel': 'Kanal',
   'marketing.campaigns.column.status': 'Holati',
@@ -4042,6 +4044,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'marketing.campaign.action.launch': 'Ishga tushirish',
   'marketing.campaign.action.halt': 'Toʻxtatish',
   'marketing.campaign.action.resume': 'Davom ettirish',
+  'marketing.campaign.action.reschedule': 'Qayta rejalashtirish',
   'marketing.campaign.fourEyes.awaitingSignature':
     'Koʻrib chiqishga yuborildi. Bu kampaniyaga sizdan boshqa birovning ikkinchi imzosi kerak.',
   'marketing.campaign.entitlement.telegramBroadcasts':
@@ -4055,6 +4058,22 @@ export const messagesUzLatn: MessageCatalogue = {
   'marketing.campaign.reasonPrompt.title.resume': 'Kampaniyani davom ettirish',
   'marketing.campaign.reasonPrompt.reason': 'Sabab',
   'marketing.campaign.reasonPrompt.confirm': 'Tasdiqlash',
+
+  'marketing.campaign.halted.banner':
+    'Bu rejalashtirilgan yuborish amalga oshmadi: {reason}. Uni yangi vaqtga qayta rejalashtiring yoki hozir ishga tushiring.',
+  'marketing.campaign.reschedulePrompt.title': 'Yuborishni qayta rejalashtirish',
+  'marketing.campaign.reschedulePrompt.label': 'Yangi vaqt',
+  'marketing.campaign.reschedulePrompt.confirm': 'Qayta rejalashtirish',
+
+  'marketing.campaign.stats.title': 'Tarix va statistika',
+  'marketing.campaign.stats.queued': 'Yuborildi (yetkazishga navbatda)',
+  'marketing.campaign.stats.pending': 'Kutilmoqda',
+  'marketing.campaign.stats.deferred': 'Kechiktirildi',
+  'marketing.campaign.stats.refused': 'Rad etildi',
+  'marketing.campaign.stats.total': 'Jami urinishlar',
+  'marketing.campaign.stats.refusedByReason.title': 'Rad etilganlar, sabab boʻyicha',
+  'marketing.campaign.stats.deliveryUnavailableHint':
+    'Yetkazildi/yetkazilmadi hali kuzatilmaydi — bu kampaniya uchun oʻqilganlik xabari yoʻq.',
 
   'marketing.refusal.ACCOUNT_NOT_ACTIVE':
     'Hisob faol emas, birlashtirilgan yoki anonimlashtirilgan',

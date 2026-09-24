@@ -3939,6 +3939,8 @@ export const messagesRu: MessageCatalogue = {
   'marketing.campaigns.denied': 'Нет доступа к кампаниям этого бренда',
   'marketing.campaigns.empty': 'Кампании пока не созданы',
   'marketing.campaigns.list.awaitingSignature': 'Ожидает вторую подпись',
+  'marketing.campaigns.list.haltedScheduledSend':
+    'Отправка не состоялась — требуется перепланирование',
   'marketing.campaigns.column.name': 'Название',
   'marketing.campaigns.column.channel': 'Канал',
   'marketing.campaigns.column.status': 'Статус',
@@ -4016,6 +4018,7 @@ export const messagesRu: MessageCatalogue = {
   'marketing.campaign.action.launch': 'Запустить',
   'marketing.campaign.action.halt': 'Остановить',
   'marketing.campaign.action.resume': 'Возобновить',
+  'marketing.campaign.action.reschedule': 'Перепланировать',
   'marketing.campaign.fourEyes.awaitingSignature':
     'Отправлена на согласование. Кампании нужна вторая подпись — от кого-то, кроме вас.',
   'marketing.campaign.entitlement.telegramBroadcasts':
@@ -4029,6 +4032,22 @@ export const messagesRu: MessageCatalogue = {
   'marketing.campaign.reasonPrompt.title.resume': 'Возобновить кампанию',
   'marketing.campaign.reasonPrompt.reason': 'Причина',
   'marketing.campaign.reasonPrompt.confirm': 'Подтвердить',
+
+  'marketing.campaign.halted.banner':
+    'Эта запланированная рассылка не была отправлена: {reason}. Перепланируйте её на новое время или запустите сейчас.',
+  'marketing.campaign.reschedulePrompt.title': 'Перепланировать рассылку',
+  'marketing.campaign.reschedulePrompt.label': 'Новое время',
+  'marketing.campaign.reschedulePrompt.confirm': 'Перепланировать',
+
+  'marketing.campaign.stats.title': 'История и статистика',
+  'marketing.campaign.stats.queued': 'Отправлено (в очереди на доставку)',
+  'marketing.campaign.stats.pending': 'В ожидании',
+  'marketing.campaign.stats.deferred': 'Отложено',
+  'marketing.campaign.stats.refused': 'Отказано',
+  'marketing.campaign.stats.total': 'Всего попыток',
+  'marketing.campaign.stats.refusedByReason.title': 'Отказано, по причине',
+  'marketing.campaign.stats.deliveryUnavailableHint':
+    'Доставлено/не доставлено пока не отслеживается — для этой кампании нет отчёта о прочтении.',
 
   'marketing.refusal.ACCOUNT_NOT_ACTIVE': 'Аккаунт неактивен, объединён или анонимизирован',
   'marketing.refusal.CONSENT_WITHHELD': 'Нет согласия на маркетинговые рассылки',
