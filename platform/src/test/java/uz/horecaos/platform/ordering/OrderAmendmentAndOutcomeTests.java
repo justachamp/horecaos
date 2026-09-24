@@ -1282,6 +1282,92 @@ class OrderAmendmentAndOutcomeTests {
         assertThat(applied.amendment().status()).isEqualTo(AmendmentStatus.APPLIED);
     }
 
+    /**
+     * ADR 0027's own maker-checker for a financial decrease: {@code
+     * requiresDecreaseApproval} (propose) and the {@code ApprovalOutcome}
+     * switch that consumes it ({@code apply}) implement it, but before this
+     * test nothing anywhere exercised the threshold, the {@code Pending}
+     * refusal, or that a spent grant lands on {@code approval_request_id}.
+     */
+    @Test
+    @DisplayName("ADR 0027: a decrease at or above the threshold is blocked until a second signature approves it")
+    void decreaseAboveThresholdNeedsFourEyesApproval() {
+        seedDeliveryZone(1_000L);
+        UUID orderId = seedDeliveryOrderForReprice("idem-decrease-approve-1", 600_000L);
+        seedDecreaseApprovalPolicy();
+
+        var proposed = proposeOnly(orderId, "k-decrease-approve-1", changeAddressIntoZoneCommand());
+        assertThat(proposed.amendment().deltaTotalMinor())
+                .as("the fabricated base total (600 000) comfortably clears the 200 000 threshold")
+                .isLessThan(-200_000L);
+        assertThat(proposed.amendment().requiresApproval()).isTrue();
+
+        int orderVersion = orderStore.find(TENANT, orderId).orElseThrow().version();
+        assertThatThrownBy(() -> tx(() -> amendments.apply(
+                        TENANT, orderId, proposed.amendment().id(), orderVersion, "USER", "sharif", "reason", null)))
+                .as("propose() raised the request; apply() must not proceed while it is still Pending")
+                .isInstanceOf(OrderAmendmentService.AmendmentRefusedException.class)
+                .satisfies(thrown -> assertThat(((OrderAmendmentService.AmendmentRefusedException) thrown).code())
+                        .isEqualTo("AMENDMENT_PENDING_APPROVAL"));
+        assertThat(orderQuery.revisions(TENANT, orderId)).hasSize(1);
+
+        UUID requestId = pendingDecreaseApprovalRequestId();
+        approvalService()
+                .decide(
+                        requestId,
+                        uz.horecaos.platform.audit.api.ApprovalService.Decision.APPROVE,
+                        uz.horecaos.platform.audit.api.ActorRef.user("nozima-manager", null),
+                        "Checked the fee difference, approved");
+
+        var applied = tx(() -> amendments.apply(
+                TENANT, orderId, proposed.amendment().id(), orderVersion, "USER", "sharif", "reason", null));
+        assertThat(applied.amendment().status()).isEqualTo(AmendmentStatus.APPLIED);
+        assertThat(applied.amendment().approvalRequestId())
+                .as(
+                        "ck_amendment_approval_recorded's own contract: an approval-gated APPLIED row names the spent request")
+                .isEqualTo(requestId);
+        assertThat(orderStore.find(TENANT, orderId).orElseThrow().totalMinor()).isLessThan(600_000L);
+    }
+
+    @Test
+    @DisplayName("ADR 0027: a declined decrease stays refused, not silently applied")
+    void declinedDecreaseApprovalRefusesTheApply() {
+        seedDeliveryZone(1_000L);
+        UUID orderId = seedDeliveryOrderForReprice("idem-decrease-decline-1", 600_000L);
+        seedDecreaseApprovalPolicy();
+
+        var proposed = proposeOnly(orderId, "k-decrease-decline-1", changeAddressIntoZoneCommand());
+        assertThat(proposed.amendment().requiresApproval()).isTrue();
+
+        int orderVersion = orderStore.find(TENANT, orderId).orElseThrow().version();
+        // The first apply raises the ADR 0027 request (still Pending).
+        assertThatThrownBy(() -> tx(() -> amendments.apply(
+                        TENANT, orderId, proposed.amendment().id(), orderVersion, "USER", "sharif", "reason", null)))
+                .isInstanceOf(OrderAmendmentService.AmendmentRefusedException.class);
+
+        UUID requestId = pendingDecreaseApprovalRequestId();
+        approvalService()
+                .decide(
+                        requestId,
+                        uz.horecaos.platform.audit.api.ApprovalService.Decision.DECLINE,
+                        uz.horecaos.platform.audit.api.ActorRef.user("nozima-manager", null),
+                        "Too large to approve without a manager present");
+
+        assertThatThrownBy(() -> tx(() -> amendments.apply(
+                        TENANT, orderId, proposed.amendment().id(), orderVersion, "USER", "sharif", "reason", null)))
+                .isInstanceOf(OrderAmendmentService.AmendmentRefusedException.class)
+                .satisfies(thrown -> assertThat(((OrderAmendmentService.AmendmentRefusedException) thrown).code())
+                        .isEqualTo("AMENDMENT_APPROVAL_DECLINED"));
+        assertThat(orderQuery.revisions(TENANT, orderId))
+                .as("a declined decrease never appends a revision")
+                .hasSize(1);
+        assertThat(amendmentStore
+                        .find(TENANT, proposed.amendment().id())
+                        .orElseThrow()
+                        .status())
+                .isEqualTo(AmendmentStatus.PRICED);
+    }
+
     @Test
     @DisplayName("ADD_LINES reprices, reserves the added stock, and needs the customer's agreement first")
     void addLinesRepricesReservesAndNeedsConfirmation() {
@@ -2461,6 +2547,45 @@ class OrderAmendmentAndOutcomeTests {
                 8_000);
         zoneService.activate(TENANT, BRAND, zoneId, draftedZone.version(), actorId);
         zoneService.bindLocation(TENANT, BRAND, zoneId, LOCATION);
+    }
+
+    /**
+     * An ADR 0027 policy for {@code ordering.amendment.decrease} at TENANT
+     * scope, so {@code requiresDecreaseApproval}'s own {@code
+     * approvals.requireApproval} call resolves a real policy instead of
+     * {@code ApprovalAction#ALLOW_WITHOUT_APPROVAL}'s default of "no policy,
+     * no review".
+     */
+    private void seedDecreaseApprovalPolicy() {
+        jdbc.sql("""
+                INSERT INTO audit.approval_policies (
+                    id, tenant_id, action_code, scope_type, threshold_json,
+                    required_approver_capability, valid_from, version, approved_by)
+                VALUES (:id, :tenantId, 'ordering.amendment.decrease', 'TENANT',
+                        CAST('{"description":"ADR 0027 decrease approval fixture"}' AS jsonb),
+                        'ordering.amendment.approve', :from, 1, 'test-fixture')
+                """)
+                .param("id", UUID.randomUUID())
+                .param("tenantId", TENANT)
+                .param("from", clock.instant().minus(Duration.ofDays(1)).atOffset(ZoneOffset.UTC))
+                .update();
+    }
+
+    /** The request {@link #seedDecreaseApprovalPolicy} plus a proposed decrease together raised. */
+    private UUID pendingDecreaseApprovalRequestId() {
+        return jdbc.sql("""
+                SELECT id FROM audit.approval_requests
+                WHERE tenant_id = :tenantId AND action_code = 'ordering.amendment.decrease'
+                  AND status = 'PENDING'
+                ORDER BY requested_at DESC LIMIT 1
+                """).param("tenantId", TENANT).query(UUID.class).single();
+    }
+
+    /** The real ADR 0027 decision path, wired by hand for the same reason every other collaborator here is. */
+    private uz.horecaos.platform.audit.infrastructure.persistence.JdbcApprovalService approvalService() {
+        var mapper = JsonMapper.builder().build();
+        return new uz.horecaos.platform.audit.infrastructure.persistence.JdbcApprovalService(
+                jdbc, new JdbcAuditRecorder(jdbc, mapper), clock, new SimpleMeterRegistry(), mapper);
     }
 
     /**

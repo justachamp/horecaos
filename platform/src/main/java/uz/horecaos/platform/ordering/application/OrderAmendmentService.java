@@ -889,7 +889,18 @@ public class OrderAmendmentService {
     private record DecreaseApprovalParameters(UUID amendmentId, long deltaTotalMinor, List<String> commandTypes) {}
 
     private String decreaseApprovalHash(UUID amendmentId, long deltaTotalMinor, List<String> commandTypes) {
+        // commandTypes is a List<String>, and ApprovalParameters canonicalises
+        // only the scalar types it names explicitly -- a List is refused
+        // outright rather than hashed through toString (see that class's own
+        // doc on why). Excluded from the automatic walk and re-added by hand,
+        // joined, under a name distinct from the record's own component:
+        // excluding() still has to name every component NOT covered
+        // automatically, so a future field added to DecreaseApprovalParameters
+        // enters the hash by itself rather than silently, exactly as every
+        // other call site here already does.
         return ApprovalParameters.of(new DecreaseApprovalParameters(amendmentId, deltaTotalMinor, commandTypes))
+                .excluding("commandTypes")
+                .and("commandTypeCodes", String.join(",", commandTypes))
                 .hash();
     }
 
