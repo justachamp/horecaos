@@ -34,7 +34,9 @@ import uz.horecaos.platform.tenancy.domain.CoordinateSource;
 import uz.horecaos.platform.tenancy.domain.CustomerIdentityMode;
 import uz.horecaos.platform.tenancy.domain.CustomerIdentityPolicy;
 import uz.horecaos.platform.tenancy.domain.Location;
+import uz.horecaos.platform.tenancy.domain.LocationLocale;
 import uz.horecaos.platform.tenancy.domain.LocationPlace;
+import uz.horecaos.platform.tenancy.domain.LocationVenue;
 import uz.horecaos.platform.tenancy.domain.OperatingUnitStatus;
 import uz.horecaos.platform.tenancy.domain.Slug;
 import uz.horecaos.platform.tenancy.domain.Tenant;
@@ -532,11 +534,15 @@ public class JdbcTenantControlPlaneStore implements TenantControlPlaneStore {
                         INSERT INTO tenant.locations (
                             id, tenant_id, brand_id, code, slug, display_name, timezone, status,
                             latitude, longitude, coordinate_source,
-                            address_line, district, city, landmark, contact_phone
+                            address_line, district, city, landmark, contact_phone,
+                            sort_order, seats, average_cheque_amount, average_cheque_currency,
+                            has_parking, has_playground, virtual_tour_url
                         ) VALUES (
                             :id, :tenantId, :brandId, :code, :slug, :displayName, :timezone, :status,
                             :latitude, :longitude, :coordinateSource,
-                            :addressLine, :district, :city, :landmark, :contactPhone
+                            :addressLine, :district, :city, :landmark, :contactPhone,
+                            :sortOrder, :seats, :averageChequeAmount, :averageChequeCurrency,
+                            :hasParking, :hasPlayground, :virtualTourUrl
                         )
                         """)
                 .param("id", location.id().value())
@@ -548,6 +554,7 @@ public class JdbcTenantControlPlaneStore implements TenantControlPlaneStore {
                 .param("timezone", location.timezone().getId())
                 .param("status", location.status().name())
                 .params(placeParams(location.place()))
+                .params(venueParams(location.venue()))
                 .update();
     }
 
@@ -578,6 +585,72 @@ public class JdbcTenantControlPlaneStore implements TenantControlPlaneStore {
                 .param("tenantId", location.tenantId().value())
                 .params(placeParams(location.place()))
                 .update();
+    }
+
+    /**
+     * Updates only the venue facts (row 10.2b) -- sort order, seats, average
+     * cheque, parking, playground, virtual tour. Separate from {@link
+     * #updateLocationPlace} for the same reason that one is separate from the
+     * identity columns: the two are edited independently and neither write
+     * should carry the other's fields along.
+     */
+    @Override
+    public void updateLocationVenue(Location location) {
+        jdbc.sql("""
+                        UPDATE tenant.locations SET
+                            sort_order = :sortOrder,
+                            seats = :seats,
+                            average_cheque_amount = :averageChequeAmount,
+                            average_cheque_currency = :averageChequeCurrency,
+                            has_parking = :hasParking,
+                            has_playground = :hasPlayground,
+                            virtual_tour_url = :virtualTourUrl,
+                            updated_at = now()
+                        WHERE id = :id AND tenant_id = :tenantId
+                        """)
+                .param("id", location.id().value())
+                .param("tenantId", location.tenantId().value())
+                .params(venueParams(location.venue()))
+                .update();
+    }
+
+    @Override
+    public List<LocationLocale> findLocationContent(TenantId tenantId, LocationId locationId) {
+        return jdbc.sql("""
+                        SELECT locale, display_name, description FROM tenant.location_content
+                        WHERE tenant_id = :tenantId AND location_id = :locationId
+                        ORDER BY locale
+                        """)
+                .param("tenantId", tenantId.value())
+                .param("locationId", locationId.value())
+                .query(JdbcTenantControlPlaneStore::mapLocationLocale)
+                .list();
+    }
+
+    /** Replaces a branch's whole localized-content set, delete-then-insert like {@link #updateBrandProfile}'s locales. */
+    @Override
+    public void updateLocationContent(TenantId tenantId, LocationId locationId, List<LocationLocale> content) {
+        jdbc.sql("DELETE FROM tenant.location_content WHERE tenant_id = :tenantId AND location_id = :locationId")
+                .param("tenantId", tenantId.value())
+                .param("locationId", locationId.value())
+                .update();
+        for (LocationLocale locale : content) {
+            jdbc.sql("""
+                            INSERT INTO tenant.location_content (tenant_id, location_id, locale, display_name, description)
+                            VALUES (:tenantId, :locationId, :locale, :displayName, :description)
+                            """)
+                    .param("tenantId", tenantId.value())
+                    .param("locationId", locationId.value())
+                    .param("locale", locale.locale())
+                    .param("displayName", locale.displayName())
+                    .param("description", locale.description())
+                    .update();
+        }
+    }
+
+    private static LocationLocale mapLocationLocale(ResultSet resultSet, int rowNumber) throws SQLException {
+        return new LocationLocale(
+                resultSet.getString("locale"), resultSet.getString("display_name"), resultSet.getString("description"));
     }
 
     @Override
@@ -709,15 +782,41 @@ public class JdbcTenantControlPlaneStore implements TenantControlPlaneStore {
         return params;
     }
 
+    /**
+     * The venue columns, shared by the insert and the update so the two
+     * cannot disagree about what a null means — the same reason {@link
+     * #placeParams} exists.
+     */
+    private static Map<String, Object> venueParams(LocationVenue venue) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("sortOrder", venue.sortOrder());
+        params.put("seats", venue.seats());
+        params.put("averageChequeAmount", venue.averageChequeAmount());
+        params.put("averageChequeCurrency", venue.averageChequeCurrency());
+        params.put("hasParking", venue.hasParking());
+        params.put("hasPlayground", venue.hasPlayground());
+        params.put("virtualTourUrl", venue.virtualTourUrl());
+        return params;
+    }
+
+    /**
+     * Every location of one brand, ordered by the branch list's own manual
+     * {@code sort_order} first (row 10.2b) -- the same column every reader of
+     * this list, including {@code OperationsBrandController.locations}, now
+     * inherits without a separate query. Ties broken by display name, then
+     * id, exactly as the list ordered before sort_order existed.
+     */
     @Override
     public List<Location> findLocations(Brand brand) {
         return jdbc.sql("""
                         SELECT id, tenant_id, brand_id, code, slug, display_name, timezone, status, version,
                                latitude, longitude, coordinate_source,
-                               address_line, district, city, landmark, contact_phone
+                               address_line, district, city, landmark, contact_phone,
+                               sort_order, seats, average_cheque_amount, average_cheque_currency,
+                               has_parking, has_playground, virtual_tour_url
                         FROM tenant.locations
                         WHERE tenant_id = :tenantId AND brand_id = :brandId
-                        ORDER BY display_name, id
+                        ORDER BY sort_order, display_name, id
                         """)
                 .param("tenantId", brand.tenantId().value())
                 .param("brandId", brand.id().value())
@@ -773,7 +872,20 @@ public class JdbcTenantControlPlaneStore implements TenantControlPlaneStore {
                 ZoneId.of(resultSet.getString("timezone")),
                 OperatingUnitStatus.valueOf(resultSet.getString("status")),
                 mapPlace(resultSet),
+                mapVenue(resultSet),
                 resultSet.getLong("version"));
+    }
+
+    /** Rebuilds the venue facts from their columns -- see {@link #mapPlace} for the sibling doc. */
+    private static LocationVenue mapVenue(ResultSet resultSet) throws SQLException {
+        return new LocationVenue(
+                resultSet.getInt("sort_order"),
+                resultSet.getObject("seats", Integer.class),
+                resultSet.getObject("average_cheque_amount", Long.class),
+                resultSet.getString("average_cheque_currency"),
+                resultSet.getBoolean("has_parking"),
+                resultSet.getBoolean("has_playground"),
+                resultSet.getString("virtual_tour_url"));
     }
 
     /**

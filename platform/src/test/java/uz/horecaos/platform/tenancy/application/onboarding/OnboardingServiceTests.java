@@ -105,6 +105,12 @@ class OnboardingServiceTests {
         jdbc = JdbcClient.create(dataSource);
         jdbc.sql("TRUNCATE TABLE tenant.onboarding_runs CASCADE").update();
         jdbc.sql("TRUNCATE TABLE tenant.onboarding_templates CASCADE").update();
+        // notificationTemplateModerationFindings' own fixture: not cascaded by
+        // the tenant.tenants truncate below (no FK ties these to it), so left
+        // alone they would leak from validatingNamesAnSmsTemplateWithheldByTheGateway
+        // into every other validate() test that shares the same TENANT id.
+        jdbc.sql("TRUNCATE TABLE notifications.template_versions CASCADE").update();
+        jdbc.sql("TRUNCATE TABLE notifications.templates CASCADE").update();
         jdbc.sql("TRUNCATE TABLE audit.audit_events").update();
         jdbc.sql("TRUNCATE TABLE audit.approval_requests CASCADE").update();
         jdbc.sql("TRUNCATE TABLE audit.approval_policies CASCADE").update();
@@ -886,6 +892,35 @@ class OnboardingServiceTests {
                 });
     }
 
+    /**
+     * Row 10.0 (gap map): {@code notificationTemplateModerationFindings}, the
+     * one check {@code validate} runs ad hoc rather than through the {@code
+     * OnboardingStep} loop this file's other {@code validate} tests exercise.
+     */
+    @Test
+    void validatingNamesAnSmsTemplateWithheldByTheGateway() {
+        UUID runId = startRun();
+        UUID confirmed = insertSmsTemplate("ORDER_CONFIRMED");
+        insertSmsTemplateVersion(confirmed, "ru", "PENDING");
+        insertSmsTemplateVersion(confirmed, "uz-Latn", "REJECTED");
+        // Neither counted: a DRAFT version is not what would actually send,
+        // and NOT_REQUIRED (the schema's own default) needs no gateway sign-off.
+        insertSmsTemplateVersion(insertSmsTemplate("ORDER_READY"), "ru", "PENDING", "DRAFT");
+        insertSmsTemplateVersion(insertSmsTemplate("ORDER_CANCELLED"), "ru", "NOT_REQUIRED");
+
+        var outcome = service.validate(TENANT, runId);
+
+        assertThat(outcome.allPassed())
+                .as("a template withheld from sending is a real readiness gap")
+                .isFalse();
+        assertThat(outcome.checks())
+                .filteredOn(check -> "NOTIFICATION_TEMPLATE_MODERATION_VALIDATE".equals(check.stepKey()))
+                .hasSize(2)
+                .allSatisfy(check -> assertThat(check.passed()).isFalse())
+                .extracting(OnboardingService.ValidationResult::errorCode)
+                .containsExactlyInAnyOrder("TEMPLATE_AWAITING_PROVIDER_REVIEW", "TEMPLATE_REJECTED_BY_PROVIDER");
+    }
+
     @Test
     void validatingDoesNotPersistAnything() {
         UUID runId = startRun();
@@ -1328,6 +1363,58 @@ class OnboardingServiceTests {
                 .param("id", runId)
                 .query(String.class)
                 .single();
+    }
+
+    /** One {@code notifications.templates} row, for {@link #validatingNamesAnSmsTemplateWithheldByTheGateway}; several locales version under it. */
+    private UUID insertSmsTemplate(String templateKey) {
+        UUID templateId = UUID.randomUUID();
+        jdbc.sql("""
+                        INSERT INTO notifications.templates (id, tenant_id, template_key, notification_class, channel)
+                        VALUES (:id, :tenantId, :key, 'TRANSACTIONAL_REQUIRED', 'SMS')
+                        """)
+                .param("id", templateId)
+                .param("tenantId", TENANT)
+                .param("key", templateKey)
+                .update();
+        return templateId;
+    }
+
+    /** An {@code ACTIVE} SMS template version at a given provider-review state. */
+    private void insertSmsTemplateVersion(UUID templateId, String locale, String providerReview) {
+        insertSmsTemplateVersion(templateId, locale, providerReview, "ACTIVE");
+    }
+
+    private void insertSmsTemplateVersion(UUID templateId, String locale, String providerReview, String versionStatus) {
+        UUID versionId = UUID.randomUUID();
+        boolean attributed = !"NOT_REQUIRED".equals(providerReview);
+        // ck_template_version_active: an ACTIVE version needs approved_by/
+        // activated_at set, in the equal pair ck_template_version_approval_pair
+        // also requires.
+        boolean active = "ACTIVE".equals(versionStatus);
+        jdbc.sql("""
+                        INSERT INTO notifications.template_versions (
+                            id, tenant_id, template_id, version_number, locale, body_template, variables_schema,
+                            content_hash, status, approved_by, activated_at,
+                            provider_review, provider_review_updated_by, provider_review_updated_at)
+                        VALUES (
+                            :id, :tenantId, :templateId, 1, :locale, 'Order update', '{}'::jsonb, :hash,
+                            :status,
+                            CASE WHEN :active THEN 'approval-fixture' END,
+                            CASE WHEN :active THEN now() END,
+                            :providerReview,
+                            CASE WHEN :attributed THEN 'gateway-review-fixture' END,
+                            CASE WHEN :attributed THEN now() END)
+                        """)
+                .param("id", versionId)
+                .param("tenantId", TENANT)
+                .param("templateId", templateId)
+                .param("locale", locale)
+                .param("hash", UUID.randomUUID().toString().replace("-", "") + "0".repeat(32))
+                .param("status", versionStatus)
+                .param("active", active)
+                .param("providerReview", providerReview)
+                .param("attributed", attributed)
+                .update();
     }
 
     private String tenantStatus() {

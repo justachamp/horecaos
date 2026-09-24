@@ -1,10 +1,12 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideRouter } from '@angular/router';
+import { Router, provideRouter } from '@angular/router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { ConfigurationKeyView } from '../../../core/api/configuration';
 import { ApiError } from '../../../core/api/problem-details';
 import { CurrentTenant } from '../../../core/auth/current-tenant';
 import { I18n } from '../../../core/i18n/i18n';
+import { ConfigurationApi } from '../configuration-api';
 import { ReadinessApi, ValidationOutcome } from './readiness-api';
 import { SettingsHomePage } from './settings-home-page';
 
@@ -15,8 +17,30 @@ async function flushMicrotasks(): Promise<void> {
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
 }
 
+const VAT_RATE_KEY: ConfigurationKeyView = {
+  code: 'ordering.vat_rate_percent',
+  valueType: 'BigDecimal',
+  defaultValue: '12',
+  settableScopes: ['TENANT', 'BRAND'],
+  owningModule: 'ordering',
+  explicitNullTerminates: false,
+  description: 'The VAT rate applied at checkout, as a percentage.',
+};
+
+/** A key `CONFIGURATION_KEY_ROUTES` names no screen for — must never appear as a search result. */
+const UNROUTED_KEY: ConfigurationKeyView = {
+  code: 'commercial.enforcement_ceiling',
+  valueType: 'String',
+  defaultValue: 'METER_ONLY',
+  settableScopes: ['PLATFORM', 'TENANT'],
+  owningModule: 'commercial',
+  explicitNullTerminates: false,
+  description: 'The strongest enforcement mode entitlement checks may apply for this tenant.',
+};
+
 async function render(
   readiness: Partial<ReadinessApi>,
+  configurationKeys: readonly ConfigurationKeyView[] = [VAT_RATE_KEY, UNROUTED_KEY],
 ): Promise<ComponentFixture<SettingsHomePage>> {
   await TestBed.configureTestingModule({
     imports: [SettingsHomePage],
@@ -31,6 +55,10 @@ async function render(
         },
       },
       { provide: ReadinessApi, useValue: readiness },
+      {
+        provide: ConfigurationApi,
+        useValue: { keys: vi.fn().mockResolvedValue(configurationKeys) },
+      },
     ],
   }).compileComponents();
   TestBed.inject(I18n).setLocale('en');
@@ -222,10 +250,14 @@ describe('SettingsHomePage', () => {
     expect(fixture.nativeElement.textContent).toContain('owner and administrators');
   });
 
+  function searchInput(fixture: ComponentFixture<SettingsHomePage>): HTMLInputElement {
+    return fixture.nativeElement.querySelector('[data-testid="q-combobox-input"]');
+  }
+
   it('filters the index by "/" find-a-setting text, across label and description', async () => {
     const fixture = await render({ validate: () => Promise.resolve(PASSING) });
 
-    const input: HTMLInputElement = fixture.nativeElement.querySelector('.search__input');
+    const input = searchInput(fixture);
     input.value = 'fiscalization';
     input.dispatchEvent(new Event('input'));
     fixture.detectChanges();
@@ -239,7 +271,7 @@ describe('SettingsHomePage', () => {
   it('shows the empty search state when nothing matches', async () => {
     const fixture = await render({ validate: () => Promise.resolve(PASSING) });
 
-    const input: HTMLInputElement = fixture.nativeElement.querySelector('.search__input');
+    const input = searchInput(fixture);
     input.value = 'zzzz-no-such-setting';
     input.dispatchEvent(new Event('input'));
     fixture.detectChanges();
@@ -254,9 +286,62 @@ describe('SettingsHomePage', () => {
 
     document.dispatchEvent(new KeyboardEvent('keydown', { key: '/', bubbles: true }));
 
-    const input: HTMLInputElement = fixture.nativeElement.querySelector('.search__input');
-    expect(document.activeElement).toBe(input);
+    expect(document.activeElement).toBe(searchInput(fixture));
 
     fixture.nativeElement.remove();
+  });
+
+  // -------------------------------------------------- 10.0: the combobox half
+
+  it('offers a matching configuration key in the combobox, but not one CONFIGURATION_KEY_ROUTES names no screen for', async () => {
+    const fixture = await render({ validate: () => Promise.resolve(PASSING) });
+
+    const input = searchInput(fixture);
+    input.value = 'vat';
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    const options = [...fixture.nativeElement.querySelectorAll('[data-testid="q-combobox-option"]')];
+    expect(options.map((option: Element) => option.textContent)).toEqual([
+      expect.stringContaining('ordering.vat_rate_percent'),
+    ]);
+  });
+
+  it('navigates to the owning screen when a configuration-key result is chosen', async () => {
+    const fixture = await render({ validate: () => Promise.resolve(PASSING) });
+    const router = TestBed.inject(Router);
+    const navigateSpy = vi.spyOn(router, 'navigate').mockResolvedValue(true);
+
+    const input = searchInput(fixture);
+    input.value = 'vat';
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    (fixture.nativeElement.querySelector('[data-testid="q-combobox-option"]') as HTMLElement).click();
+    fixture.detectChanges();
+
+    expect(navigateSpy).toHaveBeenCalledWith(['/settings', 'order-policy']);
+  });
+
+  it('offers and deep-links a reference list by its own section heading', async () => {
+    const fixture = await render({ validate: () => Promise.resolve(PASSING) });
+    const router = TestBed.inject(Router);
+    const navigateSpy = vi.spyOn(router, 'navigate').mockResolvedValue(true);
+
+    const input = searchInput(fixture);
+    input.value = 'cancellation';
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    const option = fixture.nativeElement.querySelector(
+      '[data-testid="q-combobox-option"]',
+    ) as HTMLElement;
+    expect(option.textContent).toContain('Cancellation reasons');
+    option.click();
+    fixture.detectChanges();
+
+    expect(navigateSpy).toHaveBeenCalledWith(['/settings/reference-data'], {
+      fragment: 'cancellation-reasons',
+    });
   });
 });

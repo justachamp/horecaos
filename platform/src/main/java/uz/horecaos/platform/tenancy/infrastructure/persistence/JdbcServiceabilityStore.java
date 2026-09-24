@@ -279,7 +279,7 @@ public class JdbcServiceabilityStore {
      */
     public List<ScheduleSummary> schedulesForBrand(UUID tenantId, UUID brandId) {
         return jdbc.sql("""
-                SELECT s.id, s.name, s.accepts_scheduled_orders,
+                SELECT s.id, s.name, s.accepts_scheduled_orders, s.version,
                        (SELECT count(*) FROM tenant.location_service_bindings b
                          WHERE b.tenant_id = s.tenant_id AND b.schedule_id = s.id) AS bound_count
                 FROM tenant.service_schedules s
@@ -292,16 +292,17 @@ public class JdbcServiceabilityStore {
                         row.getObject("id", UUID.class),
                         row.getString("name"),
                         row.getBoolean("accepts_scheduled_orders"),
-                        row.getLong("bound_count")))
+                        row.getLong("bound_count"),
+                        row.getInt("version")))
                 .list();
     }
 
     /** One timetable's name and full weekly grid, read-only, before a person opens the editor. */
     public Optional<NamedSchedule> scheduleDetail(UUID tenantId, UUID brandId, UUID scheduleId) {
-        record Header(String name, boolean acceptsScheduledOrders, long boundCount) {}
+        record Header(String name, boolean acceptsScheduledOrders, long boundCount, int version) {}
 
         Optional<Header> header = jdbc.sql("""
-                SELECT s.name, s.accepts_scheduled_orders,
+                SELECT s.name, s.accepts_scheduled_orders, s.version,
                        (SELECT count(*) FROM tenant.location_service_bindings b
                          WHERE b.tenant_id = s.tenant_id AND b.schedule_id = s.id) AS bound_count
                 FROM tenant.service_schedules s
@@ -311,13 +312,17 @@ public class JdbcServiceabilityStore {
                 .param("tenantId", tenantId)
                 .param("brandId", brandId)
                 .query((row, number) -> new Header(
-                        row.getString("name"), row.getBoolean("accepts_scheduled_orders"), row.getLong("bound_count")))
+                        row.getString("name"),
+                        row.getBoolean("accepts_scheduled_orders"),
+                        row.getLong("bound_count"),
+                        row.getInt("version")))
                 .optional();
 
         return header.map(found -> new NamedSchedule(
                 found.name(),
                 new WeeklySchedule(rulesOf(scheduleId), exceptionsOf(scheduleId), found.acceptsScheduledOrders()),
-                found.boundCount()));
+                found.boundCount(),
+                found.version()));
     }
 
     // ------------------------------------------------------------------ writes
@@ -415,6 +420,52 @@ public class JdbcServiceabilityStore {
                 .param("actorId", actorId)
                 .param("reason", reason)
                 .update();
+    }
+
+    /**
+     * The optimistic-concurrency check for {@link #deleteException} (row
+     * {@code 10.2c}): a dated exception carries no version of its own, so its
+     * delete borrows the owning schedule's — the same "somebody else changed
+     * this underneath you" a version guards anywhere else.
+     *
+     * @return whether {@code expectedVersion} was still current — a caller
+     *     that gets {@code false} should read {@link #currentScheduleVersion}
+     *     to report both versions, the same shape {@code
+     *     PriceAuthoringService.activatePriceBook} uses.
+     */
+    public boolean bumpScheduleVersion(UUID scheduleId, int expectedVersion, Instant now) {
+        return jdbc.sql("""
+                UPDATE tenant.service_schedules
+                SET version = version + 1, updated_at = :now
+                WHERE id = :scheduleId AND version = :expectedVersion
+                """)
+                        .param("scheduleId", scheduleId)
+                        .param("expectedVersion", expectedVersion)
+                        .param("now", timestamp(now))
+                        .update()
+                == 1;
+    }
+
+    public Optional<Integer> currentScheduleVersion(UUID scheduleId) {
+        return jdbc.sql("SELECT version FROM tenant.service_schedules WHERE id = :scheduleId")
+                .param("scheduleId", scheduleId)
+                .query(Integer.class)
+                .optional();
+    }
+
+    /**
+     * Actually removes a dated exception (row {@code 10.2c}) — until this
+     * existed the only write {@link #upsertException} offered was upsert by
+     * date, so a row taken out of the Hours grid's local draft could only
+     * ever be hidden client-side, never deleted server-side.
+     *
+     * @return whether a row existed to delete
+     */
+    public boolean deleteException(UUID scheduleId, LocalDate date) {
+        return jdbc.sql("""
+                DELETE FROM tenant.service_schedule_exceptions
+                WHERE schedule_id = :scheduleId AND exception_date = :date
+                """).param("scheduleId", scheduleId).param("date", date).update() == 1;
     }
 
     public void bindSchedule(
@@ -663,10 +714,11 @@ public class JdbcServiceabilityStore {
     public record BoundSchedule(UUID scheduleId, WeeklySchedule schedule) {}
 
     /** A brand's timetable, named, for a picker — {@link #scheduleDetail} carries the grid too. */
-    public record ScheduleSummary(UUID id, String name, boolean acceptsScheduledOrders, long boundLocationCount) {}
+    public record ScheduleSummary(
+            UUID id, String name, boolean acceptsScheduledOrders, long boundLocationCount, int version) {}
 
     /** One timetable's name and grid together, read-only. */
-    public record NamedSchedule(String name, WeeklySchedule schedule, long boundLocationCount) {}
+    public record NamedSchedule(String name, WeeklySchedule schedule, long boundLocationCount, int version) {}
 
     public record Band(
             @Nullable FulfillmentMode mode,

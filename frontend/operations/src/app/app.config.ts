@@ -26,7 +26,11 @@ export const appConfig: ApplicationConfig = {
       withComponentInputBinding(),
       // The docked detail scrolls inside its own pane; the page itself must not
       // jump to the top when the operator selects a different order.
-      withInMemoryScrolling({ scrollPositionRestoration: 'disabled' }),
+      // `anchorScrolling` is separate from that and stays on: row 10.0's
+      // find-a-setting combobox links a reference-list result straight to its
+      // own `#fragment` on reference-data-page.html, and without this the
+      // router updates the URL's hash but never actually scrolls to it.
+      withInMemoryScrolling({ scrollPositionRestoration: 'disabled', anchorScrolling: 'enabled' }),
     ),
 
     provideHttpClient(

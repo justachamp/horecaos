@@ -708,7 +708,15 @@ class TenantControlPlaneServiceTests {
                         41.311081,
                         69.240562,
                         uz.horecaos.platform.tenancy.domain.CoordinateSource.MERCHANT_PIN,
-                        false));
+                        false,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null));
 
         // Only the phone changes; address, landmark and the point are silent
         // in this write, the exact shape `location-detail-pane.ts`'s
@@ -718,7 +726,23 @@ class TenantControlPlaneServiceTests {
                 brandId,
                 locationId,
                 new TenantControlPlaneService.DescribeLocationCommand(
-                        "Amir Temur 1", "Yunusabad", "Tashkent", null, "+998712009999", null, null, null, false));
+                        "Amir Temur 1",
+                        "Yunusabad",
+                        "Tashkent",
+                        null,
+                        "+998712009999",
+                        null,
+                        null,
+                        null,
+                        false,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null));
 
         assertThat(after.contactPhone()).isEqualTo("+998712009999");
         assertThat(after.latitude())
@@ -753,7 +777,15 @@ class TenantControlPlaneServiceTests {
                         41.0,
                         69.0,
                         uz.horecaos.platform.tenancy.domain.CoordinateSource.MERCHANT_PIN,
-                        false));
+                        false,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null));
 
         var cleared = h.service.describeLocation(
                 h.tenantId,
@@ -768,7 +800,15 @@ class TenantControlPlaneServiceTests {
                         null,
                         null,
                         uz.horecaos.platform.tenancy.domain.CoordinateSource.NOT_GEOCODED,
-                        false));
+                        false,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null));
 
         assertThat(cleared.latitude()).isNull();
         assertThat(cleared.longitude()).isNull();
@@ -796,7 +836,23 @@ class TenantControlPlaneServiceTests {
                 brandId,
                 locationId,
                 new TenantControlPlaneService.DescribeLocationCommand(
-                        "Address", null, null, "Next to the blue mosque", null, null, null, null, false));
+                        "Address",
+                        null,
+                        null,
+                        "Next to the blue mosque",
+                        null,
+                        null,
+                        null,
+                        null,
+                        false,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null));
 
         // A write that is silent about landmark (clearLandmark left at its
         // default false) still carries the existing one through — the
@@ -807,7 +863,23 @@ class TenantControlPlaneServiceTests {
                 brandId,
                 locationId,
                 new TenantControlPlaneService.DescribeLocationCommand(
-                        "Address", null, null, null, "+998712009999", null, null, null, false));
+                        "Address",
+                        null,
+                        null,
+                        null,
+                        "+998712009999",
+                        null,
+                        null,
+                        null,
+                        false,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null));
         assertThat(untouched.landmark()).isEqualTo("Next to the blue mosque");
 
         var cleared = h.service.describeLocation(
@@ -815,7 +887,8 @@ class TenantControlPlaneServiceTests {
                 brandId,
                 locationId,
                 new TenantControlPlaneService.DescribeLocationCommand(
-                        "Address", null, null, null, null, null, null, null, true));
+                        "Address", null, null, null, null, null, null, null, true, null, null, null, null, null, null,
+                        null, null));
 
         assertThat(cleared.landmark())
                 .as("clearLandmark=true must actually remove the stale landmark")
@@ -949,6 +1022,8 @@ class TenantControlPlaneServiceTests {
         private final Map<BrandId, uz.horecaos.platform.tenancy.domain.BrandProfile> brandProfiles =
                 new LinkedHashMap<>();
         private final List<Location> locations = new ArrayList<>();
+        private final Map<LocationId, List<uz.horecaos.platform.tenancy.domain.LocationLocale>> locationContent =
+                new LinkedHashMap<>();
 
         @Override
         public boolean tenantSlugExists(Slug slug) {
@@ -1131,6 +1206,24 @@ class TenantControlPlaneServiceTests {
          */
         @Override
         public void updateLocationPlace(Location location) {}
+
+        /** Same reasoning as {@link #updateLocationPlace}. */
+        @Override
+        public void updateLocationVenue(Location location) {}
+
+        @Override
+        public List<uz.horecaos.platform.tenancy.domain.LocationLocale> findLocationContent(
+                TenantId tenantId, LocationId locationId) {
+            return locationContent.getOrDefault(locationId, List.of());
+        }
+
+        @Override
+        public void updateLocationContent(
+                TenantId tenantId,
+                LocationId locationId,
+                List<uz.horecaos.platform.tenancy.domain.LocationLocale> content) {
+            locationContent.put(locationId, List.copyOf(content));
+        }
 
         /** Same reasoning as {@link #updateLocationPlace}. */
         @Override

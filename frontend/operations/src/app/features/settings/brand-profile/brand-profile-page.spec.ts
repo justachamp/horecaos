@@ -10,7 +10,7 @@ import { CurrentLocation } from '../../../core/auth/current-location';
 import { I18n } from '../../../core/i18n/i18n';
 import { MediaUploader } from '../../../shared/ui/media-uploader';
 import { MediaApi, MediaAssetView } from '../../catalog/media-api';
-import { BrandProfileApi, BrandView } from './brand-profile-api';
+import { BrandProfileApi, BrandView, TenantMarketView } from './brand-profile-api';
 import { BrandProfilePage } from './brand-profile-page';
 
 const SCOPE: LocationScope = { tenantId: 'tenant-1', brandId: 'brand-1', locationId: 'location-1' };
@@ -34,6 +34,12 @@ const BRAND_WITH_MEDIA: BrandView = {
   ...BRAND,
   logoAssetId: 'asset-logo-1',
   bannerAssetId: 'asset-banner-1',
+};
+
+const TENANT_MARKET: TenantMarketView = {
+  countryCode: 'UZ',
+  defaultCurrency: 'UZS',
+  defaultTimezone: 'Asia/Tashkent',
 };
 
 class FakeCurrentLocation {
@@ -63,6 +69,7 @@ describe('BrandProfilePage', () => {
     getBrand: ReturnType<typeof vi.fn>;
     reviseBrand: ReturnType<typeof vi.fn>;
     updateProfile: ReturnType<typeof vi.fn>;
+    tenantProfile: ReturnType<typeof vi.fn>;
   };
   let mediaApi: {
     upload: ReturnType<typeof vi.fn>;
@@ -78,6 +85,7 @@ describe('BrandProfilePage', () => {
       getBrand: vi.fn().mockResolvedValue(BRAND),
       reviseBrand: vi.fn(),
       updateProfile: vi.fn(),
+      tenantProfile: vi.fn().mockResolvedValue(TENANT_MARKET),
       ...overrides,
     };
     mediaApi = {
@@ -125,6 +133,26 @@ describe('BrandProfilePage', () => {
     expect(text).toContain('rayhon');
     expect(text).toContain('+998712000000');
     expect(text).toContain('rayhon_bot');
+  });
+
+  // Row 10.1: the tenant's own country/currency/timezone, read-only.
+
+  it('shows the tenant’s country, currency and timezone read-only, sourced from the tenant not the brand', async () => {
+    await render();
+
+    expect(api.tenantProfile).toHaveBeenCalledWith('tenant-1');
+    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(text).toContain('UZ');
+    expect(text).toContain('UZS');
+    expect(text).toContain('Asia/Tashkent');
+  });
+
+  it('renders the rest of the profile even when the tenant-market read fails', async () => {
+    await render({ tenantProfile: vi.fn().mockRejectedValue(new Error('refused')) });
+
+    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(text).toContain('Rayhon');
+    expect(fixture.nativeElement.querySelector('[data-testid="brand-profile-country"]')).toBeNull();
   });
 
   it('shows the denied state without a location in scope', async () => {

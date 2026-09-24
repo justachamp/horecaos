@@ -399,8 +399,13 @@ export const pricingPaths = {
     return `${this.priceBook(scope, priceBookId)}/prices/bulk-apply`;
   },
 
-  /** The brand's VAT rate for a jurisdiction. `PUT`-only — there is no read side yet. */
+  /** The brand's VAT rate for a jurisdiction — read (row 4.8a) and write (`PUT`). */
   taxProfile(scope: BrandScope, jurisdictionCode: string): string {
     return `${this.base(scope)}/tax-profiles/${encodeURIComponent(jurisdictionCode)}`;
+  },
+
+  /** Every jurisdiction this brand has a VAT rate in force for (row 4.8a). */
+  taxProfiles(scope: BrandScope): string {
+    return `${this.base(scope)}/tax-profiles`;
   },
 } as const;

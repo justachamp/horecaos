@@ -151,6 +151,25 @@ select.field {
   gap: 8px;
 }
 
+/* 10.2b: one row of Tab 1's localized-content editor. */
+.locale-row {
+  margin-top: 12px;
+  padding: 8px 12px 12px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  display: grid;
+  gap: 8px;
+}
+
+.locale-row legend {
+  padding: 0 4px;
+  color: var(--q-ink-muted);
+}
+
+.locale-row input.field {
+  margin-top: 0;
+}
+
 .primary {
   height: 36px;
   padding: 0 16px;

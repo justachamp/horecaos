@@ -22,6 +22,7 @@ describe('ScopeBar', () => {
       selectedBrandId: string | null;
       locations: readonly ScopeBarOption[];
       selectedLocationId: string | null;
+      tenantWide: boolean;
     }> = {},
   ): Promise<ComponentFixture<ScopeBar>> {
     await TestBed.configureTestingModule({ imports: [ScopeBar] }).compileComponents();
@@ -31,6 +32,9 @@ describe('ScopeBar', () => {
     fixture.componentRef.setInput('locations', inputs.locations ?? LOCATIONS);
     if (inputs.showBrandPicker !== undefined) {
       fixture.componentRef.setInput('showBrandPicker', inputs.showBrandPicker);
+    }
+    if (inputs.tenantWide !== undefined) {
+      fixture.componentRef.setInput('tenantWide', inputs.tenantWide);
     }
     // Renders the <option>s first, on their own pass: a native <select>'s
     // [value] binding only selects an option that already exists in the DOM,
@@ -111,5 +115,39 @@ describe('ScopeBar', () => {
     const select: HTMLSelectElement = fixture.nativeElement.querySelectorAll('select')[1];
     expect(select.disabled).toBe(true);
     expect(fixture.nativeElement.textContent).toContain('Задаётся на уровне бренда');
+  });
+
+  // Row 10.3b: the TENANT/per-brand pill pair.
+
+  it('reads TENANT level and disables the location picker when tenantWide is set', async () => {
+    const fixture = await render({ tenantWide: true, selectedLocationId: 'loc-1' });
+
+    expect(fixture.nativeElement.textContent).toContain('COMPANY-WIDE');
+    const select: HTMLSelectElement = fixture.nativeElement.querySelectorAll('select')[1];
+    expect(select.disabled).toBe(true);
+  });
+
+  it('emits tenantWideChange(true) from the company-wide pill', async () => {
+    const fixture = await render();
+    let emitted: boolean | null = null;
+    fixture.componentInstance.tenantWideChange.subscribe((value) => (emitted = value));
+
+    (
+      fixture.nativeElement.querySelector('[data-testid="scope-bar-tenant-wide"]') as HTMLButtonElement
+    ).click();
+
+    expect(emitted).toBe(true);
+  });
+
+  it('emits tenantWideChange(false) from the per-brand pill', async () => {
+    const fixture = await render({ tenantWide: true });
+    let emitted: boolean | null = null;
+    fixture.componentInstance.tenantWideChange.subscribe((value) => (emitted = value));
+
+    (
+      fixture.nativeElement.querySelector('[data-testid="scope-bar-per-brand"]') as HTMLButtonElement
+    ).click();
+
+    expect(emitted).toBe(false);
   });
 });

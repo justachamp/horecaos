@@ -848,6 +848,31 @@ public class JdbcPricingStore {
         return inserted == 1 ? Optional.of(id) : Optional.empty();
     }
 
+    /**
+     * Every jurisdiction this brand currently has a VAT rate in force for
+     * (operations gap map row {@code 4.8a}) — the tax-profile screen's list,
+     * so an operator sees what already exists before opening the editor
+     * instead of only being able to overwrite a jurisdiction blind.
+     */
+    public List<TaxProfileHeader> taxProfilesForBrand(UUID tenantId, UUID brandId) {
+        return jdbc.sql("""
+                SELECT id, jurisdiction_code, mode, rate_basis_points, valid_from, version
+                FROM pricing.tax_profiles
+                WHERE tenant_id = :tenantId AND brand_id = :brandId AND valid_until IS NULL
+                ORDER BY jurisdiction_code
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .query((row, number) -> new TaxProfileHeader(
+                        row.getObject("id", UUID.class),
+                        row.getString("jurisdiction_code"),
+                        row.getString("mode"),
+                        row.getInt("rate_basis_points"),
+                        row.getObject("valid_from", OffsetDateTime.class).toInstant(),
+                        row.getInt("version")))
+                .list();
+    }
+
     public Optional<TaxProfileHeader> findTaxProfileHeader(UUID tenantId, UUID brandId, String jurisdictionCode) {
         return jdbc.sql("""
                 SELECT id, jurisdiction_code, mode, rate_basis_points, valid_from, version

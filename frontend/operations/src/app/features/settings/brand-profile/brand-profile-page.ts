@@ -18,6 +18,7 @@ import {
   BrandLocaleCode,
   BrandProfileApi,
   BrandView,
+  TenantMarketView,
   UpdateBrandProfileRequest,
 } from './brand-profile-api';
 
@@ -57,6 +58,14 @@ const KNOWN_LOCALES: readonly BrandLocaleCode[] = ['ru', 'uz-Latn', 'en'];
  * The language editor is a fixed three-row grid over `KNOWN_LOCALES` rather
  * than a free-text list: the console has an editor for exactly ru/uz-Latn/en
  * today, so offering a fourth would record a choice nothing can render.
+ *
+ * **Country/currency/timezone, read-only** (row `10.1`'s own named gap,
+ * closed this wave): `TenantProfileController.tenantProfile`, a third read
+ * beside {@link BrandProfileApi.getBrand} — these are tenant facts
+ * (`tenant.tenants`), not brand ones, and nothing on this brand-scoped
+ * screen writes them; a change of market goes through the ADR 0090
+ * residency board, a `PLATFORM_ADMIN` act with its own second-signature
+ * flow, not this screen.
  */
 @Component({
   selector: 'q-brand-profile-page',
@@ -77,6 +86,8 @@ export class BrandProfilePage {
   protected readonly denied = signal(false);
   protected readonly loadError = signal<string | null>(null);
   protected readonly brand = signal<BrandView | null>(null);
+  /** Row 10.1 — the tenant's own country/currency/timezone, read-only; null while it has not loaded yet (a best-effort read, see {@link load}). */
+  protected readonly tenantMarket = signal<TenantMarketView | null>(null);
 
   protected readonly editingName = signal(false);
   protected readonly draftDisplayName = signal('');
@@ -317,6 +328,7 @@ export class BrandProfilePage {
       const brand = await this.api.getBrand(scope);
       this.brand.set(brand);
       void this.loadMediaPreviews(brand);
+      void this.loadTenantMarket(scope.tenantId);
     } catch (error) {
       if (error instanceof ApiError && error.status === 403) {
         this.denied.set(true);
@@ -349,6 +361,22 @@ export class BrandProfilePage {
     ]);
     this.logoPreviewUrl.set(logo);
     this.bannerPreviewUrl.set(banner);
+  }
+
+  /**
+   * Row 10.1 — the tenant's own country/currency/timezone, read-only.
+   * Best-effort like {@link loadMediaPreviews}: an operator who cannot read
+   * it (a stale grant edge case, since `BRAND_READ` at `TENANT` scope is
+   * ordinarily implied by holding this screen at all) still sees the rest
+   * of the brand profile rather than the whole page failing over one
+   * secondary read.
+   */
+  private async loadTenantMarket(tenantId: string): Promise<void> {
+    try {
+      this.tenantMarket.set(await this.api.tenantProfile(tenantId));
+    } catch {
+      this.tenantMarket.set(null);
+    }
   }
 
   private async downloadUrlOrNull(tenantId: string, assetId: string | null): Promise<string | null> {

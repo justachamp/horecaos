@@ -185,6 +185,43 @@ public class ServiceScheduleService {
         publishScheduleChanged(tenantId, brandId, scheduleId, ServiceScheduleChanged.ChangeKind.EXCEPTION_UPSERTED);
     }
 
+    /**
+     * Actually removes a dated exception (gap map row {@code 10.2c}).
+     *
+     * <p>Before this existed {@link #closeForDay}/{@link #shortenDay} were the
+     * only writes {@code ServiceScheduleController} offered for an exception,
+     * both upserts by date — so a row taken out of the Hours grid's local
+     * draft and saved was never actually deleted, only hidden until the next
+     * reload silently brought it back.
+     *
+     * <p>The schedule's own version is the optimistic-concurrency token,
+     * because an exception carries none of its own: two operators editing the
+     * same shared schedule's calendar at once is exactly the race a version
+     * exists to catch, the same "thirty branches on one Ramadan timetable"
+     * risk this class's own doc names for {@link #replaceRules}.
+     *
+     * @return the schedule's new version, for the caller's next {@code If-Match}
+     */
+    @Transactional
+    public int deleteException(UUID tenantId, UUID brandId, UUID scheduleId, LocalDate date, int expectedVersion) {
+        requireOwned(tenantId, brandId, scheduleId);
+
+        if (!store.bumpScheduleVersion(scheduleId, expectedVersion, clock.instant())) {
+            int actual = store.currentScheduleVersion(scheduleId)
+                    .orElseThrow(() -> new TenantResourceNotFoundException(
+                            "No service schedule %s for this brand".formatted(scheduleId)));
+            throw new TenantResourceStaleException(expectedVersion, actual);
+        }
+
+        if (!store.deleteException(scheduleId, date)) {
+            throw new TenantResourceNotFoundException(
+                    "No dated exception for %s on schedule %s".formatted(date, scheduleId));
+        }
+
+        publishScheduleChanged(tenantId, brandId, scheduleId, ServiceScheduleChanged.ChangeKind.EXCEPTION_DELETED);
+        return expectedVersion + 1;
+    }
+
     private void publishScheduleChanged(
             UUID tenantId, UUID brandId, UUID scheduleId, ServiceScheduleChanged.ChangeKind changeKind) {
         events.publishEvent(new ServiceScheduleChanged(

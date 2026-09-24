@@ -39,17 +39,19 @@
   }
 </section>
 
-<label class="search">
+<div class="search" #searchHost>
   <span class="q-caption search__label">{{ 'settings.home.search.label' | t }}</span>
-  <input
-    #searchInput
-    class="q-body-sm search__input"
-    type="search"
-    [value]="query()"
+  <q-combobox
+    class="search__combobox"
+    [query]="query()"
+    (queryChange)="onSearchInput($event)"
+    [options]="searchResults()"
     [placeholder]="'settings.home.search.placeholder' | t"
-    (input)="onSearchInput($any($event.target).value)"
+    [ariaLabel]="'settings.home.search.label' | t"
+    (optionSelected)="onResultSelected($event)"
+    data-testid="settings-home-search"
   />
-</label>
+</div>
 
 @if (filteredGroups().length === 0) {
   <p class="q-body-sm muted">{{ 'settings.home.search.empty' | t: { query: query() } }}</p>

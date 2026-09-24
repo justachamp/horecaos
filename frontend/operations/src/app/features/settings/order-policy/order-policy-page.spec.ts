@@ -56,7 +56,7 @@ function defaultResolution(code: string): ConfigurationResolutionView {
 class FakeSettingsScope {
   readonly brandId = signal<string | null>(BRAND_ID);
   readonly locationId = signal<string | null>(null);
-  readonly level = signal<'BRAND' | 'LOCATION'>('BRAND');
+  readonly level = signal<'TENANT' | 'BRAND' | 'LOCATION'>('BRAND');
   readonly denied = signal(false);
 }
 
@@ -75,6 +75,7 @@ describe('OrderPolicyPage', () => {
   let fixture: ComponentFixture<OrderPolicyPage>;
   let policyApi: { getEffective: ReturnType<typeof vi.fn>; publish: ReturnType<typeof vi.fn> };
   let configApi: { resolution: ReturnType<typeof vi.fn>; setValue: ReturnType<typeof vi.fn> };
+  let settingsScope: FakeSettingsScope;
 
   beforeEach(async () => {
     policyApi = {
@@ -97,13 +98,14 @@ describe('OrderPolicyPage', () => {
       }),
     };
 
+    settingsScope = new FakeSettingsScope();
     await TestBed.configureTestingModule({
       imports: [OrderPolicyPage],
       providers: [
         { provide: OrderPolicyApi, useValue: policyApi },
         { provide: ConfigurationApi, useValue: configApi },
         { provide: CurrentTenant, useValue: new FakeCurrentTenant() },
-        { provide: SettingsScope, useValue: new FakeSettingsScope() },
+        { provide: SettingsScope, useValue: settingsScope },
       ],
     }).compileComponents();
     TestBed.inject(I18n).setLocale('en');
@@ -252,6 +254,65 @@ describe('OrderPolicyPage', () => {
         locationId: null,
         explicitNull: true,
       }),
+    );
+  });
+
+  // Row 10.3b: TENANT is a third editing level, reachable from the scope
+  // bar's own toggle (`ScopeBar`/`SettingsScope.setTenantLevel`). These
+  // prove this page — the row's own named consumer — actually authors at
+  // it once `scope.level()` answers `'TENANT'`, not only that the type
+  // admits the value.
+
+  it('re-reads every card 2-5 field at TENANT scope when the scope bar switches to it', async () => {
+    configApi.resolution.mockClear();
+    settingsScope.level.set('TENANT');
+    fixture.detectChanges();
+    await flushMicrotasks();
+
+    expect(configApi.resolution).toHaveBeenCalledWith(
+      TENANT_ID,
+      'ordering.late_order_threshold_minutes',
+      'TENANT',
+      BRAND_ID,
+      null,
+    );
+  });
+
+  it('overrides a Card 2 field at TENANT scope, authoring the company-wide default', async () => {
+    settingsScope.level.set('TENANT');
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    const fieldRows = fixture.nativeElement.querySelectorAll('.field-row');
+    const lateThresholdRow = fieldRows[3] as HTMLElement;
+    const overrideButton = lateThresholdRow.querySelector('.field__action') as HTMLButtonElement;
+    overrideButton.click();
+    fixture.detectChanges();
+
+    const valueInput = fixture.nativeElement.querySelector(
+      '[id="field-ordering.late_order_threshold_minutes"]',
+    ) as HTMLInputElement;
+    valueInput.value = '25';
+    valueInput.dispatchEvent(new Event('input'));
+
+    const reasonInput = fixture.nativeElement.querySelector(
+      '[id="field-reason-ordering.late_order_threshold_minutes"]',
+    ) as HTMLInputElement;
+    reasonInput.value = 'Company-wide default, every brand inherits unless overridden';
+    reasonInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    const saveButton = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('.form__actions button'),
+    ).find((button) => button.textContent?.includes('Publish')) as HTMLButtonElement;
+    saveButton.click();
+    await flushMicrotasks();
+
+    expect(configApi.setValue).toHaveBeenCalledWith(
+      TENANT_ID,
+      'ordering.late_order_threshold_minutes',
+      expect.objectContaining({ scopeType: 'TENANT', integerValue: 25 }),
     );
   });
 });

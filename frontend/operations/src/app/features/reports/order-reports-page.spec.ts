@@ -443,6 +443,14 @@ describe('OrderReportsPage', () => {
       latitude: null,
       longitude: null,
       coordinateSource: 'NOT_GEOCODED',
+      sortOrder: 0,
+      seats: null,
+      averageChequeAmount: null,
+      averageChequeCurrency: null,
+      hasParking: false,
+      hasPlayground: false,
+      virtualTourUrl: null,
+      locales: [],
     },
   ];
   const CHANNELS: readonly ChannelView[] = [
