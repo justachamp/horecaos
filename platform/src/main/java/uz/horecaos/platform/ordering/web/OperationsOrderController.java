@@ -1104,10 +1104,13 @@ public class OperationsOrderController {
             summary = "Amend a live order, appending a new revision",
             description = "An amendment is not an edit. Applying one appends a revision carrying "
                     + "its own complete total and leaves the previous one byte-identical; it "
-                    + "never rewrites a revision and never creates a second order. Three of ADR "
-                    + "0039's ten commands are built — the kitchen note, the callback flag and "
-                    + "change-due — and the other seven are refused by name rather than "
-                    + "half-performed.")
+                    + "never rewrites a revision and never creates a second order. Eleven of "
+                    + "ADR 0039's twelve commands are built (wave 10 added six financial ones — "
+                    + "ADD_LINES, CHANGE_LINE_QUANTITY increase-only, CHANGE_PAYMENT_METHOD, "
+                    + "CHANGE_DELIVERY_ADDRESS, CHANGE_FULFILLMENT_TIME and CHANGE_CONTACT — "
+                    + "beside the five already built); only REMOVE_LINES is still refused by "
+                    + "name rather than half-performed, pending an ADR 0017 return/write-off "
+                    + "primitive.")
     public ResponseEntity<AmendmentResponse> amend(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
@@ -1155,6 +1158,19 @@ public class OperationsOrderController {
             throw new ApiException(ErrorCode.RESOURCE_CONFLICT, lapsed.getMessage());
         } catch (OrderAmendmentService.CustomerConfirmationRequiredException unconfirmed) {
             throw new ApiException(ErrorCode.RESOURCE_CONFLICT, unconfirmed.getMessage());
+        } catch (OrderAmendmentService.AmendmentRefusedException refused) {
+            // Wave 10: propose() itself raises this family directly (the §3.11 cut
+            // point, an out-of-zone address, a quantity decrease with no ADR 0017
+            // primitive, a payment-method change this build cannot settle, an
+            // increase with no incremental-payment path) and again through its own
+            // inline apply() when applyImmediately repriced straight through
+            // (a lapsed quote, unavailable stock, a pending or declined ADR 0027
+            // approval). Left uncaught here it fell through to the container's
+            // generic 500 rather than a stable ADR 0031 conflict, which is worse
+            // than refusing outright: every code the doc above this method names
+            // by name was, until this catch existed, actually a fault.
+            throw new ApiException(
+                    ErrorCode.RESOURCE_CONFLICT, refused.getMessage(), java.util.Map.of("reasonCode", refused.code()));
         } catch (IllegalArgumentException invalid) {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, invalid.getMessage());
         }

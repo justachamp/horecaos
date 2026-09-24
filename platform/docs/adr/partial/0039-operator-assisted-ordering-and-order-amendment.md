@@ -138,6 +138,46 @@
   the acknowledgeable `CASH_TENDERED_INSUFFICIENT` notice, and a history view
   over `GET .../amendments`. See this record's own dated status addition below
   for what ADR 0113 did and did not change here.
+  **Wave 10 (gap map rows `1.2c`/`2.1d`) builds six of the seven financial
+  commands** — `ADD_LINES` and `CHANGE_LINE_QUANTITY` for an increase only,
+  `CHANGE_PAYMENT_METHOD` for `CASH` at either end or opening a fresh online
+  intent, `CHANGE_DELIVERY_ADDRESS`, `CHANGE_FULFILLMENT_TIME` and
+  `CHANGE_CONTACT` — taking `AmendmentCommandType`'s built set from five to
+  eleven of twelve. Each reprices through the same `CartPricingPort`/`PricingEngine`
+  path `CartService#price` uses, reserves an increase through the existing
+  `InventoryReservationPort` (never a decrease — releasing or writing off
+  already-committed stock needs a fourth ADR 0017 primitive this build does not
+  have, so `REMOVE_LINES` and a quantity decrease both stay refused by name),
+  and settles the §3.11 rules this record's own matrix already decided: the
+  cut point (`ordering.amendment_cut_point_status`, default `READY`), an
+  increase requiring the customer's attested agreement before `apply` commits
+  it (and, for an order already paid through a provider, refused with
+  `INCREMENTAL_PAYMENT_NOT_SUPPORTED` — this build's `PaymentIntentPort` has
+  no incremental-charge path), a decrease above `ordering.amendment_decrease
+  _approval_threshold_minor` (200 000 UZS default) raised as an ADR 0027
+  four-eyes approval (`ApprovalAction.ORDERING_AMENDMENT_DECREASE`) rather
+  than applied unreviewed, and the existing §3.11 POS-export interlock.
+  `CHANGE_PAYMENT_METHOD` changes `CASH` at either end directly; switching a
+  provider-paid order to anything else is refused with
+  `PAYMENT_METHOD_CHANGE_REQUIRES_VOID_REFUND`, because voiding or refunding
+  the old intent is not a capability `PaymentIntentPort` exposes yet.
+  `CHANGE_DELIVERY_ADDRESS` re-resolves the ADR 0037 zone fee through the
+  identical quoting path and refuses `DELIVERY_ADDRESS_OUT_OF_ZONE`/`_NOT_SERVICEABLE`
+  when the new point leaves every zone, or `DELIVERY_ADDRESS_NOT_APPLICABLE` on
+  a pickup order. `CHANGE_CONTACT` writes the ADR 0029-protected recipient name
+  and phone on the customer snapshot and never carries either into an audit
+  fact or an event, only the command type name. Fiscalization is not live
+  (gap map row `X.2`, ADR 0038 blocked), so every revision a financial command
+  produces sets `order_revisions.fiscal_correction_required` (V0395) rather
+  than silently skipping the correction the matrix declares; a real correction
+  document is swept in once fiscalization ships. `V0394` grants `UPDATE
+  (revision_to)` on `ordering.order_lines` — the grant V0029's own comment said
+  would "arrive with" the first line-changing command — so `ADD_LINES`/`CHANGE_LINE_QUANTITY`
+  can close a superseded line and append its replacement without ever editing
+  a row in place. Covered by `OrderAmendmentAndOutcomeTests`. `REMOVE_LINES`
+  remains the one command in the closed set of twelve that is declared and
+  refused by name; unblocking it needs the ADR 0017 amendment this record's
+  own deferred-work table already names.
 - Date proposed: 2026-08-21
 - Date decided: 2026-08-21
 - Deciders: Ayubkhon Abbosov (platform architecture), product, finance, legal

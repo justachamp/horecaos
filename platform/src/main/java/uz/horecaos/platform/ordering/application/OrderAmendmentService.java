@@ -76,15 +76,21 @@ import uz.horecaos.platform.tenancy.api.TenantId;
  * its own complete total; revision N−1 is left byte-identical, and there is never
  * a second order for one meal the customer ordered once.
  *
- * <p>Five of the now-twelve commands are carried out. Three change no money — the
- * kitchen note, the callback flag and the change-due figure — which is
- * deliberately the order ADR 0039's rollout puts them in: they exercise the
- * revision machinery with nothing at risk. ADR 0113 (wave P10) adds two more of
- * the same non-financial shape, the courier note and the internal note, once the
- * three had proved the machinery out. Every other command is refused by name
- * rather than accepted and half-performed, because a command carried out in the
- * quote and forgotten in the fiscal receipt is the failure the whole design
- * exists to prevent.
+ * <p>Eleven of the twelve commands are carried out. Five change no money — the
+ * kitchen note, the callback flag, the change-due figure, and, ADR 0113 (wave P10)
+ * added, the courier note and the internal note — which is deliberately the
+ * order ADR 0039's rollout puts them in: they exercise the revision machinery
+ * with nothing at risk. Wave 10 (gap map rows {@code 1.2c}/{@code 2.1d}) then
+ * built six of the seven financial commands — {@code ADD_LINES}, {@code
+ * CHANGE_LINE_QUANTITY} for an increase only, {@code CHANGE_PAYMENT_METHOD},
+ * {@code CHANGE_DELIVERY_ADDRESS}, {@code CHANGE_FULFILLMENT_TIME} and {@code
+ * CHANGE_CONTACT} — each repricing, reserving, charging or re-fiscalizing
+ * through the consequence its own ADR 0039 matrix row declares. Only {@code
+ * REMOVE_LINES} is still refused by name rather than accepted and
+ * half-performed, because releasing or writing off already-committed stock
+ * needs a fourth ADR 0017 primitive this build does not have, and a command
+ * carried out in the quote and forgotten in the inventory ledger is the
+ * failure the whole design exists to prevent.
  */
 @Service
 public class OrderAmendmentService {
