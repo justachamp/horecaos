@@ -12,6 +12,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.stream.Stream;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVPrinter;
@@ -57,6 +58,30 @@ public class CatalogImportParser {
             "price_currency",
             "status",
             "image_url");
+
+    /**
+     * The largest decoded {@code .xlsx} this parser will build a workbook
+     * from. Independent of any limit an HTTP layer happens to apply (ADR
+     * 0031's {@code CachedBodyRequestFilter} currently caps the whole
+     * encoded request body, JSON envelope included, at 1 MiB) — this parser
+     * has no visibility into that, and a future direct caller (a batch job,
+     * a test) may never go through it at all.
+     */
+    public static final int MAX_DECODED_XLSX_BYTES = 8 * 1024 * 1024;
+
+    /**
+     * The largest number of sheet rows this parser will ever materialize.
+     * {@code .xlsx}'s zip container uses DEFLATE, which can amplify a small,
+     * highly repetitive upload into a sheet many hundreds of times its
+     * compressed size — a byte-size check on the compressed upload alone
+     * (see {@link #MAX_DECODED_XLSX_BYTES}) does not bound that. Reading
+     * through {@link org.dhatim.fastexcel.reader.Sheet#openStream()} rather
+     * than {@link org.dhatim.fastexcel.reader.Sheet#read()}, and refusing
+     * once this many rows have been pulled, bounds the work done regardless
+     * of how the archive was built. Comfortably above any real brand
+     * catalog.
+     */
+    public static final int MAX_XLSX_ROWS = 20_000;
 
     /**
      * Parses the whole document, rows in source order, 1-based.
@@ -107,6 +132,13 @@ public class CatalogImportParser {
      * forgiveness a merchant's own copy-paste habits need — a trailing blank
      * row under the last real one is the single most common shape a filled
      * template comes back in.
+     *
+     * <p>Two caps guard against a small, maliciously crafted upload
+     * expanding into an unreasonable amount of work: {@link
+     * #MAX_DECODED_XLSX_BYTES} refuses before a workbook is even opened, and
+     * {@link #MAX_XLSX_ROWS} bounds how many rows are ever pulled from the
+     * sheet's own streaming reader, regardless of the archive's compression
+     * ratio.
      */
     private List<CatalogImportRow> parseXlsx(String base64Content) {
         byte[] bytes;
@@ -115,8 +147,19 @@ public class CatalogImportParser {
         } catch (IllegalArgumentException notBase64) {
             throw new CatalogImportFormatException("The .xlsx document is not valid Base64: " + notBase64.getMessage());
         }
+        if (bytes.length > MAX_DECODED_XLSX_BYTES) {
+            throw new CatalogImportFormatException("The .xlsx document is larger than the %d MB this import accepts"
+                    .formatted(MAX_DECODED_XLSX_BYTES / (1024 * 1024)));
+        }
         try (ReadableWorkbook workbook = new ReadableWorkbook(new ByteArrayInputStream(bytes))) {
-            List<Row> all = workbook.getFirstSheet().read();
+            List<Row> all;
+            try (Stream<Row> rows = workbook.getFirstSheet().openStream()) {
+                all = rows.limit(MAX_XLSX_ROWS + 1L).toList();
+            }
+            if (all.size() > MAX_XLSX_ROWS) {
+                throw new CatalogImportFormatException(
+                        "The .xlsx document has more than the %d rows this import accepts".formatted(MAX_XLSX_ROWS));
+            }
             if (all.isEmpty()) {
                 return List.of();
             }
@@ -146,6 +189,11 @@ public class CatalogImportParser {
                 parsed.add(toRow(raw, rowNumber));
             }
             return parsed;
+        } catch (CatalogImportFormatException refused) {
+            // Already the right exception, carrying its own specific
+            // message (the row-count cap above) -- rethrown as-is rather
+            // than wrapped a second time by the generic case below.
+            throw refused;
         } catch (IOException | RuntimeException malformed) {
             // fastexcel-reader throws a range of unchecked exceptions for a
             // document that is not actually a valid OOXML workbook (a
