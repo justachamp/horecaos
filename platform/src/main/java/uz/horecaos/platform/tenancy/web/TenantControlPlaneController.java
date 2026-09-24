@@ -360,11 +360,14 @@ public class TenantControlPlaneController {
                         Boolean.TRUE.equals(request.clearLandmark()),
                         request.sortOrder(),
                         request.seats(),
+                        Boolean.TRUE.equals(request.clearSeats()),
                         request.averageChequeAmount(),
                         request.averageChequeCurrency(),
+                        Boolean.TRUE.equals(request.clearAverageCheque()),
                         request.hasParking(),
                         request.hasPlayground(),
                         request.virtualTourUrl(),
+                        Boolean.TRUE.equals(request.clearVirtualTourUrl()),
                         request.locales() == null
                                 ? null
                                 : request.locales().stream()
@@ -450,6 +453,16 @@ public class TenantControlPlaneController {
      *                       turned {@code FAIL_ON_NULL_FOR_PRIMITIVES} on), so as
      *                       {@code boolean} every ordinary address or phone edit
      *                       answered 400 MALFORMED_BODY
+     * @param clearSeats true to remove a previously-set seat count. The same
+     *                    escape hatch {@code clearLandmark} is, and boxed for
+     *                    the same reason
+     * @param clearAverageCheque true to remove a previously-set average cheque
+     *                            amount and currency together — {@link
+     *                            uz.horecaos.platform.tenancy.domain.LocationVenue}
+     *                            requires both null or both set, so one flag
+     *                            clears the pair
+     * @param clearVirtualTourUrl true to remove a previously-set virtual tour
+     *                             link
      */
     record DescribeLocationRequest(
             @Size(max = 200) String addressLine,
@@ -474,9 +487,13 @@ public class TenantControlPlaneController {
 
             @Min(0) @Nullable Integer seats,
 
+            @Nullable Boolean clearSeats,
+
             @Min(0) @Nullable Long averageChequeAmount,
 
             @Pattern(regexp = "[A-Z]{3}") @Nullable String averageChequeCurrency,
+
+            @Nullable Boolean clearAverageCheque,
 
             @Nullable Boolean hasParking,
 
@@ -484,6 +501,8 @@ public class TenantControlPlaneController {
 
             @Size(max = 500) @Pattern(regexp = "https?://.+") @Nullable
             String virtualTourUrl,
+
+            @Nullable Boolean clearVirtualTourUrl,
 
             @Nullable List<LocationLocaleRequest> locales) {}
 

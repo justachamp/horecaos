@@ -83,11 +83,25 @@ export interface DescribeLocationRequest {
    */
   readonly sortOrder?: number;
   readonly seats?: number;
+  /**
+   * Explicitly removes a previously-set seat count, the same escape hatch
+   * `clearLandmark` is for the landmark. An omitted `seats` alone means
+   * "this write did not touch it" and carries the stored value through.
+   */
+  readonly clearSeats?: boolean;
   readonly averageChequeAmount?: number;
   readonly averageChequeCurrency?: string;
+  /**
+   * Explicitly removes a previously-set average cheque amount and currency
+   * together — the backend requires both null or both set, so one flag
+   * clears the pair.
+   */
+  readonly clearAverageCheque?: boolean;
   readonly hasParking?: boolean;
   readonly hasPlayground?: boolean;
   readonly virtualTourUrl?: string;
+  /** Explicitly removes a previously-set virtual tour link. */
+  readonly clearVirtualTourUrl?: boolean;
   /** 10.2b: a whole-set write when present — replaces the branch's entire localized-content set. Omitted leaves it untouched. */
   readonly locales?: readonly LocationLocaleRequest[];
 }

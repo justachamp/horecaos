@@ -354,6 +354,73 @@ describe('LocationDetailPane', () => {
     );
   });
 
+  /**
+   * Batch 10 finding: seats/average-cheque/virtual-tour-url had no clear
+   * signal of their own, unlike the landmark's `clearLandmark` -- an emptied
+   * field collapsed to an omitted key, which the backend read as "untouched"
+   * and kept the stale value forever while the console reported success.
+   */
+  it('sends explicit clear signals when seats, average cheque and the virtual tour url are emptied and saved', async () => {
+    const described: LocationView = {
+      ...LOCATION,
+      seats: 40,
+      averageChequeAmount: 85000,
+      averageChequeCurrency: 'UZS',
+      virtualTourUrl: 'https://tour.example/branch',
+    };
+    api.profile.mockResolvedValue(described);
+    fixture.componentRef.setInput('locationId', 'location-1-venued');
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    const editButton = fixture.nativeElement.querySelector('.primary') as HTMLButtonElement;
+    editButton.click();
+    fixture.detectChanges();
+
+    const seatsInput = fixture.nativeElement.querySelector('#place-seats') as HTMLInputElement;
+    seatsInput.value = '';
+    seatsInput.dispatchEvent(new Event('input'));
+
+    const averageChequeAmountInput = fixture.nativeElement.querySelector(
+      '#place-average-cheque',
+    ) as HTMLInputElement;
+    averageChequeAmountInput.value = '';
+    averageChequeAmountInput.dispatchEvent(new Event('input'));
+
+    const averageChequeCurrencyInput = fixture.nativeElement.querySelector(
+      '#place-average-cheque-currency',
+    ) as HTMLInputElement;
+    averageChequeCurrencyInput.value = '';
+    averageChequeCurrencyInput.dispatchEvent(new Event('input'));
+
+    const virtualTourUrlInput = fixture.nativeElement.querySelector(
+      '#place-virtual-tour',
+    ) as HTMLInputElement;
+    virtualTourUrlInput.value = '';
+    virtualTourUrlInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    const saveButton = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('.form__actions button'),
+    ).find((button) => button.textContent?.includes('Save')) as HTMLButtonElement;
+    saveButton.click();
+    await flushMicrotasks();
+
+    expect(api.describePlace).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        seats: undefined,
+        clearSeats: true,
+        averageChequeAmount: undefined,
+        averageChequeCurrency: undefined,
+        clearAverageCheque: true,
+        virtualTourUrl: undefined,
+        clearVirtualTourUrl: true,
+      }),
+    );
+  });
+
   it('warns with the shared-location count before saving a shared schedule’s hours, then saves', async () => {
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
     const tabs = fixture.nativeElement.querySelectorAll('.tab');

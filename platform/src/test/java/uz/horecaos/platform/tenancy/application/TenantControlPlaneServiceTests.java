@@ -711,11 +711,14 @@ class TenantControlPlaneServiceTests {
                         false,
                         null,
                         null,
+                        false,
+                        null,
+                        null,
+                        false,
                         null,
                         null,
                         null,
-                        null,
-                        null,
+                        false,
                         null));
 
         // Only the phone changes; address, landmark and the point are silent
@@ -737,11 +740,14 @@ class TenantControlPlaneServiceTests {
                         false,
                         null,
                         null,
+                        false,
+                        null,
+                        null,
+                        false,
                         null,
                         null,
                         null,
-                        null,
-                        null,
+                        false,
                         null));
 
         assertThat(after.contactPhone()).isEqualTo("+998712009999");
@@ -780,11 +786,14 @@ class TenantControlPlaneServiceTests {
                         false,
                         null,
                         null,
+                        false,
+                        null,
+                        null,
+                        false,
                         null,
                         null,
                         null,
-                        null,
-                        null,
+                        false,
                         null));
 
         var cleared = h.service.describeLocation(
@@ -803,11 +812,14 @@ class TenantControlPlaneServiceTests {
                         false,
                         null,
                         null,
+                        false,
+                        null,
+                        null,
+                        false,
                         null,
                         null,
                         null,
-                        null,
-                        null,
+                        false,
                         null));
 
         assertThat(cleared.latitude()).isNull();
@@ -847,11 +859,14 @@ class TenantControlPlaneServiceTests {
                         false,
                         null,
                         null,
+                        false,
+                        null,
+                        null,
+                        false,
                         null,
                         null,
                         null,
-                        null,
-                        null,
+                        false,
                         null));
 
         // A write that is silent about landmark (clearLandmark left at its
@@ -874,11 +889,14 @@ class TenantControlPlaneServiceTests {
                         false,
                         null,
                         null,
+                        false,
+                        null,
+                        null,
+                        false,
                         null,
                         null,
                         null,
-                        null,
-                        null,
+                        false,
                         null));
         assertThat(untouched.landmark()).isEqualTo("Next to the blue mosque");
 
@@ -887,11 +905,109 @@ class TenantControlPlaneServiceTests {
                 brandId,
                 locationId,
                 new TenantControlPlaneService.DescribeLocationCommand(
-                        "Address", null, null, null, null, null, null, null, true, null, null, null, null, null, null,
-                        null, null));
+                        "Address", null, null, null, null, null, null, null, true, null, null, false, null, null, false,
+                        null, null, null, false, null));
 
         assertThat(cleared.landmark())
                 .as("clearLandmark=true must actually remove the stale landmark")
+                .isNull();
+    }
+
+    /**
+     * Batch 10 finding: {@code toVenue} merged {@code seats}, {@code
+     * averageChequeAmount}/{@code averageChequeCurrency} and {@code
+     * virtualTourUrl} with "null means omitted, carry the existing value
+     * through" and no equivalent of {@code clearLandmark} for any of them —
+     * so once an operator set one of these on a branch, blanking the field
+     * and saving silently kept the stale value forever. {@code clearSeats},
+     * {@code clearAverageCheque} and {@code clearVirtualTourUrl} are the same
+     * escape hatch {@code clearLandmark} already is for the landmark.
+     */
+    @Test
+    @DisplayName("explicit clear flags actually clear seats, average cheque and the virtual tour url")
+    void explicitClearFlagsClearVenueFacts() {
+        Harness h = new Harness();
+        BrandId brandId = h.brand("VENUED", "venued");
+        LocationId locationId = h.location(brandId, "MALL");
+
+        h.service.describeLocation(
+                h.tenantId,
+                brandId,
+                locationId,
+                new TenantControlPlaneService.DescribeLocationCommand(
+                        "Address",
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        false,
+                        null,
+                        40,
+                        false,
+                        85000L,
+                        "UZS",
+                        false,
+                        null,
+                        null,
+                        "https://tour.example/branch",
+                        false,
+                        null));
+
+        // A write silent about the venue facts (every clear flag at its
+        // default false) must still carry them through unchanged -- the
+        // control for the explicit-clear calls below.
+        var untouched = h.service.describeLocation(
+                h.tenantId,
+                brandId,
+                locationId,
+                new TenantControlPlaneService.DescribeLocationCommand(
+                        "Address",
+                        null,
+                        null,
+                        null,
+                        "+998712009999",
+                        null,
+                        null,
+                        null,
+                        false,
+                        null,
+                        null,
+                        false,
+                        null,
+                        null,
+                        false,
+                        null,
+                        null,
+                        null,
+                        false,
+                        null));
+        assertThat(untouched.seats()).isEqualTo(40);
+        assertThat(untouched.averageChequeAmount()).isEqualTo(85000L);
+        assertThat(untouched.averageChequeCurrency()).isEqualTo("UZS");
+        assertThat(untouched.virtualTourUrl()).isEqualTo("https://tour.example/branch");
+
+        var cleared = h.service.describeLocation(
+                h.tenantId,
+                brandId,
+                locationId,
+                new TenantControlPlaneService.DescribeLocationCommand(
+                        "Address", null, null, null, null, null, null, null, false, null, null, true, null, null, true,
+                        null, null, null, true, null));
+
+        assertThat(cleared.seats())
+                .as("clearSeats=true must actually remove the stale seat count")
+                .isNull();
+        assertThat(cleared.averageChequeAmount())
+                .as("clearAverageCheque=true must actually remove the stale cheque amount")
+                .isNull();
+        assertThat(cleared.averageChequeCurrency())
+                .as("clearAverageCheque=true must actually remove the stale cheque currency")
+                .isNull();
+        assertThat(cleared.virtualTourUrl())
+                .as("clearVirtualTourUrl=true must actually remove the stale tour url")
                 .isNull();
     }
 

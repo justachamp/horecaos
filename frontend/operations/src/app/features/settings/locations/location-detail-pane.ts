@@ -253,6 +253,15 @@ export class LocationDetailPane {
    * blank *and* the loaded profile actually had a landmark to clear, so an
    * operator who empties the field and saves gets what the console already
    * showed as having happened.
+   *
+   * **Clearing seats, the average cheque and the virtual tour url.** The
+   * same trap as the landmark: an emptied field collapses to `undefined` on
+   * the wire, which the backend reads as "this write did not touch it" and
+   * carries the stale value through unchanged. `clearSeats`,
+   * `clearAverageCheque` and `clearVirtualTourUrl` are sent, true, only when
+   * the relevant draft field(s) are blank *and* the loaded profile actually
+   * had a value to clear — `averageChequeAmount` and `averageChequeCurrency`
+   * share one flag because the backend requires them both null or both set.
    */
   protected async savePlace(): Promise<void> {
     const scope = this.scope();
@@ -265,8 +274,15 @@ export class LocationDetailPane {
       const trimmedLandmark = this.draftLandmark().trim();
       const clearLandmark = trimmedLandmark === '' && !!this.profile()?.landmark;
       const seats = this.draftSeats().trim();
+      const clearSeats = seats === '' && this.profile()?.seats != null;
       const averageChequeAmount = this.draftAverageChequeAmount().trim();
       const averageChequeCurrency = this.draftAverageChequeCurrency().trim();
+      const clearAverageCheque =
+        averageChequeAmount === '' &&
+        averageChequeCurrency === '' &&
+        (this.profile()?.averageChequeAmount != null || this.profile()?.averageChequeCurrency != null);
+      const trimmedVirtualTourUrl = this.draftVirtualTourUrl().trim();
+      const clearVirtualTourUrl = trimmedVirtualTourUrl === '' && !!this.profile()?.virtualTourUrl;
       // A whole-set write, always sent — the same reason brand-profile.ts's
       // own saveProfile always sends its whole `locales` array: the grid
       // already knows the full set it wants. A row both fields left blank is
@@ -288,11 +304,14 @@ export class LocationDetailPane {
         clearLandmark: clearLandmark || undefined,
         sortOrder: this.draftSortOrder(),
         seats: seats === '' ? undefined : Number(seats),
+        clearSeats: clearSeats || undefined,
         averageChequeAmount: averageChequeAmount === '' ? undefined : Number(averageChequeAmount),
         averageChequeCurrency: averageChequeCurrency || undefined,
+        clearAverageCheque: clearAverageCheque || undefined,
         hasParking: this.draftHasParking(),
         hasPlayground: this.draftHasPlayground(),
-        virtualTourUrl: this.draftVirtualTourUrl().trim() || undefined,
+        virtualTourUrl: trimmedVirtualTourUrl || undefined,
+        clearVirtualTourUrl: clearVirtualTourUrl || undefined,
         locales,
       });
       this.profile.set(updated);
