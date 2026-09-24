@@ -17,6 +17,7 @@ import { REPORTS_PLACEHOLDER_TIME_ZONE } from './reports-filter-state';
 import { formatCount } from './report-formatting';
 import {
   DemandHistoryResponse,
+  DistanceBucketDefinitionResponse,
   OrderRowResponse,
   ProvenanceResponse,
   ReportingApi,
@@ -37,6 +38,25 @@ const SLA_BUCKET_LABEL_KEYS: Readonly<Record<SlaBucketCode, MessageKey>> = {
   M40_50: 'reports.branches.sla.bucket.M40_50',
   M50_60: 'reports.branches.sla.bucket.M50_60',
   OVER_60: 'reports.branches.sla.bucket.OVER_60',
+};
+
+/**
+ * Row 7.10b (wave 10 w5-reports-exports): `distance_bucket_set.v1`'s own six
+ * codes, in their fixed display order — mirrors `DistanceBucketSet.java`.
+ * Duplicated locally the same way {@link SLA_BUCKETS} already duplicates its
+ * own server-side set, rather than fetching the definition twice (once for
+ * the codes, once for the formula panel — see {@link
+ * GeographyPage.distanceBucketDefinitions}).
+ */
+const DISTANCE_BUCKETS = ['UNDER_1KM', 'KM1_2', 'KM2_3', 'KM3_5', 'KM5_8', 'OVER_8KM'] as const;
+type DistanceBucketCode = (typeof DISTANCE_BUCKETS)[number];
+const DISTANCE_BUCKET_LABEL_KEYS: Readonly<Record<DistanceBucketCode, MessageKey>> = {
+  UNDER_1KM: 'reports.geography.histogram.distance.bucket.UNDER_1KM',
+  KM1_2: 'reports.geography.histogram.distance.bucket.KM1_2',
+  KM2_3: 'reports.geography.histogram.distance.bucket.KM2_3',
+  KM3_5: 'reports.geography.histogram.distance.bucket.KM3_5',
+  KM5_8: 'reports.geography.histogram.distance.bucket.KM5_8',
+  OVER_8KM: 'reports.geography.histogram.distance.bucket.OVER_8KM',
 };
 
 /** ISO-8601: 1 = Monday .. 7 = Sunday, matching `demand-forecast-page.ts`'s own `WEEKDAYS`. */
@@ -94,19 +114,22 @@ interface DrillDown {
  * heatmap and today's-orders-as-pins rows (7.10/7.10a), both blocked on a
  * map provider decision tracked under `X.4`.
  *
- * **7.10b's histogram is two charts, not one, and only one of them is
- * real today.** `reporting.fact_delivery` (T11, ADR 0125) now carries a raw
- * `distance_meters`/`transit_seconds` per delivery, but nothing buckets it —
- * `CourierReportController` only ever answers a per-courier *aggregate*
- * (min/max/avg/total) or the fixed six-bucket SLA distribution, never a
- * distance histogram. Building that bucketing is new backend surface this
- * wave does not add (no migration, no new endpoint — see this wave's own
- * brief), so the distance chart names exactly what is missing rather than
- * rendering nothing. The duration chart is real: `GET
- * .../reporting/sla-buckets`, the same `sla_bucket_set.v1` six buckets
- * `branch-sla-report-page.ts` already renders as a table, narrowed to the
- * one selected branch and rendered as a histogram instead — no new
- * endpoint, no new SQL.
+ * **7.10b's histogram is two charts, and both are real as of wave 10
+ * w5-reports-exports.** The duration chart reads `GET .../reporting/sla-buckets`,
+ * the same `sla_bucket_set.v1` six buckets `branch-sla-report-page.ts`
+ * already renders as a table, narrowed to the one selected branch and
+ * rendered as a histogram instead — no new endpoint, no new SQL. The
+ * distance chart used to name the gap on screen: `reporting.fact_delivery`
+ * (T11, ADR 0125) carried a raw `distance_meters` per delivery but nothing
+ * bucketed it. `GET .../reporting/distance-buckets` now does — a live
+ * `GROUP BY` over `fact_delivery` against `distance_bucket_set.v1`'s own
+ * fixed six meter ranges (`DistanceBucketSet.java`), tenant/branch/period
+ * scoped and zero-filled the same way the duration chart's own buckets are.
+ * `GET .../reporting/distance-bucket-set` publishes those boundaries —
+ * fetched once, not per branch or period, and rendered as a caption beneath
+ * the chart, the same "read the definition, not just the number"
+ * transparency statistics.md §1.2's KPI-tile formula panel already gives a
+ * registry metric.
  *
  * **7.10c is the cheapest row in the whole section**: seven
  * `GET .../reporting/demand-history` calls, one per weekday, for the
@@ -154,7 +177,11 @@ export class GeographyPage implements OnInit {
   // ---------------------------------------------------------------- 7.10b
   protected readonly histogramState = signal<SecondaryLoadState>('idle');
   protected readonly durationBuckets = signal<readonly ChartCategory[]>([]);
+  protected readonly distanceBuckets = signal<readonly ChartCategory[]>([]);
   protected readonly histogramProvenance = signal<ProvenanceResponse | null>(null);
+  /** Row 7.10b's own published-formula panel — fetched once, tenant-wide and period-independent. */
+  protected readonly distanceBucketDefinitions =
+    signal<readonly DistanceBucketDefinitionResponse[]>([]);
 
   // ---------------------------------------------------------------- 7.10c
   protected readonly sampleSize = signal<number>(SAMPLE_SIZE_OPTIONS[0]);
@@ -197,6 +224,7 @@ export class GeographyPage implements OnInit {
     this.selectedLocationId.set(scope.locationId);
     await this.loadBranchOptions(scope);
     this.state.set('ready');
+    void this.loadDistanceBucketDefinitions(scope);
     const generation = ++this.loadGeneration;
     void this.loadHistogram(generation);
     void this.loadWeekGrid(generation);
@@ -208,6 +236,20 @@ export class GeographyPage implements OnInit {
 
   protected bucketLabel(bucket: SlaBucketCode): string {
     return this.i18n.t(SLA_BUCKET_LABEL_KEYS[bucket]);
+  }
+
+  protected distanceBucketLabel(bucket: DistanceBucketCode): string {
+    return this.i18n.t(DISTANCE_BUCKET_LABEL_KEYS[bucket]);
+  }
+
+  /** Row 7.10b's own formula-panel caption: `< 1 km · 1–2 km · …`, from the published definition, never hard-coded ranges. */
+  protected distanceBucketRangeLabel(definition: DistanceBucketDefinitionResponse): string {
+    const from = (definition.fromMeters / 1000).toString();
+    if (definition.toMetersExclusive === null) {
+      return this.i18n.t('reports.geography.histogram.distance.range.openEnded', { from });
+    }
+    const to = (definition.toMetersExclusive / 1000).toString();
+    return this.i18n.t('reports.geography.histogram.distance.range.bounded', { from, to });
   }
 
   protected selectBranch(locationId: string): void {
@@ -260,6 +302,22 @@ export class GeographyPage implements OnInit {
   }
 
   /**
+   * Row 7.10b's own published-formula panel — the boundaries never change
+   * per branch or period, so this is fetched once at mount rather than
+   * alongside every {@link loadHistogram} call. Best-effort: a failure here
+   * leaves the caption empty rather than failing the histogram section,
+   * which still has real bucket counts to show either way.
+   */
+  private async loadDistanceBucketDefinitions(scope: LocationScope): Promise<void> {
+    try {
+      const result = await this.api.distanceBucketSet(scope.tenantId);
+      this.distanceBucketDefinitions.set(result.buckets);
+    } catch {
+      this.distanceBucketDefinitions.set([]);
+    }
+  }
+
+  /**
    * `generation` is the {@link loadGeneration} value current when this load
    * was kicked off (see {@link selectBranch}). If a newer selection has
    * since bumped it, this response is for a branch that is no longer
@@ -278,17 +336,16 @@ export class GeographyPage implements OnInit {
     try {
       const to = todayIso();
       const from = daysAgoIso(HISTOGRAM_WINDOW_DAYS - 1);
-      const result = await this.api.slaBuckets(scope.tenantId, {
-        from,
-        to,
-        locationId: [locationId],
-      });
+      const [durationResult, distanceResult] = await Promise.all([
+        this.api.slaBuckets(scope.tenantId, { from, to, locationId: [locationId] }),
+        this.api.distanceBuckets(scope.tenantId, { from, to, locationId: [locationId] }),
+      ]);
       if (generation !== this.loadGeneration) {
         return;
       }
-      this.histogramProvenance.set(result.provenance);
+      this.histogramProvenance.set(durationResult.provenance);
       const totals = new Map<SlaBucketCode, number>(SLA_BUCKETS.map((code) => [code, 0]));
-      for (const bucket of result.buckets) {
+      for (const bucket of durationResult.buckets) {
         if ((SLA_BUCKETS as readonly string[]).includes(bucket.bucketCode)) {
           const code = bucket.bucketCode as SlaBucketCode;
           totals.set(code, (totals.get(code) ?? 0) + bucket.orderCount);
@@ -299,6 +356,26 @@ export class GeographyPage implements OnInit {
           key: code,
           label: this.bucketLabel(code),
           value: totals.get(code) ?? 0,
+        })),
+      );
+      // Row 7.10b: the server already zero-fills every bucket, but the chart
+      // still builds off DISTANCE_BUCKETS' own fixed order rather than the
+      // response's array order, the same defensive shape durationBuckets above
+      // already takes against SLA_BUCKETS.
+      const distanceTotals = new Map<DistanceBucketCode, number>(
+        DISTANCE_BUCKETS.map((code) => [code, 0]),
+      );
+      for (const bucket of distanceResult.buckets) {
+        if ((DISTANCE_BUCKETS as readonly string[]).includes(bucket.bucketCode)) {
+          const code = bucket.bucketCode as DistanceBucketCode;
+          distanceTotals.set(code, (distanceTotals.get(code) ?? 0) + bucket.deliveryCount);
+        }
+      }
+      this.distanceBuckets.set(
+        DISTANCE_BUCKETS.map((code) => ({
+          key: code,
+          label: this.distanceBucketLabel(code),
+          value: distanceTotals.get(code) ?? 0,
         })),
       );
       this.histogramState.set('ready');

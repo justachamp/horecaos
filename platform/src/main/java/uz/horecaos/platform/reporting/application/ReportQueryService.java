@@ -452,6 +452,33 @@ public class ReportQueryService {
     }
 
     /**
+     * Row 7.10b (wave 10 w5-reports-exports): the geography page's distance
+     * histogram — {@link JdbcReportingStore#readDistanceBuckets}'s live count
+     * per {@link uz.horecaos.platform.reporting.domain.DistanceBucketSet} bucket,
+     * zero-filled here so a bucket with no deliveries in range is a real zero on
+     * the chart rather than a missing bar.
+     */
+    @Transactional(readOnly = true)
+    public DistanceBucketsResult distanceBuckets(UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds) {
+        validateRange(from, to);
+        refuseMixedBoundaryRegime(tenantId, from, to);
+
+        Map<String, Integer> byCode = new LinkedHashMap<>();
+        for (String code : uz.horecaos.platform.reporting.domain.DistanceBucketSet.codes()) {
+            byCode.put(code, 0);
+        }
+        for (JdbcReportingStore.DistanceBucketRow row : store.readDistanceBuckets(tenantId, from, to, locationIds)) {
+            byCode.put(row.bucketCode(), row.deliveryCount());
+        }
+        List<JdbcReportingStore.DistanceBucketRow> rows = byCode.entrySet().stream()
+                .map(entry -> new JdbcReportingStore.DistanceBucketRow(entry.getKey(), entry.getValue()))
+                .toList();
+        return new DistanceBucketsResult(rows, provenance(tenantId, List.of(), businessDays.boundaryFor(tenantId)));
+    }
+
+    public record DistanceBucketsResult(List<JdbcReportingStore.DistanceBucketRow> buckets, Provenance provenance) {}
+
+    /**
      * T11 (7.4a, ADR 0125): the {@code COURIER} scope of the fixed SLA
      * distribution — same shape {@link #slaBuckets} returns for {@code
      * LOCATION}, narrowed to the courier scope at the store layer rather
@@ -720,12 +747,37 @@ public class ReportQueryService {
             List<UUID> locationIds,
             List<String> fulfilmentTypes,
             int limit) {
+        return variantSales(
+                tenantId,
+                from,
+                to,
+                locationIds,
+                fulfilmentTypes,
+                JdbcReportingStore.VariantSalesSort.REVENUE_DESC,
+                limit,
+                null);
+    }
+
+    /**
+     * Wave 10 w5-reports-exports (7.7): server-side sort and cursor paging, past the page's
+     * previous hard-coded revenue order and 200-row cap.
+     */
+    @Transactional(readOnly = true)
+    public VariantSalesResult variantSales(
+            UUID tenantId,
+            LocalDate from,
+            LocalDate to,
+            List<UUID> locationIds,
+            List<String> fulfilmentTypes,
+            JdbcReportingStore.VariantSalesSort sort,
+            int limit,
+            JdbcReportingStore.@Nullable VariantSalesCursor cursor) {
 
         validateRange(from, to);
         refuseMixedBoundaryRegime(tenantId, from, to);
 
         List<JdbcReportingStore.VariantSalesRow> rows =
-                store.readVariantSales(tenantId, from, to, locationIds, fulfilmentTypes, limit);
+                store.readVariantSales(tenantId, from, to, locationIds, fulfilmentTypes, sort, limit, cursor);
         return new VariantSalesResult(
                 rows, rows.size() >= limit, provenance(tenantId, List.of(), businessDays.boundaryFor(tenantId)));
     }

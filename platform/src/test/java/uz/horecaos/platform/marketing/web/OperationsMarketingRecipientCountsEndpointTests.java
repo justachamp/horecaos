@@ -135,6 +135,32 @@ class OperationsMarketingRecipientCountsEndpointTests {
                 .contains("\"total\":5");
     }
 
+    /**
+     * Row 6.4 (wave 10 w5-reports-exports): the campaign history/statistics
+     * view's own "suppressed" count — nameable from {@code refusal_reason}
+     * alone, without a terminal-status projection this wave does not add.
+     */
+    @Test
+    void refusedByReasonBreaksDownTheRefusedTotalIncludingSuppressed() throws Exception {
+        UUID campaignId = insertCampaign(BRAND);
+        insertRecipientRefused(campaignId, seedCustomer(), 0, "SUPPRESSED");
+        insertRecipientRefused(campaignId, seedCustomer(), 1, "SUPPRESSED");
+        insertRecipientRefused(campaignId, seedCustomer(), 2, "CONSENT_WITHHELD");
+        insertRecipient(campaignId, seedCustomer(), 3, "QUEUED");
+
+        MvcResult result = mvc.perform(get(countsPath(BRAND, campaignId)).with(tokenFor(ADMINISTRATOR)))
+                .andReturn();
+
+        assertThat(result.getResponse().getStatus()).isEqualTo(200);
+        String body = result.getResponse().getContentAsString();
+        assertThat(body).contains("\"refused\":3").contains("\"queued\":1");
+        assertThat(body)
+                .as("the same REFUSED total, broken down by reason — SUPPRESSED nameable on its own")
+                .contains("\"refusedByReason\"")
+                .contains("\"SUPPRESSED\":2")
+                .contains("\"CONSENT_WITHHELD\":1");
+    }
+
     @Test
     void recipientCountsRefusesACampaignFromAnotherBrand() throws Exception {
         UUID campaignId = insertCampaign(OTHER_BRAND);
@@ -173,6 +199,23 @@ class OperationsMarketingRecipientCountsEndpointTests {
                 .param("notificationId", notificationId)
                 .param("refusalReason", refusalReason)
                 .param("deferredUntil", deferredUntil)
+                .update();
+    }
+
+    /** Row 6.4: a REFUSED recipient with a chosen reason, unlike {@link #insertRecipient}'s own fixed SUPPRESSED. */
+    private void insertRecipientRefused(UUID campaignId, UUID customerAccountId, int sequence, String refusalReason) {
+        jdbc.sql("""
+                INSERT INTO marketing.campaign_recipients (
+                    campaign_id, tenant_id, customer_account_id, sequence, status,
+                    refusal_reason, created_at, updated_at)
+                VALUES (:campaignId, :tenantId, :accountId, :sequence, 'REFUSED',
+                    :refusalReason, now(), now())
+                """)
+                .param("campaignId", campaignId)
+                .param("tenantId", TENANT)
+                .param("accountId", customerAccountId)
+                .param("sequence", sequence)
+                .param("refusalReason", refusalReason)
                 .update();
     }
 

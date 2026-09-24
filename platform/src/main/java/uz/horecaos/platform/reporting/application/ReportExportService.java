@@ -10,6 +10,8 @@ import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -40,10 +42,12 @@ import uz.horecaos.platform.iam.api.protection.FieldProtection.RecordRef;
 import uz.horecaos.platform.iam.api.protection.ProtectedValue;
 import uz.horecaos.platform.media.api.ObjectStorage;
 import uz.horecaos.platform.ordering.api.OrderCrmLogExportPort;
+import uz.horecaos.platform.reporting.domain.Grain;
 import uz.horecaos.platform.reporting.domain.ReportExportDefinition;
 import uz.horecaos.platform.reporting.infrastructure.persistence.JdbcReportExportStore;
 import uz.horecaos.platform.reporting.infrastructure.persistence.JdbcReportExportStore.ClaimedExport;
 import uz.horecaos.platform.reporting.infrastructure.persistence.JdbcReportExportStore.ExportRow;
+import uz.horecaos.platform.reporting.infrastructure.persistence.JdbcReportingStore;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
 
@@ -58,7 +62,8 @@ import uz.horecaos.platform.web.api.ErrorCode;
  * claims one row and produces its artefact; see that class's own doc for why this and not a batch
  * loop.
  *
- * <p>{@link ReportExportRegistry#CUSTOMER_DIRECTORY} and {@link ReportExportRegistry#ORDER_CRM_LOG}
+ * <p>{@link ReportExportRegistry#CUSTOMER_DIRECTORY}, {@link ReportExportRegistry#ORDER_CRM_LOG},
+ * {@link ReportExportRegistry#ORDER_REPORT_LOG} and {@link ReportExportRegistry#ORDER_REPORT_SUMMARY}
  * are wired — see that class's own doc for why the next report is one more {@code case} in
  * {@link #run} rather than a pluggable abstraction.
  */
@@ -82,6 +87,15 @@ public class ReportExportService {
     private final JdbcReportExportStore store;
     private final CustomerDirectoryExportPort customerDirectory;
     private final OrderCrmLogExportPort orderCrmLog;
+    /**
+     * {@link #ORDER_REPORT_LOG}/{@link #ORDER_REPORT_SUMMARY}'s own source — a same-module
+     * dependency, not a port: both reports are plain reads of this module's own {@code
+     * reporting.fact_order}, the same read {@code ReportingController} already serves, so there is
+     * no dependency-arrow reason to invert it the way {@link CustomerDirectoryExportPort}/{@link
+     * OrderCrmLogExportPort} invert theirs for a different module's data.
+     */
+    private final ReportQueryService reportQueries;
+
     private final FieldProtection protection;
     private final AuditRecorder audit;
     private final ObjectStorage storage;
@@ -94,6 +108,7 @@ public class ReportExportService {
             JdbcReportExportStore store,
             CustomerDirectoryExportPort customerDirectory,
             OrderCrmLogExportPort orderCrmLog,
+            ReportQueryService reportQueries,
             FieldProtection protection,
             AuditRecorder audit,
             ObjectStorage storage,
@@ -104,6 +119,7 @@ public class ReportExportService {
         this.store = store;
         this.customerDirectory = customerDirectory;
         this.orderCrmLog = orderCrmLog;
+        this.reportQueries = reportQueries;
         this.protection = protection;
         this.audit = audit;
         this.storage = storage;
@@ -149,13 +165,15 @@ public class ReportExportService {
      * the caller's own {@code customer.pii.export} check — and stored as {@code
      * effective_columns}/{@code includes_pii_columns} so nothing later has to re-ask.
      *
-     * @param from        {@link ReportExportRegistry#ORDER_CRM_LOG}'s own required range start;
-     *                    ignored by every other report
-     * @param to          {@link ReportExportRegistry#ORDER_CRM_LOG}'s own required range end
-     * @param locationIds {@link ReportExportRegistry#ORDER_CRM_LOG}'s own optional branch filter;
-     *                    empty means every branch the caller's tenant-wide grant already covers
-     * @throws ApiException {@code VALIDATION_FAILED} for an unknown report key or column, or for
-     *                       {@code ORDER_CRM_LOG} with no range
+     * @param from        required by {@link ReportExportRegistry#ORDER_CRM_LOG}, {@link
+     *                    ReportExportRegistry#ORDER_REPORT_LOG} and {@link
+     *                    ReportExportRegistry#ORDER_REPORT_SUMMARY} — ignored by {@link
+     *                    ReportExportRegistry#CUSTOMER_DIRECTORY}
+     * @param to          the same three reports' own required range end
+     * @param locationIds the same three reports' own optional branch filter; empty means every
+     *                    branch the caller's tenant-wide grant already covers
+     * @throws ApiException {@code VALIDATION_FAILED} for an unknown report key or column, or for a
+     *                       report that requires a range with none given
      */
     @Transactional
     public UUID requestExport(
@@ -178,8 +196,8 @@ public class ReportExportService {
                 throw new ApiException(ErrorCode.VALIDATION_FAILED, "Unknown export column: " + column);
             }
         }
-        if (ReportExportRegistry.ORDER_CRM_LOG.equals(reportKey) && (from == null || to == null)) {
-            throw new ApiException(ErrorCode.VALIDATION_FAILED, "ORDER_CRM_LOG requires both from and to");
+        if (requiresRange(reportKey) && (from == null || to == null)) {
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, reportKey + " requires both from and to");
         }
 
         List<String> effectiveColumns = definition.effectiveColumns(requestedColumns, holdsPiiCapability);
@@ -231,6 +249,13 @@ public class ReportExportService {
         return id;
     }
 
+    /** {@code ORDER_CRM_LOG}, {@code ORDER_REPORT_LOG} and {@code ORDER_REPORT_SUMMARY} all bound an order-grain or day-grain read — none of them has a sensible "every date this tenant ever had" default the way {@code CUSTOMER_DIRECTORY}'s snapshot does. */
+    private static boolean requiresRange(String reportKey) {
+        return ReportExportRegistry.ORDER_CRM_LOG.equals(reportKey)
+                || ReportExportRegistry.ORDER_REPORT_LOG.equals(reportKey)
+                || ReportExportRegistry.ORDER_REPORT_SUMMARY.equals(reportKey);
+    }
+
     private static int rowQuotaFor(String reportKey, boolean includesPii) {
         if (!includesPii) {
             return DEFAULT_ROW_QUOTA;
@@ -270,6 +295,8 @@ public class ReportExportService {
                 switch (job.reportKey()) {
                     case ReportExportRegistry.CUSTOMER_DIRECTORY -> runCustomerDirectory(job);
                     case ReportExportRegistry.ORDER_CRM_LOG -> runOrderCrmLog(job);
+                    case ReportExportRegistry.ORDER_REPORT_LOG -> runOrderReportLog(job);
+                    case ReportExportRegistry.ORDER_REPORT_SUMMARY -> runOrderReportSummary(job);
                     default ->
                         throw new IllegalStateException(
                                 "No export source registered for report key " + job.reportKey());
@@ -357,6 +384,174 @@ public class ReportExportService {
                 .map(row -> crmLogRowAsColumns(row, job.effectiveColumns()))
                 .toList();
         return new ExportOutcome(rows, bundle.truncated());
+    }
+
+    /**
+     * Wave 10 w5-reports-exports (7.2e): «Заказы»'s order-grain commercial columns, straight off
+     * {@code reporting.fact_order} via {@link ReportQueryService#orders}. {@code from}/{@code to}
+     * are stored as {@code Instant} ({@link #requestExport}'s own wire shape, shared with {@link
+     * ReportExportRegistry#ORDER_CRM_LOG}) and read back as the UTC calendar date they name — the
+     * same "no per-tenant timezone reaches this filter yet" simplification {@code
+     * REPORTS_PLACEHOLDER_TIME_ZONE} documents on the console's own filter state, not a business-
+     * day boundary lookup. One call, one page: the same "ask for one row past the quota" bound
+     * {@link #runOrderCrmLog} uses, since {@code ReportQueryService#orders} accepts any limit
+     * directly (unlike the web controller's own 300-row page cap).
+     */
+    private ExportOutcome runOrderReportLog(ClaimedExport job) {
+        LocalDate from = instantFilterAsUtcDate(job, "from", "ORDER_REPORT_LOG");
+        LocalDate to = instantFilterAsUtcDate(job, "to", "ORDER_REPORT_LOG");
+        List<UUID> locationIds = storedLocationIds(job);
+
+        int limit = job.rowQuota() + 1;
+        ReportQueryService.OrderListResult result = reportQueries.orders(
+                job.tenantId(),
+                from,
+                to,
+                locationIds,
+                List.of(),
+                List.of(),
+                List.of(),
+                JdbcReportingStore.OrderSort.DATE_DESC,
+                limit,
+                null);
+
+        boolean truncated = result.rows().size() > job.rowQuota();
+        List<JdbcReportingStore.OrderRow> bounded =
+                truncated ? result.rows().subList(0, job.rowQuota()) : result.rows();
+
+        List<Map<String, String>> rows = bounded.stream()
+                .map(row -> orderReportLogRowAsColumns(row, job.effectiveColumns()))
+                .toList();
+        return new ExportOutcome(rows, truncated || result.maybeMore());
+    }
+
+    /**
+     * Wave 10 w5-reports-exports (7.2e): «Сводка»'s by-branch/channel/fulfilment rollup, folded
+     * exactly as {@code order-summary-grid.ts}'s own doc describes for the console's identical
+     * read — {@link ReportQueryService#run} grouped by {@code LOCATION}/{@code CHANNEL}/{@code
+     * FULFILMENT_TYPE}/{@code LEGAL_ENTITY} (ADR 0038: a money metric always names the entity axis)
+     * and summed back across the date and entity axes in memory, since this report's own grain is
+     * neither of those. The group cardinality is bounded by the tenant's own branch × channel ×
+     * fulfilment-type combinations — small at pilot scale — but the row quota is still enforced
+     * rather than assumed unreachable.
+     */
+    private ExportOutcome runOrderReportSummary(ClaimedExport job) {
+        LocalDate from = instantFilterAsUtcDate(job, "from", "ORDER_REPORT_SUMMARY");
+        LocalDate to = instantFilterAsUtcDate(job, "to", "ORDER_REPORT_SUMMARY");
+        List<UUID> locationIds = storedLocationIds(job);
+
+        ReportQuery query = new ReportQuery(
+                job.tenantId(),
+                from,
+                to,
+                List.of("revenue.gross.v1", "revenue.net.v1", "delivery_fee.v1", "orders.count.v1"),
+                List.of(
+                        Grain.Dimension.LOCATION,
+                        Grain.Dimension.CHANNEL,
+                        Grain.Dimension.FULFILMENT_TYPE,
+                        Grain.Dimension.LEGAL_ENTITY),
+                locationIds,
+                List.of(),
+                List.of());
+        ReportQueryService.ReportResult result = reportQueries.run(query);
+
+        Map<SummaryBucketKey, SummaryBucketTotals> buckets = new LinkedHashMap<>();
+        for (ReportQueryService.ReportRow row : result.rows()) {
+            SummaryBucketKey key = new SummaryBucketKey(
+                    row.slice().locationId(),
+                    row.slice().channelCode(),
+                    row.slice().fulfilmentType());
+            SummaryBucketTotals totals = buckets.computeIfAbsent(key, unused -> new SummaryBucketTotals());
+            totals.add(row.values());
+        }
+
+        boolean truncated = buckets.size() > job.rowQuota();
+        List<Map.Entry<SummaryBucketKey, SummaryBucketTotals>> bounded =
+                buckets.entrySet().stream().limit(job.rowQuota()).toList();
+
+        List<Map<String, String>> rows = bounded.stream()
+                .map(entry -> orderReportSummaryRowAsColumns(entry.getKey(), entry.getValue(), job.effectiveColumns()))
+                .toList();
+        return new ExportOutcome(rows, truncated);
+    }
+
+    /** {@code job.filters()} stores an {@code ORDER_CRM_LOG}/{@code ORDER_REPORT_LOG}/{@code ORDER_REPORT_SUMMARY} boundary as an ISO {@code Instant} string — see {@link #requestExport}. */
+    private static LocalDate instantFilterAsUtcDate(ClaimedExport job, String key, String reportKey) {
+        String raw = (String) Objects.requireNonNull(job.filters().get(key), reportKey + " queued with no " + key);
+        return Instant.parse(raw).atZone(ZoneOffset.UTC).toLocalDate();
+    }
+
+    private static List<UUID> storedLocationIds(ClaimedExport job) {
+        @SuppressWarnings("unchecked")
+        List<String> stored = (List<String>) job.filters().getOrDefault("locationIds", List.of());
+        return stored.stream().map(UUID::fromString).toList();
+    }
+
+    private static Map<String, String> orderReportLogRowAsColumns(
+            JdbcReportingStore.OrderRow row, List<String> effectiveColumns) {
+        Map<String, String> values = new LinkedHashMap<>();
+        for (String column : effectiveColumns) {
+            values.put(
+                    column,
+                    switch (column) {
+                        case "orderId" -> row.orderId().toString();
+                        case "businessDate" -> row.businessDate().toString();
+                        case "locationId" -> row.locationId().toString();
+                        case "channelCode" -> row.channelCode();
+                        case "fulfilmentType" -> row.fulfilmentType();
+                        case "terminalStatus" -> row.terminalStatus();
+                        case "isPreorder" -> Boolean.toString(row.isPreorder());
+                        case "grossRevenueSom" -> Long.toString(row.grossRevenueSom());
+                        case "discountSom" -> Long.toString(row.discountSom());
+                        case "deliveryFeeSom" -> Long.toString(row.deliveryFeeSom());
+                        case "netRevenueSom" -> Long.toString(row.netRevenueSom());
+                        case "itemCount" -> Integer.toString(row.itemCount());
+                        default -> "";
+                    });
+        }
+        return values;
+    }
+
+    private static Map<String, String> orderReportSummaryRowAsColumns(
+            SummaryBucketKey key, SummaryBucketTotals totals, List<String> effectiveColumns) {
+        Map<String, String> values = new LinkedHashMap<>();
+        for (String column : effectiveColumns) {
+            values.put(
+                    column,
+                    switch (column) {
+                        case "locationId" ->
+                            key.locationId() == null ? "" : key.locationId().toString();
+                        case "channelCode" -> key.channelCode() == null ? "" : key.channelCode();
+                        case "fulfilmentType" -> key.fulfilmentType() == null ? "" : key.fulfilmentType();
+                        case "orderCount" -> Long.toString(totals.orderCount);
+                        case "grossSom" -> Long.toString(totals.grossSom);
+                        case "deliveryFeeSom" -> Long.toString(totals.deliveryFeeSom);
+                        case "netSom" -> Long.toString(totals.netSom);
+                        default -> "";
+                    });
+        }
+        return values;
+    }
+
+    /** «Сводка»'s own fold key — one bucket per (branch, channel, fulfilment type), dates and legal entities folded away. */
+    private record SummaryBucketKey(
+            @Nullable UUID locationId,
+            @Nullable String channelCode,
+            @Nullable String fulfilmentType) {}
+
+    /** Mutable accumulator for one {@link SummaryBucketKey} — a null metric value (no data for that slice) adds zero. */
+    private static final class SummaryBucketTotals {
+        private long orderCount;
+        private long grossSom;
+        private long deliveryFeeSom;
+        private long netSom;
+
+        void add(Map<String, Long> values) {
+            orderCount += values.getOrDefault("orders.count.v1", 0L);
+            grossSom += values.getOrDefault("revenue.gross.v1", 0L);
+            deliveryFeeSom += values.getOrDefault("delivery_fee.v1", 0L);
+            netSom += values.getOrDefault("revenue.net.v1", 0L);
+        }
     }
 
     private static Map<String, String> rowAsColumns(

@@ -71,13 +71,21 @@ const CAMPAIGN: CampaignView = {
   blockedCount: 0,
   pausedAt: null,
   scheduledAt: null,
+  haltedReason: null,
   isWired: true,
   createdAt: '2026-09-01T00:00:00Z',
   updatedAt: '2026-09-02T00:00:00Z',
   version: 1,
 };
 
-const COUNTS: RecipientCountsView = { pending: 1, queued: 40, deferred: 2, refused: 3, total: 46 };
+const COUNTS: RecipientCountsView = {
+  pending: 1,
+  queued: 40,
+  deferred: 2,
+  refused: 3,
+  total: 46,
+  refusedByReason: { SUPPRESSED: 2, CONSENT_WITHHELD: 1 },
+};
 
 class FakeCurrentLocation {
   readonly scope = signal<LocationScope | null>(SCOPE);

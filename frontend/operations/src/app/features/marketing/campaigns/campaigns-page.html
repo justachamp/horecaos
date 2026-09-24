@@ -88,6 +88,11 @@
                       @if (fourEyesHint(campaign); as hint) {
                         <div class="q-caption row-hint">{{ hint | t }}</div>
                       }
+                      @if (isHaltedScheduledSend(campaign)) {
+                        <div class="q-caption row-hint" data-testid="campaign-row-halted-hint">
+                          {{ 'marketing.campaigns.list.haltedScheduledSend' | t }}
+                        </div>
+                      }
                     </td>
                     <td>{{ channelLabelKey(campaign.channel) | t }}</td>
                     <td>

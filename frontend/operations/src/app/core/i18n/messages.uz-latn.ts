@@ -4024,6 +4024,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'marketing.campaigns.denied': 'Bu brendning kampaniyalariga kirish huquqi yoʻq',
   'marketing.campaigns.empty': 'Hali kampaniya yaratilmagan',
   'marketing.campaigns.list.awaitingSignature': 'Ikkinchi imzoni kutmoqda',
+  'marketing.campaigns.list.haltedScheduledSend':
+    'Rejalashtirilgan yuborish amalga oshmadi — qayta rejalashtirish kerak',
   'marketing.campaigns.column.name': 'Nomi',
   'marketing.campaigns.column.channel': 'Kanal',
   'marketing.campaigns.column.status': 'Holati',
@@ -4101,6 +4103,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'marketing.campaign.action.launch': 'Ishga tushirish',
   'marketing.campaign.action.halt': 'Toʻxtatish',
   'marketing.campaign.action.resume': 'Davom ettirish',
+  'marketing.campaign.action.reschedule': 'Qayta rejalashtirish',
   'marketing.campaign.fourEyes.awaitingSignature':
     'Koʻrib chiqishga yuborildi. Bu kampaniyaga sizdan boshqa birovning ikkinchi imzosi kerak.',
   'marketing.campaign.entitlement.telegramBroadcasts':
@@ -4114,6 +4117,22 @@ export const messagesUzLatn: MessageCatalogue = {
   'marketing.campaign.reasonPrompt.title.resume': 'Kampaniyani davom ettirish',
   'marketing.campaign.reasonPrompt.reason': 'Sabab',
   'marketing.campaign.reasonPrompt.confirm': 'Tasdiqlash',
+
+  'marketing.campaign.halted.banner':
+    'Bu rejalashtirilgan yuborish amalga oshmadi: {reason}. Uni yangi vaqtga qayta rejalashtiring yoki hozir ishga tushiring.',
+  'marketing.campaign.reschedulePrompt.title': 'Yuborishni qayta rejalashtirish',
+  'marketing.campaign.reschedulePrompt.label': 'Yangi vaqt',
+  'marketing.campaign.reschedulePrompt.confirm': 'Qayta rejalashtirish',
+
+  'marketing.campaign.stats.title': 'Tarix va statistika',
+  'marketing.campaign.stats.queued': 'Yuborildi (yetkazishga navbatda)',
+  'marketing.campaign.stats.pending': 'Kutilmoqda',
+  'marketing.campaign.stats.deferred': 'Kechiktirildi',
+  'marketing.campaign.stats.refused': 'Rad etildi',
+  'marketing.campaign.stats.total': 'Jami urinishlar',
+  'marketing.campaign.stats.refusedByReason.title': 'Rad etilganlar, sabab boʻyicha',
+  'marketing.campaign.stats.deliveryUnavailableHint':
+    'Yetkazildi/yetkazilmadi hali kuzatilmaydi — bu kampaniya uchun oʻqilganlik xabari yoʻq.',
 
   'marketing.refusal.ACCOUNT_NOT_ACTIVE':
     'Hisob faol emas, birlashtirilgan yoki anonimlashtirilgan',
@@ -4638,6 +4657,12 @@ export const messagesUzLatn: MessageCatalogue = {
   'reports.products.column.share': 'Tushumdagi ulush',
   'reports.products.maybeMore':
     'Mahsulotlar koʻproq boʻlishi mumkin — bu chegaralangan oʻqish, toʻliq eksport emas.',
+  'reports.products.sort.label': 'Saralash',
+  'reports.products.sort.revenue': 'Tushum',
+  'reports.products.sort.quantity': 'Miqdor',
+  'reports.products.sort.name': 'Nomi',
+  'reports.products.loadMore': 'Yana yuklash',
+  'reports.products.loadMore.loading': 'Yuklanmoqda…',
   'reports.products.stop': 'STOP',
   'reports.products.dineInNote':
     'Zalda buyurtmalar jamiga qoʻshiladi, lekin yetkazib berish yoki olib ketish ustunlariga kirmaydi, shuning uchun ular yigʻindisi jamiga teng boʻlmasligi mumkin.',
@@ -4857,8 +4882,14 @@ export const messagesUzLatn: MessageCatalogue = {
   'reports.geography.section.histograms': 'Yetkazib berish vaqti va masofasi gistogrammalari',
   'reports.geography.histogram.duration.title': 'Qayta ishlash vaqti',
   'reports.geography.histogram.distance.title': 'Masofa',
-  'reports.geography.histogram.distance.unavailable':
-    'Hali koʻrsatilmagan — fact_delivery masofani saqlaydi, lekin oraliq oʻqish yoʻq.',
+  'reports.geography.histogram.distance.bucket.UNDER_1KM': '< 1 km',
+  'reports.geography.histogram.distance.bucket.KM1_2': '1–2 km',
+  'reports.geography.histogram.distance.bucket.KM2_3': '2–3 km',
+  'reports.geography.histogram.distance.bucket.KM3_5': '3–5 km',
+  'reports.geography.histogram.distance.bucket.KM5_8': '5–8 km',
+  'reports.geography.histogram.distance.bucket.OVER_8KM': '8+ km',
+  'reports.geography.histogram.distance.range.bounded': '{from}–{to} km',
+  'reports.geography.histogram.distance.range.openEnded': '{from}+ km',
   'reports.geography.section.cohort': 'Hafta kuni va soat boʻyicha buyurtmalar',
   'reports.geography.cohort.intro': 'Soatiga oʻrtacha buyurtmalar, hafta kuni boʻyicha. Bosing.',
   'reports.geography.drillDown.title': 'Buyurtmalar — {weekday}, {hour}',

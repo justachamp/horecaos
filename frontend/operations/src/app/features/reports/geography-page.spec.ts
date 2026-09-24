@@ -11,6 +11,9 @@ import { GeographyPage } from './geography-page';
 import {
   BucketResponse,
   DemandHistoryResponse,
+  DistanceBucketResponse,
+  DistanceBucketSetResponse,
+  DistanceBucketsResponse,
   HourDemandResponse,
   OrderListResponse,
   OrderRowResponse,
@@ -90,6 +93,33 @@ function slaBuckets(overrides: Partial<SlaResponse> = {}): SlaResponse {
     },
   ];
   return { buckets, medians: [], provenance: provenance(), ...overrides };
+}
+
+/** Row 7.10b: the distance histogram's own fixture — mirrors `slaBuckets()`'s shape. */
+function distanceBucketsResponse(overrides: Partial<DistanceBucketsResponse> = {}): DistanceBucketsResponse {
+  const buckets: DistanceBucketResponse[] = [
+    { bucketCode: 'UNDER_1KM', deliveryCount: 6 },
+    { bucketCode: 'KM1_2', deliveryCount: 0 },
+    { bucketCode: 'KM2_3', deliveryCount: 0 },
+    { bucketCode: 'KM3_5', deliveryCount: 0 },
+    { bucketCode: 'KM5_8', deliveryCount: 0 },
+    { bucketCode: 'OVER_8KM', deliveryCount: 1 },
+  ];
+  return { buckets, provenance: provenance(), ...overrides };
+}
+
+function distanceBucketSetResponse(): DistanceBucketSetResponse {
+  return {
+    version: 1,
+    buckets: [
+      { code: 'UNDER_1KM', fromMeters: 0, toMetersExclusive: 1_000 },
+      { code: 'KM1_2', fromMeters: 1_000, toMetersExclusive: 2_000 },
+      { code: 'KM2_3', fromMeters: 2_000, toMetersExclusive: 3_000 },
+      { code: 'KM3_5', fromMeters: 3_000, toMetersExclusive: 5_000 },
+      { code: 'KM5_8', fromMeters: 5_000, toMetersExclusive: 8_000 },
+      { code: 'OVER_8KM', fromMeters: 8_000, toMetersExclusive: null },
+    ],
+  };
 }
 
 function bucketRow(locationId: string, orderCount: number): BucketResponse {
@@ -173,6 +203,8 @@ describe('GeographyPage', () => {
           provide: ReportingApi,
           useValue: {
             slaBuckets: vi.fn().mockResolvedValue(slaBuckets()),
+            distanceBuckets: vi.fn().mockResolvedValue(distanceBucketsResponse()),
+            distanceBucketSet: vi.fn().mockResolvedValue(distanceBucketSetResponse()),
             demandHistory: vi
               .fn()
               .mockImplementation((_tenantId: string, params: { weekday: number }) =>
@@ -225,16 +257,37 @@ describe('GeographyPage', () => {
       expect(table.textContent).toContain('10');
     });
 
-    it('names the distance histogram as not yet available rather than rendering nothing — the fact exists, the bucket read does not (widens when T11 adds one)', async () => {
+    // Row 7.10b, wave 10 w5-reports-exports: the distance chart used to name
+    // the gap on screen (reporting.fact_delivery carried the raw distance but
+    // nothing bucketed it). This proves the real read, wired beside the
+    // duration chart, not a screen that still gave up on one histogram.
+    it('renders the distance histogram against the new bucket read, scoped to the selected branch', async () => {
+      const distanceBucketsFn = vi.fn().mockResolvedValue(distanceBucketsResponse());
+      await render({ distanceBuckets: distanceBucketsFn });
+
+      expect(distanceBucketsFn).toHaveBeenCalledWith(
+        't1',
+        expect.objectContaining({ locationId: ['l1'] }),
+      );
+      const host = fixture.nativeElement as HTMLElement;
+      const table = host.querySelector(
+        '[data-testid="geography-distance-histogram"] [data-testid="q-histogram-chart-table"]',
+      ) as HTMLElement;
+      expect(table).not.toBeNull();
+      expect(table.textContent).toContain('6');
+      // The duration chart is still there beside it.
+      expect(host.querySelector('[data-testid="geography-duration-histogram"]')).not.toBeNull();
+    });
+
+    it('publishes the distance bucket boundaries as a formula-panel caption, from the bucket-set endpoint', async () => {
       await render({});
 
-      const host = fixture.nativeElement as HTMLElement;
-      const note = host.querySelector('[data-testid="geography-distance-unavailable"]');
-      expect(note).not.toBeNull();
-      expect(note?.textContent).toContain('fact_delivery');
-      // And the duration chart really is there beside it — this is a partial
-      // widen, not a screen that gave up on both histograms.
-      expect(host.querySelector('[data-testid="geography-duration-histogram"]')).not.toBeNull();
+      const caption = (fixture.nativeElement as HTMLElement).querySelector(
+        '[data-testid="geography-distance-formula"]',
+      );
+      expect(caption).not.toBeNull();
+      expect(caption?.textContent).toContain('1');
+      expect(caption?.textContent).toContain('8');
     });
 
     it('surfaces a load failure and retries on request', async () => {

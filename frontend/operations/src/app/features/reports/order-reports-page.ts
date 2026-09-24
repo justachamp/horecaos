@@ -16,6 +16,9 @@ import { formatMoney } from '../../core/format/money';
 import { I18n } from '../../core/i18n/i18n';
 import { MessageKey } from '../../core/i18n/messages.en';
 import { TPipe } from '../../core/i18n/t.pipe';
+import { DataTable, QCellDef } from '../../shared/ui/data-table/data-table';
+import { DataTableColumn } from '../../shared/ui/data-table/data-table-types';
+import { orderStatusLabel } from '../orders/order-status';
 import { LocationView, LocationsApi } from '../settings/locations/locations-api';
 import { ChannelView, SalesChannelsApi } from '../settings/sales-channels/sales-channels-api';
 import {
@@ -30,10 +33,45 @@ import {
 import { OrderRowsTable, OrderTableColumn } from './order-rows-table';
 import { CrmLogRowResponse, OrderCrmLogApi } from './order-crm-log-api';
 import { ProvenanceBanner } from './provenance-banner';
-import { ddmm, formatCount, formatShare, formatSignedMinutes, median } from './report-formatting';
+import {
+  ddmm,
+  ddmmyyyy,
+  formatCount,
+  formatShare,
+  formatSignedMinutes,
+  median,
+} from './report-formatting';
 import { deriveAverageCheck, sumAcrossDays } from './report-rollup';
 import { DateRange, ReportsFilterState } from './reports-filter-state';
 import { OrderRowResponse, ProvenanceResponse, ReportingApi } from './reporting-api';
+
+/**
+ * «Заказы»: `q-data-table`'s own column order (row `X.18`/`7.2a`) — wave P27
+ * adds branch, «Предзаказ» and the public order number (via `orderId`'s own
+ * rendering); wave 9 w4-reports-distance-crm (7.2a) adds the CRM half —
+ * `customer`/`operator`/`courier` — joined client-side from `GET
+ * /orders/crm-log` (`order-crm-log-api.ts`'s own doc explains why that read
+ * is not part of `ReportingApi`). Also feeds the column chooser's own
+ * checkbox list and — through {@link OrderReportsPage.commercialTableColumns}
+ * — each column's translated header.
+ */
+const COMMERCIAL_TABLE_COLUMN_KEYS = [
+  'orderId',
+  'businessDate',
+  'branch',
+  'channel',
+  'fulfilment',
+  'preorder',
+  'status',
+  'customer',
+  'operator',
+  'courier',
+  'gross',
+  'discount',
+  'deliveryFee',
+  'net',
+  'items',
+] as const;
 
 type OrderReportTab = 'stages' | 'commercial' | 'daily' | 'summary' | 'late';
 type LoadState = 'loading' | 'ready' | 'denied' | 'error';
@@ -60,31 +98,6 @@ const STAGE_COLUMNS: readonly OrderTableColumn[] = [
   'accept',
   'cooking',
   'total',
-];
-
-/**
- * «Заказы»: wave P27 adds branch, «Предзаказ» and the public order number
- * (via `orderId`'s own rendering). Wave 9 w4-reports-distance-crm (7.2a)
- * adds the CRM half — `customer`/`operator`/`courier` — joined client-side
- * from `GET /orders/crm-log` (`order-crm-log-api.ts`'s own doc explains why
- * that read is not part of `ReportingApi`).
- */
-const COMMERCIAL_COLUMNS: readonly OrderTableColumn[] = [
-  'orderId',
-  'businessDate',
-  'branch',
-  'channel',
-  'fulfilment',
-  'preorder',
-  'status',
-  'customer',
-  'operator',
-  'courier',
-  'gross',
-  'discount',
-  'deliveryFee',
-  'net',
-  'items',
 ];
 
 const LATE_COLUMNS: readonly OrderTableColumn[] = [
@@ -168,13 +181,24 @@ interface AggregatorChannel {
  * доставки` is `revenue.gross.v1` itself (already delivery-fee-inclusive by
  * definition) and `Сумма` is that figure less `delivery_fee.v1`, the new
  * registry metric (V0383) this wave adds so the fee has a total of its own
- * to subtract. The measure and split selectors reuse the same fetch. Saved
- * views and a column chooser are out of this wave's scope — noted rather
- * than silently missing.
+ * to subtract. The measure and split selectors reuse the same fetch.
+ *
+ * **Wave 10 w5-reports-exports (`X.18`/`7.2a`).** «Заказы» now renders
+ * through `q-data-table` instead of `q-order-rows-table` — the column
+ * chooser and saved views `X.18` built and tested with no live call site
+ * (`viewId="reports.orders.commercial"`, `scopeKey` folding in the current
+ * tenant/brand/location so a shared terminal's shift change never inherits
+ * the last operator's saved views). Cursor paging (`hasMore`/`loadMore`) and
+ * the CRM join both keep working exactly as before — `q-data-table` only
+ * replaces the chrome, never the data. «Этапы»/«Опоздания» stay on
+ * `q-order-rows-table`: their own columns are read-mostly duration/lateness
+ * tables nobody has asked to reorder or save a view of, and moving them
+ * would lose the amber/red duration-severity rail `q-data-table` has no
+ * per-row styling hook for, for no requested benefit.
  */
 @Component({
   selector: 'q-order-reports-page',
-  imports: [TPipe, RouterLink, ProvenanceBanner, OrderRowsTable],
+  imports: [TPipe, RouterLink, ProvenanceBanner, OrderRowsTable, DataTable, QCellDef],
   templateUrl: './order-reports-page.html',
   styleUrl: './order-reports-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -217,7 +241,6 @@ export class OrderReportsPage {
   protected readonly crmByOrderId = signal<ReadonlyMap<string, CrmLogRowResponse>>(new Map());
 
   protected readonly stageColumns = STAGE_COLUMNS;
-  protected readonly commercialColumns = COMMERCIAL_COLUMNS;
   protected readonly lateColumns = LATE_COLUMNS;
 
   // Wave P27: the fulfilment axis moved into the query itself (see
@@ -254,6 +277,49 @@ export class OrderReportsPage {
   private channels: readonly ChannelView[] = [];
   /** Wave P27 (7.2a): «Филиал» — resolved once per load, from the same location list every other tab already fetches. */
   protected readonly locationNames = signal<ReadonlyMap<string, string>>(new Map());
+
+  /** Row `X.18`/`7.2a`: «Заказы»'s own `q-data-table` columns, translated per the current locale like every other computed column array in this app (see `products-page.ts`'s own doc). */
+  protected readonly commercialTableColumns = computed<readonly DataTableColumn[]>(() => {
+    this.i18n.locale();
+    const header = (key: MessageKey): string => this.i18n.t(key);
+    const numeric: Partial<Record<(typeof COMMERCIAL_TABLE_COLUMN_KEYS)[number], boolean>> = {
+      gross: true,
+      discount: true,
+      deliveryFee: true,
+      net: true,
+      items: true,
+    };
+    const headers: Record<(typeof COMMERCIAL_TABLE_COLUMN_KEYS)[number], MessageKey> = {
+      orderId: 'reports.orders.column.orderId',
+      businessDate: 'reports.orders.column.date',
+      branch: 'reports.orders.column.branch',
+      channel: 'reports.orders.column.channel',
+      fulfilment: 'reports.orders.column.fulfilment',
+      preorder: 'reports.orders.column.preorder',
+      status: 'reports.orders.column.status',
+      customer: 'reports.orders.column.customer',
+      operator: 'reports.orders.column.operator',
+      courier: 'reports.orders.column.courier',
+      gross: 'reports.orders.column.gross',
+      discount: 'reports.orders.column.discount',
+      deliveryFee: 'reports.orders.column.deliveryFee',
+      net: 'reports.orders.column.net',
+      items: 'reports.orders.column.items',
+    };
+    return COMMERCIAL_TABLE_COLUMN_KEYS.map((key) => ({
+      key,
+      header: header(headers[key]),
+      numeric: numeric[key],
+    }));
+  });
+
+  /** `q-data-table`'s `scopeKey` — so a shared terminal's saved views and persisted column choices never leak from one branch into another (row `X.18`'s own doc on `DataTable.scopeKey`). */
+  protected readonly commercialScopeKey = computed<string | null>(() => {
+    const scope = this.location.scope();
+    return scope ? `${scope.tenantId}:${scope.brandId}:${scope.locationId}` : null;
+  });
+
+  protected readonly commercialRowId = (row: OrderRowResponse): string => row.orderId;
 
   constructor() {
     // Re-fetches the active tab whenever the period or the shared filter
@@ -383,6 +449,60 @@ export class OrderReportsPage {
       default:
         return type;
     }
+  }
+
+  // ------------------------------------------------- «Заказы»'s q-data-table cells (X.18/7.2a)
+  // Same rendering `order-rows-table.ts` gives the commercial column set —
+  // reimplemented here rather than shared, because a `qCell` template calls
+  // straight into this component, not into `OrderRowsTable`'s own protected
+  // methods.
+
+  protected commercialOrderNumber(row: OrderRowResponse): string {
+    return row.publicOrderNumber ?? row.orderId.slice(0, 8);
+  }
+
+  protected commercialBranchName(row: OrderRowResponse): string {
+    return this.locationNames().get(row.locationId) ?? row.locationId;
+  }
+
+  protected commercialBusinessDate(iso: string): string {
+    return ddmmyyyy(iso);
+  }
+
+  protected commercialStatusLabel(status: string): string {
+    return orderStatusLabel(status, (key) => this.i18n.t(key));
+  }
+
+  private commercialCrmRow(row: OrderRowResponse): CrmLogRowResponse | undefined {
+    return this.crmByOrderId().get(row.orderId);
+  }
+
+  /** «Клиент» — see `OrderRowsTable.customerLabel`'s own doc for why a `GUEST` order is never confused with a missing snapshot. */
+  protected commercialCustomerLabel(row: OrderRowResponse): string {
+    const crm = this.commercialCrmRow(row);
+    if (!crm) {
+      return '—';
+    }
+    if (crm.customerType === 'GUEST') {
+      return this.i18n.t('reports.orders.column.customer.guest');
+    }
+    return crm.customerName ?? this.i18n.t('reports.orders.column.customer.account');
+  }
+
+  protected commercialCustomerPhone(row: OrderRowResponse): string {
+    return this.commercialCrmRow(row)?.customerPhone ?? '—';
+  }
+
+  protected commercialOperatorLabel(row: OrderRowResponse): string {
+    const operator = this.commercialCrmRow(row)?.operatorPrincipalId;
+    if (!operator) {
+      return '—';
+    }
+    return operator.startsWith('channel:') ? operator.slice('channel:'.length) : operator;
+  }
+
+  protected commercialCourierLabel(row: OrderRowResponse): string {
+    return this.commercialCrmRow(row)?.courierDisplayReference ?? '—';
   }
 
   private async loadTab(tab: OrderReportTab, range: DateRange): Promise<void> {

@@ -92,6 +92,12 @@ class ReportingControllerCapabilityHttpTests {
     @BeforeEach
     void reset() {
         jdbc.sql("TRUNCATE TABLE audit.audit_events").update();
+        // Row 7.7's own fixtures (insertVariantSalesLine) carry fixed variant
+        // ids across tests -- never FK-cascaded from tenant.tenants (fact
+        // tables are derived and rebuildable, ADR 0043), so a stale row from
+        // an earlier test would collide on this one's primary key.
+        jdbc.sql("TRUNCATE TABLE reporting.fact_order_line, reporting.fact_order")
+                .update();
         jdbc.sql("TRUNCATE TABLE tenant.tenants CASCADE").update();
         roleRegistry.synchronize();
         insertTenant();
@@ -427,9 +433,220 @@ class ReportingControllerCapabilityHttpTests {
         assertThat(ok.getResponse().getContentAsString()).contains("\"rows\":[");
     }
 
+    // ------------------------------------------------------------ wave 10 w5-reports-exports (7.7)
+
+    @Test
+    void variantSalesRefusesWithoutReportingRead() throws Exception {
+        MvcResult refused = mvc.perform(get(REPORTING + "/variant-sales")
+                        .with(tokenFor(DISPATCHER))
+                        .queryParam("from", "2026-09-01")
+                        .queryParam("to", "2026-09-01"))
+                .andReturn();
+
+        assertThat(refused.getResponse().getStatus()).isEqualTo(403);
+        assertThat(refused.getResponse().getContentAsString())
+                .contains("INSUFFICIENT_CAPABILITY")
+                .contains(Capability.REPORTING_READ.code());
+    }
+
+    @Test
+    void variantSalesDefaultsToRevenueDescendingOrder() throws Exception {
+        insertVariantSalesLine(PIZZA, "Пицца Маргарита", 1, 40_000L);
+        insertVariantSalesLine(SALAD, "Салат Цезарь", 5, 10_000L);
+
+        MvcResult ok = mvc.perform(get(REPORTING + "/variant-sales")
+                        .with(tokenFor(MANAGER))
+                        .queryParam("from", "2026-09-01")
+                        .queryParam("to", "2026-09-01"))
+                .andReturn();
+
+        assertThat(ok.getResponse().getStatus()).isEqualTo(200);
+        String body = ok.getResponse().getContentAsString();
+        assertThat(body.indexOf(PIZZA.toString()))
+                .as("pizza earns more (40000 vs 10000) and must lead the default order")
+                .isLessThan(body.indexOf(SALAD.toString()));
+    }
+
+    /** Row 7.7: the sort control the page previously had none of. */
+    @Test
+    void variantSalesSortsByQuantityWhenRequested() throws Exception {
+        insertVariantSalesLine(PIZZA, "Пицца Маргарита", 1, 40_000L);
+        insertVariantSalesLine(SALAD, "Салат Цезарь", 5, 10_000L);
+
+        MvcResult ok = mvc.perform(get(REPORTING + "/variant-sales")
+                        .with(tokenFor(MANAGER))
+                        .queryParam("from", "2026-09-01")
+                        .queryParam("to", "2026-09-01")
+                        .queryParam("sort", "QUANTITY_DESC"))
+                .andReturn();
+
+        assertThat(ok.getResponse().getStatus()).isEqualTo(200);
+        String body = ok.getResponse().getContentAsString();
+        assertThat(body.indexOf(SALAD.toString()))
+                .as("salad sells more units (5 vs 1) and must lead under QUANTITY_DESC, the opposite of revenue order")
+                .isLessThan(body.indexOf(PIZZA.toString()));
+    }
+
+    @Test
+    void variantSalesRefusesAnUnknownSort() throws Exception {
+        MvcResult refused = mvc.perform(get(REPORTING + "/variant-sales")
+                        .with(tokenFor(MANAGER))
+                        .queryParam("from", "2026-09-01")
+                        .queryParam("to", "2026-09-01")
+                        .queryParam("sort", "PRICE_DESC"))
+                .andReturn();
+
+        assertThat(refused.getResponse().getStatus())
+                .as("a refusal, not a crash")
+                .isEqualTo(400);
+        assertThat(refused.getResponse().getContentAsString()).contains("VALIDATION_FAILED");
+    }
+
+    /** Row 7.7: cursor paging past the page's previous 200-row cap. */
+    @Test
+    void variantSalesCursorPagesPastTheFirstPageUnderQuantityDesc() throws Exception {
+        insertVariantSalesLine(PIZZA, "Пицца Маргарита", 5, 40_000L);
+        insertVariantSalesLine(SALAD, "Салат Цезарь", 3, 10_000L);
+
+        MvcResult firstPage = mvc.perform(get(REPORTING + "/variant-sales")
+                        .with(tokenFor(MANAGER))
+                        .queryParam("from", "2026-09-01")
+                        .queryParam("to", "2026-09-01")
+                        .queryParam("sort", "QUANTITY_DESC")
+                        .queryParam("limit", "1"))
+                .andReturn();
+        assertThat(firstPage.getResponse().getStatus()).isEqualTo(200);
+        String firstBody = firstPage.getResponse().getContentAsString();
+        assertThat(firstBody).contains(PIZZA.toString()).doesNotContain(SALAD.toString());
+        assertThat(firstBody).contains("\"maybeMore\":true");
+
+        MvcResult secondPage = mvc.perform(get(REPORTING + "/variant-sales")
+                        .with(tokenFor(MANAGER))
+                        .queryParam("from", "2026-09-01")
+                        .queryParam("to", "2026-09-01")
+                        .queryParam("sort", "QUANTITY_DESC")
+                        .queryParam("limit", "1")
+                        .queryParam("afterQuantity", "5")
+                        .queryParam("afterVariantId", PIZZA.toString()))
+                .andReturn();
+        assertThat(secondPage.getResponse().getStatus()).isEqualTo(200);
+        String secondBody = secondPage.getResponse().getContentAsString();
+        assertThat(secondBody)
+                .as("the cursor page picks up exactly where the first page stopped, no overlap and no gap")
+                .contains(SALAD.toString())
+                .doesNotContain(PIZZA.toString());
+        // A full page (1 row for a limit of 1) cannot prove there is no next
+        // row -- the same "maybeMore" convention readOrders/variantSales
+        // already document -- so this is not a false positive, just the
+        // known shape of a full-width final page.
+        assertThat(secondBody).contains("\"maybeMore\":true");
+    }
+
+    // ------------------------------------------------------------ wave 10 w5-reports-exports (7.10b)
+
+    @Test
+    void distanceBucketsRefusesWithoutReportingRead() throws Exception {
+        MvcResult refused = mvc.perform(get(REPORTING + "/distance-buckets")
+                        .with(tokenFor(DISPATCHER))
+                        .queryParam("from", "2026-09-01")
+                        .queryParam("to", "2026-09-01"))
+                .andReturn();
+
+        assertThat(refused.getResponse().getStatus()).isEqualTo(403);
+        assertThat(refused.getResponse().getContentAsString())
+                .contains("INSUFFICIENT_CAPABILITY")
+                .contains(Capability.REPORTING_READ.code());
+    }
+
+    @Test
+    void distanceBucketsZeroFillsEveryBucketWithNoDeliveriesInRange() throws Exception {
+        MvcResult ok = mvc.perform(get(REPORTING + "/distance-buckets")
+                        .with(tokenFor(MANAGER))
+                        .queryParam("from", "2026-09-01")
+                        .queryParam("to", "2026-09-01"))
+                .andReturn();
+
+        assertThat(ok.getResponse().getStatus()).isEqualTo(200);
+        String body = ok.getResponse().getContentAsString();
+        assertThat(body)
+                .contains("\"bucketCode\":\"UNDER_1KM\",\"deliveryCount\":0")
+                .contains("\"bucketCode\":\"OVER_8KM\",\"deliveryCount\":0");
+    }
+
+    @Test
+    void distanceBucketSetRefusesWithoutReportingRead() throws Exception {
+        MvcResult refused = mvc.perform(get(REPORTING + "/distance-bucket-set").with(tokenFor(DISPATCHER)))
+                .andReturn();
+
+        assertThat(refused.getResponse().getStatus()).isEqualTo(403);
+        assertThat(refused.getResponse().getContentAsString())
+                .contains("INSUFFICIENT_CAPABILITY")
+                .contains(Capability.REPORTING_READ.code());
+    }
+
+    @Test
+    void distanceBucketSetPublishesTheFixedBoundariesAndVersion() throws Exception {
+        MvcResult ok = mvc.perform(get(REPORTING + "/distance-bucket-set").with(tokenFor(MANAGER)))
+                .andReturn();
+
+        assertThat(ok.getResponse().getStatus()).isEqualTo(200);
+        String body = ok.getResponse().getContentAsString();
+        assertThat(body)
+                .contains("\"version\":1")
+                .contains("\"code\":\"UNDER_1KM\",\"fromMeters\":0,\"toMetersExclusive\":1000")
+                .contains("\"code\":\"OVER_8KM\",\"fromMeters\":8000,\"toMetersExclusive\":null");
+    }
+
     // ------------------------------------------------------------------ fixtures
 
+    private static final UUID PIZZA = UUID.fromString("018f9b20-9100-7000-8000-0000000000b1");
+    private static final UUID SALAD = UUID.fromString("018f9b20-9100-7000-8000-0000000000b2");
+
     private static final java.time.LocalDate FACT_DAY = java.time.LocalDate.of(2026, 9, 1);
+
+    /** {@code GET .../reporting/variant-sales}'s own source — {@code reporting.fact_order}/{@code fact_order_line}, joined on (tenant, business_date, order_id). */
+    private void insertVariantSalesLine(UUID variantId, String productName, int quantity, long netSom) {
+        UUID orderId = UUID.nameUUIDFromBytes(("variant-sales-http:" + variantId).getBytes(UTF_8));
+        UUID locationId = UUID.randomUUID();
+        var occurredAt = FACT_DAY.atTime(9, 0).atOffset(ZoneOffset.UTC);
+        jdbc.sql("""
+                INSERT INTO reporting.fact_order (
+                    tenant_id, order_id, business_date, boundary_version, occurred_at,
+                    brand_id, location_id, channel_code, fulfilment_type, terminal_status,
+                    gross_revenue_som, discount_som, delivery_fee_som, tax_som, net_revenue_som,
+                    line_count, item_count, metric_calculation_version, source_order_version)
+                VALUES (:tenantId, :orderId, :businessDate, 1, :occurredAt,
+                    :brandId, :locationId, 'TELEGRAM', 'DELIVERY', 'COMPLETED',
+                    0, 0, 0, 0, 0, 1, 1, 1, 1)
+                """)
+                .param("tenantId", TENANT)
+                .param("orderId", orderId)
+                .param("businessDate", FACT_DAY)
+                .param("occurredAt", occurredAt)
+                .param("brandId", UUID.randomUUID())
+                .param("locationId", locationId)
+                .update();
+        jdbc.sql("""
+                INSERT INTO reporting.fact_order_line (
+                    tenant_id, business_date, order_id, line_id, location_id, variant_id, category_id,
+                    product_name_snapshot, quantity, gross_som, discount_som, net_som, occurred_at)
+                VALUES (:tenantId, :businessDate, :orderId, :lineId, :locationId, :variantId, :categoryId,
+                    :productName, :quantity, :gross, 0, :net, :occurredAt)
+                """)
+                .param("tenantId", TENANT)
+                .param("businessDate", FACT_DAY)
+                .param("orderId", orderId)
+                .param("lineId", UUID.nameUUIDFromBytes(("line:" + variantId).getBytes(UTF_8)))
+                .param("locationId", locationId)
+                .param("variantId", variantId)
+                .param("categoryId", UUID.randomUUID())
+                .param("productName", productName)
+                .param("quantity", quantity)
+                .param("gross", netSom)
+                .param("net", netSom)
+                .param("occurredAt", occurredAt)
+                .update();
+    }
 
     /**
      * {@code GET .../reporting/queries} reads {@code reporting.agg_branch_day}

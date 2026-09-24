@@ -60,6 +60,65 @@
   color: var(--q-ink-muted);
 }
 
+/* ------------------------------------------------------- row 7.7: sort + paging */
+
+.sort-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.sort-controls__label {
+  color: var(--q-ink-muted);
+}
+
+.sort-controls__group {
+  display: inline-flex;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+}
+
+.segment {
+  padding: 4px 10px;
+  border: none;
+  border-right: 1px solid var(--q-hairline);
+  background: var(--q-canvas);
+  color: var(--q-ink-muted);
+  font-size: var(--q-type-body-xs);
+  cursor: pointer;
+}
+
+.segment:first-of-type {
+  border-radius: var(--q-radius) 0 0 var(--q-radius);
+}
+
+.segment:last-child {
+  border-right: none;
+  border-radius: 0 var(--q-radius) var(--q-radius) 0;
+}
+
+.segment--active {
+  background: var(--q-surface-1);
+  color: var(--q-ink);
+}
+
+.load-more {
+  height: 32px;
+  padding: 0 14px;
+  margin-top: 8px;
+  border: 1px solid var(--q-hairline);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  border-radius: var(--q-radius);
+  cursor: pointer;
+}
+
+.load-more:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 .secondary {
   height: 32px;
   padding: 0 14px;

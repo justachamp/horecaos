@@ -4029,6 +4029,8 @@ export const messagesEn = {
   'marketing.campaigns.denied': 'No access to this brand’s campaigns',
   'marketing.campaigns.empty': 'No campaigns drafted yet',
   'marketing.campaigns.list.awaitingSignature': 'Awaiting a second signature',
+  'marketing.campaigns.list.haltedScheduledSend':
+    'Scheduled send did not go out — needs re-scheduling',
   'marketing.campaigns.column.name': 'Name',
   'marketing.campaigns.column.channel': 'Channel',
   'marketing.campaigns.column.status': 'Status',
@@ -4106,6 +4108,7 @@ export const messagesEn = {
   'marketing.campaign.action.launch': 'Launch',
   'marketing.campaign.action.halt': 'Halt',
   'marketing.campaign.action.resume': 'Resume',
+  'marketing.campaign.action.reschedule': 'Re-schedule',
   'marketing.campaign.fourEyes.awaitingSignature':
     'Submitted for review. This campaign needs a second signature from somebody other than you.',
   'marketing.campaign.entitlement.telegramBroadcasts':
@@ -4119,6 +4122,22 @@ export const messagesEn = {
   'marketing.campaign.reasonPrompt.title.resume': 'Resume this campaign',
   'marketing.campaign.reasonPrompt.reason': 'Reason',
   'marketing.campaign.reasonPrompt.confirm': 'Confirm',
+
+  'marketing.campaign.halted.banner':
+    'This scheduled send did not go out: {reason}. Re-schedule it for a new moment, or launch it now.',
+  'marketing.campaign.reschedulePrompt.title': 'Re-schedule this send',
+  'marketing.campaign.reschedulePrompt.label': 'New moment',
+  'marketing.campaign.reschedulePrompt.confirm': 'Re-schedule',
+
+  'marketing.campaign.stats.title': 'History & statistics',
+  'marketing.campaign.stats.queued': 'Sent (queued for delivery)',
+  'marketing.campaign.stats.pending': 'Pending',
+  'marketing.campaign.stats.deferred': 'Deferred',
+  'marketing.campaign.stats.refused': 'Refused',
+  'marketing.campaign.stats.total': 'Total attempted',
+  'marketing.campaign.stats.refusedByReason.title': 'Refused, by reason',
+  'marketing.campaign.stats.deliveryUnavailableHint':
+    'Delivered vs. failed is not tracked yet — no read receipt reaches this campaign.',
 
   'marketing.refusal.ACCOUNT_NOT_ACTIVE': 'Account not active, merged, or anonymised',
   'marketing.refusal.CONSENT_WITHHELD': 'No marketing consent on file',
@@ -4636,6 +4655,12 @@ export const messagesEn = {
   'reports.products.column.share': 'Revenue share',
   'reports.products.maybeMore':
     'There may be more products than shown — this is a bounded read, not a full export.',
+  'reports.products.sort.label': 'Sort by',
+  'reports.products.sort.revenue': 'Revenue',
+  'reports.products.sort.quantity': 'Quantity',
+  'reports.products.sort.name': 'Name',
+  'reports.products.loadMore': 'Load more',
+  'reports.products.loadMore.loading': 'Loading…',
   'reports.products.stop': 'STOP',
   'reports.products.dineInNote':
     'Dine-in lines are summed into the total but split into neither the delivery nor the pickup column, so delivery plus pickup need not add up to the total.',
@@ -4850,8 +4875,14 @@ export const messagesEn = {
   'reports.geography.section.histograms': 'Delivery-time and distance histograms',
   'reports.geography.histogram.duration.title': 'Handover time',
   'reports.geography.histogram.distance.title': 'Distance',
-  'reports.geography.histogram.distance.unavailable':
-    'Not shown yet — fact_delivery has the distance, but no bucketed read over it.',
+  'reports.geography.histogram.distance.bucket.UNDER_1KM': '< 1 km',
+  'reports.geography.histogram.distance.bucket.KM1_2': '1–2 km',
+  'reports.geography.histogram.distance.bucket.KM2_3': '2–3 km',
+  'reports.geography.histogram.distance.bucket.KM3_5': '3–5 km',
+  'reports.geography.histogram.distance.bucket.KM5_8': '5–8 km',
+  'reports.geography.histogram.distance.bucket.OVER_8KM': '8+ km',
+  'reports.geography.histogram.distance.range.bounded': '{from}–{to} km',
+  'reports.geography.histogram.distance.range.openEnded': '{from}+ km',
   'reports.geography.section.cohort': 'Orders by day of week and hour',
   'reports.geography.cohort.intro': 'Average completed orders per hour, by weekday. Click a cell.',
   'reports.geography.drillDown.title': 'Orders — {weekday}, {hour}',

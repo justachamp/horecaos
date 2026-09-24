@@ -231,6 +231,64 @@ describe('ProductAnalyticsPage', () => {
     );
   });
 
+  // ------------------------------------------------------- wave 10 w5-reports-exports (7.7)
+
+  it('defaults to REVENUE_DESC and sends the requested sort when a different one is picked', async () => {
+    await render();
+
+    expect(variantSalesSpy).toHaveBeenCalledWith(
+      SCOPE.tenantId,
+      expect.objectContaining({ sort: 'REVENUE_DESC' }),
+    );
+
+    const root = fixture.nativeElement as HTMLElement;
+    (root.querySelector('[data-testid="products-sort-QUANTITY_DESC"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    await flushMicrotasks();
+
+    expect(variantSalesSpy).toHaveBeenLastCalledWith(
+      SCOPE.tenantId,
+      expect.objectContaining({ sort: 'QUANTITY_DESC' }),
+    );
+  });
+
+  it('pages past the first response with a keyset cursor on "Load more", appending rather than replacing', async () => {
+    const first = variantRow({ variantId: 'variant-a', productName: 'A', totalNetSom: 90_000 });
+    const second = variantRow({ variantId: 'variant-b', productName: 'B', totalNetSom: 50_000 });
+    const variantSalesMock = vi
+      .fn()
+      .mockResolvedValueOnce({ rows: [first], maybeMore: true, provenance: provenance() })
+      .mockResolvedValueOnce({ rows: [second], maybeMore: false, provenance: provenance() });
+
+    await render({ variantSalesMock });
+
+    const root = fixture.nativeElement as HTMLElement;
+    const loadMore = root.querySelector('[data-testid="products-load-more"]') as HTMLButtonElement;
+    expect(loadMore).not.toBeNull();
+    loadMore.click();
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(variantSalesMock).toHaveBeenLastCalledWith(
+      SCOPE.tenantId,
+      expect.objectContaining({
+        cursor: { afterRevenueSom: 90_000, afterVariantId: 'variant-a' },
+      }),
+    );
+    // Both pages are now on screen — the second fetch appended, it did not replace.
+    expect(text()).toContain('A');
+    expect(text()).toContain('B');
+  });
+
+  it('shows no "Load more" control once the server reports no further page', async () => {
+    await render({ variantSalesMock: vi.fn().mockResolvedValue(salesResponse([variantRow()])) });
+
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('[data-testid="products-load-more"]'),
+    ).toBeNull();
+  });
+
   // ------------------------------------------------------------- Категория
 
   it('renders the Категория column resolved from the catalog, not the bare id', async () => {

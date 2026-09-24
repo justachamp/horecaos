@@ -128,6 +128,15 @@ export interface CampaignView {
   readonly pausedAt: string | null;
   /** When a launch call arms SENDING for, or null for "immediately" (T18). */
   readonly scheduledAt: string | null;
+  /**
+   * Row 6.4: why a scheduled send did not go out (cleared automatically by a
+   * later {@link MarketingApi.reschedule}), or a pause/halt reason — null on a
+   * campaign that never halted. `scheduledAt === null && status === 'SCHEDULED'
+   * && haltedReason !== null` is exactly the shape the "re-schedule" affordance
+   * targets: `CampaignScheduledSendScheduler` disarmed a due send whose channel
+   * was still unwired, rather than retrying it forever.
+   */
+  readonly haltedReason: string | null;
   /** Whether `channel` has a real ADR 0020 delivery path today (T18). */
   readonly isWired: boolean;
   readonly createdAt: string;
@@ -161,13 +170,21 @@ export interface RecipientView {
   readonly terminalStatus: string | null;
 }
 
-/** Row 7.9b. Mirrors `OperationsMarketingController.RecipientCountsResponse`. */
+/** Row 7.9b/6.4. Mirrors `OperationsMarketingController.RecipientCountsResponse`. */
 export interface RecipientCountsView {
   readonly pending: number;
   readonly queued: number;
   readonly deferred: number;
   readonly refused: number;
   readonly total: number;
+  /**
+   * Row 6.4: `refused`'s own breakdown by `RefusalReason` name (e.g.
+   * `SUPPRESSED`) — the campaign history/statistics view's "suppressed" count,
+   * nameable on its own without a terminal-status projection this wave does
+   * not add (see `OperationsMarketingController.recipientCounts`'s own doc:
+   * "delivered" vs "failed" has no data source yet).
+   */
+  readonly refusedByReason: Readonly<Record<string, number>>;
 }
 
 /** Mirrors `OperationsMarketingController.SuppressionListItemResponse`. */
@@ -392,6 +409,21 @@ export class MarketingApi {
       this.api.post<{ reason: string }, ResumeResult>(
         marketingPaths.campaignResumptions(scope, campaignId),
         command({ reason }),
+      ),
+    );
+  }
+
+  /**
+   * Row 6.4: re-arms a campaign `CampaignScheduledSendScheduler` halted for a
+   * new future moment, without a fresh approval — `status` stays `SCHEDULED`
+   * throughout. Refused (`RESOURCE_CONFLICT`) when the campaign is not
+   * currently a halted scheduled send.
+   */
+  async reschedule(scope: BrandScope, campaignId: string, scheduledAt: string): Promise<void> {
+    await firstValueFrom(
+      this.api.post<{ scheduledAt: string }, void>(
+        marketingPaths.campaignReschedules(scope, campaignId),
+        command({ scheduledAt }),
       ),
     );
   }

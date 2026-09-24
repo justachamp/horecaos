@@ -59,28 +59,74 @@
           <p class="order-reports__pii-note q-caption">
             {{ 'reports.orders.commercial.piiNote' | t }}
           </p>
-          <q-order-rows-table
+          <!--
+            Row X.18/7.2a: q-data-table's column chooser and saved views,
+            wired here — their first live call site. scopeKey keys both to
+            the current tenant/brand/location so a shift change on a shared
+            terminal never inherits the previous operator's saved views.
+          -->
+          <q-data-table
+            viewId="reports.orders.commercial"
+            [scopeKey]="commercialScopeKey()"
+            [columns]="commercialTableColumns()"
             [rows]="commercialRows()"
-            [columns]="commercialColumns"
-            [locationNames]="locationNames()"
-            [crmByOrderId]="crmByOrderId()"
-          />
-          @if (commercialMaybeMore()) {
-            <button
-              type="button"
-              class="order-reports__load-more q-body-sm"
-              [disabled]="commercialLoadingMore()"
-              (click)="loadMoreCommercial()"
-              data-testid="order-reports-load-more"
-            >
-              {{
-                (commercialLoadingMore()
-                  ? 'reports.orders.loadMore.loading'
-                  : 'reports.orders.loadMore'
-                ) | t
-              }}
-            </button>
-          }
+            [rowId]="commercialRowId"
+            [selectable]="false"
+            [hasMore]="commercialMaybeMore()"
+            [loading]="commercialLoadingMore()"
+            (loadMore)="loadMoreCommercial()"
+            data-testid="order-reports-commercial-table"
+          >
+            <ng-template qCell="orderId" let-row>
+              <span class="q-mono">{{ commercialOrderNumber(row) }}</span>
+            </ng-template>
+            <ng-template qCell="businessDate" let-row>{{
+              commercialBusinessDate(row.businessDate)
+            }}</ng-template>
+            <ng-template qCell="branch" let-row>{{ commercialBranchName(row) }}</ng-template>
+            <ng-template qCell="channel" let-row>{{ row.channelCode }}</ng-template>
+            <ng-template qCell="fulfilment" let-row>{{
+              fulfilmentLabel(row.fulfilmentType)
+            }}</ng-template>
+            <ng-template qCell="preorder" let-row>
+              @if (row.isPreorder) {
+                <span data-testid="order-row-preorder">{{
+                  'reports.orders.column.preorder.yes' | t
+                }}</span>
+              } @else {
+                —
+              }
+            </ng-template>
+            <ng-template qCell="status" let-row>{{
+              commercialStatusLabel(row.terminalStatus)
+            }}</ng-template>
+            <ng-template qCell="customer" let-row>
+              <span data-testid="order-row-customer">
+                {{ commercialCustomerLabel(row) }}
+                @if (commercialCustomerPhone(row) !== '—') {
+                  <span class="q-caption order-reports__customer-phone">{{
+                    commercialCustomerPhone(row)
+                  }}</span>
+                }
+              </span>
+            </ng-template>
+            <ng-template qCell="operator" let-row>
+              <span class="q-mono" data-testid="order-row-operator">{{
+                commercialOperatorLabel(row)
+              }}</span>
+            </ng-template>
+            <ng-template qCell="courier" let-row>
+              <span class="q-mono" data-testid="order-row-courier">{{
+                commercialCourierLabel(row)
+              }}</span>
+            </ng-template>
+            <ng-template qCell="gross" let-row>{{ money(row.grossRevenueSom) }}</ng-template>
+            <ng-template qCell="discount" let-row>{{ money(row.discountSom) }}</ng-template>
+            <ng-template qCell="deliveryFee" let-row>{{ money(row.deliveryFeeSom) }}</ng-template>
+            <ng-template qCell="net" let-row>{{ money(row.netRevenueSom) }}</ng-template>
+            <ng-template qCell="items" let-row>{{ count(row.itemCount) }}</ng-template>
+            <span emptyState class="q-body-sm">{{ 'reports.empty.period' | t }}</span>
+          </q-data-table>
         }
         @case ('late') {
           @if (lateSummaryLine(); as summary) {

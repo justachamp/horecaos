@@ -117,4 +117,38 @@ describe('ReportsShell filter bar visibility (wave W02)', () => {
       ),
     ).toBeNull();
   });
+
+  // Row X.11: DateRangePicker was built and tested with no live call site —
+  // this proves the reports filter bar's "Custom" period is q-date-range-picker
+  // itself, not a second pair of raw <input type="date"> fields.
+  it('renders q-date-range-picker for the custom period, and a chosen range reaches ReportsFilterState', async () => {
+    await render();
+    await router.navigateByUrl('/statistics/overview');
+    fixture.detectChanges();
+
+    const root = fixture.nativeElement as HTMLElement;
+    const periodButtons = Array.from(root.querySelectorAll('[data-testid^="reports-filter-period-"]'));
+    const customButton = periodButtons.find(
+      (button) => button.getAttribute('data-testid') === 'reports-filter-period-custom',
+    ) as HTMLButtonElement | undefined;
+    expect(customButton).toBeDefined();
+    customButton!.click();
+    fixture.detectChanges();
+
+    const picker = root.querySelector('[data-testid="reports-filter-custom-range"]');
+    expect(picker).not.toBeNull();
+    expect(picker?.querySelector('[data-testid="q-date-range-picker-start"]')).not.toBeNull();
+
+    const startInput = picker!.querySelector(
+      '[data-testid="q-date-range-picker-start"]',
+    ) as HTMLInputElement;
+    startInput.value = '2026-01-01';
+    startInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    const shell = fixture.componentInstance as unknown as {
+      state: { customRange: () => { from: string; to: string } };
+    };
+    expect(shell.state.customRange().from).toBe('2026-01-01');
+  });
 });
