@@ -68,6 +68,33 @@ describe('OrderAmendmentConfirmDialog', () => {
     ).toBeNull();
   });
 
+  it(
+    'shows the confirmation channel picker only for an increase -- ADR 0039 ' +
+      "ties the customer's recorded agreement to a raised total, never a decrease",
+    () => {
+      const { fixture: increase } = render({ deltaMinor: 1000 });
+      expect(
+        (increase.nativeElement as HTMLElement).querySelector(
+          '[data-testid="order-amendment-confirm-channel"]',
+        ),
+      ).not.toBeNull();
+
+      const { fixture: decrease } = render({ deltaMinor: -1000 });
+      expect(
+        (decrease.nativeElement as HTMLElement).querySelector(
+          '[data-testid="order-amendment-confirm-channel"]',
+        ),
+      ).toBeNull();
+
+      const { fixture: noChange } = render({ deltaMinor: 0 });
+      expect(
+        (noChange.nativeElement as HTMLElement).querySelector(
+          '[data-testid="order-amendment-confirm-channel"]',
+        ),
+      ).toBeNull();
+    },
+  );
+
   it('emits confirm with the chosen channel', () => {
     const { fixture } = render({ deltaMinor: 1000 });
     const host: HTMLElement = fixture.nativeElement;

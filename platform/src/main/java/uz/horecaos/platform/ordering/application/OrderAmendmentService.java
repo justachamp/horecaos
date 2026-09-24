@@ -640,13 +640,34 @@ public class OrderAmendmentService {
         return new AmendmentResult(amendments.find(tenantId, amendmentId).orElseThrow(), orderVersion, warnings, false);
     }
 
-    /** Records the customer's agreement to an increase, attested by the operator. */
+    /**
+     * Records the customer's agreement to an increase, attested by the operator.
+     *
+     * <p>ADR 0039 §3.11 ties this record to an increase only: a decrease needs
+     * only the ADR 0027 four-eyes review {@link #apply} re-derives for itself,
+     * never the customer's agreement — {@link #apply}'s own guard (see its
+     * {@code deltaTotalMinor() > 0} check) only ever requires this attestation
+     * for a positive delta. The console's confirmation dialog is nonetheless
+     * the one action that can move a blocked {@code PRICED} amendment forward
+     * regardless of sign (there is no second, decrease-only endpoint), so a
+     * decrease-only or zero-delta call still has to behave like a real
+     * version-checked call — it must simply not write a "customer agreed by
+     * phone" fact nobody attested to. Before this guard, every blocked
+     * decrease routed through here fabricated exactly that fact.
+     */
     @Transactional
     public int attestConfirmation(
             UUID tenantId, UUID amendmentId, int expectedVersion, String attestedBy, String channel) {
         Instant now = clock.instant();
         AmendmentRow amendment =
                 amendments.find(tenantId, amendmentId).orElseThrow(() -> new AmendmentNotFoundException(amendmentId));
+
+        if (amendment.deltaTotalMinor() <= 0) {
+            if (amendment.version() != expectedVersion) {
+                throw new OrderStateService.StaleOrderException(expectedVersion, amendment.version());
+            }
+            return amendment.version();
+        }
 
         return amendments
                 .attestConfirmation(tenantId, amendmentId, expectedVersion, attestedBy, channel, now)
