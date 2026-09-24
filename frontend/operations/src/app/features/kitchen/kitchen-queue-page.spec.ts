@@ -248,6 +248,7 @@ describe('KitchenQueuePage', () => {
                       quantity: 1,
                       finalAmountMinor: 5000000,
                       modifiers: [],
+                      commentPresets: [],
                       lineId: 'line-1',
                       hasNote: true,
                     },
@@ -298,6 +299,97 @@ describe('KitchenQueuePage', () => {
     );
     const revealed = host.querySelector('[data-testid="kitchen-line-note"]');
     expect(revealed?.textContent).toContain('без лука');
+  });
+
+  // ------------------------------------------------------------- row 2.1b: presets
+
+  it("renders a line's comment presets as chips ahead of the free note, resolved off the order-detail join", async () => {
+    await TestBed.configureTestingModule({
+      imports: [KitchenQueuePage],
+      providers: [
+        {
+          provide: CurrentLocation,
+          useValue: {
+            scope: signal<LocationScope | null>(SCOPE),
+            denied: signal(false),
+            ensureLoaded: () => Promise.resolve(),
+          },
+        },
+        {
+          provide: KitchenApi,
+          useValue: {
+            board: () => Promise.resolve(board([DELIVERY_TICKET])),
+            stations: () => Promise.resolve([]),
+          },
+        },
+        {
+          provide: LocationsApi,
+          useValue: { serviceSummary: () => Promise.reject(new Error('n/a')) },
+        },
+        {
+          provide: ApiClient,
+          useValue: {
+            get: () =>
+              of({
+                value: {
+                  lines: [
+                    {
+                      lineNumber: 1,
+                      productName: 'Lagman',
+                      quantity: 1,
+                      finalAmountMinor: 5000000,
+                      modifiers: [],
+                      commentPresets: [
+                        {
+                          code: 'NO_ONIONS',
+                          labelRu: 'Без лука',
+                          labelUz: 'Piyozsiz',
+                          labelEn: 'No onions',
+                        },
+                        {
+                          code: 'EXTRA_SPICY',
+                          labelRu: 'Поострее',
+                          labelUz: 'Achchiqroq',
+                          labelEn: 'Extra spicy',
+                        },
+                      ],
+                      lineId: 'line-1',
+                      hasNote: false,
+                    },
+                  ],
+                  kitchenNote: null,
+                },
+                version: null,
+              }),
+          },
+        },
+        { provide: OrderRevealApi, useValue: { revealLineNote: vi.fn() } },
+        {
+          provide: DispatchApi,
+          useValue: { queue: vi.fn(() => Promise.resolve([])), assign: vi.fn() },
+        },
+        { provide: CouriersApi, useValue: { roster: vi.fn(() => Promise.resolve([])) } },
+        { provide: Router, useValue: { navigateByUrl: vi.fn() } },
+      ],
+    }).compileComponents();
+    TestBed.inject(I18n).setLocale('en');
+    fixture = TestBed.createComponent(KitchenQueuePage);
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    const header = host.querySelector('.ticket__header') as HTMLElement;
+    header.click();
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    const chips = host.querySelector('[data-testid="kitchen-line-presets"]');
+    expect(chips).not.toBeNull();
+    expect(chips?.textContent).toContain('No onions');
+    expect(chips?.textContent).toContain('Extra spicy');
+    // No note on this line, so no reveal affordance renders beside the chips.
+    expect(host.querySelector('[data-testid="kitchen-reveal-note"]')).toBeNull();
   });
 
   // ------------------------------------------------------- P16: aggregator tab

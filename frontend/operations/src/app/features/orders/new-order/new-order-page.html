@@ -564,7 +564,7 @@
             @for (line of basket(); track line.lineKey) {
               <li
                 class="new-order__basket-line"
-                [class.new-order__basket-line--unavailable]="!line.orderable"
+                [class.new-order__basket-line--unavailable]="!line.orderable || !line.onSaleNow"
               >
                 <div class="new-order__basket-line-head">
                   <span class="q-body-sm">{{ line.productName }}</span>
@@ -586,9 +586,19 @@
                 @if (line.modifiers.length > 0) {
                   <p class="q-caption new-order__modifiers">{{ modifierSummary(line) }}</p>
                 }
+                @if (line.commentPresetCodes.length > 0) {
+                  <p class="q-caption new-order__modifiers" data-testid="new-order-line-presets">
+                    {{ presetSummary(line) }}
+                  </p>
+                }
                 @if (!line.orderable) {
                   <p class="q-caption new-order__error">
                     {{ 'orders.newOrder.basket.unavailable' | t }}
+                  </p>
+                }
+                @if (line.orderable && !line.onSaleNow) {
+                  <p class="q-caption new-order__error" data-testid="new-order-line-out-of-window">
+                    {{ 'orders.newOrder.menu.itemOutOfSaleWindow' | t }}
                   </p>
                 }
                 <input
@@ -741,6 +751,7 @@
     <q-item-modifier-dialog
       [productName]="pending.product.name"
       [groups]="pending.groups"
+      [presets]="pending.product.commentPresets"
       [currency]="menu()?.currency ?? null"
       (confirm)="onModifierConfirm($event)"
       (dismiss)="onModifierDismiss()"

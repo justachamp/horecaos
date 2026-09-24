@@ -5306,11 +5306,16 @@ export const messagesEn = {
   'orders.newOrder.menu.stopped': 'stop',
   'orders.newOrder.menu.itemStopped': 'This item is no longer available',
   'orders.newOrder.menu.unpricedResult': 'This item could not be priced — try again in a moment',
+  // Row 4.2g: distinct from itemStopped (86'd) — the item is on the menu and
+  // priced, its own sale schedule just excludes this moment.
+  'orders.newOrder.menu.itemOutOfSaleWindow': 'This item is not on sale right now',
   'orders.newOrder.modifiers.title': 'Choose options for {product}',
   'orders.newOrder.modifiers.required': 'required',
   'orders.newOrder.modifiers.selectAtLeast': 'Choose at least {min}',
   'orders.newOrder.modifiers.confirm': 'Add to order',
   'orders.newOrder.modifiers.cancel': 'Cancel',
+  // Row 2.1b: the optional checkbox section beneath the modifier groups.
+  'orders.newOrder.presets.title': 'Comments',
   'orders.newOrder.basket.title': 'Basket',
   'orders.newOrder.basket.empty': 'No items yet',
   'orders.newOrder.basket.remove': 'Remove',

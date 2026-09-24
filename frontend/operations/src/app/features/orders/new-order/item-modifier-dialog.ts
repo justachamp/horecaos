@@ -13,18 +13,29 @@ import { I18n } from '../../../core/i18n/i18n';
 import { TPipe } from '../../../core/i18n/t.pipe';
 import { Modal } from '../../../shared/ui/modal';
 import { NumberStepper } from '../../../shared/ui/number-stepper';
-import { MenuModifierGroup, MenuModifierOption } from './new-order-api';
+import { CommentPresetOption, MenuModifierGroup, MenuModifierOption } from './new-order-api';
 import { BasketModifierSelection } from './new-order-total';
 
 export interface ModifierDialogConfirmation {
   readonly selections: readonly BasketModifierSelection[];
+  /** Row 2.1b: the coded presets the operator checked, in the product's own offered order. */
+  readonly commentPresetCodes: readonly string[];
 }
 
 /**
  * orders.md §5.5: "Modifier groups enforce their min/max at selection;
  * required groups block the add." Opened whenever a chosen product carries at
- * least one modifier group; a product with none never opens this and is
- * added to the basket directly (`new-order-page.ts`'s `addToBasket`).
+ * least one modifier group or comment preset (row 2.1b); a product with
+ * neither never opens this and is added to the basket directly
+ * (`new-order-page.ts`'s `addToBasket`).
+ *
+ * **Row 2.1b's presets share this dialog rather than opening a second one.**
+ * They are optional (no min/max, never block `submit`) and rendered as plain
+ * checkboxes below the modifier groups, in the product's own offered order —
+ * `CartService.putLine`'s `commentPresetCodes` validates each checked code
+ * against `CommentPresetLookup#offeredCodesForVariant` server-side, so this
+ * dialog only ever offers what that same product's `commentPresets` already
+ * named.
  *
  * **The same rule the server enforces, enforced here first** —
  * `CartService#requireSelectionRules` counts raw entries (repeats included)
@@ -50,6 +61,8 @@ export class ItemModifierDialog {
 
   readonly productName = input.required<string>();
   readonly groups = input.required<readonly MenuModifierGroup[]>();
+  /** Row 2.1b: the presets this product offers, empty for a product with none. */
+  readonly presets = input<readonly CommentPresetOption[]>([]);
   readonly currency = input<string | null>(null);
 
   readonly confirm = output<ModifierDialogConfirmation>();
@@ -57,6 +70,8 @@ export class ItemModifierDialog {
 
   /** optionId → chosen quantity. An option absent here has quantity 0. */
   protected readonly quantities = signal<ReadonlyMap<string, number>>(new Map());
+  /** Row 2.1b: the preset codes currently checked. */
+  protected readonly checkedPresetCodes = signal<ReadonlySet<string>>(new Set());
   private readonly touched = signal(false);
 
   protected readonly touchedValue = this.touched.asReadonly();
@@ -119,6 +134,32 @@ export class ItemModifierDialog {
     this.quantities.set(next);
   }
 
+  /** Row 2.1b: a preset's label in the console's own locale — matches `order-detail-pane.ts`'s own `presetLabel`. */
+  protected presetLabel(preset: CommentPresetOption): string {
+    switch (this.i18n.locale()) {
+      case 'ru':
+        return preset.labelRu;
+      case 'uz-Latn':
+        return preset.labelUz;
+      default:
+        return preset.labelEn;
+    }
+  }
+
+  protected isPresetChecked(code: string): boolean {
+    return this.checkedPresetCodes().has(code);
+  }
+
+  protected togglePreset(code: string): void {
+    const next = new Set(this.checkedPresetCodes());
+    if (next.has(code)) {
+      next.delete(code);
+    } else {
+      next.add(code);
+    }
+    this.checkedPresetCodes.set(next);
+  }
+
   protected setStepperQuantity(option: MenuModifierOption, value: number): void {
     const next = new Map(this.quantities());
     if (value <= 0) {
@@ -171,11 +212,18 @@ export class ItemModifierDialog {
         }
       }
     }
-    this.confirm.emit({ selections });
+    this.confirm.emit({
+      selections,
+      commentPresetCodes: this.presets()
+        .filter((preset) => this.checkedPresetCodes().has(preset.code))
+        .map((preset) => preset.code),
+    });
+    this.checkedPresetCodes.set(new Set());
   }
 
   protected close(): void {
     this.quantities.set(new Map());
+    this.checkedPresetCodes.set(new Set());
     this.touched.set(false);
     this.dismiss.emit();
   }
