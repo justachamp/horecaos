@@ -253,6 +253,41 @@ export const messagesEn = {
   'orders.dialog.note.save': 'Save',
   'orders.dialog.amendMenu.title': 'What would you like to change?',
 
+  // The priced-delta confirmation step every repricing wave-10 command shares,
+  // and the RESOLVE row action's own dialog (rows 1.2c/2.1d, `POST .../amendments/{id}/confirmation`).
+  'orders.dialog.amendConfirm.title': 'Confirm this change',
+  'orders.dialog.amendConfirm.increase': 'Adds {amount} — record how the customer agreed.',
+  'orders.dialog.amendConfirm.decrease': 'Lowers the total by {amount}.',
+  'orders.dialog.amendConfirm.noChange': 'No change to the total.',
+  'orders.dialog.amendConfirm.requiresApproval': 'Also needs a supervisor’s approval first.',
+  'orders.dialog.amendConfirm.channel': 'How did the customer agree?',
+  'orders.dialog.amendConfirm.channel.PHONE': 'By phone',
+  'orders.dialog.amendConfirm.channel.IN_PERSON': 'In person',
+  'orders.dialog.amendConfirm.channel.SMS': 'By SMS/app',
+  'orders.dialog.amendConfirm.confirm': 'Confirm and apply',
+
+  'orders.dialog.changeTime.label': 'New promised time',
+
+  'orders.dialog.changeContact.name': 'Recipient name',
+  'orders.dialog.changeContact.phone': 'Recipient phone',
+
+  'orders.dialog.changePaymentMethod.label': 'New payment method',
+  'orders.dialog.changePaymentMethod.empty': 'No payment method enabled for this channel.',
+
+  'orders.dialog.changeQuantity.line': 'Item',
+  'orders.dialog.changeQuantity.newQuantity': 'New quantity (at least {min})',
+
+  'orders.dialog.changeAddress.line2': 'Address line 2',
+  'orders.dialog.changeAddress.city': 'City',
+  'orders.dialog.changeAddress.district': 'District',
+  'orders.dialog.changeAddress.latitude': 'Latitude',
+  'orders.dialog.changeAddress.longitude': 'Longitude',
+
+  'orders.dialog.addLines.noModifiers': 'No modifiers — note any for the kitchen instead.',
+  'orders.dialog.addLines.searchPlaceholder': 'Search the menu…',
+  'orders.dialog.addLines.empty': 'No items selected yet.',
+  'orders.dialog.addLines.remove': 'Remove',
+
   // The Millenium pattern's own confirmation seam (gap map row 1.2f, wave P44).
   'orders.dialog.externalCourier.title': 'Call an external courier',
   'orders.dialog.externalCourier.noPartners':
@@ -467,10 +502,21 @@ export const messagesEn = {
   'orders.detail.comments.history.hide': 'Hide history',
   'orders.detail.comments.history.error': 'The amendment history could not be loaded',
   'orders.detail.comments.history.empty': 'No amendments yet',
+  'orders.detail.comments.history.resolve': 'Resolve',
   'orders.amendment.warning.CASH_TENDERED_INSUFFICIENT':
     'Change due is now short of the total — the customer can hand over more.',
   'orders.amendment.warning.acknowledge': 'Got it',
   'orders.detail.amend.blockedByPosExport': 'Editing unavailable: waiting on the POS',
+
+  // Wave 10 financial commands (gap map rows 1.2c/2.1d) — command labels, shared by
+  // the amend menu and a history row's own label (`amendmentCommandLabel`).
+  'orders.amendment.command.ADD_LINES': 'Add items',
+  'orders.amendment.command.CHANGE_LINE_QUANTITY': 'Change item quantity',
+  'orders.amendment.command.REMOVE_LINES': 'Remove items',
+  'orders.amendment.command.CHANGE_PAYMENT_METHOD': 'Change payment method',
+  'orders.amendment.command.CHANGE_DELIVERY_ADDRESS': 'Change delivery address',
+  'orders.amendment.command.CHANGE_FULFILLMENT_TIME': 'Change promised time',
+  'orders.amendment.command.CHANGE_CONTACT': 'Change recipient name/phone',
 
   'orders.detail.section.revisions': 'Revisions ({count})',
   'orders.detail.revisions.show': 'Show revisions',
@@ -2472,6 +2518,7 @@ export const messagesEn = {
   'kitchen.ticket.targetReady': 'Ready by {time}',
   'kitchen.ticket.courierEta': 'Courier ETA {time}',
   'kitchen.ticket.kitchenNote': 'Kitchen note: {note}',
+  'kitchen.ticket.changePaymentMethod': 'Change payment',
   'kitchen.ticket.status.HELD': 'Held',
   'kitchen.ticket.status.FIRED': 'Fired',
   'kitchen.ticket.status.IN_PRODUCTION': 'In production',

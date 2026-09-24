@@ -322,5 +322,54 @@ public final class OrderingConfigurationKeys {
                     + "is kept before it is deleted outright.")
             .build();
 
+    /** Wave 10 (gap map rows {@code 1.2c}/{@code 2.1d}): the ADR 0039 amendment cut point. */
+    public static final String AMENDMENT_CUT_POINT_STATUS_CODE = "ordering.amendment_cut_point_status";
+
+    /**
+     * The last {@link uz.horecaos.platform.ordering.domain.OrderStatus} at which
+     * a financial amendment command may still be carried out (ADR 0039 §3.11:
+     * "Financial commands stop at a cut point, default {@code READY}, resolved
+     * through ADR 0030 so a location can stop earlier"). {@code
+     * OrderAmendmentService} refuses every {@code
+     * AmendmentCommandType#financial()} command once the order's own status
+     * reaches this one or a later one in {@code OrderStatus}'s declared order —
+     * past it, "add a dessert" is a second order, honestly presented as one,
+     * because the fiscal and POS consequences stop being reliably reversible.
+     * A non-financial command (a note, the callback flag, change-due) is never
+     * subject to this key.
+     */
+    public static final ConfigurationKey<String> AMENDMENT_CUT_POINT_STATUS = ConfigurationKey.of(
+                    AMENDMENT_CUT_POINT_STATUS_CODE, String.class)
+            .defaultValue("READY")
+            .ownedBy("ordering")
+            .tenantVisible()
+            .describedAs("The last order status at which a financial amendment (adding, changing "
+                    + "or removing lines, the address, the fulfilment time or the payment method) "
+                    + "may still be carried out. A location may stop earlier than READY, never later.")
+            .build();
+
+    /** Wave 10: the ADR 0027 four-eyes threshold on a decreasing amendment. */
+    public static final String AMENDMENT_DECREASE_APPROVAL_THRESHOLD_MINOR_CODE =
+            "ordering.amendment_decrease_approval_threshold_minor";
+
+    /**
+     * The size, in minor units, above which a financial amendment that lowers
+     * the order's total needs an ADR 0027 four-eyes approval before it may
+     * apply (ADR 0039 §3.11: "A decrease above a configured amount needs ADR
+     * 0027 four-eyes approval, or 'remove the two most expensive lines' is an
+     * unreviewed refund path"). 200 000 (UZS): the same figure {@code
+     * OrderRemedyService}'s own {@code horecaos.payments.remedy-approval
+     * -threshold-minor} defaults to, since an amendment's decrease and a
+     * refund are the identical exposure to the same failure.
+     */
+    public static final ConfigurationKey<Long> AMENDMENT_DECREASE_APPROVAL_THRESHOLD_MINOR = ConfigurationKey.of(
+                    AMENDMENT_DECREASE_APPROVAL_THRESHOLD_MINOR_CODE, Long.class)
+            .defaultValue(200000L)
+            .ownedBy("ordering")
+            .tenantVisible()
+            .describedAs("A financial amendment that lowers the order's total by at least this "
+                    + "many minor units needs a second signature (ADR 0027) before it may apply.")
+            .build();
+
     private OrderingConfigurationKeys() {}
 }

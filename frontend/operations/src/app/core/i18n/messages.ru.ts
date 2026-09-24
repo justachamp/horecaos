@@ -241,6 +241,39 @@ export const messagesRu: MessageCatalogue = {
   'orders.dialog.note.save': 'Сохранить',
   'orders.dialog.amendMenu.title': 'Что нужно изменить?',
 
+  'orders.dialog.amendConfirm.title': 'Подтвердите изменение',
+  'orders.dialog.amendConfirm.increase': 'Добавляет {amount} — укажите, как клиент согласился.',
+  'orders.dialog.amendConfirm.decrease': 'Уменьшает сумму на {amount}.',
+  'orders.dialog.amendConfirm.noChange': 'Сумма не меняется.',
+  'orders.dialog.amendConfirm.requiresApproval': 'Также требует подтверждения руководителя.',
+  'orders.dialog.amendConfirm.channel': 'Как клиент согласился?',
+  'orders.dialog.amendConfirm.channel.PHONE': 'По телефону',
+  'orders.dialog.amendConfirm.channel.IN_PERSON': 'Лично',
+  'orders.dialog.amendConfirm.channel.SMS': 'По SMS/приложению',
+  'orders.dialog.amendConfirm.confirm': 'Подтвердить и применить',
+
+  'orders.dialog.changeTime.label': 'Новое обещанное время',
+
+  'orders.dialog.changeContact.name': 'Имя получателя',
+  'orders.dialog.changeContact.phone': 'Телефон получателя',
+
+  'orders.dialog.changePaymentMethod.label': 'Новый способ оплаты',
+  'orders.dialog.changePaymentMethod.empty': 'Для канала не включён ни один способ оплаты.',
+
+  'orders.dialog.changeQuantity.line': 'Позиция',
+  'orders.dialog.changeQuantity.newQuantity': 'Новое количество (не менее {min})',
+
+  'orders.dialog.changeAddress.line2': 'Адрес, строка 2',
+  'orders.dialog.changeAddress.city': 'Город',
+  'orders.dialog.changeAddress.district': 'Район',
+  'orders.dialog.changeAddress.latitude': 'Широта',
+  'orders.dialog.changeAddress.longitude': 'Долгота',
+
+  'orders.dialog.addLines.noModifiers': 'Без модификаторов — укажите их в заметке для кухни.',
+  'orders.dialog.addLines.searchPlaceholder': 'Поиск по меню…',
+  'orders.dialog.addLines.empty': 'Позиции ещё не выбраны.',
+  'orders.dialog.addLines.remove': 'Убрать',
+
   // Конфирмация цены при вызове внешнего курьера (карта пробелов 1.2f, волна P44).
   'orders.dialog.externalCourier.title': 'Вызвать курьера',
   'orders.dialog.externalCourier.noPartners':
@@ -451,10 +484,19 @@ export const messagesRu: MessageCatalogue = {
   'orders.detail.comments.history.hide': 'Скрыть историю',
   'orders.detail.comments.history.error': 'Не удалось загрузить историю изменений',
   'orders.detail.comments.history.empty': 'Пока нет изменений',
+  'orders.detail.comments.history.resolve': 'Решить',
   'orders.amendment.warning.CASH_TENDERED_INSUFFICIENT':
     '«Сдача с» теперь меньше итоговой суммы — клиент может доплатить.',
   'orders.amendment.warning.acknowledge': 'Понятно',
   'orders.detail.amend.blockedByPosExport': 'Изменение недоступно: ожидается подтверждение POS',
+
+  'orders.amendment.command.ADD_LINES': 'Добавить позиции',
+  'orders.amendment.command.CHANGE_LINE_QUANTITY': 'Изменить количество позиции',
+  'orders.amendment.command.REMOVE_LINES': 'Удалить позиции',
+  'orders.amendment.command.CHANGE_PAYMENT_METHOD': 'Изменить способ оплаты',
+  'orders.amendment.command.CHANGE_DELIVERY_ADDRESS': 'Изменить адрес доставки',
+  'orders.amendment.command.CHANGE_FULFILLMENT_TIME': 'Изменить обещанное время',
+  'orders.amendment.command.CHANGE_CONTACT': 'Изменить имя/телефон получателя',
 
   'orders.detail.section.revisions': 'Ревизии ({count})',
   'orders.detail.revisions.show': 'Показать ревизии',
@@ -2445,6 +2487,7 @@ export const messagesRu: MessageCatalogue = {
   'kitchen.ticket.targetReady': 'Готово к {time}',
   'kitchen.ticket.courierEta': 'Курьер к {time}',
   'kitchen.ticket.kitchenNote': 'Комментарий кухне: {note}',
+  'kitchen.ticket.changePaymentMethod': 'Изменить оплату',
   'kitchen.ticket.status.HELD': 'В буфере',
   'kitchen.ticket.status.FIRED': 'Запущен',
   'kitchen.ticket.status.IN_PRODUCTION': 'Готовится',

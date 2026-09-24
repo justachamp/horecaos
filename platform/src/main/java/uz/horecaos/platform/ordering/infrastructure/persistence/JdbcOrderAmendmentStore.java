@@ -121,10 +121,36 @@ public class JdbcOrderAmendmentStore {
      */
     public Optional<Integer> markApplied(
             UUID tenantId, UUID amendmentId, int expectedVersion, int appliedRevision, Instant now) {
+        return markApplied(tenantId, amendmentId, expectedVersion, appliedRevision, null, now);
+    }
+
+    /**
+     * The same compare-and-set, additionally naming the ADR 0027 approval
+     * this apply spent (wave 10) — in the same statement as the transition it
+     * authorises, per {@code ApprovalService#requireApproval}'s own contract
+     * that a grant is consumed in the transaction that performs the action.
+     * {@code ck_amendment_approval_recorded} refuses an {@code APPLIED} row
+     * whose {@code requires_approval} is true and carries no request id, so a
+     * caller that forgets this parameter for an approval-gated amendment fails
+     * at the database rather than shipping a silently unrecorded approval.
+     *
+     * @param approvalRequestId null when this amendment never required one —
+     *                          leaves the column exactly as it already was
+     *                          rather than clearing a value a concurrent
+     *                          caller might have just written
+     */
+    public Optional<Integer> markApplied(
+            UUID tenantId,
+            UUID amendmentId,
+            int expectedVersion,
+            int appliedRevision,
+            @Nullable UUID approvalRequestId,
+            Instant now) {
         return jdbc.sql("""
                 UPDATE ordering.order_amendments
                 SET status = 'APPLIED',
                     applied_revision = :revision,
+                    approval_request_id = COALESCE(:approvalRequestId, approval_request_id),
                     settled_at = :now,
                     version = version + 1,
                     updated_at = :now
@@ -136,6 +162,7 @@ public class JdbcOrderAmendmentStore {
                 .param("id", amendmentId)
                 .param("expectedVersion", expectedVersion)
                 .param("revision", appliedRevision)
+                .param("approvalRequestId", approvalRequestId)
                 .param("now", utc(now))
                 .query(Integer.class)
                 .optional();

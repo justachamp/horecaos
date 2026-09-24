@@ -1,0 +1,53 @@
+/* Chrome is `q-modal` (ADR 0101); see `order-reason-dialog.css`'s identical note. */
+
+.change-address-dialog__grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 12px;
+}
+
+.change-address-dialog__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.change-address-dialog__field--wide {
+  grid-column: 1 / -1;
+}
+
+.change-address-dialog__field input,
+.change-address-dialog__field textarea {
+  padding: 8px 10px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  font-family: var(--q-font-sans);
+}
+
+.change-address-dialog__field textarea {
+  resize: vertical;
+}
+
+.change-address-dialog__dismiss,
+.change-address-dialog__confirm {
+  padding: 6px 14px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  cursor: pointer;
+}
+
+.change-address-dialog__confirm {
+  border-color: var(--q-primary);
+  background: var(--q-primary);
+  color: var(--q-inverse-ink);
+}
+
+.change-address-dialog__confirm:disabled,
+.change-address-dialog__dismiss:disabled {
+  opacity: 0.6;
+  cursor: default;
+}

@@ -243,6 +243,39 @@ export const messagesUzLatn: MessageCatalogue = {
   'orders.dialog.note.save': 'Saqlash',
   'orders.dialog.amendMenu.title': 'Nimani oʻzgartirmoqchisiz?',
 
+  'orders.dialog.amendConfirm.title': 'Oʻzgarishni tasdiqlang',
+  'orders.dialog.amendConfirm.increase': '{amount} qoʻshadi — mijoz qanday rozi boʻlganini yozing.',
+  'orders.dialog.amendConfirm.decrease': 'Summani {amount} ga kamaytiradi.',
+  'orders.dialog.amendConfirm.noChange': 'Summa oʻzgarmaydi.',
+  'orders.dialog.amendConfirm.requiresApproval': 'Rahbar tasdigʻini ham talab qiladi.',
+  'orders.dialog.amendConfirm.channel': 'Mijoz qanday rozi boʻldi?',
+  'orders.dialog.amendConfirm.channel.PHONE': 'Telefon orqali',
+  'orders.dialog.amendConfirm.channel.IN_PERSON': 'Shaxsan',
+  'orders.dialog.amendConfirm.channel.SMS': 'SMS/ilova orqali',
+  'orders.dialog.amendConfirm.confirm': 'Tasdiqlash va qoʻllash',
+
+  'orders.dialog.changeTime.label': 'Yangi vaʻda qilingan vaqt',
+
+  'orders.dialog.changeContact.name': 'Qabul qiluvchi ismi',
+  'orders.dialog.changeContact.phone': 'Qabul qiluvchi telefoni',
+
+  'orders.dialog.changePaymentMethod.label': 'Yangi toʻlov usuli',
+  'orders.dialog.changePaymentMethod.empty': 'Kanal uchun toʻlov usuli yoqilmagan.',
+
+  'orders.dialog.changeQuantity.line': 'Pozitsiya',
+  'orders.dialog.changeQuantity.newQuantity': 'Yangi miqdor (kamida {min})',
+
+  'orders.dialog.changeAddress.line2': 'Manzil, 2-qator',
+  'orders.dialog.changeAddress.city': 'Shahar',
+  'orders.dialog.changeAddress.district': 'Tuman',
+  'orders.dialog.changeAddress.latitude': 'Kenglik',
+  'orders.dialog.changeAddress.longitude': 'Uzunlik',
+
+  'orders.dialog.addLines.noModifiers': 'Modifikatorsiz — oshxona uchun izohda koʻrsating.',
+  'orders.dialog.addLines.searchPlaceholder': 'Menyudan qidirish…',
+  'orders.dialog.addLines.empty': 'Hali hech narsa tanlanmagan.',
+  'orders.dialog.addLines.remove': 'Olib tashlash',
+
   // Tashqi kuryer chaqirishda narx tasdigʻi (boʻshliqlar xaritasi 1.2f, P44 toʻlqini).
   'orders.dialog.externalCourier.title': 'Tashqi kuryer chaqirish',
   'orders.dialog.externalCourier.noPartners': 'Bu filial uchun kuryerlik xizmati sozlanmagan.',
@@ -456,10 +489,19 @@ export const messagesUzLatn: MessageCatalogue = {
   'orders.detail.comments.history.hide': 'Tarixni yashirish',
   'orders.detail.comments.history.error': 'Oʻzgarishlar tarixini yuklab boʻlmadi',
   'orders.detail.comments.history.empty': 'Hali oʻzgarish yoʻq',
+  'orders.detail.comments.history.resolve': 'Hal qilish',
   'orders.amendment.warning.CASH_TENDERED_INSUFFICIENT':
     '«Qancha pul bilan keladi» endi umumiy summadan kam — mijoz qoʻshib toʻlashi mumkin.',
   'orders.amendment.warning.acknowledge': 'Tushunarli',
   'orders.detail.amend.blockedByPosExport': 'Tahrirlash mavjud emas: POS tasdiqlanishi kutilmoqda',
+
+  'orders.amendment.command.ADD_LINES': 'Pozitsiya qoʻshish',
+  'orders.amendment.command.CHANGE_LINE_QUANTITY': 'Pozitsiya miqdorini oʻzgartirish',
+  'orders.amendment.command.REMOVE_LINES': 'Pozitsiyalarni olib tashlash',
+  'orders.amendment.command.CHANGE_PAYMENT_METHOD': 'Toʻlov usulini oʻzgartirish',
+  'orders.amendment.command.CHANGE_DELIVERY_ADDRESS': 'Yetkazib berish manzilini oʻzgartirish',
+  'orders.amendment.command.CHANGE_FULFILLMENT_TIME': 'Vaʻda qilingan vaqtni oʻzgartirish',
+  'orders.amendment.command.CHANGE_CONTACT': 'Qabul qiluvchi ism/telefonini oʻzgartirish',
 
   'orders.detail.section.revisions': 'Revizialar ({count})',
   'orders.detail.revisions.show': 'Revizialarni koʻrsatish',
@@ -2466,6 +2508,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'kitchen.ticket.targetReady': '{time} gacha tayyor',
   'kitchen.ticket.courierEta': 'Kuryer {time} da',
   'kitchen.ticket.kitchenNote': 'Oshxonaga izoh: {note}',
+  'kitchen.ticket.changePaymentMethod': 'Toʻlovni oʻzgartirish',
   'kitchen.ticket.status.HELD': 'Buferda',
   'kitchen.ticket.status.FIRED': 'Ishga tushirilgan',
   'kitchen.ticket.status.IN_PRODUCTION': 'Tayyorlanmoqda',

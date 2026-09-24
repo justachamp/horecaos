@@ -34,10 +34,13 @@ import {
   ExternalBookingSubmission,
   ExternalCourierDialog,
 } from '../orders/external-courier-dialog';
+import { OrderChangePaymentMethodDialog } from '../orders/order-change-payment-method-dialog';
 import { describeApiError } from '../orders/order-errors';
+import { OrderAmendmentsApi } from '../orders/order-amendments-api';
 import { OrderDeliveryApi } from '../orders/order-delivery-api';
 import { OrderDetailResponse, OrderLine } from '../orders/order-detail';
 import { OrderRevealApi } from '../orders/order-reveal-api';
+import { SalesChannelsApi } from '../settings/sales-channels/sales-channels-api';
 import {
   BoardCounts,
   BoardResponse,
@@ -113,15 +116,26 @@ const PLACEHOLDER_TIME_ZONE: TimeZone = 'Asia/Tashkent';
  * winning shipment's `sourceType`/status renders on every visible delivery
  * ticket from the same 10-second poll that loads the board itself
  * ({@link refreshShipmentStates}), not only once an operator happens to open
- * a picker for that one ticket.
+ * a picker for that one ticket; «Изменить оплату» — `CHANGE_PAYMENT_METHOD`
+ * (wave 10, row `2.1d`) — a ticket's own action that fetches the order's
+ * current version fresh (this board carries none of its own) and its
+ * channel's payment matrix (`SalesChannelsApi.matrices`, the identical read
+ * `order-detail-pane.ts`'s own `openChangePaymentMethodDialog` performs),
+ * then reuses `q-order-change-payment-method-dialog` verbatim — the same
+ * component that dialog renders, so a KDS operator and a console operator
+ * pick from an identical list. No pre-check: the row's own doc explains why
+ * a refusal (`PAYMENT_METHOD_CHANGE_REQUIRES_VOID_REFUND` for a
+ * provider-paid order moving to another online method) surfaces as this
+ * pass's own `actionNotice` band after the attempt rather than a
+ * proactively greyed-out option — no read exists yet that would answer
+ * "will this refuse" without guessing.
  *
  * **Not built, honestly**: preset product comments (no backend vocabulary
- * exists at all — see the wave's report); change payment type from the
- * kitchen (no backend endpoint exists for it).
+ * exists at all — see the wave's report).
  */
 @Component({
   selector: 'q-kitchen-queue-page',
-  imports: [TPipe, ExternalCourierDialog],
+  imports: [TPipe, ExternalCourierDialog, OrderChangePaymentMethodDialog],
   templateUrl: './kitchen-queue-page.html',
   styleUrl: './kitchen-queue-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -136,6 +150,8 @@ export class KitchenQueuePage implements OnInit {
   private readonly dispatchApi = inject(DispatchApi);
   private readonly orderDeliveryApi = inject(OrderDeliveryApi);
   private readonly couriersApi = inject(CouriersApi);
+  private readonly amendmentsApi = inject(OrderAmendmentsApi);
+  private readonly channelsApi = inject(SalesChannelsApi);
   private readonly router = inject(Router);
   private readonly i18n = inject(I18n);
   private readonly destroyRef = inject(DestroyRef);
@@ -199,6 +215,15 @@ export class KitchenQueuePage implements OnInit {
   protected readonly externalPartners = signal<readonly ExternalPartnerResponse[]>([]);
   protected readonly externalQuote = signal<ExternalQuoteResponse | null>(null);
   protected readonly externalCourierBusy = signal(false);
+
+  // ------------------------------------------------------- wave 10: «Изменить оплату» (row 2.1d)
+
+  /** Which ticket's «Изменить оплату» dialog is open. `null` when closed. */
+  protected readonly paymentChangeTicketId = signal<string | null>(null);
+  private paymentChangeOrderId: string | null = null;
+  private paymentChangeOrderVersion: number | null = null;
+  protected readonly paymentChangeMethods = signal<readonly string[]>(['CASH']);
+  protected readonly paymentChangeBusy = signal(false);
 
   private pollHandle: ReturnType<typeof setInterval> | null = null;
 
@@ -855,6 +880,81 @@ export class KitchenQueuePage implements OnInit {
       this.actionNotice.set(this.describeError(error));
     } finally {
       this.externalCourierBusy.set(false);
+    }
+  }
+
+  // ------------------------------------------------------- wave 10: «Изменить оплату» (row 2.1d)
+
+  protected isPaymentChangeOpen(ticket: TicketResponse): boolean {
+    return this.paymentChangeTicketId() === ticket.ticketId;
+  }
+
+  /**
+   * Opens `q-order-change-payment-method-dialog` for this ticket's own
+   * order — reads the order's current version fresh (this board carries
+   * none of its own, unlike a ticket's own `version`) and the channel's
+   * payment matrix, the identical two reads `order-detail-pane.ts`'s own
+   * `openChangePaymentMethodDialog` performs. See this class's own doc for
+   * why there is no proactive refusal prediction.
+   */
+  protected async openPaymentChangeDialog(ticket: TicketResponse): Promise<void> {
+    this.paymentChangeTicketId.set(ticket.ticketId);
+    this.paymentChangeOrderId = ticket.orderId;
+    this.paymentChangeOrderVersion = null;
+    this.paymentChangeMethods.set(['CASH']);
+    const scope = this.location.scope();
+    if (!scope) {
+      return;
+    }
+    try {
+      const detail = await firstValueFrom(
+        this.api.get<OrderDetailResponse>(operationsPaths.order(scope, ticket.orderId)),
+      );
+      this.paymentChangeOrderVersion = detail.value.summary.version ?? 0;
+      const channelCode = detail.value.summary.channelCode;
+      if (channelCode) {
+        const channels = await this.channelsApi.list(scope);
+        const channel = channels.find((candidate) => candidate.code === channelCode);
+        if (channel) {
+          const matrices = await this.channelsApi.matrices(scope, channel.id);
+          const enabled = Object.entries(matrices.paymentMethods)
+            .filter(([, isEnabled]) => isEnabled)
+            .map(([code]) => code)
+            .sort();
+          if (enabled.length > 0) {
+            this.paymentChangeMethods.set(enabled);
+          }
+        }
+      }
+    } catch (error) {
+      this.actionNotice.set(this.describeError(error));
+    }
+  }
+
+  protected closePaymentChangeDialog(): void {
+    this.paymentChangeTicketId.set(null);
+    this.paymentChangeOrderId = null;
+    this.paymentChangeOrderVersion = null;
+  }
+
+  protected async onPaymentChangeConfirm(paymentMethodCode: string): Promise<void> {
+    const scope = this.location.scope();
+    const orderId = this.paymentChangeOrderId;
+    const version = this.paymentChangeOrderVersion;
+    if (!scope || !orderId || version === null) {
+      return;
+    }
+    this.paymentChangeBusy.set(true);
+    try {
+      await firstValueFrom(
+        this.amendmentsApi.changePaymentMethod(scope, orderId, version, paymentMethodCode),
+      );
+      this.closePaymentChangeDialog();
+      await this.refresh();
+    } catch (error) {
+      this.actionNotice.set(this.describeError(error));
+    } finally {
+      this.paymentChangeBusy.set(false);
     }
   }
 
