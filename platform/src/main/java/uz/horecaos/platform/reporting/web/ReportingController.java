@@ -220,6 +220,28 @@ public class ReportingController {
                 ProvenanceResponse.of(result.provenance())));
     }
 
+    @GetMapping("/delivery-transit-time-by-location")
+    @RequiresCapability(value = Capability.REPORTING_READ, scope = ScopeType.TENANT)
+    @Operation(
+            summary = "Average courier transit seconds, per branch, in one query (7.3)",
+            description = "delivery_transit_time.average.v1 — the branch leaderboard's own `Ср. "
+                    + "время доставки` column for every branch at once, read from "
+                    + "reporting.fact_delivery (ADR 0125). Courier-leg-only, from acceptance to "
+                    + "delivery, never the door-to-door figure `delivery-time` answers. A branch "
+                    + "with no settled delivery in range is simply absent from `rows`, never a "
+                    + "row carrying a null average.")
+    public ResponseEntity<LocationAverageListResponse> averageDeliveryTimeByLocation(
+            @PathVariable UUID tenantId,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) List<UUID> locationId) {
+
+        var result = queries.averageDeliveryTimeByLocation(tenantId, from, to, orEmpty(locationId));
+        return ResponseEntity.ok(new LocationAverageListResponse(
+                result.rows().stream().map(LocationAverageResponse::of).toList(),
+                ProvenanceResponse.of(result.provenance())));
+    }
+
     @GetMapping("/fulfilment-time")
     @RequiresCapability(value = Capability.REPORTING_READ, scope = ScopeType.TENANT)
     @Operation(
@@ -917,6 +939,20 @@ public class ReportingController {
     }
 
     public record LocationMedianListResponse(List<LocationMedianResponse> rows, ProvenanceResponse provenance) {}
+
+    /**
+     * Wave 11 w5-fulfillment-destination (7.3): one branch's average courier
+     * transit time — see {@link #averageDeliveryTimeByLocation}.
+     */
+    public record LocationAverageResponse(
+            UUID locationId, @Nullable Integer averageSeconds) {
+
+        static LocationAverageResponse of(JdbcReportingStore.LocationAverageRow row) {
+            return new LocationAverageResponse(row.locationId(), row.averageSeconds());
+        }
+    }
+
+    public record LocationAverageListResponse(List<LocationAverageResponse> rows, ProvenanceResponse provenance) {}
 
     /**
      * One payment-mix row — see {@code ReportQueryService.PaymentMixRow}.

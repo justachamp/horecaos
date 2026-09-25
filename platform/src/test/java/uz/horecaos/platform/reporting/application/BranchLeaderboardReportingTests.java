@@ -84,7 +84,7 @@ class BranchLeaderboardReportingTests {
 
         jdbc.sql("""
                 TRUNCATE TABLE reporting.fact_order, reporting.agg_branch_day,
-                    reporting.business_day_policies
+                    reporting.business_day_policies, reporting.fact_delivery
                 """).update();
         jdbc.sql("TRUNCATE TABLE tenant.tenants CASCADE").update();
 
@@ -350,6 +350,76 @@ class BranchLeaderboardReportingTests {
         assertThat(result.provenance().metricVersions()).contains("prep_time.median.v1");
     }
 
+    // ------------------------------------------------- delivery transit-time average (7.3, wave 11 w5)
+
+    @Test
+    void averageDeliveryTimeForEveryBranchComesBackFromOneCall() {
+        insertDeliveryFact(LOCATION_A, 600);
+        insertDeliveryFact(LOCATION_A, 1_200);
+        insertDeliveryFact(LOCATION_B, 300);
+        // LOCATION_C had no settled delivery -- must be absent, not a null row.
+
+        List<JdbcReportingStore.LocationAverageRow> rows =
+                store.averageTransitSecondsByLocation(TENANT, DAY, DAY, List.of());
+
+        Map<UUID, Integer> byLocation = new HashMap<>();
+        for (JdbcReportingStore.LocationAverageRow row : rows) {
+            byLocation.put(row.locationId(), row.averageSeconds());
+        }
+
+        // Mean of {600, 1200} is 900.
+        assertThat(byLocation).containsEntry(LOCATION_A, 900);
+        assertThat(byLocation).containsEntry(LOCATION_B, 300);
+        assertThat(byLocation)
+                .as("no settled delivery at LOCATION_C: absent, never a zero-second courier leg")
+                .doesNotContainKey(LOCATION_C);
+        assertThat(rows).hasSize(2);
+    }
+
+    @Test
+    void averageDeliveryTimeByLocationNarrowsToTheRequestedBranches() {
+        insertDeliveryFact(LOCATION_A, 600);
+        insertDeliveryFact(LOCATION_B, 300);
+
+        List<JdbcReportingStore.LocationAverageRow> rows =
+                store.averageTransitSecondsByLocation(TENANT, DAY, DAY, List.of(LOCATION_A));
+
+        assertThat(rows)
+                .extracting(JdbcReportingStore.LocationAverageRow::locationId)
+                .containsExactly(LOCATION_A);
+    }
+
+    /** Same gap as {@link #medianSecondsToReadyByLocationNeverCrossesTenants}, for the delivery transit-time average. */
+    @Test
+    void averageTransitSecondsByLocationNeverCrossesTenants() {
+        insertDeliveryFact(TENANT, LOCATION_A, 600);
+        // OTHER_TENANT: the same location and business date, a wildly different
+        // duration -- would move the average if it ever leaked into TENANT's read.
+        insertDeliveryFact(OTHER_TENANT, LOCATION_A, 60_000);
+
+        List<JdbcReportingStore.LocationAverageRow> rows =
+                store.averageTransitSecondsByLocation(TENANT, DAY, DAY, List.of());
+
+        assertThat(rows)
+                .extracting(JdbcReportingStore.LocationAverageRow::locationId)
+                .containsExactly(LOCATION_A);
+        assertThat(rows.getFirst().averageSeconds()).isEqualTo(600);
+    }
+
+    @Test
+    void theBranchLeaderboardAverageDeliveryTimeStatesItsProvenanceLikeEveryOtherReport() {
+        insertDeliveryFact(LOCATION_A, 900);
+
+        var result = queries.averageDeliveryTimeByLocation(TENANT, DAY, DAY, List.of());
+
+        assertThat(result.rows())
+                .extracting(JdbcReportingStore.LocationAverageRow::locationId)
+                .containsExactly(LOCATION_A);
+        assertThat(result.rows().getFirst().averageSeconds()).isEqualTo(900);
+        assertThat(result.provenance().timezone()).isEqualTo("Asia/Tashkent");
+        assertThat(result.provenance().metricVersions()).contains("delivery_transit_time.average.v1");
+    }
+
     // ------------------------------------------------- handover-time median (7.3a)
 
     @Test
@@ -523,5 +593,31 @@ class BranchLeaderboardReportingTests {
                     :secondsToReady, :secondsTotal, :promisedAt, :secondsLate,
                     :metricCalculationVersion, :sourceOrderVersion)
                 """).params(params).update();
+    }
+
+    /** One {@code reporting.fact_delivery} row, {@code transitSeconds} of courier leg, TENANT's own. */
+    private void insertDeliveryFact(UUID locationId, int transitSeconds) {
+        insertDeliveryFact(TENANT, locationId, transitSeconds);
+    }
+
+    /** {@link #insertDeliveryFact}, naming a tenant — the cross-tenant isolation test's own fixture. */
+    private void insertDeliveryFact(UUID tenantId, UUID locationId, int transitSeconds) {
+        Instant accepted = tashkent(9, 0).toInstant();
+        store.insertDeliveryFact(new ReportingFacts.DeliveryFact(
+                tenantId,
+                UUID.randomUUID(),
+                DAY,
+                1,
+                1,
+                UUID.randomUUID(),
+                locationId,
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                1_000,
+                "HAVERSINE_FACTORED",
+                "ON_TIME",
+                accepted,
+                accepted.plusSeconds(transitSeconds),
+                transitSeconds));
     }
 }

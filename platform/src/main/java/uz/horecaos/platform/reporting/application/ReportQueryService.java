@@ -643,6 +643,27 @@ public class ReportQueryService {
     }
 
     /**
+     * Wave 11 w5-fulfillment-destination (7.3): every branch's average courier
+     * transit time from one query — {@code delivery_transit_time.average.v1},
+     * read straight off {@code reporting.fact_delivery}, on the same "own
+     * endpoint, not /queries" footing {@link #deliveryDistance} already
+     * establishes for the sibling average beside it.
+     */
+    @Transactional(readOnly = true)
+    public LocationAverageResult averageDeliveryTimeByLocation(
+            UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds) {
+        validateRange(from, to);
+        List<JdbcReportingStore.LocationAverageRow> rows =
+                store.averageTransitSecondsByLocation(tenantId, from, to, locationIds);
+        return new LocationAverageResult(
+                rows,
+                provenance(
+                        tenantId,
+                        List.of(MetricRegistry.require("delivery_transit_time.average.v1")),
+                        businessDays.boundaryFor(tenantId)));
+    }
+
+    /**
      * Wave P27 (7.1): the pickup/delivery elapsed-time tile — see {@code
      * JdbcReportingStore#medianSecondsTotalByFulfilment}'s own doc for why
      * this is a registry-and-endpoint gap over already-written data rather
@@ -1455,6 +1476,13 @@ public class ReportQueryService {
 
     /** Wave T06 (7.3): every branch's median preparation time from one query — see {@link #preparationTimeByLocation}. */
     public record LocationMedianResult(List<JdbcReportingStore.LocationMedianRow> rows, Provenance provenance) {}
+
+    /**
+     * Wave 11 w5-fulfillment-destination (7.3): every branch's average
+     * courier transit time from one query — see {@link
+     * #averageDeliveryTimeByLocation}.
+     */
+    public record LocationAverageResult(List<JdbcReportingStore.LocationAverageRow> rows, Provenance provenance) {}
 
     /**
      * @param maybeMore true when the bounded read came back full — there may be

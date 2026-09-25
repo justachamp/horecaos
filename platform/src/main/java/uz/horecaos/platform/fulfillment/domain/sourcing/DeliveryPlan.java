@@ -21,6 +21,14 @@ import org.jspecify.annotations.Nullable;
  * @param distanceMeters        branch to door. Snapshotted with its source so a
  *                              decision made on a road distance is not later
  *                              re-read as one made on a radius
+ * @param destinationLabel      row 3.1: ordering's non-PII projection of the
+ *                              destination — district/zone and street, never a
+ *                              house number, a flat, or a phone — snapshotted
+ *                              here at plan creation (V0410) so the dispatch
+ *                              board's card never decrypts anything on its
+ *                              10-second poll. Null when {@code
+ *                              DeliveryDestination#maskedLabel} had nothing to
+ *                              show
  */
 public record DeliveryPlan(
         UUID id,
@@ -41,7 +49,8 @@ public record DeliveryPlan(
         String distanceSource,
         UUID policyId,
         Integer policyVersion,
-        int version) {
+        int version,
+        @Nullable String destinationLabel) {
 
     public static final String STANDARD = "STANDARD";
 

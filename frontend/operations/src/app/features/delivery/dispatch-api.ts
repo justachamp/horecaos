@@ -20,6 +20,9 @@ export interface ShipmentView {
  * Mirrors `DispatchController.PlanQueueResponse`. No customer name, address
  * or order total — see `dispatch-api.ts`'s own doc for why the frontend
  * joins this against the order board's own read by `orderId` instead.
+ * `destinationLabel` (row 3.1) is the one deliberate exception: a non-PII
+ * projection — district/zone and street, never a house number, a flat, or a
+ * phone — safe for this same 10-second poll.
  */
 export interface PlanQueueResponse {
   readonly planId: string;
@@ -35,6 +38,7 @@ export interface PlanQueueResponse {
   readonly promisedDeliveryEnd?: string | null;
   readonly version: number;
   readonly shipment?: ShipmentView | null;
+  readonly destinationLabel?: string | null;
 }
 
 export interface DispatchResponse {

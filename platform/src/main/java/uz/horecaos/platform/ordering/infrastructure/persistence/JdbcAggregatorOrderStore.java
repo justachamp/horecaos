@@ -49,6 +49,14 @@ import org.springframework.stereotype.Repository;
  * {@code 1.1d}) already searches this exact table — an aggregator-entry order
  * with no reference row would be unfindable by the one number anybody outside
  * HorecaOS ever reads back.
+ *
+ * <p>Wave 11 w5-fulfillment-destination: {@code DELIVERY} is no longer
+ * refused — see {@link Command#fulfillmentMode} for the one column this
+ * class' own write shape needed to admit it, and {@code
+ * AggregatorOrderIntakeService#planDelivery} for what happens after this
+ * class returns (the customer snapshot and delivery plan a native order
+ * gets at confirmation, which this order never passes through). The two
+ * narrower-than-automated gaps above are unaffected by fulfilment mode.
  */
 @Repository
 public class JdbcAggregatorOrderStore {
@@ -67,6 +75,20 @@ public class JdbcAggregatorOrderStore {
             long unitAmountMinor,
             @Nullable String externalItemReference) {}
 
+    /**
+     * @param fulfillmentMode {@code PICKUP} or {@code DELIVERY} (row {@code
+     *                        1.3g}). A {@code DELIVERY} entry is written
+     *                        already {@code CONFIRMED} rather than {@code
+     *                        RECEIVED} — unlike a native order, there is no
+     *                        accept/reject step left to take: the aggregator
+     *                        already has the customer's agreement, and
+     *                        {@code CONFIRMED} is the one status {@code
+     *                        DeliveryOrderPort#deliveryOrder} (and so {@code
+     *                        DeliveryPlanner#planFor}) will source from. A
+     *                        {@code PICKUP} entry is unaffected and keeps
+     *                        {@code RECEIVED}, its behaviour since this
+     *                        class was written
+     */
     public record Command(
             UUID orderId,
             UUID tenantId,
@@ -85,6 +107,7 @@ public class JdbcAggregatorOrderStore {
             long totalMinor,
             String idempotencyKey,
             String operatorSubject,
+            String fulfillmentMode,
             Instant now) {}
 
     public record Created(UUID orderId, String publicOrderNumber) {}
@@ -144,6 +167,14 @@ public class JdbcAggregatorOrderStore {
         // reasoning: this is the aggregator's own order id, not personal
         // data) MarketplaceIngestionService#guestReferenceHash already uses.
         row.put("guestReferenceHash", sha256(command.marketplaceBindingId() + ":" + command.externalOrderId()));
+        row.put("fulfillmentMode", command.fulfillmentMode());
+        boolean delivery = "DELIVERY".equals(command.fulfillmentMode());
+        // Row 1.3g: DELIVERY starts CONFIRMED — see this Command's own doc for
+        // why. PICKUP keeps RECEIVED, unchanged. ck_order_confirmed_at requires
+        // confirmed_at whenever status is CONFIRMED; this order's own creation
+        // instant is that confirmation, there being no separate approval step.
+        row.put("status", delivery ? "CONFIRMED" : "RECEIVED");
+        row.put("confirmedAt", delivery ? OffsetDateTime.ofInstant(command.now(), ZoneOffset.UTC) : null);
 
         jdbc.sql("""
                 INSERT INTO ordering.orders (
@@ -155,17 +186,17 @@ public class JdbcAggregatorOrderStore {
                     discount_minor, fee_minor, total_minor, idempotency_key,
                     promise_basis, origin, pricing_authority, fulfillment_authority,
                     entry_mode, marketplace_binding_id, created_by_actor_type,
-                    created_by_actor_id, version, created_at)
+                    created_by_actor_id, version, created_at, confirmed_at)
                 VALUES (
                     :id, :number, :tenantId, :brandId, :locationId, :channelId,
-                    :channelCode, :guestReferenceHash, 'PICKUP',
+                    :channelCode, :guestReferenceHash, :fulfillmentMode,
                     'AUTO_CONFIRM', 0,
-                    'NONE', 'RECEIVED', 'NOT_REQUIRED',
+                    'NONE', :status, 'NOT_REQUIRED',
                     'PENDING', :currency, :subtotal, :tax,
                     :discount, :fee, :total, :idempotencyKey,
                     'NOT_PROMISED', 'MARKETPLACE', 'EXTERNAL', 'HORECAOS',
                     'MANUAL', :bindingId, 'USER',
-                    :createdByActorId, 1, :createdAt)
+                    :createdByActorId, 1, :createdAt, :confirmedAt)
                 """).params(row).update();
 
         Map<String, Object> revision = new HashMap<>();

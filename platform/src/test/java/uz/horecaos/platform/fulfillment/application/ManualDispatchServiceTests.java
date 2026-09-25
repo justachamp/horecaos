@@ -591,7 +591,8 @@ class ManualDispatchServiceTests {
                     "UZS",
                     true,
                     50_000L,
-                    new Waypoint(41.325, 69.281, "Home", "Customer", "+998900000002", null, "2", "5", "17")));
+                    new Waypoint(41.325, 69.281, "Home", "Customer", "+998900000002", null, "2", "5", "17"),
+                    "Test zone, Home"));
         }
     }
 }

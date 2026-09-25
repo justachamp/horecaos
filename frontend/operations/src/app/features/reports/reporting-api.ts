@@ -201,6 +201,23 @@ export interface LocationMedianListResponse {
 }
 
 /**
+ * Wave 11 w5-fulfillment-destination (7.3): one branch's average courier
+ * transit time — mirrors `ReportingController.LocationAverageResponse`.
+ * Courier-leg-only (acceptance to delivery), never the door-to-door figure
+ * `MedianResponse` from `/fulfilment-time` answers.
+ */
+export interface LocationAverageResponse {
+  readonly locationId: string;
+  readonly averageSeconds: number | null;
+}
+
+/** Wave 11 w5-fulfillment-destination (7.3): every branch's average courier transit time from one request. */
+export interface LocationAverageListResponse {
+  readonly rows: readonly LocationAverageResponse[];
+  readonly provenance: ProvenanceResponse;
+}
+
+/**
  * One payment-mix row — mirrors `ReportingController.PaymentMixRowResponse`.
  *
  * @property locationId null on an `overview` row (folded across every branch
@@ -786,6 +803,24 @@ export class ReportingApi {
   ): Promise<LocationMedianListResponse> {
     const result = await firstValueFrom(
       this.api.get<LocationMedianListResponse>(reportsPaths.preparationTimeByLocation(tenantId), {
+        params: { from: params.from, to: params.to, locationId: params.locationId },
+      }),
+    );
+    return result.value;
+  }
+
+  /**
+   * Wave 11 w5-fulfillment-destination (7.3): every branch's average courier
+   * transit time from one request — the leaderboard's own `Ср. время
+   * доставки` column, on the same "no fan-out" footing {@link
+   * preparationTimeByLocation} already established.
+   */
+  async deliveryTransitTimeByLocation(
+    tenantId: string,
+    params: RangeParams,
+  ): Promise<LocationAverageListResponse> {
+    const result = await firstValueFrom(
+      this.api.get<LocationAverageListResponse>(reportsPaths.deliveryTransitTimeByLocation(tenantId), {
         params: { from: params.from, to: params.to, locationId: params.locationId },
       }),
     );

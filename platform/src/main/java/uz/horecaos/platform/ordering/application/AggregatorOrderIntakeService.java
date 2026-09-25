@@ -1,14 +1,24 @@
 package uz.horecaos.platform.ordering.application;
 
 import java.time.Clock;
+import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.ObjectMapper;
 import uz.horecaos.platform.configuration.Ids;
+import uz.horecaos.platform.fulfillment.api.DeliveryPlanner;
+import uz.horecaos.platform.iam.api.protection.DataClass;
+import uz.horecaos.platform.iam.api.protection.FieldProtection;
+import uz.horecaos.platform.iam.api.protection.FieldProtection.RecordRef;
 import uz.horecaos.platform.ordering.api.MarketplaceBindingLookup;
+import uz.horecaos.platform.ordering.domain.DeliveryDestination;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcAggregatorOrderStore;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore;
 import uz.horecaos.platform.tenancy.api.SalesChannel;
@@ -45,14 +55,62 @@ import uz.horecaos.platform.web.api.ErrorCode;
  * ordering.orders.marketplace_binding_id} actually points at. Ordering asks
  * through this module's own port rather than {@code integration}'s directly
  * — see {@link MarketplaceBindingLookup}'s own doc for why.
+ *
+ * <p><strong>Wave 11 w5-fulfillment-destination (row {@code 1.3g}): {@code
+ * DELIVERY}, by reusing the New order screen's own structured destination —
+ * never a second, untyped address path.</strong> ADR 0114's own open input
+ * asked whether a manual entry should ever support delivery; this wave
+ * answers yes, the same way the rest of {@code AggregatorOrderRequest}
+ * reuses {@code OperationsOrderController.DestinationRequest} — an existing
+ * customer's saved, geocoded address ({@link CustomerAddressBook}, the exact
+ * port {@link CartService#setDestination} resolves a saved address through)
+ * named by {@code customerAddressId}, never a raw address typed ad hoc. This
+ * does not give the order a {@code customer_account_id}: ADR 0040's "a
+ * marketplace order never matches one" still holds, and {@code
+ * customerAccountId} here is scope for the address lookup alone, exactly the
+ * predicate {@link CustomerAddressBook#destination} already requires so that
+ * one customer cannot resolve another's saved home by guessing an address
+ * id. Once resolved, the destination is snapshotted onto {@code
+ * ordering.order_customer_snapshots} the same encrypted way {@code
+ * CheckoutOrderWriter} snapshots a native order's, and {@link
+ * DeliveryPlanner#planFor} is called directly — the same port {@code
+ * DeliveryPlanTrigger} calls off {@code OrderConfirmed} for a native order —
+ * because a phoned-through aggregator order has no checkout transaction for
+ * that trigger to listen to. Deliberately narrower than a native delivery
+ * order in the two ways ADR 0114 already names for {@code PICKUP}: no
+ * {@code order_external_pricing} and no {@code order_handover_challenges}
+ * row (the open inputs above this doc still ask whether a manual entry
+ * should ever carry settlement or handover evidence, unanswered by this
+ * wave).
  */
 @Service
 public class AggregatorOrderIntakeService {
+
+    private static final Logger log = LoggerFactory.getLogger(AggregatorOrderIntakeService.class);
+
+    /** The two fulfilment modes a manual entry may carry — never {@code DINE_IN}, which has no address to resolve. */
+    private static final String PICKUP = "PICKUP";
+
+    private static final String DELIVERY = "DELIVERY";
+
+    private static final String SNAPSHOT_TABLE = "ordering.order_customer_snapshots";
+    private static final String SNAPSHOT_NAME_COLUMN = "display_name_encrypted";
+    private static final String SNAPSHOT_CONTACT_COLUMN = "contact_encrypted";
+    private static final String SNAPSHOT_ADDRESS_COLUMN = "address_encrypted";
+    private static final String SNAPSHOT_INSTRUCTIONS_COLUMN = "delivery_instructions_encrypted";
+
+    /** The ADR 0027 purpose recorded against the one address reveal a manual delivery entry performs. */
+    private static final String ADDRESS_REVEAL_PURPOSE = "AGGREGATOR_ENTRY_DESTINATION_CAPTURE";
 
     private final SalesChannelLookup channels;
     private final MarketplaceBindingLookup installations;
     private final JdbcOrderStore orders;
     private final JdbcAggregatorOrderStore store;
+    private final CustomerAddressBook addresses;
+    private final FieldProtection protection;
+    private final ObjectMapper objectMapper;
+    private final DeliveryPlanner deliveryPlanner;
+    private final OrderFulfillmentProcess fulfillmentProcess;
     private final Clock clock;
 
     public AggregatorOrderIntakeService(
@@ -60,11 +118,21 @@ public class AggregatorOrderIntakeService {
             MarketplaceBindingLookup installations,
             JdbcOrderStore orders,
             JdbcAggregatorOrderStore store,
+            CustomerAddressBook addresses,
+            FieldProtection protection,
+            ObjectMapper objectMapper,
+            DeliveryPlanner deliveryPlanner,
+            OrderFulfillmentProcess fulfillmentProcess,
             Clock clock) {
         this.channels = channels;
         this.installations = installations;
         this.orders = orders;
         this.store = store;
+        this.addresses = addresses;
+        this.protection = protection;
+        this.objectMapper = objectMapper;
+        this.deliveryPlanner = deliveryPlanner;
+        this.fulfillmentProcess = fulfillmentProcess;
         this.clock = clock;
     }
 
@@ -76,6 +144,40 @@ public class AggregatorOrderIntakeService {
             long unitAmountMinor,
             @Nullable String externalItemReference) {}
 
+    /**
+     * Row {@code 1.3g}: where a {@code DELIVERY} manual entry goes — the
+     * identical shape {@code OperationsOrderController.DestinationRequest}
+     * and {@link OperatorOrderingService.Destination} already carry, named
+     * separately here only so this module does not reach into the web
+     * layer's own record for it.
+     */
+    public record Destination(
+            UUID customerAddressId,
+            String recipientName,
+            String recipientPhone,
+            @Nullable String deliveryNote) {
+
+        /** Never prints the recipient's name or phone. */
+        @Override
+        public String toString() {
+            return "Destination[address=%s]".formatted(customerAddressId);
+        }
+    }
+
+    /**
+     * @param fulfillmentMode  {@code PICKUP} or {@code DELIVERY}, null
+     *                         treated as {@code PICKUP} — the row's own
+     *                         previous, only behaviour. Anything else is
+     *                         refused
+     * @param customerAccountId required exactly when {@code fulfillmentMode}
+     *                         is {@code DELIVERY}: whose saved address {@code
+     *                         destination} names. Never written to the
+     *                         order's own {@code customer_account_id} — see
+     *                         this class's own doc for why a manual entry
+     *                         still matches no customer under ADR 0040
+     * @param destination      required exactly when {@code fulfillmentMode}
+     *                         is {@code DELIVERY}, refused otherwise
+     */
     public record Command(
             UUID tenantId,
             UUID brandId,
@@ -89,7 +191,10 @@ public class AggregatorOrderIntakeService {
             long feeMinor,
             long totalMinor,
             String idempotencyKey,
-            String operatorSubject) {}
+            String operatorSubject,
+            @Nullable String fulfillmentMode,
+            @Nullable UUID customerAccountId,
+            @Nullable Destination destination) {}
 
     public record Result(UUID orderId, String publicOrderNumber, boolean replayed) {}
 
@@ -108,6 +213,22 @@ public class AggregatorOrderIntakeService {
         }
         if (command.subtotalMinor() < 0 || command.discountMinor() < 0 || command.feeMinor() < 0) {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, "Subtotal, discount and fee cannot be negative");
+        }
+
+        String fulfillmentMode = command.fulfillmentMode() == null ? PICKUP : command.fulfillmentMode();
+        if (!PICKUP.equals(fulfillmentMode) && !DELIVERY.equals(fulfillmentMode)) {
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED,
+                    "A manual aggregator entry is PICKUP or DELIVERY, never " + fulfillmentMode);
+        }
+        boolean delivery = DELIVERY.equals(fulfillmentMode);
+        if (delivery && (command.customerAccountId() == null || command.destination() == null)) {
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED,
+                    "DELIVERY carries the customer whose saved address this delivers to, and that address");
+        }
+        if (!delivery && (command.customerAccountId() != null || command.destination() != null)) {
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "A PICKUP entry carries no customer or destination");
         }
 
         // The header subtotal is operator-typed off the aggregator's own order
@@ -170,6 +291,17 @@ public class AggregatorOrderIntakeService {
                     "The total does not reconcile with the subtotal, discount and fee given");
         }
 
+        // Row 1.3g (DELIVERY): resolved last, right before the write, so a
+        // request doomed by channel or arithmetic never pays for a decrypt —
+        // the ADR 0027 purpose this reveal records is meant for a delivery
+        // that is actually about to be dispatched.
+        ResolvedDestination resolvedDestination = delivery
+                ? resolveDestination(
+                        command.tenantId(),
+                        Objects.requireNonNull(command.customerAccountId(), "delivery already refused a null account"),
+                        Objects.requireNonNull(command.destination(), "delivery already refused a null destination"))
+                : null;
+
         JdbcAggregatorOrderStore.Created created = store.create(new JdbcAggregatorOrderStore.Command(
                 Ids.newId(),
                 command.tenantId(),
@@ -195,8 +327,93 @@ public class AggregatorOrderIntakeService {
                 command.totalMinor(),
                 command.idempotencyKey(),
                 command.operatorSubject(),
+                fulfillmentMode,
                 clock.instant()));
 
+        if (delivery) {
+            planDelivery(command, created.orderId(), Objects.requireNonNull(resolvedDestination));
+        }
+
         return new Result(created.orderId(), created.publicOrderNumber(), false);
+    }
+
+    /**
+     * Row 1.3g: the destination as {@link CustomerAddressBook} revealed it,
+     * plus the recipient facts the request itself carried — everything
+     * {@link #planDelivery} needs to snapshot the order's customer record,
+     * kept off {@link Command} because it is the one intermediate value this
+     * method computes rather than one a caller supplies.
+     */
+    private record ResolvedDestination(
+            DeliveryDestination destination,
+            @Nullable String deliveryInstructions,
+            String recipientName,
+            String recipientPhone) {}
+
+    private ResolvedDestination resolveDestination(UUID tenantId, UUID customerAccountId, Destination requested) {
+        CustomerAddressBook.SavedDestination saved = addresses
+                .destination(tenantId, customerAccountId, requested.customerAddressId(), ADDRESS_REVEAL_PURPOSE)
+                .orElseThrow(() -> new ApiException(ErrorCode.VALIDATION_FAILED, "No such address for this customer"));
+        if (!saved.located()) {
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED, "This address has no coordinate and cannot be delivered to");
+        }
+        String note =
+                requested.deliveryNote() == null || requested.deliveryNote().isBlank()
+                        ? saved.deliveryInstructions()
+                        : requested.deliveryNote();
+        return new ResolvedDestination(
+                Objects.requireNonNull(saved.destination(), "A located address has a destination"),
+                note,
+                requested.recipientName(),
+                requested.recipientPhone());
+    }
+
+    /**
+     * Row 1.3g: everything a native delivery order gets once it is confirmed
+     * — a customer snapshot ({@code CheckoutOrderWriter}'s own encrypted
+     * shape) and a plan ({@code DeliveryPlanTrigger}'s own call) — for an
+     * order this service just wrote directly rather than through {@link
+     * CheckoutService}. {@code DeliveryPlanner#planFor} never throws for an
+     * order it cannot plan (an unplaced branch, for instance): this method
+     * does not either, because a delivery configuration problem must not
+     * fail an aggregator entry the operator already has the aggregator's
+     * money for.
+     */
+    private void planDelivery(Command command, UUID orderId, ResolvedDestination resolved) {
+        orders.insertCustomerSnapshot(
+                command.tenantId(),
+                orderId,
+                protect(command.tenantId(), orderId, SNAPSHOT_NAME_COLUMN, resolved.recipientName()),
+                protect(command.tenantId(), orderId, SNAPSHOT_CONTACT_COLUMN, resolved.recipientPhone()),
+                protect(
+                        command.tenantId(),
+                        orderId,
+                        SNAPSHOT_ADDRESS_COLUMN,
+                        objectMapper.writeValueAsString(resolved.destination())),
+                protect(command.tenantId(), orderId, SNAPSHOT_INSTRUCTIONS_COLUMN, resolved.deliveryInstructions()),
+                true);
+
+        Instant now = clock.instant();
+        deliveryPlanner
+                .planFor(command.tenantId(), command.brandId(), command.locationId(), orderId, now)
+                .ifPresentOrElse(
+                        planId -> {
+                            log.debug("Opened delivery plan {} for manual aggregator entry {}", planId, orderId);
+                            fulfillmentProcess.enqueue(orderId, command.tenantId(), planId, now);
+                        },
+                        () -> log.warn(
+                                "Manual aggregator entry {} asked for DELIVERY but no plan was opened "
+                                        + "(no branch coordinate, or another configuration gap)",
+                                orderId));
+    }
+
+    private @Nullable String protect(UUID tenantId, UUID orderId, String column, @Nullable String plaintext) {
+        if (plaintext == null || plaintext.isBlank()) {
+            return null;
+        }
+        return protection
+                .protect(tenantId, DataClass.PERSONAL, new RecordRef(SNAPSHOT_TABLE, column, orderId), plaintext)
+                .serialize();
     }
 }

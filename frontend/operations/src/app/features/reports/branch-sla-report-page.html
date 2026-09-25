@@ -47,6 +47,7 @@
             <th class="q-caption num">{{ 'reports.branches.column.revenue' | t }}</th>
             <th class="q-caption num">{{ 'reports.branches.column.averageCheck' | t }}</th>
             <th class="q-caption num">{{ 'reports.branches.column.prepTime' | t }}</th>
+            <th class="q-caption num">{{ 'reports.branches.column.deliveryTime' | t }}</th>
             <th class="q-caption num">{{ 'reports.branches.column.cancelShare' | t }}</th>
             <th class="q-caption num">{{ 'reports.branches.column.onTime' | t }}</th>
           </tr>
@@ -66,6 +67,9 @@
                 {{ row.averageCheckSom === null ? '—' : formatMoneyValue(row.averageCheckSom) }}
               </td>
               <td class="q-body-sm q-tnum num">{{ formatPrep(row.prepMedianSeconds) }}</td>
+              <td class="q-body-sm q-tnum num" data-testid="branch-row-delivery-time">
+                {{ formatPrep(row.deliveryAverageSeconds) }}
+              </td>
               <td class="q-body-sm q-tnum num">{{ row.cancelShare }}</td>
               <td class="q-body-sm q-tnum num">{{ formatOnTime(row.onTimeSharePercent) }}</td>
             </tr>

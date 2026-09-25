@@ -440,7 +440,19 @@ export interface AggregatorOrderLine {
   readonly externalItemReference?: string | null;
 }
 
-/** `OperationsOrderController.AggregatorOrderRequest`. */
+/**
+ * `OperationsOrderController.AggregatorOrderRequest`.
+ *
+ * @property fulfillmentMode row 1.3g (wave 11 w5-fulfillment-destination):
+ *   `'PICKUP'` (the default when omitted) or `'DELIVERY'`.
+ * @property customerAccountId required, and only meaningful, when
+ *   `fulfillmentMode` is `'DELIVERY'`: whose saved address `destination`
+ *   names — the order itself still matches no customer account.
+ * @property destination required exactly when `fulfillmentMode` is
+ *   `'DELIVERY'` — the identical {@link DestinationRequest} shape the
+ *   address pane above already sends for a native order, reused rather
+ *   than a second, untyped address path.
+ */
 export interface AggregatorOrderRequest {
   readonly channelCode: string;
   readonly externalOrderId: string;
@@ -450,6 +462,9 @@ export interface AggregatorOrderRequest {
   readonly discountMinor: number;
   readonly feeMinor: number;
   readonly totalMinor: number;
+  readonly fulfillmentMode?: string | null;
+  readonly customerAccountId?: string | null;
+  readonly destination?: DestinationRequest | null;
 }
 
 function toBrandScope(scope: LocationScope): BrandScope {

@@ -179,7 +179,11 @@ public class JdbcDeliveryOrderPort implements DeliveryOrderPort {
                 // collecting cash for it must not be told the delivery fee is part
                 // of the parcel's worth.
                 Math.max(0, row.totalMinor() - row.feeMinor()),
-                dropoff);
+                dropoff,
+                // Row 3.1: computed here, alongside the one decrypt that produces
+                // the destination it is a projection of, rather than recomputed
+                // wherever a caller wants it — see DeliveryDestination#maskedLabel.
+                destination.maskedLabel());
     }
 
     /**

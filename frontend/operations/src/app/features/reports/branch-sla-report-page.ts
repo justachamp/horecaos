@@ -47,6 +47,7 @@ const SORT_LABEL_KEYS: Readonly<Record<SortKey, MessageKey>> = {
   cancelShare: 'reports.branches.column.cancelShare',
   onTime: 'reports.branches.column.onTime',
   prepTime: 'reports.branches.column.prepTime',
+  deliveryTime: 'reports.branches.column.deliveryTime',
 };
 
 interface BranchRow {
@@ -60,6 +61,8 @@ interface BranchRow {
   /** Numeric form of {@link cancelShare}, 0..100 — the secondary sort control's own sort key. */
   readonly cancelSharePercent: number;
   readonly prepMedianSeconds: number | null;
+  /** Wave 11 w5-fulfillment-destination (7.3): `Ср. время доставки` — mean courier transit seconds, `delivery_transit_time.average.v1`. */
+  readonly deliveryAverageSeconds: number | null;
   /** Wave T06 (7.3): `Доставка / Самовывоз / Агрегаторы` — the counts triple. */
   readonly deliveryCount: number;
   readonly pickupCount: number;
@@ -106,7 +109,14 @@ interface PaymentSplitRow {
 type LoadState = 'loading' | 'ready' | 'denied' | 'error' | 'singleLocation';
 
 /** Wave T06 (7.3): the branch leaderboard's persistent secondary sort control. */
-type SortKey = 'revenue' | 'orders' | 'averageCheck' | 'cancelShare' | 'onTime' | 'prepTime';
+type SortKey =
+  | 'revenue'
+  | 'orders'
+  | 'averageCheck'
+  | 'cancelShare'
+  | 'onTime'
+  | 'prepTime'
+  | 'deliveryTime';
 
 /**
  * 7.3 Branch & SLA reports (`frontend-information-architecture.md` §7.3,
@@ -131,10 +141,15 @@ type SortKey = 'revenue' | 'orders' | 'averageCheck' | 'cancelShare' | 'onTime' 
  *   per branch: `GET .../reporting/preparation-time-by-location` answers
  *   every branch from one request.
  *
- * **What stays scoped down.** `Ср. время доставки` is still not a column:
- * `fact_order` carries no delivery-specific timing and ADR 0042's delivery
- * facts are not in `reporting` yet (`delivery_cost_variance.v1`'s own
- * registry entry says `sourceAvailable: false`) — it waits for `T11`.
+ * **Wave 11 w5-fulfillment-destination adds one more column.**
+ * `Ср. время доставки` — `delivery_transit_time.average.v1`, mean courier
+ * transit seconds (acceptance to delivery) from `reporting.fact_delivery`,
+ * which `T11` (V0337) started writing; `GET
+ * .../reporting/delivery-transit-time-by-location` answers every branch
+ * from one request, the same no-fan-out shape `preparationTimeByLocation`
+ * already established. Courier-leg-only, never the door-to-door
+ * `delivery_time.median.v1` the overview's own tile answers — the two are
+ * never the same figure.
  *
  * **Table B — SLA time buckets.** `GET .../reporting/sla-buckets`, already
  * grouped by branch. Wave T06 fixes an arithmetic defect in
@@ -201,6 +216,7 @@ export class BranchSlaReportPage {
     'cancelShare',
     'onTime',
     'prepTime',
+    'deliveryTime',
   ];
 
   protected readonly branchRows = computed<readonly BranchRow[]>(() =>
@@ -307,7 +323,7 @@ export class BranchSlaReportPage {
 
       const range = this.filters.range();
 
-      const [query, sla, prepByLocation, fulfilmentAndOnTime, channelMoney, mix] =
+      const [query, sla, prepByLocation, deliveryTimeByLocation, fulfilmentAndOnTime, channelMoney, mix] =
         await Promise.all([
           this.api.query(scope.tenantId, {
             from: range.from,
@@ -317,6 +333,7 @@ export class BranchSlaReportPage {
           }),
           this.api.slaBuckets(scope.tenantId, { from: range.from, to: range.to }),
           this.api.preparationTimeByLocation(scope.tenantId, { from: range.from, to: range.to }),
+          this.api.deliveryTransitTimeByLocation(scope.tenantId, { from: range.from, to: range.to }),
           this.api.query(scope.tenantId, {
             from: range.from,
             to: range.to,
@@ -338,6 +355,9 @@ export class BranchSlaReportPage {
       this.provenance.set(query.provenance);
       const prepById = new Map(
         prepByLocation.rows.map((row) => [row.locationId, row.medianSeconds]),
+      );
+      const deliveryAverageById = new Map(
+        deliveryTimeByLocation.rows.map((row) => [row.locationId, row.averageSeconds]),
       );
 
       const buckets = sumAcrossDays(query.rows, (row) => row.locationId ?? '', [
@@ -391,6 +411,7 @@ export class BranchSlaReportPage {
             cancelShare: formatShare(cancelled, orderCount + cancelled),
             cancelSharePercent: sharePercentOf(cancelled, orderCount + cancelled),
             prepMedianSeconds: prepById.get(loc.id) ?? null,
+            deliveryAverageSeconds: deliveryAverageById.get(loc.id) ?? null,
             deliveryCount,
             pickupCount,
             aggregatorCount,
@@ -461,6 +482,9 @@ function sortBranchRows(rows: readonly BranchRow[], key: SortKey): readonly Bran
         // stays descending for every column: a manager choosing this column
         // wants to see the slowest kitchen at the top.
         return row.prepMedianSeconds;
+      case 'deliveryTime':
+        // Same framing as prepTime: slowest courier leg at the top.
+        return row.deliveryAverageSeconds;
     }
   };
   return [...rows].sort((a, b) => {

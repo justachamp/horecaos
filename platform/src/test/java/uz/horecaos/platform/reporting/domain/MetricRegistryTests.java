@@ -70,6 +70,30 @@ class MetricRegistryTests {
     }
 
     /**
+     * Wave 11 w5-fulfillment-destination (7.3): the branch leaderboard's
+     * «Ср. время доставки» is a mean sourced from {@code fact_delivery}
+     * directly, on the same "own endpoint, not composed from agg_branch_day"
+     * footing {@code delivery_distance.average.v1} already establishes for
+     * the sibling average beside it, and distinct from the order-wide {@code
+     * delivery_time.median.v1}.
+     */
+    @Test
+    void deliveryTransitTimeAverageIsCourierLegOnlyNotDoorToDoor() {
+        MetricDefinition transitTime = MetricRegistry.require("delivery_transit_time.average.v1");
+
+        assertThat(transitTime.aggregation()).isEqualTo(MetricDefinition.Aggregation.AVERAGE);
+        assertThat(transitTime.unit()).isEqualTo(MetricDefinition.MetricUnit.SECONDS);
+        assertThat(transitTime.currencyRule()).isEqualTo(MetricDefinition.CurrencyRule.NONE);
+        assertThat(transitTime.sourceAvailable()).isTrue();
+        assertThat(transitTime.sourceFact()).isEqualTo("reporting.fact_delivery.transit_seconds");
+        assertThat(transitTime.grain()).isEqualTo(Grain.DAY_LOCATION);
+        assertThat(transitTime.definition()).isNotBlank();
+        assertThat(transitTime.inclusion()).isNotBlank();
+        assertThat(transitTime.exclusion()).isNotBlank();
+        assertThat(transitTime.openQuestion()).contains("delivery_time.median.v1");
+    }
+
+    /**
      * T13 (7.6/7.6a): a drift test naming each customer-grain metric and
      * checking its formula is actually published — the credibility argument
      * against Delever's unstated LTV only holds if every one of these keeps

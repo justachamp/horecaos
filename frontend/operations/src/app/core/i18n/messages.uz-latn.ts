@@ -4742,6 +4742,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'reports.branches.column.averageCheck': 'Oʻrtacha chek',
   'reports.branches.column.cancelShare': 'Bekor qilingan, %',
   'reports.branches.column.prepTime': 'Tayyorlash vaqti',
+  // wave 11 w5-fulfillment-destination (7.3): kuryer yoʻlda boʻlgan vaqtning oʻrtachasi.
+  'reports.branches.column.deliveryTime': 'Yetkazish vaqti',
   // wave T06 (7.3): reyting jadvalining uchta yangi ustuni va ikkinchi darajali saralash.
   'reports.branches.column.fulfilmentSplit': 'Yetkazib berish / Olib ketish / Agregatorlar',
   'reports.branches.column.fulfilmentSplit.hint':
@@ -5665,6 +5667,11 @@ export const messagesUzLatn: MessageCatalogue = {
   'orders.newOrder.aggregator.total': 'Agregator yigʻgan summa',
   'orders.newOrder.aggregator.hint':
     'Agregator koʻrsatgan summa aynan shu holicha yozildi — HorecaOS uni qayta hisoblamaydi',
+  // Row 1.3g (wave 11 w5-fulfillment-destination): DELIVERY mijoz panelida tanlangan manzildan foydalanadi.
+  'orders.newOrder.aggregator.pickup': 'Olib ketish — agregator kuryeri yoki mijoz oʻzi oladi',
+  'orders.newOrder.aggregator.deliveryTo': 'Yetkazish manzili: {customer}, {address}',
+  'orders.newOrder.aggregator.deliveryMissing':
+    '«Agregator buyurtmasi»ni oʻchiring, mijoz va yetkazish manzilini tanlang, keyin qayta yoqing',
 
   // --- shared/ui (ADR 0101) ----------------------------------------------
   'ui.denied.title': 'Bu boʻlimga kirish huquqingiz yoʻq',

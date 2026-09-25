@@ -1680,11 +1680,61 @@ public class JdbcReportingStore {
     }
 
     /**
+     * Wave 11 w5-fulfillment-destination (7.3): every branch's average courier
+     * transit time — {@code delivered_at - accepted_at}, ADR 0125's own
+     * comment on {@code fact_delivery.transit_seconds} — in one grouped
+     * query, the same {@code GROUP BY} shape {@link
+     * #medianSecondsToReadyByLocation} already establishes for the sibling
+     * leaderboard column.
+     *
+     * <p>Deliberately an average, not a median: this is the branch
+     * leaderboard's «Ср. время доставки» (statistics.md §2.3), matching the
+     * word finance already put on the screen, and distinct from {@code
+     * delivery_time.median.v1} — that one is door-to-door from order creation,
+     * this one is the courier's own leg from acceptance, and the two must
+     * never be added or substituted for each other.
+     *
+     * <p>A location with no settled delivery in range is simply absent from
+     * the result, never a row carrying a null average — the same "missing
+     * means no data, not zero" contract every sibling method here keeps.
+     */
+    public List<LocationAverageRow> averageTransitSecondsByLocation(
+            UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("tenantId", tenantId);
+        params.put("from", from);
+        params.put("to", to);
+
+        String locationFilter = "";
+        if (!locationIds.isEmpty()) {
+            locationFilter = " AND location_id IN (:locations)";
+            params.put("locations", locationIds);
+        }
+
+        return jdbc.sql("""
+                SELECT location_id, AVG(transit_seconds)::double precision AS average_seconds
+                  FROM reporting.fact_delivery
+                 WHERE tenant_id = :tenantId AND business_date BETWEEN :from AND :to
+                """ + locationFilter + """
+                 GROUP BY location_id
+                """)
+                .params(params)
+                .query((ResultSet row, int number) -> new LocationAverageRow(
+                        row.getObject("location_id", UUID.class),
+                        roundedOrNull(row.getObject("average_seconds", Double.class))))
+                .list();
+    }
+
+    /**
      * One branch's median — see {@link #medianSecondsToReadyByLocation} (prep
      * time) and {@link #medianSecondsTotalByLocation} (handover time).
      */
     public record LocationMedianRow(
             UUID locationId, @Nullable Integer medianSeconds) {}
+
+    /** One branch's average — see {@link #averageTransitSecondsByLocation} (delivery transit time). */
+    public record LocationAverageRow(
+            UUID locationId, @Nullable Integer averageSeconds) {}
 
     /**
      * Order-grain rows straight off {@code fact_order}, for the three 7.2 tables

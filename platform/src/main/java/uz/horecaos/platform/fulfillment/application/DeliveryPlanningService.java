@@ -168,7 +168,8 @@ public class DeliveryPlanningService implements DeliveryPlanner {
                 RADIUS,
                 policy.policyId(),
                 policy.policyVersion(),
-                1));
+                1,
+                details.destinationLabel()));
 
         if (jobs.enqueue(
                 UUID.randomUUID(), tenantId, created.id(), created.pickup().sourceAt())) {

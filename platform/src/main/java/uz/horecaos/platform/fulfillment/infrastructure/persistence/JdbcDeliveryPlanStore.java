@@ -78,6 +78,7 @@ public class JdbcDeliveryPlanStore {
         params.put("distanceSource", plan.distanceSource());
         params.put("policyId", plan.policyId());
         params.put("policyVersion", plan.policyVersion());
+        params.put("destinationLabel", plan.destinationLabel());
 
         jdbc.sql("""
                 INSERT INTO fulfillment.delivery_plans (
@@ -88,7 +89,8 @@ public class JdbcDeliveryPlanStore {
                     pickup_window_start, pickup_window_end,
                     promised_delivery_start, promised_delivery_end,
                     source_at, latest_assignment_at, branch_zone, calculation_version,
-                    distance_meters, distance_source, policy_id, policy_version)
+                    distance_meters, distance_source, policy_id, policy_version,
+                    destination_label)
                 VALUES (
                     :id, :tenantId, :brandId, :locationId, :orderId,
                     :status, :mode, :serviceLevel,
@@ -97,7 +99,8 @@ public class JdbcDeliveryPlanStore {
                     :windowStart, :windowEnd,
                     :promisedStart, :promisedEnd,
                     :sourceAt, :latestAssignmentAt, :branchZone, :calculationVersion,
-                    :distanceMeters, :distanceSource, :policyId, :policyVersion)
+                    :distanceMeters, :distanceSource, :policyId, :policyVersion,
+                    :destinationLabel)
                 ON CONFLICT (tenant_id, order_id) WHERE status <> 'CANCELLED' DO NOTHING
                 """).params(params).update();
 
@@ -258,7 +261,8 @@ public class JdbcDeliveryPlanStore {
                    estimated_ready_at, pickup_window_start, pickup_window_end,
                    promised_delivery_start, promised_delivery_end, source_at,
                    latest_assignment_at, branch_zone, calculation_version,
-                   distance_meters, distance_source, policy_id, policy_version, version
+                   distance_meters, distance_source, policy_id, policy_version, version,
+                   destination_label
             FROM fulfillment.delivery_plans
             """;
 
@@ -301,7 +305,8 @@ public class JdbcDeliveryPlanStore {
                 row.getString("distance_source"),
                 row.getObject("policy_id", UUID.class),
                 row.getObject("policy_version", Integer.class),
-                row.getInt("version"));
+                row.getInt("version"),
+                row.getString("destination_label"));
     }
 
     static @Nullable Instant instant(java.sql.ResultSet row, String column) throws java.sql.SQLException {
