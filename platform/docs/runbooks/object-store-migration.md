@@ -47,8 +47,10 @@ the parts specific to a production run.
    ```bash
    cd /opt/horecaos/horecaos-platform
    alias qc='docker compose -f deploy/compose.production.yml --env-file /etc/horecaos/production.env'
-   qc ps minio   # (or whatever wave C's compose named the service — grep the
-                 #  file for "rustfs" if "minio" no longer matches)
+   qc ps object-store   # the compose service is named object-store; "minio"
+                         # is only a network alias now, not the service name
+                         # (`grep -n '^  object-store:' deploy/compose.production.yml`
+                         # if that ever changes again)
    ```
 
    If the `Image` column already shows `rustfs/rustfs`, the swap already
@@ -158,7 +160,7 @@ docker run --rm --network horecaos-production_core curlimages/curl:8 \
 If precondition 1 showed RustFS is not running yet, bring it up now:
 
 ```bash
-qc up -d minio   # or the object-store service's actual name
+qc up -d object-store
 ```
 
 Create the three buckets with the same properties `compose.yaml`'s
@@ -399,7 +401,7 @@ value="$(qc exec -T openbao bao kv get -field=value horecaos/production/object_s
 chmod 0444 /run/horecaos/secrets/minio-root-password
 unset value
 
-qc restart minio   # or whatever the object-store service is actually named
+qc restart object-store
 ```
 
 The **only** line in `/etc/horecaos/production.env` this step might touch is
@@ -518,10 +520,9 @@ nothing in this runbook to say why — that gap is exactly what step 1's
 extra `docker network connect` for `media` exists to close:
 
 ```bash
-qc stop minio    # or whatever the object-store service is actually named —
-                  # frees the "minio" alias on BOTH the core and media
-                  # networks at once (stopping the container drops all of
-                  # its network endpoints)
+qc stop object-store    # frees the "minio" alias on BOTH the core and media
+                         # networks at once (stopping the container drops
+                         # all of its network endpoints)
 
 # A container already connected to a network cannot have an alias added to
 # that connection — Docker refuses with "endpoint already exists" — so this
