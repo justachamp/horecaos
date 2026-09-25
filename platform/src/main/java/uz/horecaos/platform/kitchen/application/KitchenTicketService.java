@@ -27,6 +27,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.fulfillment.api.OrderProgressPort;
 import uz.horecaos.platform.fulfillment.api.OrderProgressPort.OrderProgress;
 import uz.horecaos.platform.iam.api.ResourceScope;
@@ -689,13 +690,21 @@ public class KitchenTicketService {
                     "kitchen.ticket.release-override",
                     actorId,
                     overrideReason,
-                    Map.of(
-                            "releaseMode",
-                            mode.name(),
-                            "releaseAt",
-                            String.valueOf(releaseAt),
-                            "latestHonestRelease",
-                            String.valueOf(latestHonestRelease(ticket))),
+                    ChangeDocuments.diff(
+                            Map.of(
+                                    "releaseMode",
+                                    ticket.releaseMode().name(),
+                                    "releaseAt",
+                                    String.valueOf(ticket.releaseAt()),
+                                    "latestHonestRelease",
+                                    String.valueOf(latestHonestRelease(ticket))),
+                            Map.of(
+                                    "releaseMode",
+                                    mode.name(),
+                                    "releaseAt",
+                                    String.valueOf(releaseAt),
+                                    "latestHonestRelease",
+                                    String.valueOf(latestHonestRelease(ticket)))),
                     AuditFact.Outcome.SUCCEEDED,
                     correlationId,
                     now);
@@ -818,7 +827,7 @@ public class KitchenTicketService {
                         "kitchen.ticket.recall",
                         actorId,
                         reasonCode,
-                        Map.of("ticketItemId", itemId.toString(), "refused", "AFTER_HANDOVER"),
+                        ChangeDocuments.created(Map.of("ticketItemId", itemId.toString(), "refused", "AFTER_HANDOVER")),
                         AuditFact.Outcome.REJECTED,
                         correlationId,
                         now);

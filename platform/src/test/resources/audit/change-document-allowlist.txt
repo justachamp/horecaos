@@ -173,9 +173,11 @@ uz/horecaos/platform/inventory/application/InventoryService.java:937
 uz/horecaos/platform/inventory/application/InventoryService.java:977
 
 # --- kitchen ---
-uz/horecaos/platform/kitchen/application/KitchenDeviceService.java:102
-uz/horecaos/platform/kitchen/application/KitchenDeviceService.java:73
-uz/horecaos/platform/kitchen/application/KitchenTicketService.java:1134
+# KitchenTicketService#recordAudit forwards its `changed` parameter to
+# .changed(...); both call sites (release-override, recall) now build it
+# through ChangeDocuments.diff/created, but the helper's own line still
+# resolves as a bare identifier to the scan.
+uz/horecaos/platform/kitchen/application/KitchenTicketService.java:1143
 
 # --- legal ---
 uz/horecaos/platform/legal/application/TermsPublishingService.java:111

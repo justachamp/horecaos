@@ -11,6 +11,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.iam.api.PlatformRole;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.devices.DeviceEnrolmentPort;
@@ -70,7 +71,8 @@ public class KitchenDeviceService {
                 .target("iam.device_principal", device.id())
                 .outcome(AuditFact.Outcome.SUCCEEDED)
                 .because("ADR 0079 kitchen display device enrolment: " + displayName)
-                .changed(Map.of("deviceClass", device.deviceClass().name(), "displayName", displayName))
+                .changed(ChangeDocuments.created(
+                        Map.of("deviceClass", device.deviceClass().name(), "displayName", displayName)))
                 .correlatedBy(device.id().toString())
                 .occurredAt(now)
                 .build());
@@ -99,7 +101,7 @@ public class KitchenDeviceService {
                     .target("iam.device_principal", deviceId)
                     .outcome(AuditFact.Outcome.SUCCEEDED)
                     .because(reason)
-                    .changed(Map.of())
+                    .changed(ChangeDocuments.change("revoked", false, true))
                     .correlatedBy(deviceId.toString())
                     .occurredAt(clock.instant())
                     .build());
