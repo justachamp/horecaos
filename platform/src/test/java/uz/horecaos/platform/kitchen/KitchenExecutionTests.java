@@ -67,6 +67,10 @@ import uz.horecaos.platform.ordering.domain.OrderStatus;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderProcessStore;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore;
 import uz.horecaos.platform.support.TestDatabase;
+import uz.horecaos.platform.telemetry.api.RealtimeSignal;
+import uz.horecaos.platform.telemetry.api.RealtimeSignalPublisher;
+import uz.horecaos.platform.telemetry.api.StreamChannel;
+import uz.horecaos.platform.telemetry.infrastructure.realtime.NoopRealtimeSignalPublisher;
 import uz.horecaos.platform.tenancy.api.LocationCapacityPort;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcPolicyResolver;
 import uz.horecaos.platform.web.api.ApiException;
@@ -99,6 +103,7 @@ class KitchenExecutionTests {
     private KitchenTicketService tickets;
     private RecordingOrderProgressPort proposals;
     private RecordingAuditRecorder audit;
+    private RecordingRealtimePublisher realtime;
 
     /**
      * The same kitchen with ordering's real adapter behind the port (ADR 0041
@@ -172,8 +177,9 @@ class KitchenExecutionTests {
         proposals = new RecordingOrderProgressPort();
         audit = new RecordingAuditRecorder();
         stationService = new KitchenStationService(store, clock);
-        tickets =
-                new KitchenTicketService(store, new JdbcKitchenOrderSource(jdbc), proposals, audit, clock, unitOfWork);
+        realtime = new RecordingRealtimePublisher();
+        tickets = new KitchenTicketService(
+                store, new JdbcKitchenOrderSource(jdbc), proposals, audit, clock, unitOfWork, realtime);
 
         ObjectMapper objectMapper = JsonMapper.builder().build();
         orderStore = new JdbcOrderStore(jdbc);
@@ -207,7 +213,8 @@ class KitchenExecutionTests {
                 new OrderProgressAdapter(orderState),
                 audit,
                 clock,
-                unitOfWork);
+                unitOfWork,
+                new NoopRealtimeSignalPublisher());
 
         seedTenancy();
         seedCatalogue();
@@ -1031,7 +1038,8 @@ class KitchenExecutionTests {
                 // This order was seeded with a promise, so the ticket has a computed
                 // release time.
                 Clock.fixed(Objects.requireNonNull(ticket.releaseAt()).plusSeconds(1), ZoneOffset.UTC),
-                new TransactionTemplate(new DataSourceTransactionManager(db.dataSource())));
+                new TransactionTemplate(new DataSourceTransactionManager(db.dataSource())),
+                new NoopRealtimeSignalPublisher());
 
         assertThat(later.releaseDue(50)).isEqualTo(1);
         assertThat(later.releaseDue(50))
@@ -1681,6 +1689,69 @@ class KitchenExecutionTests {
         assertThat(counts.total()).isEqualTo(2);
     }
 
+    // --------------------------------------------------- ADR 0045 realtime push
+
+    @Test
+    @DisplayName("opening a ticket publishes KITCHEN_BOARD at the ticket's own branch")
+    void openingATicketSignalsTheBoard() {
+        UUID orderId = seedConfirmedOrder("R-001", null, null, null, burger);
+
+        TicketRow ticket = tickets.open(TENANT, orderId, ReleaseMode.AUTO_ON_CONFIRM);
+
+        assertThat(realtime.forTicket(ticket.id()))
+                .as("a new ticket is a board change: the buffer or the live queue just gained a row")
+                .isNotEmpty();
+        assertThat(realtime.forTicket(ticket.id())).allSatisfy(signal -> {
+            assertThat(signal.channel()).isEqualTo(StreamChannel.KITCHEN_BOARD);
+            assertThat(signal.tenantId()).isEqualTo(TENANT);
+            assertThat(signal.scopeKey()).isEqualTo(uz.horecaos.platform.telemetry.api.ScopeKey.location(branch));
+            assertThat(signal.resourceType()).isEqualTo("KitchenTicket");
+        });
+    }
+
+    @Test
+    @DisplayName("releasing a held ticket signals the board a second time")
+    void releasingAHeldTicketSignalsAgain() {
+        UUID orderId = seedConfirmedOrder("R-002", null, null, null, burger);
+        TicketRow ticket = tickets.open(TENANT, orderId, ReleaseMode.MANUAL_HOLD);
+        int afterOpen = realtime.forTicket(ticket.id()).size();
+
+        tickets.releaseNow(TENANT, ticket.id(), ticket.version(), "MANUAL_RELEASE", "cook-1", null);
+
+        assertThat(realtime.forTicket(ticket.id()).size())
+                .as("HELD -> FIRED is a real board change on top of the ticket's own creation")
+                .isGreaterThan(afterOpen);
+    }
+
+    @Test
+    @DisplayName("marking a line ready signals the board, at the item's roll-up version")
+    void advancingAnItemSignalsTheBoard() {
+        UUID orderId = seedConfirmedOrder("R-003", null, null, null, burger);
+        TicketRow ticket = tickets.open(TENANT, orderId, ReleaseMode.AUTO_ON_CONFIRM);
+        UUID itemId = store.itemsOf(TENANT, ticket.id()).getFirst().id();
+        int beforeStart = realtime.forTicket(ticket.id()).size();
+
+        tickets.start(TENANT, itemId, "cook-1", null);
+
+        assertThat(realtime.forTicket(ticket.id()).size())
+                .as("a station advance is exactly the kind of change the KDS/VDU board re-reads for")
+                .isGreaterThan(beforeStart);
+    }
+
+    @Test
+    @DisplayName("handing a ready ticket over signals the board once more")
+    void handOverSignalsTheBoard() {
+        UUID orderId = seedConfirmedOrder("R-004", null, null, null, burger);
+        TicketRow ticket = tickets.open(TENANT, orderId, ReleaseMode.AUTO_ON_CONFIRM);
+        UUID itemId = store.itemsOf(TENANT, ticket.id()).getFirst().id();
+        tickets.ready(TENANT, itemId, "cook-1", null);
+        int beforeHandOver = realtime.forTicket(ticket.id()).size();
+
+        tickets.handOver(TENANT, ticket.id(), "expo-1", null);
+
+        assertThat(realtime.forTicket(ticket.id()).size()).isGreaterThan(beforeHandOver);
+    }
+
     // -------------------------------------------------------------------- fixture
 
     private Resolution resolve(Catalogue node) {
@@ -2049,6 +2120,31 @@ class KitchenExecutionTests {
     }
 
     /** Records what the kitchen proposed, which is all this module is entitled to do. */
+    /**
+     * Every ADR 0045 {@code KITCHEN_BOARD} signal {@code KitchenTicketService}
+     * published, in the order it published them. {@code
+     * TransactionSynchronizationManager.isSynchronizationActive()} is false
+     * for every test in this suite — {@code tickets} is constructed with
+     * plain {@code new}, never through Spring — so {@code signalBoardChanged}
+     * publishes immediately rather than deferring to a commit callback
+     * nothing here invokes; see that method's own doc.
+     */
+    private static final class RecordingRealtimePublisher implements RealtimeSignalPublisher {
+
+        private final List<RealtimeSignal> signals = new CopyOnWriteArrayList<>();
+
+        @Override
+        public void publish(RealtimeSignal signal) {
+            signals.add(signal);
+        }
+
+        List<RealtimeSignal> forTicket(UUID ticketId) {
+            return signals.stream()
+                    .filter(signal -> ticketId.equals(signal.resourceId()))
+                    .toList();
+        }
+    }
+
     private static final class RecordingOrderProgressPort implements OrderProgressPort {
 
         private final Map<UUID, List<OrderProgress>> proposed = new ConcurrentHashMap<>();

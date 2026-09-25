@@ -2761,6 +2761,21 @@ export const messagesRu: MessageCatalogue = {
   'kitchen.devices.revoke.submitting': 'Отзыв…',
   'kitchen.devices.revoke.cancel': 'Отмена',
 
+  // Кухонный wallboard (2.1/2.4)
+  'wallboardKitchen.title': 'Кухня',
+  'wallboardKitchen.denied': 'Нет доступа к кухонной доске этой точки',
+  'wallboardKitchen.loading': 'Загрузка кухонной доски',
+  'wallboardKitchen.empty': 'Сейчас ничего не готовится',
+  'wallboardKitchen.offline': 'Нет связи — показана последняя загруженная доска',
+  'wallboardKitchen.actionError': 'Не удалось выполнить действие. Попробуйте ещё раз.',
+  'wallboardVdu.title': 'Экран выдачи',
+  'wallboardVdu.denied': 'Нет доступа к кухонной доске этой точки',
+  'wallboardVdu.loading': 'Загрузка экрана выдачи',
+  'wallboardVdu.empty': 'Сейчас ничего не готовится',
+  'wallboardVdu.offline': 'Нет связи — показан последний загруженный экран',
+  'wallboardVdu.stationFilter.label': 'Станция',
+  'wallboardVdu.stationFilter.all': 'Все станции',
+
   // Курьеры (3.3) — волна 30
   'couriers.title': 'Курьеры',
   'couriers.loading': 'Загрузка списка курьеров',

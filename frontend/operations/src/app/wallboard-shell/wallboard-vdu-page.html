@@ -1,0 +1,77 @@
+<div class="wv">
+  <header class="wv__header">
+    <h1 class="wv__title">{{ 'wallboardVdu.title' | t }}</h1>
+    <div class="wv__headerRight">
+      @if (stations().length > 0) {
+        <label class="wv__stationFilter">
+          <span class="wv__stationFilter-label">{{ 'wallboardVdu.stationFilter.label' | t }}</span>
+          <select
+            [value]="selectedStation()"
+            (change)="onStationChange($any($event.target).value)"
+            data-testid="wallboard-vdu-station-filter"
+          >
+            <option value="">{{ 'wallboardVdu.stationFilter.all' | t }}</option>
+            @for (station of stations(); track station.stationId) {
+              <option [value]="station.stationId">{{ stationLabel(station) }}</option>
+            }
+          </select>
+        </label>
+      }
+      <q-live-badge [state]="connectionState()" />
+    </div>
+  </header>
+
+  <q-connection-state-banner [state]="connectionState()" />
+
+  @if (freshnessState() === 'aging' || freshnessState() === 'stale') {
+    <div
+      class="wv__staleBanner"
+      [class.wv__staleBanner--stale]="freshnessState() === 'stale'"
+      role="status"
+      data-testid="wallboard-vdu-offline-banner"
+    >
+      <span>{{ 'wallboardVdu.offline' | t }}</span>
+      <span class="wv__staleBanner-time" data-testid="wallboard-vdu-last-updated">{{
+        freshnessLabel()
+      }}</span>
+    </div>
+  }
+
+  <main class="wv__board">
+    @if (denied()) {
+      <p class="wv__hint" data-testid="wallboard-vdu-denied">{{ 'wallboardVdu.denied' | t }}</p>
+    } @else if (!firstLoadComplete()) {
+      <p class="wv__hint">{{ 'wallboardVdu.loading' | t }}</p>
+    } @else if (tickets().length === 0) {
+      <p class="wv__hint" data-testid="wallboard-vdu-empty">{{ 'wallboardVdu.empty' | t }}</p>
+    } @else {
+      <div class="wv__cards">
+        @for (ticket of tickets(); track ticket.ticketId) {
+          <article
+            class="wv__card"
+            [class.wv__card--warning]="severityTone(ticket) === 'warning'"
+            [class.wv__card--danger]="severityTone(ticket) === 'danger'"
+            data-testid="wallboard-vdu-card"
+          >
+            <div class="wv__card-sequence q-display-tv q-tnum" data-testid="wallboard-vdu-sequence">
+              {{ ticket.sequenceLabel }}
+            </div>
+            @if (ticket.externalReference) {
+              <div class="wv__card-reference" data-testid="wallboard-vdu-external-reference">
+                {{ ticket.externalReference }}
+              </div>
+            }
+            @if (targetReadyLabel(ticket); as targetReady) {
+              <div class="wv__card-detail">
+                {{ 'kitchen.ticket.targetReady' | t: { time: targetReady } }}
+              </div>
+            }
+            @if (courierEtaLabel(ticket); as courierEta) {
+              <div class="wv__card-detail">{{ courierEta }}</div>
+            }
+          </article>
+        }
+      </div>
+    }
+  </main>
+</div>

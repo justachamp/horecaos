@@ -9,7 +9,11 @@ import { StaffTokenStore } from '../auth/staff-token-store';
 import { RealtimeClient } from './realtime-client';
 
 /** Every capability a `DEFAULT_CHANNELS` entry can require — the default fixture, so existing tests connect to every channel exactly as before this class started filtering by capability. */
-const ALL_STREAM_CAPABILITIES: readonly Capability[] = ['ORDER_READ', 'DELIVERY_PLAN_READ'];
+const ALL_STREAM_CAPABILITIES: readonly Capability[] = [
+  'ORDER_READ',
+  'DELIVERY_PLAN_READ',
+  'KITCHEN_TICKET_READ',
+];
 
 const SCOPE: LocationScope = { tenantId: 't1', brandId: 'b1', locationId: 'l1' };
 
@@ -110,6 +114,7 @@ describe('RealtimeClient', () => {
     expect((init.headers as Record<string, string>)['Last-Event-Id']).toBeUndefined();
     expect(url).toContain('channels=order_detail');
     expect(url).toContain('channels=dispatch_board');
+    expect(url).toContain('channels=kitchen_board');
   });
 
   it('omits dispatch_board — and only dispatch_board — for a role that holds ORDER_READ but not DELIVERY_PLAN_READ, so the server never refuses the whole connection over one channel this operator cannot have', async () => {
@@ -122,6 +127,27 @@ describe('RealtimeClient', () => {
     expect(url).toContain('channels=order_queue');
     expect(url).toContain('channels=order_detail');
     expect(url).toContain('channels=counters');
+    expect(url).not.toContain('dispatch_board');
+    expect(url).not.toContain('kitchen_board');
+  });
+
+  it('omits kitchen_board for a role that holds ORDER_READ but not KITCHEN_TICKET_READ, the same per-channel refusal dispatch_board already proves', async () => {
+    fetchMock.mockResolvedValueOnce(okResponse([]));
+    setUp(['ORDER_READ', 'DELIVERY_PLAN_READ']);
+    await vi.advanceTimersByTimeAsync(0);
+
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain('channels=dispatch_board');
+    expect(url).not.toContain('kitchen_board');
+  });
+
+  it('requests kitchen_board for a KDS/VDU wallboard session holding KITCHEN_TICKET_READ', async () => {
+    fetchMock.mockResolvedValueOnce(okResponse([]));
+    setUp(['KITCHEN_TICKET_READ']);
+    await vi.advanceTimersByTimeAsync(0);
+
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain('channels=kitchen_board');
     expect(url).not.toContain('dispatch_board');
   });
 

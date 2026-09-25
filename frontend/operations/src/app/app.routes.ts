@@ -1007,6 +1007,23 @@ export const routes: Routes = [
     loadComponent: () => import('./wallboard-shell/wallboard-shell').then((m) => m.WallboardShell),
     canActivate: [authGuard],
   },
+  // Rows 2.1/2.4 (ADR 0045, ADR 0041 rollout step 4): the KDS touch shell and
+  // the VDU wall, hosted like the wallboard above — same reasoning, same
+  // guard, no rail. Siblings of `wallboard` rather than its children: each is
+  // its own fullscreen surface with its own realtime subscription, not a tab
+  // within one shell.
+  {
+    path: 'wallboard/kitchen',
+    loadComponent: () =>
+      import('./wallboard-shell/wallboard-kitchen-page').then((m) => m.WallboardKitchenPage),
+    canActivate: [authGuard],
+  },
+  {
+    path: 'wallboard/vdu',
+    loadComponent: () =>
+      import('./wallboard-shell/wallboard-vdu-page').then((m) => m.WallboardVduPage),
+    canActivate: [authGuard],
+  },
 ];
 
 /**

@@ -2794,6 +2794,23 @@ export const messagesEn = {
   'kitchen.devices.revoke.submitting': 'Revoking…',
   'kitchen.devices.revoke.cancel': 'Cancel',
 
+  // Kitchen wallboard shell (2.1/2.4, ADR 0045/0041 rollout step 4) — touch
+  // KDS and VDU, hosted like the wallboard (0.1e) rather than the operator
+  // console.
+  'wallboardKitchen.title': 'Kitchen',
+  'wallboardKitchen.denied': 'No access to this location’s kitchen board',
+  'wallboardKitchen.loading': 'Loading the kitchen board',
+  'wallboardKitchen.empty': 'Nothing in production right now',
+  'wallboardKitchen.offline': 'Disconnected — showing the last board this screen saw',
+  'wallboardKitchen.actionError': 'That did not go through. Try again.',
+  'wallboardVdu.title': 'Display board',
+  'wallboardVdu.denied': 'No access to this location’s kitchen board',
+  'wallboardVdu.loading': 'Loading the display board',
+  'wallboardVdu.empty': 'Nothing in production right now',
+  'wallboardVdu.offline': 'Disconnected — showing the last board this screen saw',
+  'wallboardVdu.stationFilter.label': 'Station',
+  'wallboardVdu.stationFilter.all': 'All stations',
+
   // Couriers (3.3) — wave 30
   'couriers.title': 'Couriers',
   'couriers.loading': 'Loading the roster',

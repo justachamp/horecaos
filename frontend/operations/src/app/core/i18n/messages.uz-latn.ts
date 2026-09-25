@@ -2784,6 +2784,21 @@ export const messagesUzLatn: MessageCatalogue = {
   'kitchen.devices.revoke.submitting': 'Bekor qilinmoqda…',
   'kitchen.devices.revoke.cancel': 'Yopish',
 
+  // Oshxona wallboard (2.1/2.4)
+  'wallboardKitchen.title': 'Oshxona',
+  'wallboardKitchen.denied': 'Ushbu filial oshxona taxtasiga ruxsat yoʻq',
+  'wallboardKitchen.loading': 'Oshxona taxtasi yuklanmoqda',
+  'wallboardKitchen.empty': 'Hozircha tayyorlanayotgan narsa yoʻq',
+  'wallboardKitchen.offline': 'Aloqa yoʻq — ekranda oxirgi koʻrilgan taxta',
+  'wallboardKitchen.actionError': 'Amal bajarilmadi. Qayta urinib koʻring.',
+  'wallboardVdu.title': 'Tarqatish ekrani',
+  'wallboardVdu.denied': 'Ushbu filial oshxona taxtasiga ruxsat yoʻq',
+  'wallboardVdu.loading': 'Tarqatish ekrani yuklanmoqda',
+  'wallboardVdu.empty': 'Hozircha tayyorlanayotgan narsa yoʻq',
+  'wallboardVdu.offline': 'Aloqa yoʻq — ekranda oxirgi koʻrilgan holat',
+  'wallboardVdu.stationFilter.label': 'Stansiya',
+  'wallboardVdu.stationFilter.all': 'Barcha stansiyalar',
+
   // Kuryerlar (3.3) — 30-toʻlqin
   'couriers.title': 'Kuryerlar',
   'couriers.loading': 'Kuryerlar roʻyxati yuklanmoqda',

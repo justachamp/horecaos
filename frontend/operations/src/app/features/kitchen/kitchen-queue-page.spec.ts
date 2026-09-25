@@ -9,6 +9,7 @@ import { LocationScope } from '../../core/api/operations-paths';
 import { ApiError, ApiErrorCode } from '../../core/api/problem-details';
 import { CurrentLocation } from '../../core/auth/current-location';
 import { I18n } from '../../core/i18n/i18n';
+import { RealtimeClient, RealtimeFrame } from '../../core/realtime/realtime-client';
 import { RosterEntryResponse, CouriersApi } from '../couriers/couriers-api';
 import { DispatchApi, PlanQueueResponse } from '../delivery/dispatch-api';
 import { OrderAmendmentsApi } from '../orders/order-amendments-api';
@@ -82,6 +83,8 @@ describe('KitchenQueuePage', () => {
   let dispatchAssign: ReturnType<typeof vi.fn>;
   let roster: ReturnType<typeof vi.fn>;
   let navigateByUrl: ReturnType<typeof vi.fn>;
+  let boardSpy: ReturnType<typeof vi.fn>;
+  let realtimeFrameListeners: Array<(frame: RealtimeFrame) => void>;
 
   async function render(customBoard?: BoardResponse): Promise<void> {
     boardResult = customBoard ?? board([DELIVERY_TICKET]);
@@ -92,6 +95,8 @@ describe('KitchenQueuePage', () => {
     );
     roster = vi.fn(() => Promise.resolve<readonly RosterEntryResponse[]>([]));
     navigateByUrl = vi.fn();
+    boardSpy = vi.fn(() => Promise.resolve(boardResult));
+    realtimeFrameListeners = [];
 
     await TestBed.configureTestingModule({
       imports: [KitchenQueuePage],
@@ -107,7 +112,7 @@ describe('KitchenQueuePage', () => {
         {
           provide: KitchenApi,
           useValue: {
-            board: () => Promise.resolve(boardResult),
+            board: boardSpy,
             stations: () => Promise.resolve([]),
           },
         },
@@ -123,6 +128,16 @@ describe('KitchenQueuePage', () => {
         { provide: DispatchApi, useValue: { queue: dispatchQueue, assign: dispatchAssign } },
         { provide: CouriersApi, useValue: { roster } },
         { provide: Router, useValue: { navigateByUrl } },
+        {
+          provide: RealtimeClient,
+          useValue: {
+            state: signal('open'),
+            onFrame: (listener: (frame: RealtimeFrame) => void) => {
+              realtimeFrameListeners.push(listener);
+              return () => undefined;
+            },
+          },
+        },
       ],
     }).compileComponents();
     TestBed.inject(I18n).setLocale('en');
@@ -139,6 +154,46 @@ describe('KitchenQueuePage', () => {
     expect(host.querySelectorAll('[data-testid="kitchen-ticket"]')).toHaveLength(1);
     expect(host.textContent).toContain('A-014');
     expect(host.textContent).toContain('telegram-bot');
+  });
+
+  it('refreshes at once on a KITCHEN_BOARD frame, the ADR 0045 accelerator (row 2.1)', async () => {
+    await render();
+    boardSpy.mockClear();
+
+    for (const listener of realtimeFrameListeners) {
+      listener({
+        kind: 'signal',
+        channel: 'kitchen_board',
+        scope: 'LOCATION:l1',
+        resourceType: 'KitchenTicket',
+        resourceId: 'ticket-1',
+        version: 2,
+        occurredAt: '2026-09-25T09:00:00Z',
+      });
+    }
+    await flushMicrotasks();
+
+    expect(boardSpy).toHaveBeenCalled();
+  });
+
+  it('ignores a frame on a channel this board does not care about', async () => {
+    await render();
+    boardSpy.mockClear();
+
+    for (const listener of realtimeFrameListeners) {
+      listener({
+        kind: 'signal',
+        channel: 'dispatch_board',
+        scope: 'LOCATION:l1',
+        resourceType: 'DeliveryPlan',
+        resourceId: 'plan-1',
+        version: 1,
+        occurredAt: '2026-09-25T09:00:00Z',
+      });
+    }
+    await flushMicrotasks();
+
+    expect(boardSpy).not.toHaveBeenCalled();
   });
 
   it('shows the courier ETA chip when the ticket carries one (wave P11, row 2.1a)', async () => {
