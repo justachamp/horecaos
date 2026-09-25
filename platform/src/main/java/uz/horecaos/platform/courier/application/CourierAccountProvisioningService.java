@@ -1,15 +1,19 @@
 package uz.horecaos.platform.courier.application;
 
 import java.time.Clock;
+import java.time.Instant;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.configuration.Ids;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.accounts.StaffAccounts;
 import uz.horecaos.platform.iam.api.accounts.StaffAccounts.StaffAccount;
@@ -51,6 +55,8 @@ import uz.horecaos.platform.web.api.ErrorCode;
 @Service
 public class CourierAccountProvisioningService {
 
+    private static final Logger log = LoggerFactory.getLogger(CourierAccountProvisioningService.class);
+
     private final StaffAccounts accounts;
     private final OrganizationProvisioner organizations;
     private final KeycloakOrganizationLookup organizationLookup;
@@ -77,7 +83,9 @@ public class CourierAccountProvisioningService {
      *              standing {@link StaffAccounts#create} already gives a
      *              colleague with no work email
      * @return the identity provider's own subject id, for {@code
-     *         CourierEngagementService.NewCourier#principalSubject}
+     *         CourierEngagementService.NewCourier#principalSubject}; {@link
+     *         Provisioned#created()} tells a caller whether this call is what
+     *         brought the account into being, for {@link #abandonIfCreated}
      * @throws ApiException {@code RESOURCE_CONFLICT} when this tenant has no
      *              organization to link into yet (onboarding incomplete), or
      *              when the phone already names an account this call cannot
@@ -91,7 +99,8 @@ public class CourierAccountProvisioningService {
                 .orElseThrow(() -> new ApiException(
                         ErrorCode.RESOURCE_CONFLICT, "This tenant has no organization to provision a courier into"));
 
-        StaffAccount account = reuseOrCreate(organizationId, firstName, lastName, phone, email);
+        Resolved resolved = reuseOrCreate(organizationId, firstName, lastName, phone, email);
+        StaffAccount account = resolved.account();
 
         // existingSubjectId set: ensureMembership links the account already
         // created above rather than inviting a new one by email, the same
@@ -108,7 +117,70 @@ public class CourierAccountProvisioningService {
                 .occurredAt(clock.instant())
                 .build());
 
-        return new Provisioned(account.subjectId(), account.username());
+        return new Provisioned(account.subjectId(), account.username(), resolved.created());
+    }
+
+    /**
+     * Undoes a fresh {@link StaffAccounts#create} when a later step of the
+     * same registration -- {@code CourierEngagementService#register}, most
+     * often a duplicate {@code displayReference} hitting {@code
+     * uq_courier_reference} -- fails after {@link #provision} already
+     * succeeded. Without this, the account (and the organization membership
+     * {@link #provision} just granted it) survives the failed registration
+     * as a real, tenant-linked identity that {@link StaffAccounts#findByPhone}
+     * keeps finding forever, with no courier row and no operator-visible way
+     * to know it happened -- the same "orphaned, grant-less account" shape
+     * {@link
+     * uz.horecaos.platform.tenancy.application.invitations.StaffInvitationService
+     * #abandonOrphanedAccount} exists to undo for a staff invitation.
+     *
+     * <p>A no-op when {@link Provisioned#created()} is false: an account this
+     * call reused already existed before this registration attempt and may
+     * be in active use elsewhere (a returning courier, a staff member's own
+     * login), so a failed registration must never delete it or touch its
+     * pre-existing organization membership.
+     *
+     * <p>Best-effort, exactly like its staff-invitation counterpart: {@code
+     * cause} is always what the caller re-throws, never replaced by a
+     * cleanup failure, and an unrepairable orphan is logged and audited
+     * distinctly so an operator can remove it by hand.
+     */
+    public void abandonIfCreated(
+            UUID tenantId, Provisioned account, RuntimeException cause, ActorRef actor, String reason) {
+        if (!account.created()) {
+            return;
+        }
+        try {
+            accounts.delete(account.subjectId());
+            log.warn(
+                    "A courier registration's engagement step was refused after its identity-provider account "
+                            + "was created; the orphaned account was removed (subject {})",
+                    account.subjectId(),
+                    cause);
+        } catch (RuntimeException deleteFailed) {
+            log.error(
+                    "A courier registration's engagement step was refused after its identity-provider account "
+                            + "was created, and removing the orphaned account also failed; it now permanently "
+                            + "blocks this phone until an operator removes it by hand (subject {})",
+                    account.subjectId(),
+                    deleteFailed);
+            Instant now = clock.instant();
+            audit.record(AuditFact.of("courier.account.orphan_left", AuditClass.SECURITY)
+                    .by(actor)
+                    .at(ResourceScope.tenant(tenantId))
+                    .target("iam.staff_account", Ids.newId())
+                    .because(reason)
+                    .changed(Map.of(
+                            "subjectId",
+                            account.subjectId(),
+                            "refusalReason",
+                            cause.getClass().getSimpleName(),
+                            "cleanupFailure",
+                            deleteFailed.getClass().getSimpleName()))
+                    .correlatedBy(account.subjectId())
+                    .occurredAt(now)
+                    .build());
+        }
     }
 
     /**
@@ -134,23 +206,24 @@ public class CourierAccountProvisioningService {
      * #rejectIfPhoneTaken} gives an out-of-tenant match, mirroring that
      * guard exactly.
      */
-    private StaffAccount reuseOrCreate(
+    private Resolved reuseOrCreate(
             String organizationId, String firstName, String lastName, String phone, @Nullable String email) {
         Optional<StaffAccount> existing = accounts.findByPhone(phone);
         if (existing.isPresent()) {
-            return rejectUnlessAlreadyInThisOrganization(organizationId, existing.get());
+            return new Resolved(rejectUnlessAlreadyInThisOrganization(organizationId, existing.get()), false);
         }
         try {
-            return accounts.create(firstName, lastName, phone, email);
+            return new Resolved(accounts.create(firstName, lastName, phone, email), true);
         } catch (StaffAccounts.StaffAccountAlreadyExistsException lostRace) {
             // Two registrations for the same phone raced past the check
             // above; re-resolve through the losing side rather than treat a
-            // provably-existing account as a hard failure.
+            // provably-existing account as a hard failure. The winner of the
+            // race is the one that created it, so this side never did.
             StaffAccount raced = accounts.findByPhone(phone)
                     .orElseThrow(() -> new ApiException(
                             ErrorCode.RESOURCE_CONFLICT,
                             "This phone number already has an account, but it could not be read back"));
-            return rejectUnlessAlreadyInThisOrganization(organizationId, raced);
+            return new Resolved(rejectUnlessAlreadyInThisOrganization(organizationId, raced), false);
         }
     }
 
@@ -170,5 +243,9 @@ public class CourierAccountProvisioningService {
                 ErrorCode.RESOURCE_CONFLICT, "This phone number already has an account", Map.of("field", "phone"));
     }
 
-    public record Provisioned(String subjectId, String username) {}
+    /** @param created whether this call minted a fresh account rather than reusing one that already existed */
+    public record Provisioned(String subjectId, String username, boolean created) {}
+
+    /** Which account {@link #reuseOrCreate} settled on, and whether it minted it. */
+    private record Resolved(StaffAccount account, boolean created) {}
 }

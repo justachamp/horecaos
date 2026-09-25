@@ -113,6 +113,7 @@ class OperationsCourierAccountProvisioningEndpointTests {
         jdbc.sql("TRUNCATE TABLE tenant.tenants CASCADE").update();
         accounts.byId.clear();
         accounts.created.clear();
+        accounts.deleted.clear();
         organizations.ensured.clear();
 
         jdbc.sql("""
@@ -275,11 +276,65 @@ class OperationsCourierAccountProvisioningEndpointTests {
         assertThat(storedSubject).isEqualTo(accounts.created.getFirst());
     }
 
+    @Test
+    @DisplayName("when the engagement step fails after the account step already created a brand-new "
+            + "identity-provider account, that account is removed rather than left as a live, "
+            + "tenant-linked orphan nothing ever claims")
+    void aFailedEngagementRegistrationRemovesTheFreshlyCreatedAccount() throws Exception {
+        // First registration claims displayReference "C-DUP" for a different phone.
+        MvcResult first = mvc.perform(post(registerPath())
+                        .with(tokenFor(MANAGER))
+                        .header("Idempotency-Key", "courier-register-orphan-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(registrationBodyWithReference("+998901999001", null, "C-DUP")))
+                .andReturn();
+        assertThat(first.getResponse().getStatus()).isEqualTo(200);
+        accounts.created.clear();
+        organizations.ensured.clear();
+
+        // A second registration, a different never-before-seen phone, collides
+        // on the same displayReference -- uq_courier_reference refuses it
+        // after CourierAccountProvisioningService.provision() already created
+        // and linked a brand-new account for this second phone.
+        MvcResult result = mvc.perform(post(registerPath())
+                        .with(tokenFor(MANAGER))
+                        .header("Idempotency-Key", "courier-register-orphan-2")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(registrationBodyWithReference("+998901999002", null, "C-DUP")))
+                .andReturn();
+
+        assertThat(result.getResponse().getStatus())
+                .as("the duplicate displayReference must still be refused")
+                .isGreaterThanOrEqualTo(400);
+        assertThat(accounts.created)
+                .as("the second phone's brand-new account was in fact created")
+                .hasSize(1);
+        String orphanSubject = accounts.created.getFirst();
+        assertThat(accounts.deleted)
+                .as("the account created for the failed registration must be cleaned up rather than left "
+                        + "as a permanent, tenant-linked orphan")
+                .containsExactly(orphanSubject);
+
+        Long courierRows = jdbc.sql("SELECT COUNT(*) FROM fulfillment.couriers WHERE tenant_id = :t "
+                        + "AND principal_subject = :s")
+                .param("t", TENANT)
+                .param("s", orphanSubject)
+                .query(Long.class)
+                .single();
+        assertThat(courierRows)
+                .as("no courier row exists for the orphaned account")
+                .isZero();
+    }
+
     private static String registrationBody(String phone, @Nullable String email) {
+        return registrationBodyWithReference(phone, email, "C-1001");
+    }
+
+    private static String registrationBodyWithReference(String phone, @Nullable String email, String reference) {
         return """
                 {"courierTypeId":"%s","firstName":"Malika","lastName":"Tosheva","phone":"%s",%s
-                 "displayReference":"C-1001","engagedFrom":"2026-09-25","reason":"onboarding"}
-                """.formatted(COURIER_TYPE, phone, email == null ? "" : "\"email\":\"" + email + "\",");
+                 "displayReference":"%s","engagedFrom":"2026-09-25","reason":"onboarding"}
+                """.formatted(COURIER_TYPE, phone, email == null ? "" : "\"email\":\"" + email + "\",", reference);
     }
 
     private static String registerPath() {
@@ -377,10 +432,17 @@ class OperationsCourierAccountProvisioningEndpointTests {
 
             final Map<String, StaffAccount> byId = new HashMap<>();
             final List<String> created = new ArrayList<>();
+            final List<String> deleted = new ArrayList<>();
 
             @Override
             public Optional<StaffAccount> find(String subjectId) {
                 return Optional.ofNullable(byId.get(subjectId));
+            }
+
+            @Override
+            public void delete(String subjectId) {
+                byId.remove(subjectId);
+                deleted.add(subjectId);
             }
 
             @Override
