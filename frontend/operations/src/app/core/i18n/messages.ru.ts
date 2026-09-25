@@ -5522,6 +5522,11 @@ export const messagesRu: MessageCatalogue = {
   'orders.newOrder.aggregator.total': 'Сумма, полученная агрегатором',
   'orders.newOrder.aggregator.hint':
     'Записано точно так, как указал агрегатор, — HorecaOS не пересчитывает эту сумму',
+  // Row 1.3g (wave 11 w5-fulfillment-destination): DELIVERY использует уже разрешённый адрес из панели клиента.
+  'orders.newOrder.aggregator.pickup': 'Самовывоз — курьер агрегатора или клиент забирает сам',
+  'orders.newOrder.aggregator.deliveryTo': 'Доставка: {customer}, {address}',
+  'orders.newOrder.aggregator.deliveryMissing':
+    'Снимите «Заказ агрегатора», выберите клиента и адрес доставки, затем включите снова',
 
   // --- shared/ui (ADR 0101) ----------------------------------------------
   'ui.denied.title': 'Нет доступа к этому разделу',

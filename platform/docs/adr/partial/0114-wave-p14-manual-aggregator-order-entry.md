@@ -12,13 +12,29 @@
   the four V0038 authority columns ADR 0040 defines, with `entry_mode =
   MANUAL` in the one place ADR 0040's own status line names as not built.
   Idempotency-Key replay is handled by the same service, checked against
-  `findByIdempotencyKey` before any write. Not built: `POST
+  `findByIdempotencyKey` before any write. Wave 11 w5-fulfillment-destination
+  (row `1.3g`) answers this record's own third open input: `fulfillmentMode`
+  may now be `DELIVERY`, by reusing `OperationsOrderController
+  .DestinationRequest` — the identical structured, saved-address shape the
+  New order screen's address pane already sends — named by
+  `customerAddressId` and scoped by a `customerAccountId` the request
+  carries for the address lookup alone; the order itself still matches no
+  customer account (`ck_order_owner`'s `guest_reference_hash` branch, never
+  `customer_account_id`), so ADR 0040's "a marketplace order never matches
+  one" is unchanged. The resolved destination is snapshotted onto
+  `ordering.order_customer_snapshots` the same encrypted way
+  `CheckoutOrderWriter` snapshots a native order's, the order is written
+  already `CONFIRMED` (with `confirmed_at` set, `ck_order_confirmed_at`'s own
+  requirement) rather than `RECEIVED` — a manual entry has no accept/reject
+  step left to take — and `DeliveryPlanner#planFor` is called directly,
+  opening the same plan and sourcing job a native order's confirmation opens
+  through `DeliveryPlanTrigger`. `PICKUP` is unchanged. Not built: `POST
   .../orders/aggregator-entries`'s own frontend form beyond a minimal
   totals/lines entry (no line-level tax entry, no aggregator binding
   picker beyond the tenant's own configured `AGGREGATOR` channels); no
   `ordering.order_external_pricing` or `order_handover_challenges` row is
-  written for a manual entry (see Consequences); delivery fulfilment for
-  an aggregator-entry order (fixed to `PICKUP` this wave).
+  written for a manual entry regardless of fulfilment mode (see
+  Consequences and the two open inputs below, both still open).
 - Date proposed: 2026-09-14
 - Date decided: —
 - Deciders: proposed by Claude and built on the platform owner's instruction
@@ -37,10 +53,6 @@
     binding" means nothing is dispatching a courier automatically; a tenant
     that separately arranges for the aggregator's own courier to collect a
     manually recorded order has no way to say so)
-  - Whether an aggregator-entry order should ever support `DELIVERY`
-    fulfilment — product, owner: product (this wave ships `PICKUP` only,
-    to avoid inventing a second, untyped address path beside row 1.3b's)
-
 ## Context
 
 Row `1.3g` (gap map, wave P14): "When an aggregator phones an order through
@@ -147,13 +159,15 @@ no capability code to key on because a manual entry has none.
 ordering.application.AggregatorOrderIntakeService
   Command(tenantId, brandId, locationId, channelCode, externalOrderId,
           lines, currency, subtotalMinor, discountMinor, feeMinor,
-          totalMinor, idempotencyKey, operatorSubject)
+          totalMinor, idempotencyKey, operatorSubject,
+          fulfillmentMode, customerAccountId, destination)  # wave 11 w5
   -> Result(orderId, publicOrderNumber, replayed)
 
 ordering.infrastructure.persistence.JdbcAggregatorOrderStore
-  writes ordering.orders (entry_mode = MANUAL, fulfillment_mode = PICKUP),
-  order_revisions (revision 1, source = CHECKOUT), order_lines
-  (external_mapping_status MAPPED|UNMAPPED per line), and one
+  writes ordering.orders (entry_mode = MANUAL, fulfillment_mode as given;
+  DELIVERY writes status = CONFIRMED + confirmed_at, PICKUP keeps
+  status = RECEIVED), order_revisions (revision 1, source = CHECKOUT),
+  order_lines (external_mapping_status MAPPED|UNMAPPED per line), and one
   order_external_references row (PARTNER_ORDER_ID, issued_by = HORECAOS)
 
 integration.api.provider.ProviderInstallationLookup
@@ -163,6 +177,14 @@ integration.api.provider.ProviderInstallationLookup
 
 POST /api/v1/tenants/{t}/brands/{b}/locations/{l}/orders/aggregator-entries
   ORDER_PLACE at LOCATION scope, mutating, Idempotency-Key required
+
+# Wave 11 w5-fulfillment-destination (DELIVERY): resolves the destination
+# through ordering.application.CustomerAddressBook (the same port
+# CartService#setDestination uses), encrypts it onto
+# ordering.order_customer_snapshots, and calls
+# fulfillment.api.DeliveryPlanner#planFor directly — the confirmation-time
+# call DeliveryPlanTrigger makes for a native order, made here instead
+# because this write has no checkout transaction for that trigger to fire on.
 ```
 
 taxMinor is derived, never independently typed: `totalMinor - subtotalMinor
@@ -187,9 +209,13 @@ capability grant removes the whole surface with no data migration.
       `JdbcProviderInstallationLookup` implementation
 - [x] `POST .../orders/aggregator-entries` on `OperationsOrderController`
 - [x] Frontend: «Заказ агрегатора» toggle on the New order screen
-- [ ] `order_external_pricing`/settlement evidence for a manual entry
-      (open input above)
-- [ ] Delivery fulfilment for a manual entry (open input above)
+- [x] Delivery fulfilment for a manual entry (wave 11 w5-fulfillment-destination):
+      `fulfillmentMode = DELIVERY` resolves a named customer's saved address
+      through `CustomerAddressBook`, snapshots it, writes the order
+      `CONFIRMED`, and opens a plan through `DeliveryPlanner#planFor` — still
+      no `order_external_pricing`/`order_handover_challenges` row, see below
+- [ ] `order_external_pricing`/settlement evidence for a manual entry, of
+      either fulfilment mode (open input above)
 
 ## Exit criteria
 

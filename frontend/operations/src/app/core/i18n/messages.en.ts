@@ -5545,6 +5545,11 @@ export const messagesEn = {
   'orders.newOrder.aggregator.total': 'Total the aggregator collected',
   'orders.newOrder.aggregator.hint':
     'Recorded exactly as the aggregator stated it — nothing here is re-priced by HorecaOS',
+  // Row 1.3g (wave 11 w5-fulfillment-destination): DELIVERY reuses the customer pane's own resolved address.
+  'orders.newOrder.aggregator.pickup': 'Pickup — the aggregator’s own courier or the customer collects it',
+  'orders.newOrder.aggregator.deliveryTo': 'Delivers to: {customer}, {address}',
+  'orders.newOrder.aggregator.deliveryMissing':
+    'Uncheck “Aggregator order”, resolve the customer and pick a delivery address, then check it again',
 
   // --- shared/ui (ADR 0101) ----------------------------------------------
   // The only keys in this catalogue owned by a component rather than by a

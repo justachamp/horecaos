@@ -5559,6 +5559,11 @@ export const messagesUzLatn: MessageCatalogue = {
   'orders.newOrder.aggregator.total': 'Agregator yigʻgan summa',
   'orders.newOrder.aggregator.hint':
     'Agregator koʻrsatgan summa aynan shu holicha yozildi — HorecaOS uni qayta hisoblamaydi',
+  // Row 1.3g (wave 11 w5-fulfillment-destination): DELIVERY mijoz panelida tanlangan manzildan foydalanadi.
+  'orders.newOrder.aggregator.pickup': 'Olib ketish — agregator kuryeri yoki mijoz oʻzi oladi',
+  'orders.newOrder.aggregator.deliveryTo': 'Yetkazish manzili: {customer}, {address}',
+  'orders.newOrder.aggregator.deliveryMissing':
+    '«Agregator buyurtmasi»ni oʻchiring, mijoz va yetkazish manzilini tanlang, keyin qayta yoqing',
 
   // --- shared/ui (ADR 0101) ----------------------------------------------
   'ui.denied.title': 'Bu boʻlimga kirish huquqingiz yoʻq',

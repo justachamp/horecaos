@@ -153,6 +153,31 @@
             />
           </label>
           <p class="q-caption new-order__hint">{{ 'orders.newOrder.aggregator.hint' | t }}</p>
+
+          <!-- Row 1.3g (wave 11 w5-fulfillment-destination): fulfillmentMode,
+               selectedCustomer and selectedAddressId are the same page-level
+               signals the customer pane above sets and are not reset by
+               toggleAggregatorMode — resolve a customer and pick a delivery
+               address there first, then switch to this panel. -->
+          @if (fulfillmentMode() === 'DELIVERY') {
+            @if (selectedCustomer(); as customer) {
+              @if (selectedAddress(); as address) {
+                <p class="q-caption new-order__hint" data-testid="new-order-aggregator-delivery-to">
+                  {{ 'orders.newOrder.aggregator.deliveryTo' | t: { customer: customer.label, address: address.label } }}
+                </p>
+              } @else {
+                <p class="q-caption new-order__notice" data-testid="new-order-aggregator-delivery-missing">
+                  {{ 'orders.newOrder.aggregator.deliveryMissing' | t }}
+                </p>
+              }
+            } @else {
+              <p class="q-caption new-order__notice" data-testid="new-order-aggregator-delivery-missing">
+                {{ 'orders.newOrder.aggregator.deliveryMissing' | t }}
+              </p>
+            }
+          } @else {
+            <p class="q-caption new-order__hint">{{ 'orders.newOrder.aggregator.pickup' | t }}</p>
+          }
         } @else {
           <h2 class="q-body-sm new-order__pane-title">
             {{ 'orders.newOrder.customer.title' | t }}

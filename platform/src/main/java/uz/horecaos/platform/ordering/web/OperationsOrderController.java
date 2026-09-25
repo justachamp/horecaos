@@ -552,7 +552,12 @@ public class OperationsOrderController {
                     + "`origin`/`marketplace_binding_id` set exactly as an automated partner push "
                     + "sets them, so this order counts in the channel mix as what it is rather "
                     + "than as an ordinary own-channel sale. Creates no customer account: a "
-                    + "marketplace order never matches one (ADR 0040).")
+                    + "marketplace order never matches one (ADR 0040). `fulfillmentMode` DELIVERY "
+                    + "(wave 11 w5-fulfillment-destination) reuses the New order screen's own "
+                    + "structured destination — one of the named customer's saved addresses, never "
+                    + "a second, untyped address path — and opens a delivery plan the same way a "
+                    + "native order's confirmation does; PICKUP is unchanged and carries neither "
+                    + "`customerAccountId` nor `destination`.")
     public ResponseEntity<PlaceOrderResponse> aggregatorEntry(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
@@ -572,13 +577,24 @@ public class OperationsOrderController {
                 body.feeMinor(),
                 body.totalMinor(),
                 idempotencyKey,
-                currentActor.get().subject()));
+                currentActor.get().subject(),
+                body.fulfillmentMode(),
+                body.customerAccountId(),
+                body.destination() == null ? null : body.destination().toAggregatorDestination()));
+
+        // The order's own initial status: CONFIRMED for a DELIVERY entry
+        // (AggregatorOrderIntakeService opens its plan against exactly that
+        // status), RECEIVED otherwise — the same simplification this endpoint
+        // already made for PICKUP, extended rather than re-read from a second
+        // query on every reply.
+        String initialStatus =
+                "DELIVERY".equals(body.fulfillmentMode()) ? OrderStatus.CONFIRMED.name() : OrderStatus.RECEIVED.name();
 
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(new PlaceOrderResponse(
                         result.orderId(),
                         result.publicOrderNumber(),
-                        OrderStatus.RECEIVED.name(),
+                        initialStatus,
                         1,
                         result.replayed() ? "REPLAYED" : "CREATED",
                         List.of()));
@@ -1703,6 +1719,12 @@ public class OperationsOrderController {
                     customerAddressId, recipientName, recipientPhone, deliveryNote);
         }
 
+        /** Row 1.3g: the identical fields, handed to the aggregator manual-entry path instead. */
+        AggregatorOrderIntakeService.Destination toAggregatorDestination() {
+            return new AggregatorOrderIntakeService.Destination(
+                    customerAddressId, recipientName, recipientPhone, deliveryNote);
+        }
+
         /** Never prints the recipient's name or phone — see {@code DestinationRequest} elsewhere for the same rule. */
         @Override
         public String toString() {
@@ -1741,6 +1763,21 @@ public class OperationsOrderController {
      * @param subtotalMinor   the aggregator's own totals, stored verbatim —
      * @param discountMinor   HorecaOS validates only that they reconcile to
      * @param feeMinor        {@code totalMinor}, never re-derives them
+     * @param fulfillmentMode row 1.3g (wave 11 w5-fulfillment-destination):
+     *                        {@code PICKUP} or {@code DELIVERY}, null treated
+     *                        as {@code PICKUP} — every request before this
+     *                        wave. Boxed rather than primitive per Jackson 3's
+     *                        own rule for an optional request field
+     * @param customerAccountId required, and only meaningful, when {@code
+     *                        fulfillmentMode} is {@code DELIVERY}: whose saved
+     *                        address {@code destination} names. The order
+     *                        itself still matches no customer account — see
+     *                        {@code AggregatorOrderIntakeService}'s own doc
+     * @param destination     required exactly when {@code fulfillmentMode} is
+     *                        {@code DELIVERY} — the identical structured shape
+     *                        the New order screen's address pane already
+     *                        sends, reused rather than inventing a second,
+     *                        untyped address path
      */
     public record AggregatorOrderRequest(
             @NotBlank @Size(max = 32) String channelCode,
@@ -1750,7 +1787,10 @@ public class OperationsOrderController {
             @PositiveOrZero long subtotalMinor,
             @PositiveOrZero long discountMinor,
             @PositiveOrZero long feeMinor,
-            @PositiveOrZero long totalMinor) {}
+            @PositiveOrZero long totalMinor,
+            @Nullable @Size(max = 16) String fulfillmentMode,
+            @Nullable UUID customerAccountId,
+            @Valid @Nullable DestinationRequest destination) {}
 
     /**
      * One line the operator typed off the aggregator's own order screen.

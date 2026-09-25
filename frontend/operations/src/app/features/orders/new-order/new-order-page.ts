@@ -170,9 +170,15 @@ interface PendingModifierSelection {
  * (row `1.3f`) calls the staff reorder-plan wrapper and adds every
  * `AVAILABLE` line straight to the basket. A «Заказ агрегатора»
  * toggle (row `1.3g`) records an aggregator's own phoned-through order under
- * its `AGGREGATOR`-type channel with externally-set totals, bypassing the
- * customer pane entirely — ADR 0040 is explicit that a marketplace order
- * never matches a customer account.
+ * its `AGGREGATOR`-type channel with externally-set totals; the order itself
+ * still matches no customer account — ADR 0040 is explicit that a
+ * marketplace order never does. Wave 11 w5-fulfillment-destination lets this
+ * be a `DELIVERY` entry: the panel it replaces reads `fulfillmentMode`,
+ * `selectedCustomer` and `selectedAddressId` unchanged (`toggleAggregatorMode`
+ * touches none of them), so an operator resolves the customer and picks a
+ * delivery address in the ordinary customer pane first, then switches to
+ * this one — the resolved address scopes the lookup only, never the order's
+ * own attribution.
  *
  * **This wave (rows 1.3a, 1.3d, plus what row 1.3's own gap-map text still
  * called unbuilt).** Create-on-miss ({@link onCreateSubmit}) now calls {@link
@@ -1414,6 +1420,13 @@ export class NewOrderPage implements OnInit {
     }
   }
 
+  /**
+   * Row 1.3g (wave 11 w5-fulfillment-destination): DELIVERY reuses the
+   * page's own address pane — `fulfillmentMode`, `selectedCustomer` and
+   * `selectedAddressId` are the identical signals {@link canSubmit}/{@link
+   * submit} above already gate a native order on, neither hidden nor reset
+   * when `aggregatorMode` is on (see `new-order-page.html`).
+   */
   protected readonly canSubmitAggregator = computed(
     () =>
       this.basket().length > 0 &&
@@ -1421,6 +1434,8 @@ export class NewOrderPage implements OnInit {
       this.aggregatorChannelCode() !== null &&
       this.aggregatorExternalOrderId().trim() !== '' &&
       this.aggregatorTotalMinor() > 0 &&
+      (this.fulfillmentMode() === 'PICKUP' ||
+        (this.selectedCustomer() !== null && this.selectedAddressId() !== null)) &&
       !this.aggregatorSubmitting(),
   );
 
@@ -1434,6 +1449,12 @@ export class NewOrderPage implements OnInit {
     const scope = this.location.scope();
     const channelCode = this.aggregatorChannelCode();
     if (!scope || channelCode === null || !this.canSubmitAggregator()) {
+      return;
+    }
+    const delivery = this.fulfillmentMode() === 'DELIVERY';
+    const customer = this.selectedCustomer();
+    const addressId = this.selectedAddressId();
+    if (delivery && (customer === null || addressId === null)) {
       return;
     }
     this.aggregatorSubmitting.set(true);
@@ -1454,6 +1475,17 @@ export class NewOrderPage implements OnInit {
         discountMinor: this.aggregatorDiscountMinor(),
         feeMinor: this.aggregatorFeeMinor(),
         totalMinor: this.aggregatorTotalMinor(),
+        fulfillmentMode: this.fulfillmentMode(),
+        customerAccountId: delivery && customer !== null ? customer.accountId : null,
+        destination:
+          delivery && addressId !== null && customer !== null
+            ? {
+                customerAddressId: addressId,
+                recipientName: this.recipientName().trim() || customer.label,
+                recipientPhone: this.recipientPhone().trim() || this.phone().trim(),
+                deliveryNote: this.deliveryNote().trim() || null,
+              }
+            : null,
       });
       this.toasts.show({
         message: this.i18n.t('orders.newOrder.order.created', { number: result.publicOrderNumber }),
