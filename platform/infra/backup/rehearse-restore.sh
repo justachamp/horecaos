@@ -21,10 +21,31 @@ PG_IMAGE="postgres:18"
 AWS_CLI_IMAGE="amazon/aws-cli:2.37.3@sha256:83f8ffe939569070c5b66d22231862ab78718766d9d8e4c44ca84dd0be5569a5"
 WORK_VOLUME="horecaos-backup-rehearsal"
 
-SOURCE_URL="postgresql://horecaos:horecaos@platform-db:5432/horecaos"
-ADMIN_URL="postgresql://horecaos:horecaos@platform-db:5432/postgres"
+# `horecaos_migrator`, not the plain `horecaos` superuser this used to name.
+# compose.yaml's own platform-db comment explains why that role is gone: it
+# used to be a single `horecaos` superuser that also owned the database, so
+# every GRANT and REVOKE sixty-one migrations wrote was bypassed on every
+# laptop and in every test. `horecaos_migrator` is the replacement with the
+# same reach this rehearsal actually needs -- it owns every object (so
+# pg_dump sees everything) and can CREATE/DROP the scratch database below --
+# and it is what compose.yaml (POSTGRES_USER) and compose.production.yaml
+# both call it now. The password defaults to the same value only because it
+# is the identical "worthless outside a laptop" literal compose.yaml itself
+# defaults POSTGRES_PASSWORD to for local development (see that file's own
+# comment); a real invocation overrides HORECAOS_REHEARSAL_DB_PASSWORD from
+# OpenBao (production/database/platform/migrator-password), the same secret
+# infra/production/ops/backup-job.sh already resolves for backup.sh, never a
+# literal in a script or a compose file.
+: "${HORECAOS_REHEARSAL_DB_HOST:=platform-db}"
+: "${HORECAOS_REHEARSAL_DB_PORT:=5432}"
+: "${HORECAOS_REHEARSAL_DB_NAME:=horecaos}"
+: "${HORECAOS_REHEARSAL_DB_USER:=horecaos_migrator}"
+: "${HORECAOS_REHEARSAL_DB_PASSWORD:=horecaos_migrator}"
+
+SOURCE_URL="postgresql://${HORECAOS_REHEARSAL_DB_USER}@${HORECAOS_REHEARSAL_DB_HOST}:${HORECAOS_REHEARSAL_DB_PORT}/${HORECAOS_REHEARSAL_DB_NAME}"
+ADMIN_URL="postgresql://${HORECAOS_REHEARSAL_DB_USER}@${HORECAOS_REHEARSAL_DB_HOST}:${HORECAOS_REHEARSAL_DB_PORT}/postgres"
 TARGET_DB="horecaos_restore_rehearsal"
-TARGET_URL="postgresql://horecaos:horecaos@platform-db:5432/${TARGET_DB}"
+TARGET_URL="postgresql://${HORECAOS_REHEARSAL_DB_USER}@${HORECAOS_REHEARSAL_DB_HOST}:${HORECAOS_REHEARSAL_DB_PORT}/${TARGET_DB}"
 PASSPHRASE="${HORECAOS_BACKUP_PASSPHRASE:-local-rehearsal-passphrase}"
 BUCKET="${HORECAOS_BACKUP_BUCKET:-horecaos-backups}"
 
@@ -47,7 +68,7 @@ docker volume create "${WORK_VOLUME}" >/dev/null
 
 pg() {
   docker run --rm --network "${NETWORK}" -v "${WORK_VOLUME}:/work" \
-    -e PGPASSWORD=horecaos -e PASSPHRASE="${PASSPHRASE}" \
+    -e PGPASSWORD="${HORECAOS_REHEARSAL_DB_PASSWORD}" -e PASSPHRASE="${PASSPHRASE}" \
     --entrypoint bash "${PG_IMAGE}" -c "$1"
 }
 
