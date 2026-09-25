@@ -4753,6 +4753,13 @@ export const messagesEn = {
   'reports.products.classification.column.stddev': 'Std. deviation',
   'reports.products.classification.column.cv': 'Coefficient of variation',
 
+  // X.19 (w6-reporting-facts, batch 11): the ABC cumulative-revenue-share curve.
+  'reports.products.abcCurve.title': 'Cumulative revenue share',
+  'reports.products.abcCurve.boundary.ab': 'A/B',
+  'reports.products.abcCurve.boundary.bc': 'B/C',
+  'reports.products.abcCurve.maybeMore':
+    'The curve covers only the first {limit} products by revenue — there may be more.',
+
   // ---------------------------------------------------------------- reports 7.6/7.6a/7.6b customer analytics (T13)
   'reports.customers.title': 'Customer analytics',
   'reports.customers.loading': 'Loading…',

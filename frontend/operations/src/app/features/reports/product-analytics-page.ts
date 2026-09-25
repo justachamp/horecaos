@@ -15,11 +15,13 @@ import { formatMoney } from '../../core/format/money';
 import { I18n } from '../../core/i18n/i18n';
 import { MessageKey } from '../../core/i18n/messages.en';
 import { TPipe } from '../../core/i18n/t.pipe';
+import { AbcCurveChart, AbcCurvePoint } from '../../shared/ui/charts/abc-curve-chart';
 import { CatalogApi, fetchAllVariantsAtLocation } from '../catalog/catalog-api';
 import { ProvenanceBanner } from './provenance-banner';
 import { ddmm, formatCount } from './report-formatting';
 import { ReportsFilterState } from './reports-filter-state';
 import {
+  AbcCurveListResponse,
   ClassificationRowResponse,
   ClassificationRunResponse,
   ProvenanceResponse,
@@ -31,6 +33,9 @@ import {
 
 /** The row-quantity page pages 200 at a time — same width the previous hard-coded `limit: 200` read in one shot. */
 const SALES_PAGE_SIZE = 200;
+
+/** X.19 (w6-reporting-facts, batch 11): the q-abc-curve chart's own bounded read — same width as `SALES_PAGE_SIZE`. */
+const ABC_CURVE_LIMIT = 200;
 
 /** {@code JdbcReportingStore#NIL_VARIANT_ID} — a line with no catalogue reference, mirrored here so the cursor's tiebreak matches the server's exactly. */
 const NIL_VARIANT_ID = '00000000-0000-0000-0000-000000000000';
@@ -123,7 +128,7 @@ const MINIMUM_CLASSIFICATION_DAYS = 28;
  */
 @Component({
   selector: 'q-product-analytics-page',
-  imports: [TPipe, ProvenanceBanner],
+  imports: [TPipe, ProvenanceBanner, AbcCurveChart],
   templateUrl: './product-analytics-page.html',
   styleUrl: './product-analytics-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -169,6 +174,36 @@ export class ProductAnalyticsPage {
   protected readonly classificationState = signal<ClassificationState>('idle');
   protected readonly classificationRun = signal<ClassificationRunResponse | null>(null);
   protected readonly matrixCell = signal<MatrixCell>(null);
+
+  // ---------------------------------------------------------- X.19 q-abc-curve
+  /**
+   * The chart's own load, independent of `classificationState`: {@link
+   * ReportingApi.abcCurve} has no 28-day floor and no write capability
+   * (unlike the persisted classification run above), so it loads on every
+   * visit to the ABC tab rather than waiting on a manager to press "Run
+   * classification".
+   */
+  protected readonly abcCurveState = signal<LoadState>('loading');
+  protected readonly abcCurveResult = signal<AbcCurveListResponse | null>(null);
+  protected readonly abcCurveLimit = ABC_CURVE_LIMIT;
+
+  protected readonly abcCurvePoints = computed<readonly AbcCurvePoint[]>(() => {
+    const result = this.abcCurveResult();
+    if (!result) {
+      return [];
+    }
+    return result.rows.map((row) => ({
+      key: row.variantId ?? row.productName,
+      label: row.productName,
+      sharePercent: row.sharePercent,
+      cumulativeSharePercent: row.cumulativeSharePercent,
+      abcClass: row.abcClass,
+    }));
+  });
+
+  protected readonly abcCurveThresholdA = computed(() => this.abcCurveResult()?.abcThresholdAPercent ?? 80);
+  protected readonly abcCurveThresholdB = computed(() => this.abcCurveResult()?.abcThresholdBPercent ?? 95);
+  protected readonly abcCurveMaybeMore = computed(() => this.abcCurveResult()?.maybeMore ?? false);
 
   protected readonly classificationRangeDays = computed(() => daysInRange(this.filters.range()));
 
@@ -237,6 +272,18 @@ export class ProductAnalyticsPage {
       this.matrixCell.set(null);
       void this.loadClassification(range);
     });
+
+    // X.19: the curve loads whenever the ABC tab is open and the range
+    // changes -- never on «Продажи» or «XYZ», neither of which has any use
+    // for it.
+    effect(() => {
+      const tab = this.activeTab();
+      const range = this.filters.range();
+      if (tab !== 'abc') {
+        return;
+      }
+      void this.loadAbcCurve(range);
+    });
   }
 
   protected selectTab(tab: Tab): void {
@@ -281,6 +328,10 @@ export class ProductAnalyticsPage {
 
   protected retryClassification(): void {
     void this.loadClassification(this.filters.range());
+  }
+
+  protected retryAbcCurve(): void {
+    void this.loadAbcCurve(this.filters.range());
   }
 
   protected toggleMatrixCell(cell: string): void {
@@ -447,6 +498,28 @@ export class ProductAnalyticsPage {
       this.classificationState.set(latest ? 'ready' : 'needsRun');
     } catch {
       this.classificationState.set('error');
+    }
+  }
+
+  /** X.19: {@link ReportingApi.abcCurve}'s own load — see {@link abcCurveState}'s own doc for why it never waits on {@link loadClassification}. */
+  private async loadAbcCurve(range: { from: string; to: string }): Promise<void> {
+    this.abcCurveState.set('loading');
+    const scope = this.location.scope();
+    if (!scope) {
+      this.abcCurveState.set(this.location.denied() ? 'denied' : 'error');
+      return;
+    }
+    try {
+      const result = await this.api.abcCurve(scope.tenantId, {
+        from: range.from,
+        to: range.to,
+        limit: this.abcCurveLimit,
+      });
+      this.abcCurveResult.set(result);
+      this.abcCurveState.set('ready');
+    } catch (error) {
+      const denied = error instanceof ApiError && error.status === 403;
+      this.abcCurveState.set(denied ? 'denied' : 'error');
     }
   }
 }
