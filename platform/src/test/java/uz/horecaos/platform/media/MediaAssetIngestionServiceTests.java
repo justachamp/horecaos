@@ -26,14 +26,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.DockerClientFactory;
-import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.containers.wait.strategy.Wait;
-import org.testcontainers.utility.DockerImageName;
-import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
-import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
-import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
-import software.amazon.awssdk.services.s3.S3Configuration;
 import software.amazon.awssdk.services.s3.model.BucketAlreadyOwnedByYouException;
 import software.amazon.awssdk.services.s3.model.CreateBucketRequest;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
@@ -52,11 +45,12 @@ import uz.horecaos.platform.media.infrastructure.UrlImageFetcher;
 import uz.horecaos.platform.media.infrastructure.persistence.JdbcDerivativeJobStore;
 import uz.horecaos.platform.media.infrastructure.persistence.JdbcMediaAssetStore;
 import uz.horecaos.platform.media.infrastructure.storage.S3ObjectStorage;
+import uz.horecaos.platform.support.ObjectStoreContainer;
 import uz.horecaos.platform.support.TestDatabase;
 
 /**
  * {@link MediaAssetIngestionService} against a real object store and a real
- * in-process HTTP server (row 4.5b, ADR 0010) — the same "run against MinIO
+ * in-process HTTP server (row 4.5b, ADR 0010) — the same "run against RustFS
  * rather than a stub" reasoning {@link MediaLifecycleTests} gives for the
  * presigned lifecycle, extended to the server-side fetch this class adds.
  *
@@ -74,7 +68,7 @@ class MediaAssetIngestionServiceTests {
     private static final byte[] NOT_AN_IMAGE = "<html><script>evil()</script></html>".getBytes(StandardCharsets.UTF_8);
 
     private static TestDatabase.Handle db;
-    private static GenericContainer<?> minio;
+    private static ObjectStoreContainer objectStore;
     private static S3Client s3;
     private static S3Presigner presigner;
 
@@ -90,31 +84,10 @@ class MediaAssetIngestionServiceTests {
 
         db = TestDatabase.migrated();
 
-        minio = new GenericContainer<>(DockerImageName.parse("quay.io/minio/minio:RELEASE.2025-07-23T15-54-02Z"))
-                .withCommand("server", "/data")
-                .withEnv("MINIO_ROOT_USER", "horecaos")
-                .withEnv("MINIO_ROOT_PASSWORD", "horecaos-local-secret")
-                .withExposedPorts(9000)
-                .waitingFor(Wait.forHttp("/minio/health/live").forPort(9000));
-        minio.start();
-
-        String endpoint = "http://" + minio.getHost() + ":" + minio.getMappedPort(9000);
-        var credentials =
-                StaticCredentialsProvider.create(AwsBasicCredentials.create("horecaos", "horecaos-local-secret"));
-        var pathStyle = S3Configuration.builder().pathStyleAccessEnabled(true).build();
-
-        s3 = S3Client.builder()
-                .endpointOverride(URI.create(endpoint))
-                .region(Region.US_EAST_1)
-                .credentialsProvider(credentials)
-                .serviceConfiguration(pathStyle)
-                .build();
-        presigner = S3Presigner.builder()
-                .endpointOverride(URI.create(endpoint))
-                .region(Region.US_EAST_1)
-                .credentialsProvider(credentials)
-                .serviceConfiguration(pathStyle)
-                .build();
+        objectStore = new ObjectStoreContainer();
+        objectStore.start();
+        s3 = objectStore.s3Client();
+        presigner = objectStore.s3Presigner();
 
         try {
             s3.createBucket(CreateBucketRequest.builder().bucket(BUCKET).build());
@@ -131,8 +104,8 @@ class MediaAssetIngestionServiceTests {
         if (presigner != null) {
             presigner.close();
         }
-        if (minio != null) {
-            minio.stop();
+        if (objectStore != null) {
+            objectStore.stop();
         }
         if (db != null) {
             db.close();
