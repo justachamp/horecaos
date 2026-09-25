@@ -125,6 +125,10 @@
   color: var(--q-error-text);
 }
 
+.dispatch-card__destination {
+  color: var(--q-ink-muted);
+}
+
 .dispatch-card__unassign,
 .dispatch-card__external-courier,
 .dispatch-card__cancel-shipment {

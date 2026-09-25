@@ -584,7 +584,8 @@ class OrderDeliveryExternalCourierHttpTests {
                     true,
                     40_000L,
                     new ShipmentBookingPort.Waypoint(
-                            41.32, 69.28, "Test dropoff", "Customer", "+998900000002", null, null, null, null)));
+                            41.32, 69.28, "Test dropoff", "Customer", "+998900000002", null, null, null, null),
+                    "Test zone, Test dropoff"));
         }
     }
 }

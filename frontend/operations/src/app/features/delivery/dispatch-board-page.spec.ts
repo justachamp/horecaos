@@ -24,6 +24,7 @@ const UNASSIGNED_PLAN: PlanQueueResponse = {
   estimatedReadyAt: new Date().toISOString(),
   version: 1,
   shipment: null,
+  destinationLabel: "Yunusobod, Amir Temur ko'chasi",
 };
 
 const CARRIED_PLAN: PlanQueueResponse = {
@@ -162,6 +163,18 @@ describe('DispatchBoardPage', () => {
     expect(host.textContent).toContain('1 / 2');
     const unassignedColumn = host.querySelector('[data-column-id="__unassigned__"]');
     expect(unassignedColumn?.querySelector('[data-testid="dispatch-card"]')).not.toBeNull();
+  });
+
+  it('shows the non-PII destination label on the card, and nothing when the plan carries none (row 3.1)', async () => {
+    await render([UNASSIGNED_PLAN, CARRIED_PLAN]);
+    const host = fixture.nativeElement as HTMLElement;
+
+    const labels = host.querySelectorAll('[data-testid="dispatch-card-destination"]');
+    expect(labels).toHaveLength(1);
+    expect(labels[0].textContent?.trim()).toBe("Yunusobod, Amir Temur ko'chasi");
+    // The full address never reaches this card at all — only the masked
+    // label ordering computed, and CARRIED_PLAN carries none.
+    expect(labels[0].textContent).not.toMatch(/\d/);
   });
 
   it("places a carried plan under its courier's column", async () => {

@@ -122,6 +122,11 @@
               <span>{{ plan.distanceMeters ? plan.distanceMeters + ' m' : '—' }}</span>
               <span>{{ plan.customerDeliveryFeeMinor }} {{ plan.currency }}</span>
             </div>
+            @if (plan.destinationLabel) {
+              <p class="dispatch-card__destination q-caption" data-testid="dispatch-card-destination">
+                {{ plan.destinationLabel }}
+              </p>
+            }
             @if (exceptionSummary(plan); as reason) {
               <p class="dispatch-card__exception q-caption" data-testid="dispatch-card-exception">
                 {{ reason }}
