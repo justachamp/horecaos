@@ -34,7 +34,7 @@ import uz.horecaos.platform.telemetry.api.TelemetryConfigurationKeys;
  *
  * <p><strong>Partitions past the retention window, dropped whole.</strong> A
  * {@code DELETE} sweep over hundreds of thousands of rows a day on a box that
- * also runs PostgreSQL, Kafka, Keycloak, MinIO, and OpenBao would leave bloat
+ * also runs PostgreSQL, Kafka, Keycloak, RustFS, and OpenBao would leave bloat
  * behind it and would eventually be turned off by whoever is on call. Dropping a
  * partition is O(1) and cannot be half-done.
  *

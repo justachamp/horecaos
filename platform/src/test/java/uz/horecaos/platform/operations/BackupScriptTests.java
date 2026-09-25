@@ -41,7 +41,7 @@ class BackupScriptTests {
         environment.put("HORECAOS_BACKUP_PASSPHRASE", "unused-in-this-test");
         environment.put("HORECAOS_BACKUP_ACCESS_KEY", "unused-in-this-test");
         environment.put("HORECAOS_BACKUP_SECRET_KEY", "unused-in-this-test");
-        environment.put("HORECAOS_BACKUP_S3_ENDPOINT", "http://minio:9000");
+        environment.put("HORECAOS_BACKUP_S3_ENDPOINT", "http://object-store:9000");
         return environment;
     }
 

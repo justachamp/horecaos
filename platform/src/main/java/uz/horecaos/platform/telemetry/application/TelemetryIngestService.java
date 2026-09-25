@@ -187,7 +187,7 @@ public class TelemetryIngestService {
      * <p>A minute is the grain because it is the unit a dispute is argued in —
      * "where was he at ten past" — and because one row per observation would be
      * six rows a minute per courier, of the order of 360,000 a day per tenant, on
-     * a box that also runs Kafka, Keycloak, MinIO, and OpenBao.
+     * a box that also runs Kafka, Keycloak, RustFS, and OpenBao.
      */
     private int writeTrackWindows(DutySessionRow session, List<TrackObservation> ordered, Instant now) {
         Map<Instant, List<TrackObservation>> byMinute = new TreeMap<>();

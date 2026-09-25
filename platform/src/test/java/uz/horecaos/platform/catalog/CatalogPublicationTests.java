@@ -1529,7 +1529,7 @@ class CatalogPublicationTests {
     /**
      * Controls which assets count as verified.
      *
-     * <p>Media has its own lifecycle tests against real MinIO; what matters here
+     * <p>Media has its own lifecycle tests against a real RustFS; what matters here
      * is only how catalog reacts to an asset that is not yet displayable.
      */
     private static final class MutableMediaAvailability implements MediaAvailability {

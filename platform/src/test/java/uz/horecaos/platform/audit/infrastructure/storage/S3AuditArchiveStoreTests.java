@@ -3,7 +3,6 @@ package uz.horecaos.platform.audit.infrastructure.storage;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import org.junit.jupiter.api.AfterAll;
@@ -11,29 +10,29 @@ import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.testcontainers.DockerClientFactory;
-import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.containers.wait.strategy.Wait;
-import org.testcontainers.utility.DockerImageName;
-import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
-import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
-import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
-import software.amazon.awssdk.services.s3.S3Configuration;
 import software.amazon.awssdk.services.s3.model.BucketAlreadyOwnedByYouException;
 import software.amazon.awssdk.services.s3.model.CreateBucketRequest;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
+import software.amazon.awssdk.services.s3.model.ObjectLockMode;
+import software.amazon.awssdk.services.s3.model.ObjectLockRetention;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+import software.amazon.awssdk.services.s3.model.S3Exception;
 import uz.horecaos.platform.audit.api.AuditArchivalNotVerifiedException;
 import uz.horecaos.platform.audit.api.AuditArchiveStore;
+import uz.horecaos.platform.support.ObjectStoreContainer;
 
 /**
  * Whether {@link S3AuditArchiveStore} genuinely proves what ADR 0027 asks it to
  * prove, against a real S3-compatible store rather than an assumption about one.
  *
- * <p>Two buckets, on purpose. {@code LOCKED_BUCKET} is created with MinIO's
- * {@code --with-lock}, the local equivalent of an S3 bucket created with Object
- * Lock enabled — a setting no later API call can add, which is exactly why this
- * class exists rather than trusting the {@code objectLockMode} header on a PUT.
+ * <p>Two buckets, on purpose. {@code LOCKED_BUCKET} is created with {@code
+ * objectLockEnabledForBucket(true)} — the API-level equivalent of MinIO's
+ * {@code mc mb --with-lock}, and the setting RustFS honours the same way (see
+ * {@link #rustFsGivesTheThreeGuaranteesTheAuditArchiveDependsOn()}) — a
+ * setting no later API call can add, which is exactly why this class exists
+ * rather than trusting the {@code objectLockMode} header on a PUT.
  * {@code UNLOCKED_BUCKET} has no such thing, and stands in for a provider whose
  * "S3-compatible" answer to Object Lock turns out to be no — the ADR 0073
  * question this record's own doc names as unconfirmed for production.
@@ -43,7 +42,7 @@ class S3AuditArchiveStoreTests {
     private static final String LOCKED_BUCKET = "horecaos-audit-archive-test-locked";
     private static final String UNLOCKED_BUCKET = "horecaos-audit-archive-test-unlocked";
 
-    private static GenericContainer<?> minio;
+    private static ObjectStoreContainer objectStore;
     private static S3Client client;
 
     @BeforeAll
@@ -51,23 +50,9 @@ class S3AuditArchiveStoreTests {
         Assumptions.assumeTrue(
                 DockerClientFactory.instance().isDockerAvailable(), "Docker is required for these tests");
 
-        minio = new GenericContainer<>(DockerImageName.parse("quay.io/minio/minio:RELEASE.2025-07-23T15-54-02Z"))
-                .withCommand("server", "/data")
-                .withEnv("MINIO_ROOT_USER", "horecaos")
-                .withEnv("MINIO_ROOT_PASSWORD", "horecaos-local-secret")
-                .withExposedPorts(9000)
-                .waitingFor(Wait.forHttp("/minio/health/live").forPort(9000));
-        minio.start();
-
-        String endpoint = "http://" + minio.getHost() + ":" + minio.getMappedPort(9000);
-        client = S3Client.builder()
-                .endpointOverride(URI.create(endpoint))
-                .region(Region.US_EAST_1)
-                .credentialsProvider(StaticCredentialsProvider.create(
-                        AwsBasicCredentials.create("horecaos", "horecaos-local-secret")))
-                .serviceConfiguration(
-                        S3Configuration.builder().pathStyleAccessEnabled(true).build())
-                .build();
+        objectStore = new ObjectStoreContainer();
+        objectStore.start();
+        client = objectStore.s3Client();
 
         createBucket(LOCKED_BUCKET, true);
         createBucket(UNLOCKED_BUCKET, false);
@@ -78,8 +63,8 @@ class S3AuditArchiveStoreTests {
         if (client != null) {
             client.close();
         }
-        if (minio != null) {
-            minio.stop();
+        if (objectStore != null) {
+            objectStore.stop();
         }
     }
 
@@ -149,7 +134,7 @@ class S3AuditArchiveStoreTests {
                         + "the class's own doc warns against")
                 .isInstanceOf(AuditArchivalNotVerifiedException.class);
 
-        // Measured against a real MinIO: a bucket with no Object Lock
+        // Measured against a real RustFS: a bucket with no Object Lock
         // configuration refuses the objectLockMode/objectLockRetainUntilDate
         // headers on the PUT itself (400 InvalidRequest), so nothing is left
         // behind for a caller to mistake for an unverified-but-present archive.
@@ -180,6 +165,71 @@ class S3AuditArchiveStoreTests {
                 .as("an unlocked bucket lets the same credential delete what it just wrote — "
                         + "the exact tampering ADR 0027 requires protected storage to refuse")
                 .isEmpty();
+    }
+
+    /**
+     * The three RustFS-level guarantees {@link S3AuditArchiveStore} is built on
+     * top of, asserted directly against the S3 API rather than through the
+     * class under test — the other tests in this suite prove {@code
+     * S3AuditArchiveStore} uses these correctly; this one proves the store
+     * itself actually offers them, which is what changed when MinIO's images
+     * were withdrawn and this suite moved onto RustFS.
+     */
+    @Test
+    void rustFsGivesTheThreeGuaranteesTheAuditArchiveDependsOn() {
+        // 1. A bucket created with Object Lock enabled auto-enables versioning
+        // (S3AuditArchiveStoreTests' own LOCKED_BUCKET, created in
+        // startInfrastructure, never calls PutBucketVersioning itself).
+        assertThat(client.getBucketVersioning(builder -> builder.bucket(LOCKED_BUCKET))
+                        .statusAsString())
+                .as("CreateBucket --object-lock-enabled-for-bucket must auto-enable versioning")
+                .isEqualTo("Enabled");
+
+        String key = "audit-events/2030/audit_events_2030.ndjson";
+        Instant retainUntil = Instant.parse("2040-01-01T00:00:00Z");
+        String versionId = client.putObject(
+                        PutObjectRequest.builder()
+                                .bucket(LOCKED_BUCKET)
+                                .key(key)
+                                .objectLockMode(ObjectLockMode.GOVERNANCE)
+                                .objectLockRetainUntilDate(retainUntil)
+                                .build(),
+                        RequestBody.fromString("{\"actionCode\":\"tenant.created\"}\n"))
+                .versionId();
+
+        // 2. A PutObject with GOVERNANCE retention reads back the same retention.
+        ObjectLockRetention retention = client.getObjectRetention(
+                        builder -> builder.bucket(LOCKED_BUCKET).key(key))
+                .retention();
+        assertThat(retention.modeAsString()).isEqualTo("GOVERNANCE");
+        assertThat(retention.retainUntilDate()).isEqualTo(retainUntil);
+
+        // 3a. Deleting the locked version by id is refused.
+        assertThatThrownBy(() -> client.deleteObject(DeleteObjectRequest.builder()
+                        .bucket(LOCKED_BUCKET)
+                        .key(key)
+                        .versionId(versionId)
+                        .build()))
+                .as("the specific locked version must be refused, by id, the way a determined "
+                        + "attempt to remove evidence would have to address it")
+                .isInstanceOf(S3Exception.class);
+
+        // 3b. A plain DeleteObject (no version id) only adds a delete marker; the
+        // locked version underneath is untouched and still carries its retention.
+        client.deleteObject(
+                DeleteObjectRequest.builder().bucket(LOCKED_BUCKET).key(key).build());
+        assertThatThrownBy(() -> client.headObject(
+                        builder -> builder.bucket(LOCKED_BUCKET).key(key)))
+                .as("the latest version is now a delete marker, so an unversioned read sees nothing — "
+                        + "which is different from the locked version having been destroyed")
+                .isInstanceOf(S3Exception.class);
+        ObjectLockRetention stillLocked = client.getObjectRetention(
+                        builder -> builder.bucket(LOCKED_BUCKET).key(key).versionId(versionId))
+                .retention();
+        assertThat(stillLocked.retainUntilDate())
+                .as("the plain delete only added a marker on top; the locked version itself "
+                        + "is exactly where it was")
+                .isEqualTo(retainUntil);
     }
 
     /**

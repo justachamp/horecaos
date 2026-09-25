@@ -73,7 +73,7 @@ class PosRawSnapshotWriterTests {
         ObjectStorage failing = new RecordingStorage() {
             @Override
             public void put(String bucket, String key, String contentType, byte[] content) {
-                throw new IllegalStateException("MinIO is unreachable");
+                throw new IllegalStateException("RustFS is unreachable");
             }
         };
         PosRawSnapshotWriter writer =

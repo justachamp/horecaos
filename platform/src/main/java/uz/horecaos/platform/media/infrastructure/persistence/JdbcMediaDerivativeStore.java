@@ -19,8 +19,8 @@ import uz.horecaos.platform.media.domain.MediaDerivative;
  *
  * <p>Over {@code media.derivatives} (V0058). This is the store the upload
  * lifecycle runs on: {@code MediaLifecycleTests} exercises it against a real
- * PostgreSQL and a real MinIO rather than the in-memory stand-in it used while
- * the table was still only proposed.
+ * PostgreSQL and a real RustFS rather than the in-memory stand-in it used
+ * while the table was still only proposed.
  */
 @Repository
 public class JdbcMediaDerivativeStore implements MediaDerivativeStore {
