@@ -1494,6 +1494,15 @@ export class OrderQueue implements OnInit {
         // before this wave.
         this.openOrder(order.orderId);
         return;
+      case 'RESOLVE':
+        // Gap map row 1.1e: the same treatment AMEND/ASSIGN_COURIER already
+        // get. `q-order-amendment-confirm-dialog` needs the pending
+        // amendment's own id and version, which this row does not carry —
+        // only `order-detail-pane.ts`'s `onActionClick` fetches the
+        // amendment history and opens it, so this row action's job is
+        // exactly the same as those two: get the operator to the order.
+        this.openOrder(order.orderId);
+        return;
       default:
       // An action code this client does not recognise yet — §4.2 says render
       // it, but there is nothing this client knows how to invoke for it.

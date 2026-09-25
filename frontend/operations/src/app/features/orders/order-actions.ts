@@ -150,6 +150,11 @@ export function actionLabel(
       return translate('orders.action.amend');
     case 'ASSIGN_COURIER':
       return translate('orders.action.assignCourier');
+    case 'RESOLVE':
+      // Reuses the amendment history table's own word for the identical
+      // action (`order-detail-pane.html`'s RESOLVE row, wave 10) — see this
+      // file's own class doc on why the order-level action shares it.
+      return translate('orders.detail.comments.history.resolve');
     case 'OVERRIDE': {
       const target = action.targetStatus ?? '';
       const key = OVERRIDE_LABEL_KEYS[target];

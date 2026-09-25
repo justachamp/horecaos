@@ -1872,6 +1872,81 @@ describe('OrderDetailPane: §3.6 Комментарии — the amendment client
 
     expect(confirm).toHaveBeenCalledWith(FAKE_SCOPE, 'order-1', 'amendment-9', 2, 'PHONE');
   });
+
+  /**
+   * The order-level RESOLVE action (gap map row 1.1e, `OrderActionsPolicy`'s
+   * five-argument `availableFor`) — distinct from the history table's own
+   * RESOLVE row above: this one arrives in `summary.actions`, carries no
+   * amendment id or version of its own, and `onActionClick` must fetch the
+   * history to find the one amendment that still carries its own `RESOLVE`
+   * before it can open the confirmation dialog.
+   */
+  it('wires the header RESOLVE action to fetch the amendment history and open the confirmation dialog', async () => {
+    const confirm = vi.fn().mockReturnValue(of(amendmentResult({ status: 'APPLIED' })));
+    const history = vi.fn().mockResolvedValue([
+      amendmentResult({
+        amendmentId: 'amendment-9',
+        status: 'PRICED',
+        deltaTotalMinor: 25_000,
+        requiresApproval: false,
+        amendmentVersion: 2,
+        commandDetails: [{ type: 'ADD_LINES', text: null }],
+        actions: ['RESOLVE'],
+      }),
+    ]);
+    configure({
+      get: apiGet({
+        value: detail({
+          summary: { ...detail().summary, status: 'CONFIRMED', actions: [{ action: 'RESOLVE' }] },
+        }),
+        version: 3,
+      }),
+      amendmentsApi: { confirm, history },
+    });
+    const fixture = await render();
+    const host: HTMLElement = fixture.nativeElement;
+
+    (
+      host.querySelector('[data-testid="order-detail-primary-action"]') as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(history).toHaveBeenCalled();
+    expect(host.querySelector('[data-testid="order-amendment-confirm-dialog"]')).not.toBeNull();
+
+    (
+      host.querySelector('[data-testid="order-amendment-confirm-submit"]') as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+
+    expect(confirm).toHaveBeenCalledWith(FAKE_SCOPE, 'order-1', 'amendment-9', 2, 'PHONE');
+  });
+
+  it('the header RESOLVE action does nothing if the history no longer names an amendment still carrying RESOLVE', async () => {
+    const history = vi.fn().mockResolvedValue([
+      amendmentResult({ amendmentId: 'amendment-9', status: 'APPLIED', actions: [] }),
+    ]);
+    configure({
+      get: apiGet({
+        value: detail({
+          summary: { ...detail().summary, status: 'CONFIRMED', actions: [{ action: 'RESOLVE' }] },
+        }),
+        version: 3,
+      }),
+      amendmentsApi: { history },
+    });
+    const fixture = await render();
+    const host: HTMLElement = fixture.nativeElement;
+
+    (
+      host.querySelector('[data-testid="order-detail-primary-action"]') as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(host.querySelector('[data-testid="order-amendment-confirm-dialog"]')).toBeNull();
+  });
 });
 
 // ================================================================ wave P11: the order-to-fulfilment seam

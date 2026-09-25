@@ -714,6 +714,30 @@ describe('OrderQueue: row actions render exactly from actions[] (§2.9, §4.2)',
     expect(TestBed.inject(Location).path()).toBe('/orders/order-1?tab=preparing');
   });
 
+  it('RESOLVE opens the order rather than a dialog of its own — the confirm dialog needs the amendment id/version the row does not carry (gap map 1.1e)', async () => {
+    configureWithActions(
+      [
+        order({
+          orderId: 'order-1',
+          status: 'CONFIRMED',
+          actions: [{ action: 'RESOLVE' }],
+        }),
+      ],
+      {},
+    );
+    const harness = await RouterTestingHarness.create('/orders?tab=preparing');
+    await flushMicrotasks();
+
+    (
+      harness.routeNativeElement!.querySelector(
+        '[data-testid="order-row-action-RESOLVE"]',
+      ) as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+
+    expect(TestBed.inject(Location).path()).toBe('/orders/order-1?tab=preparing');
+  });
+
   it('renders the settling decision on a lost approval race, not a generic failure', async () => {
     const approve = vi.fn().mockReturnValue(
       of({
