@@ -552,10 +552,16 @@ either.
 
 **RustFS's scoped-credential mechanism is not the one this section used to
 name.** MinIO provisioned these through `mc admin user add` / `policy
-create` / `policy attach`; RustFS 1.0.0's equivalent has not been verified as
-part of ADR 0135 and may not exist in the same shape. Until it is confirmed,
-treat this step as open rather than run a command that has not been checked
-against RustFS — see that record's Open inputs and checklist.
+create` / `policy attach`; RustFS 1.0.0 has no equivalent of those three
+commands, but it does carry its own admin API for the same job —
+**verified 2026-09-25 against a running RustFS 1.0.0 container and the real
+`ops` image** (ADR 0135, checklist item 3): [production-setup.md](production-setup.md),
+section 5, "Then create the scoped service accounts", has the exact command —
+`PUT /rustfs/admin/v3/add-service-account`,
+SigV4-signed with the root credential via `curl --aws-sigv4`, not an `aws`
+CLI subcommand since the admin API is RustFS's own surface. Run it once, for
+both the media and backup pairs, before this section's "Create the buckets"
+step below, which already assumes the backup pair exists in OpenBao.
 
 The **off-site** pair is not an on-box object-store credential at all. Generate it on whichever
 provider holds the off-site bucket, scoped to that one bucket, and enable

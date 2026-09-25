@@ -20,22 +20,32 @@
   `S3Presigner` port this ADR's own Context section says the domain code
   stays coded to, never a MinIO-specific type, so the runtime swap under a
   stable `minio` network alias needed no application-code edit; that is the
-  interface working as designed, not an unchecked box. Still not done, and
-  the reason this stays `Partial` rather than `Built`: the scoped-credential
-  provisioning path (checklist item 3 — production runs on the RustFS root
-  credential for now, a tracked, explicit reduction in defence-in-depth, see
-  `docs/runbooks/object-store-migration.md` step 2's "known gap" note), the
-  actual pre-prod VM data migration and its restore rehearsal (checklist
-  items 4-5 — the migration runbook's own header still reads "Last executed:
-  never"), sealing the old MinIO volume (checklist item 6, which cannot
-  happen before item 4), and the two open inputs (an upgrade/patch-cadence
-  owner, and TLS termination in front of the S3 API). Advance this line again
-  — to `Built`, or drop this addendum for a rewritten one — once the
-  production migration in the runbook actually runs, not when its supporting
-  code merges. (This line does not use `In progress` for the still-open items
-  above: that token was retired for exactly the failure this re-audit exists
-  to catch — status copied from a wave's own report rather than checked
-  against code — and ADR 0000 lists it as a rejected alternative.)
+  interface working as designed, not an unchecked box. Checklist item 3 (the
+  scoped-credential provisioning path) closed the same day: RustFS 1.0.0
+  turns out to expose a long-lived, policy-scoped service account through
+  its own admin API — `PUT /rustfs/admin/v3/add-service-account`,
+  SigV4-signed — verified against a running instance (the returned
+  credential wrote successfully to its own bucket and got `AccessDenied` on
+  the other one). `deploy/local-smoke.sh` now mints one instead of seeding
+  the media credential from the RustFS root pair (`LocalSmokeScriptTests`
+  pins the call); `docs/runbooks/production-setup.md` and `deploy.md` carry
+  the same verified command for a real host. The pre-prod VM itself has not
+  been re-keyed onto a scoped credential yet — that is an operator action
+  against a live host, not a code change this checklist item tracked, and
+  `docs/runbooks/object-store-migration.md` step 2's "known gap" note should
+  be cleared only once that host actually has been. Still not done, and the
+  reason this stays `Partial` rather than `Built`: the actual pre-prod VM
+  data migration and its restore rehearsal (checklist items 4-5 — the
+  migration runbook's own header still reads "Last executed: never"),
+  sealing the old MinIO volume (checklist item 6, which cannot happen before
+  item 4), and the two open inputs (an upgrade/patch-cadence owner, and TLS
+  termination in front of the S3 API). Advance this line again — to `Built`,
+  or drop this addendum for a rewritten one — once the production migration
+  in the runbook actually runs, not when its supporting code merges. (This
+  line does not use `In progress` for the still-open items above: that token
+  was retired for exactly the failure this re-audit exists to catch —
+  status copied from a wave's own report rather than checked against code —
+  and ADR 0000 lists it as a rejected alternative.)
 - Date proposed: 2026-09-25
 - Date decided: 2026-09-25
 - Deciders: Ayubkhon Abbosov (platform owner — the withdrawal and the RustFS
@@ -311,10 +321,19 @@ destination.
       Done 2026-09-25: verified no `mc` binary use remains outside comments
       explaining the replacement (`grep` for `mc ` / `minio/mc` in
       `infra/backup/*.sh` and `infra/production/ops/Dockerfile`).
-- [ ] Confirm — or build — a scoped-credential provisioning path for RustFS
+- [x] Confirm — or build — a scoped-credential provisioning path for RustFS
       equivalent to the MinIO service accounts the deploy runbook creates
       today; do not run production on the root credential if a scoped path
-      exists.
+      exists. Done 2026-09-25: confirmed and built. RustFS 1.0.0's own admin
+      API creates a long-lived, policy-scoped service account (`PUT
+      /rustfs/admin/v3/add-service-account`, SigV4-signed) — verified
+      against a running instance, including that the resulting credential
+      is denied on a bucket its policy does not name. `deploy/local-smoke.sh`
+      provisions the media credential this way instead of the root pair
+      (`LocalSmokeScriptTests`); `docs/runbooks/production-setup.md` and
+      `deploy.md` carry the same command for an operator to run against the
+      pre-prod VM, which has not been re-keyed yet — that re-keying is
+      checklist item 4's job (migrating the host), not this item's.
 - [ ] Migrate the pre-prod VM's media, audit-archive, and backup objects by
       S3 copy; verify checksums; do not delete the source volume.
 - [ ] Rehearse a restore against the RustFS-hosted copy before cutting the
