@@ -1,6 +1,10 @@
 # Object store migration: MinIO → RustFS
 
-**Last executed: never.** MinIO's own images are withdrawn — `quay.io/minio/minio`
+**Last executed: never against the pilot VM. Rehearsed locally on 2026-09-25** against
+the developer stack (the cached MinIO started read-only as `minio-legacy`, the script
+run as `--dry-run`, then for real, then `--verify-only`; all three exited 0 — with
+empty buckets, so parity was trivially met and the per-version retention loop was not
+exercised on real data). MinIO's own images are withdrawn — `quay.io/minio/minio`
 and `quay.io/minio/mc` answer 401 anonymously, Docker Hub's `minio/minio` is 404 —
 so this migration is not optional maintenance; it is how the platform's object
 store keeps existing. It still costs VM time and touches live media, audit-archive
@@ -125,6 +129,19 @@ docker run -d --name minio-legacy \
   -v horecaos-production_minio-data:/data:ro \
   quay.io/minio/minio:RELEASE.2025-07-23T15-54-02Z server /data
 ```
+
+Expect one loud line in `docker logs minio-legacy` right after start, and only one:
+`Error: unable to rename (/data/.minio.sys/tmp -> /data/.minio.sys/tmp-old/…) file access
+denied, drive may be faulty, please investigate`. That is MinIO failing to rotate its
+own scratch directory on the read-only mount — seen on the 2026-09-25 local rehearsal —
+and the container keeps running and serves every read (`aws … s3 ls` lists the buckets).
+The drive is not faulty; the mount is read-only on purpose. A container that *exits*
+instead is a different problem: check the volume name and that nothing else holds it.
+
+Budget time for the script, too: every AWS CLI call runs in its own throwaway
+container, so even the local rehearsal with empty buckets took three to four minutes per
+invocation, and the audit-archive loop makes several calls per version. Start it in a
+`tmux`/`screen` session and do not read a quiet minute as a hang.
 
 The object-store service holds the `minio` alias on **two** networks, not
 one — `core` (what `platform-app`'s S3 calls use) and `media` (what Caddy's
