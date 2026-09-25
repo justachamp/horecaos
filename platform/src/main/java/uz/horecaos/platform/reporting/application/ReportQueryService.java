@@ -816,13 +816,17 @@ public class ReportQueryService {
      * allows, straight off the same revenue-descending rows «Продажи»
      * already shows, never persisted — a chart, not a ruling.
      *
-     * <p>{@code cumulativeShareBasisPoints} is a share of whatever this
-     * bounded read returned (revenue-descending, capped at {@code limit}),
-     * the same caveat {@link #variantSales} discloses through {@code
-     * maybeMore} for its own revenue share. {@link
-     * ClassificationThresholds#DEFAULT} is the one published 80/95 boundary
-     * this platform draws an A/B/C line at everywhere else — statistics.md's
-     * own S2.7, "пороги 80/95%".
+     * <p>{@code cumulativeShareBasisPoints} is a share of the tenant's true
+     * total revenue in range — {@link JdbcReportingStore#readVariantSalesTotalNetSom},
+     * summed with no {@code LIMIT} — not of just the capped, visible page
+     * {@code rows} itself sums to. Dividing by the page's own sum would
+     * inflate every visible product's share by however much revenue the
+     * page's {@code limit} left out, and disagree with this platform's other
+     * ABC computation, {@code ProductClassificationService#run}, which sums
+     * {@code totalRevenue} over every ranked variant, unbounded, before
+     * dividing. {@link ClassificationThresholds#DEFAULT} is the one
+     * published 80/95 boundary this platform draws an A/B/C line at
+     * everywhere else — statistics.md's own S2.7, "пороги 80/95%".
      */
     @Transactional(readOnly = true)
     public AbcCurveResult abcCurve(UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds, int limit) {
@@ -839,9 +843,7 @@ public class ReportQueryService {
                 limit,
                 null);
 
-        long totalNetSom = rows.stream()
-                .mapToLong(JdbcReportingStore.VariantSalesRow::totalNetSom)
-                .sum();
+        long totalNetSom = store.readVariantSalesTotalNetSom(tenantId, from, to, locationIds, List.of());
         ClassificationThresholds thresholds = ClassificationThresholds.DEFAULT;
 
         List<AbcCurveRow> curve = new ArrayList<>(rows.size());
