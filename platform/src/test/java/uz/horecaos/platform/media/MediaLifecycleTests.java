@@ -37,14 +37,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.DockerClientFactory;
-import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.containers.wait.strategy.Wait;
-import org.testcontainers.utility.DockerImageName;
-import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
-import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
-import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
-import software.amazon.awssdk.services.s3.S3Configuration;
 import software.amazon.awssdk.services.s3.model.BucketAlreadyOwnedByYouException;
 import software.amazon.awssdk.services.s3.model.CreateBucketRequest;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
@@ -75,14 +68,15 @@ import uz.horecaos.platform.media.infrastructure.persistence.JdbcMediaAssetStore
 import uz.horecaos.platform.media.infrastructure.persistence.JdbcMediaDerivativeStore;
 import uz.horecaos.platform.media.infrastructure.persistence.JdbcVerificationJobStore;
 import uz.horecaos.platform.media.infrastructure.storage.S3ObjectStorage;
+import uz.horecaos.platform.support.ObjectStoreContainer;
 import uz.horecaos.platform.support.TestDatabase;
 
 /**
  * The presigned upload lifecycle against a real S3-compatible store (ADR 0010).
  *
- * <p>Run against MinIO rather than a stub, because the behaviour under test is
- * whether a signature actually constrains an upload — and a stub would simply
- * agree that it does.
+ * <p>Run against RustFS rather than a stub, because the behaviour under test
+ * is whether a signature actually constrains an upload — and a stub would
+ * simply agree that it does.
  */
 class MediaLifecycleTests {
 
@@ -124,7 +118,7 @@ class MediaLifecycleTests {
     private static final Instant START = Instant.parse("2026-08-21T09:00:00Z");
 
     private static TestDatabase.Handle db;
-    private static GenericContainer<?> minio;
+    private static ObjectStoreContainer objectStore;
     private static S3Client s3;
     private static S3Presigner presigner;
 
@@ -159,31 +153,10 @@ class MediaLifecycleTests {
 
         db = TestDatabase.migrated();
 
-        minio = new GenericContainer<>(DockerImageName.parse("quay.io/minio/minio:RELEASE.2025-07-23T15-54-02Z"))
-                .withCommand("server", "/data")
-                .withEnv("MINIO_ROOT_USER", "horecaos")
-                .withEnv("MINIO_ROOT_PASSWORD", "horecaos-local-secret")
-                .withExposedPorts(9000)
-                .waitingFor(Wait.forHttp("/minio/health/live").forPort(9000));
-        minio.start();
-
-        String endpoint = "http://" + minio.getHost() + ":" + minio.getMappedPort(9000);
-        var credentials =
-                StaticCredentialsProvider.create(AwsBasicCredentials.create("horecaos", "horecaos-local-secret"));
-        var pathStyle = S3Configuration.builder().pathStyleAccessEnabled(true).build();
-
-        s3 = S3Client.builder()
-                .endpointOverride(URI.create(endpoint))
-                .region(Region.US_EAST_1)
-                .credentialsProvider(credentials)
-                .serviceConfiguration(pathStyle)
-                .build();
-        presigner = S3Presigner.builder()
-                .endpointOverride(URI.create(endpoint))
-                .region(Region.US_EAST_1)
-                .credentialsProvider(credentials)
-                .serviceConfiguration(pathStyle)
-                .build();
+        objectStore = new ObjectStoreContainer();
+        objectStore.start();
+        s3 = objectStore.s3Client();
+        presigner = objectStore.s3Presigner();
 
         try {
             s3.createBucket(CreateBucketRequest.builder().bucket(BUCKET).build());
@@ -200,8 +173,8 @@ class MediaLifecycleTests {
         if (presigner != null) {
             presigner.close();
         }
-        if (minio != null) {
-            minio.stop();
+        if (objectStore != null) {
+            objectStore.stop();
         }
         if (db != null) {
             db.close();
@@ -262,7 +235,7 @@ class MediaLifecycleTests {
         verificationWorker = verificationWorkerOver(media);
 
         // Everything here is real: real originals, a real renderer, real objects
-        // written to and read back from MinIO, and — since V0058 landed the table
+        // written to and read back from RustFS, and — since V0058 landed the table
         // — real rows in media.derivatives rather than the in-memory stand-in
         // this suite used while that table was still only proposed.
         derivatives = new MediaDerivativeService(
@@ -658,7 +631,7 @@ class MediaLifecycleTests {
                 .containsExactly(DerivativeVariant.THUMBNAIL, DerivativeVariant.CARD, DerivativeVariant.DETAIL);
         assertThat(report.sourceUnsupported()).isFalse();
 
-        // Read back from MinIO and probed, not trusted from the row. The row
+        // Read back from RustFS and probed, not trusted from the row. The row
         // saying 200 pixels wide and the object being a text file is exactly the
         // failure the whole module is built to make impossible. The trailing 3
         // is the decoded cost of a pixel, which for a three-component 8-bit
@@ -916,7 +889,7 @@ class MediaLifecycleTests {
         // ten-megabyte limit, 8000x5000 against a twelve-thousand-pixel
         // dimension limit, forty megapixels against a strict forty-megapixel
         // ceiling, image/png on the allow-list, and the header's own type equal
-        // to the stored type. The file is a real PNG and MinIO stores it.
+        // to the stored type. The file is a real PNG and RustFS stores it.
         var ticket = media.requestUpload(
                 TENANT_A,
                 MediaOwner.brand(BRAND),
@@ -1335,7 +1308,7 @@ class MediaLifecycleTests {
     /**
      * An AVAILABLE asset whose bytes today's verification would refuse.
      *
-     * <p>Uploaded, finalized and verified for real — so the object in MinIO is
+     * <p>Uploaded, finalized and verified for real — so the object in RustFS is
      * the real file at the real key, and verification really did reject it —
      * and then marked available by hand, because that is exactly the row a
      * re-render sweep finds: one written before the gate existed. Faking the
