@@ -58,6 +58,11 @@ export const reportsPaths = {
     return `${TENANT_REPORTING(tenantId)}/variant-sales`;
   },
 
+  /** X.19 (w6-reporting-facts, batch 11): the ABC cumulative-revenue-share curve. */
+  abcCurve(tenantId: string): string {
+    return `${TENANT_REPORTING(tenantId)}/abc-curve`;
+  },
+
   /** T14 (7.7a/7.7b, ADR 0134): start a persisted ABC/XYZ classification run. */
   classificationRuns(tenantId: string): string {
     return `${TENANT_REPORTING(tenantId)}/classification-runs`;

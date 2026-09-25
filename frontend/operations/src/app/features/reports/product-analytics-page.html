@@ -136,6 +136,39 @@
     }
   }
 
+  @if (activeTab() === 'abc') {
+    <section class="abc-curve-section">
+      <h2 class="q-subhead">{{ 'reports.products.abcCurve.title' | t }}</h2>
+      @switch (abcCurveState()) {
+        @case ('loading') {
+          <p class="q-body-sm">{{ 'reports.branches.loading' | t }}</p>
+        }
+        @case ('error') {
+          <div class="error-band" role="alert">
+            <span class="q-body-sm">{{ 'reports.error.generic' | t }}</span>
+            <button type="button" class="secondary" (click)="retryAbcCurve()">
+              {{ 'reports.error.retry' | t }}
+            </button>
+          </div>
+        }
+        @case ('denied') {
+          <p class="q-body-sm denied">{{ 'reports.denied.notGranted' | t }}</p>
+        }
+        @case ('ready') {
+          <q-abc-curve
+            [points]="abcCurvePoints()"
+            [thresholdAPercent]="abcCurveThresholdA()"
+            [thresholdBPercent]="abcCurveThresholdB()"
+            [ariaLabel]="'reports.products.abcCurve.title' | t"
+          />
+          @if (abcCurveMaybeMore()) {
+            <p class="q-caption">{{ 'reports.products.abcCurve.maybeMore' | t: { limit: abcCurveLimit } }}</p>
+          }
+        }
+      }
+    </section>
+  }
+
   @if (activeTab() === 'abc' || activeTab() === 'xyz') {
     @switch (classificationState()) {
       @case ('loading') {

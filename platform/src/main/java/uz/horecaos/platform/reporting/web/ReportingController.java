@@ -471,6 +471,33 @@ public class ReportingController {
                 ProvenanceResponse.of(result.provenance())));
     }
 
+    @GetMapping("/abc-curve")
+    @RequiresCapability(value = Capability.REPORTING_READ, scope = ScopeType.TENANT)
+    @Operation(
+            summary = "X.19: the ABC cumulative-revenue-share curve",
+            description = "Product analytics' q-abc-curve chart -- reporting.fact_order_line's own "
+                    + "variant sales (the same source /variant-sales reads), sorted revenue-descending "
+                    + "and walked into a running cumulative share, each row classed A/B/C against "
+                    + "ClassificationThresholds.DEFAULT's published 80/95 split. Not the persisted "
+                    + "classification-run (ADR 0134): that write is capability-gated and refuses a "
+                    + "window under 28 days for its own XYZ half; this read has none and answers any "
+                    + "range, never persisted.")
+    public ResponseEntity<AbcCurveListResponse> abcCurve(
+            @PathVariable UUID tenantId,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) List<UUID> locationId,
+            @RequestParam(required = false) Integer limit) {
+
+        var result = queries.abcCurve(tenantId, from, to, orEmpty(locationId), clampVariantLimit(limit));
+        return ResponseEntity.ok(new AbcCurveListResponse(
+                result.rows().stream().map(AbcCurveRowResponse::of).toList(),
+                result.maybeMore(),
+                result.thresholds().abcThresholdA() / 100.0,
+                result.thresholds().abcThresholdB() / 100.0,
+                ProvenanceResponse.of(result.provenance())));
+    }
+
     private static JdbcReportingStore.VariantSalesSort variantSalesSort(String requested) {
         try {
             return JdbcReportingStore.VariantSalesSort.valueOf(requested);
@@ -1084,6 +1111,39 @@ public class ReportingController {
 
     public record VariantSalesListResponse(
             List<VariantSalesRowResponse> rows, boolean maybeMore, ProvenanceResponse provenance) {}
+
+    /** X.19: one product's position on the ABC cumulative-revenue-share curve. */
+    public record AbcCurveRowResponse(
+            @Nullable UUID variantId,
+            @Nullable UUID categoryId,
+            String productName,
+            long totalNetSom,
+            double sharePercent,
+            double cumulativeSharePercent,
+            String abcClass) {
+
+        static AbcCurveRowResponse of(ReportQueryService.AbcCurveRow row) {
+            return new AbcCurveRowResponse(
+                    row.variantId(),
+                    row.categoryId(),
+                    row.productName(),
+                    row.totalNetSom(),
+                    row.shareBasisPoints() / 100.0,
+                    row.cumulativeShareBasisPoints() / 100.0,
+                    String.valueOf(row.abcClass()));
+        }
+    }
+
+    /**
+     * @param abcThresholdAPercent cumulative share up to and including this is class A
+     * @param abcThresholdBPercent cumulative share up to and including this is class B; above it, C
+     */
+    public record AbcCurveListResponse(
+            List<AbcCurveRowResponse> rows,
+            boolean maybeMore,
+            double abcThresholdAPercent,
+            double abcThresholdBPercent,
+            ProvenanceResponse provenance) {}
 
     /** 7.5: one operator's totals — see {@code ReportQueryService.OperatorLeaderboardRow}. */
     public record OperatorLeaderboardRowResponse(

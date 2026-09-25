@@ -9,6 +9,8 @@ import { CatalogApi } from '../catalog/catalog-api';
 import { ProductAnalyticsPage } from './product-analytics-page';
 import { ReportsFilterState } from './reports-filter-state';
 import {
+  AbcCurveListResponse,
+  AbcCurveRowResponse,
   ClassificationRowResponse,
   ClassificationRunResponse,
   ReportingApi,
@@ -77,6 +79,29 @@ function classificationRow(
   };
 }
 
+function abcCurveRow(overrides: Partial<AbcCurveRowResponse> = {}): AbcCurveRowResponse {
+  return {
+    variantId: 'variant-pizza',
+    categoryId: 'category-mains',
+    productName: 'Пицца Маргарита',
+    totalNetSom: 90_000,
+    sharePercent: 80,
+    cumulativeSharePercent: 80,
+    abcClass: 'A',
+    ...overrides,
+  };
+}
+
+function abcCurveResponse(rows: readonly AbcCurveRowResponse[]): AbcCurveListResponse {
+  return {
+    rows,
+    maybeMore: false,
+    abcThresholdAPercent: 80,
+    abcThresholdBPercent: 95,
+    provenance: provenance(),
+  };
+}
+
 function classificationRun(rows: readonly ClassificationRowResponse[]): ClassificationRunResponse {
   return {
     runId: 'run-1',
@@ -106,10 +131,12 @@ describe('ProductAnalyticsPage', () => {
   let fixture: ComponentFixture<ProductAnalyticsPage>;
   let variantSalesSpy: ReturnType<typeof vi.fn>;
   let latestClassificationSpy: ReturnType<typeof vi.fn>;
+  let abcCurveSpy: ReturnType<typeof vi.fn>;
 
   async function render(options?: {
     readonly variantSalesMock?: ReturnType<typeof vi.fn>;
     readonly latestClassificationMock?: ReturnType<typeof vi.fn>;
+    readonly abcCurveMock?: ReturnType<typeof vi.fn>;
     readonly configure?: (filters: ReportsFilterState) => void;
     readonly initialTab?: 'sales' | 'abc' | 'xyz';
   }): Promise<void> {
@@ -121,6 +148,7 @@ describe('ProductAnalyticsPage', () => {
     variantSalesSpy =
       options?.variantSalesMock ?? vi.fn().mockResolvedValue(salesResponse([variantRow()]));
     latestClassificationSpy = options?.latestClassificationMock ?? vi.fn().mockResolvedValue(null);
+    abcCurveSpy = options?.abcCurveMock ?? vi.fn().mockResolvedValue(abcCurveResponse([abcCurveRow()]));
 
     await TestBed.configureTestingModule({
       imports: [ProductAnalyticsPage],
@@ -140,6 +168,7 @@ describe('ProductAnalyticsPage', () => {
             variantSales: variantSalesSpy,
             latestClassification: latestClassificationSpy,
             runClassification: vi.fn().mockResolvedValue(classificationRun([classificationRow()])),
+            abcCurve: abcCurveSpy,
           },
         },
         {
@@ -352,5 +381,38 @@ describe('ProductAnalyticsPage', () => {
 
     expect(latestClassificationSpy).not.toHaveBeenCalled();
     expect(text()).toContain('28');
+  });
+
+  // ------------------------------------------------------- X.19 q-abc-curve
+
+  it('renders the ABC tab’s cumulative-share curve, independent of any persisted classification run', async () => {
+    await render({
+      abcCurveMock: vi
+        .fn()
+        .mockResolvedValue(
+          abcCurveResponse([
+            abcCurveRow({ variantId: 'a', productName: 'Пицца', cumulativeSharePercent: 80, abcClass: 'A' }),
+            abcCurveRow({ variantId: 'b', productName: 'Салат', cumulativeSharePercent: 95, abcClass: 'B' }),
+          ]),
+        ),
+      // Under the 28-day floor: the persisted classification refuses, but
+      // the curve has no such floor and still renders.
+      configure: (filters) => filters.setCustomRange({ from: '2026-08-01', to: '2026-08-10' }),
+      initialTab: 'abc',
+    });
+
+    expect(abcCurveSpy).toHaveBeenCalled();
+    const chart = fixture.nativeElement.querySelector('q-abc-curve');
+    expect(chart).not.toBeNull();
+    expect(chart?.querySelectorAll('.q-abc-curve__point').length).toBe(2);
+  });
+
+  it('discloses that the curve is a bounded read when the server reports more rows exist', async () => {
+    await render({
+      abcCurveMock: vi.fn().mockResolvedValue({ ...abcCurveResponse([abcCurveRow()]), maybeMore: true }),
+      initialTab: 'abc',
+    });
+
+    expect(text()).toContain('200');
   });
 });

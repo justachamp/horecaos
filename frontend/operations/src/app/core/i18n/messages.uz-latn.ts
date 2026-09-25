@@ -4860,6 +4860,13 @@ export const messagesUzLatn: MessageCatalogue = {
   'reports.products.classification.column.stddev': 'Standart chetlanish',
   'reports.products.classification.column.cv': 'Variatsiya koeffitsienti',
 
+  // X.19 (w6-reporting-facts, batch 11): the ABC cumulative-revenue-share curve.
+  'reports.products.abcCurve.title': 'Jamlangan daromad ulushi',
+  'reports.products.abcCurve.boundary.ab': 'A/B',
+  'reports.products.abcCurve.boundary.bc': 'B/C',
+  'reports.products.abcCurve.maybeMore':
+    'Egri chiziq faqat daromad boʻyicha birinchi {limit} ta mahsulotni qamrab oladi — yana boʻlishi mumkin.',
+
   // ---------------------------------------------------------------- reports 7.6/7.6a/7.6b customer analytics (T13)
   'reports.customers.title': 'Mijozlar tahlili',
   'reports.customers.loading': 'Yuklanmoqda…',

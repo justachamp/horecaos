@@ -117,12 +117,17 @@ public class DayCloseService {
         derived.deliveries().forEach(store::insertDeliveryFact);
         DayAggregator.courierSlaBuckets(tenantId, businessDate, derived.deliveries())
                 .forEach(store::insertSlaBucket);
+        // w6-reporting-facts, batch 11 (7.4b/7.4c, ADR 0023/0125): right
+        // beside the delivery producer above, inside the same transaction,
+        // for the same "a day is written whole or not at all" reason.
+        derived.feeResolutions().forEach(store::insertTariffFeeResolutionFact);
+        derived.externalDeliveryCosts().forEach(store::insertExternalDeliveryCostFact);
 
         store.completeRun(runId, derived.orders().size(), derived.lines().size(), 0, clock.instant());
 
         log.info(
                 "Closed business day {} for tenant {}: {} orders, {} lines, {} tenders, {} refunds, "
-                        + "{} call-hours, {} deliveries",
+                        + "{} call-hours, {} deliveries, {} fee resolutions, {} external-delivery costs",
                 businessDate,
                 tenantId,
                 derived.orders().size(),
@@ -130,7 +135,9 @@ public class DayCloseService {
                 derived.tenders().size(),
                 derived.refunds().size(),
                 derived.callHours().size(),
-                derived.deliveries().size());
+                derived.deliveries().size(),
+                derived.feeResolutions().size(),
+                derived.externalDeliveryCosts().size());
 
         return new CloseResult(
                 runId,
@@ -328,6 +335,62 @@ public class DayCloseService {
                                         .getSeconds())))
                         .toList();
 
+        // w6-reporting-facts, batch 11 (7.4b, ADR 0023/0125): same instant
+        // range as every source read above, against the resolution's own
+        // created_at -- delivery_fee_resolutions has no business_date of its
+        // own to trust (V0338's own comment: "resolved once, at checkout,
+        // and never revisited").
+        List<uz.horecaos.platform.reporting.application.ReportingFacts.TariffFeeResolutionFact> feeResolutions =
+                store.readSourceTariffResolutions(tenantId, from, to).stream()
+                        .map(source ->
+                                new uz.horecaos.platform.reporting.application.ReportingFacts.TariffFeeResolutionFact(
+                                        tenantId,
+                                        source.resolutionId(),
+                                        businessDate,
+                                        boundary.version(),
+                                        MetricRegistry.CALCULATION_VERSION,
+                                        source.locationId(),
+                                        source.tariffId(),
+                                        source.tariffVersion(),
+                                        source.zoneId(),
+                                        source.bandSequence(),
+                                        source.courierId(),
+                                        source.orderId(),
+                                        source.shipmentId(),
+                                        source.finalFeeMinor(),
+                                        source.currency(),
+                                        source.resolvedAt()))
+                        .toList();
+
+        // w6-reporting-facts, batch 11 (7.4c, ADR 0023/0125): same instant
+        // range as fact_delivery's own, against the shipment's own
+        // delivered_at -- see ReportingFacts.ExternalDeliveryCostFact's own
+        // doc for why matchStatus/providerBilledMinor/varianceMinor are a
+        // close-time snapshot rather than a live reconciliation state.
+        List<uz.horecaos.platform.reporting.application.ReportingFacts.ExternalDeliveryCostFact> externalDeliveryCosts =
+                store.readSourceExternalDeliveryCosts(tenantId, from, to).stream()
+                        .map(source ->
+                                new uz.horecaos.platform.reporting.application.ReportingFacts.ExternalDeliveryCostFact(
+                                        tenantId,
+                                        source.shipmentId(),
+                                        businessDate,
+                                        boundary.version(),
+                                        MetricRegistry.CALCULATION_VERSION,
+                                        source.locationId(),
+                                        source.orderId(),
+                                        source.publicOrderNumber(),
+                                        source.orderTotalMinor(),
+                                        source.currency(),
+                                        source.chargedDeliveryMinor(),
+                                        source.providerType(),
+                                        source.providerEstimatedMinor(),
+                                        source.invoiceLineId(),
+                                        source.providerBilledMinor(),
+                                        source.matchStatus(),
+                                        source.varianceMinor(),
+                                        source.deliveredAt()))
+                        .toList();
+
         return new DerivedDay(
                 orders,
                 lines,
@@ -336,7 +399,9 @@ public class DayCloseService {
                 DayAggregator.branchDay(
                         businessDate, orders, refunds, boundary.version(), MetricRegistry.CALCULATION_VERSION),
                 callHours,
-                deliveries);
+                deliveries,
+                feeResolutions,
+                externalDeliveryCosts);
     }
 
     /**
@@ -513,7 +578,10 @@ public class DayCloseService {
             List<RefundFact> refunds,
             List<BranchDayAggregate> aggregates,
             List<CallHourFact> callHours,
-            List<uz.horecaos.platform.reporting.application.ReportingFacts.DeliveryFact> deliveries) {}
+            List<uz.horecaos.platform.reporting.application.ReportingFacts.DeliveryFact> deliveries,
+            List<uz.horecaos.platform.reporting.application.ReportingFacts.TariffFeeResolutionFact> feeResolutions,
+            List<uz.horecaos.platform.reporting.application.ReportingFacts.ExternalDeliveryCostFact>
+                    externalDeliveryCosts) {}
 
     /**
      * One slice whose re-derived figure disagrees with the stored one.

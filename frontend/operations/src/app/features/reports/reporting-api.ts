@@ -342,6 +342,33 @@ export interface VariantSalesCursor {
 }
 
 /**
+ * X.19 (w6-reporting-facts, batch 11): one product's position on the ABC
+ * cumulative-revenue-share curve. Mirrors `ReportingController.AbcCurveRowResponse`.
+ */
+export interface AbcCurveRowResponse {
+  readonly variantId: string | null;
+  readonly categoryId: string | null;
+  readonly productName: string;
+  readonly totalNetSom: number;
+  readonly sharePercent: number;
+  readonly cumulativeSharePercent: number;
+  readonly abcClass: 'A' | 'B' | 'C';
+}
+
+/**
+ * X.19: the whole curve, revenue-descending, plus the published A/B/C
+ * boundary this build draws everywhere else — mirrors
+ * `ReportingController.AbcCurveListResponse`.
+ */
+export interface AbcCurveListResponse {
+  readonly rows: readonly AbcCurveRowResponse[];
+  readonly maybeMore: boolean;
+  readonly abcThresholdAPercent: number;
+  readonly abcThresholdBPercent: number;
+  readonly provenance: ProvenanceResponse;
+}
+
+/**
  * T14 (7.7a/7.7b, ADR 0134): one product's persisted ABC/XYZ classification.
  * Mirrors `ProductClassificationController.ClassificationRowResponse`.
  */
@@ -1041,6 +1068,24 @@ export class ReportingApi {
           afterProductName: params.cursor?.afterProductName,
           afterVariantId: params.cursor?.afterVariantId,
         },
+      }),
+    );
+    return result.value;
+  }
+
+  /**
+   * X.19 (w6-reporting-facts, batch 11): the ABC cumulative-revenue-share
+   * curve behind `q-abc-curve` — no 28-day floor and no write capability, the
+   * same footing `variantSales` already stands on, unlike {@link
+   * runClassification}/{@link latestClassification}'s own persisted run.
+   */
+  async abcCurve(
+    tenantId: string,
+    params: RangeParams & { readonly limit?: number },
+  ): Promise<AbcCurveListResponse> {
+    const result = await firstValueFrom(
+      this.api.get<AbcCurveListResponse>(reportsPaths.abcCurve(tenantId), {
+        params: { from: params.from, to: params.to, locationId: params.locationId, limit: params.limit },
       }),
     );
     return result.value;

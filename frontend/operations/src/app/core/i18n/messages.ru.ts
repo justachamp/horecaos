@@ -4830,6 +4830,13 @@ export const messagesRu: MessageCatalogue = {
   'reports.products.classification.column.stddev': 'Стандартное отклонение',
   'reports.products.classification.column.cv': 'Коэффициент вариации',
 
+  // X.19 (w6-reporting-facts, batch 11): the ABC cumulative-revenue-share curve.
+  'reports.products.abcCurve.title': 'Накопленная доля выручки',
+  'reports.products.abcCurve.boundary.ab': 'A/B',
+  'reports.products.abcCurve.boundary.bc': 'B/C',
+  'reports.products.abcCurve.maybeMore':
+    'Кривая охватывает только первые {limit} товаров по выручке — их может быть больше.',
+
   // ---------------------------------------------------------------- reports 7.6/7.6a/7.6b customer analytics (T13)
   'reports.customers.title': 'Аналитика по клиентам',
   'reports.customers.loading': 'Загрузка…',

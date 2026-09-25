@@ -1,0 +1,113 @@
+<q-chart-frame [ariaLabel]="ariaLabel()" data-testid="q-abc-curve">
+  <svg chart-graphic [attr.viewBox]="'0 0 ' + width + ' ' + height" role="presentation">
+    <g [attr.transform]="'translate(' + plotLeft + ',' + plotTop + ')'">
+      @for (tick of yTicks; track tick.value) {
+        <line class="q-chart__gridline" x1="0" [attr.x2]="plotWidth" [attr.y1]="tick.y" [attr.y2]="tick.y" />
+        <text
+          class="q-chart__axis-label q-caption"
+          x="-8"
+          [attr.y]="tick.y"
+          text-anchor="end"
+          dominant-baseline="middle"
+        >
+          {{ tick.value }}
+        </text>
+      }
+
+      @for (line of thresholdLines(); track line.key) {
+        <line
+          class="q-abc-curve__threshold"
+          x1="0"
+          [attr.x2]="plotWidth"
+          [attr.y1]="line.y"
+          [attr.y2]="line.y"
+        />
+        <text class="q-abc-curve__threshold-label q-caption" [attr.x]="plotWidth" [attr.y]="line.y - 4" text-anchor="end">
+          {{ (line.key === 'a' ? 'reports.products.abcCurve.boundary.ab' : 'reports.products.abcCurve.boundary.bc') | t }}
+          {{ line.percent }}%
+        </text>
+      }
+
+      <path class="q-abc-curve__line" [attr.d]="path()" fill="none" />
+
+      @for (point of plotted(); track point.key) {
+        <circle
+          class="q-abc-curve__point"
+          [attr.cx]="point.cx"
+          [attr.cy]="point.cy"
+          r="2.5"
+          [style.fill]="point.color"
+        />
+      }
+
+      @for (hit of hitPoints(); track hit.index) {
+        <rect
+          class="q-chart__hit"
+          [attr.x]="hit.cx - hitWidth()"
+          y="0"
+          [attr.width]="hitWidth() * 2"
+          [attr.height]="plotHeight"
+          (mouseenter)="showHoverAt(hit.index)"
+          (mouseleave)="clearHover()"
+        />
+      }
+    </g>
+
+    @for (tick of xTicks(); track tick.index) {
+      <text class="q-chart__axis-label q-caption" [attr.x]="plotLeft + tick.cx" [attr.y]="height - 8" text-anchor="middle">
+        {{ tick.label }}
+      </text>
+    }
+  </svg>
+
+  @if (hover(); as tip) {
+    <div
+      chart-tooltip
+      class="q-chart__tooltip"
+      role="tooltip"
+      data-testid="q-abc-curve-tooltip"
+      [style.left.%]="((plotLeft + tip.cx) / width) * 100"
+      [style.top.%]="((plotTop + tip.cy) / height) * 100"
+    >
+      <div class="q-chart__tooltip-title q-caption">{{ tip.label }}</div>
+      <div class="q-chart__tooltip-row q-caption">{{ tip.value }} · {{ tip.abcClass }}</div>
+    </div>
+  }
+
+  <ul chart-legend class="q-chart__legend-list" data-testid="q-abc-curve-legend">
+    @for (cls of ['A', 'B', 'C']; track cls) {
+      <li class="q-chart__legend-item q-caption">
+        <span class="q-chart__swatch" [style.background]="'var(--q-viz-cat-' + (cls === 'A' ? 1 : cls === 'B' ? 2 : 3) + ')'"></span>
+        {{ cls }}
+      </li>
+    }
+  </ul>
+
+  <table chart-table data-testid="q-abc-curve-table">
+    <caption class="q-visually-hidden">
+      {{
+        ariaLabel()
+      }}
+    </caption>
+    <thead>
+      <tr>
+        <th scope="col">#</th>
+        <th scope="col">{{ 'reports.products.column.name' | t }}</th>
+        <th scope="col">{{ 'ui.charts.table.share' | t }}</th>
+        <th scope="col">{{ 'reports.products.classification.column.cumulativeShare' | t }}</th>
+        <th scope="col">{{ 'reports.products.classification.column.class' | t }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (point of plotted(); track point.key; let i = $index) {
+        <tr>
+          <th scope="row">{{ i + 1 }}</th>
+          <td>{{ point.label }}</td>
+          <td>{{ point.sharePercent.toFixed(1) }}%</td>
+          <td>{{ point.cumulativeSharePercent.toFixed(1) }}%</td>
+          <td>{{ point.abcClass }}</td>
+        </tr>
+      }
+    </tbody>
+  </table>
+</q-chart-frame>

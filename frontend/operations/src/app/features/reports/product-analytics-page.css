@@ -22,6 +22,15 @@
   border-radius: var(--q-radius);
 }
 
+/* X.19 (w6-reporting-facts, batch 11): the q-abc-curve chart, above the ABC/XYZ table it sits beside. */
+.abc-curve-section {
+  margin-bottom: 20px;
+}
+
+.abc-curve-section .q-subhead {
+  margin: 0 0 8px;
+}
+
 .table {
   width: 100%;
   border-collapse: collapse;
