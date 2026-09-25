@@ -126,4 +126,29 @@ export const marketingPaths = {
   attributionLinkArchives(scope: BrandScope, linkId: string): string {
     return `${this.attributionLinks(scope)}/${enc(linkId)}/archives`;
   },
+
+  /** `AutomationRuleController` — unattended triggers (gap-map row 6.5, ADR 0044). */
+  automations(scope: BrandScope): string {
+    return `${base(scope)}/automations`;
+  },
+
+  automation(scope: BrandScope, ruleId: string): string {
+    return `${this.automations(scope)}/${enc(ruleId)}`;
+  },
+
+  automationActivations(scope: BrandScope, ruleId: string): string {
+    return `${this.automation(scope, ruleId)}/activations`;
+  },
+
+  automationDeactivations(scope: BrandScope, ruleId: string): string {
+    return `${this.automation(scope, ruleId)}/deactivations`;
+  },
+
+  automationReorder(scope: BrandScope): string {
+    return `${this.automations(scope)}/reorder`;
+  },
+
+  automationRuns(scope: BrandScope, ruleId: string): string {
+    return `${this.automation(scope, ruleId)}/runs`;
+  },
 } as const;

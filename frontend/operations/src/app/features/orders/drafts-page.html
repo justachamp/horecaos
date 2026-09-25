@@ -102,6 +102,7 @@
           <th>{{ 'orders.drafts.column.channel' | t }}</th>
           <th>{{ 'orders.drafts.column.location' | t }}</th>
           <th>{{ 'orders.drafts.column.owner' | t }}</th>
+          <th>{{ 'orders.drafts.column.firstLine' | t }}</th>
           <th class="drafts__num-col">{{ 'orders.drafts.column.lines' | t }}</th>
           <th>{{ 'orders.drafts.column.expiresAt' | t }}</th>
           <th>{{ 'orders.drafts.column.status' | t }}</th>
@@ -116,6 +117,9 @@
             <td>{{ channelName(draft.channelId) }}</td>
             <td>{{ locationLabel(draft.locationId) }}</td>
             <td>{{ ownerLabel(draft) }}</td>
+            <td class="drafts__first-line" data-testid="draft-first-line">
+              {{ draft.firstLineProductName ?? ('orders.drafts.firstLineUnknown' | t) }}
+            </td>
             <td class="drafts__num-col q-tnum">{{ draft.lineCount }}</td>
             <td class="q-tnum">{{ expiresLabel(draft.expiresAt) }}</td>
             <td>
@@ -134,7 +138,7 @@
           </tr>
         } @empty {
           <tr>
-            <td colspan="9" class="drafts__empty" data-testid="drafts-empty">
+            <td colspan="10" class="drafts__empty" data-testid="drafts-empty">
               {{ 'orders.drafts.empty' | t }}
             </td>
           </tr>

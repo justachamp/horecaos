@@ -16,6 +16,12 @@ export interface DraftCartResponse {
   /** `ACTIVE` | `EXPIRED` | `ABANDONED`. */
   readonly status: string;
   readonly lineCount: number;
+  /**
+   * The first line's product name, resolved through `catalog.api.ItemDisplayLookup`
+   * rather than a stored snapshot. Null for a cart with no lines, or whose
+   * variant no longer resolves to a translated product.
+   */
+  readonly firstLineProductName?: string | null;
 }
 
 export interface DraftsQuery {

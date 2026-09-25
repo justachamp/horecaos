@@ -2,12 +2,16 @@ package uz.horecaos.platform.marketing.infrastructure.persistence;
 
 import java.sql.ResultSet;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -43,6 +47,9 @@ public class JdbcCustomerMetricStore {
     private static final String COMPLETED = "'COMPLETED'";
 
     private static final String ABANDONED = "'CANCELLED', 'REJECTED', 'EXPIRED'";
+
+    /** Mirrors {@code AudienceQuery}'s own formatter for {@code birth_month_day}. */
+    private static final DateTimeFormatter MONTH_DAY = DateTimeFormatter.ofPattern("MM-dd");
 
     private final JdbcClient jdbc;
 
@@ -255,6 +262,62 @@ public class JdbcCustomerMetricStore {
                 .param("tenantId", tenantId)
                 .param("accountId", accountId)
                 .update();
+    }
+
+    /**
+     * Accounts whose {@code birth_month_day} falls within {@code windowDays}
+     * either side of {@code today} — gap-map row 6.5's own {@code BIRTHDAY}
+     * sweep, expanded into a set of {@code MM-DD} literals the same way {@code
+     * AudienceQuery#birthdayClause} expands {@code BIRTHDAY_WITHIN_DAYS}, and
+     * for the same reason: date arithmetic over a column with no year needs a
+     * synthetic one and then behaves differently across a leap day.
+     */
+    public List<UUID> birthdaysWithin(UUID tenantId, UUID brandId, int windowDays, LocalDate today) {
+        if (windowDays < 0 || windowDays > 182) {
+            throw new IllegalArgumentException(
+                    "A birthday window of %d days is not a birthday campaign".formatted(windowDays));
+        }
+        Set<String> days = new LinkedHashSet<>();
+        for (int offset = -windowDays; offset <= windowDays; offset++) {
+            days.add(today.plusDays(offset).format(MONTH_DAY));
+        }
+        return jdbc.sql("""
+                SELECT customer_account_id
+                  FROM marketing.customer_metrics
+                 WHERE tenant_id = :tenantId AND brand_id = :brandId
+                   AND birth_month_day IN (:days)
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("days", List.copyOf(days))
+                .query(UUID.class)
+                .list();
+    }
+
+    /**
+     * Accounts whose {@code days_since_last_order} is at least {@code
+     * inactivityDays} — gap-map row 6.5's own {@code INACTIVITY} sweep. A
+     * customer who never ordered ({@code days_since_last_order} null) is
+     * excluded: there is no last order to have gone quiet since, and an
+     * inactivity nudge to somebody who never ordered is a different message
+     * this trigger does not send.
+     */
+    public List<UUID> inactiveSince(UUID tenantId, UUID brandId, int inactivityDays) {
+        if (inactivityDays <= 0) {
+            throw new IllegalArgumentException("inactivityDays must be positive, was " + inactivityDays);
+        }
+        return jdbc.sql("""
+                SELECT customer_account_id
+                  FROM marketing.customer_metrics
+                 WHERE tenant_id = :tenantId AND brand_id = :brandId
+                   AND days_since_last_order IS NOT NULL
+                   AND days_since_last_order >= :inactivityDays
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("inactivityDays", inactivityDays)
+                .query(UUID.class)
+                .list();
     }
 
     /**

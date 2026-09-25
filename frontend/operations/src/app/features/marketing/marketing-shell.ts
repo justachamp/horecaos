@@ -38,13 +38,17 @@ import { TPipe } from '../../core/i18n/t.pipe';
  * only), and `ReferralOperationsController` reads what has actually
  * happened; website/Telegram acquisition links render as an honest
  * not-built panel inside that same screen — see `ReferralsPage`'s own doc.
- * The other three tabs route to the shared `NotBuiltPage`, each naming its
- * own IA subsection — 6.1 Promotions, the general no-code rule-engine
- * authoring screen `V0093`'s schema could also serve, still has no
- * controller of its own; 6.5 Automations' trigger engine, and 6.7/6.8's
- * merchandising slots, have neither schema nor service. Each is a subsystem
- * in its own right, not a small gap a couple of reserved migrations could
- * close honestly — see wave 44's final report.
+ * 6.5 Automations (gap-map row 6.5, batch 11 w8-marketing-automations): a
+ * fifth real tab. `AutomationRuleController` over `marketing.automation_rules`/
+ * `automation_runs` (V0414/V0415) authors and arms unattended BIRTHDAY,
+ * INACTIVITY and CART_ABANDONMENT triggers — see `AutomationsPage`'s own
+ * doc for why only three of ADR 0044's named kinds. The other two tabs
+ * route to the shared `NotBuiltPage`, each naming its own IA subsection —
+ * 6.1 Promotions, the general no-code rule-engine authoring screen
+ * `V0093`'s schema could also serve, still has no controller of its own;
+ * 6.7/6.8's merchandising slots have neither schema nor service. Each is a
+ * subsystem in its own right, not a small gap a couple of reserved
+ * migrations could close honestly — see wave 44's final report.
  */
 @Component({
   selector: 'q-marketing-shell',

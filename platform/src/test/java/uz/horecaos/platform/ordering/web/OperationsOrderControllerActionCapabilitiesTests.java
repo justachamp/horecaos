@@ -11,6 +11,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import uz.horecaos.platform.catalog.api.ItemDisplayLookup;
 import uz.horecaos.platform.fulfillment.api.ShipmentCancellationPort;
 import uz.horecaos.platform.iam.api.AuthenticatedActor;
 import uz.horecaos.platform.iam.api.AuthorizationService;
@@ -74,7 +75,8 @@ class OperationsOrderControllerActionCapabilitiesTests {
                 mock(AggregatorOrderIntakeService.class),
                 mock(ShipmentCancellationPort.class),
                 mock(MyWorkQueryService.class),
-                mock(StaffDisplayNames.class));
+                mock(StaffDisplayNames.class),
+                mock(ItemDisplayLookup.class));
     }
 
     @Test

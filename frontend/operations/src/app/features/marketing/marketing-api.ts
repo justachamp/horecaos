@@ -452,6 +452,29 @@ export class MarketingApi {
     ).value;
   }
 
+  /**
+   * Row 6.4: the campaign detail pane's own "who received this" export —
+   * every member of the campaign's own audience snapshot, as pseudonymous
+   * account ids. Mirrors `SegmentsApi.exportSnapshot` exactly (the same
+   * `OperationsMarketingController.export` endpoint, itself the audited
+   * fact); this wave gives the campaign pane its own call site rather than
+   * sending a marketer hunting for the matching snapshot id on the Segments
+   * screen.
+   */
+  async exportSnapshot(
+    scope: BrandScope,
+    snapshotId: string,
+    purpose: string,
+  ): Promise<readonly string[]> {
+    const result = await firstValueFrom(
+      this.api.post<{ readonly purpose: string; readonly limit: number | null }, readonly string[]>(
+        marketingPaths.audienceSnapshotExports(scope, snapshotId),
+        command({ purpose, limit: null }),
+      ),
+    );
+    return result ?? [];
+  }
+
   // ----------------------------------------------------------- suppression
 
   async listSuppressions(

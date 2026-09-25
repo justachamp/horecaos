@@ -93,9 +93,11 @@ export const messagesEn = {
   'orders.drafts.column.channel': 'Channel',
   'orders.drafts.column.location': 'Location',
   'orders.drafts.column.owner': 'Owner',
+  'orders.drafts.column.firstLine': 'First item',
   'orders.drafts.column.lines': 'Lines',
   'orders.drafts.column.expiresAt': 'Expires',
   'orders.drafts.column.status': 'Status',
+  'orders.drafts.firstLineUnknown': '—',
   'orders.drafts.openCustomer': 'Open customer',
   'orders.drafts.owner.account': 'Account',
   'orders.drafts.owner.guest': 'Guest',
@@ -4316,6 +4318,8 @@ export const messagesEn = {
   'marketing.campaign.stats.refusedByReason.title': 'Refused, by reason',
   'marketing.campaign.stats.deliveryUnavailableHint':
     'Delivered vs. failed is not tracked yet — no read receipt reaches this campaign.',
+  'marketing.campaign.stats.export': 'Export recipients as CSV',
+  'marketing.campaign.stats.exportedCount': 'Exported {count} account id(s)',
 
   'marketing.refusal.ACCOUNT_NOT_ACTIVE': 'Account not active, merged, or anonymised',
   'marketing.refusal.CONSENT_WITHHELD': 'No marketing consent on file',
@@ -4649,6 +4653,42 @@ export const messagesEn = {
   'marketing.referrals.links.title': 'Website and Telegram acquisition links',
   'marketing.referrals.links.body':
     'Not built, and not a gap this screen hides: website "?ref=" links, Telegram "startapp" deep links, and a guided Mini-App/BotFather setup flow belong to ADR 0044’s marketing.attribution_links, which remains on that ADR’s own checklist. A customer can still get a code and a friend can still redeem it from the storefront — nothing here renders a shareable link, because no link table exists yet to render one from.',
+
+  // -------------------------------------------------------- automations (row 6.5, ADR 0044)
+  'marketing.automations.loading': 'Loading automations…',
+  'marketing.automations.denied': 'You do not have access to this brand’s automations.',
+  'marketing.automations.intro':
+    'Unattended triggers. A rule is authored inert and only fires once an operator arms it — nothing sends without a human.',
+  'marketing.automations.create': 'New automation',
+  'marketing.automations.empty': 'No automation rule authored yet.',
+  'marketing.automations.viewRuns': 'Recent firings — {name}',
+  'marketing.automations.rule.description':
+    '{trigger} · {channel} · {configValue} · cooldown {cooldownDays}d',
+  'marketing.automations.trigger.BIRTHDAY': 'Birthday',
+  'marketing.automations.trigger.INACTIVITY': 'Inactivity',
+  'marketing.automations.trigger.CART_ABANDONMENT': 'Cart abandonment',
+  'marketing.automations.configLabel.BIRTHDAY': 'Window, days either side of the birthday',
+  'marketing.automations.configLabel.INACTIVITY': 'Days since last order',
+  'marketing.automations.configLabel.CART_ABANDONMENT': 'Abandonment delay, hours',
+  'marketing.automations.form.title': 'Author an automation rule',
+  'marketing.automations.form.name': 'Name',
+  'marketing.automations.form.trigger': 'Trigger',
+  'marketing.automations.form.channel': 'Channel',
+  'marketing.automations.form.cooldownDays': 'Cooldown, days',
+  'marketing.automations.form.consentPurpose': 'Consent purpose',
+  'marketing.automations.form.templateKey': 'Template key',
+  'marketing.automations.form.submit': 'Save (inactive until armed)',
+  'marketing.automations.dialog.cancel': 'Cancel',
+  'marketing.automations.dialog.close': 'Close',
+  'marketing.automations.runs.title': 'Recent firings — {name}',
+  'marketing.automations.runs.loading': 'Loading…',
+  'marketing.automations.runs.empty': 'No firing recorded yet.',
+  'marketing.automations.runs.column.status': 'Status',
+  'marketing.automations.runs.column.reason': 'Reason',
+  'marketing.automations.runs.column.firedAt': 'When',
+  'marketing.automations.runStatus.FIRED': 'Fired',
+  'marketing.automations.runStatus.REFUSED': 'Refused',
+  'marketing.automations.runStatus.CANCELLED': 'Cancelled (customer converted first)',
 
   // ---------------------------------------------------------------- customers 5.3/5.4 (wave 39)
   'customers.nav.label': 'Customers section',

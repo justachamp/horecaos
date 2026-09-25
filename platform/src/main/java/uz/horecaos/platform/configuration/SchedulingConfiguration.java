@@ -220,14 +220,18 @@ public class SchedulingConfiguration {
      * far: {@code CatalogImportRunWorker.processQueuedRuns}, which drains
      * {@code catalog.import_runs} (row 4.5b) the identical way {@code
      * CustomerImportRunWorker} already drains its own import queue. Batch 11
-     * added the last one so far: {@code
-     * InventoryQuantityResetScheduler.resetDueItems}, ADR 0017's QUANTITY
-     * branch (gap map row 4.4c) — a stock item's daily default quantity
-     * (V0405/V0406) had no scheduled worker to apply it, so it stayed exactly
-     * where an operator last set on-hand, forever, regardless of how the
-     * default was configured.
+     * added the last two so far, on branches that could not see each other:
+     * {@code InventoryQuantityResetScheduler.resetDueItems}, ADR 0017's
+     * QUANTITY branch (gap map row 4.4c) — a stock item's daily default
+     * quantity (V0405/V0406) had no scheduled worker to apply it, so it
+     * stayed exactly where an operator last set on-hand, forever, regardless
+     * of how the default was configured — and {@code
+     * AutomationTriggerScheduler.sweepOnce}, gap-map row 6.5's own trigger
+     * sweep — BIRTHDAY, INACTIVITY, and CART_ABANDONMENT all in one method,
+     * guarded by {@code marketing.automation_runs}' own unique index rather
+     * than by running less often.
      */
-    static final int DEFAULT_POOL_SIZE = 67;
+    static final int DEFAULT_POOL_SIZE = 68;
 
     /**
      * The platform's scheduler, replacing Boot's single-threaded default.
