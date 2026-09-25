@@ -127,7 +127,9 @@ describe('buildSlaRows: sharePercent is the whole range’s share', () => {
 describe('BranchSlaReportPage: the tenant-wide SLA histogram', () => {
   let fixture: ComponentFixture<BranchSlaReportPage>;
 
-  async function render(): Promise<void> {
+  async function render(
+    deliveryTimeRows: readonly { locationId: string; averageSeconds: number | null }[] = [],
+  ): Promise<void> {
     TestBed.resetTestingModule();
     await TestBed.configureTestingModule({
       imports: [BranchSlaReportPage],
@@ -165,6 +167,9 @@ describe('BranchSlaReportPage: the tenant-wide SLA histogram', () => {
             preparationTimeByLocation: vi
               .fn()
               .mockResolvedValue({ rows: [], provenance: provenance() }),
+            deliveryTransitTimeByLocation: vi
+              .fn()
+              .mockResolvedValue({ rows: deliveryTimeRows, provenance: provenance() }),
             slaBuckets: vi.fn().mockResolvedValue({
               buckets: [
                 bucket('l1', 'UNDER_30', 10, 10_000),
@@ -209,5 +214,21 @@ describe('BranchSlaReportPage: the tenant-wide SLA histogram', () => {
       (r) => r.textContent?.includes('30') && r.textContent?.includes('35'),
     );
     expect(m3040Row?.querySelector('td')?.textContent?.trim()).toBe('0');
+  });
+
+  it('renders the branch leaderboard’s average delivery (courier transit) time column, row 7.3', async () => {
+    await render([
+      { locationId: 'l1', averageSeconds: 900 },
+      { locationId: 'l2', averageSeconds: null },
+    ]);
+    const host = fixture.nativeElement as HTMLElement;
+
+    const cells = Array.from(
+      host.querySelectorAll('[data-testid="branch-row-delivery-time"]'),
+    ).map((cell) => cell.textContent?.trim());
+
+    // 900 seconds -> 15 min for l1; l2 had no settled delivery in range, "—" not "0 min".
+    expect(cells).toContain('15 min');
+    expect(cells).toContain('—');
   });
 });

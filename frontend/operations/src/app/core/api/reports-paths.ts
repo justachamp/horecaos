@@ -38,6 +38,11 @@ export const reportsPaths = {
     return `${TENANT_REPORTING(tenantId)}/preparation-time-by-location`;
   },
 
+  /** Wave 11 w5-fulfillment-destination (7.3): every branch's average courier transit time, from one request. */
+  deliveryTransitTimeByLocation(tenantId: string): string {
+    return `${TENANT_REPORTING(tenantId)}/delivery-transit-time-by-location`;
+  },
+
   /** Order-grain rows behind 7.2's «Этапы», «Заказы» and «Опоздания» tables. */
   orders(tenantId: string): string {
     return `${TENANT_REPORTING(tenantId)}/orders`;

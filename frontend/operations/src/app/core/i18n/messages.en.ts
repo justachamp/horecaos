@@ -4638,6 +4638,8 @@ export const messagesEn = {
   'reports.branches.column.averageCheck': 'Average check',
   'reports.branches.column.cancelShare': 'Cancelled, %',
   'reports.branches.column.prepTime': 'Prep. time',
+  // wave 11 w5-fulfillment-destination (7.3): the courier transit-time average.
+  'reports.branches.column.deliveryTime': 'Delivery time',
   // wave T06 (7.3): the leaderboard's three new columns and its secondary sort control.
   'reports.branches.column.fulfilmentSplit': 'Delivery / Pickup / Aggregators',
   'reports.branches.column.fulfilmentSplit.hint':

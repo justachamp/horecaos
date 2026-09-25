@@ -4641,6 +4641,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'reports.branches.column.averageCheck': 'Oʻrtacha chek',
   'reports.branches.column.cancelShare': 'Bekor qilingan, %',
   'reports.branches.column.prepTime': 'Tayyorlash vaqti',
+  // wave 11 w5-fulfillment-destination (7.3): kuryer yoʻlda boʻlgan vaqtning oʻrtachasi.
+  'reports.branches.column.deliveryTime': 'Yetkazish vaqti',
   // wave T06 (7.3): reyting jadvalining uchta yangi ustuni va ikkinchi darajali saralash.
   'reports.branches.column.fulfilmentSplit': 'Yetkazib berish / Olib ketish / Agregatorlar',
   'reports.branches.column.fulfilmentSplit.hint':

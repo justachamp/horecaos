@@ -4612,6 +4612,8 @@ export const messagesRu: MessageCatalogue = {
   'reports.branches.column.averageCheck': 'Средний чек',
   'reports.branches.column.cancelShare': 'Отмены, %',
   'reports.branches.column.prepTime': 'Ср. время приготовления',
+  // wave 11 w5-fulfillment-destination (7.3): среднее время в пути у курьера.
+  'reports.branches.column.deliveryTime': 'Ср. время доставки',
   // wave T06 (7.3): три новые колонки рейтинга и его вторичная сортировка.
   'reports.branches.column.fulfilmentSplit': 'Доставка / Самовывоз / Агрегаторы',
   'reports.branches.column.fulfilmentSplit.hint':
