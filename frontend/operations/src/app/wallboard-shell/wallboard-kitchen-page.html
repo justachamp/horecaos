@@ -20,6 +20,13 @@
     </div>
   }
 
+  @if (lastError(); as error) {
+    <div class="wk__errorBand" role="alert" data-testid="wallboard-kitchen-error">
+      <span>{{ errorMessage(error) }}</span>
+      <span class="wk__errorBand-ref">{{ errorReference(error) }}</span>
+    </div>
+  }
+
   @if (actionNotice(); as notice) {
     <div class="wk__notice" role="alert" data-testid="wallboard-kitchen-notice">
       <span>{{ notice }}</span>

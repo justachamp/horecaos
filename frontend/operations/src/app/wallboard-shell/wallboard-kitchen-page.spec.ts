@@ -4,6 +4,7 @@ import { of } from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
 
 import { LocationScope } from '../core/api/operations-paths';
+import { ApiError } from '../core/api/problem-details';
 import { CurrentLocation } from '../core/auth/current-location';
 import { I18n } from '../core/i18n/i18n';
 import { RealtimeClient, RealtimeFrame } from '../core/realtime/realtime-client';
@@ -164,6 +165,47 @@ describe('WallboardKitchenPage', () => {
         '[data-testid="wallboard-kitchen-denied"]',
       ),
     ).not.toBeNull();
+  });
+
+  it('shows an error band with the correlation id on a non-denied board-fetch failure', async () => {
+    const boardSpy = vi
+      .fn()
+      .mockRejectedValue(new ApiError('INTERNAL_ERROR', 500, null, 'corr-kitchen-9'));
+
+    TestBed.configureTestingModule({
+      imports: [WallboardKitchenPage],
+      providers: [
+        {
+          provide: CurrentLocation,
+          useValue: {
+            scope: signal<LocationScope | null>(SCOPE),
+            denied: signal(false),
+            ensureLoaded: () => Promise.resolve(),
+          },
+        },
+        {
+          provide: KitchenApi,
+          useValue: {
+            board: boardSpy,
+            stations: vi.fn().mockResolvedValue([]),
+            start: vi.fn(() => of({} as ItemResponse)),
+            ready: vi.fn(() => of({} as ItemResponse)),
+            recall: vi.fn(() => of({} as ItemResponse)),
+          },
+        },
+        {
+          provide: RealtimeClient,
+          useValue: { onFrame: vi.fn(() => () => undefined), state: signal('open') },
+        },
+      ],
+    });
+    TestBed.inject(I18n).setLocale('en');
+    fixture = TestBed.createComponent(WallboardKitchenPage);
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).toContain('corr-kitchen-9');
   });
 
   it('refreshes at once on a KITCHEN_BOARD frame, the ADR 0045 accelerator', async () => {
