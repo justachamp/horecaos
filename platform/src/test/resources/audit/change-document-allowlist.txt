@@ -72,10 +72,6 @@ uz/horecaos/platform/commercial/application/WalletService.java:609
 uz/horecaos/platform/commercial/application/WalletService.java:769
 uz/horecaos/platform/commercial/application/WalletService.java:807
 
-# --- conversations ---
-uz/horecaos/platform/conversations/application/ConversationInboxService.java:301
-uz/horecaos/platform/conversations/application/FlowDocumentService.java:86
-
 # --- courier ---
 uz/horecaos/platform/courier/application/CourierAccountProvisioningService.java:115
 uz/horecaos/platform/courier/application/CourierAccountProvisioningService.java:173

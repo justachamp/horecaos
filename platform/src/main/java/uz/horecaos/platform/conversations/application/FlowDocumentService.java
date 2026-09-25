@@ -11,6 +11,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.conversations.domain.FlowDocument;
 import uz.horecaos.platform.conversations.domain.FlowDocumentException;
 import uz.horecaos.platform.conversations.domain.FlowDocumentParser;
@@ -83,8 +84,8 @@ public class FlowDocumentService {
                 .at(ResourceScope.brand(tenantId, brandId))
                 .target("conversations.flow_document", row.id())
                 .because(reason)
-                .changed(java.util.Map.of(
-                        "flowKey", flowKey, "version", String.valueOf(version), "active", String.valueOf(activate)))
+                .changed(ChangeDocuments.created(java.util.Map.of(
+                        "flowKey", flowKey, "version", String.valueOf(version), "active", String.valueOf(activate))))
                 .correlatedBy(row.id().toString())
                 .occurredAt(clock.instant())
                 .build());
