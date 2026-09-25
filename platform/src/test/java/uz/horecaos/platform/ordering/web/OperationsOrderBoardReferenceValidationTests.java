@@ -69,7 +69,14 @@ class OperationsOrderBoardReferenceValidationTests {
         assertThatCode(() -> boardQuery("0911-142")).doesNotThrowAnyException();
     }
 
-    /** Invokes the private {@code boardQuery}, unwrapping reflection's exception wrapper. */
+    /**
+     * Invokes the private {@code boardQuery}, unwrapping reflection's exception wrapper.
+     *
+     * <p>The parameter list mirrors {@code boardQuery}'s declaration in order — status list,
+     * from/to, channel, fulfilment mode, courier, payment method, created-by, reference, origin,
+     * payment status. A new board filter parameter has to be added here too, or the lookup
+     * throws {@code NoSuchMethodException} and every case fails for the wrong reason.
+     */
     private static Object boardQuery(String reference) throws Exception {
         Method method = OperationsOrderController.class.getDeclaredMethod(
                 "boardQuery",
@@ -85,11 +92,13 @@ class OperationsOrderBoardReferenceValidationTests {
                 String.class,
                 String.class,
                 String.class,
+                String.class,
                 String.class);
         method.setAccessible(true);
         try {
             return method.invoke(
-                    null, TENANT, BRAND, LOCATION, null, null, null, null, null, null, null, null, reference, null);
+                    null, TENANT, BRAND, LOCATION, null, null, null, null, null, null, null, null, reference, null,
+                    null);
         } catch (InvocationTargetException wrapped) {
             switch (wrapped.getCause()) {
                 case RuntimeException runtime -> throw runtime;
