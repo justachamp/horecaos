@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -36,6 +37,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import uz.horecaos.platform.audit.api.ActorRef;
+import uz.horecaos.platform.courier.application.CourierAccountProvisioningService;
 import uz.horecaos.platform.courier.application.CourierAdjustmentService;
 import uz.horecaos.platform.courier.application.CourierCashService;
 import uz.horecaos.platform.courier.application.CourierEngagementService;
@@ -110,6 +112,7 @@ import uz.horecaos.platform.web.idempotency.Idempotent;
 public class OperationsCourierController {
 
     private final CourierEngagementService engagements;
+    private final CourierAccountProvisioningService accountProvisioning;
     private final CourierShiftService shifts;
     private final CourierCashService cash;
     private final CourierAdjustmentService adjustments;
@@ -133,6 +136,7 @@ public class OperationsCourierController {
 
     public OperationsCourierController(
             CourierEngagementService engagements,
+            CourierAccountProvisioningService accountProvisioning,
             CourierShiftService shifts,
             CourierCashService cash,
             CourierAdjustmentService adjustments,
@@ -154,6 +158,7 @@ public class OperationsCourierController {
             CurrentActor currentActor,
             AuthorizationService authorization) {
         this.engagements = engagements;
+        this.accountProvisioning = accountProvisioning;
         this.shifts = shifts;
         this.cash = cash;
         this.adjustments = adjustments;
@@ -794,15 +799,21 @@ public class OperationsCourierController {
                     + "deliberately cannot do the second. The compliance fields are optional and "
                     + "may be filed here or later: an incomplete file is a state the roster is "
                     + "built to show, and refusing the registration over a missing passport would "
-                    + "only teach operators to type something into the box.")
+                    + "only teach operators to type something into the box. Gap map row 3.3: the "
+                    + "courier's own account at the identity provider is created here, the same "
+                    + "phone-first path ADR 0116's staff invitation uses (CourierAccountProvisioningService) — "
+                    + "the operator no longer types a Keycloak subject; there is no field for one.")
     public ResponseEntity<CourierResponse> register(
             @PathVariable UUID tenantId, @Valid @RequestBody RegisterCourierRequest body) {
+
+        CourierAccountProvisioningService.Provisioned account = accountProvisioning.provision(
+                tenantId, body.firstName(), body.lastName(), body.phone(), blankToNull(body.email()), actor());
 
         CourierEngagementService.Registration registration = engagements.register(
                 new CourierEngagementService.NewCourier(
                         tenantId,
                         body.courierTypeId(),
-                        body.principalSubject(),
+                        account.subjectId(),
                         body.displayReference(),
                         body.fullName(),
                         body.engagedFrom(),
@@ -1286,19 +1297,25 @@ public class OperationsCourierController {
     /**
      * The widened register form (IA 3.3).
      *
-     * <p>{@code principalSubject} is still a Keycloak subject created outside
-     * this console, and stays that way: ADR 0042 forbids deriving a courier's
-     * password from a passport number, and this wave adds no provisioning path
-     * that would tempt somebody to.
+     * <p>No {@code principalSubject} field, unlike before gap map row {@code
+     * 3.3}'s own fix: an operator no longer types a Keycloak subject created
+     * outside this console. {@link #register} provisions the account itself
+     * ({@link CourierAccountProvisioningService}, ADR 0116's phone-first
+     * path) from {@link #firstName}/{@link #lastName}/{@link #phone}/{@link
+     * #email} and uses the identity it gets back — never a value this body
+     * could name, so there is no way to bind a courier to somebody else's
+     * account.
      *
      * <p>Every compliance field is optional and none of them is echoed back by
      * any response on this controller.
      */
     record RegisterCourierRequest(
             @NotNull UUID courierTypeId,
-            @NotBlank String principalSubject,
+            @NotBlank @Size(max = 100) String firstName,
+            @NotBlank @Size(max = 100) String lastName,
+            @NotBlank @Size(min = 9, max = 20) String phone,
+            @Email @Size(max = 255) @Nullable String email,
             @NotBlank @Size(max = 32) String displayReference,
-            @NotBlank String fullName,
             @NotNull LocalDate engagedFrom,
             @Nullable @Size(max = 32) String passport,
             @Nullable @Size(max = 32) String pinfl,
@@ -1312,6 +1329,11 @@ public class OperationsCourierController {
             @Nullable @Size(max = 256) String referral,
             @Nullable @Size(max = 2000) String remarks,
             @NotBlank String reason) {
+
+        /** The one place {@link #firstName}/{@link #lastName} are joined for a human to read. */
+        String fullName() {
+            return (firstName.strip() + " " + lastName.strip()).strip();
+        }
 
         CourierEngagementService.ComplianceFile compliance() {
             Map<ComplianceField, String> recorded = new EnumMap<>(ComplianceField.class);

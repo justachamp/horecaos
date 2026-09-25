@@ -302,7 +302,9 @@ class CourierPolicyEndpointTests {
         long storedVersions = jdbc.sql("SELECT count(*) FROM tenant.policies WHERE key_code = 'courier.compensation'")
                 .query(Long.class)
                 .single();
-        assertThat(storedVersions).as("the refused write must publish nothing beyond the first two").isEqualTo(2);
+        assertThat(storedVersions)
+                .as("the refused write must publish nothing beyond the first two")
+                .isEqualTo(2);
     }
 
     @Test

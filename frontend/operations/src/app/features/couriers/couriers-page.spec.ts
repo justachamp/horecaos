@@ -216,9 +216,10 @@ describe('CouriersPage', () => {
     host.querySelector<HTMLButtonElement>('.couriers__register')!.click();
     fixture.detectChanges();
 
-    typeByLabel(host, 'Courier-app account (Keycloak subject)', 'keycloak-k900');
+    typeByLabel(host, 'First name', 'Alisher');
+    typeByLabel(host, 'Last name', 'Karimov');
+    typeByLabel(host, 'Phone', '+998901234567');
     typeByLabel(host, 'Display reference (e.g. K-014)', 'K-900');
-    typeByLabel(host, 'Full name', 'Alisher Karimov');
     typeByLabel(host, 'Reason', 'onboarding a rider');
     type(host, 'register-PASSPORT', 'AA1234567');
     type(host, 'register-PINFL', '31234567890123');
@@ -231,9 +232,15 @@ describe('CouriersPage', () => {
 
     expect(register).toHaveBeenCalledOnce();
     const body = register.mock.calls[0][1];
+    expect(body.firstName).toBe('Alisher');
+    expect(body.lastName).toBe('Karimov');
+    expect(body.phone).toBe('+998901234567');
     expect(body.displayReference).toBe('K-900');
     expect(body.passport).toBe('AA1234567');
     expect(body.pinfl).toBe('31234567890123');
+    // No Keycloak subject field exists at all any more (gap map row 3.3):
+    // OperationsCourierController.register provisions the account itself.
+    expect(body.principalSubject).toBeUndefined();
     // A field the operator left blank is absent, never an empty string: the
     // endpoint reads an absent field as "leave it alone".
     expect(body.drivingLicence).toBeUndefined();

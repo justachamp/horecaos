@@ -113,9 +113,11 @@ export class CouriersPage implements OnInit {
   protected readonly registerSubmitting = signal(false);
   protected readonly registerError = signal<string | null>(null);
   protected readonly newCourierTypeId = signal('');
-  protected readonly newPrincipalSubject = signal('');
+  protected readonly newFirstName = signal('');
+  protected readonly newLastName = signal('');
+  protected readonly newPhone = signal('');
+  protected readonly newEmail = signal('');
   protected readonly newDisplayReference = signal('');
-  protected readonly newFullName = signal('');
   protected readonly newEngagedFrom = signal(new Date().toISOString().slice(0, 10));
   protected readonly newReason = signal('');
 
@@ -248,9 +250,11 @@ export class CouriersPage implements OnInit {
 
   protected openRegisterForm(): void {
     this.newCourierTypeId.set(this.types()[0]?.courierTypeId ?? '');
-    this.newPrincipalSubject.set('');
+    this.newFirstName.set('');
+    this.newLastName.set('');
+    this.newPhone.set('');
+    this.newEmail.set('');
     this.newDisplayReference.set('');
-    this.newFullName.set('');
     this.newEngagedFrom.set(new Date().toISOString().slice(0, 10));
     this.newReason.set('');
     this.newCompliance.set(emptyCompliance());
@@ -267,14 +271,20 @@ export class CouriersPage implements OnInit {
     return (
       !this.registerSubmitting() &&
       this.newCourierTypeId() !== '' &&
-      this.newPrincipalSubject().trim().length > 0 &&
+      this.newFirstName().trim().length > 0 &&
+      this.newLastName().trim().length > 0 &&
+      this.newPhone().trim().length > 0 &&
       this.newDisplayReference().trim().length > 0 &&
-      this.newFullName().trim().length > 0 &&
       this.newEngagedFrom() !== '' &&
       this.newReason().trim().length > 0
     );
   }
 
+  /**
+   * Row 3.3: no Keycloak subject to type. {@code OperationsCourierController.register}
+   * provisions the courier's own account itself from the name, phone and
+   * email below and stores the identity it gets back.
+   */
   protected async submitRegister(): Promise<void> {
     const scope = this.location.scope();
     if (!scope || !this.canRegister()) {
@@ -285,9 +295,11 @@ export class CouriersPage implements OnInit {
     try {
       await this.api.register(scope.tenantId, {
         courierTypeId: this.newCourierTypeId(),
-        principalSubject: this.newPrincipalSubject().trim(),
+        firstName: this.newFirstName().trim(),
+        lastName: this.newLastName().trim(),
+        phone: this.newPhone().trim(),
+        email: this.newEmail().trim() || null,
         displayReference: this.newDisplayReference().trim(),
-        fullName: this.newFullName().trim(),
         engagedFrom: this.newEngagedFrom(),
         reason: this.newReason().trim(),
         ...compliancePayload(this.newCompliance(), this.newFuelType()),

@@ -101,13 +101,49 @@
         </label>
 
         <label class="field">
-          <span class="q-caption">{{ 'couriers.register.principalSubject' | t }}</span>
+          <span class="q-caption">{{ 'couriers.register.firstName' | t }}</span>
           <input
             type="text"
-            [value]="newPrincipalSubject()"
-            (input)="newPrincipalSubject.set($any($event.target).value)"
+            [value]="newFirstName()"
+            (input)="newFirstName.set($any($event.target).value)"
+            data-testid="register-first-name"
           />
         </label>
+
+        <label class="field">
+          <span class="q-caption">{{ 'couriers.register.lastName' | t }}</span>
+          <input
+            type="text"
+            [value]="newLastName()"
+            (input)="newLastName.set($any($event.target).value)"
+            data-testid="register-last-name"
+          />
+        </label>
+
+        <label class="field">
+          <span class="q-caption">{{ 'couriers.register.phone' | t }}</span>
+          <input
+            type="tel"
+            [value]="newPhone()"
+            (input)="newPhone.set($any($event.target).value)"
+            [attr.placeholder]="'couriers.register.phone.placeholder' | t"
+            data-testid="register-phone"
+          />
+        </label>
+
+        <label class="field">
+          <span class="q-caption">{{ 'couriers.register.email' | t }}</span>
+          <input
+            type="email"
+            [value]="newEmail()"
+            (input)="newEmail.set($any($event.target).value)"
+            data-testid="register-email"
+          />
+        </label>
+
+        <p class="couriers__hint" data-testid="register-account-note">
+          {{ 'couriers.register.accountNote' | t }}
+        </p>
 
         <label class="field">
           <span class="q-caption">{{ 'couriers.register.displayReference' | t }}</span>
@@ -115,15 +151,6 @@
             type="text"
             [value]="newDisplayReference()"
             (input)="newDisplayReference.set($any($event.target).value)"
-          />
-        </label>
-
-        <label class="field">
-          <span class="q-caption">{{ 'couriers.register.fullName' | t }}</span>
-          <input
-            type="text"
-            [value]="newFullName()"
-            (input)="newFullName.set($any($event.target).value)"
           />
         </label>
 

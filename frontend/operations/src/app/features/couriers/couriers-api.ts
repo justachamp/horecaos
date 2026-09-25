@@ -94,12 +94,20 @@ export interface CourierComplianceFileRequest {
   readonly reason: string;
 }
 
+/**
+ * Gap map row 3.3: no `principalSubject` field. `OperationsCourierController.register`
+ * provisions the courier's own account at the identity provider itself
+ * (`CourierAccountProvisioningService`, the same phone-first path ADR 0116's
+ * staff invitation uses) and stores the identity it gets back — there is
+ * nothing here for an operator to type or get wrong.
+ */
 export interface RegisterCourierRequest extends CourierComplianceFileRequest {
   readonly courierTypeId: string;
-  /** The Keycloak courier-client subject this person signs in as — provisioned outside this console. */
-  readonly principalSubject: string;
+  readonly firstName: string;
+  readonly lastName: string;
+  readonly phone: string;
+  readonly email?: string | null;
   readonly displayReference: string;
-  readonly fullName: string;
   /** ISO date. */
   readonly engagedFrom: string;
   readonly reason: string;
