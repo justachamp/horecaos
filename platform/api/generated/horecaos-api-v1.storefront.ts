@@ -553,6 +553,11 @@ export interface SocialLinkResponse {
   url?: string;
 }
 
+export interface StorefrontAvailabilityResponse {
+  available?: boolean;
+  remainingQuantity?: number;
+}
+
 export interface StorefrontChannelSetupControllerPresentationView {
   ogImageAssetId?: string;
   seoDescription?: string;
@@ -723,6 +728,7 @@ export interface Operations {
   "acceptanceStatus": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/terms/acceptance-status"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { brandName: string; locale: string } } }; responses: { "200": AcceptanceStatusView } };
   "page": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/channels/{channel}/pages/{slug}"; request: { parameters: { path: { channel: string; slug: string; tenantId: string }; query: { locale: string } } }; responses: { "200": PageView } };
   "presentation": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/channels/{channel}/presentation"; request: { parameters: { path: { channel: string; tenantId: string } } }; responses: { "200": StorefrontChannelSetupControllerPresentationView } };
+  "availability": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/locations/{locationId}/variants/{variantId}/availability"; request: { parameters: { path: { locationId: string; tenantId: string; variantId: string }; query: { channel: string } } }; responses: { "200": StorefrontAvailabilityResponse } };
   "image": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/media/{assetId}"; request: { parameters: { path: { assetId: string; tenantId: string } } }; responses: { "200": unknown } };
 }
 

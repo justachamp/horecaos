@@ -799,6 +799,13 @@
             "minLength" : 3,
             "type" : "string"
           },
+          "customerAccountId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "destination" : {
+            "$ref" : "#/components/schemas/OperationsOrderControllerDestinationRequest"
+          },
           "discountMinor" : {
             "format" : "int64",
             "minimum" : 0,
@@ -813,6 +820,11 @@
             "format" : "int64",
             "minimum" : 0,
             "type" : "integer"
+          },
+          "fulfillmentMode" : {
+            "maxLength" : 16,
+            "minLength" : 0,
+            "type" : "string"
           },
           "lines" : {
             "items" : {
@@ -1980,6 +1992,136 @@
           }
         },
         "required" : [ "approvalChannel", "mode", "reason", "timeoutAction" ],
+        "type" : "object"
+      },
+      "AutomationRuleControllerReorderRequest" : {
+        "properties" : {
+          "orderedRuleIds" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "minItems" : 1,
+            "type" : "array"
+          }
+        },
+        "required" : [ "orderedRuleIds" ],
+        "type" : "object"
+      },
+      "AutomationRuleRequest" : {
+        "properties" : {
+          "channel" : {
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "consentPurpose" : {
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "cooldownDays" : {
+            "exclusiveMinimum" : 0,
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "name" : {
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "templateKey" : {
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "triggerConfig" : {
+            "additionalProperties" : {
+              "format" : "int32",
+              "type" : "integer"
+            },
+            "minProperties" : 1,
+            "type" : "object"
+          },
+          "triggerType" : {
+            "minLength" : 1,
+            "type" : "string"
+          }
+        },
+        "required" : [ "channel", "consentPurpose", "name", "templateKey", "triggerConfig", "triggerType" ],
+        "type" : "object"
+      },
+      "AutomationRuleResponse" : {
+        "properties" : {
+          "activatedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "activatedBy" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "active" : {
+            "type" : "boolean"
+          },
+          "channel" : {
+            "type" : "string"
+          },
+          "consentPurpose" : {
+            "type" : "string"
+          },
+          "cooldownDays" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "priority" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "templateKey" : {
+            "type" : "string"
+          },
+          "triggerConfig" : {
+            "additionalProperties" : { },
+            "type" : "object"
+          },
+          "triggerType" : {
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "AutomationRunResponse" : {
+        "properties" : {
+          "cancelledReason" : {
+            "type" : "string"
+          },
+          "customerAccountId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "firedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "refusalReason" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          }
+        },
         "type" : "object"
       },
       "AvailabilityDecision" : {
@@ -4273,6 +4415,33 @@
         },
         "type" : "object"
       },
+      "ChannelStopThresholdRequest" : {
+        "properties" : {
+          "reasonCode" : {
+            "maxLength" : 64,
+            "minLength" : 0,
+            "pattern" : "^[A-Z_]{1,48}$",
+            "type" : "string"
+          },
+          "stopAtOrBelow" : {
+            "minimum" : 0,
+            "type" : "number"
+          }
+        },
+        "required" : [ "reasonCode", "stopAtOrBelow" ],
+        "type" : "object"
+      },
+      "ChannelStopThresholdResponse" : {
+        "properties" : {
+          "channelSystemType" : {
+            "type" : "string"
+          },
+          "stopAtOrBelow" : {
+            "type" : "number"
+          }
+        },
+        "type" : "object"
+      },
       "ChannelView" : {
         "properties" : {
           "brandColorPrimary" : {
@@ -5874,6 +6043,13 @@
             },
             "type" : "array"
           },
+          "lastSeenAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "online" : {
+            "type" : "boolean"
+          },
           "photoMediaId" : {
             "format" : "uuid",
             "type" : "string"
@@ -6039,6 +6215,10 @@
           "kitchenReadyOnly" : {
             "type" : "boolean"
           },
+          "onlineWithinMinutes" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
           "penaltyApprovalThresholdMinor" : {
             "format" : "int64",
             "type" : "integer"
@@ -6110,6 +6290,11 @@
           },
           "kitchenReadyOnly" : {
             "type" : "boolean"
+          },
+          "onlineWithinMinutes" : {
+            "exclusiveMinimum" : 0,
+            "format" : "int32",
+            "type" : "integer"
           },
           "penaltyApprovalThresholdMinor" : {
             "format" : "int64",
@@ -7475,6 +7660,42 @@
             "type" : "integer"
           }
         },
+        "type" : "object"
+      },
+      "CustomerLabelResponse" : {
+        "properties" : {
+          "anonymized" : {
+            "type" : "boolean"
+          },
+          "customerName" : {
+            "type" : "string"
+          },
+          "customerPhone" : {
+            "type" : "string"
+          },
+          "customerType" : {
+            "type" : "string"
+          },
+          "orderId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "CustomerLabelsRequest" : {
+        "properties" : {
+          "orderIds" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "maxItems" : 500,
+            "minItems" : 0,
+            "type" : "array"
+          }
+        },
+        "required" : [ "orderIds" ],
         "type" : "object"
       },
       "CustomerLookupCandidateResponse" : {
@@ -8951,6 +9172,9 @@
           },
           "expiresAt" : {
             "format" : "date-time",
+            "type" : "string"
+          },
+          "firstLineProductName" : {
             "type" : "string"
           },
           "guestReferenceHash" : {
@@ -11972,6 +12196,33 @@
         "required" : [ "byLocale" ],
         "type" : "object"
       },
+      "LocationAverageListResponse" : {
+        "properties" : {
+          "provenance" : {
+            "$ref" : "#/components/schemas/ProvenanceResponse"
+          },
+          "rows" : {
+            "items" : {
+              "$ref" : "#/components/schemas/LocationAverageResponse"
+            },
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
+      "LocationAverageResponse" : {
+        "properties" : {
+          "averageSeconds" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "LocationChannelsResponse" : {
         "properties" : {
           "channelCodes" : {
@@ -13808,6 +14059,22 @@
         "required" : [ "accuracyMeters", "capturedAt", "latitude", "longitude" ],
         "type" : "object"
       },
+      "OnHandRequest" : {
+        "properties" : {
+          "quantity" : {
+            "minimum" : 0,
+            "type" : "number"
+          },
+          "reasonCode" : {
+            "maxLength" : 64,
+            "minLength" : 0,
+            "pattern" : "^[A-Z_]{1,48}$",
+            "type" : "string"
+          }
+        },
+        "required" : [ "quantity", "reasonCode" ],
+        "type" : "object"
+      },
       "OnboardingControllerReasonRequest" : {
         "properties" : {
           "reason" : {
@@ -14846,6 +15113,27 @@
         },
         "type" : "object"
       },
+      "OperatorTodayCountsResponse" : {
+        "properties" : {
+          "acceptedCount" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "businessDayFrom" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "businessDayTo" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "createdCount" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
       "OrderActionResponse" : {
         "properties" : {
           "action" : {
@@ -15367,6 +15655,24 @@
           }
         },
         "required" : [ "customerTexts", "internalName", "kind", "systemCategory" ],
+        "type" : "object"
+      },
+      "OrderOutcomeReasonControllerReorderRequest" : {
+        "properties" : {
+          "kind" : {
+            "enum" : [ "CANCELLATION", "COMPLETION" ],
+            "type" : "string"
+          },
+          "orderedReasonIds" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "minItems" : 1,
+            "type" : "array"
+          }
+        },
+        "required" : [ "kind", "orderedReasonIds" ],
         "type" : "object"
       },
       "OrderOutcomeReasonControllerVersionResponse" : {
@@ -17356,6 +17662,9 @@
             "format" : "int64",
             "type" : "integer"
           },
+          "destinationLabel" : {
+            "type" : "string"
+          },
           "distanceMeters" : {
             "format" : "int32",
             "type" : "integer"
@@ -18772,6 +19081,22 @@
         "required" : [ "variantId" ],
         "type" : "object"
       },
+      "QuantityDefaultRequest" : {
+        "properties" : {
+          "defaultQuantity" : {
+            "minimum" : 0,
+            "type" : "number"
+          },
+          "reasonCode" : {
+            "maxLength" : 64,
+            "minLength" : 0,
+            "pattern" : "^[A-Z_]{1,48}$",
+            "type" : "string"
+          }
+        },
+        "required" : [ "reasonCode" ],
+        "type" : "object"
+      },
       "QuarantineBacklogView" : {
         "properties" : {
           "openItems" : {
@@ -19921,6 +20246,12 @@
             "minLength" : 0,
             "type" : "string"
           },
+          "email" : {
+            "format" : "email",
+            "maxLength" : 255,
+            "minLength" : 0,
+            "type" : "string"
+          },
           "emergencyContact" : {
             "maxLength" : 256,
             "minLength" : 0,
@@ -19930,8 +20261,9 @@
             "format" : "date",
             "type" : "string"
           },
-          "fullName" : {
-            "minLength" : 1,
+          "firstName" : {
+            "maxLength" : 100,
+            "minLength" : 0,
             "type" : "string"
           },
           "homeAddress" : {
@@ -19939,9 +20271,19 @@
             "minLength" : 0,
             "type" : "string"
           },
+          "lastName" : {
+            "maxLength" : 100,
+            "minLength" : 0,
+            "type" : "string"
+          },
           "passport" : {
             "maxLength" : 32,
             "minLength" : 0,
+            "type" : "string"
+          },
+          "phone" : {
+            "maxLength" : 20,
+            "minLength" : 9,
             "type" : "string"
           },
           "photoMediaId" : {
@@ -19951,10 +20293,6 @@
           "pinfl" : {
             "maxLength" : 32,
             "minLength" : 0,
-            "type" : "string"
-          },
-          "principalSubject" : {
-            "minLength" : 1,
             "type" : "string"
           },
           "reason" : {
@@ -19987,7 +20325,7 @@
             "type" : "string"
           }
         },
-        "required" : [ "courierTypeId", "displayReference", "engagedFrom", "fullName", "principalSubject", "reason" ],
+        "required" : [ "courierTypeId", "displayReference", "engagedFrom", "firstName", "lastName", "phone", "reason" ],
         "type" : "object"
       },
       "RegisterLegalEntityRequest" : {
@@ -20383,24 +20721,6 @@
             "type" : "string"
           }
         },
-        "type" : "object"
-      },
-      "ReorderRequest" : {
-        "properties" : {
-          "kind" : {
-            "enum" : [ "CANCELLATION", "COMPLETION" ],
-            "type" : "string"
-          },
-          "orderedReasonIds" : {
-            "items" : {
-              "format" : "uuid",
-              "type" : "string"
-            },
-            "minItems" : 1,
-            "type" : "array"
-          }
-        },
-        "required" : [ "kind", "orderedReasonIds" ],
         "type" : "object"
       },
       "ReplayRequest" : {
@@ -21342,6 +21662,13 @@
           },
           "engagementStatus" : {
             "type" : "string"
+          },
+          "lastSeenAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "online" : {
+            "type" : "boolean"
           },
           "reverificationDueOn" : {
             "format" : "date",
@@ -23741,11 +24068,63 @@
         },
         "type" : "object"
       },
+      "StockPositionResponse" : {
+        "properties" : {
+          "binaryAvailable" : {
+            "type" : "boolean"
+          },
+          "channelStopThresholds" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ChannelStopThresholdResponse"
+            },
+            "type" : "array"
+          },
+          "defaultQuantity" : {
+            "type" : "number"
+          },
+          "lastResetBusinessDate" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "onHandQuantity" : {
+            "type" : "number"
+          },
+          "remainingQuantity" : {
+            "type" : "number"
+          },
+          "reservedQuantity" : {
+            "type" : "number"
+          },
+          "stockItemId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "trackingMode" : {
+            "type" : "string"
+          },
+          "variantId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "StopInAllBranchesResponse" : {
         "properties" : {
           "locationsChanged" : {
             "format" : "int32",
             "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "StorefrontAvailabilityResponse" : {
+        "properties" : {
+          "available" : {
+            "type" : "boolean"
+          },
+          "remainingQuantity" : {
+            "type" : "number"
           }
         },
         "type" : "object"
@@ -26308,6 +26687,72 @@
         },
         "type" : "object"
       },
+      "VduBoardResponse" : {
+        "properties" : {
+          "tickets" : {
+            "items" : {
+              "$ref" : "#/components/schemas/VduTicketResponse"
+            },
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
+      "VduItemView" : {
+        "properties" : {
+          "quantity" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "stationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "VduTicketResponse" : {
+        "properties" : {
+          "courierEtaAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "createdAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "externalReference" : {
+            "type" : "string"
+          },
+          "fulfilmentMode" : {
+            "type" : "string"
+          },
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/VduItemView"
+            },
+            "type" : "array"
+          },
+          "sequenceLabel" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "targetReadyAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "ticketId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "VerifyRequest" : {
         "properties" : {
           "evidenceMediaId" : {
@@ -27184,7 +27629,7 @@
     "/api/v1/control-plane/capabilities" : {
       "get" : {
         "description" : "The code-owned registry, not one session's slice of it. Platform-admin only: the vocabulary itself is what an approval policy's requiredApproverCapability and a grant's roleCode are built from.",
-        "operationId" : "list_46",
+        "operationId" : "list_47",
         "responses" : {
           "200" : {
             "content" : {
@@ -27436,7 +27881,7 @@
     "/api/v1/control-plane/event-contracts" : {
       "get" : {
         "description" : "Code-owned (ADR 0032): a producer cannot publish an event with no entry here. Static within a build, so there is nothing to paginate.",
-        "operationId" : "list_45",
+        "operationId" : "list_46",
         "responses" : {
           "200" : {
             "content" : {
@@ -27592,7 +28037,7 @@
     },
     "/api/v1/control-plane/grants" : {
       "get" : {
-        "operationId" : "list_33",
+        "operationId" : "list_34",
         "responses" : {
           "200" : {
             "content" : {
@@ -27682,7 +28127,7 @@
     "/api/v1/control-plane/incidents" : {
       "get" : {
         "description" : "Each alert class and subject has at most one live incident; raising it again counts another occurrence.",
-        "operationId" : "list_44",
+        "operationId" : "list_45",
         "parameters" : [ {
           "in" : "query",
           "name" : "includeResolved",
@@ -28294,7 +28739,7 @@
     },
     "/api/v1/control-plane/onboarding-templates" : {
       "get" : {
-        "operationId" : "list_43",
+        "operationId" : "list_44",
         "responses" : {
           "200" : {
             "content" : {
@@ -28677,7 +29122,7 @@
     "/api/v1/control-plane/template-reviews" : {
       "get" : {
         "description" : "Versions in force or in draft, awaiting first. A version awaiting or refused is not sent. Filter to one state with ?state=.",
-        "operationId" : "list_42",
+        "operationId" : "list_43",
         "parameters" : [ {
           "in" : "query",
           "name" : "state",
@@ -28888,7 +29333,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/approval-policies" : {
       "get" : {
         "description" : "Every version of each policy, newest first. An action code with no row here needs no second signature, which is the state every action is in until somebody publishes one.",
-        "operationId" : "list_32",
+        "operationId" : "list_33",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -31205,7 +31650,7 @@
     },
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/menus" : {
       "get" : {
-        "operationId" : "list_31",
+        "operationId" : "list_32",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -31243,7 +31688,7 @@
       },
       "post" : {
         "description" : "Starts in DRAFT with no membership.",
-        "operationId" : "create_18",
+        "operationId" : "create_19",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -31421,7 +31866,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/menus/{menuId}" : {
       "put" : {
         "description" : "Whole-record PUT with an expected version, the same discipline CommentPresetController's own update already uses.",
-        "operationId" : "update_8",
+        "operationId" : "update_9",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -32877,7 +33322,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/conversations/flows" : {
       "get" : {
         "description" : "Every version of every flow key, newest first. At most one version per flow key is ever active at once.",
-        "operationId" : "list_41",
+        "operationId" : "list_42",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -32971,7 +33416,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/delivery-tariffs" : {
       "get" : {
         "description" : "Operations §3.7.",
-        "operationId" : "list_30",
+        "operationId" : "list_31",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -33009,7 +33454,7 @@
       },
       "post" : {
         "description" : "The lineage only; the numbers live on versions. At most one tariff per brand may be the default, which is the last rung of fee resolution — and there is no rung after it, because a missing rate table and free delivery must never look alike.",
-        "operationId" : "create_17",
+        "operationId" : "create_18",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -33204,7 +33649,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/delivery-tariffs/{tariffId}/versions/{version}/activate" : {
       "post" : {
         "description" : "Refuses a band gap, an inverted fee bound, and ROAD distance with no routing binding installed. Every problem is returned at once.",
-        "operationId" : "activate_13",
+        "operationId" : "activate_14",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -33662,7 +34107,7 @@
       },
       "post" : {
         "description" : "Draft: nothing in it prices anything until it is activated, so a season's prices can be built during service without moving a live one.",
-        "operationId" : "create_16",
+        "operationId" : "create_17",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -33827,7 +34272,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/pricing/price-books/{priceBookId}/activation" : {
       "post" : {
         "description" : "Requires If-Match carrying the book's version, so two operators activating at once cannot both win. Quotes already issued are untouched: they carry their own totals and are honoured at the price the customer was shown until they expire.",
-        "operationId" : "activate_12",
+        "operationId" : "activate_13",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -34369,7 +34814,7 @@
     },
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/products/{productId}/comment-presets" : {
       "get" : {
-        "operationId" : "list_29",
+        "operationId" : "list_30",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -34563,7 +35008,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/service-schedules" : {
       "get" : {
         "description" : "The Hours tab's rebind picker and the shared-schedule warning's source: each schedule's name and how many locations currently bind it.",
-        "operationId" : "list_28",
+        "operationId" : "list_29",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -34601,7 +35046,7 @@
       },
       "post" : {
         "description" : "Named and reusable, so thirty branches on one Ramadan timetable edit one object. That is the point, and also the accident.",
-        "operationId" : "create_15",
+        "operationId" : "create_16",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -34790,7 +35235,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/service-zones" : {
       "get" : {
         "description" : "Operations §3.6.",
-        "operationId" : "list_27",
+        "operationId" : "list_28",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -34828,7 +35273,7 @@
       },
       "post" : {
         "description" : "Creates the lineage only. A zone has no geometry until a version is drafted and activated, so registering one changes nothing a customer sees.",
-        "operationId" : "create_14",
+        "operationId" : "create_15",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -35023,7 +35468,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/service-zones/{zoneId}/versions/{version}/activate" : {
       "post" : {
         "description" : "Refuses self-intersecting rings, geometry outside the region's box, and an area above the platform maximum — which is what stops an operator drawing a polygon around the country by accident. Every reason is returned at once rather than one attempt at a time.",
-        "operationId" : "activate_11",
+        "operationId" : "activate_12",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -35116,7 +35561,7 @@
     },
     "/api/v1/control-plane/tenants/{tenantId}/comment-presets" : {
       "get" : {
-        "operationId" : "list_26",
+        "operationId" : "list_27",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -35146,7 +35591,7 @@
       },
       "post" : {
         "description" : "Refused (409) when the code is already registered for this tenant. pos_modifier_code is the coded value a POS export maps this preset to where it expects a modifier; left null, the preset still renders on the KDS and exports nowhere.",
-        "operationId" : "create_13",
+        "operationId" : "create_14",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -35185,7 +35630,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/comment-presets/{presetId}" : {
       "put" : {
         "description" : "Whole-record PUT with an expected version, the same discipline every other versioned reference table in this platform uses. Archiving is status=ARCHIVED here, not a DELETE: a preset already selected on an open order's line must stay resolvable.",
-        "operationId" : "update_7",
+        "operationId" : "update_8",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -35329,7 +35774,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/grants" : {
       "get" : {
         "description" : "Active only by default. Pass includeInactive=true for staff-and-access.md §2's suspended-row state and §11.2's restore action, which both need to see a revoked grant, not only what remains active.",
-        "operationId" : "list_25",
+        "operationId" : "list_26",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -35493,7 +35938,7 @@
     },
     "/api/v1/control-plane/tenants/{tenantId}/integrations" : {
       "get" : {
-        "operationId" : "list_24",
+        "operationId" : "list_25",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -36154,7 +36599,7 @@
     },
     "/api/v1/control-plane/tenants/{tenantId}/legal-entities" : {
       "get" : {
-        "operationId" : "list_23",
+        "operationId" : "list_24",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -36304,7 +36749,7 @@
       },
       "put" : {
         "description" : "Everything but the taxpayer number and the lifecycle status: legal and short name, VAT registration and certificate, tax profile, registered address and contact phone. There was no way to fix any of these before this endpoint existed — a registered entity could never be corrected.",
-        "operationId" : "update_6",
+        "operationId" : "update_7",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -36359,7 +36804,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/legal-entities/{entityId}/activate" : {
       "post" : {
         "description" : "Only an ACTIVE entity may be named as a seller. Permitted from DRAFT or SUSPENDED.",
-        "operationId" : "activate_10",
+        "operationId" : "activate_11",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -36707,7 +37152,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/onboarding-runs/{runId}/activate" : {
       "post" : {
         "description" : "Requires every required step to have completed, plus platform approval where a policy demands it. Activating twice produces one transition.",
-        "operationId" : "activate_9",
+        "operationId" : "activate_10",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -36969,7 +37414,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/order-outcome-reasons" : {
       "get" : {
         "description" : "Read with ORDER_READ rather than the manage capability, because the cancel dialog has to populate its list for every operator who can cancel an order and almost none of them may author one.",
-        "operationId" : "list_22",
+        "operationId" : "list_23",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -37015,7 +37460,7 @@
       },
       "post" : {
         "description" : "A cancellation reason decides the stock disposition, the liable party and the refund posture; none of the three has a safe default and all three are required. A completion reason names the fulfilment modes it is valid for, because without that «Самовывоз выполнен» lands on a delivery order and the courier SLA report quietly loses it.",
-        "operationId" : "create_12",
+        "operationId" : "create_13",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -37094,7 +37539,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/order-outcome-reasons/reorder" : {
       "put" : {
         "description" : "Whole-set: orderedReasonIds must name every currently active reason of this kind exactly once. If-Match carries the highest version among those reasons — there is no separate list-level aggregate to version — the same value the caller can compute from the list it already rendered. Returns the reordered list, each reason's version now bumped, so the caller never needs a second read before its next write.",
-        "operationId" : "reorder_1",
+        "operationId" : "reorder_2",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -37108,7 +37553,7 @@
           "content" : {
             "application/json" : {
               "schema" : {
-                "$ref" : "#/components/schemas/ReorderRequest"
+                "$ref" : "#/components/schemas/OrderOutcomeReasonControllerReorderRequest"
               }
             }
           },
@@ -37164,7 +37609,7 @@
       },
       "put" : {
         "description" : "Outcomes already recorded keep the snapshot they were recorded with. That duplication is deliberate: renaming a reason next year must not rewrite last year's funnel.",
-        "operationId" : "update_5",
+        "operationId" : "update_6",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -37433,7 +37878,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/pos-mappings" : {
       "get" : {
         "description" : "Optionally filtered by status (PROPOSED, ACTIVE, CONFLICTED, RETIRED). Newest-updated first.",
-        "operationId" : "list_21",
+        "operationId" : "list_22",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -37498,7 +37943,7 @@
       },
       "post" : {
         "description" : "OPERATOR-sourced (V0013's CHECK has always allowed it; nothing wrote it before this). Refused with RESOURCE_CONFLICT when an ACTIVE mapping already claims either side, or when a RETIRED row already burned this external or HorecaOS id for this binding and type — see PosMappingService.create's own doc.",
-        "operationId" : "create_11",
+        "operationId" : "create_12",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -38146,7 +38591,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/sales-channels" : {
       "get" : {
         "description" : "Archived channels are listed because a historical order still renders through one; the status says whether a new cart may use it. Each row also carries its branch count, enabled payment-method count and enabled fulfilment modes -- settings.md 10.4a's three previously absent columns.",
-        "operationId" : "list_20",
+        "operationId" : "list_21",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -38176,7 +38621,7 @@
       },
       "post" : {
         "description" : "The system type comes from a closed, code-owned list. A tenant may run several channels of one type — Uzum Tezkor and Yandex Eda are both AGGREGATOR and must differ in price plane, payment mix, and reporting.",
-        "operationId" : "create_10",
+        "operationId" : "create_11",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -38215,7 +38660,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/sales-channels/{channelId}" : {
       "put" : {
         "description" : "Everything but the code and the system type, which ADR 0036 fixes at creation because behaviour keys on the type.",
-        "operationId" : "update_4",
+        "operationId" : "update_5",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -38315,7 +38760,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/sales-channels/{channelId}/deactivate" : {
       "post" : {
         "description" : "Reversible with reactivate, unlike archive. Row 10.4a's ACTIVE→INACTIVE transition, declared since ADR 0036 and unreachable until now.",
-        "operationId" : "deactivate_1",
+        "operationId" : "deactivate_2",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -39246,7 +39691,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/statements" : {
       "get" : {
         "description" : "Newest month first, void ones included.",
-        "operationId" : "list_40",
+        "operationId" : "list_41",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -40724,7 +41169,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/branch-tags" : {
       "get" : {
-        "operationId" : "list_19",
+        "operationId" : "list_20",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -40761,7 +41206,7 @@
         "tags" : [ "Branch tags" ]
       },
       "post" : {
-        "operationId" : "create_9",
+        "operationId" : "create_10",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -40871,7 +41316,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/brands" : {
       "get" : {
-        "operationId" : "list_37",
+        "operationId" : "list_38",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -41032,7 +41477,7 @@
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/conversations" : {
       "get" : {
         "description" : "HANDED_TO_OPERATOR conversations first, then a FLOW_ACTIVE conversation whose newest message nobody has answered yet, then everything else by last activity. No message bodies here — open a conversation for its decrypted history.",
-        "operationId" : "list_39",
+        "operationId" : "list_40",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -41334,7 +41779,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/delivery-tariffs" : {
       "get" : {
-        "operationId" : "list_18",
+        "operationId" : "list_19",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -41372,7 +41817,7 @@
       },
       "post" : {
         "description" : "The lineage only; the numbers live on versions. At most one tariff per brand may be the default.",
-        "operationId" : "create_8",
+        "operationId" : "create_9",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -41567,7 +42012,7 @@
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/delivery-tariffs/{tariffId}/versions/{version}/activate" : {
       "post" : {
         "description" : "Refuses a band gap, an inverted fee bound, and ROAD distance with no routing binding installed. Every problem is returned at once.",
-        "operationId" : "activate_8",
+        "operationId" : "activate_9",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -41620,7 +42065,7 @@
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/fiscal-terminals" : {
       "get" : {
         "description" : "Sorted the way settings.md asks: failing health first, never checked next, healthy last — an operator opens this screen to find what is broken.",
-        "operationId" : "list_17",
+        "operationId" : "list_18",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -43985,7 +44430,7 @@
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/promo-codes" : {
       "get" : {
         "description" : "Every lifecycle state together (a freshly drafted code's coupon row is SUSPENDED until activated; a retired one is ARCHIVED), newest first — an authoring screen needs the lineage, not only what is live. Unlike a loyalty policy, more than one code may be live at once.",
-        "operationId" : "list_16",
+        "operationId" : "list_17",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -44070,7 +44515,7 @@
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/promo-codes/{couponId}/activate" : {
       "post" : {
         "description" : "Promotes the promotion and the coupon together, in one transaction. Unlike a loyalty policy, activating one code never retires another: a brand may run several promo codes at once.",
-        "operationId" : "activate_7",
+        "operationId" : "activate_8",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -44432,7 +44877,7 @@
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/reviews" : {
       "get" : {
         "description" : "Every filter is optional. Cursor-paginated per ADR 0031: pass the previous page's nextCursor, and a null nextCursor is the end. Row 5.2h: pass customerAccountId to narrow to one customer's own reviews — the customer detail pane's own tab.",
-        "operationId" : "list_38",
+        "operationId" : "list_39",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -44595,7 +45040,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/service-zones" : {
       "get" : {
-        "operationId" : "list_15",
+        "operationId" : "list_16",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -44633,7 +45078,7 @@
       },
       "post" : {
         "description" : "Creates the lineage only. A zone has no geometry until a version is drafted and activated, so registering one changes nothing a customer sees.",
-        "operationId" : "create_7",
+        "operationId" : "create_8",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -44966,7 +45411,7 @@
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/service-zones/{zoneId}/versions/{version}/activate" : {
       "post" : {
         "description" : "Refuses self-intersecting rings, geometry outside the region's box, and an area above the platform maximum. Every reason is returned at once rather than one attempt at a time.",
-        "operationId" : "activate_6",
+        "operationId" : "activate_7",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -45019,7 +45464,7 @@
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/service-zones/{zoneId}/versions/{version}/deactivate" : {
       "post" : {
         "description" : "The zone then covers nothing — ADR 0037's safe direction. Deliberately the same capability as activation: deciding a drawing stops governing is the same class of decision as deciding it starts.",
-        "operationId" : "deactivate",
+        "operationId" : "deactivate_1",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -45654,7 +46099,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/courier-policy" : {
       "get" : {
-        "description" : "Omit brandId/locationId for the tenant-wide resolution; supply either to see what a specific brand or location actually resolves. Wave P38 gave this document a writer beside this read (see PUT of the same path) and five new fields couriers.md §16 always named: the GPS master toggle with its accept and status-change radii, the kitchen-ready-only gate, when the customer's exact location is revealed, and the post-delivery payment check. Courier billing mode stays refused by ADR 0042 and has no field here; the telemetry collection gate is a separate, PLATFORM_ADMIN-only ADR 0030 key and is not part of this document. Authorization is checked against brandId/locationId's own resolved scope, not a fixed TENANT default, so a BRAND_MANAGER reading their own brand's policy is not refused for a grant the role bundle already gives them.",
+        "description" : "Omit brandId/locationId for the tenant-wide resolution; supply either to see what a specific brand or location actually resolves. Wave P38 gave this document a writer beside this read (see PUT of the same path) and five new fields couriers.md §16 always named: the GPS master toggle with its accept and status-change radii, the kitchen-ready-only gate, when the customer's exact location is revealed, and the post-delivery payment check. Gap map row 3.3 added a seventh, onlineWithinMinutes, the roster's online threshold — the only one of the newer fields anything outside this controller actually reads (CourierRosterQueryService). Courier billing mode stays refused by ADR 0042 and has no field here; the telemetry collection gate is a separate, PLATFORM_ADMIN-only ADR 0030 key and is not part of this document. Authorization is checked against brandId/locationId's own resolved scope, not a fixed TENANT default, so a BRAND_MANAGER reading their own brand's policy is not refused for a grant the role bundle already gives them.",
         "operationId" : "courierPolicy",
         "parameters" : [ {
           "in" : "path",
@@ -45697,7 +46142,7 @@
         "tags" : [ "Courier operations" ]
       },
       "put" : {
-        "description" : "Whole-document replace: every field is required, because ADR 0030 versions the document as one unit rather than merging a partial write over the version it replaces. Omit brandId/locationId to publish the tenant-wide default; supply either to publish a brand or location override. The version this replaces is never touched — PolicyResolver.pinned keeps answering with it for whatever already resolved it. Authorization is checked against that same resolved scope (see the class-level doc on courierPolicy above), so a BRAND_MANAGER publishing their own brand's override is not refused for a grant the role bundle already gives them.",
+        "description" : "Whole-document replace: every field is required, because ADR 0030 versions the document as one unit rather than merging a partial write over the version it replaces. Omit brandId/locationId to publish the tenant-wide default; supply either to publish a brand or location override. The version this replaces is never touched — PolicyResolver.pinned keeps answering with it for whatever already resolved it. Authorization is checked against that same resolved scope (see the class-level doc on courierPolicy above), so a BRAND_MANAGER publishing their own brand's override is not refused for a grant the role bundle already gives them. Requires If-Match carrying the version the GET at this same scope returned (ADR 0031's concurrency section) — the document itself is append-only versioned and every write technically succeeds, so without this check two operators editing the same scope's policy from two open tabs would silently overwrite one another's fields with whatever their own stale form last held.",
         "operationId" : "writeCourierPolicy",
         "parameters" : [ {
           "in" : "path",
@@ -46589,7 +47034,7 @@
         "tags" : [ "Courier operations" ]
       },
       "post" : {
-        "description" : "Opens in PENDING_VERIFICATION. Onboarding somebody and attesting to their registration are different acts by different people, and this call deliberately cannot do the second. The compliance fields are optional and may be filed here or later: an incomplete file is a state the roster is built to show, and refusing the registration over a missing passport would only teach operators to type something into the box.",
+        "description" : "Opens in PENDING_VERIFICATION. Onboarding somebody and attesting to their registration are different acts by different people, and this call deliberately cannot do the second. The compliance fields are optional and may be filed here or later: an incomplete file is a state the roster is built to show, and refusing the registration over a missing passport would only teach operators to type something into the box. Gap map row 3.3: the courier's own account at the identity provider is created here, the same phone-first path ADR 0116's staff invitation uses (CourierAccountProvisioningService) — the operator no longer types a Keycloak subject; there is no field for one.",
         "operationId" : "register_3",
         "parameters" : [ {
           "in" : "path",
@@ -47281,7 +47726,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/integrations" : {
       "get" : {
-        "operationId" : "list_13",
+        "operationId" : "list_14",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -47861,7 +48306,7 @@
     "/api/v1/operations/tenants/{tenantId}/integrations/{installationId}/partner-clients" : {
       "get" : {
         "description" : "Never the secret value — only the ADR 0028 reference, so an operator can see that a credential is configured and when it was last rotated or used.",
-        "operationId" : "list_14",
+        "operationId" : "list_15",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -48285,7 +48730,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/legal-entities" : {
       "get" : {
-        "operationId" : "list_12",
+        "operationId" : "list_13",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -48435,7 +48880,7 @@
       },
       "put" : {
         "description" : "Everything but the taxpayer number and the lifecycle status. Mirrors LegalEntityController#update exactly.",
-        "operationId" : "update_3",
+        "operationId" : "update_4",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -48490,7 +48935,7 @@
     "/api/v1/operations/tenants/{tenantId}/legal-entities/{entityId}/activate" : {
       "post" : {
         "description" : "Only an ACTIVE entity may be named as a seller. Permitted from DRAFT or SUSPENDED.",
-        "operationId" : "activate_5",
+        "operationId" : "activate_6",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -48866,7 +49311,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/merchant-bindings" : {
       "get" : {
-        "operationId" : "list_11",
+        "operationId" : "list_12",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -48971,7 +49416,7 @@
     "/api/v1/operations/tenants/{tenantId}/merchant-bindings/{bindingId}/activate" : {
       "post" : {
         "description" : "Only an ACTIVE binding resolves for a payment. Permitted from DRAFT or SUSPENDED; refused if this legal entity already has a different ACTIVE binding for the same provider.",
-        "operationId" : "activate_4",
+        "operationId" : "activate_5",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -49160,7 +49605,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/order-outcome-reasons" : {
       "get" : {
-        "operationId" : "list_10",
+        "operationId" : "list_11",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -49205,7 +49650,7 @@
         "tags" : [ "Order outcome reasons" ]
       },
       "post" : {
-        "operationId" : "create_6",
+        "operationId" : "create_7",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -49282,7 +49727,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/order-outcome-reasons/reorder" : {
       "put" : {
-        "operationId" : "reorder",
+        "operationId" : "reorder_1",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -49296,7 +49741,7 @@
           "content" : {
             "application/json" : {
               "schema" : {
-                "$ref" : "#/components/schemas/ReorderRequest"
+                "$ref" : "#/components/schemas/OrderOutcomeReasonControllerReorderRequest"
               }
             }
           },
@@ -49352,7 +49797,7 @@
       },
       "put" : {
         "description" : "Outcomes already recorded keep the snapshot they were recorded with; see the delegate's own Javadoc for why that duplication is deliberate.",
-        "operationId" : "update_2",
+        "operationId" : "update_3",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -50013,7 +50458,7 @@
     "/api/v1/operations/tenants/{tenantId}/payment-methods" : {
       "get" : {
         "description" : "Disabled methods are listed too -- a historical order still names one, and an operator re-enabling a method should find it rather than re-create it. This is where row 10.4b's channel matrix gets its columns from.",
-        "operationId" : "list_9",
+        "operationId" : "list_10",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -50043,7 +50488,7 @@
       },
       "post" : {
         "description" : "The code and base type (fiscal responsibility) are fixed here and can never change afterward -- a tender already snapshots the responsibility at settlement time.",
-        "operationId" : "create_5",
+        "operationId" : "create_6",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -50082,7 +50527,7 @@
     "/api/v1/operations/tenants/{tenantId}/payment-methods/{methodId}" : {
       "put" : {
         "description" : "The code and base type never change here.",
-        "operationId" : "update_1",
+        "operationId" : "update_2",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -50136,7 +50581,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/payment-methods/{methodId}/activate" : {
       "post" : {
-        "operationId" : "activate_3",
+        "operationId" : "activate_4",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -50498,7 +50943,7 @@
     "/api/v1/operations/tenants/{tenantId}/regions" : {
       "get" : {
         "description" : "Its own, and the platform's — V0025's nullable tenant: \"Tashkent is not one tenant's fact\". A platform region is marked as such and is read-only to a tenant.",
-        "operationId" : "list_8",
+        "operationId" : "list_9",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -50528,7 +50973,7 @@
       },
       "post" : {
         "description" : "The SW/NE box is what constrains the geocoder and what a zone activation is checked against, so a box that is inverted, has no area, or does not contain its own centre is refused with every reason at once.",
-        "operationId" : "create_4",
+        "operationId" : "create_5",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -50567,7 +51012,7 @@
     "/api/v1/operations/tenants/{tenantId}/regions/{regionId}" : {
       "put" : {
         "description" : "A tenant may rewrite its own regions and not the platform's; a platform region answers not-found rather than forbidden, so this cannot be used to discover which platform regions exist. expectedVersion is required and is the version RegionResponse last reported for this row; a stale one is refused with STALE_VERSION, the optimistic-locking convention every other mutable aggregate on this surface already carries.",
-        "operationId" : "update",
+        "operationId" : "update_1",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -51285,7 +51730,7 @@
     "/api/v1/platform-admin/commercial/modules/{moduleId}/activation" : {
       "post" : {
         "description" : "Irreversible: its terms become immutable at the database. Refused when the approver drafted it.",
-        "operationId" : "activate_2",
+        "operationId" : "activate_3",
         "parameters" : [ {
           "in" : "path",
           "name" : "moduleId",
@@ -51349,7 +51794,7 @@
     "/api/v1/platform-admin/commercial/plan-versions/{planVersionId}/activation" : {
       "post" : {
         "description" : "Irreversible: the version and its entitlements become immutable at the database. Refused when the approver is the version's author.",
-        "operationId" : "activate_1",
+        "operationId" : "activate_2",
         "parameters" : [ {
           "in" : "path",
           "name" : "planVersionId",
@@ -52132,7 +52577,7 @@
     },
     "/api/v1/platform-admin/migration/programs" : {
       "get" : {
-        "operationId" : "list_7",
+        "operationId" : "list_8",
         "parameters" : [ {
           "description" : "The nextCursor of the previous page",
           "in" : "query",
@@ -52168,7 +52613,7 @@
       },
       "post" : {
         "description" : "The program pins the approved mapping and quarantine policy version it executes, so a later revision cannot retroactively change what an already-running migration was allowed to do.",
-        "operationId" : "create_3",
+        "operationId" : "create_4",
         "requestBody" : {
           "content" : {
             "application/json" : {
@@ -56125,6 +56570,58 @@
         "tags" : [ "Storefront channel presentation" ]
       }
     },
+    "/api/v1/storefront/tenants/{tenantId}/locations/{locationId}/variants/{variantId}/availability" : {
+      "get" : {
+        "description" : "The same channel-aware check the operations console uses (GET .../availability?channel=...), scoped to one variant. The channel is required (tenant.sales_channels.system_type, e.g. WEB) so a per-channel-type stop threshold (gap map row 4.4c) applies to the channel actually asking.",
+        "operationId" : "availability_1",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "variantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "channel",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/StorefrontAvailabilityResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Whether a variant is orderable here, and its remaining quantity if tracked",
+        "tags" : [ "Storefront inventory" ]
+      }
+    },
     "/api/v1/storefront/tenants/{tenantId}/media/{assetId}" : {
       "get" : {
         "description" : "302 to a short-lived signed URL. Only a PUBLIC, displayable asset resolves; anything else is not found, and private, missing and unverified are one answer so an id cannot be probed.",
@@ -56652,7 +57149,7 @@
     "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/customers" : {
       "post" : {
         "description" : "orders.md §5.3's create-on-miss, for LOCATION_STAFF/LOCATION_MANAGER (row 1.3a) — the same account CustomerController#createManually opens, through a path this role's own grant actually covers. No Keycloak principal link (ADR 0015/0039); starts non-contactable, with no consent decision recorded for it, on the same 'absence of a decision is not consent' reasoning ConsentService already applies. V0295's origin = OPERATOR and the staff subject who typed it are recorded exactly as createManually records them, so a marketing export filters this account out the same way regardless of which of the two endpoints opened it.",
-        "operationId" : "create_2",
+        "operationId" : "create_3",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -57666,7 +58163,7 @@
     },
     "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/inventory/availability" : {
       "get" : {
-        "description" : "Names every unavailable item, because a customer told only that something is unavailable has to guess which.",
+        "description" : "Names every unavailable item, because a customer told only that something is unavailable has to guess which. An optional channel (tenant.sales_channels.system_type, e.g. AGGREGATOR) also applies that channel type's own per-item stop threshold for a QUANTITY item (gap map row 4.4c) — omitted, this is the plain stock check with no channel cutoff.",
         "operationId" : "checkAvailability",
         "parameters" : [ {
           "in" : "path",
@@ -57705,6 +58202,13 @@
             "minItems" : 0,
             "type" : "array"
           }
+        }, {
+          "in" : "query",
+          "name" : "channel",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
         } ],
         "responses" : {
           "200" : {
@@ -57719,6 +58223,54 @@
           }
         },
         "summary" : "Check whether variants can be fulfilled here",
+        "tags" : [ "Inventory" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/inventory/positions" : {
+      "get" : {
+        "description" : "The console's per-location stock page (gap map row 4.4c): on-hand, reserved and remaining for a QUANTITY item, its daily default and last reset date, and any per-channel-type stop thresholds. On-hand/reserved are reported as zero, and remaining as null, for a BINARY or UNTRACKED item — those columns carry no meaning outside QUANTITY tracking.",
+        "operationId" : "listPositions",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/StockPositionResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Every stock item at this location, with its position",
         "tags" : [ "Inventory" ]
       }
     },
@@ -57888,10 +58440,246 @@
         "tags" : [ "Inventory" ]
       }
     },
+    "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/inventory/variants/{variantId}/channel-stop-thresholds/{channelType}" : {
+      "delete" : {
+        "description" : "That channel goes back to selling to zero, like every channel with no threshold configured at all.",
+        "operationId" : "clearChannelStopThreshold",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "variantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "channelType",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "reasonCode",
+          "required" : true,
+          "schema" : {
+            "maxLength" : 64,
+            "minLength" : 0,
+            "pattern" : "^[A-Z_]{1,48}$",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Remove a channel type's stop threshold",
+        "tags" : [ "Inventory" ]
+      },
+      "put" : {
+        "description" : "gap map row 4.4c: e.g. AGGREGATOR stopping at 3 while the storefront keeps selling to zero. Never enforced by the reservation/hold path — only by the channel-aware availability read (GET .../availability?channel=...).",
+        "operationId" : "setChannelStopThreshold",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "variantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "channelType",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ChannelStopThresholdRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Name the remaining quantity a channel type stops selling this item at",
+        "tags" : [ "Inventory" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/inventory/variants/{variantId}/on-hand" : {
+      "put" : {
+        "description" : "A physical recount, a delivery received, breakage found — every change is a CORRECTION movement with its reason (ADR 0017's own API list: POST .../adjustments) and an ADR 0027 audit fact. Refuses on a BINARY or UNTRACKED item, and on a variant nobody listed here at all.",
+        "operationId" : "setOnHand",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "variantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/OnHandRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Set a QUANTITY item's on-hand count",
+        "tags" : [ "Inventory" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/inventory/variants/{variantId}/quantity-defaults" : {
+      "put" : {
+        "description" : "Every business day (ADR 0043's own boundary for this tenant), InventoryQuantityResetScheduler resets on-hand to this value. A null quantity turns the scheduled reset off for this item.",
+        "operationId" : "setQuantityDefault",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "variantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/QuantityDefaultRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Set (or clear) a QUANTITY item's daily reset target",
+        "tags" : [ "Inventory" ]
+      }
+    },
     "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/kitchen/devices" : {
       "get" : {
         "description" : "Active and revoked alike, with who enrolled or revoked each one. Behind kitchen.station.manage rather than kitchen.ticket.read, because a revocation reason and an enrolling manager's name are administrative facts a line cook's board read does not need.",
-        "operationId" : "list_36",
+        "operationId" : "list_37",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -58519,7 +59307,7 @@
     },
     "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/kitchen/stations" : {
       "get" : {
-        "operationId" : "list_6",
+        "operationId" : "list_7",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -58565,7 +59353,7 @@
       },
       "post" : {
         "description" : "One active station per role per branch, and exactly one fallback. Both are database constraints: a second grill would make a brand routing rule resolve to whichever row was read first.",
-        "operationId" : "create_1",
+        "operationId" : "create_2",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -59079,6 +59867,59 @@
         "tags" : [ "Kitchen board" ]
       }
     },
+    "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/kitchen/vdu" : {
+      "get" : {
+        "description" : "Fired tickets, no controls, no notes, no customer data -- only the fields a wall needs. Pass station to narrow to one station's own lines.",
+        "operationId" : "vdu",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "station",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/VduBoardResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The VDU wall projection",
+        "tags" : [ "Kitchen board" ]
+      }
+    },
     "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/operations/couriers/positions" : {
       "get" : {
         "description" : "Only couriers with an open duty session appear, because the table this reads is a working set rather than a history. A fix worse than 100 metres or older than ten minutes is returned without a coordinate: the courier is on duty and cannot honestly be drawn, and an accuracy circle rendered as a pin sends somebody to the wrong street. Not audited per refresh — opening a stored track is.",
@@ -59260,7 +60101,7 @@
       "get" : {
         "deprecated" : true,
         "description" : "The released v1 shape: a bare array, filterable by status, capped at five hundred and with no way to ask for the five hundred and first. Frozen, not removed — it is published in v1 and callers exist. New work uses `GET .../orders/board` (ADR 0102), which takes the board's whole filter set and pages with a cursor. Both read the same rows and return the same `OrderSummaryResponse`, so a caller that has not moved yet still gains every field ADR 0102 added.",
-        "operationId" : "list_5",
+        "operationId" : "list_6",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -59388,7 +60229,7 @@
     },
     "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/aggregator-entries" : {
       "post" : {
-        "description" : "orders.md §5, gap map row 1.3g (ADR 0040). For when an aggregator's own integration is down and they call the branch instead: the order is recorded under that aggregator's own AGGREGATOR-system-type channel with the total it already collected, never run back through the HorecaOS quote pipeline — `pricing_authority = EXTERNAL`, `entry_mode = MANUAL`, and `origin`/`marketplace_binding_id` set exactly as an automated partner push sets them, so this order counts in the channel mix as what it is rather than as an ordinary own-channel sale. Creates no customer account: a marketplace order never matches one (ADR 0040).",
+        "description" : "orders.md §5, gap map row 1.3g (ADR 0040). For when an aggregator's own integration is down and they call the branch instead: the order is recorded under that aggregator's own AGGREGATOR-system-type channel with the total it already collected, never run back through the HorecaOS quote pipeline — `pricing_authority = EXTERNAL`, `entry_mode = MANUAL`, and `origin`/`marketplace_binding_id` set exactly as an automated partner push sets them, so this order counts in the channel mix as what it is rather than as an ordinary own-channel sale. Creates no customer account: a marketplace order never matches one (ADR 0040). `fulfillmentMode` DELIVERY (wave 11 w5-fulfillment-destination) reuses the New order screen's own structured destination — one of the named customer's saved addresses, never a second, untyped address path — and opens a delivery plan the same way a native order's confirmation does; PICKUP is unchanged and carries neither `customerAccountId` nor `destination`.",
         "operationId" : "aggregatorEntry",
         "parameters" : [ {
           "in" : "path",
@@ -60998,7 +61839,7 @@
     "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/reservations" : {
       "get" : {
         "description" : "Every status in range, not only the ones holding a table: a host reading tonight's plan needs the cancellation next to the confirmed booking it replaced. No guest name, phone or note, the same restraint the single-booking read below keeps.",
-        "operationId" : "list_4",
+        "operationId" : "list_5",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -61364,7 +62205,7 @@
     },
     "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/attribution-links" : {
       "get" : {
-        "operationId" : "list_3",
+        "operationId" : "list_4",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -61816,6 +62657,334 @@
         },
         "summary" : "Evaluate an audience into an immutable snapshot",
         "tags" : [ "Marketing" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/automations" : {
+      "get" : {
+        "description" : "q-rule-list's own priority order (X.25's first live consumer): lowest priority first, ties broken by name.",
+        "operationId" : "list_3",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/AutomationRuleResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Every automation rule this brand has authored",
+        "tags" : [ "Marketing automations" ]
+      },
+      "post" : {
+        "description" : "Written inert: active defaults to false at the schema, and only activation (a separate, campaign.approve-gated act) arms it. \"Nothing sends without a human\" is this split, not a checkbox on this form.",
+        "operationId" : "create_1",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/AutomationRuleRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AutomationRuleResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Author an automation rule",
+        "tags" : [ "Marketing automations" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/automations/reorder" : {
+      "put" : {
+        "description" : "q-rule-list's own whole-set contract: every id the caller means to keep, in the order it now wants, the same shape order-outcome-reasons' own reorder endpoint gives its sibling screen.",
+        "operationId" : "reorder",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/AutomationRuleControllerReorderRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/AutomationRuleResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Rewrite priority for the whole list",
+        "tags" : [ "Marketing automations" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/automations/{ruleId}" : {
+      "put" : {
+        "description" : "Refused while the rule is active: a marketer deactivates a running automation before changing what it fires, the same \"stop, then change\" posture a running campaign takes.",
+        "operationId" : "update",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "ruleId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/AutomationRuleRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AutomationRuleResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Rewrite an inactive rule",
+        "tags" : [ "Marketing automations" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/automations/{ruleId}/activations" : {
+      "post" : {
+        "description" : "The one act that lets this rule fire unattended. Gated by campaign.approve, the same second signature a campaign's own launch takes.",
+        "operationId" : "activate_1",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "ruleId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AutomationRuleResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Arm the rule",
+        "tags" : [ "Marketing automations" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/automations/{ruleId}/deactivations" : {
+      "post" : {
+        "description" : "Reversible: reactivating asks for a fresh If-Match, not a fresh design.",
+        "operationId" : "deactivate",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "ruleId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AutomationRuleResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Stop the rule from firing",
+        "tags" : [ "Marketing automations" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/automations/{ruleId}/runs" : {
+      "get" : {
+        "description" : "Fired, refused (with its reason), or cancelled (the customer ordered before the send) — the same per-recipient honesty a campaign's own recipient list gives, at automation scale.",
+        "operationId" : "runs",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "ruleId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/AutomationRunResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "This rule's recent firing history",
+        "tags" : [ "Marketing automations" ]
       }
     },
     "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/campaigns" : {
@@ -63870,7 +65039,7 @@
     "/api/v1/tenants/{tenantId}/consent-types" : {
       "get" : {
         "description" : "Bootstraps the code-owned default catalogue on this tenant's first read, so a tenant with no rows yet still sees the two purposes already in production use (MARKETING_PROMOTIONS, TERMS_OF_SERVICE) rather than an empty registry.",
-        "operationId" : "list_35",
+        "operationId" : "list_36",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -64075,7 +65244,7 @@
     },
     "/api/v1/tenants/{tenantId}/customers/export" : {
       "get" : {
-        "description" : "One audited PII egress event for the whole filtered set (frontend information architecture §5.1), never one reveal per row. Requires a stated purpose, exactly like every other reveal on this controller. Bounded at 2000 rows; the `X-Export-Truncated` response header is `true` when the filter actually matched more than that, so a marketer can tell a complete export from a silently cut one.",
+        "description" : "One audited PII egress event for the whole filtered set (frontend information architecture §5.1), never one reveal per row. Requires a stated purpose, exactly like every other reveal on this controller. Bounded at 2000 rows; the `X-Export-Truncated` response header is `true` when the filter actually matched more than that, so a marketer can tell a complete export from a silently cut one. Above a tenant-configured row count this is also an ADR 0027 maker-checker action (Staff 9.4): `X-Export-Approval-Status` is `PENDING` with an empty body until a second signature decides it, exactly like a refund above its own threshold.",
         "operationId" : "export_1",
         "parameters" : [ {
           "in" : "path",
@@ -65347,7 +66516,7 @@
     "/api/v1/tenants/{tenantId}/customers/{accountId}/notification-preferences" : {
       "get" : {
         "description" : "Only what has been set. An absent row means the default for that class, which is on rather than off: a customer who never expressed a preference has not opted out of anything.",
-        "operationId" : "list_34",
+        "operationId" : "list_35",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -66102,6 +67271,86 @@
         "tags" : [ "Order CRM log" ]
       }
     },
+    "/api/v1/tenants/{tenantId}/orders/crm-log/labels" : {
+      "post" : {
+        "description" : "Never reads reporting.fact_order (ADR 0029's SubjectPseudonym). The name renders in full and the phone masked, the same ordinary-read rule orders.md §1.5 states — identical decrypt path to GET .../orders/crm-log, batched by orderId instead of a date range because the board pages by cursor, not by time. An orderId absent from this tenant, or with no order at all, is simply missing from the response rather than refused.",
+        "operationId" : "labels",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CustomerLabelsRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/CustomerLabelResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Customer name and masked phone for a batch of orders — the board's Клиент column (row 1.1)",
+        "tags" : [ "Order CRM log" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/orders/operators/{subject}/today-counts" : {
+      "get" : {
+        "description" : "Today is the tenant's own business day (ADR 0043), not the UTC calendar date. The two counts can both include the same order -- an operator who both created and approved it -- and are never added together server-side; see OperatorTodayCountsService's own doc.",
+        "operationId" : "today",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "subject",
+          "required" : true,
+          "schema" : {
+            "maxLength" : 255,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/OperatorTodayCountsResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "One operator's created/accepted order counts for today",
+        "tags" : [ "Operator order counts" ]
+      }
+    },
     "/api/v1/tenants/{tenantId}/reporting/abc-curve" : {
       "get" : {
         "description" : "Product analytics' q-abc-curve chart -- reporting.fact_order_line's own variant sales (the same source /variant-sales reads), sorted revenue-descending and walked into a running cumulative share, each row classed A/B/C against ClassificationThresholds.DEFAULT's published 80/95 split. Not the persisted classification-run (ADR 0134): that write is capability-gated and refuses a window under 28 days for its own XYZ half; this read has none and answers any range, never persisted.",
@@ -66738,6 +67987,62 @@
           }
         },
         "summary" : "Mean resolved delivery distance for the overview's distance tile (7.1)",
+        "tags" : [ "Reporting" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/reporting/delivery-transit-time-by-location" : {
+      "get" : {
+        "description" : "delivery_transit_time.average.v1 — the branch leaderboard's own `Ср. время доставки` column for every branch at once, read from reporting.fact_delivery (ADR 0125). Courier-leg-only, from acceptance to delivery, never the door-to-door figure `delivery-time` answers. A branch with no settled delivery in range is simply absent from `rows`, never a row carrying a null average.",
+        "operationId" : "averageDeliveryTimeByLocation",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "from",
+          "required" : true,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : true,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "locationId",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/LocationAverageListResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Average courier transit seconds, per branch, in one query (7.3)",
         "tags" : [ "Reporting" ]
       }
     },
@@ -68605,6 +69910,9 @@
     "description" : "Row 10.5: a channel's public SEO facts and static pages",
     "name" : "Storefront channel presentation"
   }, {
+    "description" : "Availability and remaining quantity a customer can see",
+    "name" : "Storefront inventory"
+  }, {
     "description" : "Customer accounts, contact details, addresses, and consent",
     "name" : "Customers"
   }, {
@@ -68668,11 +69976,11 @@
     "description" : "Production tickets, the buffer, and station advances",
     "name" : "Kitchen board"
   }, {
-    "description" : "Row 4.5b: a brand's catalog CSV/Excel import, dry run and apply, and export",
-    "name" : "Catalog import"
-  }, {
     "description" : "Binary availability and stock listing at a location",
     "name" : "Inventory"
+  }, {
+    "description" : "Row 4.5b: a brand's catalog CSV/Excel import, dry run and apply, and export",
+    "name" : "Catalog import"
   }, {
     "description" : "A dispatcher's operational SMS blast to couriers (operations 6.4b)",
     "name" : "Courier broadcasts"
@@ -68761,6 +70069,9 @@
     "description" : "The dispatcher's live map, and the audited track reveal",
     "name" : "Courier positions"
   }, {
+    "description" : "Unattended triggers: birthday, inactivity, cart abandonment (ADR 0044)",
+    "name" : "Marketing automations"
+  }, {
     "description" : "Control-plane alerts raised from outside the Java process",
     "name" : "SaaS control plane"
   }, {
@@ -68769,6 +70080,9 @@
   }, {
     "description" : "Reference search, handover, and liveness",
     "name" : "Marketplace operations"
+  }, {
+    "description" : "How many orders one operator has taken today (Staff 9.2d)",
+    "name" : "Operator order counts"
   }, {
     "description" : "Sections, tables, QR tokens, and branch settings",
     "name" : "Dine-in floor plan"

@@ -5672,6 +5672,24 @@
         "required" : [ "customerTexts", "internalName", "kind", "systemCategory" ],
         "type" : "object"
       },
+      "OrderOutcomeReasonControllerReorderRequest" : {
+        "properties" : {
+          "kind" : {
+            "enum" : [ "CANCELLATION", "COMPLETION" ],
+            "type" : "string"
+          },
+          "orderedReasonIds" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "minItems" : 1,
+            "type" : "array"
+          }
+        },
+        "required" : [ "kind", "orderedReasonIds" ],
+        "type" : "object"
+      },
       "OrderOutcomeReasonControllerVersionResponse" : {
         "properties" : {
           "reasonId" : {
@@ -7810,24 +7828,6 @@
           }
         },
         "required" : [ "reason" ],
-        "type" : "object"
-      },
-      "ReorderRequest" : {
-        "properties" : {
-          "kind" : {
-            "enum" : [ "CANCELLATION", "COMPLETION" ],
-            "type" : "string"
-          },
-          "orderedReasonIds" : {
-            "items" : {
-              "format" : "uuid",
-              "type" : "string"
-            },
-            "minItems" : 1,
-            "type" : "array"
-          }
-        },
-        "required" : [ "kind", "orderedReasonIds" ],
         "type" : "object"
       },
       "ResetInspection" : {
@@ -20908,7 +20908,7 @@
           "content" : {
             "application/json" : {
               "schema" : {
-                "$ref" : "#/components/schemas/ReorderRequest"
+                "$ref" : "#/components/schemas/OrderOutcomeReasonControllerReorderRequest"
               }
             }
           },
