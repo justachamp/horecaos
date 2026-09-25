@@ -30,9 +30,10 @@ cd /opt/horecaos/horecaos-platform
 alias qc='docker compose -f compose.production.yaml --env-file /etc/horecaos/production.env'
 ```
 
-Everything below runs inside the `ops` container, which has `pg_restore`, `psql`,
-`mc` and `openssl` at the right versions. Nothing needs to be installed on the
-host.
+Everything below runs inside the `ops` container, which has `pg_restore`,
+`psql`, the AWS CLI (ADR 0135 — replaces `mc`, whose image is withdrawn the
+same way MinIO's is) and `openssl` at the right versions. Nothing needs to be
+installed on the host.
 
 ---
 
@@ -57,10 +58,10 @@ rows out of it, and repair the live one — section 4.
 
 ```bash
 qc run --rm ops bash -c '
-  mc alias set b "$HORECAOS_BACKUP_S3_ENDPOINT" \
-    "$(bao-get.sh production/object_storage/platform/backup-access-key)" \
-    "$(bao-get.sh production/object_storage/platform/backup-secret-key)" >/dev/null
-  mc ls b/horecaos-backups/ | tail -10'
+  export AWS_ACCESS_KEY_ID="$(bao-get.sh production/object_storage/platform/backup-access-key)"
+  export AWS_SECRET_ACCESS_KEY="$(bao-get.sh production/object_storage/platform/backup-secret-key)"
+  aws --endpoint-url "$HORECAOS_BACKUP_S3_ENDPOINT" \
+    s3 ls s3://horecaos-backups/ | tail -10'
 ```
 
 **Check:** the newest `.dump.enc` is from last night, and there is a matching
@@ -68,13 +69,13 @@ qc run --rm ops bash -c '
 failing — see section 6 — and the recovery point is that date, not last night.
 
 If this machine is gone — fire, flood, seizure — the same objects are in the
-off-site bucket, which is the case that bucket exists for. Point the alias there
-instead and everything downstream is identical:
+off-site bucket, which is the case that bucket exists for. Point the credentials
+and endpoint there instead and everything downstream is identical:
 
 ```bash
-mc alias set b "$HORECAOS_BACKUP_OFFSITE_ENDPOINT" \
-  "$(bao-get.sh production/object_storage/platform/backup-offsite-access-key)" \
-  "$(bao-get.sh production/object_storage/platform/backup-offsite-secret-key)"
+export AWS_ACCESS_KEY_ID="$(bao-get.sh production/object_storage/platform/backup-offsite-access-key)"
+export AWS_SECRET_ACCESS_KEY="$(bao-get.sh production/object_storage/platform/backup-offsite-secret-key)"
+export HORECAOS_BACKUP_S3_ENDPOINT="$HORECAOS_BACKUP_OFFSITE_ENDPOINT"
 ```
 
 That command needs OpenBao, which was also in the building. Rebuilding it from
@@ -316,8 +317,9 @@ The usual causes, in the order they actually happen:
    `qc exec -T openbao bao status`. Unseal it; see `deploy.md` section 5.
 2. **The disk is full.** The dump is staged in the container's filesystem before
    it is encrypted. `df -h`, then `docker system prune`.
-3. **The off-site endpoint is unreachable, or is not configured.** `mc` will have
-   said so, or the script will have refused before dumping anything. Either way
+3. **The off-site endpoint is unreachable, or is not configured.** The AWS CLI
+   (ADR 0135) will have said so, or the script will have refused before
+   dumping anything. Either way
    the run is a failure and **tonight has no off-site copy** — the local upload
    may have succeeded, so check what is in the primary bucket, but do not read a
    local object as the backup having worked.
@@ -346,10 +348,10 @@ ls -l /var/lib/horecaos/last-backup
   database backup — `bao operator raft snapshot save` — and treat it with the
   same care as the database dump. This is not yet in `run-backup.sh` and it
   should be.
-- **Restoring MinIO.** Media objects are not in the database dump. Losing them
-  loses product photographs, which is recoverable by re-upload and is therefore
-  ranked below everything above — but it is a real gap and nobody has ever
-  tested it.
+- **Restoring the object store (RustFS, ADR 0135).** Media objects are not in
+  the database dump. Losing them loses product photographs, which is
+  recoverable by re-upload and is therefore ranked below everything above —
+  but it is a real gap and nobody has ever tested it.
 - **Restoring Keycloak.** Its database is separate and is not in the nightly
   backup. Losing it loses every user account and every client secret. Its dump
   belongs in the same job; it is not there yet.
