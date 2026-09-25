@@ -4517,6 +4517,42 @@ export const messagesRu: MessageCatalogue = {
   'marketing.referrals.links.body':
     'Не реализовано, и это не скрытый пробел: ссылки "?ref=" на сайте, deep-link "startapp" в Telegram и пошаговая настройка Mini-App/BotFather относятся к marketing.attribution_links из ADR 0044 и остаются пунктом чек-листа этого ADR. Клиент всё ещё может получить код, а друг — использовать его в витрине; здесь не отображается ссылка для отправки, потому что таблицы ссылок пока не существует.',
 
+  // -------------------------------------------------------- automations (row 6.5, ADR 0044)
+  'marketing.automations.loading': 'Загрузка автоматизаций…',
+  'marketing.automations.denied': 'У вас нет доступа к автоматизациям этого бренда.',
+  'marketing.automations.intro':
+    'Автоматические триггеры. Правило создаётся неактивным и срабатывает только после того, как оператор его активирует — ничего не отправляется без человека.',
+  'marketing.automations.create': 'Новая автоматизация',
+  'marketing.automations.empty': 'Ни одно правило автоматизации ещё не создано.',
+  'marketing.automations.viewRuns': 'Последние срабатывания — {name}',
+  'marketing.automations.rule.description':
+    '{trigger} · {channel} · {configValue} · пауза {cooldownDays} дн.',
+  'marketing.automations.trigger.BIRTHDAY': 'День рождения',
+  'marketing.automations.trigger.INACTIVITY': 'Неактивность',
+  'marketing.automations.trigger.CART_ABANDONMENT': 'Брошенная корзина',
+  'marketing.automations.configLabel.BIRTHDAY': 'Окно, дней до/после дня рождения',
+  'marketing.automations.configLabel.INACTIVITY': 'Дней с последнего заказа',
+  'marketing.automations.configLabel.CART_ABANDONMENT': 'Задержка до срабатывания, часов',
+  'marketing.automations.form.title': 'Создать правило автоматизации',
+  'marketing.automations.form.name': 'Название',
+  'marketing.automations.form.trigger': 'Триггер',
+  'marketing.automations.form.channel': 'Канал',
+  'marketing.automations.form.cooldownDays': 'Пауза, дней',
+  'marketing.automations.form.consentPurpose': 'Цель согласия',
+  'marketing.automations.form.templateKey': 'Ключ шаблона',
+  'marketing.automations.form.submit': 'Сохранить (неактивно до активации)',
+  'marketing.automations.dialog.cancel': 'Отмена',
+  'marketing.automations.dialog.close': 'Закрыть',
+  'marketing.automations.runs.title': 'Последние срабатывания — {name}',
+  'marketing.automations.runs.loading': 'Загрузка…',
+  'marketing.automations.runs.empty': 'Срабатываний пока не было.',
+  'marketing.automations.runs.column.status': 'Статус',
+  'marketing.automations.runs.column.reason': 'Причина',
+  'marketing.automations.runs.column.firedAt': 'Когда',
+  'marketing.automations.runStatus.FIRED': 'Сработало',
+  'marketing.automations.runStatus.REFUSED': 'Отказано',
+  'marketing.automations.runStatus.CANCELLED': 'Отменено (клиент уже заказал)',
+
   // ---------------------------------------------------------------- customers 5.3/5.4 (wave 39)
   'customers.nav.label': 'Раздел «Клиенты»',
   'customers.nav.list': 'Клиенты',

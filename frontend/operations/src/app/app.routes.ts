@@ -607,11 +607,17 @@ export const routes: Routes = [
               },
             ],
           },
+          // 6.5 Automations (gap-map row 6.5, ADR 0044 Triggers): unattended
+          // BIRTHDAY, INACTIVITY and CART_ABANDONMENT rules through the new
+          // `AutomationRuleController` — `q-rule-list`'s first live
+          // consumer (row `X.25`). CASHBACK_CHANGE and LATE_ORDER_APOLOGY
+          // are not offered — see `AutomationTriggerType`'s own doc.
           {
             path: 'automations',
             loadComponent: () =>
-              import('./features/not-built/not-built-page').then((m) => m.NotBuiltPage),
-            data: { spec: 'frontend-information-architecture.md §6.5 (Automations)' },
+              import('./features/marketing/automations/automations-page').then(
+                (m) => m.AutomationsPage,
+              ),
           },
           {
             path: 'content',

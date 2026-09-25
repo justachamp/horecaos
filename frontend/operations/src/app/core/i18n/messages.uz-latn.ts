@@ -4546,6 +4546,42 @@ export const messagesUzLatn: MessageCatalogue = {
   'marketing.referrals.links.body':
     'Qurilmagan, va bu yashirilgan boʻshliq emas: veb-saytdagi "?ref=" havolalari, Telegramdagi "startapp" deep-linklari va Mini-App/BotFather sozlash bosqichma-bosqich oqimi ADR 0044ning marketing.attribution_links qismiga tegishli va shu ADRning oʻz roʻyxatida qolmoqda. Mijoz hamon kod olishi va doʻsti uni doʻkon oynasidan ishlatishi mumkin — bu yerda ulashiladigan havola koʻrsatilmaydi, chunki hali havolalar jadvali mavjud emas.',
 
+  // -------------------------------------------------------- automations (row 6.5, ADR 0044)
+  'marketing.automations.loading': 'Avtomatlashtirishlar yuklanmoqda…',
+  'marketing.automations.denied': 'Ushbu brendning avtomatlashtirishlariga sizda ruxsat yoʻq.',
+  'marketing.automations.intro':
+    'Boshqaruvsiz triggerlar. Qoida faolsiz yaratiladi va faqat operator uni faollashtirgandan keyingina ishga tushadi — insonsiz hech narsa yuborilmaydi.',
+  'marketing.automations.create': 'Yangi avtomatlashtirish',
+  'marketing.automations.empty': 'Hali birorta avtomatlashtirish qoidasi yaratilmagan.',
+  'marketing.automations.viewRuns': 'Soʻnggi ishga tushishlar — {name}',
+  'marketing.automations.rule.description':
+    '{trigger} · {channel} · {configValue} · sovish {cooldownDays} kun',
+  'marketing.automations.trigger.BIRTHDAY': 'Tugʻilgan kun',
+  'marketing.automations.trigger.INACTIVITY': 'Faolsizlik',
+  'marketing.automations.trigger.CART_ABANDONMENT': 'Tashlab ketilgan savat',
+  'marketing.automations.configLabel.BIRTHDAY': 'Oyna, tugʻilgan kundan oldin/keyin kunlar',
+  'marketing.automations.configLabel.INACTIVITY': 'Oxirgi buyurtmadan beri kunlar',
+  'marketing.automations.configLabel.CART_ABANDONMENT': 'Kechikish, soatlar',
+  'marketing.automations.form.title': 'Avtomatlashtirish qoidasini yaratish',
+  'marketing.automations.form.name': 'Nomi',
+  'marketing.automations.form.trigger': 'Trigger',
+  'marketing.automations.form.channel': 'Kanal',
+  'marketing.automations.form.cooldownDays': 'Sovish, kunlar',
+  'marketing.automations.form.consentPurpose': 'Rozilik maqsadi',
+  'marketing.automations.form.templateKey': 'Shablon kaliti',
+  'marketing.automations.form.submit': 'Saqlash (faollashtirilguncha nofaol)',
+  'marketing.automations.dialog.cancel': 'Bekor qilish',
+  'marketing.automations.dialog.close': 'Yopish',
+  'marketing.automations.runs.title': 'Soʻnggi ishga tushishlar — {name}',
+  'marketing.automations.runs.loading': 'Yuklanmoqda…',
+  'marketing.automations.runs.empty': 'Hali hech qanday ishga tushish qayd etilmagan.',
+  'marketing.automations.runs.column.status': 'Holati',
+  'marketing.automations.runs.column.reason': 'Sababi',
+  'marketing.automations.runs.column.firedAt': 'Qachon',
+  'marketing.automations.runStatus.FIRED': 'Ishga tushdi',
+  'marketing.automations.runStatus.REFUSED': 'Rad etildi',
+  'marketing.automations.runStatus.CANCELLED': 'Bekor qilindi (mijoz avval buyurtma berdi)',
+
   // ---------------------------------------------------------------- customers 5.3/5.4 (wave 39)
   'customers.nav.label': 'Mijozlar boʻlimi',
   'customers.nav.list': 'Mijozlar',
