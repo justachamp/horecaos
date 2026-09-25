@@ -182,6 +182,18 @@ class MenuAuthoringServiceTests {
         assertThat(updated.name()).isEqualTo("Ramadan menu");
         assertThat(updated.status()).isEqualTo("ACTIVE");
         assertThat(updated.version()).isEqualTo(2);
+        // Staff 9.3a: a per-field diff, not a flat "what it is now" map.
+        assertThat(jdbc.sql("""
+                        SELECT change_document -> 'name' ->> 'before', change_document -> 'name' ->> 'after',
+                               change_document -> 'status' ->> 'before', change_document -> 'status' ->> 'after'
+                          FROM audit.audit_events
+                         WHERE action_code = 'catalog.menu.updated' AND correlation_id = :menuId
+                        """)
+                        .param("menuId", menu.id().toString())
+                        .query((row, number) -> String.join(
+                                "|", row.getString(1), row.getString(2), row.getString(3), row.getString(4)))
+                        .single())
+                .isEqualTo("Main menu|Ramadan menu|DRAFT|ACTIVE");
     }
 
     // ------------------------------------------------------------- membership

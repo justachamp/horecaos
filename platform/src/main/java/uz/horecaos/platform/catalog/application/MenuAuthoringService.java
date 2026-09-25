@@ -13,6 +13,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.EntityType;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcMenuStore;
@@ -120,7 +121,11 @@ public class MenuAuthoringService {
                 .target("Menu", menuId)
                 .because("Edited a named menu")
                 .usingCapability(Capability.CATALOG_AUTHOR.code())
-                .changed(Map.of("name", name, "status", status))
+                // Staff 9.3a: a per-field diff — "name"/"status" were already
+                // known before the write (existing), not only after it.
+                .changed(ChangeDocuments.diff(
+                        Map.of("name", existing.name(), "status", existing.status()),
+                        Map.of("name", name, "status", status)))
                 .correlatedBy(menuId.toString())
                 .occurredAt(now)
                 .build());

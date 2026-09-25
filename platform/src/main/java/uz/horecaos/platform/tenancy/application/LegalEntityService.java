@@ -3,6 +3,7 @@ package uz.horecaos.platform.tenancy.application;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -15,6 +16,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.tenancy.api.FiscalSeller;
@@ -120,6 +122,7 @@ public class LegalEntityService {
     @Transactional
     public LegalEntity update(UUID tenantId, UUID entityId, UpdateLegalEntityCommand command, int expectedVersion) {
         LegalEntity entity = require(tenantId, entityId);
+        Map<String, Object> before = auditFields(entity);
         entity.rename(command.legalName(), command.shortName());
         entity.applyVatRegistration(command.vatRegistered(), command.vatCertificateReference());
         entity.useTaxProfile(command.taxProfileId());
@@ -137,12 +140,31 @@ public class LegalEntityService {
                 .target("LegalEntity", entity.id().value())
                 .targetVersion((long) entity.version())
                 .because("Corrected legal entity " + entity.code())
-                .changed(Map.of(
-                        "legalName", command.legalName(), "vatRegistered", String.valueOf(command.vatRegistered())))
+                // Staff 9.3a: a per-field diff, not the two of seven corrected
+                // fields the old flat map happened to name. registeredAddress
+                // and contactPhone are still never shown as values — ChangeDocuments
+                // redacts any field whose name matches its own PROTECTED_TERMS,
+                // the same name-based interim mechanism describeLocation's own
+                // audit map already relies on — but now at least shows that
+                // one of the two changed, rather than staying invisible.
+                .changed(ChangeDocuments.diff(before, auditFields(entity)))
                 .correlatedBy(correlationId())
                 .occurredAt(now)
                 .build());
         return entity;
+    }
+
+    /** The fields {@link #update} corrects, for a before/after diff. Never {@code tin}; that is a different company, not a correction. */
+    private static Map<String, Object> auditFields(LegalEntity entity) {
+        Map<String, Object> fields = new LinkedHashMap<>();
+        fields.put("legalName", entity.legalName());
+        fields.put("shortName", entity.shortName());
+        fields.put("vatRegistered", entity.vatRegistered());
+        fields.put("vatCertificateReference", entity.vatCertificateReference());
+        fields.put("taxProfileId", entity.taxProfileId());
+        fields.put("registeredAddress", entity.registeredAddress());
+        fields.put("contactPhone", entity.contactPhone());
+        return fields;
     }
 
     @Transactional

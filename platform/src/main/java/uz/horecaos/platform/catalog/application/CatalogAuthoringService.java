@@ -22,6 +22,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.EntityType;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.ModifierGroup;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.ModifierOption;
@@ -788,7 +789,8 @@ public class CatalogAuthoringService {
                 .target("Product", productId)
                 .because("Changed product status from " + product.status() + " to " + status)
                 .usingCapability(Capability.CATALOG_AUTHOR.code())
-                .changed(Map.of("previousStatus", product.status().name(), "status", status.name()))
+                // Staff 9.3a: a field-level diff, not two flat "previousStatus"/"status" keys.
+                .changed(ChangeDocuments.change("status", product.status().name(), status.name()))
                 .correlatedBy(productId.toString())
                 .occurredAt(clock.instant())
                 .build());

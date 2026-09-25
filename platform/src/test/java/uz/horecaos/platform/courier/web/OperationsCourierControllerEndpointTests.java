@@ -391,11 +391,22 @@ class OperationsCourierControllerEndpointTests {
                 .single();
         assertThat(event.get("reason")).isEqualTo("widening the offer window after driver feedback");
         assertThat(event.get("targetId")).isEqualTo(COURIER_TYPE.toString());
-        // Postgres's own jsonb-to-text cast, not Jackson's compact form -- it
-        // inserts a space after the colon (see OwnerInvitationControllerEndpointTests'
-        // "\"revealedCount\": 2" for the same convention read from this column
-        // elsewhere in the suite).
-        assertThat(event.get("changeDocument")).contains("\"maxConcurrentAssignments\": 2");
+        // Staff 9.3a: a field-level {before, after} pair, not a flat "what it
+        // is now" map. jsonb does not preserve key insertion order (Postgres
+        // reorders on storage), so this reads the pair back through -> / ->>
+        // rather than matching substring text — maxConcurrentAssignments
+        // defaults to 1 (V0040) and this correction moves it to 2.
+        Map<String, String> maxConcurrentAssignments = jdbc.sql("""
+                        SELECT change_document -> 'maxConcurrentAssignments' ->> 'before' AS before_value,
+                               change_document -> 'maxConcurrentAssignments' ->> 'after' AS after_value
+                          FROM audit.audit_events
+                         WHERE tenant_id = :tenantId AND action_code = 'courier-type.updated'
+                        """)
+                .param("tenantId", TENANT)
+                .query((row, n) ->
+                        Map.of("before", row.getString("before_value"), "after", row.getString("after_value")))
+                .single();
+        assertThat(maxConcurrentAssignments).containsEntry("before", "1").containsEntry("after", "2");
     }
 
     @Test
