@@ -126,6 +126,33 @@ class ChangeDocumentsTests {
     }
 
     @Test
+    void recordsACreationAsAfterOnlyWithNoBeforeState() {
+        Map<String, Object> after = new LinkedHashMap<>();
+        after.put("code", "north");
+        after.put("displayName", "North branch");
+
+        Map<String, Object> document = ChangeDocuments.created(after);
+
+        assertThat(asMap(document.get("code")))
+                .as("a creation has no prior state to diff against")
+                .containsEntry("before", null)
+                .containsEntry("after", "north");
+        assertThat(asMap(document.get("displayName")))
+                .containsEntry("before", null)
+                .containsEntry("after", "North branch");
+    }
+
+    @Test
+    void createdStillRedactsProtectedFields() {
+        Map<String, Object> sanitized =
+                ChangeDocuments.sanitize(ChangeDocuments.created(Map.of("customerPhone", "+998901231076")));
+
+        assertThat(asMap(sanitized.get("customerPhone")))
+                .containsEntry("before", null)
+                .containsEntry("after", ChangeDocuments.REDACTED);
+    }
+
+    @Test
     void recognisesTheProtectedTermsUsedAcrossTheAdrSet() {
         assertThat(ChangeDocuments.isProtected("customerEmail")).isTrue();
         assertThat(ChangeDocuments.isProtected("passportNumber")).isTrue();
