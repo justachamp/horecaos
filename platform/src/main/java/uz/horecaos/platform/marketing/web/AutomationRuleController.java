@@ -208,7 +208,16 @@ public class AutomationRuleController {
                     + "recipient list gives, at automation scale.")
     public ResponseEntity<List<AutomationRunResponse>> runs(
             @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID ruleId) {
-        rules.require(tenantId, brandId, ruleId);
+        // A read of one named resource is 404 for a wrong id, matching every
+        // other GET .../{id} in this module (OperationsMarketingController's
+        // own campaign/audience detail reads) — rules.require()'s
+        // IllegalArgumentException is right for a mutation referencing a bad
+        // id (400) but wrong for a read naming one.
+        try {
+            rules.require(tenantId, brandId, ruleId);
+        } catch (IllegalArgumentException notFound) {
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, notFound.getMessage());
+        }
         return ResponseEntity.ok(runs.recentByRule(tenantId, ruleId, RUN_HISTORY_LIMIT).stream()
                 .map(AutomationRunResponse::of)
                 .toList());
