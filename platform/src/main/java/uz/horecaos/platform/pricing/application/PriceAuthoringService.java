@@ -24,6 +24,7 @@ import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.pricing.api.PriceBookActivated;
 import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPricingStore;
 import uz.horecaos.platform.tenancy.api.SalesChannelLookup;
+import uz.horecaos.platform.web.api.ApiException;
 
 /**
  * Price authoring (ADR 0018).
@@ -185,6 +186,36 @@ public class PriceAuthoringService {
     @Transactional
     public PriceBook setPrice(
             UUID tenantId, UUID brandId, UUID priceBookId, PriceableType type, UUID priceableId, long amountMinor) {
+        return setPrice(tenantId, brandId, priceBookId, type, priceableId, amountMinor, null);
+    }
+
+    /**
+     * The same write, with an optional row-level {@code If-Match} (gap map row
+     * {@code 4.8a}'s matrix inline edit).
+     *
+     * <p>{@code expectedVersion} is the version the matrix row's own price
+     * carried when the caller read it — {@code 0} when the row had no price
+     * yet, the same "unset" convention {@link JdbcPricingStore#openPriceVersion}
+     * answers with {@code Optional.empty()} for. A null {@code expectedVersion}
+     * skips the check entirely, unconditional-write behaviour kept for the
+     * single-variant editor and {@link PriceBulkApplyService}, neither of which
+     * reads a row's version before writing it.
+     *
+     * <p>Checked against the price's own version rather than the book's: the
+     * book's version bumps on every price write in it ({@link
+     * JdbcPricingStore#touchPriceBook}), so a matrix loaded once and edited row
+     * by row would have every row but the first rejected as stale the moment
+     * any other row changed, even though nothing about that row did.
+     */
+    @Transactional
+    public PriceBook setPrice(
+            UUID tenantId,
+            UUID brandId,
+            UUID priceBookId,
+            PriceableType type,
+            UUID priceableId,
+            long amountMinor,
+            @Nullable Long expectedVersion) {
 
         PriceBook book = require(tenantId, brandId, priceBookId);
         requireAuthorable(book);
@@ -196,6 +227,14 @@ public class PriceAuthoringService {
         }
         if (!catalog.priceableExists(tenantId, brandId, type, priceableId)) {
             throw new UnknownPriceableException(type, priceableId);
+        }
+
+        if (expectedVersion != null) {
+            long actual = store.openPriceVersion(tenantId, brandId, priceBookId, type.name(), priceableId)
+                    .orElse(0);
+            if (actual != expectedVersion) {
+                throw ApiException.staleVersion(expectedVersion, actual);
+            }
         }
 
         Instant now = clock.instant();
