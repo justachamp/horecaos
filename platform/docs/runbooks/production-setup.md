@@ -436,7 +436,7 @@ chmod 0444 /run/horecaos/secrets/openbao-role-id /run/horecaos/secrets/openbao-s
 unset role_id secret_id BAO_TOKEN
 
 docker compose -f deploy/compose.production.yml --env-file /etc/horecaos/production.env \
-  up -d platform-db keycloak-db kafka rustfs openbao-agent
+  up -d platform-db keycloak-db kafka object-store openbao-agent
 ```
 
 **Check:** `docker compose -f deploy/compose.production.yml --env-file /etc/horecaos/production.env ps`
@@ -695,7 +695,7 @@ credential — there is no `--ignore-existing`, so idempotency is a
 
 ```bash
 docker compose -f deploy/compose.production.yml --env-file /etc/horecaos/production.env \
-  up -d rustfs
+  up -d object-store
 docker compose -f deploy/compose.production.yml --env-file /etc/horecaos/production.env \
   run --rm --no-TTY ops bash -c '
     export AWS_ACCESS_KEY_ID="${HORECAOS_OBJECT_STORE_ACCESS_KEY}"

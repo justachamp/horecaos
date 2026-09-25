@@ -55,10 +55,10 @@ refuses an off-site endpoint equal to the primary one: a second bucket on the
 same store is a second name for the same failure domain.
 
 Locally, "off-site" is a second RustFS instance (compose service
-`minio-offsite`, kept as its network alias through the ADR 0135 cutover so
-this hostname does not change for the first deploy) rather than a second
-bucket on the same server — a bucket beside the primary does not model the
-risk being guarded against.
+`object-store-offsite`; `minio-offsite` is kept as its network alias through
+the ADR 0135 cutover so this hostname does not change for the first deploy)
+rather than a second bucket on the same server — a bucket beside the primary
+does not model the risk being guarded against.
 
 ## Switching to a real destination
 

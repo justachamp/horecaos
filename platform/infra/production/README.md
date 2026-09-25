@@ -187,7 +187,7 @@ depends on, and a deploy that briefly runs an old and a new container together.
 | `platform-app` | 2 GB | JVM at 70% of the limit, so roughly 1.4 GB of heap |
 | `kafka` | 2 GB | 1 GB heap plus page cache for the log segments |
 | `keycloak` | 1 GB | JVM, mostly idle after startup |
-| `minio` (RustFS, ADR 0135) | 1 GB | Streams; does not buffer whole objects |
+| `object-store` (RustFS, ADR 0135; `minio` alias) | 1 GB | Streams; does not buffer whole objects |
 | `keycloak-db` | 512 MB | Small and almost entirely cached |
 | `edge` | 256 MB | Caddy is small |
 | `openbao` | 256 MB | Small and mostly idle |

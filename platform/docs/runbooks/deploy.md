@@ -59,7 +59,7 @@ qc ps
 
 Every service `running`, and every service with a health check `(healthy)`:
 `edge`, `platform-app`, `platform-db`, `keycloak`, `keycloak-db`, `kafka`,
-`rustfs` (the object store — RustFS replaces MinIO as of ADR 0135), `openbao`,
+`object-store` (RustFS — replaces MinIO as of ADR 0135), `openbao`,
 `openbao-agent`, `autoheal`.
 
 Then, from a machine that is **not** this one:
@@ -472,7 +472,7 @@ The edge has to serve that name. Add a site block to
 ```
 
 The edge reaches the object store over the `media` network, which holds those
-two containers and nothing else: the store (RustFS, `rustfs`/`minio` alias)
+two containers and nothing else: the store (RustFS, `object-store`/`minio` alias)
 must not be on `public`, because the store that holds the backups should have
 no route to the internet, and the edge must not be on `core`, because the one
 internet-facing process should have no path to PostgreSQL.
@@ -576,7 +576,7 @@ RustFS replaces MinIO as of ADR 0135; the AWS CLI replaces `mc`, and there is
 no `--ignore-existing` flag, so idempotency is a `head-bucket` check:
 
 ```bash
-qc up -d rustfs
+qc up -d object-store
 qc run --rm --no-TTY ops bash -c '
   export AWS_ACCESS_KEY_ID="$(bao-get.sh production/object_storage/platform/backup-access-key)"
   export AWS_SECRET_ACCESS_KEY="$(bao-get.sh production/object_storage/platform/backup-secret-key)"
