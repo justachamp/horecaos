@@ -16,7 +16,8 @@ package uz.horecaos.platform.ordering.application;
  * and {@link #ISSUE_INVOICE} are declared here — so the wire contract names
  * them, and the frontend's forward-compatible rendering (an unrecognised code
  * renders its raw name rather than nothing, {@code order-actions.ts}) is ready
- * to receive whichever ships first. {@link #COMPLETE} is now the exception:
+ * to receive whichever ships first. {@link #ISSUE_INVOICE} is the one still
+ * declared and never emitted:
  *
  * <ul>
  *   <li>{@link #COMPLETE} is wired (wave P09, gap map {@code 1.2j}) —
@@ -37,12 +38,25 @@ package uz.horecaos.platform.ordering.application;
  *       amendment client and flipped the constant to {@code true}; see ADR
  *       0105 and ADR 0113.
  *   <li>{@link #RESOLVE} targets {@code POST .../amendments/{id}/confirmation}
- *       and only makes sense while a specific amendment is {@code
- *       AWAITING_CUSTOMER_CONFIRMATION} — a fact {@link OrderActionsPolicy}
- *       cannot see without the amendment read that wave owns.
+ *       and only makes sense while a specific amendment is blocked on the
+ *       operator — an increase awaiting the customer's recorded agreement, or
+ *       an ADR 0027 approval still pending. Wired (gap map {@code 1.1e}):
+ *       {@link OrderActionsPolicy}'s five-argument {@code availableFor}
+ *       overload emits it whenever {@code
+ *       OrderQueryService#amendmentAwaitingOperatorFor} (or its batched board
+ *       counterpart) says an open amendment is waiting and the caller holds
+ *       {@code ORDER_AMEND} — the same {@code awaitingConfirmation ||
+ *       awaitingApproval} predicate {@code
+ *       OperationsOrderController.AmendmentResponse#actionsFor} already
+ *       applies per-amendment, now read back at the order level. The row
+ *       action opens the order; the detail pane's own {@code onActionClick}
+ *       fetches the amendment history and opens {@code
+ *       q-order-amendment-confirm-dialog} for whichever entry still carries
+ *       its own {@code RESOLVE}.
  *   <li>{@link #ASSIGN_COURIER} targets the existing {@code DispatchController}
- *       manual-assignment endpoint (orders.md §4.7), not yet reachable from an
- *       order at all (gap map {@code P11}).
+ *       manual-assignment endpoint (orders.md §4.7). Wired (gap map {@code
+ *       1.1e}) — see {@link OrderActionsPolicy}'s own four-argument {@code
+ *       availableFor} overload.
  *   <li>{@link #ISSUE_INVOICE} targets «Выставить счёт», a re-issued payment
  *       invoice (orders.md §4.9), whose endpoint does not exist yet (gap map
  *       {@code P12}).
@@ -78,14 +92,15 @@ public enum OrderActionCode {
 
     /**
      * {@code POST .../amendments/{amendmentId}/confirmation}, attesting the
-     * customer agreed to a pending amendment's change in total. Declared, not
-     * yet emitted — see the class doc.
+     * customer agreed to a pending amendment's change in total (or, for a
+     * pure ADR 0027 approval-pending amendment with no increase, simply
+     * retrying the apply). Wired (gap map {@code 1.1e}) — see the class doc.
      */
     RESOLVE,
 
     /**
-     * Assign or reassign the order's courier (orders.md §4.7). Declared, not
-     * yet emitted — see the class doc.
+     * Assign or reassign the order's courier (orders.md §4.7). Wired (gap map
+     * {@code 1.1e}) — see the class doc.
      */
     ASSIGN_COURIER,
 

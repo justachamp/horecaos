@@ -325,6 +325,7 @@ class OrderAmendmentAndOutcomeTests {
                 processStore,
                 UNWIRED_PAYMENTS,
                 NO_COURIER_ASSIGNMENTS,
+                amendmentStore,
                 protection,
                 objectMapper,
                 auditRecorder,

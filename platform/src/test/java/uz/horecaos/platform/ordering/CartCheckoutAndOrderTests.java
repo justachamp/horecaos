@@ -102,6 +102,7 @@ import uz.horecaos.platform.ordering.domain.PromiseBasis;
 import uz.horecaos.platform.ordering.infrastructure.catalog.JdbcOrderCatalogSnapshot;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcCartStore;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcCheckoutAttemptStore;
+import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderAmendmentStore;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderDirectory;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderProcessStore;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore;
@@ -522,6 +523,7 @@ class CartCheckoutAndOrderTests {
                 processStore,
                 UNWIRED_PAYMENTS,
                 NO_COURIER_ASSIGNMENTS,
+                new JdbcOrderAmendmentStore(jdbc),
                 protection,
                 objectMapper,
                 new JdbcAuditRecorder(jdbc, objectMapper),

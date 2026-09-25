@@ -220,6 +220,60 @@ public final class OrderActionsPolicy {
     }
 
     /**
+     * {@link #availableFor(OrderStatus, FulfillmentMode, Set, boolean)}, with
+     * {@code RESOLVE} added when this order carries an open amendment blocked
+     * on the operator — the customer's recorded agreement to an increase, or
+     * an ADR 0027 approval still pending (gap map row 1.1e).
+     *
+     * <p>A second, fifth-argument overload rather than widening the four-
+     * argument form above, for the same reason that one is a separate
+     * overload rather than a fifth parameter on the three-argument base: the
+     * hundred-plus status &times; mode &times; grant sweeps in {@code
+     * OrderActionsPolicyTests} exercise the three- and four-argument forms
+     * directly and have no opinion about an amendment. {@code
+     * OrderActionResponse.allFor} — the one caller with an amendment read to
+     * check ({@link
+     * uz.horecaos.platform.ordering.application.OrderQueryService#amendmentAwaitingOperatorFor}
+     * for the detail screen, the batched board counterpart for the queue) —
+     * calls this overload instead, exactly as it already does for {@code
+     * courierUnassigned}.
+     *
+     * @param amendmentAwaitingOperator this order's open amendment (there is
+     *                                  never more than one, per {@code
+     *                                  JdbcOrderAmendmentStore}'s own partial
+     *                                  unique index) is blocked on the
+     *                                  operator right now — the identical
+     *                                  {@code awaitingConfirmation ||
+     *                                  awaitingApproval} predicate {@code
+     *                                  OperationsOrderController
+     *                                  .AmendmentResponse#actionsFor} already
+     *                                  applies per-amendment, read back for
+     *                                  the order-level {@code actions[]}
+     */
+    public static List<OrderAction> availableFor(
+            OrderStatus status,
+            FulfillmentMode mode,
+            Set<Capability> grantedCapabilities,
+            boolean courierUnassigned,
+            boolean amendmentAwaitingOperator) {
+        List<OrderAction> actions = new ArrayList<>(availableFor(status, mode, grantedCapabilities, courierUnassigned));
+
+        // RESOLVE targets POST .../amendments/{id}/confirmation, which
+        // declares ORDER_AMEND (the same capability AMEND's own gate above
+        // checks) — never a code an ORDER_AMEND holder cannot actually call.
+        // Gated additionally on !status.terminal(), mirroring canAmend: an
+        // amendment can outlive the order going terminal only because nothing
+        // today closes one out on cancellation/completion (a pre-existing gap,
+        // not this row's to close), and RESOLVE must not point at a dead end
+        // even then.
+        if (amendmentAwaitingOperator && !status.terminal() && grantedCapabilities.contains(Capability.ORDER_AMEND)) {
+            actions.add(new OrderAction(OrderActionCode.RESOLVE, null));
+        }
+
+        return List.copyOf(actions);
+    }
+
+    /**
      * The window {@link DeliveryPlanTrigger} keeps a delivery plan open in:
      * from {@code CONFIRMED}, when the plan is opened, through {@code
      * FULFILLING}, the last non-terminal status a delivery order reaches

@@ -9,6 +9,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -243,6 +244,42 @@ public class JdbcOrderAmendmentStore {
                 .param("orderId", orderId)
                 .query(JdbcOrderAmendmentStore::mapAmendment)
                 .optional();
+    }
+
+    /**
+     * Which of {@code orderIds} carry an open amendment blocked on the
+     * operator right now — the exact {@code awaitingConfirmation ||
+     * awaitingApproval} predicate {@code OperationsOrderController
+     * .AmendmentResponse#actionsFor} already applies per-amendment, read back
+     * for a whole page at once (gap map row 1.1e's {@code RESOLVE} action).
+     * One open amendment per order (the partial unique index {@link
+     * #insert} relies on), so this is a set membership test, never a count.
+     *
+     * <p>Mirrors {@link
+     * uz.horecaos.platform.fulfillment.api.ActiveCourierAssignmentsPort}'s own
+     * batched shape: {@link
+     * uz.horecaos.platform.ordering.application.OrderQueryService#forLocation}
+     * calls this once per page rather than once per row, exactly as it
+     * already does for the courier assignment.
+     */
+    public Set<UUID> ordersAwaitingOperatorResolution(UUID tenantId, Set<UUID> orderIds) {
+        if (orderIds.isEmpty()) {
+            return Set.of();
+        }
+        return Set.copyOf(jdbc.sql("""
+                        SELECT order_id
+                        FROM ordering.order_amendments
+                        WHERE tenant_id = :tenantId
+                          AND order_id IN (:orderIds)
+                          AND status IN ('DRAFT', 'PRICED', 'AWAITING_CUSTOMER_CONFIRMATION',
+                                         'AWAITING_PAYMENT')
+                          AND ((delta_total_minor > 0 AND confirmation_attested_at IS NULL)
+                               OR (requires_approval AND approval_request_id IS NULL))
+                        """)
+                .param("tenantId", tenantId)
+                .param("orderIds", orderIds)
+                .query(UUID.class)
+                .list());
     }
 
     public List<AmendmentRow> forOrder(UUID tenantId, UUID orderId) {

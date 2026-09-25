@@ -40,6 +40,17 @@ import { MessageKey } from '../../core/i18n/messages.en';
  * order rather than a second picker — the assign control already lives on
  * the order detail pane (§1.2e), reusing `DispatchController`'s own
  * manual-assignment endpoint.
+ *
+ * `RESOLVE` (ADR 0039, gap map row 1.1e) is offered for an order carrying an
+ * open amendment blocked on the operator — an increase awaiting the
+ * customer's recorded agreement, or an ADR 0027 approval still pending — the
+ * same predicate `order-amendments.ts`'s own per-amendment `actions` already
+ * applies, now read at the order level too. `order-queue.ts`'s handler opens
+ * the order, the same treatment `AMEND`/`ASSIGN_COURIER` already get, because
+ * the confirm dialog (`q-order-amendment-confirm-dialog`) needs the
+ * amendment's own id and version, which the row does not carry — only
+ * `order-detail-pane.ts`'s `onActionClick` fetches the amendment history and
+ * opens it.
  */
 export const ORDER_ACTION_CODES = [
   'APPROVE',
@@ -50,6 +61,7 @@ export const ORDER_ACTION_CODES = [
   'AMEND',
   'OVERRIDE',
   'ASSIGN_COURIER',
+  'RESOLVE',
 ] as const;
 export type OrderActionCode = (typeof ORDER_ACTION_CODES)[number];
 
