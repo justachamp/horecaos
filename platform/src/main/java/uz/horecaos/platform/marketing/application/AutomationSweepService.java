@@ -29,9 +29,14 @@ import uz.horecaos.platform.ordering.api.OrderDirectory;
  * candidate through {@link AutomationFiringService#attemptFire}, which owns
  * eligibility, quiet hours, and the guard.
  *
- * <p>{@code CASHBACK_CHANGE} and {@code LATE_ORDER_APOLOGY} have no sweep here
- * — see {@link AutomationTriggerType}'s own doc for why neither is offered as
- * an authorable rule at all.
+ * <p>{@code CASHBACK_CHANGE} has no sweep here either, but for a different
+ * reason than it used to: it is offered now (V0421), and it is event-driven —
+ * {@link uz.horecaos.platform.marketing.application.LoyaltyBalanceChangeAutomationTrigger}
+ * consumes {@code loyalty.api.LoyaltyBalanceChanged} the moment loyalty's own
+ * transaction commits, rather than being discovered by a periodic candidate
+ * query the way a birthday or a day count is. {@code LATE_ORDER_APOLOGY} has
+ * no sweep for the original reason — see {@link AutomationTriggerType}'s own
+ * doc for why it is still not offered as an authorable rule at all.
  */
 @Service
 public class AutomationSweepService {
