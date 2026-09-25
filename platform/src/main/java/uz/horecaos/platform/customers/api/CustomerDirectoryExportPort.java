@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.audit.api.ActorRef;
+import uz.horecaos.platform.audit.api.ApprovalOutcome;
 
 /**
  * What the export centre's {@code CUSTOMER_DIRECTORY} report needs from the Customers module
@@ -61,5 +62,15 @@ public interface CustomerDirectoryExportPort {
             @Nullable String displayName,
             @Nullable String phone) {}
 
-    record ExportBundle(List<ExportedRow> rows, boolean truncated) {}
+    /**
+     * @param approval the ADR 0027 outcome that governed this call. {@code includePhone = false}
+     *     never touches an approval policy and always carries {@link ApprovalOutcome.NotRequired}.
+     *     {@code includePhone = true} carries whatever {@code
+     *     CustomerListQueryService#exportFiltered} decided — critically, on a {@link
+     *     ApprovalOutcome.Pending}/{@link ApprovalOutcome.Declined} outcome {@code rows} is empty
+     *     for a reason that has nothing to do with the filter, and every caller of {@link #export}
+     *     must read this field, not just {@code rows.isEmpty()}, before treating the result as a
+     *     completed export that matched no one.
+     */
+    record ExportBundle(List<ExportedRow> rows, boolean truncated, ApprovalOutcome approval) {}
 }

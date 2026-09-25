@@ -4,6 +4,7 @@ import java.util.List;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 import uz.horecaos.platform.audit.api.ActorRef;
+import uz.horecaos.platform.audit.api.ApprovalOutcome;
 import uz.horecaos.platform.customers.api.CustomerDirectoryExportPort;
 import uz.horecaos.platform.customers.infrastructure.persistence.JdbcCustomerStore.AccountSummaryRow;
 
@@ -17,16 +18,15 @@ import uz.horecaos.platform.customers.infrastructure.persistence.JdbcCustomerSto
  * CustomerIdentityTests} already wires {@code CustomerListQueryService}) rather than standing up a
  * Spring context, so the constructor has to be reachable from outside this package.
  *
- * <p><strong>Staff 9.4.</strong> {@link CustomerListQueryService#exportFiltered} is now also an
- * ADR 0027 maker-checker action above the tenant's row threshold. This adapter does not (yet)
- * distinguish a {@code Pending}/{@code Declined} outcome from "matched nothing": {@code
- * result.rows()} is empty either way, and a scheduled report-export job built on this port reads
- * an empty bundle rather than a reason to wait and retry. In practice this changes nothing unless
- * a tenant authors an {@code audit.approval_policies} row naming {@code
- * ApprovalAction.CUSTOMER_PII_EXPORT} — {@code MissingPolicyMode.ALLOW_WITHOUT_APPROVAL} means an
- * unconfigured tenant sees {@code NotRequired} exactly as before this wave — but a tenant that does
- * configure one should not point a scheduled {@code CUSTOMER_DIRECTORY} export job at a PII column
- * group until this port can surface a pending approval as something other than an empty result.
+ * <p><strong>Staff 9.4.</strong> {@link CustomerListQueryService#exportFiltered} is also an ADR
+ * 0027 maker-checker action above the tenant's row threshold, and on a {@code Pending}/{@code
+ * Declined} outcome {@code result.rows()} is empty for a reason that has nothing to do with the
+ * filter. This adapter carries {@code result.approval()} straight through on {@link
+ * ExportBundle#approval()} rather than collapsing it into the row list, so a caller — {@code
+ * ReportExportService} is the only production one reachable from the queued/scheduled report-export
+ * path — can tell "matched nothing" from "a second signature is still outstanding" and must not
+ * treat the two the same. The {@code includePhone = false} branch below never touches an approval
+ * policy at all, so it always carries {@link ApprovalOutcome.NotRequired}.
  */
 @Component
 public class CustomerDirectoryExportAdapter implements CustomerDirectoryExportPort {
@@ -53,7 +53,7 @@ public class CustomerDirectoryExportAdapter implements CustomerDirectoryExportPo
             List<ExportedRow> rows = result.rows().stream()
                     .map(row -> new ExportedRow(row.accountId(), row.status(), row.displayName(), row.phone()))
                     .toList();
-            return new ExportBundle(rows, result.truncated());
+            return new ExportBundle(rows, result.truncated(), result.approval());
         }
 
         List<AccountSummaryRow> matched = lists.list(tenantId, status, query, null, rowQuota + 1);
@@ -62,6 +62,6 @@ public class CustomerDirectoryExportAdapter implements CustomerDirectoryExportPo
         List<ExportedRow> rows = bounded.stream()
                 .map(row -> new ExportedRow(row.id(), row.status(), row.displayName(), null))
                 .toList();
-        return new ExportBundle(rows, truncated);
+        return new ExportBundle(rows, truncated, new ApprovalOutcome.NotRequired());
     }
 }
