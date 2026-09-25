@@ -715,7 +715,7 @@ docker compose -f deploy/compose.production.yml --env-file /etc/horecaos/product
 application must not be able to reach the backup bucket, and the backup
 account must not be able to reach media).** This is open, not merely
 unwritten: MinIO did this through `mc admin user add` / `policy create` /
-`policy attach`, and [ADR 0135](../adr/not-started/0135-object-storage-runtime-rustfs-replaces-minio.md)
+`policy attach`, and [ADR 0135](../adr/partial/0135-object-storage-runtime-rustfs-replaces-minio.md)
 does not verify a RustFS equivalent — its Open inputs and checklist name
 this explicitly. Do not invent an `aws iam`-shaped command here without
 confirming it against a running RustFS instance first; a command that

@@ -47,8 +47,10 @@ the parts specific to a production run.
    ```bash
    cd /opt/horecaos/horecaos-platform
    alias qc='docker compose -f deploy/compose.production.yml --env-file /etc/horecaos/production.env'
-   qc ps minio   # (or whatever wave C's compose named the service — grep the
-                 #  file for "rustfs" if "minio" no longer matches)
+   qc ps object-store   # the compose service is named object-store; "minio"
+                         # is only a network alias now, not the service name
+                         # (`grep -n '^  object-store:' deploy/compose.production.yml`
+                         # if that ever changes again)
    ```
 
    If the `Image` column already shows `rustfs/rustfs`, the swap already
@@ -124,6 +126,19 @@ docker run -d --name minio-legacy \
   quay.io/minio/minio:RELEASE.2025-07-23T15-54-02Z server /data
 ```
 
+The object-store service holds the `minio` alias on **two** networks, not
+one — `core` (what `platform-app`'s S3 calls use) and `media` (what Caddy's
+`reverse_proxy minio:9000` for `media.horecaos.uz` uses; see the two
+`aliases:` blocks on `deploy/compose.production.yml`'s `object-store`
+service). `docker run` only joins one network at creation, so reserve the
+`minio-legacy` alias on `media` too, with a second call, now — this is what
+lets step 8 hand *both* aliases back to this container instead of only one:
+
+```bash
+docker network connect --alias minio-legacy \
+  horecaos-production_media minio-legacy
+```
+
 **If it refuses to start read-only** — some MinIO builds want to write an
 internal lock or temp file even when serving reads only — drop the `:ro` and
 rely on the script's own guarantee instead: `migrate-object-store.sh` never
@@ -145,7 +160,7 @@ docker run --rm --network horecaos-production_core curlimages/curl:8 \
 If precondition 1 showed RustFS is not running yet, bring it up now:
 
 ```bash
-qc up -d minio   # or the object-store service's actual name
+qc up -d object-store
 ```
 
 Create the three buckets with the same properties `compose.yaml`'s
@@ -159,12 +174,34 @@ bucket, exactly as with S3 itself:
 export TARGET_ROOT_ACCESS_KEY="<the new RustFS root access key wave C's first
   boot generated — read it with bao-get.sh, never type it>"
 export TARGET_ROOT_SECRET_KEY="<same, for the secret key>"
+```
 
+**Never pass a root credential as `-e KEY=VALUE` on a `docker run` command** —
+the resolved value sits in the `docker` client process's own argv for the
+life of that call, readable to anyone on the host who runs `ps auxww` or
+reads `/proc/<pid>/cmdline` at the wrong moment, for the credential every
+bucket created below now depends on. `migrate-object-store.sh`'s own
+`write_cred_file` avoids exactly this by writing a short-lived, mode-0600
+`--env-file` instead; do the same by hand here, once, and reuse it for every
+manual `docker run` against the target for the rest of this runbook:
+
+```bash
+TARGET_CRED_FILE="$(mktemp)"
+( umask 077
+  {
+    printf 'AWS_ACCESS_KEY_ID=%s\n' "${TARGET_ROOT_ACCESS_KEY}"
+    printf 'AWS_SECRET_ACCESS_KEY=%s\n' "${TARGET_ROOT_SECRET_KEY}"
+    printf 'AWS_DEFAULT_REGION=us-east-1\n'
+    printf 'AWS_ENDPOINT_URL=http://minio:9000\n'
+    printf 'AWS_EC2_METADATA_DISABLED=true\n'
+  } > "${TARGET_CRED_FILE}"
+)
+chmod 0600 "${TARGET_CRED_FILE}"
+```
+
+```bash
 docker run --rm --network horecaos-production_core \
-  -e AWS_ACCESS_KEY_ID="${TARGET_ROOT_ACCESS_KEY}" \
-  -e AWS_SECRET_ACCESS_KEY="${TARGET_ROOT_SECRET_KEY}" \
-  -e AWS_DEFAULT_REGION=us-east-1 -e AWS_ENDPOINT_URL=http://minio:9000 \
-  -e AWS_EC2_METADATA_DISABLED=true \
+  --env-file "${TARGET_CRED_FILE}" \
   amazon/aws-cli@sha256:83f8ffe939569070c5b66d22231862ab78718766d9d8e4c44ca84dd0be5569a5 \
   s3api create-bucket --bucket horecaos-media
 
@@ -174,6 +211,12 @@ docker run --rm --network horecaos-production_core \
 # and horecaos-audit-archive, WITH the lock flag:
 #   s3api create-bucket --bucket horecaos-audit-archive --object-lock-enabled-for-bucket
 ```
+
+Keep `TARGET_CRED_FILE` for the rest of this session — the check just below,
+and step 7's retention-date sweep, both reuse it — and remove it
+deliberately once step 7 says it is no longer needed (or, on a step-8
+rollback, once the rollback itself is confirmed complete): `rm -f
+"${TARGET_CRED_FILE}"`.
 
 **Known gap, not silently papered over:** production's current MinIO setup
 gives the application *scoped* service accounts per purpose (`media-service`,
@@ -195,8 +238,7 @@ migration; it is a decision to make explicitly rather than not notice.
 
 ```bash
 docker run --rm --network horecaos-production_core \
-  -e AWS_ACCESS_KEY_ID="${TARGET_ROOT_ACCESS_KEY}" -e AWS_SECRET_ACCESS_KEY="${TARGET_ROOT_SECRET_KEY}" \
-  -e AWS_ENDPOINT_URL=http://minio:9000 -e AWS_EC2_METADATA_DISABLED=true \
+  --env-file "${TARGET_CRED_FILE}" \
   amazon/aws-cli@sha256:83f8ffe939569070c5b66d22231862ab78718766d9d8e4c44ca84dd0be5569a5 \
   s3api get-bucket-versioning --bucket horecaos-audit-archive
 ```
@@ -244,7 +286,23 @@ anything is wrong; do not proceed past a non-zero exit.
 
 **Independently of the script**, spot-check three audit-archive retentions by
 hand, because a check the script did not write is a second, different look at
-the same claim:
+the same claim. Same rule as step 2: no root or throwaway credential as an
+`-e` flag. Write a `SOURCE_CRED_FILE` alongside the `TARGET_CRED_FILE` step 2
+already made, reusing `MINIO_LEGACY_USER`/`MINIO_LEGACY_PASSWORD` from step 1:
+
+```bash
+SOURCE_CRED_FILE="$(mktemp)"
+( umask 077
+  {
+    printf 'AWS_ACCESS_KEY_ID=%s\n' "${MINIO_LEGACY_USER}"
+    printf 'AWS_SECRET_ACCESS_KEY=%s\n' "${MINIO_LEGACY_PASSWORD}"
+    printf 'AWS_DEFAULT_REGION=us-east-1\n'
+    printf 'AWS_ENDPOINT_URL=http://minio-legacy:9000\n'
+    printf 'AWS_EC2_METADATA_DISABLED=true\n'
+  } > "${SOURCE_CRED_FILE}"
+)
+chmod 0600 "${SOURCE_CRED_FILE}"
+```
 
 ```bash
 for key_version in \
@@ -255,13 +313,11 @@ do
   set -- ${key_version}
   echo "--- ${1} @ ${2} ---"
   docker run --rm --network horecaos-production_core \
-    -e AWS_ACCESS_KEY_ID="${MINIO_LEGACY_USER}" -e AWS_SECRET_ACCESS_KEY="${MINIO_LEGACY_PASSWORD}" \
-    -e AWS_ENDPOINT_URL=http://minio-legacy:9000 -e AWS_EC2_METADATA_DISABLED=true \
+    --env-file "${SOURCE_CRED_FILE}" \
     amazon/aws-cli@sha256:83f8ffe939569070c5b66d22231862ab78718766d9d8e4c44ca84dd0be5569a5 \
     s3api get-object-retention --bucket horecaos-audit-archive --key "${1}" --version-id "${2}"
   docker run --rm --network horecaos-production_core \
-    -e AWS_ACCESS_KEY_ID="${TARGET_ROOT_ACCESS_KEY}" -e AWS_SECRET_ACCESS_KEY="${TARGET_ROOT_SECRET_KEY}" \
-    -e AWS_ENDPOINT_URL=http://minio:9000 -e AWS_EC2_METADATA_DISABLED=true \
+    --env-file "${TARGET_CRED_FILE}" \
     amazon/aws-cli@sha256:83f8ffe939569070c5b66d22231862ab78718766d9d8e4c44ca84dd0be5569a5 \
     s3api list-object-versions --bucket horecaos-audit-archive --prefix "${1}"
   # then get-object-retention on the target version id it printed, and compare by eye.
@@ -345,7 +401,7 @@ value="$(qc exec -T openbao bao kv get -field=value horecaos/production/object_s
 chmod 0444 /run/horecaos/secrets/minio-root-password
 unset value
 
-qc restart minio   # or whatever the object-store service is actually named
+qc restart object-store
 ```
 
 The **only** line in `/etc/horecaos/production.env` this step might touch is
@@ -382,6 +438,12 @@ docker stop minio-legacy
 docker rm minio-legacy
 ```
 
+`minio-legacy` is gone, so `SOURCE_CRED_FILE` (step 3-5's spot-check) no
+longer names anything reachable — remove it now, same as any other
+short-lived secret this runbook wrote to disk: `rm -f "${SOURCE_CRED_FILE}"`.
+`TARGET_CRED_FILE` is still needed below and by step 8 if a rollback turns
+out to be necessary later; its own removal is noted at the end of this step.
+
 **The volume, not the container, is the evidence.** Do not remove
 `horecaos-production_minio-data`. Label it and leave it sealed until the
 longest retention on the audit archive it once served has expired — after
@@ -396,22 +458,19 @@ locked for. The lock itself is:
 
 ```bash
 docker run --rm --network horecaos-production_core \
-  -e AWS_ACCESS_KEY_ID="${TARGET_ROOT_ACCESS_KEY}" -e AWS_SECRET_ACCESS_KEY="${TARGET_ROOT_SECRET_KEY}" \
-  -e AWS_ENDPOINT_URL=http://minio:9000 -e AWS_EC2_METADATA_DISABLED=true \
+  --env-file "${TARGET_CRED_FILE}" \
   amazon/aws-cli@sha256:83f8ffe939569070c5b66d22231862ab78718766d9d8e4c44ca84dd0be5569a5 \
   s3api list-object-versions --bucket horecaos-audit-archive \
   --query 'Versions[].VersionId' --output text \
   | tr '\t' '\n' \
   | while read -r vid; do
       key="$(docker run --rm --network horecaos-production_core \
-        -e AWS_ACCESS_KEY_ID="${TARGET_ROOT_ACCESS_KEY}" -e AWS_SECRET_ACCESS_KEY="${TARGET_ROOT_SECRET_KEY}" \
-        -e AWS_ENDPOINT_URL=http://minio:9000 -e AWS_EC2_METADATA_DISABLED=true \
+        --env-file "${TARGET_CRED_FILE}" \
         amazon/aws-cli@sha256:83f8ffe939569070c5b66d22231862ab78718766d9d8e4c44ca84dd0be5569a5 \
         s3api list-object-versions --bucket horecaos-audit-archive \
         --query "Versions[?VersionId=='${vid}'].Key | [0]" --output text)"
       docker run --rm --network horecaos-production_core \
-        -e AWS_ACCESS_KEY_ID="${TARGET_ROOT_ACCESS_KEY}" -e AWS_SECRET_ACCESS_KEY="${TARGET_ROOT_SECRET_KEY}" \
-        -e AWS_ENDPOINT_URL=http://minio:9000 -e AWS_EC2_METADATA_DISABLED=true \
+        --env-file "${TARGET_CRED_FILE}" \
         amazon/aws-cli@sha256:83f8ffe939569070c5b66d22231862ab78718766d9d8e4c44ca84dd0be5569a5 \
         s3api get-object-retention --bucket horecaos-audit-archive --key "${key}" --version-id "${vid}" \
         --query 'Retention.RetainUntilDate' --output text
@@ -422,6 +481,14 @@ That last line is the date. Put a note on the calendar, and record the volume
 name and this date in `infra/backup/README.md` next to the other numbers that
 only mean something written down (its own convention already, per
 `docs/runbooks/restore.md`'s section 3.7).
+
+Nothing past this point in a normal run needs the target root credential
+again — remove its file too: `rm -f "${TARGET_CRED_FILE}"`. **If step 6
+failed and this runbook is headed for step 8's rollback instead of finishing
+step 7 normally, keep `TARGET_CRED_FILE` for now** — step 8's own rollback
+does not call the AWS CLI, but do not delete a still-live credential file on
+the assumption a runbook step will not be re-read; remove it once rollback
+is confirmed complete, from the same shell session that created it.
 
 ## Step 8 — rollback
 
@@ -443,19 +510,43 @@ onto `minio-legacy` instead.
 *First*, hand the `minio` alias back to `minio-legacy` — this is what makes
 `http://minio:9000` mean the old store again, with no endpoint edit
 anywhere, because nothing about this rollback should require reasoning about
-which of a dozen `HORECAOS_*_ENDPOINT` lines to change under pressure:
+which of a dozen `HORECAOS_*_ENDPOINT` lines to change under pressure. Do
+this on **both** networks the object-store service held the alias on —
+`core` (`platform-app`'s S3 calls) and `media` (Caddy's
+`reverse_proxy minio:9000` for `media.horecaos.uz`, per the object-store
+service's own two-network `aliases:` block). Restoring only `core` leaves
+`platform-app` authenticating fine while every storefront image 502s, with
+nothing in this runbook to say why — that gap is exactly what step 1's
+extra `docker network connect` for `media` exists to close:
 
 ```bash
-qc stop minio    # or whatever the object-store service is actually named —
-                  # frees the "minio" alias on the core network
+qc stop object-store    # frees the "minio" alias on BOTH the core and media
+                         # networks at once (stopping the container drops
+                         # all of its network endpoints)
 
 # A container already connected to a network cannot have an alias added to
 # that connection — Docker refuses with "endpoint already exists" — so this
 # is a disconnect and reconnect, naming both the alias minio-legacy already
-# had and the one it is taking over, in the same call:
+# had and the one it is taking over, in the same call. Repeat for media —
+# skipping it is the one-network mistake this step exists to prevent:
 docker network disconnect horecaos-production_core minio-legacy
 docker network connect --alias minio-legacy --alias minio \
   horecaos-production_core minio-legacy
+
+docker network disconnect horecaos-production_media minio-legacy
+docker network connect --alias minio-legacy --alias minio \
+  horecaos-production_media minio-legacy
+```
+
+**Check both origins, not just one** — the whole reason this needed two
+`docker network connect` calls instead of one is that a check against only
+`core` cannot see a `media` alias that never came back:
+
+```bash
+docker run --rm --network horecaos-production_core curlimages/curl:8 \
+  -sf http://minio:9000/minio/health/live && echo "core: OK"
+docker run --rm --network horecaos-production_media curlimages/curl:8 \
+  -sf http://minio:9000/minio/health/live && echo "media: OK"
 ```
 
 *Second*, restore the six OpenBao values from step 6.A to what they were

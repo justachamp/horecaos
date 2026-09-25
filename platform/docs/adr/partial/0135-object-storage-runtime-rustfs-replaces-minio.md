@@ -1,19 +1,41 @@
 # ADR 0135: Object storage runtime: RustFS replaces MinIO
 
 - Decision status: Accepted
-- Implementation status: Not started — recorded here before implementation
-  lands, per the adr-discipline skill. As of this record's own commit, nothing
-  in `compose.yaml`, `compose.production.yaml`, `deploy/compose.production.yml`,
-  `infra/production/ops/Dockerfile`, `infra/backup/*.sh`,
-  `application.yml`/`AuditArchiveStorageConfiguration`, or the six
-  MinIO-backed `GenericContainer` test classes has changed. Those changes are
-  tracked as parallel work under this same migration (compose, application
-  config, backup/restore scripts, the `ops` image, and test infrastructure) and
-  this line should advance to `Partial` or `Built` once they merge and are
-  verified against code — not copied from a wave's own report, per
-  `docs/adr/README.md`'s 2026-08-24 reconciliation, which is also why this
-  line does not use `In progress`: that token was retired for exactly the
-  failure it names, and ADR 0000 lists it as a rejected alternative.
+- Implementation status: Partial — **2026-09-25 (re-audited against code, not
+  copied from a wave report, per `docs/adr/README.md`'s 2026-08-24
+  reconciliation):** every code-side target this record's original status
+  line named has since changed. `compose.yaml`, `compose.production.yaml` and
+  `deploy/compose.production.yml` all pin
+  `rustfs/rustfs:1.0.0@sha256:8cc9801755448b71a786705ce76692c77e14936cccd87cf2fc31842e58f4d1ff`;
+  `infra/production/ops/Dockerfile` installs the Alpine `aws-cli` package in
+  place of the withdrawn `mc` binary; `infra/backup/backup.sh`, `restore.sh`
+  and `rehearse-restore.sh` drive the AWS CLI against RustFS instead of `mc`;
+  and all six MinIO-backed `GenericContainer` test classes
+  (`CatalogImportRowServiceTests`, `S3AuditArchiveStoreTests`,
+  `AuditPartitionArchiverTests`, `MediaLifecycleTests`,
+  `MediaAssetIngestionServiceTests`, `BackupScriptTests`) now start the shared
+  `ObjectStoreContainer` (RustFS) fixture instead. `application.yml` and
+  `AuditArchiveStorageConfiguration` did **not** need to change — they only
+  ever named the `HORECAOS_*_ENDPOINT` values and the generic `S3Client`/
+  `S3Presigner` port this ADR's own Context section says the domain code
+  stays coded to, never a MinIO-specific type, so the runtime swap under a
+  stable `minio` network alias needed no application-code edit; that is the
+  interface working as designed, not an unchecked box. Still not done, and
+  the reason this stays `Partial` rather than `Built`: the scoped-credential
+  provisioning path (checklist item 3 — production runs on the RustFS root
+  credential for now, a tracked, explicit reduction in defence-in-depth, see
+  `docs/runbooks/object-store-migration.md` step 2's "known gap" note), the
+  actual pre-prod VM data migration and its restore rehearsal (checklist
+  items 4-5 — the migration runbook's own header still reads "Last executed:
+  never"), sealing the old MinIO volume (checklist item 6, which cannot
+  happen before item 4), and the two open inputs (an upgrade/patch-cadence
+  owner, and TLS termination in front of the S3 API). Advance this line again
+  — to `Built`, or drop this addendum for a rewritten one — once the
+  production migration in the runbook actually runs, not when its supporting
+  code merges. (This line does not use `In progress` for the still-open items
+  above: that token was retired for exactly the failure this re-audit exists
+  to catch — status copied from a wave's own report rather than checked
+  against code — and ADR 0000 lists it as a rejected alternative.)
 - Date proposed: 2026-09-25
 - Date decided: 2026-09-25
 - Deciders: Ayubkhon Abbosov (platform owner — the withdrawal and the RustFS
@@ -280,10 +302,15 @@ destination.
 
 ## Implementation checklist
 
-- [ ] Pin `rustfs/rustfs:1.0.0@sha256:...` in every compose file that names an
-      object-store image today.
-- [ ] Replace every `mc` invocation (seed jobs, `backup.sh`, `restore.sh`,
+- [x] Pin `rustfs/rustfs:1.0.0@sha256:...` in every compose file that names an
+      object-store image today. Done 2026-09-25: `compose.yaml`,
+      `compose.production.yaml` and `deploy/compose.production.yml` all pin
+      the full digest.
+- [x] Replace every `mc` invocation (seed jobs, `backup.sh`, `restore.sh`,
       `rehearse-restore.sh`, the `ops` image) with the AWS CLI equivalent.
+      Done 2026-09-25: verified no `mc` binary use remains outside comments
+      explaining the replacement (`grep` for `mc ` / `minio/mc` in
+      `infra/backup/*.sh` and `infra/production/ops/Dockerfile`).
 - [ ] Confirm — or build — a scoped-credential provisioning path for RustFS
       equivalent to the MinIO service accounts the deploy runbook creates
       today; do not run production on the root credential if a scoped path

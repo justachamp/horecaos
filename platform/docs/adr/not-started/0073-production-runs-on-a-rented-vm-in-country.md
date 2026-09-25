@@ -6,7 +6,7 @@
   provider's own S3-compatible storage is confirmed (still an open input).
   Until that happens, the self-hosted store this platform runs today is being
   replaced in place by RustFS 1.0.0, pinned by digest, per
-  [ADR 0135](0135-object-storage-runtime-rustfs-replaces-minio.md) — a
+  [ADR 0135](../partial/0135-object-storage-runtime-rustfs-replaces-minio.md) — a
   narrower, unrelated decision that does not close this record's open input or
   substitute for the provider-storage question this ADR still has to answer.
   If this ADR is later accepted, "MinIO is removed" below should be read as
