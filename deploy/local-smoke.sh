@@ -271,7 +271,7 @@ put data_encryption/platform/handover-pepper  "${HANDOVER_PEPPER}"
 # that step works is exactly what the runbook's own "Check" does — recorded
 # as a gap in this task's final report, not silently assumed to be
 # equivalent.
-put object_storage/platform/media-access-key  "${HORECAOS_MINIO_ROOT_USER:-horecaos-smoke-root}"
+put object_storage/platform/media-access-key  "${HORECAOS_OBJECT_STORE_ACCESS_KEY:-horecaos-smoke-root}"
 put object_storage/platform/media-secret-key  "${OBJECT_STORE_ROOT_PW}"
 # Matches horecaos-realm.json's own fallback default exactly (see that
 # file's ${VAR:default} syntax) — this script does not rotate these secrets
@@ -295,7 +295,7 @@ write_secret object-store-secret-key       "${OBJECT_STORE_ROOT_PW}"
 write_secret openbao-role-id               "${ROLE_ID}"
 write_secret openbao-secret-id             "${SECRET_ID}"
 
-export HORECAOS_MINIO_ROOT_USER="${HORECAOS_MINIO_ROOT_USER:-horecaos-smoke-root}"
+export HORECAOS_OBJECT_STORE_ACCESS_KEY="${HORECAOS_OBJECT_STORE_ACCESS_KEY:-horecaos-smoke-root}"
 export HORECAOS_REGISTRY="${REGISTRY}"
 export HORECAOS_IMAGE_TAG="${TAG}"
 export HORECAOS_FRONTEND_IMAGE_TAG="${TAG}"
