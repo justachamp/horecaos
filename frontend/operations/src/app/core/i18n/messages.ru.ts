@@ -3360,6 +3360,8 @@ export const messagesRu: MessageCatalogue = {
     'По умолчанию отключено. Включение начинает проверять положение курьера по обоим радиусам ниже.',
   'delivery.policy.gpsAcceptRadiusKm': 'Радиус принятия (км, от точки выдачи)',
   'delivery.policy.gpsStatusChangeRadiusMeters': 'Радиус смены статуса (м, от точки клиента)',
+  'delivery.policy.gpsSummary':
+    'Включено — приём в пределах {acceptKm} км, смена статуса в пределах {statusChangeM} м',
   'delivery.policy.billingMode': 'Биллинг курьеров (личный баланс)',
   'delivery.policy.billingMode.refused': 'Отклонено ADR 0042',
   'delivery.policy.billingMode.reason':
@@ -3368,6 +3370,15 @@ export const messagesRu: MessageCatalogue = {
   'delivery.policy.telemetryGate.platformOnly': 'Только платформа',
   'delivery.policy.telemetryGate.reason':
     'Зарегистрирован (ADR 0045), но доступен для записи только с административной панели платформы — арендатор не может задать это здесь.',
+  'delivery.policy.notEnforced': 'Пока не применяется',
+  'delivery.policy.notEnforced.gps.reason':
+    'Сохраняется, но ничего это пока не проверяет: в приложении курьера нет эндпоинта, принимающего заказ или продвигающего статус доставки с собственной позицией курьера. Подключение этого переключателя означает сначала выпустить такой эндпоинт, а это выходит за рамки данного документа.',
+  'delivery.policy.notEnforced.kitchenReadyOnly.reason':
+    'Сохраняется, но ничего это пока не проверяет: в консоли нет ленты назначений для курьера, которую можно было бы фильтровать этим переключателем — курьеры видят заказы только через диспетчеризацию, инициируемую персоналом, а не через собственный список.',
+  'delivery.policy.notEnforced.revealCustomerLocationTiming.reason':
+    'Сохраняется, но ничего это пока не проверяет: нет эндпоинта, который вообще показывал бы курьеру точный адрес клиента, так что переключателю времени нечего регулировать.',
+  'delivery.policy.notEnforced.postDeliveryPaymentCheckRequired.reason':
+    'Сохраняется, но ничего это пока не проверяет: завершение заказа намеренно решается независимо от учёта курьеров (ADR 0125) — сделать его зависимым от этого переключателя — решение, которое этот экран не может принять самостоятельно.',
   'delivery.policy.edit': 'Изменить',
   'delivery.policy.cancel': 'Отмена',
   'delivery.policy.publish': 'Опубликовать',

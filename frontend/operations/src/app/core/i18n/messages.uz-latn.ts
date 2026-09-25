@@ -3385,6 +3385,8 @@ export const messagesUzLatn: MessageCatalogue = {
     'Standart holatda oʻchirilgan. Yoqilsa, kuryerning holati quyidagi ikkala radius boʻyicha tekshirila boshlaydi.',
   'delivery.policy.gpsAcceptRadiusKm': 'Qabul qilish radiusi (km, olib ketish nuqtasidan)',
   'delivery.policy.gpsStatusChangeRadiusMeters': 'Holat oʻzgarish radiusi (m, mijoz nuqtasidan)',
+  'delivery.policy.gpsSummary':
+    'Yoqilgan — qabul {acceptKm} km ichida, holat oʻzgarishi {statusChangeM} m ichida',
   'delivery.policy.billingMode': 'Kuryerlar billingi (shaxsiy balans)',
   'delivery.policy.billingMode.refused': 'ADR 0042 tomonidan rad etilgan',
   'delivery.policy.billingMode.reason':
@@ -3393,6 +3395,15 @@ export const messagesUzLatn: MessageCatalogue = {
   'delivery.policy.telemetryGate.platformOnly': 'Faqat platforma',
   'delivery.policy.telemetryGate.reason':
     'Roʻyxatdan oʻtgan (ADR 0045), lekin faqat platforma boshqaruvi sirtidan yozish mumkin — ijarachi buni bu yerda oʻrnata olmaydi.',
+  'delivery.policy.notEnforced': 'Hali kuchga kirmagan',
+  'delivery.policy.notEnforced.gps.reason':
+    'Saqlanadi, lekin hozircha hech narsa buni tekshirmaydi: kuryer ilovasida taklifni qabul qiladigan yoki yetkazib berish holatini kuryerning oʻz joylashuvi bilan ilgari suradigan endpoint yoʻq. Bu tugmani ulash avval shu endpointni chiqarishni talab qiladi, bu esa ushbu hujjat doirasidan tashqarida.',
+  'delivery.policy.notEnforced.kitchenReadyOnly.reason':
+    'Saqlanadi, lekin hozircha hech narsa buni tekshirmaydi: konsolda bu tugma filtrlaydigan kuryerga moʻljallangan topshiriqlar lentasi yoʻq — kuryerlar buyurtmalarni faqat dispetcherlik orqali koʻradi, oʻzlari uchun alohida roʻyxat orqali emas.',
+  'delivery.policy.notEnforced.revealCustomerLocationTiming.reason':
+    'Saqlanadi, lekin hozircha hech narsa buni tekshirmaydi: kuryerga mijozning aniq manzilini umuman koʻrsatadigan endpoint yoʻq, shuning uchun vaqt tugmasi uchun tekshiradigan narsa yoʻq.',
+  'delivery.policy.notEnforced.postDeliveryPaymentCheckRequired.reason':
+    'Saqlanadi, lekin hozircha hech narsa buni tekshirmaydi: buyurtmaning yakunlanishi ataylab kuryer hisob-kitobidan mustaqil hal qilinadi (ADR 0125) — buni shu tugmaga bogʻliq qilish ushbu ekran oʻzi qabul qila olmaydigan dizayn qarori.',
   'delivery.policy.edit': 'Tahrirlash',
   'delivery.policy.cancel': 'Bekor qilish',
   'delivery.policy.publish': 'Eʻlon qilish',

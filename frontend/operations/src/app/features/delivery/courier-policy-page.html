@@ -70,6 +70,28 @@
             </div>
           }
 
+          @for (row of notEnforcedRows(); track row.key) {
+            <div class="policy__row" [attr.data-testid]="'policy-row-' + row.key">
+              <div class="policy__rowHead">
+                <dt class="q-body-sm">{{ row.labelKey | t }}</dt>
+                <q-status-pill [label]="'delivery.policy.notEnforced' | t" tone="warning" />
+              </div>
+              <dd class="q-emphasis policy__disabledValue">{{ row.value }}</dd>
+              <p class="policy__consequence q-caption">{{ row.reasonKey | t }}</p>
+            </div>
+          }
+
+          <div class="policy__row" data-testid="policy-row-gpsVerificationEnabled">
+            <div class="policy__rowHead">
+              <dt class="q-body-sm">{{ 'delivery.policy.gpsVerificationEnabled' | t }}</dt>
+              <q-status-pill [label]="'delivery.policy.notEnforced' | t" tone="warning" />
+            </div>
+            <dd class="q-emphasis policy__disabledValue">{{ notEnforcedGpsRow() }}</dd>
+            <p class="policy__consequence q-caption">
+              {{ 'delivery.policy.notEnforced.gps.reason' | t }}
+            </p>
+          </div>
+
           <div class="policy__row" data-testid="policy-row-billingMode">
             <div class="policy__rowHead">
               <dt class="q-body-sm">{{ 'delivery.policy.billingMode' | t }}</dt>
@@ -112,82 +134,15 @@
             <option value="OFF">{{ 'delivery.policy.shiftEnforcement.OFF' | t }}</option>
           </select>
 
-          <label class="checkbox q-body-sm">
-            <input
-              type="checkbox"
-              [checked]="draftKitchenReadyOnly()"
-              (change)="draftKitchenReadyOnly.set($any($event.target).checked)"
-              data-testid="policy-input-kitchenReadyOnly"
-            />
-            {{ 'delivery.policy.kitchenReadyOnly' | t }}
-          </label>
-
-          <label class="q-caption" for="policy-reveal-timing">{{
-            'delivery.policy.revealCustomerLocationTiming' | t
-          }}</label>
-          <select
-            id="policy-reveal-timing"
-            class="q-body field"
-            [value]="draftRevealTiming()"
-            (change)="draftRevealTiming.set($any($event.target).value)"
-            data-testid="policy-input-revealTiming"
-          >
-            <option value="AFTER_ACCEPT">
-              {{ 'delivery.policy.revealCustomerLocationTiming.AFTER_ACCEPT' | t }}
-            </option>
-            <option value="BEFORE_ACCEPT">
-              {{ 'delivery.policy.revealCustomerLocationTiming.BEFORE_ACCEPT' | t }}
-            </option>
-          </select>
-
-          <label class="checkbox q-body-sm">
-            <input
-              type="checkbox"
-              [checked]="draftPostDeliveryPaymentCheckRequired()"
-              (change)="draftPostDeliveryPaymentCheckRequired.set($any($event.target).checked)"
-              data-testid="policy-input-postDeliveryPaymentCheckRequired"
-            />
-            {{ 'delivery.policy.postDeliveryPaymentCheckRequired' | t }}
-          </label>
-
-          <label class="checkbox q-body-sm" data-testid="policy-input-gpsVerificationEnabled">
-            <input
-              type="checkbox"
-              [checked]="draftGpsVerificationEnabled()"
-              (change)="draftGpsVerificationEnabled.set($any($event.target).checked)"
-            />
-            {{ 'delivery.policy.gpsVerificationEnabled' | t }}
-          </label>
-
-          @if (draftGpsVerificationEnabled()) {
-            <label class="q-caption" for="policy-gps-accept-km">{{
-              'delivery.policy.gpsAcceptRadiusKm' | t
-            }}</label>
-            <input
-              id="policy-gps-accept-km"
-              class="q-body field"
-              type="number"
-              min="0.01"
-              step="0.01"
-              [value]="draftGpsAcceptRadiusKm()"
-              (input)="draftGpsAcceptRadiusKm.set(+$any($event.target).value)"
-              data-testid="policy-input-gpsAcceptRadiusKm"
-            />
-
-            <label class="q-caption" for="policy-gps-status-m">{{
-              'delivery.policy.gpsStatusChangeRadiusMeters' | t
-            }}</label>
-            <input
-              id="policy-gps-status-m"
-              class="q-body field"
-              type="number"
-              min="1"
-              step="1"
-              [value]="draftGpsStatusChangeRadiusMeters()"
-              (input)="draftGpsStatusChangeRadiusMeters.set(+$any($event.target).value)"
-              data-testid="policy-input-gpsStatusChangeRadiusMeters"
-            />
-          }
+          <!--
+            kitchenReadyOnly, revealCustomerLocationTiming,
+            postDeliveryPaymentCheckRequired and the GPS master toggle/radii
+            are deliberately NOT editable here — see this component's own
+            doc comment. Each publish echoes back the currently resolved
+            value for these four (draftKitchenReadyOnly and friends), never
+            a value this form let the operator change; the locked rows above
+            (outside this form) are the only place they are shown.
+          -->
 
           <label class="q-caption" for="policy-cash-ceiling">{{
             'delivery.policy.cashCeiling' | t

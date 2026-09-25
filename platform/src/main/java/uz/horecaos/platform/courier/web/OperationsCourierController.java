@@ -2,6 +2,7 @@ package uz.horecaos.platform.courier.web;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -24,6 +25,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -87,6 +89,7 @@ import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.tenancy.api.PolicyAuthor;
 import uz.horecaos.platform.tenancy.api.ResolvedPolicy;
+import uz.horecaos.platform.web.api.AggregateVersion;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
 import uz.horecaos.platform.web.authorization.RequiresCapability;
@@ -726,7 +729,10 @@ public class OperationsCourierController {
 
         ResourceScope scope = policyScope(tenantId, brandId, locationId);
         authorization.require(currentActor.get().subject(), Capability.DELIVERY_POLICY_READ, scope);
-        return ResponseEntity.ok(CourierPolicyResponse.of(policyResolver.resolveWithIdentity(scope)));
+        ResolvedPolicy<CourierCompensationPolicy> resolved = policyResolver.resolveWithIdentity(scope);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.ETAG, AggregateVersion.toETag(resolved.policyVersion()))
+                .body(CourierPolicyResponse.of(resolved));
     }
 
     @PutMapping("/courier-policy")
@@ -741,20 +747,33 @@ public class OperationsCourierController {
                     + "keeps answering with it for whatever already resolved it. Authorization is "
                     + "checked against that same resolved scope (see the class-level doc on "
                     + "courierPolicy above), so a BRAND_MANAGER publishing their own brand's "
-                    + "override is not refused for a grant the role bundle already gives them.")
+                    + "override is not refused for a grant the role bundle already gives them. "
+                    + "Requires If-Match carrying the version the GET at this same scope returned "
+                    + "(ADR 0031's concurrency section) — the document itself is append-only "
+                    + "versioned and every write technically succeeds, so without this check two "
+                    + "operators editing the same scope's policy from two open tabs would silently "
+                    + "overwrite one another's fields with whatever their own stale form last held.")
     public ResponseEntity<CourierPolicyResponse> writeCourierPolicy(
             @PathVariable UUID tenantId,
             @RequestParam(required = false) UUID brandId,
             @RequestParam(required = false) UUID locationId,
-            @Valid @RequestBody CourierPolicyWriteRequest body) {
+            @Valid @RequestBody CourierPolicyWriteRequest body,
+            HttpServletRequest request) {
 
         ResourceScope scope = policyScope(tenantId, brandId, locationId);
         authorization.require(currentActor.get().subject(), Capability.DELIVERY_POLICY_WRITE, scope);
+
+        long expectedVersion = AggregateVersion.requireIfMatch(request);
+        ResolvedPolicy<CourierCompensationPolicy> current = policyResolver.resolveWithIdentity(scope);
+        AggregateVersion.requireMatch(expectedVersion, current.policyVersion());
+
         CourierCompensationPolicy document = body.toDocument();
         ResolvedPolicy<CourierCompensationPolicy> published =
                 policyAuthor.author(CourierPolicies.COMPENSATION, scope, document, actor(), body.reason());
 
-        return ResponseEntity.ok(CourierPolicyResponse.of(published));
+        return ResponseEntity.ok()
+                .header(HttpHeaders.ETAG, AggregateVersion.toETag(published.policyVersion()))
+                .body(CourierPolicyResponse.of(published));
     }
 
     /** Omit brandId/locationId for the tenant-wide scope; supply either for a brand or location override. */

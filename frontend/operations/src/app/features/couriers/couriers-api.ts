@@ -886,10 +886,18 @@ export class CouriersApi {
    * required, matching `OperationsCourierController`'s own "no partial
    * merge" rule for this document. Omit `brandId`/`locationId` to publish
    * the tenant-wide default; supply either for a brand or location override.
+   *
+   * `expectedVersion` is the `policyVersion` the caller's own `policy()`
+   * read most recently returned at this exact scope — sent as `If-Match`
+   * (ADR 0031). The server refuses with `STALE_VERSION` when it no longer
+   * matches, rather than silently publishing over a version the operator
+   * never saw, which is what two open tabs editing the same scope would
+   * otherwise produce.
    */
   async writePolicy(
     tenantId: string,
     input: CourierPolicyWriteInput,
+    expectedVersion: number,
     brandId?: string,
     locationId?: string,
   ): Promise<CourierPolicyView> {
@@ -897,7 +905,10 @@ export class CouriersApi {
       this.api.put<CourierPolicyWriteInput, CourierPolicyView>(
         courierPaths.courierPolicy(tenantId),
         command(input),
-        { params: { ...(brandId ? { brandId } : {}), ...(locationId ? { locationId } : {}) } },
+        {
+          expectedVersion,
+          params: { ...(brandId ? { brandId } : {}), ...(locationId ? { locationId } : {}) },
+        },
       ),
     );
   }
