@@ -15,7 +15,10 @@ set -euo pipefail
 PROJECT="${COMPOSE_PROJECT_NAME:-horecaos-platform}"
 NETWORK="${PROJECT}_default"
 PG_IMAGE="postgres:18"
-MC_IMAGE="quay.io/minio/mc:RELEASE.2025-07-21T05-28-08Z"
+# AWS CLI, not `mc` (ADR 0135, 2026-09-25): MinIO's own client image is gone
+# from every registry the same way the server image is. Pinned by digest,
+# same as every other third-party image the migration touched.
+AWS_CLI_IMAGE="amazon/aws-cli:2.37.3@sha256:83f8ffe939569070c5b66d22231862ab78718766d9d8e4c44ca84dd0be5569a5"
 WORK_VOLUME="horecaos-backup-rehearsal"
 
 SOURCE_URL="postgresql://horecaos:horecaos@platform-db:5432/horecaos"
@@ -25,10 +28,15 @@ TARGET_URL="postgresql://horecaos:horecaos@platform-db:5432/${TARGET_DB}"
 PASSPHRASE="${HORECAOS_BACKUP_PASSPHRASE:-local-rehearsal-passphrase}"
 BUCKET="${HORECAOS_BACKUP_BUCKET:-horecaos-backups}"
 
-# The off-site destination. Locally this is a second MinIO standing in for a
-# remote site; in production it is a real bucket elsewhere. Everything between
-# here and the restore is identical either way, which is the point.
-OFFSITE_ENDPOINT="${HORECAOS_BACKUP_OFFSITE_ENDPOINT:-http://minio-offsite:9000}"
+# The primary and off-site destinations. Locally these are platform/
+# compose.yaml's own object-store and object-store-offsite (RustFS, ADR
+# 0135); in production the off-site one is a real bucket elsewhere.
+# Everything between here and the restore is identical either way, which is
+# the point.
+PRIMARY_ENDPOINT="${HORECAOS_BACKUP_S3_ENDPOINT:-http://object-store:9000}"
+PRIMARY_ACCESS_KEY="${HORECAOS_BACKUP_ACCESS_KEY:-horecaos}"
+PRIMARY_SECRET_KEY="${HORECAOS_BACKUP_SECRET_KEY:-horecaos-local-secret}"
+OFFSITE_ENDPOINT="${HORECAOS_BACKUP_OFFSITE_ENDPOINT:-http://object-store-offsite:9000}"
 OFFSITE_ACCESS_KEY="${HORECAOS_BACKUP_OFFSITE_ACCESS_KEY:-horecaos}"
 OFFSITE_SECRET_KEY="${HORECAOS_BACKUP_OFFSITE_SECRET_KEY:-horecaos-offsite-secret}"
 OBJECT="horecaos-$(date -u +%Y%m%dT%H%M%SZ).dump.enc"
@@ -43,9 +51,9 @@ pg() {
     --entrypoint bash "${PG_IMAGE}" -c "$1"
 }
 
-mcc() {
+awscli() {
   docker run --rm --network "${NETWORK}" -v "${WORK_VOLUME}:/work" \
-    --entrypoint sh "${MC_IMAGE}" -c "$1"
+    --entrypoint sh "${AWS_CLI_IMAGE}" -c "$1"
 }
 
 echo "==> Baseline"
@@ -71,18 +79,20 @@ pg "set -e
     echo \"    sha256 \$(cat /work/before.sha)\""
 
 echo "==> Upload, replicate off-site, and read back from off-site"
-mcc "set -e
-     mc alias set backup http://minio:9000 horecaos horecaos-local-secret >/dev/null
-     mc alias set offsite ${OFFSITE_ENDPOINT} ${OFFSITE_ACCESS_KEY} ${OFFSITE_SECRET_KEY} >/dev/null
-     mc mb --ignore-existing backup/${BUCKET} >/dev/null
-     mc mb --ignore-existing offsite/${BUCKET} >/dev/null
+awscli "set -e
+     export AWS_DEFAULT_REGION=us-east-1 AWS_EC2_METADATA_DISABLED=true
 
-     mc cp /work/db.enc backup/${BUCKET}/${OBJECT} >/dev/null
-     mc cp /work/db.enc offsite/${BUCKET}/${OBJECT} >/dev/null
+     export AWS_ACCESS_KEY_ID=${PRIMARY_ACCESS_KEY} AWS_SECRET_ACCESS_KEY=${PRIMARY_SECRET_KEY}
+     aws --endpoint-url ${PRIMARY_ENDPOINT} s3api create-bucket --bucket ${BUCKET} >/dev/null 2>&1 || true
+     aws --endpoint-url ${PRIMARY_ENDPOINT} s3 cp /work/db.enc s3://${BUCKET}/${OBJECT} >/dev/null
+
+     export AWS_ACCESS_KEY_ID=${OFFSITE_ACCESS_KEY} AWS_SECRET_ACCESS_KEY=${OFFSITE_SECRET_KEY}
+     aws --endpoint-url ${OFFSITE_ENDPOINT} s3api create-bucket --bucket ${BUCKET} >/dev/null 2>&1 || true
+     aws --endpoint-url ${OFFSITE_ENDPOINT} s3 cp /work/db.enc s3://${BUCKET}/${OBJECT} >/dev/null
 
      # Read back from the OFF-SITE copy, not the local one. Verifying the local
      # copy would prove nothing about the one that survives losing the primary.
-     mc cp offsite/${BUCKET}/${OBJECT} /work/roundtrip.enc >/dev/null
+     aws --endpoint-url ${OFFSITE_ENDPOINT} s3 cp s3://${BUCKET}/${OBJECT} /work/roundtrip.enc >/dev/null
      sha256sum /work/roundtrip.enc | cut -d' ' -f1 > /work/after.sha
      before=\$(cat /work/before.sha)
      after=\$(cat /work/after.sha)
