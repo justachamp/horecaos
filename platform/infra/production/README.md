@@ -43,7 +43,7 @@ nothing that runs anywhere else.
 | `caddy/Caddyfile` | TLS, routing, rate limits, body caps, and the Payme allowlist (ADR 0023) — kept in parity with `deploy/infra/caddy/Caddyfile`, see that file's own note |
 | `caddy/Dockerfile` | Stock `caddy:2.10-alpine` recompiled with `caddy-ratelimit`, since the stock image cannot run this Caddyfile's `rate_limit` directives. Shared: `deploy/`'s CI job publishes this as `horecaos-edge` too |
 | `migrate/Dockerfile` | The one-shot Flyway job. Shared with `deploy/`'s CI publish job |
-| `ops/` | The operator's shell: pg_dump, psql, mc, openssl. `ops/Dockerfile` is shared with `deploy/`'s CI publish job |
+| `ops/` | The operator's shell: pg_dump, psql, the AWS CLI (ADR 0135 — replaces `mc`), openssl. `ops/Dockerfile` is shared with `deploy/`'s CI publish job |
 | `postgres-init/` | Creates the least-privilege application login |
 | `audit-grants.sql` | Fails the deploy if a table exists the application cannot read |
 
@@ -52,20 +52,26 @@ the runbooks are the instructions.
 
 ## Three networks, not two
 
-`public` has a route out; `core` has none and holds PostgreSQL, Kafka, MinIO and
-OpenBao. A third, `media`, holds exactly the edge and MinIO.
+`public` has a route out; `core` has none and holds PostgreSQL, Kafka, the
+object store and OpenBao. A third, `media`, holds exactly the edge and the
+object store.
+
+The object store is RustFS as of ADR 0135 (2026-09-25 — MinIO's public images
+were withdrawn); the compose service name and this section's reasoning are
+otherwise unchanged from when it named MinIO.
 
 It exists because presigned media URLs are handed to browsers and therefore have
 to be signed for the public HTTPS origin, which means the edge has to reach the
 object store. Neither of the two obvious ways to arrange that is acceptable:
-putting MinIO on `public` gives the store that holds the backups a route to the
-internet, and putting the edge on `core` gives the one internet-facing process a
-path to PostgreSQL and OpenBao. A two-member link costs nothing and gives up
-neither property.
+putting the object store on `public` gives the store that holds the backups a
+route to the internet, and putting the edge on `core` gives the one
+internet-facing process a path to PostgreSQL and OpenBao. A two-member link
+costs nothing and gives up neither property.
 
 `HORECAOS_MEDIA_ORIGIN` and `HORECAOS_MEDIA_HOSTNAME` are required for the same reason
 the API and auth ones are: a URL signed for `http://minio:9000` is unreachable
-from a phone and unencrypted if it were.
+from a phone and unencrypted if it were. (`minio` is the object store's stable
+network alias through the RustFS cutover — see ADR 0135.)
 
 ## How a secret reaches a running container
 
@@ -99,16 +105,19 @@ disk.** ADR 0028 says OpenBao; here is exactly what that means in practice.
         v                         v
   platform-db               platform-app
   keycloak-db
-  minio
+  minio (RustFS as of ADR 0135)
 ```
 
 Four things follow from that picture, and each of them is the reason for a
 design decision elsewhere:
 
 **1. Three containers get a value; the application gets a token.**
-PostgreSQL, Keycloak and MinIO have no OpenBao client, so they read a password
-from a file at startup. PostgreSQL and MinIO support that directly through
-`POSTGRES_PASSWORD_FILE` and `MINIO_ROOT_PASSWORD_FILE`. Keycloak 26.7 does not,
+PostgreSQL, Keycloak and the object store (RustFS as of ADR 0135) have no
+OpenBao client, so they read a password from a file at startup. PostgreSQL
+supports that directly through `POSTGRES_PASSWORD_FILE`, and RustFS through
+`RUSTFS_SECRET_KEY_FILE` (it also honors `MINIO_ROOT_PASSWORD_FILE`, which
+this platform does not rely on as the interface — see ADR 0135). Keycloak
+26.7 does not,
 despite the convention being near-universal — `KC_DB_PASSWORD_FILE` is ignored and
 the server reports only that no password was provided — so it gets a four-line
 entrypoint wrapper instead (`keycloak/entrypoint.sh`). Those files live on a host
@@ -159,7 +168,8 @@ Stated so that nobody discovers it during an incident:
 - **No horizontal scaling.** Capacity is edited into `deploy.resources.limits`
   and redeployed. There is one of everything.
 - **No high availability anywhere.** One PostgreSQL, one Kafka broker with
-  replication factor 1, one MinIO, one OpenBao node.
+  replication factor 1, one object-store node (RustFS, ADR 0135), one OpenBao
+  node.
 
 The revisit trigger for all of this is in
 [`docs/runbooks/README.md`](../../docs/runbooks/README.md) and is deliberately a
@@ -177,7 +187,7 @@ depends on, and a deploy that briefly runs an old and a new container together.
 | `platform-app` | 2 GB | JVM at 70% of the limit, so roughly 1.4 GB of heap |
 | `kafka` | 2 GB | 1 GB heap plus page cache for the log segments |
 | `keycloak` | 1 GB | JVM, mostly idle after startup |
-| `minio` | 1 GB | Streams; does not buffer whole objects |
+| `minio` (RustFS, ADR 0135) | 1 GB | Streams; does not buffer whole objects |
 | `keycloak-db` | 512 MB | Small and almost entirely cached |
 | `edge` | 256 MB | Caddy is small |
 | `openbao` | 256 MB | Small and mostly idle |
@@ -227,7 +237,8 @@ Not verified, and it cannot be until there is a server:
   relies on the same alias and has never served a signed URL to a real browser.
 - **The Caddy site block for the media origin.** The compose side is in place and
   `docker compose config` resolves; whether Caddy issues a certificate for that
-  name and proxies MinIO correctly is unproven until there is a host.
+  name and proxies the object store (RustFS, ADR 0135) correctly is unproven
+  until there is a host.
 - **Restore time at production data volume.** The database restored here was
   effectively empty and took under a minute, which is not an estimate of
   anything.

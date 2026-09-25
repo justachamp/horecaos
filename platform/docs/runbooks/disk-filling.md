@@ -26,8 +26,13 @@ available and costs only replay depth.
 
 ### Prune backups past retention
 
+RustFS replaced MinIO (ADR 0135); `mc` is gone from the `ops` image and the
+AWS CLI takes its place, pointed at the store with `--endpoint-url`:
+
 ```bash
-qc run --rm ops sh -c 'mc ls horecaos/${HORECAOS_BACKUP_BUCKET}' | head -40
+qc run --rm ops sh -c '
+  aws --endpoint-url "$HORECAOS_BACKUP_S3_ENDPOINT" \
+    s3 ls "s3://${HORECAOS_BACKUP_BUCKET}/"' | head -40
 ```
 
 Retention is `HORECAOS_BACKUP_RETENTION_DAYS`, and `backup.sh` applies it to both
@@ -38,9 +43,10 @@ an object the local store kept:
 
 ```bash
 qc run --rm ops sh -c '
-  mc alias set offsite "$HORECAOS_BACKUP_OFFSITE_ENDPOINT" \
-     "$HORECAOS_BACKUP_OFFSITE_ACCESS_KEY" "$HORECAOS_BACKUP_OFFSITE_SECRET_KEY" >/dev/null
-  mc ls offsite/${HORECAOS_BACKUP_OFFSITE_BUCKET:-$HORECAOS_BACKUP_BUCKET}' | head -40
+  AWS_ACCESS_KEY_ID="$HORECAOS_BACKUP_OFFSITE_ACCESS_KEY" \
+  AWS_SECRET_ACCESS_KEY="$HORECAOS_BACKUP_OFFSITE_SECRET_KEY" \
+  aws --endpoint-url "$HORECAOS_BACKUP_OFFSITE_ENDPOINT" \
+    s3 ls "s3://${HORECAOS_BACKUP_OFFSITE_BUCKET:-$HORECAOS_BACKUP_BUCKET}/"' | head -40
 ```
 
 Deleting the only copy to make room is how a disk-space incident becomes a

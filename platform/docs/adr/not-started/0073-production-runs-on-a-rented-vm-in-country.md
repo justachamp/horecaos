@@ -1,7 +1,17 @@
 # ADR 0073: Production runs on a rented machine in Uzbekistan, not on hardware we own
 
 - Decision status: Proposed
-- Implementation status: Not started
+- Implementation status: Not started — **2026-09-25:** this record's Decision
+  and Specification sections below describe removing MinIO once the rented
+  provider's own S3-compatible storage is confirmed (still an open input).
+  Until that happens, the self-hosted store this platform runs today is being
+  replaced in place by RustFS 1.0.0, pinned by digest, per
+  [ADR 0135](0135-object-storage-runtime-rustfs-replaces-minio.md) — a
+  narrower, unrelated decision that does not close this record's open input or
+  substitute for the provider-storage question this ADR still has to answer.
+  If this ADR is later accepted, "MinIO is removed" below should be read as
+  "RustFS is removed," and the object-storage line item in its Implementation
+  checklist is otherwise unchanged.
 - Date proposed: 2026-09-05
 - Date decided: —
 - Deciders: platform owner (direction and the open inputs below), Claude (architecture)
