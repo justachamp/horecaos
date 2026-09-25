@@ -414,6 +414,19 @@ public class JdbcInventoryStore {
      * on-hand and reserved in one transaction"), with a {@code SALE_COMMITMENT}
      * movement recording it — the ledger fact a bare position update alone
      * would leave unexplained.
+     *
+     * <p>The position update floors both quantities at zero rather than
+     * failing outright — ADR 0017 leaves negative-stock policy an open input,
+     * and refusing here would undo an order confirmation already in flight.
+     * {@link
+     * uz.horecaos.platform.inventory.application.InventoryService#setOnHandQuantity}
+     * never refuses for going below {@code reserved_quantity} either, so a
+     * prior correction can legitimately leave less on-hand than this commit
+     * is about to remove. When that happens, the on-hand floor swallows part
+     * of the {@code SALE_COMMITMENT} movement's own delta; a second {@code
+     * CORRECTION} movement records exactly the swallowed amount so {@code
+     * inventory.movements} stays reconcilable with {@code inventory.positions}
+     * instead of silently, permanently diverging from it.
      */
     public void commitQuantitySale(
             UUID tenantId,
@@ -424,6 +437,16 @@ public class JdbcInventoryStore {
             String actorType,
             @Nullable UUID actorId,
             Instant now) {
+        Optional<BigDecimal> priorOnHand = jdbc.sql("""
+                        SELECT on_hand_quantity FROM inventory.positions
+                        WHERE stock_item_id = :stockItemId AND tenant_id = :tenantId
+                        FOR UPDATE
+                        """)
+                .param("stockItemId", stockItemId)
+                .param("tenantId", tenantId)
+                .query(BigDecimal.class)
+                .optional();
+
         jdbc.sql("""
                 INSERT INTO inventory.movements (
                     id, tenant_id, brand_id, location_id, stock_item_id, sequence_number,
@@ -463,6 +486,34 @@ public class JdbcInventoryStore {
                 .param("quantity", quantity)
                 .param("now", OffsetDateTime.ofInstant(now, ZoneOffset.UTC))
                 .update();
+
+        priorOnHand
+                .map(onHand -> quantity.subtract(onHand))
+                .filter(shortfall -> shortfall.signum() > 0)
+                .ifPresent(shortfall -> jdbc.sql("""
+                                INSERT INTO inventory.movements (
+                                    id, tenant_id, brand_id, location_id, stock_item_id, sequence_number,
+                                    movement_type, quantity_delta, source_type, source_id, idempotency_key,
+                                    reason_code, actor_type, actor_id, occurred_at)
+                                SELECT :movementId, s.tenant_id, s.brand_id, s.location_id, s.id,
+                                       COALESCE((SELECT max(m.sequence_number) FROM inventory.movements m
+                                                 WHERE m.stock_item_id = s.id), 0) + 1,
+                                       'CORRECTION', :delta, 'ORDER', :sourceId, :idempotencyKey,
+                                       'COMMIT_SHORTFALL', :actorType, :actorId, :now
+                                FROM inventory.stock_items s
+                                WHERE s.id = :stockItemId AND s.tenant_id = :tenantId
+                                ON CONFLICT (tenant_id, stock_item_id, idempotency_key) DO NOTHING
+                                """)
+                        .param("movementId", UUID.randomUUID())
+                        .param("stockItemId", stockItemId)
+                        .param("tenantId", tenantId)
+                        .param("delta", shortfall)
+                        .param("sourceId", sourceId)
+                        .param("idempotencyKey", idempotencyKey + ":commit-shortfall")
+                        .param("actorType", actorType)
+                        .param("actorId", actorId)
+                        .param("now", OffsetDateTime.ofInstant(now, ZoneOffset.UTC))
+                        .update());
     }
 
     /** One reservation's own QUANTITY-tracked lines, for an ordinary {@code commit}/{@code release}. */
