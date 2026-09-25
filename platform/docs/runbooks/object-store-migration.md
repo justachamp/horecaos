@@ -172,12 +172,34 @@ bucket, exactly as with S3 itself:
 export TARGET_ROOT_ACCESS_KEY="<the new RustFS root access key wave C's first
   boot generated — read it with bao-get.sh, never type it>"
 export TARGET_ROOT_SECRET_KEY="<same, for the secret key>"
+```
 
+**Never pass a root credential as `-e KEY=VALUE` on a `docker run` command** —
+the resolved value sits in the `docker` client process's own argv for the
+life of that call, readable to anyone on the host who runs `ps auxww` or
+reads `/proc/<pid>/cmdline` at the wrong moment, for the credential every
+bucket created below now depends on. `migrate-object-store.sh`'s own
+`write_cred_file` avoids exactly this by writing a short-lived, mode-0600
+`--env-file` instead; do the same by hand here, once, and reuse it for every
+manual `docker run` against the target for the rest of this runbook:
+
+```bash
+TARGET_CRED_FILE="$(mktemp)"
+( umask 077
+  {
+    printf 'AWS_ACCESS_KEY_ID=%s\n' "${TARGET_ROOT_ACCESS_KEY}"
+    printf 'AWS_SECRET_ACCESS_KEY=%s\n' "${TARGET_ROOT_SECRET_KEY}"
+    printf 'AWS_DEFAULT_REGION=us-east-1\n'
+    printf 'AWS_ENDPOINT_URL=http://minio:9000\n'
+    printf 'AWS_EC2_METADATA_DISABLED=true\n'
+  } > "${TARGET_CRED_FILE}"
+)
+chmod 0600 "${TARGET_CRED_FILE}"
+```
+
+```bash
 docker run --rm --network horecaos-production_core \
-  -e AWS_ACCESS_KEY_ID="${TARGET_ROOT_ACCESS_KEY}" \
-  -e AWS_SECRET_ACCESS_KEY="${TARGET_ROOT_SECRET_KEY}" \
-  -e AWS_DEFAULT_REGION=us-east-1 -e AWS_ENDPOINT_URL=http://minio:9000 \
-  -e AWS_EC2_METADATA_DISABLED=true \
+  --env-file "${TARGET_CRED_FILE}" \
   amazon/aws-cli@sha256:83f8ffe939569070c5b66d22231862ab78718766d9d8e4c44ca84dd0be5569a5 \
   s3api create-bucket --bucket horecaos-media
 
@@ -187,6 +209,12 @@ docker run --rm --network horecaos-production_core \
 # and horecaos-audit-archive, WITH the lock flag:
 #   s3api create-bucket --bucket horecaos-audit-archive --object-lock-enabled-for-bucket
 ```
+
+Keep `TARGET_CRED_FILE` for the rest of this session — the check just below,
+and step 7's retention-date sweep, both reuse it — and remove it
+deliberately once step 7 says it is no longer needed (or, on a step-8
+rollback, once the rollback itself is confirmed complete): `rm -f
+"${TARGET_CRED_FILE}"`.
 
 **Known gap, not silently papered over:** production's current MinIO setup
 gives the application *scoped* service accounts per purpose (`media-service`,
@@ -208,8 +236,7 @@ migration; it is a decision to make explicitly rather than not notice.
 
 ```bash
 docker run --rm --network horecaos-production_core \
-  -e AWS_ACCESS_KEY_ID="${TARGET_ROOT_ACCESS_KEY}" -e AWS_SECRET_ACCESS_KEY="${TARGET_ROOT_SECRET_KEY}" \
-  -e AWS_ENDPOINT_URL=http://minio:9000 -e AWS_EC2_METADATA_DISABLED=true \
+  --env-file "${TARGET_CRED_FILE}" \
   amazon/aws-cli@sha256:83f8ffe939569070c5b66d22231862ab78718766d9d8e4c44ca84dd0be5569a5 \
   s3api get-bucket-versioning --bucket horecaos-audit-archive
 ```
@@ -257,7 +284,23 @@ anything is wrong; do not proceed past a non-zero exit.
 
 **Independently of the script**, spot-check three audit-archive retentions by
 hand, because a check the script did not write is a second, different look at
-the same claim:
+the same claim. Same rule as step 2: no root or throwaway credential as an
+`-e` flag. Write a `SOURCE_CRED_FILE` alongside the `TARGET_CRED_FILE` step 2
+already made, reusing `MINIO_LEGACY_USER`/`MINIO_LEGACY_PASSWORD` from step 1:
+
+```bash
+SOURCE_CRED_FILE="$(mktemp)"
+( umask 077
+  {
+    printf 'AWS_ACCESS_KEY_ID=%s\n' "${MINIO_LEGACY_USER}"
+    printf 'AWS_SECRET_ACCESS_KEY=%s\n' "${MINIO_LEGACY_PASSWORD}"
+    printf 'AWS_DEFAULT_REGION=us-east-1\n'
+    printf 'AWS_ENDPOINT_URL=http://minio-legacy:9000\n'
+    printf 'AWS_EC2_METADATA_DISABLED=true\n'
+  } > "${SOURCE_CRED_FILE}"
+)
+chmod 0600 "${SOURCE_CRED_FILE}"
+```
 
 ```bash
 for key_version in \
@@ -268,13 +311,11 @@ do
   set -- ${key_version}
   echo "--- ${1} @ ${2} ---"
   docker run --rm --network horecaos-production_core \
-    -e AWS_ACCESS_KEY_ID="${MINIO_LEGACY_USER}" -e AWS_SECRET_ACCESS_KEY="${MINIO_LEGACY_PASSWORD}" \
-    -e AWS_ENDPOINT_URL=http://minio-legacy:9000 -e AWS_EC2_METADATA_DISABLED=true \
+    --env-file "${SOURCE_CRED_FILE}" \
     amazon/aws-cli@sha256:83f8ffe939569070c5b66d22231862ab78718766d9d8e4c44ca84dd0be5569a5 \
     s3api get-object-retention --bucket horecaos-audit-archive --key "${1}" --version-id "${2}"
   docker run --rm --network horecaos-production_core \
-    -e AWS_ACCESS_KEY_ID="${TARGET_ROOT_ACCESS_KEY}" -e AWS_SECRET_ACCESS_KEY="${TARGET_ROOT_SECRET_KEY}" \
-    -e AWS_ENDPOINT_URL=http://minio:9000 -e AWS_EC2_METADATA_DISABLED=true \
+    --env-file "${TARGET_CRED_FILE}" \
     amazon/aws-cli@sha256:83f8ffe939569070c5b66d22231862ab78718766d9d8e4c44ca84dd0be5569a5 \
     s3api list-object-versions --bucket horecaos-audit-archive --prefix "${1}"
   # then get-object-retention on the target version id it printed, and compare by eye.
@@ -395,6 +436,12 @@ docker stop minio-legacy
 docker rm minio-legacy
 ```
 
+`minio-legacy` is gone, so `SOURCE_CRED_FILE` (step 3-5's spot-check) no
+longer names anything reachable — remove it now, same as any other
+short-lived secret this runbook wrote to disk: `rm -f "${SOURCE_CRED_FILE}"`.
+`TARGET_CRED_FILE` is still needed below and by step 8 if a rollback turns
+out to be necessary later; its own removal is noted at the end of this step.
+
 **The volume, not the container, is the evidence.** Do not remove
 `horecaos-production_minio-data`. Label it and leave it sealed until the
 longest retention on the audit archive it once served has expired — after
@@ -409,22 +456,19 @@ locked for. The lock itself is:
 
 ```bash
 docker run --rm --network horecaos-production_core \
-  -e AWS_ACCESS_KEY_ID="${TARGET_ROOT_ACCESS_KEY}" -e AWS_SECRET_ACCESS_KEY="${TARGET_ROOT_SECRET_KEY}" \
-  -e AWS_ENDPOINT_URL=http://minio:9000 -e AWS_EC2_METADATA_DISABLED=true \
+  --env-file "${TARGET_CRED_FILE}" \
   amazon/aws-cli@sha256:83f8ffe939569070c5b66d22231862ab78718766d9d8e4c44ca84dd0be5569a5 \
   s3api list-object-versions --bucket horecaos-audit-archive \
   --query 'Versions[].VersionId' --output text \
   | tr '\t' '\n' \
   | while read -r vid; do
       key="$(docker run --rm --network horecaos-production_core \
-        -e AWS_ACCESS_KEY_ID="${TARGET_ROOT_ACCESS_KEY}" -e AWS_SECRET_ACCESS_KEY="${TARGET_ROOT_SECRET_KEY}" \
-        -e AWS_ENDPOINT_URL=http://minio:9000 -e AWS_EC2_METADATA_DISABLED=true \
+        --env-file "${TARGET_CRED_FILE}" \
         amazon/aws-cli@sha256:83f8ffe939569070c5b66d22231862ab78718766d9d8e4c44ca84dd0be5569a5 \
         s3api list-object-versions --bucket horecaos-audit-archive \
         --query "Versions[?VersionId=='${vid}'].Key | [0]" --output text)"
       docker run --rm --network horecaos-production_core \
-        -e AWS_ACCESS_KEY_ID="${TARGET_ROOT_ACCESS_KEY}" -e AWS_SECRET_ACCESS_KEY="${TARGET_ROOT_SECRET_KEY}" \
-        -e AWS_ENDPOINT_URL=http://minio:9000 -e AWS_EC2_METADATA_DISABLED=true \
+        --env-file "${TARGET_CRED_FILE}" \
         amazon/aws-cli@sha256:83f8ffe939569070c5b66d22231862ab78718766d9d8e4c44ca84dd0be5569a5 \
         s3api get-object-retention --bucket horecaos-audit-archive --key "${key}" --version-id "${vid}" \
         --query 'Retention.RetainUntilDate' --output text
@@ -435,6 +479,14 @@ That last line is the date. Put a note on the calendar, and record the volume
 name and this date in `infra/backup/README.md` next to the other numbers that
 only mean something written down (its own convention already, per
 `docs/runbooks/restore.md`'s section 3.7).
+
+Nothing past this point in a normal run needs the target root credential
+again — remove its file too: `rm -f "${TARGET_CRED_FILE}"`. **If step 6
+failed and this runbook is headed for step 8's rollback instead of finishing
+step 7 normally, keep `TARGET_CRED_FILE` for now** — step 8's own rollback
+does not call the AWS CLI, but do not delete a still-live credential file on
+the assumption a runbook step will not be re-read; remove it once rollback
+is confirmed complete, from the same shell session that created it.
 
 ## Step 8 — rollback
 
