@@ -872,7 +872,8 @@ export const messagesRu: MessageCatalogue = {
   'settings.integrations.branches.bindDialog.noneEligible':
     'Сначала подключите провайдера — пока привязывать нечего.',
   'settings.integrations.branches.bindDialog.capabilities': 'Возможности для привязки',
-  'settings.integrations.branches.bindDialog.capabilitiesLoading': 'Загрузка возможностей провайдера…',
+  'settings.integrations.branches.bindDialog.capabilitiesLoading':
+    'Загрузка возможностей провайдера…',
   'settings.integrations.branches.bindDialog.capabilitiesNone':
     'Этот провайдер не объявляет ни одной возможности в этой сборке, поэтому его нельзя привязать через это окно.',
   'settings.integrations.branches.bindDialog.branch': 'Филиал',
@@ -2040,9 +2041,10 @@ export const messagesRu: MessageCatalogue = {
   'catalog.import.detail.applyItems.column.action': 'Действие',
   'catalog.import.detail.applyItems.column.status': 'Статус',
   'catalog.import.detail.applyItems.column.reason': 'Причина',
-  'catalog.import.tab.file': 'Импорт CSV',
-  'catalog.import.file.title': 'Импорт товаров из CSV-файла',
-  'catalog.import.file.downloadTemplate': 'Скачать шаблон',
+  'catalog.import.tab.file': 'Импорт CSV / Excel',
+  'catalog.import.file.title': 'Импорт товаров из CSV- или Excel-файла',
+  'catalog.import.file.downloadTemplate': 'Скачать шаблон (.csv)',
+  'catalog.import.file.downloadTemplateWorkbook': 'Скачать шаблон (.xlsx)',
   'catalog.import.file.downloadExport': 'Экспортировать текущий каталог',
   'catalog.import.file.catalog': 'Каталог',
   'catalog.import.file.noCatalog.title': 'Каталога пока нет',

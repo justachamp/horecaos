@@ -80,6 +80,15 @@
             <button
               type="button"
               class="secondary"
+              [disabled]="templateWorkbookDownloading()"
+              (click)="downloadTemplateWorkbook()"
+              data-testid="q-catalog-import-download-template-xlsx"
+            >
+              {{ 'catalog.import.file.downloadTemplateWorkbook' | t }}
+            </button>
+            <button
+              type="button"
+              class="secondary"
               [disabled]="exportDownloading()"
               (click)="downloadExport()"
               data-testid="q-catalog-import-download-export"
@@ -90,6 +99,7 @@
 
           <q-import-wizard
             [title]="'catalog.import.file.title' | t"
+            accept=".csv,.xlsx"
             [adapter]="fileImportAdapter"
             (completed)="onFileImportCompleted()"
           />

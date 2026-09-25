@@ -846,7 +846,8 @@ export const messagesEn = {
     'A referenced photo or media file is not yet available.',
   'settings.home.readiness.code.TEMPLATE_AWAITING_PROVIDER_REVIEW':
     'An SMS template is awaiting the gateway’s approval.',
-  'settings.home.readiness.code.TEMPLATE_REJECTED_BY_PROVIDER': 'An SMS template was rejected by the gateway.',
+  'settings.home.readiness.code.TEMPLATE_REJECTED_BY_PROVIDER':
+    'An SMS template was rejected by the gateway.',
   'settings.home.search.label': 'Find a setting',
   'settings.home.search.placeholder': 'Find a setting (press /)',
   'settings.home.search.empty': 'No setting matches "{query}".',
@@ -902,9 +903,11 @@ export const messagesEn = {
   'settings.integrations.branches.bindDialog.lead':
     'A branch binding overrides the brand default for that branch alone.',
   'settings.integrations.branches.bindDialog.installation': 'Installation',
-  'settings.integrations.branches.bindDialog.noneEligible': 'Connect an installation first — none exist yet to bind.',
+  'settings.integrations.branches.bindDialog.noneEligible':
+    'Connect an installation first — none exist yet to bind.',
   'settings.integrations.branches.bindDialog.capabilities': 'Capabilities to bind',
-  'settings.integrations.branches.bindDialog.capabilitiesLoading': 'Loading this provider’s capabilities…',
+  'settings.integrations.branches.bindDialog.capabilitiesLoading':
+    'Loading this provider’s capabilities…',
   'settings.integrations.branches.bindDialog.capabilitiesNone':
     'This provider declares no capabilities in this build, so it cannot be bound from this dialog.',
   'settings.integrations.branches.bindDialog.branch': 'Branch',
@@ -2069,9 +2072,10 @@ export const messagesEn = {
   'catalog.import.detail.applyItems.column.action': 'Action',
   'catalog.import.detail.applyItems.column.status': 'Status',
   'catalog.import.detail.applyItems.column.reason': 'Reason',
-  'catalog.import.tab.file': 'CSV import',
-  'catalog.import.file.title': 'Import products from a CSV file',
-  'catalog.import.file.downloadTemplate': 'Download template',
+  'catalog.import.tab.file': 'CSV / Excel import',
+  'catalog.import.file.title': 'Import products from a CSV or Excel file',
+  'catalog.import.file.downloadTemplate': 'Download template (.csv)',
+  'catalog.import.file.downloadTemplateWorkbook': 'Download template (.xlsx)',
   'catalog.import.file.downloadExport': 'Export current catalog',
   'catalog.import.file.catalog': 'Catalog',
   'catalog.import.file.noCatalog.title': 'No catalog yet',
@@ -5619,7 +5623,8 @@ export const messagesEn = {
   'ui.mediaUploader.browse': 'Choose a file',
   'ui.mediaUploader.tooLarge': 'That file is larger than this upload allows',
   'ui.mediaUploader.unsupportedType': 'That file type is not accepted here',
-  'ui.mediaUploader.videoNotSupported': 'Video is not supported yet — please choose a photo instead',
+  'ui.mediaUploader.videoNotSupported':
+    'Video is not supported yet — please choose a photo instead',
   'ui.mediaUploader.ratio': 'Crop ratio',
   'ui.mediaUploader.zoom': 'Zoom',
   'ui.mediaUploader.confirm': 'Use this crop',

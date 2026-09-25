@@ -822,7 +822,8 @@ export const messagesUzLatn: MessageCatalogue = {
     'Ishlatilayotgan rasm yoki media fayl hali tayyor emas.',
   'settings.home.readiness.code.TEMPLATE_AWAITING_PROVIDER_REVIEW':
     'SMS shabloni shlyuz tasdigʻini kutmoqda.',
-  'settings.home.readiness.code.TEMPLATE_REJECTED_BY_PROVIDER': 'SMS shabloni shlyuz tomonidan rad etildi.',
+  'settings.home.readiness.code.TEMPLATE_REJECTED_BY_PROVIDER':
+    'SMS shabloni shlyuz tomonidan rad etildi.',
   'settings.home.search.label': 'Sozlamani topish',
   'settings.home.search.placeholder': 'Sozlamani topish (/ bosing)',
   'settings.home.search.empty': '«{query}» boʻyicha hech narsa topilmadi.',
@@ -881,7 +882,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.integrations.branches.bindDialog.noneEligible':
     'Avval provayder ulang — hozircha bogʻlaydigan hech narsa yoʻq.',
   'settings.integrations.branches.bindDialog.capabilities': 'Bogʻlanadigan imkoniyatlar',
-  'settings.integrations.branches.bindDialog.capabilitiesLoading': 'Provayder imkoniyatlari yuklanmoqda…',
+  'settings.integrations.branches.bindDialog.capabilitiesLoading':
+    'Provayder imkoniyatlari yuklanmoqda…',
   'settings.integrations.branches.bindDialog.capabilitiesNone':
     'Bu provayder ushbu versiyada hech qanday imkoniyat eʻlon qilmaydi, shuning uchun uni shu oyna orqali bogʻlab boʻlmaydi.',
   'settings.integrations.branches.bindDialog.branch': 'Filial',
@@ -2055,9 +2057,10 @@ export const messagesUzLatn: MessageCatalogue = {
   'catalog.import.detail.applyItems.column.action': 'Amal',
   'catalog.import.detail.applyItems.column.status': 'Holati',
   'catalog.import.detail.applyItems.column.reason': 'Sabab',
-  'catalog.import.tab.file': 'CSV import',
-  'catalog.import.file.title': 'Mahsulotlarni CSV fayldan import qilish',
-  'catalog.import.file.downloadTemplate': 'Shablonni yuklab olish',
+  'catalog.import.tab.file': 'CSV / Excel import',
+  'catalog.import.file.title': 'Mahsulotlarni CSV yoki Excel fayldan import qilish',
+  'catalog.import.file.downloadTemplate': 'Shablonni yuklab olish (.csv)',
+  'catalog.import.file.downloadTemplateWorkbook': 'Shablonni yuklab olish (.xlsx)',
   'catalog.import.file.downloadExport': 'Joriy katalogni eksport qilish',
   'catalog.import.file.catalog': 'Katalog',
   'catalog.import.file.noCatalog.title': 'Hali katalog yoʻq',
@@ -5743,7 +5746,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'scopeBar.level.TENANT': 'BUTUN KOMPANIYA',
   'scopeBar.level.BRAND': 'BREND',
   'scopeBar.level.LOCATION': 'FILIAL',
-  'scopeBar.tenantWide.groupLabel': 'Tahrirlash darajasi: brend boʻyicha yoki butun kompaniya boʻyicha',
+  'scopeBar.tenantWide.groupLabel':
+    'Tahrirlash darajasi: brend boʻyicha yoki butun kompaniya boʻyicha',
   'scopeBar.tenantWide.perBrand': 'Brend boʻyicha',
   'scopeBar.tenantWide.tenant': 'Butun kompaniya uchun standart qiymat',
   'scopeBar.status.DRAFT': 'qoralama',

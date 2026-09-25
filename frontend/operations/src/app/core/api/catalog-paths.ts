@@ -286,6 +286,11 @@ export const catalogPaths = {
     return `${this.base(scope)}/imports/template`;
   },
 
+  /** The same template as a real workbook (`CatalogImportController#templateWorkbook`) — an Import sheet, filled Examples and a Reference sheet of closed vocabularies. */
+  importTemplateWorkbook(scope: BrandScope): string {
+    return `${this.base(scope)}/imports/template.xlsx`;
+  },
+
   /** The brand's catalog filled into the same template, `text/csv`. Query param `catalogId`. */
   importExport(scope: BrandScope): string {
     return `${this.base(scope)}/export`;

@@ -45,8 +45,10 @@ import {
   CatalogImportFileApi,
   CatalogImportRowView,
   CatalogImportSubmitRequest,
+  downloadBlob,
   downloadCsvText,
 } from './catalog-import-file-api';
+import { parseXlsxGrid } from './xlsx-preview';
 import { PosSyncApi, SyncRunSummary, SyncRunDetail, ApplyItemOutcome } from './pos-sync-api';
 import {
   PosMappingApi,
@@ -154,6 +156,38 @@ function readAsText(file: File): Promise<string> {
   });
 }
 
+/**
+ * A binary file exactly as chosen -- never routed through {@link readAsText},
+ * which decodes bytes as text and corrupts a `.xlsx` (a zip archive) the
+ * moment it hits a byte that is not valid UTF-8.
+ */
+function readAsArrayBuffer(file: File): Promise<ArrayBuffer> {
+  return file.arrayBuffer();
+}
+
+/**
+ * `CatalogImportController.CatalogImportSubmitRequest#content` carries a
+ * `.xlsx` upload as Base64 text (see `CatalogImportParser`'s own class doc)
+ * -- this endpoint has never taken a multipart body, CSV or Excel alike.
+ * Chunked to stay well under any engine's argument-count limit on a large
+ * workbook, the same guard `String.fromCharCode(...bytes)` would need
+ * without it.
+ */
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  const chunkSize = 0x8000;
+  let binary = '';
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
+  }
+  return btoa(binary);
+}
+
+/** Format is decided by the file name's extension, mirroring `CatalogImportParser#isXlsx` exactly -- never sniffed from the bytes. */
+function isXlsxFileName(fileName: string): boolean {
+  return fileName.toLowerCase().endsWith('.xlsx');
+}
+
 /** The six columns `q-import-wizard`'s client-side preview shows -- a subset of the full template, mirroring `CatalogImportParser.COLUMNS`'s own order. */
 const FILE_PREVIEW_COLUMNS = [
   'product_code',
@@ -163,6 +197,36 @@ const FILE_PREVIEW_COLUMNS = [
   'price_amount_minor',
   'status',
 ] as const;
+
+/** A header row plus data rows, already split into cells -- what {@link splitCsvLine} hands the CSV path and {@link parseXlsxGrid} hands the `.xlsx` one. */
+interface PreviewGrid {
+  readonly header: readonly string[];
+  readonly rows: readonly (readonly string[])[];
+}
+
+function parseCsvGrid(text: string): PreviewGrid {
+  const lines = text.split(/\r?\n/).filter((line) => line.length > 0);
+  if (lines.length === 0) {
+    return { header: [], rows: [] };
+  }
+  return {
+    header: splitCsvLine(lines[0]),
+    rows: lines.slice(1).map(splitCsvLine),
+  };
+}
+
+/** Maps a format-agnostic {@link PreviewGrid} onto {@link FILE_PREVIEW_COLUMNS}'s fixed column order, exactly the way both the CSV and `.xlsx` paths already located their columns before this was pulled out into one routine. */
+function toFilePreviewRows(grid: PreviewGrid): readonly ImportWizardRowPreview[] {
+  if (grid.header.length === 0) {
+    return [];
+  }
+  const header = grid.header.map(normalizeHeader);
+  const indices = FILE_PREVIEW_COLUMNS.map((column) => header.indexOf(column));
+  return grid.rows.map((cells, index) => ({
+    rowNumber: index + 1,
+    cells: indices.map((i) => (i >= 0 ? (cells[i] ?? '') : '')),
+  }));
+}
 
 /**
  * catalog.md §4.11 (Import: Excel and POS), gap-map rows 4.5a/4.5b/10.8b/X.24.
@@ -237,6 +301,7 @@ export class CatalogImportPage implements OnInit {
   protected readonly catalogsLoading = signal(false);
   protected readonly fileError = signal<string | null>(null);
   protected readonly templateDownloading = signal(false);
+  protected readonly templateWorkbookDownloading = signal(false);
   protected readonly exportDownloading = signal(false);
 
   protected readonly hasBinding = computed(() => this.selectedBindingId() !== null);
@@ -489,7 +554,11 @@ export class CatalogImportPage implements OnInit {
     this.mappingError.set(null);
     try {
       const result = await firstValueFrom(
-        this.mappingApi.bulkAutoMatch({ tenantId: scope.tenantId }, bindingId, this.mappingEntityType()),
+        this.mappingApi.bulkAutoMatch(
+          { tenantId: scope.tenantId },
+          bindingId,
+          this.mappingEntityType(),
+        ),
       );
       this.mappingConflicts.set(result.conflicts);
       await this.loadMapping();
@@ -524,20 +593,10 @@ export class CatalogImportPage implements OnInit {
     ],
 
     parsePreview: async (file: File): Promise<readonly ImportWizardRowPreview[]> => {
-      const text = await readAsText(file);
-      const lines = text.split(/\r?\n/).filter((line) => line.length > 0);
-      if (lines.length === 0) {
-        return [];
-      }
-      const header = splitCsvLine(lines[0]).map(normalizeHeader);
-      const indices = FILE_PREVIEW_COLUMNS.map((column) => header.indexOf(column));
-      return lines.slice(1).map((line, index) => {
-        const cells = splitCsvLine(line);
-        return {
-          rowNumber: index + 1,
-          cells: indices.map((i) => (i >= 0 ? (cells[i] ?? '') : '')),
-        };
-      });
+      const grid = isXlsxFileName(file.name)
+        ? await parseXlsxGrid(await readAsArrayBuffer(file))
+        : parseCsvGrid(await readAsText(file));
+      return toFilePreviewRows(grid);
     },
 
     submit: async (file: File, dryRun: boolean): Promise<string> => {
@@ -549,7 +608,14 @@ export class CatalogImportPage implements OnInit {
       if (!catalogId) {
         throw new Error(this.i18n.t('catalog.import.file.noCatalog'));
       }
-      const content = await readAsText(file);
+      // A `.xlsx` is a binary zip archive -- reading it with `readAsText`
+      // would corrupt it the moment a byte is not valid UTF-8 (row 4.5b's
+      // own "built, no consumer" gap). It travels the same JSON `content`
+      // field CSV always has, Base64-encoded, exactly as
+      // `CatalogImportParser`'s own class doc describes.
+      const content = isXlsxFileName(file.name)
+        ? arrayBufferToBase64(await readAsArrayBuffer(file))
+        : await readAsText(file);
       const request: CatalogImportSubmitRequest = { catalogId, fileName: file.name, content };
       return this.fileApi.submit(scope, request, dryRun);
     },
@@ -631,6 +697,23 @@ export class CatalogImportPage implements OnInit {
       this.fileError.set(this.describe(error));
     } finally {
       this.templateDownloading.set(false);
+    }
+  }
+
+  protected async downloadTemplateWorkbook(): Promise<void> {
+    const scope = this.location.scope();
+    if (!scope || this.templateWorkbookDownloading()) {
+      return;
+    }
+    this.templateWorkbookDownloading.set(true);
+    this.fileError.set(null);
+    try {
+      const workbook = await this.fileApi.templateWorkbook(scope);
+      downloadBlob(workbook, 'catalog-import-template.xlsx');
+    } catch (error) {
+      this.fileError.set(this.describe(error));
+    } finally {
+      this.templateWorkbookDownloading.set(false);
     }
   }
 
