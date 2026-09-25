@@ -15,6 +15,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.legal.domain.TermsLocale;
@@ -108,7 +109,7 @@ public class TermsPublishingService {
                 .at(scope)
                 .target("TermsVersion", id)
                 .because(reason)
-                .changed(Map.of("version", version, "locales", normalized.keySet()))
+                .changed(ChangeDocuments.created(Map.of("version", version, "locales", normalized.keySet())))
                 .usingCapability(Capability.TERMS_MANAGE.code())
                 .correlatedBy(id.toString())
                 .occurredAt(now)

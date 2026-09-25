@@ -179,9 +179,6 @@ uz/horecaos/platform/inventory/application/InventoryService.java:977
 # resolves as a bare identifier to the scan.
 uz/horecaos/platform/kitchen/application/KitchenTicketService.java:1143
 
-# --- legal ---
-uz/horecaos/platform/legal/application/TermsPublishingService.java:111
-
 # --- marketing ---
 uz/horecaos/platform/marketing/application/AttributionLinkService.java:120
 uz/horecaos/platform/marketing/application/AudienceService.java:243
