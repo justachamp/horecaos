@@ -382,7 +382,9 @@ public class TenantControlPlaneService {
                     "Tenant",
                     tenantId.value(),
                     reason,
-                    Map.of("from", before.name(), "to", tenant.status().name()));
+                    // Staff 9.3a: a field-level diff, not two flat "from"/"to" keys.
+                    ChangeDocuments.change(
+                            "status", before.name(), tenant.status().name()));
             CustomerIdentityMode identityMode = store.findCurrentCustomerIdentityMode(tenantId, clock.instant())
                     .orElseThrow(() -> new IllegalStateException("Tenant has no current customer identity policy"));
             return new StatusChange(

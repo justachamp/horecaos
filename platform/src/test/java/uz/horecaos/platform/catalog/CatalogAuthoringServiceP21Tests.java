@@ -224,6 +224,14 @@ class CatalogAuthoringServiceP21Tests {
                         .orElseThrow()
                         .status())
                 .isEqualTo(Status.ARCHIVED);
+        // Staff 9.3a: a field-level diff, not the old flat "previousStatus"/"status" pair.
+        assertThat(jdbc.sql("""
+                        SELECT change_document -> 'status' ->> 'before', change_document -> 'status' ->> 'after'
+                          FROM audit.audit_events WHERE action_code = 'catalog.product.status_changed'
+                        """)
+                        .query((row, number) -> row.getString(1) + "->" + row.getString(2))
+                        .single())
+                .isEqualTo("ACTIVE->ARCHIVED");
 
         // Idempotent: setting the status a product already has does not throw
         // and does not need a second reason to exist.

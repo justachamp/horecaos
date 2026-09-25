@@ -25,6 +25,7 @@ import uz.horecaos.platform.audit.api.ApprovalService;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.configuration.Ids;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.ResourceScope;
@@ -93,7 +94,10 @@ public class TenantProfileService {
                 .at(ResourceScope.tenant(tenantId))
                 .target("Tenant", tenantId)
                 .because(reason)
-                .changed(Map.of("from", before.businessType().name(), "to", type.name()))
+                // Staff 9.3a: a field-level diff, not two flat "from"/"to" keys
+                // that q-diff-viewer cannot pair into one row.
+                .changed(ChangeDocuments.change(
+                        "businessType", before.businessType().name(), type.name()))
                 .usingCapability(Capability.TENANT_WRITE.code())
                 .correlatedBy(tenantId.toString())
                 .occurredAt(clock.instant())
@@ -142,7 +146,8 @@ public class TenantProfileService {
                 .at(ResourceScope.tenant(tenantId))
                 .target("Tenant", tenantId)
                 .because(reason)
-                .changed(Map.of("from", before.countryCode(), "to", countryCode))
+                // Staff 9.3a: a field-level diff — see setBusinessType's own comment.
+                .changed(ChangeDocuments.change("countryCode", before.countryCode(), countryCode))
                 .usingCapability(Capability.TENANT_WRITE.code())
                 .correlatedBy(tenantId.toString())
                 .occurredAt(clock.instant())

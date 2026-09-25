@@ -1,6 +1,6 @@
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideRouter } from '@angular/router';
+import { Router, provideRouter } from '@angular/router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { Auth } from '../../core/auth/auth';
@@ -59,6 +59,12 @@ function makeApi(grants: readonly GrantView[]) {
     revoke: vi.fn().mockResolvedValue({ changed: true, outcome: 'revoked' }),
     issueTelegramLinkCode: vi.fn().mockResolvedValue({ code: 'ABC123', command: '/link ABC123' }),
     revokeTelegramLink: vi.fn().mockResolvedValue({ changed: true, outcome: 'revoked' }),
+    operatorTodayOrderCounts: vi.fn().mockResolvedValue({
+      createdCount: 0,
+      acceptedCount: 0,
+      businessDayFrom: '2026-09-25T00:00:00Z',
+      businessDayTo: '2026-09-26T00:00:00Z',
+    }),
   };
 }
 
@@ -179,6 +185,52 @@ describe('StaffMemberDetailPane', () => {
     // is the only identifying value this table carries (V0105: no display
     // name or username is stored).
     expect(text).toContain('555');
+  });
+
+  it('renders today’s created/accepted counts on the card (Staff 9.2d)', async () => {
+    const api = makeApi([grant({})]);
+    api.operatorTodayOrderCounts.mockResolvedValue({
+      createdCount: 4,
+      acceptedCount: 2,
+      businessDayFrom: '2026-09-25T00:00:00Z',
+      businessDayTo: '2026-09-26T00:00:00Z',
+    });
+    await TestBed.configureTestingModule({
+      imports: [StaffMemberDetailPane],
+      providers: [
+        provideRouter([]),
+        { provide: StaffApi, useValue: api },
+        { provide: CurrentTenant, useValue: new FakeCurrentTenant() },
+        { provide: Auth, useValue: { subject: signal('someone-else') } },
+      ],
+    }).compileComponents();
+    TestBed.inject(I18n).setLocale('ru');
+    const fixture = TestBed.createComponent(StaffMemberDetailPane);
+    fixture.componentRef.setInput('subjectId', 'staff-1');
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(api.operatorTodayOrderCounts).toHaveBeenCalledWith('t1', 'staff-1');
+    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(text).toContain('Создано сегодня: 4');
+    expect(text).toContain('Принято сегодня: 2');
+  });
+
+  it('navigates to the person’s own activity on «Смотреть журнал действий» (Staff 9.3)', async () => {
+    const { fixture } = await setUp([grant({})]);
+    const router = TestBed.inject(Router);
+    const navigateSpy = vi.spyOn(router, 'navigate').mockResolvedValue(true);
+
+    (
+      fixture.nativeElement.querySelector(
+        '[data-testid="staff-detail-view-activity"]',
+      ) as HTMLButtonElement
+    ).click();
+
+    expect(navigateSpy).toHaveBeenCalledWith(['/staff/activity'], {
+      queryParams: { actor: 'staff-1' },
+    });
   });
 
   it('unlinks a staff member’s Telegram account with a reason, and reloads the links', async () => {

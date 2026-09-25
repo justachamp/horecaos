@@ -3528,6 +3528,10 @@ export const messagesUzLatn: MessageCatalogue = {
   'customers.export.done': '{count} ta mijoz eksport qilindi.',
   'customers.export.doneTruncated':
     'Dastlabki {count} ta mijoz eksport qilindi — filtr koʻproq topdi, roʻyxat qisqartirildi.',
+  'customers.export.approvalPending':
+    'Bu eksport chegaradan oshgan va ikkinchi imzoni kutmoqda. Menejerdan uni «Tasdiqlashlar» boʻlimida tasdiqlashni soʻrang.',
+  'customers.export.approvalDeclined':
+    'Bu eksport rad etildi. Hech narsa ochilmadi. Tasdiqlovchidan sababini soʻrang yoki torroq filtr bilan qayta yuboring.',
   'customers.import.action': 'Import',
   'customers.import.pageTitle': 'Mijozlarni CSV fayldan import qilish',
   'customers.import.close': 'Mijozlarga qaytish',
@@ -3871,6 +3875,10 @@ export const messagesUzLatn: MessageCatalogue = {
   'staff.detail.field.telegram': 'Telegram',
   'staff.detail.security.notBuilt':
     'Kirish usuli, oxirgi kirish va terminal PIN-kodi hali kuzatilmaydi',
+  'staff.detail.today.created': 'Bugun yaratilgan: {count}',
+  'staff.detail.today.accepted': 'Bugun qabul qilingan: {count}',
+  'staff.detail.today.loading': 'Bugungi buyurtmalar yuklanmoqda…',
+  'staff.detail.viewActivity': 'Amallar jurnalini koʻrish',
 
   'staff.myProfile.title': 'Mening profilim',
   'staff.myProfile.personalData.title': 'Shaxsiy maʻlumotlar',
@@ -5335,6 +5343,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'staff.activity.action.locationDeleted': 'Filial oʻchirildi',
   'staff.activity.action.tenantSuspended': 'Kompaniya toʻxtatildi',
   'staff.activity.action.tenantReactivated': 'Kompaniya qayta tiklandi',
+  'staff.activity.action.tenantActivated': 'Kompaniya faollashtirildi',
   'staff.activity.action.tenantActivate': 'Kompaniya faollashtirildi',
   'staff.activity.action.orderCancel': 'Buyurtma bekor qilindi',
   'staff.activity.filter.outcomeAll': 'Har qanday natija',
@@ -5381,6 +5390,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'staff.approvals.action.tenantActivate': 'Kompaniyani faollashtirish',
   'staff.approvals.action.integrationFailureResolve': 'Integratsiya xatosini hal qilish',
   'staff.approvals.action.loyaltyBalanceAdjust': 'Sodiqlik balansini tuzatish',
+  'staff.approvals.action.customerPiiExport': 'Mijozlar maʻlumotlarini eksport qilish',
   'staff.approvals.tab.pending': 'Kutilmoqda',
   'staff.approvals.tab.decided': 'Hal qilingan',
   'staff.approvals.column.status': 'Qaror',

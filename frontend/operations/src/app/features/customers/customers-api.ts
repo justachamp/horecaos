@@ -42,15 +42,28 @@ export interface CustomerExportRow {
 }
 
 /**
+ * Staff 9.4 (ADR 0027): whether a filtered export past the tenant's own row
+ * threshold needed a second signature — mirrors `LoyaltyAdjustmentStatus`,
+ * the same shape a different maker-checker producer already carries. `rows`
+ * is empty on anything but `NOT_REQUIRED`/`APPROVED`: nothing was decrypted,
+ * so there is nothing to show or download yet.
+ */
+export type CustomerExportApprovalStatus = 'NOT_REQUIRED' | 'PENDING' | 'APPROVED' | 'DECLINED';
+
+/**
  * `CustomersApi.exportFiltered`'s own result: `CustomerExportRow[]` (the
- * body, unchanged in shape) plus `truncated` (the `X-Export-Truncated`
- * response header — never folded into the body; see `exportFiltered`'s own
- * doc for why).
+ * body, unchanged in shape) plus `truncated`, `approvalStatus` and
+ * `approvalRequestId` (the `X-Export-Truncated`/`X-Export-Approval-Status`/
+ * `X-Export-Approval-Request-Id` response headers — never folded into the
+ * body; see `exportFiltered`'s own doc for why).
  */
 export interface CustomerExportResult {
   readonly rows: readonly CustomerExportRow[];
   /** True when the filter matched more than the server's row cap and the export was cut. */
   readonly truncated: boolean;
+  readonly approvalStatus: CustomerExportApprovalStatus;
+  /** The approval request `approvalStatus` names, or null when none was required. */
+  readonly approvalRequestId: string | null;
 }
 
 export interface CreateCustomerRequest {
@@ -425,16 +438,25 @@ export class CustomersApi {
     }
     // The body stays a plain array (CustomerController.export's own doc
     // explains why: OpenApiContractTests refuses an already-released
-    // endpoint's response type narrowing or changing) — truncation travels
-    // on the X-Export-Truncated header instead.
+    // endpoint's response type narrowing or changing) — truncation and the
+    // Staff 9.4 approval status both travel on headers instead.
     const result = await firstValueFrom(
-      this.api.getWithFlag<readonly CustomerExportRow[]>(
+      this.api.getWithHeaders<readonly CustomerExportRow[]>(
         operationsPaths.customersExport(scope),
-        'X-Export-Truncated',
+        ['X-Export-Truncated', 'X-Export-Approval-Status', 'X-Export-Approval-Request-Id'],
         { params },
       ),
     );
-    return { rows: result.value ?? [], truncated: result.flag };
+    return {
+      rows: result.value ?? [],
+      truncated: result.headers['X-Export-Truncated'] === 'true',
+      // NOT_REQUIRED is the correct fallback for a value this build has never
+      // sent (a stale server, or a test double) — the same "assume the export
+      // proceeds exactly as it always has" default `ApprovalAction`'s own
+      // ALLOW_WITHOUT_APPROVAL mode uses server-side.
+      approvalStatus: (result.headers['X-Export-Approval-Status'] as CustomerExportApprovalStatus | null) ?? 'NOT_REQUIRED',
+      approvalRequestId: result.headers['X-Export-Approval-Request-Id'],
+    };
   }
 
   async create(scope: LocationScope, request: CreateCustomerRequest): Promise<string> {

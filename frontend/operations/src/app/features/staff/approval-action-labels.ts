@@ -26,6 +26,8 @@ const ACTION_LABEL_KEYS: Readonly<Record<string, MessageKey>> = {
   'tenant.activate': 'staff.approvals.action.tenantActivate',
   'integration.failure.resolve': 'staff.approvals.action.integrationFailureResolve',
   'loyalty.balance.adjust': 'staff.approvals.action.loyaltyBalanceAdjust',
+  /** Staff 9.4: `ApprovalAction.CUSTOMER_PII_EXPORT` — a filtered customer export above the tenant's own row threshold. */
+  'customer.pii.export': 'staff.approvals.action.customerPiiExport',
 };
 
 /** The label key for a known action code, or `null` for one this map does not (yet) name. */

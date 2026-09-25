@@ -128,21 +128,14 @@
   gap: 6px 12px;
 }
 
+/* The rows themselves are q-diff-viewer's own styling (row X.26) — this
+   wraps its caption and the component with the same spacing the hand-rolled
+   version used. */
 .diff {
   margin-top: 12px;
   display: flex;
   flex-direction: column;
   gap: 6px;
-}
-
-.diff-row {
-  display: flex;
-  gap: 12px;
-}
-
-.diff-row__field {
-  flex: 0 0 160px;
-  color: var(--q-ink-muted);
 }
 
 .close-drawer {

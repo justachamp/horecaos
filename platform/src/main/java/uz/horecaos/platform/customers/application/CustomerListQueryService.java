@@ -6,9 +6,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.audit.api.ActorRef;
+import uz.horecaos.platform.audit.api.ApprovalAction;
+import uz.horecaos.platform.audit.api.ApprovalOutcome;
+import uz.horecaos.platform.audit.api.ApprovalParameters;
+import uz.horecaos.platform.audit.api.ApprovalRequestCommand;
+import uz.horecaos.platform.audit.api.ApprovalService;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
@@ -60,12 +66,25 @@ public class CustomerListQueryService {
      */
     public static final int EXPORT_LIMIT = CustomerDirectoryExportPort.PII_ROW_LIMIT;
 
+    /**
+     * Staff 9.4: a filtered export above this many rows is a customer PII
+     * export ADR 0027 gates, the same "the call site decides whether to even
+     * ask, the tenant's own policy decides how many signatures once asked"
+     * split {@code OrderRemedyService}'s own {@code approvalThresholdMinor}
+     * uses for a refund — see {@link #approvalFor}. Configurable per
+     * deployment rather than hard-coded, the same reason the refund threshold
+     * is a property and not a constant: a pilot tenant and a chain with a
+     * data-protection officer do not want the same number.
+     */
+    private final int approvalThresholdRows;
+
     private final JdbcCustomerStore store;
     private final FieldProtection protection;
     private final AuditRecorder audit;
     private final Clock clock;
     private final CustomerOrderActivityPort orderActivity;
     private final BusinessDayWindows businessDays;
+    private final ApprovalService approvals;
 
     public CustomerListQueryService(
             JdbcCustomerStore store,
@@ -73,13 +92,17 @@ public class CustomerListQueryService {
             AuditRecorder audit,
             Clock clock,
             CustomerOrderActivityPort orderActivity,
-            BusinessDayWindows businessDays) {
+            BusinessDayWindows businessDays,
+            ApprovalService approvals,
+            @Value("${horecaos.customers.pii-export-approval-threshold-rows:500}") int approvalThresholdRows) {
         this.store = store;
         this.protection = protection;
         this.audit = audit;
         this.clock = clock;
         this.orderActivity = orderActivity;
         this.businessDays = businessDays;
+        this.approvals = approvals;
+        this.approvalThresholdRows = approvalThresholdRows;
     }
 
     /**
@@ -180,7 +203,18 @@ public class CustomerListQueryService {
      * and the difference between an agent viewing one customer and exporting
      * fifty thousand is exactly what a single {@code revealedCount} answers for.
      *
-     * @param purpose recorded as the audit fact's reason (ADR 0027)
+     * <p><strong>Staff 9.4.</strong> Above {@link #approvalThresholdRows}, this is
+     * also an ADR 0027 maker-checker action: {@link #approvalFor} decides
+     * whether a second signature is required before anything is decrypted, and
+     * on {@code Pending}/{@code Declined} this returns with no rows, no
+     * {@code truncated} flag and — critically — no {@code customer.list.exported}
+     * audit fact, because nothing was revealed yet. The reveal is audited only
+     * once the export actually proceeds, exactly where {@code
+     * OrderRemedyService} records a money remedy's own audit fact only after
+     * {@link ApprovalOutcome#consume() consuming} the approval that authorised it.
+     *
+     * @param purpose recorded as the audit fact's reason, and as the approval
+     *                request's own reason where one is raised (ADR 0027)
      */
     @Transactional
     public ExportResult exportFiltered(
@@ -194,6 +228,16 @@ public class CustomerListQueryService {
         List<AccountSummaryRow> matched = list(tenantId, status, query, null, EXPORT_LIMIT + 1);
         boolean truncated = matched.size() > EXPORT_LIMIT;
         List<AccountSummaryRow> bounded = truncated ? matched.subList(0, EXPORT_LIMIT) : matched;
+
+        ApprovalOutcome approval = approvalFor(tenantId, status, query, purpose, actor, bounded.size());
+        if (!approval.mayProceed()) {
+            return new ExportResult(approval, List.of(), false);
+        }
+        // One signature, one export. Spent in this transaction so that a
+        // resubmission under a spent grant raises a fresh request rather than
+        // silently reusing this one, exactly as OrderRemedyService's own
+        // ApprovalOutcome#consume() call does for a refund.
+        approval.consume();
 
         audit.record(AuditFact.of("customer.list.exported", AuditClass.SECURITY)
                 .by(actor)
@@ -215,8 +259,57 @@ public class CustomerListQueryService {
         List<ExportRow> rows = bounded.stream()
                 .map(row -> new ExportRow(row.id(), row.status(), row.displayName(), primaryPhone(tenantId, row.id())))
                 .toList();
-        return new ExportResult(rows, truncated);
+        return new ExportResult(approval, rows, truncated);
     }
+
+    /**
+     * Whether this export needs a second signature, and raises the request if so.
+     *
+     * <p>The row count decides whether to even ask — matching {@code
+     * OrderRemedyService.approvalFor}'s own split between "the call site's
+     * magnitude check" and "the tenant's own authored policy" — so a filter
+     * that matches a handful of accounts never touches {@code
+     * audit.approval_policies} at all. Above the threshold, the tenant's own
+     * policy for {@link ApprovalAction#CUSTOMER_PII_EXPORT} governs whether a
+     * signature is actually required (absent one, {@code
+     * ALLOW_WITHOUT_APPROVAL} preserves today's one-signature export exactly
+     * as {@code TENANT_ACTIVATE} and every other freshly-added action does).
+     *
+     * <p>The parameters hash covers the tenant, the filter and the stated
+     * purpose — every component of {@link PiiExportApprovalParameters} — so an
+     * approval only ever reuses for the identical filtered export, restated
+     * with the identical justification, the same discipline {@code
+     * OrderRemedyService#refundApprovalHash}'s own doc argues for a refund's
+     * amount and reason.
+     */
+    private ApprovalOutcome approvalFor(
+            UUID tenantId,
+            @Nullable String status,
+            @Nullable String query,
+            String purpose,
+            ActorRef actor,
+            int revealedCount) {
+        if (revealedCount <= approvalThresholdRows) {
+            return new ApprovalOutcome.NotRequired();
+        }
+        String parametersHash = ApprovalParameters.of(new PiiExportApprovalParameters(tenantId, status, query, purpose))
+                .excluding()
+                .hash();
+        return approvals.requireApproval(new ApprovalRequestCommand(
+                ApprovalAction.CUSTOMER_PII_EXPORT.code(),
+                parametersHash,
+                ResourceScope.tenant(tenantId),
+                actor,
+                purpose,
+                ApprovalRequestCommand.DEFAULT_VALIDITY));
+    }
+
+    /** What {@link #approvalFor}'s signature is bound to — see that method's own doc. */
+    private record PiiExportApprovalParameters(
+            UUID tenantId,
+            @Nullable String status,
+            @Nullable String query,
+            String purpose) {}
 
     /** The primary phone, decrypted — or null when the account holds none. Never audited per row; see {@link #exportFiltered}. */
     private @Nullable String primaryPhone(UUID tenantId, UUID accountId) {
@@ -246,6 +339,13 @@ public class CustomerListQueryService {
             @Nullable String displayName,
             @Nullable String phone) {}
 
-    /** @param truncated true when the filtered set held more than {@link #EXPORT_LIMIT} rows and was cut */
-    public record ExportResult(List<ExportRow> rows, boolean truncated) {}
+    /**
+     * @param approval  Staff 9.4 (ADR 0027) — {@code NotRequired} or {@code
+     *                  Approved} means {@code rows} carries the actual export;
+     *                  {@code Pending}/{@code Declined} means nothing was
+     *                  decrypted and {@code rows} is empty
+     * @param truncated true when the filtered set held more than {@link #EXPORT_LIMIT} rows and was cut.
+     *                  Always false when {@code approval} did not allow the export to proceed
+     */
+    public record ExportResult(ApprovalOutcome approval, List<ExportRow> rows, boolean truncated) {}
 }

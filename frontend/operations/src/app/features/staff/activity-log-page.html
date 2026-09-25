@@ -180,14 +180,7 @@
                     @if (changeEntries(detail).length > 0) {
                       <div class="diff">
                         <span class="q-caption">{{ 'staff.activity.detail.changes' | t }}</span>
-                        @for (entry of changeEntries(detail); track entry[0]) {
-                          <div class="diff-row">
-                            <span class="q-body-sm q-mono diff-row__field">{{ entry[0] }}</span>
-                            <span class="q-body-sm diff-row__value">{{
-                              formatFieldChange(entry[1])
-                            }}</span>
-                          </div>
-                        }
+                        <q-diff-viewer [document]="detail.changeDocument" />
                       </div>
                     }
                   } @else {

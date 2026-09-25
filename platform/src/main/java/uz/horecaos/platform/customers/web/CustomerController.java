@@ -28,6 +28,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import uz.horecaos.platform.audit.api.ActorRef;
+import uz.horecaos.platform.audit.api.ApprovalOutcome;
 import uz.horecaos.platform.customers.application.ConsentService;
 import uz.horecaos.platform.customers.application.CustomerBlacklistService;
 import uz.horecaos.platform.customers.application.CustomerEligibility;
@@ -374,6 +375,20 @@ public class CustomerController {
      */
     private static final String EXPORT_TRUNCATED_HEADER = "X-Export-Truncated";
 
+    /**
+     * Staff 9.4 (ADR 0027): {@code NOT_REQUIRED}, {@code PENDING}, {@code
+     * APPROVED} or {@code DECLINED} — the same enumeration {@code
+     * OperationsRemedyController.RemedyResponse#approvalStatus} carries for a
+     * refund, over the same header-not-body seam {@link #EXPORT_TRUNCATED_HEADER}
+     * already established for this endpoint. On anything but {@code
+     * NOT_REQUIRED}/{@code APPROVED} the body is an empty array: nothing was
+     * decrypted, so there is nothing to return.
+     */
+    private static final String EXPORT_APPROVAL_STATUS_HEADER = "X-Export-Approval-Status";
+
+    /** The approval request a {@code PENDING}/{@code DECLINED}/{@code APPROVED} status names, if any. */
+    private static final String EXPORT_APPROVAL_REQUEST_ID_HEADER = "X-Export-Approval-Request-Id";
+
     @GetMapping("/export")
     @RequiresCapability(Capability.CUSTOMER_PII_REVEAL)
     @Operation(
@@ -383,7 +398,10 @@ public class CustomerController {
                     + "stated purpose, exactly like every other reveal on this controller. Bounded "
                     + "at 2000 rows; the `X-Export-Truncated` response header is `true` when the "
                     + "filter actually matched more than that, so a marketer can tell a complete "
-                    + "export from a silently cut one.")
+                    + "export from a silently cut one. Above a tenant-configured row count this is "
+                    + "also an ADR 0027 maker-checker action (Staff 9.4): `X-Export-Approval-Status` "
+                    + "is `PENDING` with an empty body until a second signature decides it, exactly "
+                    + "like a refund above its own threshold.")
     public ResponseEntity<List<CustomerExportResponse>> export(
             @PathVariable UUID tenantId,
             @RequestParam(required = false) String status,
@@ -392,9 +410,33 @@ public class CustomerController {
         requireKnownStatus(status);
         CustomerListQueryService.ExportResult result =
                 lists.exportFiltered(tenantId, status, query, purpose, staffActor());
-        return ResponseEntity.ok()
+        ResponseEntity.BodyBuilder response = ResponseEntity.ok()
                 .header(EXPORT_TRUNCATED_HEADER, Boolean.toString(result.truncated()))
-                .body(result.rows().stream().map(CustomerExportResponse::of).toList());
+                .header(EXPORT_APPROVAL_STATUS_HEADER, approvalStatusOf(result.approval()));
+        UUID approvalRequestId = approvalRequestIdOf(result.approval());
+        if (approvalRequestId != null) {
+            response = response.header(EXPORT_APPROVAL_REQUEST_ID_HEADER, approvalRequestId.toString());
+        }
+        return response.body(
+                result.rows().stream().map(CustomerExportResponse::of).toList());
+    }
+
+    private static String approvalStatusOf(ApprovalOutcome approval) {
+        return switch (approval) {
+            case ApprovalOutcome.NotRequired ignored -> "NOT_REQUIRED";
+            case ApprovalOutcome.Pending ignored -> "PENDING";
+            case ApprovalOutcome.Approved ignored -> "APPROVED";
+            case ApprovalOutcome.Declined ignored -> "DECLINED";
+        };
+    }
+
+    private static @Nullable UUID approvalRequestIdOf(ApprovalOutcome approval) {
+        return switch (approval) {
+            case ApprovalOutcome.NotRequired ignored -> null;
+            case ApprovalOutcome.Pending pending -> pending.requestId();
+            case ApprovalOutcome.Approved approved -> approved.requestId();
+            case ApprovalOutcome.Declined declined -> declined.requestId();
+        };
     }
 
     @PostMapping

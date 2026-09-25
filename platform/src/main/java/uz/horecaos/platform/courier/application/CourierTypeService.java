@@ -10,6 +10,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierStore;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierStore.CourierTypeRow;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierStore.CourierTypeUpdate;
@@ -58,29 +59,50 @@ public class CourierTypeService {
             throw ApiException.staleVersion(expectedVersion, current.version());
         }
 
-        Map<String, Object> changed = new LinkedHashMap<>();
-        changed.put("code", update.code());
-        changed.put("displayName", update.displayName());
-        changed.put("vehicleClass", update.vehicleClass());
-        changed.put("minDistanceMeters", update.minDistanceMeters());
-        changed.put("maxDistanceMeters", update.maxDistanceMeters());
-        changed.put("maxConcurrentAssignments", update.maxConcurrentAssignments());
-        changed.put("offerTtlSeconds", update.offerTtlSeconds());
-        changed.put("startingMinuteOffset", update.startingMinuteOffset());
-        changed.put("workMode", update.workMode());
-
         audit.record(AuditFact.of("courier-type.updated", AuditClass.BUSINESS)
                 .by(actor)
                 .at(ResourceScope.tenant(tenantId))
                 .target("CourierType", typeId)
                 .targetVersion((long) (current.version() + 1))
                 .because(reason)
-                .changed(changed)
+                // Staff 9.3a: a per-field diff over what the vehicle class
+                // was before this correction, not only what it is now.
+                .changed(ChangeDocuments.diff(auditFields(current), auditFields(update)))
                 .correlatedBy(correlationId())
                 .occurredAt(clock.instant())
                 .build());
 
         return store.findType(tenantId, typeId).orElseThrow();
+    }
+
+    /** {@link #updateType}'s own audit fields, from the row as it stood before the correction. */
+    private static Map<String, Object> auditFields(CourierTypeRow row) {
+        Map<String, Object> fields = new LinkedHashMap<>();
+        fields.put("code", row.code());
+        fields.put("displayName", row.displayName());
+        fields.put("vehicleClass", row.vehicleClass());
+        fields.put("minDistanceMeters", row.minDistanceMeters());
+        fields.put("maxDistanceMeters", row.maxDistanceMeters());
+        fields.put("maxConcurrentAssignments", row.maxConcurrentAssignments());
+        fields.put("offerTtlSeconds", row.offerTtlSeconds());
+        fields.put("startingMinuteOffset", row.startingMinuteOffset());
+        fields.put("workMode", row.workMode());
+        return fields;
+    }
+
+    /** {@link #updateType}'s own audit fields, from the command carrying the correction. Same keys as the {@link CourierTypeRow} overload. */
+    private static Map<String, Object> auditFields(CourierTypeUpdate update) {
+        Map<String, Object> fields = new LinkedHashMap<>();
+        fields.put("code", update.code());
+        fields.put("displayName", update.displayName());
+        fields.put("vehicleClass", update.vehicleClass());
+        fields.put("minDistanceMeters", update.minDistanceMeters());
+        fields.put("maxDistanceMeters", update.maxDistanceMeters());
+        fields.put("maxConcurrentAssignments", update.maxConcurrentAssignments());
+        fields.put("offerTtlSeconds", update.offerTtlSeconds());
+        fields.put("startingMinuteOffset", update.startingMinuteOffset());
+        fields.put("workMode", update.workMode());
+        return fields;
     }
 
     /** Archives an active vehicle class. Still named by any rate card or courier that already used it. */

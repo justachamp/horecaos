@@ -16,6 +16,17 @@ import uz.horecaos.platform.customers.infrastructure.persistence.JdbcCustomerSto
  * by hand (against a real Testcontainers database, the same shape {@code
  * CustomerIdentityTests} already wires {@code CustomerListQueryService}) rather than standing up a
  * Spring context, so the constructor has to be reachable from outside this package.
+ *
+ * <p><strong>Staff 9.4.</strong> {@link CustomerListQueryService#exportFiltered} is now also an
+ * ADR 0027 maker-checker action above the tenant's row threshold. This adapter does not (yet)
+ * distinguish a {@code Pending}/{@code Declined} outcome from "matched nothing": {@code
+ * result.rows()} is empty either way, and a scheduled report-export job built on this port reads
+ * an empty bundle rather than a reason to wait and retry. In practice this changes nothing unless
+ * a tenant authors an {@code audit.approval_policies} row naming {@code
+ * ApprovalAction.CUSTOMER_PII_EXPORT} — {@code MissingPolicyMode.ALLOW_WITHOUT_APPROVAL} means an
+ * unconfigured tenant sees {@code NotRequired} exactly as before this wave — but a tenant that does
+ * configure one should not point a scheduled {@code CUSTOMER_DIRECTORY} export job at a PII column
+ * group until this port can surface a pending approval as something other than an empty result.
  */
 @Component
 public class CustomerDirectoryExportAdapter implements CustomerDirectoryExportPort {

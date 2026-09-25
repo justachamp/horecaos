@@ -92,28 +92,32 @@ export class ApiClient {
   }
 
   /**
-   * A GET whose body is read normally, plus one boolean read off a response
-   * header rather than the body.
+   * A GET whose body is read normally, plus one or more raw values read off
+   * response headers rather than the body.
    *
    * For a signal that must not change an already-released endpoint's body
    * shape — `OpenApiContractTests` refuses a response type narrowing or
-   * changing, so wrapping an array response in `{rows, flag}` is a breaking
+   * changing, so wrapping an array response in `{rows, ...}` is a breaking
    * change the contract test exists to catch. `CustomerController.export`'s
-   * `X-Export-Truncated` header is the platform-side answer; this is the
-   * one place a caller reads it, the same way `Idempotency-Replayed` is read
-   * off a header rather than folded into a mutation's own body.
+   * `X-Export-Truncated`/`X-Export-Approval-Status`/`X-Export-Approval-Request-Id`
+   * headers are the platform-side answer; this is the one place a caller
+   * reads them, the same way `Idempotency-Replayed` is read off a header
+   * rather than folded into a mutation's own body. A header this endpoint
+   * did not send comes back `null`, never a thrown error — an absent
+   * optional header (`X-Export-Approval-Request-Id` when nothing was
+   * required) is not a fetch failure.
    */
-  getWithFlag<T>(
+  getWithHeaders<T>(
     path: string,
-    headerName: string,
+    headerNames: readonly string[],
     options: GetOptions = {},
-  ): Observable<{ value: T; flag: boolean }> {
+  ): Observable<{ value: T; headers: Readonly<Record<string, string | null>> }> {
     return this.http
       .get<T>(this.url(path), { params: toHttpParams(options.params), observe: 'response' })
       .pipe(
         map((response) => ({
           value: response.body as T,
-          flag: response.headers.get(headerName) === 'true',
+          headers: Object.fromEntries(headerNames.map((name) => [name, response.headers.get(name)])),
         })),
         catchError(toApiError),
       );

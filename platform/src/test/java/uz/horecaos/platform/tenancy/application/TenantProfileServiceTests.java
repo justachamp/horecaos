@@ -131,6 +131,16 @@ class TenantProfileServiceTests {
                         .query(Long.class)
                         .single())
                 .isEqualTo(1L);
+        // Staff 9.3a: a field-level {before, after} pair q-diff-viewer can
+        // render as one row, not two flat "from"/"to" keys.
+        assertThat(jdbc.sql("""
+                        SELECT change_document -> 'countryCode' ->> 'before',
+                               change_document -> 'countryCode' ->> 'after'
+                          FROM audit.audit_events WHERE action_code = 'tenant.country.changed'
+                        """)
+                        .query((row, number) -> row.getString(1) + "->" + row.getString(2))
+                        .single())
+                .isEqualTo("UZ->KZ");
     }
 
     @Test
@@ -150,6 +160,14 @@ class TenantProfileServiceTests {
                 status -> profiles.setBusinessType(TENANT, BusinessType.DARK_KITCHEN, MAKER, "delivery only"));
 
         assertThat(profiles.all().getFirst().businessType()).isEqualTo(BusinessType.DARK_KITCHEN);
+        assertThat(jdbc.sql("""
+                        SELECT change_document -> 'businessType' ->> 'before',
+                               change_document -> 'businessType' ->> 'after'
+                          FROM audit.audit_events WHERE action_code = 'tenant.business_type.changed'
+                        """)
+                        .query((row, number) -> row.getString(1) + "->" + row.getString(2))
+                        .single())
+                .isEqualTo("RESTAURANT->DARK_KITCHEN");
     }
 
     @Test

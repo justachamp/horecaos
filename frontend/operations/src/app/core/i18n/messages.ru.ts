@@ -3502,6 +3502,10 @@ export const messagesRu: MessageCatalogue = {
   'customers.export.done': 'Экспортировано клиентов: {count}.',
   'customers.export.doneTruncated':
     'Экспортированы первые {count} клиент(ов) — фильтр нашёл больше, список обрезан.',
+  'customers.export.approvalPending':
+    'Этот экспорт превышает порог и ожидает второй подписи. Попросите менеджера подтвердить его в разделе «Согласования».',
+  'customers.export.approvalDeclined':
+    'В этом экспорте отказано. Ничего не было раскрыто. Уточните причину у согласующего или отправьте запрос заново с более узким фильтром.',
   'customers.import.action': 'Импорт',
   'customers.import.pageTitle': 'Импорт клиентов из CSV-файла',
   'customers.import.close': 'Назад к клиентам',
@@ -3844,6 +3848,10 @@ export const messagesRu: MessageCatalogue = {
   'staff.detail.field.telegram': 'Telegram',
   'staff.detail.security.notBuilt':
     'Способ входа, последний вход и PIN на терминале пока не отслеживаются',
+  'staff.detail.today.created': 'Создано сегодня: {count}',
+  'staff.detail.today.accepted': 'Принято сегодня: {count}',
+  'staff.detail.today.loading': 'Загрузка заказов за сегодня…',
+  'staff.detail.viewActivity': 'Смотреть журнал действий',
 
   'staff.myProfile.title': 'Мой профиль',
   'staff.myProfile.personalData.title': 'Личные данные',
@@ -5303,6 +5311,7 @@ export const messagesRu: MessageCatalogue = {
   'staff.activity.action.locationDeleted': 'Точка удалена',
   'staff.activity.action.tenantSuspended': 'Компания приостановлена',
   'staff.activity.action.tenantReactivated': 'Компания восстановлена',
+  'staff.activity.action.tenantActivated': 'Компания активирована',
   'staff.activity.action.tenantActivate': 'Компания активирована',
   'staff.activity.action.orderCancel': 'Заказ отменён',
   'staff.activity.filter.outcomeAll': 'Любой итог',
@@ -5348,6 +5357,7 @@ export const messagesRu: MessageCatalogue = {
   'staff.approvals.action.tenantActivate': 'Активация компании',
   'staff.approvals.action.integrationFailureResolve': 'Разрешение сбоя интеграции',
   'staff.approvals.action.loyaltyBalanceAdjust': 'Корректировка баланса лояльности',
+  'staff.approvals.action.customerPiiExport': 'Экспорт данных клиентов',
   'staff.approvals.tab.pending': 'Ожидают',
   'staff.approvals.tab.decided': 'Решённые',
   'staff.approvals.column.status': 'Решение',
