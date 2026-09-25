@@ -2,6 +2,7 @@ package uz.horecaos.platform.ordering.application;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
@@ -11,6 +12,7 @@ import uz.horecaos.platform.iam.api.protection.FieldProtection.RecordRef;
 import uz.horecaos.platform.iam.api.protection.ProtectedValue;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderCrmLogStore;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderCrmLogStore.CrmLogRow;
+import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderCrmLogStore.CustomerLabelRow;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderCrmLogStore.LogCursor;
 
 /**
@@ -57,6 +59,29 @@ public class OrderCrmLogQueryService {
                 .toList();
     }
 
+    /**
+     * Gap map row 1.1: the order board's own Клиент column — the customer
+     * half of a batch of already-fetched board rows, never a date range.
+     * Decrypted exactly as far as {@link #log} already goes (the name in
+     * full, the phone for the caller to mask); no audit fact, for the
+     * identical reason this class's own doc gives for an ordinary list read.
+     */
+    @Transactional(readOnly = true)
+    public List<CustomerLabelEntry> customerLabels(UUID tenantId, Set<UUID> orderIds) {
+        return store.customerLabels(tenantId, orderIds).stream()
+                .map(row -> toLabelEntry(tenantId, row))
+                .toList();
+    }
+
+    private CustomerLabelEntry toLabelEntry(UUID tenantId, CustomerLabelRow row) {
+        return new CustomerLabelEntry(
+                row.orderId(),
+                row.customerType(),
+                row.anonymized(),
+                decrypt(tenantId, row.orderId(), NAME_COLUMN, row.displayNameEncrypted()),
+                decrypt(tenantId, row.orderId(), CONTACT_COLUMN, row.contactEncrypted()));
+    }
+
     private CrmLogEntry toEntry(UUID tenantId, CrmLogRow row) {
         return new CrmLogEntry(
                 row.orderId(),
@@ -98,4 +123,15 @@ public class OrderCrmLogQueryService {
             @Nullable String customerPhone,
             String operatorPrincipalId,
             @Nullable String courierDisplayReference) {}
+
+    /**
+     * One order's customer label — gap map row 1.1's Клиент column, the same
+     * decrypt-not-mask rule {@link CrmLogEntry}'s own doc states.
+     */
+    public record CustomerLabelEntry(
+            UUID orderId,
+            String customerType,
+            boolean anonymized,
+            @Nullable String customerName,
+            @Nullable String customerPhone) {}
 }

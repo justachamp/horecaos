@@ -15,6 +15,7 @@ import { ApiError, ApiErrorCode } from '../../core/api/problem-details';
 import { I18n } from '../../core/i18n/i18n';
 import { PLATFORM_DEFAULT_LATENESS_POLICY } from '../../core/lateness-policy';
 import { LatenessPolicyApi } from '../../core/lateness-policy-api';
+import { CustomerLabelResponse, OrderCrmLogApi } from '../reports/order-crm-log-api';
 import { ReasonResponse, ReferenceDataApi } from '../settings/reference-data/reference-data-api';
 import { OrderActionsApi } from './order-actions-api';
 import { OrderBulkActionsApi } from './order-bulk-actions-api';
@@ -1145,14 +1146,17 @@ describe('OrderQueue: the override dialog restores an earlier status from the ro
         effectiveAction: null,
       }),
     );
-    configureWithActions([
-      order({
-        orderId: 'order-1',
-        status: 'READY',
-        version: 2,
-        actions: [{ action: 'OVERRIDE', targetStatus: 'PREPARING' }],
-      }),
-    ], { override });
+    configureWithActions(
+      [
+        order({
+          orderId: 'order-1',
+          status: 'READY',
+          version: 2,
+          actions: [{ action: 'OVERRIDE', targetStatus: 'PREPARING' }],
+        }),
+      ],
+      { override },
+    );
     const harness = await RouterTestingHarness.create('/orders?tab=preparing');
     await flushMicrotasks();
 
@@ -2519,7 +2523,9 @@ describe('OrderQueue: the Курьер column resolves courierId against the ros
     await flushMicrotasks();
 
     expect(
-      harness.routeNativeElement!.querySelector('[data-testid="order-row-courier"]')?.textContent?.trim(),
+      harness
+        .routeNativeElement!.querySelector('[data-testid="order-row-courier"]')
+        ?.textContent?.trim(),
     ).toBe('—');
     // Nothing on this page has a courierId, so there was nothing to resolve.
     expect(roster).not.toHaveBeenCalled();
@@ -2536,7 +2542,9 @@ describe('OrderQueue: the Курьер column resolves courierId against the ros
 
     expect(roster).toHaveBeenCalledWith(FAKE_SCOPE.tenantId);
     expect(
-      harness.routeNativeElement!.querySelector('[data-testid="order-row-courier"]')?.textContent?.trim(),
+      harness
+        .routeNativeElement!.querySelector('[data-testid="order-row-courier"]')
+        ?.textContent?.trim(),
     ).toBe('К-042');
   });
 
@@ -2550,7 +2558,157 @@ describe('OrderQueue: the Курьер column resolves courierId against the ros
     await flushMicrotasks();
 
     expect(
-      harness.routeNativeElement!.querySelector('[data-testid="order-row-courier"]')?.textContent?.trim(),
+      harness
+        .routeNativeElement!.querySelector('[data-testid="order-row-courier"]')
+        ?.textContent?.trim(),
     ).toBe('courier-unknown');
+  });
+});
+
+/**
+ * Gap map row 1.1: the Клиент column, batched through {@code POST
+ * .../orders/crm-log/labels} (7.2a's own `OrderCrmLogController`) rather
+ * than baked into the board query. `OrderCrmLogApi` is overridden directly
+ * here, the same separation {@link configureWithCourier} keeps for
+ * `CouriersApi` — one shared `ApiClient.get` stub cannot also answer a
+ * `POST`.
+ */
+describe('OrderQueue: the Клиент column batches customer labels by page (gap map 1.1)', () => {
+  function configureWithCustomerLabels(
+    orders: readonly OrderSummaryResponse[],
+    customerLabels: ReturnType<typeof vi.fn>,
+    options: { readonly grantOrderRead?: boolean } = {},
+  ): void {
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter([{ path: 'orders', component: OrderQueue }]),
+        {
+          provide: CurrentLocation,
+          useValue: {
+            scope: signal(FAKE_SCOPE),
+            denied: signal(false),
+            ensureLoaded: () => Promise.resolve(),
+          },
+        },
+        { provide: ApiClient, useValue: { get: ordersResponse(orders) } },
+        { provide: OrderCounts, useValue: { forOrders: () => Promise.resolve(zeroTabCounts()) } },
+        { provide: RejectReasonsApi, useValue: stubRejectReasons() },
+        {
+          provide: LatenessPolicyApi,
+          useValue: { resolve: () => Promise.resolve(PLATFORM_DEFAULT_LATENESS_POLICY) },
+        },
+        {
+          provide: SessionCapabilities,
+          useValue: {
+            has: (capability: string) =>
+              (options.grantOrderRead ?? true) && capability === 'ORDER_READ',
+          },
+        },
+        { provide: OrderCrmLogApi, useValue: { customerLabels } },
+      ],
+    });
+    TestBed.inject(I18n).setLocale('en');
+  }
+
+  it('renders the decrypted name in full once the batch resolves', async () => {
+    const labels = vi.fn().mockResolvedValue([
+      {
+        orderId: 'order-1',
+        customerType: 'ACCOUNT',
+        anonymized: false,
+        customerName: 'Alisher Karimov',
+        customerPhone: '+998 90 ••• •• 67',
+      } satisfies CustomerLabelResponse,
+    ]);
+    configureWithCustomerLabels([order({ orderId: 'order-1' })], labels);
+    const harness = await RouterTestingHarness.create('/orders?tab=new');
+    await flushMicrotasks();
+
+    expect(labels).toHaveBeenCalledWith(FAKE_SCOPE.tenantId, ['order-1']);
+    expect(
+      harness
+        .routeNativeElement!.querySelector('[data-testid="order-row-customer"]')
+        ?.textContent?.trim(),
+    ).toBe('Alisher Karimov');
+  });
+
+  it('labels a guest order "Guest" rather than showing a blank cell', async () => {
+    const labels = vi.fn().mockResolvedValue([
+      {
+        orderId: 'order-1',
+        customerType: 'GUEST',
+        anonymized: false,
+        customerName: null,
+        customerPhone: null,
+      } satisfies CustomerLabelResponse,
+    ]);
+    configureWithCustomerLabels([order({ orderId: 'order-1' })], labels);
+    const harness = await RouterTestingHarness.create('/orders?tab=new');
+    await flushMicrotasks();
+
+    expect(
+      harness
+        .routeNativeElement!.querySelector('[data-testid="order-row-customer"]')
+        ?.textContent?.trim(),
+    ).toBe('Guest');
+  });
+
+  it('renders a dash while the batch has not resolved yet, and never calls the batch at all without ORDER_READ', async () => {
+    const labels = vi.fn().mockResolvedValue([]);
+    configureWithCustomerLabels([order({ orderId: 'order-1' })], labels, { grantOrderRead: false });
+    const harness = await RouterTestingHarness.create('/orders?tab=new');
+    await flushMicrotasks();
+
+    expect(labels).not.toHaveBeenCalled();
+    expect(
+      harness
+        .routeNativeElement!.querySelector('[data-testid="order-row-customer"]')
+        ?.textContent?.trim(),
+    ).toBe('—');
+  });
+
+  it('degrades to a dash rather than breaking the board when the batch call is refused', async () => {
+    const labels = vi
+      .fn()
+      .mockRejectedValue(new ApiError(ApiErrorCode.INSUFFICIENT_CAPABILITY, 403, null, null));
+    configureWithCustomerLabels([order({ orderId: 'order-1' })], labels);
+    const harness = await RouterTestingHarness.create('/orders?tab=new');
+    await flushMicrotasks();
+
+    expect(
+      harness
+        .routeNativeElement!.querySelector('[data-testid="order-row-customer"]')
+        ?.textContent?.trim(),
+    ).toBe('—');
+    // The rest of the board still rendered -- a 403 on this one read never
+    // took the whole page down with it.
+    expect(harness.routeNativeElement!.querySelector('[data-testid="order-row"]')).not.toBeNull();
+  });
+
+  it('never re-requests a label the previous page already resolved', async () => {
+    setVisibility('visible');
+    vi.useFakeTimers();
+    try {
+      const labels = vi.fn().mockResolvedValue([
+        {
+          orderId: 'order-1',
+          customerType: 'ACCOUNT',
+          anonymized: false,
+          customerName: 'Alisher Karimov',
+          customerPhone: null,
+        } satisfies CustomerLabelResponse,
+      ]);
+      configureWithCustomerLabels([order({ orderId: 'order-1' })], labels);
+      await RouterTestingHarness.create('/orders?tab=new');
+      await vi.advanceTimersByTimeAsync(FRAME_MS);
+      expect(labels).toHaveBeenCalledTimes(1);
+
+      // The 10s poll runs refresh() again over the identical page -- the
+      // label already in hand must not be re-requested.
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(labels).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

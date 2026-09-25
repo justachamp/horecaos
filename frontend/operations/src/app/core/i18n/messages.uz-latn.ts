@@ -192,6 +192,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'orders.column.total': 'Summa',
   'orders.column.fee': 'Yetkazib berish',
   'orders.column.payment': 'Toʻlov',
+  'orders.column.customer': 'Mijoz',
   'orders.column.courier': 'Kuryer',
   'orders.column.status': 'Holat',
   'orders.column.actions': 'Amallar',

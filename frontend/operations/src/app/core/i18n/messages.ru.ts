@@ -190,6 +190,7 @@ export const messagesRu: MessageCatalogue = {
   'orders.column.total': 'Сумма',
   'orders.column.fee': 'Доставка',
   'orders.column.payment': 'Оплата',
+  'orders.column.customer': 'Клиент',
   'orders.column.courier': 'Курьер',
   'orders.column.status': 'Статус',
   'orders.column.actions': 'Действия',

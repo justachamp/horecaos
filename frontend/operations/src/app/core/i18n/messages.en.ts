@@ -202,6 +202,7 @@ export const messagesEn = {
   'orders.column.total': 'Total',
   'orders.column.fee': 'Delivery fee',
   'orders.column.payment': 'Payment',
+  'orders.column.customer': 'Customer',
   'orders.column.courier': 'Courier',
   'orders.column.status': 'Status',
   'orders.column.actions': 'Actions',
