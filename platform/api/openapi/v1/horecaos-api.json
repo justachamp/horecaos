@@ -1,6 +1,62 @@
 {
   "components" : {
     "schemas" : {
+      "AbcCurveListResponse" : {
+        "properties" : {
+          "abcThresholdAPercent" : {
+            "format" : "double",
+            "type" : "number"
+          },
+          "abcThresholdBPercent" : {
+            "format" : "double",
+            "type" : "number"
+          },
+          "maybeMore" : {
+            "type" : "boolean"
+          },
+          "provenance" : {
+            "$ref" : "#/components/schemas/ProvenanceResponse"
+          },
+          "rows" : {
+            "items" : {
+              "$ref" : "#/components/schemas/AbcCurveRowResponse"
+            },
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
+      "AbcCurveRowResponse" : {
+        "properties" : {
+          "abcClass" : {
+            "type" : "string"
+          },
+          "categoryId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "cumulativeSharePercent" : {
+            "format" : "double",
+            "type" : "number"
+          },
+          "productName" : {
+            "type" : "string"
+          },
+          "sharePercent" : {
+            "format" : "double",
+            "type" : "number"
+          },
+          "totalNetSom" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "variantId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "AcceptRequest" : {
         "properties" : {
           "brandName" : {
@@ -66046,6 +66102,70 @@
         "tags" : [ "Order CRM log" ]
       }
     },
+    "/api/v1/tenants/{tenantId}/reporting/abc-curve" : {
+      "get" : {
+        "description" : "Product analytics' q-abc-curve chart -- reporting.fact_order_line's own variant sales (the same source /variant-sales reads), sorted revenue-descending and walked into a running cumulative share, each row classed A/B/C against ClassificationThresholds.DEFAULT's published 80/95 split. Not the persisted classification-run (ADR 0134): that write is capability-gated and refuses a window under 28 days for its own XYZ half; this read has none and answers any range, never persisted.",
+        "operationId" : "abcCurve",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "from",
+          "required" : true,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : true,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "locationId",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AbcCurveListResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "X.19: the ABC cumulative-revenue-share curve",
+        "tags" : [ "Reporting" ]
+      }
+    },
     "/api/v1/tenants/{tenantId}/reporting/cancellation-reasons" : {
       "get" : {
         "description" : "Resolves a CANCELLED order's cancellationReasonCode (order_outcome_reasons.id, as a string) to the internal_name an operator actually picked, so the funnel's cancellation panel prints a name rather than a UUID. REJECTED/EXPIRED reason codes name a different, platform-fixed registry this does not cover.",
@@ -66175,7 +66295,7 @@
     },
     "/api/v1/tenants/{tenantId}/reporting/couriers/external-delivery-cost" : {
       "get" : {
-        "description" : "Order amount vs charged delivery vs provider billed vs variance vs reconciliation status, for every PARTNER-sourced delivered shipment in range. reconciliationStatus is UNBILLED (never PENDING) for a shipment with no invoice line at all -- 'HorecaOS has a shipment the partner never billed', excluded from varianceMinor's own total the same way it is excluded from every sum here: a null variance never contributes. The invoice-scoped half of this reconciliation renders in Finance 8.4; this is the per-order cut.",
+        "description" : "Order amount vs charged delivery vs provider billed vs variance vs reconciliation status, off reporting.fact_external_delivery_cost (V0412, w6-reporting-facts batch 11) -- one row per PARTNER-sourced delivered shipment, projected at business-day close. reconciliationStatus is UNBILLED (never PENDING) for a shipment with no invoice line at all -- 'HorecaOS has a shipment the partner never billed', excluded from varianceMinor's own total the same way it is excluded from every sum here: a null variance never contributes. This is a close-time snapshot, not a live reconciliation state: a line matched or reconciled after its business day closed is not reflected here. The invoice-scoped half of this reconciliation renders in Finance 8.4; this is the per-order cut.",
         "operationId" : "externalDeliveryCost",
         "parameters" : [ {
           "in" : "path",
@@ -66321,7 +66441,7 @@
     },
     "/api/v1/tenants/{tenantId}/reporting/couriers/tariff-audit" : {
       "get" : {
-        "description" : "fulfillment.delivery_fee_resolutions (ADR 0037) joined through quote -> order -> shipment for the one fact none of the three tables has alone: which courier actually worked each resolution. Grouped by (tariff, courier); 'today' means whatever the range covers, not a business-day close.",
+        "description" : "reporting.fact_delivery_fee_resolution (V0411, w6-reporting-facts batch 11), one row per delivery_fee_resolutions row (ADR 0037) that named a tariff, joined at close time through quote -> order -> shipment for the one column none of the three tables has alone: which courier actually worked each resolution. Grouped by (tariff, courier), over the closed business days the range covers.",
         "operationId" : "tariffAudit",
         "parameters" : [ {
           "in" : "path",
