@@ -141,6 +141,45 @@ class AbcCurveReportingTests {
         assertThat(whole.maybeMore()).isFalse();
     }
 
+    /**
+     * The denominator behind {@code shareBasisPoints}/{@code
+     * cumulativeShareBasisPoints} has to be the tenant's true total revenue
+     * in range, not just the sum of whatever page {@code limit} let through
+     * — the same total {@link ProductClassificationService#run} sums over
+     * every ranked variant, unbounded, before dividing. A tenant with more
+     * variants than {@code limit} would otherwise see every visible
+     * product's share inflated by the excluded tail's real revenue, and the
+     * published 80/95 boundaries crossed too early.
+     */
+    @Test
+    @DisplayName("cumulative share is against the tenant's true total revenue, not just the capped page's own sum")
+    void cumulativeShareDividesByTheTrueTenantTotalNotJustTheVisiblePage() {
+        UUID order = insertOrder(TENANT, "ABC-3", LOCATION);
+        insertLine(TENANT, order, VARIANT_A, 1, 6_000L);
+        insertLine(TENANT, order, VARIANT_B, 1, 3_000L);
+        insertLine(TENANT, order, VARIANT_C, 1, 1_000L);
+
+        // limit=2 excludes VARIANT_C (1,000) from the page, but its revenue
+        // is still real tenant revenue and belongs in the denominator: true
+        // total is 10,000, not 9,000 (the visible page's own sum).
+        var result = queries.abcCurve(TENANT, DAY, DAY, List.of(), 2);
+
+        assertThat(result.rows()).hasSize(2);
+        assertThat(result.maybeMore()).isTrue();
+
+        ReportQueryService.AbcCurveRow a = result.rows().get(0);
+        assertThat(a.shareBasisPoints()).isEqualTo(6_000); // 6,000 / 10,000
+        assertThat(a.cumulativeShareBasisPoints()).isEqualTo(6_000);
+        assertThat(a.abcClass()).isEqualTo('A');
+
+        ReportQueryService.AbcCurveRow b = result.rows().get(1);
+        assertThat(b.shareBasisPoints()).isEqualTo(3_000); // 3,000 / 10,000
+        // A buggy denominator of 9,000 (the capped page's own sum) would
+        // read this as 10,000bp -- 100% -- and misclassify it 'C'.
+        assertThat(b.cumulativeShareBasisPoints()).isEqualTo(9_000);
+        assertThat(b.abcClass()).isEqualTo('B');
+    }
+
     @Test
     @DisplayName("the curve never crosses tenants")
     void theCurveNeverCrossesTenants() {

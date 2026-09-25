@@ -2297,6 +2297,50 @@ public class JdbcReportingStore {
                 .list();
     }
 
+    /**
+     * The un-bounded total net revenue across every variant in range — the
+     * same tenant/date/location/fulfilment filters {@link #readVariantSales}
+     * applies, but summed with no variant grouping and no {@code LIMIT}.
+     *
+     * <p>Exists so a bounded, revenue-ranked read (a capped page of {@link
+     * #readVariantSales}, such as {@code ReportQueryService#abcCurve}'s own
+     * curve) can divide a visible row's revenue by the tenant's true total
+     * rather than by the sum of only the rows the page returned — the same
+     * total {@code ProductClassificationService#run} sums, unbounded, over
+     * every ranked variant before computing its own cumulative share.
+     */
+    public long readVariantSalesTotalNetSom(
+            UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds, List<String> fulfilmentTypes) {
+
+        Map<String, Object> params = new HashMap<>();
+        params.put("tenantId", tenantId);
+        params.put("from", from);
+        params.put("to", to);
+
+        String locationFilter = "";
+        if (!locationIds.isEmpty()) {
+            locationFilter = " AND l.location_id IN (:locations)";
+            params.put("locations", locationIds);
+        }
+
+        String fulfilmentFilter = "";
+        if (!fulfilmentTypes.isEmpty()) {
+            fulfilmentFilter = " AND o.fulfilment_type IN (:fulfilmentTypes)";
+            params.put("fulfilmentTypes", fulfilmentTypes);
+        }
+
+        return jdbc.sql("""
+                SELECT sum(l.net_som) AS total_net_som
+                  FROM reporting.fact_order_line l
+                  JOIN reporting.fact_order o
+                    ON o.tenant_id = l.tenant_id AND o.business_date = l.business_date AND o.order_id = l.order_id
+                 WHERE l.tenant_id = :tenantId AND l.business_date BETWEEN :from AND :to
+                """ + locationFilter + fulfilmentFilter)
+                .params(params)
+                .query((ResultSet row, int number) -> row.getLong("total_net_som"))
+                .single();
+    }
+
     /** The sentinel {@link #readVariantSales} substitutes for a null {@code variant_id} in its own sort/cursor tiebreak — see that method's own doc. */
     private static final UUID NIL_VARIANT_ID = new UUID(0L, 0L);
 
