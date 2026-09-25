@@ -4,6 +4,7 @@ import { Observable, catchError, map, of, throwError } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client';
 import { BrandScope, pricingPaths } from '../../core/api/catalog-paths';
 import { command } from '../../core/api/idempotency';
+import { CursorState, Page } from '../../core/api/page';
 import { ApiError } from '../../core/api/problem-details';
 import {
   BulkPriceChangeItem,
@@ -11,6 +12,7 @@ import {
   BulkPriceChangeRequest,
   CreatePriceBookRequest,
   PriceBookAssignmentRequest,
+  PriceBookMatrixRow,
   PriceBookSummary,
   PriceRequest,
   ResolvedPrices,
@@ -62,16 +64,53 @@ export class PricingApi {
       .pipe(map((result) => result.value));
   }
 
+  /**
+   * `expectedVersion` is the matrix row's own `bookPriceVersion` (row 4.8a's
+   * inline edit) — `0` for a variant never priced in this book — sent as
+   * `If-Match` and checked against the price's own version, never the
+   * book's; see `PriceAuthoringController.setVariantPrice`'s own doc for why
+   * the two are not interchangeable. Omitted, the write stays unconditional,
+   * the product editor's own single-price cell (`product-editor-page.ts`),
+   * which never reads a version before writing one.
+   */
   setVariantPrice(
     scope: BrandScope,
     priceBookId: string,
     variantId: string,
     amountMinor: number,
+    expectedVersion?: number,
   ): Observable<PriceBookSummary> {
     return this.api.put<PriceRequest, PriceBookSummary>(
       pricingPaths.variantPrice(scope, priceBookId, variantId),
       command({ amountMinor }),
+      expectedVersion === undefined ? {} : { expectedVersion },
     );
+  }
+
+  /**
+   * Row 4.8a — every variant in the brand's draft catalog, this book's price
+   * for it, the brand's live base price and the delta, cursor-paginated by
+   * variant id. `categoryId` and `differsFromBase` are server-side filters;
+   * change either and drop `state`'s cursor first (`resetOnFilterChange`),
+   * the same rule every other cursor list in this app follows.
+   */
+  matrix(
+    scope: BrandScope,
+    priceBookId: string,
+    state: CursorState,
+    filters: { readonly categoryId?: string; readonly differsFromBase?: boolean } = {},
+  ): Observable<Page<PriceBookMatrixRow>> {
+    return this.api.page<PriceBookMatrixRow>(pricingPaths.matrix(scope, priceBookId), state, {
+      ...(filters.categoryId ? { categoryId: filters.categoryId } : {}),
+      ...(filters.differsFromBase ? { differsFromBase: true } : {}),
+    });
+  }
+
+  /** One price book and its current version — the matrix screen's own header, and the `If-Match` value activation needs. */
+  readPriceBook(scope: BrandScope, priceBookId: string): Observable<PriceBookSummary> {
+    return this.api
+      .get<PriceBookSummary>(pricingPaths.priceBook(scope, priceBookId))
+      .pipe(map((result) => result.value));
   }
 
   /** IA 4.8a — a draft book, priced by nothing until it is activated. */

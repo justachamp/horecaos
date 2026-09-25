@@ -1,0 +1,106 @@
+.price-matrix {
+  padding: 16px;
+  overflow: auto;
+  height: 100%;
+}
+
+.price-matrix__toolbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.price-matrix__toolbar a {
+  color: var(--q-primary);
+}
+
+.price-matrix__book-name {
+  color: var(--q-ink-muted);
+  font-weight: normal;
+}
+
+.price-matrix__field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--q-type-caption);
+  color: var(--q-ink-subtle);
+}
+
+.price-matrix__field select {
+  padding: 4px 8px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+}
+
+.price-matrix__field--checkbox {
+  flex-direction: row-reverse;
+  justify-content: flex-end;
+}
+
+.price-matrix__state {
+  padding: 24px 0;
+}
+
+.price-matrix__skeleton {
+  height: 200px;
+  border-radius: var(--q-radius);
+  background: var(--q-surface-1);
+}
+
+.price-matrix__error-band {
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  border-radius: var(--q-radius);
+  background: var(--q-error-tint);
+  color: var(--q-error-text);
+}
+
+.price-matrix__empty {
+  padding: 24px 0;
+  color: var(--q-ink-muted);
+}
+
+.price-matrix__table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.price-matrix__table th {
+  text-align: left;
+  padding: 8px 12px;
+  font-size: var(--q-type-caption);
+  color: var(--q-ink-subtle);
+  background: var(--q-surface-1);
+}
+
+.price-matrix__table td {
+  padding: 8px 12px;
+  font-size: var(--q-type-body-sm);
+  border-top: 1px solid var(--q-hairline);
+  vertical-align: top;
+}
+
+.price-matrix__price-input {
+  width: 100px;
+  padding: 4px 6px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+}
+
+.price-matrix__row-error {
+  color: var(--q-error-text);
+  margin-top: 4px;
+}
+
+.price-matrix__load-more {
+  margin-top: 12px;
+  padding: 6px 14px;
+  border: 1px solid var(--q-hairline);
+  background: var(--q-canvas);
+  border-radius: var(--q-radius);
+  cursor: pointer;
+  font-size: var(--q-type-body-xs);
+}
