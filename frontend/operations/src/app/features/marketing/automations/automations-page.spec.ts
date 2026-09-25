@@ -5,7 +5,12 @@ import { describe, expect, it, vi } from 'vitest';
 import { BrandScope } from '../../../core/api/catalog-paths';
 import { CurrentBrand } from '../../../core/auth/current-brand';
 import { I18n } from '../../../core/i18n/i18n';
-import { AutomationRuleView, AutomationRunView, AutomationsApi } from './automations-api';
+import {
+  AutomationPreviewCandidate,
+  AutomationRuleView,
+  AutomationRunView,
+  AutomationsApi,
+} from './automations-api';
 import { AutomationsPage } from './automations-page';
 
 const BRAND_SCOPE: BrandScope = { tenantId: 't1', brandId: 'b1' };
@@ -43,6 +48,7 @@ function fakeApi(overrides: Partial<AutomationsApi> = {}): Partial<AutomationsAp
     deactivate: vi.fn(),
     reorder: vi.fn(),
     runs: vi.fn().mockResolvedValue([]),
+    preview: vi.fn().mockResolvedValue([]),
     ...overrides,
   };
 }
@@ -201,7 +207,7 @@ describe('AutomationsPage', () => {
     expect(api.activate).not.toHaveBeenCalled();
   });
 
-  it('only offers the three built trigger kinds — never CASHBACK_CHANGE or LATE_ORDER_APOLOGY', async () => {
+  it('offers the four built trigger kinds — never LATE_ORDER_APOLOGY', async () => {
     await render(fakeApi());
     const host = fixture.nativeElement as HTMLElement;
     (host.querySelector('[data-testid="automations-create"]') as HTMLButtonElement).click();
@@ -210,7 +216,7 @@ describe('AutomationsPage', () => {
     const options = [...host.querySelectorAll('[data-testid="automation-form-trigger"] option')].map(
       (option) => (option as HTMLOptionElement).value,
     );
-    expect(options).toEqual(['BIRTHDAY', 'INACTIVITY', 'CART_ABANDONMENT']);
+    expect(options).toEqual(['BIRTHDAY', 'INACTIVITY', 'CART_ABANDONMENT', 'CASHBACK_CHANGE']);
   });
 
   it('shows a rule\'s recent firing history, including a refusal reason', async () => {
@@ -233,5 +239,54 @@ describe('AutomationsPage', () => {
     expect(host.querySelector('[data-testid="automation-runs-dialog"]')?.textContent).toContain(
       'CONSENT_WITHHELD',
     );
+  });
+
+  // ------------------------------------------------------------- preview (row X.25)
+
+  it('previews which customers a rule would match today, PII masked, without arming or sending anything', async () => {
+    const candidates: AutomationPreviewCandidate[] = [
+      { customerAccountId: 'acct-1', maskedDisplayName: 'A***** B****' },
+    ];
+    const preview = vi.fn().mockResolvedValue(candidates);
+    const api = fakeApi({ list: vi.fn().mockResolvedValue([rule()]), preview });
+    await render(api);
+    const host = fixture.nativeElement as HTMLElement;
+
+    (host.querySelector('[data-testid="automation-preview-link"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(preview).toHaveBeenCalledWith(BRAND_SCOPE, 'rule-1');
+    const dialog = host.querySelector('[data-testid="automation-preview-dialog"]');
+    expect(dialog?.textContent).toContain('A***** B****');
+    // A preview is a read: nothing here should arm the rule or record a firing.
+    expect(api.activate).not.toHaveBeenCalled();
+    expect(api.runs).not.toHaveBeenCalled();
+  });
+
+  it('shows the empty state when no customer matches the rule today', async () => {
+    const api = fakeApi({ list: vi.fn().mockResolvedValue([rule()]), preview: vi.fn().mockResolvedValue([]) });
+    await render(api);
+    const host = fixture.nativeElement as HTMLElement;
+
+    (host.querySelector('[data-testid="automation-preview-link"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(host.querySelector('[data-testid="automation-preview-empty"]')).not.toBeNull();
+  });
+
+  it('shows the refusal rather than a stale or blank list when the preview call fails', async () => {
+    const preview = vi.fn().mockRejectedValue(new Error('boom'));
+    const api = fakeApi({ list: vi.fn().mockResolvedValue([rule()]), preview });
+    await render(api);
+    const host = fixture.nativeElement as HTMLElement;
+
+    (host.querySelector('[data-testid="automation-preview-link"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(host.querySelector('.dialog__error')).not.toBeNull();
+    expect(host.querySelector('[data-testid="automation-preview-list"]')).toBeNull();
   });
 });

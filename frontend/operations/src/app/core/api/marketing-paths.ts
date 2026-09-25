@@ -151,4 +151,9 @@ export const marketingPaths = {
   automationRuns(scope: BrandScope, ruleId: string): string {
     return `${this.automation(scope, ruleId)}/runs`;
   },
+
+  /** Row X.25's bounded, PII-masked "which customers would this match today" preview. */
+  automationPreview(scope: BrandScope, ruleId: string): string {
+    return `${this.automation(scope, ruleId)}/preview`;
+  },
 } as const;

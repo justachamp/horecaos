@@ -77,6 +77,21 @@
   font-size: var(--q-type-body-sm);
 }
 
+.automations__preview-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.automations__preview-list li {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--q-hairline);
+  font-size: var(--q-type-body-sm);
+}
+
 /* -------------------------------------------------------------- dialog */
 
 .dialog-backdrop {

@@ -414,6 +414,46 @@ public class JdbcLoyaltyStore {
     }
 
     /**
+     * The most recent accrual or redemption at least {@code minimumAbsMinor} in
+     * size, at this brand, since {@code since} — {@link
+     * uz.horecaos.platform.loyalty.api.LoyaltyActivityDirectory}'s own query,
+     * over the ledger the {@link uz.horecaos.platform.loyalty.api.LoyaltyBalanceChanged}
+     * event itself is derived from.
+     *
+     * <p>Release, reversal, expiry and forfeiture movements are excluded on
+     * purpose: they are not what {@code LoyaltyAccrualService} or {@code
+     * PointsRedemptionService}'s own reserve path publish an event for, and a
+     * preview that showed them would name candidates a real firing never would.
+     */
+    public List<CustomerLedgerMovement> recentCustomerMovements(
+            UUID tenantId, UUID brandId, long minimumAbsMinor, Instant since, int limit) {
+        return jdbc.sql("""
+                SELECT a.customer_account_id, e.amount_minor, e.occurred_at
+                  FROM loyalty.entries e
+                  JOIN loyalty.accounts a ON a.tenant_id = e.tenant_id AND a.id = e.account_id
+                 WHERE e.tenant_id = :tenantId AND a.brand_id = :brandId
+                   AND e.entry_type IN ('ACCRUAL', 'REDEMPTION')
+                   AND ABS(e.amount_minor) >= :minimumAbsMinor
+                   AND e.occurred_at >= :since
+                 ORDER BY e.occurred_at DESC
+                 LIMIT :limit
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("minimumAbsMinor", minimumAbsMinor)
+                .param("since", since.atOffset(ZoneOffset.UTC))
+                .param("limit", limit)
+                .query((row, number) -> new CustomerLedgerMovement(
+                        row.getObject("customer_account_id", UUID.class),
+                        row.getLong("amount_minor"),
+                        requiredInstant(row, "occurred_at")))
+                .list();
+    }
+
+    /** One row of {@link #recentCustomerMovements}. */
+    public record CustomerLedgerMovement(UUID customerAccountId, long amountMinor, Instant occurredAt) {}
+
+    /**
      * The balance as the ledger says it is.
      *
      * <p>The definition of the number. {@code accounts.balance_minor} is a cache

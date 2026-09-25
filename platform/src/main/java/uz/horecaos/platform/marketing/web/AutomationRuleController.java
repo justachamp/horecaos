@@ -27,6 +27,8 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
+import uz.horecaos.platform.marketing.application.AutomationRulePreviewService;
+import uz.horecaos.platform.marketing.application.AutomationRulePreviewService.PreviewCandidate;
 import uz.horecaos.platform.marketing.application.AutomationRuleService;
 import uz.horecaos.platform.marketing.domain.AutomationTriggerType;
 import uz.horecaos.platform.marketing.domain.MarketingChannel;
@@ -57,12 +59,17 @@ public class AutomationRuleController {
 
     private final AutomationRuleService rules;
     private final JdbcAutomationRunStore runs;
+    private final AutomationRulePreviewService preview;
     private final CurrentActor currentActor;
 
     public AutomationRuleController(
-            AutomationRuleService rules, JdbcAutomationRunStore runs, CurrentActor currentActor) {
+            AutomationRuleService rules,
+            JdbcAutomationRunStore runs,
+            AutomationRulePreviewService preview,
+            CurrentActor currentActor) {
         this.rules = rules;
         this.runs = runs;
+        this.preview = preview;
         this.currentActor = currentActor;
     }
 
@@ -223,6 +230,25 @@ public class AutomationRuleController {
                 .toList());
     }
 
+    @GetMapping("/{ruleId}/preview")
+    @RequiresCapability(value = Capability.CAMPAIGN_AUTHOR, scope = ScopeType.BRAND)
+    @Operation(
+            summary = "Which customers this rule would match today (row X.25)",
+            description = "A bounded, tenant-scoped sample with the display name masked the same "
+                    + "way OperatorCustomerLookupService masks one — never a real send, never a "
+                    + "guard claim: AutomationRulePreviewService reuses the same candidate query a "
+                    + "live firing would, but writes nothing.")
+    public ResponseEntity<List<AutomationPreviewResponse>> preview(
+            @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID ruleId) {
+        try {
+            return ResponseEntity.ok(preview.preview(tenantId, brandId, ruleId).stream()
+                    .map(AutomationPreviewResponse::of)
+                    .toList());
+        } catch (IllegalArgumentException notFound) {
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, notFound.getMessage());
+        }
+    }
+
     private ActorRef actor() {
         return ActorRef.user(currentActor.get().subject(), null);
     }
@@ -298,6 +324,14 @@ public class AutomationRuleController {
                     row.activatedBy(),
                     row.activatedAt(),
                     row.version());
+        }
+    }
+
+    /** One preview candidate — a pseudonymous id and a masked name, never a contact value. */
+    public record AutomationPreviewResponse(
+            UUID customerAccountId, @Nullable String maskedDisplayName) {
+        static AutomationPreviewResponse of(PreviewCandidate candidate) {
+            return new AutomationPreviewResponse(candidate.customerAccountId(), candidate.maskedDisplayName());
         }
     }
 
