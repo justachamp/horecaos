@@ -593,6 +593,118 @@ describe('ReservationsPage', () => {
     expect(body.guestName).toBe('Dilnoza Karimova');
     expect(body.guestPhone).toBeUndefined();
   });
+
+  // ------------------------------------------------------------------ X.36 timeline
+
+  it('defaults to the grid, and switches to the timeline on the toggle', async () => {
+    await render({
+      availability: () => Promise.resolve([table()]),
+      listForDay: () => Promise.resolve([reservation()]),
+    });
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(host.querySelector('[data-testid="reservations-grid"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="reservations-timeline"]')).toBeNull();
+
+    (host.querySelector('[data-testid="reservations-view-timeline"]') as HTMLElement).click();
+    fixture.detectChanges();
+
+    expect(host.querySelector('[data-testid="reservations-timeline"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="reservations-grid"]')).toBeNull();
+  });
+
+  it('renders one timeline row per table and one block per booking, and opens the same detail pane on click', async () => {
+    await render({
+      availability: () => Promise.resolve([table({ tableId: 'table-1', code: 'T1' })]),
+      listForDay: () => Promise.resolve([reservation({ reservationId: 'res-9', partySize: 6 })]),
+    });
+    const host = fixture.nativeElement as HTMLElement;
+    (host.querySelector('[data-testid="reservations-view-timeline"]') as HTMLElement).click();
+    fixture.detectChanges();
+
+    expect(host.querySelector('[data-testid="timeline-row-table-1"]')).not.toBeNull();
+    const block = host.querySelector('[data-testid="timeline-block-res-9:table-1"]');
+    expect(block).not.toBeNull();
+    expect(block?.textContent).toContain('6');
+
+    (block as HTMLElement).click();
+    fixture.detectChanges();
+
+    const detail = host.querySelector('[data-testid="reservations-detail"]');
+    expect(detail).not.toBeNull();
+    expect(detail?.textContent).toContain('6');
+  });
+
+  it('never shows a dropped booking (cancelled/rejected/no-show) as a timeline block', async () => {
+    await render({
+      availability: () => Promise.resolve([table()]),
+      listForDay: () =>
+        Promise.resolve([reservation({ reservationId: 'res-cancelled', status: 'CANCELLED' })]),
+    });
+    const host = fixture.nativeElement as HTMLElement;
+    (host.querySelector('[data-testid="reservations-view-timeline"]') as HTMLElement).click();
+    fixture.detectChanges();
+
+    expect(host.querySelector('[data-testid="timeline-block-res-cancelled:table-1"]')).toBeNull();
+  });
+
+  it('highlights two bookings holding the same table over an overlapping window as a capacity conflict', async () => {
+    await render({
+      availability: () => Promise.resolve([table({ tableId: 'table-1' })]),
+      listForDay: () =>
+        Promise.resolve([
+          reservation({
+            reservationId: 'res-a',
+            tableIds: ['table-1'],
+            requestedFrom: localIso('18:00'),
+            requestedTo: localIso('20:00'),
+          }),
+          reservation({
+            reservationId: 'res-b',
+            tableIds: ['table-1'],
+            requestedFrom: localIso('19:00'),
+            requestedTo: localIso('21:00'),
+          }),
+        ]),
+    });
+    const host = fixture.nativeElement as HTMLElement;
+    (host.querySelector('[data-testid="reservations-view-timeline"]') as HTMLElement).click();
+    fixture.detectChanges();
+
+    const blockA = host.querySelector('[data-testid="timeline-block-res-a:table-1"]');
+    const blockB = host.querySelector('[data-testid="timeline-block-res-b:table-1"]');
+    expect(blockA?.className).toContain('scheduler__block--conflict');
+    expect(blockB?.className).toContain('scheduler__block--conflict');
+  });
+
+  it('does not flag two bookings on the same table whose windows do not overlap', async () => {
+    await render({
+      availability: () => Promise.resolve([table({ tableId: 'table-1' })]),
+      listForDay: () =>
+        Promise.resolve([
+          reservation({
+            reservationId: 'res-early',
+            tableIds: ['table-1'],
+            requestedFrom: localIso('12:00'),
+            requestedTo: localIso('13:30'),
+          }),
+          reservation({
+            reservationId: 'res-late',
+            tableIds: ['table-1'],
+            requestedFrom: localIso('18:00'),
+            requestedTo: localIso('20:00'),
+          }),
+        ]),
+    });
+    const host = fixture.nativeElement as HTMLElement;
+    (host.querySelector('[data-testid="reservations-view-timeline"]') as HTMLElement).click();
+    fixture.detectChanges();
+
+    const blockEarly = host.querySelector('[data-testid="timeline-block-res-early:table-1"]');
+    const blockLate = host.querySelector('[data-testid="timeline-block-res-late:table-1"]');
+    expect(blockEarly?.className).not.toContain('scheduler__block--conflict');
+    expect(blockLate?.className).not.toContain('scheduler__block--conflict');
+  });
 });
 
 /** ISO day of week, 1 (Monday) to 7 (Sunday), for a `YYYY-MM-DD` date. */

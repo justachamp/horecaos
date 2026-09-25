@@ -111,6 +111,8 @@ export const messagesRu: MessageCatalogue = {
   'reservations.noTables': 'В этом филиале пока не настроены столы',
   'reservations.closedToday': 'По расписанию филиала в этот день закрыто',
   'reservations.grid.time': 'Время',
+  'reservations.view.grid': 'Сетка',
+  'reservations.view.timeline': 'Таймлайн',
   'reservations.detail.title': 'Бронирование',
   'reservations.detail.time': 'Время',
   'reservations.detail.party': 'Количество гостей',

@@ -59,4 +59,28 @@ describe('TimelineScheduler', () => {
     const row = host.querySelector('[data-testid="timeline-row-t3"]')!;
     expect(row.querySelectorAll('[data-testid^="timeline-block-"]')).toHaveLength(0);
   });
+
+  it('emits the clicked block’s own id on blockSelect', () => {
+    const host = render();
+    const emitted: string[] = [];
+    fixture.componentInstance.blockSelect.subscribe((id) => emitted.push(id));
+
+    (host.querySelector('[data-testid="timeline-block-b2"]') as HTMLElement).click();
+
+    expect(emitted).toEqual(['b2']);
+  });
+
+  it('marks a block conflict with its own class, and leaves an ordinary block without it', () => {
+    const host = render({
+      blocks: [
+        { id: 'b1', resourceId: 't1', startMinutes: 60, endMinutes: 120, label: 'A', conflict: true },
+        { id: 'b2', resourceId: 't2', startMinutes: 90, endMinutes: 150, label: 'B' },
+      ],
+    });
+
+    const conflicting = host.querySelector('[data-testid="timeline-block-b1"]')!;
+    const ordinary = host.querySelector('[data-testid="timeline-block-b2"]')!;
+    expect(conflicting.className).toContain('scheduler__block--conflict');
+    expect(ordinary.className).not.toContain('scheduler__block--conflict');
+  });
 });

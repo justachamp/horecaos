@@ -123,6 +123,8 @@ export const messagesEn = {
   'reservations.noTables': 'No tables configured at this location yet',
   'reservations.closedToday': 'The branch’s own schedule shows it closed on this date',
   'reservations.grid.time': 'Time',
+  'reservations.view.grid': 'Grid',
+  'reservations.view.timeline': 'Timeline',
   'reservations.detail.title': 'Booking',
   'reservations.detail.time': 'Time',
   'reservations.detail.party': 'Party size',

@@ -15,6 +15,11 @@ import { I18n } from '../../core/i18n/i18n';
 import { MessageKey } from '../../core/i18n/messages.en';
 import { TPipe } from '../../core/i18n/t.pipe';
 import { ApiError } from '../../core/api/problem-details';
+import {
+  TimelineBlock,
+  TimelineResource,
+  TimelineScheduler,
+} from '../../shared/ui/timeline-scheduler/timeline-scheduler';
 import { ChannelView, SalesChannelsApi } from '../settings/sales-channels/sales-channels-api';
 import { LocationsApi, ModeBindingView } from '../settings/locations/locations-api';
 import { describeApiError } from './order-errors';
@@ -27,6 +32,9 @@ import {
   TableAvailability,
 } from './reservations-api';
 import { TableSessionsApi } from './table-sessions-api';
+
+/** The day grid, or `X.36`'s timeline — same tables, same bookings, a different read of them. */
+type ViewMode = 'GRID' | 'TIMELINE';
 
 /** A booking status this screen can move to via a plain state-action (`DineInStateMachine`, minus `SEATED`, which opens a session instead). */
 type ActionTarget = 'CONFIRMED' | 'REJECTED' | 'CANCELLED' | 'NO_SHOW' | 'COMPLETED';
@@ -103,6 +111,19 @@ interface RevealedGuest {
  * bound to the location's own `DINE_IN` service schedule (`LocationsApi`)
  * rather than a fixed 08:00-23:00 guessed in the browser's timezone.
  *
+ * **`X.36`'s day timeline, added this wave**: a toggle next to the hour grid
+ * swaps to `q-timeline-scheduler` — the same `tables()`/`reservations()` this
+ * screen already loads, read as one row per table and one block per booking
+ * along a shared time axis, so "can I fit a party of six at 20:00" is read
+ * off a timeline instead of scanning the grid table by table. Clicking a
+ * block opens the same detail pane the grid's own cells open — seat,
+ * confirm/reject/cancel/no-show/complete are exactly the actions already
+ * wired above, never duplicated. A block is flagged when it overlaps
+ * another block holding the same table, the contention the host stand's own
+ * advisory `availability` read already allows before a booking is confirmed
+ * ({@link ReservationsApi.availability}'s own doc: "the database decides
+ * between them when they confirm").
+ *
  * **Not built, honestly**: closing out a table's bill and the running-total
  * settlement screen — `TableSessionController`'s rounds, state-actions and
  * force-closures stay uncalled, because that is a different, unbuilt screen
@@ -118,7 +139,7 @@ interface RevealedGuest {
  */
 @Component({
   selector: 'q-reservations-page',
-  imports: [TPipe, OrderReasonDialog],
+  imports: [TPipe, OrderReasonDialog, TimelineScheduler],
   templateUrl: './reservations-page.html',
   styleUrl: './reservations-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -157,6 +178,104 @@ export class ReservationsPage implements OnInit {
   );
 
   protected readonly HOURS = computed<readonly number[]>(() => hourLabels(this.serviceWindow()));
+
+  // ------------------------------------------------------------------ X.36 timeline
+
+  protected readonly viewMode = signal<ViewMode>('GRID');
+
+  protected readonly timelineResources = computed<readonly TimelineResource[]>(() =>
+    this.tables().map((table) => ({
+      id: table.tableId,
+      label: `${table.code} (${table.seats})`,
+    })),
+  );
+
+  /**
+   * One block per (booking, table) pair — a party seated at two joined
+   * tables shows on both rows, matching the grid's own `cellReservation`,
+   * which already renders the same booking under every table it names.
+   * Minutes are relative to local midnight on {@link selectedDate} in
+   * {@link locationTimeZone}, the same axis {@link HOURS} labels — computed
+   * from real instants rather than guessed, so the block still lands
+   * correctly across a DST-less but UTC-offset zone change.
+   */
+  protected readonly timelineBlocks = computed<readonly TimelineBlock[]>(() => {
+    const zone = this.locationTimeZone();
+    const dayStart = zonedTimeToInstant(this.selectedDate(), 0, zone).getTime();
+    const toMinutes = (iso: string) => Math.round((new Date(iso).getTime() - dayStart) / 60_000);
+
+    const blocks: TimelineBlock[] = [];
+    for (const reservation of this.reservations()) {
+      if (isDropped(reservation.status)) {
+        continue;
+      }
+      const startMinutes = toMinutes(reservation.requestedFrom);
+      const endMinutes = toMinutes(reservation.requestedTo);
+      const label = `${reservation.partySize}·${this.statusLabel(reservation.status)}`;
+      for (const tableId of reservation.tableIds) {
+        blocks.push({
+          id: `${reservation.reservationId}:${tableId}`,
+          resourceId: tableId,
+          startMinutes,
+          endMinutes,
+          label,
+        });
+      }
+    }
+
+    // A conflict is two blocks on the same table whose windows intersect —
+    // an O(n²) pass over one table's own bookings, which for a branch's
+    // single day never runs into the hundreds.
+    const byResource = new Map<string, TimelineBlock[]>();
+    for (const block of blocks) {
+      const bucket = byResource.get(block.resourceId);
+      if (bucket) {
+        bucket.push(block);
+      } else {
+        byResource.set(block.resourceId, [block]);
+      }
+    }
+    const conflicting = new Set<string>();
+    for (const bucket of byResource.values()) {
+      for (let i = 0; i < bucket.length; i++) {
+        for (let j = i + 1; j < bucket.length; j++) {
+          const a = bucket[i];
+          const b = bucket[j];
+          if (a.startMinutes < b.endMinutes && b.startMinutes < a.endMinutes) {
+            conflicting.add(a.id);
+            conflicting.add(b.id);
+          }
+        }
+      }
+    }
+
+    return blocks.map((block) =>
+      conflicting.has(block.id) ? { ...block, conflict: true } : block,
+    );
+  });
+
+  protected readonly timelineStartMinutes = computed(() => {
+    const window = this.serviceWindow();
+    return window ? Math.floor(window.startHour) * 60 : 0;
+  });
+
+  protected readonly timelineEndMinutes = computed(() => {
+    const window = this.serviceWindow();
+    return window ? Math.ceil(window.endHour) * 60 : 24 * 60;
+  });
+
+  protected setViewMode(mode: ViewMode): void {
+    this.viewMode.set(mode);
+  }
+
+  /** `q-timeline-scheduler`'s `blockSelect` carries only the block's own id — the booking is looked up from the same list the grid already renders. */
+  protected onTimelineBlockSelect(blockId: string): void {
+    const reservationId = blockId.split(':')[0];
+    const reservation = this.reservations().find((row) => row.reservationId === reservationId);
+    if (reservation) {
+      this.openDetail(reservation);
+    }
+  }
 
   protected readonly selectedReservationId = signal<string | null>(null);
   protected readonly showCreateForm = signal(false);

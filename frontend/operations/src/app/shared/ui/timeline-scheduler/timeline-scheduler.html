@@ -6,10 +6,12 @@
         @for (block of blocksFor(resource.id); track block.id) {
           <div
             class="scheduler__block q-caption"
+            [class.scheduler__block--conflict]="block.conflict"
             [style.left.px]="block.leftPx"
             [style.width.px]="block.widthPx"
             [attr.data-testid]="'timeline-block-' + block.id"
             [attr.title]="block.label"
+            (click)="onBlockClick(block.id)"
           >
             {{ block.label }}
           </div>

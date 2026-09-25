@@ -113,6 +113,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'reservations.noTables': 'Bu filialda hali stollar sozlanmagan',
   'reservations.closedToday': 'Filial jadvaliga koʻra bu kuni yopiq',
   'reservations.grid.time': 'Vaqt',
+  'reservations.view.grid': 'Jadval',
+  'reservations.view.timeline': 'Vaqt chizigʻi',
   'reservations.detail.title': 'Bron',
   'reservations.detail.time': 'Vaqt',
   'reservations.detail.party': 'Mehmonlar soni',

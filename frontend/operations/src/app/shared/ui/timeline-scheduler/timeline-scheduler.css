@@ -35,4 +35,13 @@
   overflow: hidden;
   text-overflow: ellipsis;
   line-height: 24px;
+  cursor: pointer;
+}
+
+/** A capacity conflict: two blocks on the same resource's row overlap in time (row `X.36`'s own doc). */
+.scheduler__block--conflict {
+  background: var(--q-warning);
+  color: var(--q-warning-text);
+  outline: 2px solid var(--q-error);
+  outline-offset: -2px;
 }
