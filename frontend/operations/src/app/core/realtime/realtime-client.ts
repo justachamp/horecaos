@@ -46,15 +46,23 @@ export type RealtimeFrame = RealtimeSignalFrame | RealtimeSnapshotFrame | Realti
 type FrameListener = (frame: RealtimeFrame) => void;
 
 /** The channel set every screen that has a producer today may want a frame from. */
-const DEFAULT_CHANNELS = ['order_queue', 'order_detail', 'counters', 'dispatch_board'] as const;
+const DEFAULT_CHANNELS = [
+  'order_queue',
+  'order_detail',
+  'counters',
+  'dispatch_board',
+  'kitchen_board',
+] as const;
 
 /**
  * The capability each of {@link DEFAULT_CHANNELS} requires, mirroring
  * `StreamChannel.capability()` (platform `telemetry/api/StreamChannel.java`)
- * for the four channels this build ever requests. `streamUrl()` filters
+ * for every channel this build ever requests. `streamUrl()` filters
  * against this so a role missing one channel's capability — `DELIVERY_PLAN_READ`
  * for `dispatch_board`, held by dispatchers but not, say, `BRAND_MANAGER` or
- * `TENANT_FINANCE` — never asks for it at all: `OperationsStreamController.authorize()`
+ * `TENANT_FINANCE`, or `KITCHEN_TICKET_READ` for `kitchen_board`, held by
+ * kitchen and expo staff but not every desk role — never asks for it at all:
+ * `OperationsStreamController.authorize()`
  * refuses the *entire* connection on the first channel it has no capability
  * for (`capabilityIsCheckedPerChannelNotOnceForTheWholeSubscription`), so a
  * client that requested a channel it holds no capability for would lose the
@@ -65,6 +73,7 @@ const CHANNEL_CAPABILITY: Record<(typeof DEFAULT_CHANNELS)[number], Capability> 
   order_detail: 'ORDER_READ',
   counters: 'ORDER_READ',
   dispatch_board: 'DELIVERY_PLAN_READ',
+  kitchen_board: 'KITCHEN_TICKET_READ',
 };
 
 const RECONNECT_BASE_MS = 1_000;

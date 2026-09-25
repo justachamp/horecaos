@@ -139,6 +139,40 @@ export interface KitchenEventsResponse {
   readonly events: readonly KitchenEventResponse[];
 }
 
+/**
+ * Mirrors `KitchenBoardController.VduItemView` — the two facts a wall
+ * renders about a line, station and quantity, never a dish name.
+ */
+export interface VduItemView {
+  readonly stationId: string;
+  readonly quantity: number;
+  /** `QUEUED` | `STARTED` | `READY` | `CANCELLED`. */
+  readonly status: string;
+}
+
+/**
+ * Mirrors `KitchenBoardController.VduTicketResponse` (ADR 0041 rollout step
+ * 4) — deliberately narrower than {@link TicketResponse}: no `orderId`, no
+ * `releaseMode`/`releaseAt`/`releasedAt`/`prepEstimateSeconds`, and no
+ * per-line `orderLineId`/`routedBy`/`version`. Only what a wall needs.
+ */
+export interface VduTicketResponse {
+  readonly ticketId: string;
+  readonly sequenceLabel: string;
+  readonly externalReference?: string | null;
+  readonly fulfilmentMode: string;
+  /** `FIRED` | `IN_PRODUCTION` | `READY`. */
+  readonly status: string;
+  readonly targetReadyAt?: string | null;
+  readonly createdAt: string;
+  readonly courierEtaAt?: string | null;
+  readonly items: readonly VduItemView[];
+}
+
+export interface VduBoardResponse {
+  readonly tickets: readonly VduTicketResponse[];
+}
+
 export interface StationResponse {
   readonly stationId: string;
   readonly code: string;
@@ -242,6 +276,20 @@ export class KitchenApi {
   async eventsForOrder(scope: LocationScope, orderId: string): Promise<KitchenEventsResponse> {
     const result = await firstValueFrom(
       this.api.get<KitchenEventsResponse>(operationsPaths.kitchenEventsByOrder(scope, orderId)),
+    );
+    return result.value;
+  }
+
+  /**
+   * The VDU wall projection (ADR 0041 rollout step 4, gap map row 2.4).
+   * `station`, when given, narrows to that station's own lines and drops a
+   * ticket with none there — `KitchenBoardController.vdu`'s own rule.
+   */
+  async vdu(scope: LocationScope, station?: string): Promise<VduBoardResponse> {
+    const result = await firstValueFrom(
+      this.api.get<VduBoardResponse>(operationsPaths.kitchenVdu(scope), {
+        params: station ? { station } : {},
+      }),
     );
     return result.value;
   }

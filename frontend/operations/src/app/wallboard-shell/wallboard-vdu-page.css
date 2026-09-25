@@ -1,0 +1,142 @@
+/*
+ * TV-legible, the same reduction `wallboard-shell.ts`'s own doc names for
+ * `.q-display-tv` (128px, `design-tokens/tokens.css`) — read from across a
+ * room rather than from a desk, which is why this reaches well past
+ * `vdu-page.css`'s own `--q-type-headline` step.
+ */
+
+:host {
+  display: block;
+  height: 100%;
+  overflow-y: auto;
+  background: var(--q-ink);
+}
+
+.wv {
+  min-height: 100%;
+  padding: 24px 32px 32px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  color: var(--q-canvas);
+}
+
+.wv__header {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.wv__title {
+  font-size: var(--q-type-headline);
+  font-weight: 600;
+  margin: 0;
+}
+
+.wv__headerRight {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.wv__stationFilter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--q-type-body-lg);
+}
+
+.wv__stationFilter select {
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: var(--q-radius);
+  border: 2px solid var(--q-hairline);
+  background: var(--q-surface-1);
+  color: var(--q-ink);
+  font-size: var(--q-type-body-lg);
+}
+
+.wv__staleBanner {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 24px;
+  border-radius: var(--q-radius);
+  background: var(--q-warning-tint);
+  color: var(--q-warning-text);
+  font-size: var(--q-type-title);
+  font-weight: 600;
+}
+
+.wv__staleBanner--stale {
+  background: var(--q-error-tint);
+  color: var(--q-error-text);
+}
+
+.wv__staleBanner-time {
+  font-variant-numeric: tabular-nums;
+  font-weight: 400;
+}
+
+.wv__board {
+  flex: 1;
+}
+
+.wv__hint {
+  color: var(--q-canvas);
+  font-size: var(--q-type-subhead);
+  text-align: center;
+  padding: 48px;
+}
+
+.wv__cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 20px;
+}
+
+.wv__card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 160px;
+  background: var(--q-surface-1);
+  color: var(--q-ink);
+  border-radius: var(--q-radius);
+  border: 3px solid transparent;
+  padding: 12px;
+}
+
+/* The SLA ramp (P06, tokens.css), not the generic warning/error tokens. */
+.wv__card--warning {
+  border-color: var(--q-sla-at-risk);
+}
+
+.wv__card--danger {
+  border-color: var(--q-sla-late);
+}
+
+.wv__card-sequence {
+  font-size: 64px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.05;
+}
+
+.wv__card-reference {
+  font-size: var(--q-type-body-lg);
+  font-variant-numeric: tabular-nums;
+  opacity: 0.85;
+}
+
+.wv__card-detail {
+  font-size: var(--q-type-body);
+  opacity: 0.85;
+}

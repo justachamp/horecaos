@@ -846,7 +846,8 @@ export const messagesEn = {
     'A referenced photo or media file is not yet available.',
   'settings.home.readiness.code.TEMPLATE_AWAITING_PROVIDER_REVIEW':
     'An SMS template is awaiting the gateway’s approval.',
-  'settings.home.readiness.code.TEMPLATE_REJECTED_BY_PROVIDER': 'An SMS template was rejected by the gateway.',
+  'settings.home.readiness.code.TEMPLATE_REJECTED_BY_PROVIDER':
+    'An SMS template was rejected by the gateway.',
   'settings.home.search.label': 'Find a setting',
   'settings.home.search.placeholder': 'Find a setting (press /)',
   'settings.home.search.empty': 'No setting matches "{query}".',
@@ -902,9 +903,11 @@ export const messagesEn = {
   'settings.integrations.branches.bindDialog.lead':
     'A branch binding overrides the brand default for that branch alone.',
   'settings.integrations.branches.bindDialog.installation': 'Installation',
-  'settings.integrations.branches.bindDialog.noneEligible': 'Connect an installation first — none exist yet to bind.',
+  'settings.integrations.branches.bindDialog.noneEligible':
+    'Connect an installation first — none exist yet to bind.',
   'settings.integrations.branches.bindDialog.capabilities': 'Capabilities to bind',
-  'settings.integrations.branches.bindDialog.capabilitiesLoading': 'Loading this provider’s capabilities…',
+  'settings.integrations.branches.bindDialog.capabilitiesLoading':
+    'Loading this provider’s capabilities…',
   'settings.integrations.branches.bindDialog.capabilitiesNone':
     'This provider declares no capabilities in this build, so it cannot be bound from this dialog.',
   'settings.integrations.branches.bindDialog.branch': 'Branch',
@@ -2755,6 +2758,23 @@ export const messagesEn = {
   'kitchen.devices.revoke.confirm': 'Confirm revoke',
   'kitchen.devices.revoke.submitting': 'Revoking…',
   'kitchen.devices.revoke.cancel': 'Cancel',
+
+  // Kitchen wallboard shell (2.1/2.4, ADR 0045/0041 rollout step 4) — touch
+  // KDS and VDU, hosted like the wallboard (0.1e) rather than the operator
+  // console.
+  'wallboardKitchen.title': 'Kitchen',
+  'wallboardKitchen.denied': 'No access to this location’s kitchen board',
+  'wallboardKitchen.loading': 'Loading the kitchen board',
+  'wallboardKitchen.empty': 'Nothing in production right now',
+  'wallboardKitchen.offline': 'Disconnected — showing the last board this screen saw',
+  'wallboardKitchen.actionError': 'That did not go through. Try again.',
+  'wallboardVdu.title': 'Display board',
+  'wallboardVdu.denied': 'No access to this location’s kitchen board',
+  'wallboardVdu.loading': 'Loading the display board',
+  'wallboardVdu.empty': 'Nothing in production right now',
+  'wallboardVdu.offline': 'Disconnected — showing the last board this screen saw',
+  'wallboardVdu.stationFilter.label': 'Station',
+  'wallboardVdu.stationFilter.all': 'All stations',
 
   // Couriers (3.3) — wave 30
   'couriers.title': 'Couriers',
@@ -5619,7 +5639,8 @@ export const messagesEn = {
   'ui.mediaUploader.browse': 'Choose a file',
   'ui.mediaUploader.tooLarge': 'That file is larger than this upload allows',
   'ui.mediaUploader.unsupportedType': 'That file type is not accepted here',
-  'ui.mediaUploader.videoNotSupported': 'Video is not supported yet — please choose a photo instead',
+  'ui.mediaUploader.videoNotSupported':
+    'Video is not supported yet — please choose a photo instead',
   'ui.mediaUploader.ratio': 'Crop ratio',
   'ui.mediaUploader.zoom': 'Zoom',
   'ui.mediaUploader.confirm': 'Use this crop',

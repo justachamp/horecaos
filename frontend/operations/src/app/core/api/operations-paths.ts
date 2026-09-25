@@ -409,6 +409,16 @@ export const operationsPaths = {
     return `${this.kitchenTickets(scope)}/${encodeURIComponent(ticketId)}`;
   },
 
+  /**
+   * The VDU wall projection (ADR 0041 rollout step 4, gap map row 2.4) —
+   * deliberately narrower than {@link kitchenTickets}, see
+   * `KitchenBoardController.vdu`'s own doc. No `stream`: it is always the
+   * live queue.
+   */
+  kitchenVdu(scope: LocationScope): string {
+    return `${LEGACY_TENANT_PREFIX}${tenantBrandLocation(scope)}/kitchen/vdu`;
+  },
+
   /** Fire a held ticket now (2.2's manual release). Mutation: key and `If-Match`. */
   kitchenTicketRelease(scope: LocationScope, ticketId: string): string {
     return `${this.kitchenTicket(scope, ticketId)}/release`;

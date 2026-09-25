@@ -822,7 +822,8 @@ export const messagesUzLatn: MessageCatalogue = {
     'Ishlatilayotgan rasm yoki media fayl hali tayyor emas.',
   'settings.home.readiness.code.TEMPLATE_AWAITING_PROVIDER_REVIEW':
     'SMS shabloni shlyuz tasdigʻini kutmoqda.',
-  'settings.home.readiness.code.TEMPLATE_REJECTED_BY_PROVIDER': 'SMS shabloni shlyuz tomonidan rad etildi.',
+  'settings.home.readiness.code.TEMPLATE_REJECTED_BY_PROVIDER':
+    'SMS shabloni shlyuz tomonidan rad etildi.',
   'settings.home.search.label': 'Sozlamani topish',
   'settings.home.search.placeholder': 'Sozlamani topish (/ bosing)',
   'settings.home.search.empty': '«{query}» boʻyicha hech narsa topilmadi.',
@@ -881,7 +882,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.integrations.branches.bindDialog.noneEligible':
     'Avval provayder ulang — hozircha bogʻlaydigan hech narsa yoʻq.',
   'settings.integrations.branches.bindDialog.capabilities': 'Bogʻlanadigan imkoniyatlar',
-  'settings.integrations.branches.bindDialog.capabilitiesLoading': 'Provayder imkoniyatlari yuklanmoqda…',
+  'settings.integrations.branches.bindDialog.capabilitiesLoading':
+    'Provayder imkoniyatlari yuklanmoqda…',
   'settings.integrations.branches.bindDialog.capabilitiesNone':
     'Bu provayder ushbu versiyada hech qanday imkoniyat eʻlon qilmaydi, shuning uchun uni shu oyna orqali bogʻlab boʻlmaydi.',
   'settings.integrations.branches.bindDialog.branch': 'Filial',
@@ -2746,6 +2748,21 @@ export const messagesUzLatn: MessageCatalogue = {
   'kitchen.devices.revoke.confirm': 'Bekor qilishni tasdiqlash',
   'kitchen.devices.revoke.submitting': 'Bekor qilinmoqda…',
   'kitchen.devices.revoke.cancel': 'Yopish',
+
+  // Oshxona wallboard (2.1/2.4)
+  'wallboardKitchen.title': 'Oshxona',
+  'wallboardKitchen.denied': 'Ushbu filial oshxona taxtasiga ruxsat yoʻq',
+  'wallboardKitchen.loading': 'Oshxona taxtasi yuklanmoqda',
+  'wallboardKitchen.empty': 'Hozircha tayyorlanayotgan narsa yoʻq',
+  'wallboardKitchen.offline': 'Aloqa yoʻq — ekranda oxirgi koʻrilgan taxta',
+  'wallboardKitchen.actionError': 'Amal bajarilmadi. Qayta urinib koʻring.',
+  'wallboardVdu.title': 'Tarqatish ekrani',
+  'wallboardVdu.denied': 'Ushbu filial oshxona taxtasiga ruxsat yoʻq',
+  'wallboardVdu.loading': 'Tarqatish ekrani yuklanmoqda',
+  'wallboardVdu.empty': 'Hozircha tayyorlanayotgan narsa yoʻq',
+  'wallboardVdu.offline': 'Aloqa yoʻq — ekranda oxirgi koʻrilgan holat',
+  'wallboardVdu.stationFilter.label': 'Stansiya',
+  'wallboardVdu.stationFilter.all': 'Barcha stansiyalar',
 
   // Kuryerlar (3.3) — 30-toʻlqin
   'couriers.title': 'Kuryerlar',
@@ -5743,7 +5760,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'scopeBar.level.TENANT': 'BUTUN KOMPANIYA',
   'scopeBar.level.BRAND': 'BREND',
   'scopeBar.level.LOCATION': 'FILIAL',
-  'scopeBar.tenantWide.groupLabel': 'Tahrirlash darajasi: brend boʻyicha yoki butun kompaniya boʻyicha',
+  'scopeBar.tenantWide.groupLabel':
+    'Tahrirlash darajasi: brend boʻyicha yoki butun kompaniya boʻyicha',
   'scopeBar.tenantWide.perBrand': 'Brend boʻyicha',
   'scopeBar.tenantWide.tenant': 'Butun kompaniya uchun standart qiymat',
   'scopeBar.status.DRAFT': 'qoralama',
