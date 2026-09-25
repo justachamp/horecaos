@@ -32,6 +32,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.ObjectMapper;
 import uz.horecaos.platform.audit.api.ActorRef;
+import uz.horecaos.platform.audit.api.ApprovalOutcome;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
@@ -85,6 +86,16 @@ public class ReportExportService {
     private static final String QUERY_COLUMN = "encrypted_query";
     private static final String REVEAL_PURPOSE = "Report export processing";
     private static final String FAILURE_REASON = "EXPORT_FAILED";
+
+    /**
+     * {@link #runCustomerDirectory}'s own distinguishable failure reasons for an ADR 0027
+     * maker-checker outcome that blocks the export rather than a genuine processing failure — see
+     * {@link ExportOutcome#blockedReason()}'s own doc for why this must never settle as {@code
+     * COMPLETE} with {@code rowCount = 0}.
+     */
+    private static final String APPROVAL_PENDING_REASON = "CUSTOMER_PII_EXPORT_APPROVAL_PENDING";
+
+    private static final String APPROVAL_DECLINED_REASON = "CUSTOMER_PII_EXPORT_APPROVAL_DECLINED";
 
     private final JdbcReportExportStore store;
     private final CustomerDirectoryExportPort customerDirectory;
@@ -304,6 +315,16 @@ public class ReportExportService {
                                 "No export source registered for report key " + job.reportKey());
                 };
 
+        if (outcome.blockedReason() != null) {
+            // An ADR 0027 approval still stands in the way of this export's own PII reveal --
+            // never settle this as COMPLETE with rowCount = 0, which would read identically to a
+            // filter that legitimately matched no one. No artefact, no completed-export audit
+            // fact: nothing was revealed, so there is nothing to have produced or audited yet.
+            store.failExport(job.id(), outcome.blockedReason(), clock.instant());
+            log.info("Report export {} blocked: {}", job.id(), outcome.blockedReason());
+            return;
+        }
+
         byte[] csv = writeCsv(job.effectiveColumns(), outcome.rows());
         String objectKey = "tenants/%s/report-exports/%s.csv".formatted(job.tenantId(), job.id());
         storage.put(bucket, objectKey, "text/csv", csv);
@@ -356,6 +377,16 @@ public class ReportExportService {
                 job.rowQuota(),
                 job.purpose(),
                 ActorRef.user(job.requestedBySubject(), null));
+
+        if (!bundle.approval().mayProceed()) {
+            // Pending or Declined -- bundle.rows() is empty for a reason that has nothing to do
+            // with the filter (CustomerDirectoryExportPort.ExportBundle#approval's own doc). Block
+            // the export rather than reading this as a completed, zero-row result.
+            String reason = bundle.approval() instanceof ApprovalOutcome.Declined
+                    ? APPROVAL_DECLINED_REASON
+                    : APPROVAL_PENDING_REASON;
+            return new ExportOutcome(List.of(), false, reason);
+        }
 
         List<Map<String, String>> rows = bundle.rows().stream()
                 .map(row -> rowAsColumns(row, job.effectiveColumns()))
@@ -631,8 +662,23 @@ public class ReportExportService {
         return values;
     }
 
-    /** One report's produced rows, in wire form, and whether the row quota cut it short. */
-    private record ExportOutcome(List<Map<String, String>> rows, boolean truncated) {}
+    /**
+     * One report's produced rows, in wire form, and whether the row quota cut it short.
+     *
+     * @param blockedReason null for every report that never blocks and for a {@link
+     *     ReportExportRegistry#CUSTOMER_DIRECTORY} export that was not blocked. Non-null only when
+     *     {@link #runCustomerDirectory} found an outstanding ADR 0027 approval standing in the way
+     *     of the reveal -- {@code rows} is then always empty, but {@link #run} must settle the job
+     *     as blocked rather than as a completed, zero-row export (see that method's own doc).
+     */
+    private record ExportOutcome(
+            List<Map<String, String>> rows,
+            boolean truncated,
+            @Nullable String blockedReason) {
+        ExportOutcome(List<Map<String, String>> rows, boolean truncated) {
+            this(rows, truncated, null);
+        }
+    }
 
     private static byte[] writeCsv(List<String> columns, List<Map<String, String>> rows) {
         ByteArrayOutputStream buffer = new ByteArrayOutputStream();
