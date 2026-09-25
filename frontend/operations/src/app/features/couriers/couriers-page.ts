@@ -938,6 +938,19 @@ export class CouriersPage implements OnInit {
     }
   }
 
+  /**
+   * Gap map row 3.3: the tooltip behind the online/offline badge — when the
+   * roster last saw this courier's position, or that it never has.
+   */
+  protected onlineTitle(courier: RosterEntryResponse): string {
+    if (!courier.lastSeenAt) {
+      return this.i18n.t('couriers.online.neverSeen');
+    }
+    return this.i18n.t('couriers.online.lastSeenAt', {
+      when: new Date(courier.lastSeenAt).toLocaleString(),
+    });
+  }
+
   protected canVerifyRow(courier: RosterEntryResponse): boolean {
     return courier.engagementStatus === 'PENDING_VERIFICATION';
   }

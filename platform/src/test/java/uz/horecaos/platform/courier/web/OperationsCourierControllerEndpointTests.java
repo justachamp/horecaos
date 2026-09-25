@@ -1052,8 +1052,9 @@ class OperationsCourierControllerEndpointTests {
      * <p>Every field here matches {@code CourierCompensationPolicy.DEFAULTS}
      * exactly, including the six wave P38 added ({@code
      * gpsVerificationEnabled} through {@code
-     * postDeliveryPaymentCheckRequired}) — this fixture exists only to give
-     * {@code JdbcPolicyResolver.resolve} a real row to find, not to exercise a
+     * postDeliveryPaymentCheckRequired}) and gap map row {@code 3.3}'s own
+     * {@code onlineWithinMinutes} — this fixture exists only to give {@code
+     * JdbcPolicyResolver.resolve} a real row to find, not to exercise a
      * non-default value, so it deliberately restates the defaults rather than
      * diverging from them. {@code JdbcPolicyResolver.resolve}'s own {@code
      * unless = "#result == null"} (wave P38) means this fixture is no longer
@@ -1071,7 +1072,8 @@ class OperationsCourierControllerEndpointTests {
                  "shiftEnforcement":"ADVISORY","graceSeconds":300,"confirmationPointRetentionDays":30,
                  "gpsVerificationEnabled":false,"gpsAcceptRadiusMeters":1000,
                  "gpsStatusChangeRadiusMeters":150,"kitchenReadyOnly":false,
-                 "revealCustomerLocationTiming":"AFTER_ACCEPT","postDeliveryPaymentCheckRequired":false}
+                 "revealCustomerLocationTiming":"AFTER_ACCEPT","postDeliveryPaymentCheckRequired":false,
+                 "onlineWithinMinutes":10}
                 """.replaceAll("\\s+", " ").trim();
         jdbc.sql("""
                 INSERT INTO tenant.policies (

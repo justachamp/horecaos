@@ -111,6 +111,13 @@ const POLICY_FIELDS: readonly PolicyFieldSpec[] = [
     kind: 'count',
     raw: (p) => p.confirmationPointRetentionDays,
   },
+  {
+    key: 'onlineWithinMinutes',
+    labelKey: 'delivery.policy.onlineWithinMinutes',
+    consequenceKey: 'delivery.policy.consequence.onlineWithinMinutes',
+    kind: 'count',
+    raw: (p) => p.onlineWithinMinutes,
+  },
 ];
 
 export interface PolicyRowView {
@@ -333,6 +340,7 @@ export class CourierPolicyPage implements OnInit {
   /** Kilometres, not meters — settings.md §10.13 Card 3's own unit asymmetry. */
   protected readonly draftGpsAcceptRadiusKm = signal(1);
   protected readonly draftGpsStatusChangeRadiusMeters = signal(150);
+  protected readonly draftOnlineWithinMinutes = signal(10);
   protected readonly draftKitchenReadyOnly = signal(false);
   protected readonly draftRevealTiming =
     signal<CourierPolicyView['revealCustomerLocationTiming']>('AFTER_ACCEPT');
@@ -495,6 +503,7 @@ export class CourierPolicyPage implements OnInit {
     this.draftGpsVerificationEnabled.set(current.gpsVerificationEnabled);
     this.draftGpsAcceptRadiusKm.set(CourierPolicyPage.kmFromMeters(current.gpsAcceptRadiusMeters));
     this.draftGpsStatusChangeRadiusMeters.set(current.gpsStatusChangeRadiusMeters);
+    this.draftOnlineWithinMinutes.set(current.onlineWithinMinutes);
     this.draftKitchenReadyOnly.set(current.kitchenReadyOnly);
     this.draftRevealTiming.set(current.revealCustomerLocationTiming);
     this.draftPostDeliveryPaymentCheckRequired.set(current.postDeliveryPaymentCheckRequired);
@@ -532,6 +541,7 @@ export class CourierPolicyPage implements OnInit {
         gpsVerificationEnabled: this.draftGpsVerificationEnabled(),
         gpsAcceptRadiusMeters: CourierPolicyPage.metersFromKm(this.draftGpsAcceptRadiusKm()),
         gpsStatusChangeRadiusMeters: this.draftGpsStatusChangeRadiusMeters(),
+        onlineWithinMinutes: this.draftOnlineWithinMinutes(),
         kitchenReadyOnly: this.draftKitchenReadyOnly(),
         revealCustomerLocationTiming: this.draftRevealTiming(),
         postDeliveryPaymentCheckRequired: this.draftPostDeliveryPaymentCheckRequired(),

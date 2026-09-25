@@ -2764,6 +2764,11 @@ export const messagesEn = {
   'couriers.column.reference': 'Courier',
   'couriers.column.type': 'Type',
   'couriers.column.load': 'Load',
+  'couriers.column.online': 'Online',
+  'couriers.online.yes': 'Online',
+  'couriers.online.no': 'Offline',
+  'couriers.online.neverSeen': 'No position ever received for this courier',
+  'couriers.online.lastSeenAt': 'Last position: {when}',
   'couriers.column.engagement': 'Engagement',
   'couriers.action.verify': 'Verify',
   'couriers.action.suspend': 'Suspend',
@@ -3377,6 +3382,9 @@ export const messagesEn = {
   'delivery.policy.graceSeconds': 'Grace period (seconds)',
   'delivery.policy.consequence.graceSeconds':
     'A courier may run this many seconds past a scheduled check-in before it counts as missed.',
+  'delivery.policy.onlineWithinMinutes': 'Online threshold (minutes)',
+  'delivery.policy.consequence.onlineWithinMinutes':
+    'A courier whose most recent position is within this many minutes shows as online on the roster.',
   'delivery.policy.confirmationPointRetentionDays': 'Confirmation-point retention (days)',
   'delivery.policy.consequence.confirmationPointRetentionDays':
     'Delivery confirmation photos and signatures are kept for this many days, then purged.',

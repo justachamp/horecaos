@@ -27,6 +27,20 @@ export interface RosterEntryResponse {
   /** `VALID` | `EXPIRING` | `LAPSED`. */
   readonly warningState?: string | null;
   readonly reverificationDueOn?: string | null;
+  /**
+   * Gap map row 3.3: the courier's most recent telemetry fix is within the
+   * tenant's `courier.compensation` policy `onlineWithinMinutes`. Rating has
+   * no field here at all — no source exists on either side.
+   *
+   * Optional here even though the backend always sends it (a boolean is
+   * never omitted on the wire): the several screens beyond the roster and
+   * dispatch board that consume `RosterEntryResponse` for a courier
+   * reference care about none of this, and marking it required would force
+   * every one of their fixtures to invent a value for a field they do not
+   * render.
+   */
+  readonly online?: boolean;
+  readonly lastSeenAt?: string | null;
 }
 
 /** Mirrors `OperationsCourierController.CourierTypeResponse`. */
@@ -409,6 +423,8 @@ export interface CourierPolicyView {
   readonly kitchenReadyOnly: boolean;
   readonly revealCustomerLocationTiming: 'BEFORE_ACCEPT' | 'AFTER_ACCEPT';
   readonly postDeliveryPaymentCheckRequired: boolean;
+  /** Gap map row 3.3: the roster's online threshold. The one field of the six-minus-two this wave actually enforces. */
+  readonly onlineWithinMinutes: number;
   readonly winningScope: string;
   readonly policyId: string;
   readonly policyVersion: number;
@@ -430,6 +446,7 @@ export interface CourierPolicyWriteInput {
   readonly kitchenReadyOnly: boolean;
   readonly revealCustomerLocationTiming: 'BEFORE_ACCEPT' | 'AFTER_ACCEPT';
   readonly postDeliveryPaymentCheckRequired: boolean;
+  readonly onlineWithinMinutes: number;
   readonly reason: string;
 }
 

@@ -2733,6 +2733,11 @@ export const messagesRu: MessageCatalogue = {
   'couriers.column.reference': 'Курьер',
   'couriers.column.type': 'Тип',
   'couriers.column.load': 'Загрузка',
+  'couriers.column.online': 'Онлайн',
+  'couriers.online.yes': 'Онлайн',
+  'couriers.online.no': 'Офлайн',
+  'couriers.online.neverSeen': 'Позиция этого курьера ещё не получена',
+  'couriers.online.lastSeenAt': 'Последняя позиция: {when}',
   'couriers.column.engagement': 'Статус оформления',
   'couriers.action.verify': 'Подтвердить',
   'couriers.action.suspend': 'Приостановить',
@@ -3345,6 +3350,9 @@ export const messagesRu: MessageCatalogue = {
   'delivery.policy.graceSeconds': 'Льготный период (секунд)',
   'delivery.policy.consequence.graceSeconds':
     'Курьер может опоздать на это число секунд к запланированной отметке, прежде чем она засчитается пропущенной.',
+  'delivery.policy.onlineWithinMinutes': 'Порог «онлайн» (минут)',
+  'delivery.policy.consequence.onlineWithinMinutes':
+    'Курьер, чья последняя позиция получена не позднее этого числа минут назад, отображается в реестре как «онлайн».',
   'delivery.policy.confirmationPointRetentionDays': 'Хранение точек подтверждения (дней)',
   'delivery.policy.consequence.confirmationPointRetentionDays':
     'Фото и подписи подтверждения доставки хранятся это число дней, затем удаляются.',

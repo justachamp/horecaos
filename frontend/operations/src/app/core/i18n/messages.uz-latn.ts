@@ -2755,6 +2755,11 @@ export const messagesUzLatn: MessageCatalogue = {
   'couriers.column.reference': 'Kuryer',
   'couriers.column.type': 'Turi',
   'couriers.column.load': 'Yuklama',
+  'couriers.column.online': 'Onlayn',
+  'couriers.online.yes': 'Onlayn',
+  'couriers.online.no': 'Oflayn',
+  'couriers.online.neverSeen': 'Bu kuryerning joylashuvi hali olinmagan',
+  'couriers.online.lastSeenAt': 'Oxirgi joylashuv: {when}',
   'couriers.column.engagement': 'Rasmiylashtirish holati',
   'couriers.action.verify': 'Tasdiqlash',
   'couriers.action.suspend': 'Toʻxtatib turish',
@@ -3369,6 +3374,9 @@ export const messagesUzLatn: MessageCatalogue = {
   'delivery.policy.graceSeconds': 'Imtiyozli davr (soniya)',
   'delivery.policy.consequence.graceSeconds':
     'Kuryer rejalashtirilgan belgidan shuncha soniya kechikishi mumkin, aks holda u oʻtkazib yuborilgan hisoblanadi.',
+  'delivery.policy.onlineWithinMinutes': 'Onlayn chegarasi (daqiqa)',
+  'delivery.policy.consequence.onlineWithinMinutes':
+    'Oxirgi joylashuvi shu daqiqalar ichida boʻlgan kuryer roʻyxatda onlayn sifatida koʻrsatiladi.',
   'delivery.policy.confirmationPointRetentionDays': 'Tasdiqlash nuqtalarini saqlash (kun)',
   'delivery.policy.consequence.confirmationPointRetentionDays':
     'Yetkazib berishni tasdiqlovchi fotosurat va imzolar shuncha kun saqlanadi, keyin oʻchiriladi.',

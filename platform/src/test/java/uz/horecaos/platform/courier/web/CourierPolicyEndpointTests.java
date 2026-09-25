@@ -93,6 +93,7 @@ class CourierPolicyEndpointTests {
               "kitchenReadyOnly": true,
               "revealCustomerLocationTiming": "BEFORE_ACCEPT",
               "postDeliveryPaymentCheckRequired": true,
+              "onlineWithinMinutes": 5,
               "reason": "Tightened for the pilot branch"
             }
             """;
@@ -198,6 +199,7 @@ class CourierPolicyEndpointTests {
         assertThat(body.path("kitchenReadyOnly").asBoolean()).isFalse();
         assertThat(body.path("revealCustomerLocationTiming").asText()).isEqualTo("AFTER_ACCEPT");
         assertThat(body.path("postDeliveryPaymentCheckRequired").asBoolean()).isFalse();
+        assertThat(body.path("onlineWithinMinutes").asInt()).isEqualTo(10);
     }
 
     @Test
@@ -492,6 +494,7 @@ class CourierPolicyEndpointTests {
         assertThat(body.path("kitchenReadyOnly").asBoolean()).isTrue();
         assertThat(body.path("revealCustomerLocationTiming").asText()).isEqualTo("BEFORE_ACCEPT");
         assertThat(body.path("postDeliveryPaymentCheckRequired").asBoolean()).isTrue();
+        assertThat(body.path("onlineWithinMinutes").asInt()).isEqualTo(5);
     }
 
     private static JsonNode json(MvcResult result) throws Exception {

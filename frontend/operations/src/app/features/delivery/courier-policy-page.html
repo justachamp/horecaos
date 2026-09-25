@@ -223,6 +223,19 @@
             (input)="draftConfirmationPointRetentionDays.set(+$any($event.target).value)"
           />
 
+          <label class="q-caption" for="policy-online-minutes">{{
+            'delivery.policy.onlineWithinMinutes' | t
+          }}</label>
+          <input
+            id="policy-online-minutes"
+            class="q-body field"
+            type="number"
+            min="1"
+            [value]="draftOnlineWithinMinutes()"
+            (input)="draftOnlineWithinMinutes.set(+$any($event.target).value)"
+            data-testid="policy-input-onlineWithinMinutes"
+          />
+
           <label class="q-caption" for="policy-reason">{{ 'delivery.policy.reason' | t }}</label>
           <input
             id="policy-reason"

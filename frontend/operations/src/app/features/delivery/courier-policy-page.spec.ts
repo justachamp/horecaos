@@ -27,6 +27,7 @@ const POLICY: CourierPolicyView = {
   kitchenReadyOnly: false,
   revealCustomerLocationTiming: 'AFTER_ACCEPT',
   postDeliveryPaymentCheckRequired: false,
+  onlineWithinMinutes: 10,
   winningScope: 'TENANT',
   policyId: '00000000-0000-0000-0000-000000000042',
   policyVersion: 1,
@@ -87,6 +88,39 @@ describe('CourierPolicyPage', () => {
     // Thin-space grouped, orders.md §1.3's own UZS convention — never comma-grouped.
     expect(host.textContent?.replace(/\s/g, '')).toContain('5000000');
     expect(host.textContent).toContain('30');
+  });
+
+  // Row 3.3: onlineWithinMinutes is genuinely enforced (the roster reads it),
+  // so unlike the four fields above it stays an ordinary editable row.
+  it('renders and edits onlineWithinMinutes as an ordinary field, not a locked one', async () => {
+    const writePolicy = vi.fn().mockResolvedValue({ ...POLICY, onlineWithinMinutes: 3, policyVersion: 2 });
+    const host = await render({ policy: () => Promise.resolve(POLICY), writePolicy });
+
+    const row = host.querySelector('[data-testid="policy-row-onlineWithinMinutes"]')!;
+    expect(row.textContent).toContain('10');
+    expect(row.querySelector('q-status-pill')).toBeNull();
+
+    Array.from(host.querySelectorAll<HTMLButtonElement>('button'))
+      .find((button) => button.textContent?.trim() === 'Edit')!
+      .click();
+    fixture.detectChanges();
+
+    const input = host.querySelector<HTMLInputElement>(
+      '[data-testid="policy-input-onlineWithinMinutes"]',
+    )!;
+    input.value = '3';
+    input.dispatchEvent(new Event('input'));
+
+    const reason = host.querySelector<HTMLInputElement>('[data-testid="policy-input-reason"]')!;
+    reason.value = 'tighten the online threshold';
+    reason.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    host.querySelector<HTMLButtonElement>('[data-testid="policy-publish"]')!.click();
+    await flushMicrotasks();
+
+    expect(writePolicy).toHaveBeenCalledTimes(1);
+    expect(writePolicy.mock.calls[0][1].onlineWithinMinutes).toBe(3);
   });
 
   // Row 3.9: "renders neither policyId nor policyVersion although both are

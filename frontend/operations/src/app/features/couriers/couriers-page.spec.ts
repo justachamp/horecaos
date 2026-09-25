@@ -29,6 +29,8 @@ const COURIER: RosterEntryResponse = {
   engagementStatus: 'ACTIVE',
   warningState: 'VALID',
   reverificationDueOn: null,
+  online: true,
+  lastSeenAt: '2026-09-25T06:58:00Z',
 };
 
 const PENDING: RosterEntryResponse = { ...COURIER, engagementStatus: 'PENDING_VERIFICATION' };
@@ -155,6 +157,26 @@ describe('CouriersPage', () => {
     expect(host.querySelector('[data-testid="courier-vehicle-class"]')?.textContent?.trim()).toBe(
       'HOVERBOARD',
     );
+  });
+
+  // Gap map row 3.3: online status from telemetry recency, resolved server-side
+  // against the tenant's onlineWithinMinutes policy — this screen only renders
+  // the boolean and the timestamp it is given.
+  it('renders a courier as online or offline from the roster response, never computing it itself', async () => {
+    const host = await render({
+      roster: vi.fn().mockResolvedValue([
+        COURIER,
+        { ...COURIER, courierId: 'courier-2', displayReference: 'K-015', online: false, lastSeenAt: null },
+      ]),
+      types: vi.fn().mockResolvedValue([]),
+    });
+
+    const cells = host.querySelectorAll('[data-testid="courier-online"]');
+    expect(cells).toHaveLength(2);
+    expect(cells[0].textContent?.trim()).toBe('Online');
+    expect(cells[0].querySelector('.status-badge--online')).not.toBeNull();
+    expect(cells[1].textContent?.trim()).toBe('Offline');
+    expect(cells[1].querySelector('.status-badge--online')).toBeNull();
   });
 
   it('no longer carries the honesty notice, because the fields it apologised for exist', async () => {

@@ -505,10 +505,32 @@ class CourierCompensationTests {
 
     // ---------------------------------------------- the roster (operations §3.3)
 
+    /** DEFAULTS everywhere (10-minute online window) and nobody ever seen — the roster tests
+     * below that are not themselves about online status build their own {@link CourierLastSeenPort}. */
+    private static CourierPolicyResolver defaultsOnlyPolicyResolver() {
+        return new CourierPolicyResolver(new PolicyResolver() {
+            @Override
+            public <P> Optional<ResolvedPolicy<P>> resolve(PolicyKey<P> key, ResourceScope scope) {
+                return Optional.empty();
+            }
+
+            @Override
+            public <P> Optional<ResolvedPolicy<P>> pinned(PolicyKey<P> key, UUID policyId, int policyVersion) {
+                return Optional.empty();
+            }
+        });
+    }
+
     @Test
     @DisplayName("the roster lists a courier's type, engagement standing and current load, never the name")
     void rosterListsTypeEngagementAndLoadButNeverTheName() {
-        var roster = new CourierRosterQueryService(courierStore, (tenantId, courierIds) -> Map.of()).roster(TENANT);
+        var roster = new CourierRosterQueryService(
+                        courierStore,
+                        (tenantId, courierIds) -> Map.of(),
+                        (tenantId, courierIds) -> Map.of(),
+                        defaultsOnlyPolicyResolver(),
+                        Clock.fixed(NOON, java.time.ZoneOffset.UTC))
+                .roster(TENANT);
 
         assertThat(roster).hasSize(1);
         var entry = roster.getFirst();
@@ -528,7 +550,12 @@ class CourierCompensationTests {
     @Test
     @DisplayName("the roster's load count is the courier's own open-shipment count, from ADR 0014's own index")
     void rosterCarriesTheSameLoadSourcingItselfReads() {
-        var load = new CourierRosterQueryService(courierStore, (tenantId, courierIds) -> Map.of(courierId, 2))
+        var load = new CourierRosterQueryService(
+                        courierStore,
+                        (tenantId, courierIds) -> Map.of(courierId, 2),
+                        (tenantId, courierIds) -> Map.of(),
+                        defaultsOnlyPolicyResolver(),
+                        Clock.fixed(NOON, java.time.ZoneOffset.UTC))
                 .roster(TENANT);
 
         assertThat(load.getFirst().activeAssignments()).isEqualTo(2);
@@ -539,9 +566,66 @@ class CourierCompensationTests {
     void rosterShowsASuspendedEngagement() {
         engagements.suspend(TENANT, engagementId, "SAFETY_INCIDENT", manager(), "reported by a branch manager", "corr");
 
-        var roster = new CourierRosterQueryService(courierStore, (tenantId, courierIds) -> Map.of()).roster(TENANT);
+        var roster = new CourierRosterQueryService(
+                        courierStore,
+                        (tenantId, courierIds) -> Map.of(),
+                        (tenantId, courierIds) -> Map.of(),
+                        defaultsOnlyPolicyResolver(),
+                        Clock.fixed(NOON, java.time.ZoneOffset.UTC))
+                .roster(TENANT);
 
         assertThat(roster.getFirst().courier().engagementStatus()).isEqualTo("SUSPENDED_OPERATIONAL");
+    }
+
+    @Test
+    @DisplayName("gap map row 3.3: a courier whose most recent telemetry fix is within the policy's "
+            + "onlineWithinMinutes shows as online; one older, or with no fix at all, does not")
+    void rosterMarksACourierOnlineFromRecentTelemetryAndOfflineOtherwise() {
+        UUID staleCourierId = engagements
+                .register(new CourierEngagementService.NewCourier(
+                        TENANT,
+                        courierTypeId,
+                        "keycloak-stale-courier",
+                        "K-002",
+                        "Stale Courier",
+                        LocalDate.ofInstant(NOON, ZoneOffset.UTC),
+                        manager(),
+                        "onboarding a second rider",
+                        "corr-2"))
+                .courierId();
+
+        Map<UUID, Instant> lastFix = Map.of(
+                courierId, NOON.minus(Duration.ofMinutes(2)),
+                staleCourierId, NOON.minus(Duration.ofMinutes(45)));
+        // A courier with no live row at all is the same "offline" this test's own
+        // stale entry already proves the moment its window is exceeded; a third
+        // fixture with an absent entry would assert the identical branch.
+
+        var roster = new CourierRosterQueryService(
+                        courierStore,
+                        (tenantId, courierIds) -> Map.of(),
+                        (tenantId, courierIds) -> lastFix,
+                        defaultsOnlyPolicyResolver(),
+                        Clock.fixed(NOON, java.time.ZoneOffset.UTC))
+                .roster(TENANT);
+
+        var online = roster.stream()
+                .filter(entry -> entry.courier().id().equals(courierId))
+                .findFirst()
+                .orElseThrow();
+        assertThat(online.online())
+                .as("2 minutes ago is within the 10-minute default window")
+                .isTrue();
+        assertThat(online.lastSeenAt()).isEqualTo(NOON.minus(Duration.ofMinutes(2)));
+
+        var stale = roster.stream()
+                .filter(entry -> entry.courier().id().equals(staleCourierId))
+                .findFirst()
+                .orElseThrow();
+        assertThat(stale.online())
+                .as("45 minutes ago is well outside the 10-minute default window")
+                .isFalse();
+        assertThat(stale.lastSeenAt()).isEqualTo(NOON.minus(Duration.ofMinutes(45)));
     }
 
     // -------------------------------------------- courier types & rates (§3.4)
@@ -2508,7 +2592,8 @@ class CourierCompensationTests {
                     CourierCompensationPolicy.DEFAULTS.gpsStatusChangeRadiusMeters(),
                     CourierCompensationPolicy.DEFAULTS.kitchenReadyOnly(),
                     CourierCompensationPolicy.DEFAULTS.revealCustomerLocationTiming(),
-                    CourierCompensationPolicy.DEFAULTS.postDeliveryPaymentCheckRequired());
+                    CourierCompensationPolicy.DEFAULTS.postDeliveryPaymentCheckRequired(),
+                    CourierCompensationPolicy.DEFAULTS.onlineWithinMinutes());
 
             return Optional.of((ResolvedPolicy<P>) new ResolvedPolicy<>(
                     key.code(),

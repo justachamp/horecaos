@@ -30,6 +30,7 @@
           <th>{{ 'couriers.column.type' | t }}</th>
           <th>{{ 'couriers.column.vehicleClass' | t }}</th>
           <th>{{ 'couriers.column.load' | t }}</th>
+          <th>{{ 'couriers.column.online' | t }}</th>
           <th>{{ 'couriers.column.engagement' | t }}</th>
           <th></th>
         </tr>
@@ -44,6 +45,15 @@
             </td>
             <td class="q-tnum">
               {{ courier.activeAssignments }} / {{ courier.concurrencyCeiling }}
+            </td>
+            <td data-testid="courier-online">
+              <span
+                class="status-badge"
+                [class.status-badge--online]="courier.online"
+                [attr.title]="onlineTitle(courier)"
+              >
+                {{ (courier.online ? 'couriers.online.yes' : 'couriers.online.no') | t }}
+              </span>
             </td>
             <td>
               <span class="status-badge">{{
@@ -74,7 +84,7 @@
           </tr>
         } @empty {
           <tr>
-            <td colspan="6">
+            <td colspan="7">
               <p class="q-body-sm" data-testid="couriers-empty">{{ 'couriers.empty' | t }}</p>
             </td>
           </tr>

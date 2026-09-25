@@ -721,9 +721,12 @@ public class OperationsCourierController {
                     + "five new fields couriers.md §16 always named: the GPS master toggle with "
                     + "its accept and status-change radii, the kitchen-ready-only gate, when the "
                     + "customer's exact location is revealed, and the post-delivery payment "
-                    + "check. Courier billing mode stays refused by ADR 0042 and has no field "
-                    + "here; the telemetry collection gate is a separate, PLATFORM_ADMIN-only "
-                    + "ADR 0030 key and is not part of this document. Authorization is checked "
+                    + "check. Gap map row 3.3 added a seventh, onlineWithinMinutes, the roster's "
+                    + "online threshold — the only one of the newer fields anything outside this "
+                    + "controller actually reads (CourierRosterQueryService). Courier billing mode "
+                    + "stays refused by ADR 0042 and has no field here; the telemetry collection "
+                    + "gate is a separate, PLATFORM_ADMIN-only ADR 0030 key and is not part of "
+                    + "this document. Authorization is checked "
                     + "against brandId/locationId's own resolved scope, not a fixed TENANT "
                     + "default, so a BRAND_MANAGER reading their own brand's policy is not "
                     + "refused for a grant the role bundle already gives them.")
@@ -1464,6 +1467,8 @@ public class OperationsCourierController {
             @Nullable String engagementStatus,
             @Nullable String warningState,
             @Nullable LocalDate reverificationDueOn,
+            boolean online,
+            @Nullable Instant lastSeenAt,
             List<String> complianceFieldsOnFile,
             @Nullable String vehicleFuelType,
             @Nullable UUID photoMediaId,
@@ -1487,6 +1492,8 @@ public class OperationsCourierController {
                     courier.engagementStatus(),
                     courier.warningState(),
                     courier.reverificationDueOn(),
+                    detail.entry().online(),
+                    detail.entry().lastSeenAt(),
                     compliance.onFile().stream().map(Enum::name).sorted().toList(),
                     compliance.vehicleFuelType(),
                     compliance.photoMediaId(),
@@ -1712,6 +1719,15 @@ public class OperationsCourierController {
      * Capability#COURIER_READ}'s own doc for why {@code displayReference} is
      * the whole of what this response names a person by.
      */
+    /**
+     * @param online   gap map row 3.3: whether the courier's most recent
+     *                 telemetry fix is within the tenant's {@code
+     *                 courier.compensation} policy {@code onlineWithinMinutes}.
+     *                 Rating stays absent from this response entirely —
+     *                 no source exists on either side yet
+     * @param lastSeenAt the fix {@code online} was computed from, or null for a
+     *                 courier this call found no live row for at all
+     */
     record RosterEntryResponse(
             UUID courierId,
             String displayReference,
@@ -1724,7 +1740,9 @@ public class OperationsCourierController {
             @Nullable UUID engagementId,
             @Nullable String engagementStatus,
             @Nullable String warningState,
-            @Nullable LocalDate reverificationDueOn) {
+            @Nullable LocalDate reverificationDueOn,
+            boolean online,
+            @Nullable Instant lastSeenAt) {
 
         static RosterEntryResponse of(RosterEntry entry) {
             var courier = entry.courier();
@@ -1740,7 +1758,9 @@ public class OperationsCourierController {
                     courier.engagementId(),
                     courier.engagementStatus(),
                     courier.warningState(),
-                    courier.reverificationDueOn());
+                    courier.reverificationDueOn(),
+                    entry.online(),
+                    entry.lastSeenAt());
         }
     }
 
@@ -2001,6 +2021,7 @@ public class OperationsCourierController {
             boolean kitchenReadyOnly,
             String revealCustomerLocationTiming,
             boolean postDeliveryPaymentCheckRequired,
+            int onlineWithinMinutes,
             String winningScope,
             UUID policyId,
             int policyVersion) {
@@ -2022,6 +2043,7 @@ public class OperationsCourierController {
                     doc.kitchenReadyOnly(),
                     doc.revealCustomerLocationTiming().name(),
                     doc.postDeliveryPaymentCheckRequired(),
+                    doc.onlineWithinMinutes(),
                     resolved.winningScope().name(),
                     resolved.policyId(),
                     resolved.policyVersion());
@@ -2050,6 +2072,7 @@ public class OperationsCourierController {
             boolean kitchenReadyOnly,
             @NotBlank String revealCustomerLocationTiming,
             boolean postDeliveryPaymentCheckRequired,
+            @Positive int onlineWithinMinutes,
             @NotBlank @Size(max = 500) String reason) {
 
         CourierCompensationPolicy toDocument() {
@@ -2067,7 +2090,8 @@ public class OperationsCourierController {
                     gpsStatusChangeRadiusMeters,
                     kitchenReadyOnly,
                     parseRevealTiming(),
-                    postDeliveryPaymentCheckRequired);
+                    postDeliveryPaymentCheckRequired,
+                    onlineWithinMinutes);
         }
 
         private ShiftEnforcement parseShiftEnforcement() {
