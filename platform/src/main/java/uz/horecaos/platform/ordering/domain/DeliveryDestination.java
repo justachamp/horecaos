@@ -1,6 +1,7 @@
 package uz.horecaos.platform.ordering.domain;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import org.jspecify.annotations.Nullable;
 
@@ -105,13 +106,17 @@ public record DeliveryDestination(
      * have. {@code line1} in this market is free text that usually ends in a
      * house number ("Amir Temur ko'chasi 15"), never a field of its own (see
      * this class's own field list), so there is no structured "house number"
-     * to omit. This masks by truncating {@code line1} at its first digit
-     * instead: the safe direction to err, because a street name that itself
-     * contains a digit (rare) is masked more aggressively than strictly
-     * necessary, never less. {@code entrance}, {@code floor}, {@code
-     * apartment} and {@code landmark} are never read here at all — omission,
-     * not truncation, is how a flat number and a doorway landmark are kept
-     * off a screen forty couriers can see.
+     * to omit. This masks by dropping {@code line1}'s trailing whitespace-
+     * separated token when, and only when, that last token itself starts
+     * with a digit — the house number is always the final token, never the
+     * first. Truncating at the string's first digit instead (an earlier
+     * version of this method did) blanks the entire street for this
+     * market's common numbered/date street names, which lead with a digit
+     * ("9 Yanvar ko'chasi", "1 May ko'chasi", "40 Yil Chilonzor ko'chasi") —
+     * exactly the address text row 3.1 exists to show. {@code entrance},
+     * {@code floor}, {@code apartment} and {@code landmark} are never read
+     * here at all — omission, not truncation, is how a flat number and a
+     * doorway landmark are kept off a screen forty couriers can see.
      *
      * @return null when there is neither a zone nor a street left to show —
      *         the caller renders that as "no destination" rather than an
@@ -138,14 +143,15 @@ public record DeliveryDestination(
         if (line1 == null || line1.isBlank()) {
             return null;
         }
-        int firstDigit = -1;
-        for (int i = 0; i < line1.length(); i++) {
-            if (Character.isDigit(line1.charAt(i))) {
-                firstDigit = i;
-                break;
-            }
+        String trimmed = line1.trim();
+        String[] tokens = trimmed.split("\\s+");
+        String lastToken = tokens[tokens.length - 1];
+        String cut;
+        if (!lastToken.isEmpty() && Character.isDigit(lastToken.charAt(0))) {
+            cut = String.join(" ", Arrays.copyOf(tokens, tokens.length - 1));
+        } else {
+            cut = trimmed;
         }
-        String cut = firstDigit < 0 ? line1 : line1.substring(0, firstDigit);
         cut = cut.replaceAll("[\\s,.\\-–—]+$", "").trim();
         return cut.isEmpty() ? null : cut;
     }
