@@ -64,4 +64,7 @@ CREATE INDEX ix_automation_run_rule ON marketing.automation_runs (tenant_id, aut
 -- ---------------------------------------------------------------------------
 -- Grants
 -- ---------------------------------------------------------------------------
-GRANT SELECT, INSERT ON marketing.automation_runs TO horecaos_application;
+-- UPDATE is required: JdbcAutomationRunStore#markFired/markRefused/markCancelled
+-- all move a claimed PENDING row to its final status in place, never a second
+-- INSERT.
+GRANT SELECT, INSERT, UPDATE ON marketing.automation_runs TO horecaos_application;
