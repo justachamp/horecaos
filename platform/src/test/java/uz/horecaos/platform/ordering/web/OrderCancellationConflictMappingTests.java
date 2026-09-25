@@ -15,6 +15,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
+import uz.horecaos.platform.catalog.api.ItemDisplayLookup;
 import uz.horecaos.platform.customers.api.CurrentCustomer;
 import uz.horecaos.platform.customers.api.CustomerAccountRef;
 import uz.horecaos.platform.fulfillment.api.ShipmentCancellationPort;
@@ -96,7 +97,8 @@ class OrderCancellationConflictMappingTests {
                 mock(AggregatorOrderIntakeService.class),
                 mock(ShipmentCancellationPort.class),
                 mock(MyWorkQueryService.class),
-                mock(StaffDisplayNames.class));
+                mock(StaffDisplayNames.class),
+                mock(ItemDisplayLookup.class));
 
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.addHeader("If-Match", "\"3\"");

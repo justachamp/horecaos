@@ -250,7 +250,7 @@ describe('DraftsPage', () => {
 
     const host = fixture.nativeElement as HTMLElement;
     const firstColumnCells = [...host.querySelectorAll('[data-testid="draft-row"] td')].filter(
-      (_, index) => index % 9 === 0,
+      (_, index) => index % 10 === 0,
     );
     expect(firstColumnCells[0]?.textContent).toBe('newer'.slice(0, 8));
     expect(firstColumnCells[1]?.textContent).toBe('older'.slice(0, 8));
@@ -274,6 +274,24 @@ describe('DraftsPage', () => {
     // `formatDateTime` renders `DD.MM HH:mm` (`datetime.ts`'s own doc) — no
     // year, so this asserts the expiry actually reached the row, not a blank.
     expect(row?.textContent).toContain('20.09');
+  });
+
+  it('renders the first-line product preview when the response names one, and a placeholder otherwise', async () => {
+    await render({
+      list: () =>
+        Promise.resolve([
+          draft({ cartId: 'a', firstLineProductName: 'Plov' }),
+          draft({ cartId: 'b', firstLineProductName: null }),
+        ]),
+    });
+
+    const host = fixture.nativeElement as HTMLElement;
+    const cells = host.querySelectorAll('[data-testid="draft-first-line"]');
+    expect(cells).toHaveLength(2);
+    expect(cells[0]?.textContent?.trim()).toBe('Plov');
+    // Never a blank cell: a cart with no resolvable name still reads as a
+    // deliberate placeholder, not a rendering gap.
+    expect(cells[1]?.textContent?.trim()).not.toBe('');
   });
 
   it('offers "open customer" only for an account cart, never a guest one', async () => {
