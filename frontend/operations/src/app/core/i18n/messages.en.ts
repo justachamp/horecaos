@@ -5216,6 +5216,7 @@ export const messagesEn = {
   'staff.activity.action.locationDeleted': 'Location deleted',
   'staff.activity.action.tenantSuspended': 'Company suspended',
   'staff.activity.action.tenantReactivated': 'Company reactivated',
+  'staff.activity.action.tenantActivated': 'Company activated',
   'staff.activity.action.tenantActivate': 'Company activated',
   'staff.activity.action.orderCancel': 'Order cancelled',
   'staff.activity.filter.outcomeAll': 'Any outcome',

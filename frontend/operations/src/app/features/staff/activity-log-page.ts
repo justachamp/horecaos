@@ -6,7 +6,11 @@ import { I18n } from '../../core/i18n/i18n';
 import { TPipe } from '../../core/i18n/t.pipe';
 import { DiffViewer } from '../../shared/ui/diff-viewer';
 import { describeApiError } from '../orders/order-errors';
-import { activityLogActionLabelKey, humanizeActionCode } from './activity-log-action-labels';
+import {
+  activityLogActionLabelKey,
+  bulkActivityLogActionSentence,
+  humanizeActionCode,
+} from './activity-log-action-labels';
 import { ActivityLogApi, AuditEventDetail, AuditEventView } from './activity-log-api';
 
 type LoadState = 'loading' | 'ready' | 'denied' | 'error';
@@ -48,10 +52,13 @@ function isoDaysAgo(days: number): string {
  * time (Staff 9.3b), so most rows carry a name here without this component
  * doing anything differently — the fix lives entirely on the read path.
  * «Что» renders a plain-language label from {@link activityLogActionLabelKey}
- * where one is named, and a humanized rendering of the raw code otherwise —
- * still not a complete code-to-sentence dictionary (every module's own
- * action codes is not one screen's translation table to invent), but no
- * longer a bare dotted code either.
+ * where one is hand-curated, a mechanically-generated sentence from
+ * {@link bulkActivityLogActionSentence} for the rest of what
+ * `AuditFact.of(...)` emits as a literal code (Staff 9.3's coverage pass —
+ * `activity-log-action-codes-coverage.spec.ts` enforces this stays true),
+ * and {@link humanizeActionCode} only for a code built at runtime from a
+ * variable, which that coverage test cannot see (its own doc names which
+ * producers those are).
  */
 @Component({
   selector: 'q-activity-log-page',
@@ -297,7 +304,14 @@ export class ActivityLogPage {
 
   protected actionLabel(event: AuditEventView): string {
     const key = activityLogActionLabelKey(event.actionCode);
-    return key ? this.i18n.t(key) : humanizeActionCode(event.actionCode);
+    if (key) {
+      return this.i18n.t(key);
+    }
+    // Staff 9.3: the long tail the hand-curated map above does not name —
+    // see activity-log-action-sentences.ts's own doc for why this is a
+    // separate, lazy-loaded table rather than more messages.*.ts keys.
+    const bulk = bulkActivityLogActionSentence(event.actionCode, this.i18n.locale());
+    return bulk ?? humanizeActionCode(event.actionCode);
   }
 
   protected scopeLabel(event: AuditEventView): string {

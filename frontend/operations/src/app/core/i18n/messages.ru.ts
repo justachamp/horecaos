@@ -5195,6 +5195,7 @@ export const messagesRu: MessageCatalogue = {
   'staff.activity.action.locationDeleted': 'Точка удалена',
   'staff.activity.action.tenantSuspended': 'Компания приостановлена',
   'staff.activity.action.tenantReactivated': 'Компания восстановлена',
+  'staff.activity.action.tenantActivated': 'Компания активирована',
   'staff.activity.action.tenantActivate': 'Компания активирована',
   'staff.activity.action.orderCancel': 'Заказ отменён',
   'staff.activity.filter.outcomeAll': 'Любой итог',

@@ -5226,6 +5226,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'staff.activity.action.locationDeleted': 'Filial oʻchirildi',
   'staff.activity.action.tenantSuspended': 'Kompaniya toʻxtatildi',
   'staff.activity.action.tenantReactivated': 'Kompaniya qayta tiklandi',
+  'staff.activity.action.tenantActivated': 'Kompaniya faollashtirildi',
   'staff.activity.action.tenantActivate': 'Kompaniya faollashtirildi',
   'staff.activity.action.orderCancel': 'Buyurtma bekor qilindi',
   'staff.activity.filter.outcomeAll': 'Har qanday natija',
