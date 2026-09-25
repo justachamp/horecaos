@@ -23,6 +23,7 @@ import {
   TicketResponse,
 } from '../features/kitchen/kitchen-api';
 import { KitchenItemAction, availableItemActions } from '../features/kitchen/kitchen-ticket';
+import { describeApiError, errorReference } from '../features/orders/order-errors';
 
 /** The mandated fallback (ADR 0045): every live surface keeps a polling path that must work with the stream disabled. */
 const POLL_INTERVAL_MS = 10_000;
@@ -306,5 +307,14 @@ export class WallboardKitchenPage implements OnInit {
     }
     const minutes = Math.floor(seconds / 60);
     return this.i18n.t('wallboard.freshness.minutes', { minutes });
+  }
+
+  /** Mirrors `wallboard-shell.ts`'s own error band — same helper, same ADR 0031 codes. */
+  protected errorMessage(error: ApiError): string {
+    return describeApiError(error, (key, values) => this.i18n.t(key, values));
+  }
+
+  protected errorReference(error: ApiError): string {
+    return errorReference(error);
   }
 }

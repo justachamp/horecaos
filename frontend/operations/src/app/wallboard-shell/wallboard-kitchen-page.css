@@ -55,6 +55,24 @@
   font-weight: 400;
 }
 
+.wk__errorBand {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 24px;
+  border-radius: var(--q-radius);
+  background: var(--q-error-tint);
+  color: var(--q-error-text);
+  font-size: var(--q-type-body-lg);
+}
+
+.wk__errorBand-ref {
+  color: var(--q-error-text);
+  font-variant-numeric: tabular-nums;
+}
+
 .wk__notice {
   flex: none;
   display: flex;
