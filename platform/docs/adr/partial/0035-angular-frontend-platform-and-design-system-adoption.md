@@ -57,6 +57,37 @@
   but no frontend file imports any of them, so every app's API layer is
   still hand-written; and there is no OpenAPI release artifact, no consumer
   manifests, and no nightly smoke suite.
+
+  As of 2026-09-25 (wave 12, w3-i18n-lazy-load), the "Locales are ru,
+  uz-Latn, and en, runtime-switchable" line above has a loading model, not
+  just a catalogue-completeness guarantee. `frontend/operations/src/app/core/i18n/i18n.ts`
+  used to import all three message catalogues eagerly (`messages.ru.ts`
+  455 kB raw, `messages.en.ts` 351 kB, `messages.uz-latn.ts` 368 kB), which
+  was most of what pushed the operations console's initial bundle to
+  1.42 MB — every wave that touched the console was bumping
+  `angular.json`'s budget rather than fixing the cause. Only `ru` (the
+  default locale) still loads eagerly; `en` and `uz-Latn` each load through
+  their own dynamic-import chunk the first time an operator actually
+  requests that locale. `I18n.t()` keeps the synchronous signature every
+  call site already depends on: `setLocale(locale)` is now a request, not a
+  guarantee — if the catalogue is already cached the switch is synchronous
+  exactly as before, and if it is not, the previously active locale keeps
+  rendering, unchanged, until the import resolves, then the locale and the
+  catalogue swap atomically in one pair of signal writes (never a state
+  where the selected locale and the rendered text disagree). A later
+  request supersedes an in-flight one. The one documented fallback is a
+  cold start on a persisted locale nothing has warmed, where `t()` returns
+  the raw key rather than blocking or throwing; `main.ts`'s bootstrap closes
+  that gap in the shipped app by awaiting exactly the persisted locale's
+  catalogue before `bootstrapApplication` runs, so a returning operator's
+  reload still renders the right language on first paint. The measured
+  operations initial bundle dropped from 1.42 MB to 764.92 kB raw, and
+  `angular.json`'s initial `maximumError` budget came down from 1.43 MB to
+  825 kB (measured size plus roughly 60 kB headroom) to guard against the
+  next catalogue growing the bundle back up unnoticed. See that class's own
+  doc comment for the full model, including why the load cache is keyed off
+  a `globalThis` slot rather than a module-level variable (the unit-test
+  builder gives every spec file its own independent bundle).
 - Date proposed: 2026-08-21
 - Date decided: 2026-08-22 (amended; the 2026-08-21 decision stands except where restated below)
 - Deciders: Ayubkhon Abbosov (platform architecture, product owner)
