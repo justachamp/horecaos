@@ -79,26 +79,69 @@ describe('CatalogSettingsPage', () => {
 
   it('reads both tenant-wide switches at TENANT scope, never brand or location', () => {
     expect(api.resolution).toHaveBeenCalledWith(TENANT_ID, 'catalog.use_stock_logic', 'TENANT');
-    expect(api.resolution).toHaveBeenCalledWith(TENANT_ID, 'catalog.qr_kiosk_price_plane', 'TENANT');
+    expect(api.resolution).toHaveBeenCalledWith(
+      TENANT_ID,
+      'catalog.qr_kiosk_price_plane',
+      'TENANT',
+    );
   });
 
-  it('renders catalog.use_stock_logic as a read-only value with the not-yet-enforced reason, no edit control', () => {
-    const value = fixture.nativeElement.querySelector('[data-testid="use-stock-logic-value"]') as HTMLElement;
-    expect(value.textContent).toContain('No');
-    expect(fixture.nativeElement.querySelector('[data-testid="use-stock-logic-reason"]')).toBeTruthy();
-    // No button anywhere in the use_stock_logic card — it is deliberately not editable.
-    const section = Array.from(fixture.nativeElement.querySelectorAll('section.card'))[0] as HTMLElement;
-    expect(section.querySelectorAll('button').length).toBe(0);
+  it('renders catalog.use_stock_logic through the same inherited-field control as the other switch, with its hint', () => {
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="use-stock-logic-hint"]'),
+    ).toBeTruthy();
+    // Both switches now use the identical q-inherited-field control (batch 11: use_stock_logic is real, not read-only).
+    expect(fixture.nativeElement.querySelectorAll('q-inherited-field').length).toBe(2);
+  });
+
+  it('publishes catalog.use_stock_logic with a required reason, at TENANT scope', async () => {
+    const overrideButtons = fixture.nativeElement.querySelectorAll(
+      'q-inherited-field .field__action',
+    ) as NodeListOf<HTMLButtonElement>;
+    overrideButtons[0].click();
+    fixture.detectChanges();
+
+    const checkbox = fixture.nativeElement.querySelector(
+      'input[type="checkbox"]',
+    ) as HTMLInputElement;
+    checkbox.checked = true;
+    checkbox.dispatchEvent(new Event('change'));
+
+    const reasonInput = fixture.nativeElement.querySelector(
+      '#use-stock-logic-reason',
+    ) as HTMLInputElement;
+    reasonInput.value = 'Reconciled counts for the pilot menu';
+    reasonInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    const publishButton = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('.form__actions button'),
+    ).find((button) => button.textContent?.includes('Publish')) as HTMLButtonElement;
+    expect(publishButton.disabled).toBe(false);
+    publishButton.click();
+    await flushMicrotasks();
+
+    expect(api.setValue).toHaveBeenCalledWith(
+      TENANT_ID,
+      'catalog.use_stock_logic',
+      expect.objectContaining({
+        scopeType: 'TENANT',
+        booleanValue: true,
+        reason: 'Reconciled counts for the pilot menu',
+      }),
+    );
   });
 
   it('publishes catalog.qr_kiosk_price_plane with a required reason, at TENANT scope', async () => {
-    const overrideButton = fixture.nativeElement.querySelector(
+    const overrideButtons = fixture.nativeElement.querySelectorAll(
       'q-inherited-field .field__action',
-    ) as HTMLButtonElement;
-    overrideButton.click();
+    ) as NodeListOf<HTMLButtonElement>;
+    overrideButtons[1].click();
     fixture.detectChanges();
 
-    const checkbox = fixture.nativeElement.querySelector('input[type="checkbox"]') as HTMLInputElement;
+    const checkbox = fixture.nativeElement.querySelector(
+      'input[type="checkbox"]',
+    ) as HTMLInputElement;
     checkbox.checked = true;
     checkbox.dispatchEvent(new Event('change'));
 

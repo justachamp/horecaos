@@ -71,17 +71,14 @@ public final class InventoryConfigurationKeys {
      * place" rather than per variant per location, which is unusable on a
      * six-hundred-item catalogue.
      *
-     * <p><strong>Off by default, and turning it on does not turn anything
-     * on.</strong> {@code QUANTITY} tracking is not implemented — {@link
-     * uz.horecaos.platform.inventory.application.InventoryService.UnsupportedTrackingModeException}
-     * still refuses every attempt to use it, flag or no flag. This key exists
-     * so the setting can be authored and inherited through the operations
-     * surface before its enforcement ships, and so {@code InventoryService}
-     * can tell an operator which of the two true things is going on — the
-     * tenant has not turned it on, or the tenant has and the platform still
-     * cannot honour it — rather than one generic failure either way.
-     * Registering a key whose enforcement does not exist is worse than no
-     * key only if the key pretends to work; this one does not.
+     * <p><strong>Off by default, and real (batch 11, gap map row 4.4c).</strong>
+     * {@code InventoryService#evaluateAvailability} gates every {@code
+     * QUANTITY} item's enforcement on this flag: off, a {@code QUANTITY}
+     * item behaves exactly like {@code UNTRACKED} — quantities are recorded
+     * but never block a hold; on, {@code on_hand}/{@code reserved} are
+     * enforced for real. A variant may be listed {@code QUANTITY} either
+     * way, so an operator can reconcile counts before turning the switch on
+     * for the whole tenant.
      */
     public static final ConfigurationKey<Boolean> CATALOG_USE_STOCK_LOGIC = ConfigurationKey.of(
                     CATALOG_USE_STOCK_LOGIC_CODE, Boolean.class)
@@ -89,8 +86,8 @@ public final class InventoryConfigurationKeys {
             .ownedBy("inventory")
             .tenantVisible()
             .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
-            .describedAs("Turns counted-stock tracking on for the whole tenant. Not yet enforced: "
-                    + "QUANTITY tracking mode is still refused either way.")
+            .describedAs("Turns counted-stock (QUANTITY) tracking on for the whole tenant. Off, a "
+                    + "QUANTITY-listed item behaves like UNTRACKED.")
             .build();
 
     private InventoryConfigurationKeys() {}

@@ -4,10 +4,14 @@ import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -25,6 +29,7 @@ import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.inventory.api.AvailabilityDecision;
 import uz.horecaos.platform.inventory.api.AvailabilityDecision.Unavailable;
+import uz.horecaos.platform.inventory.api.BusinessDayWindows;
 import uz.horecaos.platform.inventory.api.InventoryConfigurationKeys;
 import uz.horecaos.platform.inventory.api.InventoryReservationPort;
 import uz.horecaos.platform.inventory.api.ItemAvailabilityChanged;
@@ -32,6 +37,9 @@ import uz.horecaos.platform.inventory.api.ReservationResult;
 import uz.horecaos.platform.inventory.api.TrackingMode;
 import uz.horecaos.platform.inventory.domain.ReservationExpiry;
 import uz.horecaos.platform.inventory.infrastructure.persistence.JdbcInventoryStore;
+import uz.horecaos.platform.inventory.infrastructure.persistence.JdbcInventoryStore.ChannelStopThresholdRow;
+import uz.horecaos.platform.inventory.infrastructure.persistence.JdbcInventoryStore.QuantityReservationLineRow;
+import uz.horecaos.platform.inventory.infrastructure.persistence.JdbcInventoryStore.StockItemListingRow;
 import uz.horecaos.platform.inventory.infrastructure.persistence.JdbcInventoryStore.StockItemRow;
 import uz.horecaos.platform.migration.api.ExternalEffect;
 import uz.horecaos.platform.migration.api.ImportSuppression;
@@ -41,13 +49,31 @@ import uz.horecaos.platform.tenancy.api.ResolutionTrace;
 import uz.horecaos.platform.tenancy.api.Resolved;
 
 /**
- * Binary availability and the reservation path (ADR 0017).
+ * Availability and the reservation path, for every tracking mode ADR 0017
+ * names (BINARY and UNTRACKED from the first cutover slice; QUANTITY from
+ * gap map row 4.4c).
  *
- * <p>The first cutover slice tracks nothing numerically. A kitchen marks a dish
- * available or not; there is no portion count to oversell. That keeps the
- * reservation path honest about what it guarantees: a hold means "this was
- * available when the cart was priced and nobody has marked it out since", not
- * "one portion is set aside for you".
+ * <p>A BINARY hold means "this was available when the cart was priced and
+ * nobody has marked it out since", not "one portion is set aside for you". A
+ * QUANTITY hold is the real thing: {@link #reserveForQuote} atomically moves
+ * {@code inventory.positions.reserved_quantity} for a QUANTITY item, refusing
+ * where {@code on_hand - reserved} cannot cover the request, and {@link
+ * #commit}/{@link #release}/{@link #expireStaleReservations} move it back —
+ * but only while {@code catalog.use_stock_logic} is on for the tenant. Off,
+ * a QUANTITY item behaves exactly like UNTRACKED: see {@link
+ * #evaluateAvailability} and {@link TrackingMode#QUANTITY}'s own doc.
+ *
+ * <p>Two of ADR 0017's own open inputs are taken conservatively here rather
+ * than decided, and say so: negative-stock policy is "never go negative:
+ * refuse" — {@link JdbcInventoryStore#tryReserveQuantity} is the one
+ * authoritative gate, a conditional {@code UPDATE} that can never leave
+ * {@code reserved_quantity} above {@code on_hand_quantity} — and cancellation
+ * restock is "a cancellation releases HELD stock only; committed stock is
+ * not restocked" — {@link #release} only ever transitions a {@code HELD}
+ * reservation (its own {@code WHERE status = 'HELD'} predicate), and nothing
+ * in this class reopens a {@code COMMITTED} one. A fourth primitive for
+ * returning committed stock is gap map row 1.2c's own open question, not
+ * this wave's to answer.
  */
 @Service
 public class InventoryService implements InventoryReservationPort {
@@ -123,12 +149,26 @@ public class InventoryService implements InventoryReservationPort {
         }
     };
 
+    /**
+     * A fixture built by hand here has no tenant business calendar to resolve
+     * against, so this answers plain UTC-midnight — {@link
+     * uz.horecaos.platform.reporting.domain.BusinessDayBoundary#midnight}'s own
+     * default — which is exactly today's previously-nonexistent behaviour for
+     * every fixture that does not specifically test the daily reset. Production
+     * wiring uses the seven-argument, {@code @Autowired} constructor below and
+     * gets {@link uz.horecaos.platform.reporting.application.InventoryBusinessDayWindowsAdapter},
+     * the one that actually resolves a tenant's own boundary and timezone.
+     */
+    private static final BusinessDayWindows NO_OP_BUSINESS_DAY_WINDOWS =
+            (tenantId, at) -> at.atZone(ZoneOffset.UTC).toLocalDate();
+
     private final JdbcInventoryStore store;
     private final ApplicationEventPublisher events;
     private final Clock clock;
     private final AuditRecorder audit;
     private final TenantRlsSession rls;
     private final ConfigurationResolver configuration;
+    private final BusinessDayWindows businessDays;
 
     public InventoryService(JdbcInventoryStore store, ApplicationEventPublisher events, Clock clock) {
         this(store, events, clock, NO_OP_AUDIT);
@@ -148,7 +188,6 @@ public class InventoryService implements InventoryReservationPort {
         this(store, events, clock, audit, rls, NO_OP_CONFIGURATION);
     }
 
-    @org.springframework.beans.factory.annotation.Autowired
     public InventoryService(
             JdbcInventoryStore store,
             ApplicationEventPublisher events,
@@ -156,25 +195,47 @@ public class InventoryService implements InventoryReservationPort {
             AuditRecorder audit,
             TenantRlsSession rls,
             ConfigurationResolver configuration) {
+        this(store, events, clock, audit, rls, configuration, NO_OP_BUSINESS_DAY_WINDOWS);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public InventoryService(
+            JdbcInventoryStore store,
+            ApplicationEventPublisher events,
+            Clock clock,
+            AuditRecorder audit,
+            TenantRlsSession rls,
+            ConfigurationResolver configuration,
+            BusinessDayWindows businessDays) {
         this.store = store;
         this.events = events;
         this.clock = clock;
         this.audit = audit;
         this.rls = rls;
         this.configuration = configuration;
+        this.businessDays = businessDays;
     }
 
     @Transactional
     public UUID listVariantAtLocation(UUID tenantId, UUID brandId, UUID locationId, UUID variantId, TrackingMode mode) {
         rls.bindTenant(tenantId);
-        if (mode == TrackingMode.QUANTITY) {
-            throw new UnsupportedTrackingModeException(useStockLogicEnabled(tenantId));
-        }
+        // QUANTITY may be listed regardless of catalog.use_stock_logic: the
+        // schema has always accommodated it (V0019), and an operator counting
+        // and reconciling a variant's stock before turning the tenant-wide
+        // switch on is ADR 0017's own rollout phase ("quantity tracking for
+        // explicitly reconciled variants") — enforcement is gated at
+        // availability/reservation time by evaluateAvailability instead, not
+        // here.
         return store.createStockItem(tenantId, brandId, locationId, variantId, mode, clock.instant());
     }
 
     /**
-     * Whether every item in a cart can be fulfilled here.
+     * Whether every item in a cart can be fulfilled here, at quantity one each
+     * — the shape every caller of this port method actually wants (a bare
+     * "can I sell one of this", including the ADR 0008 {@code
+     * ACTIVATION_SMOKE_TEST}). {@link #reserveForQuote} calls the real,
+     * quantity-aware {@link #evaluateAvailability} directly instead, since it
+     * already holds each line's actual requested quantity.
      *
      * <p>An item with no stock record is unavailable rather than available. The
      * opposite default would let a location sell anything on the brand's menu
@@ -185,11 +246,61 @@ public class InventoryService implements InventoryReservationPort {
     @Transactional(readOnly = true)
     public AvailabilityDecision checkAvailability(UUID tenantId, UUID locationId, Set<UUID> variantIds) {
         rls.bindTenant(tenantId);
+        Map<UUID, Integer> quantityOfOneEach = new java.util.HashMap<>();
+        variantIds.forEach(variantId -> quantityOfOneEach.put(variantId, 1));
+        return evaluateAvailability(tenantId, locationId, quantityOfOneEach, null);
+    }
 
-        Map<UUID, StockItemRow> items = store.findStockItems(tenantId, locationId, variantIds);
+    /**
+     * The channel-aware read gap map row 4.4c asks for: the same check as
+     * {@link #checkAvailability}, at quantity one each, plus the per-channel-
+     * type stop threshold ({@code inventory.channel_stop_thresholds}) a
+     * QUANTITY item may carry. Never used by the reservation/hold path — a
+     * hold is refused only by true stock exhaustion, never by this
+     * projection-only cutoff (see {@code AvailabilityDecision.Unavailable
+     * #channelStopped}'s own doc).
+     *
+     * @param channelSystemType {@code tenant.sales_channels.system_type}
+     *                          (e.g. {@code AGGREGATOR}), or null for no
+     *                          channel context at all — equivalent to {@link
+     *                          #checkAvailability}
+     */
+    @Transactional(readOnly = true)
+    public AvailabilityDecision checkAvailabilityForChannel(
+            UUID tenantId, UUID locationId, Set<UUID> variantIds, @Nullable String channelSystemType) {
+        rls.bindTenant(tenantId);
+        Map<UUID, Integer> quantityOfOneEach = new java.util.HashMap<>();
+        variantIds.forEach(variantId -> quantityOfOneEach.put(variantId, 1));
+        return evaluateAvailability(tenantId, locationId, quantityOfOneEach, channelSystemType);
+    }
+
+    /**
+     * The one place every tracking mode's own rule is applied. Both public
+     * availability reads and {@link #reserveForQuote} go through this rather
+     * than each re-stating the per-mode switch — the exact duplication that
+     * let {@code checkAvailability} and {@code reserveForQuote} disagree about
+     * QUANTITY before this wave (the first only ever checked presence, never
+     * quantity).
+     *
+     * <p>Does not mutate anything — this is the read half. {@link
+     * #reserveForQuote} calls this first and then, for each QUANTITY item it
+     * finds available, atomically attempts the real hold through {@link
+     * JdbcInventoryStore#tryReserveQuantity}, which is the authoritative gate
+     * under concurrency; this method's own read of {@code on_hand -
+     * reserved} is a snapshot that can go stale between here and that
+     * attempt, by design (see that method's own doc).
+     */
+    private AvailabilityDecision evaluateAvailability(
+            UUID tenantId,
+            UUID locationId,
+            Map<UUID, Integer> quantitiesByVariant,
+            @Nullable String channelSystemType) {
+        Map<UUID, StockItemRow> items = store.findStockItems(tenantId, locationId, quantitiesByVariant.keySet());
         List<Unavailable> blocked = new ArrayList<>();
+        Boolean quantityLogicOn = null;
 
-        for (UUID variantId : variantIds) {
+        for (Map.Entry<UUID, Integer> entry : quantitiesByVariant.entrySet()) {
+            UUID variantId = entry.getKey();
             StockItemRow item = items.get(variantId);
             if (item == null) {
                 blocked.add(Unavailable.notStocked(variantId));
@@ -205,7 +316,30 @@ public class InventoryService implements InventoryReservationPort {
                         blocked.add(Unavailable.soldOut(variantId));
                     }
                 }
-                case QUANTITY -> throw new UnsupportedTrackingModeException(useStockLogicEnabled(tenantId));
+                case QUANTITY -> {
+                    // Resolved at most once per call, not once per item: every
+                    // QUANTITY item in one request shares the same tenant, so the
+                    // flag can only ever answer the same way for all of them.
+                    if (quantityLogicOn == null) {
+                        quantityLogicOn = useStockLogicEnabled(tenantId);
+                    }
+                    if (!quantityLogicOn) {
+                        // catalog.use_stock_logic is off: this item behaves exactly
+                        // like UNTRACKED (TrackingMode.QUANTITY's own doc).
+                        continue;
+                    }
+                    BigDecimal requested = BigDecimal.valueOf(entry.getValue());
+                    BigDecimal remaining = item.remainingQuantity();
+                    if (remaining.compareTo(requested) < 0) {
+                        blocked.add(Unavailable.soldOut(variantId));
+                        continue;
+                    }
+                    if (channelSystemType != null) {
+                        store.findChannelStopThreshold(tenantId, item.stockItemId(), channelSystemType)
+                                .filter(threshold -> remaining.compareTo(threshold) <= 0)
+                                .ifPresent(threshold -> blocked.add(Unavailable.channelStopped(variantId)));
+                    }
+                }
             }
         }
 
@@ -383,7 +517,7 @@ public class InventoryService implements InventoryReservationPort {
         // the live checkout path instead of importing a snapshot.
         ImportSuppression.refuse(ExternalEffect.INVENTORY_MOVEMENT, "reserve stock for a quote");
 
-        AvailabilityDecision decision = checkAvailability(tenantId, locationId, quantitiesByVariant.keySet());
+        AvailabilityDecision decision = evaluateAvailability(tenantId, locationId, quantitiesByVariant, null);
         if (!decision.available()) {
             return ReservationResult.refused(decision);
         }
@@ -423,17 +557,72 @@ public class InventoryService implements InventoryReservationPort {
         }
 
         Map<UUID, StockItemRow> items = store.findStockItems(tenantId, locationId, quantitiesByVariant.keySet());
-        quantitiesByVariant.forEach((variantId, quantity) -> {
-            StockItemRow item = items.get(variantId);
-            if (item == null) {
-                // checkAvailability just confirmed every one of these variants has
-                // a stock item at this location, inside the same transaction; a
-                // null here means the two reads disagreed, which is a bug in the
-                // store or a genuine race, not an ordinary refusal to swallow.
-                throw new IllegalStateException("Stock item vanished mid-transaction for variant " + variantId);
+        boolean quantityLogicOn = items.values().stream().anyMatch(item -> item.trackingMode() == TrackingMode.QUANTITY)
+                && useStockLogicEnabled(tenantId);
+
+        // Deterministic stock-item order, not map iteration order: ADR 0017's
+        // own atomic reservation algorithm names this explicitly ("for a
+        // deterministic, sorted set of stock-item IDs... lock positions in
+        // stock-item order") as what keeps two concurrent reservations naming
+        // an overlapping set of items from deadlocking against each other —
+        // each targets the same row first, in the same order, so one simply
+        // waits for the other's row lock rather than each holding one row the
+        // other wants.
+        List<Map.Entry<UUID, Integer>> sortedLines = quantitiesByVariant.entrySet().stream()
+                .sorted(Comparator.comparing(entry -> {
+                    StockItemRow item = items.get(entry.getKey());
+                    if (item == null) {
+                        // evaluateAvailability just confirmed every one of these
+                        // variants has a stock item at this location, inside the
+                        // same transaction; a null here means the two reads
+                        // disagreed, which is a bug in the store or a genuine
+                        // race, not an ordinary refusal to swallow.
+                        throw new IllegalStateException(
+                                "Stock item vanished mid-transaction for variant " + entry.getKey());
+                    }
+                    return item.stockItemId();
+                }))
+                .toList();
+
+        // Every stock item this call has itself reserved so far, keyed by the
+        // exact quantity taken -- what a mid-loop failure below gives back.
+        // Compensated explicitly (not through transaction rollback): this
+        // service is called both through Spring's own @Transactional AOP
+        // proxy in production and, throughout this module's own test suite,
+        // as a hand-built InventoryService driven by a bare TransactionTemplate
+        // with no AOP interceptor in the picture at all -- TransactionAspectSupport's
+        // rollback-only marker exists only on the former path, so a method
+        // that must behave identically on both cannot depend on it.
+        Map<UUID, BigDecimal> reservedSoFar = new java.util.LinkedHashMap<>();
+
+        for (Map.Entry<UUID, Integer> entry : sortedLines) {
+            UUID variantId = entry.getKey();
+            StockItemRow item = Objects.requireNonNull(
+                    items.get(variantId), () -> "Stock item vanished mid-transaction for variant " + variantId);
+            BigDecimal requested = BigDecimal.valueOf(entry.getValue());
+            store.insertReservationLine(reservationId, tenantId, item.stockItemId(), requested);
+
+            if (item.trackingMode() != TrackingMode.QUANTITY || !quantityLogicOn) {
+                continue;
             }
-            store.insertReservationLine(reservationId, tenantId, item.stockItemId(), BigDecimal.valueOf(quantity));
-        });
+            if (store.tryReserveQuantity(tenantId, item.stockItemId(), requested, now)) {
+                reservedSoFar.put(item.stockItemId(), requested);
+                continue;
+            }
+            // Stock moved between evaluateAvailability's read above and this
+            // atomic attempt -- the conditional UPDATE is the authoritative
+            // gate, not that earlier snapshot (see tryReserveQuantity's own
+            // doc). Roll back everything this call has done so far: give back
+            // every earlier item's own successful reserve, then delete the
+            // reservation row this call created (inventory.reservation_lines
+            // cascades on delete) rather than leaving a HELD reservation whose
+            // lines disagree with what is actually reserved. ADR 0017: "on any
+            // failed item, roll back the entire reservation."
+            reservedSoFar.forEach(
+                    (stockItemId, quantity) -> store.releaseReservedQuantity(tenantId, stockItemId, quantity, now));
+            store.deleteReservation(tenantId, reservationId);
+            return ReservationResult.refused(AvailabilityDecision.blockedBy(List.of(Unavailable.soldOut(variantId))));
+        }
 
         return ReservationResult.held(reservationId, expiresAt);
     }
@@ -461,7 +650,16 @@ public class InventoryService implements InventoryReservationPort {
         return ReservationExpiry.notBefore(now.plus(configuredTtl), quoteExpiresAt);
     }
 
-    /** Turns a hold into a committed sale when an order is confirmed. */
+    /**
+     * Turns a hold into a committed sale when an order is confirmed.
+     *
+     * <p>For every QUANTITY line the reservation carries, this also reduces
+     * both {@code on_hand_quantity} and {@code reserved_quantity} together and
+     * writes a {@code SALE_COMMITMENT} movement (ADR 0017: "committing...
+     * reduces both on-hand and reserved in one transaction") — the actual
+     * stock movement a bare status flip on {@code inventory.reservations}
+     * would not record anywhere.
+     */
     @Override
     @Transactional
     public boolean commit(UUID tenantId, UUID quoteId) {
@@ -472,11 +670,45 @@ public class InventoryService implements InventoryReservationPort {
         ImportSuppression.refuse(ExternalEffect.INVENTORY_MOVEMENT, "commit a stock reservation");
 
         var reservation = store.findReservation(tenantId, OWNER_QUOTE, quoteId);
-        return reservation.isPresent()
-                && store.transitionReservation(tenantId, reservation.get().id(), "COMMITTED", clock.instant());
+        if (reservation.isEmpty()) {
+            return false;
+        }
+        boolean transitioned =
+                store.transitionReservation(tenantId, reservation.get().id(), "COMMITTED", clock.instant());
+        if (transitioned) {
+            applyQuantityCommit(tenantId, reservation.get().id());
+        }
+        return transitioned;
     }
 
-    /** Frees a hold when a cart is abandoned or a checkout fails. */
+    private void applyQuantityCommit(UUID tenantId, UUID reservationId) {
+        Instant now = clock.instant();
+        for (QuantityReservationLineRow line : store.findQuantityReservationLines(tenantId, reservationId)) {
+            store.commitQuantitySale(
+                    tenantId,
+                    line.stockItemId(),
+                    line.quantity(),
+                    "commit:%s:%s".formatted(reservationId, line.stockItemId()),
+                    reservationId,
+                    "SERVICE",
+                    null,
+                    now);
+        }
+    }
+
+    /**
+     * Frees a hold when a cart is abandoned or a checkout fails.
+     *
+     * <p>For every QUANTITY line, this also gives {@code reserved_quantity}
+     * back — never {@code on_hand_quantity}, which a release/expiry never
+     * touches (ADR 0017: "releasing/expiring reduces reserved only"). Only a
+     * {@code HELD} reservation can reach this at all ({@link
+     * JdbcInventoryStore#transitionReservation}'s own {@code WHERE status =
+     * 'HELD'} predicate): a {@code COMMITTED} one is unreachable here, which is
+     * this wave's conservative reading of ADR 0017's open cancellation-restock
+     * input — a cancellation after commit is a different, undecided primitive
+     * (gap map row 1.2c), not this method silently reopening a sale.
+     */
     @Override
     @Transactional
     public boolean release(UUID tenantId, UUID quoteId) {
@@ -484,8 +716,22 @@ public class InventoryService implements InventoryReservationPort {
         ImportSuppression.refuse(ExternalEffect.INVENTORY_MOVEMENT, "release a stock reservation");
 
         var reservation = store.findReservation(tenantId, OWNER_QUOTE, quoteId);
-        return reservation.isPresent()
-                && store.transitionReservation(tenantId, reservation.get().id(), "RELEASED", clock.instant());
+        if (reservation.isEmpty()) {
+            return false;
+        }
+        boolean transitioned =
+                store.transitionReservation(tenantId, reservation.get().id(), "RELEASED", clock.instant());
+        if (transitioned) {
+            applyQuantityRelease(tenantId, reservation.get().id());
+        }
+        return transitioned;
+    }
+
+    private void applyQuantityRelease(UUID tenantId, UUID reservationId) {
+        Instant now = clock.instant();
+        for (QuantityReservationLineRow line : store.findQuantityReservationLines(tenantId, reservationId)) {
+            store.releaseReservedQuantity(tenantId, line.stockItemId(), line.quantity(), now);
+        }
     }
 
     /**
@@ -504,18 +750,25 @@ public class InventoryService implements InventoryReservationPort {
         rls.bindPlatform();
         List<UUID> expired = store.expireReservations(clock.instant());
         if (!expired.isEmpty()) {
+            // Same "reserved only, never on-hand" rule as an ordinary release
+            // (see that method's own doc) — an expired hold is exactly a
+            // release the customer never asked for, not a different movement.
+            // Cross-tenant like the sweep itself: the platform-bypass session
+            // bound above stays in effect for the rest of this transaction.
+            Instant now = clock.instant();
+            for (QuantityReservationLineRow line : store.findQuantityReservationLinesForReservations(expired)) {
+                store.releaseReservedQuantity(line.tenantId(), line.stockItemId(), line.quantity(), now);
+            }
             log.debug("Expired {} stale reservations", expired.size());
         }
         return expired.size();
     }
 
     /**
-     * The {@code catalog.use_stock_logic} state at the tenant that just tried
-     * to use {@link TrackingMode#QUANTITY}, so {@link
-     * UnsupportedTrackingModeException} can tell an operator which of the two
-     * true things is going on: the tenant has not turned it on, or the
-     * tenant has and the platform still cannot honour it (gap map row
-     * {@code 4.4d}, wave P46).
+     * The {@code catalog.use_stock_logic} state that {@link
+     * #evaluateAvailability} gates every {@link TrackingMode#QUANTITY} item's
+     * enforcement on (gap map row {@code 4.4d}): off, a QUANTITY item behaves
+     * like UNTRACKED; on, it is enforced for real.
      */
     private boolean useStockLogicEnabled(UUID tenantId) {
         Boolean enabled =
@@ -523,22 +776,322 @@ public class InventoryService implements InventoryReservationPort {
         return Boolean.TRUE.equals(enabled);
     }
 
+    // ======================================================================
+    // QUANTITY: operator writes (gap map row 4.4c) — on-hand, the daily
+    // default, and per-channel-type stop thresholds. Each mirrors {@link
+    // #setAvailabilityAudited}'s own shape: a movement or config write, then
+    // an ADR 0027 audit fact, with the same no-op-on-no-change rule.
+    // ======================================================================
+
     /**
-     * Thrown rather than pretending to enforce a quantity the slice does not
-     * track. The message names which of the two operator-facing states
-     * produced the refusal, per {@link #useStockLogicEnabled}'s own doc,
-     * instead of one generic sentence either way.
+     * An operator's manual on-hand count for a QUANTITY item — a physical
+     * recount, a delivery received, breakage found — recorded as a {@code
+     * CORRECTION} movement and audited (ADR 0017's own API list: {@code POST
+     * .../inventory/{variantId}/adjustments}).
+     *
+     * <p>Never refuses for going below {@code reserved_quantity}: on-hand is
+     * a fact about physical stock an operator is reporting, and the
+     * reservation path — not this write — is what keeps {@code reserved}
+     * from ever exceeding it going forward (ADR 0017's "never go negative:
+     * refuse" applies to a new hold, not to a correction that discovers less
+     * stock than was believed reserved).
+     *
+     * @return whether on-hand actually changed
+     * @throws IllegalArgumentException if the variant is not stocked at this location
+     * @throws IllegalStateException if the variant is not QUANTITY-tracked
      */
-    public static class UnsupportedTrackingModeException extends RuntimeException {
-        public UnsupportedTrackingModeException(boolean useStockLogicEnabled) {
-            super(
-                    useStockLogicEnabled
-                            ? "Quantity tracking (catalog.use_stock_logic) is turned on for this tenant, "
-                                    + "but counted-stock tracking is not available in this build yet. "
-                                    + "List this item as BINARY or UNTRACKED until it ships."
-                            : "Quantity tracking is off for this tenant. Turn on catalog.use_stock_logic in "
-                                    + "Settings, or list this item as BINARY or UNTRACKED — counted-stock "
-                                    + "tracking is not implemented yet either way.");
+    @Transactional
+    public boolean setOnHandQuantity(
+            UUID tenantId,
+            UUID locationId,
+            UUID variantId,
+            BigDecimal newOnHand,
+            String reasonCode,
+            String actorSubject) {
+        rls.bindTenant(tenantId);
+        if (newOnHand.signum() < 0) {
+            throw new IllegalArgumentException("An on-hand quantity cannot be negative");
         }
+        StockItemRow item = requireQuantityItem(tenantId, locationId, variantId);
+
+        if (newOnHand.compareTo(item.onHandQuantity()) == 0) {
+            log.debug("Variant {} at location {} is already at on-hand {}", variantId, locationId, newOnHand);
+            return false;
+        }
+
+        BigDecimal delta = newOnHand.subtract(item.onHandQuantity());
+        String idempotencyKey =
+                "onhand:%s:%s:%d".formatted(variantId, newOnHand.toPlainString(), item.positionSequence());
+        Instant now = clock.instant();
+        store.recordOnHandCorrection(
+                tenantId,
+                item.stockItemId(),
+                newOnHand,
+                delta,
+                idempotencyKey,
+                reasonCode,
+                "USER",
+                parseActorId(actorSubject),
+                now);
+
+        audit.record(AuditFact.of("inventory.on_hand.set", AuditClass.BUSINESS)
+                .by(ActorRef.user(actorSubject, null))
+                .at(ResourceScope.location(tenantId, item.brandId(), locationId))
+                .target("Variant", variantId)
+                .because(reasonCode)
+                .usingCapability(Capability.INVENTORY_ADJUST.code())
+                .changed(Map.of(
+                        "onHandQuantity",
+                        newOnHand.toPlainString(),
+                        "stockItemId",
+                        item.stockItemId().toString()))
+                .correlatedBy(variantId.toString())
+                .occurredAt(now)
+                .build());
+        return true;
+    }
+
+    /**
+     * The QUANTITY item's daily reset target (gap map row 4.4c) — null
+     * disables the scheduled reset for this item, leaving on-hand exactly
+     * where an operator last set it.
+     *
+     * @return whether the default actually changed
+     * @throws IllegalArgumentException if the variant is not stocked at this location
+     * @throws IllegalStateException if the variant is not QUANTITY-tracked
+     */
+    @Transactional
+    public boolean setDefaultQuantity(
+            UUID tenantId,
+            UUID locationId,
+            UUID variantId,
+            @Nullable BigDecimal defaultQuantity,
+            String reasonCode,
+            String actorSubject) {
+        rls.bindTenant(tenantId);
+        if (defaultQuantity != null && defaultQuantity.signum() < 0) {
+            throw new IllegalArgumentException("A default quantity cannot be negative");
+        }
+        StockItemRow item = requireQuantityItem(tenantId, locationId, variantId);
+
+        boolean unchanged = defaultQuantity == null
+                ? item.defaultQuantity() == null
+                : defaultQuantity.equals(item.defaultQuantity())
+                        || (item.defaultQuantity() != null && defaultQuantity.compareTo(item.defaultQuantity()) == 0);
+        if (unchanged) {
+            return false;
+        }
+
+        Instant now = clock.instant();
+        store.setDefaultQuantity(tenantId, item.stockItemId(), defaultQuantity, now);
+
+        audit.record(AuditFact.of("inventory.default_quantity.set", AuditClass.BUSINESS)
+                .by(ActorRef.user(actorSubject, null))
+                .at(ResourceScope.location(tenantId, item.brandId(), locationId))
+                .target("Variant", variantId)
+                .because(reasonCode)
+                .usingCapability(Capability.INVENTORY_ADJUST.code())
+                .changed(Map.of(
+                        "defaultQuantity",
+                        defaultQuantity == null ? "null" : defaultQuantity.toPlainString(),
+                        "stockItemId",
+                        item.stockItemId().toString()))
+                .correlatedBy(variantId.toString())
+                .occurredAt(now)
+                .build());
+        return true;
+    }
+
+    /**
+     * Names the remaining quantity at which one channel type stops selling
+     * this QUANTITY item early (gap map row 4.4c), e.g. an {@code AGGREGATOR}
+     * channel stopping at 3 while the storefront keeps selling to zero.
+     *
+     * @throws IllegalArgumentException if the variant is not stocked at this location
+     * @throws IllegalStateException if the variant is not QUANTITY-tracked
+     */
+    @Transactional
+    public void setChannelStopThreshold(
+            UUID tenantId,
+            UUID locationId,
+            UUID variantId,
+            String channelSystemType,
+            BigDecimal stopAtOrBelow,
+            String reasonCode,
+            String actorSubject) {
+        rls.bindTenant(tenantId);
+        if (stopAtOrBelow.signum() < 0) {
+            throw new IllegalArgumentException("A stop threshold cannot be negative");
+        }
+        StockItemRow item = requireQuantityItem(tenantId, locationId, variantId);
+        Instant now = clock.instant();
+        store.upsertChannelStopThreshold(
+                tenantId, item.brandId(), locationId, item.stockItemId(), channelSystemType, stopAtOrBelow, now);
+
+        audit.record(AuditFact.of("inventory.channel_stop_threshold.set", AuditClass.BUSINESS)
+                .by(ActorRef.user(actorSubject, null))
+                .at(ResourceScope.location(tenantId, item.brandId(), locationId))
+                .target("Variant", variantId)
+                .because(reasonCode)
+                .usingCapability(Capability.INVENTORY_ADJUST.code())
+                .changed(Map.of(
+                        "channelSystemType",
+                        channelSystemType,
+                        "stopAtOrBelow",
+                        stopAtOrBelow.toPlainString(),
+                        "stockItemId",
+                        item.stockItemId().toString()))
+                .correlatedBy(variantId.toString())
+                .occurredAt(now)
+                .build());
+    }
+
+    /**
+     * Removes a channel type's stop threshold, so that channel goes back to
+     * selling to zero like every channel with no threshold at all.
+     *
+     * @return whether a threshold existed and was removed
+     * @throws IllegalArgumentException if the variant is not stocked at this location
+     * @throws IllegalStateException if the variant is not QUANTITY-tracked
+     */
+    @Transactional
+    public boolean clearChannelStopThreshold(
+            UUID tenantId,
+            UUID locationId,
+            UUID variantId,
+            String channelSystemType,
+            String reasonCode,
+            String actorSubject) {
+        rls.bindTenant(tenantId);
+        StockItemRow item = requireQuantityItem(tenantId, locationId, variantId);
+        boolean removed = store.deleteChannelStopThreshold(tenantId, item.stockItemId(), channelSystemType);
+        if (!removed) {
+            return false;
+        }
+        audit.record(AuditFact.of("inventory.channel_stop_threshold.clear", AuditClass.BUSINESS)
+                .by(ActorRef.user(actorSubject, null))
+                .at(ResourceScope.location(tenantId, item.brandId(), locationId))
+                .target("Variant", variantId)
+                .because(reasonCode)
+                .usingCapability(Capability.INVENTORY_ADJUST.code())
+                .changed(Map.of(
+                        "channelSystemType",
+                        channelSystemType,
+                        "stockItemId",
+                        item.stockItemId().toString()))
+                .correlatedBy(variantId.toString())
+                .occurredAt(clock.instant())
+                .build());
+        return true;
+    }
+
+    private StockItemRow requireQuantityItem(UUID tenantId, UUID locationId, UUID variantId) {
+        StockItemRow item = store.findStockItem(tenantId, locationId, variantId)
+                .orElseThrow(() ->
+                        new IllegalArgumentException("Variant " + variantId + " is not stocked at this location"));
+        if (item.trackingMode() != TrackingMode.QUANTITY) {
+            throw new IllegalStateException(
+                    "This write applies only to a QUANTITY item; this one is " + item.trackingMode());
+        }
+        return item;
+    }
+
+    // ======================================================================
+    // QUANTITY: the console's per-location stock page read (gap map row 4.4c)
+    // ======================================================================
+
+    /**
+     * One variant's own position at a location — the storefront's single-item
+     * read, which has no reason to pull every other stock item at the
+     * location the way the console's {@link #listStockPositions} page does.
+     */
+    @Transactional(readOnly = true)
+    public Optional<StockPositionView> findStockPosition(UUID tenantId, UUID locationId, UUID variantId) {
+        rls.bindTenant(tenantId);
+        return store.findStockItem(tenantId, locationId, variantId).map(item -> toView(item, variantId, List.of()));
+    }
+
+    /** Every stock item listed at a location, with its position and any channel stop thresholds. */
+    @Transactional(readOnly = true)
+    public List<StockPositionView> listStockPositions(UUID tenantId, UUID locationId) {
+        rls.bindTenant(tenantId);
+        List<StockItemListingRow> items = store.listStockItems(tenantId, locationId);
+        Map<UUID, List<ChannelStopThresholdView>> thresholdsByItem = new java.util.HashMap<>();
+        for (ChannelStopThresholdRow row : store.listChannelStopThresholds(tenantId, locationId)) {
+            thresholdsByItem
+                    .computeIfAbsent(row.stockItemId(), key -> new ArrayList<>())
+                    .add(new ChannelStopThresholdView(row.channelSystemType(), row.stopAtOrBelow()));
+        }
+        return items.stream()
+                .map(row -> toView(
+                        row.stockItem(),
+                        row.variantId(),
+                        thresholdsByItem.getOrDefault(row.stockItem().stockItemId(), List.of())))
+                .toList();
+    }
+
+    private static StockPositionView toView(
+            StockItemRow item, UUID variantId, List<ChannelStopThresholdView> thresholds) {
+        return new StockPositionView(
+                item.stockItemId(),
+                variantId,
+                item.trackingMode(),
+                item.binaryAvailable(),
+                item.onHandQuantity(),
+                item.reservedQuantity(),
+                item.trackingMode() == TrackingMode.QUANTITY ? item.remainingQuantity() : null,
+                item.defaultQuantity(),
+                item.lastResetBusinessDate(),
+                thresholds);
+    }
+
+    public record StockPositionView(
+            UUID stockItemId,
+            UUID variantId,
+            TrackingMode trackingMode,
+            @Nullable Boolean binaryAvailable,
+            BigDecimal onHandQuantity,
+            BigDecimal reservedQuantity,
+            @Nullable BigDecimal remainingQuantity,
+            @Nullable BigDecimal defaultQuantity,
+            @Nullable LocalDate lastResetBusinessDate,
+            List<ChannelStopThresholdView> channelStopThresholds) {}
+
+    public record ChannelStopThresholdView(String channelSystemType, BigDecimal stopAtOrBelow) {}
+
+    // ======================================================================
+    // QUANTITY: the daily default/auto-reset job (gap map row 4.4c). Called
+    // by InventoryQuantityResetScheduler, never directly from a controller.
+    // ======================================================================
+
+    /**
+     * Every tenant with at least one active QUANTITY item that has a daily
+     * default configured — the scheduler's own per-tick worklist, read under
+     * the platform-bypass role the same way {@link #expireStaleReservations}
+     * reads its own cross-tenant worklist.
+     */
+    @Transactional(readOnly = true)
+    public List<UUID> tenantsWithQuantityDefaults() {
+        rls.bindPlatform();
+        return store.tenantIdsWithQuantityDefaults();
+    }
+
+    /**
+     * Resets every one tenant's QUANTITY items that are due for their daily
+     * reset, on that tenant's own business day (ADR 0043) as of {@code now}.
+     *
+     * @return how many items were actually reset
+     */
+    @Transactional
+    public int resetDueQuantityItems(UUID tenantId, Instant now) {
+        rls.bindTenant(tenantId);
+        LocalDate businessDate = businessDays.businessDateOf(tenantId, now);
+        int resetCount = 0;
+        for (UUID stockItemId : store.dueQuantityResetStockItems(tenantId, businessDate)) {
+            if (store.resetIfDue(tenantId, stockItemId, businessDate, now)) {
+                resetCount++;
+            }
+        }
+        return resetCount;
     }
 }

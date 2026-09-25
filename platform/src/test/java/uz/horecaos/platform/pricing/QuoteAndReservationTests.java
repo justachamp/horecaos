@@ -539,13 +539,24 @@ class QuoteAndReservationTests {
     }
 
     @Test
-    @DisplayName("quantity tracking is refused rather than half-enforced")
-    void quantityTrackingIsRefused() {
-        // Accepting QUANTITY without enforcing it would let a location oversell
-        // silently, which is worse than an error nobody can ignore.
-        assertThat(catchThrowable(() ->
-                        inventory.listVariantAtLocation(TENANT, BRAND, LOCATION, burgerVariant, TrackingMode.QUANTITY)))
-                .isInstanceOf(InventoryService.UnsupportedTrackingModeException.class);
+    @DisplayName("a variant may be listed QUANTITY, and behaves like UNTRACKED while catalog.use_stock_logic is off")
+    void quantityListingSucceedsAndBehavesLikeUntrackedWithTheFlagOff() {
+        // Gap map row 4.4d: QUANTITY is no longer refused outright -- an
+        // operator may list and reconcile a variant's counts before turning
+        // the tenant-wide switch on (ADR 0017's own rollout phase). This
+        // fixture's inventory is built with the three-argument constructor,
+        // whose FakeConfigurationResolver default leaves catalog.use_stock_logic
+        // off, so the freshly listed item -- zero on hand -- still shows
+        // available rather than SOLD_OUT.
+        UUID stockItemId =
+                inventory.listVariantAtLocation(TENANT, BRAND, LOCATION, burgerVariant, TrackingMode.QUANTITY);
+
+        assertThat(stockItemId).isNotNull();
+        assertThat(inventory
+                        .checkAvailability(TENANT, LOCATION, java.util.Set.of(burgerVariant))
+                        .available())
+                .as("catalog.use_stock_logic off: QUANTITY quantities are ignored, UNTRACKED behaviour")
+                .isTrue();
     }
 
     @Test
