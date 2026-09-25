@@ -75,12 +75,26 @@ export interface RowResponse {
  * group in it is silently dropped server-side when the requester lacks
  * `customer.pii.export` rather than refusing the whole request. See
  * `ExportColumnChooser` for the report-specific column vocabulary.
+ *
+ * @property status  `CUSTOMER_DIRECTORY`'s own filter; ignored by every
+ *   other report
+ * @property query   `CUSTOMER_DIRECTORY`'s own search text; ignored by
+ *   every other report
+ * @property from    required by `ORDER_CRM_LOG`, `ORDER_REPORT_LOG` and
+ *   `ORDER_REPORT_SUMMARY` (an ISO instant) — ignored by `CUSTOMER_DIRECTORY`
+ * @property to      the same three reports' own required range end
+ * @property locationId  the same three reports' own optional branch filter;
+ *   absent or empty means every branch the caller's tenant-wide grant
+ *   already covers — row 7.2e's own console picker never sets this yet
  */
 export interface ReportExportRequest {
   readonly reportKey: string;
   readonly columns: readonly string[];
   readonly status?: string | null;
   readonly query?: string | null;
+  readonly from?: string | null;
+  readonly to?: string | null;
+  readonly locationId?: readonly string[] | null;
   readonly purpose: string;
 }
 

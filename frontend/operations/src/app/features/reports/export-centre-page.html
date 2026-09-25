@@ -27,48 +27,87 @@
             <span class="q-caption export-centre__field-label">{{
               'reports.exportCentre.reportLabel' | t
             }}</span>
-            <div class="q-body-sm" data-testid="export-centre-report-name">
-              {{ 'reports.exportCentre.reportOption.customerDirectory' | t }}
-            </div>
+            <select
+              class="export-centre__select"
+              [value]="selectedReportKey()"
+              (change)="selectReport($any($event.target).value)"
+              data-testid="export-centre-report"
+            >
+              @for (option of reportOptions; track option.key) {
+                <option [value]="option.key">{{ option.labelKey | t }}</option>
+              }
+            </select>
           </div>
 
           <q-export-column-chooser
-            [columns]="columns"
+            [columns]="columns()"
             [selected]="selectedColumns()"
             (selectedChange)="onColumnsChange($event)"
           />
 
-          <div class="export-centre__filters">
-            <div class="export-centre__field">
-              <span class="q-caption export-centre__field-label">{{
-                'reports.exportCentre.statusLabel' | t
-              }}</span>
-              <select
-                class="export-centre__select"
-                [value]="statusFilter()"
-                (change)="statusFilter.set($any($event.target).value)"
-                data-testid="export-centre-status"
-              >
-                @for (option of statusOptions; track option.id) {
-                  <option [value]="option.id">{{ option.labelKey | t }}</option>
-                }
-              </select>
-            </div>
+          @if (selectedReport().supportsStatusQuery) {
+            <div class="export-centre__filters">
+              <div class="export-centre__field">
+                <span class="q-caption export-centre__field-label">{{
+                  'reports.exportCentre.statusLabel' | t
+                }}</span>
+                <select
+                  class="export-centre__select"
+                  [value]="statusFilter()"
+                  (change)="statusFilter.set($any($event.target).value)"
+                  data-testid="export-centre-status"
+                >
+                  @for (option of statusOptions; track option.id) {
+                    <option [value]="option.id">{{ option.labelKey | t }}</option>
+                  }
+                </select>
+              </div>
 
-            <div class="export-centre__field">
-              <span class="q-caption export-centre__field-label">{{
-                'reports.exportCentre.queryLabel' | t
-              }}</span>
-              <input
-                type="text"
-                class="export-centre__input"
-                [value]="queryFilter()"
-                (input)="queryFilter.set($any($event.target).value)"
-                [placeholder]="'reports.exportCentre.queryPlaceholder' | t"
-                data-testid="export-centre-query"
-              />
+              <div class="export-centre__field">
+                <span class="q-caption export-centre__field-label">{{
+                  'reports.exportCentre.queryLabel' | t
+                }}</span>
+                <input
+                  type="text"
+                  class="export-centre__input"
+                  [value]="queryFilter()"
+                  (input)="queryFilter.set($any($event.target).value)"
+                  [placeholder]="'reports.exportCentre.queryPlaceholder' | t"
+                  data-testid="export-centre-query"
+                />
+              </div>
             </div>
-          </div>
+          }
+
+          @if (selectedReport().requiresRange) {
+            <div class="export-centre__filters">
+              <div class="export-centre__field">
+                <span class="q-caption export-centre__field-label">{{
+                  'reports.exportCentre.fromLabel' | t
+                }}</span>
+                <input
+                  type="date"
+                  class="export-centre__input"
+                  [value]="fromDate()"
+                  (input)="fromDate.set($any($event.target).value)"
+                  data-testid="export-centre-from"
+                />
+              </div>
+
+              <div class="export-centre__field">
+                <span class="q-caption export-centre__field-label">{{
+                  'reports.exportCentre.toLabel' | t
+                }}</span>
+                <input
+                  type="date"
+                  class="export-centre__input"
+                  [value]="toDate()"
+                  (input)="toDate.set($any($event.target).value)"
+                  data-testid="export-centre-to"
+                />
+              </div>
+            </div>
+          }
 
           <div class="export-centre__field">
             <span class="q-caption export-centre__field-label">{{
@@ -128,7 +167,7 @@
                       {{ statusLabelKey(job.status) | t }}
                     </span>
                     <span class="q-body-sm export-centre__job-report">
-                      {{ 'reports.exportCentre.reportOption.customerDirectory' | t }}
+                      {{ reportLabelKey(job.reportKey) | t }}
                     </span>
                     @if (job.includesPiiColumns) {
                       <span class="export-centre__pii-badge" data-testid="export-centre-pii-badge">
