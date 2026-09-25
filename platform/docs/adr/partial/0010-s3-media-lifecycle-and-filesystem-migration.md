@@ -136,7 +136,7 @@
   **2026-09-25:** MinIO's public images were withdrawn (quay.io answers 401
   anonymously, Docker Hub 404), so `compose.yaml` and `MediaLifecycleTests`'s
   `GenericContainer("minio/minio")` cannot pull a fresh image. Per
-  [ADR 0135](../not-started/0135-object-storage-runtime-rustfs-replaces-minio.md),
+  [ADR 0135](../partial/0135-object-storage-runtime-rustfs-replaces-minio.md),
   the store this record's tests and `S3ObjectStorage` run against is being
   replaced by RustFS 1.0.0, pinned by digest. Nothing about this record's own
   `ObjectStorage` port, presigned-upload model, or S3-compatible-only rule

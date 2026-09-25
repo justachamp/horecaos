@@ -28,7 +28,7 @@
   this record names throughout — `compose.production.yaml`'s `minio` service,
   the `rehearse-restore.sh` off-site target, the media and backup buckets in
   the data-placement table below — is being replaced by RustFS 1.0.0, pinned
-  by digest, per [ADR 0135](../not-started/0135-object-storage-runtime-rustfs-replaces-minio.md).
+  by digest, per [ADR 0135](../partial/0135-object-storage-runtime-rustfs-replaces-minio.md).
   This is a runtime substitution under the topology this record decided, not a
   change to it: the store stays colocated, private, S3-compatible-only per the
   portability rules below, and behind the same two networks. The mentions of
