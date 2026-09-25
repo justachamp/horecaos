@@ -113,6 +113,7 @@ class OperationsCourierAccountProvisioningEndpointTests {
         jdbc.sql("TRUNCATE TABLE tenant.tenants CASCADE").update();
         accounts.byId.clear();
         accounts.created.clear();
+        accounts.deleted.clear();
         organizations.ensured.clear();
 
         jdbc.sql("""
@@ -176,10 +177,15 @@ class OperationsCourierAccountProvisioningEndpointTests {
     }
 
     @Test
-    @DisplayName("registering a second courier on a phone that already has an account reuses that identity "
-            + "rather than creating a duplicate")
+    @DisplayName("registering a second courier on a phone that already has an account IN THIS TENANT'S OWN "
+            + "ORGANIZATION reuses that identity rather than creating a duplicate")
     void reregisteringOnAnExistingPhoneReusesTheAccount() throws Exception {
         StaffAccounts.StaffAccount existing = accounts.create("Existing", "Person", "+998901112233", null);
+        // Simulates the account already having been linked into THIS tenant's
+        // organization by an earlier, successful registration -- the only
+        // circumstance reuse is meant to cover.
+        organizations.ensureMembership(
+                new OrganizationProvisioner.EnsureMembership(ORGANIZATION_ID, "", existing.subjectId()));
         accounts.created.clear();
 
         MvcResult result = mvc.perform(post(registerPath())
@@ -200,6 +206,44 @@ class OperationsCourierAccountProvisioningEndpointTests {
                 .query(String.class)
                 .single();
         assertThat(storedSubject).isEqualTo(existing.subjectId());
+    }
+
+    @Test
+    @DisplayName("registering a courier on a phone whose only existing account belongs to a DIFFERENT tenant's "
+            + "organization is refused -- reusing it would silently link a stranger's account into this "
+            + "tenant's organization (tenant-isolation break)")
+    void registeringOnAPhoneOwnedByAnotherTenantIsRefused() throws Exception {
+        StaffAccounts.StaffAccount otherTenantsStaffer = accounts.create("Someone", "Else", "+998907776655", null);
+        // The account belongs to a different tenant's organization -- never this one.
+        organizations.ensureMembership(new OrganizationProvisioner.EnsureMembership(
+                "org-a-completely-different-tenant", "", otherTenantsStaffer.subjectId()));
+        accounts.created.clear();
+        organizations.ensured.clear();
+
+        MvcResult result = mvc.perform(post(registerPath())
+                        .with(tokenFor(MANAGER))
+                        .header("Idempotency-Key", "courier-register-cross-tenant")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(registrationBody("+998907776655", null)))
+                .andReturn();
+
+        assertThat(result.getResponse().getStatus())
+                .as("reusing another tenant's account must be refused as a conflict, not silently linked in")
+                .isEqualTo(409);
+        assertThat(organizations.ensured)
+                .as("the foreign account must never be linked into this tenant's organization")
+                .noneMatch(m -> m.subjectId().equals(otherTenantsStaffer.subjectId())
+                        && m.organizationId().equals(ORGANIZATION_ID));
+        assertThat(accounts.created)
+                .as("no new account should be created either -- the phone is already taken elsewhere")
+                .isEmpty();
+        Long courierRows = jdbc.sql("SELECT COUNT(*) FROM fulfillment.couriers WHERE tenant_id = :t "
+                        + "AND principal_subject = :s")
+                .param("t", TENANT)
+                .param("s", otherTenantsStaffer.subjectId())
+                .query(Long.class)
+                .single();
+        assertThat(courierRows).isZero();
     }
 
     @Test
@@ -232,11 +276,65 @@ class OperationsCourierAccountProvisioningEndpointTests {
         assertThat(storedSubject).isEqualTo(accounts.created.getFirst());
     }
 
+    @Test
+    @DisplayName("when the engagement step fails after the account step already created a brand-new "
+            + "identity-provider account, that account is removed rather than left as a live, "
+            + "tenant-linked orphan nothing ever claims")
+    void aFailedEngagementRegistrationRemovesTheFreshlyCreatedAccount() throws Exception {
+        // First registration claims displayReference "C-DUP" for a different phone.
+        MvcResult first = mvc.perform(post(registerPath())
+                        .with(tokenFor(MANAGER))
+                        .header("Idempotency-Key", "courier-register-orphan-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(registrationBodyWithReference("+998901999001", null, "C-DUP")))
+                .andReturn();
+        assertThat(first.getResponse().getStatus()).isEqualTo(200);
+        accounts.created.clear();
+        organizations.ensured.clear();
+
+        // A second registration, a different never-before-seen phone, collides
+        // on the same displayReference -- uq_courier_reference refuses it
+        // after CourierAccountProvisioningService.provision() already created
+        // and linked a brand-new account for this second phone.
+        MvcResult result = mvc.perform(post(registerPath())
+                        .with(tokenFor(MANAGER))
+                        .header("Idempotency-Key", "courier-register-orphan-2")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(registrationBodyWithReference("+998901999002", null, "C-DUP")))
+                .andReturn();
+
+        assertThat(result.getResponse().getStatus())
+                .as("the duplicate displayReference must still be refused")
+                .isGreaterThanOrEqualTo(400);
+        assertThat(accounts.created)
+                .as("the second phone's brand-new account was in fact created")
+                .hasSize(1);
+        String orphanSubject = accounts.created.getFirst();
+        assertThat(accounts.deleted)
+                .as("the account created for the failed registration must be cleaned up rather than left "
+                        + "as a permanent, tenant-linked orphan")
+                .containsExactly(orphanSubject);
+
+        Long courierRows = jdbc.sql("SELECT COUNT(*) FROM fulfillment.couriers WHERE tenant_id = :t "
+                        + "AND principal_subject = :s")
+                .param("t", TENANT)
+                .param("s", orphanSubject)
+                .query(Long.class)
+                .single();
+        assertThat(courierRows)
+                .as("no courier row exists for the orphaned account")
+                .isZero();
+    }
+
     private static String registrationBody(String phone, @Nullable String email) {
+        return registrationBodyWithReference(phone, email, "C-1001");
+    }
+
+    private static String registrationBodyWithReference(String phone, @Nullable String email, String reference) {
         return """
                 {"courierTypeId":"%s","firstName":"Malika","lastName":"Tosheva","phone":"%s",%s
-                 "displayReference":"C-1001","engagedFrom":"2026-09-25","reason":"onboarding"}
-                """.formatted(COURIER_TYPE, phone, email == null ? "" : "\"email\":\"" + email + "\",");
+                 "displayReference":"%s","engagedFrom":"2026-09-25","reason":"onboarding"}
+                """.formatted(COURIER_TYPE, phone, email == null ? "" : "\"email\":\"" + email + "\",", reference);
     }
 
     private static String registerPath() {
@@ -319,6 +417,11 @@ class OperationsCourierAccountProvisioningEndpointTests {
             }
 
             @Override
+            public boolean isMember(String organizationId, String subjectId) {
+                return ensured.contains(new EnsuredMembership(organizationId, subjectId));
+            }
+
+            @Override
             public void setOrganizationEnabled(String organizationId, boolean enabled) {
                 throw new UnsupportedOperationException("not part of this fixture");
             }
@@ -329,10 +432,17 @@ class OperationsCourierAccountProvisioningEndpointTests {
 
             final Map<String, StaffAccount> byId = new HashMap<>();
             final List<String> created = new ArrayList<>();
+            final List<String> deleted = new ArrayList<>();
 
             @Override
             public Optional<StaffAccount> find(String subjectId) {
                 return Optional.ofNullable(byId.get(subjectId));
+            }
+
+            @Override
+            public void delete(String subjectId) {
+                byId.remove(subjectId);
+                deleted.add(subjectId);
             }
 
             @Override

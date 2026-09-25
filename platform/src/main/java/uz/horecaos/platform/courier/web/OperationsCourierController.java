@@ -812,18 +812,30 @@ public class OperationsCourierController {
         CourierAccountProvisioningService.Provisioned account = accountProvisioning.provision(
                 tenantId, body.firstName(), body.lastName(), body.phone(), blankToNull(body.email()), actor());
 
-        CourierEngagementService.Registration registration = engagements.register(
-                new CourierEngagementService.NewCourier(
-                        tenantId,
-                        body.courierTypeId(),
-                        account.subjectId(),
-                        body.displayReference(),
-                        body.fullName(),
-                        body.engagedFrom(),
-                        actor(),
-                        body.reason(),
-                        correlationId()),
-                body.compliance());
+        CourierEngagementService.Registration registration;
+        try {
+            registration = engagements.register(
+                    new CourierEngagementService.NewCourier(
+                            tenantId,
+                            body.courierTypeId(),
+                            account.subjectId(),
+                            body.displayReference(),
+                            body.fullName(),
+                            body.engagedFrom(),
+                            actor(),
+                            body.reason(),
+                            correlationId()),
+                    body.compliance());
+        } catch (RuntimeException failed) {
+            // The identity-provider account above may already exist (and,
+            // when it does, already carry this tenant's organization
+            // membership) by the time a later step -- most often a duplicate
+            // displayReference hitting uq_courier_reference -- refuses the
+            // registration; without this, a freshly created account would
+            // survive as a real, tenant-linked identity nothing ever claims.
+            accountProvisioning.abandonIfCreated(tenantId, account, failed, actor(), body.reason());
+            throw failed;
+        }
 
         return ResponseEntity.ok(
                 new CourierResponse(registration.courierId(), registration.engagementId(), "PENDING_VERIFICATION"));
