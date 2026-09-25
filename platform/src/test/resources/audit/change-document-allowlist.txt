@@ -217,9 +217,6 @@ uz/horecaos/platform/ordering/application/OrderCallProvenanceService.java:57
 uz/horecaos/platform/ordering/application/OrderQueryService.java:327
 uz/horecaos/platform/ordering/application/OrderStateService.java:1438
 
-# --- partner ---
-uz/horecaos/platform/partner/application/HandoverVerificationService.java:146
-
 # --- payments ---
 uz/horecaos/platform/payments/application/PaymentMethodRegistryService.java:149
 uz/horecaos/platform/payments/application/PaymentMethodRegistryService.java:191
