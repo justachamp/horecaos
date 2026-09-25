@@ -18,6 +18,7 @@ import { LatenessPolicy, PLATFORM_DEFAULT_LATENESS_POLICY } from '../../core/lat
 import { LatenessPolicyApi } from '../../core/lateness-policy-api';
 import { I18n } from '../../core/i18n/i18n';
 import { TPipe } from '../../core/i18n/t.pipe';
+import { RealtimeClient } from '../../core/realtime/realtime-client';
 import { CouriersApi, RosterEntryResponse } from '../couriers/couriers-api';
 import {
   DispatchApi,
@@ -159,6 +160,7 @@ export class KitchenQueuePage implements OnInit {
   private readonly couriersApi = inject(CouriersApi);
   private readonly amendmentsApi = inject(OrderAmendmentsApi);
   private readonly channelsApi = inject(SalesChannelsApi);
+  private readonly realtime = inject(RealtimeClient);
   private readonly router = inject(Router);
   private readonly i18n = inject(I18n);
   private readonly destroyRef = inject(DestroyRef);
@@ -243,10 +245,26 @@ export class KitchenQueuePage implements OnInit {
         void this.refresh();
       }
     }, POLL_INTERVAL_MS);
+
+    // The ADR 0045 accelerator (row 2.1): a KITCHEN_BOARD signal or a resync
+    // means this branch's board just changed, so refresh at once rather than
+    // waiting up to POLL_INTERVAL_MS. The poll above keeps running regardless
+    // — this only ever shortens the wait, the same fallback rule
+    // `order-queue.ts`'s identical wiring already follows for ORDER_QUEUE.
+    const unsubscribeRealtime = this.realtime.onFrame((frame) => {
+      if (
+        (frame.kind === 'signal' && frame.channel === 'kitchen_board') ||
+        frame.kind === 'resync'
+      ) {
+        void this.refresh();
+      }
+    });
+
     this.destroyRef.onDestroy(() => {
       if (this.pollHandle !== null) {
         clearInterval(this.pollHandle);
       }
+      unsubscribeRealtime();
     });
     void this.start();
   }
