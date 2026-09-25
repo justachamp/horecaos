@@ -71,4 +71,35 @@ class DeliveryDestinationTests {
 
         assertThat(destination.maskedLabel()).isEqualTo("Mirzo Ulugbek, Labzak ko'chasi");
     }
+
+    @Test
+    void aStreetNameThatBeginsWithADigitIsKeptWhenThereIsNoHouseNumber() {
+        // "9 Yanvar ko'chasi" (9th January street) — a common post-Soviet
+        // numbered street name in this market, with no trailing house number.
+        DeliveryDestination destination = destination("9 Yanvar ko'chasi", "Chilonzor", "Tashkent", "", "", "");
+
+        assertThat(destination.maskedLabel()).isEqualTo("Chilonzor, 9 Yanvar ko'chasi");
+    }
+
+    @Test
+    void aStreetNameThatBeginsWithADigitSurvivesMaskingOfATrailingHouseNumber() {
+        // Same numbered street, this time with a real trailing house number
+        // that must be masked without discarding the street's own leading digit.
+        DeliveryDestination destination = destination("9 Yanvar ko'chasi 15", "Chilonzor", "Tashkent", "42", "3", "7");
+
+        String label = destination.maskedLabel();
+        assertThat(label).isEqualTo("Chilonzor, 9 Yanvar ko'chasi");
+        assertThat(label).doesNotContain("15");
+    }
+
+    @Test
+    void anotherNumberedStreetNameIsKeptWithoutItsHouseNumber() {
+        // "40 Yil Chilonzor ko'chasi" (40 Years of Chilonzor street).
+        DeliveryDestination destination =
+                destination("40 Yil Chilonzor ko'chasi 25", "Chilonzor", "Tashkent", "", "", "");
+
+        String label = destination.maskedLabel();
+        assertThat(label).isEqualTo("Chilonzor, 40 Yil Chilonzor ko'chasi");
+        assertThat(label).doesNotContain("25");
+    }
 }
