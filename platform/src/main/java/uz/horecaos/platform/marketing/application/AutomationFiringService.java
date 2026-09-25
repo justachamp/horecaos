@@ -168,12 +168,15 @@ public class AutomationFiringService {
         }
 
         runs.markFired(rule.tenantId(), runId, notificationId, deliverAt);
+        // "TRIGGER" is V0043's own ck_marketing_send_source value, reserved
+        // alongside "CAMPAIGN" since the frequency ledger was first built —
+        // this is that reservation's first caller.
         engagement.recordSend(
                 rule.tenantId(),
                 rule.brandId(),
                 customerAccountId,
                 channel.name(),
-                "AUTOMATION_RULE",
+                "TRIGGER",
                 rule.id(),
                 notificationId,
                 deliverAt);

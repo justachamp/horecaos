@@ -14,11 +14,14 @@ import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.configuration.Ids;
 import uz.horecaos.platform.iam.api.ResourceScope;
+import uz.horecaos.platform.marketing.api.CampaignMessagePort;
 import uz.horecaos.platform.marketing.domain.AutomationTriggerType;
 import uz.horecaos.platform.marketing.domain.MarketingChannel;
 import uz.horecaos.platform.marketing.infrastructure.persistence.JdbcAutomationRuleStore;
 import uz.horecaos.platform.marketing.infrastructure.persistence.JdbcAutomationRuleStore.AutomationRuleRow;
 import uz.horecaos.platform.marketing.infrastructure.persistence.JdbcAutomationRuleStore.NewRule;
+import uz.horecaos.platform.web.api.ApiException;
+import uz.horecaos.platform.web.api.ErrorCode;
 
 /**
  * Authoring and arming an automation rule (gap-map row 6.5, ADR 0044 Triggers).
@@ -31,19 +34,34 @@ import uz.horecaos.platform.marketing.infrastructure.persistence.JdbcAutomationR
  * shape {@code CampaignService#approve} already gives a campaign: the person who
  * writes a rule and the person who turns it loose may be, but need not be, the
  * same principal.
+ *
+ * <p>{@link #activate} also refuses an unwired channel, the same lesson {@code
+ * CampaignService#start}'s own doc states: before that check existed there, a
+ * campaign whose channel had no ADR 0020 delivery path reached {@code SENDING}
+ * anyway and failed silently, three frames deep inside the expansion scheduler,
+ * with nothing telling the operator who spent an approval on it. An automation
+ * rule armed against an unwired channel would fail the same way — every sweep
+ * pass records a {@code CHANNEL_NOT_WIRED} refusal nobody is watching for —
+ * so it is refused here, at the moment an operator presses arm, instead.
  */
 @Service
 public class AutomationRuleService {
 
     private final JdbcAutomationRuleStore rules;
     private final ObjectMapper objectMapper;
+    private final CampaignMessagePort messages;
     private final AuditRecorder audit;
     private final Clock clock;
 
     public AutomationRuleService(
-            JdbcAutomationRuleStore rules, ObjectMapper objectMapper, AuditRecorder audit, Clock clock) {
+            JdbcAutomationRuleStore rules,
+            ObjectMapper objectMapper,
+            CampaignMessagePort messages,
+            AuditRecorder audit,
+            Clock clock) {
         this.rules = rules;
         this.objectMapper = objectMapper;
+        this.messages = messages;
         this.audit = audit;
         this.clock = clock;
     }
@@ -117,11 +135,22 @@ public class AutomationRuleService {
                 clock.instant());
     }
 
-    /** The human act that arms a rule. See this class's own doc. */
+    /**
+     * The human act that arms a rule. See this class's own doc.
+     *
+     * @throws ApiException {@code UNPROCESSABLE_STATE} when the rule's channel has
+     *                      no ADR 0020 delivery path wired yet
+     */
     @Transactional
     public boolean activate(
             UUID tenantId, UUID brandId, UUID ruleId, int expectedVersion, ActorRef actor, String correlationId) {
         AutomationRuleRow rule = require(tenantId, brandId, ruleId);
+        if (!messages.isWired(rule.channel())) {
+            throw new ApiException(
+                    ErrorCode.UNPROCESSABLE_STATE,
+                    "No ADR 0020 delivery path is wired for %s yet; this rule cannot be armed"
+                            .formatted(rule.channel()));
+        }
         Instant now = clock.instant();
         boolean activated = rules.activate(tenantId, ruleId, expectedVersion, subjectOf(actor), now);
 
