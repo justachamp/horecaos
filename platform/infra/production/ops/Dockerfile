@@ -3,7 +3,7 @@
 # Every command in docs/runbooks/restore.md runs in this container rather than on
 # the host, for two reasons. The host is a colocation box that will be rebuilt at
 # some point, and a runbook that begins "first install the PostgreSQL 18 client
-# and MinIO's mc" is a runbook that fails when it is needed. And `pg_dump` from
+# and the AWS CLI" is a runbook that fails when it is needed. And `pg_dump` from
 # the wrong major version refuses to dump a newer server — which is discovered
 # at 3am, not before.
 #
@@ -11,12 +11,10 @@
 # PostgreSQL client version as the server they are talking to, because both come
 # from the same upstream image.
 
-FROM quay.io/minio/mc:RELEASE.2025-07-21T05-28-08Z AS mc
-
 FROM postgres:18-alpine
 
 # `ca-certificates` is needed the moment the off-site destination becomes a real
-# HTTPS endpoint rather than the MinIO next door.
+# HTTPS endpoint rather than the object store next door.
 # `openssl` is what backup.sh encrypts with; `curl` and `jq` are what
 # bao-get.sh reads the backup passphrase with at 2am when nobody is awake to
 # type a token.
@@ -24,9 +22,14 @@ FROM postgres:18-alpine
 # bootstrap runbook runs from in here: Keycloak publishes no port in production,
 # so the script has to run from a container on the compose network rather than
 # from the host.
-RUN apk add --no-cache openssl ca-certificates bash curl jq python3
-
-COPY --from=mc /usr/bin/mc /usr/local/bin/mc
+#
+# `aws-cli` replaces the `mc` binary this used to copy from MinIO's own client
+# image (ADR 0135, 2026-09-25): MinIO's images -- server and client alike --
+# were withdrawn from every public registry this repository pulled from, so
+# there is no `quay.io/minio/mc` left to copy a binary out of. Alpine ships a
+# package for it, which is also one fewer stage and one fewer pinned image to
+# track here.
+RUN apk add --no-cache openssl ca-certificates bash curl jq python3 aws-cli
 
 # The backup scripts are copied in rather than mounted, so that the image is a
 # self-contained thing that can be pulled onto a rescue host where this
