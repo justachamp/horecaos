@@ -219,9 +219,15 @@ public class SchedulingConfiguration {
      * gave {@code DayCloseService} in wave 6. Batch 8 added the last one so
      * far: {@code CatalogImportRunWorker.processQueuedRuns}, which drains
      * {@code catalog.import_runs} (row 4.5b) the identical way {@code
-     * CustomerImportRunWorker} already drains its own import queue.
+     * CustomerImportRunWorker} already drains its own import queue. Batch 11
+     * added the last one so far: {@code
+     * InventoryQuantityResetScheduler.resetDueItems}, ADR 0017's QUANTITY
+     * branch (gap map row 4.4c) — a stock item's daily default quantity
+     * (V0405/V0406) had no scheduled worker to apply it, so it stayed exactly
+     * where an operator last set on-hand, forever, regardless of how the
+     * default was configured.
      */
-    static final int DEFAULT_POOL_SIZE = 66;
+    static final int DEFAULT_POOL_SIZE = 67;
 
     /**
      * The platform's scheduler, replacing Boot's single-threaded default.

@@ -37,6 +37,20 @@ public record AvailabilityDecision(boolean available, List<Unavailable> unavaila
         }
 
         /**
+         * A QUANTITY item is still in true stock ({@code on_hand - reserved} covers
+         * the request), but a per-channel-type stop threshold (gap map row 4.4c)
+         * cuts this channel off earlier than zero — an aggregator kept selling
+         * past the point a kitchen wanted it stopped there specifically.
+         *
+         * <p>Only {@code checkAvailabilityForChannel} ever produces this reason;
+         * the reservation/hold path never refuses on it; see {@code
+         * inventory.channel_stop_thresholds}'s own migration comment.
+         */
+        public static Unavailable channelStopped(UUID variantId) {
+            return new Unavailable(variantId, "CHANNEL_STOPPED");
+        }
+
+        /**
          * The hold taken for this cart lapsed before checkout reached it.
          *
          * <p>Not attributable to one dish — the whole hold expired — so it is
