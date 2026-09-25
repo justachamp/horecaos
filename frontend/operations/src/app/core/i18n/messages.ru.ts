@@ -4177,6 +4177,8 @@ export const messagesRu: MessageCatalogue = {
   'marketing.campaign.stats.refusedByReason.title': 'Отказано, по причине',
   'marketing.campaign.stats.deliveryUnavailableHint':
     'Доставлено/не доставлено пока не отслеживается — для этой кампании нет отчёта о прочтении.',
+  'marketing.campaign.stats.export': 'Экспортировать получателей в CSV',
+  'marketing.campaign.stats.exportedCount': 'Экспортировано ID аккаунтов: {count}',
 
   'marketing.refusal.ACCOUNT_NOT_ACTIVE': 'Аккаунт неактивен, объединён или анонимизирован',
   'marketing.refusal.CONSENT_WITHHELD': 'Нет согласия на маркетинговые рассылки',

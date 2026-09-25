@@ -4207,6 +4207,8 @@ export const messagesEn = {
   'marketing.campaign.stats.refusedByReason.title': 'Refused, by reason',
   'marketing.campaign.stats.deliveryUnavailableHint':
     'Delivered vs. failed is not tracked yet — no read receipt reaches this campaign.',
+  'marketing.campaign.stats.export': 'Export recipients as CSV',
+  'marketing.campaign.stats.exportedCount': 'Exported {count} account id(s)',
 
   'marketing.refusal.ACCOUNT_NOT_ACTIVE': 'Account not active, merged, or anonymised',
   'marketing.refusal.CONSENT_WITHHELD': 'No marketing consent on file',

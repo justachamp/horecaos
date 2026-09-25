@@ -227,6 +227,29 @@
             {{ 'marketing.campaign.stats.deliveryUnavailableHint' | t }}
           </p>
         }
+
+        @if (campaign(); as c) {
+          @if (c.snapshotId !== null) {
+            <div class="stats__export">
+              <button
+                type="button"
+                data-testid="campaign-export-snapshot"
+                [disabled]="exportBusy()"
+                (click)="exportSnapshot()"
+              >
+                {{ 'marketing.campaign.stats.export' | t }}
+              </button>
+              @if (exportedCount(); as count) {
+                <span class="q-caption q-tnum" data-testid="campaign-export-count">
+                  {{ 'marketing.campaign.stats.exportedCount' | t: { count } }}
+                </span>
+              }
+            </div>
+            @if (exportError(); as error) {
+              <p class="q-caption stats__export-error" role="alert">{{ error }}</p>
+            }
+          }
+        }
       </section>
 
       <section class="recipients">

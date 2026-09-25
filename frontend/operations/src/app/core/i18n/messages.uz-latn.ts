@@ -4203,6 +4203,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'marketing.campaign.stats.refusedByReason.title': 'Rad etilganlar, sabab boʻyicha',
   'marketing.campaign.stats.deliveryUnavailableHint':
     'Yetkazildi/yetkazilmadi hali kuzatilmaydi — bu kampaniya uchun oʻqilganlik xabari yoʻq.',
+  'marketing.campaign.stats.export': 'Qabul qiluvchilarni CSV sifatida eksport qilish',
+  'marketing.campaign.stats.exportedCount': '{count} ta hisob ID eksport qilindi',
 
   'marketing.refusal.ACCOUNT_NOT_ACTIVE':
     'Hisob faol emas, birlashtirilgan yoki anonimlashtirilgan',
