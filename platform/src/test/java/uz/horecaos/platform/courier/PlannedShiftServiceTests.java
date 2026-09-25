@@ -625,7 +625,8 @@ class PlannedShiftServiceTests {
                     defaults.gpsStatusChangeRadiusMeters(),
                     defaults.kitchenReadyOnly(),
                     defaults.revealCustomerLocationTiming(),
-                    defaults.postDeliveryPaymentCheckRequired());
+                    defaults.postDeliveryPaymentCheckRequired(),
+                    defaults.onlineWithinMinutes());
             return Optional.of((ResolvedPolicy<P>)
                     new ResolvedPolicy<>(key.code(), UUID.randomUUID(), 1, scope.type(), "test", document));
         }

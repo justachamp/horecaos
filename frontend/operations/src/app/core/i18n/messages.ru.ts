@@ -2769,6 +2769,11 @@ export const messagesRu: MessageCatalogue = {
   'couriers.column.reference': 'Курьер',
   'couriers.column.type': 'Тип',
   'couriers.column.load': 'Загрузка',
+  'couriers.column.online': 'Онлайн',
+  'couriers.online.yes': 'Онлайн',
+  'couriers.online.no': 'Офлайн',
+  'couriers.online.neverSeen': 'Позиция этого курьера ещё не получена',
+  'couriers.online.lastSeenAt': 'Последняя позиция: {when}',
   'couriers.column.engagement': 'Статус оформления',
   'couriers.action.verify': 'Подтвердить',
   'couriers.action.suspend': 'Приостановить',
@@ -2776,9 +2781,14 @@ export const messagesRu: MessageCatalogue = {
   'couriers.register.action': 'Зарегистрировать курьера',
   'couriers.register.title': 'Регистрация курьера',
   'couriers.register.type': 'Тип курьера',
-  'couriers.register.principalSubject': 'Учётная запись в приложении курьера (Keycloak)',
+  'couriers.register.firstName': 'Имя',
+  'couriers.register.lastName': 'Фамилия',
+  'couriers.register.phone': 'Телефон',
+  'couriers.register.phone.placeholder': '+998 90 123 45 67',
+  'couriers.register.email': 'Email (необязательно)',
+  'couriers.register.accountNote':
+    'Учётная запись в приложении курьера создаётся автоматически по этому имени и телефону.',
   'couriers.register.displayReference': 'Отображаемый номер (например, K-014)',
-  'couriers.register.fullName': 'ФИО',
   'couriers.register.engagedFrom': 'Дата начала работы',
   'couriers.register.reason': 'Причина',
   'couriers.register.submit': 'Зарегистрировать',
@@ -3376,6 +3386,9 @@ export const messagesRu: MessageCatalogue = {
   'delivery.policy.graceSeconds': 'Льготный период (секунд)',
   'delivery.policy.consequence.graceSeconds':
     'Курьер может опоздать на это число секунд к запланированной отметке, прежде чем она засчитается пропущенной.',
+  'delivery.policy.onlineWithinMinutes': 'Порог «онлайн» (минут)',
+  'delivery.policy.consequence.onlineWithinMinutes':
+    'Курьер, чья последняя позиция получена не позднее этого числа минут назад, отображается в реестре как «онлайн».',
   'delivery.policy.confirmationPointRetentionDays': 'Хранение точек подтверждения (дней)',
   'delivery.policy.consequence.confirmationPointRetentionDays':
     'Фото и подписи подтверждения доставки хранятся это число дней, затем удаляются.',
@@ -3396,6 +3409,8 @@ export const messagesRu: MessageCatalogue = {
     'По умолчанию отключено. Включение начинает проверять положение курьера по обоим радиусам ниже.',
   'delivery.policy.gpsAcceptRadiusKm': 'Радиус принятия (км, от точки выдачи)',
   'delivery.policy.gpsStatusChangeRadiusMeters': 'Радиус смены статуса (м, от точки клиента)',
+  'delivery.policy.gpsSummary':
+    'Включено — приём в пределах {acceptKm} км, смена статуса в пределах {statusChangeM} м',
   'delivery.policy.billingMode': 'Биллинг курьеров (личный баланс)',
   'delivery.policy.billingMode.refused': 'Отклонено ADR 0042',
   'delivery.policy.billingMode.reason':
@@ -3404,6 +3419,15 @@ export const messagesRu: MessageCatalogue = {
   'delivery.policy.telemetryGate.platformOnly': 'Только платформа',
   'delivery.policy.telemetryGate.reason':
     'Зарегистрирован (ADR 0045), но доступен для записи только с административной панели платформы — арендатор не может задать это здесь.',
+  'delivery.policy.notEnforced': 'Пока не применяется',
+  'delivery.policy.notEnforced.gps.reason':
+    'Сохраняется, но ничего это пока не проверяет: в приложении курьера нет эндпоинта, принимающего заказ или продвигающего статус доставки с собственной позицией курьера. Подключение этого переключателя означает сначала выпустить такой эндпоинт, а это выходит за рамки данного документа.',
+  'delivery.policy.notEnforced.kitchenReadyOnly.reason':
+    'Сохраняется, но ничего это пока не проверяет: в консоли нет ленты назначений для курьера, которую можно было бы фильтровать этим переключателем — курьеры видят заказы только через диспетчеризацию, инициируемую персоналом, а не через собственный список.',
+  'delivery.policy.notEnforced.revealCustomerLocationTiming.reason':
+    'Сохраняется, но ничего это пока не проверяет: нет эндпоинта, который вообще показывал бы курьеру точный адрес клиента, так что переключателю времени нечего регулировать.',
+  'delivery.policy.notEnforced.postDeliveryPaymentCheckRequired.reason':
+    'Сохраняется, но ничего это пока не проверяет: завершение заказа намеренно решается независимо от учёта курьеров (ADR 0125) — сделать его зависимым от этого переключателя — решение, которое этот экран не может принять самостоятельно.',
   'delivery.policy.edit': 'Изменить',
   'delivery.policy.cancel': 'Отмена',
   'delivery.policy.publish': 'Опубликовать',

@@ -33,7 +33,27 @@ interface PolicyFieldSpec {
   readonly raw: (policy: CourierPolicyView) => string | number | boolean;
 }
 
-/** couriers.md §16's ten switches — every one is a field on this document now, except the two named below. */
+/**
+ * couriers.md §16's ten switches, split by whether anything in the platform
+ * actually reads the field once it is published.
+ *
+ * Six never had a backing field at all until this wave. Four of those six
+ * now do — `kitchenReadyOnly`, `revealCustomerLocationTiming`,
+ * `postDeliveryPaymentCheckRequired`, and the GPS master toggle with its two
+ * radii — but no enforcement point exists yet for any of them: there is no
+ * courier-app endpoint that accepts an offer, advances a delivery carrying
+ * the courier's own position, lists a courier's own offers, or reveals a
+ * customer's exact address, and an order's completion is deliberately
+ * decided independent of courier bookkeeping (ADR 0125, see
+ * `notEnforced.postDeliveryPaymentCheckRequired.reason`). Offering them here
+ * as ordinary editable rows would tell an operator they take effect when
+ * they do not — the same reason `billingMode`/`telemetryGate` below render
+ * locked rather than editable — so they render the same way: {@link
+ * NOT_ENFORCED_SIMPLE_FIELDS}, always visible, never in the edit form. The
+ * remaining two — billing mode (refused by ADR 0042) and the telemetry gate
+ * (a registered key, but platform-only) — were never fields on this
+ * document at all and keep their own fixed rows further down the template.
+ */
 const POLICY_FIELDS: readonly PolicyFieldSpec[] = [
   {
     key: 'shiftEnforcement',
@@ -41,27 +61,6 @@ const POLICY_FIELDS: readonly PolicyFieldSpec[] = [
     consequenceKey: 'delivery.policy.consequence.shiftEnforcement',
     kind: 'shiftEnforcement',
     raw: (p) => p.shiftEnforcement,
-  },
-  {
-    key: 'kitchenReadyOnly',
-    labelKey: 'delivery.policy.kitchenReadyOnly',
-    consequenceKey: 'delivery.policy.consequence.kitchenReadyOnly',
-    kind: 'boolean',
-    raw: (p) => p.kitchenReadyOnly,
-  },
-  {
-    key: 'revealCustomerLocationTiming',
-    labelKey: 'delivery.policy.revealCustomerLocationTiming',
-    consequenceKey: 'delivery.policy.consequence.revealCustomerLocationTiming',
-    kind: 'revealTiming',
-    raw: (p) => p.revealCustomerLocationTiming,
-  },
-  {
-    key: 'postDeliveryPaymentCheckRequired',
-    labelKey: 'delivery.policy.postDeliveryPaymentCheckRequired',
-    consequenceKey: 'delivery.policy.consequence.postDeliveryPaymentCheckRequired',
-    kind: 'boolean',
-    raw: (p) => p.postDeliveryPaymentCheckRequired,
   },
   {
     key: 'cashCeilingMinor',
@@ -112,6 +111,13 @@ const POLICY_FIELDS: readonly PolicyFieldSpec[] = [
     kind: 'count',
     raw: (p) => p.confirmationPointRetentionDays,
   },
+  {
+    key: 'onlineWithinMinutes',
+    labelKey: 'delivery.policy.onlineWithinMinutes',
+    consequenceKey: 'delivery.policy.consequence.onlineWithinMinutes',
+    kind: 'count',
+    raw: (p) => p.onlineWithinMinutes,
+  },
 ];
 
 export interface PolicyRowView {
@@ -123,6 +129,45 @@ export interface PolicyRowView {
   readonly inheritedValue: string | null;
 }
 
+/**
+ * A field this document stores and round-trips but that nothing in the
+ * platform reads yet — see the {@link POLICY_FIELDS} doc comment above.
+ * Rendered like `billingMode`/`telemetryGate`: the stored value, a
+ * `notEnforced` badge, and the reason, never an editable control.
+ */
+export interface NotEnforcedRowView {
+  readonly key: string;
+  readonly labelKey: MessageKey;
+  readonly reasonKey: MessageKey;
+  readonly value: string;
+}
+
+const NOT_ENFORCED_SIMPLE_FIELDS: readonly {
+  readonly key: 'kitchenReadyOnly' | 'revealCustomerLocationTiming' | 'postDeliveryPaymentCheckRequired';
+  readonly labelKey: MessageKey;
+  readonly reasonKey: MessageKey;
+  readonly kind: PolicyFieldKind;
+}[] = [
+  {
+    key: 'kitchenReadyOnly',
+    labelKey: 'delivery.policy.kitchenReadyOnly',
+    reasonKey: 'delivery.policy.notEnforced.kitchenReadyOnly.reason',
+    kind: 'boolean',
+  },
+  {
+    key: 'revealCustomerLocationTiming',
+    labelKey: 'delivery.policy.revealCustomerLocationTiming',
+    reasonKey: 'delivery.policy.notEnforced.revealCustomerLocationTiming.reason',
+    kind: 'revealTiming',
+  },
+  {
+    key: 'postDeliveryPaymentCheckRequired',
+    labelKey: 'delivery.policy.postDeliveryPaymentCheckRequired',
+    reasonKey: 'delivery.policy.notEnforced.postDeliveryPaymentCheckRequired.reason',
+    kind: 'boolean',
+  },
+];
+
 const OUT_OF_ZONE_POLICY_CODE = 'delivery.out_of_zone_policy';
 const OUT_OF_ZONE_OPTIONS = ['REJECT', 'OFFER_PICKUP', 'MANUAL_REVIEW'] as const;
 type OutOfZonePolicy = (typeof OUT_OF_ZONE_OPTIONS)[number];
@@ -130,32 +175,44 @@ type OutOfZonePolicy = (typeof OUT_OF_ZONE_OPTIONS)[number];
 /**
  * IA 3.9 / settings.md §10.13 / couriers.md §16 — Delivery policy.
  *
- * **Wave P38.** Three things changed on what was, until this wave, a
- * read-only screen with two named gaps:
+ * **Wave P38** gave this screen its writer: `PUT .../courier-policy`
+ * (`OperationsCourierController`, `DELIVERY_POLICY_WRITE`) beside the `GET`
+ * — a whole-document publish, so Edit/Publish sends every field back, not a
+ * diff — and backed four of couriers.md §16's remaining switches for the
+ * first time (the GPS master toggle with its accept/status-change radii,
+ * show-only-kitchen-ready, reveal-customer-location timing, the
+ * post-delivery payment check).
  *
- * 1. **A writer.** `PUT .../courier-policy` now exists beside the `GET`
- *    (`OperationsCourierController`, `DELIVERY_POLICY_WRITE`) — a whole-
- *    document publish, so Edit/Publish here sends every field back, not a
- *    diff. `policyVersion` on the wire is what makes "you are about to
- *    replace version {n}" honest rather than assumed.
- * 2. **Five of couriers.md §16's ten switches, backed for the first time**:
- *    the GPS master toggle with its accept/status-change radii,
- *    show-only-kitchen-ready, reveal-customer-location timing, and the
- *    post-delivery payment check. Matching Delever's own unit asymmetry
- *    (settings.md §10.13 Card 3): the accept radius is entered in
- *    kilometres, the status-change radius in metres, even though the wire
- *    and the domain both store meters — {@link kmFromMeters}/{@link
- *    metersFromKm} are the only place that conversion happens.
- * 3. **The two corrections settings.md §10.13/couriers.md §16 name.**
- *    Courier billing mode is not a missing field — ADR 0042 refuses it
- *    outright, personal-balance top-ups being a debt-collection problem
- *    HorecaOS declined to take on — so it renders as a fixed, disabled row
- *    naming the refusal rather than being silently absent. The telemetry
- *    collection gate (ADR 0045) *is* a registered ADR 0030 key today, but
- *    `telemetry.courier_collection_gate` is not `tenantVisible()` — only
- *    `ConfigurationController`'s `PLATFORM_ADMIN` surface can read or write
- *    it — so it renders here as a labelled "platform-only" row rather than
- *    attempting a tenant-scoped read that would 404.
+ * **This wave (gap map row 3.9) adds two things P38 did not.**
+ *
+ * 1. **`If-Match` on the write** (ADR 0031's concurrency section): `publish`
+ *    now sends the `policyVersion` its own last read returned as
+ *    `expectedVersion`, so two operators editing the same scope from two
+ *    open tabs get `STALE_VERSION` on the second save instead of one
+ *    silently overwriting the other's fields.
+ * 2. **Those four fields render locked, not editable.** P38 stored them and
+ *    stopped there — nothing in the platform actually reads any of the
+ *    four once published, because no courier-app endpoint exists yet that
+ *    accepts an offer, advances a delivery's status carrying the courier's
+ *    own position, lists a courier's own offers, or reveals a customer's
+ *    exact address, and an order's completion is deliberately decided
+ *    independent of courier bookkeeping (ADR 0125). Offering them as
+ *    ordinary editable rows told an operator they took effect when they did
+ *    not, so they render the way `billingMode`/`telemetryGate` already
+ *    did — the stored value, a "not yet enforced" badge, and the reason,
+ *    never a control in the edit form. See {@link NOT_ENFORCED_SIMPLE_FIELDS}
+ *    and the GPS row built inline in {@link notEnforcedGpsRow}.
+ *
+ * **The two corrections settings.md §10.13/couriers.md §16 name**, unchanged
+ * from P38. Courier billing mode is not a missing field — ADR 0042 refuses
+ * it outright, personal-balance top-ups being a debt-collection problem
+ * HorecaOS declined to take on — so it renders as a fixed, disabled row
+ * naming the refusal rather than being silently absent. The telemetry
+ * collection gate (ADR 0045) *is* a registered ADR 0030 key today, but
+ * `telemetry.courier_collection_gate` is not `tenantVisible()` — only
+ * `ConfigurationController`'s `PLATFORM_ADMIN` surface can read or write
+ * it — so it renders here as a labelled "platform-only" row rather than
+ * attempting a tenant-scoped read that would 404.
  *
  * **settings.md §10.13 Card 1 (Адреса вне зоны)** lives on this same screen
  * rather than a separate one: `delivery.out_of_zone_policy` is an ordinary
@@ -229,6 +286,41 @@ export class CourierPolicyPage implements OnInit {
     });
   });
 
+  /**
+   * The three simple not-yet-enforced switches (see this class's own doc
+   * comment) — always the currently resolved value, never a draft, because
+   * this screen offers no way to change them.
+   */
+  protected readonly notEnforcedRows = computed<readonly NotEnforcedRowView[]>(() => {
+    const policy = this.policy();
+    if (!policy) {
+      return [];
+    }
+    return NOT_ENFORCED_SIMPLE_FIELDS.map((field) => ({
+      key: field.key,
+      labelKey: field.labelKey,
+      reasonKey: field.reasonKey,
+      value: this.formatFieldValue(field.kind, policy[field.key]),
+    }));
+  });
+
+  /**
+   * The GPS master toggle and its two radii, folded into one not-yet-enforced
+   * row rather than three — a disabled toggle followed by two disabled
+   * numbers reads as three unrelated broken controls, where "GPS check:
+   * off" or "GPS check: 1000 m / 150 m" is one fact.
+   */
+  protected readonly notEnforcedGpsRow = computed<string>(() => {
+    const policy = this.policy();
+    if (!policy || !policy.gpsVerificationEnabled) {
+      return this.yesNo(false);
+    }
+    return this.i18n.t('delivery.policy.gpsSummary', {
+      acceptKm: String(CourierPolicyPage.kmFromMeters(policy.gpsAcceptRadiusMeters)),
+      statusChangeM: String(policy.gpsStatusChangeRadiusMeters),
+    });
+  });
+
   // ------------------------------------------------------------- editing
 
   protected readonly editing = signal(false);
@@ -248,6 +340,7 @@ export class CourierPolicyPage implements OnInit {
   /** Kilometres, not meters — settings.md §10.13 Card 3's own unit asymmetry. */
   protected readonly draftGpsAcceptRadiusKm = signal(1);
   protected readonly draftGpsStatusChangeRadiusMeters = signal(150);
+  protected readonly draftOnlineWithinMinutes = signal(10);
   protected readonly draftKitchenReadyOnly = signal(false);
   protected readonly draftRevealTiming =
     signal<CourierPolicyView['revealCustomerLocationTiming']>('AFTER_ACCEPT');
@@ -410,6 +503,7 @@ export class CourierPolicyPage implements OnInit {
     this.draftGpsVerificationEnabled.set(current.gpsVerificationEnabled);
     this.draftGpsAcceptRadiusKm.set(CourierPolicyPage.kmFromMeters(current.gpsAcceptRadiusMeters));
     this.draftGpsStatusChangeRadiusMeters.set(current.gpsStatusChangeRadiusMeters);
+    this.draftOnlineWithinMinutes.set(current.onlineWithinMinutes);
     this.draftKitchenReadyOnly.set(current.kitchenReadyOnly);
     this.draftRevealTiming.set(current.revealCustomerLocationTiming);
     this.draftPostDeliveryPaymentCheckRequired.set(current.postDeliveryPaymentCheckRequired);
@@ -428,7 +522,8 @@ export class CourierPolicyPage implements OnInit {
 
   protected async publish(): Promise<void> {
     const scope = this.scope;
-    if (!scope || !this.canPublish()) {
+    const current = this.policy();
+    if (!scope || !current || !this.canPublish()) {
       return;
     }
     this.saving.set(true);
@@ -446,6 +541,7 @@ export class CourierPolicyPage implements OnInit {
         gpsVerificationEnabled: this.draftGpsVerificationEnabled(),
         gpsAcceptRadiusMeters: CourierPolicyPage.metersFromKm(this.draftGpsAcceptRadiusKm()),
         gpsStatusChangeRadiusMeters: this.draftGpsStatusChangeRadiusMeters(),
+        onlineWithinMinutes: this.draftOnlineWithinMinutes(),
         kitchenReadyOnly: this.draftKitchenReadyOnly(),
         revealCustomerLocationTiming: this.draftRevealTiming(),
         postDeliveryPaymentCheckRequired: this.draftPostDeliveryPaymentCheckRequired(),
@@ -455,6 +551,7 @@ export class CourierPolicyPage implements OnInit {
       const updated = await this.api.writePolicy(
         scope.tenantId,
         input,
+        current.policyVersion,
         level === 'TENANT' ? undefined : scope.brandId,
         level === 'LOCATION' ? scope.locationId : undefined,
       );

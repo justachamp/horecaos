@@ -52,6 +52,16 @@ package uz.horecaos.platform.courier.domain;
  *                                  visible to the assigned courier
  * @param postDeliveryPaymentCheckRequired when true, an order may not close
  *                                  until payment is confirmed
+ * @param onlineWithinMinutes       gap map row {@code 3.3}: a courier whose most
+ *                                  recent telemetry fix is within this many
+ *                                  minutes shows as online on the roster.
+ *                                  Defaults to ADR 0045's own {@code
+ *                                  LivePositionRules.MAXIMUM_STALENESS} (10
+ *                                  minutes) so the roster's "online" and the
+ *                                  live map's "fresh enough to draw" agree
+ *                                  by default — an operator seeing a pin the
+ *                                  map still trusts must not see the same
+ *                                  courier marked offline on the roster
  */
 public record CourierCompensationPolicy(
         int reverificationDays,
@@ -67,7 +77,8 @@ public record CourierCompensationPolicy(
         int gpsStatusChangeRadiusMeters,
         boolean kitchenReadyOnly,
         RevealTiming revealCustomerLocationTiming,
-        boolean postDeliveryPaymentCheckRequired) {
+        boolean postDeliveryPaymentCheckRequired,
+        int onlineWithinMinutes) {
 
     /** ADR 0042's provisional values, in force until finance and operations answer. */
     public static final CourierCompensationPolicy DEFAULTS = new CourierCompensationPolicy(
@@ -84,7 +95,8 @@ public record CourierCompensationPolicy(
             150,
             false,
             RevealTiming.AFTER_ACCEPT,
-            false);
+            false,
+            10);
 
     public CourierCompensationPolicy {
         if (reverificationDays < 1 || warningDays < 1 || settlementPeriodDays < 1) {
@@ -95,6 +107,9 @@ public record CourierCompensationPolicy(
         }
         if (gpsAcceptRadiusMeters < 1 || gpsStatusChangeRadiusMeters < 1) {
             throw new IllegalArgumentException("A GPS radius of zero or less accepts nothing");
+        }
+        if (onlineWithinMinutes < 1) {
+            throw new IllegalArgumentException("An online window of zero minutes marks every courier offline");
         }
     }
 }

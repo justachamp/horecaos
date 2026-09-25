@@ -26,6 +26,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
 import org.springframework.context.annotation.Bean;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -92,6 +93,7 @@ class CourierPolicyEndpointTests {
               "kitchenReadyOnly": true,
               "revealCustomerLocationTiming": "BEFORE_ACCEPT",
               "postDeliveryPaymentCheckRequired": true,
+              "onlineWithinMinutes": 5,
               "reason": "Tightened for the pilot branch"
             }
             """;
@@ -197,6 +199,7 @@ class CourierPolicyEndpointTests {
         assertThat(body.path("kitchenReadyOnly").asBoolean()).isFalse();
         assertThat(body.path("revealCustomerLocationTiming").asText()).isEqualTo("AFTER_ACCEPT");
         assertThat(body.path("postDeliveryPaymentCheckRequired").asBoolean()).isFalse();
+        assertThat(body.path("onlineWithinMinutes").asInt()).isEqualTo(10);
     }
 
     @Test
@@ -205,11 +208,13 @@ class CourierPolicyEndpointTests {
         MvcResult written = mvc.perform(put(policyPath())
                         .with(tokenFor(MANAGER))
                         .header("Idempotency-Key", "courier-policy-write-1")
+                        .header(HttpHeaders.IF_MATCH, "\"1\"")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(FULL_POLICY_BODY))
                 .andReturn();
 
         assertThat(written.getResponse().getStatus()).isEqualTo(200);
+        assertThat(written.getResponse().getHeader(HttpHeaders.ETAG)).isEqualTo("W/\"1\"");
         JsonNode writtenBody = json(written);
         assertThat(writtenBody.path("policyVersion").asInt()).isEqualTo(1);
         assertThat(writtenBody.path("winningScope").asText()).isEqualTo("TENANT");
@@ -217,6 +222,7 @@ class CourierPolicyEndpointTests {
 
         MvcResult read = mvc.perform(get(policyPath()).with(tokenFor(MANAGER))).andReturn();
         assertThat(read.getResponse().getStatus()).isEqualTo(200);
+        assertThat(read.getResponse().getHeader(HttpHeaders.ETAG)).isEqualTo("W/\"1\"");
         assertNewFieldsMatchTheFullPolicyBody(json(read));
     }
 
@@ -226,19 +232,36 @@ class CourierPolicyEndpointTests {
         mvc.perform(put(policyPath())
                 .with(tokenFor(MANAGER))
                 .header("Idempotency-Key", "courier-policy-write-2a")
+                .header(HttpHeaders.IF_MATCH, "\"1\"")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(FULL_POLICY_BODY));
 
         MvcResult secondWrite = mvc.perform(put(policyPath())
                         .with(tokenFor(MANAGER))
                         .header("Idempotency-Key", "courier-policy-write-2b")
+                        .header(HttpHeaders.IF_MATCH, "\"2\"")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(FULL_POLICY_BODY.replace(
                                 "\"gpsAcceptRadiusMeters\": 400", "\"gpsAcceptRadiusMeters\": 800")))
                 .andReturn();
 
-        assertThat(secondWrite.getResponse().getStatus()).isEqualTo(200);
-        JsonNode secondBody = json(secondWrite);
+        assertThat(secondWrite.getResponse().getStatus())
+                .as("the second write's If-Match must carry the FIRST write's version (1), not the "
+                        + "second (2) — this deliberately proves the check reads the server's "
+                        + "resolved version rather than trusting whatever the client sent back")
+                .isEqualTo(409);
+
+        MvcResult correctedSecondWrite = mvc.perform(put(policyPath())
+                        .with(tokenFor(MANAGER))
+                        .header("Idempotency-Key", "courier-policy-write-2c")
+                        .header(HttpHeaders.IF_MATCH, "\"1\"")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(FULL_POLICY_BODY.replace(
+                                "\"gpsAcceptRadiusMeters\": 400", "\"gpsAcceptRadiusMeters\": 800")))
+                .andReturn();
+
+        assertThat(correctedSecondWrite.getResponse().getStatus()).isEqualTo(200);
+        JsonNode secondBody = json(correctedSecondWrite);
         assertThat(secondBody.path("policyVersion").asInt()).isEqualTo(2);
         assertThat(secondBody.path("gpsAcceptRadiusMeters").asInt()).isEqualTo(800);
 
@@ -249,11 +272,64 @@ class CourierPolicyEndpointTests {
     }
 
     @Test
+    @DisplayName("PUT .../courier-policy is refused with STALE_VERSION when If-Match no longer matches "
+            + "the version currently in force at that scope")
+    void writeIsRefusedOnAVersionMismatch() throws Exception {
+        // v1, then v2 — so If-Match: "1" is genuinely stale by the time the third call below sends it.
+        mvc.perform(put(policyPath())
+                .with(tokenFor(MANAGER))
+                .header("Idempotency-Key", "courier-policy-stale-1")
+                .header(HttpHeaders.IF_MATCH, "\"1\"")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(FULL_POLICY_BODY));
+        mvc.perform(put(policyPath())
+                .with(tokenFor(MANAGER))
+                .header("Idempotency-Key", "courier-policy-stale-2")
+                .header(HttpHeaders.IF_MATCH, "\"1\"")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(FULL_POLICY_BODY));
+
+        MvcResult stale = mvc.perform(put(policyPath())
+                        .with(tokenFor(MANAGER))
+                        .header("Idempotency-Key", "courier-policy-stale-3")
+                        .header(HttpHeaders.IF_MATCH, "\"1\"")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(FULL_POLICY_BODY.replace(
+                                "\"gpsAcceptRadiusMeters\": 400", "\"gpsAcceptRadiusMeters\": 900")))
+                .andReturn();
+
+        assertThat(stale.getResponse().getStatus()).isEqualTo(409);
+        assertThat(json(stale).path("code").asText()).isEqualTo("STALE_VERSION");
+
+        long storedVersions = jdbc.sql("SELECT count(*) FROM tenant.policies WHERE key_code = 'courier.compensation'")
+                .query(Long.class)
+                .single();
+        assertThat(storedVersions)
+                .as("the refused write must publish nothing beyond the first two")
+                .isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("PUT .../courier-policy is refused with INVALID_REQUEST when If-Match is missing entirely")
+    void writeIsRefusedWithoutIfMatch() throws Exception {
+        MvcResult attempt = mvc.perform(put(policyPath())
+                        .with(tokenFor(MANAGER))
+                        .header("Idempotency-Key", "courier-policy-no-if-match")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(FULL_POLICY_BODY))
+                .andReturn();
+
+        assertThat(attempt.getResponse().getStatus()).isEqualTo(400);
+        assertThat(json(attempt).path("code").asText()).isEqualTo("INVALID_REQUEST");
+    }
+
+    @Test
     @DisplayName("PUT .../courier-policy is refused for a caller holding no capability")
     void writeIsRefusedWithoutCapability() throws Exception {
         MvcResult attempt = mvc.perform(put(policyPath())
                         .with(tokenFor(NOBODY))
                         .header("Idempotency-Key", "courier-policy-write-refused")
+                        .header(HttpHeaders.IF_MATCH, "\"1\"")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(FULL_POLICY_BODY))
                 .andReturn();
@@ -288,6 +364,7 @@ class CourierPolicyEndpointTests {
         MvcResult written = mvc.perform(put(policyPathAtBrand())
                         .with(tokenFor(BRAND_MANAGER))
                         .header("Idempotency-Key", "courier-policy-write-brand-manager-1")
+                        .header(HttpHeaders.IF_MATCH, "\"1\"")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(FULL_POLICY_BODY))
                 .andReturn();
@@ -311,6 +388,7 @@ class CourierPolicyEndpointTests {
         MvcResult written = mvc.perform(put(policyPathAtBrand())
                         .with(tokenFor(MANAGER))
                         .header("Idempotency-Key", "courier-policy-write-brand-1")
+                        .header(HttpHeaders.IF_MATCH, "\"1\"")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(FULL_POLICY_BODY))
                 .andReturn();
@@ -342,12 +420,14 @@ class CourierPolicyEndpointTests {
         mvc.perform(put(policyPathAtBrand())
                 .with(tokenFor(MANAGER))
                 .header("Idempotency-Key", "courier-policy-write-brand-2")
+                .header(HttpHeaders.IF_MATCH, "\"1\"")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(FULL_POLICY_BODY));
 
         MvcResult written = mvc.perform(put(policyPathAtLocation())
                         .with(tokenFor(MANAGER))
                         .header("Idempotency-Key", "courier-policy-write-location-1")
+                        .header(HttpHeaders.IF_MATCH, "\"1\"")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(FULL_POLICY_BODY.replace(
                                 "\"gpsAcceptRadiusMeters\": 400", "\"gpsAcceptRadiusMeters\": 250")))
@@ -383,6 +463,7 @@ class CourierPolicyEndpointTests {
         MvcResult foreignWrite = mvc.perform(put(policyPath(TENANT))
                         .with(tokenFor(OTHER_TENANT_MANAGER))
                         .header("Idempotency-Key", "courier-policy-cross-tenant-write-1")
+                        .header(HttpHeaders.IF_MATCH, "\"1\"")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(FULL_POLICY_BODY))
                 .andReturn();
@@ -413,6 +494,7 @@ class CourierPolicyEndpointTests {
         assertThat(body.path("kitchenReadyOnly").asBoolean()).isTrue();
         assertThat(body.path("revealCustomerLocationTiming").asText()).isEqualTo("BEFORE_ACCEPT");
         assertThat(body.path("postDeliveryPaymentCheckRequired").asBoolean()).isTrue();
+        assertThat(body.path("onlineWithinMinutes").asInt()).isEqualTo(5);
     }
 
     private static JsonNode json(MvcResult result) throws Exception {

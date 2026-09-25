@@ -2802,6 +2802,11 @@ export const messagesEn = {
   'couriers.column.reference': 'Courier',
   'couriers.column.type': 'Type',
   'couriers.column.load': 'Load',
+  'couriers.column.online': 'Online',
+  'couriers.online.yes': 'Online',
+  'couriers.online.no': 'Offline',
+  'couriers.online.neverSeen': 'No position ever received for this courier',
+  'couriers.online.lastSeenAt': 'Last position: {when}',
   'couriers.column.engagement': 'Engagement',
   'couriers.action.verify': 'Verify',
   'couriers.action.suspend': 'Suspend',
@@ -2809,9 +2814,14 @@ export const messagesEn = {
   'couriers.register.action': 'Register courier',
   'couriers.register.title': 'Register a courier',
   'couriers.register.type': 'Courier type',
-  'couriers.register.principalSubject': 'Courier-app account (Keycloak subject)',
+  'couriers.register.firstName': 'First name',
+  'couriers.register.lastName': 'Last name',
+  'couriers.register.phone': 'Phone',
+  'couriers.register.phone.placeholder': '+998 90 123 45 67',
+  'couriers.register.email': 'Email (optional)',
+  'couriers.register.accountNote':
+    'The courier-app account is created automatically from this name and phone.',
   'couriers.register.displayReference': 'Display reference (e.g. K-014)',
-  'couriers.register.fullName': 'Full name',
   'couriers.register.engagedFrom': 'Engaged from',
   'couriers.register.reason': 'Reason',
   'couriers.register.submit': 'Register',
@@ -3410,6 +3420,9 @@ export const messagesEn = {
   'delivery.policy.graceSeconds': 'Grace period (seconds)',
   'delivery.policy.consequence.graceSeconds':
     'A courier may run this many seconds past a scheduled check-in before it counts as missed.',
+  'delivery.policy.onlineWithinMinutes': 'Online threshold (minutes)',
+  'delivery.policy.consequence.onlineWithinMinutes':
+    'A courier whose most recent position is within this many minutes shows as online on the roster.',
   'delivery.policy.confirmationPointRetentionDays': 'Confirmation-point retention (days)',
   'delivery.policy.consequence.confirmationPointRetentionDays':
     'Delivery confirmation photos and signatures are kept for this many days, then purged.',
@@ -3431,6 +3444,7 @@ export const messagesEn = {
   'delivery.policy.gpsAcceptRadiusKm': 'Accept radius (km, from the pickup point)',
   'delivery.policy.gpsStatusChangeRadiusMeters':
     'Status-change radius (m, from the customer point)',
+  'delivery.policy.gpsSummary': 'On — accept within {acceptKm} km, status change within {statusChangeM} m',
   'delivery.policy.billingMode': 'Courier billing (personal balance)',
   'delivery.policy.billingMode.refused': 'Refused by ADR 0042',
   'delivery.policy.billingMode.reason':
@@ -3439,6 +3453,15 @@ export const messagesEn = {
   'delivery.policy.telemetryGate.platformOnly': 'Platform-only',
   'delivery.policy.telemetryGate.reason':
     'Registered (ADR 0045) but writable only from the platform administration surface — a tenant cannot set this here.',
+  'delivery.policy.notEnforced': 'Not yet enforced',
+  'delivery.policy.notEnforced.gps.reason':
+    'Stored, but nothing checks it yet: no courier-app endpoint exists that accepts an offer or advances a delivery’s status carrying the courier’s own position. Wiring this switch means shipping that endpoint first, which is beyond this document.',
+  'delivery.policy.notEnforced.kitchenReadyOnly.reason':
+    'Stored, but nothing checks it yet: the console has no courier-facing assignment feed for this switch to filter — couriers see offers only through dispatch, staff-driven, not a self-service list of their own.',
+  'delivery.policy.notEnforced.revealCustomerLocationTiming.reason':
+    'Stored, but nothing checks it yet: no endpoint exists that shows a courier the customer’s exact address at all, so there is nothing for a timing switch to gate.',
+  'delivery.policy.notEnforced.postDeliveryPaymentCheckRequired.reason':
+    'Stored, but nothing checks it yet: an order’s completion is deliberately decided independently of courier bookkeeping (ADR 0125) — making it conditional on this switch is a design decision this screen cannot make on its own.',
   'delivery.policy.edit': 'Edit',
   'delivery.policy.cancel': 'Cancel',
   'delivery.policy.publish': 'Publish',

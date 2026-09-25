@@ -27,6 +27,20 @@ export interface RosterEntryResponse {
   /** `VALID` | `EXPIRING` | `LAPSED`. */
   readonly warningState?: string | null;
   readonly reverificationDueOn?: string | null;
+  /**
+   * Gap map row 3.3: the courier's most recent telemetry fix is within the
+   * tenant's `courier.compensation` policy `onlineWithinMinutes`. Rating has
+   * no field here at all — no source exists on either side.
+   *
+   * Optional here even though the backend always sends it (a boolean is
+   * never omitted on the wire): the several screens beyond the roster and
+   * dispatch board that consume `RosterEntryResponse` for a courier
+   * reference care about none of this, and marking it required would force
+   * every one of their fixtures to invent a value for a field they do not
+   * render.
+   */
+  readonly online?: boolean;
+  readonly lastSeenAt?: string | null;
 }
 
 /** Mirrors `OperationsCourierController.CourierTypeResponse`. */
@@ -94,12 +108,20 @@ export interface CourierComplianceFileRequest {
   readonly reason: string;
 }
 
+/**
+ * Gap map row 3.3: no `principalSubject` field. `OperationsCourierController.register`
+ * provisions the courier's own account at the identity provider itself
+ * (`CourierAccountProvisioningService`, the same phone-first path ADR 0116's
+ * staff invitation uses) and stores the identity it gets back — there is
+ * nothing here for an operator to type or get wrong.
+ */
 export interface RegisterCourierRequest extends CourierComplianceFileRequest {
   readonly courierTypeId: string;
-  /** The Keycloak courier-client subject this person signs in as — provisioned outside this console. */
-  readonly principalSubject: string;
+  readonly firstName: string;
+  readonly lastName: string;
+  readonly phone: string;
+  readonly email?: string | null;
   readonly displayReference: string;
-  readonly fullName: string;
   /** ISO date. */
   readonly engagedFrom: string;
   readonly reason: string;
@@ -401,6 +423,8 @@ export interface CourierPolicyView {
   readonly kitchenReadyOnly: boolean;
   readonly revealCustomerLocationTiming: 'BEFORE_ACCEPT' | 'AFTER_ACCEPT';
   readonly postDeliveryPaymentCheckRequired: boolean;
+  /** Gap map row 3.3: the roster's online threshold. The one field of the six-minus-two this wave actually enforces. */
+  readonly onlineWithinMinutes: number;
   readonly winningScope: string;
   readonly policyId: string;
   readonly policyVersion: number;
@@ -422,6 +446,7 @@ export interface CourierPolicyWriteInput {
   readonly kitchenReadyOnly: boolean;
   readonly revealCustomerLocationTiming: 'BEFORE_ACCEPT' | 'AFTER_ACCEPT';
   readonly postDeliveryPaymentCheckRequired: boolean;
+  readonly onlineWithinMinutes: number;
   readonly reason: string;
 }
 
@@ -886,10 +911,18 @@ export class CouriersApi {
    * required, matching `OperationsCourierController`'s own "no partial
    * merge" rule for this document. Omit `brandId`/`locationId` to publish
    * the tenant-wide default; supply either for a brand or location override.
+   *
+   * `expectedVersion` is the `policyVersion` the caller's own `policy()`
+   * read most recently returned at this exact scope — sent as `If-Match`
+   * (ADR 0031). The server refuses with `STALE_VERSION` when it no longer
+   * matches, rather than silently publishing over a version the operator
+   * never saw, which is what two open tabs editing the same scope would
+   * otherwise produce.
    */
   async writePolicy(
     tenantId: string,
     input: CourierPolicyWriteInput,
+    expectedVersion: number,
     brandId?: string,
     locationId?: string,
   ): Promise<CourierPolicyView> {
@@ -897,7 +930,10 @@ export class CouriersApi {
       this.api.put<CourierPolicyWriteInput, CourierPolicyView>(
         courierPaths.courierPolicy(tenantId),
         command(input),
-        { params: { ...(brandId ? { brandId } : {}), ...(locationId ? { locationId } : {}) } },
+        {
+          expectedVersion,
+          params: { ...(brandId ? { brandId } : {}), ...(locationId ? { locationId } : {}) },
+        },
       ),
     );
   }

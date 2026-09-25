@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
@@ -300,6 +301,38 @@ public class JdbcTelemetryStore {
                         row.getBigDecimal("accuracy_meters").doubleValue(),
                         row.getObject("captured_at", OffsetDateTime.class).toInstant()))
                 .list();
+    }
+
+    /**
+     * The instant of each named courier's most recent live fix, and nothing
+     * else about it — not a coordinate, not even an accuracy. {@code
+     * CourierProximityPort}'s own doc states the same rule for the identical
+     * reason: a position is read through capability-gated HTTP at a location
+     * scope and nowhere else, and a distance or a timestamp is a reduction a
+     * caller outside this module may have, never a coordinate. Absent when
+     * the courier has no live row at all, the same "we do not know" that
+     * port's own contract gives.
+     */
+    public Map<UUID, Instant> lastFixByCourier(UUID tenantId, Collection<UUID> courierIds) {
+        if (courierIds.isEmpty()) {
+            // An empty collection renders as `IN ()`, which PostgreSQL rejects.
+            return Map.of();
+        }
+        return jdbc
+                .sql("""
+                        SELECT courier_id, captured_at
+                          FROM fulfillment.courier_positions_live
+                         WHERE tenant_id = :tenantId
+                           AND courier_id IN (:courierIds)
+                        """)
+                .param("tenantId", tenantId)
+                .param("courierIds", courierIds)
+                .query((row, rowNumber) -> Map.entry(
+                        row.getObject("courier_id", UUID.class),
+                        row.getObject("captured_at", OffsetDateTime.class).toInstant()))
+                .list()
+                .stream()
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
     }
 
     /**

@@ -1,9 +1,13 @@
 package uz.horecaos.platform.courier.application;
 
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierStore;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierStore.BranchBindingRow;
@@ -11,6 +15,8 @@ import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierStore.
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierStore.CourierGroupRow;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierStore.CourierRosterRow;
 import uz.horecaos.platform.fulfillment.api.InternalFleetPort;
+import uz.horecaos.platform.iam.api.ResourceScope;
+import uz.horecaos.platform.telemetry.api.CourierLastSeenPort;
 
 /**
  * The in-house roster, with today's load (IA operations §3.3, §3.1's fleet
@@ -26,24 +32,49 @@ import uz.horecaos.platform.fulfillment.api.InternalFleetPort;
  * {@code fulfillment.api} rather than reimplemented here, for the reason its
  * own Javadoc gives: two places counting {@code fulfillment.shipments} is how
  * a courier ends up carrying one more order than his vehicle class allows.
+ *
+ * <p><strong>Online status (gap map row {@code 3.3})</strong> is the same
+ * shape: a courier's most recent telemetry fix ({@link CourierLastSeenPort},
+ * {@code telemetry.api}) compared against {@code
+ * CourierCompensationPolicy.onlineWithinMinutes} — resolved once per call at
+ * TENANT scope, since this query itself carries no location, the same
+ * tenant-wide resolution the roster's other fields already use. A courier
+ * with no live row at all (no open duty session, or one closed long enough
+ * ago that the retention sweep already removed the row) is offline; there is
+ * no third state, because an operator deciding whether to dispatch to
+ * somebody needs a yes-or-no, not "unknown since Tuesday".
  */
 @Service
 public class CourierRosterQueryService {
 
     private final JdbcCourierStore couriers;
     private final InternalFleetPort.ActiveAssignments activeAssignments;
+    private final CourierLastSeenPort lastSeen;
+    private final CourierPolicyResolver policies;
+    private final Clock clock;
 
-    public CourierRosterQueryService(JdbcCourierStore couriers, InternalFleetPort.ActiveAssignments activeAssignments) {
+    public CourierRosterQueryService(
+            JdbcCourierStore couriers,
+            InternalFleetPort.ActiveAssignments activeAssignments,
+            CourierLastSeenPort lastSeen,
+            CourierPolicyResolver policies,
+            Clock clock) {
         this.couriers = couriers;
         this.activeAssignments = activeAssignments;
+        this.lastSeen = lastSeen;
+        this.policies = policies;
+        this.clock = clock;
     }
 
     public List<RosterEntry> roster(UUID tenantId) {
         List<CourierRosterRow> rows = couriers.listCouriers(tenantId);
-        Map<UUID, Integer> load = activeAssignments.byCourier(
-                tenantId, rows.stream().map(CourierRosterRow::id).toList());
+        List<UUID> courierIds = rows.stream().map(CourierRosterRow::id).toList();
+        Map<UUID, Integer> load = activeAssignments.byCourier(tenantId, courierIds);
+        Map<UUID, Instant> lastFix = lastSeen.lastFixByCourier(tenantId, courierIds);
+        Duration onlineWindow = onlineWindow(tenantId);
+        Instant now = clock.instant();
         return rows.stream()
-                .map(row -> new RosterEntry(row, load.getOrDefault(row.id(), 0)))
+                .map(row -> toEntry(row, load, lastFix, onlineWindow, now))
                 .toList();
     }
 
@@ -59,18 +90,47 @@ public class CourierRosterQueryService {
     public Optional<CourierDetail> detail(UUID tenantId, UUID courierId) {
         return couriers.findRosterEntry(tenantId, courierId)
                 .map(row -> new CourierDetail(
-                        new RosterEntry(
+                        toEntry(
                                 row,
-                                activeAssignments
-                                        .byCourier(tenantId, List.of(row.id()))
-                                        .getOrDefault(row.id(), 0)),
+                                activeAssignments.byCourier(tenantId, List.of(row.id())),
+                                lastSeen.lastFixByCourier(tenantId, List.of(row.id())),
+                                onlineWindow(tenantId),
+                                clock.instant()),
                         couriers.findComplianceSummary(tenantId, courierId).orElseThrow(),
                         couriers.groupsOf(tenantId, courierId),
                         couriers.bindingsOf(tenantId, courierId)));
     }
 
-    /** @param activeAssignments carried orders right now; absent from the map reads as zero. */
-    public record RosterEntry(CourierRosterRow courier, int activeAssignments) {}
+    private Duration onlineWindow(UUID tenantId) {
+        return Duration.ofMinutes(
+                policies.resolve(ResourceScope.tenant(tenantId)).onlineWithinMinutes());
+    }
+
+    private static RosterEntry toEntry(
+            CourierRosterRow row,
+            Map<UUID, Integer> load,
+            Map<UUID, Instant> lastFix,
+            Duration onlineWindow,
+            Instant now) {
+        Instant seenAt = lastFix.get(row.id());
+        boolean online = seenAt != null && !seenAt.isBefore(now.minus(onlineWindow));
+        return new RosterEntry(row, load.getOrDefault(row.id(), 0), online, seenAt);
+    }
+
+    /**
+     * @param activeAssignments carried orders right now; absent from the map reads as zero
+     * @param online whether the courier's most recent telemetry fix is within the
+     *               tenant's {@code onlineWithinMinutes} policy — always {@code false}
+     *               when {@code lastSeenAt} is null
+     * @param lastSeenAt the most recent live fix this call found, or null for a
+     *                   courier with no live row at all (never tracked this
+     *                   session, or tracked and swept after sign-off)
+     */
+    public record RosterEntry(
+            CourierRosterRow courier,
+            int activeAssignments,
+            boolean online,
+            @Nullable Instant lastSeenAt) {}
 
     public record CourierDetail(
             RosterEntry entry,

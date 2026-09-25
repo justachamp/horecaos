@@ -2792,6 +2792,11 @@ export const messagesUzLatn: MessageCatalogue = {
   'couriers.column.reference': 'Kuryer',
   'couriers.column.type': 'Turi',
   'couriers.column.load': 'Yuklama',
+  'couriers.column.online': 'Onlayn',
+  'couriers.online.yes': 'Onlayn',
+  'couriers.online.no': 'Oflayn',
+  'couriers.online.neverSeen': 'Bu kuryerning joylashuvi hali olinmagan',
+  'couriers.online.lastSeenAt': 'Oxirgi joylashuv: {when}',
   'couriers.column.engagement': 'Rasmiylashtirish holati',
   'couriers.action.verify': 'Tasdiqlash',
   'couriers.action.suspend': 'Toʻxtatib turish',
@@ -2799,9 +2804,14 @@ export const messagesUzLatn: MessageCatalogue = {
   'couriers.register.action': 'Kuryerni roʻyxatga olish',
   'couriers.register.title': 'Kuryerni roʻyxatga olish',
   'couriers.register.type': 'Kuryer turi',
-  'couriers.register.principalSubject': 'Kuryer ilovasi hisobi (Keycloak subyekti)',
+  'couriers.register.firstName': 'Ism',
+  'couriers.register.lastName': 'Familiya',
+  'couriers.register.phone': 'Telefon',
+  'couriers.register.phone.placeholder': '+998 90 123 45 67',
+  'couriers.register.email': 'Email (ixtiyoriy)',
+  'couriers.register.accountNote':
+    'Kuryer ilovasi hisobi shu ism va telefon asosida avtomatik yaratiladi.',
   'couriers.register.displayReference': 'Koʻrinadigan raqam (masalan, K-014)',
-  'couriers.register.fullName': 'Toʻliq ismi',
   'couriers.register.engagedFrom': 'Ish boshlagan sana',
   'couriers.register.reason': 'Sabab',
   'couriers.register.submit': 'Roʻyxatga olish',
@@ -3401,6 +3411,9 @@ export const messagesUzLatn: MessageCatalogue = {
   'delivery.policy.graceSeconds': 'Imtiyozli davr (soniya)',
   'delivery.policy.consequence.graceSeconds':
     'Kuryer rejalashtirilgan belgidan shuncha soniya kechikishi mumkin, aks holda u oʻtkazib yuborilgan hisoblanadi.',
+  'delivery.policy.onlineWithinMinutes': 'Onlayn chegarasi (daqiqa)',
+  'delivery.policy.consequence.onlineWithinMinutes':
+    'Oxirgi joylashuvi shu daqiqalar ichida boʻlgan kuryer roʻyxatda onlayn sifatida koʻrsatiladi.',
   'delivery.policy.confirmationPointRetentionDays': 'Tasdiqlash nuqtalarini saqlash (kun)',
   'delivery.policy.consequence.confirmationPointRetentionDays':
     'Yetkazib berishni tasdiqlovchi fotosurat va imzolar shuncha kun saqlanadi, keyin oʻchiriladi.',
@@ -3422,6 +3435,8 @@ export const messagesUzLatn: MessageCatalogue = {
     'Standart holatda oʻchirilgan. Yoqilsa, kuryerning holati quyidagi ikkala radius boʻyicha tekshirila boshlaydi.',
   'delivery.policy.gpsAcceptRadiusKm': 'Qabul qilish radiusi (km, olib ketish nuqtasidan)',
   'delivery.policy.gpsStatusChangeRadiusMeters': 'Holat oʻzgarish radiusi (m, mijoz nuqtasidan)',
+  'delivery.policy.gpsSummary':
+    'Yoqilgan — qabul {acceptKm} km ichida, holat oʻzgarishi {statusChangeM} m ichida',
   'delivery.policy.billingMode': 'Kuryerlar billingi (shaxsiy balans)',
   'delivery.policy.billingMode.refused': 'ADR 0042 tomonidan rad etilgan',
   'delivery.policy.billingMode.reason':
@@ -3430,6 +3445,15 @@ export const messagesUzLatn: MessageCatalogue = {
   'delivery.policy.telemetryGate.platformOnly': 'Faqat platforma',
   'delivery.policy.telemetryGate.reason':
     'Roʻyxatdan oʻtgan (ADR 0045), lekin faqat platforma boshqaruvi sirtidan yozish mumkin — ijarachi buni bu yerda oʻrnata olmaydi.',
+  'delivery.policy.notEnforced': 'Hali kuchga kirmagan',
+  'delivery.policy.notEnforced.gps.reason':
+    'Saqlanadi, lekin hozircha hech narsa buni tekshirmaydi: kuryer ilovasida taklifni qabul qiladigan yoki yetkazib berish holatini kuryerning oʻz joylashuvi bilan ilgari suradigan endpoint yoʻq. Bu tugmani ulash avval shu endpointni chiqarishni talab qiladi, bu esa ushbu hujjat doirasidan tashqarida.',
+  'delivery.policy.notEnforced.kitchenReadyOnly.reason':
+    'Saqlanadi, lekin hozircha hech narsa buni tekshirmaydi: konsolda bu tugma filtrlaydigan kuryerga moʻljallangan topshiriqlar lentasi yoʻq — kuryerlar buyurtmalarni faqat dispetcherlik orqali koʻradi, oʻzlari uchun alohida roʻyxat orqali emas.',
+  'delivery.policy.notEnforced.revealCustomerLocationTiming.reason':
+    'Saqlanadi, lekin hozircha hech narsa buni tekshirmaydi: kuryerga mijozning aniq manzilini umuman koʻrsatadigan endpoint yoʻq, shuning uchun vaqt tugmasi uchun tekshiradigan narsa yoʻq.',
+  'delivery.policy.notEnforced.postDeliveryPaymentCheckRequired.reason':
+    'Saqlanadi, lekin hozircha hech narsa buni tekshirmaydi: buyurtmaning yakunlanishi ataylab kuryer hisob-kitobidan mustaqil hal qilinadi (ADR 0125) — buni shu tugmaga bogʻliq qilish ushbu ekran oʻzi qabul qila olmaydigan dizayn qarori.',
   'delivery.policy.edit': 'Tahrirlash',
   'delivery.policy.cancel': 'Bekor qilish',
   'delivery.policy.publish': 'Eʻlon qilish',

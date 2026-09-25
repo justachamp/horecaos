@@ -29,6 +29,8 @@ const COURIER: RosterEntryResponse = {
   engagementStatus: 'ACTIVE',
   warningState: 'VALID',
   reverificationDueOn: null,
+  online: true,
+  lastSeenAt: '2026-09-25T06:58:00Z',
 };
 
 const PENDING: RosterEntryResponse = { ...COURIER, engagementStatus: 'PENDING_VERIFICATION' };
@@ -157,6 +159,26 @@ describe('CouriersPage', () => {
     );
   });
 
+  // Gap map row 3.3: online status from telemetry recency, resolved server-side
+  // against the tenant's onlineWithinMinutes policy — this screen only renders
+  // the boolean and the timestamp it is given.
+  it('renders a courier as online or offline from the roster response, never computing it itself', async () => {
+    const host = await render({
+      roster: vi.fn().mockResolvedValue([
+        COURIER,
+        { ...COURIER, courierId: 'courier-2', displayReference: 'K-015', online: false, lastSeenAt: null },
+      ]),
+      types: vi.fn().mockResolvedValue([]),
+    });
+
+    const cells = host.querySelectorAll('[data-testid="courier-online"]');
+    expect(cells).toHaveLength(2);
+    expect(cells[0].textContent?.trim()).toBe('Online');
+    expect(cells[0].querySelector('.status-badge--online')).not.toBeNull();
+    expect(cells[1].textContent?.trim()).toBe('Offline');
+    expect(cells[1].querySelector('.status-badge--online')).toBeNull();
+  });
+
   it('no longer carries the honesty notice, because the fields it apologised for exist', async () => {
     const host = await render({
       roster: vi.fn().mockResolvedValue([COURIER]),
@@ -216,9 +238,10 @@ describe('CouriersPage', () => {
     host.querySelector<HTMLButtonElement>('.couriers__register')!.click();
     fixture.detectChanges();
 
-    typeByLabel(host, 'Courier-app account (Keycloak subject)', 'keycloak-k900');
+    typeByLabel(host, 'First name', 'Alisher');
+    typeByLabel(host, 'Last name', 'Karimov');
+    typeByLabel(host, 'Phone', '+998901234567');
     typeByLabel(host, 'Display reference (e.g. K-014)', 'K-900');
-    typeByLabel(host, 'Full name', 'Alisher Karimov');
     typeByLabel(host, 'Reason', 'onboarding a rider');
     type(host, 'register-PASSPORT', 'AA1234567');
     type(host, 'register-PINFL', '31234567890123');
@@ -231,9 +254,15 @@ describe('CouriersPage', () => {
 
     expect(register).toHaveBeenCalledOnce();
     const body = register.mock.calls[0][1];
+    expect(body.firstName).toBe('Alisher');
+    expect(body.lastName).toBe('Karimov');
+    expect(body.phone).toBe('+998901234567');
     expect(body.displayReference).toBe('K-900');
     expect(body.passport).toBe('AA1234567');
     expect(body.pinfl).toBe('31234567890123');
+    // No Keycloak subject field exists at all any more (gap map row 3.3):
+    // OperationsCourierController.register provisions the account itself.
+    expect(body.principalSubject).toBeUndefined();
     // A field the operator left blank is absent, never an empty string: the
     // endpoint reads an absent field as "leave it alone".
     expect(body.drivingLicence).toBeUndefined();
