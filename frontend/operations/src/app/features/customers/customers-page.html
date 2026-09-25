@@ -88,6 +88,17 @@
         (dismiss)="dismissExportNotice()"
       />
     }
+    <!-- Staff 9.4: a filtered export past the tenant's own row threshold, held
+         for a second signature or refused one. Never rendered alongside
+         exportedRows() above — exportFiltered() sets exactly one of the two. -->
+    @if (exportApprovalNotice(); as status) {
+      <q-inline-alert
+        [severity]="status === 'PENDING' ? 'info' : 'warning'"
+        [text]="exportApprovalNoticeText(status)"
+        dismissible
+        (dismiss)="dismissExportNotice()"
+      />
+    }
 
     @if (loading()) {
       <p class="q-body-sm">{{ 'customers.loading' | t }}</p>

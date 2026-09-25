@@ -112,7 +112,21 @@ public enum ApprovalAction {
      * signature on every decrease, not only ones above the threshold, authors
      * an {@code audit.approval_policies} row naming this code.
      */
-    ORDERING_AMENDMENT_DECREASE("ordering.amendment.decrease", MissingPolicyMode.ALLOW_WITHOUT_APPROVAL);
+    ORDERING_AMENDMENT_DECREASE("ordering.amendment.decrease", MissingPolicyMode.ALLOW_WITHOUT_APPROVAL),
+
+    /**
+     * Staff 9.4: a filtered customer PII export above the tenant's own
+     * row-count threshold ({@code CustomerListQueryService#approvalThresholdRows}).
+     * A brand-new action with no prior single-signature behaviour to
+     * preserve, so {@code ALLOW_WITHOUT_APPROVAL} is the honest starting mode
+     * ADR 0050 asks of a new action — a tenant wanting a second signature on
+     * every export, not only ones above the threshold, has no lever here
+     * (the same limitation {@link #ORDERING_AMENDMENT_DECREASE}'s own doc
+     * names): it authors an {@code audit.approval_policies} row naming this
+     * code, which only ever gets asked once the row count clears the
+     * threshold in the first place.
+     */
+    CUSTOMER_PII_EXPORT("customer.pii.export", MissingPolicyMode.ALLOW_WITHOUT_APPROVAL);
 
     /** What an action does when no valid policy resolves at the requested scope. */
     public enum MissingPolicyMode {

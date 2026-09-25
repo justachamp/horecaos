@@ -3427,6 +3427,10 @@ export const messagesRu: MessageCatalogue = {
   'customers.export.done': 'Экспортировано клиентов: {count}.',
   'customers.export.doneTruncated':
     'Экспортированы первые {count} клиент(ов) — фильтр нашёл больше, список обрезан.',
+  'customers.export.approvalPending':
+    'Этот экспорт превышает порог и ожидает второй подписи. Попросите менеджера подтвердить его в разделе «Согласования».',
+  'customers.export.approvalDeclined':
+    'В этом экспорте отказано. Ничего не было раскрыто. Уточните причину у согласующего или отправьте запрос заново с более узким фильтром.',
   'customers.import.action': 'Импорт',
   'customers.import.pageTitle': 'Импорт клиентов из CSV-файла',
   'customers.import.close': 'Назад к клиентам',
@@ -5236,6 +5240,7 @@ export const messagesRu: MessageCatalogue = {
   'staff.approvals.action.tenantActivate': 'Активация компании',
   'staff.approvals.action.integrationFailureResolve': 'Разрешение сбоя интеграции',
   'staff.approvals.action.loyaltyBalanceAdjust': 'Корректировка баланса лояльности',
+  'staff.approvals.action.customerPiiExport': 'Экспорт данных клиентов',
   'staff.approvals.tab.pending': 'Ожидают',
   'staff.approvals.tab.decided': 'Решённые',
   'staff.approvals.column.status': 'Решение',

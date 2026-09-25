@@ -3,6 +3,7 @@ package uz.horecaos.platform.customers;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -22,6 +23,8 @@ import org.testcontainers.DockerClientFactory;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
 import uz.horecaos.platform.audit.api.ActorRef;
+import uz.horecaos.platform.audit.api.ApprovalService;
+import uz.horecaos.platform.audit.infrastructure.persistence.JdbcApprovalService;
 import uz.horecaos.platform.audit.infrastructure.persistence.JdbcAuditRecorder;
 import uz.horecaos.platform.customers.api.CustomerIdentityPolicy;
 import uz.horecaos.platform.customers.application.ConsentService;
@@ -130,13 +133,24 @@ class CustomerIdentityTests {
         // A minimal CustomerOrderActivityPort: no order ever "arrives" in this
         // suite, so the ordered-today counter's own default (zero) is exactly
         // right and this suite has no reason to stand up the ordering module.
+        //
+        // A real JdbcApprovalService, not a fake: with no `customer.pii.export`
+        // policy ever authored in this suite's fixture data, ApprovalAction's
+        // own ALLOW_WITHOUT_APPROVAL default resolves every call to
+        // NotRequired regardless of the threshold below, exactly the same
+        // "no policy configured yet" path every unrelated ApprovalService
+        // consumer's own tests rely on (see BusinessCalendarServiceTests).
+        ApprovalService approvals = new JdbcApprovalService(
+                jdbc, new JdbcAuditRecorder(jdbc, objectMapper), clock, new SimpleMeterRegistry(), objectMapper);
         lists = new CustomerListQueryService(
                 store,
                 protection,
                 new JdbcAuditRecorder(jdbc, objectMapper),
                 clock,
                 new uz.horecaos.platform.customers.api.CustomerOrderActivityPort() {},
-                utcMidnightBusinessDays());
+                utcMidnightBusinessDays(),
+                approvals,
+                500);
     }
 
     /**
@@ -1701,7 +1715,14 @@ class CustomerIdentityTests {
                 new JdbcAuditRecorder(jdbc, objectMapper),
                 movable,
                 new uz.horecaos.platform.customers.api.CustomerOrderActivityPort() {},
-                tashkentBusinessDays);
+                tashkentBusinessDays,
+                new JdbcApprovalService(
+                        jdbc,
+                        new JdbcAuditRecorder(jdbc, objectMapper),
+                        movable,
+                        new SimpleMeterRegistry(),
+                        objectMapper),
+                500);
 
         localIdentity.resolve(TENANT, BRAND_A, ISSUER, "subject-tashkent-boundary");
 
@@ -1773,6 +1794,69 @@ class CustomerIdentityTests {
                         .query((row, number) -> row.getString(1) + "/" + row.getString(2))
                         .single())
                 .isEqualTo(CustomerListQueryService.EXPORT_LIMIT + "/true");
+    }
+
+    /**
+     * Staff 9.4: {@code CustomerListQueryService#approvalThresholdRows} is 500
+     * for this suite's {@link #lists} — well under {@link
+     * CustomerListQueryService#EXPORT_LIMIT}, so both tests below can seed a
+     * few hundred rows with the same bulk {@code generate_series} insert the
+     * truncation test above uses, rather than 500-plus {@code identity.resolve}
+     * calls.
+     */
+    @Test
+    @DisplayName("an export above the tenant's own row threshold still proceeds with no policy authored")
+    void exportAboveThresholdProceedsWithoutAnAuthoredPolicy() {
+        jdbc.sql("""
+                        INSERT INTO customer.customer_accounts (id, tenant_id, display_name, created_at)
+                        SELECT gen_random_uuid(), :tenantId, 'Threshold customer ' || generate_series, now()
+                        FROM generate_series(1, 501)
+                        """).param("tenantId", TENANT).update();
+
+        var result = lists.exportFiltered(TENANT, null, null, "above-threshold-no-policy", STAFF_ACTOR);
+
+        assertThat(result.approval()).isInstanceOf(uz.horecaos.platform.audit.api.ApprovalOutcome.NotRequired.class);
+        assertThat(result.rows()).hasSize(501);
+        assertThat(auditFactCount("customer.list.exported")).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("once a tenant authors a customer.pii.export policy, an export above the threshold "
+            + "waits for a second signature and reveals nothing yet")
+    void exportAboveThresholdWithAnAuthoredPolicyIsPendingAndRevealsNothing() {
+        jdbc.sql("""
+                        INSERT INTO customer.customer_accounts (id, tenant_id, display_name, created_at)
+                        SELECT gen_random_uuid(), :tenantId, 'Gated customer ' || generate_series, now()
+                        FROM generate_series(1, 501)
+                        """).param("tenantId", TENANT).update();
+        authorPiiExportPolicy();
+
+        var result = lists.exportFiltered(TENANT, null, null, "above-threshold-with-policy", STAFF_ACTOR);
+
+        assertThat(result.approval()).isInstanceOf(uz.horecaos.platform.audit.api.ApprovalOutcome.Pending.class);
+        assertThat(result.rows()).isEmpty();
+        assertThat(result.truncated()).isFalse();
+        // Nothing was decrypted, so there is nothing to have audited as a reveal —
+        // the same "the audit fact is the reveal, not the request" split
+        // OrderRemedyService keeps between raising an approval and recording the
+        // remedy it eventually authorises.
+        assertThat(auditFactCount("customer.list.exported")).isZero();
+    }
+
+    /** Seeds a {@code customer.pii.export} policy at TENANT scope, effective since before {@link #NOW}. */
+    private void authorPiiExportPolicy() {
+        jdbc.sql("""
+                        INSERT INTO audit.approval_policies
+                            (id, tenant_id, action_code, scope_type, threshold_json,
+                             required_approver_capability, valid_from, version, approved_by)
+                        VALUES (:id, :tenantId, 'customer.pii.export', 'TENANT',
+                                '{"description":"any export past the row threshold"}'::jsonb,
+                                'customer.pii.reveal', :validFrom, 1, 'platform-admin')
+                        """)
+                .param("id", UUID.randomUUID())
+                .param("tenantId", TENANT)
+                .param("validFrom", NOW.minus(java.time.Duration.ofDays(1)).atOffset(ZoneOffset.UTC))
+                .update();
     }
 
     @Test

@@ -27,6 +27,7 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.DockerClientFactory;
 import tools.jackson.databind.json.JsonMapper;
+import uz.horecaos.platform.audit.infrastructure.persistence.JdbcApprovalService;
 import uz.horecaos.platform.audit.infrastructure.persistence.JdbcAuditRecorder;
 import uz.horecaos.platform.customers.api.CustomerDirectoryExportPort;
 import uz.horecaos.platform.customers.application.CustomerDirectoryExportAdapter;
@@ -117,7 +118,14 @@ class ReportExportServiceTests {
                 new JdbcAuditRecorder(jdbc, objectMapper),
                 clock,
                 new uz.horecaos.platform.customers.api.CustomerOrderActivityPort() {},
-                (tenantId, at) -> new uz.horecaos.platform.customers.api.BusinessDayWindows.Window(at, at));
+                (tenantId, at) -> new uz.horecaos.platform.customers.api.BusinessDayWindows.Window(at, at),
+                new JdbcApprovalService(
+                        jdbc,
+                        new JdbcAuditRecorder(jdbc, objectMapper),
+                        clock,
+                        new io.micrometer.core.instrument.simple.SimpleMeterRegistry(),
+                        objectMapper),
+                500);
         CustomerDirectoryExportPort customerDirectory = new CustomerDirectoryExportAdapter(lists);
 
         var crmLogStore = new uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderCrmLogStore(jdbc);

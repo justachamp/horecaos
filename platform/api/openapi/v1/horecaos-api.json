@@ -14790,6 +14790,27 @@
         },
         "type" : "object"
       },
+      "OperatorTodayCountsResponse" : {
+        "properties" : {
+          "acceptedCount" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "businessDayFrom" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "businessDayTo" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "createdCount" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
       "OrderActionResponse" : {
         "properties" : {
           "action" : {
@@ -64019,7 +64040,7 @@
     },
     "/api/v1/tenants/{tenantId}/customers/export" : {
       "get" : {
-        "description" : "One audited PII egress event for the whole filtered set (frontend information architecture §5.1), never one reveal per row. Requires a stated purpose, exactly like every other reveal on this controller. Bounded at 2000 rows; the `X-Export-Truncated` response header is `true` when the filter actually matched more than that, so a marketer can tell a complete export from a silently cut one.",
+        "description" : "One audited PII egress event for the whole filtered set (frontend information architecture §5.1), never one reveal per row. Requires a stated purpose, exactly like every other reveal on this controller. Bounded at 2000 rows; the `X-Export-Truncated` response header is `true` when the filter actually matched more than that, so a marketer can tell a complete export from a silently cut one. Above a tenant-configured row count this is also an ADR 0027 maker-checker action (Staff 9.4): `X-Export-Approval-Status` is `PENDING` with an empty body until a second signature decides it, exactly like a refund above its own threshold.",
         "operationId" : "export_1",
         "parameters" : [ {
           "in" : "path",
@@ -66044,6 +66065,44 @@
         },
         "summary" : "Customer, operator and courier for orders in range — the console log's CRM half (7.2a)",
         "tags" : [ "Order CRM log" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/orders/operators/{subject}/today-counts" : {
+      "get" : {
+        "description" : "Today is the tenant's own business day (ADR 0043), not the UTC calendar date. The two counts can both include the same order -- an operator who both created and approved it -- and are never added together server-side; see OperatorTodayCountsService's own doc.",
+        "operationId" : "today",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "subject",
+          "required" : true,
+          "schema" : {
+            "maxLength" : 255,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/OperatorTodayCountsResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "One operator's created/accepted order counts for today",
+        "tags" : [ "Operator order counts" ]
       }
     },
     "/api/v1/tenants/{tenantId}/reporting/cancellation-reasons" : {
@@ -68649,6 +68708,9 @@
   }, {
     "description" : "Reference search, handover, and liveness",
     "name" : "Marketplace operations"
+  }, {
+    "description" : "How many orders one operator has taken today (Staff 9.2d)",
+    "name" : "Operator order counts"
   }, {
     "description" : "Sections, tables, QR tokens, and branch settings",
     "name" : "Dine-in floor plan"

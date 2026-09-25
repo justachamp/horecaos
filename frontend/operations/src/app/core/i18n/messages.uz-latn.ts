@@ -3452,6 +3452,10 @@ export const messagesUzLatn: MessageCatalogue = {
   'customers.export.done': '{count} ta mijoz eksport qilindi.',
   'customers.export.doneTruncated':
     'Dastlabki {count} ta mijoz eksport qilindi — filtr koʻproq topdi, roʻyxat qisqartirildi.',
+  'customers.export.approvalPending':
+    'Bu eksport chegaradan oshgan va ikkinchi imzoni kutmoqda. Menejerdan uni «Tasdiqlashlar» boʻlimida tasdiqlashni soʻrang.',
+  'customers.export.approvalDeclined':
+    'Bu eksport rad etildi. Hech narsa ochilmadi. Tasdiqlovchidan sababini soʻrang yoki torroq filtr bilan qayta yuboring.',
   'customers.import.action': 'Import',
   'customers.import.pageTitle': 'Mijozlarni CSV fayldan import qilish',
   'customers.import.close': 'Mijozlarga qaytish',
@@ -5268,6 +5272,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'staff.approvals.action.tenantActivate': 'Kompaniyani faollashtirish',
   'staff.approvals.action.integrationFailureResolve': 'Integratsiya xatosini hal qilish',
   'staff.approvals.action.loyaltyBalanceAdjust': 'Sodiqlik balansini tuzatish',
+  'staff.approvals.action.customerPiiExport': 'Mijozlar maʻlumotlarini eksport qilish',
   'staff.approvals.tab.pending': 'Kutilmoqda',
   'staff.approvals.tab.decided': 'Hal qilingan',
   'staff.approvals.column.status': 'Qaror',

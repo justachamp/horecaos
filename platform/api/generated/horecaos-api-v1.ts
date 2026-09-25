@@ -4689,6 +4689,13 @@ export interface OperatorProductListResponse {
   rows?: Array<VariantSalesRowResponse>;
 }
 
+export interface OperatorTodayCountsResponse {
+  acceptedCount?: number;
+  businessDayFrom?: string;
+  businessDayTo?: string;
+  createdCount?: number;
+}
+
 export interface OrderActionResponse {
   action?: string;
   targetStatus?: string;
@@ -9408,6 +9415,7 @@ export interface Operations {
   "retry": { method: "POST"; path: "/api/v1/tenants/{tenantId}/notifications/{notificationId}/retry"; request: { parameters: { path: { notificationId: string; tenantId: string } }; body: RetryRequest }; responses: { "200": unknown } };
   "byNumber": { method: "GET"; path: "/api/v1/tenants/{tenantId}/orders/by-number"; request: { parameters: { path: { tenantId: string }; query: { publicOrderNumber: string } } }; responses: { "200": OrderNumberLookupResponse } };
   "log": { method: "GET"; path: "/api/v1/tenants/{tenantId}/orders/crm-log"; request: { parameters: { path: { tenantId: string }; query: { afterOccurredAt?: string; afterOrderId?: string; from: string; limit?: number; locationId?: Array<string>; to: string } } }; responses: { "200": CrmLogListResponse } };
+  "today": { method: "GET"; path: "/api/v1/tenants/{tenantId}/orders/operators/{subject}/today-counts"; request: { parameters: { path: { subject: string; tenantId: string } } }; responses: { "200": OperatorTodayCountsResponse } };
   "cancellationReasons": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/cancellation-reasons"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<CancellationReasonResponse> } };
   "run": { method: "POST"; path: "/api/v1/tenants/{tenantId}/reporting/classification-runs"; request: { parameters: { path: { tenantId: string } }; body: ClassificationRunRequest }; responses: { "200": ClassificationRunResponse } };
   "latest": { method: "GET"; path: "/api/v1/tenants/{tenantId}/reporting/classification-runs/latest"; request: { parameters: { path: { tenantId: string }; query: { from: string; locationId?: Array<string>; to: string } } }; responses: { "200": ClassificationRunResponse } };

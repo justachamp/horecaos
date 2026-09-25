@@ -104,6 +104,9 @@ class CustomerControllerEndpointTests {
         // A contact point row is envelope-encrypted (ADR 0029); the default Spring
         // context carries no kek outside the "local" profile.
         registry.add("horecaos.secrets.data_encryption.platform.kek", () -> "a-test-key-encryption-key");
+        // Staff 9.4: low enough that aFilteredExportAbove... below can cross it
+        // with a handful of seeded rows rather than 500-plus.
+        registry.add("horecaos.customers.pii-export-approval-threshold-rows", () -> "2");
     }
 
     @Autowired
@@ -277,6 +280,93 @@ class CustomerControllerEndpointTests {
                 .andReturn();
 
         assertRefused(refused, Capability.CUSTOMER_ERASURE_RAISE);
+    }
+
+    /**
+     * Staff 9.4 (ADR 0027): a filtered export past this class's own low
+     * threshold (see {@link #properties}) proceeds exactly as before this
+     * wave when the tenant has authored no {@code customer.pii.export}
+     * policy — {@code MissingPolicyMode.ALLOW_WITHOUT_APPROVAL} is the honest
+     * default for a brand-new action, matching {@code
+     * CustomerIdentityTests.exportAboveThresholdProceedsWithoutAnAuthoredPolicy}
+     * at the service layer, proven here over the {@code @RequiresCapability}
+     * and header wiring an HTTP-level test alone can catch.
+     */
+    @Test
+    void aFilteredExportAboveTheThresholdStillProceedsWithNoPolicyAuthoredOverHttp() throws Exception {
+        seedAccounts(3);
+
+        MvcResult result = mvc.perform(get(CUSTOMERS + "/export")
+                        .with(tokenFor(SUPPORT_AGENT))
+                        .queryParam("purpose", "MARKETING_EXPORT"))
+                .andReturn();
+
+        assertThat(result.getResponse().getStatus()).isEqualTo(200);
+        assertThat(result.getResponse().getHeader("X-Export-Approval-Status")).isEqualTo("NOT_REQUIRED");
+        assertThat(result.getResponse().getHeader("X-Export-Approval-Request-Id"))
+                .isNull();
+        // One "accountId" field per row is enough to prove the body carries the
+        // export, without decoding the whole JSON array just to count it.
+        assertThat(countOccurrences(result.getResponse().getContentAsString(), "\"accountId\""))
+                .isEqualTo(3);
+    }
+
+    /**
+     * Once a tenant authors the policy, the same request waits for a second
+     * signature and the body carries nothing — no account id, no name, no
+     * phone — because nothing was decrypted yet. This is the HTTP-level half
+     * of {@code CustomerIdentityTests
+     * .exportAboveThresholdWithAnAuthoredPolicyIsPendingAndRevealsNothing}.
+     */
+    @Test
+    void aFilteredExportAboveTheThresholdWithAnAuthoredPolicyIsPendingAndRevealsNothingOverHttp() throws Exception {
+        seedAccounts(3);
+        authorPiiExportPolicy();
+
+        MvcResult result = mvc.perform(get(CUSTOMERS + "/export")
+                        .with(tokenFor(SUPPORT_AGENT))
+                        .queryParam("purpose", "MARKETING_EXPORT"))
+                .andReturn();
+
+        assertThat(result.getResponse().getStatus()).isEqualTo(200);
+        assertThat(result.getResponse().getHeader("X-Export-Approval-Status")).isEqualTo("PENDING");
+        assertThat(result.getResponse().getHeader("X-Export-Approval-Request-Id"))
+                .isNotNull();
+        assertThat(result.getResponse().getContentAsString()).isEqualTo("[]");
+    }
+
+    private static int countOccurrences(String haystack, String needle) {
+        int count = 0;
+        int from = 0;
+        while ((from = haystack.indexOf(needle, from)) != -1) {
+            count++;
+            from += needle.length();
+        }
+        return count;
+    }
+
+    private void seedAccounts(int count) {
+        jdbc.sql("""
+                        INSERT INTO customer.customer_accounts (id, tenant_id, display_name, created_at)
+                        SELECT gen_random_uuid(), :tenantId, 'Export customer ' || generate_series, now()
+                        FROM generate_series(1, :count)
+                        """).param("tenantId", TENANT).param("count", count).update();
+    }
+
+    /** Seeds a {@code customer.pii.export} policy at TENANT scope, effective an hour ago. */
+    private void authorPiiExportPolicy() {
+        jdbc.sql("""
+                        INSERT INTO audit.approval_policies
+                            (id, tenant_id, action_code, scope_type, threshold_json,
+                             required_approver_capability, valid_from, version, approved_by)
+                        VALUES (:id, :tenantId, 'customer.pii.export', 'TENANT',
+                                '{"description":"any export past the row threshold"}'::jsonb,
+                                'customer.pii.reveal', :validFrom, 1, 'platform-admin')
+                        """)
+                .param("id", UUID.randomUUID())
+                .param("tenantId", TENANT)
+                .param("validFrom", Instant.now().minus(Duration.ofHours(1)).atOffset(ZoneOffset.UTC))
+                .update();
     }
 
     private void assertRefused(MvcResult result, Capability missing) throws Exception {

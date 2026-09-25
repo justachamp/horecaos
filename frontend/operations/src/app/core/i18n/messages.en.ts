@@ -3460,6 +3460,10 @@ export const messagesEn = {
   'customers.export.done': 'Exported {count} customer(s).',
   'customers.export.doneTruncated':
     'Exported the first {count} customer(s) — the filter matched more than that and was cut.',
+  'customers.export.approvalPending':
+    'This export is above the row threshold and is waiting on a second signature. Ask a manager to approve it in Approvals.',
+  'customers.export.approvalDeclined':
+    'This export was declined. Nothing was revealed. Ask the approver why, or resubmit with a narrower filter.',
   'customers.import.action': 'Import',
   'customers.import.pageTitle': 'Import customers from a CSV file',
   'customers.import.close': 'Back to customers',
@@ -5257,6 +5261,7 @@ export const messagesEn = {
   'staff.approvals.action.tenantActivate': 'Tenant activation',
   'staff.approvals.action.integrationFailureResolve': 'Integration failure resolution',
   'staff.approvals.action.loyaltyBalanceAdjust': 'Loyalty balance adjustment',
+  'staff.approvals.action.customerPiiExport': 'Customer data export',
   'staff.approvals.tab.pending': 'Waiting',
   'staff.approvals.tab.decided': 'Decided',
   'staff.approvals.column.status': 'Outcome',
