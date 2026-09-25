@@ -685,13 +685,25 @@ public class JdbcPricingStore {
             return;
         }
 
-        jdbc.sql("""
+        // The closed row's own version carries forward rather than the new
+        // row restarting at 1: `openPriceVersion`'s `If-Match` check (gap map
+        // row 4.8a's matrix inline edit) compares against whatever version
+        // this method last wrote, and two edits close-then-insert on every
+        // call — valid_from is always "now", so the amend branch above only
+        // ever fires on a same-instant retry. A new row that reset to 1 on
+        // every ordinary edit would make every price after the first
+        // indistinguishable to that check: two operators who both read
+        // version 1 would both pass it, the second silently clobbering the
+        // first. Empty (nothing was open yet) starts the lineage at 1, the
+        // same "unset" the matrix reads as version 0.
+        Optional<Integer> closedVersion = jdbc.sql("""
                 UPDATE pricing.prices
-                SET valid_until = :at, version = version + 1
+                SET valid_until = :at
                 WHERE tenant_id = :tenantId AND brand_id = :brandId
                   AND price_book_id = :priceBookId AND priceable_type = :type
                   AND priceable_id = :priceableId
                   AND valid_until IS NULL AND valid_from < :at
+                RETURNING version
                 """)
                 .param("tenantId", tenantId)
                 .param("brandId", brandId)
@@ -699,14 +711,15 @@ public class JdbcPricingStore {
                 .param("type", priceableType)
                 .param("priceableId", priceableId)
                 .param("at", at)
-                .update();
+                .query(Integer.class)
+                .optional();
 
         jdbc.sql("""
                 INSERT INTO pricing.prices (
                     id, tenant_id, brand_id, price_book_id, priceable_type, priceable_id,
                     amount_minor, valid_from, version)
                 VALUES (:id, :tenantId, :brandId, :priceBookId, :type, :priceableId,
-                    :amount, :at, 1)
+                    :amount, :at, :version)
                 """)
                 .param("id", UUID.randomUUID())
                 .param("tenantId", tenantId)
@@ -715,6 +728,7 @@ public class JdbcPricingStore {
                 .param("type", priceableType)
                 .param("priceableId", priceableId)
                 .param("amount", amountMinor)
+                .param("version", closedVersion.orElse(0) + 1)
                 .param("at", at)
                 .update();
     }

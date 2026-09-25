@@ -317,6 +317,62 @@ class PriceBookMatrixEndpointTests {
     }
 
     @Test
+    void aSecondEditCanUseTheVersionTheFirstEditLeftBehind() throws Exception {
+        UUID variant = product(BRAND, null, "BURGER", "Burger");
+        UUID book = draftBook(BRAND);
+
+        mvc.perform(put(PRICING + "/price-books/" + book + "/variant-prices/" + variant)
+                .with(tokenFor(OWNER))
+                .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "matrix-edit-seq-1")
+                .header("If-Match", "W/\"0\"")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"amountMinor":45000}
+                        """));
+
+        MvcResult afterFirst = mvc.perform(
+                        get(PRICING + "/price-books/" + book + "/matrix").with(tokenFor(OWNER)))
+                .andReturn();
+        long versionAfterFirst =
+                items(afterFirst).get(0).path("bookPriceVersion").asLong();
+
+        // A second operator still holding version 0 (read before the first
+        // edit landed) is rejected — proving the row-level check survives a
+        // real edit rather than resetting to a value every later editor's
+        // stale read would also satisfy.
+        MvcResult staleSecond = mvc.perform(put(PRICING + "/price-books/" + book + "/variant-prices/" + variant)
+                        .with(tokenFor(OWNER))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "matrix-edit-seq-stale")
+                        .header("If-Match", "W/\"0\"")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"amountMinor":46000}
+                                """))
+                .andReturn();
+        assertThat(staleSecond.getResponse().getStatus()).isEqualTo(409);
+
+        // The version the matrix actually showed after the first edit is
+        // accepted.
+        MvcResult secondEdit = mvc.perform(put(PRICING + "/price-books/" + book + "/variant-prices/" + variant)
+                        .with(tokenFor(OWNER))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "matrix-edit-seq-2")
+                        .header("If-Match", "W/\"" + versionAfterFirst + "\"")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"amountMinor":47000}
+                                """))
+                .andReturn();
+        assertThat(secondEdit.getResponse().getStatus()).isEqualTo(200);
+
+        MvcResult afterSecond = mvc.perform(
+                        get(PRICING + "/price-books/" + book + "/matrix").with(tokenFor(OWNER)))
+                .andReturn();
+        JsonNode row = items(afterSecond).get(0);
+        assertThat(row.path("bookPriceMinor").asLong()).isEqualTo(47_000L);
+        assertThat(row.path("bookPriceVersion").asLong()).isGreaterThan(versionAfterFirst);
+    }
+
+    @Test
     void theInlineEditWithNoIfMatchStillWritesUnconditionally() throws Exception {
         UUID variant = product(BRAND, null, "BURGER", "Burger");
         UUID book = draftBook(BRAND);
