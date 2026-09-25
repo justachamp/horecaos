@@ -124,6 +124,19 @@ docker run -d --name minio-legacy \
   quay.io/minio/minio:RELEASE.2025-07-23T15-54-02Z server /data
 ```
 
+The object-store service holds the `minio` alias on **two** networks, not
+one — `core` (what `platform-app`'s S3 calls use) and `media` (what Caddy's
+`reverse_proxy minio:9000` for `media.horecaos.uz` uses; see the two
+`aliases:` blocks on `deploy/compose.production.yml`'s `object-store`
+service). `docker run` only joins one network at creation, so reserve the
+`minio-legacy` alias on `media` too, with a second call, now — this is what
+lets step 8 hand *both* aliases back to this container instead of only one:
+
+```bash
+docker network connect --alias minio-legacy \
+  horecaos-production_media minio-legacy
+```
+
 **If it refuses to start read-only** — some MinIO builds want to write an
 internal lock or temp file even when serving reads only — drop the `:ro` and
 rely on the script's own guarantee instead: `migrate-object-store.sh` never
@@ -443,19 +456,44 @@ onto `minio-legacy` instead.
 *First*, hand the `minio` alias back to `minio-legacy` — this is what makes
 `http://minio:9000` mean the old store again, with no endpoint edit
 anywhere, because nothing about this rollback should require reasoning about
-which of a dozen `HORECAOS_*_ENDPOINT` lines to change under pressure:
+which of a dozen `HORECAOS_*_ENDPOINT` lines to change under pressure. Do
+this on **both** networks the object-store service held the alias on —
+`core` (`platform-app`'s S3 calls) and `media` (Caddy's
+`reverse_proxy minio:9000` for `media.horecaos.uz`, per the object-store
+service's own two-network `aliases:` block). Restoring only `core` leaves
+`platform-app` authenticating fine while every storefront image 502s, with
+nothing in this runbook to say why — that gap is exactly what step 1's
+extra `docker network connect` for `media` exists to close:
 
 ```bash
 qc stop minio    # or whatever the object-store service is actually named —
-                  # frees the "minio" alias on the core network
+                  # frees the "minio" alias on BOTH the core and media
+                  # networks at once (stopping the container drops all of
+                  # its network endpoints)
 
 # A container already connected to a network cannot have an alias added to
 # that connection — Docker refuses with "endpoint already exists" — so this
 # is a disconnect and reconnect, naming both the alias minio-legacy already
-# had and the one it is taking over, in the same call:
+# had and the one it is taking over, in the same call. Repeat for media —
+# skipping it is the one-network mistake this step exists to prevent:
 docker network disconnect horecaos-production_core minio-legacy
 docker network connect --alias minio-legacy --alias minio \
   horecaos-production_core minio-legacy
+
+docker network disconnect horecaos-production_media minio-legacy
+docker network connect --alias minio-legacy --alias minio \
+  horecaos-production_media minio-legacy
+```
+
+**Check both origins, not just one** — the whole reason this needed two
+`docker network connect` calls instead of one is that a check against only
+`core` cannot see a `media` alias that never came back:
+
+```bash
+docker run --rm --network horecaos-production_core curlimages/curl:8 \
+  -sf http://minio:9000/minio/health/live && echo "core: OK"
+docker run --rm --network horecaos-production_media curlimages/curl:8 \
+  -sf http://minio:9000/minio/health/live && echo "media: OK"
 ```
 
 *Second*, restore the six OpenBao values from step 6.A to what they were
