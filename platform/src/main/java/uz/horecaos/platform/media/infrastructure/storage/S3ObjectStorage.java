@@ -21,7 +21,7 @@ import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignReques
 import uz.horecaos.platform.media.api.ObjectStorage;
 
 /**
- * S3-compatible storage (ADR 0010), used against MinIO locally and a hosted
+ * S3-compatible storage (ADR 0010), used against RustFS locally and a hosted
  * S3 API in production.
  *
  * <p>No public-URL convention is coded here on purpose. Providers differ on
