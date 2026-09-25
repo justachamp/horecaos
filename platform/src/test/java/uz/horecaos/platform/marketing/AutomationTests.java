@@ -15,6 +15,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import javax.sql.DataSource;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -278,6 +279,47 @@ class AutomationTests {
         assertThat(sweeps.sweepCartAbandonment()).isEqualTo(1);
         assertThat(port.sent())
                 .as("a customer who already converted must not receive a recovery message")
+                .isEmpty();
+        assertThat(runStatuses(ruleId)).containsExactly("CANCELLED");
+    }
+
+    @Test
+    @DisplayName("ADR 0044: a conversion landing between the guard claim and the send still cancels it (TOCTOU)")
+    void cartAbandonmentCancelsWhenTheCustomerConvertsDuringTheFiringWindow() {
+        UUID account = customer("+998903333334", "ru", true);
+        grantConsent(account);
+        Instant abandonedAt = NOW.minusSeconds(3 * 3600);
+        UUID cartId = UUID.randomUUID();
+        carts.abandoned(TENANT, BRAND, cartId, account, abandonedAt);
+        orders.noRecentOrderFor(account);
+
+        // Rewire the run store so that the instant the guard key is claimed — the
+        // same instant AutomationFiringService#attemptFire commits to firing —
+        // the customer's order "lands", the way a concurrent checkout commit
+        // would. AutomationSweepService#convertedSince reads OrderDirectory
+        // before attemptFire is even called, so any implementation that trusts
+        // that earlier read instead of re-checking after the claim will still
+        // see "no order" and send anyway.
+        runStore = new ClaimTriggeredAutomationRunStore(
+                jdbc, () -> orders.recentOrderFor(account, abandonedAt.plusSeconds(1800)));
+        firing = new AutomationFiringService(
+                runStore,
+                audienceStore,
+                engagementStore,
+                new MarketingEligibility(
+                        consent, new RecipientContactService(new JdbcCustomerStore(jdbc), protection), engagementStore),
+                port,
+                audit,
+                Clock.fixed(NOW, ZoneOffset.UTC));
+        sweeps = new AutomationSweepService(
+                ruleStore, metricStore, engagementStore, carts, orders, firing, Clock.fixed(NOW, ZoneOffset.UTC));
+
+        UUID ruleId = createAndActivate(AutomationTriggerType.CART_ABANDONMENT, Map.of("abandonmentDelayHours", 2), 30);
+
+        assertThat(sweeps.sweepCartAbandonment()).isEqualTo(1);
+        assertThat(port.sent())
+                .as("a customer who converted after the guard was claimed but before the send went out "
+                        + "must not receive a recovery message")
                 .isEmpty();
         assertThat(runStatuses(ruleId)).containsExactly("CANCELLED");
     }
@@ -591,6 +633,40 @@ class AutomationTests {
             return carts.stream()
                     .filter(cart -> !cart.abandonedAt().isAfter(olderThan))
                     .toList();
+        }
+    }
+
+    /**
+     * A real {@link JdbcAutomationRunStore} whose {@link #claim} fires a
+     * callback the instant it successfully reserves the guard key — modelling
+     * a concurrent transaction (a checkout) committing at exactly that moment,
+     * the narrowest possible window a correct re-check has to close.
+     */
+    private static final class ClaimTriggeredAutomationRunStore extends JdbcAutomationRunStore {
+        private final Runnable onClaimed;
+
+        ClaimTriggeredAutomationRunStore(JdbcClient jdbc, Runnable onClaimed) {
+            super(jdbc);
+            this.onClaimed = onClaimed;
+        }
+
+        @Override
+        public boolean claim(
+                UUID id,
+                UUID tenantId,
+                UUID brandId,
+                UUID automationRuleId,
+                UUID customerAccountId,
+                String triggerType,
+                String guardKey,
+                @Nullable UUID subjectId,
+                Instant now) {
+            boolean claimed = super.claim(
+                    id, tenantId, brandId, automationRuleId, customerAccountId, triggerType, guardKey, subjectId, now);
+            if (claimed) {
+                onClaimed.run();
+            }
+            return claimed;
         }
     }
 
