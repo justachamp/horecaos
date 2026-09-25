@@ -151,9 +151,19 @@ public class AutomationSweepService {
 
         for (AbandonedCart cart : candidates) {
             String guardKey = AutomationGuardKeys.cart(cart.cartId());
-            String alreadyConvertedReason = convertedSince(rule.tenantId(), rule.brandId(), cart);
+            // Not read here: convertedSince() is passed as a supplier so
+            // AutomationFiringService#attemptFire evaluates it itself, inside its
+            // own transaction and only after the guard key is claimed. Reading it
+            // eagerly, before attemptFire is even called, would leave a window in
+            // which the customer's order could commit — and this method would
+            // never see it — between this read and that guard claim.
             firing.attemptFire(
-                    rule, cart.customerAccountId(), guardKey, cart.cartId(), Map.of(), alreadyConvertedReason);
+                    rule,
+                    cart.customerAccountId(),
+                    guardKey,
+                    cart.cartId(),
+                    Map.of(),
+                    () -> convertedSince(rule.tenantId(), rule.brandId(), cart));
         }
         return candidates.size();
     }
@@ -162,6 +172,12 @@ public class AutomationSweepService {
      * ADR 0044: "cancelled if the cart converts first". A different, later cart
      * abandoned by the same customer must not cancel this one — only an order
      * placed after <em>this</em> cart went quiet counts.
+     *
+     * <p>Called by {@link AutomationFiringService#attemptFire} itself, inside its
+     * own transaction, after the guard key is claimed — never eagerly by this
+     * class — so the read sees any order committed up to that point instead of a
+     * value staled by the gap between a sweep reading it and that same firing's
+     * guard claim.
      *
      * @return the cancellation reason, or null when the customer has not ordered
      *         since

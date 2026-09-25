@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -81,13 +82,23 @@ public class AutomationFiringService {
     /**
      * @param subjectId the cart id for {@code CART_ABANDONMENT}, null for a
      *                  trigger with no such domain-fact subject
-     * @param alreadyConvertedReason non-null when the caller has already
-     *                               established, before calling this, that the
-     *                               domain fact no longer holds — "the customer
-     *                               ordered before the send" (ADR 0044: "cancelled
-     *                               if the cart converts first"). The guard key is
-     *                               still claimed and recorded {@code CANCELLED}
-     *                               so the same cart is never reconsidered
+     * @param conversionCheck null for a trigger with no such domain fact to
+     *                        recheck (BIRTHDAY, INACTIVITY). For
+     *                        CART_ABANDONMENT, a check the caller runs — "has
+     *                        the customer ordered since this cart was
+     *                        abandoned" (ADR 0044: "cancelled if the cart
+     *                        converts first") — that this method calls itself,
+     *                        inside its own transaction and only after the
+     *                        guard key is claimed, rather than trusting a
+     *                        value the caller read before this transaction
+     *                        opened. Reading it that early would leave a
+     *                        window, between that read and the guard claim
+     *                        below, in which the customer's order could commit
+     *                        without this firing ever seeing it. Non-null
+     *                        return means the domain fact no longer holds; the
+     *                        guard key is still claimed and recorded
+     *                        {@code CANCELLED} so the same cart is never
+     *                        reconsidered
      * @return what happened, for the sweep's own counters and tests
      */
     @Transactional
@@ -97,7 +108,7 @@ public class AutomationFiringService {
             String guardKey,
             @Nullable UUID subjectId,
             Map<String, String> variables,
-            @Nullable String alreadyConvertedReason) {
+            @Nullable Supplier<@Nullable String> conversionCheck) {
 
         Instant now = clock.instant();
         UUID runId = Ids.newId();
@@ -116,6 +127,7 @@ public class AutomationFiringService {
             return FireOutcome.ALREADY_GUARDED;
         }
 
+        String alreadyConvertedReason = conversionCheck == null ? null : conversionCheck.get();
         if (alreadyConvertedReason != null) {
             runs.markCancelled(rule.tenantId(), runId, alreadyConvertedReason);
             return FireOutcome.CANCELLED;
