@@ -1,0 +1,16 @@
+-- ADR 0017: InventoryService#reserve's own atomic multi-item rollback path
+-- (batch 11, wave11-w2-quantity-stock's QUANTITY tracking branch). When one
+-- item among several fails to reserve, every earlier item's own successful
+-- reserve is given back and the reservation row this call created is
+-- deleted outright (inventory.reservation_lines cascades on delete) rather
+-- than left behind as a HELD reservation whose lines disagree with what is
+-- actually reserved -- see JdbcInventoryStore#deleteReservation and
+-- InventoryService#reserve's own comment ("ADR 0017: on any failed item,
+-- roll back the entire reservation").
+--
+-- V0019 granted SELECT/INSERT/UPDATE on every table in the inventory schema
+-- at the time, because nothing deleted a reservation row yet. Caught by
+-- DatabasePrivilegeTests.theGrantsCoverWhatTheCodeActuallyDoes rather than a
+-- production 'permission denied' the first time a multi-item reservation's
+-- later line lost the availability race.
+GRANT DELETE ON inventory.reservations TO horecaos_application;
