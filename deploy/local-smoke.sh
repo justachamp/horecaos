@@ -252,7 +252,7 @@ rand() { openssl rand -base64 24 | tr -dc 'A-Za-z0-9' | head -c 32; }
 DB_MIGRATOR_PW="$(rand)"
 DB_APP_PW="$(rand)"
 KEYCLOAK_DB_PW="$(rand)"
-MINIO_ROOT_PW="$(rand)"
+OBJECT_STORE_ROOT_PW="$(rand)"
 HANDOVER_PEPPER="smoke-test-handover-pepper-not-for-any-other-use"
 KEK="smoke-test-key-encryption-key-not-for-any-other-use"
 
@@ -261,17 +261,18 @@ put() { bao_run bao kv put "horecaos/${ENVIRONMENT}/$1" "value=$2" >>"${LOG_FILE
 put database/platform/migrator-password  "${DB_MIGRATOR_PW}"
 put database/platform/app-password       "${DB_APP_PW}"
 put database/keycloak/password           "${KEYCLOAK_DB_PW}"
-put object_storage/platform/root-password "${MINIO_ROOT_PW}"
+put object_storage/platform/root-password "${OBJECT_STORE_ROOT_PW}"
 put data_encryption/platform/kek              "${KEK}"
 put data_encryption/platform/handover-pepper  "${HANDOVER_PEPPER}"
 # Cutting a corner real production does not: the media credential is the
-# MinIO root credential rather than a bucket-scoped service account.
-# production-setup.md creates the scoped account; this script does not,
-# because creating one needs a running MinIO to ask, and proving that step
-# works is exactly what the runbook's own "Check" does — recorded as a gap
-# in this task's final report, not silently assumed to be equivalent.
-put object_storage/platform/media-access-key  "${HORECAOS_MINIO_ROOT_USER:-horecaos-smoke-root}"
-put object_storage/platform/media-secret-key  "${MINIO_ROOT_PW}"
+# object store's root credential rather than a bucket-scoped service
+# account. production-setup.md creates the scoped account; this script does
+# not, because creating one needs a running object store to ask, and proving
+# that step works is exactly what the runbook's own "Check" does — recorded
+# as a gap in this task's final report, not silently assumed to be
+# equivalent.
+put object_storage/platform/media-access-key  "${HORECAOS_OBJECT_STORE_ACCESS_KEY:-horecaos-smoke-root}"
+put object_storage/platform/media-secret-key  "${OBJECT_STORE_ROOT_PW}"
 # Matches horecaos-realm.json's own fallback default exactly (see that
 # file's ${VAR:default} syntax) — this script does not rotate these secrets
 # (step 6), so Keycloak is still issuing them, and the resolver must agree.
@@ -288,11 +289,13 @@ write_secret() { ( umask 133; printf '%s' "$2" > "${SECRET_DIR}/$1" ); chmod 044
 write_secret platform-db-migrator-password "${DB_MIGRATOR_PW}"
 write_secret platform-db-app-password      "${DB_APP_PW}"
 write_secret keycloak-db-password          "${KEYCLOAK_DB_PW}"
-write_secret minio-root-password           "${MINIO_ROOT_PW}"
+# object-store-secret-key, not minio-root-password (ADR 0135, 2026-09-25):
+# compose.production.yml's `secrets:` block reads this file name by default.
+write_secret object-store-secret-key       "${OBJECT_STORE_ROOT_PW}"
 write_secret openbao-role-id               "${ROLE_ID}"
 write_secret openbao-secret-id             "${SECRET_ID}"
 
-export HORECAOS_MINIO_ROOT_USER="${HORECAOS_MINIO_ROOT_USER:-horecaos-smoke-root}"
+export HORECAOS_OBJECT_STORE_ACCESS_KEY="${HORECAOS_OBJECT_STORE_ACCESS_KEY:-horecaos-smoke-root}"
 export HORECAOS_REGISTRY="${REGISTRY}"
 export HORECAOS_IMAGE_TAG="${TAG}"
 export HORECAOS_FRONTEND_IMAGE_TAG="${TAG}"
@@ -302,15 +305,15 @@ export HORECAOS_POSTGRES_IMAGE_TAG="${TAG}"
 # 4. Dependencies, then a fresh-volume migration, then the app
 # -----------------------------------------------------------------------------
 
-say "Starting platform-db, keycloak-db, kafka, minio, openbao-agent"
-compose up -d platform-db keycloak-db kafka minio openbao-agent >>"${LOG_FILE}" 2>&1
+say "Starting platform-db, keycloak-db, kafka, object-store, openbao-agent"
+compose up -d platform-db keycloak-db kafka object-store openbao-agent >>"${LOG_FILE}" 2>&1
 
 wait_healthy platform-db 90    || die "platform-db never became healthy."
 wait_healthy keycloak-db 60    || die "keycloak-db never became healthy."
 wait_healthy kafka 90          || die "kafka never became healthy."
-wait_healthy minio 60          || die "minio never became healthy."
+wait_healthy object-store 60   || die "object-store never became healthy."
 wait_healthy openbao-agent 60  || die "openbao-agent never rendered the application's secrets."
-check "platform-db, keycloak-db, kafka, minio, openbao-agent all healthy"
+check "platform-db, keycloak-db, kafka, object-store, openbao-agent all healthy"
 
 say "Applying migrations to a fresh volume"
 export FLYWAY_PASSWORD="${DB_MIGRATOR_PW}"

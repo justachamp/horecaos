@@ -199,7 +199,9 @@ $EDITOR /etc/horecaos/production.env
 
 Fill in every blank `deploy/env.template`'s own comments name — the six
 public origins, the ACME email, `HORECAOS_KAFKA_CLUSTER_ID` (generate it
-now, see below), `HORECAOS_MINIO_ROOT_USER`, the backup off-site endpoint
+now, see below), `HORECAOS_OBJECT_STORE_ACCESS_KEY` (RustFS's root user as of
+ADR 0135 — renamed from `HORECAOS_MINIO_ROOT_USER`, which is still read as a
+fallback for one release), the backup off-site endpoint
 and bucket, and the three `HORECAOS_STOREFRONT_*` ids once the pilot tenant
 exists (section 5 covers that; the storefront container can wait until
 then). Leave `HORECAOS_TLS_MODE` **empty** — that is what makes Caddy request
@@ -367,8 +369,8 @@ reboot. Nothing above this line, and nothing below it, is safe to paste into
 a chat with an AI assistant, a support ticket, or a commit message. If you
 are about to do that, stop and use `bao kv put` instead.
 
-The remaining secrets need Keycloak and MinIO to exist first — sections 4
-and 5 create them and come back to this list:
+The remaining secrets need Keycloak and the object store (RustFS, ADR 0135)
+to exist first — sections 4 and 5 create them and come back to this list:
 
 ```text
 horecaos/production/identity_admin/keycloak/provisioning-secret
@@ -413,11 +415,14 @@ mkdir -p /run/horecaos/secrets
 mount -t tmpfs -o size=1m,mode=0700,noexec,nosuid,nodev tmpfs /run/horecaos/secrets
 export HORECAOS_SECRET_DIR=/run/horecaos/secrets
 
+# `object-store-secret-key` is RustFS's root password file as of ADR 0135 —
+# renamed from `minio-root-password`, which the compose file still accepts
+# as a fallback for one release.
 for name_path in \
     platform-db-migrator-password:database/platform/migrator-password \
     platform-db-app-password:database/platform/app-password \
     keycloak-db-password:database/keycloak/password \
-    minio-root-password:object_storage/platform/root-password
+    object-store-secret-key:object_storage/platform/root-password
 do
   name="${name_path%%:*}"; path="${name_path##*:}"
   value="$(docker compose -f deploy/compose.production.yml --env-file /etc/horecaos/production.env \
@@ -431,7 +436,7 @@ chmod 0444 /run/horecaos/secrets/openbao-role-id /run/horecaos/secrets/openbao-s
 unset role_id secret_id BAO_TOKEN
 
 docker compose -f deploy/compose.production.yml --env-file /etc/horecaos/production.env \
-  up -d platform-db keycloak-db kafka minio openbao-agent
+  up -d platform-db keycloak-db kafka object-store openbao-agent
 ```
 
 **Check:** `docker compose -f deploy/compose.production.yml --env-file /etc/horecaos/production.env ps`
@@ -682,25 +687,42 @@ HORECAOS_STOREFRONT_BRAND_ID=<the brand id>
 HORECAOS_STOREFRONT_LOCATION_ID=<the location id>
 ```
 
-Create the scoped MinIO service accounts (not the root credential — the
-application must not be able to reach the backup bucket, and the backup
-account must not be able to reach media):
+The object store is RustFS as of ADR 0135 (2026-09-25 — MinIO's public images
+were withdrawn); `mc` is gone and the AWS CLI, pointed at RustFS with
+`--endpoint-url`, takes its place. Create the buckets first, with the root
+credential — there is no `--ignore-existing`, so idempotency is a
+`head-bucket` check:
 
 ```bash
 docker compose -f deploy/compose.production.yml --env-file /etc/horecaos/production.env \
-  up -d minio
+  up -d object-store
 docker compose -f deploy/compose.production.yml --env-file /etc/horecaos/production.env \
   run --rm --no-TTY ops bash -c '
-    mc alias set root http://minio:9000 "'"${HORECAOS_MINIO_ROOT_USER}"'" "'"$(cat /run/horecaos/secrets/minio-root-password)"'" >/dev/null
-    mc mb --ignore-existing root/horecaos-media
-    mc mb --ignore-existing root/horecaos-backups
-    mc version enable root/horecaos-backups
-    mc admin user add root media-service <(head -c 32 /dev/urandom | base64)
-    mc admin policy create root media-rw /dev/stdin <<POLICY
-{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["s3:*"],"Resource":["arn:aws:s3:::horecaos-media/*","arn:aws:s3:::horecaos-media"]}]}
-POLICY
-    mc admin policy attach root media-rw --user media-service'
+    export AWS_ACCESS_KEY_ID="${HORECAOS_OBJECT_STORE_ACCESS_KEY}"
+    export AWS_SECRET_ACCESS_KEY="$(cat /run/horecaos/secrets/object-store-secret-key)"
+    export AWS_EC2_METADATA_DISABLED=true
+    export AWS_DEFAULT_REGION=us-east-1
+    ep="--endpoint-url http://minio:9000"
+    aws $ep s3api head-bucket --bucket horecaos-media 2>/dev/null \
+      || aws $ep s3api create-bucket --bucket horecaos-media
+    aws $ep s3api head-bucket --bucket horecaos-backups 2>/dev/null \
+      || aws $ep s3api create-bucket --bucket horecaos-backups
+    aws $ep s3api put-bucket-versioning --bucket horecaos-backups \
+      --versioning-configuration Status=Enabled'
 ```
+
+**Then create the scoped service accounts (not the root credential — the
+application must not be able to reach the backup bucket, and the backup
+account must not be able to reach media).** This is open, not merely
+unwritten: MinIO did this through `mc admin user add` / `policy create` /
+`policy attach`, and [ADR 0135](../adr/partial/0135-object-storage-runtime-rustfs-replaces-minio.md)
+does not verify a RustFS equivalent — its Open inputs and checklist name
+this explicitly. Do not invent an `aws iam`-shaped command here without
+confirming it against a running RustFS instance first; a command that
+silently no-ops or errors past a `|| true` would leave the application
+running on the root credential while this runbook still claimed otherwise.
+Close this gap under ADR 0135 before a real production cutover, and record
+here what the confirmed mechanism turns out to be.
 
 Store the resulting media credential in OpenBao (values from the commands
 above — the point of the exercise is that this pair, and the equivalent
@@ -777,9 +799,9 @@ this runbook's claim.
 
 ### Store the backup credentials
 
-Generate a MinIO service account scoped to `horecaos-backups` only (same
-pattern as the media account above, different bucket, different policy),
-and a real credential on whichever S3-compatible provider holds the
+Generate an object-store (RustFS) service account scoped to `horecaos-backups`
+only — same open gap as the media account above (ADR 0135), different bucket,
+different policy — and a real credential on whichever S3-compatible provider holds the
 off-site bucket — **UzCloud S3 is the default candidate** named in ADR
 0061, chosen for staying in-country; any S3-compatible endpoint works
 because nothing here calls a provider-specific API:

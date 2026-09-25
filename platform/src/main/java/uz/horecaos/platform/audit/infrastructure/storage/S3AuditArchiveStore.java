@@ -30,9 +30,11 @@ import uz.horecaos.platform.audit.api.AuditArchiveStore;
  *
  * <p><strong>What it does not prove: that the configured bucket is capable of
  * Object Lock at all.</strong> Object Lock is a bucket-creation-time setting no
- * later API call can retrofit. Locally, {@code compose.yaml} creates the archive
- * bucket with {@code mc mb --with-lock}, and this class's own tests run against
- * a real MinIO with that flag — so the mechanism is proven against a genuine
+ * later API call can retrofit. Locally, {@code compose.yaml}'s seed job
+ * creates the archive bucket with {@code aws s3api create-bucket
+ * --object-lock-enabled-for-bucket} — the AWS CLI's equivalent of MinIO's
+ * retired {@code mc mb --with-lock} — and this class's own tests run against
+ * a real RustFS with that flag — so the mechanism is proven against a genuine
  * S3-compatible implementation. Whether the ADR 0073 production provider's
  * object storage supports Object Lock is unconfirmed, the same way SigV4
  * presigning was unconfirmed until that record's own probe against the real
@@ -57,8 +59,8 @@ public class S3AuditArchiveStore implements AuditArchiveStore {
         String sha256 = sha256Base64(content);
 
         // A bucket with no Object Lock configuration does not silently accept
-        // and drop these two headers — measured against a real MinIO: it answers
-        // the PUT itself with 400 InvalidRequest, "Bucket is missing
+        // and drop these two headers — measured against a real RustFS: it
+        // answers the PUT itself with 400 InvalidRequest, "Bucket is missing
         // ObjectLockConfiguration". That is the loud failure this method wants,
         // and it is caught here rather than left to propagate as a bare SDK
         // exception, so every way this store can fail to protect an object comes

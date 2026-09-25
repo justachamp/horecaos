@@ -2,7 +2,6 @@ package uz.horecaos.platform.audit.infrastructure.persistence;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
@@ -23,14 +22,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.testcontainers.DockerClientFactory;
-import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.containers.wait.strategy.Wait;
-import org.testcontainers.utility.DockerImageName;
-import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
-import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
-import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
-import software.amazon.awssdk.services.s3.S3Configuration;
 import software.amazon.awssdk.services.s3.model.BucketAlreadyOwnedByYouException;
 import software.amazon.awssdk.services.s3.model.CreateBucketRequest;
 import tools.jackson.databind.json.JsonMapper;
@@ -40,6 +32,7 @@ import uz.horecaos.platform.audit.api.AuditArchiveStore;
 import uz.horecaos.platform.audit.api.AuditConfigurationKeys;
 import uz.horecaos.platform.audit.infrastructure.storage.S3AuditArchiveStore;
 import uz.horecaos.platform.iam.api.ResourceScope;
+import uz.horecaos.platform.support.ObjectStoreContainer;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.domain.configuration.ConfigurationKeys;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcConfigurationResolver;
@@ -53,7 +46,7 @@ import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcConfiguration
 class AuditPartitionArchiverTests {
 
     private static TestDatabase.Handle db;
-    private static GenericContainer<?> minio;
+    private static ObjectStoreContainer objectStore;
     private static S3Client s3;
     private static final String BUCKET = "horecaos-audit-archive-archiver-test";
 
@@ -66,22 +59,9 @@ class AuditPartitionArchiverTests {
 
         db = TestDatabase.migrated();
 
-        minio = new GenericContainer<>(DockerImageName.parse("quay.io/minio/minio:RELEASE.2025-07-23T15-54-02Z"))
-                .withCommand("server", "/data")
-                .withEnv("MINIO_ROOT_USER", "horecaos")
-                .withEnv("MINIO_ROOT_PASSWORD", "horecaos-local-secret")
-                .withExposedPorts(9000)
-                .waitingFor(Wait.forHttp("/minio/health/live").forPort(9000));
-        minio.start();
-
-        s3 = S3Client.builder()
-                .endpointOverride(URI.create("http://" + minio.getHost() + ":" + minio.getMappedPort(9000)))
-                .region(Region.US_EAST_1)
-                .credentialsProvider(StaticCredentialsProvider.create(
-                        AwsBasicCredentials.create("horecaos", "horecaos-local-secret")))
-                .serviceConfiguration(
-                        S3Configuration.builder().pathStyleAccessEnabled(true).build())
-                .build();
+        objectStore = new ObjectStoreContainer();
+        objectStore.start();
+        s3 = objectStore.s3Client();
         try {
             s3.createBucket(CreateBucketRequest.builder()
                     .bucket(BUCKET)
@@ -97,8 +77,8 @@ class AuditPartitionArchiverTests {
         if (s3 != null) {
             s3.close();
         }
-        if (minio != null) {
-            minio.stop();
+        if (objectStore != null) {
+            objectStore.stop();
         }
         if (db != null) {
             db.close();

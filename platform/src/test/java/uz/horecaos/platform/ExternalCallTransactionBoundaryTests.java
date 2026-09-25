@@ -89,7 +89,7 @@ import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcTenantControl
  *
  * <p>One test class for three modules, because it is one property and it is
  * architectural rather than local. The pool is ten connections wide and shared by
- * every module: a media verification waiting on a degraded MinIO, an onboarding
+ * every module: a media verification waiting on a degraded RustFS, an onboarding
  * step waiting on Keycloak, and a checkout waiting on Click each used to hold one
  * for the whole of that wait, so ten slow calls to any <em>one</em> of those
  * three stalled all of the others — ordering, tenancy, reporting and the rest
@@ -170,7 +170,7 @@ class ExternalCallTransactionBoundaryTests {
 
         assertThat(storage.headCalls).isEqualTo(1);
         assertThat(storage.insideTransaction)
-                .as("head() is a blocking round-trip to MinIO; a transaction around it "
+                .as("head() is a blocking round-trip to RustFS; a transaction around it "
                         + "holds one of ten pooled connections for its whole duration")
                 .isFalse();
     }

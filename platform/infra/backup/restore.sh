@@ -17,6 +17,8 @@ set -euo pipefail
 : "${HORECAOS_BACKUP_PASSPHRASE:?set the encryption passphrase}"
 : "${HORECAOS_BACKUP_BUCKET:=horecaos-backups}"
 : "${HORECAOS_BACKUP_S3_ENDPOINT:=http://localhost:9000}"
+: "${HORECAOS_BACKUP_ACCESS_KEY:?set the primary object-store access key}"
+: "${HORECAOS_BACKUP_SECRET_KEY:?set the primary object-store secret key}"
 
 # The names this script will not restore over, comma separated. `pg_restore
 # --clean --if-exists` drops every object it is about to recreate, so aiming it
@@ -63,20 +65,32 @@ object="${1:-}"
 workdir="$(mktemp -d)"
 trap 'rm -rf "${workdir}"' EXIT
 
-mc alias set horecaos-backup "${HORECAOS_BACKUP_S3_ENDPOINT}" \
-  "${HORECAOS_BACKUP_ACCESS_KEY}" "${HORECAOS_BACKUP_SECRET_KEY}" >/dev/null
+# AWS CLI, not `mc` (ADR 0135, 2026-09-25) -- see backup.sh's own comment on
+# why this is a wrapper function taking the credentials as environment
+# rather than an `mc alias set`.
+aws_backup() {
+  AWS_ACCESS_KEY_ID="${HORECAOS_BACKUP_ACCESS_KEY}" \
+  AWS_SECRET_ACCESS_KEY="${HORECAOS_BACKUP_SECRET_KEY}" \
+  AWS_DEFAULT_REGION=us-east-1 AWS_EC2_METADATA_DISABLED=true \
+  aws --endpoint-url "${HORECAOS_BACKUP_S3_ENDPOINT}" "$@"
+}
 
 if [ -z "${object}" ]; then
   echo "==> Selecting the most recent backup"
-  object="$(mc ls "horecaos-backup/${HORECAOS_BACKUP_BUCKET}/" \
-    | grep '\.dump\.enc$' | sort | tail -1 | awk '{print $NF}')"
+  # `mc ls` sorted by name; `s3api list-objects-v2` sorted by key the same
+  # way, since every object name is a UTC timestamp -- lexicographic order is
+  # chronological order here exactly as it is in backup.sh's own retention
+  # pruning.
+  object="$(aws_backup s3api list-objects-v2 --bucket "${HORECAOS_BACKUP_BUCKET}" \
+    --query "Contents[?ends_with(Key, '.dump.enc')].Key" --output json \
+    | jq -r 'sort | .[-1] // empty')"
 fi
 [ -n "${object}" ] || { echo "!! No backup found" >&2; exit 1; }
 echo "    ${object}"
 
 echo "==> Downloading and checking the stored checksum"
-mc cp "horecaos-backup/${HORECAOS_BACKUP_BUCKET}/${object}" "${workdir}/backup.enc" >/dev/null
-if mc cp "horecaos-backup/${HORECAOS_BACKUP_BUCKET}/${object}.sha256" \
+aws_backup s3 cp "s3://${HORECAOS_BACKUP_BUCKET}/${object}" "${workdir}/backup.enc" >/dev/null
+if aws_backup s3 cp "s3://${HORECAOS_BACKUP_BUCKET}/${object}.sha256" \
      "${workdir}/checksum.txt" >/dev/null 2>&1; then
   expected="$(cut -d' ' -f1 < "${workdir}/checksum.txt")"
   actual="$(openssl dgst -sha256 -r "${workdir}/backup.enc" | cut -d' ' -f1)"

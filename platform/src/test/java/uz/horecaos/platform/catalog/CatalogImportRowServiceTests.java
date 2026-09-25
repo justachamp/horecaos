@@ -29,14 +29,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.DockerClientFactory;
-import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.containers.wait.strategy.Wait;
-import org.testcontainers.utility.DockerImageName;
-import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
-import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
-import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
-import software.amazon.awssdk.services.s3.S3Configuration;
 import software.amazon.awssdk.services.s3.model.BucketAlreadyOwnedByYouException;
 import software.amazon.awssdk.services.s3.model.CreateBucketRequest;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
@@ -65,6 +58,7 @@ import uz.horecaos.platform.pricing.infrastructure.catalog.CatalogImportPricing;
 import uz.horecaos.platform.pricing.infrastructure.catalog.JdbcCatalogPricingContext;
 import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPricingStore;
 import uz.horecaos.platform.support.CommercialDefaults;
+import uz.horecaos.platform.support.ObjectStoreContainer;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcSalesChannelStore;
 
@@ -75,10 +69,10 @@ import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcSalesChannelS
  * PriceAuthoringTests}'s own doc gives, extended to the catalog import that
  * now writes through the identical path.
  *
- * <p>Docker is required (Postgres and MinIO, matching {@code
+ * <p>Docker is required (Postgres and RustFS, matching {@code
  * MediaAssetIngestionServiceTests}'s own infrastructure) — the image-by-URL
- * tests are what actually needs MinIO; everything else would run against
- * Postgres alone, but one shared fixture is simpler than two.
+ * tests are what actually needs the object store; everything else would run
+ * against Postgres alone, but one shared fixture is simpler than two.
  */
 class CatalogImportRowServiceTests {
 
@@ -92,7 +86,7 @@ class CatalogImportRowServiceTests {
     private static final byte[] NOT_AN_IMAGE = "<html>not a photo</html>".getBytes(StandardCharsets.UTF_8);
 
     private static TestDatabase.Handle db;
-    private static GenericContainer<?> minio;
+    private static ObjectStoreContainer objectStore;
     private static S3Client s3;
     private static S3Presigner presigner;
 
@@ -112,31 +106,10 @@ class CatalogImportRowServiceTests {
 
         db = TestDatabase.migrated();
 
-        minio = new GenericContainer<>(DockerImageName.parse("quay.io/minio/minio:RELEASE.2025-07-23T15-54-02Z"))
-                .withCommand("server", "/data")
-                .withEnv("MINIO_ROOT_USER", "horecaos")
-                .withEnv("MINIO_ROOT_PASSWORD", "horecaos-local-secret")
-                .withExposedPorts(9000)
-                .waitingFor(Wait.forHttp("/minio/health/live").forPort(9000));
-        minio.start();
-
-        String endpoint = "http://" + minio.getHost() + ":" + minio.getMappedPort(9000);
-        var credentials =
-                StaticCredentialsProvider.create(AwsBasicCredentials.create("horecaos", "horecaos-local-secret"));
-        var pathStyle = S3Configuration.builder().pathStyleAccessEnabled(true).build();
-
-        s3 = S3Client.builder()
-                .endpointOverride(URI.create(endpoint))
-                .region(Region.US_EAST_1)
-                .credentialsProvider(credentials)
-                .serviceConfiguration(pathStyle)
-                .build();
-        presigner = S3Presigner.builder()
-                .endpointOverride(URI.create(endpoint))
-                .region(Region.US_EAST_1)
-                .credentialsProvider(credentials)
-                .serviceConfiguration(pathStyle)
-                .build();
+        objectStore = new ObjectStoreContainer();
+        objectStore.start();
+        s3 = objectStore.s3Client();
+        presigner = objectStore.s3Presigner();
         try {
             s3.createBucket(CreateBucketRequest.builder().bucket(BUCKET).build());
         } catch (BucketAlreadyOwnedByYouException alreadyThere) {
@@ -152,8 +125,8 @@ class CatalogImportRowServiceTests {
         if (presigner != null) {
             presigner.close();
         }
-        if (minio != null) {
-            minio.stop();
+        if (objectStore != null) {
+            objectStore.stop();
         }
         if (db != null) {
             db.close();

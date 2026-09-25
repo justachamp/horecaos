@@ -152,7 +152,7 @@ bao_run bao write auth/approle/role/horecaos-platform \
 # or choose a weak one. They exist in exactly two places afterwards: the OpenBao
 # raft volume, and the tmpfs the deploy script writes at deploy time.
 
-say "Generating the database, Keycloak and MinIO credentials"
+say "Generating the database, Keycloak and RustFS credentials"
 # Named `secret_path` rather than `path`: in zsh, `path` is tied to `PATH`, and
 # an operator who pastes this loop into an interactive shell would silently lose
 # every command on their PATH. It costs nothing to not do that to them.
@@ -189,7 +189,7 @@ cat <<-'EOF'
 
 	  horecaos/production/object_storage/platform/media-access-key
 	  horecaos/production/object_storage/platform/media-secret-key
-	      A MinIO service account scoped to the media bucket. Not the root
+	      A RustFS service account scoped to the media bucket. Not the root
 	      credential: the application should not be able to delete the backups.
 
 	The backup passphrase belongs in

@@ -175,8 +175,8 @@ horecaos:
       # somebody else's primary.
       statement-timeout: ${HORECAOS_MIGRATION_LEGACY_STATEMENT_TIMEOUT:PT30S}
   media:
-    # ADR 0010 object storage. Local development points at the MinIO in
-    # compose.yaml; production points at the hosted S3 API from ADR 0034.
+    # ADR 0010 object storage. Local development points at the RustFS in
+    # compose.yaml (ADR 0135); production points at the hosted S3 API from ADR 0034.
     endpoint: ${HORECAOS_MEDIA_ENDPOINT:http://localhost:9000}
     region: ${HORECAOS_MEDIA_REGION:us-east-1}
     bucket: ${HORECAOS_MEDIA_BUCKET:horecaos-media}
@@ -257,20 +257,20 @@ horecaos:
     # working configuration.
     provider: ${HORECAOS_SECRETS_PROVIDER:environment}
     # Local-only placeholder values for the environment provider. These match the
-    # MinIO root credentials in compose.yaml and are worthless outside a laptop;
+    # RustFS root credentials in compose.yaml and are worthless outside a laptop;
     # SecretsProfileGuard refuses to start a non-local profile on this provider.
     object_storage:
       platform:
         media-access-key: ${HORECAOS_MEDIA_ACCESS_KEY:horecaos}
         media-secret-key: ${HORECAOS_MEDIA_SECRET_KEY:horecaos-local-secret}
-        # Same MinIO root credentials, different bucket — see the audit.archive
-        # block above and compose.yaml's minio-seed, which creates
-        # horecaos-audit-archive with --with-lock.
+        # Same RustFS root credentials, different bucket — see the audit.archive
+        # block above and compose.yaml's object-store-seed, which creates
+        # horecaos-audit-archive with --object-lock-enabled-for-bucket.
         audit-archive-access-key: ${HORECAOS_AUDIT_ARCHIVE_ACCESS_KEY:horecaos}
         audit-archive-secret-key: ${HORECAOS_AUDIT_ARCHIVE_SECRET_KEY:horecaos-local-secret}
     data_encryption:
       platform:
-        # ADR 0040's handover pepper. A local-only placeholder, like the MinIO
+        # ADR 0040's handover pepper. A local-only placeholder, like the RustFS
         # credentials above: SecretsProfileGuard refuses to start a non-local
         # profile on the environment provider, so this value cannot reach a
         # deployment. Rotating the real one invalidates every open challenge's

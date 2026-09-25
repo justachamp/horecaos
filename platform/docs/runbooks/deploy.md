@@ -59,7 +59,8 @@ qc ps
 
 Every service `running`, and every service with a health check `(healthy)`:
 `edge`, `platform-app`, `platform-db`, `keycloak`, `keycloak-db`, `kafka`,
-`minio`, `openbao`, `openbao-agent`, `autoheal`.
+`object-store` (RustFS — replaces MinIO as of ADR 0135), `openbao`,
+`openbao-agent`, `autoheal`.
 
 Then, from a machine that is **not** this one:
 
@@ -435,7 +436,9 @@ Photos are served to browsers through presigned URLs, and a presigned URL is
 signed *for one origin*. `HORECAOS_MEDIA_ORIGIN` in the env file is that origin, and
 it must be the public HTTPS name — a URL signed for `http://minio:9000` does not
 resolve on a customer's phone, and would carry the signature and the object in
-clear text if it did.
+clear text if it did. (The object store itself is RustFS as of ADR 0135; `minio`
+is kept as its network alias through the cutover, which is why it is still the
+hostname named here and below.)
 
 ```text
 HORECAOS_MEDIA_ORIGIN=https://media.horecaos.uz
@@ -447,9 +450,10 @@ The edge has to serve that name. Add a site block to
 
 ```caddyfile
 {$HORECAOS_MEDIA_ORIGIN} {
-	# Objects only. The MinIO console is off, but the S3 API also carries bucket
-	# creation, policy and admin paths, and none of them belong on a public
-	# origin — even behind a signature check.
+	# Objects only. The RustFS console is off (RUSTFS_CONSOLE_ENABLE unset,
+	# ADR 0135), but the S3 API also carries bucket creation, policy and admin
+	# paths, and none of them belong on a public origin — even behind a
+	# signature check.
 	handle {
 		reverse_proxy minio:9000
 	}
@@ -467,11 +471,11 @@ The edge has to serve that name. Add a site block to
 }
 ```
 
-The edge reaches MinIO over the `media` network, which holds those two
-containers and nothing else: MinIO must not be on `public`, because the store
-that holds the backups should have no route to the internet, and the edge must
-not be on `core`, because the one internet-facing process should have no path to
-PostgreSQL.
+The edge reaches the object store over the `media` network, which holds those
+two containers and nothing else: the store (RustFS, `object-store`/`minio` alias)
+must not be on `public`, because the store that holds the backups should have
+no route to the internet, and the edge must not be on `core`, because the one
+internet-facing process should have no path to PostgreSQL.
 
 **Check:** after the first deploy, upload a photo through the operations console
 and open the URL it returns from a phone on mobile data. `https`, and it loads.
@@ -521,8 +525,8 @@ application will not start without it: `HandoverCodeHasher` resolves it while th
 context is being built, and there is no fallback value by design — a pepper with
 a default is a pepper every deployment shares.
 
-The remaining secrets come from Keycloak and MinIO and can only be created after
-those services exist:
+The remaining secrets come from Keycloak and the object store (RustFS, ADR
+0135) and can only be created after those services exist:
 
 ```text
 horecaos/production/identity_admin/keycloak/provisioning-secret
@@ -540,12 +544,20 @@ horecaos/production/object_storage/platform/backup-offsite-access-key
 horecaos/production/object_storage/platform/backup-offsite-secret-key
 ```
 
-The MinIO pairs must be **service accounts scoped to one bucket each**, not the
-root credential. The application should not be able to reach the backup bucket at
-all: if it can, a bug in media cleanup can delete the backups. The backup account
-should not be able to reach the media bucket either.
+The object-store pairs must be **service accounts scoped to one bucket each**,
+not the root credential. The application should not be able to reach the
+backup bucket at all: if it can, a bug in media cleanup can delete the
+backups. The backup account should not be able to reach the media bucket
+either.
 
-The **off-site** pair is not a MinIO credential at all. Generate it on whichever
+**RustFS's scoped-credential mechanism is not the one this section used to
+name.** MinIO provisioned these through `mc admin user add` / `policy
+create` / `policy attach`; RustFS 1.0.0's equivalent has not been verified as
+part of ADR 0135 and may not exist in the same shape. Until it is confirmed,
+treat this step as open rather than run a command that has not been checked
+against RustFS — see that record's Open inputs and checklist.
+
+The **off-site** pair is not an on-box object-store credential at all. Generate it on whichever
 provider holds the off-site bucket, scoped to that one bucket, and enable
 versioning plus object-lock or a retention rule on it there — a credential that
 can delete the history is a backup an attacker can erase. It must not live in the
@@ -560,20 +572,30 @@ mentions nothing about secrets until nine `Caused by` lines down.
 
 ### Create the buckets
 
+RustFS replaces MinIO as of ADR 0135; the AWS CLI replaces `mc`, and there is
+no `--ignore-existing` flag, so idempotency is a `head-bucket` check:
+
 ```bash
-qc up -d minio
+qc up -d object-store
 qc run --rm --no-TTY ops bash -c '
-  mc alias set p http://minio:9000 \
-    "$(bao-get.sh production/object_storage/platform/backup-access-key)" \
-    "$(bao-get.sh production/object_storage/platform/backup-secret-key)" >/dev/null
-  mc mb --ignore-existing p/horecaos-backups
-  mc version enable p/horecaos-backups
-  mc mb --ignore-existing p/horecaos-media
-  mc ls p/'
+  export AWS_ACCESS_KEY_ID="$(bao-get.sh production/object_storage/platform/backup-access-key)"
+  export AWS_SECRET_ACCESS_KEY="$(bao-get.sh production/object_storage/platform/backup-secret-key)"
+  export AWS_EC2_METADATA_DISABLED=true
+  export AWS_DEFAULT_REGION=us-east-1
+  ep="--endpoint-url http://minio:9000"
+  aws $ep s3api head-bucket --bucket horecaos-backups 2>/dev/null \
+    || aws $ep s3api create-bucket --bucket horecaos-backups
+  aws $ep s3api put-bucket-versioning --bucket horecaos-backups \
+    --versioning-configuration Status=Enabled
+  aws $ep s3api head-bucket --bucket horecaos-media 2>/dev/null \
+    || aws $ep s3api create-bucket --bucket horecaos-media
+  aws $ep s3 ls'
 ```
 
-**Check:** both buckets listed, and `horecaos-backups` reports versioning enabled.
-Without versioning a single mistaken `mc rm` removes every backup with no undo.
+**Check:** both buckets listed, and
+`aws $ep s3api get-bucket-versioning --bucket horecaos-backups` reports
+`"Status": "Enabled"`. Without versioning a single mistaken `aws s3 rm`
+removes every backup with no undo.
 
 ### Import the Keycloak realm
 
@@ -756,8 +778,8 @@ belief, in exactly the way an untested backup is.
   Running `docker compose up` in this directory on the server starts a second,
   wrong stack with placeholder credentials. Always `-f compose.production.yaml`.
 - **Nothing but 80 and 443 is published.** There is no way to reach PostgreSQL,
-  Kafka, MinIO or OpenBao from off the host, and there should never be one. Use
-  `qc exec`, or an SSH tunnel if you need a GUI.
+  Kafka, the object store (RustFS, ADR 0135) or OpenBao from off the host, and
+  there should never be one. Use `qc exec`, or an SSH tunnel if you need a GUI.
 - **The application connects as `horecaos_app`, which cannot change the schema and
   cannot read a table no migration granted it.** If a query fails with
   `permission denied`, the missing `GRANT` belongs in the migration that created

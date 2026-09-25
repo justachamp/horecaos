@@ -104,15 +104,23 @@ jobs:
 
       - name: Pre-pull Testcontainers images
         # Testcontainers gives a pull two minutes and every suite that needs the
-        # image retries on its own, so a registry hiccup (quay.io on 2026-09-25)
-        # costs seven minutes per affected class inside the forks. Pull the three
-        # images up front with retries instead, so a registry outage fails fast
-        # and a slow one is paid for once. The Postgres image is the base of
+        # image retries on its own, so a registry hiccup costs seven minutes per
+        # affected class inside the forks. Pull the three images up front with
+        # retries instead, so a registry outage fails fast and a slow one is
+        # paid for once. The Postgres image is the base of
         # infra/postgres/Dockerfile, which TestDatabase builds locally.
+        #
+        # rustfs/rustfs, not quay.io/minio/minio (ADR 0135, 2026-09-25): MinIO's
+        # public images were withdrawn -- quay.io/minio/minio answers 401
+        # anonymously -- which is exactly the "registry hiccup" this step exists
+        # to survive, except a withdrawn image never recovers no matter how many
+        # of the five attempts run. RustFS is the pinned replacement the six
+        # Testcontainers test classes that used to start a `minio`
+        # GenericContainer now start instead.
         run: |
           set -u
           POSTGRES_IMAGE=$(sed -nE 's/^FROM (postgres:[^ ]+).*/\1/p' infra/postgres/Dockerfile | head -1)
-          for image in "$POSTGRES_IMAGE" quay.io/minio/minio:RELEASE.2025-07-23T15-54-02Z apache/kafka:4.3.1; do
+          for image in "$POSTGRES_IMAGE" rustfs/rustfs:1.0.0@sha256:8cc9801755448b71a786705ce76692c77e14936cccd87cf2fc31842e58f4d1ff apache/kafka:4.3.1; do
             for attempt in 1 2 3 4 5; do
               if docker pull --quiet "$image"; then break; fi
               if [ "$attempt" = 5 ]; then echo "could not pull $image after 5 attempts" >&2; exit 1; fi

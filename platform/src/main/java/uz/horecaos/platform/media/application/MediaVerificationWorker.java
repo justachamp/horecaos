@@ -236,7 +236,7 @@ public class MediaVerificationWorker {
             // this is terminal rather than backed off.
             terminate(job, ASSET_NOT_VERIFIABLE, now, wrongState);
         } catch (RuntimeException failure) {
-            // An object-store fault is the ordinary cause — a degraded MinIO
+            // An object-store fault is the ordinary cause — a degraded RustFS
             // refusing a HeadObject or a ranged read — and is transient, so it
             // retries; the attempt limit turns a genuinely broken object into
             // an abandoned job rather than a loop.

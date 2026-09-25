@@ -46,7 +46,7 @@ horecaos:
         # suite said nothing about it — the fixture did in setup what `make run`
         # never does.
         #
-        # A local-only placeholder, like the MinIO credentials and the handover
+        # A local-only placeholder, like the RustFS credentials and the handover
         # pepper in application.yml, and it cannot travel. This document is
         # activated by the `local` profile, and SecretsProfileGuard refuses to
         # start a non-local profile on the `environment` provider at all. What

@@ -25,8 +25,9 @@
 #                         dependent would misbehave against a half-started one
 #   resource limits       one runaway container cannot take the host with it
 #   log rotation          see the note on the logging anchor below
-#   no published ports    except 80/443 on the edge; the database, Kafka, MinIO
-#                         and OpenBao are not reachable from outside the host
+#   no published ports    except 80/443 on the edge; the database, Kafka, the
+#                         object store, and OpenBao are not reachable from
+#                         outside the host
 #   no baked credentials  every secret arrives at runtime; see `secrets:` below
 #
 # Usage is in docs/runbooks/deploy.md. Do not improvise against this file.
@@ -77,7 +78,7 @@ services:
   edge:
     # The only service with a published port. Everything else is reachable only
     # from inside the compose networks, which is what makes it defensible to run
-    # PostgreSQL, Kafka, MinIO and OpenBao without TLS between them.
+    # PostgreSQL, Kafka, the object store and OpenBao without TLS between them.
     #
     # Built rather than pulled as stock `caddy:2.10-alpine`, because stock Caddy
     # carries no `rate_limit` directive at all (verified: `caddy list-modules
@@ -138,13 +139,13 @@ services:
           # public media origin, and it also talks to that origin itself. The
           # alias keeps its own traffic inside the host.
           - ${HORECAOS_MEDIA_HOSTNAME:?set the media hostname without a scheme}
-      # A third network, holding exactly this container and MinIO. The edge has
-      # to reach the object store to serve presigned URLs, and neither of the
-      # two obvious ways to arrange that is acceptable: putting MinIO on `public`
-      # gives the store that holds the backups a route to the internet, and
-      # putting the edge on `core` gives the one internet-facing process a path
-      # to PostgreSQL, Kafka and OpenBao. This link is `internal: true` and has
-      # two members.
+      # A third network, holding exactly this container and the object store.
+      # The edge has to reach the object store to serve presigned URLs, and
+      # neither of the two obvious ways to arrange that is acceptable: putting
+      # the object store on `public` gives the store that holds the backups a
+      # route to the internet, and putting the edge on `core` gives the one
+      # internet-facing process a path to PostgreSQL, Kafka and OpenBao. This
+      # link is `internal: true` and has two members.
       media: {}
     # No `depends_on`, and that is the ordering decision rather than an omission.
     # The edge comes up first and answers 502 while its upstreams are still
@@ -283,6 +284,11 @@ services:
         # token means the container waits and then exits, and a crash loop during
         # every deploy would train an operator to ignore crash loops.
         condition: service_healthy
+      object-store-seed:
+        # The three buckets this needs -- media, backups, audit archive --
+        # must exist before the first request, not be created by whichever
+        # request happens to need one first.
+        condition: service_completed_successfully
     labels:
       autoheal: "true"
     logging: *logging
@@ -530,35 +536,69 @@ services:
         reservations:
           memory: 1G
 
-  minio:
-    # ADR 0010/0034: S3-compatible, never S3-specific. This is the phase-one
-    # implementation of the same interface AWS S3 will provide in phase two.
-    image: quay.io/minio/minio:RELEASE.2025-07-23T15-54-02Z
+  object-store:
+    # ADR 0010/0034/0135: S3-compatible, never S3-specific. This is the
+    # phase-one implementation of the same interface AWS S3 will provide in
+    # phase two.
+    #
+    # RustFS, not MinIO (ADR 0135, 2026-09-25): MinIO's public images were
+    # withdrawn — quay.io/minio/minio answers 401 anonymously and Docker
+    # Hub's minio/minio is 404, so a rebuild of this stack can no longer pull
+    # it. RustFS is the S3-compatible replacement, pinned by digest for the
+    # same reason every other third-party image in this file is. Its
+    # on-disk layout is NOT MinIO's: the existing `minio-data` volume is
+    # deliberately not reused below (a new volume name instead) and the
+    # objects it holds have to be copied across over the S3 API, not by
+    # remounting the volume — see the migration runbook.
+    image: rustfs/rustfs:1.0.0@sha256:8cc9801755448b71a786705ce76692c77e14936cccd87cf2fc31842e58f4d1ff
     <<: *hardening
     restart: unless-stopped
-    command: ["server", "/data", "--console-address", ":9090"]
     environment:
-      MINIO_ROOT_USER: ${HORECAOS_MINIO_ROOT_USER:?set a non-obvious root user name}
-      MINIO_ROOT_PASSWORD_FILE: /run/secrets/minio-root-password
-      # The browser console is a second authenticated surface with no reason to
-      # exist here; every operation the runbooks need is an `mc` command.
-      MINIO_BROWSER: "off"
+      RUSTFS_VOLUMES: /data
+      # Compose supports this nested default: an operator who already has
+      # HORECAOS_MINIO_ROOT_USER set in their environment does not have to
+      # touch it for one release. Prefer HORECAOS_OBJECT_STORE_ACCESS_KEY
+      # going forward; the old name is read only when the new one is unset,
+      # and if neither is set this refuses to start rather than picking a
+      # default access key.
+      RUSTFS_ACCESS_KEY: ${HORECAOS_OBJECT_STORE_ACCESS_KEY:-${HORECAOS_MINIO_ROOT_USER:?set a non-obvious root user name}}
+      # The secret itself comes from a file, not this block, same as MinIO's
+      # MINIO_ROOT_PASSWORD_FILE before it -- see the `secrets:` section at
+      # the bottom of this file for where object-store-secret-key resolves
+      # from, and how to keep using the existing minio-root-password file
+      # for one release.
+      RUSTFS_SECRET_KEY_FILE: /run/secrets/object-store-secret-key
+      # The browser console is a second authenticated surface with no reason
+      # to exist here; every operation the runbooks need is the AWS CLI.
+      RUSTFS_CONSOLE_ENABLE: "false"
       TZ: Asia/Tashkent
     secrets:
-      - minio-root-password
+      - object-store-secret-key
     volumes:
-      - minio-data:/data
+      - object-store-data:/data
     healthcheck:
-      test: ["CMD-SHELL", "mc ready local || exit 1"]
+      # RustFS ships no `mc`; curl is on the image and needs no shell to call,
+      # which is why this is CMD rather than CMD-SHELL -- the image has
+      # /bin/sh but no bash.
+      test: ["CMD", "curl", "-sf", "http://localhost:9000/health"]
       interval: 15s
       timeout: 10s
       retries: 10
       start_period: 30s
     networks:
-      - core
       # Reachable from the edge, and from nothing else that is on `public`. See
       # the note on the `media` network under the edge service.
-      - media
+      core:
+        aliases:
+          # `minio`, for one release only. HORECAOS_BACKUP_S3_ENDPOINT below
+          # still names it by this alias, and BackupScriptTests and anything
+          # still holding an older env file default to the same literal
+          # endpoint. Remove once nothing in the repository names `minio` any
+          # more (`grep -rl minio`) -- tracked in ADR 0135.
+          - minio
+      media:
+        aliases:
+          - minio
     labels:
       autoheal: "true"
     logging: *logging
@@ -567,6 +607,77 @@ services:
         limits:
           cpus: "2.0"
           memory: 1G
+
+  object-store-seed:
+    # AWS CLI replaces `mc`: MinIO's own client image is gone from every
+    # registry the same way the server image is, and RustFS ships no client
+    # of its own. Every `mc` subcommand this repository used has a
+    # documented `aws s3`/`s3api` equivalent (ADR 0135) -- infra/backup/
+    # README.md has the mapping.
+    #
+    # A one-shot job, not a runbook step: platform-app depends on this
+    # completing successfully (below), so the three buckets the platform
+    # needs exist before its first request on every deploy and every
+    # restart, without an operator's own `mc`/`aws` invocation in between.
+    image: amazon/aws-cli:2.37.3@sha256:83f8ffe939569070c5b66d22231862ab78718766d9d8e4c44ca84dd0be5569a5
+    <<: *hardening
+    restart: "no"
+    entrypoint: ["/bin/sh", "-c"]
+    environment:
+      AWS_ACCESS_KEY_ID: ${HORECAOS_OBJECT_STORE_ACCESS_KEY:-${HORECAOS_MINIO_ROOT_USER:?set a non-obvious root user name}}
+      AWS_DEFAULT_REGION: us-east-1
+      # Nothing here has a route to the EC2 metadata service, and without
+      # this the CLI still tries it and eats a connect timeout before
+      # falling back to the environment credentials actually set below.
+      AWS_EC2_METADATA_DISABLED: "true"
+      HORECAOS_MEDIA_BUCKET: ${HORECAOS_MEDIA_BUCKET:-horecaos-media}
+      HORECAOS_BACKUP_BUCKET: ${HORECAOS_BACKUP_BUCKET:-horecaos-backups}
+      HORECAOS_AUDIT_ARCHIVE_BUCKET: ${HORECAOS_AUDIT_ARCHIVE_BUCKET:-horecaos-audit-archive}
+      TZ: Asia/Tashkent
+    secrets:
+      - object-store-secret-key
+    command:
+      - |
+        set -eu
+        # Every `$$` below is a literal `$` for the container's shell, doubled
+        # so `docker compose config` does not try to interpolate these as its
+        # own variables.
+        export AWS_SECRET_ACCESS_KEY="$$(cat /run/secrets/object-store-secret-key)"
+        # BucketAlreadyOwnedByYou (create-bucket failing because the bucket is
+        # already there, owned by these same credentials) is fine on a rerun;
+        # anything else means the store is not actually reachable or usable,
+        # and that must fail the seed job rather than being swallowed.
+        create_bucket() {
+          bucket="$$1"; shift
+          if ! aws --endpoint-url http://object-store:9000 s3api create-bucket --bucket "$$bucket" "$$@" >/dev/null 2>&1; then
+            aws --endpoint-url http://object-store:9000 s3api head-bucket --bucket "$$bucket" >/dev/null 2>&1 \
+              || { echo "!! could not create or find bucket $$bucket" >&2; exit 1; }
+            echo "    $$bucket already exists"
+          else
+            echo "    created $$bucket"
+          fi
+        }
+        create_bucket "$$HORECAOS_MEDIA_BUCKET"
+        create_bucket "$$HORECAOS_BACKUP_BUCKET"
+        aws --endpoint-url http://object-store:9000 s3api put-bucket-versioning \
+          --bucket "$$HORECAOS_BACKUP_BUCKET" --versioning-configuration Status=Enabled
+        # ADR 0027 archival. --object-lock-enabled-for-bucket is Object Lock,
+        # which RustFS (like S3, and MinIO before it) only accepts at bucket
+        # creation and which implies versioning -- there is no later API call
+        # that retrofits it onto an existing bucket.
+        create_bucket "$$HORECAOS_AUDIT_ARCHIVE_BUCKET" --object-lock-enabled-for-bucket
+        echo "object store ready: $$HORECAOS_MEDIA_BUCKET, $$HORECAOS_BACKUP_BUCKET (versioned), $$HORECAOS_AUDIT_ARCHIVE_BUCKET (Object Lock)"
+    networks:
+      - core
+    depends_on:
+      object-store:
+        condition: service_healthy
+    logging: *logging
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 128M
 
   # ---------------------------------------------------------------------------
   # Identity
@@ -808,7 +919,7 @@ services:
     user: "0:10001"
     environment:
       HORECAOS_BACKUP_BUCKET: ${HORECAOS_BACKUP_BUCKET:-horecaos-backups}
-      HORECAOS_BACKUP_S3_ENDPOINT: ${HORECAOS_BACKUP_S3_ENDPOINT:-http://minio:9000}
+      HORECAOS_BACKUP_S3_ENDPOINT: ${HORECAOS_BACKUP_S3_ENDPOINT:-http://object-store:9000}
       HORECAOS_BACKUP_RETENTION_DAYS: ${HORECAOS_BACKUP_RETENTION_DAYS:-30}
       HORECAOS_BACKUP_OFFSITE_ENDPOINT: ${HORECAOS_BACKUP_OFFSITE_ENDPOINT:-}
       # Bucket name only. The access and secret keys for this destination are
@@ -845,10 +956,11 @@ services:
 # nothing is in the image.
 #
 # Three services need a value rather than a reference because they have no
-# OpenBao client of their own: PostgreSQL, Keycloak and MinIO all read a password
-# from a file at startup. PostgreSQL and MinIO do that natively through
-# POSTGRES_PASSWORD_FILE and MINIO_ROOT_PASSWORD_FILE; Keycloak 26.7 ignores the
-# equivalent and needs the wrapper in infra/production/keycloak/entrypoint.sh.
+# OpenBao client of their own: PostgreSQL, Keycloak and the object store all
+# read a password from a file at startup. PostgreSQL and RustFS do that
+# natively through POSTGRES_PASSWORD_FILE and RUSTFS_SECRET_KEY_FILE;
+# Keycloak 26.7 ignores the equivalent and needs the wrapper in
+# infra/production/keycloak/entrypoint.sh.
 #
 # The application is different — it holds a *renewed token* rather than a value,
 # which is why it goes through the agent instead.
@@ -868,8 +980,14 @@ secrets:
     file: ${HORECAOS_SECRET_DIR}/platform-db-app-password
   keycloak-db-password:
     file: ${HORECAOS_SECRET_DIR}/keycloak-db-password
-  minio-root-password:
-    file: ${HORECAOS_SECRET_DIR}/minio-root-password
+  object-store-secret-key:
+    # For one release, an operator who has not yet renamed the file can point
+    # this at the existing minio-root-password secret instead of regenerating
+    # or copying it:
+    #   HORECAOS_OBJECT_STORE_SECRET_KEY_FILE=${HORECAOS_SECRET_DIR}/minio-root-password
+    # Once every host reads object-store-secret-key directly, drop the
+    # override and this comment -- tracked in ADR 0135.
+    file: ${HORECAOS_OBJECT_STORE_SECRET_KEY_FILE:-${HORECAOS_SECRET_DIR}/object-store-secret-key}
   openbao-role-id:
     file: ${HORECAOS_SECRET_DIR}/openbao-role-id
   openbao-secret-id:
@@ -883,16 +1001,18 @@ networks:
   public:
     driver: bridge
 
-  # `internal: true` removes the default route. PostgreSQL, Kafka, MinIO and
-  # OpenBao can be reached by the application and by nothing else, and if any of
-  # them is ever compromised it has no path off this host to exfiltrate over.
+  # `internal: true` removes the default route. PostgreSQL, Kafka, the object
+  # store and OpenBao can be reached by the application and by nothing else,
+  # and if any of them is ever compromised it has no path off this host to
+  # exfiltrate over.
   core:
     driver: bridge
     internal: true
 
-  # The edge and MinIO, and nothing else. It exists so that presigned media URLs
-  # can be served over the public certificate without either widening `core` to
-  # the internet-facing proxy or giving the object store a route out.
+  # The edge and the object store, and nothing else. It exists so that
+  # presigned media URLs can be served over the public certificate without
+  # either widening `core` to the internet-facing proxy or giving the object
+  # store a route out.
   media:
     driver: bridge
     internal: true
@@ -902,7 +1022,7 @@ volumes:
   platform-db-data:
   keycloak-db-data:
   kafka-data:
-  minio-data:
+  object-store-data:
   openbao-data:
   edge-data:
   edge-config:

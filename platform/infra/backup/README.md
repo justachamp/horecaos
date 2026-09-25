@@ -54,9 +54,11 @@ reported healthy backups right up to the morning the building was gone. It also
 refuses an off-site endpoint equal to the primary one: a second bucket on the
 same store is a second name for the same failure domain.
 
-Locally, "off-site" is a second MinIO instance (`minio-offsite`) rather than a
-second bucket on the same server — a bucket beside the primary does not model
-the risk being guarded against.
+Locally, "off-site" is a second RustFS instance (compose service
+`object-store-offsite`; `minio-offsite` is kept as its network alias through
+the ADR 0135 cutover so this hostname does not change for the first deploy)
+rather than a second bucket on the same server — a bucket beside the primary
+does not model the risk being guarded against.
 
 ## Switching to a real destination
 

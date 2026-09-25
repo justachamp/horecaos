@@ -23,6 +23,18 @@
   never", and `deploy.md` and `restore.md` carry no such line at all; and there is no
   staging VM, no blue/green swap script, no processor register and no sanitized-staging
   procedure.
+
+  **2026-09-25:** MinIO's public images were withdrawn, so the object store
+  this record names throughout — `compose.production.yaml`'s `minio` service,
+  the `rehearse-restore.sh` off-site target, the media and backup buckets in
+  the data-placement table below — is being replaced by RustFS 1.0.0, pinned
+  by digest, per [ADR 0135](../partial/0135-object-storage-runtime-rustfs-replaces-minio.md).
+  This is a runtime substitution under the topology this record decided, not a
+  change to it: the store stays colocated, private, S3-compatible-only per the
+  portability rules below, and behind the same two networks. The mentions of
+  "MinIO" elsewhere in this record's Decision, data-placement table, and
+  single-point-of-failure table describe the decision as made and are left as
+  written; read them as "the object store, currently RustFS" per ADR 0135.
 - Date proposed: 2026-08-20
 - Date decided: 2026-08-20; platform, orchestrator, and off-site backups settled 2026-08-23
 - Deciders: Ayubkhon Abbosov (platform architecture), operations, legal

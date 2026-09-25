@@ -28,7 +28,7 @@ SECRET_DIR="${HORECAOS_SECRET_DIR:-/run/horecaos/secrets}"
 DB_MIGRATOR_PATH="horecaos/production/database/platform/migrator-password"
 DB_APP_PATH="horecaos/production/database/platform/app-password"
 KEYCLOAK_DB_PATH="horecaos/production/database/keycloak/password"
-MINIO_ROOT_PATH="horecaos/production/object_storage/platform/root-password"
+OBJECT_STORE_ROOT_PATH="horecaos/production/object_storage/platform/root-password"
 
 say()  { printf '\n==> %s\n' "$*"; }
 warn() { printf '\n!!  %s\n' "$*" >&2; }
@@ -170,7 +170,9 @@ say "Reading startup secrets from OpenBao"
 write_secret platform-db-migrator-password "${DB_MIGRATOR_PATH}"
 write_secret platform-db-app-password      "${DB_APP_PATH}"
 write_secret keycloak-db-password          "${KEYCLOAK_DB_PATH}"
-write_secret minio-root-password           "${MINIO_ROOT_PATH}"
+# object-store-secret-key, not minio-root-password (ADR 0135, 2026-09-25):
+# compose.production.yaml's `secrets:` block reads this file name by default.
+write_secret object-store-secret-key       "${OBJECT_STORE_ROOT_PATH}"
 
 
 # -----------------------------------------------------------------------------
@@ -252,7 +254,12 @@ compose build platform-app platform-migrate
 # application ever observes a half-applied schema.
 
 say "Starting dependencies"
-compose up -d platform-db keycloak-db kafka minio openbao openbao-agent
+# object-store, not minio (ADR 0135, 2026-09-25): compose.production.yaml has
+# no service literally named `minio` any more. object-store-seed is started
+# explicitly here too, rather than left for platform-app's own depends_on to
+# pull in later, so a bucket-creation failure surfaces now instead of at the
+# end of phase 7.
+compose up -d platform-db keycloak-db kafka object-store object-store-seed openbao openbao-agent
 
 say "Waiting for the OpenBao agent to render the application's secrets"
 for _ in $(seq 1 30); do

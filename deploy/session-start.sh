@@ -47,7 +47,7 @@ export HORECAOS_SECRET_DIR="${SECRET_DIR}"
 DEPLOY_POLICY="horecaos-deploy"
 APPROLE="auth/approle/role/horecaos-platform"
 
-DEPENDENCIES=(platform-db keycloak-db kafka minio openbao-agent)
+DEPENDENCIES=(platform-db keycloak-db kafka object-store openbao-agent)
 SERVICES=(keycloak platform-app storefront-web operations-web control-plane-web edge)
 
 say()  { printf '\n==> %s\n' "$*"; }
@@ -288,7 +288,9 @@ say "Reading startup secrets from OpenBao into RAM"
 write_secret platform-db-migrator-password "horecaos/${ENVIRONMENT}/database/platform/migrator-password"
 write_secret platform-db-app-password      "horecaos/${ENVIRONMENT}/database/platform/app-password"
 write_secret keycloak-db-password          "horecaos/${ENVIRONMENT}/database/keycloak/password"
-write_secret minio-root-password           "horecaos/${ENVIRONMENT}/object_storage/platform/root-password"
+# object-store-secret-key, not minio-root-password (ADR 0135, 2026-09-25):
+# compose.production.yml's `secrets:` block reads this file name by default.
+write_secret object-store-secret-key       "horecaos/${ENVIRONMENT}/object_storage/platform/root-password"
 
 say "Issuing a fresh AppRole secret-id for the agent"
 role_id="$(bao_run bao read -field=role_id "${APPROLE}/role-id")" || die "Could not read the role-id."

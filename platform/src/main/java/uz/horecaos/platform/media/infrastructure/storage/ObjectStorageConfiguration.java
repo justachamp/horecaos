@@ -19,7 +19,7 @@ import uz.horecaos.platform.iam.api.secrets.SecretReference;
 import uz.horecaos.platform.iam.api.secrets.SecretResolver;
 
 /**
- * Object-store clients (ADR 0010), pointed at MinIO locally and an S3 API in
+ * Object-store clients (ADR 0010), pointed at RustFS locally and an S3 API in
  * production.
  *
  * <p>Credentials come from ADR 0028's resolver rather than from properties, so a
@@ -70,7 +70,7 @@ public class ObjectStorageConfiguration {
                 // one vendor's implementation of the protocol works against it.
                 .requestChecksumCalculation(RequestChecksumCalculation.WHEN_REQUIRED)
                 .responseChecksumValidation(ResponseChecksumValidation.WHEN_REQUIRED)
-                // MinIO serves path-style addressing; virtual-host style would
+                // RustFS serves path-style addressing; virtual-host style would
                 // require per-bucket DNS that does not exist locally.
                 .serviceConfiguration(
                         S3Configuration.builder().pathStyleAccessEnabled(true).build())

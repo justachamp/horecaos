@@ -236,7 +236,7 @@ public class MediaAssetService implements MediaAvailability {
      * reason {@code finalizeUpload} itself no longer needs stating: {@code
      * head} and {@code readPrefix} below are blocking round trips to the object
      * store, and a transaction around them would hold one of ten pooled
-     * connections for however long a degraded MinIO takes to answer.
+     * connections for however long a degraded RustFS takes to answer.
      * {@code ExternalCallTransactionBoundaryTests} covers this property on the
      * worker that calls this method now.
      *
@@ -385,7 +385,7 @@ public class MediaAssetService implements MediaAvailability {
      *
      * <p>Short on purpose, and it is why the object-store calls above are
      * outside it. Four statements and no network, so this holds a pooled
-     * connection for microseconds rather than for however long a degraded MinIO
+     * connection for microseconds rather than for however long a degraded RustFS
      * takes to answer a head request.
      */
     private void publishAvailable(MediaAsset asset, ProbedImage image, ObjectStorage.StoredObject object, Instant now) {
