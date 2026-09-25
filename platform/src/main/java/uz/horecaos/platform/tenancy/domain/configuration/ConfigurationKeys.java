@@ -434,12 +434,11 @@ public final class ConfigurationKeys {
                     .build();
 
     /**
-     * Wave P46 (gap map row {@code 4.4d}): catalog base settings' first
-     * switch. Declared identically in {@code
-     * inventory.api.InventoryConfigurationKeys}, because {@code
-     * InventoryService} reads it to explain, rather than silently repeat,
-     * why {@code QUANTITY} tracking is refused — see that declaration's own
-     * doc.
+     * Wave P46 (gap map row {@code 4.4d}), real since batch 11 (row {@code
+     * 4.4c}): catalog base settings' first switch. Declared identically in
+     * {@code inventory.api.InventoryConfigurationKeys}, because {@code
+     * InventoryService.evaluateAvailability} reads it to gate {@code
+     * QUANTITY} enforcement — see that declaration's own doc.
      */
     public static final ConfigurationKey<Boolean> CATALOG_USE_STOCK_LOGIC = ConfigurationKey.of(
                     "catalog.use_stock_logic", Boolean.class)
@@ -447,8 +446,8 @@ public final class ConfigurationKeys {
             .ownedBy("inventory")
             .tenantVisible()
             .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
-            .describedAs("Turns counted-stock tracking on for the whole tenant. Not yet enforced: "
-                    + "QUANTITY tracking mode is still refused either way.")
+            .describedAs("Turns counted-stock (QUANTITY) tracking on for the whole tenant. Off, a "
+                    + "QUANTITY-listed item behaves like UNTRACKED.")
             .build();
 
     /**
