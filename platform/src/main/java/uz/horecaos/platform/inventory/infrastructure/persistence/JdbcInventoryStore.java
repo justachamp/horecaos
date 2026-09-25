@@ -266,6 +266,23 @@ public class JdbcInventoryStore {
                 == 1;
     }
 
+    /**
+     * Removes a reservation this same call created and is now backing out of
+     * — {@code inventory.reservation_lines}' own {@code ON DELETE CASCADE}
+     * takes its lines with it. Never called on a reservation any other
+     * caller could already see as {@code HELD} (a live hold a customer might
+     * be relying on): {@link uz.horecaos.platform.inventory.application.InventoryService#reserveForQuote}
+     * is the only caller, and only for the reservation row it itself just
+     * inserted, inside the same transaction, when a later line in the same
+     * request fails to reserve.
+     */
+    public void deleteReservation(UUID tenantId, UUID reservationId) {
+        jdbc.sql("DELETE FROM inventory.reservations WHERE tenant_id = :tenantId AND id = :id AND status = 'HELD'")
+                .param("tenantId", tenantId)
+                .param("id", reservationId)
+                .update();
+    }
+
     /** Expires holds past their TTL, so abandoned carts stop holding stock. */
     public List<UUID> expireReservations(Instant now) {
         return jdbc.sql("""

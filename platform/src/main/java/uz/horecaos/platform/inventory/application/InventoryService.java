@@ -20,7 +20,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.interceptor.TransactionAspectSupport;
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
@@ -585,6 +584,17 @@ public class InventoryService implements InventoryReservationPort {
                 }))
                 .toList();
 
+        // Every stock item this call has itself reserved so far, keyed by the
+        // exact quantity taken -- what a mid-loop failure below gives back.
+        // Compensated explicitly (not through transaction rollback): this
+        // service is called both through Spring's own @Transactional AOP
+        // proxy in production and, throughout this module's own test suite,
+        // as a hand-built InventoryService driven by a bare TransactionTemplate
+        // with no AOP interceptor in the picture at all -- TransactionAspectSupport's
+        // rollback-only marker exists only on the former path, so a method
+        // that must behave identically on both cannot depend on it.
+        Map<UUID, BigDecimal> reservedSoFar = new java.util.LinkedHashMap<>();
+
         for (Map.Entry<UUID, Integer> entry : sortedLines) {
             UUID variantId = entry.getKey();
             StockItemRow item = Objects.requireNonNull(
@@ -595,18 +605,23 @@ public class InventoryService implements InventoryReservationPort {
             if (item.trackingMode() != TrackingMode.QUANTITY || !quantityLogicOn) {
                 continue;
             }
-            if (!store.tryReserveQuantity(tenantId, item.stockItemId(), requested, now)) {
-                // Stock moved between evaluateAvailability's read above and this
-                // atomic attempt -- the conditional UPDATE is the authoritative
-                // gate, not that earlier snapshot (see tryReserveQuantity's own
-                // doc). Roll back everything this call has done so far: the
-                // reservation row, every line inserted above, and every earlier
-                // sorted item's own successful reserved-quantity bump. ADR 0017:
-                // "on any failed item, roll back the entire reservation."
-                TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
-                return ReservationResult.refused(
-                        AvailabilityDecision.blockedBy(List.of(Unavailable.soldOut(variantId))));
+            if (store.tryReserveQuantity(tenantId, item.stockItemId(), requested, now)) {
+                reservedSoFar.put(item.stockItemId(), requested);
+                continue;
             }
+            // Stock moved between evaluateAvailability's read above and this
+            // atomic attempt -- the conditional UPDATE is the authoritative
+            // gate, not that earlier snapshot (see tryReserveQuantity's own
+            // doc). Roll back everything this call has done so far: give back
+            // every earlier item's own successful reserve, then delete the
+            // reservation row this call created (inventory.reservation_lines
+            // cascades on delete) rather than leaving a HELD reservation whose
+            // lines disagree with what is actually reserved. ADR 0017: "on any
+            // failed item, roll back the entire reservation."
+            reservedSoFar.forEach(
+                    (stockItemId, quantity) -> store.releaseReservedQuantity(tenantId, stockItemId, quantity, now));
+            store.deleteReservation(tenantId, reservationId);
+            return ReservationResult.refused(AvailabilityDecision.blockedBy(List.of(Unavailable.soldOut(variantId))));
         }
 
         return ReservationResult.held(reservationId, expiresAt);
