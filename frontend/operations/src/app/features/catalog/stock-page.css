@@ -1,0 +1,134 @@
+.stock__header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.stock__note {
+  color: var(--q-ink-muted);
+  max-width: 720px;
+}
+
+.stock__status {
+  margin-top: 24px;
+  color: var(--q-ink-muted);
+}
+
+.stock__table {
+  margin-top: 16px;
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.stock__table th {
+  text-align: left;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--q-hairline);
+  color: var(--q-ink-muted);
+}
+
+.stock__table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--q-hairline);
+  vertical-align: top;
+}
+
+.stock__variant {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stock__threshold-chip {
+  display: inline-block;
+  margin: 0 6px 4px 0;
+  padding: 2px 8px;
+  border-radius: var(--q-radius);
+  background: var(--q-surface-2);
+  color: var(--q-ink);
+  font-size: 0.85em;
+}
+
+.stock__edit-row td {
+  background: var(--q-surface-1);
+}
+
+.stock__edit-panel {
+  display: grid;
+  gap: 20px;
+  padding: 8px 0;
+}
+
+.stock__edit-section h3 {
+  margin: 0 0 4px;
+}
+
+.stock__edit-fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.field {
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--q-surface-2);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  box-sizing: border-box;
+}
+
+.primary {
+  height: 36px;
+  padding: 0 16px;
+  border: none;
+  border-radius: var(--q-radius);
+  background: var(--q-primary);
+  color: var(--q-inverse-ink);
+  cursor: pointer;
+}
+
+.primary:disabled {
+  background: var(--q-surface-2);
+  color: var(--q-ink-subtle);
+  cursor: default;
+}
+
+.secondary {
+  height: 32px;
+  padding: 0 14px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  cursor: pointer;
+}
+
+.stock__threshold-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.stock__threshold-remove {
+  margin-left: 8px;
+  border: none;
+  background: none;
+  color: var(--q-ink-muted);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.error {
+  margin-top: 8px;
+  color: var(--q-error-text);
+  background: var(--q-error-tint);
+  padding: 6px 10px;
+  border-radius: var(--q-radius);
+}

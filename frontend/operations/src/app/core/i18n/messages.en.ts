@@ -846,7 +846,8 @@ export const messagesEn = {
     'A referenced photo or media file is not yet available.',
   'settings.home.readiness.code.TEMPLATE_AWAITING_PROVIDER_REVIEW':
     'An SMS template is awaiting the gateway’s approval.',
-  'settings.home.readiness.code.TEMPLATE_REJECTED_BY_PROVIDER': 'An SMS template was rejected by the gateway.',
+  'settings.home.readiness.code.TEMPLATE_REJECTED_BY_PROVIDER':
+    'An SMS template was rejected by the gateway.',
   'settings.home.search.label': 'Find a setting',
   'settings.home.search.placeholder': 'Find a setting (press /)',
   'settings.home.search.empty': 'No setting matches "{query}".',
@@ -902,9 +903,11 @@ export const messagesEn = {
   'settings.integrations.branches.bindDialog.lead':
     'A branch binding overrides the brand default for that branch alone.',
   'settings.integrations.branches.bindDialog.installation': 'Installation',
-  'settings.integrations.branches.bindDialog.noneEligible': 'Connect an installation first — none exist yet to bind.',
+  'settings.integrations.branches.bindDialog.noneEligible':
+    'Connect an installation first — none exist yet to bind.',
   'settings.integrations.branches.bindDialog.capabilities': 'Capabilities to bind',
-  'settings.integrations.branches.bindDialog.capabilitiesLoading': 'Loading this provider’s capabilities…',
+  'settings.integrations.branches.bindDialog.capabilitiesLoading':
+    'Loading this provider’s capabilities…',
   'settings.integrations.branches.bindDialog.capabilitiesNone':
     'This provider declares no capabilities in this build, so it cannot be bound from this dialog.',
   'settings.integrations.branches.bindDialog.branch': 'Branch',
@@ -1233,8 +1236,8 @@ export const messagesEn = {
   'settings.catalog.useStockLogic.body':
     'Turns counted-stock tracking on for the whole company instead of the binary available/sold-out state.',
   'settings.catalog.useStockLogic.field': 'Use stock logic',
-  'settings.catalog.useStockLogic.notYetEnforced':
-    'Not yet enforced: quantity tracking is refused for every item regardless of this switch.',
+  'settings.catalog.useStockLogic.hint':
+    'On: QUANTITY-tracked items are enforced for real. Off: those items behave like UNTRACKED — quantities are ignored.',
   'settings.catalog.qrKioskPricePlane.title': 'QR and kiosk take hall prices',
   'settings.catalog.qrKioskPricePlane.body':
     'Points the QR and kiosk channels at the hall price plane automatically instead of requiring one authored by hand.',
@@ -1987,6 +1990,7 @@ export const messagesEn = {
   'catalog.nav.categories': 'Categories',
   'catalog.nav.menus': 'Menus',
   'catalog.nav.menuSets': 'Menu sets',
+  'catalog.nav.stock': 'Stock',
   'catalog.nav.import': 'Import',
   'catalog.nav.publication': 'Publication',
   'catalog.nav.prices': 'Prices',
@@ -2268,6 +2272,9 @@ export const messagesEn = {
   'catalog.editor.availability.empty': 'This product is not offered at any location yet',
   'catalog.editor.availability.stop': 'Stop',
   'catalog.editor.availability.resume': 'Resume',
+  'catalog.editor.availability.quantityHint':
+    'On-hand count, the daily default, and channel stop thresholds for a QUANTITY-tracked variant live on the Stock page.',
+  'catalog.editor.availability.quantityHintLink': 'Open Stock',
   'catalog.editor.schedule.hint':
     'Empty means always on sale. Windows below limit when this item can be sold, resolved in this branch’s own local time.',
   'catalog.editor.schedule.loading': 'Loading schedule…',
@@ -2365,6 +2372,35 @@ export const messagesEn = {
   'catalog.categories.archiveConfirm.title': 'Archive this category?',
   'catalog.categories.archiveConfirm.body':
     '“{name}” will no longer show in the category tree. Products already placed in it stay exactly where they are.',
+
+  // Gap map row 4.4c: per-location QUANTITY stock page (batch 11)
+  'catalog.stock.title': 'Stock',
+  'catalog.stock.resetNote':
+    'A daily default resets at your business day boundary — set in Settings → Reference data.',
+  'catalog.stock.loading': 'Loading stock',
+  'catalog.stock.noLocation': 'No location resolved for this account yet',
+  'catalog.stock.denied': 'No access to this location’s stock',
+  'catalog.stock.empty': 'No QUANTITY-tracked items at this location yet',
+  'catalog.stock.column.variant': 'Variant',
+  'catalog.stock.column.onHand': 'On hand',
+  'catalog.stock.column.reserved': 'Reserved',
+  'catalog.stock.column.remaining': 'Remaining',
+  'catalog.stock.column.default': 'Daily default',
+  'catalog.stock.column.lastReset': 'Last reset',
+  'catalog.stock.column.thresholds': 'Channel stop thresholds',
+  'catalog.stock.noDefault': 'None',
+  'catalog.stock.noThresholds': 'None',
+  'catalog.stock.edit': 'Edit',
+  'catalog.stock.close': 'Close',
+  'catalog.stock.setOnHand.title': 'Set on-hand',
+  'catalog.stock.setDefault.title': 'Daily default',
+  'catalog.stock.setDefault.body':
+    'Resets on-hand to this value at the next business day boundary. Leave blank to turn the reset off.',
+  'catalog.stock.thresholds.title': 'Channel stop thresholds',
+  'catalog.stock.thresholds.body':
+    'Stops one channel type selling early once remaining stock falls to this level or below — the storefront keeps selling to zero unless it has its own threshold.',
+  'catalog.stock.thresholds.add': 'Add',
+  'catalog.stock.thresholds.remove': 'Remove',
 
   'catalog.menus.title': 'Menus',
   'catalog.menus.location.label': 'Location',
@@ -5619,7 +5655,8 @@ export const messagesEn = {
   'ui.mediaUploader.browse': 'Choose a file',
   'ui.mediaUploader.tooLarge': 'That file is larger than this upload allows',
   'ui.mediaUploader.unsupportedType': 'That file type is not accepted here',
-  'ui.mediaUploader.videoNotSupported': 'Video is not supported yet — please choose a photo instead',
+  'ui.mediaUploader.videoNotSupported':
+    'Video is not supported yet — please choose a photo instead',
   'ui.mediaUploader.ratio': 'Crop ratio',
   'ui.mediaUploader.zoom': 'Zoom',
   'ui.mediaUploader.confirm': 'Use this crop',

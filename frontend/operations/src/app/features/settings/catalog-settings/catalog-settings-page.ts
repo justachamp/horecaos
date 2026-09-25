@@ -20,22 +20,14 @@ const QR_KIOSK_PRICE_PLANE_CODE = 'catalog.qr_kiosk_price_plane';
  * platform/tenant-only, and unlike every field on `order-policy-page`, which
  * follows the scope bar because settings.md §10.3 asks it to.
  *
- * **`catalog.use_stock_logic` renders read-only, with the reason.** `QUANTITY`
- * tracking is not implemented (`InventoryService.UnsupportedTrackingModeException`
- * refuses it regardless of this flag — see that class's own doc) and the
- * wave's own trap names the alternative directly: "registering a key whose
- * enforcement does not exist is worse than no key... if it cannot be
- * honoured yet, ship it disabled with the reason." An editable `Изменить`
- * button here would be exactly the P30 "dead button that looks actionable"
- * anti-pattern the gap map calls out elsewhere, so this field is a plain
- * read-out rather than a `q-inherited-field` wired to a form nothing backs.
- *
- * **`catalog.qr_kiosk_price_plane` is a real, editable field.** Nothing about
- * it contradicts today's behaviour the way `use_stock_logic` does — a tenant
- * may still point a QR/kiosk channel at the hall's price plane by hand
- * through Sales channels (`SalesChannel.pricePlaneChannelId`) regardless of
- * this switch, so authoring the intent ahead of the day something reads it
- * automatically is honest, not a promise the platform cannot keep.
+ * **`catalog.use_stock_logic` is now a real, editable field (batch 11, gap
+ * map row 4.4c/4.4d).** `QUANTITY` tracking is enforced by `InventoryService
+ * .evaluateAvailability` exactly when this flag is on for the tenant — off,
+ * a `QUANTITY`-listed item behaves like `UNTRACKED` — so the earlier
+ * read-only "not yet enforced" placeholder (wave P46's own trap against a
+ * dead button) no longer applies; the switch does something real the moment
+ * it is turned on. Same edit/save/revert shape as `catalog.qr_kiosk_price_plane`
+ * below.
  */
 @Component({
   selector: 'q-catalog-settings-page',
@@ -55,6 +47,12 @@ export class CatalogSettingsPage {
 
   protected readonly useStockLogic = signal<ConfigurationResolutionView | null>(null);
   protected readonly qrKioskPricePlane = signal<ConfigurationResolutionView | null>(null);
+
+  protected readonly editingUseStockLogic = signal(false);
+  protected readonly draftUseStockLogic = signal(false);
+  protected readonly draftUseStockLogicReason = signal('');
+  protected readonly savingUseStockLogic = signal(false);
+  protected readonly saveUseStockLogicError = signal<string | null>(null);
 
   protected readonly editingQrKiosk = signal(false);
   protected readonly draftQrKiosk = signal(false);
@@ -77,6 +75,73 @@ export class CatalogSettingsPage {
 
   /** Bound once so `[formatValue]` gets a stable reference rather than a new closure every change-detection pass. */
   protected readonly formatYesNo = (value: unknown): string => this.yesNo(value);
+
+  protected startEditingUseStockLogic(): void {
+    const current = this.useStockLogic();
+    this.draftUseStockLogic.set(Boolean(current?.value));
+    this.draftUseStockLogicReason.set('');
+    this.saveUseStockLogicError.set(null);
+    this.editingUseStockLogic.set(true);
+  }
+
+  protected cancelEditingUseStockLogic(): void {
+    this.editingUseStockLogic.set(false);
+  }
+
+  protected canSaveUseStockLogic(): boolean {
+    return !this.savingUseStockLogic() && this.draftUseStockLogicReason().trim().length > 0;
+  }
+
+  protected async saveUseStockLogic(): Promise<void> {
+    const tenantId = this.tenantId;
+    if (!tenantId || !this.canSaveUseStockLogic()) {
+      return;
+    }
+    this.savingUseStockLogic.set(true);
+    this.saveUseStockLogicError.set(null);
+    try {
+      await this.api.setValue(tenantId, USE_STOCK_LOGIC_CODE, {
+        scopeType: 'TENANT',
+        explicitNull: false,
+        booleanValue: this.draftUseStockLogic(),
+        expectedVersion: this.useStockLogic()?.currentVersionAtScope ?? null,
+        reason: this.draftUseStockLogicReason().trim(),
+      });
+      await this.reloadUseStockLogic(tenantId);
+      this.editingUseStockLogic.set(false);
+    } catch (error) {
+      this.saveUseStockLogicError.set(this.describe(error));
+    } finally {
+      this.savingUseStockLogic.set(false);
+    }
+  }
+
+  /** Hands the tenant-wide override back to the platform default (off) — no separate reason prompt. */
+  protected async revertUseStockLogic(): Promise<void> {
+    const tenantId = this.tenantId;
+    if (!tenantId) {
+      return;
+    }
+    this.savingUseStockLogic.set(true);
+    this.saveUseStockLogicError.set(null);
+    try {
+      await this.api.setValue(tenantId, USE_STOCK_LOGIC_CODE, {
+        scopeType: 'TENANT',
+        explicitNull: true,
+        expectedVersion: this.useStockLogic()?.currentVersionAtScope ?? null,
+        reason: this.i18n.t('settings.catalog.revertReason'),
+      });
+      await this.reloadUseStockLogic(tenantId);
+    } catch (error) {
+      this.saveUseStockLogicError.set(this.describe(error));
+    } finally {
+      this.savingUseStockLogic.set(false);
+    }
+  }
+
+  private async reloadUseStockLogic(tenantId: string): Promise<void> {
+    this.useStockLogic.set(await this.api.resolution(tenantId, USE_STOCK_LOGIC_CODE, 'TENANT'));
+  }
 
   protected startEditingQrKiosk(): void {
     const current = this.qrKioskPricePlane();
@@ -142,7 +207,9 @@ export class CatalogSettingsPage {
   }
 
   private async reloadQrKiosk(tenantId: string): Promise<void> {
-    this.qrKioskPricePlane.set(await this.api.resolution(tenantId, QR_KIOSK_PRICE_PLANE_CODE, 'TENANT'));
+    this.qrKioskPricePlane.set(
+      await this.api.resolution(tenantId, QR_KIOSK_PRICE_PLANE_CODE, 'TENANT'),
+    );
   }
 
   private async load(): Promise<void> {

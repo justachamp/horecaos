@@ -872,7 +872,8 @@ export const messagesRu: MessageCatalogue = {
   'settings.integrations.branches.bindDialog.noneEligible':
     'Сначала подключите провайдера — пока привязывать нечего.',
   'settings.integrations.branches.bindDialog.capabilities': 'Возможности для привязки',
-  'settings.integrations.branches.bindDialog.capabilitiesLoading': 'Загрузка возможностей провайдера…',
+  'settings.integrations.branches.bindDialog.capabilitiesLoading':
+    'Загрузка возможностей провайдера…',
   'settings.integrations.branches.bindDialog.capabilitiesNone':
     'Этот провайдер не объявляет ни одной возможности в этой сборке, поэтому его нельзя привязать через это окно.',
   'settings.integrations.branches.bindDialog.branch': 'Филиал',
@@ -1202,8 +1203,8 @@ export const messagesRu: MessageCatalogue = {
   'settings.catalog.useStockLogic.body':
     'Включает учёт количества остатков для всей компании вместо бинарного состояния «в наличии / продано».',
   'settings.catalog.useStockLogic.field': 'Использовать логику остатков',
-  'settings.catalog.useStockLogic.notYetEnforced':
-    'Пока не применяется: учёт количества отклоняется для любой позиции независимо от этого переключателя.',
+  'settings.catalog.useStockLogic.hint':
+    'Включено — режим QUANTITY учитывается по-настоящему для позиций с этим режимом. Выключено — такие позиции ведут себя как неучитываемые (UNTRACKED).',
   'settings.catalog.qrKioskPricePlane.title': 'QR и киоск продают по ценам зала',
   'settings.catalog.qrKioskPricePlane.body':
     'Автоматически направляет каналы QR и киоск на ценовой план зала вместо отдельного плана, составленного вручную.',
@@ -1959,6 +1960,7 @@ export const messagesRu: MessageCatalogue = {
   'catalog.nav.categories': 'Категории',
   'catalog.nav.menus': 'Меню',
   'catalog.nav.menuSets': 'Наборы меню',
+  'catalog.nav.stock': 'Остатки',
   'catalog.nav.import': 'Импорт',
   'catalog.nav.publication': 'Публикация',
   'catalog.nav.prices': 'Цены',
@@ -2239,6 +2241,9 @@ export const messagesRu: MessageCatalogue = {
   'catalog.editor.availability.empty': 'Товар пока не предложен ни в одном филиале',
   'catalog.editor.availability.stop': 'В стоп',
   'catalog.editor.availability.resume': 'Снять со стопа',
+  'catalog.editor.availability.quantityHint':
+    'Остаток, суточное значение по умолчанию и пороги остановки по каналам для варианта с учётом QUANTITY находятся на странице «Остатки».',
+  'catalog.editor.availability.quantityHintLink': 'Открыть Остатки',
   'catalog.editor.schedule.hint':
     'Пусто — значит товар всегда в продаже. Окна ниже ограничивают время продажи и рассчитываются по местному времени филиала.',
   'catalog.editor.schedule.loading': 'Загрузка графика…',
@@ -2336,6 +2341,35 @@ export const messagesRu: MessageCatalogue = {
   'catalog.categories.archiveConfirm.title': 'Архивировать категорию?',
   'catalog.categories.archiveConfirm.body':
     '«{name}» больше не будет показываться в дереве категорий. Товары, размещённые в ней, останутся на месте.',
+
+  // Строка карты пробелов 4.4c: страница остатков QUANTITY по филиалу (пакет 11)
+  'catalog.stock.title': 'Остатки',
+  'catalog.stock.resetNote':
+    'Суточное значение по умолчанию сбрасывается на границе рабочего дня — задаётся в Настройки → Справочники.',
+  'catalog.stock.loading': 'Загрузка остатков',
+  'catalog.stock.noLocation': 'Для этого аккаунта ещё не определён филиал',
+  'catalog.stock.denied': 'Нет доступа к остаткам этого филиала',
+  'catalog.stock.empty': 'В этом филиале пока нет позиций с учётом QUANTITY',
+  'catalog.stock.column.variant': 'Вариант',
+  'catalog.stock.column.onHand': 'В наличии',
+  'catalog.stock.column.reserved': 'Зарезервировано',
+  'catalog.stock.column.remaining': 'Остаток',
+  'catalog.stock.column.default': 'Суточное значение',
+  'catalog.stock.column.lastReset': 'Последний сброс',
+  'catalog.stock.column.thresholds': 'Пороги остановки по каналам',
+  'catalog.stock.noDefault': 'Нет',
+  'catalog.stock.noThresholds': 'Нет',
+  'catalog.stock.edit': 'Изменить',
+  'catalog.stock.close': 'Закрыть',
+  'catalog.stock.setOnHand.title': 'Указать остаток',
+  'catalog.stock.setDefault.title': 'Суточное значение по умолчанию',
+  'catalog.stock.setDefault.body':
+    'Сбрасывает остаток до этого значения на следующей границе рабочего дня. Оставьте пустым, чтобы отключить сброс.',
+  'catalog.stock.thresholds.title': 'Пороги остановки по каналам',
+  'catalog.stock.thresholds.body':
+    'Останавливает продажу по одному типу канала раньше, когда остаток опускается до этого уровня или ниже — витрина продолжает продавать до нуля, если у неё нет своего порога.',
+  'catalog.stock.thresholds.add': 'Добавить',
+  'catalog.stock.thresholds.remove': 'Удалить',
 
   'catalog.menus.title': 'Меню',
   'catalog.menus.location.label': 'Филиал',

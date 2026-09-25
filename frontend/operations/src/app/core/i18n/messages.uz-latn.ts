@@ -822,7 +822,8 @@ export const messagesUzLatn: MessageCatalogue = {
     'Ishlatilayotgan rasm yoki media fayl hali tayyor emas.',
   'settings.home.readiness.code.TEMPLATE_AWAITING_PROVIDER_REVIEW':
     'SMS shabloni shlyuz tasdigʻini kutmoqda.',
-  'settings.home.readiness.code.TEMPLATE_REJECTED_BY_PROVIDER': 'SMS shabloni shlyuz tomonidan rad etildi.',
+  'settings.home.readiness.code.TEMPLATE_REJECTED_BY_PROVIDER':
+    'SMS shabloni shlyuz tomonidan rad etildi.',
   'settings.home.search.label': 'Sozlamani topish',
   'settings.home.search.placeholder': 'Sozlamani topish (/ bosing)',
   'settings.home.search.empty': '«{query}» boʻyicha hech narsa topilmadi.',
@@ -881,7 +882,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.integrations.branches.bindDialog.noneEligible':
     'Avval provayder ulang — hozircha bogʻlaydigan hech narsa yoʻq.',
   'settings.integrations.branches.bindDialog.capabilities': 'Bogʻlanadigan imkoniyatlar',
-  'settings.integrations.branches.bindDialog.capabilitiesLoading': 'Provayder imkoniyatlari yuklanmoqda…',
+  'settings.integrations.branches.bindDialog.capabilitiesLoading':
+    'Provayder imkoniyatlari yuklanmoqda…',
   'settings.integrations.branches.bindDialog.capabilitiesNone':
     'Bu provayder ushbu versiyada hech qanday imkoniyat eʻlon qilmaydi, shuning uchun uni shu oyna orqali bogʻlab boʻlmaydi.',
   'settings.integrations.branches.bindDialog.branch': 'Filial',
@@ -1214,8 +1216,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.catalog.useStockLogic.body':
     'Butun kompaniya uchun sonlar boʻyicha qoldiqlarni hisoblashni yoqadi — "mavjud/sotilgan" ikki holatli tizim oʻrniga.',
   'settings.catalog.useStockLogic.field': 'Qoldiq logikasidan foydalanish',
-  'settings.catalog.useStockLogic.notYetEnforced':
-    'Hali qoʻllanilmaydi: bu almashtirgich holatidan qatʻi nazar, miqdoriy hisob har bir mahsulot uchun rad etiladi.',
+  'settings.catalog.useStockLogic.hint':
+    'Yoqilgan — QUANTITY rejimidagi mahsulotlar uchun haqiqiy hisob yuritiladi. Oʻchirilgan — bunday mahsulotlar hisobga olinmaydigan (UNTRACKED) rejimdek ishlaydi.',
   'settings.catalog.qrKioskPricePlane.title': 'QR va kiosk zal narxlarida sotadi',
   'settings.catalog.qrKioskPricePlane.body':
     'QR va kiosk kanallarini qoʻlda tuzilgan alohida narx rejasi oʻrniga avtomatik ravishda zal narx rejasiga yoʻnaltiradi.',
@@ -1974,6 +1976,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'catalog.nav.categories': 'Kategoriyalar',
   'catalog.nav.menus': 'Menyular',
   'catalog.nav.menuSets': 'Menyu toʻplamlari',
+  'catalog.nav.stock': 'Qoldiqlar',
   'catalog.nav.import': 'Import',
   'catalog.nav.publication': 'Nashr',
   'catalog.nav.prices': 'Narxlar',
@@ -2256,6 +2259,9 @@ export const messagesUzLatn: MessageCatalogue = {
   'catalog.editor.availability.empty': 'Mahsulot hali birorta filialda taklif qilinmagan',
   'catalog.editor.availability.stop': 'Toʻxtatish',
   'catalog.editor.availability.resume': 'Qayta yoqish',
+  'catalog.editor.availability.quantityHint':
+    'QUANTITY rejimidagi variant uchun mavjud miqdor, kunlik standart qiymat va kanal boʻyicha toʻxtatish chegaralari «Qoldiqlar» sahifasida joylashgan.',
+  'catalog.editor.availability.quantityHintLink': 'Qoldiqlarni ochish',
   'catalog.editor.schedule.hint':
     'Boʻsh boʻlsa — tovar doim sotuvda. Quyidagi oynalar sotuv vaqtini cheklaydi va filialning oʻz mahalliy vaqtida hisoblanadi.',
   'catalog.editor.schedule.loading': 'Jadval yuklanmoqda…',
@@ -2353,6 +2359,35 @@ export const messagesUzLatn: MessageCatalogue = {
   'catalog.categories.archiveConfirm.title': 'Kategoriyani arxivlaysizmi?',
   'catalog.categories.archiveConfirm.body':
     '«{name}» endi kategoriyalar daraxtida koʻrsatilmaydi. Unga joylashtirilgan mahsulotlar oʻz oʻrnida qoladi.',
+
+  // Bo'shliq xaritasi qatori 4.4c: filial bo'yicha QUANTITY qoldiqlar sahifasi (11-partiya)
+  'catalog.stock.title': 'Qoldiqlar',
+  'catalog.stock.resetNote':
+    'Kunlik standart qiymat ish kuni chegarasida qayta tiklanadi — Sozlamalar → Maʻlumotnomalarda belgilanadi.',
+  'catalog.stock.loading': 'Qoldiqlar yuklanmoqda',
+  'catalog.stock.noLocation': 'Bu hisob uchun hali filial aniqlanmagan',
+  'catalog.stock.denied': 'Bu filial qoldiqlariga kirish huquqi yoʻq',
+  'catalog.stock.empty': 'Bu filialda hali QUANTITY rejimidagi mahsulotlar yoʻq',
+  'catalog.stock.column.variant': 'Variant',
+  'catalog.stock.column.onHand': 'Mavjud',
+  'catalog.stock.column.reserved': 'Band qilingan',
+  'catalog.stock.column.remaining': 'Qoldiq',
+  'catalog.stock.column.default': 'Kunlik standart',
+  'catalog.stock.column.lastReset': 'Oxirgi qayta tiklash',
+  'catalog.stock.column.thresholds': 'Kanal boʻyicha toʻxtatish chegarasi',
+  'catalog.stock.noDefault': 'Yoʻq',
+  'catalog.stock.noThresholds': 'Yoʻq',
+  'catalog.stock.edit': 'Tahrirlash',
+  'catalog.stock.close': 'Yopish',
+  'catalog.stock.setOnHand.title': 'Mavjud miqdorni belgilash',
+  'catalog.stock.setDefault.title': 'Kunlik standart qiymat',
+  'catalog.stock.setDefault.body':
+    'Keyingi ish kuni chegarasida mavjud miqdorni shu qiymatga qaytaradi. Qayta tiklashni oʻchirish uchun boʻsh qoldiring.',
+  'catalog.stock.thresholds.title': 'Kanal boʻyicha toʻxtatish chegarasi',
+  'catalog.stock.thresholds.body':
+    'Qoldiq shu darajaga yoki undan pastga tushganda bitta kanal turini erta toʻxtatadi — agar oʻz chegarasi boʻlmasa, doʻkon nolgacha sotishda davom etadi.',
+  'catalog.stock.thresholds.add': 'Qoʻshish',
+  'catalog.stock.thresholds.remove': 'Olib tashlash',
 
   'catalog.menus.title': 'Menyular',
   'catalog.menus.location.label': 'Filial',
@@ -5743,7 +5778,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'scopeBar.level.TENANT': 'BUTUN KOMPANIYA',
   'scopeBar.level.BRAND': 'BREND',
   'scopeBar.level.LOCATION': 'FILIAL',
-  'scopeBar.tenantWide.groupLabel': 'Tahrirlash darajasi: brend boʻyicha yoki butun kompaniya boʻyicha',
+  'scopeBar.tenantWide.groupLabel':
+    'Tahrirlash darajasi: brend boʻyicha yoki butun kompaniya boʻyicha',
   'scopeBar.tenantWide.perBrand': 'Brend boʻyicha',
   'scopeBar.tenantWide.tenant': 'Butun kompaniya uchun standart qiymat',
   'scopeBar.status.DRAFT': 'qoralama',

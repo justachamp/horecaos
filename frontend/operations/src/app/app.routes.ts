@@ -646,6 +646,15 @@ export const routes: Routes = [
             path: 'menus',
             loadComponent: () => import('./features/catalog/menus-page').then((m) => m.MenusPage),
           },
+          {
+            // Gap map row 4.4c (batch 11): the per-location QUANTITY stock
+            // page — on-hand, reserved/remaining, the daily default, and
+            // per-channel-type stop thresholds. A sibling of `menus`, not a
+            // tab inside it: 4.4c is its own gap-map row with its own
+            // columns, none of which the offering matrix has anywhere to put.
+            path: 'stock',
+            loadComponent: () => import('./features/catalog/stock-page').then((m) => m.StockPage),
+          },
           // Row 4.4a — the named Menu entity: a copyable, bindable assortment,
           // distinct from the per-location offering matrix at 'menus' above
           // (row 4.4). A different path segment on purpose, so as not to

@@ -14,17 +14,70 @@
     <h2 class="q-subhead">{{ 'settings.catalog.useStockLogic.title' | t }}</h2>
     <p class="q-body-sm">{{ 'settings.catalog.useStockLogic.body' | t }}</p>
 
-    <dl class="fields">
-      <div class="field">
-        <dt class="q-caption">{{ 'settings.catalog.useStockLogic.field' | t }}</dt>
-        <dd class="q-body q-tnum" data-testid="use-stock-logic-value">
-          {{ yesNo(useStockLogic()?.value) }}
-        </dd>
-      </div>
-    </dl>
+    @if (!editingUseStockLogic()) {
+      <q-inherited-field
+        [label]="'settings.catalog.useStockLogic.field' | t"
+        [resolution]="useStockLogic()"
+        currentScopeType="TENANT"
+        [settableScopes]="tenantOnlyScopes"
+        [formatValue]="formatYesNo"
+        (override)="startEditingUseStockLogic()"
+        (setValueRequested)="startEditingUseStockLogic()"
+        (revertToInherit)="revertUseStockLogic()"
+      />
+    } @else {
+      <div class="form">
+        <label class="checkbox q-body-sm">
+          <input
+            type="checkbox"
+            [checked]="draftUseStockLogic()"
+            (change)="draftUseStockLogic.set($any($event.target).checked)"
+          />
+          {{ 'settings.catalog.useStockLogic.field' | t }}
+        </label>
 
-    <p class="q-caption not-yet-enforced" data-testid="use-stock-logic-reason">
-      {{ 'settings.catalog.useStockLogic.notYetEnforced' | t }}
+        <label class="q-caption" for="use-stock-logic-reason">{{
+          'settings.orderPolicy.field.reason' | t
+        }}</label>
+        <input
+          id="use-stock-logic-reason"
+          class="q-body field"
+          type="text"
+          [value]="draftUseStockLogicReason()"
+          (input)="draftUseStockLogicReason.set($any($event.target).value)"
+        />
+
+        @if (saveUseStockLogicError(); as message) {
+          <p class="q-body-sm error" role="alert">{{ message }}</p>
+        }
+
+        <div class="form__actions">
+          <button
+            type="button"
+            class="q-body secondary"
+            (click)="cancelEditingUseStockLogic()"
+            [disabled]="savingUseStockLogic()"
+          >
+            {{ 'settings.orderPolicy.cancel' | t }}
+          </button>
+          <button
+            type="button"
+            class="q-body primary"
+            (click)="saveUseStockLogic()"
+            [disabled]="!canSaveUseStockLogic()"
+          >
+            {{
+              savingUseStockLogic()
+                ? ('settings.orderPolicy.publishing' | t)
+                : ('settings.orderPolicy.publish' | t)
+            }}
+          </button>
+        </div>
+      </div>
+    }
+
+    <p class="q-caption" data-testid="use-stock-logic-hint">
+      {{ 'settings.catalog.useStockLogic.hint' | t }}
     </p>
   </section>
 
@@ -54,7 +107,9 @@
           {{ 'settings.catalog.qrKioskPricePlane.field' | t }}
         </label>
 
-        <label class="q-caption" for="qr-kiosk-reason">{{ 'settings.orderPolicy.field.reason' | t }}</label>
+        <label class="q-caption" for="qr-kiosk-reason">{{
+          'settings.orderPolicy.field.reason' | t
+        }}</label>
         <input
           id="qr-kiosk-reason"
           class="q-body field"
