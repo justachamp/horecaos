@@ -105,6 +105,7 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
   'conversations.flow_document.authored': { en: 'Conversations flow document authored', ru: 'Переписки сценарий документ оформлено', 'uz-Latn': 'Suhbatlar ssenariy hujjat tuzildi' },
   'courier-type.archived': { en: 'Courier type archived', ru: 'Курьер тип архивировано', 'uz-Latn': 'Kuryer turi arxivlandi' },
   'courier-type.updated': { en: 'Courier type updated', ru: 'Курьер тип обновлено', 'uz-Latn': 'Kuryer turi yangilandi' },
+  'courier.account.orphan_left': { en: 'Courier account orphan left', ru: 'Курьер аккаунт без владельца вышел', 'uz-Latn': 'Kuryer hisob egasiz chiqdi' },
   'courier.account.provisioned': { en: 'Courier account provisioned', ru: 'Курьер аккаунт подготовлено', 'uz-Latn': 'Kuryer hisob tayyorlandi' },
   'courier.adjustment.recorded': { en: 'Courier adjustment recorded', ru: 'Курьер корректировка зафиксировано', 'uz-Latn': 'Kuryer tuzatish qayd etildi' },
   'courier.applicant.erased': { en: 'Courier applicant erased', ru: 'Курьер заявитель удалено', 'uz-Latn': 'Kuryer nomzod oʻchirildi' },
