@@ -5175,8 +5175,15 @@ export const messagesRu: MessageCatalogue = {
   'finance.subscription.modules.billingUnit.PER_LOCATION': 'За точку',
   'finance.subscription.modules.billingUnit.PER_UNIT': 'За единицу',
   'finance.subscription.modules.billingUnit.ONE_OFF': 'Разово',
+  'finance.subscription.modules.confirm.title': 'Подтвердите покупку',
+  'finance.subscription.modules.confirm.body':
+    '{name} — {price} ({billingUnit}), будет включено в следующий счёт. Это включит: {activates}.',
+  'finance.subscription.modules.confirm.priceWithQuantity': '{price} × {quantity}',
+  'finance.subscription.modules.confirm.activatesFallback': 'функции модуля',
+  'finance.subscription.modules.confirm.confirm': 'Купить',
+  'finance.subscription.modules.confirm.cancel': 'Отмена',
   'finance.subscription.notBuiltNote':
-    'Закрытие периода — задача сотрудников HorecaOS (месяц закрывается выставлением выписки, ADR 0088); предоплаченный баланс пока не реализован (ADR 0095).',
+    'Закрытие периода — задача сотрудников HorecaOS (месяц закрывается выставлением выписки, ADR 0088); предоплаченный баланс пока не реализован (ADR 0095); отключение купленного модуля пока не самообслуживание — обратитесь в HorecaOS, чтобы удалить его.',
 
   // ---------------------------------------------------------------- staff 9.3 (wave 39)
   'staff.shell.activity': 'Активность',

@@ -5207,8 +5207,15 @@ export const messagesUzLatn: MessageCatalogue = {
   'finance.subscription.modules.billingUnit.PER_LOCATION': 'Filial uchun',
   'finance.subscription.modules.billingUnit.PER_UNIT': 'Birlik uchun',
   'finance.subscription.modules.billingUnit.ONE_OFF': 'Bir martalik',
+  'finance.subscription.modules.confirm.title': 'Xaridni tasdiqlang',
+  'finance.subscription.modules.confirm.body':
+    '{name} — {price} ({billingUnit}), keyingi hisob-fakturaga qoʻshiladi. Bu yoqiladi: {activates}.',
+  'finance.subscription.modules.confirm.priceWithQuantity': '{price} × {quantity}',
+  'finance.subscription.modules.confirm.activatesFallback': 'modul funksiyalari',
+  'finance.subscription.modules.confirm.confirm': 'Sotib olish',
+  'finance.subscription.modules.confirm.cancel': 'Bekor qilish',
   'finance.subscription.notBuiltNote':
-    'Davrni yopish HorecaOS xodimlari ishi (oy hisobotini chiqarish orqali yopiladi, ADR 0088); oldindan toʻlangan balans hali yaratilmagan (ADR 0095).',
+    'Davrni yopish HorecaOS xodimlari ishi (oy hisobotini chiqarish orqali yopiladi, ADR 0088); oldindan toʻlangan balans hali yaratilmagan (ADR 0095); sotib olingan modulni oʻchirish hali oʻz-oʻziga xizmat emas — uni olib tashlash uchun HorecaOS bilan bogʻlaning.',
 
   // ---------------------------------------------------------------- staff 9.3 (wave 39)
   'staff.shell.activity': 'Faollik',

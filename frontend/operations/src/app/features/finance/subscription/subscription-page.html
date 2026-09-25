@@ -286,8 +286,9 @@
                     <button
                       type="button"
                       class="secondary"
-                      [disabled]="purchasingModuleId() === module.moduleId"
-                      (click)="purchaseModule(module)"
+                      [disabled]="purchasingModuleId() !== null"
+                      (click)="requestPurchase(module)"
+                      data-testid="subscription-module-add"
                     >
                       {{ 'finance.subscription.modules.add' | t }}
                     </button>
@@ -303,6 +304,18 @@
             }
           </tbody>
         </table>
+      }
+
+      @if (purchaseTarget(); as module) {
+        <q-confirm-dialog
+          [title]="'finance.subscription.modules.confirm.title' | t"
+          [body]="purchaseConfirmBody(module)"
+          [confirmLabel]="'finance.subscription.modules.confirm.confirm' | t"
+          [cancelLabel]="'finance.subscription.modules.confirm.cancel' | t"
+          [busy]="purchasingModuleId() === module.moduleId"
+          (confirm)="confirmPurchase()"
+          (cancel)="cancelPurchase()"
+        />
       }
 
       <p class="q-body-sm not-built-note">{{ 'finance.subscription.notBuiltNote' | t }}</p>

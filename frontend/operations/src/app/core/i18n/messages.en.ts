@@ -5198,8 +5198,15 @@ export const messagesEn = {
   'finance.subscription.modules.billingUnit.PER_LOCATION': 'Per location',
   'finance.subscription.modules.billingUnit.PER_UNIT': 'Per unit',
   'finance.subscription.modules.billingUnit.ONE_OFF': 'One-off',
+  'finance.subscription.modules.confirm.title': 'Confirm purchase',
+  'finance.subscription.modules.confirm.body':
+    '{name} — {price} ({billingUnit}), billed on your next statement. This switches on: {activates}.',
+  'finance.subscription.modules.confirm.priceWithQuantity': '{price} × {quantity}',
+  'finance.subscription.modules.confirm.activatesFallback': 'its features',
+  'finance.subscription.modules.confirm.confirm': 'Buy',
+  'finance.subscription.modules.confirm.cancel': 'Cancel',
   'finance.subscription.notBuiltNote':
-    'Period close is HorecaOS staff work (a month is closed by issuing its statement, ADR 0088); the prepaid wallet is not built yet (ADR 0095).',
+    'Period close is HorecaOS staff work (a month is closed by issuing its statement, ADR 0088); the prepaid wallet is not built yet (ADR 0095); ending a purchased module is not self-service yet — contact HorecaOS to remove one.',
 
   // ---------------------------------------------------------------- staff 9.3 (wave 39)
   'staff.shell.activity': 'Activity',
