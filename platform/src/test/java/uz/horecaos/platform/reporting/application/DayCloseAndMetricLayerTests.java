@@ -603,9 +603,17 @@ class DayCloseAndMetricLayerTests {
         // thirty-one. The write per refund is unavoidable; the lookup per refund
         // was a round-trip inside the close transaction for an answer the previous
         // refund had already fetched.
+        //
+        // w6-reporting-facts, batch 11: the budget moved from 55 to 57 when
+        // close() gained two more fixed, once-per-close source reads --
+        // readSourceTariffResolutions and readSourceExternalDeliveryCosts
+        // (7.4b/7.4c, ADR 0023/0125) -- the same "fixed per close, not
+        // per-refund" category this assertion already tolerates for every
+        // other source read derive() runs, not the N+1 this test exists to
+        // catch.
         assertThat(used)
                 .as("a busy Saturday's close should not spend a round-trip per refund")
-                .isLessThanOrEqualTo(55);
+                .isLessThanOrEqualTo(57);
     }
 
     // ----------------------------------------------------- the settle recut

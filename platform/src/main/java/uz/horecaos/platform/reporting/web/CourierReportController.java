@@ -96,10 +96,11 @@ public class CourierReportController {
     @RequiresCapability(value = Capability.REPORTING_READ, scope = ScopeType.TENANT)
     @Operation(
             summary = "7.4b: delivery-sum-by-tariff audit",
-            description = "fulfillment.delivery_fee_resolutions (ADR 0037) joined through "
-                    + "quote -> order -> shipment for the one fact none of the three tables has alone: "
-                    + "which courier actually worked each resolution. Grouped by (tariff, courier); "
-                    + "'today' means whatever the range covers, not a business-day close.")
+            description = "reporting.fact_delivery_fee_resolution (V0411, w6-reporting-facts batch 11), "
+                    + "one row per delivery_fee_resolutions row (ADR 0037) that named a tariff, joined at "
+                    + "close time through quote -> order -> shipment for the one column none of the "
+                    + "three tables has alone: which courier actually worked each resolution. Grouped by "
+                    + "(tariff, courier), over the closed business days the range covers.")
     public ResponseEntity<TariffAuditResponse> tariffAudit(
             @PathVariable UUID tenantId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
@@ -117,12 +118,15 @@ public class CourierReportController {
     @Operation(
             summary = "7.4c: per-order external-delivery cost",
             description = "Order amount vs charged delivery vs provider billed vs variance vs "
-                    + "reconciliation status, for every PARTNER-sourced delivered shipment in range. "
-                    + "reconciliationStatus is UNBILLED (never PENDING) for a shipment with no invoice "
-                    + "line at all -- 'HorecaOS has a shipment the partner never billed', excluded from "
-                    + "varianceMinor's own total the same way it is excluded from every sum here: a "
-                    + "null variance never contributes. The invoice-scoped half of this reconciliation "
-                    + "renders in Finance 8.4; this is the per-order cut.")
+                    + "reconciliation status, off reporting.fact_external_delivery_cost (V0412, "
+                    + "w6-reporting-facts batch 11) -- one row per PARTNER-sourced delivered shipment, "
+                    + "projected at business-day close. reconciliationStatus is UNBILLED (never PENDING) "
+                    + "for a shipment with no invoice line at all -- 'HorecaOS has a shipment the partner "
+                    + "never billed', excluded from varianceMinor's own total the same way it is excluded "
+                    + "from every sum here: a null variance never contributes. This is a close-time "
+                    + "snapshot, not a live reconciliation state: a line matched or reconciled after its "
+                    + "business day closed is not reflected here. The invoice-scoped half of this "
+                    + "reconciliation renders in Finance 8.4; this is the per-order cut.")
     public ResponseEntity<ExternalDeliveryCostResponse> externalDeliveryCost(
             @PathVariable UUID tenantId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,

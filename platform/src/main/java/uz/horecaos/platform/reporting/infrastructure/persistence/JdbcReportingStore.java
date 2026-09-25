@@ -58,20 +58,25 @@ import uz.horecaos.platform.reporting.domain.MetricDefinition;
  *
  * <p>They are not, however, the only statements here that touch a module
  * schema outside {@code reporting} — an adversarial review (2026-09-14)
- * found this doc overclaiming that they were. {@link #readTariffAudit},
- * {@link #readExternalDeliveryCost}, {@link #readOrders}'s {@code is_preorder}
- * subquery, and {@link #readCancellationReasons} also read a module schema
- * directly ({@code fulfillment}, {@code ordering}, {@code kitchen}), and —
- * unlike the source reads above — do so live, on every request, rather
- * than once at close time into a fact. Each carries its own doc note
- * explaining why it reads live rather than through a fact, and none of the
- * four is actually covered by the {@code horecaos_reporting_read} database
- * role this class otherwise documents: the running application connects as
- * {@code horecaos_app} (a member of {@code horecaos_application}), not as
- * that role, so nothing today enforces the boundary at the database for any
- * query in this class. Whether these four should instead project into a fact
- * — so a report never has to trade freshness for being closed — is an open
- * design question tracked against ADR 0043, not resolved by this comment.
+ * found this doc overclaiming that they were. {@link #readOrders}'s {@code
+ * is_preorder} subquery and {@link #readCancellationReasons} still read a
+ * module schema directly ({@code ordering}, {@code kitchen}), live, on every
+ * request, rather than once at close time into a fact, and neither is
+ * covered by the {@code horecaos_reporting_read} database role this class
+ * otherwise documents: the running application connects as {@code
+ * horecaos_app} (a member of {@code horecaos_application}), not as that
+ * role, so nothing today enforces the boundary at the database for either
+ * query. {@link #readTariffAudit} and {@link #readExternalDeliveryCost} were
+ * two more such reads (against {@code fulfillment} and {@code ordering})
+ * until w6-reporting-facts (batch 11) gave each its own closed fact — {@code
+ * reporting.fact_delivery_fee_resolution} (V0411) and {@code
+ * reporting.fact_external_delivery_cost} (V0412), both projected at close
+ * time by {@link #readSourceTariffResolutions} and {@link
+ * #readSourceExternalDeliveryCosts} — so both now read {@code reporting}
+ * alone, the same shape {@link #readSourceDeliveries} already gives {@code
+ * fact_delivery}. Whether the remaining two should also project into a fact
+ * is still an open design question tracked against ADR 0043, not resolved
+ * by this comment.
  */
 @Repository
 public class JdbcReportingStore {
@@ -623,7 +628,11 @@ public class JdbcReportingStore {
                 "agg_branch_day",
                 "agg_sla_bucket_day",
                 "fact_call_hour",
-                "fact_delivery")) {
+                "fact_delivery",
+                // w6-reporting-facts, batch 11 (7.4b/7.4c, ADR 0023/0125): same
+                // clear-then-rewrite shape as fact_delivery beside them.
+                "fact_delivery_fee_resolution",
+                "fact_external_delivery_cost")) {
             jdbc.sql("DELETE FROM reporting.%s WHERE tenant_id = :tenantId AND business_date = :day".formatted(table))
                     .param("tenantId", tenantId)
                     .param("day", businessDate)
@@ -1006,6 +1015,212 @@ public class JdbcReportingStore {
     }
 
     /**
+     * w6-reporting-facts, batch 11 (7.4b, ADR 0023/0125): every {@code
+     * delivery_fee_resolutions} row in the business day's own instant range
+     * that named a tariff, joined through {@code quote_id ->
+     * orders.pricing_quote_id -> shipments} for the one column none of the
+     * three tables has alone — which courier actually worked the delivery.
+     * The same join {@code readTariffAudit} ran live, on every request,
+     * before this wave; see the class doc's own history of that.
+     *
+     * <p>An {@code INNER JOIN}, exactly as the live read was: a resolution
+     * with no matching order or shipment yet (never true for a completed
+     * checkout, in practice) is silently absent from this fact rather than
+     * projected with a null order/shipment id, the same choice {@link
+     * #readSourceDeliveries} makes by requiring {@code assignment_attempts}
+     * to join.
+     */
+    public List<SourceTariffResolution> readSourceTariffResolutions(UUID tenantId, Instant from, Instant to) {
+        return jdbc.sql("""
+                SELECT resolution.id AS resolution_id, resolution.location_id, resolution.tariff_id,
+                       resolution.tariff_version, resolution.zone_id, resolution.band_sequence,
+                       resolution.final_fee_minor, resolution.currency, resolution.created_at,
+                       orders.id AS order_id, shipment.id AS shipment_id, shipment.courier_id
+                  FROM fulfillment.delivery_fee_resolutions resolution
+                  JOIN ordering.orders orders
+                    ON orders.tenant_id = resolution.tenant_id AND orders.pricing_quote_id = resolution.quote_id
+                  JOIN fulfillment.shipments shipment
+                    ON shipment.tenant_id = orders.tenant_id AND shipment.order_id = orders.id
+                 WHERE resolution.tenant_id = :tenantId AND resolution.tariff_id IS NOT NULL
+                   AND resolution.created_at >= :from AND resolution.created_at < :to
+                """)
+                .param("tenantId", tenantId)
+                .param("from", utc(from))
+                .param("to", utc(to))
+                .query((ResultSet row, int number) -> new SourceTariffResolution(
+                        Objects.requireNonNull(row.getObject("resolution_id", UUID.class)),
+                        Objects.requireNonNull(row.getObject("location_id", UUID.class)),
+                        Objects.requireNonNull(row.getObject("tariff_id", UUID.class)),
+                        row.getInt("tariff_version"),
+                        row.getObject("zone_id", UUID.class),
+                        (Integer) row.getObject("band_sequence"),
+                        row.getObject("courier_id", UUID.class),
+                        Objects.requireNonNull(row.getObject("order_id", UUID.class)),
+                        Objects.requireNonNull(row.getObject("shipment_id", UUID.class)),
+                        row.getLong("final_fee_minor"),
+                        Objects.requireNonNull(row.getString("currency")),
+                        requireInstant(row, "created_at")))
+                .list();
+    }
+
+    /** One row {@link #readSourceTariffResolutions} produced — the source for {@code ReportingFacts.TariffFeeResolutionFact}. */
+    public record SourceTariffResolution(
+            UUID resolutionId,
+            UUID locationId,
+            UUID tariffId,
+            int tariffVersion,
+            @Nullable UUID zoneId,
+            @Nullable Integer bandSequence,
+            @Nullable UUID courierId,
+            UUID orderId,
+            UUID shipmentId,
+            long finalFeeMinor,
+            String currency,
+            Instant resolvedAt) {}
+
+    public void insertTariffFeeResolutionFact(ReportingFacts.TariffFeeResolutionFact fact) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("tenantId", fact.tenantId());
+        params.put("resolutionId", fact.resolutionId());
+        params.put("businessDate", fact.businessDate());
+        params.put("boundaryVersion", fact.boundaryVersion());
+        params.put("calculationVersion", fact.metricCalculationVersion());
+        params.put("locationId", fact.locationId());
+        params.put("tariffId", fact.tariffId());
+        params.put("tariffVersion", fact.tariffVersion());
+        params.put("zoneId", fact.zoneId());
+        params.put("bandSequence", fact.bandSequence());
+        params.put("courierId", fact.courierId());
+        params.put("orderId", fact.orderId());
+        params.put("shipmentId", fact.shipmentId());
+        params.put("finalFeeMinor", fact.finalFeeMinor());
+        params.put("currency", fact.currency());
+        params.put("resolvedAt", utc(fact.resolvedAt()));
+
+        jdbc.sql("""
+                INSERT INTO reporting.fact_delivery_fee_resolution (
+                    tenant_id, resolution_id, business_date, boundary_version, metric_calculation_version,
+                    location_id, tariff_id, tariff_version, zone_id, band_sequence, courier_id,
+                    order_id, shipment_id, final_fee_minor, currency, resolved_at)
+                VALUES (
+                    :tenantId, :resolutionId, :businessDate, :boundaryVersion, :calculationVersion,
+                    :locationId, :tariffId, :tariffVersion, :zoneId, :bandSequence, :courierId,
+                    :orderId, :shipmentId, :finalFeeMinor, :currency, :resolvedAt)
+                """).params(params).update();
+    }
+
+    /**
+     * w6-reporting-facts, batch 11 (7.4c, ADR 0023/0125): every {@code
+     * PARTNER}-sourced, {@code DELIVERED} shipment in the business day's own
+     * instant range against {@code delivered_at}, left-joined against its
+     * own {@code ACCRUED} cost line and its {@code DELIVERY} invoice line —
+     * the same join {@code readExternalDeliveryCost} ran live, on every
+     * request, before this wave.
+     */
+    public List<SourceExternalDeliveryCost> readSourceExternalDeliveryCosts(UUID tenantId, Instant from, Instant to) {
+        return jdbc.sql("""
+                SELECT shipment.id AS shipment_id, shipment.location_id, shipment.provider_type,
+                       shipment.delivered_at,
+                       orders.id AS order_id, orders.public_order_number, orders.total_minor,
+                       orders.currency, orders.fee_minor AS charged_delivery_minor,
+                       cost.amount_minor AS provider_estimated_minor,
+                       line.id AS invoice_line_id, line.amount_minor AS provider_billed_minor,
+                       line.match_status, line.variance_minor
+                  FROM fulfillment.shipments shipment
+                  JOIN ordering.orders orders
+                    ON orders.tenant_id = shipment.tenant_id AND orders.id = shipment.order_id
+                  LEFT JOIN LATERAL (
+                       SELECT amount_minor
+                         FROM fulfillment.delivery_cost_lines
+                        WHERE tenant_id = shipment.tenant_id AND shipment_id = shipment.id
+                          AND cost_path = 'PARTNER' AND cost_basis = 'ACCRUED'
+                        ORDER BY recognised_at DESC
+                        LIMIT 1) cost ON true
+                  LEFT JOIN LATERAL (
+                       SELECT id, amount_minor, match_status, variance_minor
+                         FROM fulfillment.partner_delivery_invoice_lines
+                        WHERE tenant_id = shipment.tenant_id AND shipment_id = shipment.id
+                          AND charge_type = 'DELIVERY'
+                        ORDER BY matched_at DESC NULLS LAST
+                        LIMIT 1) line ON true
+                 WHERE shipment.tenant_id = :tenantId AND shipment.source_type = 'PARTNER'
+                   AND shipment.status = 'DELIVERED'
+                   AND shipment.delivered_at >= :from AND shipment.delivered_at < :to
+                """)
+                .param("tenantId", tenantId)
+                .param("from", utc(from))
+                .param("to", utc(to))
+                .query((ResultSet row, int number) -> new SourceExternalDeliveryCost(
+                        Objects.requireNonNull(row.getObject("shipment_id", UUID.class)),
+                        Objects.requireNonNull(row.getObject("location_id", UUID.class)),
+                        row.getString("provider_type"),
+                        requireInstant(row, "delivered_at"),
+                        Objects.requireNonNull(row.getObject("order_id", UUID.class)),
+                        Objects.requireNonNull(row.getString("public_order_number")),
+                        row.getLong("total_minor"),
+                        Objects.requireNonNull(row.getString("currency")),
+                        row.getLong("charged_delivery_minor"),
+                        (Long) row.getObject("provider_estimated_minor"),
+                        row.getObject("invoice_line_id", UUID.class),
+                        (Long) row.getObject("provider_billed_minor"),
+                        row.getString("match_status"),
+                        (Long) row.getObject("variance_minor")))
+                .list();
+    }
+
+    /** One row {@link #readSourceExternalDeliveryCosts} produced — the source for {@code ReportingFacts.ExternalDeliveryCostFact}. */
+    public record SourceExternalDeliveryCost(
+            UUID shipmentId,
+            UUID locationId,
+            @Nullable String providerType,
+            Instant deliveredAt,
+            UUID orderId,
+            String publicOrderNumber,
+            long orderTotalMinor,
+            String currency,
+            long chargedDeliveryMinor,
+            @Nullable Long providerEstimatedMinor,
+            @Nullable UUID invoiceLineId,
+            @Nullable Long providerBilledMinor,
+            @Nullable String matchStatus,
+            @Nullable Long varianceMinor) {}
+
+    public void insertExternalDeliveryCostFact(ReportingFacts.ExternalDeliveryCostFact fact) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("tenantId", fact.tenantId());
+        params.put("shipmentId", fact.shipmentId());
+        params.put("businessDate", fact.businessDate());
+        params.put("boundaryVersion", fact.boundaryVersion());
+        params.put("calculationVersion", fact.metricCalculationVersion());
+        params.put("locationId", fact.locationId());
+        params.put("orderId", fact.orderId());
+        params.put("publicOrderNumber", fact.publicOrderNumber());
+        params.put("orderTotalMinor", fact.orderTotalMinor());
+        params.put("currency", fact.currency());
+        params.put("chargedDeliveryMinor", fact.chargedDeliveryMinor());
+        params.put("providerType", fact.providerType());
+        params.put("providerEstimatedMinor", fact.providerEstimatedMinor());
+        params.put("invoiceLineId", fact.invoiceLineId());
+        params.put("providerBilledMinor", fact.providerBilledMinor());
+        params.put("matchStatus", fact.matchStatus());
+        params.put("varianceMinor", fact.varianceMinor());
+        params.put("deliveredAt", utc(fact.deliveredAt()));
+
+        jdbc.sql("""
+                INSERT INTO reporting.fact_external_delivery_cost (
+                    tenant_id, shipment_id, business_date, boundary_version, metric_calculation_version,
+                    location_id, order_id, public_order_number, order_total_minor, currency,
+                    charged_delivery_minor, provider_type, provider_estimated_minor, invoice_line_id,
+                    provider_billed_minor, match_status, variance_minor, delivered_at)
+                VALUES (
+                    :tenantId, :shipmentId, :businessDate, :boundaryVersion, :calculationVersion,
+                    :locationId, :orderId, :publicOrderNumber, :orderTotalMinor, :currency,
+                    :chargedDeliveryMinor, :providerType, :providerEstimatedMinor, :invoiceLineId,
+                    :providerBilledMinor, :matchStatus, :varianceMinor, :deliveredAt)
+                """).params(params).update();
+    }
+
+    /**
      * T11: the courier leaderboard (7.4) — one row per courier over a date
      * range, straight off {@code reporting.fact_delivery}. Never a courier's
      * name: the caller resolves display through P19's reveal, keyed on
@@ -1137,56 +1352,43 @@ public class JdbcReportingStore {
     }
 
     /**
-     * T11 (7.4b, ADR 0125): the delivery-sum-by-tariff audit.
-     * {@code fulfillment.delivery_fee_resolutions} already carries tariff,
-     * tariff version, zone, band and final fee (ADR 0037); this joins it
-     * through {@code quote_id -> orders.pricing_quote_id -> shipments} for
-     * the one column none of the three tables has on its own: which courier
-     * actually worked the delivery.
-     *
-     * <p>Unlike {@link #readSourceOrders} and this class's other {@code
-     * readSource*} methods, this is not a close-time read that gets
-     * projected into an immutable fact — it runs live, on every {@code
-     * GET .../tariff-audit} request (see the class doc above), so the same
-     * range re-read later can disagree if a resolution in it changes. That
-     * is an accepted trade for this specific report (an audit needs current
-     * state, not yesterday's snapshot of it), not a pattern ADR 0125 itself
-     * decides one way or the other — see the class doc's open question.
+     * T11 (7.4b, ADR 0125), w6-reporting-facts batch 11: the delivery-sum-by-
+     * tariff audit. Reads {@code reporting.fact_delivery_fee_resolution}
+     * (V0411) alone — never {@code fulfillment} or {@code ordering} directly
+     * — a closed, business-date-grain fact {@link
+     * #readSourceTariffResolutions} projects at close time, exactly the
+     * ADR 0023 read-only-projection shape {@link #readSourceDeliveries}
+     * already gives {@code fact_delivery}. Before this wave this method ran
+     * the join live, on every request; see the class doc's own history of
+     * that.
      *
      * <p>Grouped by tariff (not courier): the audit question is "did this
-     * tariff charge what it should have", and {@code courierBreakdown}
-     * inside each row answers "which couriers this tariff was actually
-     * billed against" without a second query.
+     * tariff charge what it should have", and {@code courierId} on each row
+     * answers "which courier this tariff was actually billed against"
+     * without a second query.
      */
-    public List<TariffAuditRow> readTariffAudit(UUID tenantId, Instant from, Instant to, List<UUID> locationIds) {
+    public List<TariffAuditRow> readTariffAudit(UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds) {
         Map<String, Object> params = new HashMap<>();
         params.put("tenantId", tenantId);
-        params.put("from", utc(from));
-        params.put("to", utc(to));
+        params.put("from", from);
+        params.put("to", to);
 
         String locationFilter = "";
         if (!locationIds.isEmpty()) {
-            locationFilter = " AND resolution.location_id IN (:locations)";
+            locationFilter = " AND location_id IN (:locations)";
             params.put("locations", locationIds);
         }
 
         return jdbc.sql("""
-                SELECT resolution.tariff_id, resolution.tariff_version, resolution.zone_id,
-                       resolution.band_sequence, shipment.courier_id,
+                SELECT tariff_id, tariff_version, zone_id, band_sequence, courier_id,
                        count(*)::integer AS resolution_count,
-                       sum(resolution.final_fee_minor)::bigint AS total_final_fee_minor,
-                       resolution.currency
-                  FROM fulfillment.delivery_fee_resolutions resolution
-                  JOIN ordering.orders orders
-                    ON orders.tenant_id = resolution.tenant_id AND orders.pricing_quote_id = resolution.quote_id
-                  JOIN fulfillment.shipments shipment
-                    ON shipment.tenant_id = orders.tenant_id AND shipment.order_id = orders.id
-                 WHERE resolution.tenant_id = :tenantId AND resolution.tariff_id IS NOT NULL
-                   AND resolution.created_at BETWEEN :from AND :to
+                       sum(final_fee_minor)::bigint AS total_final_fee_minor,
+                       currency
+                  FROM reporting.fact_delivery_fee_resolution
+                 WHERE tenant_id = :tenantId AND business_date BETWEEN :from AND :to
                 """ + locationFilter + """
-                 GROUP BY resolution.tariff_id, resolution.tariff_version, resolution.zone_id,
-                          resolution.band_sequence, shipment.courier_id, resolution.currency
-                 ORDER BY resolution.tariff_id, resolution.tariff_version, shipment.courier_id
+                 GROUP BY tariff_id, tariff_version, zone_id, band_sequence, courier_id, currency
+                 ORDER BY tariff_id, tariff_version, courier_id
                 """)
                 .params(params)
                 .query((ResultSet row, int number) -> new TariffAuditRow(
@@ -1213,76 +1415,52 @@ public class JdbcReportingStore {
             String currency) {}
 
     /**
-     * T11 (7.4c, ADR 0125): per-order «order amount vs charged delivery vs
-     * provider billed vs variance vs reconciliation status» — the one report
-     * in the courier family that finds money. Every {@code PARTNER}-sourced
-     * delivered shipment in range, left-joined against its {@code DELIVERY}
-     * invoice line: a shipment with no line at all reads {@code UNBILLED}
-     * (ADR 0125 / {@code courier.domain.MatchStatus}'s own doc — "HorecaOS
-     * has a shipment the partner never billed" — computed here, at read
-     * time, rather than written onto a line that by definition does not
-     * exist), never folded into {@code PENDING} the way a bare {@code
-     * COALESCE} against the enum's other unbilled-looking states would.
+     * T11 (7.4c, ADR 0125), w6-reporting-facts batch 11: per-order «order
+     * amount vs charged delivery vs provider billed vs variance vs
+     * reconciliation status» — the one report in the courier family that
+     * finds money. Reads {@code reporting.fact_external_delivery_cost}
+     * (V0412) alone — never {@code fulfillment} or {@code ordering} directly
+     * — a closed, business-date-grain fact {@link
+     * #readSourceExternalDeliveryCosts} projects at close time. A shipment
+     * with no invoice line at all reads {@code UNBILLED} (ADR 0125 / {@code
+     * courier.domain.MatchStatus}'s own doc — "HorecaOS has a shipment the
+     * partner never billed"), never folded into {@code PENDING} the way a
+     * bare {@code COALESCE} against the enum's other unbilled-looking states
+     * would; this method still leaves {@code matchStatus} null for that case
+     * and lets the caller apply the same {@code UNBILLED} substitution it
+     * always has, so this fact's own null-means-no-line contract mirrors the
+     * live read it replaces.
      *
-     * <p>Takes an instant range, not the caller's raw date range — the same
-     * correction {@link #readTariffAudit} already applies. An adversarial
-     * review (2026-09-14) found the previous {@code delivered_at::date}
-     * version cast in the database session's own timezone rather than the
-     * tenant's business-day zone, misfiling a delivery near local midnight by
-     * a calendar day for any non-UTC tenant. {@link
-     * uz.horecaos.platform.reporting.application.ReportQueryService#externalDeliveryCost}
-     * is the one caller and resolves the range through {@code
-     * BusinessDayBoundary} before it reaches here.
-     *
-     * <p>Like {@link #readTariffAudit}, this is a live, request-time read
-     * across {@code fulfillment} and {@code ordering} — not a close-time
-     * source read projected into an immutable fact — so a re-read of the
-     * same range can disagree with an earlier one (a line matched or
-     * resolved in between). See the class doc's open question on whether
-     * this and its three siblings should instead be projected.
+     * <p><b>Frozen at close, not live.</b> Before this wave this method ran
+     * the join live, on every request, so a re-read could pick up a line
+     * matched or reconciled between two calls. It now answers with whatever
+     * {@link #readSourceExternalDeliveryCosts} captured at the business
+     * day's own close — see {@code ReportingFacts.ExternalDeliveryCostFact}'s
+     * own doc for why that is an accepted, ADR-0023-driven trade rather than
+     * a regression nobody noticed.
      */
     public List<ExternalDeliveryCostRow> readExternalDeliveryCost(
-            UUID tenantId, Instant from, Instant to, List<UUID> locationIds) {
+            UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds) {
         Map<String, Object> params = new HashMap<>();
         params.put("tenantId", tenantId);
-        params.put("from", utc(from));
-        params.put("to", utc(to));
+        params.put("from", from);
+        params.put("to", to);
 
         String locationFilter = "";
         if (!locationIds.isEmpty()) {
-            locationFilter = " AND shipment.location_id IN (:locations)";
+            locationFilter = " AND location_id IN (:locations)";
             params.put("locations", locationIds);
         }
 
         return jdbc.sql("""
-                SELECT orders.id AS order_id, orders.public_order_number, orders.total_minor,
-                       orders.currency, orders.fee_minor AS charged_delivery_minor,
-                       shipment.id AS shipment_id, shipment.provider_type, shipment.location_id,
-                       cost.amount_minor AS provider_estimated_minor,
-                       line.id AS invoice_line_id, line.amount_minor AS provider_billed_minor,
-                       line.match_status, line.variance_minor
-                  FROM fulfillment.shipments shipment
-                  JOIN ordering.orders orders
-                    ON orders.tenant_id = shipment.tenant_id AND orders.id = shipment.order_id
-                  LEFT JOIN LATERAL (
-                       SELECT amount_minor
-                         FROM fulfillment.delivery_cost_lines
-                        WHERE tenant_id = shipment.tenant_id AND shipment_id = shipment.id
-                          AND cost_path = 'PARTNER' AND cost_basis = 'ACCRUED'
-                        ORDER BY recognised_at DESC
-                        LIMIT 1) cost ON true
-                  LEFT JOIN LATERAL (
-                       SELECT id, amount_minor, match_status, variance_minor
-                         FROM fulfillment.partner_delivery_invoice_lines
-                        WHERE tenant_id = shipment.tenant_id AND shipment_id = shipment.id
-                          AND charge_type = 'DELIVERY'
-                        ORDER BY matched_at DESC NULLS LAST
-                        LIMIT 1) line ON true
-                 WHERE shipment.tenant_id = :tenantId AND shipment.source_type = 'PARTNER'
-                   AND shipment.status = 'DELIVERED'
-                   AND shipment.delivered_at >= :from AND shipment.delivered_at < :to
+                SELECT order_id, public_order_number, order_total_minor AS total_minor, currency,
+                       charged_delivery_minor, shipment_id, provider_type,
+                       provider_estimated_minor, invoice_line_id, provider_billed_minor,
+                       match_status, variance_minor
+                  FROM reporting.fact_external_delivery_cost
+                 WHERE tenant_id = :tenantId AND business_date BETWEEN :from AND :to
                 """ + locationFilter + """
-                 ORDER BY shipment.delivered_at DESC
+                 ORDER BY delivered_at DESC
                 """)
                 .params(params)
                 .query((ResultSet row, int number) -> new ExternalDeliveryCostRow(
