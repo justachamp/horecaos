@@ -82,7 +82,11 @@ jobs:
     needs: changes
     if: needs.changes.outputs.platform == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    # The full suite took 46 minutes at 3db855b (5,000 tests) and 75 minutes at
+    # 60e3241 after batch 10 added the amendment and checkout suites; the run for
+    # 7217ba0 was cancelled at the old 90-minute ceiling with eight classes still
+    # queued, after five minio image pulls each spent seven minutes timing out.
+    timeout-minutes: 150
     defaults:
       run:
         working-directory: platform
@@ -97,6 +101,24 @@ jobs:
 
       - name: Runner resources
         run: nproc && free -h && df -h / | tail -1
+
+      - name: Pre-pull Testcontainers images
+        # Testcontainers gives a pull two minutes and every suite that needs the
+        # image retries on its own, so a registry hiccup (quay.io on 2026-09-25)
+        # costs seven minutes per affected class inside the forks. Pull the three
+        # images up front with retries instead, so a registry outage fails fast
+        # and a slow one is paid for once. The Postgres image is the base of
+        # infra/postgres/Dockerfile, which TestDatabase builds locally.
+        run: |
+          set -u
+          POSTGRES_IMAGE=$(sed -nE 's/^FROM (postgres:[^ ]+).*/\1/p' infra/postgres/Dockerfile | head -1)
+          for image in "$POSTGRES_IMAGE" quay.io/minio/minio:RELEASE.2025-07-23T15-54-02Z apache/kafka:4.3.1; do
+            for attempt in 1 2 3 4 5; do
+              if docker pull --quiet "$image"; then break; fi
+              if [ "$attempt" = 5 ]; then echo "could not pull $image after 5 attempts" >&2; exit 1; fi
+              sleep 30
+            done
+          done
 
       - name: Verify
         # Two forks with an explicit ceiling each: the hosted runner's memory is
