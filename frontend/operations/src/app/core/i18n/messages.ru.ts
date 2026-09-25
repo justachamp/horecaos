@@ -3769,6 +3769,10 @@ export const messagesRu: MessageCatalogue = {
   'staff.detail.field.telegram': 'Telegram',
   'staff.detail.security.notBuilt':
     'Способ входа, последний вход и PIN на терминале пока не отслеживаются',
+  'staff.detail.today.created': 'Создано сегодня: {count}',
+  'staff.detail.today.accepted': 'Принято сегодня: {count}',
+  'staff.detail.today.loading': 'Загрузка заказов за сегодня…',
+  'staff.detail.viewActivity': 'Смотреть журнал действий',
 
   'staff.myProfile.title': 'Мой профиль',
   'staff.myProfile.personalData.title': 'Личные данные',

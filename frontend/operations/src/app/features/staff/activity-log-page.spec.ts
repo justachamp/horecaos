@@ -152,6 +152,33 @@ describe('ActivityLogPage', () => {
     expect(fixture.nativeElement.querySelector('.load-more')).toBeNull();
   });
 
+  it('seeds the actor filter from a `?actor=` deep link and searches by it on the first load', async () => {
+    const api = {
+      search: vi.fn().mockResolvedValue(page([event()])),
+      detail: vi.fn(),
+    };
+    await TestBed.configureTestingModule({
+      imports: [ActivityLogPage],
+      providers: [
+        provideRouter([]),
+        { provide: ActivityLogApi, useValue: api },
+        { provide: CurrentTenant, useValue: new FakeCurrentTenant() },
+      ],
+    }).compileComponents();
+    TestBed.inject(I18n).setLocale('en');
+    const fixture = TestBed.createComponent(ActivityLogPage);
+    // Stands in for what `withComponentInputBinding()` does on a real
+    // `/staff/activity?actor=operator-9` navigation from
+    // `staff-member-detail-pane.ts#viewActivity`.
+    fixture.componentRef.setInput('actor', 'operator-9');
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(api.search).toHaveBeenCalled();
+    expect(api.search.mock.calls[0][1]).toMatchObject({ actorSubject: 'operator-9' });
+  });
+
   it('shows the bulk chip only when the opened event shares its correlation id with another row', async () => {
     const oneEvent = event({ id: 'evt-1', correlationId: 'corr-solo' });
     const api = {

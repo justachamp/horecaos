@@ -3795,6 +3795,10 @@ export const messagesUzLatn: MessageCatalogue = {
   'staff.detail.field.telegram': 'Telegram',
   'staff.detail.security.notBuilt':
     'Kirish usuli, oxirgi kirish va terminal PIN-kodi hali kuzatilmaydi',
+  'staff.detail.today.created': 'Bugun yaratilgan: {count}',
+  'staff.detail.today.accepted': 'Bugun qabul qilingan: {count}',
+  'staff.detail.today.loading': 'Bugungi buyurtmalar yuklanmoqda…',
+  'staff.detail.viewActivity': 'Amallar jurnalini koʻrish',
 
   'staff.myProfile.title': 'Mening profilim',
   'staff.myProfile.personalData.title': 'Shaxsiy maʻlumotlar',

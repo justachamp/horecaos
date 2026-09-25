@@ -116,6 +116,14 @@ export interface ScopeDirectory {
   readonly locations: readonly LocationSummary[];
 }
 
+/** Mirrors `OperatorTodayCountsController.OperatorTodayCountsResponse` (Staff 9.2d). */
+export interface OperatorTodayCounts {
+  readonly createdCount: number;
+  readonly acceptedCount: number;
+  readonly businessDayFrom: string;
+  readonly businessDayTo: string;
+}
+
 /**
  * The Staff section's one API seam: grants (Люди, Карточка), the role
  * catalogue (Должности), and staff Telegram links.
@@ -292,6 +300,19 @@ export class StaffApi {
       this.api.get<readonly StaffInvitationOutstanding[]>(staffPaths.staffInvitations(tenantId)),
     );
     return result.value ?? [];
+  }
+
+  /**
+   * `OperatorTodayCountsController.today` — Staff 9.2d. Never throws for an
+   * operator who has created or accepted nothing today: the endpoint answers
+   * two zeroes, not a 404, because "nobody has taken an order yet" is not a
+   * missing-resource condition.
+   */
+  async operatorTodayOrderCounts(tenantId: string, subject: string): Promise<OperatorTodayCounts> {
+    const result = await firstValueFrom(
+      this.api.get<OperatorTodayCounts>(staffPaths.operatorTodayOrderCounts(tenantId, subject)),
+    );
+    return result.value;
   }
 }
 

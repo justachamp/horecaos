@@ -1019,6 +1019,54 @@ public class JdbcOrderStore {
     }
 
     /**
+     * Staff 9.2d: one operator's own order counts, today, over the same
+     * {@code created_by_actor_id}/{@code ix_orders_created_by} index {@link
+     * #myWorkChannelMix} already reads, plus {@code accepted_by_actor_id} for
+     * the half of {@link uz.horecaos.platform.reporting.application.OperatorAttribution}'s
+     * precedence this manager-facing read cares about separately rather than
+     * collapsed into one number: a call-centre operator who only ever
+     * approves aggregator orders would otherwise show zero on a card that
+     * only ever asked "created".
+     *
+     * <p>Tenant-scoped, not location-scoped: a person's own card has no
+     * location to filter by, and an operator can (rarely) take orders at more
+     * than one branch in a day. The two counts can double-count the same
+     * order when one operator both created and approved it — deliberate, for
+     * the reason {@link #myWorkChannelMix}'s own doc gives for a plain index
+     * read over a materialized one: "today, for one operator" is cheap enough
+     * that a live count beats waiting on a day close to answer it, and a
+     * manager reading "7 created, 2 accepted" already understands the two
+     * numbers as different questions, not a total to add.
+     */
+    public OperatorTodayCountsRow operatorTodayCounts(UUID tenantId, String subject, Instant from, Instant to) {
+        long created = jdbc.sql("""
+                        SELECT count(*) FROM ordering.orders
+                        WHERE tenant_id = :tenantId
+                          AND created_by_actor_id = :subject
+                          AND created_at >= :from AND created_at < :to
+                        """)
+                .param("tenantId", tenantId)
+                .param("subject", subject)
+                .param("from", utc(from))
+                .param("to", utc(to))
+                .query(Long.class)
+                .single();
+        long accepted = jdbc.sql("""
+                        SELECT count(*) FROM ordering.orders
+                        WHERE tenant_id = :tenantId
+                          AND accepted_by_actor_id = :subject
+                          AND accepted_at >= :from AND accepted_at < :to
+                        """)
+                .param("tenantId", tenantId)
+                .param("subject", subject)
+                .param("from", utc(from))
+                .param("to", utc(to))
+                .query(Long.class)
+                .single();
+        return new OperatorTodayCountsRow(created, accepted);
+    }
+
+    /**
      * The nine aggregate columns {@link #counts} and {@link #countsByLocation}
      * share, so the two can never disagree about what a badge means.
      *
@@ -2659,6 +2707,9 @@ public class JdbcOrderStore {
         public static final String CHANNEL = "CHANNEL";
         public static final String FULFILLMENT_MODE = "FULFILLMENT_MODE";
     }
+
+    /** One operator's today, from {@link #operatorTodayCounts} — see that method's own doc on why two numbers, not one. */
+    public record OperatorTodayCountsRow(long created, long accepted) {}
 
     /**
      * The thirteen columns a customer's own order list needs, and no others.

@@ -3801,6 +3801,10 @@ export const messagesEn = {
   'staff.detail.field.telegram': 'Telegram',
   'staff.detail.security.notBuilt':
     'Sign-in method, last sign-in and terminal PIN are not tracked yet',
+  'staff.detail.today.created': 'Created today: {count}',
+  'staff.detail.today.accepted': 'Accepted today: {count}',
+  'staff.detail.today.loading': 'Loading today’s orders…',
+  'staff.detail.viewActivity': 'View activity log',
 
   'staff.myProfile.title': 'My profile',
   'staff.myProfile.personalData.title': 'Personal details',

@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal } from '@angular/core';
 
 import { CurrentTenant } from '../../core/auth/current-tenant';
 import { ApiError } from '../../core/api/problem-details';
@@ -58,6 +58,15 @@ export class ActivityLogPage {
   private readonly api = inject(ActivityLogApi);
   protected readonly i18n = inject(I18n);
 
+  /**
+   * `?actor=` — Staff 9.3's deep link from a person's own card
+   * (`staff-member-detail-pane.ts#viewActivity`), bound by the router's
+   * `withComponentInputBinding()` the same way `staff-member-detail-pane.ts`
+   * itself binds `:subjectId`. Optional: the plain `/staff/activity` route
+   * every nav link still points at is unaffected.
+   */
+  readonly actor = input<string>('');
+
   protected readonly state = signal<LoadState>('loading');
   protected readonly loadErrorText = signal<string | null>(null);
   protected readonly events = signal<readonly AuditEventView[]>([]);
@@ -86,10 +95,10 @@ export class ActivityLogPage {
   /**
    * Every distinct human actor seen in the loaded window, for the actor
    * filter's picker (a `<datalist>`, so a subject id can still be typed or
-   * pasted directly). Not a full staff roster — a deep link from a person's
-   * own card would seed one without a fetch this screen does not otherwise
-   * need — but it turns the filter from "paste a UUID" into "start typing a
-   * name" for anyone who has already appeared on screen.
+   * pasted directly). Not a full staff roster — {@link actor} is the deep
+   * link from a person's own card, seeded with no extra fetch this screen
+   * does not otherwise need — but it turns the filter from "paste a UUID"
+   * into "start typing a name" for anyone who has already appeared on screen.
    */
   protected readonly knownPeople = computed<readonly KnownPerson[]>(() => {
     const seen = new Map<string, string>();
@@ -102,7 +111,22 @@ export class ActivityLogPage {
   });
 
   constructor() {
-    void this.load();
+    // `withComponentInputBinding()` applies a bound input through
+    // `ComponentRef.setInput()`, which runs *after* the constructor body —
+    // reading `this.actor()` directly here would still see its default `''`
+    // — so this seeds the actor filter (and triggers the first load) from an
+    // `effect()` instead, the same idiom `staff-member-detail-pane.ts` uses
+    // for its own route-bound input, for the identical reason: `effect()`
+    // runs once the input has actually been set. It only re-fires on a real
+    // change to `?actor=` (a fresh deep link), never merely because a
+    // manager cleared the filter by hand while staying on this page.
+    effect(() => {
+      const seededActor = this.actor().trim();
+      if (seededActor !== '') {
+        this.actorFilter.set(seededActor);
+      }
+      void this.load();
+    });
   }
 
   protected retry(): void {
