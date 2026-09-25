@@ -607,11 +607,17 @@ export const routes: Routes = [
               },
             ],
           },
+          // 6.5 Automations (gap-map row 6.5, ADR 0044 Triggers): unattended
+          // BIRTHDAY, INACTIVITY and CART_ABANDONMENT rules through the new
+          // `AutomationRuleController` — `q-rule-list`'s first live
+          // consumer (row `X.25`). CASHBACK_CHANGE and LATE_ORDER_APOLOGY
+          // are not offered — see `AutomationTriggerType`'s own doc.
           {
             path: 'automations',
             loadComponent: () =>
-              import('./features/not-built/not-built-page').then((m) => m.NotBuiltPage),
-            data: { spec: 'frontend-information-architecture.md §6.5 (Automations)' },
+              import('./features/marketing/automations/automations-page').then(
+                (m) => m.AutomationsPage,
+              ),
           },
           {
             path: 'content',
@@ -645,6 +651,15 @@ export const routes: Routes = [
           {
             path: 'menus',
             loadComponent: () => import('./features/catalog/menus-page').then((m) => m.MenusPage),
+          },
+          {
+            // Gap map row 4.4c (batch 11): the per-location QUANTITY stock
+            // page — on-hand, reserved/remaining, the daily default, and
+            // per-channel-type stop thresholds. A sibling of `menus`, not a
+            // tab inside it: 4.4c is its own gap-map row with its own
+            // columns, none of which the offering matrix has anywhere to put.
+            path: 'stock',
+            loadComponent: () => import('./features/catalog/stock-page').then((m) => m.StockPage),
           },
           // Row 4.4a — the named Menu entity: a copyable, bindable assortment,
           // distinct from the per-location offering matrix at 'menus' above
@@ -996,6 +1011,23 @@ export const routes: Routes = [
   {
     path: 'wallboard',
     loadComponent: () => import('./wallboard-shell/wallboard-shell').then((m) => m.WallboardShell),
+    canActivate: [authGuard],
+  },
+  // Rows 2.1/2.4 (ADR 0045, ADR 0041 rollout step 4): the KDS touch shell and
+  // the VDU wall, hosted like the wallboard above — same reasoning, same
+  // guard, no rail. Siblings of `wallboard` rather than its children: each is
+  // its own fullscreen surface with its own realtime subscription, not a tab
+  // within one shell.
+  {
+    path: 'wallboard/kitchen',
+    loadComponent: () =>
+      import('./wallboard-shell/wallboard-kitchen-page').then((m) => m.WallboardKitchenPage),
+    canActivate: [authGuard],
+  },
+  {
+    path: 'wallboard/vdu',
+    loadComponent: () =>
+      import('./wallboard-shell/wallboard-vdu-page').then((m) => m.WallboardVduPage),
     canActivate: [authGuard],
   },
 ];

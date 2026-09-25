@@ -1659,6 +1659,17 @@
         },
         "type" : "object"
       },
+      "StorefrontAvailabilityResponse" : {
+        "properties" : {
+          "available" : {
+            "type" : "boolean"
+          },
+          "remainingQuantity" : {
+            "type" : "number"
+          }
+        },
+        "type" : "object"
+      },
       "StorefrontChannelSetupControllerPresentationView" : {
         "properties" : {
           "ogImageAssetId" : {
@@ -4903,6 +4914,58 @@
         "tags" : [ "Storefront channel presentation" ]
       }
     },
+    "/api/v1/storefront/tenants/{tenantId}/locations/{locationId}/variants/{variantId}/availability" : {
+      "get" : {
+        "description" : "The same channel-aware check the operations console uses (GET .../availability?channel=...), scoped to one variant. The channel is required (tenant.sales_channels.system_type, e.g. WEB) so a per-channel-type stop threshold (gap map row 4.4c) applies to the channel actually asking.",
+        "operationId" : "availability",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "variantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "channel",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/StorefrontAvailabilityResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Whether a variant is orderable here, and its remaining quantity if tracked",
+        "tags" : [ "Storefront inventory" ]
+      }
+    },
     "/api/v1/storefront/tenants/{tenantId}/media/{assetId}" : {
       "get" : {
         "description" : "302 to a short-lived signed URL. Only a PUBLIC, displayable asset resolves; anything else is not found, and private, missing and unverified are one answer so an id cannot be probed.",
@@ -4983,6 +5046,9 @@
   }, {
     "description" : "The tenant's own document, or the platform default (ADR 0068)",
     "name" : "Storefront terms of service"
+  }, {
+    "description" : "Availability and remaining quantity a customer can see",
+    "name" : "Storefront inventory"
   }, {
     "description" : "A customer's own rating of their own completed order",
     "name" : "Reviews"

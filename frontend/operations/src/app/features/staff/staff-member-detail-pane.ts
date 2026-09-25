@@ -20,6 +20,7 @@ import { StaffAccessDialog } from './staff-access-dialog';
 import {
   GrantRequest,
   GrantView,
+  OperatorTodayCounts,
   RoleDescriptor,
   ScopeDirectory,
   StaffApi,
@@ -76,6 +77,10 @@ export class StaffMemberDetailPane {
   protected readonly directory = signal<ScopeDirectory>({ brands: [], locations: [] });
   protected readonly telegramLinks = signal<readonly TelegramStaffLinkView[]>([]);
   protected readonly expandedGrantId = signal<string | null>(null);
+
+  /** Staff 9.2d — null while loading or on a fetch failure, which the card renders as simply absent. */
+  protected readonly todayCounts = signal<OperatorTodayCounts | null>(null);
+  protected readonly todayCountsLoading = signal(true);
 
   protected readonly jobDialogOpen = signal(false);
   protected readonly jobDialogBusy = signal(false);
@@ -314,6 +319,17 @@ export class StaffMemberDetailPane {
     void this.router.navigate(['..'], { relativeTo: this.route });
   }
 
+  /**
+   * Staff 9.3's deep link the other way: from this person's own card into
+   * the activity log, pre-filtered to them. `activity-log-page.ts`'s own doc
+   * names exactly this — "a deep link from a person's own card would seed
+   * [the actor filter] without a fetch this screen does not otherwise need"
+   * — via the `actor` query param `withComponentInputBinding()` binds there.
+   */
+  protected viewActivity(): void {
+    void this.router.navigate(['/staff/activity'], { queryParams: { actor: this.subjectId() } });
+  }
+
   private async reload(tenantId: string): Promise<void> {
     this.allGrants.set(await this.api.listGrants(tenantId, true));
   }
@@ -322,6 +338,8 @@ export class StaffMemberDetailPane {
     this.loading.set(true);
     this.loadError.set(null);
     this.notFound.set(false);
+    this.todayCounts.set(null);
+    this.todayCountsLoading.set(true);
     await this.tenant.ensureLoaded();
     const tenantId = this.tenant.tenantId();
     if (!tenantId) {
@@ -342,6 +360,8 @@ export class StaffMemberDetailPane {
       this.telegramLinks.set(telegramLinks);
       if (!grants.some((g) => g.principalSubject === subjectId)) {
         this.notFound.set(true);
+      } else {
+        void this.loadTodayCounts(tenantId, subjectId);
       }
     } catch (error) {
       if (error instanceof ApiError && error.status === 403) {
@@ -351,6 +371,23 @@ export class StaffMemberDetailPane {
       }
     } finally {
       this.loading.set(false);
+    }
+  }
+
+  /**
+   * Staff 9.2d — fetched separately from {@link load}'s own `Promise.all`
+   * rather than joined into it: this read can fail on its own (a manager
+   * with `ORDER_READ` but no order data yet is not an error worth blanking
+   * the whole card for) without the access/security tabs going down with it.
+   */
+  private async loadTodayCounts(tenantId: string, subjectId: string): Promise<void> {
+    this.todayCountsLoading.set(true);
+    try {
+      this.todayCounts.set(await this.api.operatorTodayOrderCounts(tenantId, subjectId));
+    } catch {
+      this.todayCounts.set(null);
+    } finally {
+      this.todayCountsLoading.set(false);
     }
   }
 

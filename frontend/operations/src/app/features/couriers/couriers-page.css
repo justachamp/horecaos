@@ -71,6 +71,11 @@
   color: var(--q-warning-text);
 }
 
+.status-badge--online {
+  background: var(--q-success-tint, var(--q-surface-1));
+  color: var(--q-success-text, var(--q-ink));
+}
+
 .couriers__pane {
   margin-top: 16px;
   padding: 16px;

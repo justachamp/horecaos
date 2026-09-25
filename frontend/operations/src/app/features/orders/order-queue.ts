@@ -33,6 +33,7 @@ import { StaleIndicator } from '../../shared/ui/stale-indicator';
 import { StatusPill } from '../../shared/ui/status-pill';
 import { Toasts } from '../../shared/ui/toast';
 import { CouriersApi, RosterEntryResponse } from '../couriers/couriers-api';
+import { CustomerLabelResponse, OrderCrmLogApi } from '../reports/order-crm-log-api';
 import { ReasonResponse, ReferenceDataApi } from '../settings/reference-data/reference-data-api';
 import {
   DecisionIdRegistry,
@@ -243,6 +244,7 @@ export class OrderQueue implements OnInit {
   private readonly rejectReasonsApi = inject(RejectReasonsApi);
   private readonly referenceDataApi = inject(ReferenceDataApi);
   private readonly couriersApi = inject(CouriersApi);
+  private readonly crmLogApi = inject(OrderCrmLogApi);
   private readonly serviceStatus = inject(ServiceStatus);
   protected readonly realtime = inject(RealtimeClient);
   private readonly toasts = inject(Toasts);
@@ -315,6 +317,23 @@ export class OrderQueue implements OnInit {
    */
   protected readonly courierRoster = signal<readonly RosterEntryResponse[]>([]);
   private courierRosterRequested = false;
+
+  /**
+   * Gap map row 1.1's Клиент column: name in full and masked phone for the
+   * orders currently loaded, keyed by `orderId` — `POST
+   * .../orders/crm-log/labels` (7.2a's own capability, `ORDER_READ`),
+   * batched per page after {@link refresh}/{@link loadMore} rather than
+   * baked into `OrderSummaryResponse` the way the Курьер column is: unlike
+   * `courierId` (an opaque, non-PII id `fulfillment` already hands back),
+   * this is a second, PII-carrying read, kept out of the board query itself
+   * the same way the reports page's own CRM log join stays a second request
+   * (`order-crm-log-api.ts`'s own doc). A staff subject who can see the
+   * board but holds only LOCATION-scope ORDER_READ (this endpoint is
+   * TENANT-scoped, matching GET .../orders/crm-log) simply sees every row's
+   * Клиент cell render `—` rather than a broken board — the same
+   * graceful-degrade `ensureCourierRosterLoaded` already takes.
+   */
+  protected readonly customerLabels = signal<ReadonlyMap<string, CustomerLabelResponse>>(new Map());
 
   /** §2.10: the checkbox column's own selection, independent of the fetched rows' identity — survives a page boundary. */
   protected readonly selectedIds = signal<ReadonlySet<string>>(new Set());
@@ -526,6 +545,13 @@ export class OrderQueue implements OnInit {
       if (orders.some((candidate) => candidate.courierId)) {
         this.ensureCourierRosterLoaded();
       }
+      // Merged, never reset: a repeat 10s poll's own first page overlaps the
+      // previous one far more often than not, and re-decrypting a name
+      // already in hand on every tick would be pure waste. An entry for an
+      // orderId that has since scrolled off the board lingers harmlessly —
+      // nothing ever reads it back out except by that same orderId, the same
+      // "only ever grows" trade-off `observedChannelCodes` already makes.
+      void this.loadCustomerLabels(scope.tenantId, orders);
       this.selectedIds.update((current) =>
         pruneSelection(current, new Set(orders.map((order) => order.orderId))),
       );
@@ -597,6 +623,10 @@ export class OrderQueue implements OnInit {
       this.pageState.set(nextPage(state, page) ?? state);
       this.hasMore.set(page.nextCursor !== null);
       this.observeChannelCodes(page.items);
+      // Appended, never reset -- unlike refresh()'s own fresh first page,
+      // loadMore extends what is already on screen, so the labels already
+      // resolved for it must survive.
+      void this.loadCustomerLabels(scope.tenantId, page.items);
     } catch (error) {
       if (error instanceof ApiError) {
         this.actionNotice.set(describeApiError(error, (key, values) => this.i18n.t(key, values)));
@@ -721,9 +751,30 @@ export class OrderQueue implements OnInit {
       return '—';
     }
     return (
-      this.courierRoster().find((courier) => courier.courierId === order.courierId)?.displayReference ??
-      order.courierId
+      this.courierRoster().find((courier) => courier.courierId === order.courierId)
+        ?.displayReference ?? order.courierId
     );
+  }
+
+  /**
+   * Gap map row 1.1's own Клиент column: the account's or guest's name in
+   * full, never masked (orders.md §1.5, §3.7) — the identical rule
+   * `order-rows-table.ts`'s own `customerLabel` states for the reports
+   * page's CRM column, mirrored here rather than shared, since that one
+   * reads a `Map` built from a date-range fetch and this one from a
+   * per-page batch. A row whose label has not resolved yet (still in
+   * flight, or the caller lacks the capability) renders `—`, matching
+   * {@link courierLabel}'s own "no value" dash.
+   */
+  protected customerLabel(order: OrderSummaryResponse): string {
+    const label = this.customerLabels().get(order.orderId);
+    if (!label) {
+      return '—';
+    }
+    if (label.customerType === 'GUEST') {
+      return this.i18n.t('reports.orders.column.customer.guest');
+    }
+    return label.customerName ?? this.i18n.t('reports.orders.column.customer.account');
   }
 
   protected formatUpdatedAt(): string | null {
@@ -991,6 +1042,45 @@ export class OrderQueue implements OnInit {
         // picker rather than a broken toolbar — the same graceful-degrade
         // stance `CurrentLocation.load` and `LatenessPolicyApi` already take.
       });
+  }
+
+  /**
+   * Gap map row 1.1's Клиент column: fetches the label for every order in
+   * `orders` not already resolved and merges it into {@link customerLabels}.
+   * Gated client-side on `ORDER_READ` — the same capability {@code
+   * OrderCrmLogController.labels} itself requires — purely to skip a call a
+   * denied caller would only get refused; the server re-checks it
+   * regardless (ADR 0025). A refusal (a staff subject with only
+   * LOCATION-scope `ORDER_READ`, this endpoint being TENANT-scoped) is
+   * swallowed exactly like {@link ensureCourierRosterLoaded}'s own catch —
+   * every Клиент cell simply renders `—` rather than breaking the board.
+   */
+  private async loadCustomerLabels(
+    tenantId: string,
+    orders: readonly OrderSummaryResponse[],
+  ): Promise<void> {
+    if (!this.capabilities.has('ORDER_READ')) {
+      return;
+    }
+    const known = this.customerLabels();
+    const orderIds = [...new Set(orders.map((order) => order.orderId))].filter(
+      (id) => !known.has(id),
+    );
+    if (orderIds.length === 0) {
+      return;
+    }
+    try {
+      const labels = await this.crmLogApi.customerLabels(tenantId, orderIds);
+      this.customerLabels.update((current) => {
+        const next = new Map(current);
+        for (const label of labels) {
+          next.set(label.orderId, label);
+        }
+        return next;
+      });
+    } catch {
+      // Graceful degrade — see this method's own doc.
+    }
   }
 
   // ------------------------------------------------------------ §2.10 selection
@@ -1606,7 +1696,13 @@ export class OrderQueue implements OnInit {
 
     void this.submitStateMutation(
       state.orderId,
-      this.actionsApi.override(scope, state.orderId, state.targetStatus, state.version, submission.reasonId),
+      this.actionsApi.override(
+        scope,
+        state.orderId,
+        state.targetStatus,
+        state.version,
+        submission.reasonId,
+      ),
     ).finally(() => this.dialog.set(null));
   }
 

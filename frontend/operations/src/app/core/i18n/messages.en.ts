@@ -93,9 +93,11 @@ export const messagesEn = {
   'orders.drafts.column.channel': 'Channel',
   'orders.drafts.column.location': 'Location',
   'orders.drafts.column.owner': 'Owner',
+  'orders.drafts.column.firstLine': 'First item',
   'orders.drafts.column.lines': 'Lines',
   'orders.drafts.column.expiresAt': 'Expires',
   'orders.drafts.column.status': 'Status',
+  'orders.drafts.firstLineUnknown': '—',
   'orders.drafts.openCustomer': 'Open customer',
   'orders.drafts.owner.account': 'Account',
   'orders.drafts.owner.guest': 'Guest',
@@ -202,6 +204,7 @@ export const messagesEn = {
   'orders.column.total': 'Total',
   'orders.column.fee': 'Delivery fee',
   'orders.column.payment': 'Payment',
+  'orders.column.customer': 'Customer',
   'orders.column.courier': 'Courier',
   'orders.column.status': 'Status',
   'orders.column.actions': 'Actions',
@@ -846,7 +849,8 @@ export const messagesEn = {
     'A referenced photo or media file is not yet available.',
   'settings.home.readiness.code.TEMPLATE_AWAITING_PROVIDER_REVIEW':
     'An SMS template is awaiting the gateway’s approval.',
-  'settings.home.readiness.code.TEMPLATE_REJECTED_BY_PROVIDER': 'An SMS template was rejected by the gateway.',
+  'settings.home.readiness.code.TEMPLATE_REJECTED_BY_PROVIDER':
+    'An SMS template was rejected by the gateway.',
   'settings.home.search.label': 'Find a setting',
   'settings.home.search.placeholder': 'Find a setting (press /)',
   'settings.home.search.empty': 'No setting matches "{query}".',
@@ -902,9 +906,11 @@ export const messagesEn = {
   'settings.integrations.branches.bindDialog.lead':
     'A branch binding overrides the brand default for that branch alone.',
   'settings.integrations.branches.bindDialog.installation': 'Installation',
-  'settings.integrations.branches.bindDialog.noneEligible': 'Connect an installation first — none exist yet to bind.',
+  'settings.integrations.branches.bindDialog.noneEligible':
+    'Connect an installation first — none exist yet to bind.',
   'settings.integrations.branches.bindDialog.capabilities': 'Capabilities to bind',
-  'settings.integrations.branches.bindDialog.capabilitiesLoading': 'Loading this provider’s capabilities…',
+  'settings.integrations.branches.bindDialog.capabilitiesLoading':
+    'Loading this provider’s capabilities…',
   'settings.integrations.branches.bindDialog.capabilitiesNone':
     'This provider declares no capabilities in this build, so it cannot be bound from this dialog.',
   'settings.integrations.branches.bindDialog.branch': 'Branch',
@@ -1233,8 +1239,8 @@ export const messagesEn = {
   'settings.catalog.useStockLogic.body':
     'Turns counted-stock tracking on for the whole company instead of the binary available/sold-out state.',
   'settings.catalog.useStockLogic.field': 'Use stock logic',
-  'settings.catalog.useStockLogic.notYetEnforced':
-    'Not yet enforced: quantity tracking is refused for every item regardless of this switch.',
+  'settings.catalog.useStockLogic.hint':
+    'On: QUANTITY-tracked items are enforced for real. Off: those items behave like UNTRACKED — quantities are ignored.',
   'settings.catalog.qrKioskPricePlane.title': 'QR and kiosk take hall prices',
   'settings.catalog.qrKioskPricePlane.body':
     'Points the QR and kiosk channels at the hall price plane automatically instead of requiring one authored by hand.',
@@ -1987,6 +1993,7 @@ export const messagesEn = {
   'catalog.nav.categories': 'Categories',
   'catalog.nav.menus': 'Menus',
   'catalog.nav.menuSets': 'Menu sets',
+  'catalog.nav.stock': 'Stock',
   'catalog.nav.import': 'Import',
   'catalog.nav.publication': 'Publication',
   'catalog.nav.prices': 'Prices',
@@ -2069,9 +2076,10 @@ export const messagesEn = {
   'catalog.import.detail.applyItems.column.action': 'Action',
   'catalog.import.detail.applyItems.column.status': 'Status',
   'catalog.import.detail.applyItems.column.reason': 'Reason',
-  'catalog.import.tab.file': 'CSV import',
-  'catalog.import.file.title': 'Import products from a CSV file',
-  'catalog.import.file.downloadTemplate': 'Download template',
+  'catalog.import.tab.file': 'CSV / Excel import',
+  'catalog.import.file.title': 'Import products from a CSV or Excel file',
+  'catalog.import.file.downloadTemplate': 'Download template (.csv)',
+  'catalog.import.file.downloadTemplateWorkbook': 'Download template (.xlsx)',
   'catalog.import.file.downloadExport': 'Export current catalog',
   'catalog.import.file.catalog': 'Catalog',
   'catalog.import.file.noCatalog.title': 'No catalog yet',
@@ -2268,6 +2276,9 @@ export const messagesEn = {
   'catalog.editor.availability.empty': 'This product is not offered at any location yet',
   'catalog.editor.availability.stop': 'Stop',
   'catalog.editor.availability.resume': 'Resume',
+  'catalog.editor.availability.quantityHint':
+    'On-hand count, the daily default, and channel stop thresholds for a QUANTITY-tracked variant live on the Stock page.',
+  'catalog.editor.availability.quantityHintLink': 'Open Stock',
   'catalog.editor.schedule.hint':
     'Empty means always on sale. Windows below limit when this item can be sold, resolved in this branch’s own local time.',
   'catalog.editor.schedule.loading': 'Loading schedule…',
@@ -2365,6 +2376,35 @@ export const messagesEn = {
   'catalog.categories.archiveConfirm.title': 'Archive this category?',
   'catalog.categories.archiveConfirm.body':
     '“{name}” will no longer show in the category tree. Products already placed in it stay exactly where they are.',
+
+  // Gap map row 4.4c: per-location QUANTITY stock page (batch 11)
+  'catalog.stock.title': 'Stock',
+  'catalog.stock.resetNote':
+    'A daily default resets at your business day boundary — set in Settings → Reference data.',
+  'catalog.stock.loading': 'Loading stock',
+  'catalog.stock.noLocation': 'No location resolved for this account yet',
+  'catalog.stock.denied': 'No access to this location’s stock',
+  'catalog.stock.empty': 'No QUANTITY-tracked items at this location yet',
+  'catalog.stock.column.variant': 'Variant',
+  'catalog.stock.column.onHand': 'On hand',
+  'catalog.stock.column.reserved': 'Reserved',
+  'catalog.stock.column.remaining': 'Remaining',
+  'catalog.stock.column.default': 'Daily default',
+  'catalog.stock.column.lastReset': 'Last reset',
+  'catalog.stock.column.thresholds': 'Channel stop thresholds',
+  'catalog.stock.noDefault': 'None',
+  'catalog.stock.noThresholds': 'None',
+  'catalog.stock.edit': 'Edit',
+  'catalog.stock.close': 'Close',
+  'catalog.stock.setOnHand.title': 'Set on-hand',
+  'catalog.stock.setDefault.title': 'Daily default',
+  'catalog.stock.setDefault.body':
+    'Resets on-hand to this value at the next business day boundary. Leave blank to turn the reset off.',
+  'catalog.stock.thresholds.title': 'Channel stop thresholds',
+  'catalog.stock.thresholds.body':
+    'Stops one channel type selling early once remaining stock falls to this level or below — the storefront keeps selling to zero unless it has its own threshold.',
+  'catalog.stock.thresholds.add': 'Add',
+  'catalog.stock.thresholds.remove': 'Remove',
 
   'catalog.menus.title': 'Menus',
   'catalog.menus.location.label': 'Location',
@@ -2756,6 +2796,23 @@ export const messagesEn = {
   'kitchen.devices.revoke.submitting': 'Revoking…',
   'kitchen.devices.revoke.cancel': 'Cancel',
 
+  // Kitchen wallboard shell (2.1/2.4, ADR 0045/0041 rollout step 4) — touch
+  // KDS and VDU, hosted like the wallboard (0.1e) rather than the operator
+  // console.
+  'wallboardKitchen.title': 'Kitchen',
+  'wallboardKitchen.denied': 'No access to this location’s kitchen board',
+  'wallboardKitchen.loading': 'Loading the kitchen board',
+  'wallboardKitchen.empty': 'Nothing in production right now',
+  'wallboardKitchen.offline': 'Disconnected — showing the last board this screen saw',
+  'wallboardKitchen.actionError': 'That did not go through. Try again.',
+  'wallboardVdu.title': 'Display board',
+  'wallboardVdu.denied': 'No access to this location’s kitchen board',
+  'wallboardVdu.loading': 'Loading the display board',
+  'wallboardVdu.empty': 'Nothing in production right now',
+  'wallboardVdu.offline': 'Disconnected — showing the last board this screen saw',
+  'wallboardVdu.stationFilter.label': 'Station',
+  'wallboardVdu.stationFilter.all': 'All stations',
+
   // Couriers (3.3) — wave 30
   'couriers.title': 'Couriers',
   'couriers.loading': 'Loading the roster',
@@ -2764,6 +2821,11 @@ export const messagesEn = {
   'couriers.column.reference': 'Courier',
   'couriers.column.type': 'Type',
   'couriers.column.load': 'Load',
+  'couriers.column.online': 'Online',
+  'couriers.online.yes': 'Online',
+  'couriers.online.no': 'Offline',
+  'couriers.online.neverSeen': 'No position ever received for this courier',
+  'couriers.online.lastSeenAt': 'Last position: {when}',
   'couriers.column.engagement': 'Engagement',
   'couriers.action.verify': 'Verify',
   'couriers.action.suspend': 'Suspend',
@@ -2771,9 +2833,14 @@ export const messagesEn = {
   'couriers.register.action': 'Register courier',
   'couriers.register.title': 'Register a courier',
   'couriers.register.type': 'Courier type',
-  'couriers.register.principalSubject': 'Courier-app account (Keycloak subject)',
+  'couriers.register.firstName': 'First name',
+  'couriers.register.lastName': 'Last name',
+  'couriers.register.phone': 'Phone',
+  'couriers.register.phone.placeholder': '+998 90 123 45 67',
+  'couriers.register.email': 'Email (optional)',
+  'couriers.register.accountNote':
+    'The courier-app account is created automatically from this name and phone.',
   'couriers.register.displayReference': 'Display reference (e.g. K-014)',
-  'couriers.register.fullName': 'Full name',
   'couriers.register.engagedFrom': 'Engaged from',
   'couriers.register.reason': 'Reason',
   'couriers.register.submit': 'Register',
@@ -3372,6 +3439,9 @@ export const messagesEn = {
   'delivery.policy.graceSeconds': 'Grace period (seconds)',
   'delivery.policy.consequence.graceSeconds':
     'A courier may run this many seconds past a scheduled check-in before it counts as missed.',
+  'delivery.policy.onlineWithinMinutes': 'Online threshold (minutes)',
+  'delivery.policy.consequence.onlineWithinMinutes':
+    'A courier whose most recent position is within this many minutes shows as online on the roster.',
   'delivery.policy.confirmationPointRetentionDays': 'Confirmation-point retention (days)',
   'delivery.policy.consequence.confirmationPointRetentionDays':
     'Delivery confirmation photos and signatures are kept for this many days, then purged.',
@@ -3393,6 +3463,7 @@ export const messagesEn = {
   'delivery.policy.gpsAcceptRadiusKm': 'Accept radius (km, from the pickup point)',
   'delivery.policy.gpsStatusChangeRadiusMeters':
     'Status-change radius (m, from the customer point)',
+  'delivery.policy.gpsSummary': 'On — accept within {acceptKm} km, status change within {statusChangeM} m',
   'delivery.policy.billingMode': 'Courier billing (personal balance)',
   'delivery.policy.billingMode.refused': 'Refused by ADR 0042',
   'delivery.policy.billingMode.reason':
@@ -3401,6 +3472,15 @@ export const messagesEn = {
   'delivery.policy.telemetryGate.platformOnly': 'Platform-only',
   'delivery.policy.telemetryGate.reason':
     'Registered (ADR 0045) but writable only from the platform administration surface — a tenant cannot set this here.',
+  'delivery.policy.notEnforced': 'Not yet enforced',
+  'delivery.policy.notEnforced.gps.reason':
+    'Stored, but nothing checks it yet: no courier-app endpoint exists that accepts an offer or advances a delivery’s status carrying the courier’s own position. Wiring this switch means shipping that endpoint first, which is beyond this document.',
+  'delivery.policy.notEnforced.kitchenReadyOnly.reason':
+    'Stored, but nothing checks it yet: the console has no courier-facing assignment feed for this switch to filter — couriers see offers only through dispatch, staff-driven, not a self-service list of their own.',
+  'delivery.policy.notEnforced.revealCustomerLocationTiming.reason':
+    'Stored, but nothing checks it yet: no endpoint exists that shows a courier the customer’s exact address at all, so there is nothing for a timing switch to gate.',
+  'delivery.policy.notEnforced.postDeliveryPaymentCheckRequired.reason':
+    'Stored, but nothing checks it yet: an order’s completion is deliberately decided independently of courier bookkeeping (ADR 0125) — making it conditional on this switch is a design decision this screen cannot make on its own.',
   'delivery.policy.edit': 'Edit',
   'delivery.policy.cancel': 'Cancel',
   'delivery.policy.publish': 'Publish',
@@ -3460,6 +3540,10 @@ export const messagesEn = {
   'customers.export.done': 'Exported {count} customer(s).',
   'customers.export.doneTruncated':
     'Exported the first {count} customer(s) — the filter matched more than that and was cut.',
+  'customers.export.approvalPending':
+    'This export is above the row threshold and is waiting on a second signature. Ask a manager to approve it in Approvals.',
+  'customers.export.approvalDeclined':
+    'This export was declined. Nothing was revealed. Ask the approver why, or resubmit with a narrower filter.',
   'customers.import.action': 'Import',
   'customers.import.pageTitle': 'Import customers from a CSV file',
   'customers.import.close': 'Back to customers',
@@ -3801,6 +3885,10 @@ export const messagesEn = {
   'staff.detail.field.telegram': 'Telegram',
   'staff.detail.security.notBuilt':
     'Sign-in method, last sign-in and terminal PIN are not tracked yet',
+  'staff.detail.today.created': 'Created today: {count}',
+  'staff.detail.today.accepted': 'Accepted today: {count}',
+  'staff.detail.today.loading': 'Loading today’s orders…',
+  'staff.detail.viewActivity': 'View activity log',
 
   'staff.myProfile.title': 'My profile',
   'staff.myProfile.personalData.title': 'Personal details',
@@ -3870,6 +3958,9 @@ export const messagesEn = {
   'reports.exportCentre.newTitle': 'New export',
   'reports.exportCentre.reportLabel': 'Report',
   'reports.exportCentre.reportOption.customerDirectory': 'Customer directory',
+  'reports.exportCentre.reportOption.orderCrmLog': 'Order CRM log',
+  'reports.exportCentre.reportOption.orderReportLog': 'Orders',
+  'reports.exportCentre.reportOption.orderReportSummary': 'Summary',
   'reports.exportCentre.columnsLabel': 'Columns',
   'reports.exportCentre.piiGroupLabel': 'Personal data (needs customer.pii.export)',
   'reports.exportCentre.piiGroupHidden':
@@ -3882,12 +3973,15 @@ export const messagesEn = {
   'reports.exportCentre.statusFilter.closed': 'Closed',
   'reports.exportCentre.queryLabel': 'Search (name or phone)',
   'reports.exportCentre.queryPlaceholder': 'Leave blank to export everyone',
+  'reports.exportCentre.fromLabel': 'From',
+  'reports.exportCentre.toLabel': 'To',
   'reports.exportCentre.purposeLabel': 'Purpose',
   'reports.exportCentre.purposePlaceholder': 'Why is this export needed?',
   'reports.exportCentre.submit': 'Queue export',
   'reports.exportCentre.submitting': 'Queuing…',
   'reports.exportCentre.error.noSelection': 'Choose at least one column',
   'reports.exportCentre.error.purposeRequired': 'A purpose is required',
+  'reports.exportCentre.error.rangeRequired': 'Choose both a start and an end date',
   'reports.exportCentre.error.generic': 'Could not queue this export',
   'reports.exportCentre.historyTitle': 'Recent exports',
   'reports.exportCentre.historyEmpty': 'No exports yet',
@@ -3903,6 +3997,25 @@ export const messagesEn = {
   'reports.exportCentre.column.status': 'Status',
   'reports.exportCentre.column.displayName': 'Name',
   'reports.exportCentre.column.phone': 'Phone',
+  'reports.exportCentre.column.orderId': 'Order ID',
+  'reports.exportCentre.column.occurredAt': 'Occurred at',
+  'reports.exportCentre.column.locationId': 'Branch',
+  'reports.exportCentre.column.customerType': 'Customer type',
+  'reports.exportCentre.column.customerName': 'Customer name',
+  'reports.exportCentre.column.customerPhone': 'Customer phone',
+  'reports.exportCentre.column.operatorPrincipalId': 'Operator',
+  'reports.exportCentre.column.courierDisplayReference': 'Courier',
+  'reports.exportCentre.column.businessDate': 'Business date',
+  'reports.exportCentre.column.channelCode': 'Channel',
+  'reports.exportCentre.column.fulfilmentType': 'Fulfilment type',
+  'reports.exportCentre.column.terminalStatus': 'Order status',
+  'reports.exportCentre.column.isPreorder': 'Pre-order',
+  'reports.exportCentre.column.grossSom': 'Gross revenue',
+  'reports.exportCentre.column.discountSom': 'Discount',
+  'reports.exportCentre.column.deliveryFeeSom': 'Delivery fee',
+  'reports.exportCentre.column.netSom': 'Net revenue',
+  'reports.exportCentre.column.itemCount': 'Items',
+  'reports.exportCentre.column.orderCount': 'Order count',
 
   'reports.filter.period.label': 'Period',
   'reports.filter.period.today': 'Today',
@@ -4205,6 +4318,8 @@ export const messagesEn = {
   'marketing.campaign.stats.refusedByReason.title': 'Refused, by reason',
   'marketing.campaign.stats.deliveryUnavailableHint':
     'Delivered vs. failed is not tracked yet — no read receipt reaches this campaign.',
+  'marketing.campaign.stats.export': 'Export recipients as CSV',
+  'marketing.campaign.stats.exportedCount': 'Exported {count} account id(s)',
 
   'marketing.refusal.ACCOUNT_NOT_ACTIVE': 'Account not active, merged, or anonymised',
   'marketing.refusal.CONSENT_WITHHELD': 'No marketing consent on file',
@@ -4539,6 +4654,42 @@ export const messagesEn = {
   'marketing.referrals.links.body':
     'Not built, and not a gap this screen hides: website "?ref=" links, Telegram "startapp" deep links, and a guided Mini-App/BotFather setup flow belong to ADR 0044’s marketing.attribution_links, which remains on that ADR’s own checklist. A customer can still get a code and a friend can still redeem it from the storefront — nothing here renders a shareable link, because no link table exists yet to render one from.',
 
+  // -------------------------------------------------------- automations (row 6.5, ADR 0044)
+  'marketing.automations.loading': 'Loading automations…',
+  'marketing.automations.denied': 'You do not have access to this brand’s automations.',
+  'marketing.automations.intro':
+    'Unattended triggers. A rule is authored inert and only fires once an operator arms it — nothing sends without a human.',
+  'marketing.automations.create': 'New automation',
+  'marketing.automations.empty': 'No automation rule authored yet.',
+  'marketing.automations.viewRuns': 'Recent firings — {name}',
+  'marketing.automations.rule.description':
+    '{trigger} · {channel} · {configValue} · cooldown {cooldownDays}d',
+  'marketing.automations.trigger.BIRTHDAY': 'Birthday',
+  'marketing.automations.trigger.INACTIVITY': 'Inactivity',
+  'marketing.automations.trigger.CART_ABANDONMENT': 'Cart abandonment',
+  'marketing.automations.configLabel.BIRTHDAY': 'Window, days either side of the birthday',
+  'marketing.automations.configLabel.INACTIVITY': 'Days since last order',
+  'marketing.automations.configLabel.CART_ABANDONMENT': 'Abandonment delay, hours',
+  'marketing.automations.form.title': 'Author an automation rule',
+  'marketing.automations.form.name': 'Name',
+  'marketing.automations.form.trigger': 'Trigger',
+  'marketing.automations.form.channel': 'Channel',
+  'marketing.automations.form.cooldownDays': 'Cooldown, days',
+  'marketing.automations.form.consentPurpose': 'Consent purpose',
+  'marketing.automations.form.templateKey': 'Template key',
+  'marketing.automations.form.submit': 'Save (inactive until armed)',
+  'marketing.automations.dialog.cancel': 'Cancel',
+  'marketing.automations.dialog.close': 'Close',
+  'marketing.automations.runs.title': 'Recent firings — {name}',
+  'marketing.automations.runs.loading': 'Loading…',
+  'marketing.automations.runs.empty': 'No firing recorded yet.',
+  'marketing.automations.runs.column.status': 'Status',
+  'marketing.automations.runs.column.reason': 'Reason',
+  'marketing.automations.runs.column.firedAt': 'When',
+  'marketing.automations.runStatus.FIRED': 'Fired',
+  'marketing.automations.runStatus.REFUSED': 'Refused',
+  'marketing.automations.runStatus.CANCELLED': 'Cancelled (customer converted first)',
+
   // ---------------------------------------------------------------- customers 5.3/5.4 (wave 39)
   'customers.nav.label': 'Customers section',
   'customers.nav.list': 'Customers',
@@ -4638,6 +4789,8 @@ export const messagesEn = {
   'reports.branches.column.averageCheck': 'Average check',
   'reports.branches.column.cancelShare': 'Cancelled, %',
   'reports.branches.column.prepTime': 'Prep. time',
+  // wave 11 w5-fulfillment-destination (7.3): the courier transit-time average.
+  'reports.branches.column.deliveryTime': 'Delivery time',
   // wave T06 (7.3): the leaderboard's three new columns and its secondary sort control.
   'reports.branches.column.fulfilmentSplit': 'Delivery / Pickup / Aggregators',
   'reports.branches.column.fulfilmentSplit.hint':
@@ -4752,6 +4905,13 @@ export const messagesEn = {
   'reports.products.classification.column.mean': 'Mean',
   'reports.products.classification.column.stddev': 'Std. deviation',
   'reports.products.classification.column.cv': 'Coefficient of variation',
+
+  // X.19 (w6-reporting-facts, batch 11): the ABC cumulative-revenue-share curve.
+  'reports.products.abcCurve.title': 'Cumulative revenue share',
+  'reports.products.abcCurve.boundary.ab': 'A/B',
+  'reports.products.abcCurve.boundary.bc': 'B/C',
+  'reports.products.abcCurve.maybeMore':
+    'The curve covers only the first {limit} products by revenue — there may be more.',
 
   // ---------------------------------------------------------------- reports 7.6/7.6a/7.6b customer analytics (T13)
   'reports.customers.title': 'Customer analytics',
@@ -5168,8 +5328,15 @@ export const messagesEn = {
   'finance.subscription.modules.billingUnit.PER_LOCATION': 'Per location',
   'finance.subscription.modules.billingUnit.PER_UNIT': 'Per unit',
   'finance.subscription.modules.billingUnit.ONE_OFF': 'One-off',
+  'finance.subscription.modules.confirm.title': 'Confirm purchase',
+  'finance.subscription.modules.confirm.body':
+    '{name} — {price} ({billingUnit}), billed on your next statement. This switches on: {activates}.',
+  'finance.subscription.modules.confirm.priceWithQuantity': '{price} × {quantity}',
+  'finance.subscription.modules.confirm.activatesFallback': 'its features',
+  'finance.subscription.modules.confirm.confirm': 'Buy',
+  'finance.subscription.modules.confirm.cancel': 'Cancel',
   'finance.subscription.notBuiltNote':
-    'Period close is HorecaOS staff work (a month is closed by issuing its statement, ADR 0088); the prepaid wallet is not built yet (ADR 0095).',
+    'Period close is HorecaOS staff work (a month is closed by issuing its statement, ADR 0088); the prepaid wallet is not built yet (ADR 0095); ending a purchased module is not self-service yet — contact HorecaOS to remove one.',
 
   // ---------------------------------------------------------------- staff 9.3 (wave 39)
   'staff.shell.activity': 'Activity',
@@ -5208,6 +5375,7 @@ export const messagesEn = {
   'staff.activity.action.locationDeleted': 'Location deleted',
   'staff.activity.action.tenantSuspended': 'Company suspended',
   'staff.activity.action.tenantReactivated': 'Company reactivated',
+  'staff.activity.action.tenantActivated': 'Company activated',
   'staff.activity.action.tenantActivate': 'Company activated',
   'staff.activity.action.orderCancel': 'Order cancelled',
   'staff.activity.filter.outcomeAll': 'Any outcome',
@@ -5253,6 +5421,7 @@ export const messagesEn = {
   'staff.approvals.action.tenantActivate': 'Tenant activation',
   'staff.approvals.action.integrationFailureResolve': 'Integration failure resolution',
   'staff.approvals.action.loyaltyBalanceAdjust': 'Loyalty balance adjustment',
+  'staff.approvals.action.customerPiiExport': 'Customer data export',
   'staff.approvals.tab.pending': 'Waiting',
   'staff.approvals.tab.decided': 'Decided',
   'staff.approvals.column.status': 'Outcome',
@@ -5543,6 +5712,11 @@ export const messagesEn = {
   'orders.newOrder.aggregator.total': 'Total the aggregator collected',
   'orders.newOrder.aggregator.hint':
     'Recorded exactly as the aggregator stated it — nothing here is re-priced by HorecaOS',
+  // Row 1.3g (wave 11 w5-fulfillment-destination): DELIVERY reuses the customer pane's own resolved address.
+  'orders.newOrder.aggregator.pickup': 'Pickup — the aggregator’s own courier or the customer collects it',
+  'orders.newOrder.aggregator.deliveryTo': 'Delivers to: {customer}, {address}',
+  'orders.newOrder.aggregator.deliveryMissing':
+    'Uncheck “Aggregator order”, resolve the customer and pick a delivery address, then check it again',
 
   // --- shared/ui (ADR 0101) ----------------------------------------------
   // The only keys in this catalogue owned by a component rather than by a
@@ -5619,7 +5793,8 @@ export const messagesEn = {
   'ui.mediaUploader.browse': 'Choose a file',
   'ui.mediaUploader.tooLarge': 'That file is larger than this upload allows',
   'ui.mediaUploader.unsupportedType': 'That file type is not accepted here',
-  'ui.mediaUploader.videoNotSupported': 'Video is not supported yet — please choose a photo instead',
+  'ui.mediaUploader.videoNotSupported':
+    'Video is not supported yet — please choose a photo instead',
   'ui.mediaUploader.ratio': 'Crop ratio',
   'ui.mediaUploader.zoom': 'Zoom',
   'ui.mediaUploader.confirm': 'Use this crop',

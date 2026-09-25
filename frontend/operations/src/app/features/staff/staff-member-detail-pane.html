@@ -35,6 +35,26 @@
             'staff.detail.since' | t: { date: since.slice(0, 10) }
           }}</span>
         }
+        <div class="identity__today" data-testid="staff-detail-today-counts">
+          @if (todayCountsLoading()) {
+            <span class="q-caption">{{ 'staff.detail.today.loading' | t }}</span>
+          } @else if (todayCounts(); as counts) {
+            <span class="q-caption">{{
+              'staff.detail.today.created' | t: { count: counts.createdCount }
+            }}</span>
+            <span class="q-caption">{{
+              'staff.detail.today.accepted' | t: { count: counts.acceptedCount }
+            }}</span>
+          }
+        </div>
+        <button
+          type="button"
+          class="text-button"
+          (click)="viewActivity()"
+          data-testid="staff-detail-view-activity"
+        >
+          {{ 'staff.detail.viewActivity' | t }}
+        </button>
       </div>
     </div>
 

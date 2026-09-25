@@ -82,6 +82,11 @@ export class CampaignDetailPane implements OnInit {
   protected readonly rescheduleAt = signal('');
   protected readonly rescheduleError = signal<string | null>(null);
 
+  /** Row 6.4: the campaign detail pane's own audience-snapshot CSV export. */
+  protected readonly exportBusy = signal(false);
+  protected readonly exportError = signal<string | null>(null);
+  protected readonly exportedCount = signal<number | null>(null);
+
   /**
    * Row 6.4: exactly the shape `POST .../reschedules` re-arms — a campaign
    * `CampaignScheduledSendScheduler` disarmed at its due moment (the channel
@@ -308,5 +313,67 @@ export class CampaignDetailPane implements OnInit {
     return error instanceof ApiError
       ? describeApiError(error, (key, values) => this.i18n.t(key, values))
       : this.i18n.t('error.unknown.noReference');
+  }
+
+  // -------------------------------------------------------------------- export
+
+  /**
+   * Fixed, English, machine-facing purpose — not translated, the same
+   * reason `SegmentsPage.EXPORT_PURPOSE` is not: this is read by whoever
+   * reviews the audit log, not the operator.
+   */
+  private static readonly EXPORT_PURPOSE =
+    'Operations console: campaign detail snapshot export (row 6.4)';
+
+  /**
+   * Row 6.4: downloads exactly who this campaign's own snapshot targeted, as
+   * pseudonymous account ids — the gap `CampaignDetailPane`'s own history
+   * left: a marketer reviewing a sent campaign previously had to find the
+   * matching snapshot on the Segments screen (`SegmentsPage.exportCurrentSnapshot`)
+   * rather than exporting from the campaign that actually sent to it.
+   */
+  protected async exportSnapshot(): Promise<void> {
+    const scope = this.brand.scope();
+    const c = this.campaign();
+    if (!scope || !c || c.snapshotId === null || this.exportBusy()) {
+      return;
+    }
+    this.exportBusy.set(true);
+    this.exportError.set(null);
+    try {
+      const accountIds = await this.api.exportSnapshot(
+        scope,
+        c.snapshotId,
+        CampaignDetailPane.EXPORT_PURPOSE,
+      );
+      this.exportedCount.set(accountIds.length);
+      downloadAccountIdCsv(accountIds, `campaign-${c.campaignId}-snapshot.csv`);
+    } catch (error) {
+      this.exportError.set(this.describe(error));
+    } finally {
+      this.exportBusy.set(false);
+    }
+  }
+}
+
+/**
+ * Builds the snapshot export as a browser-local CSV download — the same
+ * "no server-side file" reasoning `SegmentsPage`'s own identically-named
+ * helper carries: the export endpoint already returns the account ids as
+ * JSON in one audited call, so there is nothing a second round trip would
+ * add. Pseudonymous account ids only, never a name, phone or email — the
+ * export endpoint carries none of those and cannot.
+ */
+function downloadAccountIdCsv(accountIds: readonly string[], filename: string): void {
+  const lines = ['customerAccountId', ...accountIds];
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  try {
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = filename;
+    anchor.click();
+  } finally {
+    URL.revokeObjectURL(url);
   }
 }

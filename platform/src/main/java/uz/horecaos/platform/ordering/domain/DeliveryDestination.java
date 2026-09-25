@@ -1,7 +1,9 @@
 package uz.horecaos.platform.ordering.domain;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Where a delivery order is going (ADR 0019, ADR 0015, ADR 0029).
@@ -92,6 +94,66 @@ public record DeliveryDestination(
         if (value != null && !value.isBlank()) {
             parts.add(value.trim());
         }
+    }
+
+    /**
+     * A non-PII label safe for the dispatch board's 10-second poll (row 3.1,
+     * ADR 0014, ADR 0029): district/zone and street, never a house number, a
+     * flat, an entrance, a floor, or a phone.
+     *
+     * <p>Mirrors {@code PhoneMasking}'s own precedent — a best-effort, safely
+     * biased reduction rather than a parser that claims certainty it cannot
+     * have. {@code line1} in this market is free text that usually ends in a
+     * house number ("Amir Temur ko'chasi 15"), never a field of its own (see
+     * this class's own field list), so there is no structured "house number"
+     * to omit. This masks by dropping {@code line1}'s trailing whitespace-
+     * separated token when, and only when, that last token itself starts
+     * with a digit — the house number is always the final token, never the
+     * first. Truncating at the string's first digit instead (an earlier
+     * version of this method did) blanks the entire street for this
+     * market's common numbered/date street names, which lead with a digit
+     * ("9 Yanvar ko'chasi", "1 May ko'chasi", "40 Yil Chilonzor ko'chasi") —
+     * exactly the address text row 3.1 exists to show. {@code entrance},
+     * {@code floor}, {@code apartment} and {@code landmark} are never read
+     * here at all — omission, not truncation, is how a flat number and a
+     * doorway landmark are kept off a screen forty couriers can see.
+     *
+     * @return null when there is neither a zone nor a street left to show —
+     *         the caller renders that as "no destination" rather than an
+     *         empty label indistinguishable from a data-entry error
+     */
+    public @Nullable String maskedLabel() {
+        String zone = district != null && !district.isBlank() ? district : city;
+        String street = maskedStreet(line1);
+        boolean hasZone = zone != null && !zone.isBlank();
+        boolean hasStreet = street != null && !street.isBlank();
+        if (!hasZone && !hasStreet) {
+            return null;
+        }
+        if (!hasZone) {
+            return street;
+        }
+        if (!hasStreet) {
+            return zone.trim();
+        }
+        return zone.trim() + ", " + street;
+    }
+
+    private static @Nullable String maskedStreet(String line1) {
+        if (line1 == null || line1.isBlank()) {
+            return null;
+        }
+        String trimmed = line1.trim();
+        String[] tokens = trimmed.split("\\s+");
+        String lastToken = tokens[tokens.length - 1];
+        String cut;
+        if (!lastToken.isEmpty() && Character.isDigit(lastToken.charAt(0))) {
+            cut = String.join(" ", Arrays.copyOf(tokens, tokens.length - 1));
+        } else {
+            cut = trimmed;
+        }
+        cut = cut.replaceAll("[\\s,.\\-–—]+$", "").trim();
+        return cut.isEmpty() ? null : cut;
     }
 
     /** Names nothing about the person waiting at this door. */

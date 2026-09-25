@@ -146,6 +146,66 @@ public class KitchenBoardController {
         return ResponseEntity.ok(new BoardResponse(board, warnings, CountsResponse.of(counts)));
     }
 
+    /**
+     * The VDU wall projection (ADR 0041 rollout step 4, gap map row 2.4).
+     *
+     * <p><strong>A dedicated read model, not a filtered reuse of {@link
+     * #board}.</strong> {@link VduTicketResponse} carries only what a screen
+     * mounted above the pass and read from across the room needs — a
+     * sequence, a provider reference, a fulfilment mode, a status, the two
+     * timing facts the wall colour-codes against, and each item's station and
+     * quantity. It has no {@code orderId} (an internal identifier nobody
+     * reads off a wall), no {@code releaseMode}/{@code releaseAt}/{@code
+     * releasedAt}/{@code prepEstimateSeconds} (buffer-management facts a
+     * touch KDS needs and a read-only wall does not), no {@code
+     * orderLineId}/{@code routedBy}/{@code version} on a line (a wall never
+     * mutates one), and — same as every kitchen row since V0030 — no dish
+     * name and no per-line note: ADR 0041 keeps both off kitchen rows
+     * entirely, and a wall display is the last place either belongs.
+     *
+     * <p><strong>The station filter</strong> narrows to the tickets that have
+     * at least one line at the named station, and within each of those
+     * tickets to that station's own lines — "VDU is a projection with a
+     * station filter", ADR 0041's own words. Omitting {@code station} answers
+     * the whole branch, the same reduction the desk console's VDU page
+     * carried before this wave.
+     */
+    @GetMapping("/vdu")
+    @RequiresCapability(value = Capability.KITCHEN_TICKET_READ, scope = ScopeType.LOCATION)
+    @Operation(
+            summary = "The VDU wall projection",
+            description = "Fired tickets, no controls, no notes, no customer data -- only the fields "
+                    + "a wall needs. Pass station to narrow to one station's own lines.")
+    public ResponseEntity<VduBoardResponse> vdu(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID locationId,
+            @RequestParam(required = false) @Nullable UUID station) {
+
+        List<TicketRow> ticketRows =
+                tickets.board(tenantId, locationId, List.of("FIRED", "IN_PRODUCTION", "READY"), 200);
+
+        Set<UUID> orderIds = ticketRows.stream().map(TicketRow::orderId).collect(Collectors.toSet());
+        Map<UUID, String> externalReferences = tickets.externalReferencesByOrder(tenantId, orderIds);
+        Map<UUID, Instant> courierEtaByOrder = courierEta.etaByOrders(tenantId, orderIds);
+
+        List<VduTicketResponse> board = ticketRows.stream()
+                .map(ticket -> VduTicketResponse.of(
+                        ticket,
+                        tickets.items(tenantId, ticket.id()),
+                        station,
+                        externalReferences.get(ticket.orderId()),
+                        courierEtaByOrder.get(ticket.orderId())))
+                // A ticket that touches no line at the requested station has
+                // nothing for that wall to show -- a grill wall does not
+                // render an empty tile for a ticket that never routed to the
+                // grill.
+                .flatMap(Optional::stream)
+                .toList();
+
+        return ResponseEntity.ok(new VduBoardResponse(board));
+    }
+
     @GetMapping("/tickets/{ticketId}")
     @RequiresCapability(value = Capability.KITCHEN_TICKET_READ, scope = ScopeType.LOCATION)
     @Operation(summary = "One ticket with its lines")
@@ -554,6 +614,68 @@ public class KitchenBoardController {
                     row.actorId(),
                     row.reasonCode(),
                     row.occurredAt());
+        }
+    }
+
+    /** {@link #vdu}'s response. */
+    record VduBoardResponse(List<VduTicketResponse> tickets) {}
+
+    /**
+     * {@link #vdu}'s own narrow ticket shape -- see that method's own doc for
+     * exactly what this deliberately omits relative to {@link TicketResponse}.
+     */
+    record VduTicketResponse(
+            UUID ticketId,
+            String sequenceLabel,
+            @Nullable String externalReference,
+            String fulfilmentMode,
+            String status,
+            @Nullable Instant targetReadyAt,
+            Instant createdAt,
+            @Nullable Instant courierEtaAt,
+            List<VduItemView> items) {
+
+        /**
+         * @param station when non-null, narrows {@code items} to that station's
+         *                own lines; {@code empty()} when a station filter is
+         *                asked for and this ticket has no line at it, which is
+         *                {@link #vdu}'s own "nothing for that wall to show"
+         *                case
+         */
+        static Optional<VduTicketResponse> of(
+                TicketRow ticket,
+                List<TicketItemRow> items,
+                @Nullable UUID station,
+                @Nullable String externalReference,
+                @Nullable Instant courierEtaAt) {
+
+            List<TicketItemRow> visible = station == null
+                    ? items
+                    : items.stream()
+                            .filter(item -> station.equals(item.stationId()))
+                            .toList();
+            if (station != null && visible.isEmpty()) {
+                return Optional.empty();
+            }
+            return Optional.of(new VduTicketResponse(
+                    ticket.id(),
+                    ticket.sequenceLabel(),
+                    externalReference,
+                    ticket.fulfilmentMode(),
+                    ticket.status().name(),
+                    ticket.targetReadyAt(),
+                    ticket.createdAt(),
+                    courierEtaAt,
+                    visible.stream().map(VduItemView::of).toList()));
+        }
+    }
+
+    /** One line, reduced to the two facts a wall renders: which station, how many. */
+    record VduItemView(UUID stationId, int quantity, String status) {
+
+        static VduItemView of(TicketItemRow item) {
+            return new VduItemView(
+                    item.stationId(), item.quantity(), item.status().name());
         }
     }
 

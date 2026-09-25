@@ -43,17 +43,24 @@ import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
 
 /**
- * T11 7.4b/7.4c (ADR 0125): the delivery-sum-by-tariff audit and the
- * per-order external-delivery-cost report, including {@code UNBILLED}'s
- * first-ever producer — {@code MatchStatus.UNBILLED} was a dead enum
- * constant before this: nothing wrote it and nothing read it.
+ * T11 7.4b/7.4c (ADR 0125), w6-reporting-facts batch 11 (ADR 0023): the
+ * delivery-sum-by-tariff audit and the per-order external-delivery-cost
+ * report, including {@code UNBILLED}'s first-ever producer — {@code
+ * MatchStatus.UNBILLED} was a dead enum constant before this: nothing wrote
+ * it and nothing read it.
  *
- * <p>Rows inserted directly, the same choice {@code OperatorReportingTests}
- * makes and states why: {@code delivery_fee_resolutions} and {@code
- * partner_delivery_invoice_lines} are operational tables this wave reads
- * live, not a derived fact table with its own projector to exercise —
- * {@link CourierTariffAuditAndExternalCostTests} is the query layer's own
- * test, not a second copy of {@code DayCloseDeliveryFactTests}.
+ * <p>Rows inserted directly against {@code delivery_fee_resolutions} and
+ * {@code partner_delivery_invoice_lines} — real operational tables, the same
+ * choice {@code OperatorReportingTests} makes and states why — and then
+ * projected through a real {@link DayCloseService#close}, exactly the way
+ * {@code DayCloseDeliveryFactTests} exercises {@code fact_delivery}'s own
+ * producer beside these two. Both reads used to run live against {@code
+ * fulfillment}/{@code ordering} on every request; since w6-reporting-facts
+ * (batch 11) they answer from {@code reporting.fact_delivery_fee_resolution}
+ * (V0411) and {@code reporting.fact_external_delivery_cost} (V0412), so every
+ * test here seeds its fixture — including, for 7.4c, whatever invoice
+ * matching it wants reflected — and only then calls {@link #close} before
+ * reading through {@link #queries}.
  */
 class CourierTariffAuditAndExternalCostTests {
 
@@ -68,6 +75,7 @@ class CourierTariffAuditAndExternalCostTests {
 
     private JdbcClient jdbc;
     private ReportQueryService queries;
+    private DayCloseService close;
     private JdbcDeliveryCostStore costStore;
     private PartnerInvoiceService partnerInvoices;
 
@@ -108,9 +116,16 @@ class CourierTariffAuditAndExternalCostTests {
                 """).update();
         jdbc.sql("TRUNCATE TABLE tenant.tenants CASCADE").update();
 
+        // The clock DayCloseService stamps close_runs with -- distinct from
+        // RESOLVED_AT (the fixture's own checkout/delivery instant) the same
+        // way DayCloseDeliveryFactTests keeps its own close clock a day past
+        // DELIVERED_AT, so a close genuinely runs after its sources exist.
         Clock clock = Clock.fixed(RESOLVED_AT, ZoneOffset.UTC);
+        Clock closeClock = Clock.fixed(RESOLVED_AT.plus(java.time.Duration.ofHours(1)), ZoneOffset.UTC);
         var store = new JdbcReportingStore(jdbc);
-        queries = new ReportQueryService(store, new BusinessDayService(store), clock);
+        var businessDays = new BusinessDayService(store);
+        queries = new ReportQueryService(store, businessDays, clock);
+        close = new DayCloseService(store, businessDays, new SubjectPseudonym(TestProtection.envelope()), closeClock);
         costStore = new JdbcDeliveryCostStore(jdbc);
         partnerInvoices = new PartnerInvoiceService(costStore, fact -> {}, clock);
 
@@ -129,6 +144,7 @@ class CourierTariffAuditAndExternalCostTests {
         seedFeeResolution(orderA, TARIFF, 1, 18_000);
         seedFeeResolution(orderB, TARIFF, 1, 12_000);
 
+        close.close(TENANT, DAY);
         var result = queries.tariffAudit(TENANT, DAY, DAY, List.of());
 
         assertThat(result.rows()).hasSize(2);
@@ -153,6 +169,7 @@ class CourierTariffAuditAndExternalCostTests {
         UUID orderA = seedOrderAndShipment(courierA, "INTERNAL", "ASSIGNED", null);
         seedFeeResolution(orderA, TARIFF, 1, 15_000);
 
+        close.close(TENANT, DAY);
         var result = queries.tariffAudit(TENANT, DAY.plusDays(1), DAY.plusDays(1), List.of());
 
         assertThat(result.rows()).isEmpty();
@@ -165,6 +182,7 @@ class CourierTariffAuditAndExternalCostTests {
     void aShipmentWithNoInvoiceLineIsUnbilled() {
         seedOrderAndShipment(courierA, "PARTNER", "DELIVERED", RESOLVED_AT);
 
+        close.close(TENANT, DAY);
         var result = queries.externalDeliveryCost(TENANT, DAY, DAY, List.of());
 
         assertThat(result.rows()).hasSize(1);
@@ -184,6 +202,7 @@ class CourierTariffAuditAndExternalCostTests {
         seedInvoiceLine(matchedShipment, 20_000, MatchStatus.MATCHED, null);
         seedInvoiceLine(varianceShipment, 25_000, MatchStatus.VARIANCE, 5_000L);
 
+        close.close(TENANT, DAY);
         var result = queries.externalDeliveryCost(TENANT, DAY, DAY, List.of());
 
         assertThat(result.rows()).hasSize(3);
@@ -216,6 +235,7 @@ class CourierTariffAuditAndExternalCostTests {
         // 2026-09-14 review: reconcile must never silently erase what the
         // variance was -- the money discrepancy stays exactly as matching
         // left it, available for resolveVariance's own accept/dispute choice.
+        close.close(TENANT, DAY);
         var result = queries.externalDeliveryCost(TENANT, DAY, DAY, List.of());
         var varianceRow = result.rows().stream()
                 .filter(row -> varianceShipment.equals(row.shipmentId()))
@@ -250,6 +270,7 @@ class CourierTariffAuditAndExternalCostTests {
         assertThat(reconciledMatched).isTrue();
         assertThat(reconciledUnbilled).isFalse();
 
+        close.close(TENANT, DAY);
         var result = queries.externalDeliveryCost(TENANT, DAY, DAY, List.of());
         var matchedRow = result.rows().stream()
                 .filter(row -> matchedShipment.equals(row.shipmentId()))
@@ -280,6 +301,9 @@ class CourierTariffAuditAndExternalCostTests {
                 null);
         seedFeeResolution(other.tenantId(), other.locationId(), otherOrder, TARIFF, 1, 99_000);
 
+        close.close(TENANT, DAY);
+        close.close(other.tenantId(), DAY);
+
         var result = queries.tariffAudit(TENANT, DAY, DAY, List.of());
         assertThat(result.rows()).hasSize(1);
         assertThat(result.rows().getFirst().totalFinalFeeMinor()).isEqualTo(15_000L);
@@ -306,6 +330,9 @@ class CourierTariffAuditAndExternalCostTests {
                 "PARTNER",
                 "DELIVERED",
                 RESOLVED_AT);
+
+        close.close(TENANT, DAY);
+        close.close(other.tenantId(), DAY);
 
         var result = queries.externalDeliveryCost(TENANT, DAY, DAY, List.of());
         assertThat(result.rows()).hasSize(1);

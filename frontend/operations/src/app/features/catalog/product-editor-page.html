@@ -709,6 +709,12 @@
                     </tbody>
                   </table>
                 }
+                <p class="q-caption editor__stock-hint">
+                  {{ 'catalog.editor.availability.quantityHint' | t }}
+                  <a routerLink="/catalog/stock">{{
+                    'catalog.editor.availability.quantityHintLink' | t
+                  }}</a>
+                </p>
               </div>
             }
             @case ('SCHEDULE') {

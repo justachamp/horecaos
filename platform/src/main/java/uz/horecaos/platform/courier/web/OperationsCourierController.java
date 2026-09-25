@@ -2,7 +2,9 @@ package uz.horecaos.platform.courier.web;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -24,6 +26,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -34,6 +37,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import uz.horecaos.platform.audit.api.ActorRef;
+import uz.horecaos.platform.courier.application.CourierAccountProvisioningService;
 import uz.horecaos.platform.courier.application.CourierAdjustmentService;
 import uz.horecaos.platform.courier.application.CourierCashService;
 import uz.horecaos.platform.courier.application.CourierEngagementService;
@@ -87,6 +91,7 @@ import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.tenancy.api.PolicyAuthor;
 import uz.horecaos.platform.tenancy.api.ResolvedPolicy;
+import uz.horecaos.platform.web.api.AggregateVersion;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
 import uz.horecaos.platform.web.authorization.RequiresCapability;
@@ -107,6 +112,7 @@ import uz.horecaos.platform.web.idempotency.Idempotent;
 public class OperationsCourierController {
 
     private final CourierEngagementService engagements;
+    private final CourierAccountProvisioningService accountProvisioning;
     private final CourierShiftService shifts;
     private final CourierCashService cash;
     private final CourierAdjustmentService adjustments;
@@ -130,6 +136,7 @@ public class OperationsCourierController {
 
     public OperationsCourierController(
             CourierEngagementService engagements,
+            CourierAccountProvisioningService accountProvisioning,
             CourierShiftService shifts,
             CourierCashService cash,
             CourierAdjustmentService adjustments,
@@ -151,6 +158,7 @@ public class OperationsCourierController {
             CurrentActor currentActor,
             AuthorizationService authorization) {
         this.engagements = engagements;
+        this.accountProvisioning = accountProvisioning;
         this.shifts = shifts;
         this.cash = cash;
         this.adjustments = adjustments;
@@ -713,9 +721,12 @@ public class OperationsCourierController {
                     + "five new fields couriers.md §16 always named: the GPS master toggle with "
                     + "its accept and status-change radii, the kitchen-ready-only gate, when the "
                     + "customer's exact location is revealed, and the post-delivery payment "
-                    + "check. Courier billing mode stays refused by ADR 0042 and has no field "
-                    + "here; the telemetry collection gate is a separate, PLATFORM_ADMIN-only "
-                    + "ADR 0030 key and is not part of this document. Authorization is checked "
+                    + "check. Gap map row 3.3 added a seventh, onlineWithinMinutes, the roster's "
+                    + "online threshold — the only one of the newer fields anything outside this "
+                    + "controller actually reads (CourierRosterQueryService). Courier billing mode "
+                    + "stays refused by ADR 0042 and has no field here; the telemetry collection "
+                    + "gate is a separate, PLATFORM_ADMIN-only ADR 0030 key and is not part of "
+                    + "this document. Authorization is checked "
                     + "against brandId/locationId's own resolved scope, not a fixed TENANT "
                     + "default, so a BRAND_MANAGER reading their own brand's policy is not "
                     + "refused for a grant the role bundle already gives them.")
@@ -726,7 +737,10 @@ public class OperationsCourierController {
 
         ResourceScope scope = policyScope(tenantId, brandId, locationId);
         authorization.require(currentActor.get().subject(), Capability.DELIVERY_POLICY_READ, scope);
-        return ResponseEntity.ok(CourierPolicyResponse.of(policyResolver.resolveWithIdentity(scope)));
+        ResolvedPolicy<CourierCompensationPolicy> resolved = policyResolver.resolveWithIdentity(scope);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.ETAG, AggregateVersion.toETag(resolved.policyVersion()))
+                .body(CourierPolicyResponse.of(resolved));
     }
 
     @PutMapping("/courier-policy")
@@ -741,20 +755,33 @@ public class OperationsCourierController {
                     + "keeps answering with it for whatever already resolved it. Authorization is "
                     + "checked against that same resolved scope (see the class-level doc on "
                     + "courierPolicy above), so a BRAND_MANAGER publishing their own brand's "
-                    + "override is not refused for a grant the role bundle already gives them.")
+                    + "override is not refused for a grant the role bundle already gives them. "
+                    + "Requires If-Match carrying the version the GET at this same scope returned "
+                    + "(ADR 0031's concurrency section) — the document itself is append-only "
+                    + "versioned and every write technically succeeds, so without this check two "
+                    + "operators editing the same scope's policy from two open tabs would silently "
+                    + "overwrite one another's fields with whatever their own stale form last held.")
     public ResponseEntity<CourierPolicyResponse> writeCourierPolicy(
             @PathVariable UUID tenantId,
             @RequestParam(required = false) UUID brandId,
             @RequestParam(required = false) UUID locationId,
-            @Valid @RequestBody CourierPolicyWriteRequest body) {
+            @Valid @RequestBody CourierPolicyWriteRequest body,
+            HttpServletRequest request) {
 
         ResourceScope scope = policyScope(tenantId, brandId, locationId);
         authorization.require(currentActor.get().subject(), Capability.DELIVERY_POLICY_WRITE, scope);
+
+        long expectedVersion = AggregateVersion.requireIfMatch(request);
+        ResolvedPolicy<CourierCompensationPolicy> current = policyResolver.resolveWithIdentity(scope);
+        AggregateVersion.requireMatch(expectedVersion, current.policyVersion());
+
         CourierCompensationPolicy document = body.toDocument();
         ResolvedPolicy<CourierCompensationPolicy> published =
                 policyAuthor.author(CourierPolicies.COMPENSATION, scope, document, actor(), body.reason());
 
-        return ResponseEntity.ok(CourierPolicyResponse.of(published));
+        return ResponseEntity.ok()
+                .header(HttpHeaders.ETAG, AggregateVersion.toETag(published.policyVersion()))
+                .body(CourierPolicyResponse.of(published));
     }
 
     /** Omit brandId/locationId for the tenant-wide scope; supply either for a brand or location override. */
@@ -775,22 +802,40 @@ public class OperationsCourierController {
                     + "deliberately cannot do the second. The compliance fields are optional and "
                     + "may be filed here or later: an incomplete file is a state the roster is "
                     + "built to show, and refusing the registration over a missing passport would "
-                    + "only teach operators to type something into the box.")
+                    + "only teach operators to type something into the box. Gap map row 3.3: the "
+                    + "courier's own account at the identity provider is created here, the same "
+                    + "phone-first path ADR 0116's staff invitation uses (CourierAccountProvisioningService) — "
+                    + "the operator no longer types a Keycloak subject; there is no field for one.")
     public ResponseEntity<CourierResponse> register(
             @PathVariable UUID tenantId, @Valid @RequestBody RegisterCourierRequest body) {
 
-        CourierEngagementService.Registration registration = engagements.register(
-                new CourierEngagementService.NewCourier(
-                        tenantId,
-                        body.courierTypeId(),
-                        body.principalSubject(),
-                        body.displayReference(),
-                        body.fullName(),
-                        body.engagedFrom(),
-                        actor(),
-                        body.reason(),
-                        correlationId()),
-                body.compliance());
+        CourierAccountProvisioningService.Provisioned account = accountProvisioning.provision(
+                tenantId, body.firstName(), body.lastName(), body.phone(), blankToNull(body.email()), actor());
+
+        CourierEngagementService.Registration registration;
+        try {
+            registration = engagements.register(
+                    new CourierEngagementService.NewCourier(
+                            tenantId,
+                            body.courierTypeId(),
+                            account.subjectId(),
+                            body.displayReference(),
+                            body.fullName(),
+                            body.engagedFrom(),
+                            actor(),
+                            body.reason(),
+                            correlationId()),
+                    body.compliance());
+        } catch (RuntimeException failed) {
+            // The identity-provider account above may already exist (and,
+            // when it does, already carry this tenant's organization
+            // membership) by the time a later step -- most often a duplicate
+            // displayReference hitting uq_courier_reference -- refuses the
+            // registration; without this, a freshly created account would
+            // survive as a real, tenant-linked identity nothing ever claims.
+            accountProvisioning.abandonIfCreated(tenantId, account, failed, actor(), body.reason());
+            throw failed;
+        }
 
         return ResponseEntity.ok(
                 new CourierResponse(registration.courierId(), registration.engagementId(), "PENDING_VERIFICATION"));
@@ -1267,19 +1312,25 @@ public class OperationsCourierController {
     /**
      * The widened register form (IA 3.3).
      *
-     * <p>{@code principalSubject} is still a Keycloak subject created outside
-     * this console, and stays that way: ADR 0042 forbids deriving a courier's
-     * password from a passport number, and this wave adds no provisioning path
-     * that would tempt somebody to.
+     * <p>No {@code principalSubject} field, unlike before gap map row {@code
+     * 3.3}'s own fix: an operator no longer types a Keycloak subject created
+     * outside this console. {@link #register} provisions the account itself
+     * ({@link CourierAccountProvisioningService}, ADR 0116's phone-first
+     * path) from {@link #firstName}/{@link #lastName}/{@link #phone}/{@link
+     * #email} and uses the identity it gets back — never a value this body
+     * could name, so there is no way to bind a courier to somebody else's
+     * account.
      *
      * <p>Every compliance field is optional and none of them is echoed back by
      * any response on this controller.
      */
     record RegisterCourierRequest(
             @NotNull UUID courierTypeId,
-            @NotBlank String principalSubject,
+            @NotBlank @Size(max = 100) String firstName,
+            @NotBlank @Size(max = 100) String lastName,
+            @NotBlank @Size(min = 9, max = 20) String phone,
+            @Email @Size(max = 255) @Nullable String email,
             @NotBlank @Size(max = 32) String displayReference,
-            @NotBlank String fullName,
             @NotNull LocalDate engagedFrom,
             @Nullable @Size(max = 32) String passport,
             @Nullable @Size(max = 32) String pinfl,
@@ -1293,6 +1344,11 @@ public class OperationsCourierController {
             @Nullable @Size(max = 256) String referral,
             @Nullable @Size(max = 2000) String remarks,
             @NotBlank String reason) {
+
+        /** The one place {@link #firstName}/{@link #lastName} are joined for a human to read. */
+        String fullName() {
+            return (firstName.strip() + " " + lastName.strip()).strip();
+        }
 
         CourierEngagementService.ComplianceFile compliance() {
             Map<ComplianceField, String> recorded = new EnumMap<>(ComplianceField.class);
@@ -1423,6 +1479,8 @@ public class OperationsCourierController {
             @Nullable String engagementStatus,
             @Nullable String warningState,
             @Nullable LocalDate reverificationDueOn,
+            boolean online,
+            @Nullable Instant lastSeenAt,
             List<String> complianceFieldsOnFile,
             @Nullable String vehicleFuelType,
             @Nullable UUID photoMediaId,
@@ -1446,6 +1504,8 @@ public class OperationsCourierController {
                     courier.engagementStatus(),
                     courier.warningState(),
                     courier.reverificationDueOn(),
+                    detail.entry().online(),
+                    detail.entry().lastSeenAt(),
                     compliance.onFile().stream().map(Enum::name).sorted().toList(),
                     compliance.vehicleFuelType(),
                     compliance.photoMediaId(),
@@ -1671,6 +1731,15 @@ public class OperationsCourierController {
      * Capability#COURIER_READ}'s own doc for why {@code displayReference} is
      * the whole of what this response names a person by.
      */
+    /**
+     * @param online   gap map row 3.3: whether the courier's most recent
+     *                 telemetry fix is within the tenant's {@code
+     *                 courier.compensation} policy {@code onlineWithinMinutes}.
+     *                 Rating stays absent from this response entirely —
+     *                 no source exists on either side yet
+     * @param lastSeenAt the fix {@code online} was computed from, or null for a
+     *                 courier this call found no live row for at all
+     */
     record RosterEntryResponse(
             UUID courierId,
             String displayReference,
@@ -1683,7 +1752,9 @@ public class OperationsCourierController {
             @Nullable UUID engagementId,
             @Nullable String engagementStatus,
             @Nullable String warningState,
-            @Nullable LocalDate reverificationDueOn) {
+            @Nullable LocalDate reverificationDueOn,
+            boolean online,
+            @Nullable Instant lastSeenAt) {
 
         static RosterEntryResponse of(RosterEntry entry) {
             var courier = entry.courier();
@@ -1699,7 +1770,9 @@ public class OperationsCourierController {
                     courier.engagementId(),
                     courier.engagementStatus(),
                     courier.warningState(),
-                    courier.reverificationDueOn());
+                    courier.reverificationDueOn(),
+                    entry.online(),
+                    entry.lastSeenAt());
         }
     }
 
@@ -1960,6 +2033,7 @@ public class OperationsCourierController {
             boolean kitchenReadyOnly,
             String revealCustomerLocationTiming,
             boolean postDeliveryPaymentCheckRequired,
+            int onlineWithinMinutes,
             String winningScope,
             UUID policyId,
             int policyVersion) {
@@ -1981,6 +2055,7 @@ public class OperationsCourierController {
                     doc.kitchenReadyOnly(),
                     doc.revealCustomerLocationTiming().name(),
                     doc.postDeliveryPaymentCheckRequired(),
+                    doc.onlineWithinMinutes(),
                     resolved.winningScope().name(),
                     resolved.policyId(),
                     resolved.policyVersion());
@@ -2009,6 +2084,7 @@ public class OperationsCourierController {
             boolean kitchenReadyOnly,
             @NotBlank String revealCustomerLocationTiming,
             boolean postDeliveryPaymentCheckRequired,
+            @Positive int onlineWithinMinutes,
             @NotBlank @Size(max = 500) String reason) {
 
         CourierCompensationPolicy toDocument() {
@@ -2026,7 +2102,8 @@ public class OperationsCourierController {
                     gpsStatusChangeRadiusMeters,
                     kitchenReadyOnly,
                     parseRevealTiming(),
-                    postDeliveryPaymentCheckRequired);
+                    postDeliveryPaymentCheckRequired,
+                    onlineWithinMinutes);
         }
 
         private ShiftEnforcement parseShiftEnforcement() {

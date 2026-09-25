@@ -3,6 +3,7 @@ import {
   Component,
   OnDestroy,
   OnInit,
+  computed,
   inject,
   signal,
 } from '@angular/core';
@@ -22,22 +23,134 @@ type ExportCentreState = 'loading' | 'ready' | 'denied' | 'error';
 const POLL_INTERVAL_MS = 2_000;
 
 /**
- * This screen's own picker still offers only `CUSTOMER_DIRECTORY`. Wave 9
- * w4-reports-distance-crm also wires `ORDER_CRM_LOG` server-side
- * (`ReportExportRegistry`'s own doc) — `orderId`/`occurredAt`/`locationId`/
- * `customerType`/`customerName`/`customerPhone`/`operatorPrincipalId`/
- * `courierDisplayReference`, `customerName`/`customerPhone` the PII group —
- * but this screen was not extended with a report picker to reach it; it
- * remains reachable only via `ReportingApi.requestExport({ reportKey:
- * 'ORDER_CRM_LOG', ... })` directly. This list grows as more reports join
- * this screen's own picker.
+ * One report this screen's own picker can queue an export for — mirrors
+ * {@code ReportExportRegistry}'s four report keys and each one's own column
+ * set exactly (the request path — {@code POST .../exports} — is unchanged;
+ * only this screen's own vocabulary grows). {@link requiresRange} and
+ * {@link supportsStatusQuery} mirror {@code ReportExportService#requiresRange}
+ * and {@code CUSTOMER_DIRECTORY}'s own `status`/`query` filters respectively
+ * — the two families of filter these four reports split into, never both at
+ * once for the same report.
  */
+interface ReportOption {
+  readonly key: string;
+  readonly labelKey: MessageKey;
+  readonly columns: readonly ExportColumnOption[];
+  readonly defaultColumns: readonly string[];
+  readonly requiresRange: boolean;
+  readonly supportsStatusQuery: boolean;
+}
+
 const CUSTOMER_DIRECTORY_COLUMNS: readonly ExportColumnOption[] = [
   { key: 'accountId', labelKey: 'reports.exportCentre.column.accountId', pii: false },
   { key: 'status', labelKey: 'reports.exportCentre.column.status', pii: false },
   { key: 'displayName', labelKey: 'reports.exportCentre.column.displayName', pii: false },
   { key: 'phone', labelKey: 'reports.exportCentre.column.phone', pii: true },
 ];
+
+/** Wave 9 w4-reports-distance-crm (7.2a) — `OrderCrmLogExportPort`, never `reporting.fact_order`. `customerName`/`customerPhone` are the PII group. */
+const ORDER_CRM_LOG_COLUMNS: readonly ExportColumnOption[] = [
+  { key: 'orderId', labelKey: 'reports.exportCentre.column.orderId', pii: false },
+  { key: 'occurredAt', labelKey: 'reports.exportCentre.column.occurredAt', pii: false },
+  { key: 'locationId', labelKey: 'reports.exportCentre.column.locationId', pii: false },
+  { key: 'customerType', labelKey: 'reports.exportCentre.column.customerType', pii: false },
+  { key: 'customerName', labelKey: 'reports.exportCentre.column.customerName', pii: true },
+  { key: 'customerPhone', labelKey: 'reports.exportCentre.column.customerPhone', pii: true },
+  {
+    key: 'operatorPrincipalId',
+    labelKey: 'reports.exportCentre.column.operatorPrincipalId',
+    pii: false,
+  },
+  {
+    key: 'courierDisplayReference',
+    labelKey: 'reports.exportCentre.column.courierDisplayReference',
+    pii: false,
+  },
+];
+
+/** Wave 10 w5-reports-exports (7.2e) — «Заказы», order-grain, off `reporting.fact_order`. No PII column (ADR 0029: reporting carries no PERSONAL field). */
+const ORDER_REPORT_LOG_COLUMNS: readonly ExportColumnOption[] = [
+  { key: 'orderId', labelKey: 'reports.exportCentre.column.orderId', pii: false },
+  { key: 'businessDate', labelKey: 'reports.exportCentre.column.businessDate', pii: false },
+  { key: 'locationId', labelKey: 'reports.exportCentre.column.locationId', pii: false },
+  { key: 'channelCode', labelKey: 'reports.exportCentre.column.channelCode', pii: false },
+  { key: 'fulfilmentType', labelKey: 'reports.exportCentre.column.fulfilmentType', pii: false },
+  { key: 'terminalStatus', labelKey: 'reports.exportCentre.column.terminalStatus', pii: false },
+  { key: 'isPreorder', labelKey: 'reports.exportCentre.column.isPreorder', pii: false },
+  { key: 'grossRevenueSom', labelKey: 'reports.exportCentre.column.grossSom', pii: false },
+  { key: 'discountSom', labelKey: 'reports.exportCentre.column.discountSom', pii: false },
+  { key: 'deliveryFeeSom', labelKey: 'reports.exportCentre.column.deliveryFeeSom', pii: false },
+  { key: 'netRevenueSom', labelKey: 'reports.exportCentre.column.netSom', pii: false },
+  { key: 'itemCount', labelKey: 'reports.exportCentre.column.itemCount', pii: false },
+];
+
+/** Wave 10 w5-reports-exports (7.2e) — «Сводка», the by-branch/channel/fulfilment revenue rollup. No PII column. */
+const ORDER_REPORT_SUMMARY_COLUMNS: readonly ExportColumnOption[] = [
+  { key: 'locationId', labelKey: 'reports.exportCentre.column.locationId', pii: false },
+  { key: 'channelCode', labelKey: 'reports.exportCentre.column.channelCode', pii: false },
+  { key: 'fulfilmentType', labelKey: 'reports.exportCentre.column.fulfilmentType', pii: false },
+  { key: 'orderCount', labelKey: 'reports.exportCentre.column.orderCount', pii: false },
+  { key: 'grossSom', labelKey: 'reports.exportCentre.column.grossSom', pii: false },
+  { key: 'deliveryFeeSom', labelKey: 'reports.exportCentre.column.deliveryFeeSom', pii: false },
+  { key: 'netSom', labelKey: 'reports.exportCentre.column.netSom', pii: false },
+];
+
+/** Every report this screen's picker offers, in `ReportExportRegistry`'s own declaration order. */
+const REPORT_OPTIONS: readonly ReportOption[] = [
+  {
+    key: 'CUSTOMER_DIRECTORY',
+    labelKey: 'reports.exportCentre.reportOption.customerDirectory',
+    columns: CUSTOMER_DIRECTORY_COLUMNS,
+    defaultColumns: ['accountId', 'status', 'displayName'],
+    requiresRange: false,
+    supportsStatusQuery: true,
+  },
+  {
+    key: 'ORDER_CRM_LOG',
+    labelKey: 'reports.exportCentre.reportOption.orderCrmLog',
+    columns: ORDER_CRM_LOG_COLUMNS,
+    defaultColumns: ['orderId', 'occurredAt', 'locationId', 'customerType'],
+    requiresRange: true,
+    supportsStatusQuery: false,
+  },
+  {
+    key: 'ORDER_REPORT_LOG',
+    labelKey: 'reports.exportCentre.reportOption.orderReportLog',
+    columns: ORDER_REPORT_LOG_COLUMNS,
+    defaultColumns: [
+      'orderId',
+      'businessDate',
+      'locationId',
+      'channelCode',
+      'fulfilmentType',
+      'grossRevenueSom',
+      'netRevenueSom',
+    ],
+    requiresRange: true,
+    supportsStatusQuery: false,
+  },
+  {
+    key: 'ORDER_REPORT_SUMMARY',
+    labelKey: 'reports.exportCentre.reportOption.orderReportSummary',
+    columns: ORDER_REPORT_SUMMARY_COLUMNS,
+    defaultColumns: [
+      'locationId',
+      'channelCode',
+      'fulfilmentType',
+      'orderCount',
+      'grossSom',
+      'netSom',
+    ],
+    requiresRange: true,
+    supportsStatusQuery: false,
+  },
+];
+
+const DEFAULT_REPORT_KEY = REPORT_OPTIONS[0].key;
+
+function findReportOption(reportKey: string): ReportOption {
+  return REPORT_OPTIONS.find((option) => option.key === reportKey) ?? REPORT_OPTIONS[0];
+}
 
 const STATUS_OPTIONS: readonly { readonly id: string; readonly labelKey: MessageKey }[] = [
   { id: '', labelKey: 'reports.exportCentre.statusFilter.all' },
@@ -46,8 +159,6 @@ const STATUS_OPTIONS: readonly { readonly id: string; readonly labelKey: Message
   { id: 'ANONYMIZED', labelKey: 'reports.exportCentre.statusFilter.anonymized' },
   { id: 'CLOSED', labelKey: 'reports.exportCentre.statusFilter.closed' },
 ];
-
-const DEFAULT_COLUMNS: readonly string[] = ['accountId', 'status', 'displayName'];
 
 const STATUS_LABEL_KEYS: Readonly<Record<string, MessageKey>> = {
   QUEUED: 'reports.exportCentre.status.QUEUED',
@@ -65,14 +176,15 @@ function isPending(row: ReportExportStatusResponse): boolean {
  * checklist; wave P28). `/statistics/exports` — the route the row's own gap
  * text names as missing.
  *
- * Only the `CUSTOMER_DIRECTORY` report is wired into this screen's own
- * picker today; `ORDER_CRM_LOG` is wired server-side (see this file's own
- * `CUSTOMER_DIRECTORY_COLUMNS` comment) but has no picker option here yet —
- * a second report joins this screen the same way it joined
- * `ReportExportRegistry` server-side: a new option in `reportKey`, not a
- * new screen. The trigger here is the general one; `order-reports-page.html`'s
- * own Export button (row 7.2) links here rather than triggering an
- * order-log export of its own.
+ * All four reports {@code ReportExportRegistry} declares —
+ * `CUSTOMER_DIRECTORY`, `ORDER_CRM_LOG`, `ORDER_REPORT_LOG` and
+ * `ORDER_REPORT_SUMMARY` — are wired into this screen's own picker; a fifth
+ * report joins the same way these three did: a new {@link ReportOption} in
+ * {@link REPORT_OPTIONS}, not a new screen. The request path itself —
+ * `POST .../exports` — is unchanged; only the picker and each report's own
+ * column set and filters are new. The trigger here is the general one;
+ * `order-reports-page.html`'s own Export button (row 7.2) links here rather
+ * than triggering an order-log export of its own.
  */
 @Component({
   selector: 'q-export-centre-page',
@@ -90,12 +202,20 @@ export class ExportCentrePage implements OnInit, OnDestroy {
   protected readonly state = signal<ExportCentreState>('loading');
   protected readonly history = signal<readonly ReportExportStatusResponse[]>([]);
 
-  protected readonly columns = CUSTOMER_DIRECTORY_COLUMNS;
+  protected readonly reportOptions = REPORT_OPTIONS;
   protected readonly statusOptions = STATUS_OPTIONS;
 
-  protected readonly selectedColumns = signal<readonly string[]>(DEFAULT_COLUMNS);
+  protected readonly selectedReportKey = signal<string>(DEFAULT_REPORT_KEY);
+  protected readonly selectedReport = computed(() => findReportOption(this.selectedReportKey()));
+  protected readonly columns = computed(() => this.selectedReport().columns);
+
+  protected readonly selectedColumns = signal<readonly string[]>(
+    findReportOption(DEFAULT_REPORT_KEY).defaultColumns,
+  );
   protected readonly statusFilter = signal('');
   protected readonly queryFilter = signal('');
+  protected readonly fromDate = signal('');
+  protected readonly toDate = signal('');
   protected readonly purpose = signal('');
 
   protected readonly submitting = signal(false);
@@ -132,8 +252,32 @@ export class ExportCentrePage implements OnInit, OnDestroy {
     this.selectedColumns.set(columns);
   }
 
+  /**
+   * Switches the picker to a different report — resets the column selection
+   * to that report's own defaults and clears every filter, since a filter
+   * that made sense on the old report (a status, a search query, a date
+   * range) rarely still applies to the new one, and a stale `from`/`to`
+   * left over from `ORDER_CRM_LOG` silently carrying into `CUSTOMER_DIRECTORY`
+   * (which ignores it anyway) would be a worse trap than an empty field.
+   */
+  protected selectReport(reportKey: string): void {
+    const report = findReportOption(reportKey);
+    this.selectedReportKey.set(report.key);
+    this.selectedColumns.set(report.defaultColumns);
+    this.statusFilter.set('');
+    this.queryFilter.set('');
+    this.fromDate.set('');
+    this.toDate.set('');
+    this.submitError.set(null);
+  }
+
   protected statusLabelKey(status: string): MessageKey {
     return STATUS_LABEL_KEYS[status] ?? 'reports.exportCentre.status.FAILED';
+  }
+
+  /** The job history's own per-row report name — looked up by the row's actual `reportKey`, never assumed to be `CUSTOMER_DIRECTORY`. */
+  protected reportLabelKey(reportKey: string): MessageKey {
+    return findReportOption(reportKey).labelKey;
   }
 
   protected async submit(): Promise<void> {
@@ -141,6 +285,7 @@ export class ExportCentrePage implements OnInit, OnDestroy {
     if (!scope) {
       return;
     }
+    const report = this.selectedReport();
     if (this.selectedColumns().length === 0) {
       this.submitError.set(this.i18n.t('reports.exportCentre.error.noSelection'));
       return;
@@ -149,15 +294,30 @@ export class ExportCentrePage implements OnInit, OnDestroy {
       this.submitError.set(this.i18n.t('reports.exportCentre.error.purposeRequired'));
       return;
     }
+    let from: string | null = null;
+    let to: string | null = null;
+    if (report.requiresRange) {
+      if (!this.fromDate() || !this.toDate()) {
+        this.submitError.set(this.i18n.t('reports.exportCentre.error.rangeRequired'));
+        return;
+      }
+      // No per-tenant timezone reaches this filter yet — the same UTC
+      // calendar-day simplification `ReportExportService#runOrderReportLog`'s
+      // own doc names for the identical wire shape on the server side.
+      from = `${this.fromDate()}T00:00:00.000Z`;
+      to = `${this.toDate()}T23:59:59.999Z`;
+    }
 
     this.submitting.set(true);
     this.submitError.set(null);
     try {
       const queued = await this.api.requestExport(scope.tenantId, {
-        reportKey: 'CUSTOMER_DIRECTORY',
+        reportKey: report.key,
         columns: this.selectedColumns(),
-        status: this.statusFilter() || null,
-        query: this.queryFilter().trim() || null,
+        status: report.supportsStatusQuery ? this.statusFilter() || null : null,
+        query: report.supportsStatusQuery ? this.queryFilter().trim() || null : null,
+        from,
+        to,
         purpose: this.purpose().trim(),
       });
       const queuedStatus = await this.api.exportStatus(scope.tenantId, queued.exportId);

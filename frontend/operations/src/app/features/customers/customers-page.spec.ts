@@ -67,7 +67,9 @@ describe('CustomersPage', () => {
         .fn()
         .mockResolvedValue({ items: [CUSTOMER], nextCursor: null } satisfies Page<CustomerSummary>),
       counts: vi.fn().mockResolvedValue(COUNTS),
-      exportFiltered: vi.fn().mockResolvedValue({ rows: [], truncated: false }),
+      exportFiltered: vi
+        .fn()
+        .mockResolvedValue({ rows: [], truncated: false, approvalStatus: 'NOT_REQUIRED', approvalRequestId: null }),
       create: vi.fn().mockResolvedValue('new-customer-id'),
     };
 
@@ -219,7 +221,12 @@ describe('CustomersPage', () => {
 
     // An export row, not a `CustomerSummary`: the CSV writer reads `phone`,
     // which a summary deliberately does not carry.
-    api.exportFiltered.mockResolvedValueOnce({ rows: [EXPORT_ROW], truncated: false });
+    api.exportFiltered.mockResolvedValueOnce({
+      rows: [EXPORT_ROW],
+      truncated: false,
+      approvalStatus: 'NOT_REQUIRED',
+      approvalRequestId: null,
+    });
     exportButton.click();
     await flushMicrotasks();
     fixture.detectChanges();
@@ -237,7 +244,12 @@ describe('CustomersPage', () => {
       button.textContent?.includes('Export'),
     ) as HTMLButtonElement;
 
-    api.exportFiltered.mockResolvedValueOnce({ rows: [EXPORT_ROW], truncated: true });
+    api.exportFiltered.mockResolvedValueOnce({
+      rows: [EXPORT_ROW],
+      truncated: true,
+      approvalStatus: 'NOT_REQUIRED',
+      approvalRequestId: null,
+    });
     exportButton.click();
     await flushMicrotasks();
     fixture.detectChanges();
@@ -245,6 +257,60 @@ describe('CustomersPage', () => {
     const result = host.querySelector('[data-testid="q-inline-alert"]')!;
     expect(result.getAttribute('role')).toBe('status');
     expect(result.textContent).toContain('the filter matched more than that and was cut');
+  });
+
+  /**
+   * Staff 9.4 (ADR 0027): above the tenant's own row threshold, an export
+   * with no rows in the response is not the same as a filter matching
+   * nobody — this is the notice that tells the two apart, and proves no CSV
+   * download is triggered for an export that revealed nothing.
+   */
+  it('shows a pending-approval notice, and downloads nothing, when the export waits on a second signature', async () => {
+    const host: HTMLElement = fixture.nativeElement;
+    const exportButton = [...host.querySelectorAll('button')].find((button) =>
+      button.textContent?.includes('Export'),
+    ) as HTMLButtonElement;
+    const originalCreateObjectURL = URL.createObjectURL;
+    URL.createObjectURL = vi.fn(() => 'blob:should-not-be-called');
+
+    try {
+      api.exportFiltered.mockResolvedValueOnce({
+        rows: [],
+        truncated: false,
+        approvalStatus: 'PENDING',
+        approvalRequestId: 'request-1',
+      });
+      exportButton.click();
+      await flushMicrotasks();
+      fixture.detectChanges();
+
+      const result = host.querySelector('[data-testid="q-inline-alert"]')!;
+      expect(result.getAttribute('role')).toBe('status');
+      expect(result.textContent).toContain('waiting on a second signature');
+      expect(URL.createObjectURL).not.toHaveBeenCalled();
+    } finally {
+      URL.createObjectURL = originalCreateObjectURL;
+    }
+  });
+
+  it('shows a declined notice when the export was refused approval', async () => {
+    const host: HTMLElement = fixture.nativeElement;
+    const exportButton = [...host.querySelectorAll('button')].find((button) =>
+      button.textContent?.includes('Export'),
+    ) as HTMLButtonElement;
+
+    api.exportFiltered.mockResolvedValueOnce({
+      rows: [],
+      truncated: false,
+      approvalStatus: 'DECLINED',
+      approvalRequestId: 'request-1',
+    });
+    exportButton.click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    const result = host.querySelector('[data-testid="q-inline-alert"]')!;
+    expect(result.textContent).toContain('This export was declined');
   });
 
   it('says nothing about permission when a filter simply matches nothing', async () => {

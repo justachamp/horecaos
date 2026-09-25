@@ -91,6 +91,14 @@ class TenantControlPlaneServiceTests {
                 .as("a suspension that waits out a cache TTL is a suspension that is not yet in force")
                 .contains(tenantId.value());
         assertThat(auditFacts).extracting(fact -> fact.actionCode()).contains("tenant.suspended");
+        // Staff 9.3a: a field-level {before, after} pair, not two flat
+        // "from"/"to" keys q-diff-viewer cannot pair into one row.
+        assertThat(auditFacts.stream()
+                        .filter(fact -> fact.actionCode().equals("tenant.suspended"))
+                        .findFirst()
+                        .orElseThrow()
+                        .changeDocument())
+                .containsEntry("status", Map.of("before", "ACTIVE", "after", "SUSPENDED"));
         assertThat(provisioner.calls)
                 .as("ADR 0009: suspension reconciles the tenant's Keycloak organization to disabled")
                 .containsExactly(Map.entry("keycloak-organization-food-group", false));

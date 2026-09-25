@@ -51,6 +51,11 @@ export class CatalogImportFileApi {
     return firstValueFrom(this.api.text(catalogPaths.importTemplate(scope)));
   }
 
+  /** The same template as a real `.xlsx` workbook -- the caller triggers the browser download. */
+  templateWorkbook(scope: BrandScope): Promise<Blob> {
+    return firstValueFrom(this.api.blob(catalogPaths.importTemplateWorkbook(scope)));
+  }
+
   /** The brand's catalog filled into the template's own text. */
   export(scope: BrandScope, catalogId: string): Promise<string> {
     return firstValueFrom(
@@ -98,7 +103,11 @@ export class CatalogImportFileApi {
 
 /** Triggers a browser download of CSV text already in hand -- no second round trip. */
 export function downloadCsvText(content: string, filename: string): void {
-  const blob = new Blob([content], { type: 'text/csv;charset=utf-8' });
+  downloadBlob(new Blob([content], { type: 'text/csv;charset=utf-8' }), filename);
+}
+
+/** Triggers a browser download of a binary document already in hand -- `template.xlsx`'s own path, alongside {@link downloadCsvText}'s CSV one. */
+export function downloadBlob(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
   try {
     const anchor = document.createElement('a');

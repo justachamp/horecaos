@@ -38,6 +38,11 @@ export const reportsPaths = {
     return `${TENANT_REPORTING(tenantId)}/preparation-time-by-location`;
   },
 
+  /** Wave 11 w5-fulfillment-destination (7.3): every branch's average courier transit time, from one request. */
+  deliveryTransitTimeByLocation(tenantId: string): string {
+    return `${TENANT_REPORTING(tenantId)}/delivery-transit-time-by-location`;
+  },
+
   /** Order-grain rows behind 7.2's «Этапы», «Заказы» and «Опоздания» tables. */
   orders(tenantId: string): string {
     return `${TENANT_REPORTING(tenantId)}/orders`;
@@ -51,6 +56,11 @@ export const reportsPaths = {
   /** Per-variant sales behind 7.7's «Продажи» tab — wave 39. */
   variantSales(tenantId: string): string {
     return `${TENANT_REPORTING(tenantId)}/variant-sales`;
+  },
+
+  /** X.19 (w6-reporting-facts, batch 11): the ABC cumulative-revenue-share curve. */
+  abcCurve(tenantId: string): string {
+    return `${TENANT_REPORTING(tenantId)}/abc-curve`;
   },
 
   /** T14 (7.7a/7.7b, ADR 0134): start a persisted ABC/XYZ classification run. */

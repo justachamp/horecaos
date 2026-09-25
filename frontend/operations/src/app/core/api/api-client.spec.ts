@@ -109,6 +109,25 @@ describe('ApiClient', () => {
 
       await expect(promise).resolves.toBe('number,period\r\n"S-1","2026-08"\r\n');
     });
+
+    it('returns a binary response as a Blob, never text- or JSON-decoded', async () => {
+      const promise = firstValue(
+        client.blob('/api/v1/control-plane/tenants/t/brands/b/catalog/imports/template.xlsx'),
+      );
+
+      const request = http.expectOne(
+        url('/api/v1/control-plane/tenants/t/brands/b/catalog/imports/template.xlsx'),
+      );
+      expect(request.request.responseType).toBe('blob');
+      const body = new Blob([new Uint8Array([80, 75, 3, 4])], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      });
+      request.flush(body);
+
+      const result = await promise;
+      expect(result).toBeInstanceOf(Blob);
+      expect(result.size).toBe(4);
+    });
   });
 
   describe('cursor pagination', () => {

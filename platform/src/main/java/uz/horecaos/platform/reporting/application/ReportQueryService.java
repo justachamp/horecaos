@@ -20,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.reporting.application.ReportingFacts.BranchDayAggregate;
 import uz.horecaos.platform.reporting.application.ReportingFacts.SlaBucketAggregate;
 import uz.horecaos.platform.reporting.domain.BusinessDayBoundary;
+import uz.horecaos.platform.reporting.domain.ClassificationThresholds;
 import uz.horecaos.platform.reporting.domain.Grain;
 import uz.horecaos.platform.reporting.domain.HolidayCalendar;
 import uz.horecaos.platform.reporting.domain.HolidayMode;
@@ -499,43 +500,39 @@ public class ReportQueryService {
     }
 
     /**
-     * T11 (7.4b, ADR 0125): the delivery-sum-by-tariff audit — see {@link
-     * JdbcReportingStore#readTariffAudit}. Reads the tenant's own business
-     * day boundary purely to turn the caller's date range into the instant
-     * range {@code delivery_fee_resolutions.created_at} is compared against;
-     * unlike every other method here this is not itself a business-day-grain
-     * fact, so there is no recut frontier to refuse crossing.
+     * T11 (7.4b, ADR 0125), w6-reporting-facts batch 11: the delivery-sum-by-
+     * tariff audit — see {@link JdbcReportingStore#readTariffAudit}. Now a
+     * closed, business-date-grain fact read exactly like {@link
+     * #courierSlaBuckets} and {@link #distanceBuckets} beside it (V0411), so
+     * {@link #refuseMixedBoundaryRegime} applies here too — before this wave
+     * it did not, because the underlying read was a live join with no recut
+     * frontier to cross.
      */
     @Transactional(readOnly = true)
     public TariffAuditResult tariffAudit(UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds) {
         validateRange(from, to);
-        BusinessDayBoundary boundary = businessDays.boundaryFor(tenantId);
-        List<JdbcReportingStore.TariffAuditRow> rows =
-                store.readTariffAudit(tenantId, boundary.startOf(from), boundary.endOf(to), locationIds);
-        return new TariffAuditResult(rows, provenance(tenantId, List.of(), boundary));
+        refuseMixedBoundaryRegime(tenantId, from, to);
+        List<JdbcReportingStore.TariffAuditRow> rows = store.readTariffAudit(tenantId, from, to, locationIds);
+        return new TariffAuditResult(rows, provenance(tenantId, List.of(), businessDays.boundaryFor(tenantId)));
     }
 
     /**
-     * T11 (7.4c, ADR 0125): per-order external-delivery cost — the one
-     * courier report that finds money. See {@link
+     * T11 (7.4c, ADR 0125), w6-reporting-facts batch 11: per-order external-
+     * delivery cost — the one courier report that finds money. See {@link
      * JdbcReportingStore#readExternalDeliveryCost} for {@code UNBILLED}'s
-     * derivation and why it is never folded into {@code PENDING}. Resolves
-     * the tenant's own business-day boundary to turn the caller's date range
-     * into the instant range {@code shipment.delivered_at} is compared
-     * against, mirroring {@link #tariffAudit} — an adversarial review
-     * (2026-09-14) found this method previously passed the raw {@code
-     * LocalDate} range straight to the store, which cast {@code
-     * delivered_at} to a date in the database session's timezone rather than
-     * the tenant's.
+     * derivation and why it is never folded into {@code PENDING}, and for why
+     * this now answers from a business-day close's own snapshot (V0412)
+     * rather than a live join.
      */
     @Transactional(readOnly = true)
     public ExternalDeliveryCostResult externalDeliveryCost(
             UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds) {
         validateRange(from, to);
-        BusinessDayBoundary boundary = businessDays.boundaryFor(tenantId);
+        refuseMixedBoundaryRegime(tenantId, from, to);
         List<JdbcReportingStore.ExternalDeliveryCostRow> rows =
-                store.readExternalDeliveryCost(tenantId, boundary.startOf(from), boundary.endOf(to), locationIds);
-        return new ExternalDeliveryCostResult(rows, provenance(tenantId, List.of(), boundary));
+                store.readExternalDeliveryCost(tenantId, from, to, locationIds);
+        return new ExternalDeliveryCostResult(
+                rows, provenance(tenantId, List.of(), businessDays.boundaryFor(tenantId)));
     }
 
     public record CourierLeaderboardResult(
@@ -639,6 +636,27 @@ public class ReportQueryService {
                 provenance(
                         tenantId,
                         List.of(MetricRegistry.require("prep_time.median.v1")),
+                        businessDays.boundaryFor(tenantId)));
+    }
+
+    /**
+     * Wave 11 w5-fulfillment-destination (7.3): every branch's average courier
+     * transit time from one query — {@code delivery_transit_time.average.v1},
+     * read straight off {@code reporting.fact_delivery}, on the same "own
+     * endpoint, not /queries" footing {@link #deliveryDistance} already
+     * establishes for the sibling average beside it.
+     */
+    @Transactional(readOnly = true)
+    public LocationAverageResult averageDeliveryTimeByLocation(
+            UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds) {
+        validateRange(from, to);
+        List<JdbcReportingStore.LocationAverageRow> rows =
+                store.averageTransitSecondsByLocation(tenantId, from, to, locationIds);
+        return new LocationAverageResult(
+                rows,
+                provenance(
+                        tenantId,
+                        List.of(MetricRegistry.require("delivery_transit_time.average.v1")),
                         businessDays.boundaryFor(tenantId)));
     }
 
@@ -781,6 +799,93 @@ public class ReportQueryService {
         return new VariantSalesResult(
                 rows, rows.size() >= limit, provenance(tenantId, List.of(), businessDays.boundaryFor(tenantId)));
     }
+
+    /**
+     * X.19 (w6-reporting-facts, batch 11): the ABC cumulative-revenue-share
+     * curve behind the product analytics page's own {@code q-abc-curve}
+     * chart — cut from the same variant-sales source {@link #variantSales}
+     * itself reads, {@code reporting.fact_order_line}, already a closed fact
+     * (ADR 0023), so this needs no {@code fulfillment}/{@code ordering} read
+     * of its own.
+     *
+     * <p>Not {@link ProductClassificationService}'s own persisted {@code
+     * classification_run} (ADR 0134): that write is capability-gated and
+     * refuses a window under 28 days because its XYZ half needs enough
+     * buckets to compute a coefficient of variation over. This read has no
+     * XYZ half to protect and answers any range {@link #validateRange}
+     * allows, straight off the same revenue-descending rows «Продажи»
+     * already shows, never persisted — a chart, not a ruling.
+     *
+     * <p>{@code cumulativeShareBasisPoints} is a share of the tenant's true
+     * total revenue in range — {@link JdbcReportingStore#readVariantSalesTotalNetSom},
+     * summed with no {@code LIMIT} — not of just the capped, visible page
+     * {@code rows} itself sums to. Dividing by the page's own sum would
+     * inflate every visible product's share by however much revenue the
+     * page's {@code limit} left out, and disagree with this platform's other
+     * ABC computation, {@code ProductClassificationService#run}, which sums
+     * {@code totalRevenue} over every ranked variant, unbounded, before
+     * dividing. {@link ClassificationThresholds#DEFAULT} is the one
+     * published 80/95 boundary this platform draws an A/B/C line at
+     * everywhere else — statistics.md's own S2.7, "пороги 80/95%".
+     */
+    @Transactional(readOnly = true)
+    public AbcCurveResult abcCurve(UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds, int limit) {
+        validateRange(from, to);
+        refuseMixedBoundaryRegime(tenantId, from, to);
+
+        List<JdbcReportingStore.VariantSalesRow> rows = store.readVariantSales(
+                tenantId,
+                from,
+                to,
+                locationIds,
+                List.of(),
+                JdbcReportingStore.VariantSalesSort.REVENUE_DESC,
+                limit,
+                null);
+
+        long totalNetSom = store.readVariantSalesTotalNetSom(tenantId, from, to, locationIds, List.of());
+        ClassificationThresholds thresholds = ClassificationThresholds.DEFAULT;
+
+        List<AbcCurveRow> curve = new ArrayList<>(rows.size());
+        long cumulative = 0;
+        for (JdbcReportingStore.VariantSalesRow row : rows) {
+            cumulative += row.totalNetSom();
+            int shareBasisPoints = basisPointsOf(row.totalNetSom(), totalNetSom);
+            int cumulativeShareBasisPoints = basisPointsOf(cumulative, totalNetSom);
+            curve.add(new AbcCurveRow(
+                    row.variantId(),
+                    row.categoryId(),
+                    row.productName(),
+                    row.totalNetSom(),
+                    shareBasisPoints,
+                    cumulativeShareBasisPoints,
+                    thresholds.abcClassOf(cumulativeShareBasisPoints)));
+        }
+
+        return new AbcCurveResult(
+                curve,
+                rows.size() >= limit,
+                thresholds,
+                provenance(tenantId, List.of(), businessDays.boundaryFor(tenantId)));
+    }
+
+    /** Same rounding {@code ProductClassificationService} uses for its own ABC/XYZ shares. */
+    private static int basisPointsOf(long part, long whole) {
+        return whole <= 0 ? 0 : (int) Math.round(part * 10_000.0 / whole);
+    }
+
+    /** One product's cumulative position on the ABC curve — see {@link #abcCurve}. */
+    public record AbcCurveRow(
+            @Nullable UUID variantId,
+            @Nullable UUID categoryId,
+            String productName,
+            long totalNetSom,
+            int shareBasisPoints,
+            int cumulativeShareBasisPoints,
+            char abcClass) {}
+
+    public record AbcCurveResult(
+            List<AbcCurveRow> rows, boolean maybeMore, ClassificationThresholds thresholds, Provenance provenance) {}
 
     /**
      * 7.5's operator leaderboard and 7.5a's receipt depth, one row per
@@ -1455,6 +1560,13 @@ public class ReportQueryService {
 
     /** Wave T06 (7.3): every branch's median preparation time from one query — see {@link #preparationTimeByLocation}. */
     public record LocationMedianResult(List<JdbcReportingStore.LocationMedianRow> rows, Provenance provenance) {}
+
+    /**
+     * Wave 11 w5-fulfillment-destination (7.3): every branch's average
+     * courier transit time from one query — see {@link
+     * #averageDeliveryTimeByLocation}.
+     */
+    public record LocationAverageResult(List<JdbcReportingStore.LocationAverageRow> rows, Provenance provenance) {}
 
     /**
      * @param maybeMore true when the bounded read came back full — there may be

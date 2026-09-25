@@ -6,6 +6,7 @@ import { I18n } from '../../../core/i18n/i18n';
 import { MessageKey } from '../../../core/i18n/messages.en';
 import { TPipe } from '../../../core/i18n/t.pipe';
 import { ApiError } from '../../../core/api/problem-details';
+import { ConfirmDialog } from '../../../shared/ui/confirm-dialog';
 import { describeApiError } from '../../orders/order-errors';
 import {
   CommercialApi,
@@ -84,14 +85,32 @@ const STATEMENT_LINE_KIND_KEYS: Readonly<Record<string, MessageKey>> = {
  * plan entitlements not applying) — a healthy tenant sees nothing extra,
  * because a banner that always shows stops meaning anything.
  *
+ * **Gap map row 8.6: a confirm step before the purchase call.** Clicking
+ * "Add" no longer calls `purchaseModule` directly — it opens {@link
+ * ConfirmDialog} naming the module, its total price (quantity folded in for
+ * a `PER_UNIT` module), its billing unit (the closest thing to a "period"
+ * this catalogue has — `ONE_OFF` bills once, everything else recurs on the
+ * next statement, ADR 0088), and what it switches on (`description` when
+ * the module has one, else its raw `featureKeys`). Only {@link
+ * confirmPurchase} calls the API; {@link cancelPurchase}/Escape/backdrop
+ * close the dialog with nothing sent.
+ *
  * **What is honestly not.** Period close is HorecaOS-staff work: ADR 0088
  * decided a month is closed by issuing its statement, deliberately manual
  * until tax and invoicing are approved, so this screen has nothing left to
- * add for it. The prepaid wallet stays blocked on ADR 0095.
+ * add for it. The prepaid wallet stays blocked on ADR 0095. A tenant
+ * self-service "end" (undo a purchase) is not built either — ADR 0127's own
+ * "Accepted trade-offs" section names this exact gap and closes it on
+ * purpose: "this ADR adds no tenant-reachable end to match the new
+ * tenant-reachable add ... building the symmetric self-service end is not
+ * this wave's brief and is left for a future one to pick up if it turns out
+ * to matter." `CommercialModuleController.end` stays `ScopeType.PLATFORM`;
+ * widening it to tenant scope would be re-deciding a choice ADR 0127 already
+ * recorded, not filling a gap it left open.
  */
 @Component({
   selector: 'q-subscription-page',
-  imports: [TPipe],
+  imports: [TPipe, ConfirmDialog],
   templateUrl: './subscription-page.html',
   styleUrl: './subscription-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -124,6 +143,13 @@ export class SubscriptionPage {
   protected readonly purchasingModuleId = signal<string | null>(null);
   /** `PER_UNIT` modules ask how many; keyed by moduleId, defaulting to 1. */
   protected readonly moduleQuantities = signal<Readonly<Record<string, number>>>({});
+  /**
+   * Gap map row 8.6: the module "Add" opens a confirm step naming price,
+   * billing unit and what activates, rather than calling {@link
+   * confirmPurchase} directly — set by {@link requestPurchase}, cleared by
+   * {@link cancelPurchase} or once {@link confirmPurchase} settles.
+   */
+  protected readonly purchaseTarget = signal<SellableModuleView | null>(null);
 
   protected readonly arrears = signal<TenantArrearsView | null>(null);
   protected readonly arrearsDenied = signal(false);
@@ -240,8 +266,57 @@ export class SubscriptionPage {
     }));
   }
 
-  protected async purchaseModule(module: SellableModuleView): Promise<void> {
+  /** Gap map row 8.6: "Add" opens the confirm step instead of purchasing at once. */
+  protected requestPurchase(module: SellableModuleView): void {
     if (this.purchasingModuleId() !== null) {
+      return;
+    }
+    this.moduleActionError.set(null);
+    this.purchaseTarget.set(module);
+  }
+
+  protected cancelPurchase(): void {
+    if (this.purchasingModuleId() !== null) {
+      // A confirm already in flight must not be abandoned mid-request --
+      // ConfirmDialog itself disables Cancel/Escape/backdrop while busy, so
+      // this is a defensive no-op, not a path a real click can reach.
+      return;
+    }
+    this.purchaseTarget.set(null);
+  }
+
+  /**
+   * The confirm dialog's own price/billing-unit/activates text, gap map row
+   * 8.6's own ask. Quantity is folded into the price for a `PER_UNIT`
+   * module rather than shown as a separate line — the operator already set
+   * it on the catalogue row before clicking Add.
+   */
+  protected purchaseConfirmBody(module: SellableModuleView): string {
+    const quantity = module.billingUnit === 'PER_UNIT' ? this.quantityFor(module.moduleId) : null;
+    const unitPriceText = this.money(module.unitPrice);
+    const price =
+      quantity !== null && quantity > 1
+        ? this.i18n.t('finance.subscription.modules.confirm.priceWithQuantity', {
+            price: unitPriceText,
+            quantity,
+          })
+        : unitPriceText;
+    const activates =
+      module.description?.trim() ||
+      (module.featureKeys.length > 0
+        ? module.featureKeys.join(', ')
+        : this.i18n.t('finance.subscription.modules.confirm.activatesFallback'));
+    return this.i18n.t('finance.subscription.modules.confirm.body', {
+      name: module.name,
+      price,
+      billingUnit: this.billingUnitLabel(module.billingUnit),
+      activates,
+    });
+  }
+
+  protected async confirmPurchase(): Promise<void> {
+    const module = this.purchaseTarget();
+    if (!module || this.purchasingModuleId() !== null) {
       return;
     }
     this.moduleActionError.set(null);
@@ -255,8 +330,10 @@ export class SubscriptionPage {
       ]);
       this.modulesHeld.set(modulesHeld);
       this.entitlements.set(entitlements);
+      this.purchaseTarget.set(null);
     } catch (error) {
       this.moduleActionError.set(this.describe(error));
+      this.purchaseTarget.set(null);
     } finally {
       this.purchasingModuleId.set(null);
     }

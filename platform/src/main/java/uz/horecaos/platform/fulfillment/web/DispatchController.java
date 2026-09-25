@@ -280,7 +280,9 @@ public class DispatchController {
     /**
      * One queue row. {@code shipment} is null for a plan nobody has taken yet;
      * see the class doc for why no order-facing field (name, address, total)
-     * lives here.
+     * lives here — {@code destinationLabel} is the one deliberate exception
+     * (row 3.1): a non-PII projection, never the address itself, safe for the
+     * same 10-second poll this whole response answers.
      */
     public record PlanQueueResponse(
             UUID planId,
@@ -294,7 +296,8 @@ public class DispatchController {
             @Nullable Instant promisedDeliveryStart,
             @Nullable Instant promisedDeliveryEnd,
             int version,
-            @Nullable ShipmentView shipment) {
+            @Nullable ShipmentView shipment,
+            @Nullable String destinationLabel) {
 
         static PlanQueueResponse of(DeliveryPlan plan, @Nullable Shipment shipment) {
             return new PlanQueueResponse(
@@ -309,7 +312,8 @@ public class DispatchController {
                     plan.promisedDeliveryStart(),
                     plan.promisedDeliveryEnd(),
                     plan.version(),
-                    shipment == null ? null : ShipmentView.of(shipment));
+                    shipment == null ? null : ShipmentView.of(shipment),
+                    plan.destinationLabel());
         }
     }
 

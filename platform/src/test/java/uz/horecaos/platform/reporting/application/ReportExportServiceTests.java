@@ -27,6 +27,7 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.DockerClientFactory;
 import tools.jackson.databind.json.JsonMapper;
+import uz.horecaos.platform.audit.infrastructure.persistence.JdbcApprovalService;
 import uz.horecaos.platform.audit.infrastructure.persistence.JdbcAuditRecorder;
 import uz.horecaos.platform.customers.api.CustomerDirectoryExportPort;
 import uz.horecaos.platform.customers.application.CustomerDirectoryExportAdapter;
@@ -117,7 +118,14 @@ class ReportExportServiceTests {
                 new JdbcAuditRecorder(jdbc, objectMapper),
                 clock,
                 new uz.horecaos.platform.customers.api.CustomerOrderActivityPort() {},
-                (tenantId, at) -> new uz.horecaos.platform.customers.api.BusinessDayWindows.Window(at, at));
+                (tenantId, at) -> new uz.horecaos.platform.customers.api.BusinessDayWindows.Window(at, at),
+                new JdbcApprovalService(
+                        jdbc,
+                        new JdbcAuditRecorder(jdbc, objectMapper),
+                        clock,
+                        new io.micrometer.core.instrument.simple.SimpleMeterRegistry(),
+                        objectMapper),
+                500);
         CustomerDirectoryExportPort customerDirectory = new CustomerDirectoryExportAdapter(lists);
 
         var crmLogStore = new uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderCrmLogStore(jdbc);
@@ -276,6 +284,69 @@ class ReportExportServiceTests {
         assertThat(view.downloadUrl()).isNotNull();
         String csv = new String(storage.puts.get(0).content(), StandardCharsets.UTF_8);
         assertThat(csv).contains("+998900000003");
+    }
+
+    /**
+     * Staff 9.4: {@code CustomerListQueryService#exportFiltered} is also an ADR 0027
+     * maker-checker action above the tenant's row threshold. A queued {@code
+     * CUSTOMER_DIRECTORY} export with the PII column group above that threshold must never
+     * settle as a normal {@code COMPLETE}, zero-row result when the required second signature
+     * is still outstanding -- that is indistinguishable from a filter that legitimately matched
+     * no one, and defeats the point of gating the reveal at all.
+     */
+    @Test
+    @DisplayName("a queued CUSTOMER_DIRECTORY export above the tenant's PII-approval threshold "
+            + "never settles as a completed, empty-match export while the approval is pending")
+    void queuedCustomerDirectoryExportDoesNotSilentlyCompleteWhileApprovalIsPending() {
+        bulkInsertCustomers(501);
+        authorPiiExportPolicy();
+
+        UUID id = service.requestExport(
+                TENANT,
+                ReportExportRegistry.CUSTOMER_DIRECTORY,
+                List.of("accountId", "status", "displayName", "phone"),
+                null,
+                null,
+                "queued-pii-approval-pending-test",
+                SUBJECT,
+                true);
+
+        assertThat(service.processNextQueued()).isTrue();
+
+        ReportExportService.ExportStatusView view =
+                service.status(TENANT, id, true).orElseThrow();
+        assertThat(view.status())
+                .as("a pending second signature must never read the same as a filter that " + "matched zero customers")
+                .isNotEqualTo("COMPLETE");
+        assertThat(view.rowCount())
+                .as("nothing was decrypted or counted yet -- this is not a completed zero-row export")
+                .isNull();
+        assertThat(view.failureReason())
+                .as("the reason must name the outstanding approval, not a generic export failure")
+                .isNotNull()
+                .containsIgnoringCase("PENDING");
+        assertThat(storage.puts)
+                .as("no artefact -- not even an empty one -- may be written while a PII reveal is unauthorised")
+                .isEmpty();
+        assertThat(auditFactCount())
+                .as("nothing was revealed, so no report.export.completed fact was earned")
+                .isZero();
+    }
+
+    /** Seeds a {@code customer.pii.export} policy at TENANT scope, effective since before the fixed clock. */
+    private void authorPiiExportPolicy() {
+        jdbc.sql("""
+                        INSERT INTO audit.approval_policies
+                            (id, tenant_id, action_code, scope_type, threshold_json,
+                             required_approver_capability, valid_from, version, approved_by)
+                        VALUES (:id, :tenantId, 'customer.pii.export', 'TENANT',
+                                '{"description":"any export past the row threshold"}'::jsonb,
+                                'customer.pii.reveal', :validFrom, 1, 'platform-admin')
+                        """)
+                .param("id", UUID.randomUUID())
+                .param("tenantId", TENANT)
+                .param("validFrom", Instant.parse("2026-09-14T10:00:00Z").atOffset(ZoneOffset.UTC))
+                .update();
     }
 
     @Test

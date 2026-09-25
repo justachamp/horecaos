@@ -1,11 +1,16 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal } from '@angular/core';
 
 import { CurrentTenant } from '../../core/auth/current-tenant';
 import { ApiError } from '../../core/api/problem-details';
 import { I18n } from '../../core/i18n/i18n';
 import { TPipe } from '../../core/i18n/t.pipe';
+import { DiffViewer } from '../../shared/ui/diff-viewer';
 import { describeApiError } from '../orders/order-errors';
-import { activityLogActionLabelKey, humanizeActionCode } from './activity-log-action-labels';
+import {
+  activityLogActionLabelKey,
+  bulkActivityLogActionSentence,
+  humanizeActionCode,
+} from './activity-log-action-labels';
 import { ActivityLogApi, AuditEventDetail, AuditEventView } from './activity-log-api';
 
 type LoadState = 'loading' | 'ready' | 'denied' | 'error';
@@ -34,21 +39,30 @@ function isoDaysAgo(days: number): string {
  * Reads `AuditController`'s operations-surface routes: the list is `search`
  * (§11.12's outcome/scope/correlation filters), the drawer's diff is
  * `detail` (§11.13's single-event read, itself an individually audited call
- * per its own doc).
+ * per its own doc). The drawer's diff itself renders through `q-diff-viewer`
+ * (row `X.26`) rather than a hand-rolled `<div class="diff">` — this was the
+ * one screen that built its own version of what that component already
+ * generalises, and `q-diff-viewer`'s own doc names this file as the finding.
+ * `changeEntries` stays only as the "is there anything to show" gate around
+ * it; formatting a field's value is `q-diff-viewer`'s job now, not this
+ * component's.
  *
  * «Кто» shows `actorDisplay ?? actorSubject`. Before this wave `actorDisplay`
  * was null on nearly every row; `AuditQueryService` now resolves it at read
  * time (Staff 9.3b), so most rows carry a name here without this component
  * doing anything differently — the fix lives entirely on the read path.
  * «Что» renders a plain-language label from {@link activityLogActionLabelKey}
- * where one is named, and a humanized rendering of the raw code otherwise —
- * still not a complete code-to-sentence dictionary (every module's own
- * action codes is not one screen's translation table to invent), but no
- * longer a bare dotted code either.
+ * where one is hand-curated, a mechanically-generated sentence from
+ * {@link bulkActivityLogActionSentence} for the rest of what
+ * `AuditFact.of(...)` emits as a literal code (Staff 9.3's coverage pass —
+ * `activity-log-action-codes-coverage.spec.ts` enforces this stays true),
+ * and {@link humanizeActionCode} only for a code built at runtime from a
+ * variable, which that coverage test cannot see (its own doc names which
+ * producers those are).
  */
 @Component({
   selector: 'q-activity-log-page',
-  imports: [TPipe],
+  imports: [TPipe, DiffViewer],
   templateUrl: './activity-log-page.html',
   styleUrl: './activity-log-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -57,6 +71,15 @@ export class ActivityLogPage {
   private readonly tenant = inject(CurrentTenant);
   private readonly api = inject(ActivityLogApi);
   protected readonly i18n = inject(I18n);
+
+  /**
+   * `?actor=` — Staff 9.3's deep link from a person's own card
+   * (`staff-member-detail-pane.ts#viewActivity`), bound by the router's
+   * `withComponentInputBinding()` the same way `staff-member-detail-pane.ts`
+   * itself binds `:subjectId`. Optional: the plain `/staff/activity` route
+   * every nav link still points at is unaffected.
+   */
+  readonly actor = input<string>('');
 
   protected readonly state = signal<LoadState>('loading');
   protected readonly loadErrorText = signal<string | null>(null);
@@ -86,10 +109,10 @@ export class ActivityLogPage {
   /**
    * Every distinct human actor seen in the loaded window, for the actor
    * filter's picker (a `<datalist>`, so a subject id can still be typed or
-   * pasted directly). Not a full staff roster — a deep link from a person's
-   * own card would seed one without a fetch this screen does not otherwise
-   * need — but it turns the filter from "paste a UUID" into "start typing a
-   * name" for anyone who has already appeared on screen.
+   * pasted directly). Not a full staff roster — {@link actor} is the deep
+   * link from a person's own card, seeded with no extra fetch this screen
+   * does not otherwise need — but it turns the filter from "paste a UUID"
+   * into "start typing a name" for anyone who has already appeared on screen.
    */
   protected readonly knownPeople = computed<readonly KnownPerson[]>(() => {
     const seen = new Map<string, string>();
@@ -102,7 +125,22 @@ export class ActivityLogPage {
   });
 
   constructor() {
-    void this.load();
+    // `withComponentInputBinding()` applies a bound input through
+    // `ComponentRef.setInput()`, which runs *after* the constructor body —
+    // reading `this.actor()` directly here would still see its default `''`
+    // — so this seeds the actor filter (and triggers the first load) from an
+    // `effect()` instead, the same idiom `staff-member-detail-pane.ts` uses
+    // for its own route-bound input, for the identical reason: `effect()`
+    // runs once the input has actually been set. It only re-fires on a real
+    // change to `?actor=` (a fresh deep link), never merely because a
+    // manager cleared the filter by hand while staying on this page.
+    effect(() => {
+      const seededActor = this.actor().trim();
+      if (seededActor !== '') {
+        this.actorFilter.set(seededActor);
+      }
+      void this.load();
+    });
   }
 
   protected retry(): void {
@@ -266,7 +304,14 @@ export class ActivityLogPage {
 
   protected actionLabel(event: AuditEventView): string {
     const key = activityLogActionLabelKey(event.actionCode);
-    return key ? this.i18n.t(key) : humanizeActionCode(event.actionCode);
+    if (key) {
+      return this.i18n.t(key);
+    }
+    // Staff 9.3: the long tail the hand-curated map above does not name —
+    // see activity-log-action-sentences.ts's own doc for why this is a
+    // separate, lazy-loaded table rather than more messages.*.ts keys.
+    const bulk = bulkActivityLogActionSentence(event.actionCode, this.i18n.locale());
+    return bulk ?? humanizeActionCode(event.actionCode);
   }
 
   protected scopeLabel(event: AuditEventView): string {
@@ -275,16 +320,9 @@ export class ActivityLogPage {
       : (event.scopeId ?? '—');
   }
 
+  /** Whether there is anything for `q-diff-viewer` to render — that component owns the formatting itself. */
   protected changeEntries(detail: AuditEventDetail): readonly (readonly [string, unknown])[] {
     return detail.changeDocument ? Object.entries(detail.changeDocument) : [];
-  }
-
-  protected formatFieldChange(value: unknown): string {
-    if (value && typeof value === 'object' && 'before' in value && 'after' in value) {
-      const change = value as { before: unknown; after: unknown };
-      return `${formatValue(change.before)} → ${formatValue(change.after)}`;
-    }
-    return formatValue(value);
   }
 
   private describe(error: unknown): string {
@@ -293,11 +331,4 @@ export class ActivityLogPage {
     }
     return this.i18n.t('error.unknown.noReference');
   }
-}
-
-function formatValue(value: unknown): string {
-  if (value === null || value === undefined) {
-    return '—';
-  }
-  return typeof value === 'string' ? value : JSON.stringify(value);
 }

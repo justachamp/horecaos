@@ -81,9 +81,11 @@ export const messagesRu: MessageCatalogue = {
   'orders.drafts.column.channel': 'Канал',
   'orders.drafts.column.location': 'Филиал',
   'orders.drafts.column.owner': 'Владелец',
+  'orders.drafts.column.firstLine': 'Первая позиция',
   'orders.drafts.column.lines': 'Позиций',
   'orders.drafts.column.expiresAt': 'Истекает',
   'orders.drafts.column.status': 'Статус',
+  'orders.drafts.firstLineUnknown': '—',
   'orders.drafts.openCustomer': 'Открыть клиента',
   'orders.drafts.owner.account': 'Аккаунт',
   'orders.drafts.owner.guest': 'Гость',
@@ -190,6 +192,7 @@ export const messagesRu: MessageCatalogue = {
   'orders.column.total': 'Сумма',
   'orders.column.fee': 'Доставка',
   'orders.column.payment': 'Оплата',
+  'orders.column.customer': 'Клиент',
   'orders.column.courier': 'Курьер',
   'orders.column.status': 'Статус',
   'orders.column.actions': 'Действия',
@@ -872,7 +875,8 @@ export const messagesRu: MessageCatalogue = {
   'settings.integrations.branches.bindDialog.noneEligible':
     'Сначала подключите провайдера — пока привязывать нечего.',
   'settings.integrations.branches.bindDialog.capabilities': 'Возможности для привязки',
-  'settings.integrations.branches.bindDialog.capabilitiesLoading': 'Загрузка возможностей провайдера…',
+  'settings.integrations.branches.bindDialog.capabilitiesLoading':
+    'Загрузка возможностей провайдера…',
   'settings.integrations.branches.bindDialog.capabilitiesNone':
     'Этот провайдер не объявляет ни одной возможности в этой сборке, поэтому его нельзя привязать через это окно.',
   'settings.integrations.branches.bindDialog.branch': 'Филиал',
@@ -1202,8 +1206,8 @@ export const messagesRu: MessageCatalogue = {
   'settings.catalog.useStockLogic.body':
     'Включает учёт количества остатков для всей компании вместо бинарного состояния «в наличии / продано».',
   'settings.catalog.useStockLogic.field': 'Использовать логику остатков',
-  'settings.catalog.useStockLogic.notYetEnforced':
-    'Пока не применяется: учёт количества отклоняется для любой позиции независимо от этого переключателя.',
+  'settings.catalog.useStockLogic.hint':
+    'Включено — режим QUANTITY учитывается по-настоящему для позиций с этим режимом. Выключено — такие позиции ведут себя как неучитываемые (UNTRACKED).',
   'settings.catalog.qrKioskPricePlane.title': 'QR и киоск продают по ценам зала',
   'settings.catalog.qrKioskPricePlane.body':
     'Автоматически направляет каналы QR и киоск на ценовой план зала вместо отдельного плана, составленного вручную.',
@@ -1959,6 +1963,7 @@ export const messagesRu: MessageCatalogue = {
   'catalog.nav.categories': 'Категории',
   'catalog.nav.menus': 'Меню',
   'catalog.nav.menuSets': 'Наборы меню',
+  'catalog.nav.stock': 'Остатки',
   'catalog.nav.import': 'Импорт',
   'catalog.nav.publication': 'Публикация',
   'catalog.nav.prices': 'Цены',
@@ -2040,9 +2045,10 @@ export const messagesRu: MessageCatalogue = {
   'catalog.import.detail.applyItems.column.action': 'Действие',
   'catalog.import.detail.applyItems.column.status': 'Статус',
   'catalog.import.detail.applyItems.column.reason': 'Причина',
-  'catalog.import.tab.file': 'Импорт CSV',
-  'catalog.import.file.title': 'Импорт товаров из CSV-файла',
-  'catalog.import.file.downloadTemplate': 'Скачать шаблон',
+  'catalog.import.tab.file': 'Импорт CSV / Excel',
+  'catalog.import.file.title': 'Импорт товаров из CSV- или Excel-файла',
+  'catalog.import.file.downloadTemplate': 'Скачать шаблон (.csv)',
+  'catalog.import.file.downloadTemplateWorkbook': 'Скачать шаблон (.xlsx)',
   'catalog.import.file.downloadExport': 'Экспортировать текущий каталог',
   'catalog.import.file.catalog': 'Каталог',
   'catalog.import.file.noCatalog.title': 'Каталога пока нет',
@@ -2239,6 +2245,9 @@ export const messagesRu: MessageCatalogue = {
   'catalog.editor.availability.empty': 'Товар пока не предложен ни в одном филиале',
   'catalog.editor.availability.stop': 'В стоп',
   'catalog.editor.availability.resume': 'Снять со стопа',
+  'catalog.editor.availability.quantityHint':
+    'Остаток, суточное значение по умолчанию и пороги остановки по каналам для варианта с учётом QUANTITY находятся на странице «Остатки».',
+  'catalog.editor.availability.quantityHintLink': 'Открыть Остатки',
   'catalog.editor.schedule.hint':
     'Пусто — значит товар всегда в продаже. Окна ниже ограничивают время продажи и рассчитываются по местному времени филиала.',
   'catalog.editor.schedule.loading': 'Загрузка графика…',
@@ -2336,6 +2345,35 @@ export const messagesRu: MessageCatalogue = {
   'catalog.categories.archiveConfirm.title': 'Архивировать категорию?',
   'catalog.categories.archiveConfirm.body':
     '«{name}» больше не будет показываться в дереве категорий. Товары, размещённые в ней, останутся на месте.',
+
+  // Строка карты пробелов 4.4c: страница остатков QUANTITY по филиалу (пакет 11)
+  'catalog.stock.title': 'Остатки',
+  'catalog.stock.resetNote':
+    'Суточное значение по умолчанию сбрасывается на границе рабочего дня — задаётся в Настройки → Справочники.',
+  'catalog.stock.loading': 'Загрузка остатков',
+  'catalog.stock.noLocation': 'Для этого аккаунта ещё не определён филиал',
+  'catalog.stock.denied': 'Нет доступа к остаткам этого филиала',
+  'catalog.stock.empty': 'В этом филиале пока нет позиций с учётом QUANTITY',
+  'catalog.stock.column.variant': 'Вариант',
+  'catalog.stock.column.onHand': 'В наличии',
+  'catalog.stock.column.reserved': 'Зарезервировано',
+  'catalog.stock.column.remaining': 'Остаток',
+  'catalog.stock.column.default': 'Суточное значение',
+  'catalog.stock.column.lastReset': 'Последний сброс',
+  'catalog.stock.column.thresholds': 'Пороги остановки по каналам',
+  'catalog.stock.noDefault': 'Нет',
+  'catalog.stock.noThresholds': 'Нет',
+  'catalog.stock.edit': 'Изменить',
+  'catalog.stock.close': 'Закрыть',
+  'catalog.stock.setOnHand.title': 'Указать остаток',
+  'catalog.stock.setDefault.title': 'Суточное значение по умолчанию',
+  'catalog.stock.setDefault.body':
+    'Сбрасывает остаток до этого значения на следующей границе рабочего дня. Оставьте пустым, чтобы отключить сброс.',
+  'catalog.stock.thresholds.title': 'Пороги остановки по каналам',
+  'catalog.stock.thresholds.body':
+    'Останавливает продажу по одному типу канала раньше, когда остаток опускается до этого уровня или ниже — витрина продолжает продавать до нуля, если у неё нет своего порога.',
+  'catalog.stock.thresholds.add': 'Добавить',
+  'catalog.stock.thresholds.remove': 'Удалить',
 
   'catalog.menus.title': 'Меню',
   'catalog.menus.location.label': 'Филиал',
@@ -2725,6 +2763,21 @@ export const messagesRu: MessageCatalogue = {
   'kitchen.devices.revoke.submitting': 'Отзыв…',
   'kitchen.devices.revoke.cancel': 'Отмена',
 
+  // Кухонный wallboard (2.1/2.4)
+  'wallboardKitchen.title': 'Кухня',
+  'wallboardKitchen.denied': 'Нет доступа к кухонной доске этой точки',
+  'wallboardKitchen.loading': 'Загрузка кухонной доски',
+  'wallboardKitchen.empty': 'Сейчас ничего не готовится',
+  'wallboardKitchen.offline': 'Нет связи — показана последняя загруженная доска',
+  'wallboardKitchen.actionError': 'Не удалось выполнить действие. Попробуйте ещё раз.',
+  'wallboardVdu.title': 'Экран выдачи',
+  'wallboardVdu.denied': 'Нет доступа к кухонной доске этой точки',
+  'wallboardVdu.loading': 'Загрузка экрана выдачи',
+  'wallboardVdu.empty': 'Сейчас ничего не готовится',
+  'wallboardVdu.offline': 'Нет связи — показан последний загруженный экран',
+  'wallboardVdu.stationFilter.label': 'Станция',
+  'wallboardVdu.stationFilter.all': 'Все станции',
+
   // Курьеры (3.3) — волна 30
   'couriers.title': 'Курьеры',
   'couriers.loading': 'Загрузка списка курьеров',
@@ -2733,6 +2786,11 @@ export const messagesRu: MessageCatalogue = {
   'couriers.column.reference': 'Курьер',
   'couriers.column.type': 'Тип',
   'couriers.column.load': 'Загрузка',
+  'couriers.column.online': 'Онлайн',
+  'couriers.online.yes': 'Онлайн',
+  'couriers.online.no': 'Офлайн',
+  'couriers.online.neverSeen': 'Позиция этого курьера ещё не получена',
+  'couriers.online.lastSeenAt': 'Последняя позиция: {when}',
   'couriers.column.engagement': 'Статус оформления',
   'couriers.action.verify': 'Подтвердить',
   'couriers.action.suspend': 'Приостановить',
@@ -2740,9 +2798,14 @@ export const messagesRu: MessageCatalogue = {
   'couriers.register.action': 'Зарегистрировать курьера',
   'couriers.register.title': 'Регистрация курьера',
   'couriers.register.type': 'Тип курьера',
-  'couriers.register.principalSubject': 'Учётная запись в приложении курьера (Keycloak)',
+  'couriers.register.firstName': 'Имя',
+  'couriers.register.lastName': 'Фамилия',
+  'couriers.register.phone': 'Телефон',
+  'couriers.register.phone.placeholder': '+998 90 123 45 67',
+  'couriers.register.email': 'Email (необязательно)',
+  'couriers.register.accountNote':
+    'Учётная запись в приложении курьера создаётся автоматически по этому имени и телефону.',
   'couriers.register.displayReference': 'Отображаемый номер (например, K-014)',
-  'couriers.register.fullName': 'ФИО',
   'couriers.register.engagedFrom': 'Дата начала работы',
   'couriers.register.reason': 'Причина',
   'couriers.register.submit': 'Зарегистрировать',
@@ -3340,6 +3403,9 @@ export const messagesRu: MessageCatalogue = {
   'delivery.policy.graceSeconds': 'Льготный период (секунд)',
   'delivery.policy.consequence.graceSeconds':
     'Курьер может опоздать на это число секунд к запланированной отметке, прежде чем она засчитается пропущенной.',
+  'delivery.policy.onlineWithinMinutes': 'Порог «онлайн» (минут)',
+  'delivery.policy.consequence.onlineWithinMinutes':
+    'Курьер, чья последняя позиция получена не позднее этого числа минут назад, отображается в реестре как «онлайн».',
   'delivery.policy.confirmationPointRetentionDays': 'Хранение точек подтверждения (дней)',
   'delivery.policy.consequence.confirmationPointRetentionDays':
     'Фото и подписи подтверждения доставки хранятся это число дней, затем удаляются.',
@@ -3360,6 +3426,8 @@ export const messagesRu: MessageCatalogue = {
     'По умолчанию отключено. Включение начинает проверять положение курьера по обоим радиусам ниже.',
   'delivery.policy.gpsAcceptRadiusKm': 'Радиус принятия (км, от точки выдачи)',
   'delivery.policy.gpsStatusChangeRadiusMeters': 'Радиус смены статуса (м, от точки клиента)',
+  'delivery.policy.gpsSummary':
+    'Включено — приём в пределах {acceptKm} км, смена статуса в пределах {statusChangeM} м',
   'delivery.policy.billingMode': 'Биллинг курьеров (личный баланс)',
   'delivery.policy.billingMode.refused': 'Отклонено ADR 0042',
   'delivery.policy.billingMode.reason':
@@ -3368,6 +3436,15 @@ export const messagesRu: MessageCatalogue = {
   'delivery.policy.telemetryGate.platformOnly': 'Только платформа',
   'delivery.policy.telemetryGate.reason':
     'Зарегистрирован (ADR 0045), но доступен для записи только с административной панели платформы — арендатор не может задать это здесь.',
+  'delivery.policy.notEnforced': 'Пока не применяется',
+  'delivery.policy.notEnforced.gps.reason':
+    'Сохраняется, но ничего это пока не проверяет: в приложении курьера нет эндпоинта, принимающего заказ или продвигающего статус доставки с собственной позицией курьера. Подключение этого переключателя означает сначала выпустить такой эндпоинт, а это выходит за рамки данного документа.',
+  'delivery.policy.notEnforced.kitchenReadyOnly.reason':
+    'Сохраняется, но ничего это пока не проверяет: в консоли нет ленты назначений для курьера, которую можно было бы фильтровать этим переключателем — курьеры видят заказы только через диспетчеризацию, инициируемую персоналом, а не через собственный список.',
+  'delivery.policy.notEnforced.revealCustomerLocationTiming.reason':
+    'Сохраняется, но ничего это пока не проверяет: нет эндпоинта, который вообще показывал бы курьеру точный адрес клиента, так что переключателю времени нечего регулировать.',
+  'delivery.policy.notEnforced.postDeliveryPaymentCheckRequired.reason':
+    'Сохраняется, но ничего это пока не проверяет: завершение заказа намеренно решается независимо от учёта курьеров (ADR 0125) — сделать его зависимым от этого переключателя — решение, которое этот экран не может принять самостоятельно.',
   'delivery.policy.edit': 'Изменить',
   'delivery.policy.cancel': 'Отмена',
   'delivery.policy.publish': 'Опубликовать',
@@ -3427,6 +3504,10 @@ export const messagesRu: MessageCatalogue = {
   'customers.export.done': 'Экспортировано клиентов: {count}.',
   'customers.export.doneTruncated':
     'Экспортированы первые {count} клиент(ов) — фильтр нашёл больше, список обрезан.',
+  'customers.export.approvalPending':
+    'Этот экспорт превышает порог и ожидает второй подписи. Попросите менеджера подтвердить его в разделе «Согласования».',
+  'customers.export.approvalDeclined':
+    'В этом экспорте отказано. Ничего не было раскрыто. Уточните причину у согласующего или отправьте запрос заново с более узким фильтром.',
   'customers.import.action': 'Импорт',
   'customers.import.pageTitle': 'Импорт клиентов из CSV-файла',
   'customers.import.close': 'Назад к клиентам',
@@ -3769,6 +3850,10 @@ export const messagesRu: MessageCatalogue = {
   'staff.detail.field.telegram': 'Telegram',
   'staff.detail.security.notBuilt':
     'Способ входа, последний вход и PIN на терминале пока не отслеживаются',
+  'staff.detail.today.created': 'Создано сегодня: {count}',
+  'staff.detail.today.accepted': 'Принято сегодня: {count}',
+  'staff.detail.today.loading': 'Загрузка заказов за сегодня…',
+  'staff.detail.viewActivity': 'Смотреть журнал действий',
 
   'staff.myProfile.title': 'Мой профиль',
   'staff.myProfile.personalData.title': 'Личные данные',
@@ -3840,6 +3925,9 @@ export const messagesRu: MessageCatalogue = {
   'reports.exportCentre.newTitle': 'Новый экспорт',
   'reports.exportCentre.reportLabel': 'Отчёт',
   'reports.exportCentre.reportOption.customerDirectory': 'Справочник клиентов',
+  'reports.exportCentre.reportOption.orderCrmLog': 'CRM-журнал заказов',
+  'reports.exportCentre.reportOption.orderReportLog': 'Заказы',
+  'reports.exportCentre.reportOption.orderReportSummary': 'Сводка',
   'reports.exportCentre.columnsLabel': 'Столбцы',
   'reports.exportCentre.piiGroupLabel': 'Персональные данные (нужен customer.pii.export)',
   'reports.exportCentre.piiGroupHidden':
@@ -3852,12 +3940,15 @@ export const messagesRu: MessageCatalogue = {
   'reports.exportCentre.statusFilter.closed': 'Закрыт',
   'reports.exportCentre.queryLabel': 'Поиск (имя или телефон)',
   'reports.exportCentre.queryPlaceholder': 'Оставьте пустым, чтобы выгрузить всех',
+  'reports.exportCentre.fromLabel': 'С',
+  'reports.exportCentre.toLabel': 'По',
   'reports.exportCentre.purposeLabel': 'Цель',
   'reports.exportCentre.purposePlaceholder': 'Зачем нужен этот экспорт?',
   'reports.exportCentre.submit': 'Поставить в очередь',
   'reports.exportCentre.submitting': 'Ставим в очередь…',
   'reports.exportCentre.error.noSelection': 'Выберите хотя бы один столбец',
   'reports.exportCentre.error.purposeRequired': 'Укажите цель',
+  'reports.exportCentre.error.rangeRequired': 'Укажите дату начала и дату окончания',
   'reports.exportCentre.error.generic': 'Не удалось поставить экспорт в очередь',
   'reports.exportCentre.historyTitle': 'Недавние экспорты',
   'reports.exportCentre.historyEmpty': 'Экспортов ещё не было',
@@ -3873,6 +3964,25 @@ export const messagesRu: MessageCatalogue = {
   'reports.exportCentre.column.status': 'Статус',
   'reports.exportCentre.column.displayName': 'Имя',
   'reports.exportCentre.column.phone': 'Телефон',
+  'reports.exportCentre.column.orderId': 'ID заказа',
+  'reports.exportCentre.column.occurredAt': 'Дата создания',
+  'reports.exportCentre.column.locationId': 'Филиал',
+  'reports.exportCentre.column.customerType': 'Тип клиента',
+  'reports.exportCentre.column.customerName': 'Имя клиента',
+  'reports.exportCentre.column.customerPhone': 'Телефон клиента',
+  'reports.exportCentre.column.operatorPrincipalId': 'Оператор',
+  'reports.exportCentre.column.courierDisplayReference': 'Курьер',
+  'reports.exportCentre.column.businessDate': 'Операционная дата',
+  'reports.exportCentre.column.channelCode': 'Канал',
+  'reports.exportCentre.column.fulfilmentType': 'Тип получения',
+  'reports.exportCentre.column.terminalStatus': 'Статус заказа',
+  'reports.exportCentre.column.isPreorder': 'Предзаказ',
+  'reports.exportCentre.column.grossSom': 'Валовая выручка',
+  'reports.exportCentre.column.discountSom': 'Скидка',
+  'reports.exportCentre.column.deliveryFeeSom': 'Сумма доставки',
+  'reports.exportCentre.column.netSom': 'Чистая выручка',
+  'reports.exportCentre.column.itemCount': 'Товаров',
+  'reports.exportCentre.column.orderCount': 'Количество заказов',
 
   'reports.filter.period.label': 'Период',
   'reports.filter.period.today': 'Сегодня',
@@ -4175,6 +4285,8 @@ export const messagesRu: MessageCatalogue = {
   'marketing.campaign.stats.refusedByReason.title': 'Отказано, по причине',
   'marketing.campaign.stats.deliveryUnavailableHint':
     'Доставлено/не доставлено пока не отслеживается — для этой кампании нет отчёта о прочтении.',
+  'marketing.campaign.stats.export': 'Экспортировать получателей в CSV',
+  'marketing.campaign.stats.exportedCount': 'Экспортировано ID аккаунтов: {count}',
 
   'marketing.refusal.ACCOUNT_NOT_ACTIVE': 'Аккаунт неактивен, объединён или анонимизирован',
   'marketing.refusal.CONSENT_WITHHELD': 'Нет согласия на маркетинговые рассылки',
@@ -4513,6 +4625,42 @@ export const messagesRu: MessageCatalogue = {
   'marketing.referrals.links.body':
     'Не реализовано, и это не скрытый пробел: ссылки "?ref=" на сайте, deep-link "startapp" в Telegram и пошаговая настройка Mini-App/BotFather относятся к marketing.attribution_links из ADR 0044 и остаются пунктом чек-листа этого ADR. Клиент всё ещё может получить код, а друг — использовать его в витрине; здесь не отображается ссылка для отправки, потому что таблицы ссылок пока не существует.',
 
+  // -------------------------------------------------------- automations (row 6.5, ADR 0044)
+  'marketing.automations.loading': 'Загрузка автоматизаций…',
+  'marketing.automations.denied': 'У вас нет доступа к автоматизациям этого бренда.',
+  'marketing.automations.intro':
+    'Автоматические триггеры. Правило создаётся неактивным и срабатывает только после того, как оператор его активирует — ничего не отправляется без человека.',
+  'marketing.automations.create': 'Новая автоматизация',
+  'marketing.automations.empty': 'Ни одно правило автоматизации ещё не создано.',
+  'marketing.automations.viewRuns': 'Последние срабатывания — {name}',
+  'marketing.automations.rule.description':
+    '{trigger} · {channel} · {configValue} · пауза {cooldownDays} дн.',
+  'marketing.automations.trigger.BIRTHDAY': 'День рождения',
+  'marketing.automations.trigger.INACTIVITY': 'Неактивность',
+  'marketing.automations.trigger.CART_ABANDONMENT': 'Брошенная корзина',
+  'marketing.automations.configLabel.BIRTHDAY': 'Окно, дней до/после дня рождения',
+  'marketing.automations.configLabel.INACTIVITY': 'Дней с последнего заказа',
+  'marketing.automations.configLabel.CART_ABANDONMENT': 'Задержка до срабатывания, часов',
+  'marketing.automations.form.title': 'Создать правило автоматизации',
+  'marketing.automations.form.name': 'Название',
+  'marketing.automations.form.trigger': 'Триггер',
+  'marketing.automations.form.channel': 'Канал',
+  'marketing.automations.form.cooldownDays': 'Пауза, дней',
+  'marketing.automations.form.consentPurpose': 'Цель согласия',
+  'marketing.automations.form.templateKey': 'Ключ шаблона',
+  'marketing.automations.form.submit': 'Сохранить (неактивно до активации)',
+  'marketing.automations.dialog.cancel': 'Отмена',
+  'marketing.automations.dialog.close': 'Закрыть',
+  'marketing.automations.runs.title': 'Последние срабатывания — {name}',
+  'marketing.automations.runs.loading': 'Загрузка…',
+  'marketing.automations.runs.empty': 'Срабатываний пока не было.',
+  'marketing.automations.runs.column.status': 'Статус',
+  'marketing.automations.runs.column.reason': 'Причина',
+  'marketing.automations.runs.column.firedAt': 'Когда',
+  'marketing.automations.runStatus.FIRED': 'Сработало',
+  'marketing.automations.runStatus.REFUSED': 'Отказано',
+  'marketing.automations.runStatus.CANCELLED': 'Отменено (клиент уже заказал)',
+
   // ---------------------------------------------------------------- customers 5.3/5.4 (wave 39)
   'customers.nav.label': 'Раздел «Клиенты»',
   'customers.nav.list': 'Клиенты',
@@ -4612,6 +4760,8 @@ export const messagesRu: MessageCatalogue = {
   'reports.branches.column.averageCheck': 'Средний чек',
   'reports.branches.column.cancelShare': 'Отмены, %',
   'reports.branches.column.prepTime': 'Ср. время приготовления',
+  // wave 11 w5-fulfillment-destination (7.3): среднее время в пути у курьера.
+  'reports.branches.column.deliveryTime': 'Ср. время доставки',
   // wave T06 (7.3): три новые колонки рейтинга и его вторичная сортировка.
   'reports.branches.column.fulfilmentSplit': 'Доставка / Самовывоз / Агрегаторы',
   'reports.branches.column.fulfilmentSplit.hint':
@@ -4727,6 +4877,13 @@ export const messagesRu: MessageCatalogue = {
   'reports.products.classification.column.mean': 'Среднее',
   'reports.products.classification.column.stddev': 'Стандартное отклонение',
   'reports.products.classification.column.cv': 'Коэффициент вариации',
+
+  // X.19 (w6-reporting-facts, batch 11): the ABC cumulative-revenue-share curve.
+  'reports.products.abcCurve.title': 'Накопленная доля выручки',
+  'reports.products.abcCurve.boundary.ab': 'A/B',
+  'reports.products.abcCurve.boundary.bc': 'B/C',
+  'reports.products.abcCurve.maybeMore':
+    'Кривая охватывает только первые {limit} товаров по выручке — их может быть больше.',
 
   // ---------------------------------------------------------------- reports 7.6/7.6a/7.6b customer analytics (T13)
   'reports.customers.title': 'Аналитика по клиентам',
@@ -5147,8 +5304,15 @@ export const messagesRu: MessageCatalogue = {
   'finance.subscription.modules.billingUnit.PER_LOCATION': 'За точку',
   'finance.subscription.modules.billingUnit.PER_UNIT': 'За единицу',
   'finance.subscription.modules.billingUnit.ONE_OFF': 'Разово',
+  'finance.subscription.modules.confirm.title': 'Подтвердите покупку',
+  'finance.subscription.modules.confirm.body':
+    '{name} — {price} ({billingUnit}), будет включено в следующий счёт. Это включит: {activates}.',
+  'finance.subscription.modules.confirm.priceWithQuantity': '{price} × {quantity}',
+  'finance.subscription.modules.confirm.activatesFallback': 'функции модуля',
+  'finance.subscription.modules.confirm.confirm': 'Купить',
+  'finance.subscription.modules.confirm.cancel': 'Отмена',
   'finance.subscription.notBuiltNote':
-    'Закрытие периода — задача сотрудников HorecaOS (месяц закрывается выставлением выписки, ADR 0088); предоплаченный баланс пока не реализован (ADR 0095).',
+    'Закрытие периода — задача сотрудников HorecaOS (месяц закрывается выставлением выписки, ADR 0088); предоплаченный баланс пока не реализован (ADR 0095); отключение купленного модуля пока не самообслуживание — обратитесь в HorecaOS, чтобы удалить его.',
 
   // ---------------------------------------------------------------- staff 9.3 (wave 39)
   'staff.shell.activity': 'Активность',
@@ -5187,6 +5351,7 @@ export const messagesRu: MessageCatalogue = {
   'staff.activity.action.locationDeleted': 'Точка удалена',
   'staff.activity.action.tenantSuspended': 'Компания приостановлена',
   'staff.activity.action.tenantReactivated': 'Компания восстановлена',
+  'staff.activity.action.tenantActivated': 'Компания активирована',
   'staff.activity.action.tenantActivate': 'Компания активирована',
   'staff.activity.action.orderCancel': 'Заказ отменён',
   'staff.activity.filter.outcomeAll': 'Любой итог',
@@ -5232,6 +5397,7 @@ export const messagesRu: MessageCatalogue = {
   'staff.approvals.action.tenantActivate': 'Активация компании',
   'staff.approvals.action.integrationFailureResolve': 'Разрешение сбоя интеграции',
   'staff.approvals.action.loyaltyBalanceAdjust': 'Корректировка баланса лояльности',
+  'staff.approvals.action.customerPiiExport': 'Экспорт данных клиентов',
   'staff.approvals.tab.pending': 'Ожидают',
   'staff.approvals.tab.decided': 'Решённые',
   'staff.approvals.column.status': 'Решение',
@@ -5520,6 +5686,11 @@ export const messagesRu: MessageCatalogue = {
   'orders.newOrder.aggregator.total': 'Сумма, полученная агрегатором',
   'orders.newOrder.aggregator.hint':
     'Записано точно так, как указал агрегатор, — HorecaOS не пересчитывает эту сумму',
+  // Row 1.3g (wave 11 w5-fulfillment-destination): DELIVERY использует уже разрешённый адрес из панели клиента.
+  'orders.newOrder.aggregator.pickup': 'Самовывоз — курьер агрегатора или клиент забирает сам',
+  'orders.newOrder.aggregator.deliveryTo': 'Доставка: {customer}, {address}',
+  'orders.newOrder.aggregator.deliveryMissing':
+    'Снимите «Заказ агрегатора», выберите клиента и адрес доставки, затем включите снова',
 
   // --- shared/ui (ADR 0101) ----------------------------------------------
   'ui.denied.title': 'Нет доступа к этому разделу',

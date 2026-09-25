@@ -246,6 +246,32 @@ class OperationsLegalEntityControllerEndpointTests {
                 .containsEntry("legal-entity.updated", 1L)
                 .containsEntry("legal-entity.suspended", 1L)
                 .containsEntry("legal-entity.archived", 1L);
+
+        // Staff 9.3a: a per-field before/after diff, not a flat "what it is
+        // now" map — «кто изменил юридическое название с LIFECYCLE MCHJ на
+        // Corrected Name MCHJ» must be answerable from the audit fact alone.
+        // registeredAddress/contactPhone still redact their values (ADR
+        // 0029's name-based interim mechanism), but now at least show that
+        // each one changed at all, which the old flat map never did.
+        assertThat(jdbc.sql("""
+                        SELECT change_document -> 'legalName' ->> 'before',
+                               change_document -> 'legalName' ->> 'after',
+                               change_document -> 'vatRegistered' ->> 'before',
+                               change_document -> 'vatRegistered' ->> 'after',
+                               change_document -> 'registeredAddress' ->> 'before',
+                               change_document -> 'registeredAddress' ->> 'after'
+                          FROM audit.audit_events WHERE action_code = 'legal-entity.updated'
+                        """)
+                        .query((row, number) -> String.join(
+                                "|",
+                                row.getString(1),
+                                row.getString(2),
+                                row.getString(3),
+                                row.getString(4),
+                                row.getString(5),
+                                row.getString(6)))
+                        .single())
+                .isEqualTo("LIFECYCLE MCHJ|Corrected Name MCHJ|false|true|[redacted]|[redacted]");
     }
 
     @Test

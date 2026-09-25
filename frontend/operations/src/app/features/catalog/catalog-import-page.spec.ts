@@ -423,6 +423,94 @@ describe('CatalogImportPage', () => {
     }
   });
 
+  it('the file input accepts both .csv and .xlsx', async () => {
+    await render({});
+    await openFileTab();
+
+    const input = fixture.nativeElement.querySelector(
+      '[data-testid="import-wizard-file-input"]',
+    ) as HTMLInputElement;
+
+    expect(input.accept).toBe('.csv,.xlsx');
+  });
+
+  it('downloading the .xlsx template fetches a Blob and triggers a browser download', async () => {
+    const originalCreateObjectURL = URL.createObjectURL;
+    const originalRevokeObjectURL = URL.revokeObjectURL;
+    URL.createObjectURL = vi.fn(() => 'blob:template-xlsx');
+    URL.revokeObjectURL = vi.fn();
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+
+    let workbookCalls = 0;
+    const workbookBlob = new Blob([new Uint8Array([80, 75, 3, 4])]);
+    try {
+      await render({
+        fileApi: {
+          templateWorkbook: () => {
+            workbookCalls++;
+            return Promise.resolve(workbookBlob);
+          },
+        },
+      });
+      await openFileTab();
+
+      el('q-catalog-import-download-template-xlsx')!.click();
+      await flushMicrotasks();
+
+      expect(workbookCalls).toBe(1);
+      expect(URL.createObjectURL).toHaveBeenCalledWith(workbookBlob);
+      expect(clickSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      URL.createObjectURL = originalCreateObjectURL;
+      URL.revokeObjectURL = originalRevokeObjectURL;
+      clickSpy.mockRestore();
+    }
+  });
+
+  it('uploading a .xlsx file submits its exact bytes, Base64-encoded, never text-decoded', async () => {
+    // Deliberately includes 0xFF and 0x00 -- not valid UTF-8 on their own,
+    // so `FileReader.readAsText` would silently replace them (U+FFFD) and
+    // corrupt the binary workbook. A correct round trip through
+    // `arrayBuffer()` + Base64 preserves every byte.
+    const bytes = new Uint8Array([0x50, 0x4b, 0x03, 0x04, 0x00, 0xff, 0x10, 0x9e]);
+    let capturedContent: string | undefined;
+    await render({
+      fileApi: {
+        submit: (_scope, request, dryRun) => {
+          capturedContent = request.content;
+          expect(request.fileName).toBe('catalog.xlsx');
+          expect(dryRun).toBe(true);
+          return Promise.resolve(FILE_RUN_STATUS.runId);
+        },
+        status: () => Promise.resolve(FILE_RUN_STATUS),
+        rows: () => Promise.resolve([]),
+      },
+    });
+    await openFileTab();
+
+    const input = fixture.nativeElement.querySelector(
+      '[data-testid="import-wizard-file-input"]',
+    ) as HTMLInputElement;
+    const file = new File([bytes], 'catalog.xlsx', {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    });
+    Object.defineProperty(input, 'files', { value: [file], configurable: true });
+    input.dispatchEvent(new Event('change'));
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    const checkButton = fixture.nativeElement.querySelector(
+      '[data-testid="import-wizard-check"]',
+    ) as HTMLButtonElement;
+    checkButton.click();
+    await flushMicrotasks();
+    await flushMicrotasks();
+
+    expect(capturedContent).toBeDefined();
+    const decoded = Uint8Array.from(atob(capturedContent!), (char) => char.charCodeAt(0));
+    expect(Array.from(decoded)).toEqual(Array.from(bytes));
+  });
+
   it('checking a chosen file for problems submits a dry run for the selected catalog', async () => {
     let captured: unknown;
     await render({

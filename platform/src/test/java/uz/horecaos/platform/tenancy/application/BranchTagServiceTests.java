@@ -7,6 +7,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterAll;
@@ -126,6 +127,36 @@ class BranchTagServiceTests {
         assertThat(tags.tagsOf(TENANT, LOCATION_A))
                 .as("an already-tagged branch keeps resolving the tag it carries even once archived")
                 .containsExactly(airport);
+    }
+
+    /**
+     * Staff 9.3a: {@code setTagsForLocation}'s own audit fact now carries a
+     * field-level {@code {before, after}} pair over the real tag-id lists —
+     * this test's own {@link AuditRecorder}, separate from the class's
+     * shared {@link #NO_OP_AUDIT}, so this one behaviour gets coverage
+     * without widening every other test's scope past "the registry and
+     * assignment set" this suite's own class doc names.
+     */
+    @Test
+    void settingABranchsTagsRecordsAFieldLevelDiffOfTheTagIdList() {
+        List<uz.horecaos.platform.audit.api.AuditFact> captured = new java.util.ArrayList<>();
+        BranchTagService captureTags = new BranchTagService(
+                new JdbcBranchTagStore(jdbc),
+                captured::add,
+                Clock.fixed(Instant.parse("2026-09-12T05:00:00Z"), ZoneOffset.UTC));
+        UUID airport = captureTags.create(TENANT, "airport", "Аэропорт", ACTOR, "near the airport");
+        UUID parking = captureTags.create(TENANT, "parking", "Есть парковка", ACTOR, "has a lot");
+        captureTags.setTagsForLocation(TENANT, BRAND, LOCATION_A, List.of(airport), ACTOR, "initial tagging");
+        captured.clear();
+
+        captureTags.setTagsForLocation(TENANT, BRAND, LOCATION_A, List.of(parking), ACTOR, "swapped the tag");
+
+        assertThat(captured).hasSize(1);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> tagIdsChange =
+                (Map<String, Object>) captured.getFirst().changeDocument().get("tagIds");
+        assertThat(tagIdsChange).containsEntry("before", List.of(airport.toString()));
+        assertThat(tagIdsChange).containsEntry("after", List.of(parking.toString()));
     }
 
     @Test

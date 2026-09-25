@@ -1,0 +1,198 @@
+<div class="automations">
+  @if (loading()) {
+    <div class="automations__skeleton" [attr.aria-label]="'marketing.automations.loading' | t"></div>
+  } @else if (denied()) {
+    <div class="automations__denied" data-testid="automations-denied">
+      <p class="q-body-sm">{{ 'marketing.automations.denied' | t }}</p>
+    </div>
+  } @else {
+    @if (loadError(); as error) {
+      <div class="automations__error-band" role="alert">
+        <span class="q-body-sm">{{ error }}</span>
+      </div>
+    }
+
+    <div class="automations__header">
+      <p class="q-body-sm automations__intro">{{ 'marketing.automations.intro' | t }}</p>
+      <button type="button" data-testid="automations-create" (click)="openForm()">
+        {{ 'marketing.automations.create' | t }}
+      </button>
+    </div>
+
+    @if (actionError(); as error) {
+      <div class="automations__error-band" role="alert" data-testid="automations-action-error">
+        <span class="q-body-sm">{{ error }}</span>
+      </div>
+    }
+
+    @if (rules().length === 0) {
+      <p class="q-body-sm" data-testid="automations-empty">{{ 'marketing.automations.empty' | t }}</p>
+    } @else {
+      <q-rule-list
+        [items]="listItems()"
+        (reorder)="onReorder($event)"
+        (enabledChange)="onEnabledChange($event)"
+      />
+      <ul class="automations__run-links" data-testid="automations-run-links">
+        @for (rule of rules(); track rule.id) {
+          <li>
+            <button type="button" class="automations__run-link" (click)="openRuns(rule)">
+              {{ 'marketing.automations.viewRuns' | t: { name: rule.name } }}
+            </button>
+          </li>
+        }
+      </ul>
+    }
+
+    @if (showForm()) {
+      <div class="dialog-backdrop" (click)="closeForm()">
+        <div
+          class="dialog"
+          role="dialog"
+          aria-modal="true"
+          data-testid="automation-form-dialog"
+          (click)="$event.stopPropagation()"
+        >
+          <h2 class="q-subhead">{{ 'marketing.automations.form.title' | t }}</h2>
+
+          <label class="field">
+            <span class="q-caption">{{ 'marketing.automations.form.name' | t }}</span>
+            <input
+              type="text"
+              data-testid="automation-form-name"
+              [value]="formName()"
+              (input)="formName.set($any($event.target).value)"
+            />
+          </label>
+
+          <label class="field">
+            <span class="q-caption">{{ 'marketing.automations.form.trigger' | t }}</span>
+            <select
+              data-testid="automation-form-trigger"
+              [value]="formTriggerType()"
+              (change)="onTriggerTypeChange($any($event.target).value)"
+            >
+              @for (kind of triggerKinds; track kind) {
+                <option [value]="kind">{{ triggerLabelKey(kind) | t }}</option>
+              }
+            </select>
+          </label>
+
+          <label class="field">
+            <span class="q-caption">{{ 'marketing.automations.form.channel' | t }}</span>
+            <select
+              data-testid="automation-form-channel"
+              [value]="formChannel()"
+              (change)="formChannel.set($any($event.target).value)"
+            >
+              @for (channel of channels; track channel) {
+                <option [value]="channel">{{ channelLabelKey(channel) | t }}</option>
+              }
+            </select>
+          </label>
+
+          <label class="field">
+            <span class="q-caption">{{ configLabelKey(formTriggerType()) | t }}</span>
+            <input
+              type="number"
+              min="0"
+              data-testid="automation-form-config-value"
+              [value]="formConfigValue()"
+              (input)="formConfigValue.set($any($event.target).valueAsNumber)"
+            />
+          </label>
+
+          <label class="field">
+            <span class="q-caption">{{ 'marketing.automations.form.cooldownDays' | t }}</span>
+            <input
+              type="number"
+              min="1"
+              data-testid="automation-form-cooldown"
+              [value]="formCooldownDays()"
+              (input)="formCooldownDays.set($any($event.target).valueAsNumber)"
+            />
+          </label>
+
+          <label class="field">
+            <span class="q-caption">{{ 'marketing.automations.form.consentPurpose' | t }}</span>
+            <input
+              type="text"
+              data-testid="automation-form-consent-purpose"
+              [value]="formConsentPurpose()"
+              (input)="formConsentPurpose.set($any($event.target).value)"
+            />
+          </label>
+
+          <label class="field">
+            <span class="q-caption">{{ 'marketing.automations.form.templateKey' | t }}</span>
+            <input
+              type="text"
+              data-testid="automation-form-template-key"
+              [value]="formTemplateKey()"
+              (input)="formTemplateKey.set($any($event.target).value)"
+            />
+          </label>
+
+          @if (formError(); as error) {
+            <p class="q-body-sm dialog__error" role="alert">{{ error }}</p>
+          }
+
+          <div class="dialog__actions">
+            <button type="button" (click)="closeForm()">{{ 'marketing.automations.dialog.cancel' | t }}</button>
+            <button
+              type="button"
+              data-testid="automation-form-submit"
+              [disabled]="!canSubmit()"
+              (click)="submit()"
+            >
+              {{ 'marketing.automations.form.submit' | t }}
+            </button>
+          </div>
+        </div>
+      </div>
+    }
+
+    @if (runsForRule(); as rule) {
+      <div class="dialog-backdrop" (click)="closeRuns()">
+        <div
+          class="dialog dialog--wide"
+          role="dialog"
+          aria-modal="true"
+          data-testid="automation-runs-dialog"
+          (click)="$event.stopPropagation()"
+        >
+          <h2 class="q-subhead">{{ 'marketing.automations.runs.title' | t: { name: rule.name } }}</h2>
+          @if (runsLoading()) {
+            <p class="q-body-sm">{{ 'marketing.automations.runs.loading' | t }}</p>
+          } @else if (runsError(); as error) {
+            <p class="q-body-sm dialog__error" role="alert">{{ error }}</p>
+          } @else if (runs().length === 0) {
+            <p class="q-body-sm">{{ 'marketing.automations.runs.empty' | t }}</p>
+          } @else {
+            <table class="automations__runs-table">
+              <thead>
+                <tr>
+                  <th>{{ 'marketing.automations.runs.column.status' | t }}</th>
+                  <th>{{ 'marketing.automations.runs.column.reason' | t }}</th>
+                  <th>{{ 'marketing.automations.runs.column.firedAt' | t }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (run of runs(); track run.id) {
+                  <tr data-testid="automation-run-row">
+                    <td>{{ runStatusLabelKey(run.status) | t }}</td>
+                    <td>{{ run.refusalReason ?? run.cancelledReason ?? '—' }}</td>
+                    <td class="q-tnum">{{ formatMoment(run.firedAt) }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          }
+          <div class="dialog__actions">
+            <button type="button" (click)="closeRuns()">{{ 'marketing.automations.dialog.close' | t }}</button>
+          </div>
+        </div>
+      </div>
+    }
+  }
+</div>

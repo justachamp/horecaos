@@ -11,6 +11,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.configuration.Ids;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.ResourceScope;
@@ -118,19 +119,12 @@ public class BranchTagService {
                 .at(ResourceScope.location(tenantId, brandId, locationId))
                 .target("Location", locationId)
                 .because(reason)
-                .changed(Map.of(
-                        "from",
-                                before.stream()
-                                        .map(UUID::toString)
-                                        .sorted()
-                                        .toList()
-                                        .toString(),
-                        "to",
-                                after.stream()
-                                        .map(UUID::toString)
-                                        .sorted()
-                                        .toList()
-                                        .toString()))
+                // Staff 9.3a: a field-level diff over the real tag-id lists,
+                // not two stringified-list "from"/"to" keys.
+                .changed(ChangeDocuments.change(
+                        "tagIds",
+                        before.stream().map(UUID::toString).sorted().toList(),
+                        after.stream().map(UUID::toString).sorted().toList()))
                 .usingCapability(Capability.LOCATION_WRITE.code())
                 .correlatedBy(locationId.toString())
                 .occurredAt(clock.instant())

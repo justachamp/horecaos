@@ -67,6 +67,15 @@ public interface DeliveryOrderPort {
      *                         delivery fee
      * @param dropoff          the decrypted customer end. Personal data throughout,
      *                         which is why {@link Waypoint} prints as nothing
+     * @param destinationLabel row 3.1: a non-PII projection of the same
+     *                         destination — district/zone and street, never a
+     *                         house number, a flat, or a phone — computed by
+     *                         ordering (the module that owns {@code
+     *                         DeliveryDestination}) so the dispatch board can
+     *                         show roughly where an order is going without
+     *                         decrypting anything on its 10-second poll. Null
+     *                         when the destination carries neither a zone nor
+     *                         a street to show
      */
     record DeliveryOrder(
             UUID orderId,
@@ -77,7 +86,8 @@ public interface DeliveryOrderPort {
             String currency,
             boolean prepaid,
             long itemValueMinor,
-            Waypoint dropoff) {
+            Waypoint dropoff,
+            @Nullable String destinationLabel) {
 
         public DeliveryOrder {
             Objects.requireNonNull(orderId, "An order id is required");

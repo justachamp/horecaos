@@ -2,6 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 
 import { ApiClient } from '../../core/api/api-client';
+import { command } from '../../core/api/idempotency';
 
 /**
  * Wave 9 w4-reports-distance-crm (7.2a): the console order log's CRM columns —
@@ -52,6 +53,23 @@ export interface CrmLogParams {
   readonly afterOrderId?: string;
 }
 
+/**
+ * Gap map row 1.1: the order board's own Клиент column. Mirrors
+ * `OrderCrmLogController.CustomerLabelResponse` — the same decrypt-not-mask
+ * name and masked phone `CrmLogRowResponse` already carries, without the
+ * date-range-only fields (`occurredAt`, `operatorPrincipalId`,
+ * `courierDisplayReference`) the board has no use for.
+ */
+export interface CustomerLabelResponse {
+  readonly orderId: string;
+  readonly customerType: string;
+  readonly anonymized: boolean;
+  /** Full name, decrypted; null for a guest order or one with no snapshot. */
+  readonly customerName: string | null;
+  /** Masked server-side (orders.md §1.5) — never the plaintext phone. */
+  readonly customerPhone: string | null;
+}
+
 @Injectable({ providedIn: 'root' })
 export class OrderCrmLogApi {
   private readonly api = inject(ApiClient);
@@ -70,5 +88,23 @@ export class OrderCrmLogApi {
       }),
     );
     return result.value;
+  }
+
+  /**
+   * Gap map row 1.1: customer name/phone for a batch of already-fetched
+   * board rows — `POST .../orders/crm-log/labels`, body-only, never a query
+   * string (ADR 0029). `orderIds` absent from the tenant are simply missing
+   * from the result, never an error.
+   */
+  async customerLabels(
+    tenantId: string,
+    orderIds: readonly string[],
+  ): Promise<readonly CustomerLabelResponse[]> {
+    return firstValueFrom(
+      this.api.post<{ readonly orderIds: readonly string[] }, readonly CustomerLabelResponse[]>(
+        `${crmLogPath(tenantId)}/labels`,
+        command({ orderIds }),
+      ),
+    );
   }
 }

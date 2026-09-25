@@ -75,12 +75,26 @@ export interface RowResponse {
  * group in it is silently dropped server-side when the requester lacks
  * `customer.pii.export` rather than refusing the whole request. See
  * `ExportColumnChooser` for the report-specific column vocabulary.
+ *
+ * @property status  `CUSTOMER_DIRECTORY`'s own filter; ignored by every
+ *   other report
+ * @property query   `CUSTOMER_DIRECTORY`'s own search text; ignored by
+ *   every other report
+ * @property from    required by `ORDER_CRM_LOG`, `ORDER_REPORT_LOG` and
+ *   `ORDER_REPORT_SUMMARY` (an ISO instant) — ignored by `CUSTOMER_DIRECTORY`
+ * @property to      the same three reports' own required range end
+ * @property locationId  the same three reports' own optional branch filter;
+ *   absent or empty means every branch the caller's tenant-wide grant
+ *   already covers — row 7.2e's own console picker never sets this yet
  */
 export interface ReportExportRequest {
   readonly reportKey: string;
   readonly columns: readonly string[];
   readonly status?: string | null;
   readonly query?: string | null;
+  readonly from?: string | null;
+  readonly to?: string | null;
+  readonly locationId?: readonly string[] | null;
   readonly purpose: string;
 }
 
@@ -183,6 +197,23 @@ export interface DistanceResponse {
 /** Wave T06 (7.3): every branch's median preparation time from one request. */
 export interface LocationMedianListResponse {
   readonly rows: readonly LocationMedianResponse[];
+  readonly provenance: ProvenanceResponse;
+}
+
+/**
+ * Wave 11 w5-fulfillment-destination (7.3): one branch's average courier
+ * transit time — mirrors `ReportingController.LocationAverageResponse`.
+ * Courier-leg-only (acceptance to delivery), never the door-to-door figure
+ * `MedianResponse` from `/fulfilment-time` answers.
+ */
+export interface LocationAverageResponse {
+  readonly locationId: string;
+  readonly averageSeconds: number | null;
+}
+
+/** Wave 11 w5-fulfillment-destination (7.3): every branch's average courier transit time from one request. */
+export interface LocationAverageListResponse {
+  readonly rows: readonly LocationAverageResponse[];
   readonly provenance: ProvenanceResponse;
 }
 
@@ -308,6 +339,33 @@ export interface VariantSalesCursor {
   readonly afterRevenueSom?: number;
   readonly afterProductName?: string;
   readonly afterVariantId: string;
+}
+
+/**
+ * X.19 (w6-reporting-facts, batch 11): one product's position on the ABC
+ * cumulative-revenue-share curve. Mirrors `ReportingController.AbcCurveRowResponse`.
+ */
+export interface AbcCurveRowResponse {
+  readonly variantId: string | null;
+  readonly categoryId: string | null;
+  readonly productName: string;
+  readonly totalNetSom: number;
+  readonly sharePercent: number;
+  readonly cumulativeSharePercent: number;
+  readonly abcClass: 'A' | 'B' | 'C';
+}
+
+/**
+ * X.19: the whole curve, revenue-descending, plus the published A/B/C
+ * boundary this build draws everywhere else — mirrors
+ * `ReportingController.AbcCurveListResponse`.
+ */
+export interface AbcCurveListResponse {
+  readonly rows: readonly AbcCurveRowResponse[];
+  readonly maybeMore: boolean;
+  readonly abcThresholdAPercent: number;
+  readonly abcThresholdBPercent: number;
+  readonly provenance: ProvenanceResponse;
 }
 
 /**
@@ -778,6 +836,24 @@ export class ReportingApi {
     return result.value;
   }
 
+  /**
+   * Wave 11 w5-fulfillment-destination (7.3): every branch's average courier
+   * transit time from one request — the leaderboard's own `Ср. время
+   * доставки` column, on the same "no fan-out" footing {@link
+   * preparationTimeByLocation} already established.
+   */
+  async deliveryTransitTimeByLocation(
+    tenantId: string,
+    params: RangeParams,
+  ): Promise<LocationAverageListResponse> {
+    const result = await firstValueFrom(
+      this.api.get<LocationAverageListResponse>(reportsPaths.deliveryTransitTimeByLocation(tenantId), {
+        params: { from: params.from, to: params.to, locationId: params.locationId },
+      }),
+    );
+    return result.value;
+  }
+
   /** P39 (7.1c/7.3b): takings split by payment method. */
   async paymentMix(
     tenantId: string,
@@ -992,6 +1068,24 @@ export class ReportingApi {
           afterProductName: params.cursor?.afterProductName,
           afterVariantId: params.cursor?.afterVariantId,
         },
+      }),
+    );
+    return result.value;
+  }
+
+  /**
+   * X.19 (w6-reporting-facts, batch 11): the ABC cumulative-revenue-share
+   * curve behind `q-abc-curve` — no 28-day floor and no write capability, the
+   * same footing `variantSales` already stands on, unlike {@link
+   * runClassification}/{@link latestClassification}'s own persisted run.
+   */
+  async abcCurve(
+    tenantId: string,
+    params: RangeParams & { readonly limit?: number },
+  ): Promise<AbcCurveListResponse> {
+    const result = await firstValueFrom(
+      this.api.get<AbcCurveListResponse>(reportsPaths.abcCurve(tenantId), {
+        params: { from: params.from, to: params.to, locationId: params.locationId, limit: params.limit },
       }),
     );
     return result.value;

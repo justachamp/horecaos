@@ -394,6 +394,47 @@ export const operationsPaths = {
   },
 
   /**
+   * The five QUANTITY-branch endpoints below (gap map row 4.4c, batch 11)
+   * are built on {@link LEGACY_TENANT_PREFIX}, not {@link OPERATIONS} —
+   * deliberately unlike the four `inventory*` builders just above, which
+   * this file's own header documents as living on the ADR 0031 prefix.
+   * `InventoryController`'s real `@RequestMapping` is
+   * `/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/inventory`,
+   * with no `/operations` segment and no second, ADR-0031-prefixed mapping
+   * anywhere in the module — so a path built on {@link OPERATIONS} 404s
+   * against the real backend. Filed for the four existing builders above,
+   * which predate this wave and are out of its own row's scope to fix; the
+   * five new ones here are built against the route that actually exists.
+   */
+  inventoryPositions(scope: LocationScope): string {
+    return `${LEGACY_TENANT_PREFIX}${tenantBrandLocation(scope)}/inventory/positions`;
+  },
+
+  inventoryOnHand(scope: LocationScope, variantId: string): string {
+    return `${LEGACY_TENANT_PREFIX}${tenantBrandLocation(scope)}/inventory/variants/${encodeURIComponent(variantId)}/on-hand`;
+  },
+
+  inventoryQuantityDefault(scope: LocationScope, variantId: string): string {
+    return `${LEGACY_TENANT_PREFIX}${tenantBrandLocation(scope)}/inventory/variants/${encodeURIComponent(variantId)}/quantity-defaults`;
+  },
+
+  inventoryChannelStopThreshold(
+    scope: LocationScope,
+    variantId: string,
+    channelType: string,
+  ): string {
+    return (
+      `${LEGACY_TENANT_PREFIX}${tenantBrandLocation(scope)}/inventory/variants/${encodeURIComponent(variantId)}` +
+      `/channel-stop-thresholds/${encodeURIComponent(channelType)}`
+    );
+  },
+
+  /** Same channel-aware check as {@link inventoryAvailability}, with an optional `channel` query param. */
+  inventoryAvailabilityForChannel(scope: LocationScope): string {
+    return `${LEGACY_TENANT_PREFIX}${tenantBrandLocation(scope)}/inventory/availability`;
+  },
+
+  /**
    * The kitchen board (ADR 0041, `KitchenBoardController`) — on
    * {@link LEGACY_TENANT_PREFIX} like `orders`, not on the ADR 0031 prefix,
    * because it was built alongside the orders controller and follows the
@@ -407,6 +448,16 @@ export const operationsPaths = {
   /** One ticket with its lines. Returns an `ETag` (the aggregate version). */
   kitchenTicket(scope: LocationScope, ticketId: string): string {
     return `${this.kitchenTickets(scope)}/${encodeURIComponent(ticketId)}`;
+  },
+
+  /**
+   * The VDU wall projection (ADR 0041 rollout step 4, gap map row 2.4) —
+   * deliberately narrower than {@link kitchenTickets}, see
+   * `KitchenBoardController.vdu`'s own doc. No `stream`: it is always the
+   * live queue.
+   */
+  kitchenVdu(scope: LocationScope): string {
+    return `${LEGACY_TENANT_PREFIX}${tenantBrandLocation(scope)}/kitchen/vdu`;
   },
 
   /** Fire a held ticket now (2.2's manual release). Mutation: key and `If-Match`. */

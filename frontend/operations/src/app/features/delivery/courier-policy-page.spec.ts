@@ -27,6 +27,7 @@ const POLICY: CourierPolicyView = {
   kitchenReadyOnly: false,
   revealCustomerLocationTiming: 'AFTER_ACCEPT',
   postDeliveryPaymentCheckRequired: false,
+  onlineWithinMinutes: 10,
   winningScope: 'TENANT',
   policyId: '00000000-0000-0000-0000-000000000042',
   policyVersion: 1,
@@ -89,6 +90,39 @@ describe('CourierPolicyPage', () => {
     expect(host.textContent).toContain('30');
   });
 
+  // Row 3.3: onlineWithinMinutes is genuinely enforced (the roster reads it),
+  // so unlike the four fields above it stays an ordinary editable row.
+  it('renders and edits onlineWithinMinutes as an ordinary field, not a locked one', async () => {
+    const writePolicy = vi.fn().mockResolvedValue({ ...POLICY, onlineWithinMinutes: 3, policyVersion: 2 });
+    const host = await render({ policy: () => Promise.resolve(POLICY), writePolicy });
+
+    const row = host.querySelector('[data-testid="policy-row-onlineWithinMinutes"]')!;
+    expect(row.textContent).toContain('10');
+    expect(row.querySelector('q-status-pill')).toBeNull();
+
+    Array.from(host.querySelectorAll<HTMLButtonElement>('button'))
+      .find((button) => button.textContent?.trim() === 'Edit')!
+      .click();
+    fixture.detectChanges();
+
+    const input = host.querySelector<HTMLInputElement>(
+      '[data-testid="policy-input-onlineWithinMinutes"]',
+    )!;
+    input.value = '3';
+    input.dispatchEvent(new Event('input'));
+
+    const reason = host.querySelector<HTMLInputElement>('[data-testid="policy-input-reason"]')!;
+    reason.value = 'tighten the online threshold';
+    reason.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    host.querySelector<HTMLButtonElement>('[data-testid="policy-publish"]')!.click();
+    await flushMicrotasks();
+
+    expect(writePolicy).toHaveBeenCalledTimes(1);
+    expect(writePolicy.mock.calls[0][1].onlineWithinMinutes).toBe(3);
+  });
+
   // Row 3.9: "renders neither policyId nor policyVersion although both are
   // on the wire".
   it('renders the policy identity — policyId and policyVersion', async () => {
@@ -99,9 +133,11 @@ describe('CourierPolicyPage', () => {
     expect(identity).toContain('1');
   });
 
-  // Wave P38: the five/six fields couriers.md §16 named with no document
-  // field before this wave now render as ordinary rows.
-  it('renders the new GPS, kitchen-ready, reveal-timing and payment-check rows', async () => {
+  // Row 3.9 (this wave): P38 stored these four fields but nothing reads them
+  // yet, so they render the stored value locked, with a "not yet enforced"
+  // badge and reason — never as an editable control, which would tell an
+  // operator the switch takes effect when it does not.
+  it('renders the GPS, kitchen-ready, reveal-timing and payment-check rows locked, with their stored value and a not-enforced reason', async () => {
     const host = await render({
       policy: () =>
         Promise.resolve({
@@ -115,16 +151,54 @@ describe('CourierPolicyPage', () => {
         }),
     });
 
+    const kitchenReadyOnly = host.querySelector('[data-testid="policy-row-kitchenReadyOnly"]')!;
+    expect(kitchenReadyOnly.textContent).toContain('Yes');
+    expect(kitchenReadyOnly.textContent).toContain('Not yet enforced');
+    expect(kitchenReadyOnly.querySelector('input, select')).toBeNull();
+
+    const revealTiming = host.querySelector(
+      '[data-testid="policy-row-revealCustomerLocationTiming"]',
+    )!;
+    expect(revealTiming.textContent).toContain('Before accept');
+    expect(revealTiming.textContent).toContain('Not yet enforced');
+
+    const paymentCheck = host.querySelector(
+      '[data-testid="policy-row-postDeliveryPaymentCheckRequired"]',
+    )!;
+    expect(paymentCheck.textContent).toContain('Yes');
+    expect(paymentCheck.textContent).toContain('Not yet enforced');
+    expect(paymentCheck.textContent).toContain('ADR 0125');
+
+    const gps = host.querySelector('[data-testid="policy-row-gpsVerificationEnabled"]')!;
+    expect(gps.textContent).toContain('Not yet enforced');
+    expect(gps.textContent?.replace(/\s/g, '')).toContain('2');
+    expect(gps.textContent).toContain('120');
+    expect(gps.querySelector('input, select')).toBeNull();
+  });
+
+  // The edit form must offer no control for a field nothing enforces — the
+  // same reason billing mode/telemetry gate were never in the form either.
+  it('offers no editable control for the four not-yet-enforced fields, even while editing', async () => {
+    const host = await render({
+      policy: () => Promise.resolve(POLICY),
+      writePolicy: vi.fn(),
+    });
+
+    Array.from(host.querySelectorAll<HTMLButtonElement>('button'))
+      .find((button) => button.textContent?.trim() === 'Edit')!
+      .click();
+    fixture.detectChanges();
+
+    expect(host.querySelector('[data-testid="policy-input-kitchenReadyOnly"]')).toBeNull();
+    expect(host.querySelector('[data-testid="policy-input-revealTiming"]')).toBeNull();
     expect(
-      host.querySelector('[data-testid="policy-row-kitchenReadyOnly"]')?.textContent,
-    ).toContain('Yes');
+      host.querySelector('[data-testid="policy-input-postDeliveryPaymentCheckRequired"]'),
+    ).toBeNull();
+    expect(host.querySelector('[data-testid="policy-input-gpsVerificationEnabled"]')).toBeNull();
+    expect(host.querySelector('[data-testid="policy-input-gpsAcceptRadiusKm"]')).toBeNull();
     expect(
-      host.querySelector('[data-testid="policy-row-revealCustomerLocationTiming"]')?.textContent,
-    ).toContain('Before accept');
-    expect(
-      host.querySelector('[data-testid="policy-row-postDeliveryPaymentCheckRequired"]')
-        ?.textContent,
-    ).toContain('Yes');
+      host.querySelector('[data-testid="policy-input-gpsStatusChangeRadiusMeters"]'),
+    ).toBeNull();
   });
 
   // couriers.md §16 / settings.md §10.13: courier billing mode is refused by
@@ -230,13 +304,12 @@ describe('CourierPolicyPage', () => {
     ).not.toBeNull();
   });
 
-  // Wave P38: the write path this screen's own doc comment said "lands in P38".
-  it('publishes a whole-document write and shows the updated policy', async () => {
+  // Wave P38 built the write path; this wave (row 3.9) adds the If-Match
+  // concurrency token it was missing.
+  it('publishes a whole-document write with If-Match carrying the read version, and shows the updated policy', async () => {
     const writePolicy = vi.fn().mockResolvedValue({
       ...POLICY,
       shiftEnforcement: 'ENFORCED',
-      gpsVerificationEnabled: true,
-      gpsAcceptRadiusMeters: 500,
       policyVersion: 2,
     });
     const host = await render({
@@ -256,19 +329,6 @@ describe('CourierPolicyPage', () => {
       .querySelector<HTMLSelectElement>('[data-testid="policy-input-shiftEnforcement"]')!
       .dispatchEvent(new Event('change'));
 
-    const gpsCheckbox = host.querySelector<HTMLInputElement>(
-      '[data-testid="policy-input-gpsVerificationEnabled"] input',
-    )!;
-    gpsCheckbox.checked = true;
-    gpsCheckbox.dispatchEvent(new Event('change'));
-    fixture.detectChanges();
-
-    const acceptKm = host.querySelector<HTMLInputElement>(
-      '[data-testid="policy-input-gpsAcceptRadiusKm"]',
-    )!;
-    acceptKm.value = '0.5';
-    acceptKm.dispatchEvent(new Event('input'));
-
     const reason = host.querySelector<HTMLInputElement>('[data-testid="policy-input-reason"]')!;
     reason.value = 'Tightened for the pilot branch';
     reason.dispatchEvent(new Event('input'));
@@ -279,14 +339,23 @@ describe('CourierPolicyPage', () => {
     fixture.detectChanges();
 
     expect(writePolicy).toHaveBeenCalledTimes(1);
-    const [tenantId, input] = writePolicy.mock.calls[0];
+    const [tenantId, input, expectedVersion] = writePolicy.mock.calls[0];
     expect(tenantId).toBe('t1');
     expect(input.shiftEnforcement).toBe('ENFORCED');
-    expect(input.gpsVerificationEnabled).toBe(true);
-    // 0.5 km entered, must publish as 500 metres — the unit conversion this
-    // wave's own doc names (settings.md §10.13 Card 3's unit asymmetry).
-    expect(input.gpsAcceptRadiusMeters).toBe(500);
+    // The four not-yet-enforced fields are echoed back unchanged — this form
+    // gives the operator no way to change them (see the locked-rows tests
+    // above), never sent as whatever a stale draft happened to hold.
+    expect(input.gpsVerificationEnabled).toBe(POLICY.gpsVerificationEnabled);
+    expect(input.gpsAcceptRadiusMeters).toBe(POLICY.gpsAcceptRadiusMeters);
+    expect(input.gpsStatusChangeRadiusMeters).toBe(POLICY.gpsStatusChangeRadiusMeters);
+    expect(input.kitchenReadyOnly).toBe(POLICY.kitchenReadyOnly);
+    expect(input.revealCustomerLocationTiming).toBe(POLICY.revealCustomerLocationTiming);
+    expect(input.postDeliveryPaymentCheckRequired).toBe(POLICY.postDeliveryPaymentCheckRequired);
     expect(input.reason).toBe('Tightened for the pilot branch');
+    // ADR 0031: If-Match carries the version this screen's own read resolved,
+    // so a concurrent editor's write in another tab surfaces as STALE_VERSION
+    // instead of being silently overwritten.
+    expect(expectedVersion).toBe(POLICY.policyVersion);
     expect(host.querySelector('[data-testid="policy-input-reason"]')).toBeNull();
   });
 

@@ -1,0 +1,95 @@
+<div class="wk">
+  <header class="wk__header">
+    <h1 class="wk__title">{{ 'wallboardKitchen.title' | t }}</h1>
+    <q-live-badge [state]="connectionState()" />
+  </header>
+
+  <q-connection-state-banner [state]="connectionState()" />
+
+  @if (freshnessState() === 'aging' || freshnessState() === 'stale') {
+    <div
+      class="wk__staleBanner"
+      [class.wk__staleBanner--stale]="freshnessState() === 'stale'"
+      role="status"
+      data-testid="wallboard-kitchen-offline-banner"
+    >
+      <span>{{ 'wallboardKitchen.offline' | t }}</span>
+      <span class="wk__staleBanner-time" data-testid="wallboard-kitchen-last-updated">{{
+        freshnessLabel()
+      }}</span>
+    </div>
+  }
+
+  @if (lastError(); as error) {
+    <div class="wk__errorBand" role="alert" data-testid="wallboard-kitchen-error">
+      <span>{{ errorMessage(error) }}</span>
+      <span class="wk__errorBand-ref">{{ errorReference(error) }}</span>
+    </div>
+  }
+
+  @if (actionNotice(); as notice) {
+    <div class="wk__notice" role="alert" data-testid="wallboard-kitchen-notice">
+      <span>{{ notice }}</span>
+      <button
+        type="button"
+        (click)="dismissNotice()"
+        data-testid="wallboard-kitchen-notice-dismiss"
+      >
+        ×
+      </button>
+    </div>
+  }
+
+  <main class="wk__board">
+    @if (denied()) {
+      <p class="wk__hint" data-testid="wallboard-kitchen-denied">
+        {{ 'wallboardKitchen.denied' | t }}
+      </p>
+    } @else if (!firstLoadComplete()) {
+      <p class="wk__hint">{{ 'wallboardKitchen.loading' | t }}</p>
+    } @else if (tickets().length === 0) {
+      <p class="wk__hint" data-testid="wallboard-kitchen-empty">
+        {{ 'wallboardKitchen.empty' | t }}
+      </p>
+    } @else {
+      <div class="wk__tickets">
+        @for (ticket of tickets(); track ticket.ticketId) {
+          <article
+            class="wk__ticket"
+            [attr.data-testid]="'wallboard-kitchen-ticket-' + ticket.ticketId"
+          >
+            <header class="wk__ticket-header">
+              <span class="wk__ticket-label">{{ ticket.sequenceLabel }}</span>
+            </header>
+            <ul class="wk__items">
+              @for (item of ticket.items; track item.itemId) {
+                <li class="wk__item">
+                  <span class="wk__item-info">
+                    <span class="wk__item-station">{{ stationLabel(item.stationId) }}</span>
+                    <span class="wk__item-qty">×{{ item.quantity }}</span>
+                  </span>
+                  <span class="wk__item-actions">
+                    @for (action of availableActions(ticket, item); track action) {
+                      <button
+                        type="button"
+                        class="wk__button"
+                        [class.wk__button--recall]="action === 'RECALL'"
+                        [disabled]="isItemBusy(item)"
+                        (click)="onItemAction(item, action)"
+                        [attr.data-testid]="
+                          'wallboard-kitchen-item-' + action.toLowerCase() + '-' + item.itemId
+                        "
+                      >
+                        {{ itemActionLabel(action) }}
+                      </button>
+                    }
+                  </span>
+                </li>
+              }
+            </ul>
+          </article>
+        }
+      </div>
+    }
+  </main>
+</div>

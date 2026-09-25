@@ -112,6 +112,30 @@ class OperationsStreamControllerTests {
                         .isEqualTo(Capability.ORDER_READ));
     }
 
+    @Test
+    @DisplayName("KITCHEN_BOARD is refused the same way when KITCHEN_TICKET_READ is absent")
+    void kitchenBoardIsRefusedLikeAnyOtherChannel() {
+        assertThatThrownBy(() -> controller.open(TENANT, BRAND, LOCATION, null, List.of("kitchen_board"), null, null))
+                .isInstanceOf(AuthorizationService.AccessDeniedException.class)
+                .satisfies(failure -> assertThat(((AuthorizationService.AccessDeniedException) failure).capability())
+                        .isEqualTo(Capability.KITCHEN_TICKET_READ));
+
+        assertThat(registry.openStreams())
+                .as("a refused subscription must never reach the registry")
+                .isZero();
+    }
+
+    @Test
+    @DisplayName("a KDS or a VDU wall display holding KITCHEN_TICKET_READ connects")
+    void kitchenBoardSucceedsWithTheKitchenCapability() {
+        authorization.grant(Capability.KITCHEN_TICKET_READ);
+
+        SseEmitter emitter = controller.open(TENANT, BRAND, LOCATION, null, List.of("kitchen_board"), null, null);
+
+        assertThat(emitter).isNotNull();
+        assertThat(registry.openStreams()).isOne();
+    }
+
     private static RateLimiter allowEveryConnect() {
         return (key, policy) -> RateLimiter.Decision.allowed(policy.permits());
     }

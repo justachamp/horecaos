@@ -1172,5 +1172,97 @@ describe('NewOrderPage', () => {
     expect(request.channelCode).toBe('uzum-tezkor');
     expect(request.externalOrderId).toBe('YE-2291-04');
     expect(request.totalMinor).toBe(30_000);
+    expect(request.fulfillmentMode).toBe('PICKUP');
+    expect(request.destination).toBeNull();
+  });
+
+  it('a DELIVERY aggregator entry reuses the customer pane’s own resolved address (row 1.3g)', async () => {
+    const aggregatorEntry = vi.fn().mockResolvedValue({
+      orderId: 'order-agg-delivery',
+      publicOrderNumber: '#0778',
+      status: 'CONFIRMED',
+      version: 1,
+      outcome: 'CREATED',
+      warnings: [],
+    });
+    await render(
+      { aggregatorEntry },
+      { revealAddresses: vi.fn().mockResolvedValue([address({ id: 'addr-9' })]) },
+      [
+        {
+          id: 'chan-agg',
+          code: 'uzum-tezkor',
+          systemType: 'AGGREGATOR',
+          displayName: 'Uzum Tezkor',
+          status: 'ACTIVE',
+          pricePlaneChannelId: null,
+          externallyPriced: true,
+          guestOrdersAllowed: false,
+          providerInstallationId: 'installation-1',
+          version: 1,
+          locationCount: 1,
+          enabledPaymentMethodCount: 0,
+          enabledFulfillmentModes: [],
+        },
+      ],
+    );
+    vi.spyOn(router, 'navigate').mockResolvedValue(true);
+
+    // The customer and address are resolved through the ordinary customer
+    // pane — aggregator mode is switched on only afterwards, and
+    // toggleAggregatorMode touches neither signal (see the page's own doc).
+    fixture.componentInstance['selectCandidate'](candidate());
+    fixture.componentInstance['setFulfillmentMode']('DELIVERY');
+    await flushMicrotasks();
+    fixture.componentInstance['onItemSelected']({ id: 'v-1', label: 'Cheeseburger' });
+    fixture.detectChanges();
+    expect(fixture.componentInstance['selectedAddressId']()).toBe('addr-9');
+
+    fixture.componentInstance['toggleAggregatorMode']();
+    fixture.componentInstance['aggregatorExternalOrderId'].set('YE-2291-05');
+    fixture.componentInstance['aggregatorTotalMinor'].set(30_000);
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance['canSubmitAggregator']()).toBe(true);
+
+    await fixture.componentInstance['submitAggregator']();
+
+    expect(aggregatorEntry).toHaveBeenCalledTimes(1);
+    const [, request] = aggregatorEntry.mock.calls[0];
+    expect(request.fulfillmentMode).toBe('DELIVERY');
+    expect(request.customerAccountId).toBe(candidate().accountId);
+    expect(request.destination.customerAddressId).toBe('addr-9');
+  });
+
+  it('a DELIVERY aggregator entry cannot be submitted before a customer and address are resolved', async () => {
+    const aggregatorEntry = vi.fn();
+    await render({ aggregatorEntry }, {}, [
+      {
+        id: 'chan-agg',
+        code: 'uzum-tezkor',
+        systemType: 'AGGREGATOR',
+        displayName: 'Uzum Tezkor',
+        status: 'ACTIVE',
+        pricePlaneChannelId: null,
+        externallyPriced: true,
+        guestOrdersAllowed: false,
+        providerInstallationId: 'installation-1',
+        version: 1,
+        locationCount: 1,
+        enabledPaymentMethodCount: 0,
+        enabledFulfillmentModes: [],
+      },
+    ]);
+
+    fixture.componentInstance['fulfillmentMode'].set('DELIVERY');
+    fixture.componentInstance['toggleAggregatorMode']();
+    fixture.componentInstance['onItemSelected']({ id: 'v-1', label: 'Cheeseburger' });
+    fixture.componentInstance['aggregatorExternalOrderId'].set('YE-2291-06');
+    fixture.componentInstance['aggregatorTotalMinor'].set(30_000);
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance['canSubmitAggregator']()).toBe(false);
+    await fixture.componentInstance['submitAggregator']();
+    expect(aggregatorEntry).not.toHaveBeenCalled();
   });
 });

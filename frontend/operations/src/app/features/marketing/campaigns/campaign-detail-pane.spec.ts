@@ -85,6 +85,7 @@ describe('CampaignDetailPane', () => {
       halt: vi.fn(),
       resume: vi.fn(),
       reschedule: vi.fn(),
+      exportSnapshot: vi.fn().mockResolvedValue(['acct-1', 'acct-2']),
     };
     await TestBed.configureTestingModule({
       imports: [CampaignDetailPane],
@@ -325,5 +326,46 @@ describe('CampaignDetailPane', () => {
     expect(stats.textContent).toContain('Suppressed');
     expect(stats.textContent).toContain('2');
     expect(stats.textContent).toContain('No marketing consent on file');
+  });
+
+  // ---------------------------------------- row 6.4: audience-snapshot CSV export
+
+  it('6.4: exports the campaign\'s own snapshot as pseudonymous account ids', async () => {
+    await render(OTHER_ID, campaign({ status: 'SENT', snapshotId: 'snapshot-1' }));
+    const host = fixture.nativeElement as HTMLElement;
+
+    const button = host.querySelector('[data-testid="campaign-export-snapshot"]') as HTMLButtonElement;
+    expect(button).not.toBeNull();
+    button.click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(api['exportSnapshot']).toHaveBeenCalledWith(
+      SCOPE,
+      'snapshot-1',
+      expect.any(String),
+    );
+    expect(host.querySelector('[data-testid="campaign-export-count"]')?.textContent).toContain('2');
+  });
+
+  it('6.4: offers no export action for a campaign with no snapshot yet', async () => {
+    await render(AUTHOR_ID, campaign({ status: 'DRAFT', snapshotId: null }));
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(host.querySelector('[data-testid="campaign-export-snapshot"]')).toBeNull();
+  });
+
+  it('6.4: a refused export shows the reason rather than silently doing nothing', async () => {
+    await render(OTHER_ID, campaign({ status: 'SENT', snapshotId: 'snapshot-1' }));
+    api['exportSnapshot'] = vi
+      .fn()
+      .mockRejectedValue(new ApiError(ApiErrorCode.INSUFFICIENT_CAPABILITY, 403, { status: 403 }, null));
+    const host = fixture.nativeElement as HTMLElement;
+
+    (host.querySelector('[data-testid="campaign-export-snapshot"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(host.querySelector('.stats__export-error')).not.toBeNull();
   });
 });

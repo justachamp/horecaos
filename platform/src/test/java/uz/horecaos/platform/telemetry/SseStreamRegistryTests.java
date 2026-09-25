@@ -203,6 +203,43 @@ class SseStreamRegistryTests {
     }
 
     @Test
+    @DisplayName("a KDS/VDU reconnect with Last-Event-Id also gets a resync, never a replay")
+    void aKitchenBoardReconnectAlsoGetsAResyncNeverAReplay() {
+        // The resync mechanism is channel-agnostic (it lives in this registry,
+        // not in any one channel's own code) -- this proves it holds for
+        // KITCHEN_BOARD specifically, the channel the ADR 0045 rollout adds
+        // for the KDS touch shell and the VDU wall (ADR 0041 rollout step 4).
+        registry.open(
+                TENANT,
+                DISPATCHER,
+                Set.of(new Subscription(StreamChannel.KITCHEN_BOARD, ScopeKey.location(BRANCH))),
+                sink,
+                NOON.plusSeconds(600),
+                "01J8ZQ-kds-last-seen");
+
+        assertThat(sink.eventsNamed("resync")).hasSize(1);
+        assertThat(sink.frames.getFirst().data()).contains("NO_REPLAY_BUFFER");
+    }
+
+    @Test
+    @DisplayName("a ticket change on KITCHEN_BOARD reaches a subscribed KDS/VDU connection")
+    void aKitchenBoardSignalReachesItsSubscriber() {
+        open(Set.of(new Subscription(StreamChannel.KITCHEN_BOARD, ScopeKey.location(BRANCH))));
+
+        registry.onSignal(RealtimeSignal.of(
+                TENANT,
+                StreamChannel.KITCHEN_BOARD,
+                ScopeKey.location(BRANCH),
+                "KitchenTicket",
+                UUID.randomUUID(),
+                2L,
+                NOON));
+        registry.tick(NOON.plusMillis(300));
+
+        assertThat(sink.eventsNamed("signal")).hasSize(1);
+    }
+
+    @Test
     void aQuietConnectionIsHeartbeatedSoAProxyDoesNotIdleItClosed() {
         open(Set.of(queueSubscription()));
 

@@ -78,6 +78,15 @@ public final class MetricRegistry {
     /** Wave 9 w4-reports-distance-crm (7.1, V0387): when {@code fact_order.delivery_distance_meters} started being written. */
     private static final LocalDate W9_DELIVERY_DISTANCE = LocalDate.of(2026, 9, 23);
 
+    /**
+     * Wave 11 w5-fulfillment-destination (7.3): when this build started
+     * registering the branch leaderboard's «Ср. время доставки». {@code
+     * fact_delivery.transit_seconds} is older (V0337, T11) — this is a
+     * registry-and-endpoint gap over already-written data, the same shape
+     * {@code prep_time.median.v1}'s own P27 comment describes.
+     */
+    private static final LocalDate W11_DELIVERY_TRANSIT_TIME = LocalDate.of(2026, 9, 25);
+
     private static final Map<String, MetricDefinition> BY_CODE = index(List.of(
             new MetricDefinition(
                     new MetricId("revenue.gross", 1),
@@ -763,7 +772,35 @@ public final class MetricRegistry {
                             + "would read as a delivery next door. A row closed before V0387 "
                             + "(2026-09-23) and never recut is simply absent from this average, the "
                             + "same backfill gap delivery_fee.v1 discloses for agg_branch_day.",
-                    W9_DELIVERY_DISTANCE)));
+                    W9_DELIVERY_DISTANCE),
+            // Wave 11 w5-fulfillment-destination (7.3): the branch leaderboard's
+            // «Ср. время доставки», grouped per branch by GET
+            // .../reporting/delivery-transit-time-by-location — the same
+            // "own endpoint, not /queries" footing delivery_distance.average.v1
+            // above already establishes, because an average cannot be composed
+            // from agg_branch_day's per-slice rows either.
+            new MetricDefinition(
+                    new MetricId("delivery_transit_time.average", 1),
+                    Grain.DAY_LOCATION,
+                    "reporting.fact_delivery.transit_seconds",
+                    true,
+                    Aggregation.AVERAGE,
+                    "SETTLED_DELIVERIES",
+                    CurrencyRule.NONE,
+                    "Whole seconds, rounded to the nearest",
+                    MetricUnit.SECONDS,
+                    "Mean seconds from a courier's acceptance to delivery, across deliveries "
+                            + "whose accrual settled in the requested range and branch.",
+                    "Deliveries with a reporting.fact_delivery row — the courier accrual has "
+                            + "settled and closed (ADR 0125, ADR 0042).",
+                    "Pickup and dine-in orders, which have no courier leg; a delivery whose "
+                            + "accrual has not yet settled at day close.",
+                    "Not applicable: a refund does not change how long the courier travelled.",
+                    "Courier-leg-only, not door-to-door: this starts at the courier's own "
+                            + "acceptance, after confirmation, dispatch and sourcing, so it is never "
+                            + "the same figure as delivery_time.median.v1 (order creation to close) "
+                            + "and the two must not be added or substituted for each other.",
+                    W11_DELIVERY_TRANSIT_TIME)));
 
     private MetricRegistry() {}
 

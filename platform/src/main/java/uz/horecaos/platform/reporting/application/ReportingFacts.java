@@ -341,6 +341,109 @@ public final class ReportingFacts {
     }
 
     /**
+     * w6-reporting-facts, batch 11 (7.4b, ADR 0023/0125): one {@code
+     * fulfillment.delivery_fee_resolutions} row that named a tariff, joined
+     * at close time through {@code ordering.orders} and {@code
+     * fulfillment.shipments} for the one column none of the three tables has
+     * alone — which courier actually worked it. See {@code
+     * JdbcReportingStore#readSourceTariffResolutions} for the join this
+     * replaces {@code readTariffAudit}'s own live one with.
+     *
+     * @param resolutionId the natural key. Unlike {@link ExternalDeliveryCostFact}
+     *                     beside it, {@code delivery_fee_resolutions} is
+     *                     "resolved once, at checkout, and never revisited"
+     *                     (V0338's own comment), so this fact never goes
+     *                     stale relative to its own source
+     * @param orderId      carried as an opaque id only — nothing here reads it
+     *                     back further, the same rule {@code DeliveryFact}
+     *                     already states for {@code shipmentId}
+     */
+    public record TariffFeeResolutionFact(
+            UUID tenantId,
+            UUID resolutionId,
+            LocalDate businessDate,
+            int boundaryVersion,
+            int metricCalculationVersion,
+            UUID locationId,
+            UUID tariffId,
+            int tariffVersion,
+            @Nullable UUID zoneId,
+            @Nullable Integer bandSequence,
+            @Nullable UUID courierId,
+            UUID orderId,
+            UUID shipmentId,
+            long finalFeeMinor,
+            String currency,
+            Instant resolvedAt) {
+
+        public TariffFeeResolutionFact {
+            Objects.requireNonNull(tenantId, "A fact is tenant-owned");
+            Objects.requireNonNull(resolutionId, "A tariff-fee-resolution fact names its resolution");
+            if (finalFeeMinor < 0) {
+                throw new IllegalArgumentException("A resolved fee cannot be negative");
+            }
+        }
+    }
+
+    /**
+     * w6-reporting-facts, batch 11 (7.4c, ADR 0023/0125): one {@code
+     * PARTNER}-sourced, {@code DELIVERED} shipment, left-joined at close time
+     * against its own {@code ACCRUED} cost line and its {@code DELIVERY}
+     * invoice line — see {@code JdbcReportingStore
+     * #readSourceExternalDeliveryCosts} for the join this replaces {@code
+     * readExternalDeliveryCost}'s own live one with.
+     *
+     * <p><b>Frozen at close, unlike the report's old live read.</b> {@code
+     * matchStatus}/{@code providerBilledMinor}/{@code varianceMinor} are
+     * exactly as they stood when the business day closed (ADR 0043's own
+     * hour-after-close cadence) — a partner invoice matched or reconciled
+     * afterward is not reflected in an already-closed day's row, the same
+     * "somebody has already acted on the earlier figure" argument {@link
+     * DayCloseService}'s own class doc makes for {@code fact_order}. This is
+     * a genuine behaviour change from the live read it replaces (which
+     * always answered with whatever matching had reached by the moment of
+     * the request); it is the trade ADR 0023's read-only-projection
+     * invariant asks a report to make, not a decision this fact's own
+     * projector is making on its own.
+     *
+     * @param shipmentId    the natural key
+     * @param matchStatus   null exactly when {@code invoiceLineId} is — no
+     *                      invoice line existed for this shipment as of
+     *                      close time, which the reader treats as {@code
+     *                      UNBILLED}, never {@code PENDING} — see {@code
+     *                      JdbcReportingStore#readExternalDeliveryCost}'s own
+     *                      doc
+     */
+    public record ExternalDeliveryCostFact(
+            UUID tenantId,
+            UUID shipmentId,
+            LocalDate businessDate,
+            int boundaryVersion,
+            int metricCalculationVersion,
+            UUID locationId,
+            UUID orderId,
+            String publicOrderNumber,
+            long orderTotalMinor,
+            String currency,
+            long chargedDeliveryMinor,
+            @Nullable String providerType,
+            @Nullable Long providerEstimatedMinor,
+            @Nullable UUID invoiceLineId,
+            @Nullable Long providerBilledMinor,
+            @Nullable String matchStatus,
+            @Nullable Long varianceMinor,
+            Instant deliveredAt) {
+
+        public ExternalDeliveryCostFact {
+            Objects.requireNonNull(tenantId, "A fact is tenant-owned");
+            Objects.requireNonNull(shipmentId, "An external-delivery-cost fact names its shipment");
+            if ((invoiceLineId == null) != (matchStatus == null)) {
+                throw new IllegalArgumentException("matchStatus is set precisely when an invoice line was found");
+            }
+        }
+    }
+
+    /**
      * ADR 0064: one hour's call activity for one operator at one location, on
      * one business date. The one new grain ADR 0043's day-only physical model
      * did not have — see {@code fact_call_hour}'s own migration comment for

@@ -134,18 +134,18 @@ class CourierComplianceFileTests {
         store = new JdbcCourierStore(jdbc);
         audit = new RecordingAudit();
         clock = new MutableClock(NOON);
+        CourierPolicyResolver policyResolver = new CourierPolicyResolver(new DefaultPolicies());
         engagements = new CourierEngagementService(
-                store,
-                new ColumnBoundProtection(),
-                audit,
-                new CourierPolicyResolver(new DefaultPolicies()),
-                (tenantId, assetIds) -> false,
-                clock);
+                store, new ColumnBoundProtection(), audit, policyResolver, (tenantId, assetIds) -> false, clock);
         roster = new CourierRosterService(store, audit, clock);
         // Load is not what this suite is about, and a fleet port that answered
         // from the shipment tables would need an order chain per courier; zero
         // is honest here and the real count is proven in CourierCompensationTests.
-        rosterQuery = new CourierRosterQueryService(store, (tenantId, courierIds) -> Map.of());
+        // Same for online status: CourierCompensationTests owns that behaviour's
+        // own test, and every courier here has no live row, so DEFAULTS'
+        // onlineWithinMinutes never has a fix to compare against anyway.
+        rosterQuery = new CourierRosterQueryService(
+                store, (tenantId, courierIds) -> Map.of(), (tenantId, courierIds) -> Map.of(), policyResolver, clock);
 
         seedTenancy(TENANT);
         seedTenancy(OTHER_TENANT);

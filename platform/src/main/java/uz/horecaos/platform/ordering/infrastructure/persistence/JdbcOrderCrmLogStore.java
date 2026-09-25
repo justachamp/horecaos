@@ -8,6 +8,7 @@ import java.time.ZoneOffset;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -106,6 +107,48 @@ public class JdbcOrderCrmLogStore {
                 .list();
     }
 
+    /**
+     * Gap map row 1.1: the customer half of the board's own Клиент column,
+     * batched by {@code orderId} for exactly one already-fetched page —
+     * never a date range, never a reporting fact, the same restraint {@link
+     * #list} already keeps. Order rows outside {@code orderIds} or this
+     * tenant are simply absent from the result, the same "caller only gets
+     * what it asked for and is scoped to" contract {@link
+     * uz.horecaos.platform.fulfillment.api.ActiveCourierAssignmentsPort}
+     * already keeps for the Курьер column added alongside this one.
+     *
+     * @param orderIds bounded by the caller ({@code OrderCrmLogController}) —
+     *                 this store trusts the caller already capped it to one
+     *                 board page's worth
+     */
+    public List<CustomerLabelRow> customerLabels(UUID tenantId, Set<UUID> orderIds) {
+        if (orderIds.isEmpty()) {
+            return List.of();
+        }
+        return jdbc.sql("""
+                SELECT o.id, o.customer_account_id, cs.display_name_encrypted, cs.contact_encrypted,
+                       cs.anonymized_at
+                  FROM ordering.orders o
+                  LEFT JOIN ordering.order_customer_snapshots cs
+                    ON cs.tenant_id = o.tenant_id AND cs.order_id = o.id
+                 WHERE o.tenant_id = :tenantId
+                   AND o.id IN (:orderIds)
+                """)
+                .param("tenantId", tenantId)
+                .param("orderIds", orderIds)
+                .query(JdbcOrderCrmLogStore::customerLabelRow)
+                .list();
+    }
+
+    private static CustomerLabelRow customerLabelRow(ResultSet row, int number) throws SQLException {
+        return new CustomerLabelRow(
+                row.getObject("id", UUID.class),
+                row.getObject("customer_account_id", UUID.class) != null ? "ACCOUNT" : "GUEST",
+                row.getString("display_name_encrypted"),
+                row.getString("contact_encrypted"),
+                row.getObject("anonymized_at", OffsetDateTime.class) != null);
+    }
+
     private static CrmLogRow crmLogRow(ResultSet row, int number) throws SQLException {
         String createdByActorType = row.getString("created_by_actor_type");
         String createdByActorId = row.getString("created_by_actor_id");
@@ -186,4 +229,19 @@ public class JdbcOrderCrmLogStore {
 
     /** A keyset cursor: the previous page's last row. */
     public record LogCursor(Instant occurredAt, UUID orderId) {}
+
+    /**
+     * One order's customer half, gap map row 1.1 — {@link #customerLabels}'s
+     * own row, the same shape {@link CrmLogRow} carries minus the fields the
+     * board's Клиент column has no use for (occurred/location/operator/courier).
+     *
+     * @param displayNameEncrypted null when the order carries no customer snapshot at all
+     * @param contactEncrypted     null when the snapshot carries no phone, or the order is a guest order
+     */
+    public record CustomerLabelRow(
+            UUID orderId,
+            String customerType,
+            @Nullable String displayNameEncrypted,
+            @Nullable String contactEncrypted,
+            boolean anonymized) {}
 }

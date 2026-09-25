@@ -123,6 +123,12 @@ export class CustomersPage {
   protected readonly exportedRows = signal<readonly CustomerExportRow[] | null>(null);
   /** Set alongside {@link exportedRows} — a filter that matched more rows than the server's cap. */
   protected readonly exportTruncated = signal(false);
+  /**
+   * Staff 9.4 — set instead of {@link exportedRows} when the export waited on
+   * a second signature or was refused one: `'PENDING'`/`'DECLINED'` only,
+   * never the other two statuses, which take the {@link exportedRows} path.
+   */
+  protected readonly exportApprovalNotice = signal<'PENDING' | 'DECLINED' | null>(null);
 
   constructor() {
     void this.load();
@@ -337,6 +343,16 @@ export class CustomersPage {
         this.filters(),
         CustomersPage.EXPORT_PURPOSE,
       );
+      // Staff 9.4: PENDING/DECLINED means nothing was decrypted — the row
+      // array is empty either way, and downloading an empty CSV would read
+      // as "this filter matched nobody" rather than "this is waiting on a
+      // second signature".
+      if (result.approvalStatus === 'PENDING' || result.approvalStatus === 'DECLINED') {
+        this.exportApprovalNotice.set(result.approvalStatus);
+        this.exportedRows.set(null);
+        return;
+      }
+      this.exportApprovalNotice.set(null);
       this.exportedRows.set(result.rows);
       this.exportTruncated.set(result.truncated);
       downloadCsv(result.rows, `customers-${new Date().toISOString().slice(0, 10)}.csv`);
@@ -350,7 +366,14 @@ export class CustomersPage {
   protected dismissExportNotice(): void {
     this.exportedRows.set(null);
     this.exportTruncated.set(false);
+    this.exportApprovalNotice.set(null);
     this.exportError.set(null);
+  }
+
+  protected exportApprovalNoticeText(status: 'PENDING' | 'DECLINED'): string {
+    return this.i18n.t(
+      status === 'PENDING' ? 'customers.export.approvalPending' : 'customers.export.approvalDeclined',
+    );
   }
 
   // ------------------------------------------------------------------ format

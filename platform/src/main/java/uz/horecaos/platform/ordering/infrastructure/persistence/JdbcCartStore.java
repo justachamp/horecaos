@@ -460,11 +460,14 @@ public class JdbcCartStore {
      * §6): {@code ACTIVE}, {@code EXPIRED} or {@code ABANDONED}, with no
      * {@code converted_order_id}. Newest first — this is a log, not a queue.
      *
-     * <p>{@code lineCount} only, not a first-line preview: the product name
+     * <p>{@code firstLineVariantId} only — never a name. The product name
      * behind a cart line lives in the catalog module's schema, and resolving
-     * it here would be a cross-module join inside a persistence adapter this
-     * module does not own. The abandonment-by-channel breakdown the screen is
-     * built around needs none of it.
+     * it with a SQL join here would be a cross-module join inside a
+     * persistence adapter this module does not own. The caller — which
+     * already depends on {@code catalog.api.ItemDisplayLookup} for the same
+     * reason {@code CustomerBotOrderingAdapter} does — batch-resolves the
+     * name in memory instead, which needs no new column and no cross-schema
+     * join, only a second call.
      */
     public List<DraftCartRow> listDrafts(
             UUID tenantId,
@@ -479,7 +482,11 @@ public class JdbcCartStore {
                        cart.customer_account_id, cart.guest_reference_hash,
                        cart.expires_at, cart.status,
                        (SELECT count(*) FROM ordering.cart_lines line
-                         WHERE line.tenant_id = cart.tenant_id AND line.cart_id = cart.id) AS line_count
+                         WHERE line.tenant_id = cart.tenant_id AND line.cart_id = cart.id) AS line_count,
+                       (SELECT line.variant_id FROM ordering.cart_lines line
+                         WHERE line.tenant_id = cart.tenant_id AND line.cart_id = cart.id
+                         ORDER BY line.created_at, line.line_key
+                         LIMIT 1) AS first_line_variant_id
                   FROM ordering.carts cart
                  WHERE cart.tenant_id = :tenantId
                    AND cart.brand_id = :brandId
@@ -508,7 +515,8 @@ public class JdbcCartStore {
                         row.getString("guest_reference_hash"),
                         row.getObject("expires_at", OffsetDateTime.class).toInstant(),
                         CartStatus.valueOf(row.getString("status")),
-                        row.getInt("line_count")))
+                        row.getInt("line_count"),
+                        row.getObject("first_line_variant_id", UUID.class)))
                 .list();
     }
 
@@ -517,6 +525,7 @@ public class JdbcCartStore {
      *
      * @param customerAccountId null for a guest cart
      * @param guestReferenceHash null for an account cart — never the raw reference
+     * @param firstLineVariantId null for a cart with no lines
      */
     public record DraftCartRow(
             UUID cartId,
@@ -527,7 +536,47 @@ public class JdbcCartStore {
             @Nullable String guestReferenceHash,
             Instant expiresAt,
             CartStatus status,
-            int lineCount) {}
+            int lineCount,
+            @Nullable UUID firstLineVariantId) {}
+
+    /**
+     * Carts an account never converted, gone quiet for at least {@code
+     * olderThanMinutes} — {@code marketing}'s {@code AbandonedCartDirectory}
+     * port (gap-map row 1.4/6.5: the recovery hand-off {@code JdbcCartStore
+     * #listDrafts}'s own doc names as unbuilt).
+     *
+     * <p>Guest carts are excluded at the query: {@code customer_account_id IS
+     * NOT NULL} is the same "exactly one owner" fact {@code ck_cart_owner}
+     * enforces, and marketing has no contact value to message a guest with
+     * even if it read their reference hash. {@code CHECKOUT_IN_PROGRESS} and
+     * {@code CONVERTED} are excluded too — a cart being paid for right now, or
+     * one that already became an order, is not abandoned.
+     */
+    public List<AbandonedCartRow> abandonedForAutomation(Instant olderThan, int limit) {
+        return jdbc.sql("""
+                SELECT tenant_id, brand_id, id, customer_account_id, updated_at
+                  FROM ordering.carts
+                 WHERE status IN ('ACTIVE', 'EXPIRED', 'ABANDONED')
+                   AND converted_order_id IS NULL
+                   AND customer_account_id IS NOT NULL
+                   AND updated_at <= :olderThan
+                 ORDER BY updated_at
+                 LIMIT :limit
+                """)
+                .param("olderThan", utc(olderThan))
+                .param("limit", limit)
+                .query((row, number) -> new AbandonedCartRow(
+                        row.getObject("tenant_id", UUID.class),
+                        row.getObject("brand_id", UUID.class),
+                        row.getObject("id", UUID.class),
+                        row.getObject("customer_account_id", UUID.class),
+                        row.getObject("updated_at", OffsetDateTime.class).toInstant()))
+                .list();
+    }
+
+    /** Cross-tenant, mirroring {@code JdbcCampaignStore#sendingCampaigns}'s own sweep shape. */
+    public record AbandonedCartRow(
+            UUID tenantId, UUID brandId, UUID cartId, UUID customerAccountId, Instant abandonedAt) {}
 
     /** Sweeps carts past their TTL so an abandoned basket stops looking live. */
     public int expireStaleCarts(Instant now) {

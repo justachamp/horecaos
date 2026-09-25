@@ -1,0 +1,229 @@
+<div class="stock">
+  <div class="stock__header">
+    <h2 class="q-emphasis">{{ 'catalog.stock.title' | t }}</h2>
+    <p class="q-caption stock__note">{{ 'catalog.stock.resetNote' | t }}</p>
+  </div>
+
+  @if (!firstLoadComplete()) {
+    <p class="q-body-sm stock__status">{{ 'catalog.stock.loading' | t }}</p>
+  } @else if (noLocation()) {
+    <p class="q-body-sm stock__status" data-testid="stock-no-location">
+      {{ 'catalog.stock.noLocation' | t }}
+    </p>
+  } @else if (denied()) {
+    <p class="q-body-sm stock__status" data-testid="stock-denied">
+      {{ 'catalog.stock.denied' | t }}
+    </p>
+  } @else if (lastError(); as message) {
+    <p class="q-body-sm error" role="alert">{{ message }}</p>
+  } @else if (quantityRows().length === 0) {
+    <p class="q-body-sm stock__status" data-testid="stock-empty">
+      {{ 'catalog.stock.empty' | t }}
+    </p>
+  } @else {
+    <table class="stock__table">
+      <thead>
+        <tr>
+          <th class="q-caption">{{ 'catalog.stock.column.variant' | t }}</th>
+          <th class="q-caption">{{ 'catalog.stock.column.onHand' | t }}</th>
+          <th class="q-caption">{{ 'catalog.stock.column.reserved' | t }}</th>
+          <th class="q-caption">{{ 'catalog.stock.column.remaining' | t }}</th>
+          <th class="q-caption">{{ 'catalog.stock.column.default' | t }}</th>
+          <th class="q-caption">{{ 'catalog.stock.column.lastReset' | t }}</th>
+          <th class="q-caption">{{ 'catalog.stock.column.thresholds' | t }}</th>
+          <th class="q-caption"></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (row of quantityRows(); track row.stockItemId) {
+          <tr [attr.data-testid]="'stock-row-' + row.variantId">
+            <td class="q-body-sm q-tnum stock__variant">{{ row.variantId }}</td>
+            <td class="q-body q-tnum">{{ row.onHandQuantity }}</td>
+            <td class="q-body q-tnum">{{ row.reservedQuantity }}</td>
+            <td class="q-body q-tnum">{{ row.remainingQuantity }}</td>
+            <td class="q-body q-tnum">
+              {{
+                row.defaultQuantity === null ? ('catalog.stock.noDefault' | t) : row.defaultQuantity
+              }}
+            </td>
+            <td class="q-body-sm q-tnum">{{ row.lastResetBusinessDate ?? '—' }}</td>
+            <td class="q-body-sm">
+              @if (row.channelStopThresholds.length === 0) {
+                <span class="q-caption">{{ 'catalog.stock.noThresholds' | t }}</span>
+              } @else {
+                @for (threshold of row.channelStopThresholds; track threshold.channelSystemType) {
+                  <span class="stock__threshold-chip"
+                    >{{ threshold.channelSystemType }}: {{ threshold.stopAtOrBelow }}</span
+                  >
+                }
+              }
+            </td>
+            <td>
+              @if (editingVariantId() !== row.variantId) {
+                <button type="button" class="q-body-sm secondary" (click)="startEdit(row)">
+                  {{ 'catalog.stock.edit' | t }}
+                </button>
+              } @else {
+                <button type="button" class="q-body-sm secondary" (click)="closeEdit()">
+                  {{ 'catalog.stock.close' | t }}
+                </button>
+              }
+            </td>
+          </tr>
+          @if (editingVariantId() === row.variantId) {
+            <tr class="stock__edit-row">
+              <td colspan="8">
+                <div class="stock__edit-panel" [attr.data-testid]="'stock-edit-' + row.variantId">
+                  <section class="stock__edit-section">
+                    <h3 class="q-subhead">{{ 'catalog.stock.setOnHand.title' | t }}</h3>
+                    <div class="stock__edit-fields">
+                      <input
+                        type="number"
+                        min="0"
+                        class="q-body field"
+                        [value]="draftOnHand()"
+                        (input)="draftOnHand.set($any($event.target).value)"
+                        data-testid="stock-on-hand-input"
+                      />
+                      <input
+                        type="text"
+                        class="q-body field"
+                        [placeholder]="'settings.orderPolicy.field.reason' | t"
+                        [value]="draftOnHandReason()"
+                        (input)="draftOnHandReason.set($any($event.target).value)"
+                        data-testid="stock-on-hand-reason"
+                      />
+                      <button
+                        type="button"
+                        class="q-body primary"
+                        [disabled]="!canSaveOnHand()"
+                        (click)="saveOnHand(row)"
+                        data-testid="stock-on-hand-save"
+                      >
+                        {{
+                          savingOnHand()
+                            ? ('settings.orderPolicy.publishing' | t)
+                            : ('settings.orderPolicy.publish' | t)
+                        }}
+                      </button>
+                    </div>
+                    @if (onHandError(); as message) {
+                      <p class="q-body-sm error" role="alert">{{ message }}</p>
+                    }
+                  </section>
+
+                  <section class="stock__edit-section">
+                    <h3 class="q-subhead">{{ 'catalog.stock.setDefault.title' | t }}</h3>
+                    <p class="q-caption">{{ 'catalog.stock.setDefault.body' | t }}</p>
+                    <div class="stock__edit-fields">
+                      <input
+                        type="number"
+                        min="0"
+                        class="q-body field"
+                        [placeholder]="'catalog.stock.noDefault' | t"
+                        [value]="draftDefault()"
+                        (input)="draftDefault.set($any($event.target).value)"
+                        data-testid="stock-default-input"
+                      />
+                      <input
+                        type="text"
+                        class="q-body field"
+                        [placeholder]="'settings.orderPolicy.field.reason' | t"
+                        [value]="draftDefaultReason()"
+                        (input)="draftDefaultReason.set($any($event.target).value)"
+                        data-testid="stock-default-reason"
+                      />
+                      <button
+                        type="button"
+                        class="q-body primary"
+                        [disabled]="!canSaveDefault()"
+                        (click)="saveDefault(row)"
+                        data-testid="stock-default-save"
+                      >
+                        {{
+                          savingDefault()
+                            ? ('settings.orderPolicy.publishing' | t)
+                            : ('settings.orderPolicy.publish' | t)
+                        }}
+                      </button>
+                    </div>
+                    @if (defaultError(); as message) {
+                      <p class="q-body-sm error" role="alert">{{ message }}</p>
+                    }
+                  </section>
+
+                  <section class="stock__edit-section">
+                    <h3 class="q-subhead">{{ 'catalog.stock.thresholds.title' | t }}</h3>
+                    <p class="q-caption">{{ 'catalog.stock.thresholds.body' | t }}</p>
+                    @if (row.channelStopThresholds.length > 0) {
+                      <ul class="stock__threshold-list">
+                        @for (
+                          threshold of row.channelStopThresholds;
+                          track threshold.channelSystemType
+                        ) {
+                          <li class="q-body-sm">
+                            {{ threshold.channelSystemType }}: {{ threshold.stopAtOrBelow }}
+                            <button
+                              type="button"
+                              class="q-caption stock__threshold-remove"
+                              (click)="removeThreshold(row, threshold.channelSystemType)"
+                              [attr.data-testid]="
+                                'stock-threshold-remove-' + threshold.channelSystemType
+                              "
+                            >
+                              {{ 'catalog.stock.thresholds.remove' | t }}
+                            </button>
+                          </li>
+                        }
+                      </ul>
+                    }
+                    <div class="stock__edit-fields">
+                      <select
+                        class="q-body field"
+                        [value]="draftThresholdChannel()"
+                        (change)="draftThresholdChannel.set($any($event.target).value)"
+                        data-testid="stock-threshold-channel"
+                      >
+                        @for (channel of channelTypes; track channel) {
+                          <option [value]="channel">{{ channel }}</option>
+                        }
+                      </select>
+                      <input
+                        type="number"
+                        min="0"
+                        class="q-body field"
+                        [value]="draftThresholdValue()"
+                        (input)="draftThresholdValue.set($any($event.target).value)"
+                        data-testid="stock-threshold-value"
+                      />
+                      <input
+                        type="text"
+                        class="q-body field"
+                        [placeholder]="'settings.orderPolicy.field.reason' | t"
+                        [value]="draftThresholdReason()"
+                        (input)="draftThresholdReason.set($any($event.target).value)"
+                        data-testid="stock-threshold-reason"
+                      />
+                      <button
+                        type="button"
+                        class="q-body primary"
+                        [disabled]="!canSaveThreshold()"
+                        (click)="addThreshold(row)"
+                        data-testid="stock-threshold-save"
+                      >
+                        {{ 'catalog.stock.thresholds.add' | t }}
+                      </button>
+                    </div>
+                    @if (thresholdError(); as message) {
+                      <p class="q-body-sm error" role="alert">{{ message }}</p>
+                    }
+                  </section>
+                </div>
+              </td>
+            </tr>
+          }
+        }
+      </tbody>
+    </table>
+  }
+</div>

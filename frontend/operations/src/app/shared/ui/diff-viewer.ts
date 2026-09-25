@@ -19,17 +19,20 @@ function formatValue(value: unknown): string {
  * A per-field before/after change document, rendered — `q-diff-viewer`
  * (row `X.26`).
  *
- * Generalises `activity-log-page.ts`'s `changeEntries`/`formatFieldChange`,
- * the only production reader of `ChangeDocuments.change(field, before,
- * after)`'s `{before, after}` shape (`T08`'s own finding: **zero** production
- * callers write it yet — this viewer is ready before the write side is).
+ * `activity-log-page.ts`'s drawer is this component's one caller — before
+ * row `X.26`'s own audit, that screen rendered its own hand-rolled
+ * `<div class="diff">` instead of consuming this component, which had
+ * existed with no call site anywhere in the app; that duplication is fixed
+ * as of Staff `9.3a`.
  *
- * **Both shapes, honestly.** `T08` also finds that ~130 of 132 `.changed(...)`
- * call sites write a flat, after-only map — a fact recorded, not a change
- * observed. A field whose value is not a `{before, after}` object renders as
- * "set to «value»" rather than a fabricated `undefined → value` diff line,
- * so a viewer built before the write-side migration lands does not lie about
- * what it is showing.
+ * **Both shapes, honestly.** Staff `9.3a` migrates the settings-heavy
+ * aggregates' own `.changed(...)` call sites onto {@code
+ * ChangeDocuments.diff}'s `{before, after}` shape a call site at a time —
+ * most of the platform's ~130 sites still write a flat, after-only map,
+ * a fact recorded rather than a change observed. A field whose value is not
+ * a `{before, after}` object renders as "set to «value»" rather than a
+ * fabricated `undefined → value` diff line, so this viewer never lies about
+ * what it is showing for a call site not yet migrated.
  */
 @Component({
   selector: 'q-diff-viewer',

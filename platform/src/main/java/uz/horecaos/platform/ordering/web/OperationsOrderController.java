@@ -37,6 +37,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import uz.horecaos.platform.audit.api.ActorRef;
+import uz.horecaos.platform.catalog.api.ItemDisplayLookup;
 import uz.horecaos.platform.fulfillment.api.ShipmentCancellationPort;
 import uz.horecaos.platform.fulfillment.api.ShipmentCancellationPort.Outcome;
 import uz.horecaos.platform.iam.api.AuthorizationService;
@@ -117,6 +118,7 @@ public class OperationsOrderController {
     private final ShipmentCancellationPort deliveryCancellation;
     private final MyWorkQueryService myWork;
     private final StaffDisplayNames staffDisplayNames;
+    private final ItemDisplayLookup itemDisplayLookup;
 
     /**
      * Every capability {@link OrderActionsPolicy#availableFor} reads. Computed
@@ -164,7 +166,8 @@ public class OperationsOrderController {
             AggregatorOrderIntakeService aggregatorOrders,
             ShipmentCancellationPort deliveryCancellation,
             MyWorkQueryService myWork,
-            StaffDisplayNames staffDisplayNames) {
+            StaffDisplayNames staffDisplayNames,
+            ItemDisplayLookup itemDisplayLookup) {
         this.orderQuery = orderQuery;
         this.orderState = orderState;
         this.outcomes = outcomes;
@@ -182,6 +185,7 @@ public class OperationsOrderController {
         this.deliveryCancellation = deliveryCancellation;
         this.myWork = myWork;
         this.staffDisplayNames = staffDisplayNames;
+        this.itemDisplayLookup = itemDisplayLookup;
     }
 
     /**
@@ -552,7 +556,12 @@ public class OperationsOrderController {
                     + "`origin`/`marketplace_binding_id` set exactly as an automated partner push "
                     + "sets them, so this order counts in the channel mix as what it is rather "
                     + "than as an ordinary own-channel sale. Creates no customer account: a "
-                    + "marketplace order never matches one (ADR 0040).")
+                    + "marketplace order never matches one (ADR 0040). `fulfillmentMode` DELIVERY "
+                    + "(wave 11 w5-fulfillment-destination) reuses the New order screen's own "
+                    + "structured destination — one of the named customer's saved addresses, never "
+                    + "a second, untyped address path — and opens a delivery plan the same way a "
+                    + "native order's confirmation does; PICKUP is unchanged and carries neither "
+                    + "`customerAccountId` nor `destination`.")
     public ResponseEntity<PlaceOrderResponse> aggregatorEntry(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
@@ -572,13 +581,24 @@ public class OperationsOrderController {
                 body.feeMinor(),
                 body.totalMinor(),
                 idempotencyKey,
-                currentActor.get().subject()));
+                currentActor.get().subject(),
+                body.fulfillmentMode(),
+                body.customerAccountId(),
+                body.destination() == null ? null : body.destination().toAggregatorDestination()));
+
+        // The order's own initial status: CONFIRMED for a DELIVERY entry
+        // (AggregatorOrderIntakeService opens its plan against exactly that
+        // status), RECEIVED otherwise — the same simplification this endpoint
+        // already made for PICKUP, extended rather than re-read from a second
+        // query on every reply.
+        String initialStatus =
+                "DELIVERY".equals(body.fulfillmentMode()) ? OrderStatus.CONFIRMED.name() : OrderStatus.RECEIVED.name();
 
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(new PlaceOrderResponse(
                         result.orderId(),
                         result.publicOrderNumber(),
-                        OrderStatus.RECEIVED.name(),
+                        initialStatus,
                         1,
                         result.replayed() ? "REPLAYED" : "CREATED",
                         List.of()));
@@ -706,8 +726,22 @@ public class OperationsOrderController {
             @RequestParam(required = false) UUID channelId,
             @RequestParam(defaultValue = "200") @jakarta.validation.constraints.Max(500) int limit) {
 
-        return ResponseEntity.ok(carts.listDrafts(tenantId, brandId, locationId, from, to, channelId, limit).stream()
-                .map(DraftCartResponse::of)
+        List<JdbcCartStore.DraftCartRow> rows =
+                carts.listDrafts(tenantId, brandId, locationId, from, to, channelId, limit);
+
+        // Row 1.4's own first-line preview: one batch lookup rather than one call
+        // per row, the same discipline ItemDisplayLookup's own doc requires of a
+        // caller naming a basket rather than a single item.
+        Set<UUID> firstLineVariantIds = rows.stream()
+                .map(JdbcCartStore.DraftCartRow::firstLineVariantId)
+                .filter(java.util.Objects::nonNull)
+                .collect(java.util.stream.Collectors.toSet());
+        Map<UUID, String> firstLineNames = firstLineVariantIds.isEmpty()
+                ? Map.of()
+                : itemDisplayLookup.displayNames(tenantId, firstLineVariantIds);
+
+        return ResponseEntity.ok(rows.stream()
+                .map(row -> DraftCartResponse.of(row, firstLineNames.get(row.firstLineVariantId())))
                 .toList());
     }
 
@@ -1703,6 +1737,12 @@ public class OperationsOrderController {
                     customerAddressId, recipientName, recipientPhone, deliveryNote);
         }
 
+        /** Row 1.3g: the identical fields, handed to the aggregator manual-entry path instead. */
+        AggregatorOrderIntakeService.Destination toAggregatorDestination() {
+            return new AggregatorOrderIntakeService.Destination(
+                    customerAddressId, recipientName, recipientPhone, deliveryNote);
+        }
+
         /** Never prints the recipient's name or phone — see {@code DestinationRequest} elsewhere for the same rule. */
         @Override
         public String toString() {
@@ -1741,6 +1781,21 @@ public class OperationsOrderController {
      * @param subtotalMinor   the aggregator's own totals, stored verbatim —
      * @param discountMinor   HorecaOS validates only that they reconcile to
      * @param feeMinor        {@code totalMinor}, never re-derives them
+     * @param fulfillmentMode row 1.3g (wave 11 w5-fulfillment-destination):
+     *                        {@code PICKUP} or {@code DELIVERY}, null treated
+     *                        as {@code PICKUP} — every request before this
+     *                        wave. Boxed rather than primitive per Jackson 3's
+     *                        own rule for an optional request field
+     * @param customerAccountId required, and only meaningful, when {@code
+     *                        fulfillmentMode} is {@code DELIVERY}: whose saved
+     *                        address {@code destination} names. The order
+     *                        itself still matches no customer account — see
+     *                        {@code AggregatorOrderIntakeService}'s own doc
+     * @param destination     required exactly when {@code fulfillmentMode} is
+     *                        {@code DELIVERY} — the identical structured shape
+     *                        the New order screen's address pane already
+     *                        sends, reused rather than inventing a second,
+     *                        untyped address path
      */
     public record AggregatorOrderRequest(
             @NotBlank @Size(max = 32) String channelCode,
@@ -1750,7 +1805,10 @@ public class OperationsOrderController {
             @PositiveOrZero long subtotalMinor,
             @PositiveOrZero long discountMinor,
             @PositiveOrZero long feeMinor,
-            @PositiveOrZero long totalMinor) {}
+            @PositiveOrZero long totalMinor,
+            @Nullable @Size(max = 16) String fulfillmentMode,
+            @Nullable UUID customerAccountId,
+            @Valid @Nullable DestinationRequest destination) {}
 
     /**
      * One line the operator typed off the aggregator's own order screen.
@@ -2703,6 +2761,11 @@ public class OperationsOrderController {
      *                          rendered here directly
      * @param guestReferenceHash a keyed hash, never the reference itself — a
      *                           guest cart is not attributable to a person
+     * @param firstLineProductName the first line's product name, resolved
+     *                             through {@code catalog.api.ItemDisplayLookup}
+     *                             rather than a stored snapshot; null for a
+     *                             cart with no lines or whose variant no
+     *                             longer resolves to a translated product
      */
     public record DraftCartResponse(
             UUID cartId,
@@ -2713,9 +2776,10 @@ public class OperationsOrderController {
             @Nullable String guestReferenceHash,
             Instant expiresAt,
             String status,
-            int lineCount) {
+            int lineCount,
+            @Nullable String firstLineProductName) {
 
-        static DraftCartResponse of(JdbcCartStore.DraftCartRow row) {
+        static DraftCartResponse of(JdbcCartStore.DraftCartRow row, @Nullable String firstLineProductName) {
             return new DraftCartResponse(
                     row.cartId(),
                     row.createdAt(),
@@ -2725,7 +2789,8 @@ public class OperationsOrderController {
                     row.guestReferenceHash(),
                     row.expiresAt(),
                     row.status().name(),
-                    row.lineCount());
+                    row.lineCount(),
+                    firstLineProductName);
         }
     }
 

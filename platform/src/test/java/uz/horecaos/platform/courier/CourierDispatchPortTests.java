@@ -1137,7 +1137,8 @@ class CourierDispatchPortTests {
                     CourierCompensationPolicy.DEFAULTS.gpsStatusChangeRadiusMeters(),
                     CourierCompensationPolicy.DEFAULTS.kitchenReadyOnly(),
                     CourierCompensationPolicy.DEFAULTS.revealCustomerLocationTiming(),
-                    CourierCompensationPolicy.DEFAULTS.postDeliveryPaymentCheckRequired());
+                    CourierCompensationPolicy.DEFAULTS.postDeliveryPaymentCheckRequired(),
+                    CourierCompensationPolicy.DEFAULTS.onlineWithinMinutes());
 
             return Optional.of((ResolvedPolicy<P>) new ResolvedPolicy<>(
                     key.code(),

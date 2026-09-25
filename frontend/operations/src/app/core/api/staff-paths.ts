@@ -123,6 +123,18 @@ export const staffPaths = {
   staffInvitation(tenantId: string, invitationId: string): string {
     return `${this.staffInvitations(tenantId)}/${enc(invitationId)}`;
   },
+
+  /**
+   * `OperatorTodayCountsController.today` — Staff 9.2d's "how many orders
+   * did this person take today", read from the person's own card.
+   * `/api/v1/tenants/**`, not `/api/v1/operations/tenants/**`: it lives on
+   * `ordering.web`'s own tenant-scoped `orders/**` tree — the same one
+   * `OrderNumberLookupController` uses — not the operations-surface mirror
+   * `auditEvents`/`approvalRequests` above need for their own history.
+   */
+  operatorTodayOrderCounts(tenantId: string, subject: string): string {
+    return `${OPERATIONS}/tenants/${enc(tenantId)}/orders/operators/${enc(subject)}/today-counts`;
+  },
 } as const;
 
 function enc(value: string): string {

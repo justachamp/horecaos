@@ -1810,6 +1810,11 @@ export interface OrderOutcomeReasonControllerReasonRequest {
   systemCategory: "CUSTOMER_CANCELLED" | "CUSTOMER_UNREACHABLE" | "CUSTOMER_NO_SHOW" | "RESTAURANT_REFUSED" | "ITEM_UNAVAILABLE" | "KITCHEN_CAPACITY" | "DELIVERY_FAILED" | "COURIER_UNAVAILABLE" | "ADDRESS_UNSERVICEABLE" | "PAYMENT_NOT_RECEIVED" | "DUPLICATE_ORDER" | "TEST_ORDER" | "SUSPECTED_FRAUD" | "PRICING_ERROR" | "DELIVERED_OWN_COURIER" | "DELIVERED_PARTNER_COURIER" | "COLLECTED_BY_CUSTOMER" | "SERVED_IN_HOUSE" | "APPROVAL_DEADLINE_LAPSED" | "OTHER";
 }
 
+export interface OrderOutcomeReasonControllerReorderRequest {
+  kind: "CANCELLATION" | "COMPLETION";
+  orderedReasonIds: Array<string>;
+}
+
 export interface OrderOutcomeReasonControllerVersionResponse {
   reasonId?: string;
   version?: number;
@@ -2519,11 +2524,6 @@ export interface RegisterLegalEntityRequest {
 
 export interface RemoveHolidayRequest {
   reason: string;
-}
-
-export interface ReorderRequest {
-  kind: "CANCELLATION" | "COMPLETION";
-  orderedReasonIds: Array<string>;
 }
 
 export interface ResetInspection {
@@ -3673,7 +3673,7 @@ export interface Operations {
   "list_3": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/order-outcome-reasons"; request: { parameters: { path: { tenantId: string }; query: { activeOnly?: boolean; kind: "CANCELLATION" | "COMPLETION" } } }; responses: { "200": Array<ReasonResponse> } };
   "create_3": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/order-outcome-reasons"; request: { parameters: { path: { tenantId: string } }; body: OrderOutcomeReasonControllerReasonRequest }; responses: { "200": OrderOutcomeReasonControllerIdResponse } };
   "categories_1": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/order-outcome-reasons/categories"; request: { parameters: { path: { tenantId: string }; query: { kind: "CANCELLATION" | "COMPLETION" } } }; responses: { "200": Array<string> } };
-  "reorder": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/order-outcome-reasons/reorder"; request: { parameters: { path: { tenantId: string } }; body: ReorderRequest }; responses: { "200": Array<ReasonResponse> } };
+  "reorder": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/order-outcome-reasons/reorder"; request: { parameters: { path: { tenantId: string } }; body: OrderOutcomeReasonControllerReorderRequest }; responses: { "200": Array<ReasonResponse> } };
   "archive": { method: "DELETE"; path: "/api/v1/control-plane/tenants/{tenantId}/order-outcome-reasons/{reasonId}"; request: { parameters: { path: { reasonId: string; tenantId: string } } }; responses: { "200": unknown } };
   "update_1": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/order-outcome-reasons/{reasonId}"; request: { parameters: { path: { reasonId: string; tenantId: string } }; body: OrderOutcomeReasonControllerReasonRequest }; responses: { "200": OrderOutcomeReasonControllerVersionResponse } };
   "view": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/owner-invitation"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": OwnerInvitationView } };

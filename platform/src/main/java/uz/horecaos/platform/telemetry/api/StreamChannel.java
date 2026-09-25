@@ -116,7 +116,28 @@ public enum StreamChannel {
             Capability.COURIER_POSITION_READ,
             FrameClass.SNAPSHOT,
             "realtime.signals",
-            Duration.ofSeconds(5));
+            Duration.ofSeconds(5)),
+
+    /**
+     * A branch's kitchen board changed (ADR 0041 rollout step 4, ADR 0045 gap
+     * map row 2.1). Every screen the aggregate feeds — the KDS queue, the
+     * buffer, the VDU wall projection, and the expo pass — shares this one
+     * channel and re-reads its own view through the ordinary {@code
+     * KitchenBoardController} routes; a signal never says which of the four
+     * changed, the same reasoning {@code ORDER_QUEUE}/{@code ORDER_DETAIL}
+     * already share one cadence cap for.
+     *
+     * <p>{@code kitchen.ticket.read} rather than a new capability: a wall
+     * display or a touch KDS reads the identical aggregate a desk console
+     * already reads, at the identical {@code LOCATION} scope, so there is
+     * nothing here for a fourth capability to separate.
+     */
+    KITCHEN_BOARD(
+            EnumSet.of(ScopeType.LOCATION),
+            Capability.KITCHEN_TICKET_READ,
+            FrameClass.SIGNAL,
+            "kitchen.events",
+            Duration.ofMillis(250));
 
     /** What a frame carries. */
     public enum FrameClass {

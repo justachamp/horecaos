@@ -30,6 +30,7 @@
           <th>{{ 'couriers.column.type' | t }}</th>
           <th>{{ 'couriers.column.vehicleClass' | t }}</th>
           <th>{{ 'couriers.column.load' | t }}</th>
+          <th>{{ 'couriers.column.online' | t }}</th>
           <th>{{ 'couriers.column.engagement' | t }}</th>
           <th></th>
         </tr>
@@ -44,6 +45,15 @@
             </td>
             <td class="q-tnum">
               {{ courier.activeAssignments }} / {{ courier.concurrencyCeiling }}
+            </td>
+            <td data-testid="courier-online">
+              <span
+                class="status-badge"
+                [class.status-badge--online]="courier.online"
+                [attr.title]="onlineTitle(courier)"
+              >
+                {{ (courier.online ? 'couriers.online.yes' : 'couriers.online.no') | t }}
+              </span>
             </td>
             <td>
               <span class="status-badge">{{
@@ -74,7 +84,7 @@
           </tr>
         } @empty {
           <tr>
-            <td colspan="6">
+            <td colspan="7">
               <p class="q-body-sm" data-testid="couriers-empty">{{ 'couriers.empty' | t }}</p>
             </td>
           </tr>
@@ -101,13 +111,49 @@
         </label>
 
         <label class="field">
-          <span class="q-caption">{{ 'couriers.register.principalSubject' | t }}</span>
+          <span class="q-caption">{{ 'couriers.register.firstName' | t }}</span>
           <input
             type="text"
-            [value]="newPrincipalSubject()"
-            (input)="newPrincipalSubject.set($any($event.target).value)"
+            [value]="newFirstName()"
+            (input)="newFirstName.set($any($event.target).value)"
+            data-testid="register-first-name"
           />
         </label>
+
+        <label class="field">
+          <span class="q-caption">{{ 'couriers.register.lastName' | t }}</span>
+          <input
+            type="text"
+            [value]="newLastName()"
+            (input)="newLastName.set($any($event.target).value)"
+            data-testid="register-last-name"
+          />
+        </label>
+
+        <label class="field">
+          <span class="q-caption">{{ 'couriers.register.phone' | t }}</span>
+          <input
+            type="tel"
+            [value]="newPhone()"
+            (input)="newPhone.set($any($event.target).value)"
+            [attr.placeholder]="'couriers.register.phone.placeholder' | t"
+            data-testid="register-phone"
+          />
+        </label>
+
+        <label class="field">
+          <span class="q-caption">{{ 'couriers.register.email' | t }}</span>
+          <input
+            type="email"
+            [value]="newEmail()"
+            (input)="newEmail.set($any($event.target).value)"
+            data-testid="register-email"
+          />
+        </label>
+
+        <p class="couriers__hint" data-testid="register-account-note">
+          {{ 'couriers.register.accountNote' | t }}
+        </p>
 
         <label class="field">
           <span class="q-caption">{{ 'couriers.register.displayReference' | t }}</span>
@@ -115,15 +161,6 @@
             type="text"
             [value]="newDisplayReference()"
             (input)="newDisplayReference.set($any($event.target).value)"
-          />
-        </label>
-
-        <label class="field">
-          <span class="q-caption">{{ 'couriers.register.fullName' | t }}</span>
-          <input
-            type="text"
-            [value]="newFullName()"
-            (input)="newFullName.set($any($event.target).value)"
           />
         </label>
 

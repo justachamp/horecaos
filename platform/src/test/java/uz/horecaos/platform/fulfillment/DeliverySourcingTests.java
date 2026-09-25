@@ -215,6 +215,21 @@ class DeliverySourcingTests {
         assertThat(first.status()).isEqualTo(PlanStatus.PLANNED);
         // Snapshotted at checkout and never re-derived from today's zones.
         assertThat(first.customerDeliveryFeeMinor()).isEqualTo(12_000L);
+
+        // Row 3.1: the non-PII destination label DeliveryOrderPort carried is
+        // snapshotted onto the row at creation and reads back unchanged — the
+        // whole point of persisting it rather than joining ordering's own
+        // tables on every 10-second poll.
+        assertThat(first.destinationLabel()).isEqualTo("Test zone, Home");
+        assertThat(planStore.find(TENANT, first.id()).orElseThrow().destinationLabel())
+                .isEqualTo("Test zone, Home");
+        assertThat(jdbc.sql("SELECT destination_label FROM fulfillment.delivery_plans WHERE id = :id")
+                        .param("id", first.id())
+                        .query(String.class)
+                        .single())
+                .as("persisted column, not only the in-memory record")
+                .isEqualTo("Test zone, Home")
+                .doesNotContainPattern("\\d");
     }
 
     @Test
@@ -1005,7 +1020,8 @@ class DeliverySourcingTests {
                     "UZS",
                     true,
                     50_000L,
-                    new Waypoint(41.325, 69.281, "Home", "Customer", "+998900000002", null, "2", "5", "17")));
+                    new Waypoint(41.325, 69.281, "Home", "Customer", "+998900000002", null, "2", "5", "17"),
+                    "Test zone, Home"));
         }
     }
 
