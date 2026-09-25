@@ -529,6 +529,45 @@ public class JdbcCartStore {
             CartStatus status,
             int lineCount) {}
 
+    /**
+     * Carts an account never converted, gone quiet for at least {@code
+     * olderThanMinutes} — {@code marketing}'s {@code AbandonedCartDirectory}
+     * port (gap-map row 1.4/6.5: the recovery hand-off {@code JdbcCartStore
+     * #listDrafts}'s own doc names as unbuilt).
+     *
+     * <p>Guest carts are excluded at the query: {@code customer_account_id IS
+     * NOT NULL} is the same "exactly one owner" fact {@code ck_cart_owner}
+     * enforces, and marketing has no contact value to message a guest with
+     * even if it read their reference hash. {@code CHECKOUT_IN_PROGRESS} and
+     * {@code CONVERTED} are excluded too — a cart being paid for right now, or
+     * one that already became an order, is not abandoned.
+     */
+    public List<AbandonedCartRow> abandonedForAutomation(Instant olderThan, int limit) {
+        return jdbc.sql("""
+                SELECT tenant_id, brand_id, id, customer_account_id, updated_at
+                  FROM ordering.carts
+                 WHERE status IN ('ACTIVE', 'EXPIRED', 'ABANDONED')
+                   AND converted_order_id IS NULL
+                   AND customer_account_id IS NOT NULL
+                   AND updated_at <= :olderThan
+                 ORDER BY updated_at
+                 LIMIT :limit
+                """)
+                .param("olderThan", utc(olderThan))
+                .param("limit", limit)
+                .query((row, number) -> new AbandonedCartRow(
+                        row.getObject("tenant_id", UUID.class),
+                        row.getObject("brand_id", UUID.class),
+                        row.getObject("id", UUID.class),
+                        row.getObject("customer_account_id", UUID.class),
+                        row.getObject("updated_at", OffsetDateTime.class).toInstant()))
+                .list();
+    }
+
+    /** Cross-tenant, mirroring {@code JdbcCampaignStore#sendingCampaigns}'s own sweep shape. */
+    public record AbandonedCartRow(
+            UUID tenantId, UUID brandId, UUID cartId, UUID customerAccountId, Instant abandonedAt) {}
+
     /** Sweeps carts past their TTL so an abandoned basket stops looking live. */
     public int expireStaleCarts(Instant now) {
         return jdbc.sql("""

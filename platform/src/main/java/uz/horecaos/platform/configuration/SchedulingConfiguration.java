@@ -219,9 +219,14 @@ public class SchedulingConfiguration {
      * gave {@code DayCloseService} in wave 6. Batch 8 added the last one so
      * far: {@code CatalogImportRunWorker.processQueuedRuns}, which drains
      * {@code catalog.import_runs} (row 4.5b) the identical way {@code
-     * CustomerImportRunWorker} already drains its own import queue.
+     * CustomerImportRunWorker} already drains its own import queue. Batch 11
+     * w8-marketing-automations added the last one so far: {@code
+     * AutomationTriggerScheduler.sweepOnce}, gap-map row 6.5's own trigger
+     * sweep — BIRTHDAY, INACTIVITY, and CART_ABANDONMENT all in one method,
+     * guarded by {@code marketing.automation_runs}' own unique index rather
+     * than by running less often.
      */
-    static final int DEFAULT_POOL_SIZE = 66;
+    static final int DEFAULT_POOL_SIZE = 67;
 
     /**
      * The platform's scheduler, replacing Boot's single-threaded default.
