@@ -21,8 +21,9 @@ independent and both matter.
   structure.
 
 Before implementing: close the `Open inputs` or record why the work proceeds without
-them, set `Implementation status: In progress`, and update the canonical domain documents
-the change requires.
+them, advance `Implementation status` from `Not started` to `Partial` as code lands —
+never claim `Built` until a real operator could use the whole feature — and update the
+canonical domain documents the change requires.
 
 ## Execution order
 
