@@ -238,3 +238,6 @@ Not verified, and it cannot be until there is a server:
   the passphrase.
 - **The reboot procedure end to end**, including whether the operator can find
   three unseal shares at 3am. That one is worth rehearsing on purpose.
+
+Moving the object store itself — MinIO to RustFS, since MinIO's own images are
+withdrawn — is [`docs/runbooks/object-store-migration.md`](../../docs/runbooks/object-store-migration.md).
