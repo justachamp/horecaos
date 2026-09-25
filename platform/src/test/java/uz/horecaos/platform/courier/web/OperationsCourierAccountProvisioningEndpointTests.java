@@ -176,10 +176,15 @@ class OperationsCourierAccountProvisioningEndpointTests {
     }
 
     @Test
-    @DisplayName("registering a second courier on a phone that already has an account reuses that identity "
-            + "rather than creating a duplicate")
+    @DisplayName("registering a second courier on a phone that already has an account IN THIS TENANT'S OWN "
+            + "ORGANIZATION reuses that identity rather than creating a duplicate")
     void reregisteringOnAnExistingPhoneReusesTheAccount() throws Exception {
         StaffAccounts.StaffAccount existing = accounts.create("Existing", "Person", "+998901112233", null);
+        // Simulates the account already having been linked into THIS tenant's
+        // organization by an earlier, successful registration -- the only
+        // circumstance reuse is meant to cover.
+        organizations.ensureMembership(
+                new OrganizationProvisioner.EnsureMembership(ORGANIZATION_ID, "", existing.subjectId()));
         accounts.created.clear();
 
         MvcResult result = mvc.perform(post(registerPath())
@@ -200,6 +205,44 @@ class OperationsCourierAccountProvisioningEndpointTests {
                 .query(String.class)
                 .single();
         assertThat(storedSubject).isEqualTo(existing.subjectId());
+    }
+
+    @Test
+    @DisplayName("registering a courier on a phone whose only existing account belongs to a DIFFERENT tenant's "
+            + "organization is refused -- reusing it would silently link a stranger's account into this "
+            + "tenant's organization (tenant-isolation break)")
+    void registeringOnAPhoneOwnedByAnotherTenantIsRefused() throws Exception {
+        StaffAccounts.StaffAccount otherTenantsStaffer = accounts.create("Someone", "Else", "+998907776655", null);
+        // The account belongs to a different tenant's organization -- never this one.
+        organizations.ensureMembership(new OrganizationProvisioner.EnsureMembership(
+                "org-a-completely-different-tenant", "", otherTenantsStaffer.subjectId()));
+        accounts.created.clear();
+        organizations.ensured.clear();
+
+        MvcResult result = mvc.perform(post(registerPath())
+                        .with(tokenFor(MANAGER))
+                        .header("Idempotency-Key", "courier-register-cross-tenant")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(registrationBody("+998907776655", null)))
+                .andReturn();
+
+        assertThat(result.getResponse().getStatus())
+                .as("reusing another tenant's account must be refused as a conflict, not silently linked in")
+                .isEqualTo(409);
+        assertThat(organizations.ensured)
+                .as("the foreign account must never be linked into this tenant's organization")
+                .noneMatch(m -> m.subjectId().equals(otherTenantsStaffer.subjectId())
+                        && m.organizationId().equals(ORGANIZATION_ID));
+        assertThat(accounts.created)
+                .as("no new account should be created either -- the phone is already taken elsewhere")
+                .isEmpty();
+        Long courierRows = jdbc.sql("SELECT COUNT(*) FROM fulfillment.couriers WHERE tenant_id = :t "
+                        + "AND principal_subject = :s")
+                .param("t", TENANT)
+                .param("s", otherTenantsStaffer.subjectId())
+                .query(Long.class)
+                .single();
+        assertThat(courierRows).isZero();
     }
 
     @Test
@@ -316,6 +359,11 @@ class OperationsCourierAccountProvisioningEndpointTests {
                 String subjectId = java.util.Objects.requireNonNull(command.existingSubjectId());
                 ensured.add(new EnsuredMembership(command.organizationId(), subjectId));
                 return new MembershipRef(command.organizationId(), subjectId, false);
+            }
+
+            @Override
+            public boolean isMember(String organizationId, String subjectId) {
+                return ensured.contains(new EnsuredMembership(organizationId, subjectId));
             }
 
             @Override

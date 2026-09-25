@@ -91,7 +91,7 @@ public class CourierAccountProvisioningService {
                 .orElseThrow(() -> new ApiException(
                         ErrorCode.RESOURCE_CONFLICT, "This tenant has no organization to provision a courier into"));
 
-        StaffAccount account = reuseOrCreate(firstName, lastName, phone, email);
+        StaffAccount account = reuseOrCreate(organizationId, firstName, lastName, phone, email);
 
         // existingSubjectId set: ensureMembership links the account already
         // created above rather than inviting a new one by email, the same
@@ -112,17 +112,33 @@ public class CourierAccountProvisioningService {
     }
 
     /**
-     * An existing account for the phone is reused rather than refused: unlike
-     * a staff job invitation, provisioning a courier confers no authority
-     * beyond row-ownership of the courier record itself, so an operator, a
-     * former staff member, or an already-provisioned courier re-registering
-     * on the same phone all get the identity they already have rather than a
-     * conflict a manager cannot self-serve past.
+     * An existing account for the phone is reused rather than refused only
+     * when it already belongs to <em>this</em> tenant's own organization:
+     * unlike a staff job invitation, provisioning a courier confers no
+     * authority beyond row-ownership of the courier record itself, so an
+     * operator, a former staff member, or an already-provisioned courier
+     * re-registering on the same phone all get the identity they already
+     * have rather than a conflict a manager cannot self-serve past.
+     *
+     * <p>{@link StaffAccounts#findByPhone} searches the whole shared
+     * Keycloak realm, with no tenant filter of any kind (a staff account is
+     * one global identity keyed by phone, never tenant-scoped). Reusing a
+     * match unconditionally would let any tenant that merely knows or
+     * guesses another tenant's staff phone number link that stranger's
+     * account into its own organization -- the account's token would then
+     * carry this tenant's org claim, and {@code CourierSelfAuthorized}'s
+     * row-ownership check would accept it for this tenant's own courier
+     * self-service endpoints. So a match that is not already a member of
+     * {@code organizationId} is refused the same {@code RESOURCE_CONFLICT}
+     * {@link uz.horecaos.platform.tenancy.application.invitations.StaffInvitationService
+     * #rejectIfPhoneTaken} gives an out-of-tenant match, mirroring that
+     * guard exactly.
      */
-    private StaffAccount reuseOrCreate(String firstName, String lastName, String phone, @Nullable String email) {
+    private StaffAccount reuseOrCreate(
+            String organizationId, String firstName, String lastName, String phone, @Nullable String email) {
         Optional<StaffAccount> existing = accounts.findByPhone(phone);
         if (existing.isPresent()) {
-            return existing.get();
+            return rejectUnlessAlreadyInThisOrganization(organizationId, existing.get());
         }
         try {
             return accounts.create(firstName, lastName, phone, email);
@@ -130,11 +146,28 @@ public class CourierAccountProvisioningService {
             // Two registrations for the same phone raced past the check
             // above; re-resolve through the losing side rather than treat a
             // provably-existing account as a hard failure.
-            return accounts.findByPhone(phone)
+            StaffAccount raced = accounts.findByPhone(phone)
                     .orElseThrow(() -> new ApiException(
                             ErrorCode.RESOURCE_CONFLICT,
                             "This phone number already has an account, but it could not be read back"));
+            return rejectUnlessAlreadyInThisOrganization(organizationId, raced);
         }
+    }
+
+    /**
+     * Never discloses whether the match belongs to a different tenant --
+     * only that the phone is taken -- the same non-disclosure {@code
+     * StaffInvitationService#rejectIfPhoneTaken} keeps for an out-of-tenant
+     * match, so an actor who only proved authority over their own tenant
+     * cannot use this endpoint to enumerate which phone numbers already have
+     * accounts elsewhere on the platform.
+     */
+    private StaffAccount rejectUnlessAlreadyInThisOrganization(String organizationId, StaffAccount existing) {
+        if (organizations.isMember(organizationId, existing.subjectId())) {
+            return existing;
+        }
+        throw new ApiException(
+                ErrorCode.RESOURCE_CONFLICT, "This phone number already has an account", Map.of("field", "phone"));
     }
 
     public record Provisioned(String subjectId, String username) {}
