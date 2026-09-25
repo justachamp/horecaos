@@ -4,6 +4,7 @@ import { CurrentTenant } from '../../core/auth/current-tenant';
 import { ApiError } from '../../core/api/problem-details';
 import { I18n } from '../../core/i18n/i18n';
 import { TPipe } from '../../core/i18n/t.pipe';
+import { DiffViewer } from '../../shared/ui/diff-viewer';
 import { describeApiError } from '../orders/order-errors';
 import { activityLogActionLabelKey, humanizeActionCode } from './activity-log-action-labels';
 import { ActivityLogApi, AuditEventDetail, AuditEventView } from './activity-log-api';
@@ -34,7 +35,13 @@ function isoDaysAgo(days: number): string {
  * Reads `AuditController`'s operations-surface routes: the list is `search`
  * (§11.12's outcome/scope/correlation filters), the drawer's diff is
  * `detail` (§11.13's single-event read, itself an individually audited call
- * per its own doc).
+ * per its own doc). The drawer's diff itself renders through `q-diff-viewer`
+ * (row `X.26`) rather than a hand-rolled `<div class="diff">` — this was the
+ * one screen that built its own version of what that component already
+ * generalises, and `q-diff-viewer`'s own doc names this file as the finding.
+ * `changeEntries` stays only as the "is there anything to show" gate around
+ * it; formatting a field's value is `q-diff-viewer`'s job now, not this
+ * component's.
  *
  * «Кто» shows `actorDisplay ?? actorSubject`. Before this wave `actorDisplay`
  * was null on nearly every row; `AuditQueryService` now resolves it at read
@@ -48,7 +55,7 @@ function isoDaysAgo(days: number): string {
  */
 @Component({
   selector: 'q-activity-log-page',
-  imports: [TPipe],
+  imports: [TPipe, DiffViewer],
   templateUrl: './activity-log-page.html',
   styleUrl: './activity-log-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -299,16 +306,9 @@ export class ActivityLogPage {
       : (event.scopeId ?? '—');
   }
 
+  /** Whether there is anything for `q-diff-viewer` to render — that component owns the formatting itself. */
   protected changeEntries(detail: AuditEventDetail): readonly (readonly [string, unknown])[] {
     return detail.changeDocument ? Object.entries(detail.changeDocument) : [];
-  }
-
-  protected formatFieldChange(value: unknown): string {
-    if (value && typeof value === 'object' && 'before' in value && 'after' in value) {
-      const change = value as { before: unknown; after: unknown };
-      return `${formatValue(change.before)} → ${formatValue(change.after)}`;
-    }
-    return formatValue(value);
   }
 
   private describe(error: unknown): string {
@@ -317,11 +317,4 @@ export class ActivityLogPage {
     }
     return this.i18n.t('error.unknown.noReference');
   }
-}
-
-function formatValue(value: unknown): string {
-  if (value === null || value === undefined) {
-    return '—';
-  }
-  return typeof value === 'string' ? value : JSON.stringify(value);
 }
