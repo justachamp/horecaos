@@ -195,6 +195,51 @@ class InventoryQuantityLifecycleTests {
     }
 
     @Test
+    @DisplayName("a commit that floors on-hand below what it removes still leaves the ledger reconcilable")
+    void commitFlooringWhenOnHandWasCorrectedBelowReservedStaysReconcilableWithTheLedger() {
+        Fixture fixture = seedQuantityFixture(BigDecimal.valueOf(5));
+        UUID quoteId = UUID.randomUUID();
+
+        ReservationResult held = tx(() -> inventoryOn.reserveForQuote(
+                fixture.tenantId(),
+                fixture.brandId(),
+                fixture.locationId(),
+                quoteId,
+                clock.instant().plusSeconds(900),
+                Map.of(fixture.variantId(), 3)));
+        assertThat(held.isHeld()).isTrue();
+
+        // Spoilage discovered after the hold was taken. setOnHandQuantity never
+        // refuses for going below reserved_quantity (its own doc), so on-hand
+        // legitimately ends up below what is already reserved.
+        tx(() -> inventoryOn.setOnHandQuantity(
+                fixture.tenantId(),
+                fixture.locationId(),
+                fixture.variantId(),
+                BigDecimal.valueOf(2),
+                "SPOILAGE",
+                "op-1"));
+        assertThat(onHandQuantity(fixture.stockItemId())).isEqualByComparingTo(BigDecimal.valueOf(2));
+        assertThat(reservedQuantity(fixture.stockItemId())).isEqualByComparingTo(BigDecimal.valueOf(3));
+        assertThat(ledgerSum(fixture.stockItemId()))
+                .as("sanity check: the ledger already reconciles with on-hand before the commit")
+                .isEqualByComparingTo(onHandQuantity(fixture.stockItemId()));
+
+        boolean committed = tx(() -> inventoryOn.commit(fixture.tenantId(), quoteId));
+        assertThat(committed).isTrue();
+
+        assertThat(onHandQuantity(fixture.stockItemId()))
+                .as("the position stays floored at zero, never negative")
+                .isEqualByComparingTo(BigDecimal.ZERO);
+        assertThat(reservedQuantity(fixture.stockItemId())).isEqualByComparingTo(BigDecimal.ZERO);
+        assertThat(ledgerSum(fixture.stockItemId()))
+                .as("summing inventory.movements must still equal on-hand after a commit that had to floor — "
+                        + "a bare SALE_COMMITMENT for the full, un-floored quantity would leave the ledger "
+                        + "permanently diverged from the position with no trace of the shortfall")
+                .isEqualByComparingTo(onHandQuantity(fixture.stockItemId()));
+    }
+
+    @Test
     @DisplayName("release gives reserved back without ever touching on-hand, and cannot reach a COMMITTED reservation")
     void releaseTouchesReservedOnlyAndNeverACommittedReservation() {
         Fixture fixture = seedQuantityFixture(BigDecimal.valueOf(5));
@@ -602,6 +647,14 @@ class InventoryQuantityLifecycleTests {
                 .param("id", stockItemId)
                 .query(String.class)
                 .list();
+    }
+
+    /** What on_hand_quantity must equal if the ledger is to be reconstructable, per ADR 0017. */
+    private BigDecimal ledgerSum(UUID stockItemId) {
+        return jdbc.sql("SELECT COALESCE(SUM(quantity_delta), 0) FROM inventory.movements WHERE stock_item_id = :id")
+                .param("id", stockItemId)
+                .query(BigDecimal.class)
+                .single();
     }
 
     private <T> T tx(Supplier<T> work) {
