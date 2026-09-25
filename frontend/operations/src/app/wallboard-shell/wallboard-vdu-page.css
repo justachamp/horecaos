@@ -96,7 +96,7 @@
 
 .wv__cards {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: 20px;
 }
 
@@ -106,7 +106,7 @@
   align-items: center;
   justify-content: center;
   gap: 6px;
-  min-height: 160px;
+  min-height: 220px;
   background: var(--q-surface-1);
   color: var(--q-ink);
   border-radius: var(--q-radius);
@@ -123,11 +123,11 @@
   border-color: var(--q-sla-late);
 }
 
+/* Sizing is the closed-scale `.q-display-tv` utility class, applied in the
+   template (`design-tokens/tokens.css`'s own consumer list); this rule is
+   layout only. */
 .wv__card-sequence {
-  font-size: 64px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  line-height: 1.05;
+  text-align: center;
 }
 
 .wv__card-reference {
