@@ -20,6 +20,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
@@ -43,6 +45,10 @@ import uz.horecaos.platform.kitchen.infrastructure.persistence.JdbcKitchenStore.
 import uz.horecaos.platform.kitchen.infrastructure.persistence.JdbcKitchenStore.StationCapacityRow;
 import uz.horecaos.platform.kitchen.infrastructure.persistence.JdbcKitchenStore.TicketItemRow;
 import uz.horecaos.platform.kitchen.infrastructure.persistence.JdbcKitchenStore.TicketRow;
+import uz.horecaos.platform.telemetry.api.RealtimeSignal;
+import uz.horecaos.platform.telemetry.api.RealtimeSignalPublisher;
+import uz.horecaos.platform.telemetry.api.ScopeKey;
+import uz.horecaos.platform.telemetry.api.StreamChannel;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
 
@@ -83,6 +89,7 @@ public class KitchenTicketService {
     private final AuditRecorder audit;
     private final Clock clock;
     private final TransactionTemplate independently;
+    private final RealtimeSignalPublisher realtime;
 
     public KitchenTicketService(
             JdbcKitchenStore kitchen,
@@ -90,7 +97,8 @@ public class KitchenTicketService {
             OrderProgressPort orderProgress,
             AuditRecorder audit,
             Clock clock,
-            TransactionTemplate unitOfWork) {
+            TransactionTemplate unitOfWork,
+            RealtimeSignalPublisher realtime) {
         this.kitchen = kitchen;
         this.orders = orders;
         this.orderProgress = orderProgress;
@@ -101,6 +109,40 @@ public class KitchenTicketService {
         this.independently = new TransactionTemplate(Objects.requireNonNull(
                 unitOfWork.getTransactionManager(), "unitOfWork must already carry a transaction manager"));
         this.independently.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        this.realtime = realtime;
+    }
+
+    /**
+     * Publishes the ADR 0045 {@code KITCHEN_BOARD} signal for one ticket,
+     * deferred past this transaction's commit when one is open — the same
+     * guard {@code ManualDispatchService.signalDispatchBoardChanged} uses, and
+     * for the identical reason: firing before the write durably commits would
+     * announce a change a re-reading client could race past the database.
+     * {@link TransactionSynchronizationManager#isSynchronizationActive()} is
+     * false outside a real {@code @Transactional} proxy, which is how every
+     * test in this package constructs this service (plain {@code new}), so
+     * those tests publish immediately rather than losing the signal to a
+     * callback nothing ever invokes.
+     */
+    private void signalBoardChanged(UUID tenantId, UUID locationId, UUID ticketId, int version, Instant now) {
+        Runnable publish = () -> realtime.publish(RealtimeSignal.of(
+                tenantId,
+                StreamChannel.KITCHEN_BOARD,
+                ScopeKey.location(locationId),
+                "KitchenTicket",
+                ticketId,
+                (long) version,
+                now));
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    publish.run();
+                }
+            });
+        } else {
+            publish.run();
+        }
     }
 
     // ------------------------------------------------------------ ticket creation
@@ -176,6 +218,7 @@ public class KitchenTicketService {
                 1,
                 now);
         kitchen.insertTicket(ticket);
+        signalBoardChanged(tenantId, order.locationId(), ticketId, ticket.version(), now);
 
         List<String> unresolved = insertRoutedItems(order.tenantId(), order.locationId(), ticketId, routedLines, now);
 
@@ -484,7 +527,9 @@ public class KitchenTicketService {
                 reasonCode,
                 correlationId,
                 now);
-        return kitchen.findTicket(tenantId, ticketId);
+        Optional<TicketRow> fired = kitchen.findTicket(tenantId, ticketId);
+        fired.ifPresent(ticket -> signalBoardChanged(tenantId, ticket.locationId(), ticketId, ticket.version(), now));
+        return fired;
     }
 
     /**
@@ -521,7 +566,10 @@ public class KitchenTicketService {
                 null,
                 correlationId,
                 now);
-        return kitchen.findTicket(tenantId, ticketId);
+        Optional<TicketRow> handedOver = kitchen.findTicket(tenantId, ticketId);
+        handedOver.ifPresent(
+                ticket -> signalBoardChanged(tenantId, ticket.locationId(), ticketId, ticket.version(), now));
+        return handedOver;
     }
 
     /** A person at the branch pressing "release now" on a buffered ticket. */
@@ -653,7 +701,9 @@ public class KitchenTicketService {
                     now);
             log.warn("Ticket {} was re-timed past the promise by {}", ticketId, actorId);
         }
-        return require(tenantId, ticketId);
+        TicketRow after = require(tenantId, ticketId);
+        signalBoardChanged(tenantId, after.locationId(), ticketId, after.version(), now);
+        return after;
     }
 
     /**
@@ -855,6 +905,7 @@ public class KitchenTicketService {
                 now);
 
         TicketRow after = rollUp(tenantId, ticket, actorId, correlationId, now);
+        signalBoardChanged(tenantId, after.locationId(), after.id(), after.version(), now);
         return new ItemOutcome(true, kitchen.findItem(tenantId, itemId).orElseThrow(), after);
     }
 
