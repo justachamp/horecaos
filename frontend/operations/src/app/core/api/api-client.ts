@@ -84,6 +84,13 @@ export class ApiClient {
       .pipe(catchError(toApiError));
   }
 
+  /** A binary document such as the row 4.5b `.xlsx` import template — never text- or JSON-decoded. */
+  blob(path: string, options: GetOptions = {}): Observable<Blob> {
+    return this.http
+      .get(this.url(path), { params: toHttpParams(options.params), responseType: 'blob' })
+      .pipe(catchError(toApiError));
+  }
+
   /**
    * A GET whose body is read normally, plus one boolean read off a response
    * header rather than the body.

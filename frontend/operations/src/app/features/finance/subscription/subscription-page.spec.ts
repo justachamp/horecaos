@@ -319,18 +319,85 @@ describe('SubscriptionPage', () => {
     expect(kioskRow?.querySelector('button')?.textContent?.trim()).toBe('Add');
   });
 
-  it('purchases an on-sale module and refreshes what the tenant holds and is entitled to', async () => {
-    const host: HTMLElement = fixture.nativeElement;
+  // -------------------------------------------------- gap map row 8.6: purchase confirmation
+
+  function clickAdd(host: HTMLElement): void {
     const addButton = [...host.querySelectorAll('button')].find(
       (button) => button.textContent?.trim() === 'Add',
     ) as HTMLButtonElement;
     expect(addButton).toBeTruthy();
+    addButton.click();
+  }
 
+  it('clicking Add opens a confirm dialog naming the price and what activates, without purchasing yet', () => {
+    const host: HTMLElement = fixture.nativeElement;
+    clickAdd(host);
+    fixture.detectChanges();
+
+    expect(api.purchaseModule).not.toHaveBeenCalled();
+    const dialog = host.querySelector('[data-testid="q-confirm-dialog"]');
+    expect(dialog).not.toBeNull();
+    expect(dialog?.textContent).toContain('Self-service kiosk');
+    // ON_SALE_MODULE.unitPrice is 150 000 UZS — money.ts groups with U+00A0 (NBSP).
+    expect(dialog?.textContent).toContain('150 000');
+    expect(dialog?.textContent).toContain('Per tenant');
+    // ON_SALE_MODULE carries a description — that is what "activates" names.
+    expect(dialog?.textContent).toContain('An ordering screen at the counter.');
+  });
+
+  it('names the quantity in the confirm dialog for a PER_UNIT module', async () => {
+    api.modulesOnSale.mockResolvedValueOnce([
+      {
+        ...ON_SALE_MODULE,
+        billingUnit: 'PER_UNIT',
+        featureKeys: ['kds.orders.accept'],
+        description: null,
+      },
+    ]);
+    fixture = TestBed.createComponent(SubscriptionPage);
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+    const host: HTMLElement = fixture.nativeElement;
+    const quantityInput = host.querySelector('[aria-label="Quantity"]') as HTMLInputElement;
+    quantityInput.value = '3';
+    quantityInput.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    clickAdd(host);
+    fixture.detectChanges();
+
+    const dialog = host.querySelector('[data-testid="q-confirm-dialog"]');
+    // Quantity folded into the price line, and no description on this
+    // module falls back to naming the raw feature key.
+    expect(dialog?.textContent).toContain('× 3');
+    expect(dialog?.textContent).toContain('kds.orders.accept');
+  });
+
+  it('Cancel closes the dialog without purchasing', async () => {
+    const host: HTMLElement = fixture.nativeElement;
+    clickAdd(host);
+    fixture.detectChanges();
+
+    (host.querySelector('[data-testid="q-confirm-cancel"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(api.purchaseModule).not.toHaveBeenCalled();
+    expect(host.querySelector('[data-testid="q-confirm-dialog"]')).toBeNull();
+  });
+
+  it('confirming the dialog purchases the module and refreshes what the tenant holds and is entitled to', async () => {
+    const host: HTMLElement = fixture.nativeElement;
     api.modulesHeld.mockResolvedValueOnce([
       ALREADY_HELD_MODULE,
       { ...ALREADY_HELD_MODULE, tenantModuleId: 'tm-2', moduleId: ON_SALE_MODULE.moduleId },
     ]);
-    addButton.click();
+    clickAdd(host);
+    fixture.detectChanges();
+    expect(api.purchaseModule).not.toHaveBeenCalled();
+
+    (host.querySelector('[data-testid="q-confirm-confirm"]') as HTMLButtonElement).click();
     await flushMicrotasks();
     fixture.detectChanges();
 
@@ -338,22 +405,24 @@ describe('SubscriptionPage', () => {
     // Re-read after a successful purchase, so the catalogue reflects what just happened.
     expect(api.modulesHeld).toHaveBeenCalledTimes(2);
     expect(api.entitlements).toHaveBeenCalledTimes(2);
+    // The dialog closes once the purchase settles.
+    expect(host.querySelector('[data-testid="q-confirm-dialog"]')).toBeNull();
   });
 
-  it('shows a purchase failure as an alert rather than staying silent', async () => {
+  it('shows a purchase failure as an alert rather than staying silent, and closes the dialog', async () => {
     api.purchaseModule.mockRejectedValueOnce(
       new ApiError(ApiErrorCode.INTERNAL_ERROR, 500, null, 'corr-2'),
     );
     const host: HTMLElement = fixture.nativeElement;
-    const addButton = [...host.querySelectorAll('button')].find(
-      (button) => button.textContent?.trim() === 'Add',
-    ) as HTMLButtonElement;
+    clickAdd(host);
+    fixture.detectChanges();
 
-    addButton.click();
+    (host.querySelector('[data-testid="q-confirm-confirm"]') as HTMLButtonElement).click();
     await flushMicrotasks();
     fixture.detectChanges();
 
     expect(host.querySelector('[role="alert"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="q-confirm-dialog"]')).toBeNull();
   });
 
   it('renders no restriction banner while the subscription is in good standing', () => {
