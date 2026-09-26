@@ -51,6 +51,7 @@ import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.telemetry.api.RealtimeSignal;
 import uz.horecaos.platform.telemetry.api.RealtimeSignalPublisher;
+import uz.horecaos.platform.telemetry.api.StreamChannel;
 import uz.horecaos.platform.tenancy.api.PolicyKey;
 import uz.horecaos.platform.tenancy.api.PolicyResolver;
 import uz.horecaos.platform.tenancy.api.ResolvedPolicy;
