@@ -736,6 +736,7 @@ class SampleMenuPublishStepTests {
         return new StorefrontCatalogQuery(
                 catalogStore(),
                 new PricingMenuPriceLookup(pricingStore(), new JdbcSalesChannelStore(jdbc), CLOCK),
+                (tenantId, brandId, locationId, channel, variantIds) -> Map.of(),
                 new JdbcMenuStore(jdbc),
                 new uz.horecaos.platform.catalog.infrastructure.tenancy.JdbcCatalogTenantContext(jdbc),
                 CLOCK,

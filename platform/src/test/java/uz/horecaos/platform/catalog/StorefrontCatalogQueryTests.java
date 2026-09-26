@@ -2,6 +2,7 @@ package uz.horecaos.platform.catalog;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -19,6 +20,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.testcontainers.DockerClientFactory;
 import tools.jackson.databind.json.JsonMapper;
+import uz.horecaos.platform.catalog.api.MenuAvailabilityLookup;
+import uz.horecaos.platform.catalog.api.MenuAvailabilityLookup.VariantAvailability;
 import uz.horecaos.platform.catalog.api.MenuPriceLookup;
 import uz.horecaos.platform.catalog.api.VariantPricingLookup;
 import uz.horecaos.platform.catalog.application.CatalogAuthoringService;
@@ -129,11 +132,23 @@ class StorefrontCatalogQueryTests {
         storefront = new StorefrontCatalogQuery(
                 store,
                 (tenantId, brandId, locationId, channel, variantIds, optionIds) -> Optional.empty(),
+                alwaysAvailable,
                 menuStore,
                 tenantContext,
                 Clock.systemUTC(),
                 commentPresetStore);
     }
+
+    /**
+     * The default for every test that is not itself about rows 4.4c/4.4d: no
+     * variant carries any inventory-side restriction, matching this class's
+     * behaviour before {@code MenuAvailabilityLookup} existed. A test that
+     * needs a sold-out or low-stock variant overrides {@link #storefront}
+     * with its own lookup instead — see {@code aQuantityItemAtZeroIsSoldOut}
+     * and its neighbours.
+     */
+    private final uz.horecaos.platform.catalog.api.MenuAvailabilityLookup alwaysAvailable =
+            (tenantId, brandId, locationId, channel, variantIds) -> Map.of();
 
     @Test
     @DisplayName("a channel is served only its own publication, never another channel's")
@@ -326,6 +341,7 @@ class StorefrontCatalogQueryTests {
                 store,
                 (tenantId, brandId, locationId, channel, variantIds, optionIds) -> Optional.of(
                         new MenuPriceLookup.MenuPrices("UZS", Map.of(somePricedVariantElsewhere, 15_000L), Map.of())),
+                alwaysAvailable,
                 menuStore,
                 tenantContext,
                 Clock.systemUTC(),
@@ -384,6 +400,7 @@ class StorefrontCatalogQueryTests {
         StorefrontCatalogQuery atThreePm = new StorefrontCatalogQuery(
                 store,
                 (tenantId, brandId, locationId, channel, variantIds, optionIds) -> Optional.empty(),
+                alwaysAvailable,
                 menuStore,
                 tenantContext,
                 Clock.fixed(Instant.parse("2026-08-21T10:00:00Z"), ZoneOffset.UTC),
@@ -410,6 +427,174 @@ class StorefrontCatalogQueryTests {
                 .satisfies(product -> assertThat(product.variants())
                         .singleElement()
                         .satisfies(variant -> assertThat(variant.onSaleNow()).isTrue()));
+    }
+
+    // ------------------------------------------- rows 4.4c/4.4d: inventory
+
+    @Test
+    @DisplayName("rows 4.4c/4.4d: an item inventory reports unavailable is shown, not orderable")
+    void anInventoryUnavailableVariantIsSoldOutOnTheMenu() {
+        UUID catalogId = authoring.createCatalog(TENANT, BRAND, "MAIN", "Main menu", LOCALE);
+        var burger = authoring.createProduct(
+                TENANT, BRAND, catalogId, "BURGER", "Burger", null, LOCALE, "SKU-INV", "PIECE", UNCLASSIFIED, ACTOR);
+        UUID variantId = burger.defaultVariantId();
+        authoring.setOffering(TENANT, BRAND, LOCATION, variantId, OfferingStatus.AVAILABLE, List.of("DELIVERY"));
+        publication.publish(TENANT, BRAND, catalogId, "STOREFRONT", null);
+
+        // Batched, per gap map rows 4.4c/4.4d's own "one lookup per menu page"
+        // shape: the stub answers every id in one call, exactly like the real
+        // InventoryMenuAvailabilityLookup does (proven end to end by
+        // StorefrontCatalogControllerEndpointTests).
+        MenuAvailabilityLookup soldOut = (tenantId, brandId, locationId, channel, variantIds) -> {
+            assertThat(variantIds).contains(variantId);
+            return Map.of(variantId, new VariantAvailability(false, null));
+        };
+        StorefrontCatalogQuery withInventory = new StorefrontCatalogQuery(
+                store,
+                (tenantId, brandId, locationId, channel, ids, optionIds) -> Optional.empty(),
+                soldOut,
+                menuStore,
+                tenantContext,
+                Clock.systemUTC(),
+                commentPresetStore);
+
+        var menu = withInventory
+                .menuFor(TENANT, BRAND, LOCATION, LOCALE, "STOREFRONT")
+                .orElseThrow();
+
+        // Shown, not dropped -- the same "86'd, not hidden" rule the offering
+        // status already gets (variantsOf's own HIDDEN-vs-UNAVAILABLE doc).
+        assertThat(menu.products())
+                .singleElement()
+                .satisfies(product -> assertThat(product.variants())
+                        .singleElement()
+                        .satisfies(variant -> {
+                            assertThat(variant.orderable()).isFalse();
+                            assertThat(variant.remainingQuantity()).isNull();
+                        }));
+    }
+
+    @Test
+    @DisplayName("rows 4.4c/4.4d: inventory can only take an offered item off the menu, never restore a hidden one")
+    void inventoryOrderableNeverOverridesAWithdrawnOffering() {
+        UUID catalogId = authoring.createCatalog(TENANT, BRAND, "MAIN", "Main menu", LOCALE);
+        var burger = authoring.createProduct(
+                TENANT, BRAND, catalogId, "BURGER", "Burger", null, LOCALE, "SKU-WD", "PIECE", UNCLASSIFIED, ACTOR);
+        UUID variantId = burger.defaultVariantId();
+        // UNAVAILABLE, not HIDDEN: still on the menu, but 86'd by the tenant's
+        // own offering -- variantsOf's orderable computation, unrelated to
+        // inventory.
+        authoring.setOffering(TENANT, BRAND, LOCATION, variantId, OfferingStatus.UNAVAILABLE, List.of("DELIVERY"));
+        publication.publish(TENANT, BRAND, catalogId, "STOREFRONT", null);
+
+        // Inventory itself says the item is fine -- proves the AND, not either
+        // side alone.
+        MenuAvailabilityLookup inventorySaysFine = (tenantId, brandId, locationId, channel, variantIds) ->
+                Map.of(variantId, VariantAvailability.available());
+        StorefrontCatalogQuery withInventory = new StorefrontCatalogQuery(
+                store,
+                (tenantId, brandId, locationId, channel, ids, optionIds) -> Optional.empty(),
+                inventorySaysFine,
+                menuStore,
+                tenantContext,
+                Clock.systemUTC(),
+                commentPresetStore);
+
+        var menu = withInventory
+                .menuFor(TENANT, BRAND, LOCATION, LOCALE, "STOREFRONT")
+                .orElseThrow();
+
+        assertThat(menu.products())
+                .singleElement()
+                .satisfies(product -> assertThat(product.variants())
+                        .singleElement()
+                        .satisfies(variant -> assertThat(variant.orderable()).isFalse()));
+    }
+
+    @Test
+    @DisplayName("rows 4.4c/4.4d: a low remaining count is shown, but never above the displayed threshold")
+    void remainingQuantityIsHiddenAboveTheDisplayThresholdAndShownBelowIt() {
+        UUID catalogId = authoring.createCatalog(TENANT, BRAND, "MAIN", "Main menu", LOCALE);
+        var low = authoring.createProduct(
+                TENANT, BRAND, catalogId, "LOW", "Kam qoldi", null, LOCALE, "SKU-LOW", "PIECE", UNCLASSIFIED, ACTOR);
+        var plenty = authoring.createProduct(
+                TENANT,
+                BRAND,
+                catalogId,
+                "PLENTY",
+                "Ko'p bor",
+                null,
+                LOCALE,
+                "SKU-PLENTY",
+                "PIECE",
+                UNCLASSIFIED,
+                ACTOR);
+        UUID lowVariant = low.defaultVariantId();
+        UUID plentyVariant = plenty.defaultVariantId();
+        authoring.setOffering(TENANT, BRAND, LOCATION, lowVariant, OfferingStatus.AVAILABLE, List.of("DELIVERY"));
+        authoring.setOffering(TENANT, BRAND, LOCATION, plentyVariant, OfferingStatus.AVAILABLE, List.of("DELIVERY"));
+        publication.publish(TENANT, BRAND, catalogId, "STOREFRONT", null);
+
+        MenuAvailabilityLookup lowStock = (tenantId, brandId, locationId, channel, variantIds) -> Map.of(
+                lowVariant,
+                new VariantAvailability(true, BigDecimal.valueOf(2)),
+                // No count at all above the threshold -- ADR 0017's own
+                // "quantity need not be exposed publicly", omitted rather
+                // than sent as a large, harmless-looking number.
+                plentyVariant,
+                VariantAvailability.available());
+        StorefrontCatalogQuery withInventory = new StorefrontCatalogQuery(
+                store,
+                (tenantId, brandId, locationId, channel, ids, optionIds) -> Optional.empty(),
+                lowStock,
+                menuStore,
+                tenantContext,
+                Clock.systemUTC(),
+                commentPresetStore);
+
+        var menu = withInventory
+                .menuFor(TENANT, BRAND, LOCATION, LOCALE, "STOREFRONT")
+                .orElseThrow();
+
+        assertThat(menu.products())
+                .filteredOn(product -> product.code().equals("LOW"))
+                .singleElement()
+                .satisfies(product -> assertThat(product.variants())
+                        .singleElement()
+                        .satisfies(variant -> {
+                            assertThat(variant.orderable()).isTrue();
+                            assertThat(variant.remainingQuantity()).isEqualByComparingTo(BigDecimal.valueOf(2));
+                        }));
+        assertThat(menu.products())
+                .filteredOn(product -> product.code().equals("PLENTY"))
+                .singleElement()
+                .satisfies(product -> assertThat(product.variants())
+                        .singleElement()
+                        .satisfies(variant -> {
+                            assertThat(variant.orderable()).isTrue();
+                            assertThat(variant.remainingQuantity()).isNull();
+                        }));
+    }
+
+    @Test
+    @DisplayName("rows 4.4c/4.4d: a variant inventory has no opinion about keeps its offering-based orderable")
+    void aVariantAbsentFromTheAvailabilityResultIsUnaffected() {
+        UUID catalogId = authoring.createCatalog(TENANT, BRAND, "MAIN", "Main menu", LOCALE);
+        var burger = authoring.createProduct(
+                TENANT, BRAND, catalogId, "BURGER", "Burger", null, LOCALE, "SKU-ABS", "PIECE", UNCLASSIFIED, ACTOR);
+        authoring.setOffering(
+                TENANT, BRAND, LOCATION, burger.defaultVariantId(), OfferingStatus.AVAILABLE, List.of("DELIVERY"));
+        publication.publish(TENANT, BRAND, catalogId, "STOREFRONT", null);
+
+        var menu = storefront
+                .menuFor(TENANT, BRAND, LOCATION, LOCALE, "STOREFRONT")
+                .orElseThrow();
+
+        assertThat(menu.products())
+                .singleElement()
+                .satisfies(product -> assertThat(product.variants())
+                        .singleElement()
+                        .satisfies(variant -> assertThat(variant.orderable()).isTrue()));
     }
 
     @Test

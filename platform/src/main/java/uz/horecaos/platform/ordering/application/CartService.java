@@ -23,6 +23,8 @@ import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.protection.DataClass;
 import uz.horecaos.platform.iam.api.protection.FieldProtection;
 import uz.horecaos.platform.iam.api.protection.FieldProtection.RecordRef;
+import uz.horecaos.platform.inventory.api.AvailabilityDecision;
+import uz.horecaos.platform.inventory.api.InventoryReservationPort;
 import uz.horecaos.platform.ordering.api.OrderingConfigurationKeys;
 import uz.horecaos.platform.ordering.domain.CartStatus;
 import uz.horecaos.platform.ordering.domain.DeliveryDestination;
@@ -112,6 +114,7 @@ public class CartService {
     private final ConfigurationResolver configuration;
     private final CartSaleWindowRules saleWindows;
     private final CommentPresetLookup commentPresets;
+    private final InventoryReservationPort inventory;
 
     @SuppressWarnings("checkstyle:ParameterNumber")
     public CartService(
@@ -129,7 +132,8 @@ public class CartService {
             PromoCodeQueryPort promoCodes,
             ConfigurationResolver configuration,
             CartSaleWindowRules saleWindows,
-            CommentPresetLookup commentPresets) {
+            CommentPresetLookup commentPresets,
+            InventoryReservationPort inventory) {
         this.carts = carts;
         this.channels = channels;
         this.menu = menu;
@@ -145,6 +149,7 @@ public class CartService {
         this.configuration = configuration;
         this.saleWindows = saleWindows;
         this.commentPresets = commentPresets;
+        this.inventory = inventory;
     }
 
     /**
@@ -313,6 +318,7 @@ public class CartService {
 
         CartRow cart = requireEditable(tenantId, brandId, callerAccountId, cartId);
         requireSelectionRules(tenantId, brandId, cart, variantId, modifierOptionIds);
+        requireAvailable(tenantId, cart, java.util.Set.of(variantId));
         Instant now = clock.instant();
         requireOnSaleNow(tenantId, cart, variantId, now);
         List<String> presetCodes = commentPresetCodes == null ? List.of() : commentPresetCodes;
@@ -588,6 +594,15 @@ public class CartService {
         for (CartLineRow line : lines) {
             requireOnSaleNow(tenantId, cart, line.variantId(), priceNow);
         }
+        // Rows 4.4c/4.4d, storefront half: re-checked here too, not only at
+        // putLine, for the identical reason requireOnSaleNow already is —
+        // stock can run out between adding a line and pricing the cart, and
+        // a price a customer cannot actually check out on is worse than a
+        // refusal that names the line.
+        requireAvailable(
+                tenantId,
+                cart,
+                lines.stream().map(CartLineRow::variantId).collect(java.util.stream.Collectors.toSet()));
 
         SalesChannel channel = channels.byId(tenantId, cart.channelId())
                 .orElseThrow(() ->
@@ -894,6 +909,36 @@ public class CartService {
      * Order screen can show the customer or operator exactly why this dish is
      * refused, rather than a generic validation failure.
      */
+    /**
+     * Rows 4.4c/4.4d, storefront half: the same "can I sell one of this"
+     * check {@code ACTIVATION_SMOKE_TEST} and {@code
+     * CheckoutReservationStep}'s own {@code reserveForQuote} use (via {@link
+     * InventoryReservationPort#checkAvailability}) — quantity one each, no
+     * channel context, real stock exhaustion only. A per-channel-type stop
+     * threshold (gap map row 4.4c) is deliberately not consulted here: it is
+     * a projection-only cutoff the reservation path itself never refuses on
+     * (see {@code AvailabilityDecision.Unavailable#channelStopped}'s own
+     * doc), and the cart's refusal must agree with what checkout will
+     * actually do or a customer is turned away here for stock checkout would
+     * still have sold.
+     *
+     * <p>Refuses with the first blocked variant's own reason code — {@code
+     * SOLD_OUT}, {@code NOT_STOCKED_AT_LOCATION}, or the rarer {@code
+     * RESERVATION_NO_LONGER_HELD} — the same codes the operator console and
+     * {@code CheckoutReservationStep}'s own {@code ItemsUnavailable} already
+     * use, so a client need not learn a second vocabulary for "this dish is
+     * gone".
+     */
+    private void requireAvailable(UUID tenantId, CartRow cart, java.util.Set<UUID> variantIds) {
+        AvailabilityDecision decision = inventory.checkAvailability(tenantId, cart.locationId(), variantIds);
+        if (!decision.available()) {
+            AvailabilityDecision.Unavailable first = decision.unavailableItems().get(0);
+            throw new CartRefusedException(
+                    first.reason(),
+                    "Variant %s is no longer available (%s)".formatted(first.variantId(), first.reason()));
+        }
+    }
+
     private void requireOnSaleNow(UUID tenantId, CartRow cart, UUID variantId, Instant at) {
         ZoneId zone = tenancy.timezoneOf(tenantId, cart.locationId())
                 .orElseThrow(() -> new IllegalStateException("Location " + cart.locationId() + " has no timezone"));
