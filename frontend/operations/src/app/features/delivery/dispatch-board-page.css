@@ -12,6 +12,17 @@
   border-bottom: 1px solid var(--q-hairline);
 }
 
+.dispatch__status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.dispatch__stamp {
+  color: var(--q-ink-subtle);
+}
+
 .dispatch__refresh {
   padding: 6px 14px;
   border: 1px solid var(--q-hairline);

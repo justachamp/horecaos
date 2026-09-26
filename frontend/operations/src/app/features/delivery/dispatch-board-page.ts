@@ -13,16 +13,20 @@ import { ApiClient } from '../../core/api/api-client';
 import { LocationScope, operationsPaths } from '../../core/api/operations-paths';
 import { ApiError } from '../../core/api/problem-details';
 import { CurrentLocation } from '../../core/auth/current-location';
+import { TimeZone, formatClock } from '../../core/format/datetime';
 import { I18n } from '../../core/i18n/i18n';
 import { MessageKey } from '../../core/i18n/messages.en';
 import { TPipe } from '../../core/i18n/t.pipe';
+import { RealtimeClient } from '../../core/realtime/realtime-client';
 import { ConfirmDialog } from '../../shared/ui/confirm-dialog';
+import { ConnectionStateBanner } from '../../shared/ui/connection-state-banner';
 import { DragDropAssign, QBoardCardDef } from '../../shared/ui/drag-drop-assign/drag-drop-assign';
 import {
   DragDropAssignColumn,
   DragDropAssignOutcome,
   DragDropAssignRejection,
 } from '../../shared/ui/drag-drop-assign/drag-drop-assign-types';
+import { StaleIndicator } from '../../shared/ui/stale-indicator';
 import { StatusPill, StatusTone } from '../../shared/ui/status-pill';
 import { CouriersApi, RosterEntryResponse } from '../couriers/couriers-api';
 import {
@@ -71,8 +75,11 @@ export interface BulkAssignOutcome {
   readonly reason?: string | null;
 }
 
-/** Same cadence as the order and kitchen boards, until ADR 0045 live updates exist. */
+/** Same cadence as the order and kitchen boards — the ADR 0045 fallback every live surface keeps regardless of the accelerator below (row `3.1`). */
 const POLL_INTERVAL_MS = 10_000;
+
+/** See `order-queue.ts`'s identical constant — no location carries a timezone on any response this board reaches yet. */
+const PLACEHOLDER_TIME_ZONE: TimeZone = 'Asia/Tashkent';
 
 /** `q-drag-drop-assign`'s pool column — a plan with no courier lands here. */
 const UNASSIGNED_COLUMN_ID = '__unassigned__';
@@ -136,10 +143,35 @@ const OPEN_STATUSES: ReadonlySet<string> = new Set([
  * `PlanQueueResponse` carries neither today (see `dispatch-api.ts`'s own
  * doc); a masked zone/street projection needs a new server-side field this
  * wave did not build (see the gap map's own row `3.1` audit note).
+ *
+ * **The ADR 0045 accelerator (row 3.1, this wave).** This board used to be
+ * the one live surface still standing on a bare 10-second poll after the
+ * kitchen board (row 2.1) and order board both moved to `RealtimeClient`.
+ * `fulfillment` already publishes a `DISPATCH_BOARD` signal on every
+ * assign/unassign/cancel/external-booking write (wave P08's own producer,
+ * `ManualDispatchService`/`ShipmentCancellationService`/
+ * `ManualExternalBookingService`) — what was missing was this page's own
+ * subscriber. It now listens for that signal (or a `resync`, on reconnect)
+ * and re-reads the board at once, on top of the unconditional poll above,
+ * which keeps running exactly as it always has — turning the stream off
+ * changes nothing else here, the same degrade-to-poll contract every other
+ * `RealtimeClient` consumer keeps. `q-connection-state-banner` and
+ * `q-stale-indicator` (the same freshness pairing `order-queue.ts` already
+ * shows) report the transport's own state and how long ago the board last
+ * actually refreshed, respectively.
  */
 @Component({
   selector: 'q-dispatch-board-page',
-  imports: [TPipe, DragDropAssign, QBoardCardDef, StatusPill, ConfirmDialog, ExternalCourierDialog],
+  imports: [
+    TPipe,
+    DragDropAssign,
+    QBoardCardDef,
+    StatusPill,
+    ConfirmDialog,
+    ExternalCourierDialog,
+    ConnectionStateBanner,
+    StaleIndicator,
+  ],
   templateUrl: './dispatch-board-page.html',
   styleUrl: './dispatch-board-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -151,12 +183,15 @@ export class DispatchBoardPage implements OnInit {
   private readonly location = inject(CurrentLocation);
   private readonly i18n = inject(I18n);
   private readonly destroyRef = inject(DestroyRef);
+  protected readonly realtime = inject(RealtimeClient);
 
   protected readonly UNASSIGNED_COLUMN_ID = UNASSIGNED_COLUMN_ID;
 
   protected readonly firstLoadComplete = signal(false);
   protected readonly denied = signal(false);
   protected readonly lastError = signal<ApiError | null>(null);
+  /** Row `3.1`'s own freshness marker — set on every successful `refresh()`, read by `q-stale-indicator` and `formatUpdatedAt()`. */
+  protected readonly lastUpdatedAt = signal<Date | null>(null);
 
   protected readonly plans = signal<readonly PlanQueueResponse[]>([]);
   protected readonly ordersByOrderId = signal<ReadonlyMap<string, OrderSummaryResponse>>(new Map());
@@ -310,10 +345,31 @@ export class DispatchBoardPage implements OnInit {
         void this.refresh();
       }
     }, POLL_INTERVAL_MS);
+
+    // Row 3.1's own accelerator: fulfillment now publishes a DISPATCH_BOARD
+    // signal on every plan/assignment/shipment change this board cares about
+    // (`ManualDispatchService.assign`/`unassign`, `ShipmentCancellationService`'s
+    // cascade and dedicated cancel, `ManualExternalBookingService.book`) — the
+    // same ADR 0045 pattern `kitchen_board` already established for the
+    // kitchen board (row 2.1) and `order_queue` for the order board. The poll
+    // above keeps running regardless — this only ever shortens the wait, and
+    // a `resync` frame (a reconnect after a drop) is treated exactly like a
+    // signal: re-read the whole board rather than trying to replay whatever
+    // was missed, since the server keeps no replay buffer either.
+    const unsubscribeRealtime = this.realtime.onFrame((frame) => {
+      if (
+        (frame.kind === 'signal' && frame.channel === 'dispatch_board') ||
+        frame.kind === 'resync'
+      ) {
+        void this.refresh();
+      }
+    });
+
     this.destroyRef.onDestroy(() => {
       if (this.pollHandle !== null) {
         clearInterval(this.pollHandle);
       }
+      unsubscribeRealtime();
     });
     void this.start();
   }
@@ -358,6 +414,7 @@ export class DispatchBoardPage implements OnInit {
       await this.loadExceptions(scope, plans);
       this.denied.set(false);
       this.lastError.set(null);
+      this.lastUpdatedAt.set(new Date());
     } catch (error) {
       if (error instanceof ApiError && error.status === 403) {
         this.denied.set(true);
@@ -396,6 +453,13 @@ export class DispatchBoardPage implements OnInit {
 
   protected manualRefresh(): void {
     void this.refresh();
+  }
+
+  protected formatUpdatedAt(): string | null {
+    const updated = this.lastUpdatedAt();
+    return updated
+      ? this.i18n.t('delivery.dispatch.updated', { time: formatClock(updated, PLACEHOLDER_TIME_ZONE) })
+      : null;
   }
 
   protected orderFor(plan: PlanQueueResponse): OrderSummaryResponse | null {

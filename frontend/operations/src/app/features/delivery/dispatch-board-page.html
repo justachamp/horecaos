@@ -1,10 +1,20 @@
 <div class="dispatch">
   <div class="dispatch__toolbar">
     <h1 class="q-subhead">{{ 'delivery.dispatch.title' | t }}</h1>
-    <button type="button" class="dispatch__refresh" (click)="manualRefresh()">
-      {{ 'delivery.dispatch.refresh' | t }}
-    </button>
+    <div class="dispatch__status">
+      @if (formatUpdatedAt(); as stamp) {
+        <span class="dispatch__stamp q-caption q-tnum" data-testid="dispatch-updated-at">{{
+          stamp
+        }}</span>
+        <q-stale-indicator [updatedAt]="lastUpdatedAt()" />
+      }
+      <button type="button" class="dispatch__refresh" (click)="manualRefresh()">
+        {{ 'delivery.dispatch.refresh' | t }}
+      </button>
+    </div>
   </div>
+
+  <q-connection-state-banner [state]="realtime.state()" />
 
   @if (notice(); as message) {
     <div class="dispatch__notice-band" role="alert">

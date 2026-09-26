@@ -1,3 +1,10 @@
+.q-color-input-wrap {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
 .q-color-input {
   display: inline-flex;
   align-items: center;
@@ -29,3 +36,18 @@
   border-color: var(--q-error);
   color: var(--q-error-text);
 }
+
+/* X.39: inline legibility warnings, below the swatch rather than a blocking
+   validation error — a low-contrast highlight colour still saves; it is a
+   caution, never a refusal (`ColorInput`'s own doc on `warnings`). */
+.q-color-input__warnings {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: var(--q-warning-text);
+  font-size: var(--q-type-caption);
+}
+
