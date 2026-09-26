@@ -286,7 +286,3 @@ uz/horecaos/platform/tenancy/application/onboarding/OnboardingService.java:199
 uz/horecaos/platform/tenancy/application/onboarding/OnboardingService.java:546
 uz/horecaos/platform/tenancy/infrastructure/persistence/JdbcConfigurationValueAuthor.java:190
 uz/horecaos/platform/tenancy/infrastructure/persistence/JdbcPolicyAuthor.java:166
-
-# --- voice ---
-uz/horecaos/platform/voice/application/OperatorPresenceService.java:73
-uz/horecaos/platform/voice/application/ScreenPopQueryService.java:119

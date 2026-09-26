@@ -16,6 +16,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.configuration.Ids;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.pricing.application.PromoCodeAuthoringService.DiscountShape;
@@ -128,10 +129,11 @@ public class BenefitGrantService {
                         .target("PricingBenefitGrant", id)
                         .because("Minted a %s grant for one named customer via %s"
                                 .formatted(request.shape(), request.sourceType()))
-                        .changed(Map.of(
+                        // Staff 9.3a: a brand-new grant, no prior state to diff against.
+                        .changed(ChangeDocuments.created(Map.of(
                                 "customerAccountId", request.customerAccountId(),
                                 "benefitType", request.shape().name(),
-                                "sourceType", request.sourceType()))
+                                "sourceType", request.sourceType())))
                         .correlatedBy(correlationId)
                         .occurredAt(now)
                         .build());

@@ -13,6 +13,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.customers.api.CustomerPhoneLookup;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.protection.FieldProtection;
@@ -116,7 +117,11 @@ public class ScreenPopQueryService {
                 .target("VoiceCallEvent", callEventId)
                 .because("Prefilling create-customer from an unknown caller's screen-pop card")
                 .usingCapability(capabilityUsed)
-                .changed(Map.of())
+                // Staff 9.3a: a reveal changes no field of the call event -- the
+                // number was already stored, encrypted, before this call -- so
+                // the honest diff is empty on both sides rather than an
+                // after-only map claiming a change that did not happen.
+                .changed(ChangeDocuments.diff(Map.of(), Map.of()))
                 .correlatedBy(callEventId.toString())
                 .occurredAt(clock.instant())
                 .build());
