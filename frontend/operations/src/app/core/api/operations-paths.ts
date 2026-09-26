@@ -362,11 +362,28 @@ export const operationsPaths = {
   },
 
   /**
-   * The 86 toggle: register a variant as stocked at this location (waves 6/24,
-   * `InventoryController`). Already on the ADR 0031 prefix.
+   * Every `InventoryController` path below is built on {@link
+   * LEGACY_TENANT_PREFIX}, never {@link OPERATIONS} — its real
+   * `@RequestMapping` is
+   * `/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/inventory`,
+   * with no `/operations` segment and no second, ADR-0031-prefixed mapping
+   * anywhere in the module, so a path built on {@link OPERATIONS} 404s
+   * against the real backend.
+   *
+   * <p>Batch 11 found this the hard way: {@link inventoryStockItems}, {@link
+   * inventoryVariantAvailability} and {@link inventoryBulkAvailability} were
+   * built on {@link OPERATIONS} from the start. `menus-page.ts` and
+   * `product-editor-page.ts`'s stop toggle (through
+   * `InventoryApi.setAvailability`) and `stop-list-page.ts`'s bulk
+   * stop/unstop (called directly against {@link inventoryBulkAvailability})
+   * never surfaced it, because the only specs that existed either mocked
+   * `InventoryApi` wholesale or compared the request URL against this same
+   * builder's own output — a comparison that cannot fail regardless of which
+   * prefix is wrong. The fix pairs with a literal-URL spec in
+   * `operations-paths.spec.ts` and in each caller's own spec instead.
    */
   inventoryStockItems(scope: LocationScope): string {
-    return `${OPERATIONS}${tenantBrandLocation(scope)}/inventory/stock-items`;
+    return `${LEGACY_TENANT_PREFIX}${tenantBrandLocation(scope)}/inventory/stock-items`;
   },
 
   /**
@@ -375,7 +392,7 @@ export const operationsPaths = {
    * (catalog.md §0's authoring-vs-availability split).
    */
   inventoryVariantAvailability(scope: LocationScope, variantId: string): string {
-    return `${OPERATIONS}${tenantBrandLocation(scope)}/inventory/variants/${encodeURIComponent(variantId)}/availability`;
+    return `${LEGACY_TENANT_PREFIX}${tenantBrandLocation(scope)}/inventory/variants/${encodeURIComponent(variantId)}/availability`;
   },
 
   /**
@@ -385,27 +402,22 @@ export const operationsPaths = {
    * used to run. Mutation: key required, capped at 200 variants.
    */
   inventoryBulkAvailability(scope: LocationScope): string {
-    return `${OPERATIONS}${tenantBrandLocation(scope)}/inventory/variants/bulk-availability`;
-  },
-
-  /** Current binary availability for a set of variants at this location (query param `variantIds`, max 100). */
-  inventoryAvailability(scope: LocationScope): string {
-    return `${OPERATIONS}${tenantBrandLocation(scope)}/inventory/availability`;
+    return `${LEGACY_TENANT_PREFIX}${tenantBrandLocation(scope)}/inventory/variants/bulk-availability`;
   },
 
   /**
-   * The five QUANTITY-branch endpoints below (gap map row 4.4c, batch 11)
-   * are built on {@link LEGACY_TENANT_PREFIX}, not {@link OPERATIONS} —
-   * deliberately unlike the four `inventory*` builders just above, which
-   * this file's own header documents as living on the ADR 0031 prefix.
-   * `InventoryController`'s real `@RequestMapping` is
-   * `/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/inventory`,
-   * with no `/operations` segment and no second, ADR-0031-prefixed mapping
-   * anywhere in the module — so a path built on {@link OPERATIONS} 404s
-   * against the real backend. Filed for the four existing builders above,
-   * which predate this wave and are out of its own row's scope to fix; the
-   * five new ones here are built against the route that actually exists.
+   * Current availability for a set of variants at this location (query param
+   * `variantIds`, max 100), with an optional `channel` query param
+   * (`tenant.sales_channels.system_type`, e.g. `AGGREGATOR`) that also
+   * applies that channel type's own per-item stop threshold for a QUANTITY
+   * item (gap map row 4.4c) — omitted, this is the plain stock check with no
+   * channel cutoff. `InventoryApi.availability`/`availabilityForChannel`
+   * both call this one builder; there is only one endpoint.
    */
+  inventoryAvailability(scope: LocationScope): string {
+    return `${LEGACY_TENANT_PREFIX}${tenantBrandLocation(scope)}/inventory/availability`;
+  },
+
   inventoryPositions(scope: LocationScope): string {
     return `${LEGACY_TENANT_PREFIX}${tenantBrandLocation(scope)}/inventory/positions`;
   },
@@ -427,11 +439,6 @@ export const operationsPaths = {
       `${LEGACY_TENANT_PREFIX}${tenantBrandLocation(scope)}/inventory/variants/${encodeURIComponent(variantId)}` +
       `/channel-stop-thresholds/${encodeURIComponent(channelType)}`
     );
-  },
-
-  /** Same channel-aware check as {@link inventoryAvailability}, with an optional `channel` query param. */
-  inventoryAvailabilityForChannel(scope: LocationScope): string {
-    return `${LEGACY_TENANT_PREFIX}${tenantBrandLocation(scope)}/inventory/availability`;
   },
 
   /**
