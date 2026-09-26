@@ -201,6 +201,12 @@ uz/horecaos/platform/media/application/MediaAssetService.java:423
 uz/horecaos/platform/media/application/MediaAssetService.java:443
 
 # --- migration ---
+# MigrationAudit#record and #recordRefusal forward their `changes`
+# parameter to .changed(...); every one of their ~11 call sites across
+# QuarantineService, MigrationProgramService, MigrationRunService and
+# MigrationScopeService now builds that argument through
+# ChangeDocuments.diff/change/created, but the scan cannot see through
+# a parameter passed from another file.
 uz/horecaos/platform/migration/application/MigrationAudit.java:108
 uz/horecaos/platform/migration/application/MigrationAudit.java:63
 
