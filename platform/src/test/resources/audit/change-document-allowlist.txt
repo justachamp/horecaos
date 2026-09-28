@@ -198,9 +198,6 @@ uz/horecaos/platform/marketing/application/MarketingSuppressionService.java:206
 uz/horecaos/platform/migration/application/MigrationAudit.java:108
 uz/horecaos/platform/migration/application/MigrationAudit.java:63
 
-# --- notifications ---
-uz/horecaos/platform/notifications/web/ControlPlaneIncidentController.java:124
-
 # --- ordering ---
 uz/horecaos/platform/ordering/application/OperatorCustomerLookupService.java:92
 uz/horecaos/platform/ordering/application/OrderAmendmentService.java:1455
