@@ -207,6 +207,13 @@ public class PriceAuthoringService {
      * JdbcPricingStore#touchPriceBook}), so a matrix loaded once and edited row
      * by row would have every row but the first rejected as stale the moment
      * any other row changed, even though nothing about that row did.
+     *
+     * <p>The guard is enforced by {@link JdbcPricingStore#setPrice} itself, as
+     * part of the same atomic write — never by a SELECT here followed by a
+     * separate write, which would leave a gap a concurrent editor of the same
+     * row could land in between the two. {@link JdbcPricingStore#openPriceVersion}
+     * is consulted only after a stale write is reported, purely to name the
+     * current version in the error; it never decides whether the write happens.
      */
     @Transactional
     public PriceBook setPrice(
@@ -230,16 +237,21 @@ public class PriceAuthoringService {
             throw new UnknownPriceableException(type, priceableId);
         }
 
-        if (expectedVersion != null) {
+        Instant now = clock.instant();
+        Integer expected = expectedVersion == null ? null : Math.toIntExact(expectedVersion);
+        boolean applied =
+                store.setPrice(tenantId, brandId, priceBookId, type.name(), priceableId, amountMinor, now, expected);
+        if (!applied) {
+            // Only for the error message: the write itself already refused
+            // atomically, against whatever version was actually current at
+            // that instant, not against this follow-up read.
             long actual = store.openPriceVersion(tenantId, brandId, priceBookId, type.name(), priceableId)
                     .orElse(0);
-            if (actual != expectedVersion) {
-                throw ApiException.staleVersion(expectedVersion, actual);
-            }
+            // A version is what made `applied` false in the first place — the
+            // unconditional path (null) always either returns true or throws
+            // on its own. The fallback is unreachable, not a real "unset".
+            throw ApiException.staleVersion(expectedVersion == null ? 0 : expectedVersion, actual);
         }
-
-        Instant now = clock.instant();
-        store.setPrice(tenantId, brandId, priceBookId, type.name(), priceableId, amountMinor, now);
         store.touchPriceBook(tenantId, brandId, priceBookId, now);
 
         return require(tenantId, brandId, priceBookId);
