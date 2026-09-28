@@ -264,9 +264,21 @@ export class CategoriesPage implements OnInit {
     );
   }
 
-  /** Row 10.12: whether this locale is the brand's own required default, for the grid's visible marker. */
+  /**
+   * Row 10.12 fix: whether this locale is `CATALOG_DEFAULT_LOCALE`, for the
+   * grid's visible marker — not `LocaleSet.defaultLocale()` (the brand's own
+   * preferred locale), which this used to bind to. The two are unrelated
+   * once a brand's default differs from `CATALOG_DEFAULT_LOCALE`: the tree
+   * label right next to this grid, and every other list-screen read
+   * (`CatalogQueryService.categories()`/`products()`/`catalogs()` via
+   * `defaultLocaleNames`), always resolve a category's display name from
+   * `CATALOG_DEFAULT_LOCALE` specifically, so that is the locale an operator
+   * actually needs filled in for a name to show up anywhere else in the
+   * console — matching the same marker `product-editor-page.ts` already
+   * exposes off its own `CATALOG_DEFAULT_LOCALE` constant.
+   */
   protected isDefaultLocale(locale: Locale): boolean {
-    return this.localeSet.defaultLocale() === locale;
+    return toCatalogLocale(locale) === CATALOG_DEFAULT_LOCALE;
   }
 
   protected localeLabel(locale: Locale): string {
