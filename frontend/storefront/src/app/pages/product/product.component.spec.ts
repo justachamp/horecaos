@@ -298,6 +298,39 @@ describe('ProductComponent: row 4.2g sale-window guard', () => {
   });
 });
 
+describe('ProductComponent: no orderable variant (row 4.2g, product-id fallback)', () => {
+  it('resolves variantId() to null, disables the add button, and never sends the product id as a variant id', async () => {
+    const menuService = new FakeMenuService();
+    // Every variant the product has is 86'd -- `active: false` is exactly
+    // `MenuItemVariant.active`'s doc ("the platform already drops...", i.e.
+    // `orderable`) at false for the only variant, the real-world shape of
+    // "every variant is unorderable" (the platform never publishes a product
+    // with a genuinely empty `variants` array -- see
+    // `StorefrontCatalogQuery.menuFor`'s own `variants.isEmpty()` continue).
+    menuService.item.mockResolvedValue(
+      menuItem({ variants: [onSaleVariant({ active: false })] }),
+    );
+    const cartService = new FakeUiCartService();
+    cartService.cartData.mockReturnValue({});
+    const { fixture, comp } = await render({ menuService, cartService });
+    const host: HTMLElement = fixture.nativeElement;
+
+    expect(comp.variantId()).toBeNull();
+
+    const addButton = host.querySelector<HTMLButtonElement>(
+      '[data-testid="product-add-to-cart"]',
+    );
+    expect(addButton).not.toBeNull();
+    expect(addButton!.disabled).toBe(true);
+
+    // Clicking (or calling the handler directly) must be a no-op -- the
+    // product's own id ('item-1') must never reach the cart as a variant id.
+    comp.add();
+
+    expect(cartService.add).not.toHaveBeenCalled();
+  });
+});
+
 describe('ProductComponent: rows 4.4c/4.4d low-stock display', () => {
   it('shows the low-stock notice when the server reports a remaining count', async () => {
     const menuService = new FakeMenuService();
