@@ -70,12 +70,15 @@ export const appConfig: ApplicationConfig = {
       })();
     }),
 
-    // The stored locale is applied to <html lang> before the first paint.
-    // Getting this wrong is not cosmetic: `lang` is what a screen reader uses to
-    // choose a voice, and Russian read with an English voice is unintelligible.
+    // `I18n`'s constructor applies the stored locale to <html lang> and to
+    // `t()` as soon as it runs — see that class's doc comment for the full
+    // loading model. This initializer's only job is to force that
+    // construction to happen now, before the first paint, rather than
+    // whenever some component first injects `I18n` on its own. Getting this
+    // wrong is not cosmetic: `lang` is what a screen reader uses to choose a
+    // voice, and Russian read with an English voice is unintelligible.
     provideAppInitializer(() => {
-      const i18n = inject(I18n);
-      i18n.setLocale(i18n.locale());
+      inject(I18n);
     }),
   ],
 };
