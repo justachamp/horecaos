@@ -280,13 +280,13 @@ describe('CategoriesPage', () => {
     );
   });
 
-  it('the content grid shows one row per brand-supported locale, default first, and marks the default', async () => {
+  it('the content grid shows one row per brand-supported locale, brand default first', async () => {
     const localeSet = new FakeLocaleSet();
     // The fake, like LocaleSet's own real contract, returns the default
     // locale first — so `en` (the brand's chosen default here) is listed
     // before `ru`, its own canonical-order position notwithstanding.
     // uz-Latn is included too (uz never dropping out of the grid is its own
-    // spec, below), so this one stays purely about ordering and the marker.
+    // spec, below), so this one stays purely about ordering.
     localeSet.locales.set(['en', 'ru', 'uz-Latn']);
     localeSet.defaultLocale.set('en');
     configure(
@@ -322,10 +322,52 @@ describe('CategoriesPage', () => {
       ...host.querySelectorAll('.categories__locale-row input'),
     ] as HTMLInputElement[];
     expect(nameInputs.map((el) => el.value)).toEqual(['Salads', 'Салаты', '']);
-    const legends = [...host.querySelectorAll('.categories__locale-row legend')];
-    expect(legends[0]!.textContent).toContain('Default');
-    expect(legends[1]!.textContent).not.toContain('Default');
-    expect(legends[2]!.textContent).not.toContain('Default');
+  });
+
+  it('marks uz-Latn as the default row — the locale the tree label and every list read actually resolve a name from — even when the brand’s own configured default locale is different', async () => {
+    // Row 10.12 regression: the grid used to mark whichever locale
+    // `LocaleSet.defaultLocale()` returned (the brand's own preference).
+    // The tree node right next to this grid, and every list-screen read
+    // (`CatalogQueryService.categories()`/`products()`/`catalogs()`), always
+    // resolve a category's display name against the catalog's own fixed
+    // `CATALOG_DEFAULT_LOCALE` ('uz'/'uz-Latn' on the wire), never the
+    // brand's own default. An operator who fills in only the row the old
+    // badge called "Default" — here, `en` — saves a translation that never
+    // shows up anywhere else in the console, with no error to explain why.
+    const localeSet = new FakeLocaleSet();
+    localeSet.locales.set(['en', 'ru', 'uz-Latn']);
+    localeSet.defaultLocale.set('en');
+    configure(
+      {
+        listCatalogs: () =>
+          of([{ catalogId: 'catalog-1', code: 'MAIN', name: 'Основной', status: 'ACTIVE' }]),
+        listCategories: () =>
+          of([
+            category({
+              categoryId: 'cat-1',
+              name: 'Salads',
+              translations: {
+                en: { name: 'Salads', description: null },
+                uz: { name: 'Salatlar', description: null },
+              },
+            }),
+          ]),
+      },
+      localeSet,
+    );
+    TestBed.inject(I18n).setLocale('en');
+
+    const harness = await RouterTestingHarness.create('/catalog/categories');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+    (host.querySelector('[data-testid="tree-node"]') as HTMLElement).click();
+    await flushMicrotasks();
+
+    const rows = [...host.querySelectorAll('.categories__locale-row')] as HTMLElement[];
+    const markedLocales = rows
+      .filter((row) => row.querySelector('legend')!.textContent!.includes('Default'))
+      .map((row) => row.querySelector('input')!.getAttribute('data-testid'));
+    expect(markedLocales).toEqual(['category-locale-name-uz-Latn']);
   });
 
   it('saves every non-blank locale row and never touches a locale the brand no longer supports', async () => {
