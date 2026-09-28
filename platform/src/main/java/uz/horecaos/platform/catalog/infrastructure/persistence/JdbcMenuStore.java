@@ -383,6 +383,26 @@ public class JdbcMenuStore {
                 .single();
     }
 
+    /**
+     * The menu currently bound to this exact (location, channel) scope, read
+     * before {@link #upsertBinding}/{@link #deleteBinding} overwrite or
+     * remove it (Staff 9.3a) -- {@code channelId} null names the branch's
+     * default binding, exactly as it does for both of those.
+     */
+    public Optional<UUID> findBinding(UUID tenantId, UUID brandId, UUID locationId, @Nullable UUID channelId) {
+        return jdbc.sql("""
+                SELECT menu_id FROM catalog.branch_menu_bindings
+                WHERE tenant_id = :tenantId AND brand_id = :brandId AND location_id = :locationId
+                  AND channel_id IS NOT DISTINCT FROM :channelId
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("locationId", locationId)
+                .param("channelId", channelId)
+                .query(UUID.class)
+                .optional();
+    }
+
     /** Idempotent: unbinding a scope that already carries no binding still resolves. */
     public boolean deleteBinding(UUID tenantId, UUID brandId, UUID locationId, @Nullable UUID channelId) {
         return jdbc.sql("""

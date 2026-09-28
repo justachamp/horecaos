@@ -2,8 +2,10 @@ package uz.horecaos.platform.catalog.application;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -78,7 +80,8 @@ public class MenuAuthoringService {
                 .target("Menu", row.id())
                 .because("Created a named menu")
                 .usingCapability(Capability.CATALOG_AUTHOR.code())
-                .changed(Map.of("name", name))
+                // Staff 9.3a: a brand-new menu, no prior state to diff against.
+                .changed(ChangeDocuments.created(Map.of("name", name, "status", row.status())))
                 .correlatedBy(row.id().toString())
                 .occurredAt(now)
                 .build());
@@ -148,7 +151,10 @@ public class MenuAuthoringService {
                 .target("Menu", copy.id())
                 .because("Copied a named menu")
                 .usingCapability(Capability.CATALOG_AUTHOR.code())
-                .changed(Map.of("sourceMenuId", sourceMenuId.toString(), "itemCount", copied))
+                // Staff 9.3a: a brand-new menu (createMenu, above, already
+                // wrote its own creation fact); this one records what it was
+                // copied from.
+                .changed(ChangeDocuments.created(Map.of("sourceMenuId", sourceMenuId.toString(), "itemCount", copied)))
                 .correlatedBy(copy.id().toString())
                 .occurredAt(clock.instant())
                 .build());
@@ -175,14 +181,33 @@ public class MenuAuthoringService {
         if (!catalog.entityExistsInBrand(tenantId, brandId, EntityType.VARIANT, variantId)) {
             throw new UnknownVariantException(variantId);
         }
+        // Staff 9.3a: read this variant's current membership row before the
+        // upsert below overwrites it -- empty distinguishes a fresh add from
+        // a re-default.
+        Optional<MenuItemRow> before = menus.listItems(tenantId, brandId, menuId).stream()
+                .filter(item -> item.variantId().equals(variantId))
+                .findFirst();
         menus.upsertItem(tenantId, brandId, menuId, variantId, sortOrder, availabilityDefault);
+        Map<String, Object> beforeFields = before.isEmpty()
+                ? Map.of()
+                : Map.of(
+                        "variantId",
+                        variantId.toString(),
+                        "sortOrder",
+                        before.get().sortOrder(),
+                        "availabilityDefault",
+                        before.get().availabilityDefault());
+        Map<String, Object> afterFields = Map.of(
+                "variantId", variantId.toString(), "sortOrder", sortOrder, "availabilityDefault", availabilityDefault);
         audit.record(AuditFact.of("catalog.menu.item-added", AuditClass.BUSINESS)
                 .by(ActorRef.user(actorSubject, null))
                 .at(ResourceScope.brand(tenantId, brandId))
                 .target("Menu", menuId)
                 .because("Added a variant to a named menu")
                 .usingCapability(Capability.CATALOG_AUTHOR.code())
-                .changed(Map.of("variantId", variantId.toString(), "availabilityDefault", availabilityDefault))
+                // Staff 9.3a: diff(Map.of(), after) is created(after) --
+                // before.isEmpty() means this call added a fresh row.
+                .changed(ChangeDocuments.diff(beforeFields, afterFields))
                 .correlatedBy(menuId.toString())
                 .occurredAt(clock.instant())
                 .build());
@@ -191,17 +216,29 @@ public class MenuAuthoringService {
     /** Idempotent — removing a variant already off the menu still resolves. */
     @Transactional
     public void removeItem(UUID tenantId, UUID brandId, UUID menuId, UUID variantId, String actorSubject) {
+        // Staff 9.3a: read the row before deleteItem removes it.
+        Optional<MenuItemRow> before = menus.listItems(tenantId, brandId, menuId).stream()
+                .filter(item -> item.variantId().equals(variantId))
+                .findFirst();
         boolean removed = menus.deleteItem(tenantId, brandId, menuId, variantId);
         if (!removed) {
             return;
         }
+        Map<String, Object> beforeDoc = new LinkedHashMap<>();
+        beforeDoc.put("variantId", variantId.toString());
+        beforeDoc.put(
+                "availabilityDefault",
+                before.map(MenuItemRow::availabilityDefault).orElse(null));
+        Map<String, Object> afterDoc = new LinkedHashMap<>();
+        afterDoc.put("variantId", null);
+        afterDoc.put("availabilityDefault", null);
         audit.record(AuditFact.of("catalog.menu.item-removed", AuditClass.BUSINESS)
                 .by(ActorRef.user(actorSubject, null))
                 .at(ResourceScope.brand(tenantId, brandId))
                 .target("Menu", menuId)
                 .because("Removed a variant from a named menu")
                 .usingCapability(Capability.CATALOG_AUTHOR.code())
-                .changed(Map.of("variantId", variantId.toString()))
+                .changed(ChangeDocuments.diff(beforeDoc, afterDoc))
                 .correlatedBy(menuId.toString())
                 .occurredAt(clock.instant())
                 .build());
@@ -240,10 +277,13 @@ public class MenuAuthoringService {
                 .target("Menu", menuId)
                 .because("Added products to a named menu by filter")
                 .usingCapability(Capability.CATALOG_AUTHOR.code())
-                .changed(Map.of(
+                // Staff 9.3a: a bulk gesture over however many rows the filter
+                // matched -- the filter and the count it produced are the
+                // fact, not a diffable field on any one entity.
+                .changed(ChangeDocuments.created(Map.of(
                         "categoryId", categoryId == null ? "" : categoryId.toString(),
                         "search", search == null ? "" : search,
-                        "itemCount", added))
+                        "itemCount", added)))
                 .correlatedBy(menuId.toString())
                 .occurredAt(clock.instant())
                 .build());
@@ -278,18 +318,27 @@ public class MenuAuthoringService {
         if (channelId != null && channels.byId(tenantId, channelId).isEmpty()) {
             throw new UnknownChannelException(channelId);
         }
+        // Staff 9.3a: read this exact scope's current binding before the
+        // upsert below replaces it -- empty means the scope was unbound.
+        Optional<UUID> before = menus.findBinding(tenantId, brandId, locationId, channelId);
         try {
             menus.upsertBinding(tenantId, brandId, locationId, channelId, menuId, clock.instant());
         } catch (DataIntegrityViolationException violation) {
             throw asApiException(JdbcMenuStore.explain(violation));
         }
+        String channelScope = channelId == null ? "" : channelId.toString();
+        Map<String, Object> beforeFields =
+                before.isEmpty() ? Map.of() : Map.of("menuId", before.get().toString(), "channelId", channelScope);
+        Map<String, Object> afterFields = Map.of("menuId", menuId.toString(), "channelId", channelScope);
         audit.record(AuditFact.of("catalog.menu.bound", AuditClass.BUSINESS)
                 .by(ActorRef.user(actorSubject, null))
                 .at(ResourceScope.location(tenantId, brandId, locationId))
                 .target("Menu", menuId)
                 .because("Bound a named menu to a branch")
                 .usingCapability(Capability.CATALOG_AUTHOR.code())
-                .changed(Map.of("channelId", channelId == null ? "" : channelId.toString()))
+                // Staff 9.3a: diff(Map.of(), after) is created(after) --
+                // before.isEmpty() means this scope was unbound.
+                .changed(ChangeDocuments.diff(beforeFields, afterFields))
                 .correlatedBy(menuId.toString())
                 .occurredAt(clock.instant())
                 .build());
@@ -299,17 +348,26 @@ public class MenuAuthoringService {
     @Transactional
     public void unbindBranch(
             UUID tenantId, UUID brandId, UUID locationId, @Nullable UUID channelId, String actorSubject) {
+        // Staff 9.3a: read which menu this scope was bound to before
+        // deleteBinding removes the row.
+        Optional<UUID> before = menus.findBinding(tenantId, brandId, locationId, channelId);
         boolean removed = menus.deleteBinding(tenantId, brandId, locationId, channelId);
         if (!removed) {
             return;
         }
+        Map<String, Object> beforeDoc = new LinkedHashMap<>();
+        beforeDoc.put("menuId", before.map(UUID::toString).orElse(null));
+        beforeDoc.put("channelId", channelId == null ? "" : channelId.toString());
+        Map<String, Object> afterDoc = new LinkedHashMap<>();
+        afterDoc.put("menuId", null);
+        afterDoc.put("channelId", channelId == null ? "" : channelId.toString());
         audit.record(AuditFact.of("catalog.menu.unbound", AuditClass.BUSINESS)
                 .by(ActorRef.user(actorSubject, null))
                 .at(ResourceScope.location(tenantId, brandId, locationId))
                 .target("Location", locationId)
                 .because("Unbound a named menu from a branch")
                 .usingCapability(Capability.CATALOG_AUTHOR.code())
-                .changed(Map.of("channelId", channelId == null ? "" : channelId.toString()))
+                .changed(ChangeDocuments.diff(beforeDoc, afterDoc))
                 .correlatedBy(locationId.toString())
                 .occurredAt(clock.instant())
                 .build());

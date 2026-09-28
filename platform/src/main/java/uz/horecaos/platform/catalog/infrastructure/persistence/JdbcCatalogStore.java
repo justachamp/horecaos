@@ -1891,6 +1891,25 @@ public class JdbcCatalogStore {
                 .list();
     }
 
+    /**
+     * One offering's current row, unfiltered by status — unlike {@link
+     * #offeringsForLocation}, which drops {@code HIDDEN} rows for the
+     * customer-facing read it backs, an audit before-state must see a
+     * {@code HIDDEN} row too, or a variant already hidden would read as
+     * "never offered" the moment its status changes again (Staff 9.3a).
+     */
+    public Optional<LocationOffering> findOffering(UUID tenantId, UUID locationId, UUID variantId) {
+        return jdbc.sql("""
+                SELECT * FROM catalog.location_offerings
+                WHERE tenant_id = :tenantId AND location_id = :locationId AND variant_id = :variantId
+                """)
+                .param("tenantId", tenantId)
+                .param("locationId", locationId)
+                .param("variantId", variantId)
+                .query(JdbcCatalogStore::mapOffering)
+                .optional();
+    }
+
     // ------------------------------------------------------------ publications
 
     public void insertPublication(
@@ -2619,6 +2638,26 @@ public class JdbcCatalogStore {
                 .param("tenantId", tenantId)
                 .param("variantId", variantId)
                 .query(UUID.class)
+                .optional();
+    }
+
+    /**
+     * A recommendation pair's current {@code sortOrder}, read before {@link
+     * #upsertRecommendation} overwrites it — empty when the pair is not yet
+     * attached, distinguishing a fresh attach from a re-sort (Staff 9.3a).
+     */
+    public Optional<Integer> recommendationSortOrder(
+            UUID tenantId, UUID brandId, UUID sourceProductId, UUID targetVariantId) {
+        return jdbc.sql("""
+                SELECT sort_order FROM catalog.product_recommendations
+                WHERE tenant_id = :tenantId AND brand_id = :brandId AND source_product_id = :sourceProductId
+                  AND target_variant_id = :targetVariantId
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("sourceProductId", sourceProductId)
+                .param("targetVariantId", targetVariantId)
+                .query(Integer.class)
                 .optional();
     }
 

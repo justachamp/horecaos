@@ -25,27 +25,6 @@ uz/horecaos/platform/audit/infrastructure/persistence/JdbcApprovalService.java:3
 uz/horecaos/platform/audit/infrastructure/persistence/JdbcApprovalService.java:571
 uz/horecaos/platform/audit/web/AuditController.java:225
 
-# --- catalog ---
-uz/horecaos/platform/catalog/application/CatalogAuthoringService.java:1056
-uz/horecaos/platform/catalog/application/CatalogAuthoringService.java:1252
-uz/horecaos/platform/catalog/application/CatalogAuthoringService.java:1331
-uz/horecaos/platform/catalog/application/CatalogAuthoringService.java:1354
-uz/horecaos/platform/catalog/application/CatalogAuthoringService.java:444
-uz/horecaos/platform/catalog/application/CatalogAuthoringService.java:508
-uz/horecaos/platform/catalog/application/CatalogAuthoringService.java:575
-uz/horecaos/platform/catalog/application/CatalogAuthoringService.java:820
-uz/horecaos/platform/catalog/application/CommentPresetService.java:121
-uz/horecaos/platform/catalog/application/CommentPresetService.java:163
-uz/horecaos/platform/catalog/application/CommentPresetService.java:183
-uz/horecaos/platform/catalog/application/CommentPresetService.java:83
-uz/horecaos/platform/catalog/application/MenuAuthoringService.java:151
-uz/horecaos/platform/catalog/application/MenuAuthoringService.java:185
-uz/horecaos/platform/catalog/application/MenuAuthoringService.java:204
-uz/horecaos/platform/catalog/application/MenuAuthoringService.java:243
-uz/horecaos/platform/catalog/application/MenuAuthoringService.java:292
-uz/horecaos/platform/catalog/application/MenuAuthoringService.java:312
-uz/horecaos/platform/catalog/application/MenuAuthoringService.java:81
-
 # --- commercial ---
 uz/horecaos/platform/commercial/application/ModuleCatalogService.java:227
 uz/horecaos/platform/commercial/application/ModuleCatalogService.java:248
