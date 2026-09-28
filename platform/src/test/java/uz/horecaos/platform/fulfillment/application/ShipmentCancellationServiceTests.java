@@ -46,6 +46,8 @@ import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.telemetry.api.RealtimeSignal;
 import uz.horecaos.platform.telemetry.api.RealtimeSignalPublisher;
+import uz.horecaos.platform.telemetry.api.ScopeKey;
+import uz.horecaos.platform.telemetry.api.StreamChannel;
 import uz.horecaos.platform.tenancy.api.PolicyKey;
 import uz.horecaos.platform.tenancy.api.PolicyResolver;
 import uz.horecaos.platform.tenancy.api.ResolvedPolicy;
@@ -168,6 +170,11 @@ class ShipmentCancellationServiceTests {
                 .extracting(AuditFact::actionCode)
                 .containsExactly("fulfillment.shipment.cascade-cancel");
         assertThat(realtime.signals).hasSize(1);
+        RealtimeSignal signal = realtime.signals.getFirst();
+        assertThat(signal.channel()).isEqualTo(StreamChannel.DISPATCH_BOARD);
+        assertThat(signal.scopeKey()).isEqualTo(ScopeKey.location(branch));
+        assertThat(signal.resourceType()).isEqualTo("DeliveryPlan");
+        assertThat(signal.resourceId()).isEqualTo(plan.id());
     }
 
     @Test
