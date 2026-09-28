@@ -67,7 +67,7 @@ qc exec -T platform-db psql -U horecaos_migrator -d horecaos -At -F',' -c \
       echo "Backfilling tenant=$tenant brand=$brand location=$location"
       curl -sS -X POST \
         "https://$HOST/api/v1/tenants/$tenant/brands/$brand/locations/$location/inventory/listing-backfill" \
-        -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json"
+        -H "Authorization: Bearer $TOKEN" -H "Idempotency-Key: $(uuidgen)" -H "Content-Type: application/json"
       echo
     done
 ```
