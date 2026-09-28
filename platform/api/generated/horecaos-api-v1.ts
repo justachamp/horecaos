@@ -187,6 +187,10 @@ export interface AddModuleRequest {
   reason: string;
 }
 
+export interface AddRoundRequest {
+  orderId: string;
+}
+
 export interface AddVariantRequest {
   fiscal?: FiscalClassificationRequest;
   locale: string;
@@ -232,6 +236,7 @@ export interface AdjustmentReasonResponse {
 
 export interface AdmissionResponse {
   brandId?: string;
+  channelCode?: string;
   expiresAt?: string;
   guestToken?: string;
   locationId?: string;
@@ -9332,6 +9337,7 @@ export interface Operations {
   "exchange": { method: "POST"; path: "/api/v1/storefront/dine-in/qr/token-exchanges"; request: { parameters: Record<string, never>; body: ExchangeRequest }; responses: { "200": AdmissionResponse } };
   "bill": { method: "GET"; path: "/api/v1/storefront/dine-in/sessions/{sessionId}"; request: { parameters: { header: { "X-Dine-In-Token": string }; path: { sessionId: string } } }; responses: { "200": GuestBillResponse } };
   "requestBill": { method: "POST"; path: "/api/v1/storefront/dine-in/sessions/{sessionId}/bill-requests"; request: { parameters: { header: { "X-Dine-In-Token": string }; path: { sessionId: string } } }; responses: { "200": GuestBillResponse } };
+  "addRound_1": { method: "POST"; path: "/api/v1/storefront/dine-in/sessions/{sessionId}/rounds"; request: { parameters: { header: { "X-Dine-In-Token": string }; path: { sessionId: string } }; body: AddRoundRequest }; responses: { "200": GuestBillResponse } };
   "balance": { method: "GET"; path: "/api/v1/storefront/loyalty/tenants/{tenantId}/accounts/{accountId}"; request: { parameters: { path: { accountId: string; tenantId: string } } }; responses: { "200": BalanceResponse } };
   "entries": { method: "GET"; path: "/api/v1/storefront/loyalty/tenants/{tenantId}/accounts/{accountId}/entries"; request: { parameters: { path: { accountId: string; tenantId: string } } }; responses: { "200": Array<LoyaltyStorefrontControllerEntryResponse> } };
   "nearbyPickupLocations": { method: "POST"; path: "/api/v1/storefront/pickup-locations"; request: { parameters: Record<string, never>; body: PickupLocationSearchRequest }; responses: { "200": PickupLocations } };

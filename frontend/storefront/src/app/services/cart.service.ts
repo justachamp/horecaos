@@ -64,6 +64,7 @@ export class CartService {
     locationId: string,
     fulfillmentMode: FulfillmentMode,
     create = true,
+    channel?: string,
   ): Promise<PlatformCart | null> {
     const stored = readCartId(locationId);
     if (stored) {
@@ -89,12 +90,21 @@ export class CartService {
       this.cart.set(null);
       return null;
     }
-    return this.create(locationId, fulfillmentMode);
+    return this.create(locationId, fulfillmentMode, channel);
   }
 
-  async create(locationId: string, fulfillmentMode: FulfillmentMode): Promise<PlatformCart> {
+  /**
+   * @param channel overrides this deployment's own configured channel --
+   *        the dine-in QR flow's own cart is opened on the table's
+   *        `QR_TABLE` channel, never this build's `config.channel`.
+   */
+  async create(
+    locationId: string,
+    fulfillmentMode: FulfillmentMode,
+    channel?: string,
+  ): Promise<PlatformCart> {
     const cart = await this.api.mutate<PlatformCart>('POST', `${this.brandPath}/carts`, {
-      body: { locationId, channel: this.config.channel, fulfillmentMode },
+      body: { locationId, channel: channel ?? this.config.channel, fulfillmentMode },
       idempotencyKey: newIdempotencyKey(),
     });
     rememberCartId(locationId, cart.cartId);

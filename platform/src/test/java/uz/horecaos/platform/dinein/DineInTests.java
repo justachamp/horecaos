@@ -13,6 +13,7 @@ import java.time.ZoneOffset;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
@@ -46,6 +47,7 @@ import uz.horecaos.platform.dinein.infrastructure.persistence.JdbcDineInStore.Re
 import uz.horecaos.platform.dinein.infrastructure.persistence.JdbcDineInStore.SectionRow;
 import uz.horecaos.platform.dinein.infrastructure.persistence.JdbcDineInStore.SessionRow;
 import uz.horecaos.platform.dinein.infrastructure.persistence.JdbcDineInStore.TableRow;
+import uz.horecaos.platform.dinein.infrastructure.tenancy.JdbcQrChannelSource;
 import uz.horecaos.platform.iam.api.protection.DataClass;
 import uz.horecaos.platform.iam.api.protection.FieldProtection;
 import uz.horecaos.platform.iam.api.protection.ProtectedValue;
@@ -143,7 +145,8 @@ class DineInTests {
         floorPlan = new FloorPlanService(store, audit, clock);
         reservations = new ReservationService(store, floorPlan, new ReversibleProtection(), audit, clock);
         sessions = new TableSessionService(store, floorPlan, new JdbcSessionOrderSource(jdbc), audit, clock);
-        qr = new QrEntryService(store, floorPlan, new InProcessRateLimiter(clock), clock);
+        qr = new QrEntryService(
+                store, floorPlan, tenantId -> Optional.of("QRTABLE"), new InProcessRateLimiter(clock), clock);
 
         seedTenancy();
         seedFloorPlan();
@@ -712,6 +715,9 @@ class DineInTests {
         assertThat(admission.guestToken()).isNotBlank();
         assertThat(admission.tableId()).isEqualTo(tableOne);
         assertThat(admission.mode()).isEqualTo(QrMode.ORDER_AND_PAY);
+        assertThat(admission.channelCode())
+                .as("the storefront cannot guess a tenant-chosen channel code on its own")
+                .isEqualTo("QRTABLE");
 
         assertThat(jdbc.sql("SELECT qr_token_hash FROM dinein.tables WHERE id = :id")
                         .param("id", tableOne)
@@ -813,6 +819,39 @@ class DineInTests {
         assertThat(admission.openSessionId())
                 .as("HorecaOS creates nothing in VIEW_ONLY, so there is no bill to point at")
                 .isNull();
+    }
+
+    @Test
+    @DisplayName("the tenant's QR_TABLE channel code resolves only when exactly one active "
+            + "channel carries that system type")
+    void qrChannelSourceAnswersOnlyForExactlyOne() {
+        JdbcQrChannelSource channels = new JdbcQrChannelSource(jdbc);
+
+        // seedTenancy() already inserted one QR_TABLE channel (channelId, code
+        // "QRTABLE"), so the ordinary case is already the fixture's own state.
+        assertThat(channels.qrTableChannelCode(TENANT)).contains("QRTABLE");
+
+        UUID second = UUID.randomUUID();
+        jdbc.sql("""
+                        INSERT INTO tenant.sales_channels (id, tenant_id, code, system_type,
+                            display_name, status)
+                        VALUES (:id, :tenantId, 'QRTABLE2', 'QR_TABLE', 'Second QR table', 'ACTIVE')
+                        """).param("id", second).param("tenantId", TENANT).update();
+        assertThat(channels.qrTableChannelCode(TENANT))
+                .as("two active channels of the same system type name no unambiguous one")
+                .isEmpty();
+
+        jdbc.sql("UPDATE tenant.sales_channels SET status = 'ARCHIVED' WHERE id IN (:a, :b)")
+                .param("a", channelId)
+                .param("b", second)
+                .update();
+        assertThat(channels.qrTableChannelCode(TENANT))
+                .as("zero active channels is the same absence as never having registered one")
+                .isEmpty();
+
+        assertThat(channels.qrTableChannelCode(OTHER_TENANT))
+                .as("a channel from a tenant nobody asked about must never answer for it")
+                .isEmpty();
     }
 
     @Test
