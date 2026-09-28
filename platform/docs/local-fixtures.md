@@ -113,6 +113,44 @@ sets what. A fixed one-time code reaching real production would be a complete
 authentication bypass, so the failure mode there is a container that will not
 come up.
 
+## Dine-in table QR (row 10.5, ADR 0047)
+
+One `QR_TABLE` channel, one section, and one table with a fixed printed
+token — so the storefront's table-QR flow is exercisable without first
+minting a token through the operations console.
+
+| Resource | Value |
+| --- | --- |
+| Channel | `QRTABLE` (`QR_TABLE`, `DINE_IN`/`CASH` enabled) |
+| Section | `HALL` |
+| Table | `T1`, printed token `local-fixture-table-qr-token` |
+| QR mode | `ORDER_AND_PAY` |
+
+Exchange the printed token for a guest token, the same call the storefront's
+scan-landing route (`/dine-in/local-fixture-table-qr-token`) makes:
+
+```bash
+curl -sX POST 'http://localhost:8080/api/v1/storefront/dine-in/qr/token-exchanges' \
+  -H 'Content-Type: application/json' \
+  -d '{"tableToken":"local-fixture-table-qr-token"}'
+```
+
+The table starts with no live session — nobody has seated it — so the
+guest token's `openSessionId` reads `null` and the ordering endpoints below
+answer `404` until an operator seats it. There is no local-fixture reservation
+to seat today, so seat it as a walk-in through the operator endpoint directly
+(a manager grant is not seeded here either; see `dev-personas.md`-style notes
+in the team's own memory for a working operator credential, or seat it with a
+direct row in `dinein.table_sessions`/`dinein.session_tables` for a quick
+local check). Once a session is open, the guest token from the exchange above
+reads its bill:
+
+```bash
+GUEST_TOKEN=... # from the exchange above
+curl -s "http://localhost:8080/api/v1/storefront/dine-in/sessions/$SESSION_ID" \
+  -H "X-Dine-In-Token: $GUEST_TOKEN"
+```
+
 ## Staff operations
 
 Protected operator endpoints still need a local Keycloak access token; fixture

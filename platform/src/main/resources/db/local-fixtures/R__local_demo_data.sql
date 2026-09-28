@@ -617,3 +617,73 @@ states:
 $yaml$,
     true, 'Welcome series (local fixture, ADR 0059 stage 1)', 'local-fixture'
 ) ON CONFLICT DO NOTHING;
+
+-- ---------------------------------------------------------------------------
+-- Dine-in: a QR_TABLE channel, one section, one seated table (row 10.5's
+-- storefront facet, ADR 0047). The printed token below is a fixed plaintext
+-- rather than a freshly minted one, on purpose: a local fixture's whole point
+-- is a value a developer can paste without first calling the platform to mint
+-- one. It is never written in the clear -- qr_token_hash is its SHA-256 digest,
+-- the same as BearerToken.hash(plaintext) would produce, per QrEntryController's
+-- own doc that a table's token exists once, in the printed card, and nowhere
+-- a query can find it.
+-- ---------------------------------------------------------------------------
+
+INSERT INTO tenant.sales_channels (
+    id, tenant_id, code, system_type, display_name, status, guest_orders_allowed
+) VALUES (
+    '10000000-0000-0000-0000-000000000060',
+    '10000000-0000-0000-0000-000000000001',
+    'QRTABLE', 'QR_TABLE', 'Local QR table', 'ACTIVE', true
+) ON CONFLICT DO NOTHING;
+
+INSERT INTO tenant.sales_channel_locations (tenant_id, channel_id, location_id, status)
+VALUES (
+    '10000000-0000-0000-0000-000000000001',
+    '10000000-0000-0000-0000-000000000060',
+    '10000000-0000-0000-0000-000000000003', 'ACTIVE'
+) ON CONFLICT DO NOTHING;
+
+INSERT INTO tenant.channel_payment_methods (tenant_id, channel_id, payment_method_code, enabled)
+VALUES (
+    '10000000-0000-0000-0000-000000000001',
+    '10000000-0000-0000-0000-000000000060', 'CASH', true
+) ON CONFLICT DO NOTHING;
+
+INSERT INTO tenant.channel_fulfillment_modes (tenant_id, channel_id, fulfillment_mode, enabled)
+VALUES (
+    '10000000-0000-0000-0000-000000000001',
+    '10000000-0000-0000-0000-000000000060', 'DINE_IN', true
+) ON CONFLICT DO NOTHING;
+
+INSERT INTO dinein.location_settings (
+    tenant_id, brand_id, location_id, qr_mode, turnaround_minutes,
+    guest_session_ttl_minutes, service_charge_rate_bp
+) VALUES (
+    '10000000-0000-0000-0000-000000000001',
+    '10000000-0000-0000-0000-000000000002',
+    '10000000-0000-0000-0000-000000000003', 'ORDER_AND_PAY', 15, 240, 0
+) ON CONFLICT DO NOTHING;
+
+INSERT INTO dinein.sections (
+    id, tenant_id, brand_id, location_id, code, display_name, sort_order
+) VALUES (
+    '10000000-0000-0000-0000-000000000061',
+    '10000000-0000-0000-0000-000000000001',
+    '10000000-0000-0000-0000-000000000002',
+    '10000000-0000-0000-0000-000000000003', 'HALL', 'Hall', 0
+) ON CONFLICT DO NOTHING;
+
+-- Digest of the plaintext 'local-fixture-table-qr-token' -- see this
+-- section's own doc above for why the plaintext is fixed rather than minted.
+INSERT INTO dinein.tables (
+    id, tenant_id, brand_id, location_id, section_id, code, display_name,
+    seats, joinable, qr_token_hash, qr_token_rotated_at
+) VALUES (
+    '10000000-0000-0000-0000-000000000062',
+    '10000000-0000-0000-0000-000000000001',
+    '10000000-0000-0000-0000-000000000002',
+    '10000000-0000-0000-0000-000000000003',
+    '10000000-0000-0000-0000-000000000061', 'T1', 'Table 1', 4, false,
+    'e4a4bdbd09574b5d9cbf8f23efb1685bf1f469ad134625e0b50811ff2297c9d0', now()
+) ON CONFLICT DO NOTHING;
