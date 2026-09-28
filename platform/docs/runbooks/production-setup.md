@@ -942,15 +942,22 @@ docker compose -f deploy/compose.production.yml --env-file /etc/horecaos/product
   ops /opt/horecaos/backup/rehearse-restore.sh
 ```
 
-Run this against **staging**, restoring a **production** backup object,
-once a month — never against the live production database (`rehearse-restore.sh`
-always creates a separate scratch database and drops it on success; the
-danger is running it with production connection strings for both source and
-target, which the command above avoids by running from staging's own
-`ops` container against staging's own `platform-db`, pointed at a production
-backup object by bucket/prefix). Record the elapsed time and the row-count
-match in `docs/runbooks/README.md`'s "Recovery time" line — an unmeasured
-number is a guess, not a plan.
+Run this against **staging**, once a month — never against the live production
+database (`rehearse-restore.sh` always creates a separate scratch database
+and drops it on success; the danger is running it with production connection
+strings for both source and target, which the command above avoids by
+running from staging's own `ops` container against staging's own
+`platform-db`). This is a self-contained roundtrip smoke test of the backup
+mechanism, not a restore of a specific, previously-taken production backup
+object: `rehearse-restore.sh` always dumps a fresh, freshly timestamped
+snapshot of whatever database it is pointed at (here, staging's own current
+data), encrypts and uploads it to both buckets, reads the off-site copy back,
+restores it into a scratch database, and compares row counts — it has no
+argument, environment variable, bucket or prefix that selects an existing
+backup object, so it can never validate that a specific archived production
+backup is recoverable. Record the elapsed time and the row-count match in
+`docs/runbooks/README.md`'s "Recovery time" line — an unmeasured number is a
+guess, not a plan.
 
 **Check:** `REHEARSAL PASSED` and the baseline/restored counts match.
 
@@ -1169,9 +1176,11 @@ Differences from everything above:
 - **Section 6 (Backups):** staging's own nightly backup exists mainly to
   give the monthly restore rehearsal somewhere to run *from* — its
   retention is shorter (`deploy/env.staging.example`: 7 days, not 30) and
-  its own data is not precious. The rehearsal itself restores a
-  **production** backup object onto staging, so staging's off-site bucket
-  only needs to exist, not hold anything irreplaceable.
+  its own data is not precious. The rehearsal itself dumps a fresh snapshot
+  of staging's own database, round-trips it through staging's own primary
+  and off-site buckets, and restores it into a scratch database — it never
+  touches a production backup object, so staging's off-site bucket only
+  needs to exist, not hold anything irreplaceable.
 - **Section 7 (Verify):** the same checklist, against
   `*.staging.horecaos.uz`. A green run here, on a different provider, **is
   the release gate** — ADR 0061's Rollout step 2 names this explicitly:
