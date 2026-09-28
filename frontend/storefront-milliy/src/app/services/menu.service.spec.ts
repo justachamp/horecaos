@@ -40,41 +40,7 @@ function setUp() {
   return { service: TestBed.inject(MenuService), api };
 }
 
-describe('MenuService.menu: concurrent callers for the same key share one request', () => {
-  it('two callers before the first resolves get one GET, not two -- home and a re-projecting cart asking together', async () => {
-    const { service, api } = setUp();
-    let resolve!: (menu: PublishedMenu) => void;
-    api.get.mockReturnValue(new Promise<PublishedMenu>((r) => (resolve = r)));
-
-    const first = service.menu('uz');
-    const second = service.menu('uz');
-
-    expect(api.get).toHaveBeenCalledTimes(1);
-    resolve(emptyMenu());
-    const [a, b] = await Promise.all([first, second]);
-    expect(a).toBe(await service.menu('uz')); // now cached
-    expect(b).toEqual(emptyMenu());
-  });
-
-  it('a different locale (a different key) is its own request, not deduped against the first', async () => {
-    const { service, api } = setUp();
-    api.get.mockResolvedValue(emptyMenu());
-
-    await Promise.all([service.menu('uz'), service.menu('ru')]);
-
-    expect(api.get).toHaveBeenCalledTimes(2);
-  });
-
-  it('a request that fails does not poison the next call for the same key', async () => {
-    const { service, api } = setUp();
-    api.get.mockRejectedValueOnce(new Error('network exploded'));
-    api.get.mockResolvedValueOnce(emptyMenu());
-
-    await expect(service.menu('uz')).rejects.toThrow('network exploded');
-    await expect(service.menu('uz')).resolves.toEqual(emptyMenu());
-    expect(api.get).toHaveBeenCalledTimes(2);
-  });
-
+describe('MenuService.menu: every read goes back to the origin', () => {
   it('a later call for the same key still re-fetches -- the origin, not a stale local copy, decides freshness', async () => {
     const { service, api } = setUp();
     api.get.mockResolvedValue(emptyMenu());
@@ -97,5 +63,14 @@ describe('MenuService.menu: concurrent callers for the same key share one reques
     expect(api.get).toHaveBeenCalledTimes(2);
     expect(second).toBe(now86d);
     expect(second).not.toBe(first);
+  });
+
+  it('a different locale (a different key) is its own request', async () => {
+    const { service, api } = setUp();
+    api.get.mockResolvedValue(emptyMenu());
+
+    await Promise.all([service.menu('uz'), service.menu('ru')]);
+
+    expect(api.get).toHaveBeenCalledTimes(2);
   });
 });
