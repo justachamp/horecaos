@@ -70,12 +70,21 @@ public class CatalogQueryService {
     /**
      * One catalog's categories, flat — the client builds the tree from each
      * category's {@code parentCategoryId}.
+     *
+     * <p>Row 10.12: {@code translations} carries every locale the category has
+     * a row in, not only the configured default — the categories page's own
+     * per-locale grid needs to know which locales already have text, the same
+     * reason {@link #productDetail} carries the product editor's full set
+     * rather than {@link #defaultLocaleNames}'s one resolved name.
      */
     public List<CategorySummary> categories(UUID tenantId, UUID brandId, UUID catalogId) {
         List<Category> categories = store.categoriesInCatalog(tenantId, brandId, catalogId);
         Map<UUID, List<UUID>> productsByCategory = store.productIdsByCategory(tenantId, brandId, catalogId);
         Map<UUID, String> names = defaultLocaleNames(tenantId, brandId, EntityType.CATEGORY);
         Map<UUID, String> descriptions = defaultLocaleDescriptions(tenantId, brandId, EntityType.CATEGORY);
+        Set<UUID> categoryIds = categories.stream().map(Category::id).collect(Collectors.toCollection(HashSet::new));
+        Map<UUID, Map<String, LocalizedFields>> translations =
+                translationsFor(tenantId, brandId, Map.of(EntityType.CATEGORY, categoryIds));
         return categories.stream()
                 .map(category -> new CategorySummary(
                         category.id(),
@@ -87,7 +96,8 @@ public class CatalogQueryService {
                         category.status().name(),
                         productsByCategory
                                 .getOrDefault(category.id(), List.of())
-                                .size()))
+                                .size(),
+                        translations.getOrDefault(category.id(), Map.of())))
                 .toList();
     }
 
@@ -416,7 +426,8 @@ public class CatalogQueryService {
             @Nullable String description,
             int sortOrder,
             String status,
-            int productCount) {}
+            int productCount,
+            Map<String, LocalizedFields> translations) {}
 
     public record ProductSummary(
             UUID productId,

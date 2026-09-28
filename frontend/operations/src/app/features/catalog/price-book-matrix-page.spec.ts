@@ -135,7 +135,11 @@ describe('PriceBookMatrixPage', () => {
         _scope: BrandScope,
         _priceBookId: string,
         _state: CursorState,
-        _filters?: { readonly categoryId?: string; readonly differsFromBase?: boolean; readonly locale?: string },
+        _filters?: {
+          readonly categoryId?: string;
+          readonly differsFromBase?: boolean;
+          readonly locale?: string;
+        },
       ) => of<Page<PriceBookMatrixRow>>({ items: [row()], nextCursor: null }),
     );
     await render(
@@ -144,9 +148,20 @@ describe('PriceBookMatrixPage', () => {
         matrix: matrixSpy,
       },
       {
-        listCatalogs: () => of([{ catalogId: 'cat-catalog', code: 'MAIN', name: 'Main', status: 'ACTIVE' }]),
+        listCatalogs: () =>
+          of([{ catalogId: 'cat-catalog', code: 'MAIN', name: 'Main', status: 'ACTIVE' }]),
         listCategories: () =>
-          of([{ categoryId: 'cat-1', code: 'MAINS', name: 'Mains', sortOrder: 0, status: 'ACTIVE', productCount: 1 }]),
+          of([
+            {
+              categoryId: 'cat-1',
+              code: 'MAINS',
+              name: 'Mains',
+              sortOrder: 0,
+              status: 'ACTIVE',
+              productCount: 1,
+              translations: {},
+            },
+          ]),
       },
     );
     matrixSpy.mockClear();
@@ -170,7 +185,11 @@ describe('PriceBookMatrixPage', () => {
         _scope: BrandScope,
         _priceBookId: string,
         _state: CursorState,
-        _filters?: { readonly categoryId?: string; readonly differsFromBase?: boolean; readonly locale?: string },
+        _filters?: {
+          readonly categoryId?: string;
+          readonly differsFromBase?: boolean;
+          readonly locale?: string;
+        },
       ) => of<Page<PriceBookMatrixRow>>(matrixPage),
     );
     await render(
@@ -243,7 +262,9 @@ describe('PriceBookMatrixPage', () => {
           ),
       ),
     );
-    const matrixSpy = vi.fn(() => of<Page<PriceBookMatrixRow>>({ items: [row()], nextCursor: null }));
+    const matrixSpy = vi.fn(() =>
+      of<Page<PriceBookMatrixRow>>({ items: [row()], nextCursor: null }),
+    );
     await render({
       readPriceBook: () => of(BOOK),
       matrix: matrixSpy,
@@ -265,8 +286,12 @@ describe('PriceBookMatrixPage', () => {
     const secondPageRow = row({ variantId: 'v2', displayName: 'Fries' });
     const matrixSpy = vi
       .fn()
-      .mockReturnValueOnce(of<Page<PriceBookMatrixRow>>({ items: [firstPageRow], nextCursor: 'c1' }))
-      .mockReturnValueOnce(of<Page<PriceBookMatrixRow>>({ items: [secondPageRow], nextCursor: null }));
+      .mockReturnValueOnce(
+        of<Page<PriceBookMatrixRow>>({ items: [firstPageRow], nextCursor: 'c1' }),
+      )
+      .mockReturnValueOnce(
+        of<Page<PriceBookMatrixRow>>({ items: [secondPageRow], nextCursor: null }),
+      );
     await render({
       readPriceBook: () => of(BOOK),
       matrix: matrixSpy,

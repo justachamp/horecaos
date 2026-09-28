@@ -1047,7 +1047,8 @@ export const messagesRu: MessageCatalogue = {
   'settings.salesChannels.field.brandColorPrimary': 'Основной цвет',
   'settings.salesChannels.field.brandColorSecondary': 'Дополнительный цвет',
   'settings.salesChannels.field.color.clear': 'Очистить',
-  'settings.salesChannels.field.color.contrastWarning': 'Низкий контраст ({ratio}:1) на фоне «{surface}» — по WCAG AA нужно 4.5:1',
+  'settings.salesChannels.field.color.contrastWarning':
+    'Низкий контраст ({ratio}:1) на фоне «{surface}» — по WCAG AA нужно 4.5:1',
   'settings.salesChannels.field.color.surface.canvas': 'фона страницы',
   'settings.salesChannels.field.color.surface.surface1': 'поверхности карточки',
   'settings.salesChannels.field.color.surface.slaLateTint': 'просроченного заказа',
@@ -2357,6 +2358,9 @@ export const messagesRu: MessageCatalogue = {
   'catalog.categories.archiveConfirm.title': 'Архивировать категорию?',
   'catalog.categories.archiveConfirm.body':
     '«{name}» больше не будет показываться в дереве категорий. Товары, размещённые в ней, останутся на месте.',
+  'catalog.categories.form.saving': 'Сохранение…',
+  'catalog.categories.content.title': 'Название и описание по языкам',
+  'catalog.categories.content.defaultMarker': 'По умолчанию',
 
   // Строка карты пробелов 4.4c: страница остатков QUANTITY по филиалу (пакет 11)
   'catalog.stock.title': 'Остатки',
@@ -4679,7 +4683,8 @@ export const messagesRu: MessageCatalogue = {
   'marketing.automations.configLabel.BIRTHDAY': 'Окно, дней до/после дня рождения',
   'marketing.automations.configLabel.INACTIVITY': 'Дней с последнего заказа',
   'marketing.automations.configLabel.CART_ABANDONMENT': 'Задержка до срабатывания, часов',
-  'marketing.automations.configLabel.CASHBACK_CHANGE': 'Минимальное изменение баланса, минимальные единицы',
+  'marketing.automations.configLabel.CASHBACK_CHANGE':
+    'Минимальное изменение баланса, минимальные единицы',
   'marketing.automations.form.title': 'Создать правило автоматизации',
   'marketing.automations.form.name': 'Название',
   'marketing.automations.form.trigger': 'Триггер',

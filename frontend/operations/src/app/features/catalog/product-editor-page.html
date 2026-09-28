@@ -38,7 +38,7 @@
     <div class="editor__locale-strip">
       <span class="q-caption">{{ 'catalog.editor.locale.label' | t }}</span>
       <q-localized-field-group
-        [locales]="editingLocales"
+        [locales]="editingLocales()"
         [activeLocale]="editingLocale()"
         (activeLocaleChange)="editingLocale.set($event)"
         [defaultLocale]="catalogDefaultLocale"
