@@ -41,6 +41,14 @@
           </div>
         }
 
+        @if (selectedVariant(); as variant) {
+          @if (variant.remainingQuantity !== null) {
+            <p class="hint" data-testid="details-low-stock">
+              {{ 'details.lowStock' | t: { count: variant.remainingQuantity } }}
+            </p>
+          }
+        }
+
         @for (group of product.modifierGroups; track group.id) {
           <h2 class="section">
             {{ group.name }}

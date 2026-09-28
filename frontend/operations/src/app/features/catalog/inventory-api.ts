@@ -67,9 +67,12 @@ export interface AvailabilityDecision {
 }
 
 /**
- * `GET/POST/PUT .../inventory/**` — `InventoryController` (waves 6/24), on the
- * ADR 0031 `/api/v1/operations/**` prefix (unlike `CatalogApi`/`PricingApi`).
- * The audited stop/86 toggle catalog.md §4.2 tab 6 and §4.6 both read.
+ * `GET/POST/PUT .../inventory/**` — `InventoryController` (waves 6/24). Never
+ * moved onto the ADR 0031 `/api/v1/operations/**` prefix, unlike
+ * `CatalogApi`/`PricingApi` — every path here is built on
+ * {@link operationsPaths}'s own {@code LEGACY_TENANT_PREFIX} (see that
+ * builder's own class doc on its `inventory*` group). The audited stop/86
+ * toggle catalog.md §4.2 tab 6 and §4.6 both read.
  */
 @Injectable({ providedIn: 'root' })
 export class InventoryApi {
@@ -128,7 +131,7 @@ export class InventoryApi {
     channel: ChannelSystemType,
   ): Observable<AvailabilityDecision> {
     return this.api
-      .get<AvailabilityDecision>(operationsPaths.inventoryAvailabilityForChannel(scope), {
+      .get<AvailabilityDecision>(operationsPaths.inventoryAvailability(scope), {
         params: { variantIds, channel },
       })
       .pipe(map((result) => result.value));

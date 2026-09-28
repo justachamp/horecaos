@@ -365,7 +365,8 @@
     "notFound": "Dish not found",
     "loadError": "The dish could not be loaded",
     "increase": "Increase",
-    "decrease": "Decrease"
+    "decrease": "Decrease",
+    "lowStock": "Only {{count}} left"
   },
   "referral": {
     "title": "Referral",

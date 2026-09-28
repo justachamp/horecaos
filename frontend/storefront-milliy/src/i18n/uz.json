@@ -365,7 +365,8 @@
     "notFound": "Taom topilmadi",
     "loadError": "Taomni yuklab bo‘lmadi",
     "increase": "Ko‘paytirish",
-    "decrease": "Kamaytirish"
+    "decrease": "Kamaytirish",
+    "lowStock": "Faqat {{count}} ta qoldi"
   },
   "referral": {
     "title": "Referal",

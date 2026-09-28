@@ -37,6 +37,8 @@ export interface ProductVariantDisplay {
    * filter), but add-to-cart must refuse it.
    */
   onSaleNow: boolean;
+  /** Rows 4.4c/4.4d: a low remaining count, or null for the ordinary case. See `MenuItemVariant`'s own doc. */
+  remainingQuantity: number | null;
 }
 
 export interface ProductDisplay {
@@ -61,6 +63,7 @@ function menuItemToDisplay(item: MenuItem, formatPriceFn: (n: number) => string)
       label: v.name,
       price: v.price,
       onSaleNow: v.onSaleNow,
+      remainingQuantity: v.remainingQuantity,
     }));
   return {
     id: item.id,

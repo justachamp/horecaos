@@ -1011,6 +1011,36 @@ public class InventoryService implements InventoryReservationPort {
         return store.findStockItem(tenantId, locationId, variantId).map(item -> toView(item, variantId, List.of()));
     }
 
+    /**
+     * Remaining quantity for exactly the QUANTITY-tracked, listed variants in
+     * {@code variantIds} — the storefront menu's own batched read (gap map
+     * rows 4.4c/4.4d, storefront half; see {@code
+     * uz.horecaos.platform.inventory.infrastructure.catalog.InventoryMenuAvailabilityLookup}),
+     * scoped to one page's variant set rather than every stock item at the
+     * location the way {@link #listStockPositions} reads for the console.
+     *
+     * @return one entry per variant that is listed here and tracked as
+     *     QUANTITY. A variant that is BINARY, UNTRACKED, or not listed at all
+     *     is simply absent — this method makes no claim about availability,
+     *     only about a remaining count, so absence is never "sold out" on its
+     *     own.
+     */
+    @Transactional(readOnly = true)
+    public Map<UUID, BigDecimal> remainingQuantitiesFor(UUID tenantId, UUID locationId, Set<UUID> variantIds) {
+        rls.bindTenant(tenantId);
+        if (variantIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, StockItemRow> items = store.findStockItems(tenantId, locationId, variantIds);
+        Map<UUID, BigDecimal> remaining = new java.util.HashMap<>();
+        items.forEach((variantId, item) -> {
+            if (item.trackingMode() == TrackingMode.QUANTITY) {
+                remaining.put(variantId, item.remainingQuantity());
+            }
+        });
+        return remaining;
+    }
+
     /** Every stock item listed at a location, with its position and any channel stop thresholds. */
     @Transactional(readOnly = true)
     public List<StockPositionView> listStockPositions(UUID tenantId, UUID locationId) {

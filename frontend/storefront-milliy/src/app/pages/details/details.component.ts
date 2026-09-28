@@ -108,6 +108,11 @@ export class DetailsComponent implements OnInit {
     ),
   );
 
+  /** Rows 4.4c/4.4d: the chosen variant's own row, for its low-stock count. */
+  protected readonly selectedVariant = computed(
+    () => this.item()?.variants.find((variant) => variant.id === this.variantId()) ?? null,
+  );
+
   protected readonly canAdd = computed(
     () => this.state() === 'ready' && this.unsatisfied().length === 0 && !this.adding(),
   );
