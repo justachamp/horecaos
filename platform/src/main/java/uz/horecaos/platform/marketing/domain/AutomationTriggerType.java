@@ -13,19 +13,29 @@ package uz.horecaos.platform.marketing.domain;
  * cart converts first"). {@code POST_ORDER_REVIEW} is not offered because
  * {@code marketing.reviews} does not exist yet.
  *
- * <p><strong>Two trigger kinds this row's own instructions named are
- * deliberately not offered</strong>, and neither is an oversight:
+ * <p><strong>{@code CASHBACK_CHANGE} is now offered too</strong> (V0421, batch
+ * 12): {@code loyalty.api.LoyaltyBalanceChanged} is a Modulith application
+ * event {@code LoyaltyAccrualService#accrue} and {@code
+ * PointsRedemptionService#reserve} both publish — ids and amounts only, no
+ * PII, as every event payload in this codebase must be — and {@code
+ * uz.horecaos.platform.marketing.application.LoyaltyBalanceChangeAutomationTrigger}
+ * consumes it the same way {@code OrderCompletionAccrualTrigger} consumes
+ * {@code OrderCompleted}: a {@code @TransactionalEventListener} in loyalty's
+ * own commit, not a sweep, because there is no polling candidate query for
+ * "whose balance changed" the way there is for a birthday or a day count —
+ * the fact is inherently point-in-time. Its guard reuses {@link
+ * uz.horecaos.platform.marketing.domain.AutomationGuardKeys#cooldownBucket}
+ * unchanged, so a customer whose balance moves several times inside one
+ * cooldown window is told about it once, the same "guard/cooldown/quiet-hours
+ * semantics the existing triggers have" restated for an event-driven trigger
+ * rather than a swept one. {@code minimumChangeMinor} is this kind's
+ * threshold: a change smaller than it is not a candidate at all, the same way
+ * a customer outside {@code birthdayWindowDays} is not one.
+ *
+ * <p><strong>One trigger kind this row's own instructions named is still
+ * deliberately not offered</strong>, and it is not an oversight:
  *
  * <ul>
- *   <li>{@code CASHBACK_CHANGE} — no accrual or debit event exists in the
- *       {@code loyalty} module today ({@code LoyaltyAccrualService} writes a
- *       ledger entry and publishes nothing to any other module), so a trigger
- *       of this kind would be a rule with no producer. Building the producer
- *       — a new {@code loyalty.api} port or an event {@code loyalty} does not
- *       yet emit — is real design work with its own consistency questions
- *       (accrual is deferred past an earn delay; does "changed" mean the
- *       entry or the point the lot actually becomes spendable?) that deserves
- *       its own decision rather than a rushed answer inside this migration.
  *   <li>{@code LATE_ORDER_APOLOGY} — ADR 0044's own Triggers section states
  *       it is "deliberately absent": lateness is an ADR 0013 recovery event
  *       with a compensation decision attached, and a second, unreconciled
@@ -47,7 +57,14 @@ public enum AutomationTriggerType {
     INACTIVITY("inactivityDays"),
 
     /** An abandoned cart with no order after {@code abandonmentDelayHours}. */
-    CART_ABANDONMENT("abandonmentDelayHours");
+    CART_ABANDONMENT("abandonmentDelayHours"),
+
+    /**
+     * A {@code loyalty.api.LoyaltyBalanceChanged} whose {@code |deltaMinor|} is
+     * at least {@code minimumChangeMinor}. Event-driven, not swept — see this
+     * enum's own doc.
+     */
+    CASHBACK_CHANGE("minimumChangeMinor");
 
     private final String configKey;
 

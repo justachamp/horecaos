@@ -4645,9 +4645,11 @@ export const messagesRu: MessageCatalogue = {
   'marketing.automations.trigger.BIRTHDAY': 'День рождения',
   'marketing.automations.trigger.INACTIVITY': 'Неактивность',
   'marketing.automations.trigger.CART_ABANDONMENT': 'Брошенная корзина',
+  'marketing.automations.trigger.CASHBACK_CHANGE': 'Изменение кэшбэка',
   'marketing.automations.configLabel.BIRTHDAY': 'Окно, дней до/после дня рождения',
   'marketing.automations.configLabel.INACTIVITY': 'Дней с последнего заказа',
   'marketing.automations.configLabel.CART_ABANDONMENT': 'Задержка до срабатывания, часов',
+  'marketing.automations.configLabel.CASHBACK_CHANGE': 'Минимальное изменение баланса, минимальные единицы',
   'marketing.automations.form.title': 'Создать правило автоматизации',
   'marketing.automations.form.name': 'Название',
   'marketing.automations.form.trigger': 'Триггер',
@@ -4667,6 +4669,13 @@ export const messagesRu: MessageCatalogue = {
   'marketing.automations.runStatus.FIRED': 'Сработало',
   'marketing.automations.runStatus.REFUSED': 'Отказано',
   'marketing.automations.runStatus.CANCELLED': 'Отменено (клиент уже заказал)',
+  'marketing.automations.preview.open': 'Просмотр совпадений — {name}',
+  'marketing.automations.preview.title': 'Кого это правило затронет сегодня — {name}',
+  'marketing.automations.preview.intro':
+    'Ограниченная выборка реальных клиентов на сегодня, имя скрыто. Здесь ничего не отправляется и пауза не засчитывается.',
+  'marketing.automations.preview.loading': 'Загрузка совпадений…',
+  'marketing.automations.preview.empty': 'Сегодня ни один клиент не подходит под это правило.',
+  'marketing.automations.preview.unnamed': 'Клиент без имени',
 
   // ---------------------------------------------------------------- customers 5.3/5.4 (wave 39)
   'customers.nav.label': 'Раздел «Клиенты»',

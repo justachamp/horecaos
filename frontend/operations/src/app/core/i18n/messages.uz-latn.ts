@@ -4675,9 +4675,11 @@ export const messagesUzLatn: MessageCatalogue = {
   'marketing.automations.trigger.BIRTHDAY': 'Tugʻilgan kun',
   'marketing.automations.trigger.INACTIVITY': 'Faolsizlik',
   'marketing.automations.trigger.CART_ABANDONMENT': 'Tashlab ketilgan savat',
+  'marketing.automations.trigger.CASHBACK_CHANGE': 'Keshbek oʻzgarishi',
   'marketing.automations.configLabel.BIRTHDAY': 'Oyna, tugʻilgan kundan oldin/keyin kunlar',
   'marketing.automations.configLabel.INACTIVITY': 'Oxirgi buyurtmadan beri kunlar',
   'marketing.automations.configLabel.CART_ABANDONMENT': 'Kechikish, soatlar',
+  'marketing.automations.configLabel.CASHBACK_CHANGE': 'Balansning eng kam oʻzgarishi, mayda birliklarda',
   'marketing.automations.form.title': 'Avtomatlashtirish qoidasini yaratish',
   'marketing.automations.form.name': 'Nomi',
   'marketing.automations.form.trigger': 'Trigger',
@@ -4697,6 +4699,13 @@ export const messagesUzLatn: MessageCatalogue = {
   'marketing.automations.runStatus.FIRED': 'Ishga tushdi',
   'marketing.automations.runStatus.REFUSED': 'Rad etildi',
   'marketing.automations.runStatus.CANCELLED': 'Bekor qilindi (mijoz avval buyurtma berdi)',
+  'marketing.automations.preview.open': 'Mosliklarni koʻrish — {name}',
+  'marketing.automations.preview.title': 'Bu qoida bugun kimga mos kelardi — {name}',
+  'marketing.automations.preview.intro':
+    'Bugungi haqiqiy mijozlardan chegaralangan namuna, ism yashirilgan. Bu yerdan hech narsa yuborilmaydi va sovish davri hisoblanmaydi.',
+  'marketing.automations.preview.loading': 'Mosliklar yuklanmoqda…',
+  'marketing.automations.preview.empty': 'Bugun bu qoidaga mos mijoz yoʻq.',
+  'marketing.automations.preview.unnamed': 'Nomsiz mijoz',
 
   // ---------------------------------------------------------------- customers 5.3/5.4 (wave 39)
   'customers.nav.label': 'Mijozlar boʻlimi',

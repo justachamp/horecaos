@@ -344,7 +344,16 @@ class CartCheckoutAndOrderTests {
         // settlements themselves and so never asked whether anything else did.
         loyaltyStore = new uz.horecaos.platform.loyalty.infrastructure.persistence.JdbcLoyaltyStore(jdbc);
         var redemption = new uz.horecaos.platform.loyalty.application.PointsRedemptionService(
-                loyaltyStore, new uz.horecaos.platform.loyalty.application.LoyaltyPolicyService(loyaltyStore), clock);
+                loyaltyStore,
+                new uz.horecaos.platform.loyalty.application.LoyaltyPolicyService(loyaltyStore),
+                // A dedicated publisher, not `published`: that one's `.events` is
+                // asserted with bare hasSize(...) in several tests below for
+                // ordering/payment events only, and a LoyaltyBalanceChanged landing
+                // in the same list on any split-tender checkout would inflate those
+                // counts for a reason those tests are not about. CASHBACK_CHANGE's
+                // own producer is covered in LoyaltyLedgerAndSplitTenderTests.
+                event -> {},
+                clock);
         loyaltyAdjustments = new uz.horecaos.platform.loyalty.application.LoyaltyAdjustmentService(
                 loyaltyStore, ALWAYS_APPROVES, new JdbcAuditRecorder(jdbc, objectMapper), clock, 100_000L);
         settlementStore = new JdbcSettlementStore(jdbc);

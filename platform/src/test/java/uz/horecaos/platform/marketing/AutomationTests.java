@@ -41,10 +41,12 @@ import uz.horecaos.platform.iam.api.secrets.SecretResolver;
 import uz.horecaos.platform.iam.infrastructure.protection.DataEncryptionKeyProvider;
 import uz.horecaos.platform.iam.infrastructure.protection.EnvelopeFieldProtection;
 import uz.horecaos.platform.iam.infrastructure.secrets.EnvironmentSecretResolver;
+import uz.horecaos.platform.loyalty.api.LoyaltyBalanceChanged;
 import uz.horecaos.platform.marketing.application.AutomationFiringService;
 import uz.horecaos.platform.marketing.application.AutomationRuleService;
 import uz.horecaos.platform.marketing.application.AutomationSweepService;
 import uz.horecaos.platform.marketing.application.CustomerMetricProjectionService;
+import uz.horecaos.platform.marketing.application.LoyaltyBalanceChangeAutomationTrigger;
 import uz.horecaos.platform.marketing.application.MarketingEligibility;
 import uz.horecaos.platform.marketing.domain.AutomationTriggerType;
 import uz.horecaos.platform.marketing.domain.MarketingChannel;
@@ -105,6 +107,7 @@ class AutomationTests {
     private AutomationRuleService rules;
     private AutomationFiringService firing;
     private AutomationSweepService sweeps;
+    private LoyaltyBalanceChangeAutomationTrigger cashbackTrigger;
 
     private final ActorRef author = ActorRef.user(UUID.randomUUID().toString(), "Author");
 
@@ -165,6 +168,7 @@ class AutomationTests {
         rules = new AutomationRuleService(ruleStore, objectMapper, port, audit, clock);
         firing = new AutomationFiringService(runStore, audienceStore, engagementStore, eligibility, port, audit, clock);
         sweeps = new AutomationSweepService(ruleStore, metricStore, engagementStore, carts, orders, firing, clock);
+        cashbackTrigger = new LoyaltyBalanceChangeAutomationTrigger(ruleStore, firing, clock);
     }
 
     // --------------------------------------------------------------- BIRTHDAY
@@ -342,6 +346,74 @@ class AutomationTests {
         assertThat(port.sent()).hasSize(1);
     }
 
+    // ------------------------------------------------------- CASHBACK_CHANGE
+
+    @Test
+    @DisplayName("a CASHBACK_CHANGE rule fires once for a balance change, then its cooldown bucket guards it")
+    void cashbackChangeFiresOnceThenGuardsTheCooldown() {
+        UUID account = customer("+998906666661", "ru", true);
+        grantConsent(account);
+        UUID ruleId = createAndActivate(AutomationTriggerType.CASHBACK_CHANGE, Map.of("minimumChangeMinor", 1_000), 7);
+
+        cashbackTrigger.onLoyaltyBalanceChanged(new LoyaltyBalanceChanged(
+                TENANT, BRAND, account, UUID.randomUUID(), UUID.randomUUID(), "ACCRUAL", 5_000L, 5_000L, NOW));
+
+        assertThat(port.sent()).hasSize(1);
+        assertThat(runStatuses(ruleId)).containsExactly("FIRED");
+
+        // A second, distinct balance change for the same customer, inside the
+        // same cooldown bucket — AutomationGuardKeys.cooldownBucket, unchanged
+        // from what INACTIVITY already uses, guards it exactly the same way.
+        cashbackTrigger.onLoyaltyBalanceChanged(new LoyaltyBalanceChanged(
+                TENANT,
+                BRAND,
+                account,
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                "REDEMPTION",
+                -2_000L,
+                3_000L,
+                NOW.plusSeconds(60)));
+
+        assertThat(port.sent())
+                .as("the same cooldown bucket must not fire a second message")
+                .hasSize(1);
+    }
+
+    @Test
+    @DisplayName("a balance change smaller than minimumChangeMinor is not a candidate at all")
+    void cashbackChangeBelowThresholdIsIgnored() {
+        UUID account = customer("+998906666662", "ru", true);
+        grantConsent(account);
+        UUID ruleId = createAndActivate(AutomationTriggerType.CASHBACK_CHANGE, Map.of("minimumChangeMinor", 1_000), 7);
+
+        cashbackTrigger.onLoyaltyBalanceChanged(new LoyaltyBalanceChanged(
+                TENANT, BRAND, account, UUID.randomUUID(), UUID.randomUUID(), "ACCRUAL", 500L, 500L, NOW));
+
+        assertThat(port.sent()).isEmpty();
+        assertThat(runStatuses(ruleId)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("a CASHBACK_CHANGE rule in a different brand does not fire for this brand's event")
+    void cashbackChangeDoesNotCrossBrands() {
+        UUID account = customer("+998906666663", "ru", true);
+        grantConsent(account);
+        UUID otherBrand = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO tenant.brands (id, tenant_id, code, slug, display_name, status)
+                VALUES (:id, :tenantId, 'OTHER', 'other-brand', 'Other brand', 'ACTIVE')
+                """).param("id", otherBrand).param("tenantId", TENANT).update();
+        createAndActivateFor(otherBrand, AutomationTriggerType.CASHBACK_CHANGE, Map.of("minimumChangeMinor", 1_000), 7);
+
+        cashbackTrigger.onLoyaltyBalanceChanged(new LoyaltyBalanceChanged(
+                TENANT, BRAND, account, UUID.randomUUID(), UUID.randomUUID(), "ACCRUAL", 5_000L, 5_000L, NOW));
+
+        assertThat(port.sent())
+                .as("BRAND scoping: a sibling brand's own armed rule must not fire for this brand's event")
+                .isEmpty();
+    }
+
     // ---------------------------------------------------- channel wiring & refusal
 
     @Test
@@ -476,9 +548,14 @@ class AutomationTests {
     // ------------------------------------------------------------------- helpers
 
     private UUID createAndActivate(AutomationTriggerType type, Map<String, Integer> config, int cooldownDays) {
+        return createAndActivateFor(BRAND, type, config, cooldownDays);
+    }
+
+    private UUID createAndActivateFor(
+            UUID brandId, AutomationTriggerType type, Map<String, Integer> config, int cooldownDays) {
         UUID id = rules.create(
                 TENANT,
-                BRAND,
+                brandId,
                 type + " " + UUID.randomUUID(),
                 type,
                 MarketingChannel.MESSAGING_APP,
@@ -487,8 +564,8 @@ class AutomationTests {
                 config,
                 cooldownDays,
                 actorId());
-        AutomationRuleRow row = rules.require(TENANT, BRAND, id);
-        boolean activated = rules.activate(TENANT, BRAND, id, row.version(), author, "corr");
+        AutomationRuleRow row = rules.require(TENANT, brandId, id);
+        boolean activated = rules.activate(TENANT, brandId, id, row.version(), author, "corr");
         assertThat(activated).as("activation must succeed for a wired channel").isTrue();
         return id;
     }

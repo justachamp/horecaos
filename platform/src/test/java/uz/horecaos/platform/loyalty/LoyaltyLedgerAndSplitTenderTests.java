@@ -28,6 +28,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -39,6 +40,7 @@ import uz.horecaos.platform.audit.api.ApprovalService;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.loyalty.api.HeldTenderPort;
+import uz.horecaos.platform.loyalty.api.LoyaltyBalanceChanged;
 import uz.horecaos.platform.loyalty.api.LoyaltyExpiryWarningPort;
 import uz.horecaos.platform.loyalty.api.PointsRedemptionPort;
 import uz.horecaos.platform.loyalty.application.LoyaltyAccrualService;
@@ -162,6 +164,17 @@ class LoyaltyLedgerAndSplitTenderTests {
     private TransactionTemplate transactions;
     private MutableClock clock;
 
+    /**
+     * Not a Spring context — nothing here actually invokes {@code
+     * @TransactionalEventListener}. This just proves {@code
+     * LoyaltyAccrualService#accrue} and {@code PointsRedemptionService#reserve}
+     * publish {@link LoyaltyBalanceChanged} exactly when ADR 0046 says the
+     * balance moved. {@code LoyaltyBalanceChangeAutomationTrigger}'s own
+     * consumption of it is {@code AutomationTests}' concern, the same split
+     * {@code OrderCompletionAccrualTriggerTests} already draws from this class.
+     */
+    private List<LoyaltyBalanceChanged> publishedBalanceChanges;
+
     private PointsRedemptionService redemption;
     private LoyaltyAccrualService accrual;
     private LoyaltyAdjustmentService adjustments;
@@ -219,9 +232,16 @@ class LoyaltyLedgerAndSplitTenderTests {
         audit = new RecordingAudit();
         transactions = new TransactionTemplate(new DataSourceTransactionManager(dataSource));
 
+        publishedBalanceChanges = new CopyOnWriteArrayList<>();
+        ApplicationEventPublisher events = event -> {
+            if (event instanceof LoyaltyBalanceChanged balanceChanged) {
+                publishedBalanceChanges.add(balanceChanged);
+            }
+        };
+
         LoyaltyPolicyService policies = new LoyaltyPolicyService(store);
-        redemption = new PointsRedemptionService(store, policies, clock);
-        accrual = new LoyaltyAccrualService(store, policies, clock);
+        redemption = new PointsRedemptionService(store, policies, events, clock);
+        accrual = new LoyaltyAccrualService(store, policies, events, clock);
         adjustments = new LoyaltyAdjustmentService(store, new AlwaysApproves(), audit, clock, 100_000L);
         maintenance = new LoyaltyMaintenanceService(
                 store, redemption, NOTHING_AWAITS, NO_WARNINGS_RECORDED, transactions, clock);
@@ -1256,6 +1276,52 @@ class LoyaltyLedgerAndSplitTenderTests {
                 .as("accruing on the redeemed portion is a balance that never decays, which "
                         + "finance finds as a liability growing without a matching sale")
                 .isEqualTo(2_160L);
+    }
+
+    // ------------------------------------------ CASHBACK_CHANGE's own producer
+
+    @Test
+    @DisplayName("an accrual publishes LoyaltyBalanceChanged once, and a replayed accrual does not publish again")
+    void accrualPublishesTheBalanceChangeEventOnce() {
+        UUID order = completedOrder("M-2", 94_000L, 10_000L);
+
+        transactions.executeWithoutResult(status -> accrual.accrue(completion(order, 82_000L, 10_000L)));
+
+        assertThat(publishedBalanceChanges).hasSize(1);
+        LoyaltyBalanceChanged published = publishedBalanceChanges.getFirst();
+        assertThat(published.tenantId()).isEqualTo(TENANT);
+        assertThat(published.brandId()).isEqualTo(BRAND);
+        assertThat(published.customerAccountId()).isEqualTo(customerId);
+        assertThat(published.changeType()).isEqualTo("ACCRUAL");
+        assertThat(published.deltaMinor()).isEqualTo(2_160L);
+        assertThat(published.balanceAfterMinor()).isEqualTo(2_160L);
+
+        // appendEntry's own ON CONFLICT DO NOTHING refuses a second accrual of the
+        // same order — accrue() returns empty and this class's own doc says a
+        // replayed completion event must not grant a second lot. Nothing to
+        // publish a second event about either.
+        transactions.executeWithoutResult(status -> accrual.accrue(completion(order, 82_000L, 10_000L)));
+        assertThat(publishedBalanceChanges)
+                .as("a replayed accrual for an order already accrued publishes no second event")
+                .hasSize(1);
+    }
+
+    @Test
+    @DisplayName("a redemption publishes LoyaltyBalanceChanged once, with a negative delta")
+    void redemptionPublishesTheBalanceChangeEventOnce() {
+        seedBalance(20_000L);
+        UUID order = completedOrder("M-3", 100_000L, 0L);
+
+        splitTender(order, 100_000L, 6_000L);
+
+        assertThat(publishedBalanceChanges).hasSize(1);
+        LoyaltyBalanceChanged published = publishedBalanceChanges.getFirst();
+        assertThat(published.tenantId()).isEqualTo(TENANT);
+        assertThat(published.brandId()).isEqualTo(BRAND);
+        assertThat(published.customerAccountId()).isEqualTo(customerId);
+        assertThat(published.changeType()).isEqualTo("REDEMPTION");
+        assertThat(published.deltaMinor()).isEqualTo(-6_000L);
+        assertThat(published.balanceAfterMinor()).isEqualTo(14_000L);
     }
 
     @Test

@@ -6,14 +6,15 @@ import { BrandScope } from '../../../core/api/catalog-paths';
 import { command } from '../../../core/api/idempotency';
 import { marketingPaths } from '../../../core/api/marketing-paths';
 
-/** The trigger kinds this build offers. See `AutomationTriggerType`'s own doc for why only three. */
-export type AutomationTriggerKind = 'BIRTHDAY' | 'INACTIVITY' | 'CART_ABANDONMENT';
+/** The trigger kinds this build offers. See `AutomationTriggerType`'s own doc for why not five. */
+export type AutomationTriggerKind = 'BIRTHDAY' | 'INACTIVITY' | 'CART_ABANDONMENT' | 'CASHBACK_CHANGE';
 
 /** The one `trigger_config` key each trigger kind reads — `AutomationTriggerType.configKey()`. */
 export const AUTOMATION_TRIGGER_CONFIG_KEY: Readonly<Record<AutomationTriggerKind, string>> = {
   BIRTHDAY: 'birthdayWindowDays',
   INACTIVITY: 'inactivityDays',
   CART_ABANDONMENT: 'abandonmentDelayHours',
+  CASHBACK_CHANGE: 'minimumChangeMinor',
 };
 
 /** Mirrors `AutomationRuleController.AutomationRuleResponse`. */
@@ -42,6 +43,12 @@ export interface AutomationRuleRequest {
   readonly templateKey: string;
   readonly triggerConfig: Readonly<Record<string, number>>;
   readonly cooldownDays: number;
+}
+
+/** Mirrors `AutomationRuleController.AutomationPreviewResponse` (row X.25). */
+export interface AutomationPreviewCandidate {
+  readonly customerAccountId: string;
+  readonly maskedDisplayName: string | null;
 }
 
 /** Mirrors `AutomationRuleController.AutomationRunResponse`. */
@@ -143,6 +150,18 @@ export class AutomationsApi {
   async runs(scope: BrandScope, ruleId: string): Promise<readonly AutomationRunView[]> {
     const result = await firstValueFrom(
       this.api.get<readonly AutomationRunView[]>(marketingPaths.automationRuns(scope, ruleId)),
+    );
+    return result.value ?? [];
+  }
+
+  /**
+   * Row X.25's own preview: a bounded, PII-masked sample of who this rule
+   * would match today. Read-only — `AutomationRulePreviewService`'s own doc
+   * is explicit that nothing here claims a guard or sends a message.
+   */
+  async preview(scope: BrandScope, ruleId: string): Promise<readonly AutomationPreviewCandidate[]> {
+    const result = await firstValueFrom(
+      this.api.get<readonly AutomationPreviewCandidate[]>(marketingPaths.automationPreview(scope, ruleId)),
     );
     return result.value ?? [];
   }

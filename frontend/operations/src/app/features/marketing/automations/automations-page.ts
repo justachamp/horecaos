@@ -10,6 +10,7 @@ import { MarketingChannel } from '../../customers/segments/segments-api';
 import { describeApiError } from '../../orders/order-errors';
 import {
   AUTOMATION_TRIGGER_CONFIG_KEY,
+  AutomationPreviewCandidate,
   AutomationRuleRequest,
   AutomationRuleView,
   AutomationRunView,
@@ -29,15 +30,22 @@ import {
  * refusal shows up here rather than being hidden behind a toggle that always
  * looks like it worked.
  *
- * **Three trigger kinds, not four.** `AutomationTriggerType`'s own doc names
- * why `CASHBACK_CHANGE` (no producer exists in `loyalty` yet) and
- * `LATE_ORDER_APOLOGY` (ADR 0044 states it "deliberately absent", pending
- * the still-`Proposed` ADR 0112) are not offered here — this form cannot
+ * **Four trigger kinds, not five.** `AutomationTriggerType`'s own doc names
+ * why `LATE_ORDER_APOLOGY` (ADR 0044 states it "deliberately absent", pending
+ * the still-`Proposed` ADR 0112) is not offered here — this form cannot
  * create a rule of a kind the server would refuse to keep firing.
+ * `CASHBACK_CHANGE` is offered (batch 12): it has no cooldown-days default of
+ * its own reason the way BIRTHDAY's 365 does, so it shares INACTIVITY's.
  *
  * **Priority is q-rule-list's own drag/keyboard reorder**, persisted through
  * one whole-set `PUT .../automations/reorder` call — the same contract
  * `OrderOutcomeReasonController.reorder` already gives its sibling screen.
+ *
+ * **Preview is row X.25's own answer to "which customers would this match
+ * today"**, not a reuse of `q-rule-simulator` — see
+ * `AutomationRulePreviewService`'s own doc for why that component's
+ * client-side, candidate-typed dry run does not fit a rule with no
+ * `ConditionGroup` and this row's own ask for real, PII-masked customers.
  */
 @Component({
   selector: 'q-automations-page',
@@ -63,6 +71,7 @@ export class AutomationsPage implements OnInit {
     'BIRTHDAY',
     'INACTIVITY',
     'CART_ABANDONMENT',
+    'CASHBACK_CHANGE',
   ];
   protected readonly channels: readonly MarketingChannel[] = ['MESSAGING_APP', 'SMS', 'EMAIL', 'PUSH'];
 
@@ -85,6 +94,13 @@ export class AutomationsPage implements OnInit {
   protected readonly runsLoading = signal(false);
   protected readonly runsError = signal<string | null>(null);
   protected readonly runs = signal<readonly AutomationRunView[]>([]);
+
+  // ------------------------------------------------------------- preview (X.25)
+
+  protected readonly previewForRule = signal<AutomationRuleView | null>(null);
+  protected readonly previewLoading = signal(false);
+  protected readonly previewError = signal<string | null>(null);
+  protected readonly previewCandidates = signal<readonly AutomationPreviewCandidate[]>([]);
 
   async ngOnInit(): Promise<void> {
     await this.load();
@@ -231,7 +247,13 @@ export class AutomationsPage implements OnInit {
     if (triggerType === 'INACTIVITY') {
       return 90;
     }
-    return 2;
+    if (triggerType === 'CART_ABANDONMENT') {
+      return 2;
+    }
+    // CASHBACK_CHANGE's minimumChangeMinor: 1 000 so'm, small enough that a
+    // typical accrual or redemption clears it, large enough that a rounding
+    // entry does not.
+    return 1_000;
   }
 
   protected canSubmit(): boolean {
@@ -300,6 +322,30 @@ export class AutomationsPage implements OnInit {
 
   protected runStatusLabelKey(status: string): MessageKey {
     return `marketing.automations.runStatus.${status}` as MessageKey;
+  }
+
+  // ------------------------------------------------------------- preview (X.25)
+
+  protected async openPreview(rule: AutomationRuleView): Promise<void> {
+    const scope = this.brand.scope();
+    if (!scope) {
+      return;
+    }
+    this.previewForRule.set(rule);
+    this.previewError.set(null);
+    this.previewCandidates.set([]);
+    this.previewLoading.set(true);
+    try {
+      this.previewCandidates.set(await this.api.preview(scope, rule.id));
+    } catch (error) {
+      this.previewError.set(this.describe(error));
+    } finally {
+      this.previewLoading.set(false);
+    }
+  }
+
+  protected closePreview(): void {
+    this.previewForRule.set(null);
   }
 
   protected formatMoment(iso: string): string {

@@ -4674,9 +4674,11 @@ export const messagesEn = {
   'marketing.automations.trigger.BIRTHDAY': 'Birthday',
   'marketing.automations.trigger.INACTIVITY': 'Inactivity',
   'marketing.automations.trigger.CART_ABANDONMENT': 'Cart abandonment',
+  'marketing.automations.trigger.CASHBACK_CHANGE': 'Cashback change',
   'marketing.automations.configLabel.BIRTHDAY': 'Window, days either side of the birthday',
   'marketing.automations.configLabel.INACTIVITY': 'Days since last order',
   'marketing.automations.configLabel.CART_ABANDONMENT': 'Abandonment delay, hours',
+  'marketing.automations.configLabel.CASHBACK_CHANGE': 'Minimum balance change, minor units',
   'marketing.automations.form.title': 'Author an automation rule',
   'marketing.automations.form.name': 'Name',
   'marketing.automations.form.trigger': 'Trigger',
@@ -4696,6 +4698,13 @@ export const messagesEn = {
   'marketing.automations.runStatus.FIRED': 'Fired',
   'marketing.automations.runStatus.REFUSED': 'Refused',
   'marketing.automations.runStatus.CANCELLED': 'Cancelled (customer converted first)',
+  'marketing.automations.preview.open': 'Preview matches — {name}',
+  'marketing.automations.preview.title': 'Who this rule would match today — {name}',
+  'marketing.automations.preview.intro':
+    'A bounded sample of today’s real customers, name masked. Nothing here sends a message or claims a cooldown.',
+  'marketing.automations.preview.loading': 'Loading matches…',
+  'marketing.automations.preview.empty': 'No customer matches this rule today.',
+  'marketing.automations.preview.unnamed': 'Unnamed customer',
 
   // ---------------------------------------------------------------- customers 5.3/5.4 (wave 39)
   'customers.nav.label': 'Customers section',

@@ -5,8 +5,10 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import uz.horecaos.platform.loyalty.api.LoyaltyBalanceChanged;
 import uz.horecaos.platform.loyalty.domain.EntryType;
 import uz.horecaos.platform.loyalty.domain.LotStatus;
 import uz.horecaos.platform.loyalty.infrastructure.persistence.JdbcLoyaltyStore;
@@ -39,11 +41,14 @@ public class LoyaltyAccrualService {
 
     private final JdbcLoyaltyStore store;
     private final LoyaltyPolicyService policies;
+    private final ApplicationEventPublisher events;
     private final Clock clock;
 
-    public LoyaltyAccrualService(JdbcLoyaltyStore store, LoyaltyPolicyService policies, Clock clock) {
+    public LoyaltyAccrualService(
+            JdbcLoyaltyStore store, LoyaltyPolicyService policies, ApplicationEventPublisher events, Clock clock) {
         this.store = store;
         this.policies = policies;
+        this.events = events;
         this.clock = clock;
     }
 
@@ -155,6 +160,23 @@ public class LoyaltyAccrualService {
         // the moment they earned it, and should not be able to spend it before
         // the refund window closes.
         store.creditBalance(order.tenantId(), account.id(), earned, 0L, now);
+
+        // Gap-map row 6.5's CASHBACK_CHANGE producer (ADR 0044 Triggers). Fired
+        // after the credit that made it true — see LoyaltyBalanceChanged's own
+        // doc for why its consumer listens AFTER_COMMIT rather than joining
+        // this transaction, and why that is the right durability shape here
+        // rather than an ADR 0032 outbox.
+        events.publishEvent(new LoyaltyBalanceChanged(
+                order.tenantId(),
+                order.brandId(),
+                order.customerAccountId(),
+                account.id(),
+                entryId,
+                EntryType.ACCRUAL.name(),
+                earned,
+                account.balanceMinor() + earned,
+                now));
+
         return Optional.of(lotId);
     }
 }
