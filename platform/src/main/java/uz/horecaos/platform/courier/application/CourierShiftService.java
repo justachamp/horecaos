@@ -369,8 +369,14 @@ public class CourierShiftService {
         adjustmentRules.evaluateShiftClose(tenantId, shift);
 
         // Staff 9.3a: "status" genuinely moves -- shift (read above, before
-        // shifts.approveHours) already holds the prior value.
-        Map<String, Object> beforeFields = Map.of("status", shift.status().name());
+        // shifts.approveHours) already holds the prior value. paidSeconds does
+        // not move here: close() already fixed it (see creditShiftEarning's
+        // argument above), so it is carried unchanged on both sides rather
+        // than left absent from beforeFields, which ChangeDocuments.diff would
+        // otherwise read as "was unset until this approval".
+        Map<String, Object> beforeFields = Map.of(
+                "status", shift.status().name(),
+                "paidSeconds", String.valueOf(shift.paidSeconds()));
         Map<String, Object> afterFields =
                 Map.of("status", "CLOSED", "paidSeconds", String.valueOf(shift.paidSeconds()));
         Map<String, Object> changes = ChangeDocuments.diff(beforeFields, afterFields);
