@@ -941,22 +941,32 @@ public class OrderStateService {
 
         ProgressProposal outcome;
         int version = order.version();
+        // What the order's status actually is once this proposal is settled —
+        // never assumed to be the target just because that was asked for. A
+        // REFUSED or already-there proposal leaves the order exactly where it
+        // was (or where a concurrent winner left it); only APPLIED reaches
+        // target. The audit trail below reads this, not target directly, so
+        // it cannot claim a transition that never happened.
+        OrderStatus resultStatus;
 
         if (order.status() == target) {
             // Two stations finishing in the same second, or an operator who
             // advanced by hand a moment ago. Correct, and not an error.
             outcome = ProgressProposal.ALREADY_THERE;
+            resultStatus = order.status();
         } else if (!OrderStateMachine.permits(order.status(), target, order.fulfillmentMode())) {
             // ADR 0019 does not have this edge from where the order actually is.
             // The ticket is not rolled back: the food is where the food is.
             log.info("Order {} is {} and refuses a kitchen proposal of {}", orderId, order.status(), target);
             outcome = ProgressProposal.REFUSED;
+            resultStatus = order.status();
         } else {
             Optional<Integer> won = orders.transition(tenantId, orderId, order.status(), target, now);
             if (won.isEmpty()) {
                 OrderRow settled = orders.find(tenantId, orderId).orElseThrow();
                 version = settled.version();
                 outcome = settled.status() == target ? ProgressProposal.ALREADY_THERE : ProgressProposal.REFUSED;
+                resultStatus = settled.status();
             } else {
                 version = won.get();
                 orders.recordTransition(
@@ -991,6 +1001,7 @@ public class OrderStateService {
 
                 applyConsequences(order, target, version, reason, null, actorType, actorId, completion, now);
                 outcome = ProgressProposal.APPLIED;
+                resultStatus = target;
             }
         }
 
@@ -1009,7 +1020,7 @@ public class OrderStateService {
                 reason,
                 version,
                 Map.of("status", order.status().name()),
-                Map.of("status", target.name(), "outcome", outcome.name(), "idempotencyKey", idempotencyKey),
+                Map.of("status", resultStatus.name(), "outcome", outcome.name(), "idempotencyKey", idempotencyKey),
                 outcome == ProgressProposal.REFUSED ? AuditFact.Outcome.REJECTED : AuditFact.Outcome.SUCCEEDED,
                 correlationId,
                 now);

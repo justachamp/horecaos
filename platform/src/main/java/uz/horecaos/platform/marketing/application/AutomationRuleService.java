@@ -161,11 +161,20 @@ public class AutomationRuleService {
                 .target("MarketingAutomationRule", ruleId)
                 .outcome(activated ? AuditFact.Outcome.SUCCEEDED : AuditFact.Outcome.REJECTED)
                 .because("Operator armed the automation")
-                // Staff 9.3a: "active" genuinely moves from the rule's prior
-                // value (read above, before the write) to true.
+                // Staff 9.3a: "active" moves from the rule's prior value
+                // (read above, before the write) to true only when the
+                // write actually won -- a stale expectedVersion leaves the
+                // rule exactly where it was, and the audit must not claim
+                // it armed when it did not.
                 .changed(ChangeDocuments.diff(
                         Map.of("active", rule.active(), "triggerType", rule.triggerType(), "channel", rule.channel()),
-                        Map.of("active", true, "triggerType", rule.triggerType(), "channel", rule.channel())))
+                        Map.of(
+                                "active",
+                                activated ? true : rule.active(),
+                                "triggerType",
+                                rule.triggerType(),
+                                "channel",
+                                rule.channel())))
                 .usingCapability("campaign.approve")
                 .correlatedBy(correlationId)
                 .occurredAt(now)
@@ -186,9 +195,12 @@ public class AutomationRuleService {
                 .target("MarketingAutomationRule", ruleId)
                 .outcome(deactivated ? AuditFact.Outcome.SUCCEEDED : AuditFact.Outcome.REJECTED)
                 .because("Operator stopped the automation")
-                // Staff 9.3a: "active" genuinely moves from the rule's prior
-                // value (read above, before the write) to false.
-                .changed(ChangeDocuments.change("active", rule.active(), false))
+                // Staff 9.3a: "active" moves from the rule's prior value
+                // (read above, before the write) to false only when the
+                // write actually won -- a stale expectedVersion leaves the
+                // rule exactly where it was, and the audit must not claim
+                // it stopped when it did not.
+                .changed(ChangeDocuments.change("active", rule.active(), deactivated ? false : rule.active()))
                 .usingCapability("campaign.approve")
                 .correlatedBy(correlationId)
                 .occurredAt(now)
