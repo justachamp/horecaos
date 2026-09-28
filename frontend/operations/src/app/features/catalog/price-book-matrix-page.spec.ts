@@ -8,7 +8,7 @@ import { BrandScope } from '../../core/api/catalog-paths';
 import { CursorState, Page } from '../../core/api/page';
 import { ApiError, ApiErrorCode } from '../../core/api/problem-details';
 import { CurrentBrand } from '../../core/auth/current-brand';
-import { I18n } from '../../core/i18n/i18n';
+import { I18n, Locale } from '../../core/i18n/i18n';
 import { CatalogApi } from './catalog-api';
 import { PriceBookMatrixRow, PriceBookSummary } from './catalog-domain';
 import { PriceBookMatrixPage } from './price-book-matrix-page';
@@ -59,6 +59,7 @@ describe('PriceBookMatrixPage', () => {
       listCategories: () => of([]),
     },
     priceBookId: string | null = BOOK_ID,
+    locale: Locale = 'en',
   ): Promise<void> {
     await TestBed.configureTestingModule({
       imports: [PriceBookMatrixPage],
@@ -82,7 +83,7 @@ describe('PriceBookMatrixPage', () => {
         { provide: CatalogApi, useValue: catalog },
       ],
     }).compileComponents();
-    TestBed.inject(I18n).setLocale('en');
+    TestBed.inject(I18n).setLocale(locale);
     fixture = TestBed.createComponent(PriceBookMatrixPage);
     fixture.detectChanges();
     await flushMicrotasks();
@@ -134,7 +135,7 @@ describe('PriceBookMatrixPage', () => {
         _scope: BrandScope,
         _priceBookId: string,
         _state: CursorState,
-        _filters?: { readonly categoryId?: string; readonly differsFromBase?: boolean },
+        _filters?: { readonly categoryId?: string; readonly differsFromBase?: boolean; readonly locale?: string },
       ) => of<Page<PriceBookMatrixRow>>({ items: [row()], nextCursor: null }),
     );
     await render(
@@ -159,7 +160,39 @@ describe('PriceBookMatrixPage', () => {
     expect(matrixSpy).toHaveBeenCalledTimes(1);
     const [, , state, filters] = matrixSpy.mock.calls[0];
     expect(state.cursor).toBeNull();
-    expect(filters).toEqual({ categoryId: 'cat-1' });
+    expect(filters).toEqual({ categoryId: 'cat-1', locale: 'en' });
+  });
+
+  it("sends the operator's own UI locale, not the server's uz default", async () => {
+    const matrixPage: Page<PriceBookMatrixRow> = { items: [row()], nextCursor: null };
+    const matrixSpy = vi.fn(
+      (
+        _scope: BrandScope,
+        _priceBookId: string,
+        _state: CursorState,
+        _filters?: { readonly categoryId?: string; readonly differsFromBase?: boolean; readonly locale?: string },
+      ) => of<Page<PriceBookMatrixRow>>(matrixPage),
+    );
+    await render(
+      {
+        readPriceBook: () => of(BOOK),
+        matrix: matrixSpy,
+      },
+      {
+        listCatalogs: () => of([]),
+        listCategories: () => of([]),
+      },
+      BOOK_ID,
+      'ru',
+    );
+
+    // A console set to Russian must not silently fall back to
+    // PriceAuthoringController.matrix's own `uz` default: displayName and
+    // categoryName come from whichever locale is sent, and every other
+    // catalog screen's own locale-bearing call already sends the operator's.
+    expect(matrixSpy).toHaveBeenCalledTimes(1);
+    const [, , , filters] = matrixSpy.mock.calls[0];
+    expect(filters).toMatchObject({ locale: 'ru' });
   });
 
   it('saves a row through the existing per-variant write, sending the row’s own version as If-Match', async () => {
