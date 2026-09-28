@@ -18,6 +18,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.dinein.application.port.SessionOrderSource;
 import uz.horecaos.platform.dinein.application.port.SessionOrderSource.OrderForSession;
 import uz.horecaos.platform.dinein.application.port.SessionOrderSource.SessionBill;
@@ -183,10 +184,11 @@ public class TableSessionService {
                 .target("dinein.table_session", sessionId)
                 .targetVersion(1L)
                 .because(reason)
-                .changed(Map.of(
+                // Staff 9.3a: a freshly inserted session has no prior state.
+                .changed(ChangeDocuments.created(Map.of(
                         "tables", request.tableIds().size(),
                         "walkIn", request.reservationId() == null,
-                        "businessDate", session.businessDate().toString()))
+                        "businessDate", session.businessDate().toString())))
                 .usingCapability("dinein.session.manage")
                 .correlatedBy(sessionId.toString())
                 .occurredAt(now)
@@ -249,7 +251,8 @@ public class TableSessionService {
                 .target("dinein.table_session", sessionId)
                 .targetVersion((long) session.version())
                 .because(reason)
-                .changed(Map.of("orderId", orderId.toString(), "sequence", sequence))
+                // Staff 9.3a: a freshly added round has no prior state.
+                .changed(ChangeDocuments.created(Map.of("orderId", orderId.toString(), "sequence", sequence)))
                 .usingCapability("dinein.session.manage")
                 .correlatedBy(sessionId.toString())
                 .occurredAt(now)
@@ -336,17 +339,16 @@ public class TableSessionService {
             throw ApiException.staleVersion(expectedVersion, session.version());
         }
 
-        Map<String, Object> changed = new HashMap<>();
-        changed.put("from", session.status().name());
-        changed.put("to", to.name());
-        changed.put("rounds", bill.roundCount());
-        changed.put("billTotalMinor", bill.totalMinor());
-        changed.put("currency", bill.currency() == null ? session.currency() : bill.currency());
+        Map<String, Object> after = new HashMap<>();
+        after.put("status", to.name());
+        after.put("rounds", bill.roundCount());
+        after.put("billTotalMinor", bill.totalMinor());
+        after.put("currency", bill.currency() == null ? session.currency() : bill.currency());
         if (to == SessionStatus.FORCE_CLOSED) {
             // The unpaid amount, recorded where a shift report can group by it.
             // This is the number a manager is answering for.
-            changed.put("unsettledMinor", bill.totalMinor());
-            changed.put("closeReasonCode", closeReasonCode);
+            after.put("unsettledMinor", bill.totalMinor());
+            after.put("closeReasonCode", closeReasonCode);
         }
 
         audit.record(AuditFact.of(
@@ -356,7 +358,11 @@ public class TableSessionService {
                 .target("dinein.table_session", sessionId)
                 .targetVersion((long) expectedVersion + 1)
                 .because(reason)
-                .changed(changed)
+                // Staff 9.3a: "status" genuinely moves from the session's
+                // prior status to the requested one; every other key is this
+                // transition's own billing snapshot, with no prior value to
+                // diff against.
+                .changed(ChangeDocuments.diff(Map.of("status", session.status().name()), after))
                 .usingCapability(
                         to == SessionStatus.FORCE_CLOSED ? "dinein.session.force_close" : "dinein.session.manage")
                 .correlatedBy(sessionId.toString())

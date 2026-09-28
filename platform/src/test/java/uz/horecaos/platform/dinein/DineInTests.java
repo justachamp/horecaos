@@ -13,6 +13,7 @@ import java.time.ZoneOffset;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
@@ -644,10 +645,21 @@ class DineInTests {
                 .orElseThrow();
 
         assertThat(record.capabilityUsed()).isEqualTo("dinein.session.force_close");
-        assertThat(record.changeDocument())
+        // Staff 9.3a: ChangeDocuments.diff(...) -- unsettledMinor and
+        // closeReasonCode are this transition's own context, with no prior
+        // value to diff against, so "before" is explicitly null rather than
+        // the key being absent.
+        @SuppressWarnings("unchecked")
+        Map<String, Object> unsettled = (Map<String, Object>)
+                Objects.requireNonNull(record.changeDocument().get("unsettledMinor"));
+        assertThat(unsettled).containsEntry("before", null).containsEntry("after", 61_000L);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> closeReason = (Map<String, Object>)
+                Objects.requireNonNull(record.changeDocument().get("closeReasonCode"));
+        assertThat(closeReason)
                 .as("a shift's cash shortfall has to be attributable to a person and an amount")
-                .containsEntry("unsettledMinor", 61_000L)
-                .containsEntry("closeReasonCode", "WALKOUT");
+                .containsEntry("before", null)
+                .containsEntry("after", "WALKOUT");
     }
 
     @Test
