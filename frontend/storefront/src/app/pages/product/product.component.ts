@@ -120,12 +120,25 @@ export class ProductComponent {
 
   readonly hasCartItems = computed(() => this.cartService.totalItemsCount() > 0);
 
-  /** Variant id for the single-product add-to-cart bar (first active variant, else item id). */
+  /**
+   * Variant id for the single-product add-to-cart bar (the first active
+   * variant, or `null` when none is orderable).
+   *
+   * Never falls back to the product's own id: `item.id` and a variant id are
+   * different identifier spaces on the wire, and a product with every
+   * variant unorderable (86'd or otherwise inactive) has no id here that the
+   * cart API would accept as a `variant_id`. `add()`/`increaseVariant()`
+   * already refuse a falsy id, so `null` here is what keeps the sole-variant
+   * bottom bar's add button from ever sending the product id as a variant.
+   */
   variantId = computed(() => {
     const item = this.rawItem();
     const activeVariants = (item?.variants ?? []).filter((v: MenuItemVariant) => v.active);
-    return activeVariants[0]?.id ?? item?.id ?? null;
+    return activeVariants[0]?.id ?? null;
   });
+
+  /** True when the product has no orderable variant at all -- the sole-variant bottom bar's add button must disable rather than silently no-op. */
+  readonly noOrderableVariant = computed(() => this.variantId() === null);
 
   /** The modifier groups this product offers (add-ons, sizes-of-topping, and so on). */
   readonly modifierGroups = computed<MenuItemModifierGroup[]>(
@@ -535,9 +548,11 @@ export class ProductComponent {
 
   /**
    * Resolves a variant id to its own name and price for the GA4 event
-   * contract -- a product with variants names one of them; a product with
-   * none uses {@link variantId}'s own fallback to the item's own id, so the
-   * item's own name and price are the right answer for that case too.
+   * contract -- a product with variants names one of them. `variantId` no
+   * longer ever hands this a bare item id (see its own doc), but
+   * `increaseVariant` takes a plain string and this stays defensive against a
+   * direct call carrying the item's own id -- the item's own name and price
+   * are the right answer for that case too.
    */
   private ecommerceItemForVariant(variantId: string): EcommerceItem | null {
     const item = this.rawItem();
