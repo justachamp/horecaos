@@ -165,13 +165,6 @@ uz/horecaos/platform/integration/web/ProviderInstallationController.java:1141
 uz/horecaos/platform/integration/web/SecretIngressController.java:167
 uz/horecaos/platform/integration/web/telegram/SendPulseContactImportController.java:98
 
-# --- inventory ---
-uz/horecaos/platform/inventory/application/InventoryService.java:455
-uz/horecaos/platform/inventory/application/InventoryService.java:843
-uz/horecaos/platform/inventory/application/InventoryService.java:894
-uz/horecaos/platform/inventory/application/InventoryService.java:937
-uz/horecaos/platform/inventory/application/InventoryService.java:977
-
 # --- kitchen ---
 # KitchenTicketService#recordAudit forwards its `changed` parameter to
 # .changed(...); both call sites (release-override, recall) now build it
