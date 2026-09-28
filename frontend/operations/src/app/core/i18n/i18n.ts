@@ -40,6 +40,25 @@ const LOADERS: Record<Exclude<Locale, 'ru'>, () => Promise<MessageCatalogue>> = 
   'uz-Latn': () => import('./messages.uz-latn').then((m) => m.messagesUzLatn),
 };
 
+/**
+ * Test-only: overrides one lazy locale's loader, e.g. to simulate a failed
+ * dynamic import without touching the network. Returns a function that
+ * restores the real loader; every caller must call it before the test ends,
+ * since `LOADERS` — like the cache in {@link catalogueCache} — is shared
+ * with every other spec bundled into the same entry point (see that
+ * function's doc comment).
+ */
+export function setLoaderForTesting(
+  locale: Exclude<Locale, 'ru'>,
+  loader: () => Promise<MessageCatalogue>,
+): () => void {
+  const original = LOADERS[locale];
+  LOADERS[locale] = loader;
+  return () => {
+    LOADERS[locale] = original;
+  };
+}
+
 interface CatalogueCache {
   readonly loaded: Map<Locale, MessageCatalogue>;
   readonly pending: Map<Locale, Promise<MessageCatalogue>>;
@@ -90,11 +109,22 @@ function ensureLoaded(locale: Locale): Promise<MessageCatalogue> {
   }
   let inFlight = cache.pending.get(locale);
   if (!inFlight) {
-    inFlight = LOADERS[locale as Exclude<Locale, 'ru'>]().then((catalogue) => {
-      cache.loaded.set(locale, catalogue);
-      cache.pending.delete(locale);
-      return catalogue;
-    });
+    inFlight = LOADERS[locale as Exclude<Locale, 'ru'>]().then(
+      (catalogue) => {
+        cache.loaded.set(locale, catalogue);
+        cache.pending.delete(locale);
+        return catalogue;
+      },
+      (err: unknown) => {
+        // Don't leave a rejected promise cached forever: the next request
+        // for this locale — a retry, or the operator clicking the language
+        // switcher again — must hit the network again, not the same dead
+        // promise. Without this, one transient failure permanently disables
+        // that locale for the rest of the tab's life.
+        cache.pending.delete(locale);
+        throw err;
+      },
+    );
     cache.pending.set(locale, inFlight);
   }
   return inFlight;
@@ -264,9 +294,18 @@ export class I18n {
   }
 
   private async applyOnceLoaded(locale: Locale): Promise<void> {
-    const catalogue = await ensureLoaded(locale);
-    if (this.lastRequested === locale) {
-      this.applyLoaded(locale, catalogue);
+    try {
+      const catalogue = await ensureLoaded(locale);
+      if (this.lastRequested === locale) {
+        this.applyLoaded(locale, catalogue);
+      }
+    } catch (err) {
+      // The import failed (bad deploy, flaky network). Both call sites
+      // (`void this.applyOnceLoaded(...)`) discard this promise, so without
+      // catching here the rejection would be unhandled. Leave whatever
+      // catalogue is already active in place — see the class doc comment —
+      // and report the failure instead of failing silently.
+      console.error(err);
     }
   }
 

@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   I18n,
@@ -8,6 +8,7 @@ import {
   interpolate,
   preloadLocale,
   resetCatalogueCacheForTesting,
+  setLoaderForTesting,
 } from './i18n';
 import { messagesEn } from './messages.en';
 import { messagesRu } from './messages.ru';
@@ -171,6 +172,45 @@ describe('I18n — lazy loading', () => {
 
     expect(i18n.t('shell.nav.orders')).toBe('Orders');
     expect(document.documentElement.lang).toBe('en');
+  });
+
+  it('retries a locale after a failed import instead of caching the rejection forever', async () => {
+    resetCatalogueCacheForTesting();
+    const restore = setLoaderForTesting('en', () =>
+      Promise.reject(new Error('network blip')),
+    );
+
+    await expect(preloadLocale('en')).rejects.toThrow('network blip');
+    restore();
+
+    // If the rejected promise were still cached, this would reject again
+    // instead of actually retrying the (now working) loader.
+    await expect(preloadLocale('en')).resolves.toBeUndefined();
+  });
+
+  it('reports a failed load instead of leaving the language switcher silently inert', async () => {
+    resetCatalogueCacheForTesting();
+    localStorage.clear();
+    TestBed.configureTestingModule({});
+    const i18n = TestBed.inject(I18n);
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const restore = setLoaderForTesting('en', () =>
+      Promise.reject(new Error('network blip')),
+    );
+
+    i18n.setLocale('en');
+    await expect(preloadLocale('en')).rejects.toThrow('network blip');
+    // Give applyOnceLoaded's own await-chain, off the same cached promise,
+    // a microtask turn to run its catch handler.
+    await Promise.resolve();
+
+    // Stayed on the previous catalogue — no crash, no half-switched state —
+    // and the failure was reported instead of an unhandled rejection.
+    expect(i18n.locale()).toBe('ru');
+    expect(consoleError).toHaveBeenCalled();
+
+    consoleError.mockRestore();
+    restore();
   });
 });
 

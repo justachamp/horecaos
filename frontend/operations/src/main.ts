@@ -19,7 +19,13 @@ import { DEFAULT_LOCALE, peekStoredLocale, preloadLocale } from './app/core/i18n
 async function bootstrap(): Promise<void> {
   const locale = peekStoredLocale();
   if (locale !== DEFAULT_LOCALE) {
-    await preloadLocale(locale);
+    // A rejected preload (a bad deploy, a flaky connection on the
+    // locale-chunk fetch) must never stop the app from opening at all — the
+    // worst acceptable outcome is one flash of Russian or a raw-key fallback
+    // until the operator's next `setLocale`, not a permanently empty
+    // `<q-root>`. See i18n.ts's `ensureLoaded`, which retries rather than
+    // caching this rejection forever.
+    await preloadLocale(locale).catch((err) => console.error(err));
   }
   await bootstrapApplication(App, appConfig);
 }
