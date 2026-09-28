@@ -14,6 +14,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.fulfillment.application.ServiceZoneService.DeliveryResourceNotFoundException;
 import uz.horecaos.platform.fulfillment.domain.sourcing.AttemptStatus;
 import uz.horecaos.platform.fulfillment.domain.sourcing.DeliveryPlan;
@@ -164,7 +165,17 @@ public class ManualDispatchService {
                 .at(ResourceScope.location(tenantId, plan.brandId(), plan.locationId()))
                 .target("fulfillment.delivery_plan", planId)
                 .because(reasonCode)
-                .changed(Map.of("courierId", courierId, "shipmentId", shipmentId.get()))
+                // Staff 9.3a: "status" genuinely moves from the plan's prior
+                // status (read above, before the write) to ASSIGNED.
+                .changed(ChangeDocuments.diff(
+                        Map.of("status", plan.status().name()),
+                        Map.of(
+                                "status",
+                                PlanStatus.ASSIGNED.name(),
+                                "courierId",
+                                courierId,
+                                "shipmentId",
+                                shipmentId.get())))
                 .correlatedBy(planId.toString())
                 .occurredAt(now)
                 .build());
@@ -204,7 +215,13 @@ public class ManualDispatchService {
                 .at(ResourceScope.location(tenantId, plan.brandId(), plan.locationId()))
                 .target("fulfillment.delivery_plan", planId)
                 .because(reasonCode)
-                .changed(Map.of("shipmentId", shipment.id()))
+                // Staff 9.3a: "status" genuinely moves from the shipment's
+                // prior status (read above, before the write) to CANCELLED,
+                // the same transition JdbcAssignmentStore#cancelShipment
+                // performs.
+                .changed(ChangeDocuments.diff(
+                        Map.of("status", shipment.status().name()),
+                        Map.of("status", "CANCELLED", "shipmentId", shipment.id())))
                 .correlatedBy(planId.toString())
                 .occurredAt(now)
                 .build());
