@@ -142,12 +142,22 @@ export class DineInService {
    * table's running total. Safe to call again with the same order id if a
    * response was lost -- the platform answers the second call with the bill
    * unchanged rather than a conflict.
+   *
+   * Deliberately *not* `anonymous`, unlike every other call in this class.
+   * The guest token proves this device is at this table; it proves nothing
+   * about which order the caller is allowed to attach, so the platform also
+   * checks the order against the caller's own signed-in session -- the same
+   * one `checkout()` just placed it under, still held by `Session` at this
+   * point in the flow (see `QrEntryController.addRound`'s own doc). Passing
+   * `anonymous: true` here would send the guest token with no way to prove
+   * the order is the caller's, which is exactly the gap that let a table
+   * attach a neighbouring table's bill.
    */
   async attachRound(sessionId: string, orderId: string): Promise<DineInBill> {
     return this.api.mutate<DineInBill>(
       'POST',
       `/storefront/dine-in/sessions/${sessionId}/rounds`,
-      { body: { orderId }, anonymous: true, headers: this.tokenHeader() },
+      { body: { orderId }, headers: this.tokenHeader() },
     );
   }
 

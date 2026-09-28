@@ -204,9 +204,36 @@ public class TableSessionService {
      * ADR 0019 priced it, and this records that it belongs to this table's evening.
      * The unique key on {@code (tenant_id, order_id)} is what stops one meal
      * appearing on two bills.
+     *
+     * @param requireOwnerAccountId null for an operator's own capability-gated
+     *                              write ({@code TableSessionController}), which
+     *                              may attach any order a manager can see. Non-null
+     *                              for the guest's own device ({@code
+     *                              QrEntryController}), which holds a table-scoped
+     *                              token and no ADR 0025 capability at all -- the
+     *                              token alone proves "this device is at this
+     *                              table", never "this order is this device's own".
+     *                              Checkout does not bind a cart to a table (ADR
+     *                              0047's own "what was not built"), so the only
+     *                              fact this method can still check is the one
+     *                              checkout always records: which signed-in
+     *                              customer placed the order. A mismatch answers
+     *                              exactly like a non-existent order -- the same
+     *                              {@link ErrorCode#RESOURCE_NOT_FOUND} the lookup
+     *                              two lines below throws -- so a guest fishing for
+     *                              another table's order id learns nothing from the
+     *                              difference, and so an order that really does not
+     *                              exist and one that exists but is not theirs read
+     *                              identically to every caller that is not its owner.
      */
     @Transactional
-    public int addRound(UUID tenantId, UUID sessionId, UUID orderId, String actorSubject, String reason) {
+    public int addRound(
+            UUID tenantId,
+            UUID sessionId,
+            UUID orderId,
+            @Nullable UUID requireOwnerAccountId,
+            String actorSubject,
+            String reason) {
 
         SessionRow session = require(tenantId, sessionId);
         if (!session.status().live()) {
@@ -216,6 +243,15 @@ public class TableSessionService {
 
         OrderForSession order = orders.find(tenantId, orderId)
                 .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such order"));
+
+        if (requireOwnerAccountId != null && !requireOwnerAccountId.equals(order.customerAccountId())) {
+            // Same refusal, same message, as the lookup above: a guest holding a
+            // valid token for table A and a real order id from table B must not be
+            // able to tell "wrong table" apart from "no such order" by the answer
+            // it gets back -- that difference is exactly what let table A's guest
+            // reach table B's bill.
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such order");
+        }
 
         if (!"DINE_IN".equals(order.fulfillmentMode())) {
             throw new ApiException(

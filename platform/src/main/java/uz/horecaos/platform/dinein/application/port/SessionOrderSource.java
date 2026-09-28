@@ -2,6 +2,7 @@ package uz.horecaos.platform.dinein.application.port;
 
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 /**
  * The few order facts a session needs (ADR 0047).
@@ -24,6 +25,14 @@ public interface SessionOrderSource {
      *
      * @param status the order's own status, so a session can refuse to attach a
      *               round that was cancelled
+     * @param customerAccountId the account that placed the order, when it was
+     *                          placed by a signed-in customer rather than
+     *                          through a guest-reference channel. A guest
+     *                          endpoint attaching a round on the placing
+     *                          customer's own say-so (rather than an operator's
+     *                          capability) needs this to confirm the round is
+     *                          actually theirs -- see {@code
+     *                          TableSessionService#addRound}'s own doc
      */
     record OrderForSession(
             UUID orderId,
@@ -32,7 +41,8 @@ public interface SessionOrderSource {
             String fulfillmentMode,
             String status,
             String currency,
-            long totalMinor) {}
+            long totalMinor,
+            @Nullable UUID customerAccountId) {}
 
     /** The running bill: currency and the sum over the session's rounds. */
     record SessionBill(String currency, long totalMinor, int roundCount, int openRoundCount) {}

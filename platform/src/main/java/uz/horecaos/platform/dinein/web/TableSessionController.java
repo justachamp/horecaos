@@ -133,8 +133,12 @@ public class TableSessionController {
             @PathVariable UUID sessionId,
             @Valid @RequestBody RoundRequest body) {
 
+        // null: an operator's write is gated by DINEIN_SESSION_MANAGE above, not by
+        // matching the order's own customer -- a manager recording a phone order
+        // onto a table's bill is exactly the case QrEntryController's own guest
+        // path (which does pass an owner to check) cannot allow.
         int sequence = sessions.addRound(
-                tenantId, sessionId, body.orderId(), currentActor.get().subject(), body.reason());
+                tenantId, sessionId, body.orderId(), null, currentActor.get().subject(), body.reason());
 
         return ResponseEntity.ok(new RoundResponse(sessionId, body.orderId(), sequence));
     }
