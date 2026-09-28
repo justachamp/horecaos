@@ -291,6 +291,27 @@
       "privacyOffer": "Privacy / offer"
     }
   },
+  "dineIn": {
+    "scanFailedTitle": "This code is not in service",
+    "scanFailedBody": "Please ask a member of staff for help.",
+    "backHome": "Back to menu",
+    "scanLoading": "Reading the table's code...",
+    "noAdmissionTitle": "Scan a table to order",
+    "noAdmissionBody": "Scan the QR code on your table to see the menu.",
+    "thisBranch": "This branch",
+    "tableLabel": "Table {{code}}",
+    "notSeated": "Ask a member of staff to seat you, then scan the code again.",
+    "menuUnavailable": "The menu is not available right now.",
+    "signInToOrder": "Sign in to order",
+    "itemsInCart": "{{count}} items in cart",
+    "orderRound": "Order",
+    "tableBill": "Table bill",
+    "roundCount": "{{count}} rounds ordered",
+    "askForBill": "Ask for the bill",
+    "orderPlaced": "Order sent to the kitchen",
+    "billRequested": "The bill has been requested",
+    "roundAttachRetry": "Order placed — refresh the bill in a moment to see it"
+  },
   "action": {
     "yourAddress": "Your address",
     "balance": "Balance",

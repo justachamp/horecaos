@@ -146,3 +146,25 @@ describe('app.routes: the profile shell is public, its account screens are not',
     expect(router.url).toBe('/profile/details');
   });
 });
+
+describe('app.routes: dine-in QR (row 10.5, ADR 0047) needs no account either', () => {
+  beforeEach(() => localStorage.clear());
+
+  it('an anonymous scan reaches the scan-landing route with the printed token as a param', async () => {
+    const { router } = setUp();
+
+    const ok = await router.navigateByUrl('/dine-in/a-printed-table-token');
+
+    expect(ok).toBe(true);
+    expect(router.url).toBe('/dine-in/a-printed-table-token');
+  });
+
+  it('the literal /dine-in/table route -- not the :tableToken route -- resumes an existing visit', async () => {
+    const { router } = setUp();
+
+    const ok = await router.navigateByUrl('/dine-in/table');
+
+    expect(ok).toBe(true);
+    expect(router.url).toBe('/dine-in/table');
+  });
+});

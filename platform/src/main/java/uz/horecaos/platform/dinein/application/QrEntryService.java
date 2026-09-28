@@ -8,6 +8,7 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import uz.horecaos.platform.dinein.application.port.QrChannelSource;
 import uz.horecaos.platform.dinein.domain.BearerToken;
 import uz.horecaos.platform.dinein.domain.QrMode;
 import uz.horecaos.platform.dinein.infrastructure.persistence.JdbcDineInStore;
@@ -58,12 +59,19 @@ public class QrEntryService {
 
     private final JdbcDineInStore store;
     private final FloorPlanService floorPlan;
+    private final QrChannelSource channels;
     private final RateLimiter rateLimiter;
     private final Clock clock;
 
-    public QrEntryService(JdbcDineInStore store, FloorPlanService floorPlan, RateLimiter rateLimiter, Clock clock) {
+    public QrEntryService(
+            JdbcDineInStore store,
+            FloorPlanService floorPlan,
+            QrChannelSource channels,
+            RateLimiter rateLimiter,
+            Clock clock) {
         this.store = store;
         this.floorPlan = floorPlan;
+        this.channels = channels;
         this.rateLimiter = rateLimiter;
         this.clock = clock;
     }
@@ -84,7 +92,18 @@ public class QrEntryService {
             UUID locationId,
             UUID tableId,
             String tableCode,
-            @Nullable UUID openSessionId) {}
+            @Nullable UUID openSessionId,
+            /**
+             * The tenant's own {@code QR_TABLE} channel code, so a scanning guest's
+             * browser can fetch the right menu and price plane -- see {@link
+             * QrChannelSource}'s own doc for why this cannot be guessed client-side.
+             * Null exactly when the tenant has registered zero or more than one
+             * active {@code QR_TABLE} channel, which VIEW_ONLY and ORDER_AND_PAY read
+             * differently: a null here is why the storefront falls back to whatever
+             * channel it would otherwise browse under rather than refusing to render
+             * a menu at all.
+             */
+            @Nullable String channelCode) {}
 
     /** What a resolved guest token is allowed to see, with no token in it. */
     public record GuestContext(
@@ -154,7 +173,8 @@ public class QrEntryService {
                 table.locationId(),
                 table.id(),
                 table.code(),
-                openSession);
+                openSession,
+                channels.qrTableChannelCode(table.tenantId()).orElse(null));
     }
 
     /**

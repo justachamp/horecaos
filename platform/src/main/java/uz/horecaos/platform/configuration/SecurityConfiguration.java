@@ -221,7 +221,15 @@ public class SecurityConfiguration {
                         .requestMatchers(
                                 HttpMethod.POST,
                                 "/api/v1/storefront/dine-in/qr/token-exchanges",
-                                "/api/v1/storefront/dine-in/sessions/*/bill-requests")
+                                "/api/v1/storefront/dine-in/sessions/*/bill-requests",
+                                // ADR 0047: closes the "ordering's cart-to-table binding"
+                                // gap the ADR's own "what was not built" section names --
+                                // the guest's own token attaches their just-checked-out
+                                // order to their own table's bill. Same standing as
+                                // bill-requests immediately above: no principal exists to
+                                // hold a capability, and the guest token is resolved to a
+                                // row before anything is written.
+                                "/api/v1/storefront/dine-in/sessions/*/rounds")
                         .permitAll()
                         // The branch discovery route, the same pre-account
                         // purpose the GET list above documents -- only active,

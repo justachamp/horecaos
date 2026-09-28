@@ -294,7 +294,8 @@ class EndpointCapabilityDeclarationTests {
     private static boolean isGuestBearerEndpoint(Method handler) {
         String path = pathOf(handler);
         return path.equals("/api/v1/storefront/dine-in/qr/token-exchanges")
-                || path.equals("/api/v1/storefront/dine-in/sessions/{sessionId}/bill-requests");
+                || path.equals("/api/v1/storefront/dine-in/sessions/{sessionId}/bill-requests")
+                || path.equals("/api/v1/storefront/dine-in/sessions/{sessionId}/rounds");
     }
 
     /**

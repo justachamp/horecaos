@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.time.Instant;
 import java.util.List;
@@ -92,7 +93,8 @@ public class QrEntryController {
                 admission.brandId(),
                 admission.locationId(),
                 admission.tableCode(),
-                admission.openSessionId()));
+                admission.openSessionId(),
+                admission.channelCode()));
     }
 
     @GetMapping("/sessions/{sessionId}")
@@ -150,6 +152,47 @@ public class QrEntryController {
         return ResponseEntity.ok(billResponse(guest, moved));
     }
 
+    @PostMapping("/sessions/{sessionId}/rounds")
+    @Operation(
+            summary = "Attach a just-placed order to the table's bill",
+            description = "Checkout does not itself bind a cart to a table (ADR 0047's own "
+                    + "'what was not built' notes this: 'ordering's cart-to-table binding'). "
+                    + "This closes that loop for a guest ordering from the table's own device: "
+                    + "the order was already priced, reserved and confirmed by the ordinary "
+                    + "checkout, and this only records that it belongs to this table's evening -- "
+                    + "the exact write TableSessionController's operator endpoint makes, reached "
+                    + "here through the guest's own token instead of a capability. Calling it "
+                    + "twice with the same order is not an error: the second call finds the order "
+                    + "already on this bill and answers with the bill unchanged.")
+    public ResponseEntity<GuestBillResponse> addRound(
+            @PathVariable UUID sessionId,
+            @RequestHeader(GUEST_TOKEN_HEADER) String guestToken,
+            @Valid @RequestBody AddRoundRequest body) {
+
+        GuestContext guest = qr.resolve(guestToken);
+        requireOrdering(guest);
+
+        SessionRow session = qr.requireSessionAtTable(guest, sessionId);
+        try {
+            sessions.addRound(
+                    guest.tenantId(),
+                    sessionId,
+                    body.orderId(),
+                    "guest:" + guest.tableId(),
+                    "Placed from the table via QR checkout");
+        } catch (ApiException alreadyOnABill) {
+            // Idempotent by observation, like requestBill above: a retry after a
+            // dropped response must not read as a failure when the round already
+            // landed. Any other refusal (wrong branch, wrong fulfilment mode, no
+            // such order) is a real one and propagates.
+            if (!"ORDER_ALREADY_BILLED".equals(alreadyOnABill.properties().get("conflict"))) {
+                throw alreadyOnABill;
+            }
+        }
+
+        return ResponseEntity.ok(billResponse(guest, session));
+    }
+
     private GuestBillResponse billResponse(GuestContext guest, SessionRow session) {
         SessionBill bill = sessions.bill(guest.tenantId(), session.id());
         return new GuestBillResponse(
@@ -178,6 +221,8 @@ public class QrEntryController {
 
     record ExchangeRequest(@NotBlank @Size(max = 64) String tableToken) {}
 
+    record AddRoundRequest(@NotNull UUID orderId) {}
+
     /**
      * @param guestToken returned once. There is no endpoint that reissues it: the
      *                   guest scans again
@@ -190,7 +235,9 @@ public class QrEntryController {
             UUID brandId,
             UUID locationId,
             String tableCode,
-            @Nullable UUID openSessionId) {}
+            @Nullable UUID openSessionId,
+            /** See {@link QrEntryService.GuestAdmission#channelCode()}. */
+            @Nullable String channelCode) {}
 
     record GuestBillResponse(
             UUID sessionId, String status, String currency, long totalMinor, int roundCount, List<UUID> orderIds) {}

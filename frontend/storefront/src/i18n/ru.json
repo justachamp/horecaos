@@ -291,6 +291,27 @@
       "privacyOffer": "Конфиденциальность / оферта"
     }
   },
+  "dineIn": {
+    "scanFailedTitle": "Этот код больше не работает",
+    "scanFailedBody": "Обратитесь к сотруднику за помощью.",
+    "backHome": "На главную",
+    "scanLoading": "Считываем код столика...",
+    "noAdmissionTitle": "Отсканируйте столик, чтобы заказать",
+    "noAdmissionBody": "Отсканируйте QR-код на своём столике, чтобы увидеть меню.",
+    "thisBranch": "Этот филиал",
+    "tableLabel": "Столик {{code}}",
+    "notSeated": "Попросите сотрудника посадить вас за столик, затем отсканируйте код снова.",
+    "menuUnavailable": "Меню сейчас недоступно.",
+    "signInToOrder": "Войдите, чтобы заказать",
+    "itemsInCart": "В корзине: {{count}}",
+    "orderRound": "Заказать",
+    "tableBill": "Счёт столика",
+    "roundCount": "Заказано подходов: {{count}}",
+    "askForBill": "Попросить счёт",
+    "orderPlaced": "Заказ отправлен на кухню",
+    "billRequested": "Счёт запрошен",
+    "roundAttachRetry": "Заказ оформлен — счёт обновится через момент"
+  },
   "action": {
     "yourAddress": "Ваш адрес",
     "balance": "Баланс",

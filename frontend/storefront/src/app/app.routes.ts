@@ -19,6 +19,8 @@ import { CategoryItemsComponent } from './pages/category-items/category-items.co
 import { TermsOfConditionsComponent } from './pages/terms/terms-of-conditions.component';
 import { ChannelPageComponent } from './pages/channel-page/channel-page.component';
 import { SearchComponent } from './pages/search/search.component';
+import { DineInScanComponent } from './pages/dine-in/dine-in-scan/dine-in-scan.component';
+import { DineInTableComponent } from './pages/dine-in/dine-in-table/dine-in-table.component';
 
 export const routes: Routes = [
   { path: '', pathMatch: 'full', redirectTo: 'home' },
@@ -100,5 +102,14 @@ export const routes: Routes = [
   // hub. An unrecognised slug renders the same not-found state as one the
   // channel has never published -- see ChannelPageComponent's own doc.
   { path: 'pages/:slug', component: ChannelPageComponent },
+  // Row 10.5's dine-in facet (ADR 0047): the table-QR flow. `:tableToken` is
+  // the one-time value a table's printed code encodes -- DineInScanComponent
+  // spends it once, against QrEntryController.exchange, and replaces the URL
+  // with the token-free `dine-in` below before anything else runs, so the
+  // printed token never sits in history past that single request (see that
+  // component's own doc). Public: a guest holds no session at all yet, the
+  // same pre-account standing as the menu routes above.
+  { path: 'dine-in/table', component: DineInTableComponent },
+  { path: 'dine-in/:tableToken', component: DineInScanComponent },
   { path: '**', redirectTo: 'home' },
 ];
