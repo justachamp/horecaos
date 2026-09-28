@@ -28,6 +28,7 @@ import uz.horecaos.platform.audit.api.ApprovalService;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.commercial.domain.BonusGrantBalance;
 import uz.horecaos.platform.commercial.domain.PaymentMethod;
 import uz.horecaos.platform.commercial.domain.StatementPayment;
@@ -228,7 +229,8 @@ public class WalletService {
                 .at(ResourceScope.tenant(tenantId))
                 .target("commercial.wallet_entry", id)
                 .because(reason)
-                .changed(Map.of("amountMinor", amountMinor))
+                // Staff 9.3a: a brand-new ledger entry, no prior state to diff against.
+                .changed(ChangeDocuments.created(Map.of("amountMinor", amountMinor)))
                 .usingCapability(Capability.COMMERCIAL_WALLET_MANAGE.code())
                 .correlatedBy(correlationId)
                 .occurredAt(now)
@@ -317,18 +319,25 @@ public class WalletService {
                 .at(ResourceScope.tenant(tenantId))
                 .target("commercial.wallet_entry", id)
                 .because(reason)
-                // deposit_due_minor is not money, so the ledger cannot
-                // reconstruct the obligation this cleared. Which subscription,
-                // and from what to what, exactly as the reversal records it.
-                .changed(Map.of(
-                        "amountMinor",
-                        due,
-                        "subscriptionId",
-                        obligation.subscriptionId().toString(),
-                        "depositDueFromMinor",
-                        due,
-                        "depositDueToMinor",
-                        0L))
+                // Staff 9.3a: deposit_due_minor is not money, so the ledger
+                // cannot reconstruct the obligation this cleared. A real
+                // diff, not a flat pair of "From"/"To" keys: which
+                // subscription, and from what to what.
+                .changed(ChangeDocuments.diff(
+                        Map.of(
+                                "amountMinor",
+                                due,
+                                "subscriptionId",
+                                obligation.subscriptionId().toString(),
+                                "depositDueMinor",
+                                due),
+                        Map.of(
+                                "amountMinor",
+                                due,
+                                "subscriptionId",
+                                obligation.subscriptionId().toString(),
+                                "depositDueMinor",
+                                0L)))
                 .usingCapability(Capability.COMMERCIAL_WALLET_MANAGE.code())
                 .correlatedBy(correlationId)
                 .occurredAt(now)
@@ -440,7 +449,8 @@ public class WalletService {
                 .at(ResourceScope.tenant(tenantId))
                 .target("commercial.wallet_entry", id)
                 .because(reason)
-                .changed(Map.of("moneyKind", moneyKind, "amountMinor", amountMinor))
+                // Staff 9.3a: a brand-new ledger entry, no prior state to diff against.
+                .changed(ChangeDocuments.created(Map.of("moneyKind", moneyKind, "amountMinor", amountMinor)))
                 .usingCapability(Capability.COMMERCIAL_WALLET_MANAGE.code())
                 .underApproval(requestId)
                 .correlatedBy(correlationId)
@@ -515,7 +525,8 @@ public class WalletService {
                 .at(ResourceScope.tenant(tenantId))
                 .target("commercial.wallet_entry", id)
                 .because(reason)
-                .changed(Map.of("amountMinor", amountMinor, "expiresAt", expiresAt.toString()))
+                // Staff 9.3a: a brand-new ledger entry, no prior state to diff against.
+                .changed(ChangeDocuments.created(Map.of("amountMinor", amountMinor, "expiresAt", expiresAt.toString())))
                 .usingCapability(Capability.COMMERCIAL_WALLET_MANAGE.code())
                 .underApproval(requestId)
                 .correlatedBy(correlationId)
@@ -606,7 +617,8 @@ public class WalletService {
                 .at(ResourceScope.tenant(tenantId))
                 .target("commercial.wallet_entry", id)
                 .because(reason)
-                .changed(Map.of("amountMinor", amountMinor))
+                // Staff 9.3a: a brand-new ledger entry, no prior state to diff against.
+                .changed(ChangeDocuments.created(Map.of("amountMinor", amountMinor)))
                 .usingCapability(Capability.COMMERCIAL_WALLET_MANAGE.code())
                 .underApproval(requestId)
                 .correlatedBy(correlationId)
@@ -763,15 +775,29 @@ public class WalletService {
                 .at(ResourceScope.tenant(tenantId))
                 .target("commercial.wallet_entry", id)
                 .because(reason)
-                // The obligation move is the one fact the ledger cannot
-                // reconstruct: it records money, and deposit_due_minor is not
-                // money. Which subscription, and from what to what.
-                .changed(Map.of(
-                        "amountMinor", deposit.amountMinor(),
-                        "reversedEntryId", depositEntryId.toString(),
-                        "subscriptionId", subscriptionId.toString(),
-                        "depositDueFromMinor", dueBefore,
-                        "depositDueToMinor", dueBefore + deposit.amountMinor()))
+                // Staff 9.3a: the obligation move is the one fact the ledger
+                // cannot reconstruct: it records money, and deposit_due_minor
+                // is not money. A real diff, not a flat pair of "From"/"To"
+                // keys: which subscription, and from what to what.
+                .changed(ChangeDocuments.diff(
+                        Map.of(
+                                "amountMinor",
+                                deposit.amountMinor(),
+                                "reversedEntryId",
+                                depositEntryId.toString(),
+                                "subscriptionId",
+                                subscriptionId.toString(),
+                                "depositDueMinor",
+                                dueBefore),
+                        Map.of(
+                                "amountMinor",
+                                deposit.amountMinor(),
+                                "reversedEntryId",
+                                depositEntryId.toString(),
+                                "subscriptionId",
+                                subscriptionId.toString(),
+                                "depositDueMinor",
+                                dueBefore + deposit.amountMinor())))
                 .usingCapability(Capability.COMMERCIAL_WALLET_MANAGE.code())
                 .underApproval(requestId)
                 .correlatedBy(correlationId)
@@ -804,7 +830,10 @@ public class WalletService {
                 .at(ResourceScope.tenant(tenantId))
                 .target("commercial.tenant_billing", tenantId)
                 .because(reason)
-                .changed(Map.of("from", before.paymentMethod().name(), "to", method.name()))
+                // Staff 9.3a: "paymentMethod" genuinely moves -- before (read
+                // above, under the same lock) already holds the prior value.
+                .changed(ChangeDocuments.change(
+                        "paymentMethod", before.paymentMethod().name(), method.name()))
                 .usingCapability(Capability.COMMERCIAL_WALLET_MANAGE.code())
                 .correlatedBy(correlationId)
                 .occurredAt(now)
@@ -1261,16 +1290,27 @@ public class WalletService {
                             + "charge() call may still be outstanding against the old card, this fact is not "
                             + "proof no charge happened on it, and a late success for it will be recorded "
                             + "separately as commercial.wallet.card_charge_after_supersede for reconciliation")
-                    .changed(
+                    // Staff 9.3a: "outcome" genuinely moves -- attempts.settle
+                    // just above only returns true when the row was PENDING.
+                    .changed(ChangeDocuments.diff(
+                            Map.of(
+                                    "outcome",
+                                    "PENDING",
+                                    "supersededAttemptId",
+                                    superseded.id().toString()),
                             freshId == null
                                     ? Map.of(
+                                            "outcome",
+                                            "SUPERSEDED",
                                             "supersededAttemptId",
                                             superseded.id().toString())
                                     : Map.of(
+                                            "outcome",
+                                            "SUPERSEDED",
                                             "supersededAttemptId",
                                             superseded.id().toString(),
                                             "newAttemptId",
-                                            freshId.toString()))
+                                            freshId.toString())))
                     .usingCapability(Capability.COMMERCIAL_WALLET_MANAGE.code())
                     .correlatedBy(statementId.toString())
                     .occurredAt(now)
@@ -1331,7 +1371,10 @@ public class WalletService {
                         .target("commercial.statement", attempt.statementId())
                         .outcome(AuditFact.Outcome.REJECTED)
                         .because("the card charge was declined by the provider")
-                        .changed(Map.of("reason", failed.reason()))
+                        // Staff 9.3a: "outcome" genuinely moves -- attempts.settle
+                        // just above only returns true when the row was PENDING.
+                        .changed(ChangeDocuments.diff(
+                                Map.of("outcome", "PENDING"), Map.of("outcome", "FAILED", "reason", failed.reason())))
                         .usingCapability(Capability.COMMERCIAL_WALLET_MANAGE.code())
                         .correlatedBy(attempt.statementId().toString())
                         .occurredAt(now)
@@ -1469,7 +1512,10 @@ public class WalletService {
                         + "already been settled SUPERSEDED and replaced by a fresh attempt under a different "
                         + "card; the money is real, was never credited, and needs reconciling against the "
                         + "provider by hand")
-                .changed(supersededBy
+                // Staff 9.3a: a late report of an outcome that already
+                // happened out of band, with nothing on this row to diff
+                // against -- see this method's own Javadoc.
+                .changed(ChangeDocuments.created(supersededBy
                         .<Map<String, Object>>map(newAttemptId -> Map.of(
                                 "supersededAttemptId", attempt.attemptId().toString(),
                                 "newAttemptId", newAttemptId.toString(),
@@ -1478,7 +1524,7 @@ public class WalletService {
                                 "supersededAttemptId",
                                 attempt.attemptId().toString(),
                                 "providerReference",
-                                succeeded.providerReference())))
+                                succeeded.providerReference()))))
                 .usingCapability(Capability.COMMERCIAL_WALLET_MANAGE.code())
                 .correlatedBy(attempt.statementId().toString())
                 .occurredAt(now)
@@ -1522,13 +1568,15 @@ public class WalletService {
                     .target("commercial.statement", attempt.statementId())
                     .outcome(AuditFact.Outcome.REJECTED)
                     .because("the card charge succeeded for more than the statement still owed")
-                    .changed(Map.of(
+                    // Staff 9.3a: a report of this charge's own outcome, no
+                    // prior state on the target statement to diff against.
+                    .changed(ChangeDocuments.created(Map.of(
                             "amountMinor",
                             attempt.amountMinor(),
                             "appliedMinor",
                             applied,
                             "providerReference",
-                            succeeded.providerReference()))
+                            succeeded.providerReference())))
                     .usingCapability(Capability.COMMERCIAL_WALLET_MANAGE.code())
                     .correlatedBy(attempt.statementId().toString())
                     .occurredAt(now)
@@ -1542,7 +1590,11 @@ public class WalletService {
                 .at(ResourceScope.tenant(tenantId))
                 .target("commercial.statement", attempt.statementId())
                 .because("the statement's remainder was charged to the tenant's card")
-                .changed(Map.of("amountMinor", applied, "providerReference", succeeded.providerReference()))
+                // Staff 9.3a: a report of this charge's own outcome (the
+                // WalletEntry it credits, appended below, is the entity with
+                // no prior state), no diffable field on the target statement.
+                .changed(ChangeDocuments.created(
+                        Map.of("amountMinor", applied, "providerReference", succeeded.providerReference())))
                 .usingCapability(Capability.COMMERCIAL_WALLET_MANAGE.code())
                 .correlatedBy(attempt.statementId().toString())
                 .occurredAt(now)
@@ -1669,7 +1721,8 @@ public class WalletService {
                 .at(ResourceScope.tenant(tenantId))
                 .target("commercial.wallet_entry", id)
                 .because("the bonus grant lapsed at its expiry")
-                .changed(Map.of("grantId", grantId.toString(), "lapsedMinor", remaining))
+                // Staff 9.3a: a brand-new ledger entry, no prior state to diff against.
+                .changed(ChangeDocuments.created(Map.of("grantId", grantId.toString(), "lapsedMinor", remaining)))
                 .usingCapability(Capability.COMMERCIAL_WALLET_MANAGE.code())
                 .correlatedBy(id.toString())
                 .occurredAt(now)

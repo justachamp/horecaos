@@ -25,32 +25,6 @@ uz/horecaos/platform/audit/infrastructure/persistence/JdbcApprovalService.java:3
 uz/horecaos/platform/audit/infrastructure/persistence/JdbcApprovalService.java:571
 uz/horecaos/platform/audit/web/AuditController.java:225
 
-# --- commercial ---
-uz/horecaos/platform/commercial/application/ModuleCatalogService.java:227
-uz/horecaos/platform/commercial/application/ModuleCatalogService.java:248
-uz/horecaos/platform/commercial/application/ModuleCatalogService.java:300
-uz/horecaos/platform/commercial/application/PlanCatalogService.java:168
-uz/horecaos/platform/commercial/application/PlanCatalogService.java:215
-uz/horecaos/platform/commercial/application/PlanCatalogService.java:69
-uz/horecaos/platform/commercial/application/StatementService.java:247
-uz/horecaos/platform/commercial/application/StatementService.java:273
-uz/horecaos/platform/commercial/application/SubscriptionService.java:184
-uz/horecaos/platform/commercial/application/SubscriptionService.java:264
-uz/horecaos/platform/commercial/application/SubscriptionService.java:322
-uz/horecaos/platform/commercial/application/WalletService.java:1264
-uz/horecaos/platform/commercial/application/WalletService.java:1334
-uz/horecaos/platform/commercial/application/WalletService.java:1472
-uz/horecaos/platform/commercial/application/WalletService.java:1525
-uz/horecaos/platform/commercial/application/WalletService.java:1545
-uz/horecaos/platform/commercial/application/WalletService.java:1672
-uz/horecaos/platform/commercial/application/WalletService.java:231
-uz/horecaos/platform/commercial/application/WalletService.java:323
-uz/horecaos/platform/commercial/application/WalletService.java:443
-uz/horecaos/platform/commercial/application/WalletService.java:518
-uz/horecaos/platform/commercial/application/WalletService.java:609
-uz/horecaos/platform/commercial/application/WalletService.java:769
-uz/horecaos/platform/commercial/application/WalletService.java:807
-
 # --- courier ---
 uz/horecaos/platform/courier/application/CourierAccountProvisioningService.java:115
 uz/horecaos/platform/courier/application/CourierAccountProvisioningService.java:173
