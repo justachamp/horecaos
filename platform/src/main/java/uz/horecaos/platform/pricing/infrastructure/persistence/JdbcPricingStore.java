@@ -10,6 +10,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import tools.jackson.databind.ObjectMapper;
@@ -653,67 +654,139 @@ public class JdbcPricingStore {
      * in force for nobody, so there is no history to keep, and closing it would
      * violate {@code ck_price_window}, which requires the close to come strictly
      * after the open.
+     *
+     * <p>{@code expectedVersion} folds the matrix inline edit's per-row
+     * {@code If-Match} into the very UPDATE that performs the write, rather than
+     * a separate SELECT beforehand: a check done as its own statement and a write
+     * done as another leaves a gap between the two that a concurrent writer can
+     * land in, which is exactly what the version guard exists to close. Both
+     * branches below carry {@code AND version = :expectedVersion} in their own
+     * WHERE clause when a version was given, so the database — not a race with
+     * whatever else is happening between two round trips — is what decides
+     * whether the write happens. {@code null} skips the guard entirely: the
+     * single-variant editor and {@link uz.horecaos.platform.pricing.application.PriceBulkApplyService}
+     * write unconditionally and never read a row's version first. {@code 0} means
+     * the caller expects no row open yet; that case has no existing row to guard
+     * an UPDATE with, so {@code ux_price_current} is what makes the fallback
+     * insert below race-safe instead. Returns {@code false} only when a version
+     * was given and nothing matched it — the caller's one correct response is to
+     * refuse the edit, never to retry it as if it had raced nothing.
      */
-    public void setPrice(
+    public boolean setPrice(
             UUID tenantId,
             UUID brandId,
             UUID priceBookId,
             String priceableType,
             UUID priceableId,
             long amountMinor,
-            Instant now) {
+            Instant now,
+            @Nullable Integer expectedVersion) {
         OffsetDateTime at = OffsetDateTime.ofInstant(now, ZoneOffset.UTC);
+        String versionGuard = expectedVersion == null ? "" : " AND version = :expectedVersion";
 
-        int amended = jdbc.sql("""
-                UPDATE pricing.prices
-                SET amount_minor = :amount, version = version + 1
-                WHERE tenant_id = :tenantId AND brand_id = :brandId
-                  AND price_book_id = :priceBookId AND priceable_type = :type
-                  AND priceable_id = :priceableId
-                  AND valid_until IS NULL AND valid_from >= :at
-                """)
+        JdbcClient.StatementSpec amendSpec = jdbc.sql("""
+                        UPDATE pricing.prices
+                        SET amount_minor = :amount, version = version + 1
+                        WHERE tenant_id = :tenantId AND brand_id = :brandId
+                          AND price_book_id = :priceBookId AND priceable_type = :type
+                          AND priceable_id = :priceableId
+                          AND valid_until IS NULL AND valid_from >= :at""" + versionGuard)
                 .param("tenantId", tenantId)
                 .param("brandId", brandId)
                 .param("priceBookId", priceBookId)
                 .param("type", priceableType)
                 .param("priceableId", priceableId)
                 .param("amount", amountMinor)
-                .param("at", at)
-                .update();
+                .param("at", at);
+        if (expectedVersion != null) {
+            amendSpec = amendSpec.param("expectedVersion", expectedVersion);
+        }
+        int amended = amendSpec.update();
 
         if (amended > 0) {
-            return;
+            return true;
         }
 
         // The closed row's own version carries forward rather than the new
-        // row restarting at 1: `openPriceVersion`'s `If-Match` check (gap map
-        // row 4.8a's matrix inline edit) compares against whatever version
-        // this method last wrote, and two edits close-then-insert on every
-        // call — valid_from is always "now", so the amend branch above only
-        // ever fires on a same-instant retry. A new row that reset to 1 on
-        // every ordinary edit would make every price after the first
+        // row restarting at 1: the If-Match check compares against whatever
+        // version this method last wrote, and two edits close-then-insert on
+        // every call — valid_from is always "now", so the amend branch above
+        // only ever fires on a same-instant retry. A new row that reset to 1
+        // on every ordinary edit would make every price after the first
         // indistinguishable to that check: two operators who both read
         // version 1 would both pass it, the second silently clobbering the
         // first. Empty (nothing was open yet) starts the lineage at 1, the
         // same "unset" the matrix reads as version 0.
-        Optional<Integer> closedVersion = jdbc.sql("""
-                UPDATE pricing.prices
-                SET valid_until = :at
-                WHERE tenant_id = :tenantId AND brand_id = :brandId
-                  AND price_book_id = :priceBookId AND priceable_type = :type
-                  AND priceable_id = :priceableId
-                  AND valid_until IS NULL AND valid_from < :at
-                RETURNING version
-                """)
+        JdbcClient.StatementSpec closeSpec = jdbc.sql("""
+                        UPDATE pricing.prices
+                        SET valid_until = :at
+                        WHERE tenant_id = :tenantId AND brand_id = :brandId
+                          AND price_book_id = :priceBookId AND priceable_type = :type
+                          AND priceable_id = :priceableId
+                          AND valid_until IS NULL AND valid_from < :at""" + versionGuard + """
+
+                        RETURNING version""")
                 .param("tenantId", tenantId)
                 .param("brandId", brandId)
                 .param("priceBookId", priceBookId)
                 .param("type", priceableType)
                 .param("priceableId", priceableId)
-                .param("at", at)
-                .query(Integer.class)
-                .optional();
+                .param("at", at);
+        if (expectedVersion != null) {
+            closeSpec = closeSpec.param("expectedVersion", expectedVersion);
+        }
+        Optional<Integer> closedVersion = closeSpec.query(Integer.class).optional();
 
+        if (closedVersion.isPresent()) {
+            insertPrice(
+                    tenantId,
+                    brandId,
+                    priceBookId,
+                    priceableType,
+                    priceableId,
+                    amountMinor,
+                    at,
+                    closedVersion.get() + 1);
+            return true;
+        }
+
+        if (expectedVersion != null && expectedVersion != 0) {
+            // A version was expected and neither atomic write above matched
+            // it: the row either moved on to a different version or is gone
+            // — either way, stale. Never fall through to the insert below,
+            // which would otherwise silently start a brand-new lineage over
+            // whatever is actually open.
+            return false;
+        }
+
+        // No row was expected to be open (expectedVersion null, or 0 for "not
+        // priced yet") and neither UPDATE touched anything. ux_price_current
+        // is what makes this insert race-safe against a second writer landing
+        // here at the same instant: only one of two concurrent first-time
+        // inserts for the same priceable can hold that index. The loser's
+        // collision is reported as staleness when a version was actually
+        // being enforced; an unconditional caller keeps the original,
+        // unguarded behaviour of letting the violation propagate.
+        try {
+            insertPrice(tenantId, brandId, priceBookId, priceableType, priceableId, amountMinor, at, 1);
+            return true;
+        } catch (DataIntegrityViolationException collision) {
+            if (expectedVersion == null) {
+                throw collision;
+            }
+            return false;
+        }
+    }
+
+    private void insertPrice(
+            UUID tenantId,
+            UUID brandId,
+            UUID priceBookId,
+            String priceableType,
+            UUID priceableId,
+            long amountMinor,
+            OffsetDateTime at,
+            int version) {
         jdbc.sql("""
                 INSERT INTO pricing.prices (
                     id, tenant_id, brand_id, price_book_id, priceable_type, priceable_id,
@@ -728,7 +801,7 @@ public class JdbcPricingStore {
                 .param("type", priceableType)
                 .param("priceableId", priceableId)
                 .param("amount", amountMinor)
-                .param("version", closedVersion.orElse(0) + 1)
+                .param("version", version)
                 .param("at", at)
                 .update();
     }

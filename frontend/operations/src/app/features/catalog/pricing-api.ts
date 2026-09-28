@@ -93,16 +93,28 @@ export class PricingApi {
    * variant id. `categoryId` and `differsFromBase` are server-side filters;
    * change either and drop `state`'s cursor first (`resetOnFilterChange`),
    * the same rule every other cursor list in this app follows.
+   *
+   * `locale` picks which `catalog.translations` row `displayName`/
+   * `categoryName` resolve from server-side (`PriceAuthoringController.matrix`
+   * defaults to `uz` when omitted) — the caller passes
+   * `toCatalogLocale(this.i18n.locale())`, the same convention every other
+   * catalog screen's own locale-bearing calls follow, so a row's name matches
+   * the operator's own UI language instead of always falling back to `uz`.
    */
   matrix(
     scope: BrandScope,
     priceBookId: string,
     state: CursorState,
-    filters: { readonly categoryId?: string; readonly differsFromBase?: boolean } = {},
+    filters: {
+      readonly categoryId?: string;
+      readonly differsFromBase?: boolean;
+      readonly locale?: string;
+    } = {},
   ): Observable<Page<PriceBookMatrixRow>> {
     return this.api.page<PriceBookMatrixRow>(pricingPaths.matrix(scope, priceBookId), state, {
       ...(filters.categoryId ? { categoryId: filters.categoryId } : {}),
       ...(filters.differsFromBase ? { differsFromBase: true } : {}),
+      ...(filters.locale ? { locale: filters.locale } : {}),
     });
   }
 

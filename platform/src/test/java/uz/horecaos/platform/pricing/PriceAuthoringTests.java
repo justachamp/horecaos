@@ -11,6 +11,12 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import javax.sql.DataSource;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterAll;
@@ -47,6 +53,8 @@ import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPromoCodeStor
 import uz.horecaos.platform.support.FakeConfigurationResolver;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcSalesChannelStore;
+import uz.horecaos.platform.web.api.ApiException;
+import uz.horecaos.platform.web.api.ErrorCode;
 
 /**
  * Price authoring, end to end (ADR 0018).
@@ -327,6 +335,93 @@ class PriceAuthoringTests {
                 .isInstanceOf(OptimisticLockingFailureException.class);
         assertThat(authoring.require(TENANT, BRAND, drafted.id()).status())
                 .isEqualTo(PriceAuthoringService.Status.DRAFT);
+    }
+
+    @Test
+    @DisplayName("two operators inline-editing the same matrix row at once: the loser is refused, not silently lost")
+    void concurrentInlineEditsSettleOnce() throws Exception {
+        UUID book = liveBrandBook(50_000L);
+        long readVersion = pricingStore
+                .openPriceVersion(TENANT, BRAND, book, "VARIANT", burgerVariant)
+                .orElseThrow();
+
+        // Both operators' matrix rows show the same version -- exactly what two
+        // browser tabs, or a double-clicked Save, produce. Neither operator call
+        // holds any lock of its own; that absence is the bug this proves. A
+        // third transaction holds the row's lock until both operator calls are
+        // queued behind it, so each operator's own version check -- which needs
+        // no lock and runs immediately -- is guaranteed to see the same version,
+        // before either one's write has landed. That is the interleaving two
+        // real concurrent requests would hit under load, made deterministic.
+        CyclicBarrier gate = new CyclicBarrier(3);
+        Map<String, Throwable> failures = new ConcurrentHashMap<>();
+        TransactionTemplate raceTx = new TransactionTemplate(new DataSourceTransactionManager(db.dataSource()));
+
+        try (ExecutorService threads = Executors.newFixedThreadPool(3)) {
+            Future<?> locker = threads.submit(() -> raceTx.executeWithoutResult(status -> {
+                jdbc.sql("""
+                                SELECT 1 FROM pricing.prices
+                                WHERE price_book_id = :book AND priceable_id = :variant
+                                  AND valid_until IS NULL
+                                FOR UPDATE
+                                """)
+                        .param("book", book)
+                        .param("variant", burgerVariant)
+                        .query(Integer.class)
+                        .list();
+                trip(gate);
+                // Long enough that both operators' writes are queued on the
+                // lock before it releases.
+                sleepFor(500);
+            }));
+            Future<?> operatorA = threads.submit(() -> {
+                trip(gate);
+                try {
+                    authoring.setPrice(TENANT, BRAND, book, PriceableType.VARIANT, burgerVariant, 60_000L, readVersion);
+                } catch (RuntimeException failed) {
+                    failures.put("A", failed);
+                }
+            });
+            Future<?> operatorB = threads.submit(() -> {
+                trip(gate);
+                sleepFor(100); // lets A queue on the row lock first, deterministically
+                try {
+                    authoring.setPrice(TENANT, BRAND, book, PriceableType.VARIANT, burgerVariant, 70_000L, readVersion);
+                } catch (RuntimeException failed) {
+                    failures.put("B", failed);
+                }
+            });
+            locker.get(60, TimeUnit.SECONDS);
+            operatorA.get(60, TimeUnit.SECONDS);
+            operatorB.get(60, TimeUnit.SECONDS);
+        }
+
+        assertThat(failures)
+                .as("exactly one of the two racing edits must be refused as stale -- the docstring's own "
+                        + "promise that 'one row's edit cannot silently overwrite another operator's edit to "
+                        + "the same row.' Both landing with no error at all is the silent lost update on a "
+                        + "money field this test exists to catch.")
+                .hasSize(1);
+        assertThat(failures.values())
+                .allSatisfy(failure -> assertThat(failure)
+                        .isInstanceOf(ApiException.class)
+                        .extracting(ex -> ((ApiException) ex).errorCode())
+                        .isEqualTo(ErrorCode.STALE_VERSION));
+
+        // Whichever write actually landed is the only one that happened: the
+        // version moved by exactly one edit, never two silently stacked on
+        // top of each other.
+        assertThat(pricingStore.openPriceVersion(TENANT, BRAND, book, "VARIANT", burgerVariant))
+                .contains((int) readVersion + 1);
+        long survivingAmount = jdbc.sql("""
+                        SELECT amount_minor FROM pricing.prices
+                        WHERE price_book_id = :book AND priceable_id = :variant AND valid_until IS NULL
+                        """)
+                .param("book", book)
+                .param("variant", burgerVariant)
+                .query(Long.class)
+                .single();
+        assertThat(survivingAmount).isIn(60_000L, 70_000L);
     }
 
     @Test
@@ -715,6 +810,23 @@ class PriceAuthoringTests {
     }
 
     // ------------------------------------------------------------------ fixtures
+
+    private static void trip(CyclicBarrier gate) {
+        try {
+            gate.await(30, TimeUnit.SECONDS);
+        } catch (Exception interrupted) {
+            throw new IllegalStateException("the gate never opened", interrupted);
+        }
+    }
+
+    private static void sleepFor(long millis) {
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("interrupted while forcing the race window", interrupted);
+        }
+    }
 
     /** A brand-wide active book with one priced burger, which most tests start from. */
     private UUID liveBrandBook(long burgerAmountMinor) {

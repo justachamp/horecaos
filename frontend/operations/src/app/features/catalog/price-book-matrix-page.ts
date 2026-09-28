@@ -10,7 +10,7 @@ import { I18n } from '../../core/i18n/i18n';
 import { TPipe } from '../../core/i18n/t.pipe';
 import { describeApiError } from '../orders/order-errors';
 import { CatalogApi } from './catalog-api';
-import { CategorySummary, PriceBookMatrixRow, PriceBookSummary } from './catalog-domain';
+import { CategorySummary, PriceBookMatrixRow, PriceBookSummary, toCatalogLocale } from './catalog-domain';
 import { PricingApi } from './pricing-api';
 
 /** The matrix loads and "load more"s this many rows a call, matching `variantsAtLocation`'s own default page. */
@@ -244,11 +244,12 @@ export class PriceBookMatrixPage implements OnInit {
     });
   }
 
-  private filters(): { categoryId?: string; differsFromBase?: boolean } {
+  private filters(): { categoryId?: string; differsFromBase?: boolean; locale?: string } {
     const categoryId = this.categoryFilter();
     return {
       ...(categoryId ? { categoryId } : {}),
       ...(this.differsFromBaseOnly() ? { differsFromBase: true } : {}),
+      locale: toCatalogLocale(this.i18n.locale()),
     };
   }
 
