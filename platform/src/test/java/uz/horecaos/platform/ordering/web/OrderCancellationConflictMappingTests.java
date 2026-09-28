@@ -98,7 +98,9 @@ class OrderCancellationConflictMappingTests {
                 mock(ShipmentCancellationPort.class),
                 mock(MyWorkQueryService.class),
                 mock(StaffDisplayNames.class),
-                mock(ItemDisplayLookup.class));
+                mock(ItemDisplayLookup.class),
+                mock(uz.horecaos.platform.ordering.application.BranchResolutionQueryService.class),
+                mock(uz.horecaos.platform.ordering.application.BranchOverrideReasonQueryService.class));
 
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.addHeader("If-Match", "\"3\"");

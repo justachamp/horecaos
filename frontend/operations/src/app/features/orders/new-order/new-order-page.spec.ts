@@ -11,6 +11,8 @@ import { Toasts } from '../../../shared/ui/toast';
 import { CustomersApi, RevealedCustomerAddress } from '../../customers/customers-api';
 import { ChannelView, SalesChannelsApi } from '../../settings/sales-channels/sales-channels-api';
 import {
+  BranchCandidate,
+  BranchOverrideReason,
   CustomerLookupCandidate,
   NewOrderApi,
   PlaceOrderResult,
@@ -92,6 +94,32 @@ function candidate(overrides: Partial<CustomerLookupCandidate> = {}): CustomerLo
   };
 }
 
+/** Row 1.3's own fixture: one candidate branch `resolveBranches` might answer with. */
+function branchCandidate(overrides: Partial<BranchCandidate> = {}): BranchCandidate {
+  return {
+    locationId: 'l1',
+    displayName: 'Chilanzar',
+    available: true,
+    reason: null,
+    preparationMinutes: 20,
+    activeOrderCount: 2,
+    zoneId: null,
+    zonePriority: null,
+    zoneAreaSquareMeters: null,
+    ...overrides,
+  };
+}
+
+function overrideReason(overrides: Partial<BranchOverrideReason> = {}): BranchOverrideReason {
+  return {
+    code: 'PROPOSED_BRANCH_TOO_BUSY',
+    displayOrder: 1,
+    requiresNote: false,
+    labels: { en: 'Proposed branch is too busy' },
+    ...overrides,
+  };
+}
+
 function address(overrides: Partial<RevealedCustomerAddress> = {}): RevealedCustomerAddress {
   return {
     id: 'addr-1',
@@ -120,6 +148,8 @@ describe('NewOrderPage', () => {
     searchItems: ReturnType<typeof vi.fn>;
     placeOrder: ReturnType<typeof vi.fn>;
     deliveryFeeQuote: ReturnType<typeof vi.fn>;
+    resolveBranches: ReturnType<typeof vi.fn>;
+    branchOverrideReasons: ReturnType<typeof vi.fn>;
     aggregatorEntry: ReturnType<typeof vi.fn>;
     recordCallProvenance: ReturnType<typeof vi.fn>;
   };
@@ -161,6 +191,16 @@ describe('NewOrderPage', () => {
       deliveryFeeQuote: vi
         .fn()
         .mockResolvedValue({ available: true, feeMinor: 15_000, reasonCode: null }),
+      // Row 1.3: defaults to a single candidate naming the operator's own
+      // branch as both the candidate and the proposal, so a test that never
+      // mentions the resolver keeps placing at SCOPE exactly as before this
+      // row existed — see resolveBranches' own describe block for the tests
+      // that override this.
+      resolveBranches: vi.fn().mockResolvedValue({
+        candidates: [branchCandidate({ locationId: 'l1', displayName: 'Chilanzar' })],
+        proposedLocationId: 'l1',
+      }),
+      branchOverrideReasons: vi.fn().mockResolvedValue([overrideReason()]),
       aggregatorEntry: vi.fn(),
       recordCallProvenance: vi.fn().mockResolvedValue(undefined),
       ...overrides,
@@ -542,25 +582,225 @@ describe('NewOrderPage', () => {
     );
   });
 
-  it('renders the branch with a «по зоне» caption on a delivery order, and the plain name on a pickup order', async () => {
-    await render({}, { revealAddresses: vi.fn().mockResolvedValue([address()]) });
-    fixture.componentInstance['selectCandidate'](candidate());
+  // ------------------------------------------------------- §5.4/§5.6 branch resolution (row 1.3)
+
+  it('resolves branches for PICKUP immediately, with no point', async () => {
+    await render();
+
+    expect(newOrderApi.resolveBranches).toHaveBeenCalledWith(SCOPE, 'PICKUP', null, 'call-centre');
+  });
+
+  it('renders every candidate with its load, marks the proposed one, and defaults the selection to it', async () => {
+    await render({
+      resolveBranches: vi.fn().mockResolvedValue({
+        candidates: [
+          branchCandidate({ locationId: 'l1', displayName: 'Chilanzar', activeOrderCount: 4 }),
+          branchCandidate({ locationId: 'l2', displayName: 'Yunusabad', activeOrderCount: 1 }),
+        ],
+        proposedLocationId: 'l2',
+      }),
+    });
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    // The component's own signal state, not the native <select>'s `.value`
+    // property: a native select's value can read back its first <option>
+    // until a later change-detection pass re-applies it against the options
+    // an @for block just inserted — a DOM-timing quirk orthogonal to what
+    // this test exists to prove, which is the resolver's own defaulting.
+    expect(fixture.componentInstance['selectedLocationId']()).toBe('l2');
+    expect(fixture.componentInstance['proposedLocationId']()).toBe('l2');
+
+    const host: HTMLElement = fixture.nativeElement;
+    const select = host.querySelector<HTMLSelectElement>('[data-testid="new-order-branch-select"]');
+    expect(select?.textContent).toContain('Yunusabad');
+    expect(select?.textContent).toContain('Chilanzar');
+    expect(select?.textContent).toContain('(proposed)');
+    expect(fixture.componentInstance['isBranchOverride']()).toBe(false);
+  });
+
+  it('a closed candidate is still listed, not hidden — its own reason is shown instead', async () => {
+    await render({
+      resolveBranches: vi.fn().mockResolvedValue({
+        candidates: [
+          branchCandidate({
+            locationId: 'l1',
+            displayName: 'Chilanzar',
+            available: false,
+            reason: 'MANUALLY_CLOSED',
+          }),
+        ],
+        proposedLocationId: 'l1',
+      }),
+    });
+    await flushMicrotasks();
     fixture.detectChanges();
 
     const host: HTMLElement = fixture.nativeElement;
-    expect(host.querySelector('[data-testid="new-order-branch-row"]')?.textContent).toContain(
-      'Chilanzar',
+    expect(
+      host.querySelector('[data-testid="new-order-branch-select"]')?.textContent,
+    ).toContain('closed');
+  });
+
+  it('switching to DELIVERY re-resolves once the address carries a coordinate', async () => {
+    const resolveBranches = vi.fn().mockResolvedValue({
+      candidates: [branchCandidate({ locationId: 'l1' })],
+      proposedLocationId: 'l1',
+    });
+    await render(
+      { resolveBranches },
+      { revealAddresses: vi.fn().mockResolvedValue([address({ latitude: 41.31, longitude: 69.28 })]) },
     );
-    expect(host.querySelector('[data-testid="new-order-branch-row"]')?.textContent).not.toContain(
-      'zone',
-    );
+    resolveBranches.mockClear();
+    fixture.componentInstance['selectCandidate'](candidate());
 
     fixture.componentInstance['setFulfillmentMode']('DELIVERY');
     await flushMicrotasks();
     fixture.detectChanges();
 
+    expect(resolveBranches).toHaveBeenCalledWith(
+      SCOPE,
+      'DELIVERY',
+      { lat: 41.31, lon: 69.28 },
+      'call-centre',
+    );
+  });
+
+  it('a DELIVERY address with no coordinate resolves nothing and keeps the operator’s own branch as the fallback', async () => {
+    const resolveBranches = vi.fn();
+    await render(
+      { resolveBranches },
+      { revealAddresses: vi.fn().mockResolvedValue([address()]) },
+    );
+    resolveBranches.mockClear();
+    fixture.componentInstance['selectCandidate'](candidate());
+    fixture.componentInstance['setFulfillmentMode']('DELIVERY');
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(resolveBranches).not.toHaveBeenCalled();
+    expect(fixture.componentInstance['branchCandidates']()).toEqual([]);
+  });
+
+  it('picking a branch other than the proposed one requires an override reason before it can submit', async () => {
+    await render({
+      resolveBranches: vi.fn().mockResolvedValue({
+        candidates: [
+          branchCandidate({ locationId: 'l1', displayName: 'Chilanzar' }),
+          branchCandidate({ locationId: 'l2', displayName: 'Yunusabad' }),
+        ],
+        proposedLocationId: 'l1',
+      }),
+    });
+    await flushMicrotasks();
+    fixture.componentInstance['selectCandidate'](candidate());
+    fixture.componentInstance['onItemSelected']({ id: 'v-1', label: 'Cheeseburger' });
+    fixture.detectChanges();
+    expect(fixture.componentInstance['canSubmit']()).toBe(true);
+
+    fixture.componentInstance['selectBranch']('l2');
+    fixture.detectChanges();
+    expect(fixture.componentInstance['isBranchOverride']()).toBe(true);
+    expect(fixture.componentInstance['canSubmit']()).toBe(false);
+
+    fixture.componentInstance['setOverrideReasonCode']('PROPOSED_BRANCH_TOO_BUSY');
+    fixture.detectChanges();
+    expect(fixture.componentInstance['canSubmit']()).toBe(true);
+  });
+
+  it('an OTHER override reason also needs a note before it can submit', async () => {
+    await render({
+      resolveBranches: vi.fn().mockResolvedValue({
+        candidates: [
+          branchCandidate({ locationId: 'l1', displayName: 'Chilanzar' }),
+          branchCandidate({ locationId: 'l2', displayName: 'Yunusabad' }),
+        ],
+        proposedLocationId: 'l1',
+      }),
+      branchOverrideReasons: vi
+        .fn()
+        .mockResolvedValue([overrideReason({ code: 'OTHER', requiresNote: true })]),
+    });
+    await flushMicrotasks();
+    fixture.componentInstance['selectCandidate'](candidate());
+    fixture.componentInstance['onItemSelected']({ id: 'v-1', label: 'Cheeseburger' });
+    fixture.componentInstance['selectBranch']('l2');
+    fixture.componentInstance['setOverrideReasonCode']('OTHER');
+    fixture.detectChanges();
+    expect(fixture.componentInstance['canSubmit']()).toBe(false);
+
+    fixture.componentInstance['overrideNote'].set('Customer asked for Yunusabad specifically');
+    fixture.detectChanges();
+    expect(fixture.componentInstance['canSubmit']()).toBe(true);
+  });
+
+  it('submitting an override places at the chosen branch and carries the proposal and reason', async () => {
+    const placeOrder = vi.fn().mockResolvedValue({
+      orderId: 'order-1',
+      publicOrderNumber: '#0001',
+      status: 'CONFIRMED',
+      version: 1,
+      outcome: 'PLACED',
+      warnings: [],
+    });
+    await render({
+      placeOrder,
+      resolveBranches: vi.fn().mockResolvedValue({
+        candidates: [
+          branchCandidate({ locationId: 'l1', displayName: 'Chilanzar' }),
+          branchCandidate({ locationId: 'l2', displayName: 'Yunusabad' }),
+        ],
+        proposedLocationId: 'l1',
+      }),
+    });
+    vi.spyOn(router, 'navigate').mockResolvedValue(true);
+    await flushMicrotasks();
+    fixture.componentInstance['selectCandidate'](candidate());
+    fixture.componentInstance['onItemSelected']({ id: 'v-1', label: 'Cheeseburger' });
+    fixture.componentInstance['selectBranch']('l2');
+    fixture.componentInstance['setOverrideReasonCode']('PROPOSED_BRANCH_TOO_BUSY');
+    fixture.detectChanges();
+
+    await fixture.componentInstance['submit']();
+
+    expect(placeOrder).toHaveBeenCalledTimes(1);
+    const [scope, request] = placeOrder.mock.calls[0];
+    expect(scope).toEqual({ tenantId: 't1', brandId: 'b1', locationId: 'l2' });
+    expect(request.proposedLocationId).toBe('l1');
+    expect(request.overrideReasonCode).toBe('PROPOSED_BRANCH_TOO_BUSY');
+  });
+
+  it('submitting with no override sends no reason and places at the resolved (proposed) branch', async () => {
+    const placeOrder = vi.fn().mockResolvedValue({
+      orderId: 'order-1',
+      publicOrderNumber: '#0001',
+      status: 'CONFIRMED',
+      version: 1,
+      outcome: 'PLACED',
+      warnings: [],
+    });
+    await render({ placeOrder });
+    vi.spyOn(router, 'navigate').mockResolvedValue(true);
+    fixture.componentInstance['selectCandidate'](candidate());
+    fixture.componentInstance['onItemSelected']({ id: 'v-1', label: 'Cheeseburger' });
+    fixture.detectChanges();
+
+    await fixture.componentInstance['submit']();
+
+    const [, request] = placeOrder.mock.calls[0];
+    expect(request.overrideReasonCode).toBeNull();
+    expect(request.proposedLocationId).toBe('l1');
+  });
+
+  it('a resolver failure keeps the screen usable at the operator’s own branch', async () => {
+    await render({ resolveBranches: vi.fn().mockRejectedValue(new Error('network')) });
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance['branchCandidates']()).toEqual([]);
+    expect(fixture.componentInstance['selectedLocationId']()).toBe('l1');
+    const host: HTMLElement = fixture.nativeElement;
     expect(host.querySelector('[data-testid="new-order-branch-row"]')?.textContent).toContain(
-      'by zone',
+      'Chilanzar',
     );
   });
 

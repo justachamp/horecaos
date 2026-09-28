@@ -190,6 +190,7 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
   'marketplace.handover.bypassed': { en: 'Marketplace handover bypassed', ru: 'Маркетплейс передача пропущено', 'uz-Latn': 'Marketpleys topshirish chetlab oʻtildi' },
   'media.asset.ingested': { en: 'Media asset ingested', ru: 'Медиа файл загружено', 'uz-Latn': 'Media fayl yuklandi' },
   'notifications.template.provider_review_recorded': { en: 'Notifications template provider review recorded', ru: 'Уведомления шаблон провайдер проверка зафиксировано', 'uz-Latn': 'Bildirishnomalar shablon provayder koʻrib chiqish qayd etildi' },
+  'ordering.order.branch_overridden': { en: 'Ordering order branch overridden', ru: 'Заказы заказ филиал переопределено', 'uz-Latn': 'Buyurtmalar buyurtma filial oʻzgartirildi' },
   'ordering.order.call_provenance_recorded': { en: 'Ordering order call provenance recorded', ru: 'Заказы заказ звонок источник зафиксировано', 'uz-Latn': 'Buyurtmalar buyurtma qoʻngʻiroq manba qayd etildi' },
   'partner.invoice.disputed': { en: 'Partner invoice disputed', ru: 'Партнёр счёт оспорено', 'uz-Latn': 'Hamkor hisob-faktura eʻtiroz bildirildi' },
   'partner.invoice.imported': { en: 'Partner invoice imported', ru: 'Партнёр счёт импортировано', 'uz-Latn': 'Hamkor hisob-faktura import qilindi' },
