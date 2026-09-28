@@ -184,6 +184,31 @@ class CatalogQueryServiceTests {
     }
 
     @Test
+    @DisplayName("a category's translations carry every locale it has a row in, not only the default")
+    void categoriesCarryEveryLocaleTranslation() {
+        UUID catalogId = authoring.createCatalog(TENANT, BRAND, "MAIN", "Asosiy menyu", LOCALE);
+        UUID hot = authoring.createCategory(TENANT, BRAND, catalogId, null, "HOT", "Issiq", LOCALE, 1);
+        authoring.translate(TENANT, BRAND, EntityType.CATEGORY, hot, "ru", "Горячее", "Горячие блюда");
+
+        List<CatalogQueryService.CategorySummary> categories = query.categories(TENANT, BRAND, catalogId);
+
+        assertThat(categories)
+                .filteredOn(c -> c.categoryId().equals(hot))
+                .singleElement()
+                .satisfies(c -> {
+                    assertThat(c.translations()).containsOnlyKeys("uz", "ru");
+                    assertThat(c.translations())
+                            .extractingByKey("uz")
+                            .extracting(CatalogQueryService.LocalizedFields::name)
+                            .isEqualTo("Issiq");
+                    assertThat(c.translations()).extractingByKey("ru").satisfies(fields -> {
+                        assertThat(fields.name()).isEqualTo("Горячее");
+                        assertThat(fields.description()).isEqualTo("Горячие блюда");
+                    });
+                });
+    }
+
+    @Test
     @DisplayName("another tenant's categories never appear, even naming the real catalog id")
     void categoriesAreTenantIsolated() {
         UUID catalogId = authoring.createCatalog(TENANT, BRAND, "MAIN", "Asosiy menyu", LOCALE);

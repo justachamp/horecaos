@@ -1082,7 +1082,8 @@ export const messagesEn = {
   'settings.salesChannels.field.brandColorPrimary': 'Primary colour',
   'settings.salesChannels.field.brandColorSecondary': 'Secondary colour',
   'settings.salesChannels.field.color.clear': 'Clear',
-  'settings.salesChannels.field.color.contrastWarning': 'Low contrast ({ratio}:1) against {surface} — WCAG AA needs 4.5:1',
+  'settings.salesChannels.field.color.contrastWarning':
+    'Low contrast ({ratio}:1) against {surface} — WCAG AA needs 4.5:1',
   'settings.salesChannels.field.color.surface.canvas': 'the page background',
   'settings.salesChannels.field.color.surface.surface1': 'a card surface',
   'settings.salesChannels.field.color.surface.slaLateTint': 'a late-order row',
@@ -2384,6 +2385,10 @@ export const messagesEn = {
   'catalog.categories.archiveConfirm.title': 'Archive this category?',
   'catalog.categories.archiveConfirm.body':
     '“{name}” will no longer show in the category tree. Products already placed in it stay exactly where they are.',
+  'catalog.categories.form.saving': 'Saving…',
+  // Row 10.12: the content editor's per-locale grid.
+  'catalog.categories.content.title': 'Name and description, by language',
+  'catalog.categories.content.defaultMarker': 'Default',
 
   // Gap map row 4.4c: per-location QUANTITY stock page (batch 11)
   'catalog.stock.title': 'Stock',
@@ -3496,7 +3501,8 @@ export const messagesEn = {
   'delivery.policy.gpsAcceptRadiusKm': 'Accept radius (km, from the pickup point)',
   'delivery.policy.gpsStatusChangeRadiusMeters':
     'Status-change radius (m, from the customer point)',
-  'delivery.policy.gpsSummary': 'On — accept within {acceptKm} km, status change within {statusChangeM} m',
+  'delivery.policy.gpsSummary':
+    'On — accept within {acceptKm} km, status change within {statusChangeM} m',
   'delivery.policy.billingMode': 'Courier billing (personal balance)',
   'delivery.policy.billingMode.refused': 'Refused by ADR 0042',
   'delivery.policy.billingMode.reason':
@@ -5755,7 +5761,8 @@ export const messagesEn = {
   'orders.newOrder.aggregator.hint':
     'Recorded exactly as the aggregator stated it — nothing here is re-priced by HorecaOS',
   // Row 1.3g (wave 11 w5-fulfillment-destination): DELIVERY reuses the customer pane's own resolved address.
-  'orders.newOrder.aggregator.pickup': 'Pickup — the aggregator’s own courier or the customer collects it',
+  'orders.newOrder.aggregator.pickup':
+    'Pickup — the aggregator’s own courier or the customer collects it',
   'orders.newOrder.aggregator.deliveryTo': 'Delivers to: {customer}, {address}',
   'orders.newOrder.aggregator.deliveryMissing':
     'Uncheck “Aggregator order”, resolve the customer and pick a delivery address, then check it again',

@@ -507,20 +507,19 @@ describe('ProductsPage', () => {
   });
 
   it('adds a product to a category, defaulting the sort order to that category’s current product count', async () => {
-    const listCategories = vi
-      .fn()
-      .mockReturnValue(
-        of([
-          {
-            categoryId: 'cat-1',
-            code: 'HOT',
-            name: 'Горячее',
-            sortOrder: 0,
-            status: 'ACTIVE',
-            productCount: 4,
-          },
-        ] satisfies CategorySummary[]),
-      );
+    const listCategories = vi.fn().mockReturnValue(
+      of([
+        {
+          categoryId: 'cat-1',
+          code: 'HOT',
+          name: 'Горячее',
+          sortOrder: 0,
+          status: 'ACTIVE',
+          productCount: 4,
+          translations: {},
+        },
+      ] satisfies CategorySummary[]),
+    );
     const placeInCategory = vi.fn().mockReturnValue(of(undefined));
     configure({
       listCatalogs: () => of(FAKE_CATALOGS),

@@ -1058,7 +1058,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.salesChannels.field.brandColorPrimary': 'Asosiy rang',
   'settings.salesChannels.field.brandColorSecondary': 'Qoʻshimcha rang',
   'settings.salesChannels.field.color.clear': 'Tozalash',
-  'settings.salesChannels.field.color.contrastWarning': 'Kontrast past ({ratio}:1) — {surface} fonida WCAG AA boʻyicha 4.5:1 kerak',
+  'settings.salesChannels.field.color.contrastWarning':
+    'Kontrast past ({ratio}:1) — {surface} fonida WCAG AA boʻyicha 4.5:1 kerak',
   'settings.salesChannels.field.color.surface.canvas': 'sahifa foni',
   'settings.salesChannels.field.color.surface.surface1': 'karta sirti',
   'settings.salesChannels.field.color.surface.slaLateTint': 'kechikkan buyurtma qatori',
@@ -2371,6 +2372,9 @@ export const messagesUzLatn: MessageCatalogue = {
   'catalog.categories.archiveConfirm.title': 'Kategoriyani arxivlaysizmi?',
   'catalog.categories.archiveConfirm.body':
     '«{name}» endi kategoriyalar daraxtida koʻrsatilmaydi. Unga joylashtirilgan mahsulotlar oʻz oʻrnida qoladi.',
+  'catalog.categories.form.saving': 'Saqlanmoqda…',
+  'catalog.categories.content.title': 'Til boʻyicha nomi va tavsifi',
+  'catalog.categories.content.defaultMarker': 'Birlamchi',
 
   // Bo'shliq xaritasi qatori 4.4c: filial bo'yicha QUANTITY qoldiqlar sahifasi (11-partiya)
   'catalog.stock.title': 'Qoldiqlar',
@@ -4705,7 +4709,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'marketing.automations.configLabel.BIRTHDAY': 'Oyna, tugʻilgan kundan oldin/keyin kunlar',
   'marketing.automations.configLabel.INACTIVITY': 'Oxirgi buyurtmadan beri kunlar',
   'marketing.automations.configLabel.CART_ABANDONMENT': 'Kechikish, soatlar',
-  'marketing.automations.configLabel.CASHBACK_CHANGE': 'Balansning eng kam oʻzgarishi, mayda birliklarda',
+  'marketing.automations.configLabel.CASHBACK_CHANGE':
+    'Balansning eng kam oʻzgarishi, mayda birliklarda',
   'marketing.automations.form.title': 'Avtomatlashtirish qoidasini yaratish',
   'marketing.automations.form.name': 'Nomi',
   'marketing.automations.form.trigger': 'Trigger',

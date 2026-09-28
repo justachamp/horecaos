@@ -83,6 +83,8 @@ export interface CategorySummary {
   readonly sortOrder: number;
   readonly status: CatalogStatus;
   readonly productCount: number;
+  /** Row 10.12: every locale this category has a row in, not only {@link name}/{@link description}'s resolved default. */
+  readonly translations: Readonly<Record<string, LocalizedFields>>;
 }
 
 /** `ProductSummaryResponse` — one row of 4.1 Products. */

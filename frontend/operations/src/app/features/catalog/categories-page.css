@@ -131,6 +131,32 @@
   cursor: default;
 }
 
+.categories__content-title {
+  margin: 16px 0 8px;
+}
+
+/* Row 10.12: one row of the content editor's per-locale grid. */
+.categories__locale-row {
+  margin: 0 0 12px;
+  padding: 8px 12px 12px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  display: grid;
+  gap: 8px;
+}
+
+.categories__locale-row legend {
+  padding: 0 4px;
+  color: var(--q-ink-muted);
+}
+
+.categories__locale-default-marker {
+  margin-left: 6px;
+  font-size: 0.85em;
+  text-transform: uppercase;
+  color: var(--q-ink-muted);
+}
+
 .categories__detail-error {
   margin: 0 0 16px;
   padding: 8px 10px;

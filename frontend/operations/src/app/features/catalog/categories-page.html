@@ -73,26 +73,6 @@
             <dt class="q-caption">{{ 'catalog.categories.form.status' | t }}</dt>
             <dd>{{ statusLabel(category.status) }}</dd>
 
-            <dt class="q-caption">{{ 'catalog.categories.form.description' | t }}</dt>
-            <dd class="categories__field-row">
-              <textarea
-                class="categories__textarea"
-                rows="3"
-                [value]="descriptionDraft()"
-                (input)="setDescriptionDraft($any($event.target).value)"
-                data-testid="category-description-input"
-              ></textarea>
-              <button
-                type="button"
-                class="categories__save"
-                (click)="saveDescription()"
-                [disabled]="savingDetail()"
-                data-testid="category-description-save"
-              >
-                {{ 'catalog.categories.form.save' | t }}
-              </button>
-            </dd>
-
             <dt class="q-caption">{{ 'catalog.categories.form.image' | t }}</dt>
             <dd>
               <label class="categories__photo-upload">
@@ -111,6 +91,60 @@
               </label>
             </dd>
           </dl>
+
+          <h3 class="q-body-sm categories__content-title">
+            {{ 'catalog.categories.content.title' | t }}
+          </h3>
+          @for (row of localeContentDraft(); track row.locale) {
+            <fieldset class="categories__locale-row">
+              <legend class="q-caption">
+                {{ localeLabel(row.locale) }}
+                @if (isDefaultLocale(row.locale)) {
+                  <span class="categories__locale-default-marker">{{
+                    'catalog.categories.content.defaultMarker' | t
+                  }}</span>
+                }
+              </legend>
+              <input
+                type="text"
+                class="categories__input"
+                [attr.aria-label]="'catalog.categories.form.name' | t"
+                [placeholder]="'catalog.categories.form.name' | t"
+                [value]="row.name"
+                (input)="setLocaleName(row.locale, $any($event.target).value)"
+                [disabled]="savingContent()"
+                [attr.data-testid]="'category-locale-name-' + row.locale"
+              />
+              <textarea
+                class="categories__textarea"
+                rows="2"
+                [attr.aria-label]="'catalog.categories.form.description' | t"
+                [placeholder]="'catalog.categories.form.description' | t"
+                [value]="row.description"
+                (input)="setLocaleDescription(row.locale, $any($event.target).value)"
+                [disabled]="savingContent()"
+                [attr.data-testid]="'category-locale-description-' + row.locale"
+              ></textarea>
+            </fieldset>
+          }
+          @if (contentError(); as message) {
+            <div class="categories__detail-error" role="alert" data-testid="category-content-error">
+              {{ message }}
+            </div>
+          }
+          <button
+            type="button"
+            class="categories__save"
+            (click)="saveContent()"
+            [disabled]="savingContent()"
+            data-testid="category-content-save"
+          >
+            {{
+              savingContent()
+                ? ('catalog.categories.form.saving' | t)
+                : ('catalog.categories.form.save' | t)
+            }}
+          </button>
 
           @if (detailError(); as message) {
             <div class="categories__detail-error" role="alert" data-testid="category-detail-error">
