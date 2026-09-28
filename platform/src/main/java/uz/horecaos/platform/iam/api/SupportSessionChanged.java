@@ -14,6 +14,14 @@ import java.util.UUID;
  * @param actorSubject who did it: the support person opening, or whoever
  *                     ended it — the person themselves, a platform
  *                     administrator, or the tenant's own administrator
+ * @param before empty for a fresh {@link Change#OPENED} session, which has
+ *               no prior state; the session's own prior field values for
+ *               {@link Change#ENDED}. Staff 9.3a: {@code audit}, not {@code
+ *               iam}, owns {@code ChangeDocuments}, so {@link
+ *               uz.horecaos.platform.audit.application.SupportSessionAuditListener}
+ *               is the one that builds the audit fact's before/after diff
+ *               from this and {@link #after}.
+ * @param after  the fields as they stand once this change has happened
  */
 public record SupportSessionChanged(
         UUID sessionId,
@@ -22,7 +30,8 @@ public record SupportSessionChanged(
         String principalSubject,
         String actorSubject,
         String reason,
-        Map<String, Object> details,
+        Map<String, Object> before,
+        Map<String, Object> after,
         Instant occurredAt) {
 
     public enum Change {

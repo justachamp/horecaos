@@ -5,6 +5,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -23,6 +24,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.secrets.SecretCategory;
@@ -273,9 +275,13 @@ public class TelegramWebhookRegistrationService {
                         .because("Telegram webhook registered")
                         // Reference NAME only, per ADR 0028 -- the token itself
                         // never reaches this class beyond the one door.write()
-                        // and setWebhook() calls above.
-                        .changed(
-                                Map.of("webhookSecretReference", webhookReference.toString(), "webhookUrl", webhookUrl))
+                        // and setWebhook() calls above. "webhookSecretReference"
+                        // genuinely moves from the row's old reference (verified
+                        // against above, may be null on a first registration) to
+                        // the new one; "webhookUrl" is set for the first time.
+                        .changed(ChangeDocuments.diff(
+                                webhookRegistrationDiffMap(installation.webhookSecretReference(), null),
+                                webhookRegistrationDiffMap(webhookReference.toString(), webhookUrl)))
                         .usingCapability(Capability.INTEGRATION_INSTALLATION_MANAGE.code())
                         .correlatedBy(installationId.toString())
                         .occurredAt(registeredAt.toInstant())
@@ -371,6 +377,15 @@ public class TelegramWebhookRegistrationService {
                         row.getString("base_url"),
                         row.getString("bot_username")))
                 .optional();
+    }
+
+    /** A {@code {webhookSecretReference, webhookUrl}} snapshot for {@code registerWebhook}'s diff. */
+    private static Map<String, Object> webhookRegistrationDiffMap(
+            @Nullable String webhookSecretReference, @Nullable String webhookUrl) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("webhookSecretReference", webhookSecretReference);
+        map.put("webhookUrl", webhookUrl);
+        return map;
     }
 
     private static String describe(TelegramCallResult result) {

@@ -1303,20 +1303,26 @@ class WalletTests {
         UUID subscriptionId = inTx(() -> subscriptions.start(PILOT, versionId, null, MAKER, "the pilot", "corr"));
         UUID deposit = inTx(() -> wallet.recordDeposit(PILOT, "MT103-DEP", MAKER, "the deposit", "corr"));
 
-        assertThat(changeDocument("commercial.wallet.deposit_recorded"))
+        // Staff 9.3a: a real per-field diff now -- "depositDueMinor" nests
+        // {before, after}, not two flat "From"/"To" keys.
+        assertThat(changeDocumentField("commercial.wallet.deposit_recorded", "subscriptionId", "after"))
                 .as("deposit_due_minor is not money, so the ledger cannot reconstruct the obligation this "
                         + "cleared: which subscription, and from what to what, or a mis-clear leaves "
                         + "nothing anywhere to find it by")
-                .containsEntry("subscriptionId", subscriptionId.toString())
-                .containsEntry("depositDueFromMinor", "500000")
-                .containsEntry("depositDueToMinor", "0");
+                .isEqualTo(subscriptionId.toString());
+        assertThat(changeDocumentField("commercial.wallet.deposit_recorded", "depositDueMinor", "before"))
+                .isEqualTo("500000");
+        assertThat(changeDocumentField("commercial.wallet.deposit_recorded", "depositDueMinor", "after"))
+                .isEqualTo("0");
 
         applyChange(() -> wallet.proposeDepositReversal(PILOT, deposit, MAKER, "the wrong tenant", "corr"));
 
-        assertThat(changeDocument("commercial.wallet.deposit_reversed"))
-                .containsEntry("subscriptionId", subscriptionId.toString())
-                .containsEntry("depositDueFromMinor", "0")
-                .containsEntry("depositDueToMinor", "500000");
+        assertThat(changeDocumentField("commercial.wallet.deposit_reversed", "subscriptionId", "after"))
+                .isEqualTo(subscriptionId.toString());
+        assertThat(changeDocumentField("commercial.wallet.deposit_reversed", "depositDueMinor", "before"))
+                .isEqualTo("0");
+        assertThat(changeDocumentField("commercial.wallet.deposit_reversed", "depositDueMinor", "after"))
+                .isEqualTo("500000");
     }
 
     @Test
@@ -1599,8 +1605,10 @@ class WalletTests {
                 .as("a tenant in arrears with no recorded cause is what a silent `return 0` produced; "
                         + "finance has to be able to tell 'the provider declined' from 'we never asked'")
                 .contains("commercial.wallet.card_charge_declined");
+        // Staff 9.3a: "reason" now nests {before, after} under a real
+        // diff -- ->'reason'->>'after', not the flat ->>'reason'.
         assertThat(jdbc.sql("""
-                        SELECT change_document->>'reason' FROM audit.audit_events
+                        SELECT change_document->'reason'->>'after' FROM audit.audit_events
                          WHERE action_code = 'commercial.wallet.card_charge_declined'
                         """).query(String.class).single()).isEqualTo("DECLINED");
         assertThat(meters.get("commercial.wallet.card_charge")
@@ -2040,12 +2048,17 @@ class WalletTests {
                         "commercial.wallet.card_charged",
                         "commercial.wallet.card_charge_after_supersede",
                         "commercial.wallet.card_charge_surplus_refused");
-        assertThat(changeDocument("commercial.wallet.card_charge_after_supersede"))
+        // Staff 9.3a: a real created() document now -- every field nests
+        // {before, after}, not a flat map.
+        assertThat(changeDocumentField("commercial.wallet.card_charge_after_supersede", "providerReference", "after"))
                 .as("naming X, the fresh attempt Y that replaced it, and the provider's own reference for "
                         + "X's charge -- never a card token -- so finance can find the old card's charge and "
                         + "refund it by hand")
-                .containsEntry("providerReference", "CLICK-STALE-SUCCESS")
-                .containsKeys("supersededAttemptId", "newAttemptId");
+                .isEqualTo("CLICK-STALE-SUCCESS");
+        assertThat(changeDocumentField("commercial.wallet.card_charge_after_supersede", "supersededAttemptId", "after"))
+                .isNotNull();
+        assertThat(changeDocumentField("commercial.wallet.card_charge_after_supersede", "newAttemptId", "after"))
+                .isNotNull();
     }
 
     @Test
@@ -2651,7 +2664,13 @@ class WalletTests {
         return jdbc.sql("""
                         SELECT action_code FROM audit.audit_events
                          WHERE action_code LIKE 'approval.%'
-                           AND change_document->>'subjectTenantId' = :tenantId
+                           -- Staff 9.3a: JdbcApprovalService now writes subjectTenantId
+                           -- through ChangeDocuments.diff/created, so every field --
+                           -- this one included -- is a {before, after} pair rather
+                           -- than a bare scalar; "after" is subjectTenantId's current
+                           -- value for every one of these facts, requested included
+                           -- (created's own "before" is always null).
+                           AND change_document->'subjectTenantId'->>'after' = :tenantId
                         """)
                 .param("tenantId", tenantId.toString())
                 .query(String.class)
@@ -2769,6 +2788,23 @@ class WalletTests {
                 .query(String.class)
                 .single();
         return JsonMapper.builder().build().readValue(json, new TypeReference<Map<String, String>>() {});
+    }
+
+    /**
+     * Staff 9.3a: one field's {@code before} or {@code after} value from the
+     * change document of the one audit fact with this action code -- every
+     * field ChangeDocuments.diff/change/created builds nests {before, after}
+     * under its own key, unlike the flat-string shape {@link
+     * #changeDocument} still reads for a site not yet converted.
+     */
+    private String changeDocumentField(String actionCode, String field, String beforeOrAfter) {
+        return jdbc.sql("SELECT change_document -> :field ->> :beforeOrAfter FROM audit.audit_events "
+                        + "WHERE action_code = :code")
+                .param("code", actionCode)
+                .param("field", field)
+                .param("beforeOrAfter", beforeOrAfter)
+                .query(String.class)
+                .single();
     }
 
     /** A DEPOSIT row written straight into the ledger, to reach a constraint the service cannot. */

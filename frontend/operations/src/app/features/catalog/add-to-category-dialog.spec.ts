@@ -13,6 +13,7 @@ const CATEGORIES: readonly CategorySummary[] = [
     sortOrder: 0,
     status: 'ACTIVE',
     productCount: 2,
+    translations: {},
   },
   {
     categoryId: 'cat-2',
@@ -21,6 +22,7 @@ const CATEGORIES: readonly CategorySummary[] = [
     sortOrder: 1,
     status: 'ACTIVE',
     productCount: 0,
+    translations: {},
   },
 ];
 

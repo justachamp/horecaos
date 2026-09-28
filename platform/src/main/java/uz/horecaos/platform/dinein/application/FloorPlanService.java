@@ -3,6 +3,7 @@ package uz.horecaos.platform.dinein.application;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -14,6 +15,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.dinein.domain.BearerToken;
 import uz.horecaos.platform.dinein.domain.QrMode;
 import uz.horecaos.platform.dinein.infrastructure.persistence.JdbcDineInStore;
@@ -98,11 +100,10 @@ public class FloorPlanService {
                 .target("dinein.location_settings", saved.locationId())
                 .targetVersion((long) saved.version())
                 .because(reason)
-                .changed(Map.of(
-                        "qrMode", saved.qrMode().name(),
-                        "turnaroundMinutes", saved.turnaroundMinutes(),
-                        "guestSessionTtlMinutes", saved.guestSessionTtlMinutes(),
-                        "serviceChargeRateBp", saved.serviceChargeRateBp()))
+                // Staff 9.3a: every field genuinely moves from the branch's
+                // prior settings (or the documented defaults, when none
+                // existed yet) to the saved ones.
+                .changed(ChangeDocuments.diff(branchSettingsDiffMap(current), branchSettingsDiffMap(saved)))
                 .usingCapability("dinein.floorplan.manage")
                 .correlatedBy(saved.locationId().toString())
                 .occurredAt(clock.instant())
@@ -239,7 +240,10 @@ public class FloorPlanService {
                 .target("dinein.table", tableId)
                 .targetVersion((long) expectedVersion + 1)
                 .because(reason)
-                .changed(Map.of("layoutX", layoutX, "layoutY", layoutY))
+                // Staff 9.3a: layoutX/layoutY genuinely move from the table's
+                // prior position (read above, before the write) to the new one.
+                .changed(ChangeDocuments.diff(
+                        tableLayoutDiffMap(table.layoutX(), table.layoutY()), tableLayoutDiffMap(layoutX, layoutY)))
                 .usingCapability("dinein.floorplan.manage")
                 .correlatedBy(tableId.toString())
                 .occurredAt(now)
@@ -309,13 +313,21 @@ public class FloorPlanService {
                 .target("dinein.table", tableId)
                 .targetVersion((long) expectedVersion + 1)
                 .because(reason)
-                .changed(Map.of(
-                        "tableCode",
-                        table.code(),
-                        "previouslyIssued",
-                        table.qrTokenHash() != null,
-                        "revokedGuestSessions",
-                        revoked))
+                // Staff 9.3a: "qrTokenHash" genuinely moves from the table's
+                // prior digest (null if none was ever issued) to the new
+                // one -- the digest, never the bearer token itself, per this
+                // method's own comment above. tableCode is unchanged
+                // identifying context; revokedGuestSessions is this
+                // rotation's own count, with no prior count to diff.
+                .changed(ChangeDocuments.diff(
+                        qrRotationDiffMap(table.code(), table.qrTokenHash()),
+                        Map.of(
+                                "tableCode",
+                                table.code(),
+                                "qrTokenHash",
+                                issued.hash(),
+                                "revokedGuestSessions",
+                                revoked)))
                 .evidence(issued.hash())
                 .usingCapability("dinein.qr.rotate")
                 .correlatedBy(tableId.toString())
@@ -369,7 +381,9 @@ public class FloorPlanService {
                 .target("dinein.table", tableId)
                 .targetVersion((long) expectedVersion + 1)
                 .because(reason)
-                .changed(Map.of("from", table.status(), "to", status))
+                // Staff 9.3a: "status" genuinely moves from the table's prior
+                // status to the requested one.
+                .changed(ChangeDocuments.change("status", table.status(), status))
                 .usingCapability("dinein.floorplan.manage")
                 .correlatedBy(tableId.toString())
                 .occurredAt(now)
@@ -408,5 +422,34 @@ public class FloorPlanService {
 
     private static int orDefault(@Nullable Integer supplied, int fallback) {
         return supplied == null ? fallback : supplied;
+    }
+
+    /** A {@code {tableCode, qrTokenHash}} snapshot for {@link #rotateQrToken}'s diff -- {@code qrTokenHash} may be null. */
+    private static Map<String, Object> qrRotationDiffMap(String tableCode, @Nullable String qrTokenHash) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("tableCode", tableCode);
+        map.put("qrTokenHash", qrTokenHash);
+        return map;
+    }
+
+    /** A {@code {layoutX, layoutY}} snapshot for {@link #moveTable}'s diff. */
+    private static Map<String, Object> tableLayoutDiffMap(@Nullable BigDecimal layoutX, @Nullable BigDecimal layoutY) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("layoutX", layoutX);
+        map.put("layoutY", layoutY);
+        return map;
+    }
+
+    /** A {@code {qrMode, turnaroundMinutes, guestSessionTtlMinutes, serviceChargeRateBp}} snapshot, or empty when no settings row exists yet. */
+    private static Map<String, Object> branchSettingsDiffMap(@Nullable SettingsRow row) {
+        if (row == null) {
+            return Map.of();
+        }
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("qrMode", row.qrMode().name());
+        map.put("turnaroundMinutes", row.turnaroundMinutes());
+        map.put("guestSessionTtlMinutes", row.guestSessionTtlMinutes());
+        map.put("serviceChargeRateBp", row.serviceChargeRateBp());
+        return map;
     }
 }

@@ -202,9 +202,16 @@ class ReportExportServiceTests {
         assertThat(service.processNextQueued()).isTrue();
 
         assertThat(auditFactCount()).isEqualTo(1);
+        // Staff 9.3a: ChangeDocuments.created(...) nests every field under its
+        // own {before, after} pair -- "before" is null throughout because a
+        // completed export's rowCount/piiColumnGroup/filters never existed on
+        // this job until this write, not because the code skipped reading them.
         var fact = jdbc.sql("""
-                        SELECT change_document ->> 'reportKey', change_document ->> 'rowCount',
-                               change_document ->> 'piiColumnGroup', change_document -> 'filters' ->> 'status',
+                        SELECT change_document -> 'reportKey' ->> 'after',
+                               change_document -> 'reportKey' ->> 'before',
+                               change_document -> 'rowCount' ->> 'after',
+                               change_document -> 'piiColumnGroup' ->> 'after',
+                               change_document -> 'filters' -> 'after' ->> 'status',
                                correlation_id, reason
                         FROM audit.audit_events WHERE action_code = 'report.export.completed'
                         """)
@@ -214,17 +221,21 @@ class ReportExportServiceTests {
                     row.getString(3),
                     row.getString(4),
                     row.getString(5),
-                    row.getString(6)
+                    row.getString(6),
+                    row.getString(7)
                 })
                 .single();
         assertThat(fact[0]).isEqualTo(ReportExportRegistry.CUSTOMER_DIRECTORY);
-        assertThat(fact[1]).isEqualTo("1");
-        assertThat(fact[2]).isEqualTo("EXCLUDED");
-        assertThat(fact[3])
+        assertThat(fact[1])
+                .as("no prior reportKey existed on this job to diff against")
+                .isNull();
+        assertThat(fact[2]).isEqualTo("1");
+        assertThat(fact[3]).isEqualTo("EXCLUDED");
+        assertThat(fact[4])
                 .as("the audit fact's own filters carry the status filter, never the raw search text")
                 .isEqualTo("ACTIVE");
-        assertThat(fact[4]).isEqualTo(id.toString());
-        assertThat(fact[5]).isEqualTo("audit-shape-test");
+        assertThat(fact[5]).isEqualTo(id.toString());
+        assertThat(fact[6]).isEqualTo("audit-shape-test");
     }
 
     @Test
@@ -483,7 +494,7 @@ class ReportExportServiceTests {
         assertThat(csv).contains("Nodira Yusupova").contains("+998900000011");
 
         var fact = jdbc.sql("""
-                        SELECT change_document ->> 'reportKey', change_document ->> 'piiColumnGroup'
+                        SELECT change_document -> 'reportKey' ->> 'after', change_document -> 'piiColumnGroup' ->> 'after'
                           FROM audit.audit_events
                          WHERE action_code = 'report.export.completed' AND correlation_id = :id
                         """)
@@ -719,7 +730,7 @@ class ReportExportServiceTests {
                 .contains("90000");
 
         var fact = jdbc.sql("""
-                        SELECT change_document ->> 'reportKey', change_document ->> 'piiColumnGroup'
+                        SELECT change_document -> 'reportKey' ->> 'after', change_document -> 'piiColumnGroup' ->> 'after'
                           FROM audit.audit_events
                          WHERE action_code = 'report.export.completed' AND correlation_id = :id
                         """)

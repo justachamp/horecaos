@@ -561,6 +561,7 @@ export interface CategorySummaryResponse {
   productCount?: number;
   sortOrder?: number;
   status?: string;
+  translations?: { [key: string]: LocalizedFields };
 }
 
 export interface CategoryView {
@@ -572,6 +573,13 @@ export interface CategoryView {
   requiresReconciliation?: boolean;
   retryableByTimer?: boolean;
   securityRelevant?: boolean;
+}
+
+export interface ChallengeView {
+  issuedAt?: string;
+  recordName?: string;
+  recordType?: string;
+  token?: string;
 }
 
 export interface ChangeProgramStatusRequest {
@@ -3729,6 +3737,8 @@ export interface Operations {
   "reactivate": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/sales-channels/{channelId}/reactivate"; request: { parameters: { path: { channelId: string; tenantId: string }; query: { expectedVersion: number } } }; responses: { "200": ChannelView } };
   "clearHostname": { method: "DELETE"; path: "/api/v1/control-plane/tenants/{tenantId}/sales-channels/{channelId}/setup/hostname"; request: { parameters: { path: { channelId: string; tenantId: string }; query: { expectedVersion: number } } }; responses: { "200": unknown } };
   "hostname": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/sales-channels/{channelId}/setup/hostname"; request: { parameters: { path: { channelId: string; tenantId: string } } }; responses: { "200": HostnameView } };
+  "challenge": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/sales-channels/{channelId}/setup/hostname/challenge"; request: { parameters: { path: { channelId: string; tenantId: string } } }; responses: { "200": ChallengeView } };
+  "rotateChallenge": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/sales-channels/{channelId}/setup/hostname/challenge/rotate"; request: { parameters: { path: { channelId: string; tenantId: string }; query: { expectedVersion: number } } }; responses: { "200": ChallengeView } };
   "setCustomHostname": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/sales-channels/{channelId}/setup/hostname/custom"; request: { parameters: { path: { channelId: string; tenantId: string }; query: { expectedVersion: number } }; body: CustomHostnameRequest }; responses: { "200": HostnameView } };
   "setSubdomain": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/sales-channels/{channelId}/setup/hostname/subdomain"; request: { parameters: { path: { channelId: string; tenantId: string }; query: { expectedVersion: number } }; body: SubdomainRequest }; responses: { "200": HostnameView } };
   "verify": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/sales-channels/{channelId}/setup/hostname/verify"; request: { parameters: { path: { channelId: string; tenantId: string }; query: { expectedVersion: number } } }; responses: { "200": HostnameView } };

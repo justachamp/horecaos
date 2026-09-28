@@ -615,7 +615,24 @@ class CartCheckoutAndOrderTests {
         // exercises. The phone lookup beside it (OperatorCustomerLookupService)
         // has its own, separate collaborators and its own suite,
         // OperatorOrderingLookupTests, since `place` never reaches them.
-        operatorOrdering = new uz.horecaos.platform.ordering.application.OperatorOrderingService(carts, checkout);
+        operatorOrdering = new uz.horecaos.platform.ordering.application.OperatorOrderingService(
+                carts,
+                checkout,
+                new uz.horecaos.platform.ordering.application.BranchOverrideReasonQueryService(
+                        new uz.horecaos.platform.ordering.infrastructure.persistence.JdbcBranchOverrideReasonStore(
+                                jdbc)),
+                new uz.horecaos.platform.ordering.application.BranchResolutionQueryService(
+                        new uz.horecaos.platform.fulfillment.application.BranchResolutionService(
+                                new uz.horecaos.platform.fulfillment.infrastructure.persistence
+                                        .JdbcBranchResolutionStore(jdbc)),
+                        serviceability,
+                        channelStore,
+                        orderStore,
+                        clock),
+                new uz.horecaos.platform.ordering.infrastructure.customer.JdbcCustomerAddressBook(
+                        jdbc, protection, objectMapper),
+                new JdbcAuditRecorder(jdbc, objectMapper),
+                clock);
 
         seedTenancyAndCatalog();
         seedPublication("STOREFRONT");
@@ -815,7 +832,10 @@ class CartCheckoutAndOrderTests {
                         "operator-subject-9",
                         null,
                         null,
-                        false)));
+                        false,
+                        null,
+                        null,
+                        null)));
 
         assertThat(result.created()).isTrue();
         UUID orderId = Objects.requireNonNull(result.orderId());
@@ -858,7 +878,10 @@ class CartCheckoutAndOrderTests {
                 "operator-subject-9",
                 null,
                 null,
-                false);
+                false,
+                null,
+                null,
+                null);
 
         var result = tx(() -> operatorOrdering.place(command));
 
@@ -893,7 +916,10 @@ class CartCheckoutAndOrderTests {
                 "operator-subject-9",
                 null,
                 null,
-                false);
+                false,
+                null,
+                null,
+                null);
 
         var result = tx(() -> operatorOrdering.place(command));
 
@@ -961,8 +987,24 @@ class CartCheckoutAndOrderTests {
         authoring.activate(TENANT, BRAND, drafted.couponId());
 
         var spiedCarts = org.mockito.Mockito.spy(carts);
-        var operatorOrderingWithSpy =
-                new uz.horecaos.platform.ordering.application.OperatorOrderingService(spiedCarts, checkout);
+        var operatorOrderingWithSpy = new uz.horecaos.platform.ordering.application.OperatorOrderingService(
+                spiedCarts,
+                checkout,
+                new uz.horecaos.platform.ordering.application.BranchOverrideReasonQueryService(
+                        new uz.horecaos.platform.ordering.infrastructure.persistence.JdbcBranchOverrideReasonStore(
+                                jdbc)),
+                new uz.horecaos.platform.ordering.application.BranchResolutionQueryService(
+                        new uz.horecaos.platform.fulfillment.application.BranchResolutionService(
+                                new uz.horecaos.platform.fulfillment.infrastructure.persistence
+                                        .JdbcBranchResolutionStore(jdbc)),
+                        new ServiceabilityService(new JdbcServiceabilityStore(jdbc), clock),
+                        new JdbcSalesChannelStore(jdbc),
+                        orderStore,
+                        clock),
+                new uz.horecaos.platform.ordering.infrastructure.customer.JdbcCustomerAddressBook(
+                        jdbc, protection, objectMapper),
+                new JdbcAuditRecorder(jdbc, objectMapper),
+                clock);
 
         var withCode = new uz.horecaos.platform.ordering.application.OperatorOrderingService.PlaceOrderCommand(
                 TENANT,
@@ -980,7 +1022,10 @@ class CartCheckoutAndOrderTests {
                 "operator-subject-9",
                 null,
                 null,
-                false);
+                false,
+                null,
+                null,
+                null);
 
         var result = tx(() -> operatorOrderingWithSpy.place(withCode));
 
@@ -1162,7 +1207,10 @@ class CartCheckoutAndOrderTests {
                         "operator-subject-9",
                         null,
                         null,
-                        false);
+                        false,
+                        null,
+                        null,
+                        null);
 
         assertThatThrownBy(() -> tx(() -> operatorOrdering.place(missingDestination)))
                 .isInstanceOf(ApiException.class)
@@ -1187,7 +1235,10 @@ class CartCheckoutAndOrderTests {
                         "operator-subject-9",
                         null,
                         null,
-                        false);
+                        false,
+                        null,
+                        null,
+                        null);
 
         assertThatThrownBy(() -> tx(() -> operatorOrdering.place(pickupWithDestination)))
                 .isInstanceOf(ApiException.class)
@@ -6732,11 +6783,23 @@ class CartCheckoutAndOrderTests {
         pizzaVariant = seedProduct("PIZZA", "Pizza");
     }
 
+    /**
+     * {@code display_name} is the {@code code} itself, deliberately never the
+     * shared literal {@code "Branch"} a still-earlier version of this fixture
+     * used: {@code BranchResolutionQueryService}'s own PICKUP ranking (row
+     * 1.3) orders candidates by {@code display_name} once load ties, and two
+     * ACTIVE locations of one brand with identical names left that order
+     * undefined — which {@code OperatorOrderingService#place} now genuinely
+     * depends on (it re-resolves the branch itself rather than trusting the
+     * caller, see that class's own doc). {@code MAIN01} sorts before {@code
+     * MAIN02}, so {@link #LOCATION} — the branch every operator-placement
+     * test here actually places at — is always the one PICKUP proposes.
+     */
     private void insertLocation(UUID id, String code, String slug) {
         jdbc.sql("""
                 INSERT INTO tenant.locations (id, tenant_id, brand_id, code, slug, display_name,
                     timezone, status, version)
-                VALUES (:id, :tenantId, :brandId, :code, :slug, 'Branch', 'Asia/Tashkent',
+                VALUES (:id, :tenantId, :brandId, :code, :slug, :code, 'Asia/Tashkent',
                     'ACTIVE', 0)
                 """)
                 .param("id", id)

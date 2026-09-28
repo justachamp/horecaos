@@ -109,32 +109,6 @@ public class TenantControlPlaneService {
         this.scopedGrants = scopedGrants;
     }
 
-    /**
-     * Records an ADR 0027 audit fact in the same transaction as the change.
-     *
-     * <p>An outbox event tells other modules what happened; an audit fact records
-     * who caused it and why. They are not substitutes: the event carries no actor
-     * and is subject to topic retention.
-     */
-    private void recordAudit(
-            String actionCode,
-            ResourceScope scope,
-            String targetType,
-            UUID targetId,
-            String reason,
-            Map<String, Object> changes) {
-
-        audit.record(AuditFact.of(actionCode, AuditClass.BUSINESS)
-                .by(ActorRef.user(currentActor.get().subject(), null))
-                .at(scope)
-                .target(targetType, targetId)
-                .because(reason)
-                .changed(changes)
-                .correlatedBy(correlationId())
-                .occurredAt(clock.instant())
-                .build());
-    }
-
     private static String correlationId() {
         String correlationId = org.slf4j.MDC.get("correlationId");
         return correlationId == null || correlationId.isBlank()
@@ -176,16 +150,18 @@ public class TenantControlPlaneService {
                 tenant.defaultTimezone().getId(),
                 tenant.status().name(),
                 identityPolicy.mode().name()));
+        // Staff 9.3a: a brand-new tenant, no prior state to diff against.
+        Map<String, Object> changes = ChangeDocuments.created(Map.of(
+                "slug", tenant.slug().value(),
+                "status", tenant.status().name(),
+                "customerIdentityMode", identityPolicy.mode().name()));
         recordAudit(
                 "tenant.created",
                 ResourceScope.tenant(tenant.id().value()),
                 "Tenant",
                 tenant.id().value(),
                 "Control-plane tenant creation",
-                Map.of(
-                        "slug", tenant.slug().value(),
-                        "status", tenant.status().name(),
-                        "customerIdentityMode", identityPolicy.mode().name()));
+                changes);
         return toView(tenant, identityPolicy.mode());
     }
 
@@ -255,15 +231,19 @@ public class TenantControlPlaneService {
     public TenantView linkKeycloakOrganization(TenantId tenantId, String organizationId) {
         Tenant tenant = requireTenant(tenantId);
         accessPolicy.requirePlatformAdministrator();
+        // Staff 9.3a: read before linkKeycloakOrganization mutates it in place.
+        String previousOrganizationId = tenant.keycloakOrganizationId().orElse(null);
         tenant.linkKeycloakOrganization(organizationId);
         store.linkKeycloakOrganization(tenant);
+        Map<String, Object> changes =
+                ChangeDocuments.change("keycloakOrganizationId", previousOrganizationId, organizationId);
         recordAudit(
                 "tenant.keycloak_organization_linked",
                 ResourceScope.tenant(tenantId.value()),
                 "Tenant",
                 tenantId.value(),
                 "Keycloak organization reconciliation",
-                Map.of("keycloakOrganizationId", organizationId));
+                changes);
         CustomerIdentityMode identityMode = store.findCurrentCustomerIdentityMode(tenantId, clock.instant())
                 .orElseThrow(() -> new IllegalStateException("Tenant has no current customer identity policy"));
         return toView(tenant, identityMode);
@@ -376,15 +356,11 @@ public class TenantControlPlaneService {
             transition.accept(tenant);
             store.updateTenantStatus(tenant);
             suspensions.evict(tenantId.value());
+            // Staff 9.3a: a field-level diff, not two flat "from"/"to" keys.
+            Map<String, Object> changes = ChangeDocuments.change(
+                    "status", before.name(), tenant.status().name());
             recordAudit(
-                    actionCode,
-                    ResourceScope.tenant(tenantId.value()),
-                    "Tenant",
-                    tenantId.value(),
-                    reason,
-                    // Staff 9.3a: a field-level diff, not two flat "from"/"to" keys.
-                    ChangeDocuments.change(
-                            "status", before.name(), tenant.status().name()));
+                    actionCode, ResourceScope.tenant(tenantId.value()), "Tenant", tenantId.value(), reason, changes);
             CustomerIdentityMode identityMode = store.findCurrentCustomerIdentityMode(tenantId, clock.instant())
                     .orElseThrow(() -> new IllegalStateException("Tenant has no current customer identity policy"));
             return new StatusChange(
@@ -449,19 +425,21 @@ public class TenantControlPlaneService {
                 brand.slug().value(),
                 brand.displayName(),
                 brand.status().name()));
+        // Staff 9.3a: a brand-new brand, no prior state to diff against.
+        Map<String, Object> changes = ChangeDocuments.created(Map.of(
+                "code",
+                brand.code(),
+                "slug",
+                brand.slug().value(),
+                "status",
+                brand.status().name()));
         recordAudit(
                 "brand.created",
                 ResourceScope.tenant(tenantId.value()),
                 "Brand",
                 brand.id().value(),
                 "Control-plane brand creation",
-                Map.of(
-                        "code",
-                        brand.code(),
-                        "slug",
-                        brand.slug().value(),
-                        "status",
-                        brand.status().name()));
+                changes);
         return toView(brand, BrandProfile.empty());
     }
 
@@ -488,15 +466,19 @@ public class TenantControlPlaneService {
         if (brand.status() == OperatingUnitStatus.ACTIVE) {
             return toView(brand, store.findBrandProfile(tenantId, brandId));
         }
+        // Staff 9.3a: read before activate() mutates the brand in place.
+        String previousStatus = brand.status().name();
         brand.activate();
         store.updateBrandStatus(brand);
+        Map<String, Object> changes =
+                ChangeDocuments.change("status", previousStatus, brand.status().name());
         recordAudit(
                 "brand.activated",
                 ResourceScope.tenant(tenantId.value()),
                 "Brand",
                 brandId.value(),
                 "Control-plane brand activation",
-                Map.of("status", brand.status().name()));
+                changes);
         // Re-read: the status write moved the stored version on, and a view
         // carrying the old one would make the next correction fail as stale.
         return toView(requireBrand(tenantId, brandId), store.findBrandProfile(tenantId, brandId));
@@ -536,15 +518,17 @@ public class TenantControlPlaneService {
                 brand.slug().value(),
                 brand.displayName(),
                 brand.status().name()));
+        // Staff 9.3a: a per-field diff, not a root-level {before, after}
+        // pair of whole snapshots — see ChangeDocuments.diff's own doc.
+        Map<String, Object> changes =
+                ChangeDocuments.diff(before, identityOf(brand.code(), brand.slug(), brand.displayName(), null));
         recordAudit(
                 "brand.revised",
                 ResourceScope.brand(tenantId.value(), brandId.value()),
                 "Brand",
                 brandId.value(),
                 "Control-plane brand correction",
-                // Staff 9.3a: a per-field diff, not a root-level {before, after}
-                // pair of whole snapshots — see ChangeDocuments.diff's own doc.
-                ChangeDocuments.diff(before, identityOf(brand.code(), brand.slug(), brand.displayName(), null)));
+                changes);
         return toView(requireBrand(tenantId, brandId), store.findBrandProfile(tenantId, brandId));
     }
 
@@ -571,17 +555,18 @@ public class TenantControlPlaneService {
         BrandProfile before = store.findBrandProfile(tenantId, brandId);
         BrandProfile profile = command.toProfile();
         store.updateBrandProfile(tenantId, brandId, profile);
+        // Never contactPhone/telegramHandle here -- the same PII exclusion
+        // describeLocation's own audit map keeps for contactPhone, ADR 0029.
+        // Locale codes, a default marker and whether media is set are not
+        // personal data.
+        Map<String, Object> changes = ChangeDocuments.diff(profileAudit(before), profileAudit(profile));
         recordAudit(
                 "brand.profile_revised",
                 ResourceScope.brand(tenantId.value(), brandId.value()),
                 "Brand",
                 brandId.value(),
                 "Control-plane brand profile correction",
-                // Never contactPhone/telegramHandle here -- the same PII
-                // exclusion describeLocation's own audit map keeps for
-                // contactPhone, ADR 0029. Locale codes, a default marker and
-                // whether media is set are not personal data.
-                ChangeDocuments.diff(profileAudit(before), profileAudit(profile)));
+                changes);
         return toView(brand, profile);
     }
 
@@ -644,13 +629,17 @@ public class TenantControlPlaneService {
             throw staleBrand(tenantId, brandId, expectedVersion);
         }
         events.publishEvent(new BrandDeleted(UUID.randomUUID(), tenantId, brandId, clock.instant(), brand.code()));
+        // Staff 9.3a: a deletion -- every field's after is null because the
+        // row no longer exists, the mirror image of ChangeDocuments.created.
+        Map<String, Object> changes =
+                ChangeDocuments.diff(identityOf(brand.code(), brand.slug(), brand.displayName(), null), Map.of());
         recordAudit(
                 "brand.deleted",
                 ResourceScope.tenant(tenantId.value()),
                 "Brand",
                 brandId.value(),
                 "Control-plane deletion of a draft brand",
-                identityOf(brand.code(), brand.slug(), brand.displayName(), null));
+                changes);
     }
 
     @Transactional(readOnly = true)
@@ -713,17 +702,19 @@ public class TenantControlPlaneService {
                 location.displayName(),
                 location.timezone().getId(),
                 location.status().name()));
+        // Staff 9.3a: a brand-new location, no prior state to diff against.
+        Map<String, Object> changes = ChangeDocuments.created(Map.of(
+                "code", location.code(),
+                "slug", location.slug().value(),
+                "timezone", location.timezone().getId(),
+                "status", location.status().name()));
         recordAudit(
                 "location.created",
                 ResourceScope.brand(tenantId.value(), brandId.value()),
                 "Location",
                 location.id().value(),
                 "Control-plane location creation",
-                Map.of(
-                        "code", location.code(),
-                        "slug", location.slug().value(),
-                        "timezone", location.timezone().getId(),
-                        "status", location.status().name()));
+                changes);
         return toView(location);
     }
 
@@ -754,6 +745,11 @@ public class TenantControlPlaneService {
                 .filter(candidate -> candidate.id().equals(locationId))
                 .findFirst()
                 .orElseThrow(() -> new TenantResourceNotFoundException("Location was not found in this brand"));
+
+        // Staff 9.3a: read before describePlace/describeVenue mutate the
+        // location in place.
+        LocationPlace previousPlace = location.place();
+        LocationVenue previousVenue = location.venue();
 
         LocationPlace place = command.toPlace(location.place());
         location.describePlace(place);
@@ -787,6 +783,21 @@ public class TenantControlPlaneService {
         // own doc). Before this wave nothing had ever exercised this path with
         // one of them absent, so describeLocation on the branch every location
         // starts as -- unpinned -- threw out of a call that otherwise succeeded.
+        Map<String, Object> changes =
+                ChangeDocuments.diff(placeVenueAudit(previousPlace, previousVenue), placeVenueAudit(place, venue));
+        recordAudit(
+                "location.described",
+                ResourceScope.brand(tenantId.value(), brandId.value()),
+                "Location",
+                location.id().value(),
+                "Control-plane location address, point and venue facts",
+                changes);
+
+        return toView(location, store.findLocationContent(tenantId, locationId));
+    }
+
+    /** Staff 9.3a: the address, point and venue facts {@link #describeLocation} audits, for a before/after diff. */
+    private static Map<String, Object> placeVenueAudit(LocationPlace place, LocationVenue venue) {
         Map<String, Object> audited = new LinkedHashMap<>();
         audited.put("coordinateSource", place.coordinateSource().name());
         place.point().ifPresent(point -> {
@@ -805,15 +816,7 @@ public class TenantControlPlaneService {
         if (venue.seats() != null) {
             audited.put("seats", venue.seats());
         }
-        recordAudit(
-                "location.described",
-                ResourceScope.brand(tenantId.value(), brandId.value()),
-                "Location",
-                location.id().value(),
-                "Control-plane location address, point and venue facts",
-                audited);
-
-        return toView(location, store.findLocationContent(tenantId, locationId));
+        return audited;
     }
 
     /**
@@ -837,15 +840,19 @@ public class TenantControlPlaneService {
         if (location.status() == OperatingUnitStatus.ACTIVE) {
             return toView(location, store.findLocationContent(tenantId, locationId));
         }
+        // Staff 9.3a: read before activate() mutates the location in place.
+        String previousStatus = location.status().name();
         location.activate();
         store.updateLocationStatus(location);
+        Map<String, Object> changes = ChangeDocuments.change(
+                "status", previousStatus, location.status().name());
         recordAudit(
                 "location.activated",
                 ResourceScope.brand(tenantId.value(), brandId.value()),
                 "Location",
                 locationId.value(),
                 "Control-plane location activation",
-                Map.of("status", location.status().name()));
+                changes);
         // Re-read, for the reason activateBrand gives.
         return toView(requireLocation(brand, locationId), store.findLocationContent(tenantId, locationId));
     }
@@ -893,21 +900,22 @@ public class TenantControlPlaneService {
                 location.displayName(),
                 location.timezone().getId(),
                 location.status().name()));
+        // Staff 9.3a: a per-field diff, not a root-level {before, after}
+        // pair of whole snapshots — see ChangeDocuments.diff's own doc.
+        Map<String, Object> changes = ChangeDocuments.diff(
+                before,
+                identityOf(
+                        location.code(),
+                        location.slug(),
+                        location.displayName(),
+                        location.timezone().getId()));
         recordAudit(
                 "location.revised",
                 ResourceScope.brand(tenantId.value(), brandId.value()),
                 "Location",
                 locationId.value(),
                 "Control-plane location correction",
-                // Staff 9.3a: a per-field diff, not a root-level {before, after}
-                // pair of whole snapshots — see ChangeDocuments.diff's own doc.
-                ChangeDocuments.diff(
-                        before,
-                        identityOf(
-                                location.code(),
-                                location.slug(),
-                                location.displayName(),
-                                location.timezone().getId())));
+                changes);
         return toView(requireLocation(brand, locationId), store.findLocationContent(tenantId, locationId));
     }
 
@@ -938,17 +946,54 @@ public class TenantControlPlaneService {
         }
         events.publishEvent(new LocationDeleted(
                 UUID.randomUUID(), tenantId, brandId, locationId, clock.instant(), location.code()));
+        // Staff 9.3a: a deletion -- every field's after is null because the
+        // row no longer exists, the mirror image of ChangeDocuments.created.
+        Map<String, Object> changes = ChangeDocuments.diff(
+                identityOf(
+                        location.code(),
+                        location.slug(),
+                        location.displayName(),
+                        location.timezone().getId()),
+                Map.of());
         recordAudit(
                 "location.deleted",
                 ResourceScope.brand(tenantId.value(), brandId.value()),
                 "Location",
                 locationId.value(),
                 "Control-plane deletion of a draft location",
-                identityOf(
-                        location.code(),
-                        location.slug(),
-                        location.displayName(),
-                        location.timezone().getId()));
+                changes);
+    }
+
+    /**
+     * Records an ADR 0027 audit fact in the same transaction as the change.
+     *
+     * <p>An outbox event tells other modules what happened; an audit fact records
+     * who caused it and why. They are not substitutes: the event carries no actor
+     * and is subject to topic retention.
+     *
+     * <p>Staff 9.3a: placed after every caller in this file, deliberately --
+     * {@code ChangeDocumentUsageTests}' single-hop scan resolves a bare
+     * {@code .changed(changes)} identifier by looking for the nearest earlier
+     * {@code changes = ChangeDocuments....(} assignment in the same file, and
+     * every caller above already builds one before calling this.
+     */
+    private void recordAudit(
+            String actionCode,
+            ResourceScope scope,
+            String targetType,
+            UUID targetId,
+            String reason,
+            Map<String, Object> changes) {
+
+        audit.record(AuditFact.of(actionCode, AuditClass.BUSINESS)
+                .by(ActorRef.user(currentActor.get().subject(), null))
+                .at(scope)
+                .target(targetType, targetId)
+                .because(reason)
+                .changed(changes)
+                .correlatedBy(correlationId())
+                .occurredAt(clock.instant())
+                .build());
     }
 
     @Transactional(readOnly = true)

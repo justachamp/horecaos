@@ -291,6 +291,27 @@
       "privacyOffer": "Maxfiylik / oferta"
     }
   },
+  "dineIn": {
+    "scanFailedTitle": "Bu kod endi ishlamaydi",
+    "scanFailedBody": "Yordam uchun xodimga murojaat qiling.",
+    "backHome": "Bosh sahifaga",
+    "scanLoading": "Stol kodi o'qilmoqda...",
+    "noAdmissionTitle": "Buyurtma berish uchun stolni skanerlang",
+    "noAdmissionBody": "Menyuni ko'rish uchun stolingizdagi QR-kodni skanerlang.",
+    "thisBranch": "Ushbu filial",
+    "tableLabel": "{{code}}-stol",
+    "notSeated": "Xodimdan sizni stolga o'tqazishini so'rang, so'ng kodni qayta skanerlang.",
+    "menuUnavailable": "Hozircha menyu mavjud emas.",
+    "signInToOrder": "Buyurtma berish uchun kiring",
+    "itemsInCart": "Savatda: {{count}} ta",
+    "orderRound": "Buyurtma berish",
+    "tableBill": "Stol hisobi",
+    "roundCount": "Buyurtma qilingan: {{count}} marta",
+    "askForBill": "Hisobni so'rash",
+    "orderPlaced": "Buyurtma oshxonaga yuborildi",
+    "billRequested": "Hisob so'raldi",
+    "roundAttachRetry": "Buyurtma qabul qilindi — hisob birozdan keyin yangilanadi"
+  },
   "action": {
     "yourAddress": "Sizning manzil",
     "balance": "Balans",

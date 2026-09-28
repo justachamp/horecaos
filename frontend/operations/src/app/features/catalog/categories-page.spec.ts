@@ -7,7 +7,8 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { CurrentBrand } from '../../core/auth/current-brand';
 import { ApiError, ApiErrorCode } from '../../core/api/problem-details';
-import { I18n } from '../../core/i18n/i18n';
+import { I18n, Locale } from '../../core/i18n/i18n';
+import { LocaleSet } from '../../core/i18n/locale-set';
 import { CatalogApi } from './catalog-api';
 import { CategoriesPage } from './categories-page';
 import { CategorySummary } from './catalog-domain';
@@ -24,6 +25,7 @@ function category(overrides: Partial<CategorySummary>): CategorySummary {
     sortOrder: 0,
     status: 'ACTIVE',
     productCount: 3,
+    translations: {},
     ...overrides,
   };
 }
@@ -33,7 +35,21 @@ async function flushMicrotasks(): Promise<void> {
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
 }
 
-function configure(catalogApi: Partial<CatalogApi>): void {
+/** Row 10.12: a brand's resolved locale set, defaulting to the platform's own fallback triple — same fake `location-detail-pane.spec.ts` uses. */
+class FakeLocaleSet {
+  readonly locales = signal<readonly Locale[]>(['ru', 'uz-Latn', 'en']);
+  readonly defaultLocale = signal<Locale>('ru');
+  readonly isConfigured = signal(false);
+  ensureLoaded = vi.fn().mockResolvedValue(undefined);
+  supports(locale: Locale): boolean {
+    return this.locales().includes(locale);
+  }
+}
+
+function configure(
+  catalogApi: Partial<CatalogApi>,
+  localeSet: FakeLocaleSet = new FakeLocaleSet(),
+): FakeLocaleSet {
   TestBed.configureTestingModule({
     providers: [
       provideRouter([{ path: 'catalog/categories', component: CategoriesPage }]),
@@ -45,6 +61,7 @@ function configure(catalogApi: Partial<CatalogApi>): void {
           ensureLoaded: () => Promise.resolve(),
         },
       },
+      { provide: LocaleSet, useValue: localeSet },
       {
         provide: CatalogApi,
         useValue: {
@@ -55,6 +72,7 @@ function configure(catalogApi: Partial<CatalogApi>): void {
     ],
   });
   TestBed.inject(I18n).setLocale('ru');
+  return localeSet;
 }
 
 describe('CategoriesPage', () => {
@@ -188,24 +206,263 @@ describe('CategoriesPage', () => {
     );
   });
 
+  it('renaming through the tree always writes the catalog’s default locale, never the operator’s own console language', async () => {
+    // Row 10.12's fix: the tree's own label always resolves the catalog's
+    // configured default locale (`uz`, mirrored by CATALOG_DEFAULT_LOCALE),
+    // so a rename written anywhere else — such as wherever the operator's
+    // own UI happens to be set — used to leave the tree looking untouched.
+    const setTranslation = vi.fn().mockReturnValue(of(undefined));
+    configure({
+      listCatalogs: () =>
+        of([{ catalogId: 'catalog-1', code: 'MAIN', name: 'Основной', status: 'ACTIVE' }]),
+      listCategories: () => of([category({ categoryId: 'cat-1', name: 'Салаты' })]),
+      setTranslation,
+    });
+    // The operator's own console language, English here — deliberately not
+    // the locale a rename should land in.
+    TestBed.inject(I18n).setLocale('en');
+
+    const harness = await RouterTestingHarness.create('/catalog/categories');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+
+    const row = host.querySelector('[data-node-id="cat-1"]') as HTMLElement;
+    row.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    await flushMicrotasks();
+    const input = host.querySelector('[data-testid="tree-node-rename-input"]') as HTMLInputElement;
+    input.value = 'Vegetables';
+    input.dispatchEvent(new Event('input'));
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    await flushMicrotasks();
+
+    expect(setTranslation).toHaveBeenCalledWith(
+      FAKE_SCOPE,
+      expect.objectContaining({ locale: 'uz', name: 'Vegetables' }),
+    );
+  });
+
+  it('creating a category always authors it in the catalog’s default locale, not the operator’s own console language', async () => {
+    const createCategory = vi.fn().mockReturnValue(of({ id: 'new-cat' }));
+    configure({
+      listCatalogs: () =>
+        of([{ catalogId: 'catalog-1', code: 'MAIN', name: 'Основной', status: 'ACTIVE' }]),
+      listCategories: vi.fn().mockReturnValue(of([])),
+      createCategory,
+    });
+    TestBed.inject(I18n).setLocale('en');
+
+    const harness = await RouterTestingHarness.create('/catalog/categories');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+
+    (host.querySelector('[data-testid="categories-create"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    const nameInput = host.querySelector(
+      '[data-testid="create-category-dialog-name"]',
+    ) as HTMLInputElement;
+    const codeInput = host.querySelector(
+      '[data-testid="create-category-dialog-code"]',
+    ) as HTMLInputElement;
+    nameInput.value = 'Desserts';
+    nameInput.dispatchEvent(new Event('input'));
+    codeInput.value = 'DESSERTS';
+    codeInput.dispatchEvent(new Event('input'));
+    await flushMicrotasks();
+    (
+      host.querySelector('[data-testid="create-category-dialog-confirm"]') as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+
+    expect(createCategory).toHaveBeenCalledWith(
+      FAKE_SCOPE,
+      'catalog-1',
+      expect.objectContaining({ locale: 'uz', name: 'Desserts' }),
+    );
+  });
+
+  it('the content grid shows one row per brand-supported locale, brand default first', async () => {
+    const localeSet = new FakeLocaleSet();
+    // The fake, like LocaleSet's own real contract, returns the default
+    // locale first — so `en` (the brand's chosen default here) is listed
+    // before `ru`, its own canonical-order position notwithstanding.
+    // uz-Latn is included too (uz never dropping out of the grid is its own
+    // spec, below), so this one stays purely about ordering.
+    localeSet.locales.set(['en', 'ru', 'uz-Latn']);
+    localeSet.defaultLocale.set('en');
+    configure(
+      {
+        listCatalogs: () =>
+          of([{ catalogId: 'catalog-1', code: 'MAIN', name: 'Основной', status: 'ACTIVE' }]),
+        listCategories: () =>
+          of([
+            category({
+              categoryId: 'cat-1',
+              name: 'Салаты',
+              translations: {
+                ru: { name: 'Салаты', description: 'Свежие овощи' },
+                en: { name: 'Salads', description: null },
+              },
+            }),
+          ]),
+      },
+      localeSet,
+    );
+    TestBed.inject(I18n).setLocale('en');
+
+    const harness = await RouterTestingHarness.create('/catalog/categories');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+    (host.querySelector('[data-testid="tree-node"]') as HTMLElement).click();
+    await flushMicrotasks();
+
+    // en is the brand's own default, so it sorts first even though ru comes
+    // first in LocaleSet's own canonical ordering; uz-Latn — untranslated —
+    // trails with an empty field.
+    const nameInputs = [
+      ...host.querySelectorAll('.categories__locale-row input'),
+    ] as HTMLInputElement[];
+    expect(nameInputs.map((el) => el.value)).toEqual(['Salads', 'Салаты', '']);
+  });
+
+  it('marks uz-Latn as the default row — the locale the tree label and every list read actually resolve a name from — even when the brand’s own configured default locale is different', async () => {
+    // Row 10.12 regression: the grid used to mark whichever locale
+    // `LocaleSet.defaultLocale()` returned (the brand's own preference).
+    // The tree node right next to this grid, and every list-screen read
+    // (`CatalogQueryService.categories()`/`products()`/`catalogs()`), always
+    // resolve a category's display name against the catalog's own fixed
+    // `CATALOG_DEFAULT_LOCALE` ('uz'/'uz-Latn' on the wire), never the
+    // brand's own default. An operator who fills in only the row the old
+    // badge called "Default" — here, `en` — saves a translation that never
+    // shows up anywhere else in the console, with no error to explain why.
+    const localeSet = new FakeLocaleSet();
+    localeSet.locales.set(['en', 'ru', 'uz-Latn']);
+    localeSet.defaultLocale.set('en');
+    configure(
+      {
+        listCatalogs: () =>
+          of([{ catalogId: 'catalog-1', code: 'MAIN', name: 'Основной', status: 'ACTIVE' }]),
+        listCategories: () =>
+          of([
+            category({
+              categoryId: 'cat-1',
+              name: 'Salads',
+              translations: {
+                en: { name: 'Salads', description: null },
+                uz: { name: 'Salatlar', description: null },
+              },
+            }),
+          ]),
+      },
+      localeSet,
+    );
+    TestBed.inject(I18n).setLocale('en');
+
+    const harness = await RouterTestingHarness.create('/catalog/categories');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+    (host.querySelector('[data-testid="tree-node"]') as HTMLElement).click();
+    await flushMicrotasks();
+
+    const rows = [...host.querySelectorAll('.categories__locale-row')] as HTMLElement[];
+    const markedLocales = rows
+      .filter((row) => row.querySelector('legend')!.textContent!.includes('Default'))
+      .map((row) => row.querySelector('input')!.getAttribute('data-testid'));
+    expect(markedLocales).toEqual(['category-locale-name-uz-Latn']);
+  });
+
+  it('saves every non-blank locale row and never touches a locale the brand no longer supports', async () => {
+    const setTranslation = vi.fn().mockReturnValue(of(undefined));
+    const localeSet = new FakeLocaleSet();
+    localeSet.locales.set(['ru']);
+    localeSet.defaultLocale.set('ru');
+    configure(
+      {
+        listCatalogs: () =>
+          of([{ catalogId: 'catalog-1', code: 'MAIN', name: 'Основной', status: 'ACTIVE' }]),
+        listCategories: vi.fn().mockReturnValue(
+          of([
+            category({
+              categoryId: 'cat-1',
+              name: 'Салаты',
+              translations: {
+                ru: { name: 'Салаты', description: null },
+                // A locale the brand narrowed away from, but still carries
+                // stored content — must never be part of this save.
+                en: { name: 'Salads', description: 'Fresh vegetables' },
+              },
+            }),
+          ]),
+        ),
+        setTranslation,
+      },
+      localeSet,
+    );
+
+    const harness = await RouterTestingHarness.create('/catalog/categories');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+    (host.querySelector('[data-testid="tree-node"]') as HTMLElement).click();
+    await flushMicrotasks();
+
+    // Two rows: the brand's one supported locale, plus uz-Latn — forced in
+    // regardless (this file's own knownLocales doc) since the tree and
+    // every list read resolve a category's name in that locale specifically.
+    // en never appears: the brand narrowed its own set away from it, and it
+    // is not the forced one.
+    expect(host.querySelectorAll('.categories__locale-row').length).toBe(2);
+    expect(host.querySelector('[data-testid="category-locale-name-en"]')).toBeNull();
+    const nameInput = host.querySelector(
+      '[data-testid="category-locale-name-ru"]',
+    ) as HTMLInputElement;
+    nameInput.value = 'Свежие салаты';
+    nameInput.dispatchEvent(new Event('input'));
+    await flushMicrotasks();
+
+    (host.querySelector('[data-testid="category-content-save"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    expect(setTranslation).toHaveBeenCalledTimes(1);
+    expect(setTranslation).toHaveBeenCalledWith(
+      FAKE_SCOPE,
+      expect.objectContaining({ locale: 'ru', name: 'Свежие салаты' }),
+    );
+    expect(setTranslation).not.toHaveBeenCalledWith(
+      FAKE_SCOPE,
+      expect.objectContaining({ locale: 'en' }),
+    );
+  });
+
+  it('resolves LocaleSet on load, so the content grid never sticks on the platform fallback for a configured brand', async () => {
+    const localeSet = new FakeLocaleSet();
+    configure(
+      {
+        listCatalogs: () => of([]),
+      },
+      localeSet,
+    );
+
+    await RouterTestingHarness.create('/catalog/categories');
+    await flushMicrotasks();
+
+    expect(localeSet.ensureLoaded).toHaveBeenCalled();
+  });
+
   it('moving a node through the tree calls updateCategory with the new parent', async () => {
     const updateCategory = vi.fn().mockReturnValue(of(undefined));
     configure({
       listCatalogs: () =>
         of([{ catalogId: 'catalog-1', code: 'MAIN', name: 'Основной', status: 'ACTIVE' }]),
-      listCategories: vi
-        .fn()
-        .mockReturnValue(
-          of([
-            category({ categoryId: 'food', name: 'Еда', sortOrder: 0 }),
-            category({
-              categoryId: 'drinks',
-              parentCategoryId: null,
-              name: 'Напитки',
-              sortOrder: 1,
-            }),
-          ]),
-        ),
+      listCategories: vi.fn().mockReturnValue(
+        of([
+          category({ categoryId: 'food', name: 'Еда', sortOrder: 0 }),
+          category({
+            categoryId: 'drinks',
+            parentCategoryId: null,
+            name: 'Напитки',
+            sortOrder: 1,
+          }),
+        ]),
+      ),
       updateCategory,
     });
 
@@ -254,19 +511,17 @@ describe('CategoriesPage', () => {
     configure({
       listCatalogs: () =>
         of([{ catalogId: 'catalog-1', code: 'MAIN', name: 'Основной', status: 'ACTIVE' }]),
-      listCategories: vi
-        .fn()
-        .mockReturnValue(
-          of([
-            category({ categoryId: 'food', name: 'Еда', sortOrder: 0 }),
-            category({
-              categoryId: 'drinks',
-              parentCategoryId: null,
-              name: 'Напитки',
-              sortOrder: 1,
-            }),
-          ]),
-        ),
+      listCategories: vi.fn().mockReturnValue(
+        of([
+          category({ categoryId: 'food', name: 'Еда', sortOrder: 0 }),
+          category({
+            categoryId: 'drinks',
+            parentCategoryId: null,
+            name: 'Напитки',
+            sortOrder: 1,
+          }),
+        ]),
+      ),
       updateCategory,
     });
 

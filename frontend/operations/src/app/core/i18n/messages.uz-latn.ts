@@ -1058,7 +1058,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.salesChannels.field.brandColorPrimary': 'Asosiy rang',
   'settings.salesChannels.field.brandColorSecondary': 'Qoʻshimcha rang',
   'settings.salesChannels.field.color.clear': 'Tozalash',
-  'settings.salesChannels.field.color.contrastWarning': 'Kontrast past ({ratio}:1) — {surface} fonida WCAG AA boʻyicha 4.5:1 kerak',
+  'settings.salesChannels.field.color.contrastWarning':
+    'Kontrast past ({ratio}:1) — {surface} fonida WCAG AA boʻyicha 4.5:1 kerak',
   'settings.salesChannels.field.color.surface.canvas': 'sahifa foni',
   'settings.salesChannels.field.color.surface.surface1': 'karta sirti',
   'settings.salesChannels.field.color.surface.slaLateTint': 'kechikkan buyurtma qatori',
@@ -1110,6 +1111,13 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.channelSetup.hostname.custom.label': 'Oʻz domeningiz',
   'settings.channelSetup.hostname.custom.placeholder': 'orders.example.uz',
   'settings.channelSetup.hostname.claim': 'Band qilish',
+  'settings.channelSetup.hostname.challenge.instructions':
+    'DNS provayderingizda ushbu TXT yozuvini qoʻshing, soʻng tasdiqlang:',
+  'settings.channelSetup.hostname.challenge.recordLabel': 'Yozuv nomi',
+  'settings.channelSetup.hostname.challenge.valueLabel': 'Qiymat',
+  'settings.channelSetup.hostname.challenge.copy': 'Nusxalash',
+  'settings.channelSetup.hostname.challenge.copied': 'Nusxalandi',
+  'settings.channelSetup.hostname.challenge.rotate': 'Yangi kod olish',
   'settings.channelSetup.presentation.title': 'Qidiruv koʻrinishi',
   'settings.channelSetup.presentation.seoTitle': 'Sarlavha',
   'settings.channelSetup.presentation.seoDescription': 'Tavsif',
@@ -2274,6 +2282,10 @@ export const messagesUzLatn: MessageCatalogue = {
   'catalog.editor.availability.quantityHint':
     'QUANTITY rejimidagi variant uchun mavjud miqdor, kunlik standart qiymat va kanal boʻyicha toʻxtatish chegaralari «Qoldiqlar» sahifasida joylashgan.',
   'catalog.editor.availability.quantityHintLink': 'Qoldiqlarni ochish',
+  'catalog.editor.availability.notListedAtBranches':
+    "{count} ta filialda hali joylashtirilmagan — taklif qilingan, lekin joylashtirilguncha buyurtma qabul qilinmaydi.",
+  'catalog.editor.availability.listEverywhere': "Barcha filiallarda joylashtirish",
+  'catalog.editor.availability.listingInProgress': 'Joylashtirilmoqda…',
   'catalog.editor.schedule.hint':
     'Boʻsh boʻlsa — tovar doim sotuvda. Quyidagi oynalar sotuv vaqtini cheklaydi va filialning oʻz mahalliy vaqtida hisoblanadi.',
   'catalog.editor.schedule.loading': 'Jadval yuklanmoqda…',
@@ -2371,6 +2383,9 @@ export const messagesUzLatn: MessageCatalogue = {
   'catalog.categories.archiveConfirm.title': 'Kategoriyani arxivlaysizmi?',
   'catalog.categories.archiveConfirm.body':
     '«{name}» endi kategoriyalar daraxtida koʻrsatilmaydi. Unga joylashtirilgan mahsulotlar oʻz oʻrnida qoladi.',
+  'catalog.categories.form.saving': 'Saqlanmoqda…',
+  'catalog.categories.content.title': 'Til boʻyicha nomi va tavsifi',
+  'catalog.categories.content.defaultMarker': 'Birlamchi',
 
   // Bo'shliq xaritasi qatori 4.4c: filial bo'yicha QUANTITY qoldiqlar sahifasi (11-partiya)
   'catalog.stock.title': 'Qoldiqlar',
@@ -4705,7 +4720,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'marketing.automations.configLabel.BIRTHDAY': 'Oyna, tugʻilgan kundan oldin/keyin kunlar',
   'marketing.automations.configLabel.INACTIVITY': 'Oxirgi buyurtmadan beri kunlar',
   'marketing.automations.configLabel.CART_ABANDONMENT': 'Kechikish, soatlar',
-  'marketing.automations.configLabel.CASHBACK_CHANGE': 'Balansning eng kam oʻzgarishi, mayda birliklarda',
+  'marketing.automations.configLabel.CASHBACK_CHANGE':
+    'Balansning eng kam oʻzgarishi, mayda birliklarda',
   'marketing.automations.form.title': 'Avtomatlashtirish qoidasini yaratish',
   'marketing.automations.form.name': 'Nomi',
   'marketing.automations.form.trigger': 'Trigger',
@@ -5717,6 +5733,15 @@ export const messagesUzLatn: MessageCatalogue = {
   'orders.newOrder.order.unavailableCount': 'Savatdagi {count} ta taom endi mavjud emas',
   'orders.newOrder.order.branch': 'Filial',
   'orders.newOrder.order.byZone': '(hudud boʻyicha)',
+  'orders.newOrder.order.branchLoading': 'Filial tanlanmoqda…',
+  'orders.newOrder.order.branchLoad': '{count} ta faol buyurtma',
+  'orders.newOrder.order.branchClosed': 'yopiq',
+  'orders.newOrder.order.branchProposedSuffix': '(taklif qilingan)',
+  'orders.newOrder.order.branchResolutionFailed': 'Filial tanlab boʻlmadi — joriy filialda rasmiylashtiramiz',
+  'orders.newOrder.order.branchNoCandidates': 'Bu manzilga hech qaysi filial yetkazib bermaydi',
+  'orders.newOrder.order.branchOverrideReason': 'Boshqa filial tanlash sababi',
+  'orders.newOrder.order.branchOverrideReasonPlaceholder': 'Sababni tanlang',
+  'orders.newOrder.order.branchOverrideNote': 'Izoh',
   'orders.newOrder.order.promoCode': 'Promokod',
   'orders.newOrder.order.cashTendered': 'Berilgan pul',
   'orders.newOrder.order.changeDue': 'Qaytim',

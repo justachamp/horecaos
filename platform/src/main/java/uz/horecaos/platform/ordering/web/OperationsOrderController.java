@@ -47,6 +47,10 @@ import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.iam.api.accounts.StaffDisplayNames;
 import uz.horecaos.platform.ordering.application.AggregatorOrderIntakeService;
+import uz.horecaos.platform.ordering.application.BranchOverrideReasonQueryService;
+import uz.horecaos.platform.ordering.application.BranchResolutionQueryService;
+import uz.horecaos.platform.ordering.application.BranchResolutionQueryService.BranchCandidate;
+import uz.horecaos.platform.ordering.application.BranchResolutionQueryService.BranchResolution;
 import uz.horecaos.platform.ordering.application.CartService;
 import uz.horecaos.platform.ordering.application.CheckoutService;
 import uz.horecaos.platform.ordering.application.LiveBoardQueryService;
@@ -70,12 +74,14 @@ import uz.horecaos.platform.ordering.domain.BulkItemStatus;
 import uz.horecaos.platform.ordering.domain.OrderDecisionChannel;
 import uz.horecaos.platform.ordering.domain.OrderStateMachine;
 import uz.horecaos.platform.ordering.domain.OrderStatus;
+import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcBranchOverrideReasonStore;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcCartStore;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderAmendmentStore;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcRejectReasonStore;
 import uz.horecaos.platform.pricing.api.CartPricingPort;
 import uz.horecaos.platform.tenancy.api.FulfillmentMode;
+import uz.horecaos.platform.tenancy.api.GeoPoint;
 import uz.horecaos.platform.web.api.AggregateVersion;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.Cursor;
@@ -119,6 +125,8 @@ public class OperationsOrderController {
     private final MyWorkQueryService myWork;
     private final StaffDisplayNames staffDisplayNames;
     private final ItemDisplayLookup itemDisplayLookup;
+    private final BranchResolutionQueryService branchResolution;
+    private final BranchOverrideReasonQueryService branchOverrideReasons;
 
     /**
      * Every capability {@link OrderActionsPolicy#availableFor} reads. Computed
@@ -167,7 +175,9 @@ public class OperationsOrderController {
             ShipmentCancellationPort deliveryCancellation,
             MyWorkQueryService myWork,
             StaffDisplayNames staffDisplayNames,
-            ItemDisplayLookup itemDisplayLookup) {
+            ItemDisplayLookup itemDisplayLookup,
+            BranchResolutionQueryService branchResolution,
+            BranchOverrideReasonQueryService branchOverrideReasons) {
         this.orderQuery = orderQuery;
         this.orderState = orderState;
         this.outcomes = outcomes;
@@ -186,6 +196,8 @@ public class OperationsOrderController {
         this.myWork = myWork;
         this.staffDisplayNames = staffDisplayNames;
         this.itemDisplayLookup = itemDisplayLookup;
+        this.branchResolution = branchResolution;
+        this.branchOverrideReasons = branchOverrideReasons;
     }
 
     /**
@@ -465,6 +477,52 @@ public class OperationsOrderController {
 
     // ------------------------------------------------------- operator order intake (ADR 0039)
 
+    @PostMapping("/branch-resolution")
+    @RequiresCapability(value = Capability.ORDER_READ, scope = ScopeType.LOCATION)
+    @Idempotent
+    @Operation(
+            summary = "Which branches can take this order, ranked and with their current load",
+            description = "Gap map rows 1.3 and 0.1c. DELIVERY ranks every branch of this brand "
+                    + "with a live ADR 0037 zone covering `point` by that zone's own priority/area "
+                    + "order — the identical order DeliveryFeeResolver would apply if checkout later "
+                    + "priced this address at that branch, never a second ranking rule. PICKUP has "
+                    + "no address to rank a zone against, so every open branch of the brand is a "
+                    + "candidate, ranked by current load ascending. Every candidate carries its "
+                    + "ADR 0036 open/closed state, preparation band, and the exact brand-scoped live "
+                    + "order count the branch leaderboard (row 0.1c) already reads once per tick — "
+                    + "closed branches are included, not filtered out, so an operator can see the "
+                    + "resolver's own top pick is closed rather than have it silently vanish. "
+                    + "`proposedLocationId` is the first open candidate in ranked order, or the "
+                    + "top-ranked one if none is open. Authorized at this request's own `locationId` "
+                    + "(the operator's current branch) with ORDER_READ — the same read LOCATION_STAFF "
+                    + "already holds for this screen — even though the candidates it returns span the "
+                    + "whole brand: this is the explicit, human-facing search DeliveryFeeResolver's own "
+                    + "doc names as the correct home for this question, never a second zone algorithm.")
+    public ResponseEntity<BranchResolutionResponse> resolveBranches(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID locationId,
+            @Valid @RequestBody BranchResolutionRequest body) {
+        BranchResolution resolution =
+                branchResolution.resolve(tenantId, brandId, body.fulfillmentMode(), body.point(), body.channelCode());
+        return ResponseEntity.ok(BranchResolutionResponse.of(resolution));
+    }
+
+    @GetMapping("/branch-override-reasons")
+    @RequiresCapability(value = Capability.ORDER_READ, scope = ScopeType.LOCATION)
+    @Operation(
+            summary = "The curated list a branch-override dialog picks from",
+            description = "Platform-owned reference data (V0423), not a tenant registry — "
+                    + "GET .../reject-reasons' own sibling and the same closed-set argument. Read "
+                    + "with ORDER_READ because every operator who can place an order needs to "
+                    + "populate this picker.")
+    public ResponseEntity<List<BranchOverrideReasonResponse>> branchOverrideReasons(
+            @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID locationId) {
+        return ResponseEntity.ok(branchOverrideReasons.listActive().stream()
+                .map(BranchOverrideReasonResponse::of)
+                .toList());
+    }
+
     @PostMapping
     @RequiresCapability(value = Capability.ORDER_PLACE, scope = ScopeType.LOCATION, mutating = true)
     @Operation(
@@ -508,7 +566,10 @@ public class OperationsOrderController {
                     currentActor.get().subject(),
                     null,
                     body.requestedFor(),
-                    Boolean.TRUE.equals(body.overrideOutOfHours())));
+                    Boolean.TRUE.equals(body.overrideOutOfHours()),
+                    body.proposedLocationId(),
+                    body.overrideReasonCode(),
+                    body.overrideNote()));
 
             if (result.outcome() == CheckoutService.CheckoutResult.Outcome.REJECTED) {
                 String rejectionCode =
@@ -1690,6 +1751,19 @@ public class OperationsOrderController {
      *                          to override a branch whose own policy refuses a
      *                          pre-order into a closed slot outright ({@code
      *                          BRANCH_CLOSED_AT_REQUESTED_TIME})
+     * @param proposedLocationId row 1.3: the branch id {@code POST
+     *                          .../branch-resolution} proposed for this order,
+     *                          echoed back so the backend can tell an ordinary
+     *                          placement from an override — absent when the
+     *                          screen never called the resolver at all (a
+     *                          PICKUP order picked without asking, say), never
+     *                          required
+     * @param overrideReasonCode required exactly when this request's own
+     *                          {@code locationId} path segment differs from
+     *                          {@code proposedLocationId}: one of {@code
+     *                          GET .../branch-override-reasons}' curated codes
+     * @param overrideNote      required exactly when {@code overrideReasonCode}
+     *                          is {@code OTHER}
      */
     public record PlaceOrderRequest(
             @NotNull UUID customerAccountId,
@@ -1700,7 +1774,10 @@ public class OperationsOrderController {
             @NotBlank @Size(max = 32) String paymentMethodCode,
             @Nullable @Size(max = 32) String promoCode,
             @Nullable Instant requestedFor,
-            Boolean overrideOutOfHours) {}
+            Boolean overrideOutOfHours,
+            @Nullable UUID proposedLocationId,
+            @Nullable @Size(max = 48) String overrideReasonCode,
+            @Nullable @Size(max = 500) String overrideNote) {}
 
     /** One line the operator entered into the basket, same shape as a storefront cart line. */
     public record OrderLineRequest(
@@ -2320,6 +2397,83 @@ public class OperationsOrderController {
 
         static RejectReasonResponse of(JdbcRejectReasonStore.ReasonRow row) {
             return new RejectReasonResponse(row.code(), row.displayOrder(), row.requiresNote(), row.labels());
+        }
+    }
+
+    /**
+     * {@code POST .../branch-resolution}'s request (gap map row 1.3).
+     *
+     * @param point null for PICKUP, required for DELIVERY — refused
+     *              (VALIDATION_FAILED) by {@code BranchResolutionQueryService}
+     *              when absent on a DELIVERY request
+     */
+    public record BranchResolutionRequest(
+            @NotNull FulfillmentMode fulfillmentMode,
+            @Nullable @Valid GeoPoint point,
+            @NotBlank String channelCode) {}
+
+    /**
+     * One candidate branch — ranked by zone match for DELIVERY, by current
+     * load for PICKUP (row 1.3's own note: no zone applies to a pickup order).
+     *
+     * @param zoneId               the winning DELIVERY zone; null for a PICKUP candidate
+     * @param zonePriority         ADR 0037's first ranking key; null for a PICKUP candidate
+     * @param zoneAreaSquareMeters ADR 0037's second ranking key; null for a PICKUP candidate
+     * @param activeOrderCount     row 0.1c's own brand-scoped live count — the
+     *                             branch leaderboard's number, read at the
+     *                             moment of choosing a branch for a call
+     */
+    public record BranchCandidateResponse(
+            UUID locationId,
+            String displayName,
+            boolean available,
+            @Nullable String reason,
+            @Nullable Integer preparationMinutes,
+            long activeOrderCount,
+            @Nullable UUID zoneId,
+            @Nullable Integer zonePriority,
+            @Nullable Double zoneAreaSquareMeters) {
+
+        static BranchCandidateResponse of(BranchCandidate candidate) {
+            return new BranchCandidateResponse(
+                    candidate.locationId(),
+                    candidate.displayName(),
+                    candidate.available(),
+                    candidate.reason(),
+                    candidate.preparationMinutes(),
+                    candidate.activeOrderCount(),
+                    candidate.zoneId(),
+                    candidate.zonePriority(),
+                    candidate.zoneAreaSquareMeters());
+        }
+    }
+
+    /** @param proposedLocationId null only when {@code candidates} is empty — no branch serves this address at all */
+    public record BranchResolutionResponse(
+            List<BranchCandidateResponse> candidates,
+            @Nullable UUID proposedLocationId) {
+
+        static BranchResolutionResponse of(BranchResolution resolution) {
+            return new BranchResolutionResponse(
+                    resolution.candidates().stream()
+                            .map(BranchCandidateResponse::of)
+                            .toList(),
+                    resolution.proposedLocationId());
+        }
+    }
+
+    /**
+     * One curated branch-override reason (V0423), as the override dialog's picker renders it.
+     *
+     * @param labels every locale's label at once, {@code GET .../reject-reasons}'
+     *               own shape
+     * @param requiresNote true only for {@code OTHER} today
+     */
+    public record BranchOverrideReasonResponse(
+            String code, int displayOrder, boolean requiresNote, Map<String, String> labels) {
+
+        static BranchOverrideReasonResponse of(JdbcBranchOverrideReasonStore.ReasonRow row) {
+            return new BranchOverrideReasonResponse(row.code(), row.displayOrder(), row.requiresNote(), row.labels());
         }
     }
 

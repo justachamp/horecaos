@@ -6,6 +6,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Locale;
 import java.util.Map;
@@ -34,6 +35,7 @@ import uz.horecaos.platform.audit.api.ApprovalSubject;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
@@ -226,7 +228,12 @@ public class JdbcApprovalService implements ApprovalService {
                 .at(scopeOf(request))
                 .target("ApprovalRequest", requestId)
                 .because(reason)
-                .changed(subjectDocument(request.subjectTenantId()))
+                // Staff 9.3a: "status" genuinely moves from PENDING (this
+                // method's own guard above proves it) to the decision.
+                .changed(ChangeDocuments.diff(
+                        subjectDocument(request.subjectTenantId(), "PENDING"),
+                        subjectDocument(
+                                request.subjectTenantId(), decision == Decision.APPROVE ? "APPROVED" : "DECLINED")))
                 .underApproval(requestId)
                 .correlatedBy(requestId.toString())
                 .occurredAt(clock.instant())
@@ -363,7 +370,8 @@ public class JdbcApprovalService implements ApprovalService {
                 .at(command.scope())
                 .target("ApprovalRequest", requestId)
                 .because(command.reason())
-                .changed(subjectDocument(subjectTenantId(command)))
+                // Staff 9.3a: a freshly inserted request has no prior state.
+                .changed(ChangeDocuments.created(subjectDocument(subjectTenantId(command), "PENDING")))
                 .underApproval(requestId)
                 .correlatedBy(requestId.toString())
                 .occurredAt(now)
@@ -399,6 +407,13 @@ public class JdbcApprovalService implements ApprovalService {
      */
     private static Map<String, Object> subjectDocument(@Nullable UUID subjectTenantId) {
         return subjectTenantId == null ? Map.of() : Map.of("subjectTenantId", subjectTenantId.toString());
+    }
+
+    /** {@link #subjectDocument} plus a {@code status} field, for a request's own diff. */
+    private static Map<String, Object> subjectDocument(@Nullable UUID subjectTenantId, String status) {
+        Map<String, Object> document = new LinkedHashMap<>(subjectDocument(subjectTenantId));
+        document.put("status", status);
+        return document;
     }
 
     /**
@@ -568,7 +583,12 @@ public class JdbcApprovalService implements ApprovalService {
                 // decision; what this fact adds is that the signature was spent,
                 // so it says that and nothing about a customer.
                 .because("The approved action was executed under this approval")
-                .changed(subjectDocument(request.subjectTenantId()))
+                // Staff 9.3a: "status" genuinely moves from APPROVED (the
+                // UPDATE above's own WHERE status = 'APPROVED' guard proves
+                // it) to CONSUMED.
+                .changed(ChangeDocuments.diff(
+                        subjectDocument(request.subjectTenantId(), "APPROVED"),
+                        subjectDocument(request.subjectTenantId(), "CONSUMED")))
                 .underApproval(request.id())
                 .correlatedBy(request.id().toString())
                 .occurredAt(now)

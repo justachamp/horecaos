@@ -77,14 +77,24 @@ export class MenuService {
 
   readonly currency = signal<string | null>(null);
 
-  /** The whole menu for a location: the already-in-flight read for that key
-   * if one is on the wire, otherwise a fresh read from the origin. */
-  async menu(locale: string, locationId?: string): Promise<PublishedMenu> {
+  /**
+   * The whole menu for a location: the already-in-flight read for that key
+   * if one is on the wire, otherwise a fresh read from the origin.
+   *
+   * @param channel overrides this deployment's own configured channel. The
+   *        one caller today is the dine-in QR flow (`DineInService`): a
+   *        table's `QR_TABLE` channel is resolved per scan, from the guest
+   *        admission, and is never this build's `config.channel` -- see
+   *        `AppConfig.channel`'s own doc on why a static build config cannot
+   *        answer that.
+   */
+  async menu(locale: string, locationId?: string, channel?: string): Promise<PublishedMenu> {
     const location = locationId ?? this.config.defaultLocationId;
     if (!location) {
       throw new Error('No location is configured for this storefront.');
     }
-    const key = `${location}|${locale}|${this.config.channel}`;
+    const effectiveChannel = channel ?? this.config.channel;
+    const key = `${location}|${locale}|${effectiveChannel}`;
     if (this.pending?.key === key) {
       return this.pending.promise;
     }
@@ -93,10 +103,10 @@ export class MenuService {
         `/storefront/tenants/${this.config.tenantId}/brands/${this.config.brandId}` +
           `/locations/${location}/menu`,
         {
-          // The channel is required and is this deployment's own: ADR 0036 makes it
-          // supply both the publication and the price plane, so a menu fetched on
-          // another channel is a menu whose prices change at checkout.
-          query: { locale, channel: this.config.channel },
+          // The channel is required: ADR 0036 makes it supply both the
+          // publication and the price plane, so a menu fetched on another
+          // channel is a menu whose prices change at checkout.
+          query: { locale, channel: effectiveChannel },
           anonymous: true,
         },
       )

@@ -69,7 +69,8 @@ public class BranchTagService {
                 .at(ResourceScope.tenant(tenantId))
                 .target("BranchTag", id)
                 .because(reason)
-                .changed(Map.of("code", code, "displayName", displayName))
+                // Staff 9.3a: a brand-new tag, no prior state to diff against.
+                .changed(ChangeDocuments.created(Map.of("code", code, "displayName", displayName)))
                 .usingCapability(Capability.LOCATION_WRITE.code())
                 .correlatedBy(id.toString())
                 .occurredAt(clock.instant())
@@ -89,7 +90,9 @@ public class BranchTagService {
                 .at(ResourceScope.tenant(tenantId))
                 .target("BranchTag", tagId)
                 .because(reason)
-                .changed(Map.of("code", tag.code()))
+                // Staff 9.3a: "status" genuinely moves -- tags.archive's own
+                // WHERE clause only ever touches an ACTIVE row.
+                .changed(ChangeDocuments.change("status", tag.status(), "ARCHIVED"))
                 .usingCapability(Capability.LOCATION_WRITE.code())
                 .correlatedBy(tagId.toString())
                 .occurredAt(clock.instant())

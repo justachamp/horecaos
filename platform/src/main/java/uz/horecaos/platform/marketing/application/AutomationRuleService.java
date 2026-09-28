@@ -12,6 +12,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.configuration.Ids;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.marketing.api.CampaignMessagePort;
@@ -160,7 +161,20 @@ public class AutomationRuleService {
                 .target("MarketingAutomationRule", ruleId)
                 .outcome(activated ? AuditFact.Outcome.SUCCEEDED : AuditFact.Outcome.REJECTED)
                 .because("Operator armed the automation")
-                .changed(Map.of("triggerType", rule.triggerType(), "channel", rule.channel()))
+                // Staff 9.3a: "active" moves from the rule's prior value
+                // (read above, before the write) to true only when the
+                // write actually won -- a stale expectedVersion leaves the
+                // rule exactly where it was, and the audit must not claim
+                // it armed when it did not.
+                .changed(ChangeDocuments.diff(
+                        Map.of("active", rule.active(), "triggerType", rule.triggerType(), "channel", rule.channel()),
+                        Map.of(
+                                "active",
+                                activated ? true : rule.active(),
+                                "triggerType",
+                                rule.triggerType(),
+                                "channel",
+                                rule.channel())))
                 .usingCapability("campaign.approve")
                 .correlatedBy(correlationId)
                 .occurredAt(now)
@@ -171,7 +185,7 @@ public class AutomationRuleService {
     @Transactional
     public boolean deactivate(
             UUID tenantId, UUID brandId, UUID ruleId, int expectedVersion, ActorRef actor, String correlationId) {
-        require(tenantId, brandId, ruleId);
+        AutomationRuleRow rule = require(tenantId, brandId, ruleId);
         Instant now = clock.instant();
         boolean deactivated = rules.deactivate(tenantId, ruleId, expectedVersion, now);
 
@@ -181,7 +195,12 @@ public class AutomationRuleService {
                 .target("MarketingAutomationRule", ruleId)
                 .outcome(deactivated ? AuditFact.Outcome.SUCCEEDED : AuditFact.Outcome.REJECTED)
                 .because("Operator stopped the automation")
-                .changed(Map.of())
+                // Staff 9.3a: "active" moves from the rule's prior value
+                // (read above, before the write) to false only when the
+                // write actually won -- a stale expectedVersion leaves the
+                // rule exactly where it was, and the audit must not claim
+                // it stopped when it did not.
+                .changed(ChangeDocuments.change("active", rule.active(), deactivated ? false : rule.active()))
                 .usingCapability("campaign.approve")
                 .correlatedBy(correlationId)
                 .occurredAt(now)

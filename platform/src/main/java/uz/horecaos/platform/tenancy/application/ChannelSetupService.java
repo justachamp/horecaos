@@ -1,6 +1,7 @@
 package uz.horecaos.platform.tenancy.application;
 
 import java.time.Clock;
+import java.time.Instant;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
@@ -12,8 +13,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.tenancy.domain.channel.ChannelHostname;
 import uz.horecaos.platform.tenancy.domain.channel.ChannelPresentation;
+import uz.horecaos.platform.tenancy.domain.channel.HostnameChallenge;
+import uz.horecaos.platform.tenancy.domain.channel.HostnameChallenges;
 import uz.horecaos.platform.tenancy.domain.channel.ReservedSubdomains;
+import uz.horecaos.platform.tenancy.infrastructure.dns.DnsTxtResolver;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcChannelSetupStore;
+import uz.horecaos.platform.web.api.ApiException;
+import uz.horecaos.platform.web.api.ErrorCode;
 
 /**
  * Row 10.5's channel setup hub: a channel's hostname and SEO presentation
@@ -28,13 +34,16 @@ import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcChannelSetupS
  * exposed publicly by {@code StorefrontChannelHostnameController} — and the
  * console screen an operator uses to set the mapping in the first place.
  *
- * <p><strong>What this does not build.</strong> The DNS-TXT
- * challenge-and-poll verification flow settings.md 10.5's WEB section
- * describes (issue a token, show it, poll DNS, flip the status) is real
- * infrastructure work this wave does not do — see this class's own {@link
- * #verifyCustomHostname} doc. That, and the kiosk device registry, are the
- * two things the operations gap map already names as needing an owner
- * decision on row 10.5, and re-deciding them is out of scope here.
+ * <p><strong>The DNS-TXT challenge.</strong> settings.md 10.5's WEB section:
+ * "Domain verification is DNS TXT, not credential handover." A custom
+ * hostname gets a fresh {@link HostnameChallenge} the moment it is claimed
+ * ({@link #setCustomHostname}); {@link #verifyCustomHostname} resolves that
+ * challenge's TXT record over real DNS ({@link DnsTxtResolver}) and only
+ * flips {@code verified} on a match; {@link #rotateChallenge} issues a fresh
+ * token on request, un-verifying the hostname in the same write since the
+ * old proof no longer matches what the console now shows. The kiosk device
+ * registry is the one thing left on row 10.5 needing an owner decision —
+ * re-deciding it is out of scope here.
  */
 @Service
 public class ChannelSetupService {
@@ -45,16 +54,19 @@ public class ChannelSetupService {
     private final JdbcChannelSetupStore store;
     private final SalesChannelService channels;
     private final Clock clock;
+    private final DnsTxtResolver dnsResolver;
     private final String baseDomain;
 
     public ChannelSetupService(
             JdbcChannelSetupStore store,
             SalesChannelService channels,
             Clock clock,
+            DnsTxtResolver dnsResolver,
             @Value("${horecaos.storefront.base-domain:stores.horecaos.uz}") String baseDomain) {
         this.store = store;
         this.channels = channels;
         this.clock = clock;
+        this.dnsResolver = dnsResolver;
         this.baseDomain = baseDomain;
     }
 
@@ -109,24 +121,81 @@ public class ChannelSetupService {
     }
 
     /**
-     * Marks the channel's current hostname verified.
+     * Resolves the channel's active DNS-TXT challenge over real DNS and
+     * flips {@code verified} true only on a match.
      *
-     * <p>This is the flag alone, set by a capability-gated operator action
-     * once they have confirmed ownership by whatever means — today, outside
-     * this application. It is not the DNS-TXT challenge settings.md 10.5
-     * describes: this wave stores where that flag lives and lets it be set,
-     * it does not issue a token, poll a resolver, or prove anything on its
-     * own. Building that checker is the gap map's own open item, not
-     * re-decided here.
+     * <p>Refuses with {@link TenantResourceNotFoundException} when this
+     * channel has no active challenge — no hostname claimed, or a
+     * platform-issued subdomain, which is verified immediately at claim time
+     * and never gets a challenge to resolve ({@link #setSubdomain}).
+     * Refuses with {@link ErrorCode#UNPROCESSABLE_STATE} when the challenge
+     * record does not (yet) carry the issued token: the request was
+     * well-formed and named a real, pending challenge, but the DNS state it
+     * depends on refuses it — exactly {@link ErrorCode#UNPROCESSABLE_STATE}'s
+     * own contract, not a 400 telling the operator to fix a request that was
+     * never wrong.
      */
     @Transactional
     public ChannelHostname verifyCustomHostname(UUID tenantId, UUID channelId, int expectedVersion) {
         channels.require(tenantId, channelId);
+        HostnameChallenge challenge = store.challengeFor(tenantId, channelId)
+                .orElseThrow(() -> new TenantResourceNotFoundException(
+                        "This channel has no active DNS challenge to verify — claim a custom hostname first"));
+        if (!recordCarriesToken(challenge)) {
+            throw new ApiException(
+                    ErrorCode.UNPROCESSABLE_STATE,
+                    ("The DNS TXT record %s does not yet carry the issued challenge — publish it, allow "
+                                    + "DNS to propagate, and try again")
+                            .formatted(challenge.recordName()));
+        }
         if (!store.markVerified(tenantId, channelId, expectedVersion, clock.instant())) {
             throw new TenantResourceConflictException("The channel changed since it was read");
         }
         return store.hostnameFor(tenantId, channelId)
                 .orElseThrow(() -> new TenantResourceNotFoundException("This channel has no hostname"));
+    }
+
+    /**
+     * The channel's active DNS-TXT challenge, for the console to show with a
+     * copy action. Empty for a channel with no custom hostname claimed —
+     * including one that has claimed a platform-issued subdomain, which
+     * never gets a challenge in the first place.
+     */
+    @Transactional(readOnly = true)
+    public Optional<HostnameChallenge> challenge(UUID tenantId, UUID channelId) {
+        channels.require(tenantId, channelId);
+        return store.challengeFor(tenantId, channelId);
+    }
+
+    /**
+     * Issues a fresh challenge token for the channel's current custom
+     * hostname, replacing whatever token it had. Un-verifies the hostname in
+     * the same write ({@link JdbcChannelSetupStore#rotateChallenge}): the
+     * previous DNS-TXT record, if still published, carries the *old* token,
+     * which is no longer the challenge the console is showing, so it must
+     * not keep resolving traffic on a proof that no longer applies.
+     */
+    @Transactional
+    public HostnameChallenge rotateChallenge(UUID tenantId, UUID channelId, int expectedVersion) {
+        channels.require(tenantId, channelId);
+        ChannelHostname current = store.hostnameFor(tenantId, channelId)
+                .orElseThrow(() -> new TenantResourceNotFoundException("This channel has no hostname"));
+        if (isPlatformIssued(current.hostname())) {
+            throw new IllegalArgumentException(
+                    "\"%s\" is a platform-issued subdomain and needs no DNS challenge".formatted(current.hostname()));
+        }
+        String token = HostnameChallenges.generateToken();
+        Instant now = clock.instant();
+        if (!store.rotateChallenge(tenantId, channelId, token, expectedVersion, now)) {
+            throw new TenantResourceConflictException("The channel changed since it was read");
+        }
+        return HostnameChallenge.of(tenantId, channelId, current.hostname(), token, now);
+    }
+
+    private boolean recordCarriesToken(HostnameChallenge challenge) {
+        return dnsResolver.resolveTxt(challenge.recordName()).stream()
+                .map(String::trim)
+                .anyMatch(challenge.token()::equals);
     }
 
     @Transactional
@@ -139,15 +208,36 @@ public class ChannelSetupService {
 
     private ChannelHostname write(
             UUID tenantId, UUID channelId, String hostname, boolean verified, int expectedVersion) {
-        java.time.Instant now = clock.instant();
+        Instant now = clock.instant();
+        // A platform-issued subdomain (verified=true) needs no challenge --
+        // HorecaOS's own DNS already answers for it. A custom hostname
+        // always gets a fresh one here, even if it is replacing an earlier
+        // custom hostname's own token: the previous challenge named a
+        // different hostname, so carrying its token forward would be
+        // meaningless.
+        String token = verified ? null : HostnameChallenges.generateToken();
+        Instant issuedAt = verified ? null : now;
         try {
-            if (!store.setHostname(tenantId, channelId, hostname, verified, expectedVersion, now)) {
+            if (!store.setHostname(tenantId, channelId, hostname, verified, token, issuedAt, expectedVersion, now)) {
                 throw new TenantResourceConflictException("The channel changed since it was read");
             }
         } catch (DataIntegrityViolationException violation) {
             throw explainHostnameViolation(violation);
         }
         return new ChannelHostname(tenantId, channelId, hostname, verified, now);
+    }
+
+    /**
+     * Whether {@code hostname} is (or is under) the platform's own base
+     * domain — a subdomain claimed through {@link #setSubdomain}, verified
+     * immediately and never given a DNS challenge — as opposed to a tenant's
+     * own custom domain. Computed from the hostname string rather than
+     * stored, matching {@link ChannelHostname}'s own doc on why that
+     * distinction is deliberately not a column: it only ever matters at
+     * write time, and now here, at challenge time.
+     */
+    private boolean isPlatformIssued(String hostname) {
+        return hostname.equals(baseDomain) || hostname.endsWith("." + baseDomain);
     }
 
     // --------------------------------------------------------- presentation
@@ -233,7 +323,7 @@ public class ChannelSetupService {
                 throw new IllegalArgumentException("\"%s\" is not a valid hostname".formatted(hostname));
             }
         }
-        if (normalized.equals(baseDomain) || normalized.endsWith("." + baseDomain)) {
+        if (isPlatformIssued(normalized)) {
             throw new IllegalArgumentException(
                     "\"%s\" is under the platform's own domain — use the subdomain field instead".formatted(hostname));
         }

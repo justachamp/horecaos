@@ -18,6 +18,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.dinein.application.port.SessionOrderSource;
 import uz.horecaos.platform.dinein.application.port.SessionOrderSource.OrderForSession;
 import uz.horecaos.platform.dinein.application.port.SessionOrderSource.SessionBill;
@@ -183,10 +184,11 @@ public class TableSessionService {
                 .target("dinein.table_session", sessionId)
                 .targetVersion(1L)
                 .because(reason)
-                .changed(Map.of(
+                // Staff 9.3a: a freshly inserted session has no prior state.
+                .changed(ChangeDocuments.created(Map.of(
                         "tables", request.tableIds().size(),
                         "walkIn", request.reservationId() == null,
-                        "businessDate", session.businessDate().toString()))
+                        "businessDate", session.businessDate().toString())))
                 .usingCapability("dinein.session.manage")
                 .correlatedBy(sessionId.toString())
                 .occurredAt(now)
@@ -202,9 +204,36 @@ public class TableSessionService {
      * ADR 0019 priced it, and this records that it belongs to this table's evening.
      * The unique key on {@code (tenant_id, order_id)} is what stops one meal
      * appearing on two bills.
+     *
+     * @param requireOwnerAccountId null for an operator's own capability-gated
+     *                              write ({@code TableSessionController}), which
+     *                              may attach any order a manager can see. Non-null
+     *                              for the guest's own device ({@code
+     *                              QrEntryController}), which holds a table-scoped
+     *                              token and no ADR 0025 capability at all -- the
+     *                              token alone proves "this device is at this
+     *                              table", never "this order is this device's own".
+     *                              Checkout does not bind a cart to a table (ADR
+     *                              0047's own "what was not built"), so the only
+     *                              fact this method can still check is the one
+     *                              checkout always records: which signed-in
+     *                              customer placed the order. A mismatch answers
+     *                              exactly like a non-existent order -- the same
+     *                              {@link ErrorCode#RESOURCE_NOT_FOUND} the lookup
+     *                              two lines below throws -- so a guest fishing for
+     *                              another table's order id learns nothing from the
+     *                              difference, and so an order that really does not
+     *                              exist and one that exists but is not theirs read
+     *                              identically to every caller that is not its owner.
      */
     @Transactional
-    public int addRound(UUID tenantId, UUID sessionId, UUID orderId, String actorSubject, String reason) {
+    public int addRound(
+            UUID tenantId,
+            UUID sessionId,
+            UUID orderId,
+            @Nullable UUID requireOwnerAccountId,
+            String actorSubject,
+            String reason) {
 
         SessionRow session = require(tenantId, sessionId);
         if (!session.status().live()) {
@@ -214,6 +243,15 @@ public class TableSessionService {
 
         OrderForSession order = orders.find(tenantId, orderId)
                 .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such order"));
+
+        if (requireOwnerAccountId != null && !requireOwnerAccountId.equals(order.customerAccountId())) {
+            // Same refusal, same message, as the lookup above: a guest holding a
+            // valid token for table A and a real order id from table B must not be
+            // able to tell "wrong table" apart from "no such order" by the answer
+            // it gets back -- that difference is exactly what let table A's guest
+            // reach table B's bill.
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such order");
+        }
 
         if (!"DINE_IN".equals(order.fulfillmentMode())) {
             throw new ApiException(
@@ -249,7 +287,8 @@ public class TableSessionService {
                 .target("dinein.table_session", sessionId)
                 .targetVersion((long) session.version())
                 .because(reason)
-                .changed(Map.of("orderId", orderId.toString(), "sequence", sequence))
+                // Staff 9.3a: a freshly added round has no prior state.
+                .changed(ChangeDocuments.created(Map.of("orderId", orderId.toString(), "sequence", sequence)))
                 .usingCapability("dinein.session.manage")
                 .correlatedBy(sessionId.toString())
                 .occurredAt(now)
@@ -336,17 +375,16 @@ public class TableSessionService {
             throw ApiException.staleVersion(expectedVersion, session.version());
         }
 
-        Map<String, Object> changed = new HashMap<>();
-        changed.put("from", session.status().name());
-        changed.put("to", to.name());
-        changed.put("rounds", bill.roundCount());
-        changed.put("billTotalMinor", bill.totalMinor());
-        changed.put("currency", bill.currency() == null ? session.currency() : bill.currency());
+        Map<String, Object> after = new HashMap<>();
+        after.put("status", to.name());
+        after.put("rounds", bill.roundCount());
+        after.put("billTotalMinor", bill.totalMinor());
+        after.put("currency", bill.currency() == null ? session.currency() : bill.currency());
         if (to == SessionStatus.FORCE_CLOSED) {
             // The unpaid amount, recorded where a shift report can group by it.
             // This is the number a manager is answering for.
-            changed.put("unsettledMinor", bill.totalMinor());
-            changed.put("closeReasonCode", closeReasonCode);
+            after.put("unsettledMinor", bill.totalMinor());
+            after.put("closeReasonCode", closeReasonCode);
         }
 
         audit.record(AuditFact.of(
@@ -356,7 +394,11 @@ public class TableSessionService {
                 .target("dinein.table_session", sessionId)
                 .targetVersion((long) expectedVersion + 1)
                 .because(reason)
-                .changed(changed)
+                // Staff 9.3a: "status" genuinely moves from the session's
+                // prior status to the requested one; every other key is this
+                // transition's own billing snapshot, with no prior value to
+                // diff against.
+                .changed(ChangeDocuments.diff(Map.of("status", session.status().name()), after))
                 .usingCapability(
                         to == SessionStatus.FORCE_CLOSED ? "dinein.session.force_close" : "dinein.session.manage")
                 .correlatedBy(sessionId.toString())

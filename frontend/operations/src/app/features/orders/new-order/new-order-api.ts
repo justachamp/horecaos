@@ -168,6 +168,15 @@ export interface DestinationRequest {
  *   `requestedFor` — but `new-order-page.ts` only sets it true on the
  *   confirmed resubmit, so a stray false-positive warning is never silently
  *   skipped.
+ * @property proposedLocationId row 1.3: the branch `resolveBranches` proposed
+ *   for this order, echoed back so the backend can tell an ordinary
+ *   placement from an override — absent when the screen never resolved
+ *   branches at all.
+ * @property overrideReasonCode row 1.3: required exactly when the scope this
+ *   request is sent to differs from `proposedLocationId` — one of
+ *   `branchOverrideReasons`' curated codes.
+ * @property overrideNote row 1.3: required exactly when `overrideReasonCode`
+ *   is `OTHER`.
  */
 export interface PlaceOrderRequest {
   readonly customerAccountId: string;
@@ -179,6 +188,54 @@ export interface PlaceOrderRequest {
   readonly promoCode?: string | null;
   readonly requestedFor?: string | null;
   readonly overrideOutOfHours?: boolean;
+  readonly proposedLocationId?: string | null;
+  readonly overrideReasonCode?: string | null;
+  readonly overrideNote?: string | null;
+}
+
+// -------------------------------------------------------- §5.4 branch resolution (row 1.3)
+
+/**
+ * `OperationsOrderController.BranchResolutionRequest`. `point` is required
+ * for `DELIVERY` and omitted for `PICKUP` — there is no address to rank a
+ * zone against (row 1.3's own note).
+ */
+interface BranchResolutionRequest {
+  readonly fulfillmentMode: string;
+  readonly point?: { readonly latitude: number; readonly longitude: number } | null;
+  readonly channelCode: string;
+}
+
+/**
+ * `OperationsOrderController.BranchCandidateResponse` — one branch the New
+ * Order screen may place this order at. `zoneId`/`zonePriority`/
+ * `zoneAreaSquareMeters` are present only for a `DELIVERY` candidate (row
+ * 1.3's own note: `PICKUP` has no zone to match).
+ */
+export interface BranchCandidate {
+  readonly locationId: string;
+  readonly displayName: string;
+  readonly available: boolean;
+  readonly reason: string | null;
+  readonly preparationMinutes: number | null;
+  readonly activeOrderCount: number;
+  readonly zoneId: string | null;
+  readonly zonePriority: number | null;
+  readonly zoneAreaSquareMeters: number | null;
+}
+
+/** `OperationsOrderController.BranchResolutionResponse`. */
+export interface BranchResolution {
+  readonly candidates: readonly BranchCandidate[];
+  readonly proposedLocationId: string | null;
+}
+
+/** `OperationsOrderController.BranchOverrideReasonResponse` — `GET .../branch-override-reasons`'s own row. */
+export interface BranchOverrideReason {
+  readonly code: string;
+  readonly displayOrder: number;
+  readonly requiresNote: boolean;
+  readonly labels: Readonly<Record<string, string>>;
 }
 
 // -------------------------------------------------------- §5.6 delivery fee preview
@@ -301,6 +358,39 @@ export class NewOrderApi {
       ),
     );
     return result.value;
+  }
+
+  /**
+   * Rows 1.3/0.1c: the cross-branch resolver — which branches of the brand
+   * can take this order, ranked, each with its current load, its open/closed
+   * state and preparation band. `point` is required for `DELIVERY` and
+   * omitted for `PICKUP`. `Idempotent` server-side like {@link
+   * lookupCustomerByPhone}, so a fresh key per call is correct — this reads
+   * nothing that survives between calls.
+   */
+  async resolveBranches(
+    scope: LocationScope,
+    fulfillmentMode: string,
+    point: { lat: number; lon: number } | null,
+    channelCode: string,
+  ): Promise<BranchResolution> {
+    return firstValueFrom(
+      this.api.post<BranchResolutionRequest, BranchResolution>(
+        operationsPaths.orderBranchResolution(scope),
+        command({
+          fulfillmentMode,
+          point: point === null ? null : { latitude: point.lat, longitude: point.lon },
+          channelCode,
+        }),
+      ),
+    );
+  }
+
+  /** Row 1.3: the curated list the branch-override dialog picks from. */
+  async branchOverrideReasons(scope: LocationScope): Promise<readonly BranchOverrideReason[]> {
+    return firstValueFrom(
+      this.api.get<readonly BranchOverrideReason[]>(operationsPaths.orderBranchOverrideReasons(scope)),
+    ).then((result) => result.value);
   }
 
   /**

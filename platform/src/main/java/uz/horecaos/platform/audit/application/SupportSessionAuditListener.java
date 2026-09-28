@@ -7,6 +7,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.SupportSessionChanged;
@@ -34,7 +35,10 @@ public class SupportSessionAuditListener {
                 .at(ResourceScope.tenant(event.tenantId()))
                 .target("SupportSession", event.sessionId())
                 .because(event.reason())
-                .changed(event.details())
+                // Staff 9.3a: audit, not iam, owns ChangeDocuments (see
+                // SupportSessionChanged's own doc on before/after), so this
+                // listener is where the before/after diff is actually built.
+                .changed(ChangeDocuments.diff(event.before(), event.after()))
                 .usingCapability(
                         event.change() == SupportSessionChanged.Change.OPENED
                                 ? Capability.SUPPORT_SESSION_START.code()

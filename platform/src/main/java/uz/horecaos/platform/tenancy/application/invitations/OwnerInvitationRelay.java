@@ -22,6 +22,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.accounts.StaffAccounts;
 import uz.horecaos.platform.iam.api.accounts.StaffAccounts.StaffAccount;
@@ -196,7 +197,10 @@ public class OwnerInvitationRelay {
                             .at(ResourceScope.tenant(row.tenantId()))
                             .target("tenant.owner_invitation", row.id())
                             .because("The owner's invitation was emailed (ADR 0097)")
-                            .changed(Map.of("attempt", row.attempts(), "expiresAt", expiresAt.toString()))
+                            // Staff 9.3a: this send's own fresh attempt/expiry,
+                            // no prior state on this fact to diff against.
+                            .changed(ChangeDocuments.created(
+                                    Map.of("attempt", row.attempts(), "expiresAt", expiresAt.toString())))
                             .correlatedBy(UUID.randomUUID().toString())
                             .occurredAt(now)
                             .build());

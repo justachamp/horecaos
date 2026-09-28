@@ -1047,7 +1047,8 @@ export const messagesRu: MessageCatalogue = {
   'settings.salesChannels.field.brandColorPrimary': 'Основной цвет',
   'settings.salesChannels.field.brandColorSecondary': 'Дополнительный цвет',
   'settings.salesChannels.field.color.clear': 'Очистить',
-  'settings.salesChannels.field.color.contrastWarning': 'Низкий контраст ({ratio}:1) на фоне «{surface}» — по WCAG AA нужно 4.5:1',
+  'settings.salesChannels.field.color.contrastWarning':
+    'Низкий контраст ({ratio}:1) на фоне «{surface}» — по WCAG AA нужно 4.5:1',
   'settings.salesChannels.field.color.surface.canvas': 'фона страницы',
   'settings.salesChannels.field.color.surface.surface1': 'поверхности карточки',
   'settings.salesChannels.field.color.surface.slaLateTint': 'просроченного заказа',
@@ -1099,6 +1100,13 @@ export const messagesRu: MessageCatalogue = {
   'settings.channelSetup.hostname.custom.label': 'Свой домен',
   'settings.channelSetup.hostname.custom.placeholder': 'orders.example.uz',
   'settings.channelSetup.hostname.claim': 'Занять',
+  'settings.channelSetup.hostname.challenge.instructions':
+    'Добавьте эту TXT-запись у вашего DNS-провайдера, затем подтвердите:',
+  'settings.channelSetup.hostname.challenge.recordLabel': 'Имя записи',
+  'settings.channelSetup.hostname.challenge.valueLabel': 'Значение',
+  'settings.channelSetup.hostname.challenge.copy': 'Копировать',
+  'settings.channelSetup.hostname.challenge.copied': 'Скопировано',
+  'settings.channelSetup.hostname.challenge.rotate': 'Получить новый код',
   'settings.channelSetup.presentation.title': 'Предпросмотр в поиске',
   'settings.channelSetup.presentation.seoTitle': 'Заголовок',
   'settings.channelSetup.presentation.seoDescription': 'Описание',
@@ -2256,6 +2264,10 @@ export const messagesRu: MessageCatalogue = {
   'catalog.editor.availability.quantityHint':
     'Остаток, суточное значение по умолчанию и пороги остановки по каналам для варианта с учётом QUANTITY находятся на странице «Остатки».',
   'catalog.editor.availability.quantityHintLink': 'Открыть Остатки',
+  'catalog.editor.availability.notListedAtBranches':
+    'Не размещено в {count} филиал(ах) — предлагается там, но недоступно для заказа, пока не размещено.',
+  'catalog.editor.availability.listEverywhere': 'Разместить во всех филиалах',
+  'catalog.editor.availability.listingInProgress': 'Размещение…',
   'catalog.editor.schedule.hint':
     'Пусто — значит товар всегда в продаже. Окна ниже ограничивают время продажи и рассчитываются по местному времени филиала.',
   'catalog.editor.schedule.loading': 'Загрузка графика…',
@@ -2353,6 +2365,9 @@ export const messagesRu: MessageCatalogue = {
   'catalog.categories.archiveConfirm.title': 'Архивировать категорию?',
   'catalog.categories.archiveConfirm.body':
     '«{name}» больше не будет показываться в дереве категорий. Товары, размещённые в ней, останутся на месте.',
+  'catalog.categories.form.saving': 'Сохранение…',
+  'catalog.categories.content.title': 'Название и описание по языкам',
+  'catalog.categories.content.defaultMarker': 'По умолчанию',
 
   // Строка карты пробелов 4.4c: страница остатков QUANTITY по филиалу (пакет 11)
   'catalog.stock.title': 'Остатки',
@@ -4675,7 +4690,8 @@ export const messagesRu: MessageCatalogue = {
   'marketing.automations.configLabel.BIRTHDAY': 'Окно, дней до/после дня рождения',
   'marketing.automations.configLabel.INACTIVITY': 'Дней с последнего заказа',
   'marketing.automations.configLabel.CART_ABANDONMENT': 'Задержка до срабатывания, часов',
-  'marketing.automations.configLabel.CASHBACK_CHANGE': 'Минимальное изменение баланса, минимальные единицы',
+  'marketing.automations.configLabel.CASHBACK_CHANGE':
+    'Минимальное изменение баланса, минимальные единицы',
   'marketing.automations.form.title': 'Создать правило автоматизации',
   'marketing.automations.form.name': 'Название',
   'marketing.automations.form.trigger': 'Триггер',
@@ -5681,6 +5697,15 @@ export const messagesRu: MessageCatalogue = {
   'orders.newOrder.order.unavailableCount': 'Позиций в корзине больше не доступно: {count}',
   'orders.newOrder.order.branch': 'Филиал',
   'orders.newOrder.order.byZone': '(по зоне)',
+  'orders.newOrder.order.branchLoading': 'Подбираем филиал…',
+  'orders.newOrder.order.branchLoad': '{count} активных заказов',
+  'orders.newOrder.order.branchClosed': 'закрыт',
+  'orders.newOrder.order.branchProposedSuffix': '(предложено)',
+  'orders.newOrder.order.branchResolutionFailed': 'Не удалось подобрать филиал — оформляем в текущем',
+  'orders.newOrder.order.branchNoCandidates': 'Ни один филиал не доставляет по этому адресу',
+  'orders.newOrder.order.branchOverrideReason': 'Причина выбора другого филиала',
+  'orders.newOrder.order.branchOverrideReasonPlaceholder': 'Выберите причину',
+  'orders.newOrder.order.branchOverrideNote': 'Комментарий',
   'orders.newOrder.order.promoCode': 'Промокод',
   'orders.newOrder.order.cashTendered': 'Сдача с',
   'orders.newOrder.order.changeDue': 'Сдача',

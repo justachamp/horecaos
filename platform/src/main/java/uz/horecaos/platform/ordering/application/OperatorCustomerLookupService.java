@@ -14,6 +14,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.customers.api.CustomerAccountRef;
 import uz.horecaos.platform.customers.api.CustomerPhoneLookup;
 import uz.horecaos.platform.iam.api.ResourceScope;
@@ -89,7 +90,9 @@ public class OperatorCustomerLookupService {
                 .at(ResourceScope.location(tenantId, brandId, locationId))
                 .because(LOOKUP_REASON)
                 .usingCapability(capabilityUsed)
-                .changed(Map.of("matchCount", String.valueOf(candidates.size())))
+                // Staff 9.3a: each lookup is its own append-only search-audit
+                // fact, with no prior lookup's count to diff against.
+                .changed(ChangeDocuments.created(Map.of("matchCount", String.valueOf(candidates.size()))))
                 .correlatedBy(Optional.ofNullable(MDC.get("correlationId")).orElse(LOOKUP_CORRELATION_FALLBACK))
                 .occurredAt(clock.instant())
                 .build());

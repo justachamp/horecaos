@@ -32,6 +32,16 @@ import java.util.UUID;
  * system-initiated grant, say. The frontend fan-out that makes this matter is
  * {@code staff-page.ts}'s {@code suspend}/{@code restore}: one correlation id
  * minted once and sent on every call in the {@code Promise.allSettled} batch.
+ *
+ * @param before empty for a fresh {@link Change#GRANTED} grant, which has no
+ *               prior state; the grant's own prior field values for {@link
+ *               Change#REVOKED}. Staff 9.3a: {@code audit}, not {@code iam},
+ *               owns {@code ChangeDocuments}, so {@link
+ *               uz.horecaos.platform.audit.application.GrantAuditListener}
+ *               is the one that builds the audit fact's before/after diff
+ *               from this and {@link #after}, rather than this module
+ *               pre-shaping one.
+ * @param after  the fields as they stand once this change has happened
  */
 public record GrantChanged(
         UUID grantId,
@@ -40,7 +50,8 @@ public record GrantChanged(
         ResourceScope scope,
         String actorSubject,
         String reason,
-        Map<String, Object> details,
+        Map<String, Object> before,
+        Map<String, Object> after,
         String correlationId,
         Instant occurredAt) {
 
@@ -57,7 +68,8 @@ public record GrantChanged(
         Objects.requireNonNull(actorSubject, "An actor subject is required");
         Objects.requireNonNull(correlationId, "A correlation id is required");
         Objects.requireNonNull(occurredAt, "An occurrence time is required");
-        details = details == null ? Map.of() : Map.copyOf(details);
+        before = before == null ? Map.of() : Map.copyOf(before);
+        after = after == null ? Map.of() : Map.copyOf(after);
         if (reason == null || reason.isBlank()) {
             throw new IllegalArgumentException("A grant change requires a reason");
         }

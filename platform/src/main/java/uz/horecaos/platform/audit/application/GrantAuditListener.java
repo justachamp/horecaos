@@ -7,6 +7,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.GrantChanged;
 
@@ -46,7 +47,10 @@ public class GrantAuditListener {
                 .at(event.scope())
                 .target("Grant", event.grantId())
                 .because(event.reason())
-                .changed(event.details())
+                // Staff 9.3a: audit, not iam, owns ChangeDocuments (see
+                // GrantChanged's own doc on before/after), so this listener
+                // is where the before/after diff is actually built.
+                .changed(ChangeDocuments.diff(event.before(), event.after()))
                 .usingCapability(Capability.IAM_GRANT_MANAGE.code())
                 .correlatedBy(event.correlationId())
                 .occurredAt(event.occurredAt())

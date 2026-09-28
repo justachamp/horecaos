@@ -347,7 +347,34 @@
     "insufficientCapability": "Buni bajarishga ruxsatingiz yo'q.",
     "entitlementRequired": "Bu sizning tarifingizda mavjud emas.",
     "notFound": "Topa olmadik.",
-    "rateLimited": "Juda ko'p urinish. Biroz kuting."
+    "rateLimited": "Juda ko'p urinish. Biroz kuting.",
+    "reason": {
+      "deliveryFeeUnresolved": "Yetkazib berish narxini hisoblab bo'lmadi. Boshqa manzil tanlang yoki keyinroq urinib ko'ring.",
+      "minimumBasketNotMet": "Yetkazib berish uchun buyurtma summasi yetarli emas.",
+      "minimumBasketAmount": "Yetkazib berish uchun eng kamida {{amount}}lik buyurtma bering.",
+      "destinationRequired": "Avval yetkazib berish manzilini tanlang.",
+      "outOfZone": "Bu manzil yetkazib berish zonasidan tashqarida.",
+      "notServiceable": "Hozir bu filialdan xizmat ko'rsatib bo'lmaydi.",
+      "signInRequired": "Buyurtma berish uchun tizimga kiring.",
+      "accountBlocked": "Hisobingiz buyurtma berishga cheklangan. Qo'llab-quvvatlash xizmatiga murojaat qiling.",
+      "cartExpired": "Savat muddati tugadi. Iltimos, qaytadan boshlang.",
+      "cartNotEditable": "Bu savatni endi o'zgartirib bo'lmaydi.",
+      "addressNotFound": "Bu manzil topilmadi. Boshqa manzil tanlang.",
+      "codeNotFound": "Bunday promokod topilmadi.",
+      "codeNotActive": "Bu promokod hali faol emas.",
+      "codeExpired": "Promokod muddati tugagan.",
+      "codeLimitReached": "Bu promokoddan foydalanish chegarasiga yetdingiz.",
+      "channelNotEnabled": "Bu xizmat hozircha ushbu kanalda mavjud emas.",
+      "modeUnavailable": "Bu usul hozircha mavjud emas.",
+      "closed": "Filial hozir yopiq.",
+      "outsideHours": "Filial ish vaqtidan tashqarida.",
+      "noLiveMenu": "Hozircha menyu mavjud emas.",
+      "atCapacity": "Oshxona hozir band. Birozdan so'ng qayta urinib ko'ring.",
+      "itemOutOfSaleWindow": "Bu taom hozir sotuvda emas.",
+      "presetNotOffered": "Bu izoh endi ushbu taom uchun taklif etilmaydi.",
+      "itemUnavailable": "Bu taom hozirgina tugab qoldi.",
+      "holdExpired": "Savatingiz uchun band qilingan vaqt tugadi. Buyurtmangizni qayta tekshirib, yana urinib ko'ring."
+    }
   },
   "money": {
     "unit": {

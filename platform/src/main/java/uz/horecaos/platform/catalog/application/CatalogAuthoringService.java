@@ -7,6 +7,7 @@ import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -16,6 +17,7 @@ import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.audit.api.ActorRef;
@@ -23,7 +25,9 @@ import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.audit.api.ChangeDocuments;
+import uz.horecaos.platform.catalog.api.OfferingBecameAvailable;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.EntityType;
+import uz.horecaos.platform.catalog.domain.CatalogEntities.LocationOffering;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.ModifierGroup;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.ModifierOption;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.OfferingStatus;
@@ -69,6 +73,7 @@ public class CatalogAuthoringService {
     private final UsageMeter usage;
     private final Clock clock;
     private final CatalogTenantContext tenantContext;
+    private final ApplicationEventPublisher events;
 
     /**
      * See {@code ServiceabilityService}'s matching overload for why this
@@ -88,7 +93,14 @@ public class CatalogAuthoringService {
         this(store, audit, entitlements, usage, clock, (tenantId, locationId) -> Optional.empty());
     }
 
-    @Autowired
+    /**
+     * Same widening concern as the five-argument overload above, for {@link
+     * #events}: dozens of this file's own tests construct through this
+     * overload directly and never assert on {@link OfferingBecameAvailable},
+     * so a no-op publisher here costs them nothing — a caller that does care
+     * uses the seven-argument, {@code @Autowired} overload below, either
+     * directly or through Spring.
+     */
     public CatalogAuthoringService(
             JdbcCatalogStore store,
             AuditRecorder audit,
@@ -96,12 +108,25 @@ public class CatalogAuthoringService {
             UsageMeter usage,
             Clock clock,
             CatalogTenantContext tenantContext) {
+        this(store, audit, entitlements, usage, clock, tenantContext, event -> {});
+    }
+
+    @Autowired
+    public CatalogAuthoringService(
+            JdbcCatalogStore store,
+            AuditRecorder audit,
+            EntitlementService entitlements,
+            UsageMeter usage,
+            Clock clock,
+            CatalogTenantContext tenantContext,
+            ApplicationEventPublisher events) {
         this.store = store;
         this.audit = audit;
         this.entitlements = entitlements;
         this.usage = usage;
         this.clock = clock;
         this.tenantContext = tenantContext;
+        this.events = events;
     }
 
     @Transactional
@@ -430,23 +455,66 @@ public class CatalogAuthoringService {
             List<UUID> variantIds,
             OfferingStatus status,
             String actorSubject) {
+        // Staff 9.3a: read every affected variant's current status before the
+        // loop below overwrites it, so the audit fact can say what each one
+        // actually moved from -- a flat "set N variants to STOPPED" cannot
+        // answer whether variant Y was already stopped. findOffering (not
+        // offeringsForLocation) because a HIDDEN row must still show as its
+        // real prior status, not read as "never offered".
+        Map<UUID, String> before = new LinkedHashMap<>();
+        for (UUID variantId : variantIds) {
+            before.put(
+                    variantId,
+                    store.findOffering(tenantId, locationId, variantId)
+                            .map(offering -> offering.status().name())
+                            .orElse(null));
+        }
+
         for (UUID variantId : variantIds) {
             store.upsertOfferingStatus(tenantId, brandId, locationId, variantId, status);
+            publishIfAvailable(tenantId, brandId, locationId, variantId, status);
         }
 
         if (!variantIds.isEmpty()) {
+            Map<String, Object> beforeDoc = new LinkedHashMap<>();
+            Map<String, Object> afterDoc = new LinkedHashMap<>();
+            for (UUID variantId : variantIds) {
+                beforeDoc.put(variantId.toString(), before.get(variantId));
+                afterDoc.put(variantId.toString(), status.name());
+            }
             audit.record(AuditFact.of("catalog.offering.bulkSet", AuditClass.BUSINESS)
                     .by(ActorRef.user(actorSubject, null))
                     .at(ResourceScope.location(tenantId, brandId, locationId))
                     .target("LocationOffering", locationId)
                     .because("Bulk-set %d variants to %s".formatted(variantIds.size(), status))
                     .usingCapability(Capability.CATALOG_AUTHOR.code())
-                    .changed(Map.of("status", status.name(), "variantCount", variantIds.size()))
+                    // Staff 9.3a: per-variant before/after, keyed by variant id
+                    // -- a null before means the variant had no offering row yet.
+                    .changed(ChangeDocuments.diff(beforeDoc, afterDoc))
                     .correlatedBy(locationId.toString())
                     .occurredAt(clock.instant())
                     .build());
         }
         return variantIds.size();
+    }
+
+    /**
+     * {@link OfferingBecameAvailable}'s one publish site, called from every
+     * write that can move an offering to {@code AVAILABLE} — both {@link
+     * #setOffering} overloads, {@link #offerIfAbsent} and {@link
+     * #bulkSetOfferingStatus}. Fires whenever the target status is {@code
+     * AVAILABLE}, whether the row was just created or already was — {@code
+     * inventory.application.CatalogOfferingListingTrigger}'s own {@code
+     * ensureListed} call is idempotent, so a redundant fire costs a cheap
+     * "already listed" read, never a second stock item or a re-opened 86.
+     * Silent for {@code UNAVAILABLE}/{@code HIDDEN}: nothing about taking an
+     * offering down or hiding it should ever list a variant.
+     */
+    private void publishIfAvailable(
+            UUID tenantId, UUID brandId, UUID locationId, UUID variantId, OfferingStatus status) {
+        if (status == OfferingStatus.AVAILABLE) {
+            events.publishEvent(new OfferingBecameAvailable(tenantId, brandId, locationId, variantId, clock.instant()));
+        }
     }
 
     /**
@@ -505,16 +573,28 @@ public class CatalogAuthoringService {
                 .target("ChannelOfferingExclusion", variantId)
                 .because(offered ? "Included on channel" : "Excluded from channel: " + reasonCode)
                 .usingCapability(Capability.CATALOG_AUTHOR.code())
-                .changed(Map.of(
-                        "channelId",
-                        channelId.toString(),
-                        "offered",
-                        offered,
-                        "locationId",
-                        locationId == null ? "BRAND" : locationId.toString()))
+                // Staff 9.3a: "offered" genuinely moves -- includeInChannel only
+                // returns true when an exclusion row existed to delete, and
+                // excludeFromChannel only when none existed to conflict with,
+                // so `changed` already proves the opposite of `offered` was
+                // this variant's state a moment ago; channelId/locationId are
+                // unchanged identifying context.
+                .changed(ChangeDocuments.diff(
+                        channelOfferingDiffMap(!offered, channelId, locationId),
+                        channelOfferingDiffMap(offered, channelId, locationId)))
                 .correlatedBy(variantId.toString())
                 .occurredAt(clock.instant())
                 .build());
+    }
+
+    /** A {@code {offered, channelId, locationId}} snapshot for a channel-offering diff (Staff 9.3a). */
+    private static Map<String, Object> channelOfferingDiffMap(
+            boolean offered, UUID channelId, @Nullable UUID locationId) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("offered", offered);
+        map.put("channelId", channelId.toString());
+        map.put("locationId", locationId == null ? "BRAND" : locationId.toString());
+        return map;
     }
 
     /**
@@ -544,6 +624,8 @@ public class CatalogAuthoringService {
         // on the exclude path, so every call site on the include path is
         // free to pass null for the direction that has none.
         int changed = 0;
+        Map<String, Object> beforeDoc = new LinkedHashMap<>();
+        Map<String, Object> afterDoc = new LinkedHashMap<>();
         for (UUID variantId : variantIds) {
             // Same explicit brand-ownership check as the single-variant
             // sibling above — see its own doc for why the insert path's
@@ -562,6 +644,11 @@ public class CatalogAuthoringService {
                             Objects.requireNonNull(reasonCode, "An exclusion needs a reason code"));
             if (rowChanged) {
                 changed++;
+                // Staff 9.3a: same proof as setChannelOffering's own single-
+                // variant sibling -- rowChanged already tells us this variant
+                // was `!offered` a moment ago, per variant id.
+                beforeDoc.put(variantId.toString(), !offered);
+                afterDoc.put(variantId.toString(), offered);
             }
         }
         if (changed > 0) {
@@ -572,7 +659,7 @@ public class CatalogAuthoringService {
                     .because("Bulk-set %d variants to %s on one channel"
                             .formatted(changed, offered ? "offered" : "excluded"))
                     .usingCapability(Capability.CATALOG_AUTHOR.code())
-                    .changed(Map.of("channelId", channelId.toString(), "offered", offered, "changedCount", changed))
+                    .changed(ChangeDocuments.diff(beforeDoc, afterDoc))
                     .correlatedBy(channelId.toString())
                     .occurredAt(clock.instant())
                     .build());
@@ -817,7 +904,10 @@ public class CatalogAuthoringService {
                     .target("Product", productId)
                     .because("Stopped in all branches (" + changed + " location offerings)")
                     .usingCapability(Capability.CATALOG_AUTHOR.code())
-                    .changed(Map.of("locationOfferingsChanged", changed))
+                    // Staff 9.3a: stopProductEverywhere's own WHERE clause only
+                    // ever touches rows that were AVAILABLE, setting them
+                    // UNAVAILABLE -- true of every one of the `changed` rows.
+                    .changed(ChangeDocuments.change("status", "AVAILABLE", "UNAVAILABLE"))
                     .correlatedBy(productId.toString())
                     .occurredAt(clock.instant())
                     .build());
@@ -992,6 +1082,7 @@ public class CatalogAuthoringService {
             OfferingStatus status,
             List<String> fulfillmentModes) {
         store.upsertOffering(tenantId, brandId, locationId, variantId, status, String.join(",", fulfillmentModes));
+        publishIfAvailable(tenantId, brandId, locationId, variantId, status);
     }
 
     /**
@@ -1016,8 +1107,16 @@ public class CatalogAuthoringService {
             UUID variantId,
             OfferingStatus status,
             List<String> fulfillmentModes) {
-        return store.insertOfferingIfAbsent(
+        boolean created = store.insertOfferingIfAbsent(
                 tenantId, brandId, locationId, variantId, status, String.join(",", fulfillmentModes));
+        // Only on an actual create: an existing row is somebody's decision and
+        // is left alone by this method's own contract, so a call that found
+        // one changed nothing an offering-became-available listener should
+        // react to.
+        if (created) {
+            publishIfAvailable(tenantId, brandId, locationId, variantId, status);
+        }
+        return created;
     }
 
     /**
@@ -1045,15 +1144,29 @@ public class CatalogAuthoringService {
             OfferingStatus status,
             List<String> fulfillmentModes,
             String actorSubject) {
+        // Staff 9.3a: read the offering's row before upsertOffering's
+        // last-write-wins overwrite -- empty when this call creates it.
+        Optional<LocationOffering> before = store.findOffering(tenantId, locationId, variantId);
         store.upsertOffering(tenantId, brandId, locationId, variantId, status, String.join(",", fulfillmentModes));
+        publishIfAvailable(tenantId, brandId, locationId, variantId, status);
 
+        Map<String, Object> beforeFields = before.isEmpty()
+                ? Map.of()
+                : Map.of(
+                        "status",
+                        before.get().status().name(),
+                        "fulfillmentModes",
+                        before.get().fulfillmentModes());
+        Map<String, Object> afterFields = Map.of("status", status.name(), "fulfillmentModes", fulfillmentModes);
         audit.record(AuditFact.of("catalog.offering.set", AuditClass.BUSINESS)
                 .by(ActorRef.user(actorSubject, null))
                 .at(ResourceScope.location(tenantId, brandId, locationId))
                 .target("LocationOffering", variantId)
                 .because("Set variant availability to " + status)
                 .usingCapability(Capability.OFFERING_MANAGE.code())
-                .changed(Map.of("status", status.name(), "fulfillmentModes", fulfillmentModes))
+                // Staff 9.3a: diff(Map.of(), after) is created(after) --
+                // before.isEmpty() means this call created the offering.
+                .changed(ChangeDocuments.diff(beforeFields, afterFields))
                 .correlatedBy(variantId.toString())
                 .occurredAt(clock.instant())
                 .build());
@@ -1242,6 +1355,11 @@ public class CatalogAuthoringService {
         if (!store.entityExistsInBrand(tenantId, brandId, EntityType.VARIANT, variantId)) {
             throw new UnknownCatalogEntityException(EntityType.VARIANT, variantId);
         }
+        // Staff 9.3a: read the current window set before replaceItemSaleWindows
+        // deletes it -- the whole-set discipline this method already keeps
+        // (see its own Javadoc) means the prior set is exactly what a caller
+        // would need to undo this write.
+        List<ItemSaleSchedule.Window> before = store.listItemSaleWindows(tenantId, locationId, variantId);
         store.replaceItemSaleWindows(tenantId, brandId, locationId, variantId, windows);
         audit.record(AuditFact.of("catalog.itemSaleSchedule.replaced", AuditClass.BUSINESS)
                 .by(ActorRef.user(actorSubject, null))
@@ -1249,10 +1367,24 @@ public class CatalogAuthoringService {
                 .target("ItemSaleSchedule", variantId)
                 .because("Replaced the weekly sale-window set")
                 .usingCapability(Capability.CATALOG_AUTHOR.code())
-                .changed(Map.of("locationId", locationId.toString(), "windowCount", windows.size()))
+                .changed(ChangeDocuments.diff(
+                        saleWindowDiffMap(before, locationId), saleWindowDiffMap(windows, locationId)))
                 .correlatedBy(variantId.toString())
                 .occurredAt(clock.instant())
                 .build());
+    }
+
+    /** A {@code {locationId, windowCount, windows}} snapshot for a sale-window diff (Staff 9.3a). */
+    private static Map<String, Object> saleWindowDiffMap(List<ItemSaleSchedule.Window> windows, UUID locationId) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("locationId", locationId.toString());
+        map.put("windowCount", windows.size());
+        map.put(
+                "windows",
+                windows.stream()
+                        .map(window -> window.dayOfWeek() + " " + window.opensAt() + "-" + window.closesAt())
+                        .toList());
+        return map;
     }
 
     public List<ItemSaleSchedule.Window> itemSaleWindows(UUID tenantId, UUID locationId, UUID variantId) {
@@ -1320,15 +1452,24 @@ public class CatalogAuthoringService {
         if (targetProductId.equals(sourceProductId)) {
             throw new SelfRecommendationException(sourceProductId, targetVariantId);
         }
+        // Staff 9.3a: read the pair's current sortOrder before upsertRecommendation
+        // overwrites it -- empty distinguishes a fresh attach from a re-sort.
+        Optional<Integer> before = store.recommendationSortOrder(tenantId, brandId, sourceProductId, targetVariantId);
         UUID recommendationId =
                 store.upsertRecommendation(tenantId, brandId, sourceProductId, targetVariantId, sortOrder);
+        Map<String, Object> beforeFields = before.isEmpty()
+                ? Map.of()
+                : Map.of("targetVariantId", targetVariantId.toString(), "sortOrder", before.get());
+        Map<String, Object> afterFields = Map.of("targetVariantId", targetVariantId.toString(), "sortOrder", sortOrder);
         audit.record(AuditFact.of("catalog.recommendation.attached", AuditClass.BUSINESS)
                 .by(ActorRef.user(actorSubject, null))
                 .at(ResourceScope.brand(tenantId, brandId))
                 .target("ProductRecommendation", sourceProductId)
                 .because("Attached a recommended variant")
                 .usingCapability(Capability.CATALOG_AUTHOR.code())
-                .changed(Map.of("targetVariantId", targetVariantId.toString(), "sortOrder", sortOrder))
+                // Staff 9.3a: diff(Map.of(), after) is created(after) --
+                // before.isEmpty() means this call attached a fresh pair.
+                .changed(ChangeDocuments.diff(beforeFields, afterFields))
                 .correlatedBy(sourceProductId.toString())
                 .occurredAt(clock.instant())
                 .build());
@@ -1339,19 +1480,28 @@ public class CatalogAuthoringService {
     @Transactional
     public void detachRecommendation(
             UUID tenantId, UUID brandId, UUID sourceProductId, UUID targetVariantId, String actorSubject) {
+        // Staff 9.3a: read the pair's sortOrder before deleteRecommendation
+        // removes the row it lived on.
+        Optional<Integer> before = store.recommendationSortOrder(tenantId, brandId, sourceProductId, targetVariantId);
         boolean removed = store.deleteRecommendation(tenantId, brandId, sourceProductId, targetVariantId);
         if (!removed) {
             // Already gone: nothing changed for anyone to review, matching
             // setChannelOffering's own no-op-writes-no-fact convention.
             return;
         }
+        Map<String, Object> beforeDoc = new LinkedHashMap<>();
+        beforeDoc.put("targetVariantId", targetVariantId.toString());
+        beforeDoc.put("sortOrder", before.orElse(null));
+        Map<String, Object> afterDoc = new LinkedHashMap<>();
+        afterDoc.put("targetVariantId", null);
+        afterDoc.put("sortOrder", null);
         audit.record(AuditFact.of("catalog.recommendation.detached", AuditClass.BUSINESS)
                 .by(ActorRef.user(actorSubject, null))
                 .at(ResourceScope.brand(tenantId, brandId))
                 .target("ProductRecommendation", sourceProductId)
                 .because("Detached a recommended variant")
                 .usingCapability(Capability.CATALOG_AUTHOR.code())
-                .changed(Map.of("targetVariantId", targetVariantId.toString()))
+                .changed(ChangeDocuments.diff(beforeDoc, afterDoc))
                 .correlatedBy(sourceProductId.toString())
                 .occurredAt(clock.instant())
                 .build());

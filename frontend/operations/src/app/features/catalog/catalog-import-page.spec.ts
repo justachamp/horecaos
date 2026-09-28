@@ -533,16 +533,31 @@ describe('CatalogImportPage', () => {
     });
     Object.defineProperty(input, 'files', { value: [file], configurable: true });
     input.dispatchEvent(new Event('change'));
-    await flushMicrotasks();
-    fixture.detectChanges();
+    // `pickFile` reads the CSV through the real `FileReader` (`readAsText`),
+    // which jsdom resolves as its own asynchronous task rather than a plain
+    // microtask -- a fixed two-tick `flushMicrotasks` sometimes ran out
+    // before `stage` flipped to `'preview'` and the check button ever
+    // rendered. Polling for the real boundary (the button showing up) with
+    // real timers, instead of guessing how many ticks that boundary needs,
+    // is what makes this deterministic.
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      expect(
+        fixture.nativeElement.querySelector('[data-testid="import-wizard-check"]'),
+      ).not.toBeNull();
+    });
 
     const checkButton = fixture.nativeElement.querySelector(
       '[data-testid="import-wizard-check"]',
     ) as HTMLButtonElement;
     checkButton.click();
-    await flushMicrotasks();
-    await flushMicrotasks();
-
-    expect(captured).toEqual({ catalogId: 'catalog-1', fileName: 'products.csv', dryRun: true });
+    // Same reasoning on the submit side: `runJob` awaits `adapter().submit`
+    // (another `FileReader` round trip) before it even starts polling, so
+    // the number of ticks between the click and `captured` being set is not
+    // fixed either. Wait for the actual assertion to become true instead of
+    // a guessed number of flushes.
+    await vi.waitFor(() => {
+      expect(captured).toEqual({ catalogId: 'catalog-1', fileName: 'products.csv', dryRun: true });
+    });
   });
 });

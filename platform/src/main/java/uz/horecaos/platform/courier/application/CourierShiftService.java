@@ -15,6 +15,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.courier.domain.AdjustmentOrigin;
 import uz.horecaos.platform.courier.domain.CourierAccrual;
 import uz.horecaos.platform.courier.domain.CourierCompensationPolicy;
@@ -168,6 +169,14 @@ public class CourierShiftService {
                 period.id(),
                 1));
 
+        // Staff 9.3a: a brand-new shift, no prior state to diff against.
+        Map<String, Object> changes = ChangeDocuments.created(Map.of(
+                "openSource",
+                "COURIER",
+                "enforcementMode",
+                policy.document().shiftEnforcement().name(),
+                "enforcementPolicyVersion",
+                policy.policyVersion()));
         audit.record(fact(
                 "courier.shift.opened",
                 command.actor(),
@@ -176,13 +185,7 @@ public class CourierShiftService {
                 command.locationId(),
                 shiftId,
                 command.reason(),
-                Map.of(
-                        "openSource",
-                        "COURIER",
-                        "enforcementMode",
-                        policy.document().shiftEnforcement().name(),
-                        "enforcementPolicyVersion",
-                        policy.policyVersion())));
+                changes));
 
         return shifts.findShift(command.tenantId(), shiftId).orElseThrow();
     }
@@ -201,6 +204,9 @@ public class CourierShiftService {
         }
         shifts.startBreak(UUID.randomUUID(), tenantId, shiftId, clock.instant());
 
+        // Staff 9.3a: "dutyState" genuinely moves -- setDutyState's own guard
+        // above proved it was AVAILABLE.
+        Map<String, Object> changes = ChangeDocuments.change("dutyState", "AVAILABLE", "ON_BREAK");
         audit.record(fact(
                 "courier.shift.break-started",
                 actor,
@@ -209,7 +215,7 @@ public class CourierShiftService {
                 shift.locationId(),
                 shiftId,
                 reason,
-                Map.of("dutyState", DutyState.ON_BREAK.name())));
+                changes));
     }
 
     @Transactional
@@ -224,6 +230,9 @@ public class CourierShiftService {
         }
         shifts.setDutyState(tenantId, shiftId, DutyState.ON_BREAK, DutyState.AVAILABLE, clock.instant());
 
+        // Staff 9.3a: "dutyState" genuinely moves -- endOpenBreak's own guard
+        // above proved a break was open (ON_BREAK).
+        Map<String, Object> changes = ChangeDocuments.change("dutyState", "ON_BREAK", "AVAILABLE");
         audit.record(fact(
                 "courier.shift.break-ended",
                 actor,
@@ -232,7 +241,7 @@ public class CourierShiftService {
                 shift.locationId(),
                 shiftId,
                 reason,
-                Map.of("dutyState", DutyState.AVAILABLE.name())));
+                changes));
     }
 
     /**
@@ -305,6 +314,21 @@ public class CourierShiftService {
             adjustmentRules.evaluateShiftClose(command.tenantId(), shift);
         }
 
+        // Staff 9.3a: "status" genuinely moves -- shift (read above, before
+        // shifts.close) already holds the prior value.
+        Map<String, Object> beforeFields = Map.of("status", shift.status().name());
+        Map<String, Object> afterFields = Map.of(
+                "status",
+                status.name(),
+                "closeSource",
+                closeSource,
+                "paidSeconds",
+                paidSeconds,
+                "breakSeconds",
+                breakSeconds,
+                "reasonCode",
+                String.valueOf(command.reasonCode()));
+        Map<String, Object> changes = ChangeDocuments.diff(beforeFields, afterFields);
         audit.record(fact(
                 "courier.shift.closed",
                 command.actor(),
@@ -313,17 +337,7 @@ public class CourierShiftService {
                 shift.locationId(),
                 command.shiftId(),
                 command.reason(),
-                Map.of(
-                        "closeSource",
-                        closeSource,
-                        "status",
-                        status.name(),
-                        "paidSeconds",
-                        paidSeconds,
-                        "breakSeconds",
-                        breakSeconds,
-                        "reasonCode",
-                        String.valueOf(command.reasonCode()))));
+                changes));
 
         return new CloseOutcome(status, paidSeconds, breakSeconds, handoverId);
     }
@@ -354,6 +368,18 @@ public class CourierShiftService {
         // close — so this is where their SHIFT-window rules evaluate.
         adjustmentRules.evaluateShiftClose(tenantId, shift);
 
+        // Staff 9.3a: "status" genuinely moves -- shift (read above, before
+        // shifts.approveHours) already holds the prior value. paidSeconds does
+        // not move here: close() already fixed it (see creditShiftEarning's
+        // argument above), so it is carried unchanged on both sides rather
+        // than left absent from beforeFields, which ChangeDocuments.diff would
+        // otherwise read as "was unset until this approval".
+        Map<String, Object> beforeFields = Map.of(
+                "status", shift.status().name(),
+                "paidSeconds", String.valueOf(shift.paidSeconds()));
+        Map<String, Object> afterFields =
+                Map.of("status", "CLOSED", "paidSeconds", String.valueOf(shift.paidSeconds()));
+        Map<String, Object> changes = ChangeDocuments.diff(beforeFields, afterFields);
         audit.record(fact(
                 "courier.shift.hours-approved",
                 actor,
@@ -362,7 +388,7 @@ public class CourierShiftService {
                 shift.locationId(),
                 shiftId,
                 reason,
-                Map.of("paidSeconds", String.valueOf(shift.paidSeconds()))));
+                changes));
     }
 
     /**

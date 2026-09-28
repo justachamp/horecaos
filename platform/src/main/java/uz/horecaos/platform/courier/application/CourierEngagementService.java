@@ -16,6 +16,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.courier.domain.ComplianceField;
 import uz.horecaos.platform.courier.domain.CourierCompensationPolicy;
 import uz.horecaos.platform.courier.domain.EngagementStatus;
@@ -157,7 +158,8 @@ public class CourierEngagementService {
                 .at(ResourceScope.tenant(command.tenantId()))
                 .target("courier_engagement", engagementId)
                 .because(command.reason())
-                .changed(Map.of(
+                // Staff 9.3a: a brand-new engagement, no prior state to diff against.
+                .changed(ChangeDocuments.created(Map.of(
                         "courierReference",
                         command.displayReference(),
                         "engagementType",
@@ -169,7 +171,7 @@ public class CourierEngagementService {
                         // the thing ADR 0029 keeps out of an audit trail, which is
                         // read by more people than the record is.
                         "complianceFieldsRecorded",
-                        fieldNames(file.recorded().keySet())))
+                        fieldNames(file.recorded().keySet()))))
                 .usingCapability("courier.engagement.manage")
                 .correlatedBy(command.correlationId())
                 .occurredAt(clock.instant())
@@ -245,13 +247,20 @@ public class CourierEngagementService {
                 .at(ResourceScope.tenant(command.tenantId()))
                 .target("courier_engagement", command.engagementId())
                 .because(command.reason())
-                .changed(Map.of(
-                        "method",
-                        command.method().name(),
-                        "registrationValidUntil",
-                        command.validUntil().toString(),
-                        "reverificationDueOn",
-                        dueOn.toString()))
+                // Staff 9.3a: "status" genuinely moves -- engagement (read
+                // above, before couriers.verify) already holds the prior value,
+                // and this write always sets status to ACTIVE.
+                .changed(ChangeDocuments.diff(
+                        Map.of("status", engagement.status().name()),
+                        Map.of(
+                                "status",
+                                "ACTIVE",
+                                "method",
+                                command.method().name(),
+                                "registrationValidUntil",
+                                command.validUntil().toString(),
+                                "reverificationDueOn",
+                                dueOn.toString())))
                 .evidence(
                         command.evidenceMediaId() == null
                                 ? null
@@ -270,6 +279,9 @@ public class CourierEngagementService {
     public void suspend(
             UUID tenantId, UUID engagementId, String reasonCode, ActorRef actor, String reason, String correlationId) {
 
+        // Staff 9.3a: read before couriers.suspend mutates it -- its own WHERE
+        // clause already proves this was ACTIVE or PENDING_VERIFICATION.
+        Optional<EngagementRow> before = couriers.findEngagement(tenantId, engagementId);
         boolean applied = couriers.suspend(
                 tenantId,
                 engagementId,
@@ -287,7 +299,11 @@ public class CourierEngagementService {
                 .at(ResourceScope.tenant(tenantId))
                 .target("courier_engagement", engagementId)
                 .because(reason)
-                .changed(Map.of("status", EngagementStatus.SUSPENDED_OPERATIONAL.name(), "reasonCode", reasonCode))
+                // Staff 9.3a: "status" genuinely moves -- before (read above)
+                // already holds the prior value.
+                .changed(ChangeDocuments.diff(
+                        Map.of("status", before.orElseThrow().status().name()),
+                        Map.of("status", EngagementStatus.SUSPENDED_OPERATIONAL.name(), "reasonCode", reasonCode)))
                 .usingCapability("courier.engagement.manage")
                 .correlatedBy(correlationId)
                 .occurredAt(clock.instant())
@@ -361,14 +377,16 @@ public class CourierEngagementService {
                 .at(ResourceScope.tenant(tenantId))
                 .target("courier", courierId)
                 .because(reason)
-                .changed(Map.of(
-                        // Field names only, on both sides. What a passport number
-                        // is remains unknown to the audit trail, and "which
-                        // documents did this manager touch" stays answerable.
+                // Staff 9.3a: this call's own action, described by field name
+                // only -- what a passport number is remains unknown to the
+                // audit trail, and "which documents did this manager touch"
+                // stays answerable. No prior state to diff a field-name list
+                // against.
+                .changed(ChangeDocuments.created(Map.of(
                         "complianceFieldsRecorded",
                         fieldNames(file.recorded().keySet()),
                         "complianceFieldsCleared",
-                        fieldNames(file.cleared())))
+                        fieldNames(file.cleared()))))
                 .usingCapability("courier.engagement.manage")
                 .correlatedBy(correlationId)
                 .occurredAt(clock.instant())
@@ -411,7 +429,8 @@ public class CourierEngagementService {
                 .at(ResourceScope.tenant(tenantId))
                 .target("courier", courierId)
                 .because(purpose)
-                .changed(Map.of("complianceFieldsRevealed", fieldNames(revealed.keySet())))
+                // Staff 9.3a: a fresh access-log fact, no prior state to diff against.
+                .changed(ChangeDocuments.created(Map.of("complianceFieldsRevealed", fieldNames(revealed.keySet()))))
                 .usingCapability("courier.pii.reveal")
                 .correlatedBy(correlationId)
                 .occurredAt(clock.instant())

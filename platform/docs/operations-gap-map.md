@@ -30,11 +30,136 @@ re-reading the evidence.
 
 | | BUILT | PARTIAL | NOT BUILT | BLOCKED | Total |
 |---|---|---|---|---|---|
-| **P** — pilot | 118 | 28 | 4 | 1 | **151** |
+| **P** — pilot | 119 | 27 | 4 | 1 | **151** |
 | **2** — parity | 61 | 22 | 14 | 3 | **100** |
 | **3** — tail | 14 | 6 | 8 | 2 | **30** |
 | **?** — no IA row | 3 | 0 | 4 | 0 | **7** |
-| **Total** | **196** | **56** | **30** | **6** | **288** |
+| **Total** | **197** | **55** | **30** | **6** | **288** |
+
+**Re-audited 2026-09-28 after batch 13: 1 of 5 re-checked rows moved status; the other four
+kept their prior verdict, each with a real, verified sub-gap closed and the note rewritten.**
+(Eight waves — `w1-catalog-auto-listing`, `w2-new-order-branch-resolver`,
+`w3-storefront-table-qr`, `w4-audit-diffs-a`, `w5-audit-diffs-b`, `w6-locales-part-2`,
+`w7-hostname-verification-infra` and `w8-test-health-fixes` — plus a review-fix round
+(`fix13-a-listing`, `fix13-b-resolver`, `fix13-c-table-qr`, `fix13-d-audit-a`,
+`fix13-e-audit-b`, `fix13-f-locales`, `fix13-g-hostname-infra` and `fix13-h-test-health`, all
+merged) landed on `wave13-integration`, worktree HEAD `ed430552`. Every row a wave claimed
+was re-verified against the code on this branch rather than copied, per the platform owner's
+standing rule: "no call site = PARTIAL."
+
+One row moves PARTIAL → BUILT: `0.1c` (branch leaderboard / per-branch active-order load) —
+the live-board half was already efficient; this batch's cross-branch resolver on `1.3` New
+order now threads that same leaderboard's live counts into the branch picker itself, so an
+operator sees load at the moment of choosing a branch for a call rather than only on the
+board. Tested both ends (`NewOrderBranchResolutionHttpTests`, `new-order-page.spec.ts`).
+
+Four rows keep their prior status but had a real, verified sub-gap close, with the note
+rewritten to say what is actually still missing. `1.3` (New order) gets the cross-branch
+resolver itself — `BranchResolutionQueryService` ranks DELIVERY candidates by winning
+delivery zone and PICKUP candidates by live load, with a curated override-reason picker and
+a `ChangeDocuments`-audited override fact — closing the last of the row's own named gaps
+(the address geocoder and the promo-code total mismatch stay open, both blocked on other
+ADRs). A same-batch fix closed a real hole the feature's own review found:
+`OperatorOrderingService#place` trusted the client's own `proposedLocationId` to decide
+whether an override had happened, so a caller could omit it and place at any branch with no
+reason required and no audit fact written; the server now re-derives the resolver's own
+proposal itself before deciding, never the request body. `10.5` (channel setup) gets DNS-TXT
+ownership verification for a custom hostname — a challenge token, real DNS resolution over
+dnsjava, and a periodic sweeper that un-verifies a hostname the moment its record stops
+matching — closing the "stored unverified pending out-of-band confirmation" gap the prior
+audit's own words named; kiosk device pairing stays the row's one remaining gap, unchanged.
+`10.12` (languages & regional formats) reaches two more forms — the category tree/content
+grid and the product editor — with the same `LocaleSet` service batch 12 wired onto the
+location and channel-page editors, catching two real bugs along the way (the category editor
+was writing the operator's own console language instead of a locale the tree's reads ever
+resolved, and the grid could drop `uz-Latn` out of edit reach even though the tree's default
+read always depends on it); four of roughly 40 forms now read the brand's own locale set.
+`9.3a` (activity & audit) is the one worth naming for its scale: eleven commits split by
+module finish essentially the whole before/after-diff migration `ChangeDocumentUsageTests`
+exists to track, converting roughly 200 more `.changed(...)` call sites and pruning the
+allow-list from 202 entries to 3 — a full re-scan against the merged tree confirms 235 of 238
+sites are now compliant, `ChangeDocumentUsageTests` passes clean, and the 3 remaining are the
+same documented parameter-forwarding false-negative the scan's own doc comment already
+excuses, not new debt. The row still cannot move past PARTIAL, because its one remaining gap
+is not a wrong-shaped call site but a missing one: `OrderAcceptancePolicyService`,
+`OrderLatenessPolicyService` and `OrderOutcomeReasonService` still write no audit fact at
+all, unchanged from last batch, and a migration that reshapes existing calls cannot close a
+row whose gap is that the call does not exist.
+
+Several commits this batch's own titles cite gap-map rows that, verified against the code,
+turn out to touch only the customer-facing apps this document does not track (its own
+opening line: `apps/operations` only) — recorded here so a future reader does not assume
+otherwise. `10.5b`/ADR 0047: `w3-storefront-table-qr`'s storefront table-QR ordering flow (a
+real, tested, guest-scoped cart-to-table binding, plus a same-batch fix closing a real
+cross-table order-attachment exploit) and its commit's own "(row 10.5, ADR 0047)" both touch
+`frontend/storefront` only — the operations-console settings screen `10.5b` actually names
+(turnaround minutes, guest-session TTL, the per-table QR card) is untouched and stays `BUILT`
+exactly as batch 10 left it. `4.4c`/`4.4d`: this batch's storefront fix (`ProductComponent`
+no longer falls back a missing variant id to the product's own id, closing a real
+add-to-cart bug) touches `frontend/storefront` for row `4.2g`'s own sale-window guard, not
+`4.4c`/`4.4d`'s stock/QR-kiosk-pricing capabilities; neither operations row moves. `X.36` and
+`1.1e` are named in the task's own wave citations but no commit this batch touches
+`TimelineScheduler`, `FloorPlanCanvas`, `OrderActionCode` or either row's own spec files —
+both stay exactly where batch 12 left them (`X.36` `BUILT`, `1.1e` `PARTIAL` on
+`ISSUE_INVOICE` alone). `4.1` is unchanged and stays `BUILT`; the only diff touching its own
+files this batch is a test-fixture type addition (`CategorySummary.translations`) carried by
+`10.12`'s own category-editor conversion, not a change to the product library itself.
+
+Two items this batch built are not gap-map rows at all, and are recorded here rather than
+silently folded into a row that does not name them, matching the precedent batch 12 set for
+infrastructure with no console screen. `w1-catalog-auto-listing`'s pilot-critical fix closes
+a real, previously silent gap: an offering set `AVAILABLE` was never automatically listed in
+`inventory.stock_items`, so it read as `NOT_STOCKED_AT_LOCATION` regardless of
+`catalog.use_stock_logic` until an operator happened to touch `/catalog/stock` by hand.
+`CatalogAuthoringService` now publishes `OfferingBecameAvailable` and
+`inventory.application.CatalogOfferingListingTrigger` lists it automatically going forward; a
+one-time, idempotent `POST .../inventory/listing-backfill` runbook
+(`docs/runbooks/catalog-offering-listing-backfill.md`, tested by
+`CatalogOfferingListingBackfillRunbookIdempotencyKeyTests`) closes the backlog for offerings
+that were already `AVAILABLE` before the fix shipped. This is inventory-listing plumbing
+behind row `4.1`'s own product library, not a console screen any row names, so it is
+documented here rather than invented as a new row. `w7-hostname-verification-infra` also
+carries the batch's RustFS follow-up (`2e3ac519`): `object-store-seed` and its compose twin
+stop authenticating as the object store's own root credential, minting a scoped
+create-bucket-only service account instead — deploy/runbook infrastructure with no console
+screen or platform-module capability any PART A row tracks, the same category as batch 12's
+own ADR 0135 follow-ups. `w3-storefront-table-qr` also carries `storefront-milliy`'s own
+per-reason cart/checkout error messages (ported verbatim from `frontend/storefront`) — a
+customer-app-only change, out of this document's scope by its own opening line.
+
+The counts below are a full programmatic recount of every row in PART A (id, tier, status),
+not a hand tally — see the shape-of-the-debt table above and the per-section headers below,
+both freshly regenerated straight from the row table with a Python script, pasted verbatim.
+Net for this batch: BUILT 196→197, PARTIAL 56→55, NOT BUILT unchanged at 30, BLOCKED unchanged
+at 6, total unchanged at 288. One section header (`§0`) was recounted and corrected alongside
+its own row move:
+
+```
+=== Section counts (BUILT/PARTIAL/NOT BUILT/BLOCKED) ===
+§0: 12 rows — 8 built · 1 partial · 3 not built
+§1: 40 rows — 29 built · 9 partial · 2 not built
+§2: 16 rows — 12 built · 2 partial · 1 not built · 1 blocked
+§3: 15 rows — 5 built · 8 partial · 2 not built
+§4: 25 rows — 18 built · 1 partial · 4 not built · 2 blocked
+§5: 19 rows — 15 built · 2 partial · 1 not built · 1 blocked
+§6: 15 rows — 4 built · 4 partial · 6 not built · 1 blocked
+§7: 39 rows — 32 built · 2 partial · 5 not built
+§8: 11 rows — 7 built · 2 partial · 1 not built · 1 blocked
+§9: 20 rows — 10 built · 6 partial · 4 not built
+§10: 36 rows — 27 built · 8 partial · 1 not built
+§X: 40 rows — 30 built · 10 partial
+
+Total PART A rows counted: 288
+
+=== Shape of the debt (Tier x Status) ===
+P: BUILT=119 PARTIAL=27 NOT BUILT=4 BLOCKED=1 Total=151
+2: BUILT=61 PARTIAL=22 NOT BUILT=14 BLOCKED=3 Total=100
+3: BUILT=14 PARTIAL=6 NOT BUILT=8 BLOCKED=2 Total=30
+?: BUILT=3 PARTIAL=0 NOT BUILT=4 BLOCKED=0 Total=7
+Column totals: {'BUILT': 197, 'PARTIAL': 55, 'NOT BUILT': 30, 'BLOCKED': 6}
+Grand total: 288
+```
+)
 
 **Re-audited 2026-09-13 after batches 1 and 2 merged; 46 rows changed status.** (27 waves,
 main at `99f4af70` — see the wave index for which.)
@@ -793,7 +918,7 @@ cannot do today, not a restatement of the row title.
 | `0.1` | Live board | P | PARTIAL | The operator leaderboard band is an honest locked note pending the staff-identity ADR (see `0.1d`, still unbuilt). The 'Отменено' counter and both live mixes are now correctly cut to the tenant's business-day boundary, and per-branch load answers in one brand-scoped request per tick rather than one query per branch. TV-distance presentation now exists separately via the wallboard shell (`0.1e` / T23). | L | — | P15 |  |
 | `0.1a` | Oversized counters + the canonical "in progress" grouping | P | BUILT | — | M | — | P15 |  |
 | `0.1b` | Live source-mix and type-mix | P | BUILT | — | M | — | P15 |  |
-| `0.1c` | Branch leaderboard / per-branch active-order load | P | PARTIAL | The branch leaderboard now answers in one brand-scoped request per tick instead of one counts query per branch every 10 seconds. The order-entry half of this row — seeing branch load at the moment of choosing a branch for a call — stays blocked on `1.3` New order, itself still an unbuilt placeholder. | M | — | P15 |  |
+| `0.1c †` | Branch leaderboard / per-branch active-order load | P | BUILT | The branch leaderboard answers in one brand-scoped request per tick (unchanged). This batch closes the row's other half: `1.3` New order's own cross-branch resolver (`BranchResolutionQueryService`) now carries each candidate branch's live active-order count — reusing this row's own leaderboard counts rather than a second read — straight into the New Order screen's branch picker, so an operator sees load at the moment of choosing a branch for a call, not only on the live board. Tested both ends (`NewOrderBranchResolutionHttpTests`, `new-order-page.spec.ts`). | M | — | w2-new-order-branch-resolver |  |
 | `0.1d` | Live operator leaderboard | P | NOT BUILT | A shift supervisor cannot see who is taking or confirming orders, so the one number that ranks the floor during service is absent; and even a counting endpoint would print Keycloak subject UUIDs, because no staff person record with a display name exists anywhere. | XL | No ADR owns staff identity — staff-and-access.md §11.1 (line 957) states plainly that a new ADR covering staff identity, the employment record and terminal access is required; ADR 0009's iam.principals (V0057) holds identifiers by design, not a profile. | deferred |  |
 | `0.1e †` | Wallboard presentation of 0.1 (TV-distance shell + WallboardTile) | 2 | BUILT | — | L | — | T23 | NOT BUILT |
 | `0.1f` | Liveness: refresh, staleness and the ADR 0045 COUNTERS stream | 2 | BUILT | — | M | — | P08 |  |
@@ -835,7 +960,7 @@ cannot do today, not a restatement of the row title.
 | `1.2n` | Both delivery money fields (charged to customer vs billed by provider) | P | BUILT | Provider-billed cost is honestly null/"not tracked" when `fulfillment.delivery_cost_subsidies` recorded no gap for that order (no other figure records an exact provider invoice at order level) — a schema limit, not a missing render. | M | — | P11 |  |
 | `1.2o` | Change-due (Сдача) | P | BUILT | — | S | — | P09 |  |
 | `1.2p †` | Ревизии — the revision chain | P | BUILT | — | S | — | P09 | NOT BUILT  |
-| `1.3 †` | New order — the call-centre order-entry screen | P | PARTIAL | This row's "PICKUP-only and cash-only... still unbuilt" note was stale even before batch 8: the three-pane composer at `/orders/new` already took DELIVERY (structured address, `1.3b`) and non-cash payment (the channel's own matrix, `1.3e`) from wave P14. Batch 8 (w2) closes two more of this row's own named gaps — a `«Позже»` pre-order time with an out-of-hours confirm/refuse (`1.3d`) and create-on-miss for `LOCATION_STAFF`/`LOCATION_MANAGER` (`1.3a`) — and adds a running delivery-fee preview once the chosen address carries a real coordinate. Still missing: the address pane's map pin/suggest/geocoder (`1.3b`, blocked on ADR 0015's unapproved provider), a cross-branch resolver (`Филиал` stays the current branch with a static «по зоне» caption), and, cross-cutting rather than specific to this screen, `ordering.orders`' `ck_order_total_reconciles` still assumes a gross subtotal against `PricingEngine`'s net-of-discount total, so a nonzero promo code still cannot complete checkout anywhere (`1.3e`'s own note, ADR 0072 open). No server-side draft cart or quote-expiry: `OperatorOrderingService.place` prices and checks out atomically, so the IA's header draft-timer states do not apply to this backend shape at all. | XL | — | w2-new-order | NOT BUILT  |
+| `1.3 †` | New order — the call-centre order-entry screen | P | PARTIAL | This row's "PICKUP-only and cash-only... still unbuilt" note was stale even before batch 8: the three-pane composer at `/orders/new` already took DELIVERY (structured address, `1.3b`) and non-cash payment (the channel's own matrix, `1.3e`) from wave P14. Batch 8 (w2) closed a `«Позже»` pre-order time with an out-of-hours confirm/refuse (`1.3d`) and create-on-miss for `LOCATION_STAFF`/`LOCATION_MANAGER` (`1.3a`), and added a running delivery-fee preview. This batch closes the last of the row's own named gaps: `Филиал` is no longer a static «по зоне» caption on the current branch — a real cross-branch resolver (`BranchResolutionQueryService`, ADR 0037) ranks DELIVERY candidates by the brand's own winning delivery zone and PICKUP candidates by live load (reusing `0.1c`'s own leaderboard counts), with a curated override-reason picker and a `ChangeDocuments`-audited override fact when the operator picks a branch the resolver did not propose. A same-batch fix closed a real gap the feature's own review found: `OperatorOrderingService#place` originally trusted the client's own `proposedLocationId` to decide whether an override had happened, so a caller could omit it (or echo back the chosen branch) and place at any branch with no reason required and no audit fact written; `place()` now re-derives the resolver's own proposal server-side and never trusts the request body for it. Tested both ends (`NewOrderBranchResolutionHttpTests`, `OperatorOrderingServiceBranchOverrideTests`, `new-order-page.spec.ts`). Still missing: the address pane's map pin/suggest/geocoder (`1.3b`, blocked on ADR 0015's unapproved provider), and, cross-cutting rather than specific to this screen, `ordering.orders`' `ck_order_total_reconciles` still assumes a gross subtotal against `PricingEngine`'s net-of-discount total, so a nonzero promo code still cannot complete checkout anywhere (`1.3e`'s own note, ADR 0072 open). No server-side draft cart or quote-expiry: `OperatorOrderingService.place` prices and checks out atomically, so the IA's header draft-timer states do not apply to this backend shape at all. | XL | — | w2-new-order-branch-resolver | NOT BUILT  |
 | `1.3a †` | New order — customer pane (phone lookup, auto-create, order-history peek) | P | BUILT | Phone lookup, candidate list, select-to-attach, create-on-miss (location-scoped `CUSTOMER_CREATE`, batch 8 w2) and an itemized order-history popover with a working «Повторить» are all built and tested. This batch closes the one remaining gap, shared with `1.3f`: a new `CustomerOrderReorderController` (`ORDER_READ` at `LOCATION`, not `BRAND`) gives `LOCATION_STAFF` — this screen's primary persona — its own route to the reorder plan, resolved against the location's own menu rather than the order's original one; the frontend's `operationsPaths.customerOrderReorder` now builds this LOCATION-scoped path. Tested: `CustomerOrderHistoryReorderHttpTests` (LOCATION_STAFF reaches the endpoint; the same grant at a different location still 403s; an ungranted principal is refused), a `CartCheckoutAndOrderTests` case proving the plan resolves against the given location's own menu, and `operations-paths.spec.ts`. | M | — | w1-order-board-actions |  |
 | `1.3b †` | New order — address pane (map pin/search + дом/квартира/подъезд/этаж/ориентир) | P | PARTIAL | The structured address half is now built: a saved-address list/select behind the existing `CUSTOMER_PII_REVEAL` reveal, an inline add form (дом/квартира/подъезд/этаж/ориентир), recipient name/phone/note, and `DestinationRequest` threaded into `placeOrder`, saving `NOT_GEOCODED` or `LANDMARK_ONLY`. The branch selector is still a static label + "(by zone)" caption, not a real resolver. `LOCATION_STAFF` — this screen's primary persona — lacks `CUSTOMER_PII_REVEAL`, so the saved-address list 403s (handled gracefully, not a crash) for that exact role; only `LOCATION_MANAGER` can use it today. | XL | ADR 0015's own open input, still open: "Approve address/geocoder provider, normalization, coordinate precedence, zone, and outage rules" (adr/partial/0015…:96, :297, :475). Yandex Maps is the market expectation per IA PART 4 but no provider is approved and no credential exists; ADR 0037 inherits the same input for the routing provider. The pin, the suggest and the geocoder stay deferred to `X.4` for exactly this reason. | P14 | BLOCKED |
 | `1.3c †` | New order — item search and the interactive full-screen menu/basket | P | BUILT | — | L | — | P13 | NOT BUILT  |
@@ -1055,7 +1180,7 @@ cannot do today, not a restatement of the row title.
 | `9.2c` | People — operator ↔ POS operator ID mapping | 2 | PARTIAL | `PosAdapter.OrderExport` now carries a provider-neutral `operatorExternalId`, resolved through the existing ADR 0026 `provider_entity_mappings` table off `accepted_by_actor_id` — but no console screen writes an `OPERATOR` mapping row yet (it hangs off the still-missing `9.2` staff person record), so the field resolves to null in production; Clopos's documented API also has no field to receive it. | L | — | T20 |  |
 | `9.2d †` | People — created-by / accepted-by attribution | 2 | BUILT | The order-detail half (`OrderDetailResponse` resolving `createdByActorId`/`acceptedByActorId` to a display name) is unchanged from batch 10. This batch closes the row's last gap: a new `GET .../orders/operators/{subject}/today-counts` endpoint (`OperatorTodayCountsController`, over the existing `created_by_actor_id`/`accepted_by_actor_id` columns and `ix_orders_created_by`, for the tenant's own ADR 0043 business day) backs "Created today"/"Accepted today" on the staff member's own detail card. Tested both ends (`OperatorTodayCountsControllerEndpointTests`, `staff-member-detail-pane.spec.ts`). | M | — | w7-audit-people | PARTIAL |
 | `9.3 †` | Activity & audit — the activity log screen (История изменений) | 2 | BUILT | Cursor paging past 200 events, four backend-ready filters and a person-picker datalist are unchanged from batch 10. This batch closes both of the row's remaining gaps: the action-code dictionary now covers all 208 `AuditFact.of("<code>", ...)` literals enumerated straight from the platform's own Java sources, in en/ru/uz-Latn, generated by a script with its own coverage test (`activity-log-action-codes-coverage.spec.ts`) that fails the build if a new literal-coded action ships with no sentence — up from 12 hand-named codes with a humanized fallback for the rest; and a person's staff card now carries a "View activity log" link that deep-links into the activity log pre-filtered to that person via a new `?actor=` query param. A handful of producers that build their action code from a variable rather than a literal (documented in the coverage test's own doc) are out of the scan's reach and still named by hand. | M | — | w7-audit-people |   |
-| `9.3a` | Activity & audit — field-level before/after diff | 2 | PARTIAL | The 10 call sites migrated through batch 11 are unchanged. This batch adds `ChangeDocuments.created(after)`, a third shape for a deliberate from-nothing creation fact (every field's before is null because there is none, not because a call site skipped fetching it), and `ChangeDocumentUsageTests`, a source-scan regression guard: every `.changed(...)` call site in `src/main/java` (237 of them, the scan's own count, unchanged before and after this batch) must build its document through `ChangeDocuments.diff/change/created` or be named by file:line in `change-document-allowlist.txt` — a new non-compliant site that is not on the list now fails the build, and a listed line that no longer needs the exemption fails it too, so the debt can only shrink from here. Nine follow-up commits then convert roughly 28 more sites — fiscal (terminal lifecycle, document facts), notifications (incident acknowledge/resolve), inventory (availability, quantity, channel thresholds), media (ingestion, availability, rejection), telemetry (duty-session, track-reveal), kitchen (device, ticket facts), partner (handover bypass), legal (terms publishing) and conversations (both of the module's sites) — leaving 202 of 237 sites (85%) still on the allow-list, writing a flat, after-only map. Migrated coverage is 35 of 237, up from 10 last batch — real progress, but still a minority. No order-policy call site is included yet: `OrderAcceptancePolicyService`/`OrderLatenessPolicyService`/`OrderOutcomeReasonService` still write no audit fact at all, a different, larger gap than this row's own migration. | L | — | w6-audit-diffs-locales |   |
+| `9.3a` | Activity & audit — field-level before/after diff | 2 | PARTIAL | The 10 call sites migrated through batch 11, `ChangeDocuments.created(after)` and `ChangeDocumentUsageTests`'s source-scan regression guard (batch 12) are unchanged in shape. This batch finishes essentially the whole migration: eleven commits split by module — catalog, commercial, tenancy and courier first, then reporting, integration, payments, ordering, pos, customers, dinein, the audit module's own remaining sites, marketing and fulfillment — convert roughly 200 more sites to `ChangeDocuments.diff/change/created`, and a twelfth commit prunes every entry the conversions closed from `change-document-allowlist.txt` (202 entries down to 3). A full re-scan against the merged tree (238 `.changed(...)` call sites total, up one from last batch's 237 as the codebase grew) confirms the claim rather than copying it: 235 of 238 are compliant, `ChangeDocumentUsageTests` passes clean, and the 3 remaining sites are exactly the documented false-negative the scan's own doc comment names — a value forwarded through a private helper's parameter, verified compliant at its real call site but unreadable to a scan that only resolves one hop of local-variable indirection (`KitchenTicketService`'s one line, `MigrationAudit`'s two) — not new debt. What the migration cannot close, because it is a missing call site rather than a wrong-shaped one, is unchanged from last batch and is why this row stays PARTIAL rather than moving to BUILT: `OrderAcceptancePolicyService`, `OrderLatenessPolicyService` and `OrderOutcomeReasonService` still write no audit fact at all. | L | — | w4-audit-diffs-a, w5-audit-diffs-b |   |
 | `9.3b` | Activity & audit — a named human actor, even for background paths | 2 | BUILT | — | M | — | T08 |  |
 | `9.3c †` | Activity & audit — a bulk action produces N records, not one | 2 | BUILT | — | S | — | T08 | PARTIAL |
 | `9.4` | Approvals — the maker-checker worklist | 3 | PARTIAL | A Decided tab and decided-history read are unchanged from batch 10. This batch closes one of the IA's two remaining named cases: above a tenant-configurable row threshold (`horecaos.customers.pii-export-approval-threshold-rows`, default 500), `CustomerListQueryService#exportFiltered` now raises a maker-checker request through the existing `ApprovalService` machinery before decrypting anything — on Pending/Declined nothing is revealed and no audit fact is written — surfacing in the worklist via a new `customer.pii.export` label, with the console's export button reading the new status headers instead of silently downloading. Tested both ends (`CustomerControllerEndpointTests`). There is still no discretionary order-line discount producer — it has no ADR backing it, and this batch does not decide one; thresholds are still authored only in control-plane. | M | — | w7-audit-people |   |
@@ -1082,7 +1207,7 @@ cannot do today, not a restatement of the row title.
 | `10.3b †` | Order policy — Cards 2–5 (timings & SLA, automation/auto-accept, conditions, operator order entry) | P | BUILT | Cards 2-5's eleven fields (unchanged) are joined this batch by the row's one remaining gap: `SettingsScope.level` gains `TENANT` alongside `BRAND`/`LOCATION`, driven by a `?level=tenant` query param; the scope bar renders a company-wide pill beside the level readout, and `order-policy-page.ts`'s reactive effect (previously tracking only `brandId`/`locationId`) now also tracks `level`, so toggling tenant-wide without touching brand or location actually re-resolves the cards. `OperationsConfigurationController.scopeOf` already resolved `TENANT` server-side; only the console selector was missing. Tested: `settings-scope.spec.ts`, `scope-bar.spec.ts`, `settings-shell.spec.ts`, `order-policy-page.spec.ts`. | XL | — | w6-settings-locations-policy |  |
 | `10.4a †` | Sales channels — channel registry | P | BUILT | Icon, brand colours and social links are all built (wave 9 w2): `tenant.sales_channels` gains `icon`/`brand_color_primary`/`brand_color_secondary` (V0385, hex-validated), and a new `tenant.channel_social_links` table holds one https-only link per checked platform, replaced whole-set under the channel's own version like the payment/fulfilment/location matrices. `sales-channels-page.ts`'s edit panel gains the icon field, two `q-color-input` swatches and a social-links list (add/remove, one per platform). A fix round caught and fixed two real bugs before merge: a non-https link only refused at save time, after the two earlier writes had already landed, leaving stale data on screen; `saveEdit`'s catch block now reloads so the list always reflects whatever subset of the three sequential writes actually committed. Tested both ends: `SalesChannelAndServiceabilityTests`, and nine new `sales-channels-page.spec.ts` cases. | L | — | w2-brand-channel-presentation |  |
 | `10.4b` | Sales channels — capability matrix (payment method × channel, order type × channel) | P | BUILT | Residue: a channel with locations but none of them carrying a live fiscal terminal is not yet hatched as UNAVAILABLE (only a channel with zero locations is) — the fuller fiscal-terminal cross-reference is explicitly deferred to `P34`/`P35`. | M | — | P33 |  |
-| `10.5 †` | Channel setup (Telegram bot, website/domain, mobile apps, kiosk device registry, aggregator, call centre) | P | PARTIAL | A per-channel setup hub (`/settings/channel-setup/:channelId`) now dispatches by channel type. WEB gets a real hostname claim (a reserved-checked subdomain slug off the platform's own configured base domain, or a custom hostname stored unverified pending out-of-band confirmation — `ChannelSetupService`, `tenant.channel_hostnames`) and SEO + versioned static pages (title/description/OG image, `tenant.channel_pages`/`channel_page_contents`, published by insert like `legal.terms_versions`, rendered publicly at `/pages/:slug` on the storefront). TELEGRAM links to the existing integrations connect flow instead of a duplicate; QR_TABLE links out to the already-built per-location QR dine-in setting (`10.5b`, ADR 0047 keeps it per-location, not per-channel) rather than re-adding a channel-scoped field that would contradict it. KIOSK renders honestly locked — no device-pairing flow exists, confirmed against `DevicePrincipalClass` (only `KITCHEN_KDS`). Public reads (hostname resolution, presentation, pages) are unauthenticated and channel-scoped, capability-gated on the console side (`CHANNEL_READ`/`CHANNEL_MANAGE`, ADR 0031 `expectedVersion`). Tested: 9 HTTP tests on the tenancy side plus `ChannelPagesControllerEndpointTests`/`StorefrontChannelSetupControllerEndpointTests`, `channel-setup-page.spec.ts` (154 lines). Still missing: kiosk device pairing, and website colours/menu ordering as a merchandising layer (brand colours themselves are covered separately by `10.4a`). | XL | Kiosk device pairing has no owner decision or hardware/device integration named anywhere. | w8-channel-setup |  |
+| `10.5 †` | Channel setup (Telegram bot, website/domain, mobile apps, kiosk device registry, aggregator, call centre) | P | PARTIAL | A per-channel setup hub (`/settings/channel-setup/:channelId`) dispatches by channel type; the hostname claim, SEO and versioned static pages (batch 10) are unchanged in shape. This batch closes the one gap the prior audit's own words flagged — a custom hostname "stored unverified pending out-of-band confirmation": claiming one now issues a per-hostname DNS-TXT challenge token (`ChannelSetupService#setCustomHostname`, rotatable via `#rotateChallenge`), `POST .../hostname/verify` resolves the real `_horecaos-challenge.<hostname>` TXT record over DNS (dnsjava, never the JDK's own banned JNDI provider) and flips verified only on a match, and a new `ChannelHostnameVerificationSweeper` periodically re-resolves every verified hostname and un-verifies it the moment the record stops matching — verification is now a standing guarantee, not a one-time check. The setup hub shows the DNS-TXT record itself with copy and rotate actions. TELEGRAM links to the existing integrations connect flow instead of a duplicate; QR_TABLE links out to the already-built per-location QR dine-in setting (`10.5b`, ADR 0047 keeps it per-location, not per-channel) rather than re-adding a channel-scoped field that would contradict it. KIOSK renders honestly locked — no device-pairing flow exists, confirmed against `DevicePrincipalClass` (only `KITCHEN_KDS`). Tested both ends: `ChannelHostnameVerificationSweeperTests` and `ChannelSetupControllerEndpointTests`'s new challenge/verify/rotate cases, `channel-setup-page.spec.ts`. Still missing: kiosk device pairing, and website colours/menu ordering as a merchandising layer (brand colours themselves are covered separately by `10.4a`). | XL | Kiosk device pairing has no owner decision or hardware/device integration named anywhere. | w7-hostname-verification-infra |  |
 | `10.5b †` | Channel setup — QR dine-in modes and table QR codes | P | BUILT | The settings form (turnaround minutes, guest-session TTL, service-charge rate, reason) and the per-table issue/rotate action, rendering the token as a printable table card via `P17`'s `q-qr-code`, are built. `SETTLE_OPEN_TICKET` renders disabled with its reason, per ADR 0042. | M | — | P38 | NOT BUILT |
 | `10.6` | Payment methods (registry, localized name, icon, base type, acquirer binding) | P | BUILT | — | L | — | P33 |  |
 | `10.7a †` | Fiscalization — Tab 1 Юридические лица (legal entities, INN, per-branch assignment) | P | BUILT | — | S | — | P34 | BUILT |
@@ -1102,7 +1227,7 @@ cannot do today, not a restatement of the row title.
 | `10.10c †` | Reference data — SLA bucket boundaries | 2 | PARTIAL | ADR 0107 resolves the contradiction this row named: SLA buckets stay platform-fixed and versioned (ADR 0043), full stop — tenant configurability is declined, not deferred. `P37` ships the honest half instead: a tenant-readable version card (`ReportingController.slaBucketSet`) naming the active bucket set so a report can be read against the definition it was computed under. An operator still cannot change where 'late' starts, by design. | M | — | P37 | BLOCKED |
 | `10.10d` | Reference data — branch tags | 2 | BUILT | `P37` built the registry (`tenant.branch_tags`), the per-branch assignment (`tenant.location_branch_tags`), and the settings screen's location × tag matrix — the filter-and-group affordance this row named as the reason to have tags at all. | M | — | P37 |  |
 | `10.11` | Data & privacy (retention schedules, consent definitions, DSAR/erasure, export audit) | 3 | PARTIAL | Retention periods for three categories, a tenant consent-type registry, and a tenant-wide DSAR erasure worklist are all live now (the worklist's own URL bug — a missing `/customers` segment — is fixed). Export and correction of a customer's own data remain not-built, per ADR 0029 — unchanged, and explicitly out of scope. | L | — | W03 |  |
-| `10.12` | Languages & regional formats (supported languages, default language, currency/phone/timezone formats) | 2 | PARTIAL | A brand's own supported-locale set and default language are still stored and editable inside the `10.1` brand-profile screen (unchanged). This batch adds the shared `LocaleSet` service (`core/i18n/locale-set.ts`) — fetches the brand's configured set once, falls back to the platform ru/uz-Latn/en triple until a brand actually configures one, orders the default locale first — and wires two more forms onto it: the location-content editor (`location-detail-pane.ts`) and the channel static-page editor (`channel-setup-page.ts`); a post-merge fix closed a real bug where both read `LocaleSet.locales()`/`defaultLocale()` without ever calling `ensureLoaded()`, so every brand — configured or not — silently kept seeing the platform fallback. Two of roughly 40 forms now read the brand's own set; the rest stay hard-coded to the platform triple, and there is still no currency/phone/timezone regional-format editor. | M | — | w6-audit-diffs-locales |  |
+| `10.12` | Languages & regional formats (supported languages, default language, currency/phone/timezone formats) | 2 | PARTIAL | A brand's own supported-locale set and default language are still stored and editable inside the `10.1` brand-profile screen (unchanged). The shared `LocaleSet` service and its batch-12 rollout to the location-content and channel static-page editors are unchanged. This batch wires two more forms onto it, both catching a real bug along the way: the category tree's quick-rename/creation and its per-locale content grid (`categories-page.ts`) now target `LocaleSet.locales()`/`CATALOG_DEFAULT_LOCALE` instead of writing whatever console language the operating staff member happened to have selected (which the tree's own reads never resolved, so the edit silently appeared to do nothing), and a same-batch fix corrected which locale the grid marks "Default" — previously bound to the brand's own configured default, which could point an operator at the wrong tab while the tree itself always reads the fixed `CATALOG_DEFAULT_LOCALE`, now bound to that fixed locale instead; a further fix keeps `uz-Latn` writable in the grid even once a brand's own `LocaleSet` narrows away from it, since `CATALOG_DEFAULT_LOCALE` still resolves against it regardless. The product editor's own locale tab strip (`product-editor-page.ts`) now reads `LocaleSet.locales()` instead of a hard-coded ru/uz/en triple and opens on the brand's own default locale instead of the operator's console language. Four of roughly 40 forms now read the brand's own set; the rest stay hard-coded to the platform triple, and there is still no currency/phone/timezone regional-format editor. Tested both ends (`categories-page.spec.ts`, `product-editor-page.spec.ts`, `CatalogQueryServiceTests`). | M | — | w6-locales-part-2 |  |
 | `10.13` | Delivery policy in Settings (out-of-zone addresses, what the courier sees and may do, GPS action checks) | P | BUILT | `PUT .../courier-policy` (via `PolicyAuthor`) and the `/delivery/courier-policy` screen now exist, with the five previously fieldless switches added (GPS master toggle + radii, show-only-kitchen-ready, reveal-customer-location timing, post-delivery payment check) and `delivery.out_of_zone_policy` registered as an ADR 0030 key. | L | — | P38 |  |
 | `10.14` | Printing & receipts (POS printing, fiscal receipt presentation, tape width) | ? | NOT BUILT | An operator cannot choose what prints where, on what tape width, or what the customer's receipt looks like; every print today is whatever the POS adapter happens to do. | XL | No ADR owns printing or receipt presentation — one has to be written before any screen can be specified (settings.md §4). | deferred |  |
 | `X.2` | Terms of service (storefront terms per brand, per locale, versioned) | P | BUILT | Nothing an operator needs for the pilot. Only a rich-text editor is absent (plain textareas per locale) and the route/api comments still cite 'ADR 0067', which is the referral-programme ADR — the real record is ADR 0068. | S | — | — |  |
@@ -1508,6 +1633,23 @@ and `w8-pricebook-reservations` (`4.8a`, `X.36`), plus a review-fix round
 `fix12-f-audit-locales`, `fix12-g-marketing` and `fix12-h-pricebook-dinein`, all merged),
 landed on `wave12-integration` at `ccd66cdb`. See the batch-12 re-audit paragraph above for
 what verification moved and why.
+
+**Batch 13 (post-plan, 2026-09-28).** Eight further waves, same posture — not part of the
+`P`/`T`/`W` table above, no brief in **The waves** below. Recorded here only for
+traceability: `w1-catalog-auto-listing` (pilot-critical inventory-listing fix behind `4.1` —
+no PART A row of its own), `w2-new-order-branch-resolver` (`1.3`, `0.1c`),
+`w3-storefront-table-qr` (customer-facing `frontend/storefront` dine-in ordering and
+`frontend/storefront-milliy` error messages — no PART A row; its commits' own "(row 10.5,
+ADR 0047)"/"(row 10.5b)" citations touch only the storefront apps this document does not
+track), `w4-audit-diffs-a` and `w5-audit-diffs-b` (`9.3a`, split catalog/commercial/tenancy/
+courier from reporting/integration/payments/ordering/pos/customers/dinein/audit/marketing/
+fulfillment), `w6-locales-part-2` (`10.12`), `w7-hostname-verification-infra` (`10.5`, plus
+an ADR 0135 RustFS deploy-credential follow-up with no PART A row) and `w8-test-health-fixes`
+(test-infrastructure hardening — no PART A row), plus a review-fix round (`fix13-a-listing`,
+`fix13-b-resolver`, `fix13-c-table-qr`, `fix13-d-audit-a`, `fix13-e-audit-b`,
+`fix13-f-locales`, `fix13-g-hostname-infra` and `fix13-h-test-health`, all merged), landed on
+`wave13-integration` at `ed430552`. See the batch-13 re-audit paragraph above for what
+verification moved and why.
 
 ## The waves
 

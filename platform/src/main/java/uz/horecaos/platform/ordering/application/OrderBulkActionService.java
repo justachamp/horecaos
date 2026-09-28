@@ -18,6 +18,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.configuration.Ids;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.ordering.domain.BulkActionType;
@@ -334,11 +335,13 @@ public class OrderBulkActionService {
                 .target("ordering.order", orderId)
                 .outcome(outcome)
                 .because(auditReasonFor(command))
-                .changed(Map.of(
+                // Staff 9.3a: each bulk-item outcome is its own append-only
+                // fact, with no prior item outcome to diff against.
+                .changed(ChangeDocuments.created(Map.of(
                         "bulkOperationId",
                         bulkOperationId.toString(),
                         "problemCode",
-                        problemCode == null ? "" : problemCode))
+                        problemCode == null ? "" : problemCode)))
                 .correlatedBy(bulkOperationId.toString())
                 .occurredAt(now);
         if (resultingVersion != null) {
@@ -382,10 +385,12 @@ public class OrderBulkActionService {
                 .target("ordering.bulk_operation", bulkOperationId)
                 .outcome(failed == 0 ? AuditFact.Outcome.SUCCEEDED : AuditFact.Outcome.FAILED)
                 .because(auditReasonFor(command))
-                .changed(Map.of(
+                // Staff 9.3a: each bulk-operation run is its own append-only
+                // summary fact, with no prior run's counts to diff against.
+                .changed(ChangeDocuments.created(Map.of(
                         "requestedCount", command.orders().size(),
                         "appliedCount", applied,
-                        "failedCount", failed))
+                        "failedCount", failed)))
                 .correlatedBy(bulkOperationId.toString())
                 .occurredAt(now)
                 .build());

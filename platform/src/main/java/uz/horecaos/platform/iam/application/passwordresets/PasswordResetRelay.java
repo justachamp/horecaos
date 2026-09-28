@@ -162,16 +162,25 @@ public class PasswordResetRelay {
         switch (delivery.status()) {
             case SENT -> {
                 if (store.markSent(row.id(), row.attempts(), PasswordResetService.hash(token), expiresAt, now)) {
+                    // Staff 9.3a: "status" genuinely moves from QUEUED
+                    // (markSent's own WHERE status = 'QUEUED' guard proves
+                    // it) to SENT.
                     audit.record(StaffSecurityFact.bySystemJob(
                             "iam.password_reset.sent",
                             "password-reset-relay",
                             "iam.password_reset",
                             row.id(),
                             "A staff member's password reset link was emailed (ADR 0098)",
+                            Map.of("status", "QUEUED", "attempt", row.attempts()),
                             Map.of(
-                                    "attempt", row.attempts(),
-                                    "console", row.console(),
-                                    "expiresAt", expiresAt.toString()),
+                                    "status",
+                                    "SENT",
+                                    "attempt",
+                                    row.attempts(),
+                                    "console",
+                                    row.console(),
+                                    "expiresAt",
+                                    expiresAt.toString()),
                             UUID.randomUUID().toString(),
                             now));
                     return true;

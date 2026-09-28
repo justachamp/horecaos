@@ -13,6 +13,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.configuration.Ids;
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcRegionStore;
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcRegionStore.RegionGeography;
@@ -75,7 +76,8 @@ public class RegionService {
                 .at(ResourceScope.tenant(tenantId))
                 .target("Region", id)
                 .because("Registered region '%s'".formatted(geography.code()))
-                .changed(boxOf(geography))
+                // Staff 9.3a: a freshly inserted region has no prior state.
+                .changed(ChangeDocuments.created(boxOf(geography)))
                 .correlatedBy(correlationId())
                 .occurredAt(now)
                 .build());
@@ -121,7 +123,9 @@ public class RegionService {
                 .at(ResourceScope.tenant(tenantId))
                 .target("Region", regionId)
                 .because("Rewrote region '%s'".formatted(geography.code()))
-                .changed(boxOf(geography))
+                // Staff 9.3a: every field genuinely moves from the region's
+                // prior geography (read above, before the write) to the new one.
+                .changed(ChangeDocuments.diff(boxOf(current), boxOf(geography)))
                 .correlatedBy(correlationId())
                 .occurredAt(now)
                 .build());
@@ -150,7 +154,12 @@ public class RegionService {
                 .at(ResourceScope.tenant(tenantId))
                 .target("Region", regionId)
                 .because("Archived region %s".formatted(regionId))
-                .changed(Map.of("zoneVersionsStillNaming", stillNaming))
+                // Staff 9.3a: "status" genuinely moves from ACTIVE (this
+                // store's own archive() only ever affects an active region)
+                // to ARCHIVED.
+                .changed(ChangeDocuments.diff(
+                        Map.of("status", "ACTIVE"),
+                        Map.of("status", "ARCHIVED", "zoneVersionsStillNaming", stillNaming)))
                 .correlatedBy(correlationId())
                 .occurredAt(now)
                 .build());
@@ -218,6 +227,17 @@ public class RegionService {
         changed.put("swLon", geography.bboxSwLon());
         changed.put("neLat", geography.bboxNeLat());
         changed.put("neLon", geography.bboxNeLon());
+        return changed;
+    }
+
+    /** {@link #boxOf(RegionGeography)}'s same shape, read from a stored row for {@link #update}'s before side. */
+    private static Map<String, Object> boxOf(RegionRow region) {
+        Map<String, Object> changed = new LinkedHashMap<>();
+        changed.put("code", region.code());
+        changed.put("swLat", region.bboxSwLat());
+        changed.put("swLon", region.bboxSwLon());
+        changed.put("neLat", region.bboxNeLat());
+        changed.put("neLon", region.bboxNeLon());
         return changed;
     }
 

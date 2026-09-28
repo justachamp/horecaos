@@ -10,6 +10,7 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.MonthDay;
 import java.util.HexFormat;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -26,6 +27,7 @@ import uz.horecaos.platform.audit.api.ApprovalService;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.configuration.Ids;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.ResourceScope;
@@ -128,10 +130,11 @@ public class BusinessCalendarService {
                 .at(ResourceScope.tenant(tenantId))
                 .target("BusinessDayBoundary", tenantId)
                 .because(reason)
-                .changed(Map.of(
-                        "from", current.start().toString(),
-                        "to", newStart.toString(),
-                        "effectiveFrom", effectiveFrom.toString()))
+                // Staff 9.3a: "start" genuinely moves from current.start() to
+                // newStart; effectiveFrom is unchanged identifying context (the
+                // date the new start takes hold), carried on both sides.
+                .changed(ChangeDocuments.diff(
+                        boundaryDiffMap(current.start(), effectiveFrom), boundaryDiffMap(newStart, effectiveFrom)))
                 .usingCapability(Capability.TENANT_CONFIGURATION_WRITE.code())
                 .correlatedBy(tenantId.toString())
                 .occurredAt(clock.instant())
@@ -147,13 +150,16 @@ public class BusinessCalendarService {
                 throw new ApiException(ErrorCode.VALIDATION_FAILED, "A weekday is 1 (Monday) through 7 (Sunday)");
             }
         }
+        // Staff 9.3a: read before the write so "weekendDays" has a real prior
+        // value to diff against, not just the new list restated as "after".
+        List<Integer> before = calendars.weekendDays(tenantId);
         calendars.setWeekendDays(tenantId, List.copyOf(weekendDays));
         audit.record(AuditFact.of("reporting.business-calendar.weekend-set", AuditClass.BUSINESS)
                 .by(actor)
                 .at(ResourceScope.tenant(tenantId))
                 .target("BusinessCalendar", tenantId)
                 .because(reason)
-                .changed(Map.of("weekendDays", weekendDays.toString()))
+                .changed(ChangeDocuments.change("weekendDays", before.toString(), weekendDays.toString()))
                 .usingCapability(Capability.TENANT_CONFIGURATION_WRITE.code())
                 .correlatedBy(tenantId.toString())
                 .occurredAt(clock.instant())
@@ -193,7 +199,9 @@ public class BusinessCalendarService {
                 .at(ResourceScope.tenant(tenantId))
                 .target("TenantHoliday", id)
                 .because(reason)
-                .changed(Map.of("name", name))
+                // Staff 9.3a: a newly added holiday has no prior state to diff
+                // against.
+                .changed(ChangeDocuments.created(Map.of("name", name)))
                 .usingCapability(Capability.TENANT_CONFIGURATION_WRITE.code())
                 .correlatedBy(id.toString())
                 .occurredAt(now)
@@ -212,11 +220,21 @@ public class BusinessCalendarService {
                 .at(ResourceScope.tenant(tenantId))
                 .target("TenantHoliday", holidayId)
                 .because(reason)
-                .changed(Map.of("name", holiday.name()))
+                // Staff 9.3a: "name" genuinely moves from the removed holiday's
+                // name to nothing -- the row is gone.
+                .changed(ChangeDocuments.change("name", holiday.name(), null))
                 .usingCapability(Capability.TENANT_CONFIGURATION_WRITE.code())
                 .correlatedBy(holidayId.toString())
                 .occurredAt(clock.instant())
                 .build());
+    }
+
+    /** A {@code {start, effectiveFrom}} snapshot for {@link #changeBoundary}'s diff. */
+    private static Map<String, Object> boundaryDiffMap(LocalTime start, LocalDate effectiveFrom) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("start", start.toString());
+        map.put("effectiveFrom", effectiveFrom.toString());
+        return map;
     }
 
     private static String subject(ActorRef actor) {

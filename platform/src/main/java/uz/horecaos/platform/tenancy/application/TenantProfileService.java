@@ -206,7 +206,8 @@ public class TenantProfileService {
                 .at(ResourceScope.platform())
                 .target("PublicHoliday", id)
                 .because(reason)
-                .changed(Map.of("countryCode", countryCode, "name", name))
+                // Staff 9.3a: a brand-new holiday, no prior state to diff against.
+                .changed(ChangeDocuments.created(Map.of("countryCode", countryCode, "name", name)))
                 .usingCapability(Capability.PLATFORM_ADMIN.code())
                 .correlatedBy(id.toString())
                 .occurredAt(now)
@@ -224,7 +225,10 @@ public class TenantProfileService {
                 .at(ResourceScope.platform())
                 .target("PublicHoliday", id)
                 .because(reason)
-                .changed(Map.of("countryCode", holiday.countryCode(), "name", holiday.name()))
+                // Staff 9.3a: a deletion -- every field's after is null because
+                // the row no longer exists, the mirror image of ChangeDocuments.created.
+                .changed(ChangeDocuments.diff(
+                        Map.of("countryCode", holiday.countryCode(), "name", holiday.name()), Map.of()))
                 .usingCapability(Capability.PLATFORM_ADMIN.code())
                 .correlatedBy(id.toString())
                 .occurredAt(clock.instant())

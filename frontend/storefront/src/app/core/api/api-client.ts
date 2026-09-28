@@ -45,6 +45,15 @@ export interface ReadOptions {
   /** Sent as `If-None-Match`; a 304 is surfaced as a null body by the caller. */
   readonly etag?: string;
   readonly anonymous?: boolean;
+  /**
+   * Extra headers this one call needs beyond the platform's own conventions
+   * (`Accept`, `X-Correlation-Id`) and the bearer the interceptors already
+   * attach. The dine-in QR flow is the one caller today: the guest's
+   * table-scoped token (`X-Dine-In-Token`) authorises those reads instead of
+   * -- and alongside -- `anonymous`, since there is no Keycloak-style
+   * principal for the bearer interceptor to find.
+   */
+  readonly headers?: Readonly<Record<string, string>>;
 }
 
 export interface MutateOptions<B> {
@@ -69,6 +78,8 @@ export interface MutateOptions<B> {
    * anonymous in the platform's audit trail.
    */
   readonly anonymous?: boolean;
+  /** See {@link ReadOptions.headers} -- the same one caller, the same reason. */
+  readonly headers?: Readonly<Record<string, string>>;
 }
 
 /**
@@ -88,6 +99,9 @@ export class ApiClient {
     let headers = new HttpHeaders();
     if (options.etag) {
       headers = headers.set('If-None-Match', options.etag);
+    }
+    for (const [name, value] of Object.entries(options.headers ?? {})) {
+      headers = headers.set(name, value);
     }
     return firstValueFrom(
       this.http.get<T>(this.url(path), {
@@ -134,6 +148,9 @@ export class ApiClient {
 
     if (options.expectedVersion !== undefined) {
       headers = headers.set('If-Match', weakETag(options.expectedVersion));
+    }
+    for (const [name, value] of Object.entries(options.headers ?? {})) {
+      headers = headers.set(name, value);
     }
 
     return firstValueFrom(

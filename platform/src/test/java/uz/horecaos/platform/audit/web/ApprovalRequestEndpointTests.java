@@ -501,7 +501,7 @@ class ApprovalRequestEndpointTests {
                 .isEqualTo(403);
         assertThat(status(requestId)).isEqualTo("PENDING");
         assertThat(jdbc.sql("""
-                        SELECT change_document->>'subjectTenantId' FROM audit.audit_events
+                        SELECT change_document->'subjectTenantId'->>'after' FROM audit.audit_events
                          WHERE action_code = 'approval.decision.refused' AND actor_subject = :subject
                         """)
                         .param("subject", PLATFORM_MAKER)

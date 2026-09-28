@@ -13,7 +13,6 @@ import java.time.Clock;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
@@ -29,6 +28,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope;
@@ -185,6 +185,10 @@ public class MerchantBindingController {
             @RequestParam int expectedVersion,
             @Valid @RequestBody RotateMerchantBindingSecretRequest request) {
 
+        // Read before the rotation so "reference" has a real prior value to
+        // diff against (Staff 9.3a), not just the new one restated as "after".
+        String oldReference =
+                bindings.require(tenantId, bindingId).secretReference().toString();
         MerchantBinding rotated = bindings.rotateSecret(tenantId, bindingId, expectedVersion, request.value());
 
         audit.record(AuditFact.of("payment.merchant_binding_secret_rotated", AuditClass.SECURITY)
@@ -194,8 +198,10 @@ public class MerchantBindingController {
                 .because(request.reason())
                 // Reference only, never the value -- the same discipline
                 // ProviderInstallationController.rotateSecret's own audit
-                // comment documents for the installation path.
-                .changed(Map.of("newReference", rotated.secretReference().toString()))
+                // comment documents for the installation path. "reference"
+                // genuinely moves from oldReference to the rotated one.
+                .changed(ChangeDocuments.change(
+                        "reference", oldReference, rotated.secretReference().toString()))
                 .usingCapability(Capability.PAYMENT_MERCHANT_BINDING_MANAGE.code())
                 .correlatedBy(bindingId.toString())
                 .occurredAt(clock.instant())

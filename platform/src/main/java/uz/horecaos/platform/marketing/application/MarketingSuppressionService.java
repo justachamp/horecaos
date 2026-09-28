@@ -13,6 +13,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.marketing.domain.MarketingChannel;
 import uz.horecaos.platform.marketing.domain.SuppressionReason;
@@ -121,7 +122,8 @@ public class MarketingSuppressionService {
                 .at(brandId == null ? ResourceScope.tenant(tenantId) : ResourceScope.brand(tenantId, brandId))
                 .target("MarketingSuppression", id)
                 .because(statedReason == null ? "Suppression recorded by " + actorType : statedReason)
-                .changed(changed)
+                // Staff 9.3a: a freshly recorded suppression has no prior state.
+                .changed(ChangeDocuments.created(changed))
                 .usingCapability("suppression.manage")
                 .correlatedBy(correlationId)
                 .occurredAt(now)
@@ -189,10 +191,15 @@ public class MarketingSuppressionService {
         Instant now = clock.instant();
         boolean lifted = engagement.liftSuppression(tenantId, suppressionId, liftedBy, reason, now);
 
-        Map<String, Object> changed = new HashMap<>();
-        changed.put("customerAccountId", suppression.customerAccountId());
-        changed.put("reason", suppression.reason());
-        changed.put("lifted", lifted);
+        Map<String, Object> before = new HashMap<>();
+        before.put("customerAccountId", suppression.customerAccountId());
+        before.put("reason", suppression.reason());
+        before.put("liftedAt", null);
+
+        Map<String, Object> after = new HashMap<>();
+        after.put("customerAccountId", suppression.customerAccountId());
+        after.put("reason", suppression.reason());
+        after.put("liftedAt", lifted ? now.toString() : null);
 
         audit.record(AuditFact.of("MARKETING_SUPPRESSION_LIFTED", AuditClass.SECURITY)
                 .by(actor)
@@ -203,7 +210,10 @@ public class MarketingSuppressionService {
                 .target("MarketingSuppression", suppressionId)
                 .outcome(lifted ? AuditFact.Outcome.SUCCEEDED : AuditFact.Outcome.REJECTED)
                 .because(reason)
-                .changed(changed)
+                // Staff 9.3a: "liftedAt" genuinely moves from null
+                // (liftSuppression's own WHERE lifted_at IS NULL guard
+                // proves it) to now, when the lift actually landed.
+                .changed(ChangeDocuments.diff(before, after))
                 .usingCapability("suppression.manage")
                 .correlatedBy(correlationId)
                 .occurredAt(now)

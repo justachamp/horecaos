@@ -21,6 +21,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope;
@@ -168,11 +169,13 @@ public class OrderPosExportController {
                                 .at(ResourceScope.tenant(tenantId))
                                 .target("PosOrderExport", exportId)
                                 .because(request.reason())
-                                .changed(Map.of(
+                                // Staff 9.3a: this push attempt's own outcome,
+                                // with no prior attempt's outcome to diff.
+                                .changed(ChangeDocuments.created(Map.of(
                                         "outcome",
                                         sendOutcome.status().name(),
                                         "state",
-                                        settledState == null ? "" : settledState.name()))
+                                        settledState == null ? "" : settledState.name())))
                                 .usingCapability(Capability.POS_EXPORT_RESOLVE.code())
                                 .correlatedBy(exportId.toString())
                                 .occurredAt(clock.instant())

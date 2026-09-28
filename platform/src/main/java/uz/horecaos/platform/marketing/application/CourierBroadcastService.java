@@ -13,6 +13,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.configuration.Ids;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.marketing.api.CampaignMessagePort;
@@ -80,7 +81,8 @@ public class CourierBroadcastService {
                 .at(ResourceScope.brand(tenantId, brandId))
                 .target("CourierBroadcast", id)
                 .because("Drafted a courier broadcast")
-                .changed(Map.of("targetKind", targetKind))
+                // Staff 9.3a: a freshly inserted broadcast has no prior state.
+                .changed(ChangeDocuments.created(Map.of("targetKind", targetKind)))
                 .correlatedBy(correlationId())
                 .occurredAt(now)
                 .build());
@@ -131,7 +133,11 @@ public class CourierBroadcastService {
                 .at(ResourceScope.brand(tenantId, broadcast.brandId()))
                 .target("CourierBroadcast", broadcastId)
                 .because("Sent a courier broadcast")
-                .changed(Map.of("recipientCount", recipientCount))
+                // Staff 9.3a: "status" genuinely moves from DRAFT (guarded
+                // above) to SENT, the same transition JdbcCourierBroadcastStore
+                // #recordSent performs.
+                .changed(ChangeDocuments.diff(
+                        Map.of("status", "DRAFT"), Map.of("status", "SENT", "recipientCount", recipientCount)))
                 .correlatedBy(correlationId())
                 .occurredAt(now)
                 .build());

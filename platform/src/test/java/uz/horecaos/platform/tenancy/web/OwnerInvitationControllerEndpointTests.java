@@ -135,12 +135,16 @@ class OwnerInvitationControllerEndpointTests {
                                 """).query(String.class).list())
                 .as("one fact per screen load, naming the purpose and not a person")
                 .containsExactly("tenancy.onboarding.invitation.recipient");
+        // Staff 9.3a: a real created() document now -- "revealedCount"
+        // nests {before, after}, so the count is read from ->'after'.
+        assertThat(jdbc.sql("""
+                                SELECT change_document -> 'revealedCount' ->> 'after' FROM audit.audit_events
+                                 WHERE action_code = 'tenant.owner_invitation.recipient_revealed'
+                                """).query(String.class).single()).isEqualTo("2");
         assertThat(jdbc.sql("""
                                 SELECT change_document::text FROM audit.audit_events
                                  WHERE action_code = 'tenant.owner_invitation.recipient_revealed'
-                                """).query(String.class).single())
-                .contains("\"revealedCount\": 2")
-                .doesNotContain("example.uz");
+                                """).query(String.class).single()).doesNotContain("example.uz");
         assertThat(jdbc.sql("""
                                 SELECT capability_used || '|' || scope_type || '|' || coalesce(scope_id::text, 'none')
                                   FROM audit.audit_events
@@ -169,12 +173,17 @@ class OwnerInvitationControllerEndpointTests {
                 .as("the mask stays alongside it")
                 .contains("\"emailMasked\":\"d***a@example.uz\"");
 
+        // Staff 9.3a: a real created() document now -- "revealedCount"
+        // nests {before, after}, so the count is read from ->'after'.
+        assertThat(jdbc.sql("""
+                                SELECT change_document -> 'revealedCount' ->> 'after' FROM audit.audit_events
+                                 WHERE action_code = 'tenant.owner_invitation.recipient_revealed'
+                                """).query(String.class).list()).containsExactly("1");
         assertThat(jdbc.sql("""
                                 SELECT change_document::text FROM audit.audit_events
                                  WHERE action_code = 'tenant.owner_invitation.recipient_revealed'
                                 """).query(String.class).list())
                 .singleElement(org.assertj.core.api.InstanceOfAssertFactories.STRING)
-                .contains("\"revealedCount\": 1")
                 .doesNotContain("example.uz");
         assertThat(jdbc.sql("""
                                 SELECT capability_used || '|' || scope_type || '|' || coalesce(scope_id::text, 'none')

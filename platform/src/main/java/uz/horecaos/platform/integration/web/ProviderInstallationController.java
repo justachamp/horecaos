@@ -31,6 +31,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope;
@@ -320,11 +321,13 @@ public class ProviderInstallationController {
                 .param("config", nonSensitiveConfigOf(providerType, request.externalAccountReference()))
                 .update();
 
+        // Staff 9.3a: a freshly inserted installation has no prior state to diff.
         record(
                 tenantId,
                 "integration.installation_created",
                 id,
                 "Provider installed",
+                Map.of(),
                 Map.of(
                         "category", request.category().name(),
                         "providerType", providerType,
@@ -383,11 +386,13 @@ public class ProviderInstallationController {
                     .update();
         }
 
+        // Staff 9.3a: a freshly inserted binding has no prior state to diff.
         record(
                 tenantId,
                 "integration.binding_created",
                 id,
                 "Provider bound",
+                Map.of(),
                 Map.of(
                         "installationId", installationId.toString(),
                         "capabilities", request.capabilities()),
@@ -430,11 +435,14 @@ public class ProviderInstallationController {
             @PathVariable UUID tenantId, @PathVariable UUID installationId) {
         ProviderCapabilityReconciliationService.Reconciliation result =
                 reconciliation.reconcile(tenantId, installationId);
+        // Staff 9.3a: each reconciliation run is its own append-only evidence
+        // fact, not a diff of the installation's own persisted state.
         record(
                 tenantId,
                 "integration.capabilities_reconciled",
                 installationId,
                 "Provider capability preflight completed",
+                Map.of(),
                 Map.of(
                         "connectionStatus", result.connectionStatus(),
                         "adapterVersion", result.adapterVersion(),
@@ -529,26 +537,23 @@ public class ProviderInstallationController {
         Object usernameValue = success.result().get("username");
         String botUsername = usernameValue == null ? null : String.valueOf(usernameValue);
 
+        // Reference NAMES only, per ADR 0028 discipline — never the token
+        // they point at, which never reaches this class at all beyond the
+        // one getMe call above. Named "reference", not "secretReference":
+        // ChangeDocuments#isProtected redacts any changed()-map key
+        // containing "secret" by name regardless of what the value actually
+        // is, and the whole point here is that an ADR 0028 reference is
+        // exactly the kind of value that is safe to keep visible in the
+        // audit trail. Staff 9.3a: "reference" genuinely moves from
+        // oldReference to the new one; "botUsername" is this verification's
+        // own fresh result, with no prior value to diff against.
         record(
                 tenantId,
                 "integration.installation_secret_rotated",
                 installationId,
                 request.reason(),
-                // Reference NAMES only, per ADR 0028 discipline — never the
-                // token they point at, which never reaches this class at all
-                // beyond the one getMe call above. Named "reference", not
-                // "secretReference": ChangeDocuments#isProtected redacts any
-                // changed()-map key containing "secret" by name regardless of
-                // what the value actually is, and the whole point here is that
-                // an ADR 0028 reference is exactly the kind of value that is
-                // safe to keep visible in the audit trail.
-                Map.of(
-                        "oldReference",
-                        oldReference,
-                        "newReference",
-                        reference.toString(),
-                        "botUsername",
-                        botUsername == null ? "" : botUsername),
+                Map.of("reference", oldReference),
+                Map.of("reference", reference.toString(), "botUsername", botUsername == null ? "" : botUsername),
                 Capability.INTEGRATION_INSTALLATION_MANAGE);
 
         return ResponseEntity.ok(
@@ -629,18 +634,20 @@ public class ProviderInstallationController {
                     "This installation's secret reference changed while the new value was being verified");
         }
 
+        // Reference names and the verification outcome only -- never the
+        // value, which never reaches this method beyond the one door.write()
+        // and (Telegram only) getMe() calls above. Staff 9.3a: "reference"
+        // genuinely moves from oldReference to the new one; "verified" and
+        // "botUsername" are this rotation's own fresh outcome, with no prior
+        // value to diff against.
         record(
                 tenantId,
                 "integration.installation_secret_rotated",
                 installationId,
                 request.reason(),
-                // Reference names and the verification outcome only -- never
-                // the value, which never reaches this method beyond the one
-                // door.write() and (Telegram only) getMe() calls above.
+                Map.of("reference", oldReference),
                 Map.of(
-                        "oldReference",
-                        oldReference,
-                        "newReference",
+                        "reference",
                         reference.toString(),
                         "verified",
                         verified,
@@ -969,12 +976,16 @@ public class ProviderInstallationController {
                     .param("tenantId", tenantId)
                     .param("now", OffsetDateTime.now(ZoneOffset.UTC))
                     .update();
+            // Staff 9.3a: "status" genuinely moves from SUSPENDED to ACTIVE,
+            // the same transition the UPDATE above performs; installationId
+            // is unchanged identifying context.
             record(
                     tenantId,
                     "integration.binding_activated",
                     bindingId,
                     request.reason(),
-                    Map.of("installationId", installationId.toString()),
+                    Map.of("status", "SUSPENDED", "installationId", installationId.toString()),
+                    Map.of("status", "ACTIVE", "installationId", installationId.toString()),
                     Capability.INTEGRATION_BINDING_ACTIVATE);
         }
         return ResponseEntity.ok(
@@ -1004,12 +1015,15 @@ public class ProviderInstallationController {
                 .update();
 
         if (suspended == 1) {
+            // Staff 9.3a: "status" genuinely moves from ACTIVE to SUSPENDED,
+            // the same transition the UPDATE above performs.
             record(
                     tenantId,
                     "integration.binding_suspended",
                     bindingId,
                     request.reason(),
-                    Map.of(),
+                    Map.of("status", "ACTIVE"),
+                    Map.of("status", "SUSPENDED"),
                     Capability.INTEGRATION_BINDING_ACTIVATE);
         }
         return ResponseEntity.ok(
@@ -1067,16 +1081,15 @@ public class ProviderInstallationController {
             throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "Installation is not available");
         }
 
+        // Staff 9.3a: "requireClerkApproval" genuinely moves from the row's
+        // prior value to the requested one.
         record(
                 tenantId,
                 "integration.installation_settings_updated",
                 installationId,
                 "Clopos order-acceptance setting changed",
-                Map.of(
-                        "requireClerkApproval",
-                        request.requireClerkApproval(),
-                        "previousValue",
-                        row.requireClerkApproval()),
+                Map.of("requireClerkApproval", row.requireClerkApproval()),
+                Map.of("requireClerkApproval", request.requireClerkApproval()),
                 Capability.INTEGRATION_INSTALLATION_MANAGE);
 
         return ResponseEntity.ok(new CloposSettingsView(request.requireClerkApproval()));
@@ -1131,14 +1144,18 @@ public class ProviderInstallationController {
             String actionCode,
             UUID targetId,
             String reason,
-            Map<String, Object> changes,
+            Map<String, Object> before,
+            Map<String, Object> after,
             Capability capability) {
         audit.record(AuditFact.of(actionCode, AuditClass.SECURITY)
                 .by(ActorRef.user(currentActor.get().subject(), null))
                 .at(ResourceScope.tenant(tenantId))
                 .target("Integration", targetId)
                 .because(reason)
-                .changed(changes)
+                // Staff 9.3a: an empty before map makes this a from-nothing
+                // creation, the same fact ChangeDocuments#created records --
+                // see each call site's own comment for what "before" holds.
+                .changed(ChangeDocuments.diff(before, after))
                 .usingCapability(capability.code())
                 .correlatedBy(targetId.toString())
                 .occurredAt(clock.instant())

@@ -130,12 +130,12 @@ public class SupportSessionService {
                 .param("expiresAt", utc(until))
                 .update();
 
-        Map<String, Object> details = new HashMap<>();
-        details.put("access", access.name());
-        details.put("expiresAt", until.toString());
+        Map<String, Object> after = new HashMap<>();
+        after.put("access", access.name());
+        after.put("expiresAt", until.toString());
         String ticket = blankToNull(ticketReference);
         if (ticket != null) {
-            details.put("ticketReference", ticket);
+            after.put("ticketReference", ticket);
         }
         events.publishEvent(new SupportSessionChanged(
                 id,
@@ -144,7 +144,9 @@ public class SupportSessionService {
                 staffSubject,
                 staffSubject,
                 reason.strip(),
-                details,
+                // Staff 9.3a: a freshly opened session has no prior state.
+                Map.of(),
+                after,
                 now));
         return find(tenantId, id).orElseThrow();
     }
@@ -188,6 +190,9 @@ public class SupportSessionService {
                 .param("id", sessionId)
                 .update();
 
+        Map<String, Object> endedBefore = new HashMap<>();
+        endedBefore.put("endedAt", null);
+        endedBefore.put("access", session.access().name());
         events.publishEvent(new SupportSessionChanged(
                 sessionId,
                 tenantId,
@@ -195,7 +200,17 @@ public class SupportSessionService {
                 session.principalSubject(),
                 actorSubject,
                 reason.strip(),
-                Map.of("access", session.access().name(), "early", now.isBefore(session.expiresAt())),
+                // Staff 9.3a: "endedAt" genuinely moves from null (this
+                // method's own early return on session.endedAt() != null
+                // proves it was open) to now.
+                endedBefore,
+                Map.of(
+                        "endedAt",
+                        now.toString(),
+                        "access",
+                        session.access().name(),
+                        "early",
+                        now.isBefore(session.expiresAt())),
                 now));
         return find(tenantId, sessionId).orElseThrow();
     }

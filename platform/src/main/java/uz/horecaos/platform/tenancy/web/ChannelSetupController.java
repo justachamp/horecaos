@@ -5,6 +5,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
+import java.time.Instant;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
@@ -21,6 +22,9 @@ import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.tenancy.application.ChannelSetupService;
 import uz.horecaos.platform.tenancy.domain.channel.ChannelHostname;
 import uz.horecaos.platform.tenancy.domain.channel.ChannelPresentation;
+import uz.horecaos.platform.tenancy.domain.channel.HostnameChallenge;
+import uz.horecaos.platform.web.api.ApiException;
+import uz.horecaos.platform.web.api.ErrorCode;
 import uz.horecaos.platform.web.authorization.RequiresCapability;
 
 /**
@@ -79,9 +83,9 @@ public class ChannelSetupController {
     @RequiresCapability(value = Capability.CHANNEL_MANAGE, mutating = true)
     @Operation(
             summary = "Claim a tenant's own custom domain",
-            description = "Stored unverified. The automated DNS-TXT challenge is not built -- see "
-                    + "ChannelSetupService's own doc -- so an operator confirms ownership out of "
-                    + "band and a capability-holder marks it verified through the /verify action.")
+            description = "Stored unverified, with a fresh DNS-TXT challenge issued alongside it -- "
+                    + "GET /hostname/challenge returns the record to publish, and POST /hostname/verify "
+                    + "resolves it over real DNS.")
     public HostnameView setCustomHostname(
             @PathVariable UUID tenantId,
             @PathVariable UUID channelId,
@@ -91,9 +95,40 @@ public class ChannelSetupController {
                 setup.setCustomHostname(tenantId, channelId, body.hostname(), expectedVersion), setup.baseDomain());
     }
 
+    @GetMapping("/hostname/challenge")
+    @RequiresCapability(Capability.CHANNEL_READ)
+    @Operation(
+            summary = "The DNS-TXT record to publish to prove ownership of this channel's custom hostname",
+            description = "404 when no custom hostname is claimed -- including when the channel has "
+                    + "claimed a platform-issued subdomain instead, which is verified immediately and "
+                    + "never gets a challenge.")
+    public ChallengeView challenge(@PathVariable UUID tenantId, @PathVariable UUID channelId) {
+        return setup.challenge(tenantId, channelId)
+                .map(ChallengeView::of)
+                .orElseThrow(() ->
+                        new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "This channel has no active DNS challenge"));
+    }
+
+    @PostMapping("/hostname/challenge/rotate")
+    @RequiresCapability(value = Capability.CHANNEL_MANAGE, mutating = true)
+    @Operation(
+            summary = "Issue a fresh DNS-TXT challenge token",
+            description = "Un-verifies the hostname: the DNS record an operator was asked to publish "
+                    + "carries the previous token, which no longer matches, so a stale match must not "
+                    + "keep resolving traffic. Refused for a platform-issued subdomain, which has "
+                    + "nothing to challenge.")
+    public ChallengeView rotateChallenge(
+            @PathVariable UUID tenantId, @PathVariable UUID channelId, @RequestParam int expectedVersion) {
+        return ChallengeView.of(setup.rotateChallenge(tenantId, channelId, expectedVersion));
+    }
+
     @PostMapping("/hostname/verify")
     @RequiresCapability(value = Capability.CHANNEL_MANAGE, mutating = true)
-    @Operation(summary = "Mark the channel's current hostname verified")
+    @Operation(
+            summary = "Resolve the channel's DNS-TXT challenge and mark it verified on a match",
+            description = "Looks up the challenge's TXT record over real DNS -- UNPROCESSABLE_STATE "
+                    + "when it does not (yet) carry the issued token, RESOURCE_NOT_FOUND when this "
+                    + "channel has no active challenge to resolve.")
     public HostnameView verify(
             @PathVariable UUID tenantId, @PathVariable UUID channelId, @RequestParam int expectedVersion) {
         return HostnameView.of(setup.verifyCustomHostname(tenantId, channelId, expectedVersion), setup.baseDomain());
@@ -149,6 +184,13 @@ public class ChannelSetupController {
 
         static HostnameView unset(String baseDomain) {
             return new HostnameView(false, null, false, baseDomain);
+        }
+    }
+
+    /** @param recordType always {@code "TXT"} -- named explicitly so the console never has to hardcode it. */
+    record ChallengeView(String recordName, String recordType, String token, Instant issuedAt) {
+        static ChallengeView of(HostnameChallenge challenge) {
+            return new ChallengeView(challenge.recordName(), "TXT", challenge.token(), challenge.issuedAt());
         }
     }
 

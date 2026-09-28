@@ -62,6 +62,24 @@ describe('operationsPaths inventory* group (row 4.4c/4.4d InventoryController pa
       '/api/v1/tenants/t1/brands/b1/locations/l1/inventory/variants/v1/channel-stop-thresholds/AGGREGATOR',
     );
   });
+
+  it('inventoryListingBackfill builds on the legacy tenant prefix, not /operations', () => {
+    expect(operationsPaths.inventoryListingBackfill(SCOPE)).toBe(
+      '/api/v1/tenants/t1/brands/b1/locations/l1/inventory/listing-backfill',
+    );
+  });
+
+  it('inventoryVariantListing is brand-scoped, with no location segment', () => {
+    expect(operationsPaths.inventoryVariantListing(SCOPE, 'v1')).toBe(
+      '/api/v1/tenants/t1/brands/b1/variants/v1/inventory-listing',
+    );
+  });
+
+  it('inventoryVariantListingBackfill posts to the same brand-scoped path GET reads', () => {
+    expect(operationsPaths.inventoryVariantListingBackfill(SCOPE, 'v1')).toBe(
+      operationsPaths.inventoryVariantListing(SCOPE, 'v1'),
+    );
+  });
 });
 
 describe('operationsPaths.customerOrderReorder', () => {

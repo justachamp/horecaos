@@ -98,6 +98,20 @@ public class InventoryService implements InventoryReservationPort {
      */
     public static final Duration RESERVATION_TTL = Duration.ofMinutes(15);
 
+    /**
+     * A QUANTITY item's remaining count is shown to a customer-facing reader
+     * at or below this many units, and never above it — ADR 0017's own
+     * "quantity need not be exposed publicly". Shared by every customer-facing
+     * remaining-quantity read (gap-map rows 4.4c/4.4d's storefront half): the
+     * menu's own {@code InventoryMenuAvailabilityLookup} and the single-variant
+     * {@code StorefrontInventoryController}, so a threshold change is one
+     * edit, not two that can drift. Fixed and undecided rather than
+     * tenant-configurable — no ADR names a merchant-facing "low stock"
+     * setting, and inventing one is a decision neither reader needs to make
+     * to stop leaking an exact count.
+     */
+    public static final BigDecimal LOW_STOCK_DISPLAY_THRESHOLD = BigDecimal.valueOf(5);
+
     private static final String OWNER_QUOTE = "QUOTE";
 
     /**

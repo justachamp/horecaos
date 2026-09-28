@@ -144,7 +144,13 @@ class MerchantBindingSecretRotationEndpointTests {
                 WHERE action_code = 'payment.merchant_binding_secret_rotated' AND actor_subject = :subject
                 """).param("subject", OWNER).query().listOfRows();
         assertThat(auditRows).hasSize(1);
-        assertThat(String.valueOf(auditRows.getFirst().get("change_document")))
+        // Staff 9.3a: "reference" is a real before/after diff, not a flat
+        // after-only map -- jsonb does not preserve key order, so this
+        // checks the before and after values independently rather than one
+        // connected substring.
+        String changeDocument = String.valueOf(auditRows.getFirst().get("change_document"));
+        assertThat(changeDocument)
+                .contains(ORIGINAL_SECRET_REFERENCE)
                 .contains(newReference)
                 .doesNotContain("a-brand-new-click-secret-key");
     }

@@ -278,8 +278,14 @@
         @if (qty() === 0) {
           <button
             type="button"
+            data-testid="product-add-to-cart"
             (click)="add()"
-            [disabled]="cartService.updating() || !modifiersValid() || soleVariantOutOfSaleWindow()"
+            [disabled]="
+              cartService.updating() ||
+              !modifiersValid() ||
+              soleVariantOutOfSaleWindow() ||
+              noOrderableVariant()
+            "
             class="w-full rounded-t-2xl bg-brand-accent py-4 text-base font-bold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
           >
             {{ 'cart.addToCart' | t }}
@@ -315,7 +321,10 @@
                   type="button"
                   (click)="add()"
                   [disabled]="
-                    cartService.updating() || !modifiersValid() || soleVariantOutOfSaleWindow()
+                    cartService.updating() ||
+                    !modifiersValid() ||
+                    soleVariantOutOfSaleWindow() ||
+                    noOrderableVariant()
                   "
                   class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-surface-raised-2 text-xl font-light leading-none text-text-primary transition-colors hover:bg-surface-hover disabled:opacity-50"
                   [attr.aria-label]="'common.increase' | t"

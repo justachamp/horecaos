@@ -216,7 +216,15 @@ public class CatalogQueryController {
         }
     }
 
-    /** @param parentCategoryId null for a top-level category */
+    /**
+     * @param parentCategoryId null for a top-level category
+     * @param translations every locale this category has a row in (row
+     *                     10.12) — not only {@code name}/{@code description}'s
+     *                     resolved default-locale pair, the same shape {@code
+     *                     ProductDetailResponse} already carries, so the
+     *                     categories page's per-locale grid knows which
+     *                     locales already have text
+     */
     public record CategorySummaryResponse(
             UUID categoryId,
             @Nullable UUID parentCategoryId,
@@ -225,7 +233,8 @@ public class CatalogQueryController {
             @Nullable String description,
             int sortOrder,
             String status,
-            int productCount) {
+            int productCount,
+            Map<String, LocalizedFields> translations) {
 
         static CategorySummaryResponse of(CatalogQueryService.CategorySummary summary) {
             return new CategorySummaryResponse(
@@ -236,7 +245,8 @@ public class CatalogQueryController {
                     summary.description(),
                     summary.sortOrder(),
                     summary.status(),
-                    summary.productCount());
+                    summary.productCount(),
+                    LocalizedFields.of(summary.translations()));
         }
     }
 

@@ -1701,6 +1701,12 @@
           },
           "status" : {
             "type" : "string"
+          },
+          "translations" : {
+            "additionalProperties" : {
+              "$ref" : "#/components/schemas/LocalizedFields"
+            },
+            "type" : "object"
           }
         },
         "type" : "object"
@@ -1734,6 +1740,24 @@
           },
           "securityRelevant" : {
             "type" : "boolean"
+          }
+        },
+        "type" : "object"
+      },
+      "ChallengeView" : {
+        "properties" : {
+          "issuedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "recordName" : {
+            "type" : "string"
+          },
+          "recordType" : {
+            "type" : "string"
+          },
+          "token" : {
+            "type" : "string"
           }
         },
         "type" : "object"
@@ -22600,9 +22624,91 @@
         "tags" : [ "Channel setup" ]
       }
     },
+    "/api/v1/control-plane/tenants/{tenantId}/sales-channels/{channelId}/setup/hostname/challenge" : {
+      "get" : {
+        "description" : "404 when no custom hostname is claimed -- including when the channel has claimed a platform-issued subdomain instead, which is verified immediately and never gets a challenge.",
+        "operationId" : "challenge",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "channelId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ChallengeView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The DNS-TXT record to publish to prove ownership of this channel's custom hostname",
+        "tags" : [ "Channel setup" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/sales-channels/{channelId}/setup/hostname/challenge/rotate" : {
+      "post" : {
+        "description" : "Un-verifies the hostname: the DNS record an operator was asked to publish carries the previous token, which no longer matches, so a stale match must not keep resolving traffic. Refused for a platform-issued subdomain, which has nothing to challenge.",
+        "operationId" : "rotateChallenge",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "channelId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "expectedVersion",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ChallengeView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Issue a fresh DNS-TXT challenge token",
+        "tags" : [ "Channel setup" ]
+      }
+    },
     "/api/v1/control-plane/tenants/{tenantId}/sales-channels/{channelId}/setup/hostname/custom" : {
       "put" : {
-        "description" : "Stored unverified. The automated DNS-TXT challenge is not built -- see ChannelSetupService's own doc -- so an operator confirms ownership out of band and a capability-holder marks it verified through the /verify action.",
+        "description" : "Stored unverified, with a fresh DNS-TXT challenge issued alongside it -- GET /hostname/challenge returns the record to publish, and POST /hostname/verify resolves it over real DNS.",
         "operationId" : "setCustomHostname",
         "parameters" : [ {
           "in" : "path",
@@ -22712,6 +22818,7 @@
     },
     "/api/v1/control-plane/tenants/{tenantId}/sales-channels/{channelId}/setup/hostname/verify" : {
       "post" : {
+        "description" : "Looks up the challenge's TXT record over real DNS -- UNPROCESSABLE_STATE when it does not (yet) carry the issued token, RESOURCE_NOT_FOUND when this channel has no active challenge to resolve.",
         "operationId" : "verify",
         "parameters" : [ {
           "in" : "path",
@@ -22750,7 +22857,7 @@
             "description" : "OK"
           }
         },
-        "summary" : "Mark the channel's current hostname verified",
+        "summary" : "Resolve the channel's DNS-TXT challenge and mark it verified on a match",
         "tags" : [ "Channel setup" ]
       }
     },

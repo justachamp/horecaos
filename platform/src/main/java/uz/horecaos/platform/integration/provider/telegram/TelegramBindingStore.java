@@ -17,6 +17,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.integration.api.provider.ProviderInstallationLookup;
 import uz.horecaos.platform.notifications.api.OperationsSubscriptionDirectory.ScopedBinding;
@@ -362,7 +363,11 @@ public class TelegramBindingStore {
                     .by(actor)
                     .at(ResourceScope.tenant(tenantId))
                     .target("IntegrationBinding", bindingId)
-                    .changed(Map.of("reason", reason))
+                    // Staff 9.3a: "status" genuinely moves from ACTIVE to
+                    // SUSPENDED, the same transition the UPDATE above performs;
+                    // "reason" is set for the first time on this retirement.
+                    .changed(ChangeDocuments.diff(
+                            Map.of("status", "ACTIVE"), Map.of("status", "SUSPENDED", "reason", reason)))
                     .correlatedBy(bindingId.toString())
                     .occurredAt(now);
             if (reasonNote != null) {

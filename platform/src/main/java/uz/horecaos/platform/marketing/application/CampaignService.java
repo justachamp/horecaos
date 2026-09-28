@@ -14,6 +14,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.commercial.api.EntitlementKeys;
 import uz.horecaos.platform.commercial.api.EntitlementService;
 import uz.horecaos.platform.iam.api.ResourceScope;
@@ -249,15 +250,25 @@ public class CampaignService {
                 .targetVersion((long) campaign.version())
                 .outcome(approved ? AuditFact.Outcome.SUCCEEDED : AuditFact.Outcome.REJECTED)
                 .because(reason)
-                .changed(Map.of(
-                        "estimatedRecipients",
-                        campaign.estimatedRecipients() == null ? 0 : campaign.estimatedRecipients(),
-                        "costCeilingMinor",
-                        String.valueOf(campaign.costCeilingMinor()),
-                        "recipientCap",
-                        campaign.recipientCap(),
-                        "authorIsApprover",
-                        approverId.equals(campaign.createdBy())))
+                // Staff 9.3a: "status" moves from the campaign's prior status
+                // (read above, before the write) to APPROVED only when
+                // #approve actually won that write -- a self-approval
+                // refusal, a stale version, or a lost race leaves the
+                // campaign exactly where it was, and the audit must say so
+                // rather than record a transition that never happened.
+                .changed(ChangeDocuments.diff(
+                        Map.of("status", campaign.status().name()),
+                        Map.of(
+                                "status",
+                                (approved ? CampaignStatus.APPROVED : campaign.status()).name(),
+                                "estimatedRecipients",
+                                campaign.estimatedRecipients() == null ? 0 : campaign.estimatedRecipients(),
+                                "costCeilingMinor",
+                                String.valueOf(campaign.costCeilingMinor()),
+                                "recipientCap",
+                                campaign.recipientCap(),
+                                "authorIsApprover",
+                                approverId.equals(campaign.createdBy()))))
                 .underApproval(approvalId)
                 .usingCapability("campaign.approve")
                 .correlatedBy(correlationId)
@@ -364,7 +375,22 @@ public class CampaignService {
                 .target("MarketingCampaign", campaignId)
                 .outcome(rescheduled ? AuditFact.Outcome.SUCCEEDED : AuditFact.Outcome.REJECTED)
                 .because(campaign.haltedReason() == null ? "operator re-schedule" : campaign.haltedReason())
-                .changed(Map.of("scheduledAt", newScheduledAt.toString()))
+                // Staff 9.3a: "scheduledAt" moves from the campaign's prior
+                // value (read above, before the write, null when it was
+                // never scheduled) to the new instant only when the write
+                // actually won -- a campaign that was not halted (or one
+                // already re-armed by a concurrent call) keeps its prior
+                // value, and the audit must not claim the new instant took.
+                .changed(ChangeDocuments.change(
+                        "scheduledAt",
+                        campaign.scheduledAt() == null
+                                ? null
+                                : campaign.scheduledAt().toString(),
+                        rescheduled
+                                ? newScheduledAt.toString()
+                                : (campaign.scheduledAt() == null
+                                        ? null
+                                        : campaign.scheduledAt().toString())))
                 .usingCapability("campaign.approve")
                 .correlatedBy(correlationId)
                 .occurredAt(now)
@@ -396,10 +422,19 @@ public class CampaignService {
                 .target("MarketingCampaign", campaignId)
                 .outcome(halted ? AuditFact.Outcome.SUCCEEDED : AuditFact.Outcome.REJECTED)
                 .because(reason)
-                .changed(Map.of(
-                        "statusBefore", campaign.status().name(),
-                        "spentCostMinor", campaign.spentCostMinor(),
-                        "reservedCostMinor", campaign.reservedCostMinor()))
+                // Staff 9.3a: "status" moves from the campaign's prior status
+                // (read above, before the write) to HALTED_OPERATOR only
+                // when the write actually won -- a status guard or lost race
+                // leaves the campaign exactly where it was.
+                .changed(ChangeDocuments.diff(
+                        Map.of("status", campaign.status().name()),
+                        Map.of(
+                                "status",
+                                (halted ? CampaignStatus.HALTED_OPERATOR : campaign.status()).name(),
+                                "spentCostMinor",
+                                campaign.spentCostMinor(),
+                                "reservedCostMinor",
+                                campaign.reservedCostMinor())))
                 .usingCapability("campaign.approve")
                 .correlatedBy(correlationId)
                 .occurredAt(now)
@@ -461,8 +496,22 @@ public class CampaignService {
                 .targetVersion((long) campaign.version())
                 .outcome(resumed ? AuditFact.Outcome.SUCCEEDED : AuditFact.Outcome.REJECTED)
                 .because(reason)
-                .changed(
-                        Map.of("blockedCountBeforeReset", campaign.blockedCount(), "suppressedDuringPause", suppressed))
+                // Staff 9.3a: "status" moves from PAUSED (guarded above) to
+                // SENDING, and "blockedCount" resets to 0, only when
+                // JdbcCampaignStore#resume actually won that write -- a
+                // lost race (the campaign left PAUSED between this read and
+                // that write) leaves the campaign exactly where it was, and
+                // the audit must say so rather than record a resume that
+                // did not happen.
+                .changed(ChangeDocuments.diff(
+                        Map.of("status", CampaignStatus.PAUSED.name(), "blockedCount", campaign.blockedCount()),
+                        Map.of(
+                                "status",
+                                (resumed ? CampaignStatus.SENDING : campaign.status()).name(),
+                                "blockedCount",
+                                resumed ? 0 : campaign.blockedCount(),
+                                "suppressedDuringPause",
+                                suppressed)))
                 .usingCapability("campaign.approve")
                 .correlatedBy(correlationId)
                 .occurredAt(now)

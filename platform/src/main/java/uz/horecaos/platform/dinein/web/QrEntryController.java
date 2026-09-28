@@ -4,12 +4,15 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -17,6 +20,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import uz.horecaos.platform.customers.api.CurrentCustomer;
+import uz.horecaos.platform.customers.api.CustomerAccountRef;
 import uz.horecaos.platform.dinein.application.QrEntryService;
 import uz.horecaos.platform.dinein.application.QrEntryService.GuestAdmission;
 import uz.horecaos.platform.dinein.application.QrEntryService.GuestContext;
@@ -35,7 +40,13 @@ import uz.horecaos.platform.web.api.ErrorCode;
  * uz.horecaos.platform.web.authorization.RequiresCapability} declaration, because
  * there is no principal to hold a capability: the caller is somebody who pointed a
  * camera at a table. Authorization here is the token itself, and every endpoint
- * below resolves it to a row before doing anything.
+ * below resolves it to a row before doing anything. {@code addRound} is the one
+ * exception, and only for the second credential it checks: the guest token still
+ * proves the table, but attaching a round also checks the caller's ordinary
+ * customer session against the order's own owner (see that handler's {@code
+ * requireOwnOrder}) -- because the table token alone names a table, never a
+ * specific order, and a guest device that could attach any order at the branch
+ * would reach another table's bill exactly as ADR 0047's exit criteria forbid.
  *
  * <p><strong>The printed token travels in the request body, not in the path.</strong>
  * ADR 0047's API sketch writes {@code POST /api/v1/storefront/qr/{tableToken}/sessions},
@@ -66,10 +77,12 @@ public class QrEntryController {
 
     private final QrEntryService qr;
     private final TableSessionService sessions;
+    private final CurrentCustomer currentCustomer;
 
-    public QrEntryController(QrEntryService qr, TableSessionService sessions) {
+    public QrEntryController(QrEntryService qr, TableSessionService sessions, CurrentCustomer currentCustomer) {
         this.qr = qr;
         this.sessions = sessions;
+        this.currentCustomer = currentCustomer;
     }
 
     @PostMapping("/qr/token-exchanges")
@@ -92,7 +105,8 @@ public class QrEntryController {
                 admission.brandId(),
                 admission.locationId(),
                 admission.tableCode(),
-                admission.openSessionId()));
+                admission.openSessionId(),
+                admission.channelCode()));
     }
 
     @GetMapping("/sessions/{sessionId}")
@@ -150,6 +164,88 @@ public class QrEntryController {
         return ResponseEntity.ok(billResponse(guest, moved));
     }
 
+    @PostMapping("/sessions/{sessionId}/rounds")
+    @Operation(
+            summary = "Attach a just-placed order to the table's bill",
+            description = "Checkout does not itself bind a cart to a table (ADR 0047's own "
+                    + "'what was not built' notes this: 'ordering's cart-to-table binding'). "
+                    + "This closes that loop for a guest ordering from the table's own device: "
+                    + "the order was already priced, reserved and confirmed by the ordinary "
+                    + "checkout, and this only records that it belongs to this table's evening -- "
+                    + "the exact write TableSessionController's operator endpoint makes, reached "
+                    + "here through the guest's own token instead of a capability. Calling it "
+                    + "twice with the same order is not an error: the second call finds the order "
+                    + "already on this bill and answers with the bill unchanged. The guest token "
+                    + "alone proves the caller is at this table, not that the order named in the "
+                    + "body is theirs, so this also requires the ordinary signed-in session "
+                    + "(Authorization: Bearer) the checkout that created the order was placed "
+                    + "under -- see requireOwnOrder's own doc.")
+    public ResponseEntity<GuestBillResponse> addRound(
+            @PathVariable UUID sessionId,
+            @RequestHeader(GUEST_TOKEN_HEADER) String guestToken,
+            @Valid @RequestBody AddRoundRequest body) {
+
+        GuestContext guest = qr.resolve(guestToken);
+        requireOrdering(guest);
+
+        SessionRow session = qr.requireSessionAtTable(guest, sessionId);
+        CustomerAccountRef caller = requireOwnOrder(guest);
+        try {
+            sessions.addRound(
+                    guest.tenantId(),
+                    sessionId,
+                    body.orderId(),
+                    caller.accountId(),
+                    "guest:" + guest.tableId(),
+                    "Placed from the table via QR checkout");
+        } catch (ApiException alreadyOnABill) {
+            // Idempotent by observation, like requestBill above: a retry after a
+            // dropped response must not read as a failure when the round already
+            // landed. Any other refusal (wrong branch, wrong fulfilment mode, no
+            // such order) is a real one and propagates.
+            if (!"ORDER_ALREADY_BILLED".equals(alreadyOnABill.properties().get("conflict"))) {
+                throw alreadyOnABill;
+            }
+        }
+
+        return ResponseEntity.ok(billResponse(guest, session));
+    }
+
+    /**
+     * The signed-in customer whose checkout {@code addRound} is allowed to
+     * attach.
+     *
+     * <p>The guest token this class otherwise runs on proves "this device
+     * scanned this table" and nothing about which order is the caller's own --
+     * every DINE_IN order still needs a signed-in customer to have been placed
+     * at all (there is no anonymous path through {@code POST .../carts}), so
+     * that same session is the one fact available here to check a round
+     * against. Without it, any device holding a valid guest token for table A
+     * could attach any not-yet-billed DINE_IN order at the branch -- including
+     * one a guest at table B just placed -- onto table A's bill, which is
+     * exactly the reach across tables ADR 0047's exit criteria forbid.
+     *
+     * <p>{@link CurrentCustomer#account} answers empty for a caller with no
+     * session at all, and the underlying {@code CurrentActor} throws for a
+     * request carrying neither a customer session nor a realm token -- both
+     * translate to the same refusal here, since from the caller's side they
+     * are the same fact: nobody is signed in.
+     */
+    private CustomerAccountRef requireOwnOrder(GuestContext guest) {
+        Optional<CustomerAccountRef> account;
+        try {
+            account = currentCustomer.account(guest.tenantId(), guest.brandId());
+        } catch (AccessDeniedException noSession) {
+            throw unownedRound();
+        }
+        return account.orElseThrow(QrEntryController::unownedRound);
+    }
+
+    private static ApiException unownedRound() {
+        return new ApiException(
+                ErrorCode.UNAUTHENTICATED, "Attaching a round needs the signed-in session the order was placed under");
+    }
+
     private GuestBillResponse billResponse(GuestContext guest, SessionRow session) {
         SessionBill bill = sessions.bill(guest.tenantId(), session.id());
         return new GuestBillResponse(
@@ -178,6 +274,8 @@ public class QrEntryController {
 
     record ExchangeRequest(@NotBlank @Size(max = 64) String tableToken) {}
 
+    record AddRoundRequest(@NotNull UUID orderId) {}
+
     /**
      * @param guestToken returned once. There is no endpoint that reissues it: the
      *                   guest scans again
@@ -190,7 +288,9 @@ public class QrEntryController {
             UUID brandId,
             UUID locationId,
             String tableCode,
-            @Nullable UUID openSessionId) {}
+            @Nullable UUID openSessionId,
+            /** See {@link QrEntryService.GuestAdmission#channelCode()}. */
+            @Nullable String channelCode) {}
 
     record GuestBillResponse(
             UUID sessionId, String status, String currency, long totalMinor, int roundCount, List<UUID> orderIds) {}

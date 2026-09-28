@@ -19,6 +19,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope;
@@ -164,10 +165,12 @@ public class SecretIngressController {
                 .because("Tenant wrote a provider credential through the ADR 0065 secret door")
                 // Reference and category only -- never the value, which never
                 // reaches this method beyond the one write() call above.
-                .changed(Map.of(
+                // Staff 9.3a: door.write() always mints a fresh reference, so
+                // there is no prior secret on this reference to diff against.
+                .changed(ChangeDocuments.created(Map.of(
                         "category", request.category().name(),
                         "providerType", request.providerType(),
-                        "reference", reference.toString()))
+                        "reference", reference.toString())))
                 .usingCapability(Capability.INTEGRATION_INSTALLATION_MANAGE.code())
                 .correlatedBy(reference.toString())
                 .occurredAt(clock.instant())

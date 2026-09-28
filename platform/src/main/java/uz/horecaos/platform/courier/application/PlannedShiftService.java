@@ -14,6 +14,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.configuration.Ids;
 import uz.horecaos.platform.courier.domain.PlannedShiftStatus;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierShiftStore;
@@ -98,6 +99,11 @@ public class PlannedShiftService {
                 1);
         roster.insert(entry);
 
+        // Staff 9.3a: a brand-new planned shift, no prior state to diff against.
+        Map<String, Object> changes = ChangeDocuments.created(Map.of(
+                "courierId", command.courierId().toString(),
+                "plannedStart", command.plannedStart().toString(),
+                "plannedEnd", command.plannedEnd().toString()));
         audit.record(fact(
                 "courier.roster-entry.drafted",
                 command.actor(),
@@ -106,10 +112,7 @@ public class PlannedShiftService {
                 command.locationId(),
                 id,
                 command.reason(),
-                Map.of(
-                        "courierId", command.courierId().toString(),
-                        "plannedStart", command.plannedStart().toString(),
-                        "plannedEnd", command.plannedEnd().toString())));
+                changes));
 
         return entry;
     }
@@ -138,6 +141,11 @@ public class PlannedShiftService {
                     ErrorCode.UNPROCESSABLE_STATE,
                     "This planned shift is %s and cannot be published".formatted(entry.status()));
         }
+        // Staff 9.3a: "status" genuinely moves -- entry (read above, before
+        // roster.publish) already holds the prior value.
+        Map<String, Object> changes = ChangeDocuments.diff(
+                Map.of("status", entry.status().name()),
+                Map.of("status", "PUBLISHED", "courierId", entry.courierId().toString()));
         audit.record(fact(
                 "courier.roster-entry.published",
                 actor,
@@ -146,7 +154,7 @@ public class PlannedShiftService {
                 entry.locationId(),
                 id,
                 reason,
-                Map.of("courierId", entry.courierId().toString())));
+                changes));
     }
 
     /**
@@ -167,6 +175,11 @@ public class PlannedShiftService {
                     ErrorCode.UNPROCESSABLE_STATE,
                     "This planned shift is %s and cannot be cancelled".formatted(entry.status()));
         }
+        // Staff 9.3a: "status" genuinely moves -- entry (read above, before
+        // roster.cancel) already holds the prior value.
+        Map<String, Object> changes = ChangeDocuments.diff(
+                Map.of("status", entry.status().name()),
+                Map.of("status", "CANCELLED", "courierId", entry.courierId().toString()));
         audit.record(fact(
                 "courier.roster-entry.cancelled",
                 actor,
@@ -175,7 +188,7 @@ public class PlannedShiftService {
                 entry.locationId(),
                 id,
                 reason,
-                Map.of("courierId", entry.courierId().toString())));
+                changes));
     }
 
     /** The branch's planned shifts, optionally windowed to a period — IA 3.5's roster grid. */

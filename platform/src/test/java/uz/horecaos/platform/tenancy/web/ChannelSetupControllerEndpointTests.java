@@ -22,6 +22,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Primary;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -35,7 +36,9 @@ import org.testcontainers.DockerClientFactory;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.PlatformRole;
 import uz.horecaos.platform.iam.infrastructure.authorization.RoleRegistrySynchronizer;
+import uz.horecaos.platform.support.FakeDnsTxtResolver;
 import uz.horecaos.platform.support.TestDatabase;
+import uz.horecaos.platform.tenancy.domain.channel.HostnameChallenges;
 import uz.horecaos.platform.web.idempotency.IdempotencyInterceptor;
 
 /**
@@ -89,10 +92,14 @@ class ChannelSetupControllerEndpointTests {
     @Autowired
     private RoleRegistrySynchronizer roleRegistry;
 
+    @Autowired
+    private FakeDnsTxtResolver dnsTxtResolver;
+
     @BeforeEach
     void reset() {
         jdbc.sql("TRUNCATE TABLE platform.idempotency_records").update();
         jdbc.sql("TRUNCATE TABLE tenant.tenants CASCADE").update();
+        dnsTxtResolver.reset();
         roleRegistry.synchronize();
         insertTenant(TENANT, "channel-setup-endpoint");
         insertTenant(OTHER_TENANT, "channel-setup-endpoint-other");
@@ -154,7 +161,7 @@ class ChannelSetupControllerEndpointTests {
     }
 
     @Test
-    void aCustomHostnameStartsUnverifiedAndCanBeMarkedVerified() throws Exception {
+    void aCustomHostnameIssuesAChallengeAndIsVerifiedOnlyOnceDnsMatchesIt() throws Exception {
         MvcResult claimed = mvc.perform(put(setupPath(TENANT, CHANNEL) + "/hostname/custom")
                         .with(tokenFor(OWNER))
                         .header(IDEMPOTENCY_HEADER, "custom-1")
@@ -169,6 +176,29 @@ class ChannelSetupControllerEndpointTests {
                 .contains("\"hostname\":\"orders.tandir-house.uz\"")
                 .contains("\"verified\":false");
 
+        MvcResult challenge = mvc.perform(
+                        get(setupPath(TENANT, CHANNEL) + "/hostname/challenge").with(tokenFor(OWNER)))
+                .andReturn();
+        assertThat(challenge.getResponse().getStatus()).isEqualTo(200);
+        String challengeBody = challenge.getResponse().getContentAsString();
+        assertThat(challengeBody)
+                .as("the record name is derived from the hostname, never a free-standing field to keep in sync")
+                .contains("\"recordName\":\"_horecaos-challenge.orders.tandir-house.uz\"")
+                .contains("\"recordType\":\"TXT\"");
+        String token = extractJsonString(challengeBody, "token");
+
+        MvcResult refused = mvc.perform(post(setupPath(TENANT, CHANNEL) + "/hostname/verify")
+                        .with(tokenFor(OWNER))
+                        .header(IDEMPOTENCY_HEADER, "custom-verify-too-early")
+                        .param("expectedVersion", "2"))
+                .andReturn();
+        assertThat(refused.getResponse().getStatus())
+                .as("the challenge record was never published, so nothing has proven ownership yet")
+                .isEqualTo(422);
+        assertThat(refused.getResponse().getContentAsString()).contains("UNPROCESSABLE_STATE");
+
+        dnsTxtResolver.publish("_horecaos-challenge.orders.tandir-house.uz", token);
+
         MvcResult verified = mvc.perform(post(setupPath(TENANT, CHANNEL) + "/hostname/verify")
                         .with(tokenFor(OWNER))
                         .header(IDEMPOTENCY_HEADER, "custom-verify-1")
@@ -176,6 +206,91 @@ class ChannelSetupControllerEndpointTests {
                 .andReturn();
         assertThat(verified.getResponse().getStatus()).isEqualTo(200);
         assertThat(verified.getResponse().getContentAsString()).contains("\"verified\":true");
+    }
+
+    @Test
+    void rotatingTheChallengeReplacesTheTokenAndUnverifiesTheHostname() throws Exception {
+        mvc.perform(put(setupPath(TENANT, CHANNEL) + "/hostname/custom")
+                .with(tokenFor(OWNER))
+                .header(IDEMPOTENCY_HEADER, "rotate-claim")
+                .contentType(MediaType.APPLICATION_JSON)
+                .param("expectedVersion", "1")
+                .content("""
+                        {"hostname":"rotate.tandir-house.uz"}
+                        """));
+        String recordName = HostnameChallenges.recordName("rotate.tandir-house.uz");
+        String firstToken = extractJsonString(
+                mvc.perform(get(setupPath(TENANT, CHANNEL) + "/hostname/challenge")
+                                .with(tokenFor(OWNER)))
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString(),
+                "token");
+        dnsTxtResolver.publish(recordName, firstToken);
+        mvc.perform(post(setupPath(TENANT, CHANNEL) + "/hostname/verify")
+                .with(tokenFor(OWNER))
+                .header(IDEMPOTENCY_HEADER, "rotate-verify-1")
+                .param("expectedVersion", "2"));
+
+        MvcResult rotated = mvc.perform(post(setupPath(TENANT, CHANNEL) + "/hostname/challenge/rotate")
+                        .with(tokenFor(OWNER))
+                        .header(IDEMPOTENCY_HEADER, "rotate-1")
+                        .param("expectedVersion", "3"))
+                .andReturn();
+        assertThat(rotated.getResponse().getStatus()).isEqualTo(200);
+        String secondToken = extractJsonString(rotated.getResponse().getContentAsString(), "token");
+        assertThat(secondToken).isNotEqualTo(firstToken);
+
+        MvcResult hostAfterRotate = mvc.perform(
+                        get(setupPath(TENANT, CHANNEL) + "/hostname").with(tokenFor(OWNER)))
+                .andReturn();
+        assertThat(hostAfterRotate.getResponse().getContentAsString())
+                .as("the old DNS record still carries the old token, which is no longer the live challenge")
+                .contains("\"verified\":false");
+
+        MvcResult reVerifyWithOldToken = mvc.perform(post(setupPath(TENANT, CHANNEL) + "/hostname/verify")
+                        .with(tokenFor(OWNER))
+                        .header(IDEMPOTENCY_HEADER, "rotate-verify-stale")
+                        .param("expectedVersion", "4"))
+                .andReturn();
+        assertThat(reVerifyWithOldToken.getResponse().getStatus())
+                .as("DNS still answers with the pre-rotation token, which no longer matches")
+                .isEqualTo(422);
+    }
+
+    @Test
+    void aPlatformIssuedSubdomainHasNoChallengeToRotate() throws Exception {
+        mvc.perform(put(setupPath(TENANT, CHANNEL) + "/hostname/subdomain")
+                .with(tokenFor(OWNER))
+                .header(IDEMPOTENCY_HEADER, "no-challenge-subdomain")
+                .contentType(MediaType.APPLICATION_JSON)
+                .param("expectedVersion", "1")
+                .content("""
+                        {"slug":"tandir-house"}
+                        """));
+
+        MvcResult challenge = mvc.perform(
+                        get(setupPath(TENANT, CHANNEL) + "/hostname/challenge").with(tokenFor(OWNER)))
+                .andReturn();
+        assertThat(challenge.getResponse().getStatus())
+                .as("a platform-issued subdomain is verified immediately and never gets a challenge")
+                .isEqualTo(404);
+
+        MvcResult rotate = mvc.perform(post(setupPath(TENANT, CHANNEL) + "/hostname/challenge/rotate")
+                        .with(tokenFor(OWNER))
+                        .header(IDEMPOTENCY_HEADER, "no-challenge-rotate")
+                        .param("expectedVersion", "2"))
+                .andReturn();
+        assertThat(rotate.getResponse().getStatus()).isEqualTo(400);
+    }
+
+    private static String extractJsonString(String body, String field) {
+        String needle = "\"" + field + "\":\"";
+        int start = body.indexOf(needle);
+        assertThat(start).as("field %s in %s", field, body).isGreaterThanOrEqualTo(0);
+        start += needle.length();
+        int end = body.indexOf('"', start);
+        return body.substring(start, end);
     }
 
     @Test
@@ -328,6 +443,18 @@ class ChannelSetupControllerEndpointTests {
                     .header("alg", "none")
                     .claim("sub", "unused")
                     .build();
+        }
+
+        /**
+         * Row 10.5: verification must never reach the real network from a
+         * test. Every {@code /hostname/verify}, {@code /hostname/challenge}
+         * and the sweep in this suite go through this fake instead of {@code
+         * DnsjavaTxtResolver}.
+         */
+        @Bean
+        @Primary
+        FakeDnsTxtResolver dnsTxtResolver() {
+            return new FakeDnsTxtResolver();
         }
     }
 }

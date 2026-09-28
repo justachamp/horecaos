@@ -29,6 +29,13 @@ DB_MIGRATOR_PATH="horecaos/production/database/platform/migrator-password"
 DB_APP_PATH="horecaos/production/database/platform/app-password"
 KEYCLOAK_DB_PATH="horecaos/production/database/keycloak/password"
 OBJECT_STORE_ROOT_PATH="horecaos/production/object_storage/platform/root-password"
+# The backup service account's own pair (ADR 0135, checklist item 3's
+# sibling for the backup bucket). docs/runbooks/production-setup.md used to
+# ask an operator to mint this by hand; Phase 6a below scripts it instead, so
+# these two paths are written here on every deploy rather than read once at
+# bootstrap.
+OBJECT_STORE_BACKUP_ACCESS_PATH="horecaos/production/object_storage/platform/backup-access-key"
+OBJECT_STORE_BACKUP_SECRET_PATH="horecaos/production/object_storage/platform/backup-secret-key"
 
 say()  { printf '\n==> %s\n' "$*"; }
 warn() { printf '\n!!  %s\n' "$*" >&2; }
@@ -138,6 +145,21 @@ bao_field() {
     bao_run bao kv get -field=value "$1"
 }
 
+# Writes a single value to a KV v2 path. The value travels over stdin behind
+# the operator's own token, the same protection this file already gives
+# OPERATOR_TOKEN itself (see bao_run's own comment): an argument to
+# `docker compose exec` sits in this host's own `ps` output for as long as
+# the exec runs, and a service-account secret key is exactly the kind of
+# value that must never appear there, however briefly.
+bao_put_value() {
+    local path="$1" value="$2"
+    printf '%s\n%s' "${OPERATOR_TOKEN}" "${value}" \
+        | compose exec -T openbao sh -c '
+            IFS= read -r BAO_TOKEN; export BAO_TOKEN
+            IFS= read -r VALUE
+            bao kv put "$1" "value=${VALUE}"' _ "${path}"
+}
+
 compose exec -T openbao sh -c 'true' >/dev/null 2>&1 \
     || die "Cannot exec into the OpenBao container."
 
@@ -242,7 +264,7 @@ else
 fi
 
 say "Building the application image (horecaos/platform:${IMAGE_TAG})"
-compose build platform-app platform-migrate
+compose build platform-app platform-migrate ops
 
 
 # -----------------------------------------------------------------------------
@@ -255,11 +277,110 @@ compose build platform-app platform-migrate
 
 say "Starting dependencies"
 # object-store, not minio (ADR 0135, 2026-09-25): compose.production.yaml has
-# no service literally named `minio` any more. object-store-seed is started
-# explicitly here too, rather than left for platform-app's own depends_on to
-# pull in later, so a bucket-creation failure surfaces now instead of at the
-# end of phase 7.
-compose up -d platform-db keycloak-db kafka object-store object-store-seed openbao openbao-agent
+# no service literally named `minio` any more. object-store-seed itself
+# starts later (below), once it has a create-bucket-only credential to run
+# with -- starting it here would fall back to the object store's own root
+# credential, which is exactly the corner Phase 6a below closes.
+compose up -d platform-db keycloak-db kafka object-store openbao openbao-agent
+
+say "Waiting for the object store to become healthy"
+for _ in $(seq 1 30); do
+    if compose ps --format json object-store 2>/dev/null | grep -q '"Health":"healthy"'; then
+        break
+    fi
+    sleep 2
+done
+
+
+# -----------------------------------------------------------------------------
+# Phase 6a — provision the object store's own scoped service accounts
+# -----------------------------------------------------------------------------
+#
+# Two service accounts, minted against the object store's root credential
+# and used nowhere but here: a create-bucket-only account for the seed job
+# below, and the backup account docs/runbooks/production-setup.md used to
+# ask an operator to create by hand, "Then create the scoped service
+# accounts". Neither is the root credential, and neither is the media
+# credential platform-app itself runs with (that one is provisioned once, at
+# bootstrap — see infra/production/bootstrap.sh — not re-minted on every
+# deploy). RustFS 1.0.0 has no MinIO-shaped `mc admin user add`; its own
+# admin API is `PUT /rustfs/admin/v3/add-service-account`, SigV4-signed —
+# reached here through the `ops` container the same way
+# deploy/local-smoke.sh's own proof of this call does (verified 2026-09-25
+# against a running RustFS 1.0.0 container). The `ops` service already
+# carries the root access key and the root secret file (compose.production.
+# yaml's own comment on `ops` explains why), so nothing here ever holds the
+# root credential in this script's own shell.
+
+say "Provisioning a create-bucket-only service account for the seed job"
+read -r -d '' SEED_SVC_ACCOUNT_SCRIPT <<'SCRIPT' || true
+set -euo pipefail
+root_secret="$(cat /run/secrets/object-store-secret-key)"
+policy=$(jq -nc --arg media "${HORECAOS_MEDIA_BUCKET}" --arg backup "${HORECAOS_BACKUP_BUCKET}" \
+    --arg audit "${HORECAOS_AUDIT_ARCHIVE_BUCKET}" \
+    '{Version:"2012-10-17",Statement:[{Effect:"Allow",Action:["s3:CreateBucket","s3:HeadBucket","s3:PutBucketVersioning"],Resource:[("arn:aws:s3:::"+$media),("arn:aws:s3:::"+$backup),("arn:aws:s3:::"+$audit)]}]}')
+body=$(jq -nc --argjson policy "${policy}" --arg name "object-store-seed" '{policy:$policy,name:$name}')
+curl -fsS -X PUT "http://object-store:9000/rustfs/admin/v3/add-service-account" \
+    --user "${OBJECT_STORE_ROOT_ACCESS_KEY}:${root_secret}" \
+    --aws-sigv4 "aws:amz:us-east-1:s3" \
+    -H "Content-Type: application/json" \
+    --data "${body}"
+SCRIPT
+SEED_SVC_JSON="$(compose run --rm --no-TTY ops bash -c "${SEED_SVC_ACCOUNT_SCRIPT}")" \
+    || die "Could not create the seed service account against RustFS's admin API."
+SEED_ACCESS_KEY="$(printf '%s' "${SEED_SVC_JSON}" | jq -r '.credentials.accessKey // empty')"
+SEED_SECRET_KEY="$(printf '%s' "${SEED_SVC_JSON}" | jq -r '.credentials.secretKey // empty')"
+if [ -z "${SEED_ACCESS_KEY}" ] || [ -z "${SEED_SECRET_KEY}" ]; then
+    die "RustFS did not return a service-account access key/secret for the seed account at .credentials.accessKey/.credentials.secretKey."
+fi
+export HORECAOS_OBJECT_STORE_SEED_ACCESS_KEY="${SEED_ACCESS_KEY}"
+( umask 133; printf '%s' "${SEED_SECRET_KEY}" > "${SECRET_DIR}/object-store-seed-secret-key" )
+chmod 0444 "${SECRET_DIR}/object-store-seed-secret-key"
+unset SEED_SVC_ACCOUNT_SCRIPT SEED_SVC_JSON SEED_ACCESS_KEY SEED_SECRET_KEY
+
+# Unlike the seed account above, this one is provisioned once, not re-minted
+# on every deploy: it is the nightly backup job's own long-lived credential
+# (`s3:*` on the backup bucket, the same breadth the media pair has on the
+# media bucket), and RustFS's admin API has no "already exists" response for
+# a repeated `add-service-account` call -- minting a fresh one on every
+# deploy would leave every earlier pair live and un-revoked forever, an
+# ever-growing set of valid, backup-bucket-wide credentials nobody is
+# tracking. So this checks OpenBao first and only mints when the pair is
+# genuinely missing -- the first deploy after infra/production/bootstrap.sh
+# on a fresh host, or after an operator has deliberately cleared it to force
+# a rotation.
+say "Provisioning the backup bucket's own service account"
+if bao_field "${OBJECT_STORE_BACKUP_ACCESS_PATH}" >/dev/null 2>&1; then
+    say "Backup service account already provisioned; leaving it as it is"
+else
+    read -r -d '' BACKUP_SVC_ACCOUNT_SCRIPT <<'SCRIPT' || true
+set -euo pipefail
+root_secret="$(cat /run/secrets/object-store-secret-key)"
+policy=$(jq -nc --arg b "${HORECAOS_BACKUP_BUCKET}" \
+    '{Version:"2012-10-17",Statement:[{Effect:"Allow",Action:["s3:*"],Resource:[("arn:aws:s3:::"+$b),("arn:aws:s3:::"+$b+"/*")]}]}')
+body=$(jq -nc --argjson policy "${policy}" --arg name "backup-production" '{policy:$policy,name:$name}')
+curl -fsS -X PUT "http://object-store:9000/rustfs/admin/v3/add-service-account" \
+    --user "${OBJECT_STORE_ROOT_ACCESS_KEY}:${root_secret}" \
+    --aws-sigv4 "aws:amz:us-east-1:s3" \
+    -H "Content-Type: application/json" \
+    --data "${body}"
+SCRIPT
+    BACKUP_SVC_JSON="$(compose run --rm --no-TTY ops bash -c "${BACKUP_SVC_ACCOUNT_SCRIPT}")" \
+        || die "Could not create the backup service account against RustFS's admin API."
+    BACKUP_ACCESS_KEY="$(printf '%s' "${BACKUP_SVC_JSON}" | jq -r '.credentials.accessKey // empty')"
+    BACKUP_SECRET_KEY="$(printf '%s' "${BACKUP_SVC_JSON}" | jq -r '.credentials.secretKey // empty')"
+    if [ -z "${BACKUP_ACCESS_KEY}" ] || [ -z "${BACKUP_SECRET_KEY}" ]; then
+        die "RustFS did not return a service-account access key/secret for the backup account at .credentials.accessKey/.credentials.secretKey."
+    fi
+    bao_put_value "${OBJECT_STORE_BACKUP_ACCESS_PATH}" "${BACKUP_ACCESS_KEY}" \
+        || die "Could not write ${OBJECT_STORE_BACKUP_ACCESS_PATH} to OpenBao."
+    bao_put_value "${OBJECT_STORE_BACKUP_SECRET_PATH}" "${BACKUP_SECRET_KEY}" \
+        || die "Could not write ${OBJECT_STORE_BACKUP_SECRET_PATH} to OpenBao."
+    unset BACKUP_SVC_ACCOUNT_SCRIPT BACKUP_SVC_JSON BACKUP_ACCESS_KEY BACKUP_SECRET_KEY
+fi
+
+say "Starting the bucket-creation seed job with its own scoped credential"
+compose up -d object-store-seed
 
 say "Waiting for the OpenBao agent to render the application's secrets"
 for _ in $(seq 1 30); do

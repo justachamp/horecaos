@@ -144,6 +144,23 @@ describe('InventoryApi', () => {
     await promise;
   });
 
+  it('reads a variant’s unlisted branches on the brand-scoped, non-/operations inventory-listing path', async () => {
+    const promise = firstValue(api.unlistedLocations(SCOPE, 'v1'));
+    const request = http.expectOne(url('/api/v1/tenants/t1/brands/b1/variants/v1/inventory-listing'));
+    expect(request.request.method).toBe('GET');
+    request.flush({ locationIds: ['l2', 'l3'] });
+    await expect(promise).resolves.toEqual(['l2', 'l3']);
+  });
+
+  it('backfills a variant’s listing with a POST to the same brand-scoped path GET reads', async () => {
+    const promise = firstValue(api.backfillVariantListing(SCOPE, 'v1'));
+    const request = http.expectOne(url('/api/v1/tenants/t1/brands/b1/variants/v1/inventory-listing'));
+    expect(request.request.method).toBe('POST');
+    expect(request.request.headers.has('Idempotency-Key')).toBe(true);
+    request.flush({ candidateCount: 2, listedCount: 2 });
+    await expect(promise).resolves.toEqual({ candidateCount: 2, listedCount: 2 });
+  });
+
   it('clears a channel stop threshold with a DELETE to the same path, reasonCode as a query param', async () => {
     const promise = firstValue(
       api.clearChannelStopThreshold(SCOPE, 'v1', 'AGGREGATOR', 'PARTNER_REQUEST'),

@@ -12,6 +12,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.customers.infrastructure.persistence.JdbcCustomerStore;
 import uz.horecaos.platform.customers.infrastructure.persistence.JdbcCustomerStore.AccountRow;
 import uz.horecaos.platform.customers.infrastructure.persistence.JdbcCustomerStore.AddressRow;
@@ -145,13 +146,15 @@ public class CustomerErasureService {
             return store.pendingErasureRequest(tenantId, accountId).orElseThrow(NoCompletedRequestException::new);
         }
 
+        // Staff 9.3a: a freshly raised request has no prior state.
         recordFact(
                 "customer.erasure.requested",
                 requestReasonFor(actor),
                 tenantId,
                 accountId,
                 actor,
-                Map.of("requestId", requestId.toString(), "requestedVia", via.name()));
+                Map.of(),
+                Map.of("requestId", requestId.toString(), "requestedVia", via.name(), "status", "PENDING"));
 
         return store.erasureRequest(tenantId, requestId).orElseThrow(NoCompletedRequestException::new);
     }
@@ -256,13 +259,15 @@ public class CustomerErasureService {
             participant.erase(tenantId, accountId);
         }
 
+        // Staff 9.3a: "status" genuinely moves from PENDING to COMPLETED.
         recordFact(
                 "customer.erasure.completed",
                 "Erasure executed: the account was anonymised and its protected fields overwritten",
                 tenantId,
                 accountId,
                 actor,
-                Map.of("requestId", requestId.toString()));
+                Map.of("requestId", requestId.toString(), "status", "PENDING"),
+                Map.of("requestId", requestId.toString(), "status", "COMPLETED"));
 
         return store.erasureRequest(tenantId, requestId).orElseThrow(NoSuchErasureRequestException::new);
     }
@@ -343,13 +348,15 @@ public class CustomerErasureService {
             return store.erasureRequest(tenantId, requestId).orElseThrow(NoSuchErasureRequestException::new);
         }
 
+        // Staff 9.3a: "status" genuinely moves from PENDING to CANCELLED.
         recordFact(
                 "customer.erasure.cancelled",
                 cancelReasonFor(actor),
                 tenantId,
                 accountId,
                 actor,
-                Map.of("requestId", requestId.toString()));
+                Map.of("requestId", requestId.toString(), "status", "PENDING"),
+                Map.of("requestId", requestId.toString(), "status", "CANCELLED"));
 
         return store.erasureRequest(tenantId, requestId).orElseThrow(NoSuchErasureRequestException::new);
     }
@@ -366,13 +373,14 @@ public class CustomerErasureService {
             UUID tenantId,
             UUID accountId,
             ActorRef actor,
-            Map<String, Object> changed) {
+            Map<String, Object> before,
+            Map<String, Object> after) {
         audit.record(AuditFact.of(actionCode, AuditClass.SECURITY)
                 .by(actor)
                 .at(ResourceScope.tenant(tenantId))
                 .target(ACCOUNT_TABLE, accountId)
                 .because(auditReason)
-                .changed(changed)
+                .changed(ChangeDocuments.diff(before, after))
                 .correlatedBy(accountId.toString())
                 .occurredAt(clock.instant())
                 .build());

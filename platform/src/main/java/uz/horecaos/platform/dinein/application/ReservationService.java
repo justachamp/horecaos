@@ -15,6 +15,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.dinein.domain.DineInStateMachine;
 import uz.horecaos.platform.dinein.domain.ReservationStatus;
 import uz.horecaos.platform.dinein.infrastructure.persistence.JdbcDineInStore;
@@ -175,11 +176,12 @@ public class ReservationService {
                 .target("dinein.reservation", reservationId)
                 .targetVersion(1L)
                 .because("Booking taken")
-                .changed(Map.of(
+                // Staff 9.3a: a freshly inserted reservation has no prior state.
+                .changed(ChangeDocuments.created(Map.of(
                         "partySize", request.partySize(),
                         "tables", request.tableIds().size(),
                         "requestedFrom", request.requestedFrom().toString(),
-                        "requestedTo", request.requestedTo().toString()))
+                        "requestedTo", request.requestedTo().toString())))
                 .usingCapability("reservation.manage")
                 .correlatedBy(reservationId.toString())
                 .occurredAt(now)
@@ -261,10 +263,13 @@ public class ReservationService {
                 .target("dinein.reservation", reservationId)
                 .targetVersion((long) expectedVersion + 1)
                 .because(reason)
-                .changed(Map.of(
-                        "from", reservation.status().name(),
-                        "to", to.name(),
-                        "turnaroundMinutes", turnaround))
+                // Staff 9.3a: "status" genuinely moves from the reservation's
+                // prior status to the requested one; turnaroundMinutes is
+                // unchanged identifying context (the settings value used for
+                // this move's holds).
+                .changed(ChangeDocuments.diff(
+                        Map.of("status", reservation.status().name(), "turnaroundMinutes", turnaround),
+                        Map.of("status", to.name(), "turnaroundMinutes", turnaround)))
                 .usingCapability("reservation.manage")
                 .correlatedBy(reservationId.toString())
                 .occurredAt(now)
@@ -417,24 +422,36 @@ public class ReservationService {
                 .target("dinein.reservation", reservationId)
                 .targetVersion((long) expectedVersion + 1)
                 .because(reason)
-                .changed(Map.of(
-                        "partySize",
-                        partySize,
-                        "tables",
-                        tableIds.size(),
-                        "requestedFrom",
-                        requestedFrom.toString(),
-                        "requestedTo",
-                        requestedTo.toString(),
-                        // Booleans, never the corrected values — ADR 0029 keeps a
-                        // guest's real name and number out of every audit `changed`
-                        // document, this one included.
-                        "guestNameCorrected",
-                        guestNameEncrypted != null,
-                        "guestPhoneCorrected",
-                        guestPhoneEncrypted != null,
-                        "noteCorrected",
-                        noteEncrypted != null))
+                // Staff 9.3a: partySize/requestedFrom/requestedTo genuinely
+                // move from the reservation's prior values (read above,
+                // before the write) to the corrected ones; the rest are this
+                // amendment's own context, with no prior value to diff.
+                .changed(ChangeDocuments.diff(
+                        Map.of(
+                                "partySize",
+                                reservation.partySize(),
+                                "requestedFrom",
+                                reservation.requestedFrom().toString(),
+                                "requestedTo",
+                                reservation.requestedTo().toString()),
+                        Map.of(
+                                "partySize",
+                                partySize,
+                                "tables",
+                                tableIds.size(),
+                                "requestedFrom",
+                                requestedFrom.toString(),
+                                "requestedTo",
+                                requestedTo.toString(),
+                                // Booleans, never the corrected values — ADR 0029 keeps
+                                // a guest's real name and number out of every audit
+                                // `changed` document, this one included.
+                                "guestNameCorrected",
+                                guestNameEncrypted != null,
+                                "guestPhoneCorrected",
+                                guestPhoneEncrypted != null,
+                                "noteCorrected",
+                                noteEncrypted != null)))
                 .usingCapability("reservation.manage")
                 .correlatedBy(reservationId.toString())
                 .occurredAt(now)
@@ -487,10 +504,12 @@ public class ReservationService {
                 .target("dinein.reservation", reservationId)
                 .targetVersion((long) reservation.version())
                 .because(purpose)
-                .changed(Map.of(
+                // Staff 9.3a: each reveal is its own append-only access-log
+                // fact, with no prior reveal to diff against.
+                .changed(ChangeDocuments.created(Map.of(
                         "guestName", true,
                         "guestPhone", true,
-                        "note", note != null))
+                        "note", note != null)))
                 .usingCapability("reservation.read")
                 .correlatedBy(reservationId.toString())
                 .occurredAt(clock.instant())

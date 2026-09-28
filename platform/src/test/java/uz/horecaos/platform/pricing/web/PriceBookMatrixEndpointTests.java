@@ -23,13 +23,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
-import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.simple.JdbcClient;
-import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
@@ -41,6 +38,7 @@ import tools.jackson.databind.json.JsonMapper;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.PlatformRole;
 import uz.horecaos.platform.iam.infrastructure.authorization.RoleRegistrySynchronizer;
+import uz.horecaos.platform.support.StubJwtIssuer;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.web.idempotency.IdempotencyInterceptor;
 
@@ -56,6 +54,7 @@ import uz.horecaos.platform.web.idempotency.IdempotencyInterceptor;
  */
 @SpringBootTest
 @AutoConfigureMockMvc
+@Import(StubJwtIssuer.class)
 class PriceBookMatrixEndpointTests {
 
     private static final UUID TENANT = UUID.fromString("018f9b20-4000-7000-8000-0000000000d1");
@@ -585,16 +584,5 @@ class PriceBookMatrixEndpointTests {
     private static RequestPostProcessor tokenFor(String subject) {
         return jwt().jwt(builder ->
                 builder.subject(subject).claim("resource_access", Map.of("horecaos-api", Map.of("roles", List.of()))));
-    }
-
-    @TestConfiguration(proxyBeanMethods = false)
-    static class StubIssuer {
-        @Bean
-        JwtDecoder jwtDecoder() {
-            return token -> Jwt.withTokenValue(token)
-                    .header("alg", "none")
-                    .claim("sub", "unused")
-                    .build();
-        }
     }
 }

@@ -20,6 +20,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.tenancy.api.PolicyAuthor;
 import uz.horecaos.platform.tenancy.api.PolicyKey;
@@ -163,7 +164,9 @@ public class JdbcPolicyAuthor implements PolicyAuthor {
                 .at(scope)
                 .target("Policy", policyId)
                 .because(reason)
-                .changed(Map.of(
+                // Staff 9.3a: always a new policy version (nextVersion never
+                // reuses one), no prior state to diff against.
+                .changed(ChangeDocuments.created(Map.of(
                         "keyCode",
                         key.code(),
                         "scopeType",
@@ -171,7 +174,7 @@ public class JdbcPolicyAuthor implements PolicyAuthor {
                         "version",
                         version,
                         "documentHash",
-                        hash))
+                        hash)))
                 .correlatedBy(policyId.toString())
                 .occurredAt(now)
                 .build());

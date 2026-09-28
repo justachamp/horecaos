@@ -9,6 +9,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore;
 import uz.horecaos.platform.web.api.ApiException;
@@ -54,7 +55,10 @@ public class OrderCallProvenanceService {
                     .target("Order", orderId)
                     .because(DEFAULT_REASON)
                     .usingCapability(capabilityUsed)
-                    .changed(Map.of("callId", callId.toString()))
+                    // Staff 9.3a: write-once by source_call_id IS NULL (see
+                    // JdbcOrderStore#recordCallProvenance) -- there is no
+                    // prior call id on this order to diff against.
+                    .changed(ChangeDocuments.created(Map.of("callId", callId.toString())))
                     .correlatedBy(orderId.toString())
                     .occurredAt(clock.instant())
                     .build());

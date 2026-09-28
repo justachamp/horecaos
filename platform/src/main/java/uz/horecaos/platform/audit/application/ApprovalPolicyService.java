@@ -22,6 +22,7 @@ import uz.horecaos.platform.audit.api.ApprovalAction;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
@@ -211,7 +212,11 @@ public class ApprovalPolicyService {
                 .at(scope)
                 .target("ApprovalPolicy", policyId)
                 .because(command.reason())
-                .changed(changeDocument(actionCode, scope, version, threshold, approver, validFrom))
+                // Staff 9.3a: a freshly authored version has no prior state
+                // -- what it superseded is a different row, recorded by
+                // recordSupersessions below, targeting that row's own id.
+                .changed(ChangeDocuments.created(
+                        changeDocument(actionCode, scope, version, threshold, approver, validFrom)))
                 .usingCapability(Capability.APPROVAL_POLICY_MANAGE.code())
                 .correlatedBy(policyId.toString())
                 .occurredAt(now)
@@ -254,17 +259,25 @@ public class ApprovalPolicyService {
             Instant now) {
 
         for (SupersededVersion previous : superseded) {
+            // Staff 9.3a: "validUntil" genuinely moves from the version's own
+            // prior window end (null when it was open) to where publishing
+            // this new version closes it; supersededByPolicyId/neverTookEffect
+            // are this event's own context, with no prior value to diff.
+            Map<String, Object> before = new LinkedHashMap<>();
+            before.put("actionCode", actionCode);
+            before.put("scopeType", scope.type().name());
+            addScopeIdentifiers(before, scope);
+            before.put("version", previous.version());
+            before.put(
+                    "validUntil",
+                    previous.validUntil() == null ? null : previous.validUntil().toString());
+
             Map<String, Object> changes = new LinkedHashMap<>();
             changes.put("actionCode", actionCode);
             changes.put("scopeType", scope.type().name());
             addScopeIdentifiers(changes, scope);
             changes.put("version", previous.version());
             changes.put("supersededByPolicyId", policyId.toString());
-            // Absent rather than null when the window was open: AuditFact copies
-            // the document into an immutable map, which admits no null value.
-            if (previous.validUntil() != null) {
-                changes.put("previousValidUntil", previous.validUntil().toString());
-            }
             changes.put("validUntil", previous.closesAt().toString());
             // The distinction the operator has to be able to find later. A
             // shortened window governed something; a voided one never will.
@@ -276,7 +289,7 @@ public class ApprovalPolicyService {
                     .at(scope)
                     .target("ApprovalPolicy", previous.id())
                     .because(command.reason())
-                    .changed(changes)
+                    .changed(ChangeDocuments.diff(before, changes))
                     .usingCapability(Capability.APPROVAL_POLICY_MANAGE.code())
                     .correlatedBy(policyId.toString())
                     .occurredAt(now)
@@ -395,7 +408,10 @@ public class ApprovalPolicyService {
                 .at(auditScope(policy))
                 .target("ApprovalPolicy", policyId)
                 .because(reason)
-                .changed(policyChangeDocument(policy, end, false))
+                // Staff 9.3a: "validUntil" genuinely moves from null (both
+                // this method's own guard and the WHERE valid_until IS NULL
+                // above prove it was open) to the closing instant.
+                .changed(ChangeDocuments.diff(policyChangeDocument(policy, null), policyChangeDocument(policy, end)))
                 .usingCapability(Capability.APPROVAL_POLICY_MANAGE.code())
                 .correlatedBy(policyId.toString())
                 .occurredAt(now)
@@ -505,7 +521,12 @@ public class ApprovalPolicyService {
                 .at(auditScope(policy))
                 .target("ApprovalPolicy", policy.id())
                 .because(reason)
-                .changed(policyChangeDocument(policy, policy.validFrom(), true))
+                // Staff 9.3a: "validUntil" genuinely moves from null (the
+                // WHERE valid_until IS NULL guard above proves it was open)
+                // to validFrom -- an empty window, cancelling the version
+                // outright. neverTookEffect is this event's own marker, with
+                // no prior value to diff.
+                .changed(ChangeDocuments.diff(policyChangeDocument(policy, null), cancelledDocument(policy)))
                 .usingCapability(Capability.APPROVAL_POLICY_MANAGE.code())
                 .correlatedBy(policy.id().toString())
                 .occurredAt(now)
@@ -701,8 +722,14 @@ public class ApprovalPolicyService {
         };
     }
 
-    private static Map<String, Object> policyChangeDocument(
-            PolicyView policy, Instant validUntil, boolean neverTookEffect) {
+    /**
+     * A {@code {actionCode, scopeType, ..., version, validUntil}} snapshot,
+     * shared by both sides of {@link #endVersion}/{@link #cancelScheduled}'s
+     * diff -- {@code validUntil} is null on the before side (both callers'
+     * own {@code WHERE valid_until IS NULL} guard proves it) and the closing
+     * instant on the after side.
+     */
+    private static Map<String, Object> policyChangeDocument(PolicyView policy, @Nullable Instant validUntil) {
         Map<String, Object> document = new LinkedHashMap<>();
         document.put("actionCode", policy.actionCode());
         document.put("scopeType", policy.scopeType());
@@ -712,10 +739,14 @@ public class ApprovalPolicyService {
             addScopeIdentifiers(document, auditScope(policy));
         }
         document.put("version", policy.version());
-        document.put("validUntil", validUntil.toString());
-        if (neverTookEffect) {
-            document.put("neverTookEffect", true);
-        }
+        document.put("validUntil", validUntil == null ? null : validUntil.toString());
+        return document;
+    }
+
+    /** {@link #policyChangeDocument}'s snapshot closed at its own {@code validFrom}, marked as never having taken effect. */
+    private static Map<String, Object> cancelledDocument(PolicyView policy) {
+        Map<String, Object> document = policyChangeDocument(policy, policy.validFrom());
+        document.put("neverTookEffect", true);
         return document;
     }
 

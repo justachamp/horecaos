@@ -12,6 +12,7 @@ import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -396,11 +397,12 @@ class ZoneLifecycleAndRegionTests {
 
         assertThat(audit.actionCodes())
                 .containsExactly("delivery.region.created", "delivery.region.updated", "delivery.region.archived");
-        assertThat(audit.facts().getFirst().changeDocument())
-                .as("the box is what was decided, so the box is what the fact records")
-                .containsEntry("code", "TASHKENT")
-                .containsEntry("swLat", 40.5)
-                .containsEntry("neLon", 70.0);
+        // Staff 9.3a: ChangeDocuments.created(...) -- a freshly created
+        // region has no prior box to diff against, so every field's "before"
+        // is null and "after" carries the box that was decided.
+        assertThat(fieldAfter(audit.facts().getFirst(), "code")).isEqualTo("TASHKENT");
+        assertThat(fieldAfter(audit.facts().getFirst(), "swLat")).isEqualTo(40.5);
+        assertThat(fieldAfter(audit.facts().getFirst(), "neLon")).isEqualTo(70.0);
         assertThat(jdbc.sql("SELECT status FROM fulfillment.regions WHERE id = :id")
                         .param("id", regionId)
                         .query(String.class)
@@ -558,6 +560,13 @@ class ZoneLifecycleAndRegionTests {
 
     private static RegionGeography tashkent(String code) {
         return new RegionGeography(code, "Ташкент", "Toshkent", "Tashkent", 41.31, 69.24, 40.5, 68.5, 42.0, 70.0);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static @Nullable Object fieldAfter(AuditFact fact, String field) {
+        return Objects.requireNonNull(
+                        (Map<String, Object>) fact.changeDocument().get(field))
+                .get("after");
     }
 
     private UUID activeZone(

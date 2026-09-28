@@ -20,6 +20,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.configuration.Ids;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.tenancy.api.AuthoredConfigurationValue;
@@ -164,30 +165,34 @@ public class JdbcConfigurationValueAuthor implements ConfigurationValueAuthor {
         // cache with the value this call is about to replace.
         cache.evict(key.code(), scope);
 
-        // AuditFact.changeDocument() runs the map through Map.copyOf, which
-        // rejects a null value at the top level — so "the field was previously
-        // unset" (a legitimate, distinct fact from "the field was zero") has to
-        // live inside a non-null container, the same way audit.api.ChangeDocuments
-        // nests before/after under one submap rather than two nullable top-level
-        // entries. That class lives in audit's internal domain package, not its
-        // api, so this builds the same shape by hand rather than importing it.
-        Map<String, Object> valueChange = new LinkedHashMap<>();
-        valueChange.put("before", existing.map(row -> row.typedValue(key)).orElse(null));
-        valueChange.put("after", explicitNull ? null : value);
-
-        Map<String, Object> changed = new LinkedHashMap<>();
-        changed.put("keyCode", key.code());
-        changed.put("scopeType", scope.type().name());
-        changed.put("version", newVersion);
-        changed.put("explicitNull", explicitNull);
-        changed.put("value", valueChange);
+        // Staff 9.3a: ChangeDocuments (audit.api, not an internal domain
+        // package -- this file's own prior comment was stale) already nests
+        // a field's before/after under one submap, so it replaces the
+        // hand-rolled shape this used to build. keyCode/scopeType/version/
+        // explicitNull are unchanged identifying context, carried in both
+        // sides so the real change -- "value" -- is the only field that
+        // actually differs.
+        Object valueBefore = existing.map(row -> row.typedValue(key)).orElse(null);
+        Object valueAfter = explicitNull ? null : value;
+        Map<String, Object> beforeDoc = new LinkedHashMap<>();
+        beforeDoc.put("keyCode", key.code());
+        beforeDoc.put("scopeType", scope.type().name());
+        beforeDoc.put("version", newVersion);
+        beforeDoc.put("explicitNull", explicitNull);
+        beforeDoc.put("value", valueBefore);
+        Map<String, Object> afterDoc = new LinkedHashMap<>();
+        afterDoc.put("keyCode", key.code());
+        afterDoc.put("scopeType", scope.type().name());
+        afterDoc.put("version", newVersion);
+        afterDoc.put("explicitNull", explicitNull);
+        afterDoc.put("value", valueAfter);
 
         audit.record(AuditFact.of("tenant.configuration_value.set", AuditClass.BUSINESS)
                 .by(setBy)
                 .at(scope)
                 .target("ConfigurationValue", id)
                 .because(reason)
-                .changed(changed)
+                .changed(ChangeDocuments.diff(beforeDoc, afterDoc))
                 .correlatedBy(id.toString())
                 .occurredAt(now)
                 .build());

@@ -2,8 +2,10 @@ package uz.horecaos.platform.catalog.application;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.dao.DuplicateKeyException;
@@ -13,6 +15,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.EntityType;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCommentPresetStore;
@@ -80,7 +83,13 @@ public class CommentPresetService {
                 .target("CommentPreset", row.id())
                 .because("Registered a preset product comment")
                 .usingCapability(Capability.CATALOG_AUTHOR.code())
-                .changed(Map.of("code", command.code()))
+                // Staff 9.3a: a brand-new preset, no prior state to diff against.
+                .changed(ChangeDocuments.created(Map.of(
+                        "code", command.code(),
+                        "labelRu", command.labelRu(),
+                        "labelUz", command.labelUz(),
+                        "labelEn", command.labelEn(),
+                        "sortOrder", command.sortOrder())))
                 .correlatedBy(row.id().toString())
                 .occurredAt(row.createdAt())
                 .build());
@@ -118,7 +127,21 @@ public class CommentPresetService {
                 .target("CommentPreset", presetId)
                 .because("Edited a preset product comment")
                 .usingCapability(Capability.CATALOG_AUTHOR.code())
-                .changed(Map.of("status", command.status()))
+                // Staff 9.3a: a per-field diff -- "existing" already holds every
+                // field's value from before this write.
+                .changed(ChangeDocuments.diff(
+                        Map.of(
+                                "labelRu", existing.labelRu(),
+                                "labelUz", existing.labelUz(),
+                                "labelEn", existing.labelEn(),
+                                "sortOrder", existing.sortOrder(),
+                                "status", existing.status()),
+                        Map.of(
+                                "labelRu", command.labelRu(),
+                                "labelUz", command.labelUz(),
+                                "labelEn", command.labelEn(),
+                                "sortOrder", command.sortOrder(),
+                                "status", command.status())))
                 .correlatedBy(presetId.toString())
                 .occurredAt(now)
                 .build());
@@ -153,14 +176,26 @@ public class CommentPresetService {
         if (presets.find(tenantId, presetId).isEmpty()) {
             throw new UnknownPresetException(presetId);
         }
+        // Staff 9.3a: read the pair's current sortOrder before the upsert
+        // below overwrites it -- empty distinguishes a fresh attach from a
+        // re-sort.
+        Optional<Integer> before = presets.listForProduct(tenantId, brandId, productId).stream()
+                .filter(row -> row.presetId().equals(presetId))
+                .map(ProductPresetRow::sortOrder)
+                .findFirst();
         UUID id = presets.upsertProductPreset(tenantId, brandId, productId, presetId, sortOrder);
+        Map<String, Object> beforeFields =
+                before.isEmpty() ? Map.of() : Map.of("presetId", presetId.toString(), "sortOrder", before.get());
+        Map<String, Object> afterFields = Map.of("presetId", presetId.toString(), "sortOrder", sortOrder);
         audit.record(AuditFact.of("catalog.comment-preset.attached", AuditClass.BUSINESS)
                 .by(ActorRef.user(actorSubject, null))
                 .at(ResourceScope.brand(tenantId, brandId))
                 .target("Product", productId)
                 .because("Attached a preset product comment")
                 .usingCapability(Capability.CATALOG_AUTHOR.code())
-                .changed(Map.of("presetId", presetId.toString(), "sortOrder", sortOrder))
+                // Staff 9.3a: diff(Map.of(), after) is created(after) --
+                // before.isEmpty() means this call attached a fresh pair.
+                .changed(ChangeDocuments.diff(beforeFields, afterFields))
                 .correlatedBy(productId.toString())
                 .occurredAt(clock.instant())
                 .build());
@@ -170,17 +205,29 @@ public class CommentPresetService {
     /** Idempotent — detaching a pair that was never attached, or is already gone, still resolves. */
     @Transactional
     public void detachFromProduct(UUID tenantId, UUID brandId, UUID productId, UUID presetId, String actorSubject) {
+        // Staff 9.3a: read the pair's sortOrder before deleteProductPreset
+        // removes the row it lived on.
+        Optional<Integer> before = presets.listForProduct(tenantId, brandId, productId).stream()
+                .filter(row -> row.presetId().equals(presetId))
+                .map(ProductPresetRow::sortOrder)
+                .findFirst();
         boolean removed = presets.deleteProductPreset(tenantId, brandId, productId, presetId);
         if (!removed) {
             return;
         }
+        Map<String, Object> beforeDoc = new LinkedHashMap<>();
+        beforeDoc.put("presetId", presetId.toString());
+        beforeDoc.put("sortOrder", before.orElse(null));
+        Map<String, Object> afterDoc = new LinkedHashMap<>();
+        afterDoc.put("presetId", null);
+        afterDoc.put("sortOrder", null);
         audit.record(AuditFact.of("catalog.comment-preset.detached", AuditClass.BUSINESS)
                 .by(ActorRef.user(actorSubject, null))
                 .at(ResourceScope.brand(tenantId, brandId))
                 .target("Product", productId)
                 .because("Detached a preset product comment")
                 .usingCapability(Capability.CATALOG_AUTHOR.code())
-                .changed(Map.of("presetId", presetId.toString()))
+                .changed(ChangeDocuments.diff(beforeDoc, afterDoc))
                 .correlatedBy(productId.toString())
                 .occurredAt(clock.instant())
                 .build());

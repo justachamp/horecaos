@@ -148,6 +148,22 @@ export const operationsPaths = {
     return `${this.orders(scope)}/aggregator-entries`;
   },
 
+  /**
+   * Rows 1.3/0.1c: which of the brand's branches can take this order, ranked
+   * and with their current load — `OperationsOrderController.resolveBranches`.
+   * `scope.locationId` is the operator's own current branch, which authorizes
+   * the call (`ORDER_READ` at `LOCATION`); the candidates it returns span the
+   * whole brand.
+   */
+  orderBranchResolution(scope: LocationScope): string {
+    return `${this.orders(scope)}/branch-resolution`;
+  },
+
+  /** Row 1.3: the curated list `POST .../orders`'s own `overrideReasonCode` picks from. */
+  orderBranchOverrideReasons(scope: LocationScope): string {
+    return `${this.orders(scope)}/branch-override-reasons`;
+  },
+
   /** One order with its snapshotted lines. Returns an `ETag`. */
   order(scope: LocationScope, orderId: string): string {
     return `${this.orders(scope)}/${encodeURIComponent(orderId)}`;
@@ -439,6 +455,33 @@ export const operationsPaths = {
       `${LEGACY_TENANT_PREFIX}${tenantBrandLocation(scope)}/inventory/variants/${encodeURIComponent(variantId)}` +
       `/channel-stop-thresholds/${encodeURIComponent(channelType)}`
     );
+  },
+
+  /**
+   * The location-scoped backfill (gap map row 4.1): lists every
+   * AVAILABLE-offered variant this location has never listed —
+   * `InventoryController#backfillLocationListing`, same prefix as every
+   * other `inventory*` path above.
+   */
+  inventoryListingBackfill(scope: LocationScope): string {
+    return `${LEGACY_TENANT_PREFIX}${tenantBrandLocation(scope)}/inventory/listing-backfill`;
+  },
+
+  /**
+   * One variant's own unlisted branches across the whole brand (gap map row
+   * 4.1) — `InventoryVariantListingController`, brand-scoped like {@link
+   * conversations}: only `scope.tenantId`/`scope.brandId` are read.
+   * `GET` reads the branch list, `POST` (see {@link
+   * inventoryVariantListingBackfill}) lists this variant everywhere it is
+   * still missing.
+   */
+  inventoryVariantListing(scope: LocationScope, variantId: string): string {
+    return `${LEGACY_TENANT_PREFIX}${tenantBrand(scope)}/variants/${encodeURIComponent(variantId)}/inventory-listing`;
+  },
+
+  /** The product editor's own one-click action behind {@link inventoryVariantListing}'s banner. Mutation. */
+  inventoryVariantListingBackfill(scope: LocationScope, variantId: string): string {
+    return this.inventoryVariantListing(scope, variantId);
   },
 
   /**

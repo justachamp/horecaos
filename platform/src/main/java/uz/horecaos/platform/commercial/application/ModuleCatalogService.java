@@ -15,6 +15,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.commercial.api.EntitlementKey;
 import uz.horecaos.platform.commercial.api.EntitlementKeys;
 import uz.horecaos.platform.commercial.domain.BillingUnit;
@@ -103,12 +104,14 @@ public class ModuleCatalogService {
                     Map.of("moduleCode", code));
         }
 
-        Map<String, Object> change = new HashMap<>();
-        change.put("code", code);
-        change.put("billingUnit", billingUnit.name());
-        change.put("currency", currency);
-        change.put("unitPriceMinor", unitPriceMinor);
-        change.put("featureKeys", features);
+        Map<String, Object> fields = new HashMap<>();
+        fields.put("code", code);
+        fields.put("billingUnit", billingUnit.name());
+        fields.put("currency", currency);
+        fields.put("unitPriceMinor", unitPriceMinor);
+        fields.put("featureKeys", features);
+        // Staff 9.3a: a brand-new module, no prior state to diff against.
+        Map<String, Object> change = ChangeDocuments.created(fields);
         record(
                 "commercial.module.drafted",
                 actor,
@@ -138,12 +141,15 @@ public class ModuleCatalogService {
         if (!modules.activate(moduleId, subject(approver), now)) {
             throw new ApiException(ErrorCode.RESOURCE_CONFLICT, "The module changed while it was being activated");
         }
+        // Staff 9.3a: "activated" genuinely moves -- the guard above already
+        // proved module.isActivated() was false.
+        Map<String, Object> change = ChangeDocuments.change("activated", false, true);
         record(
                 "commercial.module.activated",
                 approver,
                 moduleId,
                 reason,
-                Map.of("code", module.code(), "unitPriceMinor", module.unitPriceMinor(), "currency", module.currency()),
+                change,
                 Capability.COMMERCIAL_PLAN_ACTIVATE,
                 correlationId,
                 now);
@@ -158,12 +164,15 @@ public class ModuleCatalogService {
                     ErrorCode.RESOURCE_CONFLICT,
                     "Only a module on sale can be retired; %s is %s".formatted(module.code(), module.status()));
         }
+        // Staff 9.3a: "status" genuinely moves -- modules.retire's own guard
+        // above proved the row was on sale a moment ago, not already RETIRED.
+        Map<String, Object> change = ChangeDocuments.change("status", module.status(), SellableModule.RETIRED);
         record(
                 "commercial.module.retired",
                 actor,
                 moduleId,
                 reason,
-                Map.of("code", module.code()),
+                change,
                 Capability.COMMERCIAL_PLAN_MANAGE,
                 correlationId,
                 now);
@@ -213,18 +222,19 @@ public class ModuleCatalogService {
                     ErrorCode.RESOURCE_CONFLICT, "The tenant already has module %s".formatted(module.code()));
         }
 
-        Map<String, Object> change = new HashMap<>();
-        change.put("moduleCode", module.code());
-        change.put("billingUnit", module.billingUnit().name());
+        Map<String, Object> fields = new HashMap<>();
+        fields.put("moduleCode", module.code());
+        fields.put("billingUnit", module.billingUnit().name());
         if (quantity != null) {
-            change.put("quantity", quantity);
+            fields.put("quantity", quantity);
         }
         audit.record(AuditFact.of("commercial.tenant_module.added", AuditClass.BUSINESS)
                 .by(actor)
                 .at(ResourceScope.tenant(tenantId))
                 .target("commercial.tenant_module", id)
                 .because(reason)
-                .changed(change)
+                // Staff 9.3a: a brand-new tenant module, no prior state to diff against.
+                .changed(ChangeDocuments.created(fields))
                 .usingCapability(Capability.COMMERCIAL_SUBSCRIPTION_MANAGE.code())
                 .correlatedBy(correlationId)
                 .occurredAt(now)
@@ -245,7 +255,12 @@ public class ModuleCatalogService {
                 .at(ResourceScope.tenant(tenantId))
                 .target("commercial.tenant_module", tenantModuleId)
                 .because(reason)
-                .changed(Map.of("moduleId", held.moduleId().toString()))
+                // Staff 9.3a: "live" genuinely moves -- held (read above,
+                // before endTenantModule) was live or this call would have
+                // failed the guard above.
+                .changed(ChangeDocuments.diff(
+                        Map.of("moduleId", held.moduleId().toString(), "live", true),
+                        Map.of("moduleId", held.moduleId().toString(), "live", false)))
                 .usingCapability(Capability.COMMERCIAL_SUBSCRIPTION_MANAGE.code())
                 .correlatedBy(correlationId)
                 .occurredAt(now)

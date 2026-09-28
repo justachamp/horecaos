@@ -15,6 +15,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.ordering.api.OrderAwaitingApproval;
 import uz.horecaos.platform.ordering.api.OrderCancelled;
@@ -139,6 +140,8 @@ public class OrderStateService {
             // earlier decision. The command is on record and inert, and audited,
             // because a restaurant asking "I did reject that order" is asking about
             // exactly this case.
+            // Staff 9.3a: the order already settled some other way, so this
+            // decision made no transition -- an empty before.
             recordAudit(
                     order,
                     "ordering.order.approval-decision",
@@ -146,6 +149,7 @@ public class OrderStateService {
                     command.actorId(),
                     command.reasonCode(),
                     order.version(),
+                    Map.of(),
                     Map.of(
                             "action",
                             command.action().name(),
@@ -195,6 +199,9 @@ public class OrderStateService {
                     command.actorId(),
                     command.reasonCode(),
                     settled.version(),
+                    // Staff 9.3a: this decision lost the race and made no
+                    // transition of its own -- an empty before.
+                    Map.of(),
                     Map.of(
                             "action",
                             command.action().name(),
@@ -266,15 +273,19 @@ public class OrderStateService {
                 command.actorId(),
                 command.reasonCode(),
                 version,
+                // Staff 9.3a: "status" genuinely moves from AWAITING_APPROVAL
+                // (order.status() here is still the pre-transition read at
+                // the top of this method) to target.
+                Map.of("status", order.status().name()),
                 Map.of(
+                        "status",
+                        target.name(),
                         "action",
                         command.action().name(),
                         "decisionId",
                         command.decisionId(),
                         "channel",
-                        command.decisionChannel(),
-                        "toStatus",
-                        target.name()),
+                        command.decisionChannel()),
                 AuditFact.Outcome.SUCCEEDED,
                 command.correlationId(),
                 now);
@@ -429,7 +440,8 @@ public class OrderStateService {
                 PAYMENT_CAPTURE_ACTOR,
                 "PAYMENT_CAPTURED",
                 version,
-                Map.of("fromStatus", OrderStatus.PAYMENT_AUTHORIZING.name(), "toStatus", target.name()),
+                Map.of("status", OrderStatus.PAYMENT_AUTHORIZING.name()),
+                Map.of("status", target.name()),
                 AuditFact.Outcome.SUCCEEDED,
                 null,
                 now);
@@ -662,7 +674,8 @@ public class OrderStateService {
                 actorId,
                 reasonCode,
                 version,
-                Map.of("fromStatus", order.status().name(), "toStatus", target.name()),
+                Map.of("status", order.status().name()),
+                Map.of("status", target.name()),
                 AuditFact.Outcome.SUCCEEDED,
                 correlationId,
                 now);
@@ -824,10 +837,9 @@ public class OrderStateService {
                 actorId,
                 reasonCode,
                 version,
+                Map.of("status", order.status().name()),
                 Map.of(
-                        "fromStatus",
-                        order.status().name(),
-                        "toStatus",
+                        "status",
                         target.name(),
                         "reasonId",
                         reasonId.toString(),
@@ -929,22 +941,32 @@ public class OrderStateService {
 
         ProgressProposal outcome;
         int version = order.version();
+        // What the order's status actually is once this proposal is settled —
+        // never assumed to be the target just because that was asked for. A
+        // REFUSED or already-there proposal leaves the order exactly where it
+        // was (or where a concurrent winner left it); only APPLIED reaches
+        // target. The audit trail below reads this, not target directly, so
+        // it cannot claim a transition that never happened.
+        OrderStatus resultStatus;
 
         if (order.status() == target) {
             // Two stations finishing in the same second, or an operator who
             // advanced by hand a moment ago. Correct, and not an error.
             outcome = ProgressProposal.ALREADY_THERE;
+            resultStatus = order.status();
         } else if (!OrderStateMachine.permits(order.status(), target, order.fulfillmentMode())) {
             // ADR 0019 does not have this edge from where the order actually is.
             // The ticket is not rolled back: the food is where the food is.
             log.info("Order {} is {} and refuses a kitchen proposal of {}", orderId, order.status(), target);
             outcome = ProgressProposal.REFUSED;
+            resultStatus = order.status();
         } else {
             Optional<Integer> won = orders.transition(tenantId, orderId, order.status(), target, now);
             if (won.isEmpty()) {
                 OrderRow settled = orders.find(tenantId, orderId).orElseThrow();
                 version = settled.version();
                 outcome = settled.status() == target ? ProgressProposal.ALREADY_THERE : ProgressProposal.REFUSED;
+                resultStatus = settled.status();
             } else {
                 version = won.get();
                 orders.recordTransition(
@@ -979,6 +1001,7 @@ public class OrderStateService {
 
                 applyConsequences(order, target, version, reason, null, actorType, actorId, completion, now);
                 outcome = ProgressProposal.APPLIED;
+                resultStatus = target;
             }
         }
 
@@ -996,15 +1019,8 @@ public class OrderStateService {
                 actorId,
                 reason,
                 version,
-                Map.of(
-                        "fromStatus",
-                        order.status().name(),
-                        "proposedStatus",
-                        target.name(),
-                        "outcome",
-                        outcome.name(),
-                        "idempotencyKey",
-                        idempotencyKey),
+                Map.of("status", order.status().name()),
+                Map.of("status", resultStatus.name(), "outcome", outcome.name(), "idempotencyKey", idempotencyKey),
                 outcome == ProgressProposal.REFUSED ? AuditFact.Outcome.REJECTED : AuditFact.Outcome.SUCCEEDED,
                 correlationId,
                 now);
@@ -1149,9 +1165,10 @@ public class OrderStateService {
                 actorId,
                 reasonCode,
                 version,
+                Map.of("status", order.status().name()),
                 Map.of(
-                        "fromStatus",
-                        order.status().name(),
+                        "status",
+                        OrderStatus.CANCELLED.name(),
                         "systemCategory",
                         outcome.systemCategory().name(),
                         "stockDisposition",
@@ -1409,7 +1426,8 @@ public class OrderStateService {
             @Nullable String actorId,
             @Nullable String reasonCode,
             int version,
-            Map<String, Object> changed,
+            Map<String, Object> before,
+            Map<String, Object> after,
             AuditFact.Outcome outcome,
             @Nullable String correlationId,
             Instant now) {
@@ -1435,7 +1453,11 @@ public class OrderStateService {
                 // actor without one, which is what stops "what happened" being
                 // recorded with no "why".
                 .because(reasonCode)
-                .changed(changed)
+                // Staff 9.3a: "status" genuinely moves from the order's prior
+                // status to the new one (an empty before means the decision
+                // itself had no transition to make -- see each call site's
+                // own comment); every other key is this event's own context.
+                .changed(ChangeDocuments.diff(before, after))
                 .correlatedBy(correlationId == null ? order.orderId().toString() : correlationId)
                 .occurredAt(now)
                 .build());

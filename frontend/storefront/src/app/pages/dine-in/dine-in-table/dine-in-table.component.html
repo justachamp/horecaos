@@ -1,0 +1,161 @@
+<div class="table" data-testid="dine-in-table">
+  @if (!admission()) {
+    <div class="table__empty" data-testid="dine-in-no-admission">
+      <p class="table__title">{{ 'dineIn.noAdmissionTitle' | t }}</p>
+      <p class="table__body">{{ 'dineIn.noAdmissionBody' | t }}</p>
+      <a class="table__home" routerLink="/home" data-testid="dine-in-home-link">
+        {{ 'dineIn.backHome' | t }}
+      </a>
+    </div>
+  } @else {
+    <header class="table__header">
+      <p class="table__branch" data-testid="dine-in-branch-name">
+        {{ branchName() ?? ('dineIn.thisBranch' | t) }}
+      </p>
+      <h1 class="table__code" data-testid="dine-in-table-code">
+        {{ 'dineIn.tableLabel' | t: { code: admission()!.tableCode } }}
+      </h1>
+    </header>
+
+    @if (canOrder() && !isSeated()) {
+      <div class="table__notice" data-testid="dine-in-not-seated">
+        {{ 'dineIn.notSeated' | t }}
+      </div>
+    }
+
+    @if (loading()) {
+      <p class="table__loading" data-testid="dine-in-menu-loading">{{ 'common.loading' | t }}</p>
+    } @else if (!menu() || rows().length === 0) {
+      <p class="table__empty-menu" data-testid="dine-in-menu-empty">{{ 'dineIn.menuUnavailable' | t }}</p>
+    } @else {
+      <div class="table__menu" data-testid="dine-in-menu">
+        @for (row of rows(); track row.categoryId) {
+          <section class="table__category">
+            <h2 class="table__category-name">{{ row.categoryName }}</h2>
+            @for (product of row.products; track product.productId) {
+              @for (variant of product.variants; track variant.variantId) {
+                <div class="table__item" data-testid="dine-in-menu-item">
+                  <div class="table__item-info">
+                    <p class="table__item-name">{{ product.name }}</p>
+                    @if (product.description) {
+                      <p class="table__item-description">{{ product.description }}</p>
+                    }
+                    <p class="table__item-price">{{ formatPrice(variant.amountMinor) }}</p>
+                  </div>
+                  @if (canOrder() && isSeated()) {
+                    <div class="table__item-actions">
+                      @if (quantityOf(variant.variantId) === 0) {
+                        <button
+                          type="button"
+                          class="table__add"
+                          data-testid="dine-in-add"
+                          [disabled]="!variant.orderable"
+                          (click)="increase(variant.variantId)"
+                        >
+                          {{ 'common.add' | t }}
+                        </button>
+                      } @else {
+                        <div class="table__stepper">
+                          <button
+                            type="button"
+                            class="table__step"
+                            data-testid="dine-in-decrease"
+                            (click)="decrease(variant.variantId)"
+                          >
+                            −
+                          </button>
+                          <span class="table__step-count" data-testid="dine-in-quantity">{{
+                            quantityOf(variant.variantId)
+                          }}</span>
+                          <button
+                            type="button"
+                            class="table__step"
+                            data-testid="dine-in-increase"
+                            (click)="increase(variant.variantId)"
+                          >
+                            +
+                          </button>
+                        </div>
+                      }
+                    </div>
+                  }
+                </div>
+              }
+            }
+          </section>
+        }
+      </div>
+    }
+
+    @if (canOrder() && isSeated()) {
+      <div class="table__cart" data-testid="dine-in-cart">
+        @if (!session.isAuthenticated()) {
+          <button type="button" class="table__signin" data-testid="dine-in-signin" (click)="signIn()">
+            {{ 'dineIn.signInToOrder' | t }}
+          </button>
+        } @else {
+          @if (cartCount() > 0) {
+            <div class="table__cart-summary">
+              <span data-testid="dine-in-cart-count">{{
+                'dineIn.itemsInCart' | t: { count: cartCount() }
+              }}</span>
+              <span data-testid="dine-in-cart-total">{{ totalFormatted }}</span>
+            </div>
+
+            @if (paymentOptions().length > 1) {
+              <div class="table__payment-options" data-testid="dine-in-payment-options">
+                @for (code of paymentOptions(); track code) {
+                  <button
+                    type="button"
+                    class="table__payment-option"
+                    [class.table__payment-option--selected]="selectedPaymentCode() === code"
+                    (click)="selectPayment(code)"
+                  >
+                    {{ code }}
+                  </button>
+                }
+              </div>
+            }
+
+            @if (checkoutError()) {
+              <p class="table__checkout-error" data-testid="dine-in-checkout-error">
+                {{ checkoutError() }}
+              </p>
+            }
+
+            <button
+              type="button"
+              class="table__checkout"
+              data-testid="dine-in-checkout"
+              [disabled]="checkingOut() || !priced()"
+              (click)="checkout()"
+            >
+              {{ checkingOut() ? ('common.saving' | t) : ('dineIn.orderRound' | t) }}
+            </button>
+          }
+        }
+
+        @if (bill(); as currentBill) {
+          <div class="table__bill" data-testid="dine-in-bill">
+            <p class="table__bill-title">{{ 'dineIn.tableBill' | t }}</p>
+            <p class="table__bill-total" data-testid="dine-in-bill-total">
+              {{ formatPrice(currentBill.totalMinor) }}
+            </p>
+            <p class="table__bill-rounds" data-testid="dine-in-bill-rounds">
+              {{ 'dineIn.roundCount' | t: { count: currentBill.roundCount } }}
+            </p>
+            <button
+              type="button"
+              class="table__ask-for-bill"
+              data-testid="dine-in-request-bill"
+              [disabled]="billBusy()"
+              (click)="requestBill()"
+            >
+              {{ 'dineIn.askForBill' | t }}
+            </button>
+          </div>
+        }
+      </div>
+    }
+  }
+</div>

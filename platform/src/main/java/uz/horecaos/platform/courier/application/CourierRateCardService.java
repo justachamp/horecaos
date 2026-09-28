@@ -11,6 +11,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.courier.domain.RateCard;
 import uz.horecaos.platform.courier.domain.RateCardValidator;
 import uz.horecaos.platform.courier.domain.RateComponent;
@@ -85,11 +86,17 @@ public class CourierRateCardService {
                 .at(ResourceScope.tenant(tenantId))
                 .target("courier_rate_card", cardId)
                 .because(reason)
-                .changed(Map.of(
-                        "cardVersion",
-                        card.version(),
-                        "componentCount",
-                        card.components().size()))
+                // Staff 9.3a: "status" genuinely moves -- cards.activate's own
+                // guard above proved this card was DRAFT, not already ACTIVE.
+                .changed(ChangeDocuments.diff(
+                        Map.of("status", "DRAFT"),
+                        Map.of(
+                                "status",
+                                "ACTIVE",
+                                "cardVersion",
+                                card.version(),
+                                "componentCount",
+                                card.components().size())))
                 .usingCapability("courier.ratecard.manage")
                 .correlatedBy("courier-rate-card")
                 .occurredAt(clock.instant())

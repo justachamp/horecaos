@@ -14,6 +14,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.configuration.Ids;
 import uz.horecaos.platform.customers.api.CustomerAccountRef;
 import uz.horecaos.platform.customers.api.CustomerDirectory;
@@ -361,7 +362,9 @@ public class CustomerIdentityService implements CustomerDirectory {
                 .at(ResourceScope.tenant(tenantId))
                 .target("customer_account", sourceAccountId)
                 .because("Operator merged a duplicate customer identity")
-                .changed(java.util.Map.of("mergedIntoAccountId", targetAccountId.toString()))
+                // Staff 9.3a: a source account is merged once -- there is no
+                // prior "mergedIntoAccountId" to diff against.
+                .changed(ChangeDocuments.created(java.util.Map.of("mergedIntoAccountId", targetAccountId.toString())))
                 .correlatedBy(sourceAccountId.toString())
                 .occurredAt(now)
                 .build());

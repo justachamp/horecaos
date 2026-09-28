@@ -207,9 +207,14 @@ class OwnerInvitationOverviewTests {
         assertThat(facts).singleElement().satisfies(fact -> {
             assertThat(fact.actionCode()).isEqualTo("tenant.owner_invitation.recipient_revealed");
             assertThat(fact.reason()).isEqualTo("tenancy.onboarding.invitation.recipient");
+            // Staff 9.3a: a real created() document now -- "revealedCount"
+            // nests {before, after}, not a flat entry.
+            Map<String, Object> revealedCount = new java.util.LinkedHashMap<>();
+            revealedCount.put("before", null);
+            revealedCount.put("after", 3);
             assertThat(fact.changeDocument())
                     .as("one fact per screen load, saying how many and never which")
-                    .containsExactly(Map.entry("revealedCount", 3));
+                    .containsExactly(Map.entry("revealedCount", revealedCount));
             assertThat(fact.changeDocument().toString()).doesNotContain("example.uz");
             assertThat(fact.capabilityUsed())
                     .as("under which capability a staff address was read, or the attribution says nothing")
@@ -228,9 +233,15 @@ class OwnerInvitationOverviewTests {
 
         invitations.overview(OwnerInvitationService.NONE, ONBOARDER, "corr");
 
+        // Staff 9.3a: a real created() document now -- "revealedCount"
+        // nests {before, after}, not a flat entry.
+        Map<String, Object> revealedCount = new java.util.LinkedHashMap<>();
+        revealedCount.put("before", null);
+        revealedCount.put("after", 1);
         assertThat(facts)
                 .singleElement()
-                .satisfies(fact -> assertThat(fact.changeDocument()).containsExactly(Map.entry("revealedCount", 1)));
+                .satisfies(fact ->
+                        assertThat(fact.changeDocument()).containsExactly(Map.entry("revealedCount", revealedCount)));
     }
 
     /**
@@ -459,9 +470,15 @@ class OwnerInvitationOverviewTests {
         assertThat(whileRecording)
                 .as("the fact is still a transaction's worth of work, just its own")
                 .containsExactly(true);
+        // Staff 9.3a: a real created() document now -- "revealedCount"
+        // nests {before, after}, not a flat entry.
+        Map<String, Object> revealedCount3 = new java.util.LinkedHashMap<>();
+        revealedCount3.put("before", null);
+        revealedCount3.put("after", 3);
         assertThat(facts)
                 .singleElement()
-                .satisfies(fact -> assertThat(fact.changeDocument()).containsExactly(Map.entry("revealedCount", 3)));
+                .satisfies(fact ->
+                        assertThat(fact.changeDocument()).containsExactly(Map.entry("revealedCount", revealedCount3)));
     }
 
     /** One overview row for a tenant with no invitation and no owner to resolve. */

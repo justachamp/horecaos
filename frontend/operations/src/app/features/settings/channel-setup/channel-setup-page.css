@@ -62,6 +62,33 @@
   gap: 8px;
 }
 
+.dns-challenge {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  margin: 4px 0;
+  border: 1px dashed var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas-subtle, transparent);
+}
+
+.challenge-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.challenge-value {
+  font-family: var(--q-mono, monospace);
+  font-size: 0.85em;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--q-canvas);
+  word-break: break-all;
+}
+
 .media-editor {
   display: flex;
   align-items: center;

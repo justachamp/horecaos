@@ -10,6 +10,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.configuration.Ids;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierStore;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierStore.CourierGroupRow;
@@ -60,7 +61,8 @@ public class CourierRosterService {
                 .at(ResourceScope.tenant(tenantId))
                 .target("courier_group", groupId)
                 .because(reason)
-                .changed(Map.of("code", code, "displayName", displayName))
+                // Staff 9.3a: a brand-new group, no prior state to diff against.
+                .changed(ChangeDocuments.created(Map.of("code", code, "displayName", displayName)))
                 .usingCapability("courier.engagement.manage")
                 .correlatedBy(correlationId)
                 .occurredAt(clock.instant())
@@ -80,7 +82,9 @@ public class CourierRosterService {
                 .at(ResourceScope.tenant(tenantId))
                 .target("courier_group", groupId)
                 .because(reason)
-                .changed(Map.of("status", "ARCHIVED"))
+                // Staff 9.3a: "status" genuinely moves -- archiveGroup's own
+                // guard above proved this group was active a moment ago.
+                .changed(ChangeDocuments.change("status", "ACTIVE", "ARCHIVED"))
                 .usingCapability("courier.engagement.manage")
                 .correlatedBy(correlationId)
                 .occurredAt(clock.instant())
@@ -104,7 +108,8 @@ public class CourierRosterService {
                 .at(ResourceScope.tenant(tenantId))
                 .target("courier", courierId)
                 .because(reason)
-                .changed(Map.of("groupId", groupId.toString()))
+                // Staff 9.3a: a brand-new membership, no prior state to diff against.
+                .changed(ChangeDocuments.created(Map.of("groupId", groupId.toString())))
                 .usingCapability("courier.engagement.manage")
                 .correlatedBy(correlationId)
                 .occurredAt(clock.instant())
@@ -123,7 +128,8 @@ public class CourierRosterService {
                 .at(ResourceScope.tenant(tenantId))
                 .target("courier", courierId)
                 .because(reason)
-                .changed(Map.of("groupId", groupId.toString()))
+                // Staff 9.3a: a deletion -- the mirror image of ChangeDocuments.created.
+                .changed(ChangeDocuments.diff(Map.of("groupId", groupId.toString()), Map.of()))
                 .usingCapability("courier.engagement.manage")
                 .correlatedBy(correlationId)
                 .occurredAt(clock.instant())
@@ -148,7 +154,12 @@ public class CourierRosterService {
                 .at(ResourceScope.location(tenantId, brandId, locationId))
                 .target("courier", courierId)
                 .because(reason)
-                .changed(Map.of("locationId", locationId.toString(), "primary", Boolean.toString(primary)))
+                // Staff 9.3a: this call's own binding fact -- see the store's
+                // own doc: a primary rebind stands the old one down first, so
+                // there is no single stable "prior" row this call's own
+                // before-state would name.
+                .changed(ChangeDocuments.created(
+                        Map.of("locationId", locationId.toString(), "primary", Boolean.toString(primary))))
                 .usingCapability("courier.engagement.manage")
                 .correlatedBy(correlationId)
                 .occurredAt(clock.instant())
@@ -167,7 +178,8 @@ public class CourierRosterService {
                 .at(ResourceScope.tenant(tenantId))
                 .target("courier", courierId)
                 .because(reason)
-                .changed(Map.of("locationId", locationId.toString()))
+                // Staff 9.3a: a deletion -- the mirror image of ChangeDocuments.created.
+                .changed(ChangeDocuments.diff(Map.of("locationId", locationId.toString()), Map.of()))
                 .usingCapability("courier.engagement.manage")
                 .correlatedBy(correlationId)
                 .occurredAt(clock.instant())

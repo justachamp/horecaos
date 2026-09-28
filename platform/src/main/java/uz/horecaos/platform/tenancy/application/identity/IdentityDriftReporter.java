@@ -5,7 +5,6 @@ import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -22,6 +21,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.organizations.OrganizationDirectory;
 import uz.horecaos.platform.iam.api.organizations.OrganizationProvisioner.OrganizationSnapshot;
@@ -272,9 +272,9 @@ public class IdentityDriftReporter {
                 .register(meters)
                 .increment();
 
-        Map<String, Object> changes = new LinkedHashMap<>();
-        changes.put("driftCode", finding.code().name());
-        changes.put("detail", finding.detail());
+        // Staff 9.3a: a fresh finding, no prior state on this fact to diff against.
+        Map<String, Object> fields = Map.of("driftCode", finding.code().name(), "detail", finding.detail());
+        Map<String, Object> changes = ChangeDocuments.created(fields);
 
         audit.record(AuditFact.of("iam.identity_drift_detected", AuditClass.SECURITY)
                 .by(REPORTER)

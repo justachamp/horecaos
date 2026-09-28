@@ -1082,7 +1082,8 @@ export const messagesEn = {
   'settings.salesChannels.field.brandColorPrimary': 'Primary colour',
   'settings.salesChannels.field.brandColorSecondary': 'Secondary colour',
   'settings.salesChannels.field.color.clear': 'Clear',
-  'settings.salesChannels.field.color.contrastWarning': 'Low contrast ({ratio}:1) against {surface} — WCAG AA needs 4.5:1',
+  'settings.salesChannels.field.color.contrastWarning':
+    'Low contrast ({ratio}:1) against {surface} — WCAG AA needs 4.5:1',
   'settings.salesChannels.field.color.surface.canvas': 'the page background',
   'settings.salesChannels.field.color.surface.surface1': 'a card surface',
   'settings.salesChannels.field.color.surface.slaLateTint': 'a late-order row',
@@ -1134,6 +1135,13 @@ export const messagesEn = {
   'settings.channelSetup.hostname.custom.label': 'Your own domain',
   'settings.channelSetup.hostname.custom.placeholder': 'orders.example.uz',
   'settings.channelSetup.hostname.claim': 'Claim',
+  'settings.channelSetup.hostname.challenge.instructions':
+    'Add this TXT record at your DNS provider, then verify:',
+  'settings.channelSetup.hostname.challenge.recordLabel': 'Record name',
+  'settings.channelSetup.hostname.challenge.valueLabel': 'Value',
+  'settings.channelSetup.hostname.challenge.copy': 'Copy',
+  'settings.channelSetup.hostname.challenge.copied': 'Copied',
+  'settings.channelSetup.hostname.challenge.rotate': 'Get a new code',
   'settings.channelSetup.presentation.title': 'Search preview',
   'settings.channelSetup.presentation.seoTitle': 'Title',
   'settings.channelSetup.presentation.seoDescription': 'Description',
@@ -2287,6 +2295,10 @@ export const messagesEn = {
   'catalog.editor.availability.quantityHint':
     'On-hand count, the daily default, and channel stop thresholds for a QUANTITY-tracked variant live on the Stock page.',
   'catalog.editor.availability.quantityHintLink': 'Open Stock',
+  'catalog.editor.availability.notListedAtBranches':
+    'Not listed at {count} branch(es) yet — offered there, but not orderable until it is listed.',
+  'catalog.editor.availability.listEverywhere': 'List at every branch',
+  'catalog.editor.availability.listingInProgress': 'Listing…',
   'catalog.editor.schedule.hint':
     'Empty means always on sale. Windows below limit when this item can be sold, resolved in this branch’s own local time.',
   'catalog.editor.schedule.loading': 'Loading schedule…',
@@ -2384,6 +2396,10 @@ export const messagesEn = {
   'catalog.categories.archiveConfirm.title': 'Archive this category?',
   'catalog.categories.archiveConfirm.body':
     '“{name}” will no longer show in the category tree. Products already placed in it stay exactly where they are.',
+  'catalog.categories.form.saving': 'Saving…',
+  // Row 10.12: the content editor's per-locale grid.
+  'catalog.categories.content.title': 'Name and description, by language',
+  'catalog.categories.content.defaultMarker': 'Default',
 
   // Gap map row 4.4c: per-location QUANTITY stock page (batch 11)
   'catalog.stock.title': 'Stock',
@@ -3496,7 +3512,8 @@ export const messagesEn = {
   'delivery.policy.gpsAcceptRadiusKm': 'Accept radius (km, from the pickup point)',
   'delivery.policy.gpsStatusChangeRadiusMeters':
     'Status-change radius (m, from the customer point)',
-  'delivery.policy.gpsSummary': 'On — accept within {acceptKm} km, status change within {statusChangeM} m',
+  'delivery.policy.gpsSummary':
+    'On — accept within {acceptKm} km, status change within {statusChangeM} m',
   'delivery.policy.billingMode': 'Courier billing (personal balance)',
   'delivery.policy.billingMode.refused': 'Refused by ADR 0042',
   'delivery.policy.billingMode.reason':
@@ -5706,6 +5723,15 @@ export const messagesEn = {
   'orders.newOrder.order.unavailableCount': '{count} item(s) in the basket are no longer available',
   'orders.newOrder.order.branch': 'Branch',
   'orders.newOrder.order.byZone': '(by zone)',
+  'orders.newOrder.order.branchLoading': 'Finding a branch…',
+  'orders.newOrder.order.branchLoad': '{count} active orders',
+  'orders.newOrder.order.branchClosed': 'closed',
+  'orders.newOrder.order.branchProposedSuffix': '(proposed)',
+  'orders.newOrder.order.branchResolutionFailed': 'Could not resolve a branch — placing at the current one',
+  'orders.newOrder.order.branchNoCandidates': 'No branch delivers to this address',
+  'orders.newOrder.order.branchOverrideReason': 'Reason for choosing a different branch',
+  'orders.newOrder.order.branchOverrideReasonPlaceholder': 'Pick a reason',
+  'orders.newOrder.order.branchOverrideNote': 'Note',
   'orders.newOrder.order.promoCode': 'Promo code',
   'orders.newOrder.order.cashTendered': 'Cash tendered',
   'orders.newOrder.order.changeDue': 'Change due',
@@ -5755,7 +5781,8 @@ export const messagesEn = {
   'orders.newOrder.aggregator.hint':
     'Recorded exactly as the aggregator stated it — nothing here is re-priced by HorecaOS',
   // Row 1.3g (wave 11 w5-fulfillment-destination): DELIVERY reuses the customer pane's own resolved address.
-  'orders.newOrder.aggregator.pickup': 'Pickup — the aggregator’s own courier or the customer collects it',
+  'orders.newOrder.aggregator.pickup':
+    'Pickup — the aggregator’s own courier or the customer collects it',
   'orders.newOrder.aggregator.deliveryTo': 'Delivers to: {customer}, {address}',
   'orders.newOrder.aggregator.deliveryMissing':
     'Uncheck “Aggregator order”, resolve the customer and pick a delivery address, then check it again',
