@@ -763,22 +763,31 @@ public class JdbcPricingStore {
         // priced yet") and neither UPDATE touched anything. ux_price_current
         // is what makes this insert race-safe against a second writer landing
         // here at the same instant: only one of two concurrent first-time
-        // inserts for the same priceable can hold that index. The loser's
-        // collision is reported as staleness when a version was actually
-        // being enforced; an unconditional caller keeps the original,
-        // unguarded behaviour of letting the violation propagate.
-        try {
-            insertPrice(tenantId, brandId, priceBookId, priceableType, priceableId, amountMinor, at, 1);
+        // inserts for the same priceable can hold that index. ON CONFLICT DO
+        // NOTHING rather than catching the unique-violation: Postgres aborts
+        // the whole transaction the instant any statement inside it errors, so
+        // a caught DataIntegrityViolationException here would leave every
+        // later statement in this same @Transactional call — including the
+        // openPriceVersion lookup PriceAuthoringService makes to name the
+        // current version in a stale-write's message — failing with "current
+        // transaction is aborted" instead of running. A no-op insert reports
+        // itself as zero rows affected, which never poisons the transaction.
+        // The loser's no-op is reported as staleness when a version was
+        // actually being enforced; an unconditional caller keeps the original,
+        // unguarded behaviour of a conflict propagating — DataIntegrityViolationException
+        // is still what GlobalApiErrorHandler maps to 409, just synthesized
+        // here instead of caught from Postgres.
+        if (insertPrice(tenantId, brandId, priceBookId, priceableType, priceableId, amountMinor, at, 1)) {
             return true;
-        } catch (DataIntegrityViolationException collision) {
-            if (expectedVersion == null) {
-                throw collision;
-            }
-            return false;
         }
+        if (expectedVersion == null) {
+            throw new DataIntegrityViolationException(
+                    "A price is already current for " + priceableType + " " + priceableId + " in book " + priceBookId);
+        }
+        return false;
     }
 
-    private void insertPrice(
+    private boolean insertPrice(
             UUID tenantId,
             UUID brandId,
             UUID priceBookId,
@@ -787,12 +796,14 @@ public class JdbcPricingStore {
             long amountMinor,
             OffsetDateTime at,
             int version) {
-        jdbc.sql("""
+        int inserted = jdbc.sql("""
                 INSERT INTO pricing.prices (
                     id, tenant_id, brand_id, price_book_id, priceable_type, priceable_id,
                     amount_minor, valid_from, version)
                 VALUES (:id, :tenantId, :brandId, :priceBookId, :type, :priceableId,
                     :amount, :at, :version)
+                ON CONFLICT (price_book_id, priceable_type, priceable_id) WHERE valid_until IS NULL
+                DO NOTHING
                 """)
                 .param("id", UUID.randomUUID())
                 .param("tenantId", tenantId)
@@ -804,6 +815,7 @@ public class JdbcPricingStore {
                 .param("version", version)
                 .param("at", at)
                 .update();
+        return inserted > 0;
     }
 
     /**
