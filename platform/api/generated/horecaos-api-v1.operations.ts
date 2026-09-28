@@ -419,6 +419,11 @@ export interface AuditEventView {
   tenantId?: string;
 }
 
+export interface AutomationPreviewResponse {
+  customerAccountId?: string;
+  maskedDisplayName?: string;
+}
+
 export interface AutomationRuleControllerReorderRequest {
   orderedRuleIds: Array<string>;
 }
@@ -5761,6 +5766,7 @@ export interface Operations {
   "update": { method: "PUT"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/automations/{ruleId}"; request: { parameters: { path: { brandId: string; ruleId: string; tenantId: string } }; body: AutomationRuleRequest }; responses: { "200": AutomationRuleResponse } };
   "activate_1": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/automations/{ruleId}/activations"; request: { parameters: { path: { brandId: string; ruleId: string; tenantId: string } } }; responses: { "200": AutomationRuleResponse } };
   "deactivate": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/automations/{ruleId}/deactivations"; request: { parameters: { path: { brandId: string; ruleId: string; tenantId: string } } }; responses: { "200": AutomationRuleResponse } };
+  "preview": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/automations/{ruleId}/preview"; request: { parameters: { path: { brandId: string; ruleId: string; tenantId: string } } }; responses: { "200": Array<AutomationPreviewResponse> } };
   "runs": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/automations/{ruleId}/runs"; request: { parameters: { path: { brandId: string; ruleId: string; tenantId: string } } }; responses: { "200": Array<AutomationRunResponse> } };
   "listCampaigns": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/campaigns"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<CampaignResponse> } };
   "createCampaign": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/campaigns"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: CreateCampaignRequest }; responses: { "200": CampaignResponse } };

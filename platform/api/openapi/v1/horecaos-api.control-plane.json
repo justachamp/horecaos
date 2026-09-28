@@ -6218,6 +6218,20 @@
         },
         "type" : "object"
       },
+      "PagePriceBookMatrixRowResponse" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/PriceBookMatrixRowResponse"
+            },
+            "type" : "array"
+          },
+          "nextCursor" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "PageProductSummaryResponse" : {
         "properties" : {
           "items" : {
@@ -7058,6 +7072,48 @@
           "version" : {
             "format" : "int32",
             "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "PriceBookMatrixRowResponse" : {
+        "properties" : {
+          "basePriceMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "bookPriceMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "bookPriceVersion" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "categoryId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "categoryName" : {
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "deltaMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "displayName" : {
+            "type" : "string"
+          },
+          "productId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "variantId" : {
+            "format" : "uuid",
+            "type" : "string"
           }
         },
         "type" : "object"
@@ -12265,7 +12321,7 @@
     "/api/v1/control-plane/pos-capability-matrix" : {
       "get" : {
         "description" : "The vendor ceiling from code, not one installation's discovered subset. Compare against ADR 0012's capability-reconciliation, which narrows this per credential.",
-        "operationId" : "matrix",
+        "operationId" : "matrix_1",
         "responses" : {
           "200" : {
             "content" : {
@@ -17850,6 +17906,91 @@
         "tags" : [ "Price authoring" ]
       }
     },
+    "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/pricing/price-books/{priceBookId}/matrix" : {
+      "get" : {
+        "description" : "Gap map row 4.8a: before this, a book's variant prices could only be seen one product at a time in the per-variant editor. Cursor-paginated by variant id (ADR 0031), brand-scoped — never a location or channel, unlike `resolved/prices` — so this shows every variant in the brand's draft catalog regardless of where this book is assigned. `basePriceMinor` is the price the brand's live BRAND-scope book currently charges (null when the brand has none live yet); `deltaMinor` is `bookPriceMinor - basePriceMinor` and is null whenever either side is. `categoryId` narrows to one category; `differsFromBase` keeps only rows where the two prices are not the same, including a row priced at brand scope but not yet in this book.",
+        "operationId" : "matrix",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "priceBookId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "categoryId",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "differsFromBase",
+          "required" : false,
+          "schema" : {
+            "default" : false,
+            "type" : "boolean"
+          }
+        }, {
+          "in" : "query",
+          "name" : "locale",
+          "required" : false,
+          "schema" : {
+            "default" : "uz",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "cursor",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PagePriceBookMatrixRowResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Every variant priced in this book, next to the brand's base price and the delta between them",
+        "tags" : [ "Price authoring" ]
+      }
+    },
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/pricing/price-books/{priceBookId}/modifier-option-prices/{modifierOptionId}" : {
       "put" : {
         "description" : "Zero is a legitimate price and means the extra is free. A modifier with no price at all refuses the whole cart rather than pricing at zero.",
@@ -17970,7 +18111,7 @@
     },
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/pricing/price-books/{priceBookId}/variant-prices/{variantId}" : {
       "put" : {
-        "description" : "Integer minor units, and for UZS a minor unit is a whole som: 50000 is 50,000 som. Under the brand's default INCLUSIVE tax profile this is what the customer pays, with tax extracted from inside it; under an EXCLUSIVE profile it is what the customer pays before tax, added on top.",
+        "description" : "Integer minor units, and for UZS a minor unit is a whole som: 50000 is 50,000 som. Under the brand's default INCLUSIVE tax profile this is what the customer pays, with tax extracted from inside it; under an EXCLUSIVE profile it is what the customer pays before tax, added on top. `If-Match` is optional here: omitted, the write is unconditional, the editor's original behaviour; given, it is checked against this row's own price version — `0` for a variant not yet priced in this book — which is what the matrix screen's inline edit sends (gap map row 4.8a) so one row's edit cannot silently overwrite another operator's edit to the same row.",
         "operationId" : "setVariantPrice",
         "parameters" : [ {
           "in" : "path",

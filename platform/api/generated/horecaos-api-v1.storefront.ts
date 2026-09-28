@@ -312,6 +312,7 @@ export interface MenuVariant {
   isDefault?: boolean;
   onSaleNow?: boolean;
   orderable?: boolean;
+  remainingQuantity?: number;
   sku?: string;
   unitCode?: string;
   variantId?: string;
