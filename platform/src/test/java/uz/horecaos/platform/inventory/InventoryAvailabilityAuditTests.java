@@ -199,8 +199,7 @@ class InventoryAvailabilityAuditTests {
 
     /** Staff 9.3a: the most recent {@code inventory.availability.set} fact's "available" field, as {@code before->after}. */
     private String availableChangeDocument(UUID targetId) {
-        return jdbc.sql(
-                        """
+        return jdbc.sql("""
                         SELECT change_document -> 'available' ->> 'before', change_document -> 'available' ->> 'after'
                           FROM audit.audit_events
                          WHERE target_id = :targetId AND action_code = 'inventory.availability.set'

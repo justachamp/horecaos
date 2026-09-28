@@ -285,8 +285,7 @@ class MediaAssetIngestionServiceTests {
 
     /** Staff 9.3a: the {@code media.asset.ingested} fact's "status" field, as {@code before->after}. */
     private String statusChangeDocument(MediaAssetId assetId) {
-        return jdbc.sql(
-                        """
+        return jdbc.sql("""
                         SELECT change_document -> 'status' ->> 'before', change_document -> 'status' ->> 'after'
                           FROM audit.audit_events
                          WHERE target_type = 'media_asset' AND target_id = :id AND action_code = 'media.asset.ingested'

@@ -281,8 +281,8 @@ public class FiscalDocumentService {
                 // prior outcome to diff against, so it is recorded as a
                 // creation, the same reasoning CourierTrackRevealService's
                 // reveal-parameters use.
-                .changed(ChangeDocuments.created(
-                        Map.of("outcome", outcome.name(), "orderId", document.orderId().toString())))
+                .changed(ChangeDocuments.created(Map.of(
+                        "outcome", outcome.name(), "orderId", document.orderId().toString())))
                 .correlatedBy(correlationId == null ? documentId.toString() : correlationId)
                 .occurredAt(clock.instant())
                 .build());

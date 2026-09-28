@@ -449,7 +449,8 @@ class FiscalDocumentLifecycleTests {
             // Staff 9.3a: "outcome" is this attempt's own result, not a
             // field the document carried before -- recorded as a creation.
             @SuppressWarnings("unchecked")
-            var outcomeChange = (java.util.Map<String, Object>) fact.changeDocument().get("outcome");
+            var outcomeChange =
+                    (java.util.Map<String, Object>) fact.changeDocument().get("outcome");
             assertThat(outcomeChange).containsEntry("before", null).containsEntry("after", "NOT_WIRED");
         });
     }
@@ -528,7 +529,8 @@ class FiscalDocumentLifecycleTests {
             // Staff 9.3a: "state" genuinely moves (BLOCKED -> PENDING, ADR
             // 0038's own arrow).
             @SuppressWarnings("unchecked")
-            var stateChange = (java.util.Map<String, Object>) fact.changeDocument().get("state");
+            var stateChange =
+                    (java.util.Map<String, Object>) fact.changeDocument().get("state");
             assertThat(stateChange).containsEntry("before", "BLOCKED").containsEntry("after", "PENDING");
         });
     }

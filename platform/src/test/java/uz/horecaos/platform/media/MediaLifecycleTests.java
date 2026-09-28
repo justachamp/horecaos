@@ -1259,8 +1259,7 @@ class MediaLifecycleTests {
 
     /** Staff 9.3a: one field's {@code before->after} pair, from the fact written for this asset and action. */
     private String changeDocumentField(MediaAssetId assetId, String actionCode, String field) {
-        return jdbc.sql(
-                        """
+        return jdbc.sql("""
                         SELECT change_document -> :field ->> 'before', change_document -> :field ->> 'after'
                           FROM audit.audit_events
                          WHERE target_type = 'media_asset' AND target_id = :id AND action_code = :actionCode

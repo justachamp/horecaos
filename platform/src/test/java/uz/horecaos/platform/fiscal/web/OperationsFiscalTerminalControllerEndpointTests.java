@@ -355,8 +355,7 @@ class OperationsFiscalTerminalControllerEndpointTests {
 
     /** Staff 9.3a: the most recent fact's change document field, as {@code before->after}. */
     private String changeDocumentField(UUID terminalId, String actionCode, String field) {
-        return jdbc.sql(
-                        """
+        return jdbc.sql("""
                         SELECT change_document -> :field ->> 'before', change_document -> :field ->> 'after'
                           FROM audit.audit_events
                          WHERE target_id = :id AND action_code = :actionCode

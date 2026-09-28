@@ -421,8 +421,7 @@ public class MediaAssetService implements MediaAvailability {
                     image.heightPx()));
 
             audit.record(auditFact("media.asset.available", asset, now)
-                    .changed(ChangeDocuments.diff(
-                            availabilityBefore(asset), availabilityAfter(asset, image, object)))
+                    .changed(ChangeDocuments.diff(availabilityBefore(asset), availabilityAfter(asset, image, object)))
                     .build());
         });
     }

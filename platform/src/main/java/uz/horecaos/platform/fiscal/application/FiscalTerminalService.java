@@ -174,7 +174,8 @@ public class FiscalTerminalService {
         // Staff 9.3a: read before transition() both fetches and mutates the
         // terminal in place, so this is the only chance to see its status as
         // it stood before this transition.
-        FiscalTerminalStatus previousStatus = require(tenantId, brandId, terminalId).status();
+        FiscalTerminalStatus previousStatus =
+                require(tenantId, brandId, terminalId).status();
         Instant now = clock.instant();
         FiscalTerminal terminal = transition(tenantId, brandId, terminalId, expectedVersion, change);
         audit.record(AuditFact.of(actionCode, AuditClass.BUSINESS)
@@ -183,7 +184,8 @@ public class FiscalTerminalService {
                 .target("FiscalTerminal", terminal.id())
                 .targetVersion((long) terminal.version())
                 .because(actionCode + " for terminal " + terminal.terminalReference())
-                .changed(ChangeDocuments.change("status", previousStatus.name(), terminal.status().name()))
+                .changed(ChangeDocuments.change(
+                        "status", previousStatus.name(), terminal.status().name()))
                 .correlatedBy(correlationId())
                 .occurredAt(now)
                 .build());

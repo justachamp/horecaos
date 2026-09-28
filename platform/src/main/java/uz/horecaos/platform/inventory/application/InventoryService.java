@@ -907,7 +907,9 @@ public class InventoryService implements InventoryReservationPort {
                 .changed(ChangeDocuments.diff(
                         Map.of(
                                 "defaultQuantity",
-                                item.defaultQuantity() == null ? "null" : item.defaultQuantity().toPlainString(),
+                                item.defaultQuantity() == null
+                                        ? "null"
+                                        : item.defaultQuantity().toPlainString(),
                                 "stockItemId",
                                 item.stockItemId().toString()),
                         Map.of(
@@ -943,8 +945,7 @@ public class InventoryService implements InventoryReservationPort {
             throw new IllegalArgumentException("A stop threshold cannot be negative");
         }
         StockItemRow item = requireQuantityItem(tenantId, locationId, variantId);
-        Optional<BigDecimal> previous =
-                store.findChannelStopThreshold(tenantId, item.stockItemId(), channelSystemType);
+        Optional<BigDecimal> previous = store.findChannelStopThreshold(tenantId, item.stockItemId(), channelSystemType);
         Instant now = clock.instant();
         store.upsertChannelStopThreshold(
                 tenantId, item.brandId(), locationId, item.stockItemId(), channelSystemType, stopAtOrBelow, now);
@@ -988,8 +989,7 @@ public class InventoryService implements InventoryReservationPort {
             String actorSubject) {
         rls.bindTenant(tenantId);
         StockItemRow item = requireQuantityItem(tenantId, locationId, variantId);
-        Optional<BigDecimal> previous =
-                store.findChannelStopThreshold(tenantId, item.stockItemId(), channelSystemType);
+        Optional<BigDecimal> previous = store.findChannelStopThreshold(tenantId, item.stockItemId(), channelSystemType);
         boolean removed = store.deleteChannelStopThreshold(tenantId, item.stockItemId(), channelSystemType);
         if (!removed) {
             return false;

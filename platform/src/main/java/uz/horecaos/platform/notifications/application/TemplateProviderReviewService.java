@@ -169,8 +169,10 @@ public class TemplateProviderReviewService {
                 // only ever the destination state.
                 .changed(ChangeDocuments.diff(
                         Map.of(
-                                "providerReview", before.providerReview(),
-                                "reference", before.reference() == null ? "" : before.reference()),
+                                "providerReview",
+                                before.providerReview(),
+                                "reference",
+                                before.reference() == null ? "" : before.reference()),
                         Map.of("providerReview", state, "reference", reference == null ? "" : reference)))
                 .usingCapability(Capability.NOTIFICATION_TEMPLATE_ACTIVATE.code())
                 .correlatedBy(versionId.toString())
@@ -179,7 +181,10 @@ public class TemplateProviderReviewService {
     }
 
     /** The provider-review fields of a template version as they stood before a write, for the audit diff. */
-    private record BeforeState(String channel, @Nullable String providerReview, @Nullable String reference) {}
+    private record BeforeState(
+            String channel,
+            @Nullable String providerReview,
+            @Nullable String reference) {}
 
     /** One SMS wording and where it stands with its provider. */
     public record ReviewRow(

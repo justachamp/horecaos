@@ -265,8 +265,8 @@ class CourierTelemetryTests {
                 .findFirst()
                 .orElseThrow();
         @SuppressWarnings("unchecked")
-        Map<String, Object> shiftIdChange =
-                Objects.requireNonNull((Map<String, Object>) opened.changeDocument().get("shiftId"));
+        Map<String, Object> shiftIdChange = Objects.requireNonNull(
+                (Map<String, Object>) opened.changeDocument().get("shiftId"));
         assertThat(shiftIdChange.get("before"))
                 .as("a brand-new session has no prior shift to diff against")
                 .isNull();
@@ -286,8 +286,8 @@ class CourierTelemetryTests {
                 .findFirst()
                 .orElseThrow();
         @SuppressWarnings("unchecked")
-        Map<String, Object> statusChange =
-                Objects.requireNonNull((Map<String, Object>) closed.changeDocument().get("status"));
+        Map<String, Object> statusChange = Objects.requireNonNull(
+                (Map<String, Object>) closed.changeDocument().get("status"));
         assertThat(statusChange.get("before")).isEqualTo("OPEN");
         assertThat(statusChange.get("after")).isEqualTo("CLOSED");
     }
@@ -514,8 +514,8 @@ class CourierTelemetryTests {
         // "after" the reveal's own parameters -- rather than a flat map.
         assertThat(fact.changeDocument()).containsKeys("courierId", "windowFrom", "windowTo", "windowsRevealed");
         @SuppressWarnings("unchecked")
-        Map<String, Object> courierIdChange =
-                Objects.requireNonNull((Map<String, Object>) fact.changeDocument().get("courierId"));
+        Map<String, Object> courierIdChange = Objects.requireNonNull(
+                (Map<String, Object>) fact.changeDocument().get("courierId"));
         assertThat(courierIdChange.get("before")).isNull();
         assertThat(courierIdChange.get("after")).isEqualTo(COURIER.toString());
     }
