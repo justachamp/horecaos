@@ -15,6 +15,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.commercial.api.EntitlementSnapshot;
 import uz.horecaos.platform.commercial.domain.PlanTerms;
 import uz.horecaos.platform.commercial.domain.PlanVersion;
@@ -168,12 +169,12 @@ public class SubscriptionService {
         subscriptions.insert(subscription, termMonths, terms.activationDepositMinor(), now);
 
         EntitlementSnapshot snapshot = entitlements.snapshot(tenantId);
-        Map<String, Object> change = new HashMap<>();
-        change.put("planCode", version.planCode());
-        change.put("planVersionNumber", version.versionNumber());
-        change.put("status", subscription.status().name());
-        change.put("termMonths", termMonths);
-        change.put("entitlementHash", snapshot.hash());
+        Map<String, Object> fields = new HashMap<>();
+        fields.put("planCode", version.planCode());
+        fields.put("planVersionNumber", version.versionNumber());
+        fields.put("status", subscription.status().name());
+        fields.put("termMonths", termMonths);
+        fields.put("entitlementHash", snapshot.hash());
 
         audit.record(AuditFact.of("commercial.subscription.started", AuditClass.BUSINESS)
                 .by(actor)
@@ -181,7 +182,8 @@ public class SubscriptionService {
                 .target("commercial.subscription", subscription.id())
                 .targetVersion(1L)
                 .because(reason)
-                .changed(change)
+                // Staff 9.3a: a brand-new subscription, no prior state to diff against.
+                .changed(ChangeDocuments.created(fields))
                 .usingCapability(Capability.COMMERCIAL_SUBSCRIPTION_MANAGE.code())
                 .correlatedBy(correlationId)
                 .occurredAt(now)
@@ -247,12 +249,11 @@ public class SubscriptionService {
             throw ApiException.staleVersion(expectedVersion, live.version());
         }
 
-        Map<String, Object> change = new HashMap<>();
-        change.put("from", live.status().name());
-        change.put("to", to.name());
-        change.put("entitlementHash", entitlements.snapshot(tenantId).hash());
+        Map<String, Object> afterFields = new HashMap<>();
+        afterFields.put("status", to.name());
+        afterFields.put("entitlementHash", entitlements.snapshot(tenantId).hash());
         if (suspending) {
-            change.put("suspensionReason", suspensionReason);
+            afterFields.put("suspensionReason", suspensionReason);
         }
 
         audit.record(AuditFact.of("commercial.subscription.transitioned", AuditClass.BUSINESS)
@@ -261,7 +262,10 @@ public class SubscriptionService {
                 .target("commercial.subscription", live.id())
                 .targetVersion(expectedVersion + 1)
                 .because(reason)
-                .changed(change)
+                // Staff 9.3a: "status" genuinely moves -- live (read above,
+                // before subscriptions.transition) already proved the prior
+                // status via its own canTransitionTo guard.
+                .changed(ChangeDocuments.diff(Map.of("status", live.status().name()), afterFields))
                 .usingCapability(Capability.COMMERCIAL_SUBSCRIPTION_MANAGE.code())
                 .correlatedBy(correlationId)
                 .occurredAt(now)
@@ -319,10 +323,13 @@ public class SubscriptionService {
                 .at(ResourceScope.tenant(tenantId))
                 .target("commercial.entitlement_override", id)
                 .because(reason)
-                .changed(Map.of(
+                // Staff 9.3a: a brand-new override row (see this method's own
+                // Javadoc: replacing a live one is a revoke and an insert, not
+                // an update), no prior state to diff against.
+                .changed(ChangeDocuments.created(Map.of(
                         "entitlementKey", entitlementKey,
                         "validUntil", validUntil.toString(),
-                        "approvedBy", approvedBy))
+                        "approvedBy", approvedBy)))
                 .usingCapability(Capability.COMMERCIAL_OVERRIDE_APPROVE.code())
                 .correlatedBy(correlationId)
                 .occurredAt(now)

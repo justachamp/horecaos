@@ -19,6 +19,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.courier.api.CourierConfigurationKeys;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierStore;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierStore.ApplicantRef;
@@ -158,7 +159,12 @@ public class CourierApplicantRetentionSweeper {
                         .at(ResourceScope.tenant(applicant.tenantId()))
                         .target("courier", applicant.courierId())
                         .because("ADR 0092: an application nobody verified is erased after its retention period")
-                        .changed(Map.of("status", "ARCHIVED", "name", "ERASED"))
+                        // Staff 9.3a: "status" genuinely moves -- claimUnverifiedApplicants'
+                        // own WHERE clause only ever claims an ACTIVE row. The
+                        // real prior name is never recorded, before or after
+                        // (ADR 0029): "name" is after-only, the tombstone value.
+                        .changed(ChangeDocuments.diff(
+                                Map.of("status", "ACTIVE"), Map.of("status", "ARCHIVED", "name", "ERASED")))
                         .correlatedBy(correlationId)
                         .occurredAt(now)
                         .build());

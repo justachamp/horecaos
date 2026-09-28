@@ -15,6 +15,7 @@ import uz.horecaos.platform.audit.api.ApprovalService;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.courier.domain.AdjustmentOrigin;
 import uz.horecaos.platform.courier.domain.CourierCompensationPolicy;
 import uz.horecaos.platform.courier.domain.LedgerEntryType;
@@ -171,7 +172,8 @@ public class CourierAdjustmentService {
                 .at(ResourceScope.tenant(command.tenantId()))
                 .target("courier_ledger_entry", entry.id())
                 .because(command.reason())
-                .changed(Map.of(
+                // Staff 9.3a: a brand-new ledger entry, no prior state to diff against.
+                .changed(ChangeDocuments.created(Map.of(
                         "amountMinor",
                         command.amountMinor(),
                         "reasonCode",
@@ -179,7 +181,7 @@ public class CourierAdjustmentService {
                         "origin",
                         command.origin().name(),
                         "outcomeBasis",
-                        reason.outcomeBasis()))
+                        reason.outcomeBasis())))
                 .underApproval(approvalRequestId)
                 .usingCapability("courier.adjustment.create")
                 .correlatedBy(command.correlationId())

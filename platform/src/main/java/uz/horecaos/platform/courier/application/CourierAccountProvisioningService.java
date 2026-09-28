@@ -13,6 +13,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.configuration.Ids;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.accounts.StaffAccounts;
@@ -112,7 +113,10 @@ public class CourierAccountProvisioningService {
                 .by(actor)
                 .at(ResourceScope.tenant(tenantId))
                 .because("Courier registration")
-                .changed(Map.of("organizationId", organizationId, "subjectId", account.subjectId()))
+                // Staff 9.3a: a fresh provisioning/membership fact, no prior
+                // state to diff against.
+                .changed(ChangeDocuments.created(
+                        Map.of("organizationId", organizationId, "subjectId", account.subjectId())))
                 .correlatedBy(account.subjectId())
                 .occurredAt(clock.instant())
                 .build());
@@ -170,13 +174,14 @@ public class CourierAccountProvisioningService {
                     .at(ResourceScope.tenant(tenantId))
                     .target("iam.staff_account", Ids.newId())
                     .because(reason)
-                    .changed(Map.of(
+                    // Staff 9.3a: a fresh failure report, no prior state to diff against.
+                    .changed(ChangeDocuments.created(Map.of(
                             "subjectId",
                             account.subjectId(),
                             "refusalReason",
                             cause.getClass().getSimpleName(),
                             "cleanupFailure",
-                            deleteFailed.getClass().getSimpleName()))
+                            deleteFailed.getClass().getSimpleName())))
                     .correlatedBy(account.subjectId())
                     .occurredAt(now)
                     .build());

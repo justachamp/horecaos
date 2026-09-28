@@ -24,6 +24,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.tenancy.api.BrandId;
@@ -287,6 +288,8 @@ public class ServiceScheduleService {
             throw new IllegalArgumentException("Returning to the schedule cannot carry an expiry");
         }
 
+        // Staff 9.3a: read before upsertServiceState overwrites it.
+        JdbcServiceabilityStore.ServiceState before = store.serviceState(tenantId, locationId);
         Instant now = clock.instant();
         String reasonCode = command.mode() == ServiceMode.FOLLOW_SCHEDULE ? null : command.reasonCode();
         int version = store.upsertServiceState(
@@ -310,7 +313,9 @@ public class ServiceScheduleService {
                         command.mode() == ServiceMode.FOLLOW_SCHEDULE
                                 ? "Returned to the published schedule"
                                 : Objects.requireNonNull(command.reasonCode()))
-                .changed(changeDocument(command))
+                // Staff 9.3a: a per-field diff -- before was read above, ahead
+                // of upsertServiceState's overwrite.
+                .changed(ChangeDocuments.diff(changeDocument(before), changeDocument(command)))
                 .correlatedBy(correlationId())
                 .occurredAt(now)
                 .build());
@@ -433,6 +438,17 @@ public class ServiceScheduleService {
                         command.effectiveUntil() == null
                                 ? ""
                                 : command.effectiveUntil().toString());
+    }
+
+    /** Staff 9.3a: the same shape as {@link #changeDocument(ChangeServiceStateCommand)}, for a prior state. */
+    private static Map<String, Object> changeDocument(JdbcServiceabilityStore.ServiceState state) {
+        return Map.of(
+                "mode", state.mode().name(),
+                "reasonCode", state.reasonCode() == null ? "" : state.reasonCode(),
+                "effectiveUntil",
+                        state.effectiveUntil() == null
+                                ? ""
+                                : state.effectiveUntil().toString());
     }
 
     private @Nullable UUID actorId() {

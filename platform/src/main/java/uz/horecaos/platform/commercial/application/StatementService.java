@@ -21,6 +21,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.commercial.api.EntitlementKeys;
 import uz.horecaos.platform.commercial.api.ResetPeriod;
 import uz.horecaos.platform.commercial.api.UsagePeriod;
@@ -233,18 +234,19 @@ public class StatementService {
                     Map.of("periodKey", periodKey));
         }
 
-        Map<String, Object> change = new HashMap<>();
-        change.put("number", number);
-        change.put("periodKey", periodKey);
-        change.put("currency", currency);
-        change.put("totalMinor", draft.totalMinor());
-        change.put("lineCount", draft.lines().size());
+        Map<String, Object> fields = new HashMap<>();
+        fields.put("number", number);
+        fields.put("periodKey", periodKey);
+        fields.put("currency", currency);
+        fields.put("totalMinor", draft.totalMinor());
+        fields.put("lineCount", draft.lines().size());
         audit.record(AuditFact.of("commercial.statement.issued", AuditClass.BUSINESS)
                 .by(actor)
                 .at(ResourceScope.tenant(tenantId))
                 .target("commercial.statement", id)
                 .because(reason)
-                .changed(change)
+                // Staff 9.3a: a brand-new issued statement, no prior state to diff against.
+                .changed(ChangeDocuments.created(fields))
                 .usingCapability(Capability.COMMERCIAL_STATEMENT_ISSUE.code())
                 .correlatedBy(correlationId)
                 .occurredAt(now)
@@ -270,7 +272,9 @@ public class StatementService {
                 .at(ResourceScope.tenant(tenantId))
                 .target("commercial.statement", statementId)
                 .because(reason)
-                .changed(Map.of("number", String.valueOf(statement.number()), "periodKey", statement.periodKey()))
+                // Staff 9.3a: "status" genuinely moves -- statements.voidStatement's
+                // own guard above proved the row was ISSUED, not already VOID.
+                .changed(ChangeDocuments.change("status", statement.status(), Statement.VOID))
                 .usingCapability(Capability.COMMERCIAL_STATEMENT_ISSUE.code())
                 .correlatedBy(correlationId)
                 .occurredAt(now)

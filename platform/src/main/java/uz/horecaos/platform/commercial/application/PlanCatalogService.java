@@ -15,6 +15,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.commercial.api.EntitlementKey;
 import uz.horecaos.platform.commercial.api.EntitlementKeys;
 import uz.horecaos.platform.commercial.domain.PlanEntitlement;
@@ -66,7 +67,8 @@ public class PlanCatalogService {
                 .at(ResourceScope.platform())
                 .target("commercial.plan", id)
                 .because(reason)
-                .changed(Map.of("code", code, "name", name))
+                // Staff 9.3a: a brand-new plan, no prior state to diff against.
+                .changed(ChangeDocuments.created(Map.of("code", code, "name", name)))
                 .usingCapability(Capability.COMMERCIAL_PLAN_MANAGE.code())
                 .correlatedBy(correlationId)
                 .occurredAt(now)
@@ -165,7 +167,10 @@ public class PlanCatalogService {
                 .at(ResourceScope.platform())
                 .target("commercial.plan_version", id)
                 .because(reason)
-                .changed(change)
+                // Staff 9.3a: always a new version (see this method's own
+                // Javadoc: "there is no path here that edits an existing
+                // one"), so it has no prior state to diff against.
+                .changed(ChangeDocuments.created(change))
                 .usingCapability(Capability.COMMERCIAL_PLAN_MANAGE.code())
                 .correlatedBy(correlationId)
                 .occurredAt(now)
@@ -212,11 +217,9 @@ public class PlanCatalogService {
                 .at(ResourceScope.platform())
                 .target("commercial.plan_version", planVersionId)
                 .because(reason)
-                .changed(Map.of(
-                        "planCode", version.planCode(),
-                        "versionNumber", version.versionNumber(),
-                        "priceMinor", version.priceMinor(),
-                        "currency", version.currency()))
+                // Staff 9.3a: "activated" genuinely moves -- the four-eyes
+                // check above already proved version.isActivated() was false.
+                .changed(ChangeDocuments.change("activated", false, true))
                 .usingCapability(Capability.COMMERCIAL_PLAN_ACTIVATE.code())
                 .correlatedBy(correlationId)
                 .occurredAt(now)

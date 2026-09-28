@@ -14,6 +14,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.courier.domain.CostBasis;
 import uz.horecaos.platform.courier.domain.CostPath;
 import uz.horecaos.platform.courier.domain.MatchStatus;
@@ -92,7 +93,8 @@ public class PartnerInvoiceService {
                 .at(ResourceScope.tenant(command.tenantId()))
                 .target("partner_delivery_invoice", invoiceId)
                 .because(command.reason())
-                .changed(Map.of(
+                // Staff 9.3a: a brand-new invoice, no prior state to diff against.
+                .changed(ChangeDocuments.created(Map.of(
                         "providerCode",
                         command.providerCode(),
                         "providerInvoiceRef",
@@ -100,7 +102,7 @@ public class PartnerInvoiceService {
                         "totalMinor",
                         command.totalMinor(),
                         "lineCount",
-                        command.lines().size()))
+                        command.lines().size())))
                 .usingCapability("partner.invoice.manage")
                 .correlatedBy("partner-invoice")
                 .occurredAt(clock.instant())
@@ -250,8 +252,14 @@ public class PartnerInvoiceService {
                 .at(ResourceScope.tenant(tenantId))
                 .target("partner_delivery_invoice", invoiceId)
                 .because(reason)
-                .changed(Map.of(
-                        "matchedLines", matched, "varianceLines", variances.size(), "unmatchedLines", unmatched.size()))
+                // Staff 9.3a: this pass's own summary, no prior state to diff against.
+                .changed(ChangeDocuments.created(Map.of(
+                        "matchedLines",
+                        matched,
+                        "varianceLines",
+                        variances.size(),
+                        "unmatchedLines",
+                        unmatched.size())))
                 .usingCapability("partner.invoice.manage")
                 .correlatedBy("partner-invoice")
                 .occurredAt(clock.instant())
@@ -280,8 +288,17 @@ public class PartnerInvoiceService {
                 .at(ResourceScope.tenant(tenantId))
                 .target("partner_delivery_invoice", invoiceId)
                 .because(reason)
-                .changed(Map.of(
-                        "providerCode", invoice.providerCode(), "providerInvoiceRef", invoice.providerInvoiceRef()))
+                // Staff 9.3a: "status" genuinely moves -- invoice (read above,
+                // before markInvoiceDisputed) already holds the prior value.
+                .changed(ChangeDocuments.diff(
+                        Map.of("status", invoice.status()),
+                        Map.of(
+                                "status",
+                                "DISPUTED",
+                                "providerCode",
+                                invoice.providerCode(),
+                                "providerInvoiceRef",
+                                invoice.providerInvoiceRef())))
                 .usingCapability("partner.invoice.manage")
                 .correlatedBy("partner-invoice")
                 .occurredAt(clock.instant())
@@ -321,7 +338,12 @@ public class PartnerInvoiceService {
                 .at(ResourceScope.tenant(tenantId))
                 .target("partner_delivery_invoice_line", lineId)
                 .because(reason)
-                .changed(Map.of("resolution", resolution, "varianceMinor", String.valueOf(line.varianceMinor())))
+                // Staff 9.3a: "resolution" genuinely moves -- resolveVarianceLine's
+                // own WHERE clause matches only a VARIANCE line with no prior
+                // resolution.
+                .changed(ChangeDocuments.diff(
+                        Map.of("varianceMinor", String.valueOf(line.varianceMinor())),
+                        Map.of("resolution", resolution, "varianceMinor", String.valueOf(line.varianceMinor()))))
                 .usingCapability("partner.invoice.manage")
                 .correlatedBy("partner-invoice")
                 .occurredAt(clock.instant())
@@ -371,7 +393,9 @@ public class PartnerInvoiceService {
                     .at(ResourceScope.tenant(tenantId))
                     .target("shipment", shipmentId)
                     .because(reason)
-                    .changed(Map.of())
+                    // Staff 9.3a: a fresh acknowledgement fact with no fields
+                    // at all, no prior state to diff against.
+                    .changed(ChangeDocuments.created(Map.of()))
                     .usingCapability("partner.invoice.manage")
                     .correlatedBy("partner-invoice")
                     .occurredAt(clock.instant())
@@ -395,11 +419,11 @@ public class PartnerInvoiceService {
                 .at(ResourceScope.tenant(tenantId))
                 .target("partner_delivery_invoice_line", line.get().id())
                 .because(reason)
-                .changed(Map.of(
-                        "shipmentId",
-                        shipmentId,
-                        "previousStatus",
-                        line.get().matchStatus().name()))
+                // Staff 9.3a: "status" genuinely moves -- line (read above,
+                // before reconcileLine) already holds the prior value.
+                .changed(ChangeDocuments.diff(
+                        Map.of("status", line.get().matchStatus().name()),
+                        Map.of("status", "MATCHED", "shipmentId", shipmentId)))
                 .usingCapability("partner.invoice.manage")
                 .correlatedBy("partner-invoice")
                 .occurredAt(clock.instant())

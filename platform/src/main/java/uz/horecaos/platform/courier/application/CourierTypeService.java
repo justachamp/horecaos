@@ -118,7 +118,9 @@ public class CourierTypeService {
                 .at(ResourceScope.tenant(tenantId))
                 .target("CourierType", typeId)
                 .because(reason)
-                .changed(Map.of("status", "ARCHIVED"))
+                // Staff 9.3a: "status" genuinely moves -- archiveType's own
+                // guard above proved this type was active a moment ago.
+                .changed(ChangeDocuments.change("status", "ACTIVE", "ARCHIVED"))
                 .correlatedBy(correlationId())
                 .occurredAt(clock.instant())
                 .build());
@@ -142,17 +144,21 @@ public class CourierTypeService {
                 .at(ResourceScope.tenant(tenantId))
                 .target("CourierAdjustmentReason", reasonId)
                 .because(reason)
-                .changed(Map.of(
-                        "status",
-                        "ARCHIVED",
-                        // Not "note" or "comment" -- both are protected terms
-                        // ChangeDocuments.isProtected substring-matches, which would
-                        // redact this whole explanation to "[redacted]" the same way
-                        // it caught "startingMinuteOffset" below (it contains "tin",
-                        // as does this word if misspelled "notation"/"annotation").
-                        "impact",
-                        "a rule-wired reason stops evaluating immediately; AdjustmentRuleEvaluator "
-                                + "only reads ACTIVE reasons"))
+                // Staff 9.3a: "status" genuinely moves -- archiveAdjustmentReason's
+                // own guard above proved this reason was active a moment ago.
+                .changed(ChangeDocuments.diff(
+                        Map.of("status", "ACTIVE"),
+                        Map.of(
+                                "status",
+                                "ARCHIVED",
+                                // Not "note" or "comment" -- both are protected terms
+                                // ChangeDocuments.isProtected substring-matches, which would
+                                // redact this whole explanation to "[redacted]" the same way
+                                // it caught "startingMinuteOffset" below (it contains "tin",
+                                // as does this word if misspelled "notation"/"annotation").
+                                "impact",
+                                "a rule-wired reason stops evaluating immediately; AdjustmentRuleEvaluator "
+                                        + "only reads ACTIVE reasons")))
                 .correlatedBy(correlationId())
                 .occurredAt(clock.instant())
                 .build());
