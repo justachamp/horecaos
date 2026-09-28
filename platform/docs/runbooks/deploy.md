@@ -581,24 +581,33 @@ mentions nothing about secrets until nine `Caused by` lines down.
 RustFS replaces MinIO as of ADR 0135; the AWS CLI replaces `mc`, and there is
 no `--ignore-existing` flag, so idempotency is a `head-bucket` check:
 
+Each bucket is created with its *own* scoped pair — the backup credential
+gets `AccessDenied` on `horecaos-media` and the media credential gets
+`AccessDenied` on `horecaos-backups`, by design (see the paragraph above):
+
 ```bash
 qc up -d object-store
 qc run --rm --no-TTY ops bash -c '
-  export AWS_ACCESS_KEY_ID="$(bao-get.sh production/object_storage/platform/backup-access-key)"
-  export AWS_SECRET_ACCESS_KEY="$(bao-get.sh production/object_storage/platform/backup-secret-key)"
   export AWS_EC2_METADATA_DISABLED=true
   export AWS_DEFAULT_REGION=us-east-1
   ep="--endpoint-url http://minio:9000"
+
+  export AWS_ACCESS_KEY_ID="$(bao-get.sh production/object_storage/platform/media-access-key)"
+  export AWS_SECRET_ACCESS_KEY="$(bao-get.sh production/object_storage/platform/media-secret-key)"
+  aws $ep s3api head-bucket --bucket horecaos-media 2>/dev/null \
+    || aws $ep s3api create-bucket --bucket horecaos-media
+  aws $ep s3api head-bucket --bucket horecaos-media
+
+  export AWS_ACCESS_KEY_ID="$(bao-get.sh production/object_storage/platform/backup-access-key)"
+  export AWS_SECRET_ACCESS_KEY="$(bao-get.sh production/object_storage/platform/backup-secret-key)"
   aws $ep s3api head-bucket --bucket horecaos-backups 2>/dev/null \
     || aws $ep s3api create-bucket --bucket horecaos-backups
   aws $ep s3api put-bucket-versioning --bucket horecaos-backups \
     --versioning-configuration Status=Enabled
-  aws $ep s3api head-bucket --bucket horecaos-media 2>/dev/null \
-    || aws $ep s3api create-bucket --bucket horecaos-media
-  aws $ep s3 ls'
+  aws $ep s3api head-bucket --bucket horecaos-backups'
 ```
 
-**Check:** both buckets listed, and
+**Check:** both `head-bucket` calls above exit zero, and
 `aws $ep s3api get-bucket-versioning --bucket horecaos-backups` reports
 `"Status": "Enabled"`. Without versioning a single mistaken `aws s3 rm`
 removes every backup with no undo.
