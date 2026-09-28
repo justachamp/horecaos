@@ -1,3 +1,5 @@
+import { contrastRatio } from '../color/contrast';
+
 /**
  * The dataviz palette's own colour math (wave T09, IA X.19) — `--q-viz-*` in
  * `tokens.css` gives every chart its fills; this module gives every chart the
@@ -8,7 +10,7 @@
  * shortcut this file is taking alone — `frontend/design-tokens/tokens.css`
  * itself is vendored into three applications and "verified by eye, not by a
  * script" for two of them (frontend/README.md). A mismatch here would fail
- * {@link contrastRatio}'s own spec, not silently drift.
+ * `contrastRatio`'s own spec, not silently drift.
  *
  * **Categorical order is fixed and never cycled past six slots** — the
  * data-viz procedure's own rule: a seventh series folds into the neutral
@@ -16,7 +18,13 @@
  * series. **Sequential is one hue**, light→dark, for a continuous magnitude
  * (the demand heatmap, `heatmap-chart.ts`) or an ordinal tier (the SLA
  * histogram's six ordered buckets, `histogram-chart.ts`).
+ *
+ * **The WCAG contrast formula itself now lives in `../color/contrast.ts`**
+ * (gap map row `X.39`), shared with the highlight-colour legibility check —
+ * re-exported here so this module's own existing `contrastRatio` import
+ * sites, and `chart-colors.spec.ts`, need no change.
  */
+export { contrastRatio };
 
 /** How many distinct categorical hues `tokens.css` defines before folding to "other". */
 export const CHART_CATEGORICAL_SLOTS = 6;
@@ -100,49 +108,3 @@ export const CHART_SURFACE_LIGHT_HEX = '#ffffff';
 
 /** `--q-inverse` — the console's one dark surface (nav rail, toasts, tooltips), not a page background. */
 export const CHART_SURFACE_DARK_HEX = '#161616';
-
-interface Rgb {
-  readonly r: number;
-  readonly g: number;
-  readonly b: number;
-}
-
-function hexToRgb(hex: string): Rgb {
-  const match = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex);
-  if (!match) {
-    throw new Error(`not a 6-digit hex colour: ${hex}`);
-  }
-  return {
-    r: parseInt(match[1], 16),
-    g: parseInt(match[2], 16),
-    b: parseInt(match[3], 16),
-  };
-}
-
-function srgbChannelToLinear(channel255: number): number {
-  const channel = channel255 / 255;
-  return channel <= 0.04045 ? channel / 12.92 : Math.pow((channel + 0.055) / 1.055, 2.4);
-}
-
-function relativeLuminance(hex: string): number {
-  const { r, g, b } = hexToRgb(hex);
-  const [red, green, blue] = [r, g, b].map(srgbChannelToLinear);
-  return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
-}
-
-/**
- * WCAG 2.x contrast ratio between two sRGB hex colours — `(L1 + 0.05) / (L2 +
- * 0.05)` over relative luminance, order-independent, always ≥ 1. This is the
- * one check `chart-colors.spec.ts` runs on the palette; the fuller CVD
- * simulation (adjacent-pair ΔE, the unsimulated-vision floor) was run once
- * against the platform's own data-viz validator while choosing these hexes
- * (see `tokens.css`'s own comment on the block) rather than re-implemented
- * here as a second, competing colour-science engine.
- */
-export function contrastRatio(hexA: string, hexB: string): number {
-  const luminanceA = relativeLuminance(hexA);
-  const luminanceB = relativeLuminance(hexB);
-  const lighter = Math.max(luminanceA, luminanceB);
-  const darker = Math.min(luminanceA, luminanceB);
-  return (lighter + 0.05) / (darker + 0.05);
-}

@@ -51,6 +51,7 @@ import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.telemetry.api.RealtimeSignal;
 import uz.horecaos.platform.telemetry.api.RealtimeSignalPublisher;
+import uz.horecaos.platform.telemetry.api.StreamChannel;
 import uz.horecaos.platform.tenancy.api.PolicyKey;
 import uz.horecaos.platform.tenancy.api.PolicyResolver;
 import uz.horecaos.platform.tenancy.api.ResolvedPolicy;
@@ -220,6 +221,15 @@ class ManualExternalBookingServiceTests {
         assertThat(audit.facts)
                 .extracting(AuditFact::actionCode)
                 .containsExactly("fulfillment.dispatch.external-book-accept");
+
+        // Row 3.1: an operator's accept is exactly the ADR 0045 board-changing
+        // event ManualDispatchService's own in-house assign already publishes
+        // for — the dispatch board must not need to wait 10s to notice a
+        // successful external booking either.
+        assertThat(realtime.signals).hasSize(1);
+        RealtimeSignal signal = realtime.signals.getFirst();
+        assertThat(signal.channel()).isEqualTo(StreamChannel.DISPATCH_BOARD);
+        assertThat(signal.resourceId()).isEqualTo(plan.id());
     }
 
     @Test

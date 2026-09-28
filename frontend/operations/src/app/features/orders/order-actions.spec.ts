@@ -57,6 +57,10 @@ describe('actionLabel', () => {
     );
   });
 
+  it('labels RESOLVE (gap map row 1.1e) with the amendment history’s own word, never falling to the raw code', () => {
+    expect(actionLabel(action({ action: 'RESOLVE' }), null, t, statusLabel)).toBe('Resolve');
+  });
+
   it('labels an advance by its target status, not the status’s own noun', () => {
     expect(
       actionLabel(action({ action: 'ADVANCE', targetStatus: 'PREPARING' }), null, t, statusLabel),

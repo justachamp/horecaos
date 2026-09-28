@@ -3,6 +3,7 @@ package uz.horecaos.platform.ordering.web;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
 import java.time.Duration;
@@ -273,11 +274,125 @@ class OperationsOrderControllerAmendmentsHttpTests {
         assertThat(result.getResponse().getStatus()).isEqualTo(400);
     }
 
+    /**
+     * Gap map row 1.1e: {@code OrderActionsPolicy}'s five-argument {@code
+     * availableFor} overload emits {@code RESOLVE} on the order-level {@code
+     * actions[]} whenever an open amendment is blocked on the operator. The
+     * amendment row is seeded directly (mirroring {@link #seedOrder}'s own
+     * bespoke SQL) rather than proposed through a real repricing command,
+     * because {@code OrderAmendmentAndOutcomeTests} and {@link
+     * #changeContactAppliesOverHttp} already exercise {@code propose}'s own
+     * pricing path end to end — what this test isolates is the read path this
+     * wave adds: {@code GET .../orders/{orderId}} answering with {@code
+     * RESOLVE} once {@code amendmentAwaitingOperatorFor} says one is waiting.
+     */
+    @Test
+    @DisplayName("GET the order carries RESOLVE in actions[] once an amendment awaits the operator's confirmation")
+    void actionsCarriesResolveForAnOrderWithAnAmendmentAwaitingConfirmation() throws Exception {
+        UUID orderId = seedOrder(LOCATION_A, "AMD-7", "CONFIRMED");
+        seedOpenAmendment(orderId, "amend-resolve-1", 5000, false);
+
+        MvcResult result = mvc.perform(get(orderPath(LOCATION_A, orderId)).with(tokenFor(AMENDER)))
+                .andReturn();
+
+        assertThat(result.getResponse().getStatus()).isEqualTo(200);
+        assertThat(result.getResponse().getContentAsString()).contains("\"action\":\"RESOLVE\"");
+    }
+
+    /** The approval-pending half of the same predicate: no increase, but a decrease still awaiting ADR 0027. */
+    @Test
+    @DisplayName("GET the order carries RESOLVE in actions[] once an amendment awaits an ADR 0027 approval")
+    void actionsCarriesResolveForAnOrderWithAnAmendmentAwaitingApproval() throws Exception {
+        UUID orderId = seedOrder(LOCATION_A, "AMD-8", "CONFIRMED");
+        seedOpenAmendment(orderId, "amend-resolve-2", 0, true);
+
+        MvcResult result = mvc.perform(get(orderPath(LOCATION_A, orderId)).with(tokenFor(AMENDER)))
+                .andReturn();
+
+        assertThat(result.getResponse().getStatus()).isEqualTo(200);
+        assertThat(result.getResponse().getContentAsString()).contains("\"action\":\"RESOLVE\"");
+    }
+
+    @Test
+    @DisplayName("GET the order carries no RESOLVE while nothing is open on it")
+    void actionsCarriesNoResolveWithNoOpenAmendment() throws Exception {
+        UUID orderId = seedOrder(LOCATION_A, "AMD-9", "CONFIRMED");
+
+        MvcResult result = mvc.perform(get(orderPath(LOCATION_A, orderId)).with(tokenFor(AMENDER)))
+                .andReturn();
+
+        assertThat(result.getResponse().getStatus()).isEqualTo(200);
+        assertThat(result.getResponse().getContentAsString()).doesNotContain("\"action\":\"RESOLVE\"");
+    }
+
+    /**
+     * The board's own batched path ({@code
+     * JdbcOrderAmendmentStore#ordersAwaitingOperatorResolution}) rather than
+     * the detail read's single-order one above — the two must never disagree
+     * about whether this order's amendment is waiting.
+     */
+    @Test
+    @DisplayName("the order board carries RESOLVE for a row with an amendment awaiting the operator")
+    void boardCarriesResolveForAnOrderWithAnAmendmentAwaitingTheOperator() throws Exception {
+        UUID orderId = seedOrder(LOCATION_A, "AMD-10", "CONFIRMED");
+        seedOpenAmendment(orderId, "amend-resolve-3", 5000, false);
+
+        MvcResult result =
+                mvc.perform(get(boardPath(LOCATION_A)).with(tokenFor(AMENDER))).andReturn();
+
+        assertThat(result.getResponse().getStatus()).isEqualTo(200);
+        assertThat(result.getResponse().getContentAsString()).contains("\"action\":\"RESOLVE\"");
+    }
+
     // ------------------------------------------------------------------ fixtures
 
     private String amendmentsPath(UUID locationId, UUID orderId) {
         return "/api/v1/tenants/" + TENANT + "/brands/" + BRAND + "/locations/" + locationId + "/orders/" + orderId
                 + "/amendments";
+    }
+
+    private String orderPath(UUID locationId, UUID orderId) {
+        return "/api/v1/tenants/" + TENANT + "/brands/" + BRAND + "/locations/" + locationId + "/orders/" + orderId;
+    }
+
+    private String boardPath(UUID locationId) {
+        return "/api/v1/tenants/" + TENANT + "/brands/" + BRAND + "/locations/" + locationId + "/orders/board";
+    }
+
+    /**
+     * Inserts an open ({@code PRICED}) amendment directly, mirroring {@link
+     * #seedOrder}'s own bespoke SQL — the amendment machinery's own pricing
+     * path is exercised elsewhere ({@code OrderAmendmentAndOutcomeTests},
+     * {@link #changeContactAppliesOverHttp}); this seeds exactly the state
+     * {@code actionsFor}/{@code amendmentAwaitingOperatorFor} read.
+     *
+     * @param deltaTotalMinor a positive value leaves {@code
+     *                        confirmation_attested_at} null (awaiting the
+     *                        customer's recorded agreement); zero with {@code
+     *                        requiresApproval} leaves {@code
+     *                        approval_request_id} null (awaiting ADR 0027)
+     */
+    private void seedOpenAmendment(
+            UUID orderId, String idempotencyKey, long deltaTotalMinor, boolean requiresApproval) {
+        Instant now = Instant.now();
+        jdbc.sql("""
+                        INSERT INTO ordering.order_amendments (id, tenant_id, order_id, status,
+                            base_revision, delta_total_minor, requires_approval, idempotency_key,
+                            expires_at, created_by_actor_type, created_by_actor_id, version,
+                            created_at, updated_at)
+                        VALUES (:id, :t, :orderId, 'PRICED', 1, :delta, :requiresApproval, :key,
+                            :expires, 'USER', :actor, 1, :now, :now)
+                        """)
+                .param("id", UUID.randomUUID())
+                .param("t", TENANT)
+                .param("orderId", orderId)
+                .param("delta", deltaTotalMinor)
+                .param("requiresApproval", requiresApproval)
+                .param("key", idempotencyKey)
+                .param("expires", now.plus(Duration.ofMinutes(15)).atOffset(ZoneOffset.UTC))
+                .param("actor", AMENDER)
+                .param("now", now.atOffset(ZoneOffset.UTC))
+                .update();
     }
 
     private UUID seedOrder(UUID locationId, String number, String status) {

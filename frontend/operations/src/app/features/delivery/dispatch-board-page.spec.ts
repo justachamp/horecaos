@@ -7,6 +7,7 @@ import { ApiClient } from '../../core/api/api-client';
 import { LocationScope } from '../../core/api/operations-paths';
 import { CurrentLocation } from '../../core/auth/current-location';
 import { I18n } from '../../core/i18n/i18n';
+import { RealtimeClient, RealtimeFrame } from '../../core/realtime/realtime-client';
 import { CouriersApi, RosterEntryResponse } from '../couriers/couriers-api';
 import { DispatchApi, ExceptionResponse, PlanQueueResponse } from './dispatch-api';
 import { DispatchBoardPage } from './dispatch-board-page';
@@ -115,6 +116,24 @@ describe('DispatchBoardPage', () => {
     externalBook: ReturnType<typeof vi.fn>;
     cancelShipment: ReturnType<typeof vi.fn>;
   };
+  /** Every listener `RealtimeClient.onFrame` was handed — the fake stub below never fires one on its own; a test dispatches a frame by calling one of these directly. */
+  let frameListeners: Array<(frame: RealtimeFrame) => void>;
+  let realtimeState: ReturnType<typeof signal<'connecting' | 'open' | 'reconnecting' | 'unavailable'>>;
+
+  function fakeRealtimeClient(): {
+    onFrame: ReturnType<typeof vi.fn>;
+    state: typeof realtimeState;
+  } {
+    frameListeners = [];
+    realtimeState = signal('open');
+    return {
+      onFrame: vi.fn((listener: (frame: RealtimeFrame) => void) => {
+        frameListeners.push(listener);
+        return () => undefined;
+      }),
+      state: realtimeState,
+    };
+  }
 
   async function render(
     plans: readonly PlanQueueResponse[] = [UNASSIGNED_PLAN],
@@ -144,6 +163,7 @@ describe('DispatchBoardPage', () => {
         { provide: DispatchApi, useValue: dispatchApi },
         { provide: CouriersApi, useValue: { roster: vi.fn().mockResolvedValue(fleet) } },
         { provide: ApiClient, useValue: { get: () => of({ value: [], version: null }) } },
+        { provide: RealtimeClient, useValue: fakeRealtimeClient() },
       ],
     }).compileComponents();
     TestBed.inject(I18n).setLocale('en');
@@ -202,6 +222,76 @@ describe('DispatchBoardPage', () => {
     );
   });
 
+  // -------------------------------------------------- row 3.1: ADR 0045 accelerator
+
+  it('refreshes at once on a DISPATCH_BOARD frame, the ADR 0045 accelerator', async () => {
+    await render();
+    dispatchApi.queue.mockClear();
+
+    for (const listener of frameListeners) {
+      listener({
+        kind: 'signal',
+        channel: 'dispatch_board',
+        scope: 'LOCATION:l1',
+        resourceType: 'DeliveryPlan',
+        resourceId: 'plan-1',
+        version: 2,
+        occurredAt: '2026-09-25T09:00:00Z',
+      });
+    }
+    await flushMicrotasks();
+
+    expect(dispatchApi.queue).toHaveBeenCalledWith(SCOPE);
+  });
+
+  it('ignores a frame on a channel this board does not care about', async () => {
+    await render();
+    dispatchApi.queue.mockClear();
+
+    for (const listener of frameListeners) {
+      listener({
+        kind: 'signal',
+        channel: 'kitchen_board',
+        scope: 'LOCATION:l1',
+        resourceType: 'KitchenTicket',
+        resourceId: 'ticket-1',
+        version: 2,
+        occurredAt: '2026-09-25T09:00:00Z',
+      });
+    }
+    await flushMicrotasks();
+
+    expect(dispatchApi.queue).not.toHaveBeenCalled();
+  });
+
+  it('resumes without gaps: a resync frame (a reconnect after a drop) re-reads the whole board', async () => {
+    await render();
+    dispatchApi.queue.mockClear();
+
+    for (const listener of frameListeners) {
+      listener({ kind: 'resync' });
+    }
+    await flushMicrotasks();
+
+    expect(dispatchApi.queue).toHaveBeenCalledWith(SCOPE);
+  });
+
+  it('shows the connection-state banner’s reconnecting text when the transport degrades', async () => {
+    await render();
+    realtimeState.set('reconnecting');
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).toContain('Reconnecting');
+  });
+
+  it('stamps the board with when it was last refreshed', async () => {
+    await render();
+
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('[data-testid="dispatch-updated-at"]'),
+    ).not.toBeNull();
+  });
+
   it('shows the denied state when the location grant is missing', async () => {
     await TestBed.configureTestingModule({
       imports: [DispatchBoardPage],
@@ -220,6 +310,7 @@ describe('DispatchBoardPage', () => {
         },
         { provide: CouriersApi, useValue: { roster: vi.fn() } },
         { provide: ApiClient, useValue: { get: () => of({ value: [], version: null }) } },
+        { provide: RealtimeClient, useValue: fakeRealtimeClient() },
       ],
     }).compileComponents();
     TestBed.inject(I18n).setLocale('en');

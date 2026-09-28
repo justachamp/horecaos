@@ -27,6 +27,7 @@ import uz.horecaos.platform.ordering.api.OrderCounts;
 import uz.horecaos.platform.ordering.api.OrderCountsQuery;
 import uz.horecaos.platform.ordering.api.PaymentIntentPort;
 import uz.horecaos.platform.ordering.domain.DeliveryDestination;
+import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderAmendmentStore;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderProcessStore;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore.CustomerSnapshotRow;
@@ -74,16 +75,19 @@ public class OrderQueryService implements OrderCountsQuery {
     private final JdbcOrderProcessStore processes;
     private final PaymentIntentPort payments;
     private final ActiveCourierAssignmentsPort courierAssignments;
+    private final JdbcOrderAmendmentStore amendments;
     private final FieldProtection protection;
     private final ObjectMapper objectMapper;
     private final AuditRecorder audit;
     private final Clock clock;
 
+    @SuppressWarnings("checkstyle:ParameterNumber")
     public OrderQueryService(
             JdbcOrderStore orders,
             JdbcOrderProcessStore processes,
             PaymentIntentPort payments,
             ActiveCourierAssignmentsPort courierAssignments,
+            JdbcOrderAmendmentStore amendments,
             FieldProtection protection,
             ObjectMapper objectMapper,
             AuditRecorder audit,
@@ -92,6 +96,7 @@ public class OrderQueryService implements OrderCountsQuery {
         this.processes = processes;
         this.payments = payments;
         this.courierAssignments = courierAssignments;
+        this.amendments = amendments;
         this.protection = protection;
         this.objectMapper = objectMapper;
         this.audit = audit;
@@ -415,7 +420,7 @@ public class OrderQueryService implements OrderCountsQuery {
                     .orElseThrow(UnknownCursorException::new);
         }
         List<JdbcOrderStore.OrderBoardRow> rows = orders.listForLocation(query, before, cursorOrderId, limit);
-        return withCourierAssignments(query.tenantId(), rows);
+        return withAmendmentAwaitingOperator(query.tenantId(), withCourierAssignments(query.tenantId(), rows));
     }
 
     /**
@@ -437,6 +442,30 @@ public class OrderQueryService implements OrderCountsQuery {
         }
         return rows.stream()
                 .map(row -> row.withCourierId(courierByOrder.get(row.order().orderId())))
+                .toList();
+    }
+
+    /**
+     * Fills in {@link JdbcOrderStore.OrderBoardRow#amendmentAwaitingOperator()}
+     * for a page of board rows (gap map row 1.1e's {@code RESOLVE} action):
+     * one round trip through {@link JdbcOrderAmendmentStore
+     * #ordersAwaitingOperatorResolution} rather than a query per row, exactly
+     * the same discipline {@link #withCourierAssignments} already applies for
+     * the courier column.
+     */
+    private List<JdbcOrderStore.OrderBoardRow> withAmendmentAwaitingOperator(
+            UUID tenantId, List<JdbcOrderStore.OrderBoardRow> rows) {
+        if (rows.isEmpty()) {
+            return rows;
+        }
+        Set<UUID> orderIds = rows.stream().map(row -> row.order().orderId()).collect(Collectors.toSet());
+        Set<UUID> awaiting = amendments.ordersAwaitingOperatorResolution(tenantId, orderIds);
+        if (awaiting.isEmpty()) {
+            return rows;
+        }
+        return rows.stream()
+                .map(row -> row.withAmendmentAwaitingOperator(
+                        awaiting.contains(row.order().orderId())))
                 .toList();
     }
 
@@ -500,6 +529,22 @@ public class OrderQueryService implements OrderCountsQuery {
     @Transactional(readOnly = true)
     public @Nullable UUID courierIdFor(UUID tenantId, UUID orderId) {
         return courierAssignments.assignedCouriers(tenantId, Set.of(orderId)).get(orderId);
+    }
+
+    /**
+     * Whether this order carries an open amendment blocked on the operator
+     * right now — the detail-screen counterpart to {@link #forLocation}'s
+     * batched {@link JdbcOrderStore.OrderBoardRow#amendmentAwaitingOperator()}
+     * (gap map row 1.1e). The detail read's own {@code actions[]} needs this
+     * single-order answer too, so {@code OrderActionsPolicy}'s {@code
+     * RESOLVE} branch never disagrees with the board about whether this
+     * order has an amendment waiting.
+     */
+    @Transactional(readOnly = true)
+    public boolean amendmentAwaitingOperatorFor(UUID tenantId, UUID orderId) {
+        return amendments
+                .ordersAwaitingOperatorResolution(tenantId, Set.of(orderId))
+                .contains(orderId);
     }
 
     /** The transition log: the answer to "why is this order in this state". */

@@ -1332,7 +1332,7 @@ public class JdbcOrderStore {
                 .param("beforeId", beforeId == null ? null : beforeId.toString())
                 .param("limit", limit)
                 .query((row, number) ->
-                        new OrderBoardRow(mapOrder(row, number), row.getString("process_attention"), null))
+                        new OrderBoardRow(mapOrder(row, number), row.getString("process_attention"), null, false))
                 .list();
     }
 
@@ -2531,15 +2531,35 @@ public class JdbcOrderStore {
      *                         store's to join — and filled in afterward by
      *                         {@link uz.horecaos.platform.ordering.application.OrderQueryService#forLocation}
      *                         through {@link uz.horecaos.platform.fulfillment.api.ActiveCourierAssignmentsPort}
+     * @param amendmentAwaitingOperator this order carries an open amendment
+     *                         blocked on the operator — an increase awaiting
+     *                         the customer's recorded agreement, or an ADR
+     *                         0027 approval still pending (gap map row 1.1e's
+     *                         {@code RESOLVE} action). Always {@code false} as
+     *                         this class constructs the row — {@code
+     *                         ordering.order_amendments} is a read this store
+     *                         does not make for a board page — and filled in
+     *                         afterward by {@link
+     *                         uz.horecaos.platform.ordering.application.OrderQueryService#forLocation}
+     *                         through {@code JdbcOrderAmendmentStore
+     *                         #ordersAwaitingOperatorResolution}, exactly the
+     *                         same two-step shape {@code courierId} already
+     *                         has
      */
     public record OrderBoardRow(
             OrderRow order,
             @Nullable String processAttention,
-            @Nullable UUID courierId) {
+            @Nullable UUID courierId,
+            boolean amendmentAwaitingOperator) {
 
         /** {@link #courierId} filled in, once the caller has resolved it through the port. */
         public OrderBoardRow withCourierId(@Nullable UUID resolvedCourierId) {
-            return new OrderBoardRow(order, processAttention, resolvedCourierId);
+            return new OrderBoardRow(order, processAttention, resolvedCourierId, amendmentAwaitingOperator);
+        }
+
+        /** {@link #amendmentAwaitingOperator} filled in, once the caller has resolved it through the store. */
+        public OrderBoardRow withAmendmentAwaitingOperator(boolean resolvedAmendmentAwaitingOperator) {
+            return new OrderBoardRow(order, processAttention, courierId, resolvedAmendmentAwaitingOperator);
         }
     }
 

@@ -309,6 +309,7 @@
                       <q-color-input
                         [value]="editBrandColorPrimary() || '#000000'"
                         [ariaLabel]="'settings.salesChannels.field.brandColorPrimary' | t"
+                        [warnings]="brandColorPrimaryWarnings()"
                         (valueChange)="setBrandColorPrimary($event)"
                         data-testid="edit-color-primary"
                       />
@@ -324,6 +325,7 @@
                       <q-color-input
                         [value]="editBrandColorSecondary() || '#000000'"
                         [ariaLabel]="'settings.salesChannels.field.brandColorSecondary' | t"
+                        [warnings]="brandColorSecondaryWarnings()"
                         (valueChange)="setBrandColorSecondary($event)"
                         data-testid="edit-color-secondary"
                       />

@@ -4,8 +4,13 @@ import { RouterLink } from '@angular/router';
 import { ApiError } from '../../../core/api/problem-details';
 import { CurrentLocation } from '../../../core/auth/current-location';
 import { I18n } from '../../../core/i18n/i18n';
+import { MessageKey } from '../../../core/i18n/messages.en';
 import { TPipe } from '../../../core/i18n/t.pipe';
 import { ColorInput } from '../../../shared/ui/color-input';
+import {
+  HighlightContrastSurfaceId,
+  evaluateHighlightColourContrast,
+} from '../../../shared/ui/color/highlight-contrast';
 import { MatrixGrid } from '../../../shared/ui/matrix-grid/matrix-grid';
 import {
   MatrixBulkToggleEvent,
@@ -30,6 +35,14 @@ interface SocialLinkDraft {
   readonly platform: string;
   url: string;
 }
+
+/** {@link HighlightContrastSurfaceId} → its own translated label, for the contrast warning sentence below a `10.4a` colour field (gap map row `X.39`). */
+const CONTRAST_SURFACE_LABEL_KEYS: Readonly<Record<HighlightContrastSurfaceId, MessageKey>> = {
+  canvas: 'settings.salesChannels.field.color.surface.canvas',
+  surface1: 'settings.salesChannels.field.color.surface.surface1',
+  slaLateTint: 'settings.salesChannels.field.color.surface.slaLateTint',
+  slaAtRiskTint: 'settings.salesChannels.field.color.surface.slaAtRiskTint',
+};
 
 /** ADR 0036's closed system-type set. */
 export const CHANNEL_SYSTEM_TYPES: readonly string[] = [
@@ -126,6 +139,14 @@ export class SalesChannelsPage {
   protected readonly newSocialPlatform = signal<string>(CHANNEL_SOCIAL_PLATFORMS[0]);
   protected readonly newSocialUrl = signal('');
   protected readonly socialPlatforms = CHANNEL_SOCIAL_PLATFORMS;
+
+  /** Row `X.39`: inline legibility warnings for each `10.4a` swatch, recomputed as the operator picks or types. */
+  protected readonly brandColorPrimaryWarnings = computed(() =>
+    this.contrastWarningLabels(this.editBrandColorPrimary()),
+  );
+  protected readonly brandColorSecondaryWarnings = computed(() =>
+    this.contrastWarningLabels(this.editBrandColorSecondary()),
+  );
 
   /** {@link CHANNEL_SOCIAL_PLATFORMS} not already on the draft list. */
   protected readonly availableSocialPlatforms = computed(() => {
@@ -276,6 +297,24 @@ export class SalesChannelsPage {
 
   protected clearBrandColorSecondary(): void {
     this.editBrandColorSecondary.set('');
+  }
+
+  /**
+   * Row `X.39` — every reference surface `hex` fails WCAG AA's 4.5:1
+   * against, as a ready-to-render sentence. An unset swatch (`hex === ''`)
+   * warns about nothing: `evaluateHighlightColourContrast` already treats an
+   * incomplete draft the same way, this only short-circuits the i18n calls.
+   */
+  private contrastWarningLabels(hex: string): readonly string[] {
+    if (!hex) {
+      return [];
+    }
+    return evaluateHighlightColourContrast(hex).map((warning) =>
+      this.i18n.t('settings.salesChannels.field.color.contrastWarning', {
+        ratio: warning.ratio.toFixed(1),
+        surface: this.i18n.t(CONTRAST_SURFACE_LABEL_KEYS[warning.surfaceId]),
+      }),
+    );
   }
 
   protected addSocialLink(): void {
