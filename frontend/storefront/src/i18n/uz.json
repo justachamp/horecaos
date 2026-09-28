@@ -270,7 +270,8 @@
     "modifierOption": "Variant",
     "modifiersIncomplete": "Savatga qo'shishdan oldin yuqoridagi majburiy variantlarni tanlang.",
     "presetsTitle": "Izohlar",
-    "outOfSaleWindow": "Bu taom hozir sotuvda emas."
+    "outOfSaleWindow": "Bu taom hozir sotuvda emas.",
+    "lowStock": "Faqat {{count}} ta qoldi"
   },
   "terms": {
     "agreementTitle": "Ommaviy oferta bo'yicha shartnoma",
@@ -340,7 +341,9 @@
       "noLiveMenu": "Hozircha menyu mavjud emas.",
       "atCapacity": "Oshxona hozir band. Birozdan so'ng qayta urinib ko'ring.",
       "itemOutOfSaleWindow": "Bu taom hozir sotuvda emas.",
-      "presetNotOffered": "Bu izoh endi ushbu taom uchun taklif etilmaydi."
+      "presetNotOffered": "Bu izoh endi ushbu taom uchun taklif etilmaydi.",
+      "itemUnavailable": "Bu taom hozirgina tugab qoldi.",
+      "holdExpired": "Savatingiz uchun band qilingan vaqt tugadi. Buyurtmangizni qayta tekshirib, yana urinib ko'ring."
     }
   },
   "money": {

@@ -18,9 +18,14 @@ import type {
  * Replaces `CustomerUiService`, which called five legacy endpoints —
  * `/customers/ui/`, `/ui/categories/{id}/items`, `/ui/items/{id}`, a search and a
  * recently-searched list. The platform serves **one**: the whole published menu
- * for a location, unauthenticated, cached for thirty seconds with the
- * publication id as its ETag. Category browse, the product page and search are
- * all reads of that one document, so they are done here rather than over the
+ * for a location, unauthenticated. Rows 4.4c/4.4d folded live inventory
+ * availability into that same response, so the server no longer hands out a
+ * flat thirty-second cache window for it (ADR 0033) — it is revalidated
+ * against the origin on every read (a fresh `ETag` combining the publication
+ * id with an availability fingerprint) rather than replayed blind, so a stop
+ * taken between two reads is never served stale. Category browse, the product
+ * page and search are all reads of that one document, so they are done here
+ * rather than over the
  * wire.
  *
  * <h2>What the platform does not send, and what this refuses to invent</h2>
@@ -224,6 +229,7 @@ export class MenuService {
       price: variant.amountMinor ?? 0,
       price_without_discount: variant.amountMinor ?? 0,
       onSaleNow: variant.onSaleNow,
+      remainingQuantity: variant.remainingQuantity,
     }));
 
     return {
@@ -358,6 +364,13 @@ export interface PublishedVariant {
    * page must refuse adding a variant while this is false.
    */
   readonly onSaleNow: boolean;
+  /**
+   * Rows 4.4c/4.4d: set only for a QUANTITY-tracked item once remaining
+   * stock has dropped to a small displayed threshold, and never above it
+   * (ADR 0017's own "quantity need not be exposed publicly") -- omitted
+   * (null) is the ordinary case, not "unlimited".
+   */
+  readonly remainingQuantity: number | null;
 }
 
 export interface PublishedModifierGroup {

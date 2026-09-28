@@ -235,6 +235,14 @@ const REASON_MESSAGE_KEYS: Readonly<Record<string, string>> = {
   NO_TARIFF: 'errors.reason.deliveryFeeUnresolved',
   LOCATION_NOT_LOCATED: 'errors.reason.deliveryFeeUnresolved',
   // Cart / checkout refusals.
+  // Rows 4.4c/4.4d: CartService.requireAvailable's own codes (see its class
+  // doc), the exact reasons an inventory-aware putLine/price refusal carries
+  // -- the same vocabulary the operator console and CheckoutReservationStep's
+  // ItemsUnavailable already use, so a customer sees one honest sentence
+  // regardless of which of the two ways a dish became unavailable.
+  SOLD_OUT: 'errors.reason.itemUnavailable',
+  NOT_STOCKED_AT_LOCATION: 'errors.reason.itemUnavailable',
+  RESERVATION_NO_LONGER_HELD: 'errors.reason.holdExpired',
   NOT_SERVICEABLE: 'errors.reason.notServiceable',
   CHANNEL_NOT_SELLABLE: 'errors.reason.notServiceable',
   GUEST_ORDERS_NOT_ALLOWED: 'errors.reason.signInRequired',

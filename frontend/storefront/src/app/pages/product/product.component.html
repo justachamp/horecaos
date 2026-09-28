@@ -188,6 +188,11 @@
                   <span class="text-[13px] font-medium leading-snug text-text-primary">{{
                     variant.label
                   }}</span>
+                  @if (variant.remainingQuantity !== null) {
+                    <p class="text-[12px] text-amber-400" data-testid="product-low-stock">
+                      {{ 'product.lowStock' | t: { count: variant.remainingQuantity } }}
+                    </p>
+                  }
                   @if (qtyForVariant(variant.id); as qty) {
                     <div class="flex items-center gap-1.5">
                       <button

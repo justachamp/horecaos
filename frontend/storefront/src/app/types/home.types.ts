@@ -14,6 +14,13 @@ export interface MenuItemVariant {
    * (86'd): `MenuService.toMenuItem`'s own doc explains the difference.
    */
   onSaleNow: boolean;
+  /**
+   * Rows 4.4c/4.4d: a low remaining count for a QUANTITY-tracked item,
+   * shown only once stock has dropped to a small threshold -- never above
+   * it. `null` is the ordinary case (plenty of stock, or not
+   * QUANTITY-tracked at all), never "unlimited".
+   */
+  remainingQuantity: number | null;
 }
 
 /**

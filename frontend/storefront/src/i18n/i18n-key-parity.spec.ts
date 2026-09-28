@@ -74,6 +74,9 @@ describe('i18n content: every REASON_MESSAGE_KEYS target resolves in every local
   // sync with problem-details.spec.ts's own list rather than importing a
   // private map, so a new reason code needs a deliberate edit in both places.
   const REASON_CODES = [
+    'SOLD_OUT',
+    'NOT_STOCKED_AT_LOCATION',
+    'RESERVATION_NO_LONGER_HELD',
     'DELIVERY_FEE_UNRESOLVED',
     'DELIVERY_MINIMUM_BASKET_NOT_MET',
     'BELOW_MINIMUM_BASKET',

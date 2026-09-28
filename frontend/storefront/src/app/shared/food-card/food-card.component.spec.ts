@@ -74,6 +74,7 @@ function menuItem(overrides: Partial<MenuItem> = {}): MenuItem {
         price: 25000,
         price_without_discount: 25000,
         onSaleNow: true,
+        remainingQuantity: null,
       },
     ],
     modifierGroups: [],
