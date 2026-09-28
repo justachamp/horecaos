@@ -1371,6 +1371,43 @@ class KitchenExecutionTests {
     }
 
     @Test
+    @DisplayName("a refused kitchen proposal's audit fact records the order's real status, "
+            + "never the target it was refused")
+    void aRefusedProposalDoesNotFabricateAStatusTransitionInItsAudit() {
+        brandRule(null, burger.productId(), null, StationRole.GRILL);
+        UUID orderId = seedConfirmedOrder("A-067", null, null, null, burger);
+        TicketRow ticket = wiredTickets.open(TENANT, orderId, ReleaseMode.AUTO_ON_CONFIRM);
+        TicketItemRow item = store.itemsOf(TENANT, ticket.id()).getFirst();
+
+        // An operator cancelled the order while the ticket was on the line. There
+        // is no CANCELLED -> PREPARING edge, and there should not be one.
+        jdbc.sql("UPDATE ordering.orders SET status = 'CANCELLED', version = version + 1 " + "WHERE id = :id")
+                .param("id", orderId)
+                .update();
+
+        wiredTickets.start(TENANT, item.id(), "cook", null);
+
+        assertThat(statusOf(orderId))
+                .as("the order never moved; PREPARING was refused")
+                .isEqualTo(OrderStatus.CANCELLED);
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> statusChange = Objects.requireNonNull((Map<String, Object>) audit.facts.stream()
+                .filter(fact -> "ordering.order.kitchen-progress".equals(fact.actionCode())
+                        && fact.outcome() == AuditFact.Outcome.REJECTED)
+                .findFirst()
+                .orElseThrow()
+                .changeDocument()
+                .get("status"));
+
+        assertThat(statusChange.get("after"))
+                .as("the audit trail must not record a transition to PREPARING that the order "
+                        + "state machine refused; it must say what the order's status really is")
+                .isEqualTo(OrderStatus.CANCELLED.name())
+                .isNotEqualTo(OrderStatus.PREPARING.name());
+    }
+
+    @Test
     @DisplayName("a replayed advance against an order that has moved on produces one effect " + "and no false refusal")
     void aReplayedAdvanceProducesOneEffect() {
         brandRule(null, burger.productId(), null, StationRole.GRILL);
