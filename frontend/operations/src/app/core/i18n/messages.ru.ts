@@ -1590,6 +1590,7 @@ export const messagesRu: MessageCatalogue = {
   'settings.locations.content.title': 'Локализованный контент',
   'settings.locations.content.displayName': 'Название',
   'settings.locations.content.description': 'Описание',
+  'settings.locations.content.defaultMarker': 'по умолчанию',
   'settings.locations.empty': 'Филиалов пока нет.',
   'settings.locations.list.column.state': 'Состояние',
   'settings.locations.list.filterState': 'Состояние',

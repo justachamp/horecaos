@@ -5,8 +5,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { LocationScope } from '../../../core/api/operations-paths';
 import { CurrentLocation } from '../../../core/auth/current-location';
 import { I18n } from '../../../core/i18n/i18n';
+import { LocaleSet } from '../../../core/i18n/locale-set';
 import { LocationDetailPane } from './location-detail-pane';
 import {
+  LocationLocaleCode,
   LocationsApi,
   LocationView,
   ScheduleSummaryView,
@@ -79,6 +81,17 @@ class FakeCurrentLocation {
   ensureLoaded = vi.fn().mockResolvedValue(undefined);
 }
 
+/** Staff 10.12: a brand's resolved locale set, defaulting to the platform's own fallback triple. */
+class FakeLocaleSet {
+  readonly locales = signal<readonly LocationLocaleCode[]>(['ru', 'uz-Latn', 'en']);
+  readonly defaultLocale = signal<LocationLocaleCode>('ru');
+  readonly isConfigured = signal(false);
+  ensureLoaded = vi.fn().mockResolvedValue(undefined);
+  supports(locale: LocationLocaleCode): boolean {
+    return this.locales().includes(locale);
+  }
+}
+
 async function flushMicrotasks(): Promise<void> {
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
@@ -103,6 +116,7 @@ const SCHEDULES: readonly ScheduleSummaryView[] = [
 
 describe('LocationDetailPane', () => {
   let fixture: ComponentFixture<LocationDetailPane>;
+  let localeSet: FakeLocaleSet;
   let api: {
     profile: ReturnType<typeof vi.fn>;
     serviceSummary: ReturnType<typeof vi.fn>;
@@ -131,12 +145,14 @@ describe('LocationDetailPane', () => {
       bindSchedule: vi.fn().mockResolvedValue(undefined),
       replacePreparationBands: vi.fn().mockResolvedValue(undefined),
     };
+    localeSet = new FakeLocaleSet();
 
     await TestBed.configureTestingModule({
       imports: [LocationDetailPane],
       providers: [
         { provide: LocationsApi, useValue: api },
         { provide: CurrentLocation, useValue: new FakeCurrentLocation() },
+        { provide: LocaleSet, useValue: localeSet },
       ],
     }).compileComponents();
     TestBed.inject(I18n).setLocale('en');
@@ -352,6 +368,73 @@ describe('LocationDetailPane', () => {
         locales: [{ locale: 'ru', displayName: 'Филиал', description: 'Описание' }],
       }),
     );
+  });
+
+  /**
+   * Staff 10.12: `describePlace` replaces the branch's whole locale-content
+   * set with whatever `locales` carries. The editor only ever shows the
+   * brand's current set (`localeSet.locales()`) -- if a brand narrows its
+   * set after a branch already has content in a dropped locale, that content
+   * must survive an unrelated save (an address correction, say) rather than
+   * being silently wiped because the editor never showed it a box to keep it
+   * in.
+   */
+  it('hides a locale the brand no longer supports from editing, but never deletes its stored content on save', async () => {
+    localeSet.locales.set(['ru']);
+    localeSet.defaultLocale.set('ru');
+    const described: LocationView = {
+      ...LOCATION,
+      locales: [
+        { locale: 'ru', displayName: 'Филиал', description: 'Описание' },
+        { locale: 'uz-Latn', displayName: 'Filial', description: 'Tavsif' },
+        { locale: 'en', displayName: 'Branch', description: 'Description' },
+      ],
+    };
+    api.profile.mockResolvedValue(described);
+    fixture.componentRef.setInput('locationId', 'location-1-narrowed');
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    const editButton = fixture.nativeElement.querySelector('.primary') as HTMLButtonElement;
+    editButton.click();
+    fixture.detectChanges();
+
+    // Only the brand's one supported locale gets an editable row; uz-Latn
+    // and en are hidden from the form entirely.
+    const localeRows = fixture.nativeElement.querySelectorAll('.locale-row');
+    expect(localeRows.length).toBe(1);
+    const localeInputs = fixture.nativeElement.querySelectorAll(
+      '.locale-row input',
+    ) as NodeListOf<HTMLInputElement>;
+    expect(localeInputs[0].value).toBe('Филиал');
+
+    // An edit to the one visible locale, then save -- an address correction
+    // touches nothing about the hidden locales.
+    localeInputs[0].value = 'Филиал (обновлено)';
+    localeInputs[0].dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    const saveButton = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('.form__actions button'),
+    ).find((button) => button.textContent?.includes('Save')) as HTMLButtonElement;
+    saveButton.click();
+    await flushMicrotasks();
+
+    expect(api.describePlace).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        locales: expect.arrayContaining([
+          { locale: 'ru', displayName: 'Филиал (обновлено)', description: 'Описание' },
+          { locale: 'uz-Latn', displayName: 'Filial', description: 'Tavsif' },
+          { locale: 'en', displayName: 'Branch', description: 'Description' },
+        ]),
+      }),
+    );
+    const sentLocales = (
+      api.describePlace.mock.calls.at(-1)?.[1] as { locales: readonly unknown[] }
+    ).locales;
+    expect(sentLocales).toHaveLength(3);
   });
 
   /**
