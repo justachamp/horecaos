@@ -710,7 +710,11 @@ export class LocationDetailPane {
     this.rebindingMode.set(null);
     this.availableSchedules.set(null);
     this.editingBands.set(false);
-    await this.baseLocation.ensureLoaded();
+    // The brand's own locale set (Staff 10.12) is independent of the
+    // location scope, so it resolves alongside it rather than after it --
+    // without this, `knownLocales()`/`isDefaultLocale()` never advance past
+    // `LocaleSet`'s platform fallback (`locale-set.ts`'s own doc).
+    await Promise.all([this.baseLocation.ensureLoaded(), this.localeSet.ensureLoaded()]);
     const base = this.baseLocation.scope();
     if (!base) {
       this.denied.set(this.baseLocation.denied());

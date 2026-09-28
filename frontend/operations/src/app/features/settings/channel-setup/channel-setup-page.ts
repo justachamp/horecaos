@@ -114,7 +114,11 @@ export class ChannelSetupPage {
 
   private async load(): Promise<void> {
     this.loading.set(true);
-    await this.location.ensureLoaded();
+    // The brand's own locale set (Staff 10.12) is independent of the
+    // location scope, so it resolves alongside it rather than after it --
+    // without this, `locales()`/`isDefaultLocale()` never advance past
+    // `LocaleSet`'s platform fallback (`locale-set.ts`'s own doc).
+    await Promise.all([this.location.ensureLoaded(), this.localeSet.ensureLoaded()]);
     const scope = this.location.scope();
     if (!scope) {
       this.denied.set(this.location.denied());

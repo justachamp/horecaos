@@ -304,4 +304,100 @@ describe('ChannelSetupPage', () => {
       en: 'About us',
     });
   });
+
+  /**
+   * Batch 12 audit finding: `LocaleSet.locales()`/`defaultLocale()` stay on
+   * the platform fallback (`ru`/`uz-Latn`/`en`, default `ru`) until
+   * `ensureLoaded()` actually resolves -- exactly like the real service,
+   * whose `configured` signal starts `null` and only advances inside
+   * `load()`. This fake mirrors that timing (the signals only move once
+   * `ensureLoaded()` is both called and awaited), so the page fails this
+   * test if it ever reads `locales()`/`isDefaultLocale()` without first
+   * calling `LocaleSet.ensureLoaded()`.
+   */
+  it('loads the brand’s own configured locale set before the page editor renders', async () => {
+    const theChannel = channel({ systemType: 'WEB' });
+    const channelsApi = {
+      list: vi.fn().mockResolvedValue([theChannel]),
+      matrices: vi.fn().mockResolvedValue({ paymentMethods: {}, fulfillmentModes: {}, locationIds: [] }),
+    };
+    const setupApiLocal = {
+      hostname: vi
+        .fn()
+        .mockResolvedValue({ configured: false, hostname: null, verified: false, baseDomain: 'stores.horecaos.uz' }),
+      presentation: vi.fn().mockResolvedValue({ seoTitle: null, seoDescription: null, ogImageAssetId: null }),
+      currentPage: vi.fn().mockImplementation((_scope: unknown, _channelId: string, slug: string) =>
+        Promise.resolve(
+          slug === 'about'
+            ? {
+                published: true,
+                slug: 'about',
+                id: 'page-1',
+                version: 3,
+                contentsByLocale: { ru: 'О нас', 'uz-Latn': 'Biz haqimizda', en: 'About us' },
+                publishedBy: 'operator-1',
+                publishedAt: '2026-09-20T00:00:00Z',
+              }
+            : {
+                published: false,
+                slug,
+                id: null,
+                version: null,
+                contentsByLocale: {},
+                publishedBy: null,
+                publishedAt: null,
+              },
+        ),
+      ),
+      setSubdomain: vi.fn(),
+      publishPage: vi.fn(),
+    };
+    const localLocaleSet = new FakeLocaleSet();
+    localLocaleSet.ensureLoaded = vi.fn().mockImplementation(() => {
+      localLocaleSet.locales.set(['en', 'uz-Latn']);
+      localLocaleSet.defaultLocale.set('en');
+      return Promise.resolve();
+    });
+
+    await TestBed.configureTestingModule({
+      imports: [ChannelSetupPage],
+      providers: [
+        { provide: SalesChannelsApi, useValue: channelsApi },
+        { provide: ChannelSetupApi, useValue: setupApiLocal },
+        { provide: IntegrationsApi, useValue: { listInstallations: vi.fn().mockResolvedValue([]) } },
+        { provide: LocationsApi, useValue: { list: vi.fn().mockResolvedValue([]) } },
+        { provide: DineInApi, useValue: { settings: vi.fn().mockRejectedValue(new Error('not needed')) } },
+        { provide: LocaleSet, useValue: localLocaleSet },
+        {
+          provide: MediaApi,
+          useValue: { downloadUrl: vi.fn().mockReturnValue(of('https://cdn.example/og.jpg')) },
+        },
+        { provide: CurrentLocation, useValue: new FakeCurrentLocation() },
+        provideRouter([]),
+      ],
+    }).compileComponents();
+    TestBed.inject(I18n).setLocale('en');
+    const created = TestBed.createComponent(ChannelSetupPage);
+    created.componentRef.setInput('channelId', theChannel.id);
+    created.detectChanges();
+    await flushMicrotasks();
+    created.detectChanges();
+
+    expect(localLocaleSet.ensureLoaded).toHaveBeenCalled();
+
+    const host = created.nativeElement as HTMLElement;
+    (host.querySelector('[data-testid="edit-page-about"]') as HTMLButtonElement).click();
+    created.detectChanges();
+
+    // 'ru' is not in the brand's configured set and must not get a draft
+    // box, even though the live page already carries content in it.
+    const labels = host.querySelectorAll('.page-editor label');
+    expect(labels).toHaveLength(2);
+    const labelText = Array.from(labels).map((label) => label.textContent ?? '');
+    expect(labelText.some((text) => text.includes('ru'))).toBe(false);
+
+    // 'en' is the brand's real default and must carry the marker -- not 'ru'.
+    const englishLabel = labelText.find((text) => text.trim().startsWith('en'));
+    expect(englishLabel).toContain('default');
+  });
 });
