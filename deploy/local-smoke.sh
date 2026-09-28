@@ -218,6 +218,23 @@ bao_run() {
         | compose exec -T openbao sh -c 'BAO_TOKEN="$(cat)"; export BAO_TOKEN; "$@"' _ "$@"
 }
 
+# Writes a single value to a KV v2 path. The value travels over stdin behind
+# the root token, the same protection this file already gives ROOT_TOKEN
+# itself (see bao_run above): an argument to `docker compose exec` sits in
+# this host's own `ps` output for as long as the exec runs, and every value
+# put() writes -- generated in this shell or minted by RustFS's admin API,
+# such as the backup service account's own secret key -- is exactly the kind
+# of value that must never appear there, however briefly. Mirrors
+# infra/production/deploy.sh's own bao_put_value.
+bao_put_value() {
+    local path="$1" value="$2"
+    printf '%s\n%s' "${ROOT_TOKEN}" "${value}" \
+        | compose exec -T openbao sh -c '
+            IFS= read -r BAO_TOKEN; export BAO_TOKEN
+            IFS= read -r VALUE
+            bao kv put "$1" "value=${VALUE}"' _ "${path}"
+}
+
 say "Enabling the horecaos KV v2 mount, policies, and the platform AppRole"
 bao_run bao secrets enable -path=horecaos -version=2 kv >>"${LOG_FILE}" 2>&1 || true
 
@@ -256,7 +273,7 @@ OBJECT_STORE_ROOT_PW="$(rand)"
 HANDOVER_PEPPER="smoke-test-handover-pepper-not-for-any-other-use"
 KEK="smoke-test-key-encryption-key-not-for-any-other-use"
 
-put() { bao_run bao kv put "horecaos/${ENVIRONMENT}/$1" "value=$2" >>"${LOG_FILE}" 2>&1; }
+put() { bao_put_value "horecaos/${ENVIRONMENT}/$1" "$2" >>"${LOG_FILE}" 2>&1; }
 
 put database/platform/migrator-password  "${DB_MIGRATOR_PW}"
 put database/platform/app-password       "${DB_APP_PW}"
