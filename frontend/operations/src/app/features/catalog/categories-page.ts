@@ -132,8 +132,20 @@ export class CategoriesPage implements OnInit {
   protected readonly detailError = signal<string | null>(null);
   protected readonly uploadingPhoto = signal(false);
 
-  /** Row 10.12: the brand's own supported locales (default first), or the platform triple when unconfigured. */
-  protected readonly knownLocales = computed(() => this.localeSet.locales());
+  /**
+   * Row 10.12: the brand's own supported locales (default first), or the
+   * platform triple when unconfigured — always including `uz-Latn` even
+   * when the brand's own set does not, the same forced inclusion
+   * `product-editor-page.ts`'s own `editingLocales` applies to
+   * `CATALOG_DEFAULT_LOCALE`: `treeNodes()`'s label and every list read
+   * resolve a category's name in that locale specifically (this file's own
+   * doc), so a grid that could never write it would leave those reads
+   * permanently falling back to the bare code for a brand that dropped it.
+   */
+  protected readonly knownLocales = computed<readonly Locale[]>(() => {
+    const brandLocales = this.localeSet.locales();
+    return brandLocales.includes('uz-Latn') ? brandLocales : [...brandLocales, 'uz-Latn'];
+  });
   protected readonly localeContentDraft = signal<readonly LocaleContentDraft[]>([]);
   protected readonly savingContent = signal(false);
   protected readonly contentError = signal<string | null>(null);

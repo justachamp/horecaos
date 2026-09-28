@@ -285,7 +285,9 @@ describe('CategoriesPage', () => {
     // The fake, like LocaleSet's own real contract, returns the default
     // locale first — so `en` (the brand's chosen default here) is listed
     // before `ru`, its own canonical-order position notwithstanding.
-    localeSet.locales.set(['en', 'ru']);
+    // uz-Latn is included too (uz never dropping out of the grid is its own
+    // spec, below), so this one stays purely about ordering and the marker.
+    localeSet.locales.set(['en', 'ru', 'uz-Latn']);
     localeSet.defaultLocale.set('en');
     configure(
       {
@@ -314,16 +316,16 @@ describe('CategoriesPage', () => {
     await flushMicrotasks();
 
     // en is the brand's own default, so it sorts first even though ru comes
-    // first in LocaleSet's own canonical ordering.
+    // first in LocaleSet's own canonical ordering; uz-Latn — untranslated —
+    // trails with an empty field.
     const nameInputs = [
       ...host.querySelectorAll('.categories__locale-row input'),
     ] as HTMLInputElement[];
-    expect(nameInputs.map((el) => el.value)).toEqual(['Salads', 'Салаты']);
+    expect(nameInputs.map((el) => el.value)).toEqual(['Salads', 'Салаты', '']);
     const legends = [...host.querySelectorAll('.categories__locale-row legend')];
     expect(legends[0]!.textContent).toContain('Default');
     expect(legends[1]!.textContent).not.toContain('Default');
-    // uz never appears: the brand's own set is ru/en only.
-    expect(host.querySelector('[data-testid="category-locale-name-uz-Latn"]')).toBeNull();
+    expect(legends[2]!.textContent).not.toContain('Default');
   });
 
   it('saves every non-blank locale row and never touches a locale the brand no longer supports', async () => {
@@ -360,8 +362,13 @@ describe('CategoriesPage', () => {
     (host.querySelector('[data-testid="tree-node"]') as HTMLElement).click();
     await flushMicrotasks();
 
-    // Only one row is rendered — the brand's one supported locale.
-    expect(host.querySelectorAll('.categories__locale-row').length).toBe(1);
+    // Two rows: the brand's one supported locale, plus uz-Latn — forced in
+    // regardless (this file's own knownLocales doc) since the tree and
+    // every list read resolve a category's name in that locale specifically.
+    // en never appears: the brand narrowed its own set away from it, and it
+    // is not the forced one.
+    expect(host.querySelectorAll('.categories__locale-row').length).toBe(2);
+    expect(host.querySelector('[data-testid="category-locale-name-en"]')).toBeNull();
     const nameInput = host.querySelector(
       '[data-testid="category-locale-name-ru"]',
     ) as HTMLInputElement;
