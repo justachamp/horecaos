@@ -7,6 +7,8 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import javax.sql.DataSource;
@@ -103,7 +105,12 @@ class OrderCallProvenanceServiceTests {
         assertThat(audit.facts).hasSize(1);
         AuditFact fact = audit.facts.get(0);
         assertThat(fact.actionCode()).isEqualTo("ordering.order.call_provenance_recorded");
-        assertThat(fact.changeDocument()).containsEntry("callId", callId.toString());
+        // Staff 9.3a: ChangeDocuments.created(...) -- write-once by
+        // source_call_id IS NULL, so there is no prior call id to diff.
+        @SuppressWarnings("unchecked")
+        Map<String, Object> callIdChange = (Map<String, Object>)
+                Objects.requireNonNull(fact.changeDocument().get("callId"));
+        assertThat(callIdChange).containsEntry("before", null).containsEntry("after", callId.toString());
     }
 
     @Test

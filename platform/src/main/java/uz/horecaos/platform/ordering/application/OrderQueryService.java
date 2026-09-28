@@ -18,6 +18,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.fulfillment.api.ActiveCourierAssignmentsPort;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.ResourceScope;
@@ -322,14 +323,16 @@ public class OrderQueryService implements OrderCountsQuery {
      * itself) in the change document rather than in a second target type.
      */
     private void recordReveal(
-            String actionCode, OrderRow order, String purpose, String actorSubject, Map<String, Object> changed) {
+            String actionCode, OrderRow order, String purpose, String actorSubject, Map<String, Object> revealed) {
         audit.record(AuditFact.of(actionCode, AuditClass.SECURITY)
                 .by(ActorRef.user(actorSubject, null))
                 .at(ResourceScope.location(order.tenantId(), order.brandId(), order.locationId()))
                 .target("ordering.order", order.orderId())
                 .because(purpose)
                 .usingCapability(Capability.CUSTOMER_PII_REVEAL.code())
-                .changed(changed)
+                // Staff 9.3a: each reveal is its own append-only access-log
+                // fact, with no prior reveal to diff against.
+                .changed(ChangeDocuments.created(revealed))
                 .correlatedBy(order.orderId().toString())
                 .occurredAt(clock.instant())
                 .build());
