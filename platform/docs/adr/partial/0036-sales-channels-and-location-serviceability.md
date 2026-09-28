@@ -474,6 +474,14 @@ snapshotted by code.
       wired into `StorefrontCatalogQuery.menuFor` — the sparse-exclusion read path
       sits with the storefront menu query rather than with the channel registry,
       as this section originally said it should.
+- [x] Give `catalog.channel_offering_exclusions` a writer (wave P45, gap map
+      row 4.4b). `JdbcCatalogStore.excludeFromChannel`/`includeInChannel`
+      (idempotent against the table's two partial unique indexes),
+      `CatalogAuthoringService.setChannelOffering`/`bulkSetChannelOffering`,
+      and `CatalogAuthoringController`'s `PUT …/exclusions/variants/{variantId}`,
+      `POST …/exclusions/bulk` and `GET …/exclusions`, all `CATALOG_AUTHOR`/
+      `CATALOG_READ` at `BRAND` scope — an operator can now say a dish is not
+      on a given channel from the catalog screen.
 - [x] Have `CheckoutEligibilityGuard` consult the channel's payment-method
       matrix, not just `CartPaymentOptions.forCart`. Found while wiring the
       payment-method foreign key and reported rather than fixed at the time;

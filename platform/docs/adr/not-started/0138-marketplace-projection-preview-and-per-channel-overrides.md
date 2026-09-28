@@ -34,12 +34,6 @@
     so") and this record does not reopen that, but flags it as a product
     question for whenever aggregator onboarding volume justifies the
     investment (product, design).
-  - Whether `catalog.channel_offering_exclusions`' write endpoint (ADR 0036's
-    own unbuilt item, "wave P45") is built before or after this record's
-    preview read — this record's preview is correct either way (it reads
-    whatever exclusion rows exist, however they got written, including by
-    hand today) but the two are natural sequencing partners for whichever
-    wave picks either up (platform owner).
   - Per-channel image variant selection precedence when both a location and a
     channel each have an override for the same variant — this record decides
     channel-then-location precedence for price (matching ADR 0018's existing
@@ -74,8 +68,12 @@ at and ADR 0040 never wrote.
   `UNAVAILABLE`/`HIDDEN`, read live.
 - `catalog.channel_offering_exclusions` (ADR 0036, `V0020`): a sparse
   per-(channel, variant, optional location) suppression, default offered,
-  with a reader (`JdbcCatalogStore.channelExcludedVariantIds`) and, per that
-  record's own account, no writer anywhere yet.
+  with a reader (`JdbcCatalogStore.channelExcludedVariantIds`) and, since
+  wave P45, a writer too (`JdbcCatalogStore.excludeFromChannel`/
+  `includeInChannel`, exposed on `CatalogAuthoringController` as
+  `PUT …/exclusions/variants/{variantId}` and `POST …/exclusions/bulk`) — an
+  operator can already say a dish is not on a given channel from the catalog
+  screen.
 - `pricing.price_book_assignments` at `CHANNEL` scope (ADR 0018), resolved
   through `tenant.sales_channels.price_plane_channel_id` (ADR 0036) — fully
   built and already channel-aware.
