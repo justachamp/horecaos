@@ -1135,6 +1135,13 @@ export const messagesEn = {
   'settings.channelSetup.hostname.custom.label': 'Your own domain',
   'settings.channelSetup.hostname.custom.placeholder': 'orders.example.uz',
   'settings.channelSetup.hostname.claim': 'Claim',
+  'settings.channelSetup.hostname.challenge.instructions':
+    'Add this TXT record at your DNS provider, then verify:',
+  'settings.channelSetup.hostname.challenge.recordLabel': 'Record name',
+  'settings.channelSetup.hostname.challenge.valueLabel': 'Value',
+  'settings.channelSetup.hostname.challenge.copy': 'Copy',
+  'settings.channelSetup.hostname.challenge.copied': 'Copied',
+  'settings.channelSetup.hostname.challenge.rotate': 'Get a new code',
   'settings.channelSetup.presentation.title': 'Search preview',
   'settings.channelSetup.presentation.seoTitle': 'Title',
   'settings.channelSetup.presentation.seoDescription': 'Description',

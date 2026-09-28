@@ -4,6 +4,7 @@ import { firstValueFrom } from 'rxjs';
 import { ApiClient } from '../../../core/api/api-client';
 import { command } from '../../../core/api/idempotency';
 import { LocationScope } from '../../../core/api/operations-paths';
+import { ApiError } from '../../../core/api/problem-details';
 import { settingsPaths } from '../../../core/api/settings-paths';
 
 /** Mirrors `ChannelSetupController.HostnameView`. */
@@ -13,6 +14,14 @@ export interface ChannelHostnameView {
   readonly verified: boolean;
   /** The platform's own base domain a subdomain slug is composed under -- authoritative, always present. */
   readonly baseDomain: string;
+}
+
+/** Mirrors `ChannelSetupController.ChallengeView`. The DNS-TXT record an operator must publish to prove ownership of a custom hostname. */
+export interface ChannelHostnameChallengeView {
+  readonly recordName: string;
+  readonly recordType: string;
+  readonly token: string;
+  readonly issuedAt: string;
 }
 
 /** Mirrors `ChannelSetupController.PresentationView`. */
@@ -99,6 +108,39 @@ export class ChannelSetupApi {
     return firstValueFrom(
       this.api.post<null, ChannelHostnameView>(
         settingsPaths.channelHostnameVerify(scope, channelId),
+        command(null),
+        { params: { expectedVersion } },
+      ),
+    );
+  }
+
+  /**
+   * The DNS-TXT record to publish, or `null` when this channel has no
+   * custom hostname claimed -- including one that has claimed a
+   * platform-issued subdomain, which never gets a challenge.
+   */
+  async challenge(scope: LocationScope, channelId: string): Promise<ChannelHostnameChallengeView | null> {
+    try {
+      const result = await firstValueFrom(
+        this.api.get<ChannelHostnameChallengeView>(settingsPaths.channelHostnameChallenge(scope, channelId)),
+      );
+      return result.value;
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) {
+        return null;
+      }
+      throw error;
+    }
+  }
+
+  async rotateChallenge(
+    scope: LocationScope,
+    channelId: string,
+    expectedVersion: number,
+  ): Promise<ChannelHostnameChallengeView> {
+    return firstValueFrom(
+      this.api.post<null, ChannelHostnameChallengeView>(
+        settingsPaths.channelHostnameChallengeRotate(scope, channelId),
         command(null),
         { params: { expectedVersion } },
       ),

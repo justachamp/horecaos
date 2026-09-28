@@ -756,7 +756,16 @@ services:
     restart: "no"
     entrypoint: ["/bin/sh", "-c"]
     environment:
-      AWS_ACCESS_KEY_ID: ${HORECAOS_OBJECT_STORE_ACCESS_KEY:-${HORECAOS_MINIO_ROOT_USER:?set a non-obvious root user name}}
+      # A create-bucket-only service account, not the object store's own root
+      # credential (ADR 0135, checklist item 3 for the media credential; this
+      # is the same closure for the seed job). infra/production/deploy.sh and
+      # deploy/local-smoke.sh mint it against RustFS's admin API once the
+      # object store is healthy and before this service runs -- see either
+      # script's own "Provisioning a bucket-scoped seed service account"
+      # step. Falls back to the root access key only for an ad hoc
+      # `docker compose up` outside either script; every real deploy sets
+      # HORECAOS_OBJECT_STORE_SEED_ACCESS_KEY before this job starts.
+      AWS_ACCESS_KEY_ID: ${HORECAOS_OBJECT_STORE_SEED_ACCESS_KEY:-${HORECAOS_OBJECT_STORE_ACCESS_KEY:-${HORECAOS_MINIO_ROOT_USER:?set a non-obvious root user name}}}
       AWS_DEFAULT_REGION: us-east-1
       # Nothing here has a route to the EC2 metadata service, and without
       # this the CLI still tries it and eats a connect timeout before
@@ -767,14 +776,14 @@ services:
       HORECAOS_AUDIT_ARCHIVE_BUCKET: ${HORECAOS_AUDIT_ARCHIVE_BUCKET:-horecaos-audit-archive}
       TZ: Asia/Tashkent
     secrets:
-      - object-store-secret-key
+      - object-store-seed-secret-key
     command:
       - |
         set -eu
         # Every `$$` below is a literal `$` for the container's shell, doubled
         # so `docker compose config` does not try to interpolate these as its
         # own variables.
-        export AWS_SECRET_ACCESS_KEY="$$(cat /run/secrets/object-store-secret-key)"
+        export AWS_SECRET_ACCESS_KEY="$$(cat /run/secrets/object-store-seed-secret-key)"
         # BucketAlreadyOwnedByYou (create-bucket failing because the bucket is
         # already there, owned by these same credentials) is fine on a rerun;
         # anything else means the store is not actually reachable or usable,
@@ -985,13 +994,25 @@ services:
     restart: "no"
     user: "0:10001"
     environment:
+      HORECAOS_MEDIA_BUCKET: ${HORECAOS_MEDIA_BUCKET:-horecaos-media}
       HORECAOS_BACKUP_BUCKET: ${HORECAOS_BACKUP_BUCKET:-horecaos-backups}
+      HORECAOS_AUDIT_ARCHIVE_BUCKET: ${HORECAOS_AUDIT_ARCHIVE_BUCKET:-horecaos-audit-archive}
       HORECAOS_BACKUP_S3_ENDPOINT: ${HORECAOS_BACKUP_S3_ENDPOINT:-http://object-store:9000}
       HORECAOS_BACKUP_RETENTION_DAYS: ${HORECAOS_BACKUP_RETENTION_DAYS:-30}
       HORECAOS_BACKUP_OFFSITE_ENDPOINT: ${HORECAOS_BACKUP_OFFSITE_ENDPOINT:-}
       HORECAOS_BACKUP_OFFSITE_BUCKET: ${HORECAOS_BACKUP_OFFSITE_BUCKET:-}
+      # The object store's own root access key -- an access key id, not the
+      # secret half, so it follows object-store-seed's own convention of a
+      # plain environment value (see that service's comment). Used only by
+      # infra/production/deploy.sh's "Provisioning the object store's scoped
+      # service accounts" step, which runs `add-service-account` against
+      # RustFS's admin API through this container to mint the seed and backup
+      # credentials.
+      OBJECT_STORE_ROOT_ACCESS_KEY: ${HORECAOS_OBJECT_STORE_ACCESS_KEY:-${HORECAOS_MINIO_ROOT_USER:?set a non-obvious root user name}}
       BAO_ADDR: http://openbao:8200
       TZ: Asia/Tashkent
+    secrets:
+      - object-store-secret-key
     volumes:
       - bao-runtime:/run/bao:ro
     networks:
@@ -1030,6 +1051,13 @@ secrets:
     # Once every host reads object-store-secret-key directly, drop the
     # override and this comment -- tracked in ADR 0135.
     file: ${HORECAOS_OBJECT_STORE_SECRET_KEY_FILE:-${HORECAOS_SECRET_DIR}/object-store-secret-key}
+  object-store-seed-secret-key:
+    # The seed job's own create-bucket-only credential (see object-store-seed's
+    # own comment above), never the object store's root secret. Written by
+    # infra/production/deploy.sh / deploy/local-smoke.sh once RustFS's admin
+    # API has minted the scoped service account -- this file does not exist,
+    # and object-store-seed does not start, until that step has run.
+    file: ${HORECAOS_OBJECT_STORE_SEED_SECRET_KEY_FILE:-${HORECAOS_SECRET_DIR}/object-store-seed-secret-key}
   openbao-role-id:
     file: ${HORECAOS_SECRET_DIR}/openbao-role-id
   openbao-secret-id:
