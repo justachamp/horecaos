@@ -615,7 +615,14 @@ class CartCheckoutAndOrderTests {
         // exercises. The phone lookup beside it (OperatorCustomerLookupService)
         // has its own, separate collaborators and its own suite,
         // OperatorOrderingLookupTests, since `place` never reaches them.
-        operatorOrdering = new uz.horecaos.platform.ordering.application.OperatorOrderingService(carts, checkout);
+        operatorOrdering = new uz.horecaos.platform.ordering.application.OperatorOrderingService(
+                carts,
+                checkout,
+                new uz.horecaos.platform.ordering.application.BranchOverrideReasonQueryService(
+                        new uz.horecaos.platform.ordering.infrastructure.persistence.JdbcBranchOverrideReasonStore(
+                                jdbc)),
+                new JdbcAuditRecorder(jdbc, objectMapper),
+                clock);
 
         seedTenancyAndCatalog();
         seedPublication("STOREFRONT");
@@ -815,7 +822,10 @@ class CartCheckoutAndOrderTests {
                         "operator-subject-9",
                         null,
                         null,
-                        false)));
+                        false,
+                        null,
+                        null,
+                        null)));
 
         assertThat(result.created()).isTrue();
         UUID orderId = Objects.requireNonNull(result.orderId());
@@ -858,7 +868,10 @@ class CartCheckoutAndOrderTests {
                 "operator-subject-9",
                 null,
                 null,
-                false);
+                false,
+                null,
+                null,
+                null);
 
         var result = tx(() -> operatorOrdering.place(command));
 
@@ -893,7 +906,10 @@ class CartCheckoutAndOrderTests {
                 "operator-subject-9",
                 null,
                 null,
-                false);
+                false,
+                null,
+                null,
+                null);
 
         var result = tx(() -> operatorOrdering.place(command));
 
@@ -961,8 +977,14 @@ class CartCheckoutAndOrderTests {
         authoring.activate(TENANT, BRAND, drafted.couponId());
 
         var spiedCarts = org.mockito.Mockito.spy(carts);
-        var operatorOrderingWithSpy =
-                new uz.horecaos.platform.ordering.application.OperatorOrderingService(spiedCarts, checkout);
+        var operatorOrderingWithSpy = new uz.horecaos.platform.ordering.application.OperatorOrderingService(
+                spiedCarts,
+                checkout,
+                new uz.horecaos.platform.ordering.application.BranchOverrideReasonQueryService(
+                        new uz.horecaos.platform.ordering.infrastructure.persistence.JdbcBranchOverrideReasonStore(
+                                jdbc)),
+                new JdbcAuditRecorder(jdbc, objectMapper),
+                clock);
 
         var withCode = new uz.horecaos.platform.ordering.application.OperatorOrderingService.PlaceOrderCommand(
                 TENANT,
@@ -980,7 +1002,10 @@ class CartCheckoutAndOrderTests {
                 "operator-subject-9",
                 null,
                 null,
-                false);
+                false,
+                null,
+                null,
+                null);
 
         var result = tx(() -> operatorOrderingWithSpy.place(withCode));
 
@@ -1162,7 +1187,10 @@ class CartCheckoutAndOrderTests {
                         "operator-subject-9",
                         null,
                         null,
-                        false);
+                        false,
+                        null,
+                        null,
+                        null);
 
         assertThatThrownBy(() -> tx(() -> operatorOrdering.place(missingDestination)))
                 .isInstanceOf(ApiException.class)
@@ -1187,7 +1215,10 @@ class CartCheckoutAndOrderTests {
                         "operator-subject-9",
                         null,
                         null,
-                        false);
+                        false,
+                        null,
+                        null,
+                        null);
 
         assertThatThrownBy(() -> tx(() -> operatorOrdering.place(pickupWithDestination)))
                 .isInstanceOf(ApiException.class)

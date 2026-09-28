@@ -652,15 +652,74 @@
             <span>{{ fulfillmentModeLabel(fulfillmentMode()) }}</span>
           </p>
 
-          <p class="q-caption new-order__order-row" data-testid="new-order-branch-row">
-            <span>{{ 'orders.newOrder.order.branch' | t }}</span>
-            <span>
-              {{ currentLocationName() }}
-              @if (fulfillmentMode() === 'DELIVERY') {
-                <span class="new-order__branch-zone">{{ 'orders.newOrder.order.byZone' | t }}</span>
-              }
-            </span>
-          </p>
+          <div class="new-order__field" data-testid="new-order-branch-row">
+            <span class="q-caption">{{ 'orders.newOrder.order.branch' | t }}</span>
+            @if (branchResolutionLoading()) {
+              <span class="q-caption" data-testid="new-order-branch-loading">
+                {{ 'orders.newOrder.order.branchLoading' | t }}
+              </span>
+            } @else if (branchCandidates().length > 0) {
+              <select
+                class="new-order__input q-body-sm"
+                [value]="selectedLocationId() ?? ''"
+                (change)="selectBranch($any($event.target).value)"
+                data-testid="new-order-branch-select"
+              >
+                @for (candidate of branchCandidates(); track candidate.locationId) {
+                  <option [value]="candidate.locationId">
+                    {{ branchCandidateLabel(candidate) }}
+                    {{
+                      candidate.locationId === proposedLocationId()
+                        ? ('orders.newOrder.order.branchProposedSuffix' | t)
+                        : ''
+                    }}
+                  </option>
+                }
+              </select>
+            } @else {
+              <span class="q-caption">
+                {{ currentLocationName() }}
+                @if (branchResolutionError()) {
+                  <span class="new-order__error q-caption" data-testid="new-order-branch-error">
+                    {{ 'orders.newOrder.order.branchResolutionFailed' | t }}
+                  </span>
+                } @else if (fulfillmentMode() === 'DELIVERY' && selectedAddress() !== null) {
+                  <span class="new-order__error q-caption" data-testid="new-order-branch-none">
+                    {{ 'orders.newOrder.order.branchNoCandidates' | t }}
+                  </span>
+                }
+              </span>
+            }
+          </div>
+
+          @if (isBranchOverride()) {
+            <label class="new-order__field" data-testid="new-order-branch-override-reason-row">
+              <span class="q-caption">{{ 'orders.newOrder.order.branchOverrideReason' | t }}</span>
+              <select
+                class="new-order__input q-body-sm"
+                [value]="overrideReasonCode() ?? ''"
+                (change)="setOverrideReasonCode($any($event.target).value)"
+                data-testid="new-order-branch-override-reason"
+              >
+                <option value="">{{ 'orders.newOrder.order.branchOverrideReasonPlaceholder' | t }}</option>
+                @for (reason of overrideReasons(); track reason.code) {
+                  <option [value]="reason.code">{{ branchOverrideReasonLabel(reason) }}</option>
+                }
+              </select>
+            </label>
+            @if (overrideReasonRequiresNote()) {
+              <label class="new-order__field">
+                <span class="q-caption">{{ 'orders.newOrder.order.branchOverrideNote' | t }}</span>
+                <input
+                  type="text"
+                  class="new-order__input q-body-sm"
+                  [value]="overrideNote()"
+                  (input)="overrideNote.set($any($event.target).value)"
+                  data-testid="new-order-branch-override-note"
+                />
+              </label>
+            }
+          }
 
           <label class="new-order__aggregator-toggle q-caption">
             <input

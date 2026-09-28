@@ -41,6 +41,8 @@ import { accessRefusal, describeApiError } from '../order-errors';
 import { ItemModifierDialog, ModifierDialogConfirmation } from './item-modifier-dialog';
 import {
   AggregatorOrderLine,
+  BranchCandidate,
+  BranchOverrideReason,
   CommentPresetOption,
   CustomerLookupCandidate,
   DeliveryFeeQuote,
@@ -291,10 +293,10 @@ export class NewOrderPage implements OnInit {
   protected readonly channels = signal<readonly ChannelView[]>([]);
 
   /**
-   * §5.4/§5.6's "Филиал" — always the current session's own branch: this
-   * screen has no cross-branch order creation, so there is nothing here to
-   * resolve away from it. See this class's own doc for why «по зоне» is a
-   * static caption rather than a real ADR 0037 resolver.
+   * The operator's own logged-in branch — still what an aggregator entry
+   * places at (that toggle carries no cross-branch resolution of its own) and
+   * the label shown while the real resolver (below, row 1.3) has not yet
+   * proposed anything.
    */
   protected readonly currentLocationName = computed(() => {
     const scope = this.location.scope();
@@ -311,6 +313,23 @@ export class NewOrderPage implements OnInit {
       this.menuLoading.set(false);
       return;
     }
+    // Row 1.3: the fallback the resolution effect (constructor) keeps until
+    // its first successful resolve — the New Order screen stays usable at
+    // the operator's own branch from the first render, before any resolver
+    // read has even started. Guarded rather than a plain set(): the
+    // constructor's own effect can resolve first (it fires immediately, with
+    // no await ahead of it, while this method is still on its own first
+    // await) and this must never stomp a proposal that already landed.
+    this.selectedLocationId.update((current) => current ?? scope.locationId);
+    void this.api
+      .branchOverrideReasons(scope)
+      .then((reasons) => this.overrideReasons.set(reasons))
+      .catch(() => {
+        // Graceful degradation: an override is simply refused with no reason
+        // to pick from ({@link canSubmit}) rather than the whole screen
+        // failing to load.
+      });
+
     const locale = this.menuLocale();
     const channels = await this.channelsApi.list(scope).catch(() => [] as readonly ChannelView[]);
     this.channels.set(channels);
@@ -1123,6 +1142,41 @@ export class NewOrderPage implements OnInit {
         void this.refreshDeliveryFee(lat, lon, currency, subtotalMinor);
       }, 400);
     });
+
+    // Row 1.3's cross-branch resolver. Re-resolves on every fulfilment-mode
+    // or address change — no debounce, unlike the delivery-fee preview
+    // above: that effect also tracks the basket subtotal, which changes on
+    // every quantity-stepper click, while this one tracks only mode, address
+    // and channel, each a single discrete event (a toggle, a pick from a
+    // list, one bootstrap correction), never a rapid-fire one a debounce
+    // would need to absorb. `channelCode` is tracked too: `ngOnInit` starts
+    // it at the fallback code and corrects it once the real operator channel
+    // loads, and a candidate's open/closed state depends on which channel
+    // asked.
+    effect(() => {
+      const mode = this.fulfillmentMode();
+      const address = mode === 'DELIVERY' ? this.selectedAddress() : null;
+      const channelCode = this.channelCode();
+
+      // A changed resolution context (mode, address or channel) retires
+      // whatever the operator picked for the previous one — a manual choice
+      // for one address should not silently carry over to a different one.
+      this.branchManuallyOverridden = false;
+      this.overrideReasonCode.set(null);
+      this.overrideNote.set('');
+
+      if (mode === 'DELIVERY' && (address === null || address.latitude === null || address.longitude === null)) {
+        this.branchCandidates.set([]);
+        this.proposedLocationId.set(null);
+        // selectedLocationId is left alone: it stays at the operator's own
+        // branch (ngOnInit's own fallback) until a real address gives the
+        // resolver something to answer.
+        return;
+      }
+      const point =
+        mode === 'DELIVERY' && address ? { lat: address.latitude as number, lon: address.longitude as number } : null;
+      void this.refreshBranchResolution(mode, point, channelCode);
+    });
   }
 
   private async refreshDeliveryFee(
@@ -1175,6 +1229,115 @@ export class NewOrderPage implements OnInit {
       { amountMinor: total.subtotalMinor + quote.feeMinor, currency: total.currency },
       this.i18n.locale(),
     );
+  }
+
+  // ------------------------------------------------------------- §5.4/§5.6 branch resolution (row 1.3)
+
+  /**
+   * Row 1.3: which of the brand's branches can take this order, ranked by
+   * zone match for DELIVERY and by current load for PICKUP (row 1.3's own
+   * note: a PICKUP order has no address to rank a zone against). Empty
+   * before the first resolution completes, or when nothing serves the
+   * chosen address.
+   */
+  protected readonly branchCandidates = signal<readonly BranchCandidate[]>([]);
+  /** The resolver's own pick — the first open candidate in ranked order, or the top-ranked one if none is open. */
+  protected readonly proposedLocationId = signal<string | null>(null);
+  /**
+   * The branch this order will actually be placed at. Defaults to the
+   * operator's own current branch ({@link ngOnInit}) until the resolver has
+   * something better to propose, and tracks {@link proposedLocationId} after
+   * that unless the operator has picked a different candidate by hand
+   * ({@link selectBranch}).
+   */
+  protected readonly selectedLocationId = signal<string | null>(null);
+  protected readonly branchResolutionLoading = signal(false);
+  protected readonly branchResolutionError = signal(false);
+
+  /** Row 1.3's curated override-reason list, fetched once in {@link ngOnInit}. */
+  protected readonly overrideReasons = signal<readonly BranchOverrideReason[]>([]);
+  protected readonly overrideReasonCode = signal<string | null>(null);
+  protected readonly overrideNote = signal('');
+
+  /** Plain field, not a signal: read only inside the resolution effect above, never rendered. */
+  private branchManuallyOverridden = false;
+
+  /** Whether the operator has picked a branch other than the resolver's own proposal. */
+  protected readonly isBranchOverride = computed(() => {
+    const selected = this.selectedLocationId();
+    const proposed = this.proposedLocationId();
+    return selected !== null && proposed !== null && selected !== proposed;
+  });
+
+  protected readonly selectedBranchCandidate = computed(
+    () => this.branchCandidates().find((candidate) => candidate.locationId === this.selectedLocationId()) ?? null,
+  );
+
+  /** {@code requiresNote} of whichever override reason is currently picked, or false while none is. */
+  protected readonly overrideReasonRequiresNote = computed(
+    () =>
+      this.overrideReasons().find((reason) => reason.code === this.overrideReasonCode())?.requiresNote ?? false,
+  );
+
+  private async refreshBranchResolution(
+    mode: 'PICKUP' | 'DELIVERY',
+    point: { lat: number; lon: number } | null,
+    channelCode: string,
+  ): Promise<void> {
+    const scope = this.location.scope();
+    if (!scope) {
+      return;
+    }
+    this.branchResolutionLoading.set(true);
+    this.branchResolutionError.set(false);
+    try {
+      const resolution = await this.api.resolveBranches(scope, mode, point, channelCode);
+      this.branchCandidates.set(resolution.candidates);
+      this.proposedLocationId.set(resolution.proposedLocationId);
+      if (!this.branchManuallyOverridden) {
+        this.selectedLocationId.set(resolution.proposedLocationId ?? scope.locationId);
+      }
+    } catch {
+      // Graceful degradation, the same shape `drafts-page.ts` and this
+      // screen's own channel lookup already use: the New Order screen stays
+      // usable at the operator's own branch even when the resolver read
+      // fails, rather than blocking order entry on a read that is a
+      // convenience, not a precondition for placing an order.
+      this.branchCandidates.set([]);
+      this.proposedLocationId.set(null);
+      this.branchResolutionError.set(true);
+    } finally {
+      this.branchResolutionLoading.set(false);
+    }
+  }
+
+  /** The operator overriding the resolver's own proposal — every candidate stays choosable, closed ones included. */
+  protected selectBranch(locationId: string): void {
+    this.branchManuallyOverridden = true;
+    this.selectedLocationId.set(locationId);
+    if (locationId === this.proposedLocationId()) {
+      this.overrideReasonCode.set(null);
+      this.overrideNote.set('');
+    }
+  }
+
+  protected setOverrideReasonCode(code: string): void {
+    this.overrideReasonCode.set(code === '' ? null : code);
+    if (this.overrideReasonCode() !== null && !this.overrideReasonRequiresNote()) {
+      this.overrideNote.set('');
+    }
+  }
+
+  protected branchCandidateLabel(candidate: BranchCandidate): string {
+    const load = this.i18n.t('orders.newOrder.order.branchLoad', { count: candidate.activeOrderCount });
+    const closed = candidate.available ? '' : ` · ${this.i18n.t('orders.newOrder.order.branchClosed')}`;
+    return `${candidate.displayName} — ${load}${closed}`;
+  }
+
+  /** `order-reject-reason-dialog.ts`'s own defensive fallback, restated for this picker's identical response shape. */
+  protected branchOverrideReasonLabel(reason: BranchOverrideReason): string {
+    const locale = this.i18n.locale();
+    return reason.labels?.[locale] ?? reason.labels?.['ru'] ?? reason.code;
   }
 
   // -------------------------------------------------------- §5.6 pre-order time (1.3d)
@@ -1245,6 +1408,10 @@ export class NewOrderPage implements OnInit {
       this.total().allAvailable &&
       (this.fulfillmentMode() === 'PICKUP' || this.selectedAddressId() !== null) &&
       (!this.preOrderEnabled() || this.requestedForLocal().trim() !== '') &&
+      this.selectedLocationId() !== null &&
+      (!this.isBranchOverride() ||
+        (this.overrideReasonCode() !== null &&
+          (!this.overrideReasonRequiresNote() || this.overrideNote().trim() !== ''))) &&
       !this.submitting(),
   );
 
@@ -1259,6 +1426,11 @@ export class NewOrderPage implements OnInit {
     if (delivery && addressId === null) {
       return;
     }
+    const placeAtLocationId = this.selectedLocationId() ?? scope.locationId;
+    // Row 1.3: POST .../orders at the resolved (or overridden) branch, not
+    // always the operator's own logged-in one.
+    const placeAtScope = { ...scope, locationId: placeAtLocationId };
+    const override = this.isBranchOverride();
     const requestedForDate = this.requestedForDate();
     if (this.preOrderEnabled()) {
       if (requestedForDate === null) {
@@ -1302,12 +1474,17 @@ export class NewOrderPage implements OnInit {
         promoCode: this.promoCode().trim() || null,
         requestedFor: requestedForDate ? requestedForDate.toISOString() : null,
         overrideOutOfHours: confirmingOutOfHours,
+        proposedLocationId: this.proposedLocationId(),
+        overrideReasonCode: override ? this.overrideReasonCode() : null,
+        overrideNote: override ? this.overrideNote().trim() || null : null,
       };
-      const result = await this.api.placeOrder(scope, request);
+      const result = await this.api.placeOrder(placeAtScope, request);
       this.outOfHoursConfirmReason.set(null);
       if (this.callEventId) {
         try {
-          await this.api.recordCallProvenance(scope, result.orderId, this.callEventId);
+          // The order's own branch — placeAtScope, not the operator's own
+          // logged-in one — since an override placed it there.
+          await this.api.recordCallProvenance(placeAtScope, result.orderId, this.callEventId);
         } catch {
           // The order already exists and is worth keeping either way — a
           // lost provenance link is an operator-KPI gap, not a reason to

@@ -1,12 +1,21 @@
 package uz.horecaos.platform.ordering.application;
 
+import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import uz.horecaos.platform.audit.api.ActorRef;
+import uz.horecaos.platform.audit.api.AuditClass;
+import uz.horecaos.platform.audit.api.AuditFact;
+import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
+import uz.horecaos.platform.iam.api.ResourceScope;
+import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcBranchOverrideReasonStore;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcCartStore.CartRow;
 import uz.horecaos.platform.tenancy.api.FulfillmentMode;
 import uz.horecaos.platform.web.api.ApiException;
@@ -66,10 +75,21 @@ public class OperatorOrderingService {
 
     private final CartService carts;
     private final CheckoutService checkout;
+    private final BranchOverrideReasonQueryService overrideReasons;
+    private final AuditRecorder audit;
+    private final Clock clock;
 
-    public OperatorOrderingService(CartService carts, CheckoutService checkout) {
+    public OperatorOrderingService(
+            CartService carts,
+            CheckoutService checkout,
+            BranchOverrideReasonQueryService overrideReasons,
+            AuditRecorder audit,
+            Clock clock) {
         this.carts = carts;
         this.checkout = checkout;
+        this.overrideReasons = overrideReasons;
+        this.audit = audit;
+        this.clock = clock;
     }
 
     /** One line an operator entered into the basket. */
@@ -107,6 +127,23 @@ public class OperatorOrderingService {
      *                           branch is closed at {@code requestedFor} and
      *                           chose to place it anyway. Meaningless when {@code
      *                           requestedFor} is null
+     * @param proposedLocationId row 1.3's cross-branch resolver: the branch
+     *                           {@code BranchResolutionQueryService} proposed,
+     *                           carried through so this class can tell a plain
+     *                           placement from an override — null when the
+     *                           caller never resolved branches at all (a PICKUP
+     *                           order the operator placed without asking, say),
+     *                           in which case no override is possible and none
+     *                           is audited, whatever {@code locationId} is
+     * @param overrideReasonCode required, and only meaningful, when {@code
+     *                           locationId} differs from {@code
+     *                           proposedLocationId}: one of {@code
+     *                           BranchOverrideReasonQueryService}'s curated
+     *                           codes, validated and audited before the order
+     *                           is created
+     * @param overrideNote       required exactly when {@code overrideReasonCode}
+     *                           is {@code OTHER}; free text, so redacted like
+     *                           every other note in this platform's audit trail
      */
     public record PlaceOrderCommand(
             UUID tenantId,
@@ -123,7 +160,16 @@ public class OperatorOrderingService {
             String operatorSubject,
             @Nullable String correlationId,
             @Nullable Instant requestedFor,
-            boolean overrideOutOfHours) {}
+            boolean overrideOutOfHours,
+            @Nullable UUID proposedLocationId,
+            @Nullable String overrideReasonCode,
+            @Nullable String overrideNote) {
+
+        /** Whether the operator sent the order somewhere other than the resolver's own proposal. */
+        boolean isBranchOverride() {
+            return proposedLocationId != null && !proposedLocationId.equals(locationId);
+        }
+    }
 
     /**
      * Opens a cart for the resolved customer, fills it exactly as entered,
@@ -144,6 +190,30 @@ public class OperatorOrderingService {
         if (!delivery && command.destination() != null) {
             throw new ApiException(
                     ErrorCode.VALIDATION_FAILED, "A " + command.fulfillmentMode() + " order has nowhere to deliver to");
+        }
+
+        // Row 1.3: validated before anything is created, so a bad or missing
+        // reason code refuses cleanly rather than leaving an orphaned cart
+        // behind. BranchOverrideReasonQueryService#validateForDecision throws
+        // ApiException-unwrapped exceptions the caller below translates the
+        // same way CartService's own refusals already are — see the catch
+        // blocks this method already carries.
+        JdbcBranchOverrideReasonStore.ReasonRow overrideReason = null;
+        if (command.isBranchOverride()) {
+            if (command.overrideReasonCode() == null
+                    || command.overrideReasonCode().isBlank()) {
+                throw new ApiException(
+                        ErrorCode.VALIDATION_FAILED,
+                        "Placing at a branch other than the one the resolver proposed needs a reason");
+            }
+            try {
+                overrideReason =
+                        overrideReasons.validateForDecision(command.overrideReasonCode(), command.overrideNote());
+            } catch (BranchOverrideReasonQueryService.UnknownBranchOverrideReasonException unknown) {
+                throw new ApiException(ErrorCode.VALIDATION_FAILED, unknown.getMessage());
+            } catch (IllegalArgumentException invalid) {
+                throw new ApiException(ErrorCode.VALIDATION_FAILED, invalid.getMessage());
+            }
         }
 
         CartRow cart = carts.create(
@@ -212,7 +282,7 @@ public class OperatorOrderingService {
         var priced =
                 carts.price(command.tenantId(), command.brandId(), command.customerAccountId(), cart.cartId(), version);
 
-        return checkout.checkout(new CheckoutService.CheckoutCommand(
+        CheckoutService.CheckoutResult result = checkout.checkout(new CheckoutService.CheckoutCommand(
                 command.tenantId(),
                 command.brandId(),
                 cart.cartId(),
@@ -227,5 +297,50 @@ public class OperatorOrderingService {
                 command.correlationId(),
                 command.requestedFor(),
                 command.overrideOutOfHours()));
+
+        // Audited only on the write that actually created the order — never on
+        // a REJECTED outcome (nothing was placed to have a branch at all) and
+        // never a second time on a REPLAYED retry of the same Idempotency-Key,
+        // which would otherwise double the audit trail for one real override.
+        if (overrideReason != null && result.outcome() == CheckoutService.CheckoutResult.Outcome.CREATED) {
+            recordOverrideAudit(command, overrideReason, Objects.requireNonNull(result.orderId()));
+        }
+
+        return result;
+    }
+
+    private void recordOverrideAudit(
+            PlaceOrderCommand command, JdbcBranchOverrideReasonStore.ReasonRow reason, UUID orderId) {
+        audit.record(AuditFact.of("ordering.order.branch_overridden", AuditClass.BUSINESS)
+                .by(ActorRef.user(command.operatorSubject(), null))
+                .at(ResourceScope.location(command.tenantId(), command.brandId(), command.locationId()))
+                .target("Order", orderId)
+                .because("Operator overrode the resolver's proposed branch (%s)".formatted(reason.code()))
+                .changed(ChangeDocuments.created(mapOf(
+                        "proposedLocationId",
+                        Objects.requireNonNull(command.proposedLocationId()).toString(),
+                        "chosenLocationId",
+                        command.locationId().toString(),
+                        "reasonCode",
+                        reason.code(),
+                        "note",
+                        command.overrideNote())))
+                .correlatedBy(command.correlationId() == null ? orderId.toString() : command.correlationId())
+                .occurredAt(clock.instant())
+                .build());
+    }
+
+    /**
+     * {@code Map.of} rejects a null value outright, and {@code note} is
+     * legitimately null whenever the operator gave none — the same reason
+     * {@code JdbcServiceZoneStore#commonDraftParams} reaches for a mutable map
+     * instead.
+     */
+    private static Map<String, Object> mapOf(@Nullable Object... pairs) {
+        Map<String, Object> map = new java.util.LinkedHashMap<>();
+        for (int index = 0; index < pairs.length; index += 2) {
+            map.put((String) pairs[index], pairs[index + 1]);
+        }
+        return map;
     }
 }

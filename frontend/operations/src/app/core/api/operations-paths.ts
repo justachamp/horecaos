@@ -148,6 +148,22 @@ export const operationsPaths = {
     return `${this.orders(scope)}/aggregator-entries`;
   },
 
+  /**
+   * Rows 1.3/0.1c: which of the brand's branches can take this order, ranked
+   * and with their current load — `OperationsOrderController.resolveBranches`.
+   * `scope.locationId` is the operator's own current branch, which authorizes
+   * the call (`ORDER_READ` at `LOCATION`); the candidates it returns span the
+   * whole brand.
+   */
+  orderBranchResolution(scope: LocationScope): string {
+    return `${this.orders(scope)}/branch-resolution`;
+  },
+
+  /** Row 1.3: the curated list `POST .../orders`'s own `overrideReasonCode` picks from. */
+  orderBranchOverrideReasons(scope: LocationScope): string {
+    return `${this.orders(scope)}/branch-override-reasons`;
+  },
+
   /** One order with its snapshotted lines. Returns an `ETag`. */
   order(scope: LocationScope, orderId: string): string {
     return `${this.orders(scope)}/${encodeURIComponent(orderId)}`;
