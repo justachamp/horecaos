@@ -104,11 +104,29 @@ describe('DineInService', () => {
         '/storefront/dine-in/sessions/session-1/rounds',
         expect.objectContaining({
           body: { orderId: 'order-1' },
-          anonymous: true,
           headers: { 'X-Dine-In-Token': 'guest-token-1' },
         }),
       );
       expect(bill.totalMinor).toBe(45000);
+    });
+
+    it('does not mark the call anonymous, so the caller\'s own signed-in session is sent too', async () => {
+      const { service, api } = setUp();
+      api.mutate.mockResolvedValueOnce(admission());
+      await service.exchange('printed-table-token');
+      api.mutate.mockResolvedValueOnce({
+        sessionId: 'session-1',
+        status: 'OPEN',
+        currency: 'UZS',
+        totalMinor: 45000,
+        roundCount: 1,
+        orderIds: ['order-1'],
+      });
+
+      await service.attachRound('session-1', 'order-1');
+
+      const [, , options] = api.mutate.mock.calls.at(-1)!;
+      expect(options.anonymous).not.toBe(true);
     });
 
     it('refuses to call a dine-in endpoint with no guest token on hand', async () => {

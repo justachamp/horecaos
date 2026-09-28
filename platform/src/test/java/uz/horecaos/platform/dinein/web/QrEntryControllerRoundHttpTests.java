@@ -10,6 +10,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -24,7 +25,9 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.testcontainers.DockerClientFactory;
+import uz.horecaos.platform.customers.infrastructure.security.PresetVerificationCodeSource;
 import uz.horecaos.platform.dinein.application.FloorPlanService;
 import uz.horecaos.platform.dinein.application.TableSessionService;
 import uz.horecaos.platform.dinein.infrastructure.persistence.JdbcDineInStore.SessionRow;
@@ -57,6 +60,11 @@ class QrEntryControllerRoundHttpTests {
     private static final UUID BRAND = UUID.fromString("018fd700-4000-7000-8000-0000000000b1");
     private static final UUID LOCATION = UUID.fromString("018fd700-4000-7000-8000-0000000000c1");
 
+    /** Same preset the OTP dev persona and {@code CustomerSessionSurfaceTests} use. */
+    private static final String PRESET_PHONE = "+998000000000";
+
+    private static final String PRESET_CODE = "000000";
+
     @SuppressWarnings("NullAway")
     private static TestDatabase.Handle db;
 
@@ -75,6 +83,11 @@ class QrEntryControllerRoundHttpTests {
         registry.add("horecaos.messaging.outbox.enabled", () -> "false");
         registry.add("spring.kafka.bootstrap-servers", () -> "localhost:59092");
         registry.add("horecaos.secrets.data_encryption.platform.kek", () -> "a-test-key-encryption-key");
+        // The preset OTP identity, the same way CustomerSessionSurfaceTests signs
+        // in: addRound now checks a round against the placing customer's own
+        // session, so proving that check needs a real one, not a jwt() shortcut.
+        registry.add(PresetVerificationCodeSource.PHONE_PROPERTY, () -> PRESET_PHONE);
+        registry.add(PresetVerificationCodeSource.CODE_PROPERTY, () -> PRESET_CODE);
     }
 
     @Autowired
@@ -127,12 +140,14 @@ class QrEntryControllerRoundHttpTests {
                 "QR ordering on");
         String printed = rotate(table);
         SessionRow session = openWalkIn(table.id());
-        UUID orderId = seedDineInOrder("T1-001", 45_000);
+        SignedIn customer = signIn();
+        UUID orderId = seedDineInOrder("T1-001", 45_000, customer.accountId());
 
         String guestToken = exchange(printed);
 
         MvcResult attach = mvc.perform(post(roundsPath(session.id()))
                         .header("X-Dine-In-Token", guestToken)
+                        .with(session(customer.token()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"orderId\":\"" + orderId + "\"}"))
                 .andReturn();
@@ -161,12 +176,14 @@ class QrEntryControllerRoundHttpTests {
                 "QR ordering on");
         String printed = rotate(table);
         SessionRow session = openWalkIn(table.id());
-        UUID orderId = seedDineInOrder("T1-002", 30_000);
+        SignedIn customer = signIn();
+        UUID orderId = seedDineInOrder("T1-002", 30_000, customer.accountId());
         String guestToken = exchange(printed);
 
-        attachRound(session.id(), guestToken, orderId);
+        attachRound(session.id(), guestToken, customer.token(), orderId);
         MvcResult retry = mvc.perform(post(roundsPath(session.id()))
                         .header("X-Dine-In-Token", guestToken)
+                        .with(session(customer.token()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"orderId\":\"" + orderId + "\"}"))
                 .andReturn();
@@ -241,16 +258,93 @@ class QrEntryControllerRoundHttpTests {
                 "QR ordering on");
         String printed = rotate(table);
         SessionRow session = openWalkIn(table.id());
-        UUID deliveryOrder = seedOrder("T1-003", 18_000, "DELIVERY");
+        SignedIn customer = signIn();
+        UUID deliveryOrder = seedOrder("T1-003", 18_000, "DELIVERY", customer.accountId());
         String guestToken = exchange(printed);
 
         MvcResult attempt = mvc.perform(post(roundsPath(session.id()))
                         .header("X-Dine-In-Token", guestToken)
+                        .with(session(customer.token()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"orderId\":\"" + deliveryOrder + "\"}"))
                 .andReturn();
 
         assertThat(attempt.getResponse().getStatus()).isEqualTo(400);
+        assertThat(jdbc.sql("SELECT count(*) FROM dinein.session_orders WHERE session_id = :id")
+                        .param("id", session.id())
+                        .query(Integer.class)
+                        .single())
+                .isEqualTo(0);
+    }
+
+    @Test
+    @DisplayName("a guest cannot attach an order placed by a different customer, even at their own table")
+    void guestCannotAttachAnotherCustomersOrder() throws Exception {
+        // The vulnerability this closes: the guest token only ever proved "this
+        // device is at table T1" -- it said nothing about which order the caller
+        // is allowed to attach. Before addRound checked ownership, an attacker
+        // holding a valid guest token for their own table and *any* not-yet-billed
+        // DINE_IN order id at the branch -- a friend's receipt, a link shared from
+        // another table, a guess -- could redirect that order's charge onto their
+        // own table's bill, exactly the reach across bills ADR 0047 forbids.
+        TableRow table = createTable("T1");
+        floorPlan.configure(
+                new FloorPlanService.BranchSettings(TENANT, BRAND, LOCATION, "ORDER_AND_PAY", 15, 240, 0),
+                "manager",
+                "QR ordering on");
+        String printed = rotate(table);
+        SessionRow session = openWalkIn(table.id());
+
+        SignedIn attacker = signIn();
+        UUID victimAccountId = seedAnotherCustomerAccount();
+        UUID victimsOrder = seedDineInOrder("T1-004", 99_000, victimAccountId);
+
+        String guestToken = exchange(printed);
+
+        MvcResult attempt = mvc.perform(post(roundsPath(session.id()))
+                        .header("X-Dine-In-Token", guestToken)
+                        .with(session(attacker.token()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"orderId\":\"" + victimsOrder + "\"}"))
+                .andReturn();
+
+        assertThat(attempt.getResponse().getStatus())
+                .as("an order that exists but is not the caller's own reads exactly like one "
+                        + "that does not exist -- the same refusal the order lookup itself gives, "
+                        + "so a guest fishing for another table's order id learns nothing either way")
+                .isEqualTo(404);
+        assertThat(jdbc.sql("SELECT count(*) FROM dinein.session_orders WHERE session_id = :id")
+                        .param("id", session.id())
+                        .query(Integer.class)
+                        .single())
+                .as("the victim's order must not have been redirected onto the attacker's bill")
+                .isEqualTo(0);
+    }
+
+    @Test
+    @DisplayName("attaching a round with no customer session at all is refused, not attributed to nobody")
+    void attachingWithNoCustomerSessionIsRefused() throws Exception {
+        TableRow table = createTable("T1");
+        floorPlan.configure(
+                new FloorPlanService.BranchSettings(TENANT, BRAND, LOCATION, "ORDER_AND_PAY", 15, 240, 0),
+                "manager",
+                "QR ordering on");
+        String printed = rotate(table);
+        SessionRow session = openWalkIn(table.id());
+        UUID orderId = seedDineInOrder("T1-005", 10_000, seedAnotherCustomerAccount());
+        String guestToken = exchange(printed);
+
+        MvcResult attempt = mvc.perform(post(roundsPath(session.id()))
+                        .header("X-Dine-In-Token", guestToken)
+                        // Deliberately no Authorization header: the guest token alone
+                        // is not proof the round is this caller's own.
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"orderId\":\"" + orderId + "\"}"))
+                .andReturn();
+
+        assertThat(attempt.getResponse().getStatus())
+                .as("no signed-in session means nobody to check the order's ownership against")
+                .isEqualTo(401);
         assertThat(jdbc.sql("SELECT count(*) FROM dinein.session_orders WHERE session_id = :id")
                         .param("id", session.id())
                         .query(Integer.class)
@@ -307,13 +401,78 @@ class QrEntryControllerRoundHttpTests {
         return json(exchanged).path("guestToken").asText();
     }
 
-    private void attachRound(UUID sessionId, String guestToken, UUID orderId) throws Exception {
+    private void attachRound(UUID sessionId, String guestToken, String customerToken, UUID orderId) throws Exception {
         MvcResult attached = mvc.perform(post(roundsPath(sessionId))
                         .header("X-Dine-In-Token", guestToken)
+                        .with(session(customerToken))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"orderId\":\"" + orderId + "\"}"))
                 .andReturn();
         assertThat(attached.getResponse().getStatus()).isEqualTo(200);
+    }
+
+    /** The whole journey: ask for a code, type it, exchange the grant (ADR 0051). */
+    private SignedIn signIn() throws Exception {
+        MvcResult challenge = mvc.perform(post(identity() + "/verification-challenges")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"phone\":\"" + PRESET_PHONE + "\"}"))
+                .andReturn();
+        assertThat(challenge.getResponse().getStatus()).isEqualTo(202);
+        String challengeId = json(challenge).path("challengeId").asText();
+
+        MvcResult attempt = mvc.perform(post(identity() + "/verification-challenges/" + challengeId + "/attempts")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"code\":\"" + PRESET_CODE + "\"}"))
+                .andReturn();
+        assertThat(attempt.getResponse().getStatus())
+                .as("the preset code is the code the challenge was written with")
+                .isEqualTo(200);
+        String grant = json(attempt).path("grant").asText();
+
+        MvcResult session = mvc.perform(post(identity() + "/sessions")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"grant\":\"" + grant + "\"}"))
+                .andReturn();
+        assertThat(session.getResponse().getStatus()).isIn(200, 201);
+
+        JsonNode body = json(session);
+        return new SignedIn(
+                body.path("token").asText(),
+                UUID.fromString(body.path("accountId").asText()));
+    }
+
+    private record SignedIn(String token, UUID accountId) {}
+
+    /**
+     * The customer's own credential, in the header a browser sends it in (ADR
+     * 0051). Deliberately not a {@code jwt()} post-processor -- that would set a
+     * security context directly and step over the same bearer-token resolver
+     * {@code addRound} now depends on.
+     */
+    private static RequestPostProcessor session(String token) {
+        return request -> {
+            request.addHeader("Authorization", "Bearer " + token);
+            return request;
+        };
+    }
+
+    /** Another account entirely -- inserted directly, the way a real returning
+     * customer's row already exists rather than being minted through this test. */
+    private UUID seedAnotherCustomerAccount() {
+        UUID accountId = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO customer.customer_accounts (id, tenant_id, status)
+                VALUES (:id, :t, 'ACTIVE')
+                """).param("id", accountId).param("t", TENANT).update();
+        return accountId;
+    }
+
+    private static String brand() {
+        return "/api/v1/storefront/tenants/" + TENANT + "/brands/" + BRAND;
+    }
+
+    private static String identity() {
+        return brand() + "/identity";
     }
 
     private static List<String> orderIdsOf(JsonNode body) {
@@ -332,14 +491,28 @@ class QrEntryControllerRoundHttpTests {
 
     // ------------------------------------------------------------------ fixtures
 
+    /** A DINE_IN order placed by nobody in particular -- fine wherever the round
+     * is refused before {@code addRound}'s ownership check is even reached. */
     private UUID seedDineInOrder(String number, long totalMinor) {
-        return seedOrder(number, totalMinor, "DINE_IN");
+        return seedOrder(number, totalMinor, "DINE_IN", null);
     }
 
-    private UUID seedOrder(String number, long totalMinor, String mode) {
+    /** A DINE_IN order placed by exactly this account -- what a real QR checkout
+     * always produces, per {@code POST .../carts} having no anonymous path. */
+    private UUID seedDineInOrder(String number, long totalMinor, UUID ownerAccountId) {
+        return seedOrder(number, totalMinor, "DINE_IN", ownerAccountId);
+    }
+
+    private UUID seedOrder(String number, long totalMinor, String mode, @Nullable UUID ownerAccountId) {
         UUID orderId = UUID.randomUUID();
         UUID quoteId = UUID.randomUUID();
         UUID cartId = UUID.randomUUID();
+        // ck_cart_owner_xor / ck_order_owner: exactly one of the two is set. Every
+        // order this suite's guest actually attaches goes through the owner path,
+        // matching what checkout always writes today (no anonymous cart at all);
+        // the guest-hash path stays available for fixtures the ownership check
+        // never reaches.
+        String guestReference = ownerAccountId == null ? "guest-" + number : null;
 
         jdbc.sql("""
                 INSERT INTO pricing.quotes (id, tenant_id, brand_id, location_id, currency,
@@ -358,9 +531,10 @@ class QrEntryControllerRoundHttpTests {
 
         jdbc.sql("""
                 INSERT INTO ordering.carts (id, tenant_id, brand_id, location_id, channel_id,
-                    fulfillment_mode, currency, status, guest_reference_hash, expires_at)
+                    fulfillment_mode, currency, status, customer_account_id, guest_reference_hash,
+                    expires_at)
                 VALUES (:id, :tenantId, :brandId, :locationId, :channelId, :mode, 'UZS',
-                        'ACTIVE', :guest, now() + interval '1 hour')
+                        'ACTIVE', :owner, :guest, now() + interval '1 hour')
                 """)
                 .param("id", cartId)
                 .param("tenantId", TENANT)
@@ -368,7 +542,8 @@ class QrEntryControllerRoundHttpTests {
                 .param("locationId", LOCATION)
                 .param("channelId", channelId)
                 .param("mode", mode)
-                .param("guest", "guest-" + number)
+                .param("owner", ownerAccountId)
+                .param("guest", guestReference)
                 .update();
 
         Map<String, Object> order = new HashMap<>();
@@ -381,21 +556,25 @@ class QrEntryControllerRoundHttpTests {
         order.put("quoteId", quoteId);
         order.put("cartId", cartId);
         order.put("publicationId", publicationId);
-        order.put("guest", "guest-" + number);
+        order.put("owner", ownerAccountId);
+        order.put("guest", guestReference);
         order.put("mode", mode);
         order.put("total", totalMinor);
+        // The idempotency key only has to be unique per tenant here; the order
+        // number does too, and both already are since `number` is.
+        order.put("idempotencyKey", "idem-" + number);
 
         jdbc.sql("""
                 INSERT INTO ordering.orders (id, public_order_number, tenant_id, brand_id,
-                    location_id, channel_id, channel_code_snapshot, guest_reference_hash,
-                    fulfillment_mode, acceptance_mode_snapshot, acceptance_policy_id,
-                    acceptance_policy_version, approval_channel_snapshot,
+                    location_id, channel_id, channel_code_snapshot, customer_account_id,
+                    guest_reference_hash, fulfillment_mode, acceptance_mode_snapshot,
+                    acceptance_policy_id, acceptance_policy_version, approval_channel_snapshot,
                     approval_timeout_action_snapshot, status, currency, subtotal_minor, tax_minor,
                     total_minor, pricing_quote_id, pricing_context_hash, catalog_publication_id,
                     cart_id, idempotency_key, version, confirmed_at)
                 VALUES (:id, :number, :tenantId, :brandId, :locationId, :channelId, 'QRTABLE',
-                    :guest, :mode, 'AUTO_CONFIRM', NULL, 0, 'NONE', NULL, 'CONFIRMED', 'UZS',
-                    :total, 0, :total, :quoteId, 'hash', :publicationId, :cartId, :guest,
+                    :owner, :guest, :mode, 'AUTO_CONFIRM', NULL, 0, 'NONE', NULL, 'CONFIRMED', 'UZS',
+                    :total, 0, :total, :quoteId, 'hash', :publicationId, :cartId, :idempotencyKey,
                     1, now())
                 """).params(order).update();
 
@@ -414,6 +593,18 @@ class QrEntryControllerRoundHttpTests {
                 INSERT INTO tenant.brands (id, tenant_id, code, slug, display_name, status, version)
                 VALUES (:id, :t, 'MAIN', 'main', 'Main', 'ACTIVE', 0)
                 """).param("id", BRAND).param("t", TENANT).update();
+
+        jdbc.sql("""
+                INSERT INTO tenant.customer_identity_policies (
+                    id, tenant_id, version, identity_mode, effective_from)
+                VALUES (:id, :t, 1, 'TENANT_SHARED', TIMESTAMPTZ '2020-01-01T00:00:00Z')
+                ON CONFLICT DO NOTHING
+                """)
+                .param(
+                        "id",
+                        UUID.nameUUIDFromBytes(TENANT.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8)))
+                .param("t", TENANT)
+                .update();
 
         jdbc.sql("""
                 INSERT INTO tenant.locations (id, tenant_id, brand_id, code, slug, display_name,

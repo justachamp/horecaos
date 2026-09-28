@@ -1030,7 +1030,8 @@ class DineInTests {
     }
 
     private int addRound(UUID sessionId, UUID orderId) {
-        return transactions.execute(status -> sessions.addRound(TENANT, sessionId, orderId, "waiter", "Round fired"));
+        return transactions.execute(
+                status -> sessions.addRound(TENANT, sessionId, orderId, null, "waiter", "Round fired"));
     }
 
     private SessionRow move(UUID sessionId, SessionStatus to, int expectedVersion) {

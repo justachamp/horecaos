@@ -44,7 +44,8 @@ public class JdbcSessionOrderSource implements SessionOrderSource {
     @Override
     public Optional<OrderForSession> find(UUID tenantId, UUID orderId) {
         return jdbc.sql("""
-                SELECT id, tenant_id, location_id, fulfillment_mode, status, currency, total_minor
+                SELECT id, tenant_id, location_id, fulfillment_mode, status, currency, total_minor,
+                       customer_account_id
                 FROM ordering.orders
                 WHERE tenant_id = :tenantId AND id = :id
                 """)
@@ -57,7 +58,8 @@ public class JdbcSessionOrderSource implements SessionOrderSource {
                         row.getString("fulfillment_mode"),
                         row.getString("status"),
                         row.getString("currency"),
-                        row.getLong("total_minor")))
+                        row.getLong("total_minor"),
+                        row.getObject("customer_account_id", UUID.class)))
                 .optional();
     }
 
