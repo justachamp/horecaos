@@ -69,6 +69,7 @@ function configure(
   productCommentPresetsApi: Partial<ProductCommentPresetsApi> = {},
   commentPresetsApi: Partial<CommentPresetsApi> = {},
   salesChannelsApi: Partial<SalesChannelsApi> = {},
+  inventoryApi: Partial<InventoryApi> = {},
 ): void {
   TestBed.configureTestingModule({
     providers: [
@@ -107,7 +108,7 @@ function configure(
         },
       },
       { provide: MediaApi, useValue: mediaApi },
-      { provide: InventoryApi, useValue: {} },
+      { provide: InventoryApi, useValue: inventoryApi },
       {
         provide: ActivityLogApi,
         useValue: {
@@ -439,6 +440,66 @@ describe('ProductEditorPage', () => {
     expect(text).toContain('Плов, порция');
     expect(text).toContain('Set variant availability to UNAVAILABLE');
     expect(text).not.toContain('variant-of-another-product');
+  });
+
+  it('shows "not listed at N branches" and lists everywhere on click (gap map row 4.1)', async () => {
+    const unlistedLocations = vi.fn().mockReturnValue(of(['l2', 'l3']));
+    const backfillVariantListing = vi.fn().mockReturnValue(of({ candidateCount: 2, listedCount: 2 }));
+    configure(
+      { productDetail: () => of(productDetail()) },
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      { unlistedLocations, backfillVariantListing },
+    );
+
+    const harness = await RouterTestingHarness.create('/catalog/products/product-1');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+
+    (host.querySelector('[data-testid="editor-tab-AVAILABILITY"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    harness.detectChanges();
+
+    expect(unlistedLocations).toHaveBeenCalledWith(LOCATION_SCOPE, 'variant-1');
+    const banner = host.querySelector('[data-testid="editor-unlisted-branches-banner"]');
+    expect(banner?.textContent).toContain('2');
+
+    // A second call, with none left unlisted, hides the banner.
+    unlistedLocations.mockReturnValue(of([]));
+    (host.querySelector('[data-testid="editor-list-missing-branches"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    harness.detectChanges();
+
+    expect(backfillVariantListing).toHaveBeenCalledWith(LOCATION_SCOPE, 'variant-1');
+    expect(host.querySelector('[data-testid="editor-unlisted-branches-banner"]')).toBeFalsy();
+  });
+
+  it('never shows the "not listed" banner once every branch is already listed', async () => {
+    const unlistedLocations = vi.fn().mockReturnValue(of([]));
+    configure(
+      { productDetail: () => of(productDetail()) },
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      { unlistedLocations },
+    );
+
+    const harness = await RouterTestingHarness.create('/catalog/products/product-1');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+
+    (host.querySelector('[data-testid="editor-tab-AVAILABILITY"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    harness.detectChanges();
+
+    expect(host.querySelector('[data-testid="editor-unlisted-branches-banner"]')).toBeFalsy();
   });
 
   it('sends sku, unitCode and name when adding a variant — AddVariantRequest always accepted them', async () => {

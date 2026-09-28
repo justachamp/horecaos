@@ -2274,6 +2274,10 @@ export const messagesUzLatn: MessageCatalogue = {
   'catalog.editor.availability.quantityHint':
     'QUANTITY rejimidagi variant uchun mavjud miqdor, kunlik standart qiymat va kanal boʻyicha toʻxtatish chegaralari «Qoldiqlar» sahifasida joylashgan.',
   'catalog.editor.availability.quantityHintLink': 'Qoldiqlarni ochish',
+  'catalog.editor.availability.notListedAtBranches':
+    "{count} ta filialda hali joylashtirilmagan — taklif qilingan, lekin joylashtirilguncha buyurtma qabul qilinmaydi.",
+  'catalog.editor.availability.listEverywhere': "Barcha filiallarda joylashtirish",
+  'catalog.editor.availability.listingInProgress': 'Joylashtirilmoqda…',
   'catalog.editor.schedule.hint':
     'Boʻsh boʻlsa — tovar doim sotuvda. Quyidagi oynalar sotuv vaqtini cheklaydi va filialning oʻz mahalliy vaqtida hisoblanadi.',
   'catalog.editor.schedule.loading': 'Jadval yuklanmoqda…',

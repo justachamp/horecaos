@@ -16,6 +16,7 @@ import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.audit.api.ActorRef;
@@ -23,6 +24,7 @@ import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.audit.api.ChangeDocuments;
+import uz.horecaos.platform.catalog.api.OfferingBecameAvailable;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.EntityType;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.ModifierGroup;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.ModifierOption;
@@ -69,6 +71,7 @@ public class CatalogAuthoringService {
     private final UsageMeter usage;
     private final Clock clock;
     private final CatalogTenantContext tenantContext;
+    private final ApplicationEventPublisher events;
 
     /**
      * See {@code ServiceabilityService}'s matching overload for why this
@@ -88,7 +91,14 @@ public class CatalogAuthoringService {
         this(store, audit, entitlements, usage, clock, (tenantId, locationId) -> Optional.empty());
     }
 
-    @Autowired
+    /**
+     * Same widening concern as the five-argument overload above, for {@link
+     * #events}: dozens of this file's own tests construct through this
+     * overload directly and never assert on {@link OfferingBecameAvailable},
+     * so a no-op publisher here costs them nothing — a caller that does care
+     * uses the seven-argument, {@code @Autowired} overload below, either
+     * directly or through Spring.
+     */
     public CatalogAuthoringService(
             JdbcCatalogStore store,
             AuditRecorder audit,
@@ -96,12 +106,25 @@ public class CatalogAuthoringService {
             UsageMeter usage,
             Clock clock,
             CatalogTenantContext tenantContext) {
+        this(store, audit, entitlements, usage, clock, tenantContext, event -> {});
+    }
+
+    @Autowired
+    public CatalogAuthoringService(
+            JdbcCatalogStore store,
+            AuditRecorder audit,
+            EntitlementService entitlements,
+            UsageMeter usage,
+            Clock clock,
+            CatalogTenantContext tenantContext,
+            ApplicationEventPublisher events) {
         this.store = store;
         this.audit = audit;
         this.entitlements = entitlements;
         this.usage = usage;
         this.clock = clock;
         this.tenantContext = tenantContext;
+        this.events = events;
     }
 
     @Transactional
@@ -432,6 +455,7 @@ public class CatalogAuthoringService {
             String actorSubject) {
         for (UUID variantId : variantIds) {
             store.upsertOfferingStatus(tenantId, brandId, locationId, variantId, status);
+            publishIfAvailable(tenantId, brandId, locationId, variantId, status);
         }
 
         if (!variantIds.isEmpty()) {
@@ -447,6 +471,25 @@ public class CatalogAuthoringService {
                     .build());
         }
         return variantIds.size();
+    }
+
+    /**
+     * {@link OfferingBecameAvailable}'s one publish site, called from every
+     * write that can move an offering to {@code AVAILABLE} — both {@link
+     * #setOffering} overloads, {@link #offerIfAbsent} and {@link
+     * #bulkSetOfferingStatus}. Fires whenever the target status is {@code
+     * AVAILABLE}, whether the row was just created or already was — {@code
+     * inventory.application.CatalogOfferingListingTrigger}'s own {@code
+     * ensureListed} call is idempotent, so a redundant fire costs a cheap
+     * "already listed" read, never a second stock item or a re-opened 86.
+     * Silent for {@code UNAVAILABLE}/{@code HIDDEN}: nothing about taking an
+     * offering down or hiding it should ever list a variant.
+     */
+    private void publishIfAvailable(
+            UUID tenantId, UUID brandId, UUID locationId, UUID variantId, OfferingStatus status) {
+        if (status == OfferingStatus.AVAILABLE) {
+            events.publishEvent(new OfferingBecameAvailable(tenantId, brandId, locationId, variantId, clock.instant()));
+        }
     }
 
     /**
@@ -992,6 +1035,7 @@ public class CatalogAuthoringService {
             OfferingStatus status,
             List<String> fulfillmentModes) {
         store.upsertOffering(tenantId, brandId, locationId, variantId, status, String.join(",", fulfillmentModes));
+        publishIfAvailable(tenantId, brandId, locationId, variantId, status);
     }
 
     /**
@@ -1016,8 +1060,16 @@ public class CatalogAuthoringService {
             UUID variantId,
             OfferingStatus status,
             List<String> fulfillmentModes) {
-        return store.insertOfferingIfAbsent(
+        boolean created = store.insertOfferingIfAbsent(
                 tenantId, brandId, locationId, variantId, status, String.join(",", fulfillmentModes));
+        // Only on an actual create: an existing row is somebody's decision and
+        // is left alone by this method's own contract, so a call that found
+        // one changed nothing an offering-became-available listener should
+        // react to.
+        if (created) {
+            publishIfAvailable(tenantId, brandId, locationId, variantId, status);
+        }
+        return created;
     }
 
     /**
@@ -1046,6 +1098,7 @@ public class CatalogAuthoringService {
             List<String> fulfillmentModes,
             String actorSubject) {
         store.upsertOffering(tenantId, brandId, locationId, variantId, status, String.join(",", fulfillmentModes));
+        publishIfAvailable(tenantId, brandId, locationId, variantId, status);
 
         audit.record(AuditFact.of("catalog.offering.set", AuditClass.BUSINESS)
                 .by(ActorRef.user(actorSubject, null))

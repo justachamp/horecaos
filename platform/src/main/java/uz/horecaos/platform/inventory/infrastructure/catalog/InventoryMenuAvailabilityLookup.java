@@ -36,16 +36,6 @@ import uz.horecaos.platform.tenancy.api.SalesChannelLookup;
 @Component
 public class InventoryMenuAvailabilityLookup implements MenuAvailabilityLookup {
 
-    /**
-     * The remaining count is shown at or below this many units, and never
-     * above it — ADR 0017's own "quantity need not be exposed publicly".
-     * Conservative and undecided rather than tenant-configurable: no ADR
-     * names a merchant-facing "low stock" setting, and inventing one is a
-     * decision this wave does not need to make to close the gap (a fixed,
-     * documented threshold does).
-     */
-    static final BigDecimal LOW_STOCK_DISPLAY_THRESHOLD = BigDecimal.valueOf(5);
-
     private final InventoryService inventory;
     private final SalesChannelLookup channels;
 
@@ -83,7 +73,8 @@ public class InventoryMenuAvailabilityLookup implements MenuAvailabilityLookup {
         for (UUID variantId : variantIds) {
             boolean orderable = !unavailableReasons.containsKey(variantId);
             BigDecimal own = remaining.get(variantId);
-            boolean showRemaining = orderable && own != null && own.compareTo(LOW_STOCK_DISPLAY_THRESHOLD) <= 0;
+            boolean showRemaining =
+                    orderable && own != null && own.compareTo(InventoryService.LOW_STOCK_DISPLAY_THRESHOLD) <= 0;
             result.put(variantId, new VariantAvailability(orderable, showRemaining ? own : null));
         }
         return result;

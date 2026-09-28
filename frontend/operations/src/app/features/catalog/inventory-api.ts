@@ -177,6 +177,30 @@ export class InventoryApi {
     );
   }
 
+  /**
+   * The product editor's own "not listed at N branches" read (gap map row
+   * 4.1) — `InventoryVariantListingController`, brand-scoped: every branch
+   * offering this variant AVAILABLE that has never listed it.
+   */
+  unlistedLocations(scope: LocationScope, variantId: string): Observable<readonly string[]> {
+    return this.api
+      .get<{ locationIds: readonly string[] }>(operationsPaths.inventoryVariantListing(scope, variantId))
+      .pipe(map((result) => result.value.locationIds));
+  }
+
+  /**
+   * The Availability tab's own one-click action behind {@link unlistedLocations}'s
+   * banner: lists this variant at every branch it names. Idempotent — a
+   * branch already listed, or one that deliberately marked this variant sold
+   * out, is left exactly as it is.
+   */
+  backfillVariantListing(
+    scope: LocationScope,
+    variantId: string,
+  ): Observable<{ candidateCount: number; listedCount: number }> {
+    return this.api.post(operationsPaths.inventoryVariantListingBackfill(scope, variantId), command(undefined));
+  }
+
   /** Removes a channel type's stop threshold — that channel goes back to selling to zero. */
   clearChannelStopThreshold(
     scope: LocationScope,

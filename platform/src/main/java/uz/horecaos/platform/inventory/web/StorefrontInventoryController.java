@@ -23,11 +23,14 @@ import uz.horecaos.platform.inventory.application.InventoryService;
  * <p>Unauthenticated by design, matching {@code StorefrontCatalogController}'s
  * own stance: a customer browsing before they have an account still needs to
  * know whether a dish is orderable and, where the tenant tracks it, roughly
- * how much is left. {@code remainingQuantity} is only ever populated for a
- * QUANTITY item with {@code catalog.use_stock_logic} on for the tenant — ADR
- * 0017's own "quantity need not be exposed publicly" is honoured by omitting
- * the field rather than by refusing the whole read, the same shape {@code
- * AvailabilityDecision} already uses for "unavailable, and here is why".
+ * how much is left. {@code remainingQuantity} is only ever populated for an
+ * orderable QUANTITY item with {@code catalog.use_stock_logic} on for the
+ * tenant, and even then only at or below {@link
+ * InventoryService#LOW_STOCK_DISPLAY_THRESHOLD} — ADR 0017's own "quantity
+ * need not be exposed publicly" is honoured by omitting the field, the same
+ * gate {@code InventoryMenuAvailabilityLookup} applies to the published
+ * menu's own read, rather than by refusing the whole read the way {@code
+ * AvailabilityDecision} already handles "unavailable, and here is why".
  */
 @RestController
 @RequestMapping("/api/v1/storefront/tenants/{tenantId}/locations/{locationId}")
@@ -54,16 +57,27 @@ public class StorefrontInventoryController {
             @RequestParam String channel) {
         AvailabilityDecision decision =
                 inventory.checkAvailabilityForChannel(tenantId, locationId, Set.of(variantId), channel);
-        BigDecimal remaining = decision.available()
+        BigDecimal own = decision.available()
                 ? inventory
                         .findStockPosition(tenantId, locationId, variantId)
                         .map(InventoryService.StockPositionView::remainingQuantity)
                         .orElse(null)
                 : null;
+        // The same low-stock gate the menu read applies (gap map row
+        // 4.4c/4.4d's storefront half, InventoryMenuAvailabilityLookup): a
+        // customer sees the count only at or below the shared threshold,
+        // never an exact large number. This endpoint used to return `own`
+        // unconditionally, leaking the raw remainingQuantity above it.
+        BigDecimal remaining =
+                own != null && own.compareTo(InventoryService.LOW_STOCK_DISPLAY_THRESHOLD) <= 0 ? own : null;
         return ResponseEntity.ok(new StorefrontAvailabilityResponse(decision.available(), remaining));
     }
 
-    /** {@code remainingQuantity} is null whenever the item is not QUANTITY-tracked, or is unavailable. */
+    /**
+     * {@code remainingQuantity} is null whenever the item is not
+     * QUANTITY-tracked, is unavailable, or its own count sits above {@link
+     * InventoryService#LOW_STOCK_DISPLAY_THRESHOLD}.
+     */
     public record StorefrontAvailabilityResponse(
             boolean available, @Nullable BigDecimal remainingQuantity) {}
 }

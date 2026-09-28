@@ -267,6 +267,18 @@ export class ProductEditorPage implements OnInit {
 
   protected readonly availabilityRows = signal<readonly VariantAvailabilityRow[]>([]);
 
+  /**
+   * "Not listed at N branches" (gap map row 4.1): the default variant's own
+   * unlisted-branch count. `null` before the first load or when the count
+   * has never been fetched; `0` once every AVAILABLE offering of this
+   * variant has a stock item somewhere — the common case, so the banner
+   * stays hidden almost always. Scoped to the product's default variant
+   * only, the same "one variant per row" simplification `CatalogImportRow`'s
+   * own doc documents for the CSV import.
+   */
+  protected readonly unlistedBranchCount = signal<number | null>(null);
+  protected readonly listingBackfillPending = signal(false);
+
   protected readonly historyLoading = signal(false);
   protected readonly historyLoaded = signal(false);
   protected readonly historyDenied = signal(false);
@@ -571,6 +583,42 @@ export class ProductEditorPage implements OnInit {
       this.availabilityRows.set(rows.filter((row) => variantIds.has(row.variantId)));
     } catch {
       this.availabilityRows.set([]);
+    }
+    void this.loadUnlistedBranchCount();
+  }
+
+  private async loadUnlistedBranchCount(): Promise<void> {
+    const locationScope = this.location.scope();
+    const variantId = this.defaultVariantId();
+    if (!locationScope || !variantId) {
+      this.unlistedBranchCount.set(null);
+      return;
+    }
+    try {
+      const locationIds = await firstValueFrom(this.inventoryApi.unlistedLocations(locationScope, variantId));
+      this.unlistedBranchCount.set(locationIds.length);
+    } catch {
+      // Read-only banner: a failure here just leaves it hidden rather than
+      // interrupting the tab the way `availabilityRows`'s own catch does.
+      this.unlistedBranchCount.set(null);
+    }
+  }
+
+  /** The Availability tab's own one-click action behind the "not listed at N branches" banner. */
+  protected async listAtMissingBranches(): Promise<void> {
+    const locationScope = this.location.scope();
+    const variantId = this.defaultVariantId();
+    if (!locationScope || !variantId || this.listingBackfillPending()) {
+      return;
+    }
+    this.listingBackfillPending.set(true);
+    try {
+      await firstValueFrom(this.inventoryApi.backfillVariantListing(locationScope, variantId));
+      await this.loadUnlistedBranchCount();
+    } catch (error) {
+      this.handleSaveError(error);
+    } finally {
+      this.listingBackfillPending.set(false);
     }
   }
 

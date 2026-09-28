@@ -1891,6 +1891,70 @@ public class JdbcCatalogStore {
                 .list();
     }
 
+    /**
+     * {@code catalog.api.UnlistedOfferingsPort}'s own read (gap-map row 4.1's
+     * backfill): every location of this brand offering this variant {@code
+     * AVAILABLE} with no {@code inventory.stock_items} row for it. The {@code
+     * LEFT JOIN ... IS NULL} anti-join is the same shape {@link
+     * #unlistedAvailableVariantsAtLocation} uses for its own, narrower
+     * question — this one holds the variant fixed and varies the location
+     * instead of the other way around.
+     */
+    public List<UUID> unlistedLocationsForVariant(UUID tenantId, UUID brandId, UUID variantId, int limit) {
+        return jdbc.sql("""
+                SELECT lo.location_id
+                FROM catalog.location_offerings lo
+                LEFT JOIN inventory.stock_items si
+                    ON si.variant_id = lo.variant_id AND si.tenant_id = lo.tenant_id
+                       AND si.location_id = lo.location_id
+                WHERE lo.tenant_id = :tenantId AND lo.brand_id = :brandId AND lo.variant_id = :variantId
+                  AND lo.status = 'AVAILABLE' AND si.id IS NULL
+                ORDER BY lo.location_id
+                LIMIT :limit
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("variantId", variantId)
+                .param("limit", limit)
+                .query((row, number) -> java.util.Objects.requireNonNull(row.getObject("location_id", UUID.class)))
+                .list();
+    }
+
+    /**
+     * The location-scoped mirror of {@link #unlistedLocationsForVariant}
+     * (gap-map row 4.1's other backfill direction, ADR 0099): every variant
+     * this location offers {@code AVAILABLE} with no stock item at all,
+     * ordered so a caller paging with {@code cursorVariantId} sees every
+     * offering exactly once regardless of how many pages it takes — the same
+     * cursor shape {@link #variantsAtLocation} already establishes.
+     */
+    public List<UnlistedVariantRow> unlistedAvailableVariantsAtLocation(
+            UUID tenantId, UUID brandId, UUID locationId, @Nullable UUID cursorVariantId, int limit) {
+        return jdbc.sql("""
+                SELECT lo.variant_id
+                FROM catalog.location_offerings lo
+                LEFT JOIN inventory.stock_items si
+                    ON si.variant_id = lo.variant_id AND si.tenant_id = lo.tenant_id
+                       AND si.location_id = lo.location_id
+                WHERE lo.tenant_id = :tenantId AND lo.brand_id = :brandId AND lo.location_id = :locationId
+                  AND lo.status = 'AVAILABLE' AND si.id IS NULL
+                  AND (CAST(:cursor AS uuid) IS NULL OR lo.variant_id > CAST(:cursor AS uuid))
+                ORDER BY lo.variant_id
+                LIMIT :limit
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("locationId", locationId)
+                .param("cursor", cursorVariantId)
+                .param("limit", limit)
+                .query((row, number) -> new UnlistedVariantRow(
+                        java.util.Objects.requireNonNull(row.getObject("variant_id", UUID.class))))
+                .list();
+    }
+
+    /** One row of {@link #unlistedAvailableVariantsAtLocation}. */
+    public record UnlistedVariantRow(UUID variantId) {}
+
     // ------------------------------------------------------------ publications
 
     public void insertPublication(
