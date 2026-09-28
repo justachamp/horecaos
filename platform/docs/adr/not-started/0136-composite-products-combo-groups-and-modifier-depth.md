@@ -95,7 +95,7 @@ this record makes it the spine of the Decision below.
 unit_amount_minor, base_amount_minor, final_amount_minor, tax_amount_minor)`,
 with `ordering.order_lines.ck_order_line_amounts` and, at the order level,
 `ck_order_total_reconciles` (`total = subtotal + tax + fee - discount`,
-ADR 0072) summing every line to the order's own stated total. Every consumer
+V0022/ADR 0019) summing every line to the order's own stated total. Every consumer
 downstream — `KitchenTicketService`, `PosOrderExportService`, reporting's
 metric layer, the receipt renderer — reads that flat list and none of them
 know a hierarchy exists. A combo design that introduces a parent/child line
@@ -455,6 +455,9 @@ dropped.
 
 - ADR 0016: Brand catalog, publication, and location offerings
 - ADR 0018: Deterministic pricing, promotions, taxes, and quotes
+- ADR 0019: Cart, checkout, and order orchestration — `V0022`'s order model
+  and `ck_order_total_reconciles`, the constraint this record's flat-line
+  design keeps satisfying
 - ADR 0038: Legal entities, fiscal receipts, and fiscal product classification
 - ADR 0041: Kitchen execution, production routing, and kitchen release
 - ADR 0072: Promo codes as a coupon-gated pricing input — the
