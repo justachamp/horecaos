@@ -25,39 +25,6 @@ uz/horecaos/platform/audit/infrastructure/persistence/JdbcApprovalService.java:3
 uz/horecaos/platform/audit/infrastructure/persistence/JdbcApprovalService.java:571
 uz/horecaos/platform/audit/web/AuditController.java:225
 
-# --- courier ---
-uz/horecaos/platform/courier/application/CourierAccountProvisioningService.java:115
-uz/horecaos/platform/courier/application/CourierAccountProvisioningService.java:173
-uz/horecaos/platform/courier/application/CourierAdjustmentService.java:174
-uz/horecaos/platform/courier/application/CourierApplicantRetentionSweeper.java:161
-uz/horecaos/platform/courier/application/CourierCashService.java:157
-uz/horecaos/platform/courier/application/CourierCashService.java:73
-uz/horecaos/platform/courier/application/CourierEngagementService.java:160
-uz/horecaos/platform/courier/application/CourierEngagementService.java:248
-uz/horecaos/platform/courier/application/CourierEngagementService.java:290
-uz/horecaos/platform/courier/application/CourierEngagementService.java:364
-uz/horecaos/platform/courier/application/CourierEngagementService.java:414
-uz/horecaos/platform/courier/application/CourierRateCardService.java:88
-uz/horecaos/platform/courier/application/CourierRosterService.java:107
-uz/horecaos/platform/courier/application/CourierRosterService.java:126
-uz/horecaos/platform/courier/application/CourierRosterService.java:151
-uz/horecaos/platform/courier/application/CourierRosterService.java:170
-uz/horecaos/platform/courier/application/CourierRosterService.java:63
-uz/horecaos/platform/courier/application/CourierRosterService.java:83
-uz/horecaos/platform/courier/application/CourierSettlementService.java:184
-uz/horecaos/platform/courier/application/CourierSettlementService.java:304
-uz/horecaos/platform/courier/application/CourierShiftService.java:513
-uz/horecaos/platform/courier/application/CourierTypeService.java:121
-uz/horecaos/platform/courier/application/CourierTypeService.java:145
-uz/horecaos/platform/courier/application/PartnerInvoiceService.java:253
-uz/horecaos/platform/courier/application/PartnerInvoiceService.java:283
-uz/horecaos/platform/courier/application/PartnerInvoiceService.java:324
-uz/horecaos/platform/courier/application/PartnerInvoiceService.java:374
-uz/horecaos/platform/courier/application/PartnerInvoiceService.java:398
-uz/horecaos/platform/courier/application/PartnerInvoiceService.java:95
-uz/horecaos/platform/courier/application/PlannedShiftService.java:240
-uz/horecaos/platform/courier/application/RegistrationComplianceSweeper.java:152
-
 # --- customers ---
 uz/horecaos/platform/customers/application/CustomerBlacklistService.java:202
 uz/horecaos/platform/customers/application/CustomerBlacklistService.java:252

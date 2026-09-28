@@ -1,6 +1,7 @@
 package uz.horecaos.platform.courier.application;
 
 import java.time.Clock;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -10,6 +11,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.courier.domain.AdjustmentOrigin;
 import uz.horecaos.platform.courier.domain.LedgerEntryType;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierShiftStore;
@@ -70,7 +72,9 @@ public class CourierCashService {
                 // record that fixed business intent rather than inventing one
                 // from the declared amount.
                 .because("Courier declared cash handover")
-                .changed(Map.of("declaredMinor", declaredMinor))
+                // Staff 9.3a: "declaredMinor" genuinely moves -- handover (read
+                // above, before shifts.declare) already holds the prior value.
+                .changed(ChangeDocuments.change("declaredMinor", handover.declaredMinor(), declaredMinor))
                 .usingCapability("courier.shift.open")
                 .correlatedBy("courier-cash")
                 .occurredAt(clock.instant())
@@ -149,22 +153,27 @@ public class CourierCashService {
                     actor.subject()));
         }
 
+        Map<String, Object> beforeFields = new LinkedHashMap<>();
+        beforeFields.put("status", handover.status());
+        beforeFields.put("expectedMinor", handover.expectedMinor());
+        beforeFields.put("declaredMinor", handover.declaredMinor());
+        beforeFields.put("confirmedMinor", handover.confirmedMinor());
+        Map<String, Object> afterFields = new LinkedHashMap<>();
+        afterFields.put("status", status);
+        afterFields.put("expectedMinor", handover.expectedMinor());
+        afterFields.put("declaredMinor", handover.declaredMinor());
+        afterFields.put("confirmedMinor", confirmedMinor);
+        afterFields.put("varianceMinor", variance);
+        afterFields.put("reasonCode", reasonCode);
         audit.record(AuditFact.of("courier.cash.confirmed", AuditClass.BUSINESS)
                 .by(actor)
                 .at(ResourceScope.tenant(tenantId))
                 .target("courier_cash_handover", handoverId)
                 .because(reason)
-                .changed(Map.of(
-                        "expectedMinor",
-                        handover.expectedMinor(),
-                        "declaredMinor",
-                        handover.declaredMinor(),
-                        "confirmedMinor",
-                        confirmedMinor,
-                        "varianceMinor",
-                        variance,
-                        "reasonCode",
-                        String.valueOf(reasonCode)))
+                // Staff 9.3a: "status"/"confirmedMinor" genuinely move --
+                // handover (read above, before shifts.confirm) already holds
+                // every prior value.
+                .changed(ChangeDocuments.diff(beforeFields, afterFields))
                 .usingCapability("courier.cash.confirm")
                 .correlatedBy("courier-cash")
                 .occurredAt(clock.instant())

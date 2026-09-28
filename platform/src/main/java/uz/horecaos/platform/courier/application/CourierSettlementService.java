@@ -26,6 +26,7 @@ import uz.horecaos.platform.audit.api.ApprovalService;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.courier.domain.CostBasis;
 import uz.horecaos.platform.courier.domain.CostPath;
 import uz.horecaos.platform.courier.domain.LedgerEntryType;
@@ -181,17 +182,23 @@ public class CourierSettlementService {
                 .at(ResourceScope.tenant(tenantId))
                 .target("courier_settlement_period", periodId)
                 .because(reason)
-                .changed(Map.of(
-                        "amountPayableMinor",
-                        totals.amountPayableMinor(),
-                        "grossEarningsMinor",
-                        totals.grossEarningsMinor(),
-                        "cashHeldMinor",
-                        totals.cashHeldMinor(),
-                        "complianceFlag",
-                        complianceFlag,
-                        "statementHash",
-                        hash))
+                // Staff 9.3a: "status" genuinely moves -- the guard above
+                // already proved period.status() was OPEN.
+                .changed(ChangeDocuments.diff(
+                        Map.of("status", "OPEN"),
+                        Map.of(
+                                "status",
+                                "CLOSED",
+                                "amountPayableMinor",
+                                totals.amountPayableMinor(),
+                                "grossEarningsMinor",
+                                totals.grossEarningsMinor(),
+                                "cashHeldMinor",
+                                totals.cashHeldMinor(),
+                                "complianceFlag",
+                                complianceFlag,
+                                "statementHash",
+                                hash)))
                 .evidence(hash)
                 .usingCapability("courier.settlement.close")
                 .correlatedBy("courier-settlement")
@@ -301,13 +308,14 @@ public class CourierSettlementService {
                 .at(ResourceScope.tenant(tenantId))
                 .target("courier_payout", payoutId)
                 .because(reason)
-                .changed(Map.of(
+                // Staff 9.3a: a brand-new payout, no prior state to diff against.
+                .changed(ChangeDocuments.created(Map.of(
                         "amountMinor",
                         period.amountPayableMinor(),
                         "method",
                         method.name(),
                         "complianceFlag",
-                        period.complianceFlag()))
+                        period.complianceFlag())))
                 .underApproval(approvalRequestId)
                 .usingCapability("courier.payout.authorise")
                 .correlatedBy("courier-settlement")

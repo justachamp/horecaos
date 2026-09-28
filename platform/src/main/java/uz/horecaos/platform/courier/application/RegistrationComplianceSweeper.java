@@ -13,6 +13,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.courier.application.port.CourierNotificationPort;
 import uz.horecaos.platform.courier.domain.CourierCompensationPolicy;
 import uz.horecaos.platform.courier.domain.EngagementStatus;
@@ -149,13 +150,17 @@ public class RegistrationComplianceSweeper {
                     .by(ActorRef.systemJob("courier-registration-sweeper"))
                     .at(ResourceScope.tenant(engagement.tenantId()))
                     .target("courier_engagement", engagement.id())
-                    .changed(Map.of(
-                            "status",
-                            EngagementStatus.SUSPENDED_COMPLIANCE.name(),
-                            "reverificationDueOn",
-                            String.valueOf(engagement.reverificationDueOn()),
-                            "accruedEarningsReversed",
-                            false))
+                    // Staff 9.3a: "status" genuinely moves -- the guard above
+                    // already proved engagement.status() was ACTIVE.
+                    .changed(ChangeDocuments.diff(
+                            Map.of("status", EngagementStatus.ACTIVE.name()),
+                            Map.of(
+                                    "status",
+                                    EngagementStatus.SUSPENDED_COMPLIANCE.name(),
+                                    "reverificationDueOn",
+                                    String.valueOf(engagement.reverificationDueOn()),
+                                    "accruedEarningsReversed",
+                                    false)))
                     .correlatedBy("courier-registration-sweeper")
                     .occurredAt(clock.instant())
                     .build());
