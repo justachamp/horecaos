@@ -1611,6 +1611,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.locations.content.title': 'Lokalizatsiya qilingan kontent',
   'settings.locations.content.displayName': 'Nomi',
   'settings.locations.content.description': 'Tavsif',
+  'settings.locations.content.defaultMarker': 'standart',
   'settings.locations.empty': 'Hali filiallar yoʻq.',
   'settings.locations.list.column.state': 'Holat',
   'settings.locations.list.filterState': 'Holat',

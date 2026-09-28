@@ -180,6 +180,12 @@ class PriceAuthoringTests {
         var activated = authoring.activate(TENANT, BRAND, drafted.id(), priced.version());
         assertThat(activated.status()).isEqualTo(PriceAuthoringService.Status.ACTIVE);
 
+        // Staff 9.3a: status and version genuinely moved (DRAFT -> ACTIVE, an
+        // optimistic-lock bump); priority did not, and is diffed against
+        // itself rather than restated as though it were new information.
+        assertThat(changeDocumentField(activated.id(), "status")).isEqualTo("DRAFT->ACTIVE");
+        assertThat(changeDocumentField(activated.id(), "priority")).isEqualTo("0->0");
+
         var quote = quotes.quote(cart(Map.of(burgerVariant, 2)));
 
         // Two burgers at 50,000 som each. The customer pays 100,000, and the 12%
@@ -719,6 +725,20 @@ class PriceAuthoringTests {
         authoring.activate(TENANT, BRAND, drafted.id(), ready.version());
         authoring.setTaxProfile(TENANT, BRAND, "UZ", TaxMode.INCLUSIVE, 1200);
         return drafted.id();
+    }
+
+    /** The one field's before/after pair, for this price book's most recent activation fact. */
+    private String changeDocumentField(UUID priceBookId, String field) {
+        return jdbc.sql("""
+                        SELECT change_document -> :field ->> 'before', change_document -> :field ->> 'after'
+                        FROM audit.audit_events
+                        WHERE action_code = 'pricing.price_book.activated' AND target_id = :priceBookId
+                        ORDER BY occurred_at DESC LIMIT 1
+                        """)
+                .param("field", field)
+                .param("priceBookId", priceBookId)
+                .query((row, n) -> row.getString(1) + "->" + row.getString(2))
+                .single();
     }
 
     private static PriceAuthoringService.NewPriceBook newBook(String name, int priority) {

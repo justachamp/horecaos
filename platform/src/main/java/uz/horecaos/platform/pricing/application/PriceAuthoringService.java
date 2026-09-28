@@ -18,6 +18,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope;
@@ -275,10 +276,19 @@ public class PriceAuthoringService {
                 .targetVersion((long) activated.version())
                 .because("Price book activated")
                 .usingCapability(Capability.PRICING_ACTIVATE.code())
-                .changed(Map.of(
-                        "status", activated.status().name(),
-                        "version", activated.version(),
-                        "priority", activated.priority()))
+                // Staff 9.3a: "status" and "version" genuinely move here (DRAFT
+                // -> ACTIVE, and the optimistic-lock bump); "priority" does not,
+                // and diffing it against itself says so honestly instead of
+                // restating it as though it were new information.
+                .changed(ChangeDocuments.diff(
+                        Map.of(
+                                "status", book.status().name(),
+                                "version", book.version(),
+                                "priority", book.priority()),
+                        Map.of(
+                                "status", activated.status().name(),
+                                "version", activated.version(),
+                                "priority", activated.priority())))
                 .correlatedBy(priceBookId.toString())
                 .occurredAt(clock.instant())
                 .build());

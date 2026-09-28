@@ -15,6 +15,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.audit.api.ActorRef;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.migration.api.ImportContext;
 import uz.horecaos.platform.migration.application.MigrationRunStore.Counters;
 import uz.horecaos.platform.migration.application.MigrationRunStore.RunRow;
@@ -153,7 +154,8 @@ public class MigrationRunService {
                 run.id(),
                 run.version(),
                 command.reason(),
-                Map.of(
+                // Staff 9.3a: a brand-new run row, no prior state to diff against.
+                ChangeDocuments.created(Map.of(
                         "scopeId",
                         scopeId,
                         "capability",
@@ -163,7 +165,7 @@ public class MigrationRunService {
                         "transformationVersion",
                         run.transformationVersion(),
                         "resumedFromWatermark",
-                        run.sourceWatermark() == null ? "start" : run.sourceWatermark()),
+                        run.sourceWatermark() == null ? "start" : run.sourceWatermark())),
                 null);
 
         log.info("Opened {} run {} over scope {} from watermark {}", runType, run.id(), scopeId, run.sourceWatermark());
@@ -296,25 +298,38 @@ public class MigrationRunService {
                 runId,
                 version,
                 command.reason(),
-                Map.of(
-                        "scopeId",
-                        run.scopeId(),
-                        "runType",
-                        run.runType().name(),
-                        "status",
-                        terminal.name(),
-                        "sourceWatermark",
-                        run.sourceWatermark() == null ? "" : run.sourceWatermark(),
-                        "scanned",
-                        run.counters().scanned(),
-                        "created",
-                        run.counters().created(),
-                        "updated",
-                        run.counters().updated(),
-                        "skipped",
-                        run.counters().skipped(),
-                        "quarantined",
-                        run.counters().quarantined()),
+                // Staff 9.3a: run.status() is what it was before this finish call
+                // (RUNNING) -- terminal is what it becomes; the counters are only
+                // meaningful as of the finish, so they appear in "after" alone.
+                ChangeDocuments.diff(
+                        Map.of(
+                                "scopeId",
+                                run.scopeId(),
+                                "runType",
+                                run.runType().name(),
+                                "status",
+                                run.status().name(),
+                                "sourceWatermark",
+                                run.sourceWatermark() == null ? "" : run.sourceWatermark()),
+                        Map.of(
+                                "scopeId",
+                                run.scopeId(),
+                                "runType",
+                                run.runType().name(),
+                                "status",
+                                terminal.name(),
+                                "sourceWatermark",
+                                run.sourceWatermark() == null ? "" : run.sourceWatermark(),
+                                "scanned",
+                                run.counters().scanned(),
+                                "created",
+                                run.counters().created(),
+                                "updated",
+                                run.counters().updated(),
+                                "skipped",
+                                run.counters().skipped(),
+                                "quarantined",
+                                run.counters().quarantined())),
                 null);
         return requireRun(tenantId, runId);
     }

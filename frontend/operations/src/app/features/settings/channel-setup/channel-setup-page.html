@@ -182,8 +182,15 @@
           </div>
           @if (editingSlug() === slug) {
             <div class="page-editor">
-              @for (locale of locales; track locale) {
-                <label class="q-caption">{{ locale }}</label>
+              @for (locale of locales(); track locale) {
+                <label class="q-caption"
+                  >{{ locale }}
+                  @if (isDefaultLocale(locale)) {
+                    <span class="locale-default-marker">{{
+                      'settings.locations.content.defaultMarker' | t
+                    }}</span>
+                  }
+                </label>
                 <textarea
                   class="q-input"
                   rows="4"

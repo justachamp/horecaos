@@ -17,6 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.ApprovalRequestOwnership;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.migration.application.MigrationCutoverDecisionStore.Decision;
 import uz.horecaos.platform.migration.application.MigrationCutoverDecisionStore.DecisionRow;
 import uz.horecaos.platform.migration.application.MigrationScopeStore.ScopeRow;
@@ -580,13 +581,15 @@ public class MigrationScopeService {
                 scopeId,
                 scope.version(),
                 command.reason(),
-                Map.of(
+                // Staff 9.3a: a new, standalone DecisionRow recording the refusal --
+                // the scope itself does not move -- so this is a creation.
+                ChangeDocuments.created(Map.of(
                         "decisionId",
                         decision.id(),
                         "decidedBy",
                         decidedBy,
                         "proposedState",
-                        command.targetState().name()),
+                        command.targetState().name())),
                 command.approvalRequestId());
         return decision;
     }
@@ -632,11 +635,7 @@ public class MigrationScopeService {
                 scopeId,
                 version,
                 reason,
-                Map.of(
-                        "undecidedSources",
-                        undecidedSources,
-                        "previousUndecidedSources",
-                        previous == null ? "unknown" : previous),
+                ChangeDocuments.change("undecidedSources", previous == null ? "unknown" : previous, undecidedSources),
                 null);
 
         return new ScopeRow(
@@ -824,11 +823,20 @@ public class MigrationScopeService {
                     return MigrationConflictException.staleVersion("scope", scope.version(), settled.version());
                 });
 
-        Map<String, Object> changes = new LinkedHashMap<>(extraChanges);
-        changes.put("fromState", scope.state().name());
-        changes.put("toState", to.name());
-        changes.put("capability", scope.capability().name());
-        changes.put("targetOwner", scope.targetOwner());
+        // Staff 9.3a: "state" is the one field that genuinely moves here; the
+        // extraChanges a caller supplies (decisionId, requestedBy, writeMode,
+        // ...) are new facts recorded with this transition, not prior fields
+        // that changed, so they appear in "after" only -- diff() still merges
+        // them correctly since a key absent from "before" reads as null there.
+        Map<String, Object> before = Map.of(
+                "state", scope.state().name(),
+                "capability", scope.capability().name(),
+                "targetOwner", scope.targetOwner());
+        Map<String, Object> after = new LinkedHashMap<>(extraChanges);
+        after.put("state", to.name());
+        after.put("capability", scope.capability().name());
+        after.put("targetOwner", scope.targetOwner());
+        Map<String, Object> changes = ChangeDocuments.diff(before, after);
         audit.record(
                 actionCode,
                 ActorRef.user(actor, null),
@@ -939,13 +947,22 @@ public class MigrationScopeService {
                 scope.id(),
                 scope.version(),
                 reasonCode,
-                Map.of(
-                        "state",
-                        scope.state().name(),
-                        "capability",
-                        scope.capability().name(),
-                        "refusal",
-                        reasonCode));
+                // Staff 9.3a: the scope does not move -- state/capability are
+                // unchanged, recorded on both sides -- only the refusal itself
+                // is new information.
+                ChangeDocuments.diff(
+                        Map.of(
+                                "state",
+                                scope.state().name(),
+                                "capability",
+                                scope.capability().name()),
+                        Map.of(
+                                "state",
+                                scope.state().name(),
+                                "capability",
+                                scope.capability().name(),
+                                "refusal",
+                                reasonCode)));
         log.warn("Refused a transition of scope {} in {}: {}", scope.id(), scope.state(), message);
         return new MigrationPreconditionException(reasonCode, message);
     }

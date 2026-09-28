@@ -150,6 +150,35 @@ class VoiceModuleIntegrationTest {
     }
 
     @Test
+    void settingPresenceWritesAFieldLevelDiffFromWhatItWasBefore() {
+        presence.setPresence(
+                TENANT, BRAND, LOCATION, OPERATOR, OperatorPresenceState.ONLINE, null, userActor(), "cap", "diff-1");
+
+        // The first presence write of an operator's session: no prior row, so
+        // the marker "NONE" -- never a real OperatorPresenceState -- names it.
+        assertThat(changeDocumentField("voice.presence.changed", "diff-1", "state"))
+                .isEqualTo("NONE->ONLINE");
+
+        presence.setPresence(
+                TENANT,
+                BRAND,
+                LOCATION,
+                OPERATOR,
+                OperatorPresenceState.PAUSED,
+                "Lunch break",
+                userActor(),
+                "cap",
+                "diff-2");
+
+        // The second write diffs against the row the first one left, not
+        // against "NONE" a second time.
+        assertThat(changeDocumentField("voice.presence.changed", "diff-2", "state"))
+                .isEqualTo("ONLINE->PAUSED");
+        assertThat(changeDocumentField("voice.presence.changed", "diff-2", "reason"))
+                .isEqualTo("null->Lunch break");
+    }
+
+    @Test
     void reSettingPresenceUpdatesTheSameRowRatherThanAddingASecondOne() {
         presence.setPresence(
                 TENANT, BRAND, LOCATION, OPERATOR, OperatorPresenceState.ONLINE, null, userActor(), "cap", "c1");
@@ -337,6 +366,16 @@ class VoiceModuleIntegrationTest {
                 WHERE action_code = 'voice.screen_pop.caller_number_revealed'
                 """).query(Long.class).single();
         assertThat(auditCount).isEqualTo(1L);
+
+        // Staff 9.3a: a reveal changes no field on the call event. An empty
+        // ChangeDocuments.diff(Map.of(), Map.of()) and JdbcAuditRecorder's own
+        // "empty means no document" rule agree: the column is null rather
+        // than an after-only map claiming a change that never happened.
+        Boolean changeDocumentIsNull = jdbc.sql("""
+                        SELECT change_document IS NULL FROM audit.audit_events
+                        WHERE action_code = 'voice.screen_pop.caller_number_revealed'
+                        """).query(Boolean.class).single();
+        assertThat(changeDocumentIsNull).isTrue();
     }
 
     @Test
@@ -387,6 +426,20 @@ class VoiceModuleIntegrationTest {
 
     private static ActorRef userActor() {
         return ActorRef.user(OPERATOR, null);
+    }
+
+    /** The one field's before/after pair, for the audit fact this correlation id names. */
+    private String changeDocumentField(String actionCode, String correlationId, String field) {
+        return jdbc.sql("""
+                        SELECT change_document -> :field ->> 'before', change_document -> :field ->> 'after'
+                        FROM audit.audit_events
+                        WHERE action_code = :actionCode AND correlation_id = :correlationId
+                        """)
+                .param("field", field)
+                .param("actionCode", actionCode)
+                .param("correlationId", correlationId)
+                .query((row, n) -> row.getString(1) + "->" + row.getString(2))
+                .single();
     }
 
     private void truncate() {

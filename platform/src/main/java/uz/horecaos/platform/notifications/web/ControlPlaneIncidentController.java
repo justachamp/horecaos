@@ -25,6 +25,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope;
@@ -89,7 +90,12 @@ public class ControlPlaneIncidentController {
         StoredAlert alert = require(incidentId);
         Instant now = clock.instant();
         if (alerts.acknowledge(incidentId, subject(), now)) {
-            record("notifications.incident.acknowledged", alert, body == null ? "Acknowledged" : body.note(), now);
+            record(
+                    "notifications.incident.acknowledged",
+                    alert,
+                    "ACKNOWLEDGED",
+                    body == null ? "Acknowledged" : body.note(),
+                    now);
         }
         return ResponseEntity.noContent().build();
     }
@@ -105,7 +111,7 @@ public class ControlPlaneIncidentController {
         StoredAlert alert = require(incidentId);
         Instant now = clock.instant();
         if (alerts.resolve(incidentId, subject(), body.note(), now)) {
-            record("notifications.incident.resolved", alert, body.note(), now);
+            record("notifications.incident.resolved", alert, "RESOLVED", body.note(), now);
         }
         return ResponseEntity.noContent().build();
     }
@@ -115,13 +121,30 @@ public class ControlPlaneIncidentController {
                 .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such incident"));
     }
 
-    private void record(String action, StoredAlert alert, String reason, Instant now) {
+    private void record(String action, StoredAlert alert, String targetStatus, String reason, Instant now) {
         audit.record(AuditFact.of(action, AuditClass.SECURITY)
                 .by(ActorRef.user(subject(), null))
                 .at(ResourceScope.platform())
                 .target("ControlPlaneIncident", alert.id())
                 .because(reason)
-                .changed(Map.of("eventClass", alert.eventClass(), "subjectId", alert.subjectId()))
+                // Staff 9.3a: "status" genuinely moves (alert.status(), read
+                // before this mutation, -> targetStatus); eventClass/subjectId
+                // are unchanged identifying context, kept on both sides.
+                .changed(ChangeDocuments.diff(
+                        Map.of(
+                                "eventClass",
+                                alert.eventClass(),
+                                "subjectId",
+                                alert.subjectId(),
+                                "status",
+                                alert.status()),
+                        Map.of(
+                                "eventClass",
+                                alert.eventClass(),
+                                "subjectId",
+                                alert.subjectId(),
+                                "status",
+                                targetStatus)))
                 .usingCapability(Capability.CONTROL_PLANE_ALERT_MANAGE.code())
                 .correlatedBy(alert.id().toString())
                 .occurredAt(now)

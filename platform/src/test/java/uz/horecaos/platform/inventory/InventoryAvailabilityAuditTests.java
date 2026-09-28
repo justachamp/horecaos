@@ -142,6 +142,9 @@ class InventoryAvailabilityAuditTests {
             assertThat(row.get("reason")).isEqualTo("SOLD_OUT");
             assertThat(row.get("tenant_id")).isEqualTo(TENANT);
         });
+        // Staff 9.3a: "available" genuinely moves (true, set by the fixture's
+        // setOffering, -> false) rather than an after-only map.
+        assertThat(availableChangeDocument(variantId)).isEqualTo("true->false");
     }
 
     @Test
@@ -192,6 +195,21 @@ class InventoryAvailabilityAuditTests {
                 WHERE target_id = :targetId
                 ORDER BY occurred_at
                 """).param("targetId", targetId).query().listOfRows();
+    }
+
+    /** Staff 9.3a: the most recent {@code inventory.availability.set} fact's "available" field, as {@code before->after}. */
+    private String availableChangeDocument(UUID targetId) {
+        return jdbc.sql(
+                        """
+                        SELECT change_document -> 'available' ->> 'before', change_document -> 'available' ->> 'after'
+                          FROM audit.audit_events
+                         WHERE target_id = :targetId AND action_code = 'inventory.availability.set'
+                         ORDER BY occurred_at DESC
+                         LIMIT 1
+                        """)
+                .param("targetId", targetId)
+                .query((row, n) -> row.getString(1) + "->" + row.getString(2))
+                .single();
     }
 
     private void insertTenancy() {

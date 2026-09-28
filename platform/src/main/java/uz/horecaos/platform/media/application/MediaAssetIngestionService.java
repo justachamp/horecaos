@@ -24,6 +24,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.media.api.MediaAssetAvailable;
 import uz.horecaos.platform.media.api.MediaAssetId;
@@ -223,11 +224,21 @@ public class MediaAssetIngestionService implements MediaAssetIngestion {
                     image.widthPx(),
                     image.heightPx()));
 
-            Map<String, Object> changed = new LinkedHashMap<>();
-            changed.put("status", MediaAssetStatus.AVAILABLE.name());
-            changed.put("verifiedContentType", image.contentType());
-            changed.put("verifiedSizeBytes", object.sizeBytes());
-            changed.put("ingestedServerSide", "true");
+            // Staff 9.3a: "status"/"verifiedContentType"/"verifiedSizeBytes"
+            // genuinely move here (the asset's own fields, PENDING/null
+            // before this ingestion); "ingestedServerSide" is a fact about
+            // this ingestion path itself, not a prior field, so it has no
+            // earlier value.
+            Map<String, Object> before = new LinkedHashMap<>();
+            before.put("status", asset.status().name());
+            before.put("verifiedContentType", asset.verifiedContentType());
+            before.put("verifiedSizeBytes", asset.verifiedSizeBytes());
+
+            Map<String, Object> after = new LinkedHashMap<>();
+            after.put("status", MediaAssetStatus.AVAILABLE.name());
+            after.put("verifiedContentType", image.contentType());
+            after.put("verifiedSizeBytes", object.sizeBytes());
+            after.put("ingestedServerSide", "true");
 
             audit.record(AuditFact.of("media.asset.ingested", AuditClass.BUSINESS)
                     .by(
@@ -238,7 +249,7 @@ public class MediaAssetIngestionService implements MediaAssetIngestion {
                     .target("media_asset", asset.assetId().value())
                     .correlatedBy(asset.assetId().value().toString())
                     .occurredAt(now)
-                    .changed(changed)
+                    .changed(ChangeDocuments.diff(before, after))
                     .build());
         });
     }

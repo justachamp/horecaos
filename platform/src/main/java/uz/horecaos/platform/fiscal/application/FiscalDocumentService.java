@@ -20,6 +20,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.fiscal.api.FiscalDocumentBlocked;
 import uz.horecaos.platform.fiscal.api.PartnerFiscalizationPort;
 import uz.horecaos.platform.fiscal.domain.BusinessZone;
@@ -275,8 +276,13 @@ public class FiscalDocumentService {
                                 ? AuditFact.Outcome.FAILED
                                 : AuditFact.Outcome.SUCCEEDED)
                 .because(reason)
-                .changed(Map.of(
-                        "outcome", outcome.name(), "orderId", document.orderId().toString()))
+                // Staff 9.3a: "outcome" is this retry attempt's own result,
+                // not a field the document carried before -- there is no
+                // prior outcome to diff against, so it is recorded as a
+                // creation, the same reasoning CourierTrackRevealService's
+                // reveal-parameters use.
+                .changed(ChangeDocuments.created(
+                        Map.of("outcome", outcome.name(), "orderId", document.orderId().toString())))
                 .correlatedBy(correlationId == null ? documentId.toString() : correlationId)
                 .occurredAt(clock.instant())
                 .build());
@@ -329,11 +335,25 @@ public class FiscalDocumentService {
                 .target("fiscal_document", documentId)
                 .targetVersion((long) expectedVersion)
                 .because(reason)
-                .changed(Map.of(
-                        "fromReasonCode",
-                        document.reasonCode(),
-                        "orderId",
-                        document.orderId().toString()))
+                // Staff 9.3a: "state" and "reasonCode" genuinely move here
+                // (ADR 0038's BLOCKED -> PENDING arrow, and the reason reset
+                // to AWAITING_PROVIDER); orderId is unchanged identifying
+                // context.
+                .changed(ChangeDocuments.diff(
+                        Map.of(
+                                "state",
+                                document.state().name(),
+                                "reasonCode",
+                                document.reasonCode(),
+                                "orderId",
+                                document.orderId().toString()),
+                        Map.of(
+                                "state",
+                                FiscalDocumentState.PENDING.name(),
+                                "reasonCode",
+                                FiscalReasonCode.AWAITING_PROVIDER,
+                                "orderId",
+                                document.orderId().toString())))
                 .correlatedBy(correlationId == null ? documentId.toString() : correlationId)
                 .occurredAt(now)
                 .build());

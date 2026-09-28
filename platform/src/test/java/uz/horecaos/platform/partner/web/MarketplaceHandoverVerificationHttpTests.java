@@ -237,6 +237,17 @@ class MarketplaceHandoverVerificationHttpTests {
                         .single())
                 .as("available after attempts are exhausted, per the endpoint's own doc")
                 .containsExactly("BYPASSED", "COURIER_APP_OFFLINE");
+
+        // Staff 9.3a: the audited fact is a real before/after diff of the
+        // challenge's status, not a flat after-only map.
+        assertThat(jdbc.sql("""
+                        SELECT change_document -> 'status' ->> 'before',
+                               change_document -> 'status' ->> 'after'
+                          FROM audit.audit_events WHERE action_code = 'marketplace.handover.bypassed'
+                        """)
+                        .query((row, n) -> row.getString(1) + "->" + row.getString(2))
+                        .single())
+                .isEqualTo("PENDING->BYPASSED");
     }
 
     @Test

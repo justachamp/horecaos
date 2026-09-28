@@ -9,7 +9,9 @@ import static org.mockito.Mockito.verify;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterAll;
@@ -17,6 +19,7 @@ import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.testcontainers.DockerClientFactory;
 import tools.jackson.databind.json.JsonMapper;
@@ -87,6 +90,21 @@ class ControlPlaneIncidentControllerTests {
         assertThat(store.find(id).orElseThrow().status()).isEqualTo("RESOLVED");
         assertThat(store.find(id).orElseThrow().resolutionNote()).isEqualTo("replayed the dead letters");
         // One fact per step taken, none for the repeats.
-        verify(audit, times(2)).record(any(AuditFact.class));
+        ArgumentCaptor<AuditFact> facts = ArgumentCaptor.forClass(AuditFact.class);
+        verify(audit, times(2)).record(facts.capture());
+
+        // Staff 9.3a: "status" genuinely moves (OPEN -> ACKNOWLEDGED, then
+        // ACKNOWLEDGED -> RESOLVED) rather than an after-only map that could
+        // not tell an escalation from a repeat.
+        List<AuditFact> recorded = facts.getAllValues();
+        assertThat(statusChange(recorded.get(0)).get("before")).isEqualTo("OPEN");
+        assertThat(statusChange(recorded.get(0)).get("after")).isEqualTo("ACKNOWLEDGED");
+        assertThat(statusChange(recorded.get(1)).get("before")).isEqualTo("ACKNOWLEDGED");
+        assertThat(statusChange(recorded.get(1)).get("after")).isEqualTo("RESOLVED");
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> statusChange(AuditFact fact) {
+        return Objects.requireNonNull((Map<String, Object>) fact.changeDocument().get("status"));
     }
 }

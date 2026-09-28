@@ -12,6 +12,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.voice.domain.OperatorPresenceState;
 import uz.horecaos.platform.voice.infrastructure.persistence.JdbcVoiceStore;
@@ -60,6 +61,13 @@ public class OperatorPresenceService {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, "Pausing requires a reason");
         }
 
+        // Staff 9.3a: read the row as it stood before the upsert, so the audit
+        // fact says what state the operator moved from, not only what they
+        // moved to. "NONE" (never a real OperatorPresenceState) marks their
+        // very first presence write, which the class doc says is exactly as
+        // ordinary as their hundredth -- Map.of() cannot hold a null here.
+        Optional<PresenceRow> before = store.presence(tenantId, locationId, operatorPrincipalId);
+
         var now = clock.instant();
         store.upsertPresence(
                 UUID.randomUUID(), tenantId, brandId, locationId, operatorPrincipalId, state.name(), reason, now);
@@ -70,7 +78,13 @@ public class OperatorPresenceService {
                 .target("OperatorPresence", deterministicId(tenantId, locationId, operatorPrincipalId))
                 .because(reason == null || reason.isBlank() ? "Operator changed their own presence" : reason)
                 .usingCapability(capabilityUsed)
-                .changed(Map.of("state", state.name(), "reason", String.valueOf(reason)))
+                .changed(ChangeDocuments.diff(
+                        Map.of(
+                                "state", before.map(PresenceRow::state).orElse("NONE"),
+                                "reason",
+                                        String.valueOf(
+                                                before.map(PresenceRow::reason).orElse(null))),
+                        Map.of("state", state.name(), "reason", String.valueOf(reason))))
                 .correlatedBy(correlationId)
                 .occurredAt(now)
                 .build());

@@ -1627,6 +1627,7 @@ export const messagesEn = {
   'settings.locations.content.title': 'Localized content',
   'settings.locations.content.displayName': 'Display name',
   'settings.locations.content.description': 'Description',
+  'settings.locations.content.defaultMarker': 'default',
   'settings.locations.empty': 'No locations yet.',
   'settings.locations.list.column.state': 'State',
   'settings.locations.list.filterState': 'State',

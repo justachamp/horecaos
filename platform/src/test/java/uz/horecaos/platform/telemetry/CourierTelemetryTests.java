@@ -11,6 +11,7 @@ import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -254,6 +255,43 @@ class CourierTelemetryTests {
                 .containsExactly("telemetry.duty_session.opened", "telemetry.duty_session.closed");
     }
 
+    @Test
+    @DisplayName("opening a duty session records a creation diff, and closing records the status move")
+    void openAndCloseWriteRealBeforeAfterDiffs() {
+        DutySessionRow session = openSession();
+
+        AuditFact opened = audit.recorded.stream()
+                .filter(fact -> "telemetry.duty_session.opened".equals(fact.actionCode()))
+                .findFirst()
+                .orElseThrow();
+        @SuppressWarnings("unchecked")
+        Map<String, Object> shiftIdChange =
+                Objects.requireNonNull((Map<String, Object>) opened.changeDocument().get("shiftId"));
+        assertThat(shiftIdChange.get("before"))
+                .as("a brand-new session has no prior shift to diff against")
+                .isNull();
+        assertThat(shiftIdChange.get("after")).isNotNull();
+
+        sessions.close(
+                TENANT,
+                session.id(),
+                "SIGNED_OFF",
+                ActorRef.user("dispatcher", null),
+                "end of shift",
+                "courier.duty.manage",
+                "corr-close-1");
+
+        AuditFact closed = audit.recorded.stream()
+                .filter(fact -> "telemetry.duty_session.closed".equals(fact.actionCode()))
+                .findFirst()
+                .orElseThrow();
+        @SuppressWarnings("unchecked")
+        Map<String, Object> statusChange =
+                Objects.requireNonNull((Map<String, Object>) closed.changeDocument().get("status"));
+        assertThat(statusChange.get("before")).isEqualTo("OPEN");
+        assertThat(statusChange.get("after")).isEqualTo("CLOSED");
+    }
+
     // ---------------------------------------------------------------------- ingest
 
     @Test
@@ -471,9 +509,15 @@ class CourierTelemetryTests {
         assertThat(fact.capabilityUsed()).isEqualTo("courier.track.reveal");
         assertThat(fact.actor().subject()).isEqualTo("investigator");
         assertThat(fact.reason()).contains("customer says the order never arrived");
-        assertThat(fact.changeDocument())
-                .containsEntry("courierId", COURIER.toString())
-                .containsKeys("windowFrom", "windowTo", "windowsRevealed");
+        // Staff 9.3a: a reveal changes no field of the courier's track, so
+        // every field here is recorded as a creation -- "before" null,
+        // "after" the reveal's own parameters -- rather than a flat map.
+        assertThat(fact.changeDocument()).containsKeys("courierId", "windowFrom", "windowTo", "windowsRevealed");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> courierIdChange =
+                Objects.requireNonNull((Map<String, Object>) fact.changeDocument().get("courierId"));
+        assertThat(courierIdChange.get("before")).isNull();
+        assertThat(courierIdChange.get("after")).isEqualTo(COURIER.toString());
     }
 
     @Test

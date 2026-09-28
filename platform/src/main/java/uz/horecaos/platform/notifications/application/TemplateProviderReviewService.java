@@ -4,7 +4,6 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -17,6 +16,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.web.api.ApiException;
@@ -126,18 +126,18 @@ public class TemplateProviderReviewService {
         if (REJECTED.equals(state) && (note == null || note.isBlank())) {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, "A refusal says what the provider objected to");
         }
-        String channel = jdbc.sql("""
-                        SELECT tpl.channel
+        BeforeState before = jdbc.sql("""
+                        SELECT tpl.channel, v.provider_review, v.provider_review_reference
                           FROM notifications.template_versions v
                           JOIN notifications.templates tpl ON tpl.id = v.template_id AND tpl.tenant_id = v.tenant_id
                          WHERE v.tenant_id = :tenantId AND v.id = :versionId
                         """)
                 .param("tenantId", tenantId)
                 .param("versionId", versionId)
-                .query(String.class)
+                .query((row, num) -> new BeforeState(row.getString(1), row.getString(2), row.getString(3)))
                 .optional()
                 .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such template version"));
-        if (!"SMS".equals(channel)) {
+        if (!"SMS".equals(before.channel())) {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, "Only an SMS wording waits on a gateway's approval");
         }
 
@@ -158,22 +158,28 @@ public class TemplateProviderReviewService {
                 .param("versionId", versionId)
                 .update();
 
-        Map<String, Object> change = new HashMap<>();
-        change.put("providerReview", state);
-        if (reference != null) {
-            change.put("reference", reference);
-        }
         audit.record(AuditFact.of("notifications.template.provider_review_recorded", AuditClass.BUSINESS)
                 .by(actor)
                 .at(ResourceScope.tenant(tenantId))
                 .target("NotificationTemplateVersion", versionId)
                 .because(reason)
-                .changed(change)
+                // Staff 9.3a: diffed against the row as it stood before this
+                // UPDATE, so a re-review (PENDING -> REJECTED -> PENDING again
+                // after a source fix) reads as what actually moved rather than
+                // only ever the destination state.
+                .changed(ChangeDocuments.diff(
+                        Map.of(
+                                "providerReview", before.providerReview(),
+                                "reference", before.reference() == null ? "" : before.reference()),
+                        Map.of("providerReview", state, "reference", reference == null ? "" : reference)))
                 .usingCapability(Capability.NOTIFICATION_TEMPLATE_ACTIVATE.code())
                 .correlatedBy(versionId.toString())
                 .occurredAt(now)
                 .build());
     }
+
+    /** The provider-review fields of a template version as they stood before a write, for the audit diff. */
+    private record BeforeState(String channel, @Nullable String providerReview, @Nullable String reference) {}
 
     /** One SMS wording and where it stands with its provider. */
     public record ReviewRow(

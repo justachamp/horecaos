@@ -542,6 +542,61 @@ class MigrationControlPlaneTests extends MigrationControlPlaneFixture {
                 .hasMessageContaining("evidence, not state");
     }
 
+    /**
+     * Staff 9.3a: {@code MigrationAudit#record}/{@code #recordRefusal} forward
+     * their {@code changes} parameter to {@code .changed(...)}, so the source
+     * scan cannot see through it -- this asserts, against the real schema,
+     * that every caller of it in this package now passes a real before/after
+     * document rather than the flat, after-only map it used to.
+     */
+    @Test
+    @DisplayName("every migration audit fact through the shared recorder is a real before/after diff")
+    void migrationAuditFactsAreRealDiffsNotFlatMaps() {
+        // migration.program.created: fired by the fixture's own setUp, which is
+        // the only program this test's tenant has.
+        assertThat(changeDocumentOf("migration.program.created", "name")).isEqualTo("null->Delever cutover");
+
+        UUID scopeId = openTenantWideScope(MigrationCapability.ORDERS);
+        assertThat(changeDocumentOf("migration.scope.opened", "state"))
+                .as("a brand-new scope, no prior state to diff against")
+                .isEqualTo("null->DISCOVERY");
+
+        advanceThrough(scopeId, ScopeState.MAPPING_APPROVED);
+        assertThat(changeDocumentOf("migration.scope.advanced", "state")).isEqualTo("DISCOVERY->MAPPING_APPROVED");
+
+        advanceThrough(scopeId, ScopeState.BACKFILLING);
+        UUID runId = startRun(scopeId, RunType.BACKFILL, "diff-check-1");
+        assertThat(changeDocumentOf("migration.run.started", "runType")).isEqualTo("null->BACKFILL");
+
+        MigrationQuarantineStore.QuarantineItemRow filed = quarantineService.quarantine(
+                TENANT,
+                runId,
+                new QuarantineService.QuarantineCommand("ORDER", "delever-diff-1", "TENANT_UNPROVABLE", null));
+        assertThat(changeDocumentOf("migration.quarantine.filed", "legacyId")).isEqualTo("null->delever-diff-1");
+
+        quarantineService.resolve(
+                TENANT, filed.id(), new QuarantineService.ResolveCommand("REMEDIATED", "fixed at the source"));
+        assertThat(changeDocumentOf("migration.quarantine.resolved", "status")).isEqualTo("OPEN->RESOLVED");
+
+        runService.finish(
+                TENANT,
+                runId,
+                new MigrationRunService.FinishRunCommand(RunStatus.COMPLETED, "b".repeat(64), runVersion(runId), "ok"));
+        assertThat(changeDocumentOf("migration.run.finished", "status")).isEqualTo("RUNNING->COMPLETED");
+    }
+
+    /** The one row an action code wrote, as this field's before/after pair. */
+    private String changeDocumentOf(String actionCode, String field) {
+        return jdbc.sql("""
+                        SELECT change_document -> :field ->> 'before', change_document -> :field ->> 'after'
+                          FROM audit.audit_events WHERE action_code = :actionCode
+                        """)
+                .param("field", field)
+                .param("actionCode", actionCode)
+                .query((row, n) -> row.getString(1) + "->" + row.getString(2))
+                .single();
+    }
+
     @Test
     @DisplayName("two live runs of one type over one scope are unrepresentable")
     void oneLiveRunOfEachTypePerScope() {

@@ -178,6 +178,9 @@ class MediaAssetIngestionServiceTests {
         assertThat(outcome.accepted()).isTrue();
         MediaAssetId assetId = requireAssetId(outcome);
         assertThat(status(assetId)).isEqualTo("AVAILABLE");
+        // Staff 9.3a: "status" genuinely moves (PENDING_UPLOAD -> AVAILABLE);
+        // server-side ingestion never passes through UPLOADED.
+        assertThat(statusChangeDocument(assetId)).isEqualTo("PENDING_UPLOAD->AVAILABLE");
     }
 
     @Test
@@ -277,6 +280,19 @@ class MediaAssetIngestionServiceTests {
         return jdbc.sql("SELECT status FROM media.assets WHERE asset_id = :id")
                 .param("id", assetId.value())
                 .query(String.class)
+                .single();
+    }
+
+    /** Staff 9.3a: the {@code media.asset.ingested} fact's "status" field, as {@code before->after}. */
+    private String statusChangeDocument(MediaAssetId assetId) {
+        return jdbc.sql(
+                        """
+                        SELECT change_document -> 'status' ->> 'before', change_document -> 'status' ->> 'after'
+                          FROM audit.audit_events
+                         WHERE target_type = 'media_asset' AND target_id = :id AND action_code = 'media.asset.ingested'
+                        """)
+                .param("id", assetId.value())
+                .query((row, n) -> row.getString(1) + "->" + row.getString(2))
                 .single();
     }
 

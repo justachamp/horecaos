@@ -14,6 +14,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.protection.FieldProtection;
 import uz.horecaos.platform.iam.api.protection.ProtectedValue;
@@ -110,11 +111,16 @@ public class CourierTrackRevealService {
                 .target("CourierTrack", command.courierId())
                 .because(purpose)
                 .usingCapability("courier.track.reveal")
-                .changed(Map.of(
+                // Staff 9.3a: a reveal changes no field of the courier's
+                // track -- it is a read, not a write -- so there is no prior
+                // value for the window it asked to see; recorded as a
+                // creation rather than discarding these facts as an empty
+                // diff would.
+                .changed(ChangeDocuments.created(Map.of(
                         "courierId", command.courierId().toString(),
                         "windowFrom", command.from().toString(),
                         "windowTo", command.to().toString(),
-                        "windowsRevealed", windows.size()))
+                        "windowsRevealed", windows.size())))
                 .correlatedBy(command.correlationId())
                 .occurredAt(now)
                 .build());

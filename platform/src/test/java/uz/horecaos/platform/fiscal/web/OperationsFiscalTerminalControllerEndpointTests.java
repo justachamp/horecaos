@@ -182,6 +182,10 @@ class OperationsFiscalTerminalControllerEndpointTests {
         assertThat(directory.hasCapableTerminal(TENANT, LOCATION))
                 .as("CheckoutSettlementPlanner reads exactly this query")
                 .isTrue();
+
+        // Staff 9.3a: a brand-new terminal, no prior state to diff against.
+        assertThat(changeDocumentField(terminalId("KASSA-1"), "fiscal-terminal.registered", "kind"))
+                .isEqualTo("null->POS");
     }
 
     @Test
@@ -218,6 +222,9 @@ class OperationsFiscalTerminalControllerEndpointTests {
                 .andReturn();
         assertThat(healthChecked.getResponse().getStatus()).isEqualTo(200);
         assertThat(healthChecked.getResponse().getContentAsString()).contains("\"lastHealthStatus\":\"HEALTHY\"");
+        // Staff 9.3a: a fresh registration has no prior health status.
+        assertThat(changeDocumentField(terminalId, "fiscal-terminal.health-checked", "lastHealthStatus"))
+                .isEqualTo("null->HEALTHY");
 
         assertThat(directory.hasCapableTerminal(TENANT, LOCATION)).isTrue();
 
@@ -228,6 +235,9 @@ class OperationsFiscalTerminalControllerEndpointTests {
                 .andReturn();
         assertThat(suspended.getResponse().getStatus()).isEqualTo(200);
         assertThat(suspended.getResponse().getContentAsString()).contains("\"status\":\"SUSPENDED\"");
+        // Staff 9.3a: "status" genuinely moves (ACTIVE -> SUSPENDED).
+        assertThat(changeDocumentField(terminalId, "fiscal-terminal.suspended", "status"))
+                .isEqualTo("ACTIVE->SUSPENDED");
 
         assertThat(directory.hasCapableTerminal(TENANT, LOCATION))
                 .as("a suspended terminal must stop counting toward the activation precondition")
@@ -341,6 +351,23 @@ class OperationsFiscalTerminalControllerEndpointTests {
                 .as("failing health sorts ahead of never-checked")
                 .isLessThan(body.indexOf("KASSA-A"))
                 .isGreaterThanOrEqualTo(0);
+    }
+
+    /** Staff 9.3a: the most recent fact's change document field, as {@code before->after}. */
+    private String changeDocumentField(UUID terminalId, String actionCode, String field) {
+        return jdbc.sql(
+                        """
+                        SELECT change_document -> :field ->> 'before', change_document -> :field ->> 'after'
+                          FROM audit.audit_events
+                         WHERE target_id = :id AND action_code = :actionCode
+                         ORDER BY occurred_at DESC
+                         LIMIT 1
+                        """)
+                .param("id", terminalId)
+                .param("actionCode", actionCode)
+                .param("field", field)
+                .query((row, n) -> row.getString(1) + "->" + row.getString(2))
+                .single();
     }
 
     private UUID terminalId(String reference) {

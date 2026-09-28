@@ -31,6 +31,8 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.DockerClientFactory;
+import uz.horecaos.platform.audit.api.AuditFact;
+import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.configuration.rls.TenantRlsSession;
 import uz.horecaos.platform.inventory.api.AvailabilityDecision;
 import uz.horecaos.platform.inventory.api.BusinessDayWindows;
@@ -464,6 +466,73 @@ class InventoryQuantityLifecycleTests {
         int nextDate = tx(() -> inventoryWithBusinessDays.resetDueQuantityItems(fixture.tenantId(), clock.instant()));
         assertThat(nextDate).isEqualTo(1);
         assertThat(onHandQuantity(fixture.stockItemId())).isEqualByComparingTo(BigDecimal.TEN);
+    }
+
+    @Test
+    @DisplayName("on-hand, default-quantity, and channel-threshold writes each record a real before/after diff")
+    void quantityWritesRecordRealDiffsNotFlatMaps() {
+        List<AuditFact> facts = new ArrayList<>();
+        AuditRecorder recorder = facts::add;
+        InventoryService audited = new InventoryService(
+                store,
+                event -> {},
+                clock,
+                recorder,
+                NO_OP_RLS,
+                new FakeConfigurationResolver(Map.of("catalog.use_stock_logic", true)));
+
+        Fixture fixture = seedQuantityFixture(BigDecimal.valueOf(5));
+        // The column's own stored scale (e.g. "5.000"), not the literal this
+        // test seeded it with -- the production code diffs the same stored
+        // string, via item.onHandQuantity().toPlainString().
+        String seededOnHand = onHandQuantity(fixture.stockItemId()).toPlainString();
+
+        tx(() -> audited.setOnHandQuantity(
+                fixture.tenantId(), fixture.locationId(), fixture.variantId(), BigDecimal.valueOf(8), "COUNT", "op-1"));
+        AuditFact onHandFact = factNamed(facts, "inventory.on_hand.set");
+        assertThat(onHandFact.changeDocument().get("onHandQuantity"))
+                .isEqualTo(Map.of("before", seededOnHand, "after", "8"));
+
+        tx(() -> audited.setDefaultQuantity(
+                fixture.tenantId(), fixture.locationId(), fixture.variantId(), BigDecimal.TEN, "DEFAULT", "op-1"));
+        AuditFact defaultFact = factNamed(facts, "inventory.default_quantity.set");
+        assertThat(defaultFact.changeDocument().get("defaultQuantity"))
+                .isEqualTo(Map.of("before", "null", "after", "10"));
+
+        tx(() -> audited.setChannelStopThreshold(
+                fixture.tenantId(),
+                fixture.locationId(),
+                fixture.variantId(),
+                "AGGREGATOR",
+                BigDecimal.valueOf(3),
+                "BUFFER",
+                "op-1"));
+        AuditFact setThresholdFact = factNamed(facts, "inventory.channel_stop_threshold.set");
+        Map<String, Object> stopBeforeAfter = Objects.requireNonNull(
+                (Map<String, Object>) setThresholdFact.changeDocument().get("stopAtOrBelow"));
+        assertThat(stopBeforeAfter.get("before"))
+                .as("no threshold existed yet for this channel")
+                .isNull();
+        assertThat(stopBeforeAfter.get("after")).isEqualTo("3");
+
+        facts.clear();
+        tx(() -> audited.clearChannelStopThreshold(
+                fixture.tenantId(), fixture.locationId(), fixture.variantId(), "AGGREGATOR", "REMOVE", "op-1"));
+        AuditFact clearFact = factNamed(facts, "inventory.channel_stop_threshold.clear");
+        Map<String, Object> clearedBeforeAfter = Objects.requireNonNull(
+                (Map<String, Object>) clearFact.changeDocument().get("stopAtOrBelow"));
+        // Read back at the column's own numeric(14,3) scale, the same string
+        // the production code diffs (store.findChannelStopThreshold) -- not
+        // the "3" this test set it with.
+        assertThat(clearedBeforeAfter.get("before")).isEqualTo("3.000");
+        assertThat(clearedBeforeAfter.get("after")).isNull();
+    }
+
+    private static AuditFact factNamed(List<AuditFact> facts, String actionCode) {
+        return facts.stream()
+                .filter(f -> actionCode.equals(f.actionCode()))
+                .reduce((first, second) -> second)
+                .orElseThrow(() -> new AssertionError("No audit fact recorded for " + actionCode));
     }
 
     @Test
