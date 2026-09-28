@@ -130,13 +130,6 @@ uz/horecaos/platform/dinein/application/TableSessionService.java:186
 uz/horecaos/platform/dinein/application/TableSessionService.java:252
 uz/horecaos/platform/dinein/application/TableSessionService.java:359
 
-# --- fiscal ---
-uz/horecaos/platform/fiscal/application/FiscalDocumentService.java:278
-uz/horecaos/platform/fiscal/application/FiscalDocumentService.java:332
-uz/horecaos/platform/fiscal/application/FiscalTerminalService.java:127
-uz/horecaos/platform/fiscal/application/FiscalTerminalService.java:173
-uz/horecaos/platform/fiscal/application/FiscalTerminalService.java:79
-
 # --- fulfillment ---
 uz/horecaos/platform/fulfillment/application/DeliverySourcingService.java:575
 uz/horecaos/platform/fulfillment/application/DeliveryTariffService.java:112
