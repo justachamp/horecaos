@@ -174,6 +174,39 @@ class LocalSmokeScriptTests {
     }
 
     @Test
+    @DisplayName("every OpenBao value put() writes travels over stdin, never as a `docker compose exec` argument")
+    void writesEveryPutValueOverStdinNotAsAComposeExecArgument() throws IOException {
+        String script = readFile(SCRIPT);
+
+        // infra/production/deploy.sh already carries this exact protection for
+        // OPERATOR_TOKEN and its own backup-credential writes (see
+        // DeployScriptTests#backupServiceAccountIsProvisionedAndStoredInOpenBao):
+        // a value passed as a literal `docker compose exec` argument sits in
+        // this host's own `ps` output for as long as the exec runs. Until this
+        // fix, local-smoke.sh's put() forwarded every secret it writes --
+        // including the BACKUP_ACCESS_KEY/BACKUP_SECRET_KEY this wave mints
+        // from RustFS's admin API -- straight into `bao_run`'s "$@", which
+        // lands as a literal argument the same way.
+        assertThat(script)
+                .as("local-smoke.sh must carry a stdin-based helper for writing KV values to "
+                        + "OpenBao, mirroring infra/production/deploy.sh's own bao_put_value")
+                .contains("bao_put_value() {")
+                .as("the value must travel over stdin behind the root token, never as a `bao kv "
+                        + "put ... value=...` argument")
+                .contains("printf '%s\\n%s' \"${ROOT_TOKEN}\" \"${value}\"");
+
+        assertThat(script)
+                .as("put() -- and therefore every secret value it writes, including the backup "
+                        + "service-account keys -- must route through the stdin-based helper, not "
+                        + "embed the raw value as a literal argument on the compose exec command line")
+                .contains("put() { bao_put_value \"horecaos/${ENVIRONMENT}/$1\" \"$2\"")
+                .as("the old argv-based form (the value as a literal `bao kv put ... value=$2` "
+                        + "argument to bao_run) must be gone, not left alongside the fix as a second "
+                        + "path that still leaks the value")
+                .doesNotContain("bao_run bao kv put \"horecaos/${ENVIRONMENT}/$1\" \"value=$2\"");
+    }
+
+    @Test
     @DisplayName(
             "the seed and backup accounts are provisioned after object-store is healthy and before the seed job (or the application) starts")
     void provisionsTheSeedAndBackupAccountsInOrder() throws IOException {
