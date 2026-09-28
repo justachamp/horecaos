@@ -242,10 +242,6 @@ uz/horecaos/platform/pos/web/PosSyncRunController.java:224
 uz/horecaos/platform/pos/web/PosSyncRunController.java:260
 uz/horecaos/platform/pos/web/PosSyncRunController.java:300
 
-# --- pricing ---
-uz/horecaos/platform/pricing/application/BenefitGrantService.java:131
-uz/horecaos/platform/pricing/application/PriceAuthoringService.java:278
-
 # --- reporting ---
 uz/horecaos/platform/reporting/application/BusinessCalendarService.java:131
 uz/horecaos/platform/reporting/application/BusinessCalendarService.java:156

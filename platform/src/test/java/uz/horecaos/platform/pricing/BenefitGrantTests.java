@@ -9,6 +9,7 @@ import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterAll;
@@ -113,8 +114,8 @@ class BenefitGrantTests {
         // "before" is null -- distinguishable from a call site that just never
         // bothered fetching one.
         @SuppressWarnings("unchecked")
-        Map<String, Object> customerIdChange =
-                (Map<String, Object>) fact.changeDocument().get("customerAccountId");
+        Map<String, Object> customerIdChange = Objects.requireNonNull(
+                (Map<String, Object>) fact.changeDocument().get("customerAccountId"));
         assertThat(customerIdChange.get("before")).isNull();
         assertThat(customerIdChange.get("after")).isEqualTo(customer);
     }
