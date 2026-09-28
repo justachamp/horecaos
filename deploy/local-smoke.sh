@@ -351,8 +351,19 @@ MEDIA_SVC_JSON="$(compose run --rm --no-TTY \
     || die "Could not create the media service account against RustFS's admin API. See ${LOG_FILE}."
 MEDIA_ACCESS_KEY="$(printf '%s' "${MEDIA_SVC_JSON}" | jq -r '.credentials.accessKey // empty')"
 MEDIA_SECRET_KEY="$(printf '%s' "${MEDIA_SVC_JSON}" | jq -r '.credentials.secretKey // empty')"
-[ -n "${MEDIA_ACCESS_KEY}" ] && [ -n "${MEDIA_SECRET_KEY}" ] \
-    || die "RustFS did not return a service-account access key/secret. Response: ${MEDIA_SVC_JSON}"
+if [ -z "${MEDIA_ACCESS_KEY}" ] || [ -z "${MEDIA_SECRET_KEY}" ]; then
+    # Never log the raw response: if RustFS's shape ever drifts from
+    # .credentials.accessKey/.credentials.secretKey, the body can still hold a
+    # real, usable secret even though this extraction failed. Redact every
+    # string value recursively (walk descends into nested objects; only
+    # object/array structure and key names survive) so the failure is still
+    # diagnosable — the shape is visible — without ever writing a secret
+    # value to LOG_FILE or stderr (ADR 0028/0029).
+    MEDIA_SVC_SHAPE="$(printf '%s' "${MEDIA_SVC_JSON}" \
+        | jq -c 'walk(if type == "string" then "<redacted>" else . end)' 2>/dev/null \
+        || echo '<response was not valid JSON>')"
+    die "RustFS did not return a service-account access key/secret at .credentials.accessKey/.credentials.secretKey. Response shape (values redacted): ${MEDIA_SVC_SHAPE}"
+fi
 
 put object_storage/platform/media-access-key "${MEDIA_ACCESS_KEY}"
 put object_storage/platform/media-secret-key "${MEDIA_SECRET_KEY}"
