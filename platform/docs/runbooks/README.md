@@ -36,6 +36,7 @@ That shapes them more than any style guide would.
 | [customers-cannot-sign-in.md](customers-cannot-sign-in.md) | No SMS is arriving, or a customer cannot get past the code screen |
 | [laptop-lost.md](laptop-lost.md) | Revoking your own access from the second device |
 | [control-band-response.md](control-band-response.md) | A control band breached and an agent wrote an `intent.md` to triage |
+| [catalog-offering-listing-backfill.md](catalog-offering-listing-backfill.md) | A pre-existing tenant's offerings were set `AVAILABLE` before the auto-listing fix and still read as unsellable |
 
 **A runbook that has never been executed is a draft.** Each file above carries a
 `Last executed` line in its header, and every one except `deploy.md` and

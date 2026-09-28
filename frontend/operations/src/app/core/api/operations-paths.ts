@@ -442,6 +442,33 @@ export const operationsPaths = {
   },
 
   /**
+   * The location-scoped backfill (gap map row 4.1): lists every
+   * AVAILABLE-offered variant this location has never listed —
+   * `InventoryController#backfillLocationListing`, same prefix as every
+   * other `inventory*` path above.
+   */
+  inventoryListingBackfill(scope: LocationScope): string {
+    return `${LEGACY_TENANT_PREFIX}${tenantBrandLocation(scope)}/inventory/listing-backfill`;
+  },
+
+  /**
+   * One variant's own unlisted branches across the whole brand (gap map row
+   * 4.1) — `InventoryVariantListingController`, brand-scoped like {@link
+   * conversations}: only `scope.tenantId`/`scope.brandId` are read.
+   * `GET` reads the branch list, `POST` (see {@link
+   * inventoryVariantListingBackfill}) lists this variant everywhere it is
+   * still missing.
+   */
+  inventoryVariantListing(scope: LocationScope, variantId: string): string {
+    return `${LEGACY_TENANT_PREFIX}${tenantBrand(scope)}/variants/${encodeURIComponent(variantId)}/inventory-listing`;
+  },
+
+  /** The product editor's own one-click action behind {@link inventoryVariantListing}'s banner. Mutation. */
+  inventoryVariantListingBackfill(scope: LocationScope, variantId: string): string {
+    return this.inventoryVariantListing(scope, variantId);
+  },
+
+  /**
    * The kitchen board (ADR 0041, `KitchenBoardController`) — on
    * {@link LEGACY_TENANT_PREFIX} like `orders`, not on the ADR 0031 prefix,
    * because it was built alongside the orders controller and follows the

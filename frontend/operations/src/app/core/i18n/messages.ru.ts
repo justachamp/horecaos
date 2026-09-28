@@ -2256,6 +2256,10 @@ export const messagesRu: MessageCatalogue = {
   'catalog.editor.availability.quantityHint':
     'Остаток, суточное значение по умолчанию и пороги остановки по каналам для варианта с учётом QUANTITY находятся на странице «Остатки».',
   'catalog.editor.availability.quantityHintLink': 'Открыть Остатки',
+  'catalog.editor.availability.notListedAtBranches':
+    'Не размещено в {count} филиал(ах) — предлагается там, но недоступно для заказа, пока не размещено.',
+  'catalog.editor.availability.listEverywhere': 'Разместить во всех филиалах',
+  'catalog.editor.availability.listingInProgress': 'Размещение…',
   'catalog.editor.schedule.hint':
     'Пусто — значит товар всегда в продаже. Окна ниже ограничивают время продажи и рассчитываются по местному времени филиала.',
   'catalog.editor.schedule.loading': 'Загрузка графика…',

@@ -35,6 +35,8 @@ import uz.horecaos.platform.inventory.application.InventoryBulkAvailabilityServi
 import uz.horecaos.platform.inventory.application.InventoryService;
 import uz.horecaos.platform.inventory.application.InventoryService.ChannelStopThresholdView;
 import uz.horecaos.platform.inventory.application.InventoryService.StockPositionView;
+import uz.horecaos.platform.inventory.application.OfferingListingBackfillService;
+import uz.horecaos.platform.inventory.application.OfferingListingBackfillService.LocationBackfillResult;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
 import uz.horecaos.platform.web.authorization.RequiresCapability;
@@ -56,12 +58,17 @@ public class InventoryController {
 
     private final InventoryService inventory;
     private final InventoryBulkAvailabilityService bulkAvailability;
+    private final OfferingListingBackfillService backfill;
     private final CurrentActor currentActor;
 
     public InventoryController(
-            InventoryService inventory, InventoryBulkAvailabilityService bulkAvailability, CurrentActor currentActor) {
+            InventoryService inventory,
+            InventoryBulkAvailabilityService bulkAvailability,
+            OfferingListingBackfillService backfill,
+            CurrentActor currentActor) {
         this.inventory = inventory;
         this.bulkAvailability = bulkAvailability;
+        this.backfill = backfill;
         this.currentActor = currentActor;
     }
 
@@ -80,6 +87,25 @@ public class InventoryController {
                 inventory.listVariantAtLocation(tenantId, brandId, locationId, body.variantId(), body.trackingMode());
         return ResponseEntity.ok(
                 new StockItemResponse(stockItemId, body.trackingMode().name()));
+    }
+
+    @PostMapping("/listing-backfill")
+    @RequiresCapability(value = Capability.INVENTORY_ADJUST, scope = ScopeType.LOCATION, mutating = true)
+    @Operation(
+            summary = "List every AVAILABLE-offered variant this location has never listed",
+            description = "gap map row 4.1's pilot-critical backfill: an offering set AVAILABLE "
+                    + "before CatalogOfferingListingTrigger existed, or one its best-effort listener "
+                    + "missed, still has no stock item and reads as unavailable regardless of "
+                    + "catalog.use_stock_logic. Idempotent and safe to call repeatedly — a variant "
+                    + "already listed, or one a kitchen has deliberately marked sold out, is left "
+                    + "exactly as it is (StockListingPort#ensureListed's own contract). Scans up to "
+                    + "OfferingListingBackfillService.MAX_LOCATION_BACKFILL variants per call; call "
+                    + "again while `mayHaveMore` is true to finish a location with more than that.")
+    public ResponseEntity<BackfillResponse> backfillLocationListing(
+            @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID locationId) {
+        LocationBackfillResult result = backfill.backfillLocation(tenantId, brandId, locationId);
+        return ResponseEntity.ok(
+                new BackfillResponse(result.candidateCount(), result.listedCount(), result.mayHaveMore()));
     }
 
     @PutMapping("/variants/{variantId}/availability")
@@ -321,6 +347,13 @@ public class InventoryController {
             String reasonCode) {}
 
     public record StockItemResponse(UUID stockItemId, String trackingMode) {}
+
+    /**
+     * @param candidateCount how many unlisted AVAILABLE variants this call found
+     * @param listedCount    how many it actually listed
+     * @param mayHaveMore    the read hit its own page cap; call again to continue
+     */
+    public record BackfillResponse(int candidateCount, int listedCount, boolean mayHaveMore) {}
 
     /** {@code reasonCode} is a short enumerated code — see {@link AvailabilityRequest}'s own doc. */
     public record BulkAvailabilityRequest(

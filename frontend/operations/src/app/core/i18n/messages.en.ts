@@ -2287,6 +2287,10 @@ export const messagesEn = {
   'catalog.editor.availability.quantityHint':
     'On-hand count, the daily default, and channel stop thresholds for a QUANTITY-tracked variant live on the Stock page.',
   'catalog.editor.availability.quantityHintLink': 'Open Stock',
+  'catalog.editor.availability.notListedAtBranches':
+    'Not listed at {count} branch(es) yet — offered there, but not orderable until it is listed.',
+  'catalog.editor.availability.listEverywhere': 'List at every branch',
+  'catalog.editor.availability.listingInProgress': 'Listing…',
   'catalog.editor.schedule.hint':
     'Empty means always on sale. Windows below limit when this item can be sold, resolved in this branch’s own local time.',
   'catalog.editor.schedule.loading': 'Loading schedule…',

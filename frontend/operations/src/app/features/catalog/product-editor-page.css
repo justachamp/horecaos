@@ -40,6 +40,38 @@
   color: var(--q-success-text);
 }
 
+.editor__unlisted-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  background: var(--q-warning-tint);
+  color: var(--q-warning-text);
+  border: 1px solid var(--q-warning);
+  border-radius: var(--q-radius);
+}
+
+.editor__unlisted-banner p {
+  margin: 0;
+}
+
+.editor__unlisted-banner button {
+  flex-shrink: 0;
+  padding: 6px 12px;
+  border: 1px solid var(--q-warning-text);
+  background: transparent;
+  color: var(--q-warning-text);
+  border-radius: var(--q-radius);
+  cursor: pointer;
+}
+
+.editor__unlisted-banner button:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
 .editor__publish {
   padding: 6px 16px;
   border: 1px solid var(--q-primary);
