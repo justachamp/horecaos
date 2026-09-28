@@ -12,6 +12,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.customers.api.CustomerBlacklistPort;
 import uz.horecaos.platform.customers.infrastructure.persistence.JdbcCustomerStore;
 import uz.horecaos.platform.customers.infrastructure.persistence.JdbcCustomerStore.BlacklistEntryRow;
@@ -100,13 +101,15 @@ public class CustomerBlacklistService implements CustomerBlacklistPort {
                 expiresAt,
                 now);
 
+        // Staff 9.3a: a freshly added entry has no prior state.
         recordFact(
                 "customer.blacklist.added",
                 "Operator recorded a customer blacklist entry",
                 tenantId,
                 accountId,
                 actor,
-                Map.of("entryId", entryId.toString()));
+                Map.of(),
+                Map.of("entryId", entryId.toString(), "status", "ACTIVE"));
         return entryId;
     }
 
@@ -141,13 +144,15 @@ public class CustomerBlacklistService implements CustomerBlacklistPort {
             throw new NoActiveEntryException();
         }
 
+        // Staff 9.3a: "status" genuinely moves from ACTIVE to LIFTED.
         recordFact(
                 "customer.blacklist.lifted",
                 "Operator lifted a customer blacklist entry",
                 tenantId,
                 accountId,
                 actor,
-                Map.of("entryId", active.id().toString()));
+                Map.of("entryId", active.id().toString(), "status", "ACTIVE"),
+                Map.of("entryId", active.id().toString(), "status", "LIFTED"));
     }
 
     /**
@@ -199,7 +204,9 @@ public class CustomerBlacklistService implements CustomerBlacklistPort {
                 .at(ResourceScope.tenant(tenantId))
                 .target("customer_account", accountId)
                 .because(purpose)
-                .changed(Map.of("revealedCount", rows.size()))
+                // Staff 9.3a: each reveal is its own append-only access-log
+                // fact, with no prior reveal to diff against.
+                .changed(ChangeDocuments.created(Map.of("revealedCount", rows.size())))
                 .correlatedBy(accountId.toString())
                 .occurredAt(clock.instant());
         audit.record(fact.build());
@@ -243,13 +250,14 @@ public class CustomerBlacklistService implements CustomerBlacklistPort {
             UUID tenantId,
             UUID accountId,
             ActorRef actor,
-            Map<String, Object> changed) {
+            Map<String, Object> before,
+            Map<String, Object> after) {
         audit.record(AuditFact.of(actionCode, AuditClass.SECURITY)
                 .by(actor)
                 .at(ResourceScope.tenant(tenantId))
                 .target("customer_account", accountId)
                 .because(auditReason)
-                .changed(changed)
+                .changed(ChangeDocuments.diff(before, after))
                 .correlatedBy(accountId.toString())
                 .occurredAt(clock.instant())
                 .build());

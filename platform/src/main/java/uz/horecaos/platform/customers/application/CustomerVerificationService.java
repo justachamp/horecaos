@@ -18,6 +18,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.customers.api.CustomerAccountRef;
 import uz.horecaos.platform.customers.application.CustomerProfileService.ContactType;
 import uz.horecaos.platform.customers.application.VerificationChallengeIssuer.Opened;
@@ -633,8 +634,12 @@ public class CustomerVerificationService {
                 .target("customer_verification", targetId)
                 // Identifiers and states only. A number, a code, or a grant in a
                 // change document would put personal data and a live credential
-                // into a record designed to be kept for years.
-                .changed(changes)
+                // into a record designed to be kept for years. Staff 9.3a: a
+                // challenge is single-use and a grant is spent on redemption
+                // (see this class's own Javadoc), so every one of this
+                // helper's facts is a genuine, one-time verification with no
+                // prior state to diff against.
+                .changed(ChangeDocuments.created(changes))
                 .correlatedBy(Optional.ofNullable(MDC.get("correlationId")).orElse("customer-verification"))
                 .occurredAt(now)
                 .build();

@@ -15,6 +15,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.customers.domain.PhoneNumber;
 import uz.horecaos.platform.customers.infrastructure.persistence.JdbcCustomerStore;
 import uz.horecaos.platform.iam.api.Capability;
@@ -634,7 +635,9 @@ public class CustomerProfileService {
                 .at(ResourceScope.tenant(tenantId))
                 .target("customer_account", accountId)
                 .because(purpose)
-                .changed(Map.of("revealedCount", revealedCount))
+                // Staff 9.3a: each reveal is its own append-only access-log
+                // fact, with no prior reveal to diff against.
+                .changed(ChangeDocuments.created(Map.of("revealedCount", revealedCount)))
                 .correlatedBy(accountId.toString())
                 .occurredAt(clock.instant());
         if (actor.type() == ActorRef.Type.USER) {

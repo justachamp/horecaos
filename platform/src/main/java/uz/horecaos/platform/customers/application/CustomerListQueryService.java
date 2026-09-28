@@ -18,6 +18,7 @@ import uz.horecaos.platform.audit.api.ApprovalService;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.customers.api.BusinessDayWindows;
 import uz.horecaos.platform.customers.api.CustomerDirectoryExportPort;
 import uz.horecaos.platform.customers.api.CustomerOrderActivityPort;
@@ -243,7 +244,9 @@ public class CustomerListQueryService {
                 .by(actor)
                 .at(ResourceScope.tenant(tenantId))
                 .because(purpose)
-                .changed(Map.of(
+                // Staff 9.3a: each export is its own append-only access-log
+                // fact, with no prior export to diff against.
+                .changed(ChangeDocuments.created(Map.of(
                         "revealedCount",
                         bounded.size(),
                         "statusFilter",
@@ -251,7 +254,7 @@ public class CustomerListQueryService {
                         "hadSearchQuery",
                         query != null && !query.isBlank(),
                         "truncated",
-                        truncated))
+                        truncated)))
                 .correlatedBy(tenantId.toString())
                 .occurredAt(clock.instant())
                 .build());

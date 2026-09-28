@@ -1225,9 +1225,12 @@ class CustomerIdentityTests {
      * this suite closes) nor duplicated.
      */
     private String auditFact(String actionCode, UUID accountId) {
+        // Staff 9.3a: ChangeDocuments.created(...) nests "revealedCount" under
+        // its own {before, after} pair -- the value this suite compares is
+        // the "after" side.
         return jdbc.sql("""
                         SELECT actor_subject || '|' || reason || '|' || capability_used || '|'
-                                || (change_document ->> 'revealedCount')
+                                || (change_document -> 'revealedCount' ->> 'after')
                         FROM audit.audit_events
                         WHERE action_code = :code AND target_id = :accountId
                         """)
@@ -1757,7 +1760,7 @@ class CustomerIdentityTests {
                 .containsExactlyInAnyOrder("+998911112222", "+998933334444");
         assertThat(auditFactCount("customer.list.exported")).isEqualTo(1);
         assertThat(jdbc.sql("""
-                        SELECT change_document ->> 'revealedCount' FROM audit.audit_events
+                        SELECT change_document -> 'revealedCount' ->> 'after' FROM audit.audit_events
                         WHERE action_code = 'customer.list.exported'
                         """).query(String.class).single()).isEqualTo("2");
     }
@@ -1787,7 +1790,8 @@ class CustomerIdentityTests {
                 .isTrue();
         assertThat(result.rows()).hasSize(CustomerListQueryService.EXPORT_LIMIT);
         assertThat(jdbc.sql("""
-                        SELECT change_document ->> 'revealedCount', change_document ->> 'truncated'
+                        SELECT change_document -> 'revealedCount' ->> 'after',
+                               change_document -> 'truncated' ->> 'after'
                         FROM audit.audit_events
                         WHERE action_code = 'customer.list.exported'
                         """)

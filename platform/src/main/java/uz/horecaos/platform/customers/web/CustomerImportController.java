@@ -23,6 +23,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.customers.application.CustomerImportService;
 import uz.horecaos.platform.customers.infrastructure.persistence.JdbcCustomerImportStore;
 import uz.horecaos.platform.iam.api.Capability;
@@ -88,10 +89,11 @@ public class CustomerImportController {
                 .at(ResourceScope.tenant(tenantId))
                 .target("CustomerImportRun", runId)
                 .because("Customer CSV import (" + (dryRun ? "dry run" : "real run") + ")")
-                .changed(Map.of(
+                // Staff 9.3a: a freshly queued run has no prior state.
+                .changed(ChangeDocuments.created(Map.of(
                         "sourceFileName", request.fileName(),
                         "dryRun", Boolean.toString(dryRun),
-                        "rowsTotal", Integer.toString(run.rowsTotal())))
+                        "rowsTotal", Integer.toString(run.rowsTotal()))))
                 .usingCapability(Capability.CUSTOMER_IMPORT.code())
                 .correlatedBy(runId.toString())
                 .occurredAt(clock.instant())
