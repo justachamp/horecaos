@@ -1981,8 +1981,15 @@ describe('OrderQueue: Оплата and Доставка columns (orders.md §2.5
   it('renders the delivery fee as money when set, and a dash for a pickup order with none', async () => {
     configure(
       ordersResponse([
-        order({ orderId: 'a', feeMinor: 1_500_000, currency: 'UZS' }),
-        order({ orderId: 'b', feeMinor: 0 }),
+        // Explicit, distinct `createdAt` values -- the `all` tab is a log tab
+        // (order-severity.ts's `compareNewestFirst`, newest first), and two
+        // `order()` calls both defaulting to `new Date().toISOString()` back
+        // to back occasionally straddle a real millisecond tick, which
+        // silently swaps the sort order and this test's `cells[0]`/`cells[1]`
+        // indices with it. Fixed timestamps make the row order deterministic
+        // regardless of how fast the real clock is ticking.
+        order({ orderId: 'a', feeMinor: 1_500_000, currency: 'UZS', createdAt: '2026-01-01T10:01:00.000Z' }),
+        order({ orderId: 'b', feeMinor: 0, createdAt: '2026-01-01T10:00:00.000Z' }),
       ]),
     );
     const harness = await RouterTestingHarness.create('/orders?tab=all');
@@ -2023,17 +2030,32 @@ describe('OrderQueue: cursor paging and Load more (row 1.1, X.18)', () => {
   });
 
   it('appends the next cursor page to what is already loaded, and hides the control once the collection ends', async () => {
+    // Explicit, distinct `createdAt` values -- see the delivery-fee test
+    // above for why two back-to-back `new Date()` defaults are flaky under
+    // the `all` tab's newest-first comparator. A real cursor chain page 2's
+    // items older than page 1's, so this also matches how the board actually
+    // orders a log tab's pages.
     const getOrders = vi
       .fn()
       .mockReturnValueOnce(
         of({
-          value: { items: [order({ orderId: 'a', publicOrderNumber: '0001' })], nextCursor: 'c1' },
+          value: {
+            items: [
+              order({ orderId: 'a', publicOrderNumber: '0001', createdAt: '2026-01-01T10:01:00.000Z' }),
+            ],
+            nextCursor: 'c1',
+          },
           version: null,
         }),
       )
       .mockReturnValueOnce(
         of({
-          value: { items: [order({ orderId: 'b', publicOrderNumber: '0002' })], nextCursor: null },
+          value: {
+            items: [
+              order({ orderId: 'b', publicOrderNumber: '0002', createdAt: '2026-01-01T10:00:00.000Z' }),
+            ],
+            nextCursor: null,
+          },
           version: null,
         }),
       );
