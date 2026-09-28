@@ -221,6 +221,20 @@ export class DispatchBoardPage implements OnInit {
 
   private pollHandle: ReturnType<typeof setInterval> | null = null;
 
+  /**
+   * Guards the {@link refresh} vs {@link refresh} race (fix12 review,
+   * dispatch board): `refresh()` is triggered by four independent,
+   * uncoordinated sources — the pre-existing 10s poll, the row-3.1 realtime
+   * accelerator's `onFrame` subscription (every `DISPATCH_BOARD` signal or
+   * `resync`), {@link manualRefresh}, and the `assign`/`unassign` `finally`
+   * block — any of which can overlap on a slow connection. Bumped by every
+   * {@link refresh} before it awaits anything; a call whose own generation
+   * has since been superseded discards its result instead of committing it
+   * — the same pattern `order-queue.ts`'s own `pageGeneration` uses for the
+   * identical `refresh()` vs `loadMore()` race there.
+   */
+  private refreshGeneration = 0;
+
   /** One column per courier, plus the unassigned pool — the drop target's own load (§3.1). */
   protected readonly boardColumns = computed<readonly DragDropAssignColumn<RosterEntryResponse>[]>(
     () => [
@@ -386,6 +400,12 @@ export class DispatchBoardPage implements OnInit {
       this.firstLoadComplete.set(true);
       return;
     }
+    // Captured before the first await: a refresh started later (another
+    // poll tick, another realtime frame, a manual click, the post-drop
+    // finally block) bumps this and must win — this call's own result is
+    // silently dropped once it is no longer the newest one in flight,
+    // rather than clobbering fresher board state with a stale response.
+    const generation = ++this.refreshGeneration;
     try {
       const [plans, fleet, orders] = await Promise.all([
         this.dispatch.queue(scope),
@@ -396,6 +416,19 @@ export class DispatchBoardPage implements OnInit {
           }),
         ),
       ]);
+      if (generation !== this.refreshGeneration) {
+        return;
+      }
+      // `GET .../exceptions` (built by `DispatchController`, never called
+      // before this wave) — only for the plans that need it, since it is
+      // one request per plan and most plans are never
+      // `MANUAL_ACTION_REQUIRED`. Awaited before any signal below commits,
+      // so a superseded call is caught here too rather than only at the
+      // top of this fetch.
+      const exceptionsByPlanId = await this.loadExceptions(scope, plans);
+      if (generation !== this.refreshGeneration) {
+        return;
+      }
       this.plans.set(plans);
       this.fleet.set(fleet);
       this.ordersByOrderId.set(
@@ -411,18 +444,25 @@ export class DispatchBoardPage implements OnInit {
           new Set(plans.filter((plan) => this.isBulkSelectable(plan)).map((plan) => plan.planId)),
         ),
       );
-      await this.loadExceptions(scope, plans);
+      this.exceptionsByPlanId.set(exceptionsByPlanId);
       this.denied.set(false);
       this.lastError.set(null);
       this.lastUpdatedAt.set(new Date());
     } catch (error) {
-      if (error instanceof ApiError && error.status === 403) {
+      if (!(error instanceof ApiError)) {
+        // An unexpected, non-API error is a real defect regardless of
+        // whether a newer refresh has since superseded this call — it must
+        // still surface, never be silently dropped by the generation guard.
+        throw error;
+      }
+      if (generation !== this.refreshGeneration) {
+        return;
+      }
+      if (error.status === 403) {
         this.denied.set(true);
         this.lastError.set(null);
-      } else if (error instanceof ApiError) {
-        this.lastError.set(error);
       } else {
-        throw error;
+        this.lastError.set(error);
       }
     } finally {
       this.firstLoadComplete.set(true);
@@ -432,23 +472,25 @@ export class DispatchBoardPage implements OnInit {
   /**
    * `GET .../exceptions` (built by `DispatchController`, never called before
    * this wave) — only for the plans that need it, since it is one request
-   * per plan and most plans are never `MANUAL_ACTION_REQUIRED`.
+   * per plan and most plans are never `MANUAL_ACTION_REQUIRED`. Returns the
+   * map rather than committing it directly, so {@link refresh} can gate the
+   * commit on its own generation check alongside every other signal it reads
+   * this same round trip.
    */
   private async loadExceptions(
     scope: LocationScope,
     plans: readonly PlanQueueResponse[],
-  ): Promise<void> {
+  ): Promise<ReadonlyMap<string, readonly ExceptionResponse[]>> {
     const needing = plans.filter((plan) => plan.status === 'MANUAL_ACTION_REQUIRED');
     if (needing.length === 0) {
-      this.exceptionsByPlanId.set(new Map());
-      return;
+      return new Map();
     }
     const results = await Promise.all(
       needing.map((plan) =>
         this.dispatch.exceptions(scope, plan.planId).catch((): readonly ExceptionResponse[] => []),
       ),
     );
-    this.exceptionsByPlanId.set(new Map(needing.map((plan, i) => [plan.planId, results[i]])));
+    return new Map(needing.map((plan, i) => [plan.planId, results[i]]));
   }
 
   protected manualRefresh(): void {
@@ -458,7 +500,9 @@ export class DispatchBoardPage implements OnInit {
   protected formatUpdatedAt(): string | null {
     const updated = this.lastUpdatedAt();
     return updated
-      ? this.i18n.t('delivery.dispatch.updated', { time: formatClock(updated, PLACEHOLDER_TIME_ZONE) })
+      ? this.i18n.t('delivery.dispatch.updated', {
+          time: formatClock(updated, PLACEHOLDER_TIME_ZONE),
+        })
       : null;
   }
 
