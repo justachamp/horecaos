@@ -714,10 +714,27 @@ class RefundAndRemedyTests {
         assertThat(audit.facts).hasSize(1);
         AuditFact fact = audit.facts.get(0);
         assertThat(fact.actionCode()).isEqualTo("payments.remedy.record");
-        assertThat(fact.changeDocument())
-                .containsEntry("attestedMoneyMinor", 96_000L)
-                .containsEntry("platformSettledMinor", 4_000L)
-                .containsEntry("settlementBasis", SettlementBasis.MIXED.name());
+        // Staff 9.3a: ChangeDocuments.created(...) -- a freshly recorded
+        // remedy has no prior remedy to diff against, so every field's
+        // "before" is null and "after" carries the value this remedy set.
+        assertThat(fieldAfter(fact, "attestedMoneyMinor")).isEqualTo(96_000L);
+        assertThat(fieldAfter(fact, "platformSettledMinor")).isEqualTo(4_000L);
+        assertThat(fieldAfter(fact, "settlementBasis")).isEqualTo(SettlementBasis.MIXED.name());
+        assertThat(fieldBefore(fact, "attestedMoneyMinor")).isNull();
+    }
+
+    @SuppressWarnings("unchecked")
+    private static @Nullable Object fieldAfter(AuditFact fact, String field) {
+        return Objects.requireNonNull(
+                        (Map<String, Object>) fact.changeDocument().get(field))
+                .get("after");
+    }
+
+    @SuppressWarnings("unchecked")
+    private static @Nullable Object fieldBefore(AuditFact fact, String field) {
+        return Objects.requireNonNull(
+                        (Map<String, Object>) fact.changeDocument().get(field))
+                .get("before");
     }
 
     // ------------------------------------ money that arrives after the order

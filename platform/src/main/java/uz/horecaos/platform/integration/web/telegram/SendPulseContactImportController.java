@@ -20,6 +20,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope;
@@ -95,7 +96,9 @@ public class SendPulseContactImportController {
                 .at(ResourceScope.tenant(tenantId))
                 .target("SendPulseImportRun", report.runId())
                 .because("SendPulse contact export import (" + (dryRun ? "dry run" : "real run") + ")")
-                .changed(Map.of(
+                // Staff 9.3a: each import run is its own append-only report
+                // fact, with no prior run's counts to diff against.
+                .changed(ChangeDocuments.created(Map.of(
                         "sourceFileName", request.fileName(),
                         "dryRun", Boolean.toString(dryRun),
                         "rowsTotal", Integer.toString(report.counts().total()),
@@ -103,7 +106,7 @@ public class SendPulseContactImportController {
                         "rowsMatchedCustomer", Integer.toString(report.counts().matchedCustomer()),
                         "rowsSkippedAlreadyLinked",
                                 Integer.toString(report.counts().skippedAlreadyLinked()),
-                        "rowsRejected", Integer.toString(report.counts().rejected())))
+                        "rowsRejected", Integer.toString(report.counts().rejected()))))
                 .usingCapability(Capability.CUSTOMER_IMPORT.code())
                 .correlatedBy(report.runId().toString())
                 .occurredAt(clock.instant())

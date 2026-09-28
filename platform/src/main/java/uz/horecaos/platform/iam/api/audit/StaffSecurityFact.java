@@ -24,6 +24,14 @@ import org.jspecify.annotations.Nullable;
  * @param staffSubjectId the staff member, when a person acted; null otherwise
  * @param systemJob the job, when the platform acted on a schedule; null otherwise
  * @param service the surface, when an unauthenticated caller acted through it; null otherwise
+ * @param before empty when the fact has no prior state to diff against (a
+ *               fresh row, or evidence with no field of its own that
+ *               changed); the row's own prior field values otherwise. Staff
+ *               9.3a: {@code audit}, not {@code iam}, owns {@code
+ *               ChangeDocuments} (see {@link
+ *               uz.horecaos.platform.audit.infrastructure.RecordedStaffSecurityAudit}),
+ *               so this and {@link #after} are shaped there, not here.
+ * @param after  the fields as they stand once this fact happened
  */
 public record StaffSecurityFact(
         String actionCode,
@@ -33,7 +41,8 @@ public record StaffSecurityFact(
         String targetType,
         UUID targetId,
         String because,
-        Map<String, Object> changed,
+        Map<String, Object> before,
+        Map<String, Object> after,
         String correlationId,
         Instant occurredAt) {
 
@@ -44,7 +53,8 @@ public record StaffSecurityFact(
         Objects.requireNonNull(because, "A reason is required");
         Objects.requireNonNull(correlationId, "A correlation id is required (ADR 0027)");
         Objects.requireNonNull(occurredAt, "An instant is required");
-        changed = Map.copyOf(Objects.requireNonNull(changed, "A changed map is required"));
+        before = before == null ? Map.of() : Map.copyOf(before);
+        after = Map.copyOf(Objects.requireNonNull(after, "An after map is required"));
         long attributions = (staffSubjectId == null ? 0 : 1) + (systemJob == null ? 0 : 1) + (service == null ? 0 : 1);
         if (attributions != 1) {
             // A person did this, or the platform did on a schedule, or an
@@ -69,11 +79,22 @@ public record StaffSecurityFact(
             String targetType,
             UUID targetId,
             String because,
-            Map<String, Object> changed,
+            Map<String, Object> before,
+            Map<String, Object> after,
             String correlationId,
             Instant occurredAt) {
         return new StaffSecurityFact(
-                actionCode, subjectId, null, null, targetType, targetId, because, changed, correlationId, occurredAt);
+                actionCode,
+                subjectId,
+                null,
+                null,
+                targetType,
+                targetId,
+                because,
+                before,
+                after,
+                correlationId,
+                occurredAt);
     }
 
     /** Something the platform did on its own, on a schedule. */
@@ -83,11 +104,12 @@ public record StaffSecurityFact(
             String targetType,
             UUID targetId,
             String because,
-            Map<String, Object> changed,
+            Map<String, Object> before,
+            Map<String, Object> after,
             String correlationId,
             Instant occurredAt) {
         return new StaffSecurityFact(
-                actionCode, null, job, null, targetType, targetId, because, changed, correlationId, occurredAt);
+                actionCode, null, job, null, targetType, targetId, because, before, after, correlationId, occurredAt);
     }
 
     /**
@@ -108,10 +130,21 @@ public record StaffSecurityFact(
             String targetType,
             UUID targetId,
             String because,
-            Map<String, Object> changed,
+            Map<String, Object> before,
+            Map<String, Object> after,
             String correlationId,
             Instant occurredAt) {
         return new StaffSecurityFact(
-                actionCode, null, null, service, targetType, targetId, because, changed, correlationId, occurredAt);
+                actionCode,
+                null,
+                null,
+                service,
+                targetType,
+                targetId,
+                because,
+                before,
+                after,
+                correlationId,
+                occurredAt);
     }
 }

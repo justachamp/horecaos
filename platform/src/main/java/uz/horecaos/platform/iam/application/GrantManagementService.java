@@ -126,6 +126,8 @@ public class GrantManagementService implements GrantAuthority {
                 command.scope(),
                 granterSubject,
                 command.reason(),
+                // Staff 9.3a: a freshly inserted grant has no prior state.
+                Map.of(),
                 Map.of(
                         "role",
                         role.code(),
@@ -226,6 +228,8 @@ public class GrantManagementService implements GrantAuthority {
                 command.scope(),
                 systemActor,
                 command.reason(),
+                // Staff 9.3a: a freshly inserted grant has no prior state.
+                Map.of(),
                 Map.of(
                         "role",
                         role.code(),
@@ -298,6 +302,8 @@ public class GrantManagementService implements GrantAuthority {
                 command.scope(),
                 staffSubject,
                 command.reason(),
+                // Staff 9.3a: a freshly inserted grant has no prior state.
+                Map.of(),
                 Map.of(
                         "role",
                         role.code(),
@@ -398,7 +404,11 @@ public class GrantManagementService implements GrantAuthority {
                     grant.tenantId() == null ? ResourceScope.platform() : ResourceScope.tenant(grant.tenantId()),
                     revokerSubject,
                     reason,
-                    Map.of("scope", grant.scopeType()),
+                    // Staff 9.3a: "status" genuinely moves from ACTIVE (the
+                    // WHERE status = 'ACTIVE' guard above proves it) to
+                    // REVOKED.
+                    Map.of("status", "ACTIVE", "scope", grant.scopeType()),
+                    Map.of("status", "REVOKED", "scope", grant.scopeType()),
                     correlationIdFor(grantId),
                     clock.instant()));
         }

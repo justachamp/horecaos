@@ -769,7 +769,13 @@ class DayCloseAndMetricLayerTests {
 
         assertThat(auditRecorder.facts).hasSize(1);
         assertThat(auditRecorder.facts.getFirst().actionCode()).isEqualTo("reporting.metric.signed");
-        assertThat(auditRecorder.facts.getFirst().changeDocument()).containsKey("definitionDigest");
+        // Staff 9.3a: ChangeDocuments.created(...) -- signing is not
+        // idempotent, so there is never a prior signature to diff against.
+        @SuppressWarnings("unchecked")
+        Map<String, Object> digestChange = (Map<String, Object>) Objects.requireNonNull(
+                auditRecorder.facts.getFirst().changeDocument().get("definitionDigest"));
+        assertThat(digestChange).containsEntry("before", null);
+        assertThat(digestChange.get("after")).isNotNull();
 
         assertThatThrownBy(
                         () -> signing.sign("revenue.gross.v1", ActorRef.user("finance-2", "Finance"), "Signing again"))

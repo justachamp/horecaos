@@ -364,7 +364,7 @@ class ApprovalPolicyServiceTests {
                  WHERE action_code = 'approval.policy.cancelled'
                    AND audit_class = 'SECURITY'
                    AND target_id = :id
-                   AND change_document->>'neverTookEffect' = 'true'
+                   AND change_document->'neverTookEffect'->>'after' = 'true'
                 """).param("id", mistake.id()).query(Long.class).single())
                 .as("calling off a control change is itself a security event")
                 .isEqualTo(1L);
@@ -417,7 +417,7 @@ class ApprovalPolicyServiceTests {
                         + "the least chance of noticing on their own")
                 .isEqualTo(1L);
         assertThat(jdbc.sql("""
-                SELECT change_document->>'neverTookEffect' FROM audit.audit_events
+                SELECT change_document->'neverTookEffect'->>'after' FROM audit.audit_events
                  WHERE action_code = 'approval.policy.voided' AND target_id = :id
                 """)
                         .param("id", tightening.id())
@@ -444,7 +444,7 @@ class ApprovalPolicyServiceTests {
                    AND actor_subject = 'owner-1'
                    AND target_id = :target
                    AND capability_used = 'approval.policy.manage'
-                   AND change_document->>'supersededByPolicyId' = :supersededBy
+                   AND change_document->'supersededByPolicyId'->>'after' = :supersededBy
                 """)
                 .param("actionCode", actionCode)
                 .param("target", target)

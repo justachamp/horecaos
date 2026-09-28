@@ -13,6 +13,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.configuration.Ids;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.marketing.api.CampaignMessagePort;
@@ -199,7 +200,10 @@ public class AutomationFiringService {
                 .target("MarketingAutomationRule", rule.id())
                 .outcome(AuditFact.Outcome.SUCCEEDED)
                 .because("Trigger " + rule.triggerType() + " fired for guard key " + guardKey)
-                .changed(Map.of("customerAccountId", customerAccountId.toString(), "channel", channel.name()))
+                // Staff 9.3a: each firing is its own append-only fact, with
+                // no prior firing to diff against.
+                .changed(ChangeDocuments.created(
+                        Map.of("customerAccountId", customerAccountId.toString(), "channel", channel.name())))
                 .correlatedBy(runId.toString())
                 .occurredAt(now)
                 .build());

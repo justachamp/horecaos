@@ -16,6 +16,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.fulfillment.api.InternalFleetPort;
 import uz.horecaos.platform.fulfillment.api.InternalFleetPort.FleetCandidate;
 import uz.horecaos.platform.fulfillment.api.ShipmentBookingPort;
@@ -572,12 +573,13 @@ public class DeliverySourcingService {
                 .at(ResourceScope.location(request.tenantId(), request.brandId(), request.locationId()))
                 .target("fulfillment.shipment", shipmentId.get())
                 .because("Partner " + partner.providerType() + " cost more than the customer's delivery fee")
-                .changed(Map.of(
+                // Staff 9.3a: a freshly recorded subsidy has no prior state.
+                .changed(ChangeDocuments.created(Map.of(
                         "customerDeliveryFeeMinor", request.customerDeliveryFeeMinor(),
                         "providerCostMinor", quote.priceMinor(),
                         "subsidyAmountMinor", gapMinor,
                         "currency", request.currency(),
-                        "bearer", subsidyPolicy.document().bearer().name()))
+                        "bearer", subsidyPolicy.document().bearer().name())))
                 .correlatedBy(request.correlationId())
                 .occurredAt(now)
                 .build());

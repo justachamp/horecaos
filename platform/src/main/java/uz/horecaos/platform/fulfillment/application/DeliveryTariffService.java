@@ -12,6 +12,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.fulfillment.application.ServiceZoneService.DeliveryResourceNotFoundException;
 import uz.horecaos.platform.fulfillment.domain.VersionStatus;
 import uz.horecaos.platform.fulfillment.domain.tariff.DeliveryTariff;
@@ -59,7 +60,8 @@ public class DeliveryTariffService {
                 .at(ResourceScope.brand(tenantId, brandId))
                 .target("DeliveryTariff", id)
                 .because("Registered a rate table lineage '%s'".formatted(code))
-                .changed(Map.of("code", code, "name", name, "brandDefault", brandDefault))
+                // Staff 9.3a: a freshly registered tariff has no prior state.
+                .changed(ChangeDocuments.created(Map.of("code", code, "name", name, "brandDefault", brandDefault)))
                 .correlatedBy(correlationId())
                 .occurredAt(now)
                 .build());
@@ -109,10 +111,11 @@ public class DeliveryTariffService {
                 .target("DeliveryTariff", draft.tariffId())
                 .targetVersion((long) version)
                 .because("Drafted version %d of rate table %s".formatted(version, draft.tariffId()))
-                .changed(Map.of(
+                // Staff 9.3a: a freshly inserted version has no prior state.
+                .changed(ChangeDocuments.created(Map.of(
                         "feeSource", draft.feeSource().name(),
                         "distanceMode", draft.distanceMode().name(),
-                        "maxDistanceMeters", draft.maxDistanceMeters()))
+                        "maxDistanceMeters", draft.maxDistanceMeters())))
                 .correlatedBy(correlationId())
                 .occurredAt(now)
                 .build());
@@ -149,7 +152,11 @@ public class DeliveryTariffService {
                 .target("DeliveryTariff", tariffId)
                 .targetVersion((long) version)
                 .because("Activated version %d of rate table %s".formatted(version, tariffId))
-                .changed(Map.of("version", version))
+                // Staff 9.3a: "status" genuinely moves from DRAFT (guarded
+                // above) to ACTIVE.
+                .changed(ChangeDocuments.diff(
+                        Map.of("status", VersionStatus.DRAFT.name()),
+                        Map.of("status", VersionStatus.ACTIVE.name(), "version", version)))
                 .correlatedBy(correlationId())
                 .occurredAt(now)
                 .build());
@@ -165,7 +172,10 @@ public class DeliveryTariffService {
                 .at(ResourceScope.brand(tenantId, brandId))
                 .target("DeliveryTariff", tariffId)
                 .because("Bound location %s to rate table %s".formatted(locationId, tariffId))
-                .changed(Map.of("locationId", locationId.toString()))
+                // Staff 9.3a: an effective-dated binding row is appended, not
+                // mutated (JdbcDeliveryTariffStore#bindLocation), so there is
+                // no prior binding fact to diff against.
+                .changed(ChangeDocuments.created(Map.of("locationId", locationId.toString())))
                 .correlatedBy(correlationId())
                 .occurredAt(now)
                 .build());

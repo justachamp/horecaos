@@ -9,6 +9,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.reporting.domain.MetricDefinition;
 import uz.horecaos.platform.reporting.domain.MetricRegistry;
@@ -62,10 +63,13 @@ public class MetricSigningService {
                                 definition.id().code().getBytes(java.nio.charset.StandardCharsets.UTF_8)))
                 .outcome(AuditFact.Outcome.SUCCEEDED)
                 .because(reason)
-                .changed(Map.of(
+                // Staff 9.3a: signing is not idempotent (see class Javadoc) --
+                // a signed metric is refused rather than re-signed, so this is
+                // always a genuine creation with no prior signature to diff.
+                .changed(ChangeDocuments.created(Map.of(
                         "metricCode", definition.id().code(),
                         "definitionDigest", definition.digest(),
-                        "definition", definition.definition()))
+                        "definition", definition.definition())))
                 .evidence(definition.digest())
                 .usingCapability("metric.manage")
                 .correlatedBy(UUID.randomUUID().toString())

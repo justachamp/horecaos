@@ -153,10 +153,13 @@ class ProviderInstallationSecretRotationEndpointTests {
                 .as("ADR 0027: who rotated which installation is an audited fact")
                 .hasSize(1);
         String changeDocument = String.valueOf(auditRows.getFirst().get("change_document"));
+        // Staff 9.3a: "reference" is a real before/after diff, not a flat
+        // after-only map -- jsonb does not preserve key order, so this
+        // checks the before and after values independently rather than one
+        // connected substring.
         assertThat(changeDocument)
-                .as("reference NAMES only — the audit row must never carry the token value either")
-                .contains("telegram-original")
-                .contains("telegram-rotated")
+                .contains("horecaos:local:provider_notification:platform:telegram-original")
+                .contains("horecaos:local:provider_notification:platform:telegram-rotated")
                 .doesNotContain("the-rotated-bot-token");
     }
 

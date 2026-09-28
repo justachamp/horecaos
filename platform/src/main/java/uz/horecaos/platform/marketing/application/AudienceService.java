@@ -18,6 +18,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.marketing.domain.AudiencePredicate;
 import uz.horecaos.platform.marketing.domain.EngagementPolicy;
@@ -240,12 +241,13 @@ public class AudienceService {
                 .at(ResourceScope.brand(tenantId, audience.brandId()))
                 .target("MarketingAudienceSnapshot", snapshotId)
                 .because("Evaluated audience %s for a %s send".formatted(audience.name(), channel))
-                .changed(Map.of(
+                // Staff 9.3a: a freshly built snapshot has no prior state.
+                .changed(ChangeDocuments.created(Map.of(
                         "audienceId", audienceId,
                         "definitionVersion", audience.definitionVersion(),
                         "channel", channel.name(),
                         "candidateCount", candidates.size(),
-                        "memberCount", included))
+                        "memberCount", included)))
                 .correlatedBy(correlationId)
                 .occurredAt(now)
                 .build());
@@ -307,10 +309,12 @@ public class AudienceService {
                 .at(ResourceScope.brand(tenantId, snapshot.brandId()))
                 .target("MarketingAudienceSnapshot", snapshotId)
                 .because(statedPurpose)
-                .changed(Map.of(
+                // Staff 9.3a: each export is its own append-only access-log
+                // fact, with no prior export to diff against.
+                .changed(ChangeDocuments.created(Map.of(
                         "audienceId", snapshot.audienceId(),
                         "definitionVersion", snapshot.definitionVersion(),
-                        "rowCount", ids.size()))
+                        "rowCount", ids.size())))
                 .usingCapability("audience.export")
                 .correlatedBy(correlationId)
                 .occurredAt(clock.instant())

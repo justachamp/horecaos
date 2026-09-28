@@ -22,6 +22,7 @@ import uz.horecaos.platform.audit.api.ApprovalService;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
@@ -482,7 +483,15 @@ public class FailureOperationsService {
                 .update();
 
         if (updated == 1) {
-            record("integration.outbox.retried", tenantId.get(), "OutboxEvent", eventId, actor, reason, Map.of());
+            record(
+                    "integration.outbox.retried",
+                    tenantId.get(),
+                    "OutboxEvent",
+                    eventId,
+                    actor,
+                    reason,
+                    Map.of("status", "DEAD_LETTER"),
+                    Map.of("status", "PENDING"));
         }
         return updated == 1;
     }
@@ -545,7 +554,8 @@ public class FailureOperationsService {
                     eventId,
                     actor,
                     reason,
-                    Map.of("consumer", consumerName));
+                    Map.of("status", "DEAD_LETTER", "consumer", consumerName),
+                    Map.of("status", "RETRY_PENDING", "consumer", consumerName));
         }
         return updated == 1;
     }
@@ -614,7 +624,14 @@ public class FailureOperationsService {
                     eventId,
                     actor,
                     reason,
-                    Map.of("category", category.name(), "evidence", String.valueOf(evidenceReference)));
+                    Map.of("status", "DEAD_LETTER"),
+                    Map.of(
+                            "status",
+                            "RESOLVED",
+                            "category",
+                            category.name(),
+                            "evidence",
+                            String.valueOf(evidenceReference)));
         }
         return Resolution.applied(updated == 1);
     }
@@ -684,7 +701,8 @@ public class FailureOperationsService {
                     eventId,
                     actor,
                     reason,
-                    Map.of("consumer", consumerName, "category", category.name()));
+                    Map.of("status", "DEAD_LETTER", "consumer", consumerName),
+                    Map.of("status", "RESOLVED", "consumer", consumerName, "category", category.name()));
         }
         return Resolution.applied(updated == 1);
     }
@@ -761,14 +779,20 @@ public class FailureOperationsService {
             UUID targetId,
             ActorRef actor,
             String reason,
-            Map<String, Object> changes) {
+            Map<String, Object> before,
+            Map<String, Object> after) {
 
         audit.record(AuditFact.of(actionCode, AuditClass.BUSINESS)
                 .by(actor)
                 .at(ResourceScope.tenant(tenantId))
                 .target(targetType, targetId)
                 .because(reason)
-                .changed(changes)
+                // Staff 9.3a: "status" genuinely moves from DEAD_LETTER to the
+                // retried/resolved status; any other field (consumer, category,
+                // evidence) is either unchanged identifying context on both
+                // sides or a value this action sets for the first time, which
+                // diff() records as before=null.
+                .changed(ChangeDocuments.diff(before, after))
                 .correlatedBy(targetId.toString())
                 .occurredAt(clock.instant())
                 .build());

@@ -17,6 +17,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.customers.application.CustomerSessionStore.NewSession;
 import uz.horecaos.platform.customers.application.CustomerSessionStore.StoredSession;
 import uz.horecaos.platform.customers.application.CustomerVerificationService.Redemption;
@@ -257,8 +258,10 @@ public class CustomerSessionService {
                 .target("customer_session", targetId)
                 // Identifiers and instants. A token or a number in a change
                 // document would put a live credential and personal data into a
-                // record designed to be kept for years.
-                .changed(changes)
+                // record designed to be kept for years. Staff 9.3a: each of
+                // this helper's facts is its own append-only report, with no
+                // prior state to diff against.
+                .changed(ChangeDocuments.created(changes))
                 .correlatedBy(Optional.ofNullable(MDC.get("correlationId")).orElse("customer-session"))
                 .occurredAt(now)
                 .build();

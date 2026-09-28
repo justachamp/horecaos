@@ -36,6 +36,7 @@ import uz.horecaos.platform.audit.api.ApprovalOutcome;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.configuration.Ids;
 import uz.horecaos.platform.customers.api.CustomerDirectoryExportPort;
 import uz.horecaos.platform.iam.api.ResourceScope;
@@ -341,7 +342,10 @@ public class ReportExportService {
                     .at(ResourceScope.tenant(job.tenantId()))
                     .target("report_export", job.id())
                     .because(job.purpose())
-                    .changed(Map.of(
+                    // Staff 9.3a: rowCount/truncated are the export's own
+                    // result, set for the first time as it completes -- no
+                    // prior export outcome exists on this job to diff against.
+                    .changed(ChangeDocuments.created(Map.of(
                             "reportKey",
                             job.reportKey(),
                             "rowCount",
@@ -351,7 +355,7 @@ public class ReportExportService {
                             "piiColumnGroup",
                             job.includesPiiColumns() ? "INCLUDED" : "EXCLUDED",
                             "filters",
-                            job.filters()))
+                            job.filters())))
                     .correlatedBy(job.id().toString())
                     .occurredAt(now)
                     .build());

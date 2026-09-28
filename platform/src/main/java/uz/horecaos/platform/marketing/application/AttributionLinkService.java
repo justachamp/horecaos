@@ -16,6 +16,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.configuration.Ids;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.marketing.infrastructure.persistence.JdbcAttributionLinkStore;
@@ -117,7 +118,8 @@ public class AttributionLinkService {
                 .at(ResourceScope.brand(tenantId, brandId))
                 .target("AttributionLink", id)
                 .because("Minted a trackable acquisition link")
-                .changed(
+                // Staff 9.3a: a freshly minted link has no prior state.
+                .changed(ChangeDocuments.created(
                         destinationId == null
                                 ? Map.of("channel", channel, "destinationType", destinationType)
                                 : Map.of(
@@ -126,7 +128,7 @@ public class AttributionLinkService {
                                         "destinationType",
                                         destinationType,
                                         "destinationId",
-                                        destinationId))
+                                        destinationId)))
                 .correlatedBy(correlationId())
                 .occurredAt(now)
                 .build());

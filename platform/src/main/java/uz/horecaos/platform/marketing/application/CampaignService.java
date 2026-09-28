@@ -14,6 +14,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.commercial.api.EntitlementKeys;
 import uz.horecaos.platform.commercial.api.EntitlementService;
 import uz.horecaos.platform.iam.api.ResourceScope;
@@ -249,15 +250,22 @@ public class CampaignService {
                 .targetVersion((long) campaign.version())
                 .outcome(approved ? AuditFact.Outcome.SUCCEEDED : AuditFact.Outcome.REJECTED)
                 .because(reason)
-                .changed(Map.of(
-                        "estimatedRecipients",
-                        campaign.estimatedRecipients() == null ? 0 : campaign.estimatedRecipients(),
-                        "costCeilingMinor",
-                        String.valueOf(campaign.costCeilingMinor()),
-                        "recipientCap",
-                        campaign.recipientCap(),
-                        "authorIsApprover",
-                        approverId.equals(campaign.createdBy())))
+                // Staff 9.3a: "status" genuinely moves from the campaign's
+                // prior status (read above, before the write) to APPROVED --
+                // the same transition JdbcCampaignStore#approve performs.
+                .changed(ChangeDocuments.diff(
+                        Map.of("status", campaign.status().name()),
+                        Map.of(
+                                "status",
+                                CampaignStatus.APPROVED.name(),
+                                "estimatedRecipients",
+                                campaign.estimatedRecipients() == null ? 0 : campaign.estimatedRecipients(),
+                                "costCeilingMinor",
+                                String.valueOf(campaign.costCeilingMinor()),
+                                "recipientCap",
+                                campaign.recipientCap(),
+                                "authorIsApprover",
+                                approverId.equals(campaign.createdBy()))))
                 .underApproval(approvalId)
                 .usingCapability("campaign.approve")
                 .correlatedBy(correlationId)
@@ -364,7 +372,15 @@ public class CampaignService {
                 .target("MarketingCampaign", campaignId)
                 .outcome(rescheduled ? AuditFact.Outcome.SUCCEEDED : AuditFact.Outcome.REJECTED)
                 .because(campaign.haltedReason() == null ? "operator re-schedule" : campaign.haltedReason())
-                .changed(Map.of("scheduledAt", newScheduledAt.toString()))
+                // Staff 9.3a: "scheduledAt" genuinely moves from the
+                // campaign's prior value (read above, before the write,
+                // null when it was never scheduled) to the new instant.
+                .changed(ChangeDocuments.change(
+                        "scheduledAt",
+                        campaign.scheduledAt() == null
+                                ? null
+                                : campaign.scheduledAt().toString(),
+                        newScheduledAt.toString()))
                 .usingCapability("campaign.approve")
                 .correlatedBy(correlationId)
                 .occurredAt(now)
@@ -396,10 +412,18 @@ public class CampaignService {
                 .target("MarketingCampaign", campaignId)
                 .outcome(halted ? AuditFact.Outcome.SUCCEEDED : AuditFact.Outcome.REJECTED)
                 .because(reason)
-                .changed(Map.of(
-                        "statusBefore", campaign.status().name(),
-                        "spentCostMinor", campaign.spentCostMinor(),
-                        "reservedCostMinor", campaign.reservedCostMinor()))
+                // Staff 9.3a: "status" genuinely moves from the campaign's
+                // prior status (read above, before the write) to
+                // HALTED_OPERATOR.
+                .changed(ChangeDocuments.diff(
+                        Map.of("status", campaign.status().name()),
+                        Map.of(
+                                "status",
+                                CampaignStatus.HALTED_OPERATOR.name(),
+                                "spentCostMinor",
+                                campaign.spentCostMinor(),
+                                "reservedCostMinor",
+                                campaign.reservedCostMinor())))
                 .usingCapability("campaign.approve")
                 .correlatedBy(correlationId)
                 .occurredAt(now)
@@ -461,8 +485,18 @@ public class CampaignService {
                 .targetVersion((long) campaign.version())
                 .outcome(resumed ? AuditFact.Outcome.SUCCEEDED : AuditFact.Outcome.REJECTED)
                 .because(reason)
-                .changed(
-                        Map.of("blockedCountBeforeReset", campaign.blockedCount(), "suppressedDuringPause", suppressed))
+                // Staff 9.3a: "status" genuinely moves from PAUSED (guarded
+                // above) to SENDING, the same transition JdbcCampaignStore
+                // #resume performs, which also resets blockedCount to 0.
+                .changed(ChangeDocuments.diff(
+                        Map.of("status", CampaignStatus.PAUSED.name(), "blockedCount", campaign.blockedCount()),
+                        Map.of(
+                                "status",
+                                CampaignStatus.SENDING.name(),
+                                "blockedCount",
+                                0,
+                                "suppressedDuringPause",
+                                suppressed)))
                 .usingCapability("campaign.approve")
                 .correlatedBy(correlationId)
                 .occurredAt(now)

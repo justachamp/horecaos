@@ -30,6 +30,7 @@ import uz.horecaos.platform.audit.api.ApprovalService;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.fulfillment.api.DeliveryFeeOutcome;
 import uz.horecaos.platform.fulfillment.api.PricingAuthority;
 import uz.horecaos.platform.iam.api.ResourceScope;
@@ -1434,7 +1435,7 @@ public class OrderAmendmentService {
             @Nullable String actorId,
             @Nullable String reason,
             int version,
-            Map<String, Object> changed,
+            Map<String, Object> after,
             @Nullable String correlationId,
             Instant now) {
 
@@ -1452,7 +1453,12 @@ public class OrderAmendmentService {
                 .targetVersion((long) version)
                 .outcome(AuditFact.Outcome.SUCCEEDED)
                 .because(reason)
-                .changed(changed)
+                // Staff 9.3a: both callers record a specific amendment's own
+                // proposal or application -- its own commands, revision and
+                // delta, not a diff of some field this helper's two callers
+                // share. Each is its own event fact, with no prior amendment
+                // event to diff against.
+                .changed(ChangeDocuments.created(after))
                 .correlatedBy(correlationId == null ? order.orderId().toString() : correlationId)
                 .occurredAt(now)
                 .build());

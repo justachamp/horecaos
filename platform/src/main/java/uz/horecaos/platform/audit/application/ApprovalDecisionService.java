@@ -20,6 +20,7 @@ import uz.horecaos.platform.audit.api.ApprovalService;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.iam.api.AuthorizationService;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.ResourceScope;
@@ -403,7 +404,9 @@ public class ApprovalDecisionService {
                 .target("ApprovalRequest", request.id())
                 .outcome(AuditFact.Outcome.REJECTED)
                 .because(reason)
-                .changed(document)
+                // Staff 9.3a: each refusal is its own append-only evidence
+                // fact, with no prior refusal to diff against.
+                .changed(ChangeDocuments.created(document))
                 .underApproval(request.id())
                 .correlatedBy(request.id().toString())
                 .occurredAt(clock.instant())

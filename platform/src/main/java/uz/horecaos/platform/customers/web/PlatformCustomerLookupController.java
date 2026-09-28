@@ -19,6 +19,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.customers.application.CustomerProfileService;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
@@ -83,7 +84,9 @@ public class PlatformCustomerLookupController {
                 .by(ActorRef.user(subject, null))
                 .at(ResourceScope.platform())
                 .because(body.reason())
-                .changed(Map.of("tenantsSearched", tenants.size(), "matches", matches.size()))
+                // Staff 9.3a: each lookup is its own append-only search-audit
+                // fact, with no prior lookup's counts to diff against.
+                .changed(ChangeDocuments.created(Map.of("tenantsSearched", tenants.size(), "matches", matches.size())))
                 .usingCapability(Capability.CUSTOMER_PII_REVEAL.code())
                 .correlatedBy(UUID.randomUUID().toString())
                 .occurredAt(clock.instant())

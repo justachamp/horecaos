@@ -15,6 +15,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.fulfillment.domain.BranchOrigin;
 import uz.horecaos.platform.fulfillment.domain.VersionStatus;
 import uz.horecaos.platform.fulfillment.domain.zone.ZoneRole;
@@ -83,7 +84,8 @@ public class ServiceZoneService {
                 .at(ResourceScope.brand(tenantId, brandId))
                 .target("ServiceZone", zoneId)
                 .because("Registered a %s zone lineage '%s'".formatted(role, code))
-                .changed(Map.of("role", role.name(), "code", code))
+                // Staff 9.3a: a freshly registered zone has no prior state.
+                .changed(ChangeDocuments.created(Map.of("role", role.name(), "code", code)))
                 .correlatedBy(correlationId())
                 .occurredAt(now)
                 .build());
@@ -160,10 +162,11 @@ public class ServiceZoneService {
                 .target("ServiceZone", request.zoneId())
                 .targetVersion((long) version)
                 .because("Drafted %s version %d of zone %s".formatted(shapeKind, version, request.zoneId()))
-                .changed(Map.of(
+                // Staff 9.3a: a freshly inserted version has no prior state.
+                .changed(ChangeDocuments.created(Map.of(
                         "shape", shapeKind,
                         "priority", request.priority(),
-                        "currency", request.currency()))
+                        "currency", request.currency())))
                 .correlatedBy(correlationId())
                 .occurredAt(now)
                 .build());
@@ -229,7 +232,10 @@ public class ServiceZoneService {
                 .target("ServiceZone", zoneId)
                 .targetVersion((long) version)
                 .because("Activated version %d of zone %s".formatted(version, zoneId))
-                .changed(Map.of("version", version))
+                // Staff 9.3a: "status" genuinely moves from DRAFT to ACTIVE.
+                .changed(ChangeDocuments.diff(
+                        Map.of("status", VersionStatus.DRAFT.name()),
+                        Map.of("status", VersionStatus.ACTIVE.name(), "version", version)))
                 .correlatedBy(correlationId())
                 .occurredAt(now)
                 .build());
@@ -258,7 +264,10 @@ public class ServiceZoneService {
                 .at(ResourceScope.brand(tenantId, brandId))
                 .target("ServiceZone", zoneId)
                 .because("Bound location %s to zone %s".formatted(locationId, zoneId))
-                .changed(Map.of("locationId", locationId.toString()))
+                // Staff 9.3a: an effective-dated binding row is appended, not
+                // mutated (JdbcServiceZoneStore#bindLocation), so there is no
+                // prior binding fact to diff against.
+                .changed(ChangeDocuments.created(Map.of("locationId", locationId.toString())))
                 .correlatedBy(correlationId())
                 .occurredAt(now)
                 .build());
@@ -301,7 +310,12 @@ public class ServiceZoneService {
                 .target("ServiceZone", zoneId)
                 .targetVersion((long) version)
                 .because("Deactivated version %d of zone %s; the zone now covers nothing".formatted(version, zoneId))
-                .changed(Map.of("version", version))
+                // Staff 9.3a: "status" genuinely moves from ACTIVE (the
+                // UPDATE above's own WHERE status = 'ACTIVE' guard proves
+                // it) to RETIRED.
+                .changed(ChangeDocuments.diff(
+                        Map.of("status", VersionStatus.ACTIVE.name()),
+                        Map.of("status", VersionStatus.RETIRED.name(), "version", version)))
                 .correlatedBy(correlationId())
                 .occurredAt(now)
                 .build());
@@ -332,7 +346,11 @@ public class ServiceZoneService {
                 .at(ResourceScope.brand(tenantId, brandId))
                 .target("ServiceZone", zoneId)
                 .because("Unbound location %s from zone %s".formatted(locationId, zoneId))
-                .changed(Map.of("locationId", locationId.toString()))
+                // Staff 9.3a: "validUntil" genuinely moves from null (this
+                // store's own WHERE valid_until IS NULL guard proves it) to
+                // now, closing the binding's window (ADR 0104).
+                .changed(ChangeDocuments.diff(
+                        unboundDiffMap(locationId, null), unboundDiffMap(locationId, now.toString())))
                 .correlatedBy(correlationId())
                 .occurredAt(now)
                 .build());
@@ -363,6 +381,14 @@ public class ServiceZoneService {
     }
 
     public record ZoneDetail(JdbcServiceZoneStore.ZoneSummaryRow zone, List<UUID> boundLocationIds) {}
+
+    /** A {@code {locationId, validUntil}} snapshot for {@link #unbindLocation}'s diff -- {@code validUntil} may be null. */
+    private static Map<String, Object> unboundDiffMap(UUID locationId, @Nullable String validUntil) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("locationId", locationId.toString());
+        map.put("validUntil", validUntil);
+        return map;
+    }
 
     private ActorRef actor() {
         return ActorRef.user(currentActor.get().subject(), null);

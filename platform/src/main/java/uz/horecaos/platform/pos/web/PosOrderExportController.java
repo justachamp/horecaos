@@ -22,6 +22,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope;
@@ -148,11 +149,14 @@ public class PosOrderExportController {
                     .at(ResourceScope.tenant(tenantId))
                     .target("PosOrderExport", exportId)
                     .because(request.reason())
-                    .changed(Map.of(
+                    // Staff 9.3a: settleByOperator's own CAS only ever moves
+                    // an export from AWAITING_OPERATOR, so there is no prior
+                    // operator decision on this export to diff against.
+                    .changed(ChangeDocuments.created(Map.of(
                             "decision",
                             request.decision().name(),
                             "externalOrderId",
-                            request.externalOrderId() == null ? "" : request.externalOrderId()))
+                            request.externalOrderId() == null ? "" : request.externalOrderId())))
                     .usingCapability(Capability.POS_EXPORT_RESOLVE.code())
                     .correlatedBy(exportId.toString())
                     .occurredAt(clock.instant())

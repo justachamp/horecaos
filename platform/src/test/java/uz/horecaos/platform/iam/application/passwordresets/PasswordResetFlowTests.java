@@ -161,7 +161,7 @@ class PasswordResetFlowTests {
                 .extracting(StaffSecurityFact::actionCode)
                 .containsExactly(
                         "iam.password_reset.requested", "iam.password_reset.sent", "iam.password_reset.accepted");
-        assertThat(fact("iam.password_reset.accepted").changed())
+        assertThat(fact("iam.password_reset.accepted").after())
                 .as("the fact says whether the sessions were actually ended, rather than asserting it")
                 .containsEntry("sessionsEnded", true);
     }
@@ -187,7 +187,7 @@ class PasswordResetFlowTests {
         assertThat(requested.correlationId())
                 .as("what an investigator joins a burst of these by is the caller, not a per-request value")
                 .isEqualTo("caller-address-hash");
-        assertThat(requested.changed().toString())
+        assertThat(requested.after().toString())
                 .as("and never the login that was typed")
                 .doesNotContain("dilnoza");
 
@@ -640,7 +640,7 @@ class PasswordResetFlowTests {
                         ApiException.class,
                         refused -> assertThat(refused.properties()).containsEntry("reason", "INVALID"));
 
-        assertThat(fact("iam.password_reset.accepted").changed()).containsEntry("sessionsEnded", false);
+        assertThat(fact("iam.password_reset.accepted").after()).containsEntry("sessionsEnded", false);
         assertThat(facts)
                 .extracting(StaffSecurityFact::actionCode)
                 .as("a credential changed and the sessions it was changed because of are still live: alertable")

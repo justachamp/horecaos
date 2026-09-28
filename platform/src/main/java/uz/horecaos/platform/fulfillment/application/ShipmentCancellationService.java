@@ -14,6 +14,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.configuration.Ids;
 import uz.horecaos.platform.fulfillment.api.ShipmentBookingPort;
 import uz.horecaos.platform.fulfillment.api.ShipmentBookingPort.CancelCommand;
@@ -325,7 +326,10 @@ public class ShipmentCancellationService implements ShipmentCancellationPort {
                 .at(ResourceScope.location(tenantId, brandId, locationId))
                 .target("fulfillment.delivery_plan", planId)
                 .because(reasonCode)
-                .changed(changed)
+                // Staff 9.3a: each cascade-cancel attempt is its own
+                // append-only outcome fact, with no prior attempt on this
+                // plan to diff against.
+                .changed(ChangeDocuments.created(changed))
                 .correlatedBy(planId.toString())
                 .occurredAt(now)
                 .build());
