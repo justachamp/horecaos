@@ -30,6 +30,7 @@ import uz.horecaos.platform.audit.api.ApprovalService;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.tenancy.api.BrandId;
 import uz.horecaos.platform.tenancy.api.LocationId;
@@ -196,7 +197,8 @@ public class OnboardingService implements OnboardingHealthQuery {
                 // ADR 0099: the one choice the caller made when starting the run,
                 // so "who asked for a sample menu in this tenant" is answerable
                 // from the audit trail rather than only from a step's status.
-                .changed(Map.of("sampleMenu", sampleMenu))
+                // Staff 9.3a: a brand-new run, no prior state to diff against.
+                .changed(ChangeDocuments.created(Map.of("sampleMenu", sampleMenu)))
                 .correlatedBy(runId.toString())
                 .occurredAt(now)
                 .build());
@@ -543,7 +545,10 @@ public class OnboardingService implements OnboardingHealthQuery {
                 .at(ResourceScope.tenant(tenantOf(runId)))
                 .target("OnboardingRun", runId)
                 .because(reason)
-                .changed(Map.of("reopenedSteps", reopened))
+                // Staff 9.3a: "status" genuinely moves -- the UPDATE just above
+                // only ever matches a FAILED run.
+                .changed(ChangeDocuments.diff(
+                        Map.of("status", "FAILED"), Map.of("status", "PROVISIONING", "reopenedSteps", reopened)))
                 .correlatedBy(runId.toString())
                 .occurredAt(clock.instant())
                 .build());

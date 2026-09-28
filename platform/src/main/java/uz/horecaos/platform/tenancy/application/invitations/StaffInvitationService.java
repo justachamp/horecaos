@@ -24,6 +24,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.configuration.Ids;
 import uz.horecaos.platform.iam.api.AuthorizationService;
 import uz.horecaos.platform.iam.api.Capability;
@@ -229,10 +230,11 @@ public class StaffInvitationService {
                     .at(command.scope())
                     .target("tenant.staff_invitation", invitationId)
                     .because(command.reason())
-                    .changed(Map.of(
+                    // Staff 9.3a: a brand-new invitation, no prior state to diff against.
+                    .changed(ChangeDocuments.created(Map.of(
                             "roleCode", command.roleCode(),
                             "scopeType", command.scope().type().name(),
-                            "emailGiven", emailGiven))
+                            "emailGiven", emailGiven)))
                     .usingCapability(Capability.IAM_GRANT_MANAGE.code())
                     .correlatedBy(correlationId)
                     .occurredAt(now)
@@ -322,19 +324,20 @@ public class StaffInvitationService {
                     correlationId,
                     deleteFailed);
             Instant now = clock.instant();
-            transactions.executeWithoutResult(
-                    ignored -> audit.record(AuditFact.of("tenant.staff_invitation.orphan_left", AuditClass.SECURITY)
+            transactions.executeWithoutResult(ignored ->
+                    audit.record(AuditFact.of("tenant.staff_invitation.orphan_left", AuditClass.SECURITY)
                             .by(actor)
                             .at(ResourceScope.tenant(tenantId))
                             .target("iam.staff_account", Ids.newId())
                             .because(reason)
-                            .changed(Map.of(
+                            // Staff 9.3a: a fresh failure report, no prior state to diff against.
+                            .changed(ChangeDocuments.created(Map.of(
                                     "subjectId",
                                     account.subjectId(),
                                     "refusalReason",
                                     cause.getClass().getSimpleName(),
                                     "cleanupFailure",
-                                    deleteFailed.getClass().getSimpleName()))
+                                    deleteFailed.getClass().getSimpleName())))
                             .usingCapability(Capability.IAM_GRANT_MANAGE.code())
                             .correlatedBy(correlationId)
                             .occurredAt(now)
@@ -402,7 +405,10 @@ public class StaffInvitationService {
                     .at(ResourceScope.tenant(tenantId))
                     .target("tenant.staff_invitation", invitationId)
                     .because(reason)
-                    .changed(Map.of("previousStatus", row.status()))
+                    // Staff 9.3a: "status" genuinely moves -- requeue's own
+                    // guard above already proved row.status() was the prior
+                    // value, and it always resets status to QUEUED.
+                    .changed(ChangeDocuments.change("status", row.status(), "QUEUED"))
                     .usingCapability(Capability.IAM_GRANT_MANAGE.code())
                     .correlatedBy(correlationId)
                     .occurredAt(now)
@@ -448,7 +454,10 @@ public class StaffInvitationService {
                         .at(ResourceScope.tenant(tenantId))
                         .target("tenant.staff_invitation", invitationId)
                         .because(reason)
-                        .changed(Map.of("previousStatus", row.status()))
+                        // Staff 9.3a: "status" genuinely moves -- markCancelled's
+                        // own guard above already proved row.status() was the
+                        // prior value, and it always sets status to CANCELLED.
+                        .changed(ChangeDocuments.change("status", row.status(), "CANCELLED"))
                         .usingCapability(Capability.IAM_GRANT_MANAGE.code())
                         .correlatedBy(correlationId)
                         .occurredAt(now)
@@ -523,7 +532,10 @@ public class StaffInvitationService {
                         .at(ResourceScope.tenant(row.tenantId()))
                         .target("tenant.staff_invitation", row.id())
                         .because("The invited person set up their account (ADR 0116)")
-                        .changed(Map.of("status", "ACCEPTED"))
+                        // Staff 9.3a: "status" genuinely moves -- markAccepted's
+                        // own guard above already proved row.status() was the
+                        // prior value.
+                        .changed(ChangeDocuments.change("status", row.status(), "ACCEPTED"))
                         .correlatedBy(correlationId)
                         .occurredAt(now)
                         .build()));

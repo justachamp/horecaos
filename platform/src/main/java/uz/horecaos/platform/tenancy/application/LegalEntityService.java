@@ -94,7 +94,9 @@ public class LegalEntityService {
                 .at(ResourceScope.tenant(tenantId))
                 .target("LegalEntity", entity.id().value())
                 .because("Registered legal entity '%s' (TIN %s)".formatted(command.code(), command.tin()))
-                .changed(Map.of("code", command.code(), "legalName", command.legalName(), "tin", command.tin()))
+                // Staff 9.3a: a brand-new legal entity, no prior state to diff against.
+                .changed(ChangeDocuments.created(
+                        Map.of("code", command.code(), "legalName", command.legalName(), "tin", command.tin())))
                 .correlatedBy(correlationId())
                 .occurredAt(now)
                 .build());
@@ -169,8 +171,11 @@ public class LegalEntityService {
 
     @Transactional
     public LegalEntity activate(UUID tenantId, UUID entityId, int expectedVersion) {
+        // Staff 9.3a: read before transition() mutates the entity in place.
+        String previousStatus = require(tenantId, entityId).status().name();
         LegalEntity entity = transition(tenantId, entityId, expectedVersion, LegalEntity::activate);
-        auditTransition("legal-entity.activated", tenantId, entity, "Activated legal entity " + entity.code());
+        auditTransition(
+                "legal-entity.activated", tenantId, entity, previousStatus, "Activated legal entity " + entity.code());
         return entity;
     }
 
@@ -185,15 +190,21 @@ public class LegalEntityService {
      */
     @Transactional
     public LegalEntity suspend(UUID tenantId, UUID entityId, int expectedVersion) {
+        // Staff 9.3a: read before transition() mutates the entity in place.
+        String previousStatus = require(tenantId, entityId).status().name();
         LegalEntity entity = transition(tenantId, entityId, expectedVersion, LegalEntity::suspend);
-        auditTransition("legal-entity.suspended", tenantId, entity, "Suspended legal entity " + entity.code());
+        auditTransition(
+                "legal-entity.suspended", tenantId, entity, previousStatus, "Suspended legal entity " + entity.code());
         return entity;
     }
 
     @Transactional
     public LegalEntity archive(UUID tenantId, UUID entityId, int expectedVersion) {
+        // Staff 9.3a: read before transition() mutates the entity in place.
+        String previousStatus = require(tenantId, entityId).status().name();
         LegalEntity entity = transition(tenantId, entityId, expectedVersion, LegalEntity::archive);
-        auditTransition("legal-entity.archived", tenantId, entity, "Archived legal entity " + entity.code());
+        auditTransition(
+                "legal-entity.archived", tenantId, entity, previousStatus, "Archived legal entity " + entity.code());
         return entity;
     }
 
@@ -273,9 +284,10 @@ public class LegalEntityService {
                                         && !command.approvalReference().isBlank()
                                 ? command.approvalReference()
                                 : "Assigned legal entity as this location's fiscal seller")
-                .changed(Map.of(
+                // Staff 9.3a: a brand-new assignment, no prior state to diff against.
+                .changed(ChangeDocuments.created(Map.of(
                         "legalEntityId", command.legalEntityId().toString(),
-                        "effectiveFrom", command.effectiveFrom().toString()))
+                        "effectiveFrom", command.effectiveFrom().toString())))
                 .correlatedBy(correlationId())
                 .occurredAt(now)
                 .build());
@@ -309,14 +321,18 @@ public class LegalEntityService {
         return entity;
     }
 
-    private void auditTransition(String actionCode, UUID tenantId, LegalEntity entity, String reason) {
+    private void auditTransition(
+            String actionCode, UUID tenantId, LegalEntity entity, String previousStatus, String reason) {
         audit.record(AuditFact.of(actionCode, AuditClass.BUSINESS)
                 .by(actor())
                 .at(ResourceScope.tenant(tenantId))
                 .target("LegalEntity", entity.id().value())
                 .targetVersion((long) entity.version())
                 .because(reason)
-                .changed(Map.of("status", entity.status().name()))
+                // Staff 9.3a: "status" genuinely moves -- previousStatus was
+                // read by each caller before transition() mutated the entity.
+                .changed(ChangeDocuments.change(
+                        "status", previousStatus, entity.status().name()))
                 .correlatedBy(correlationId())
                 .occurredAt(clock.instant())
                 .build());

@@ -23,6 +23,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.configuration.Ids;
 import uz.horecaos.platform.iam.api.AuthorizationService;
 import uz.horecaos.platform.iam.api.Capability;
@@ -188,7 +189,8 @@ public class OwnerInvitationService implements OwnerInvitations {
                 .at(ResourceScope.tenant(tenantId))
                 .target("tenant.owner_invitation", id)
                 .because("Tenant onboarding: the owner's account has no password (ADR 0097)")
-                .changed(Map.of("locale", language))
+                // Staff 9.3a: a brand-new queued invitation, no prior state to diff against.
+                .changed(ChangeDocuments.created(Map.of("locale", language)))
                 .correlatedBy(correlationId)
                 .occurredAt(now)
                 .build());
@@ -366,7 +368,12 @@ public class OwnerInvitationService implements OwnerInvitations {
                 .at(ResourceScope.tenant(tenantId))
                 .target("tenant.owner_invitation", row.id())
                 .because(reason)
-                .changed(Map.of("previousStatus", row.status(), "locale", language))
+                // Staff 9.3a: a per-field diff -- requeue's own WHERE clause
+                // (status <> 'ACCEPTED') just proved row.status() was the prior
+                // value, and it always resets status to QUEUED.
+                .changed(ChangeDocuments.diff(
+                        Map.of("status", row.status(), "locale", row.locale()),
+                        Map.of("status", "QUEUED", "locale", language)))
                 .usingCapability(Capability.TENANT_ONBOARDING_MANAGE.code())
                 .correlatedBy(correlationId)
                 .occurredAt(now)
@@ -424,7 +431,8 @@ public class OwnerInvitationService implements OwnerInvitations {
                 .at(ResourceScope.tenant(tenantId))
                 .target("tenant.owner_invitation", id)
                 .because(reason)
-                .changed(Map.of("locale", language, "firstInvitation", true))
+                // Staff 9.3a: a brand-new queued invitation, no prior state to diff against.
+                .changed(ChangeDocuments.created(Map.of("locale", language, "firstInvitation", true)))
                 .usingCapability(Capability.TENANT_ONBOARDING_MANAGE.code())
                 .correlatedBy(correlationId)
                 .occurredAt(now)
@@ -542,7 +550,10 @@ public class OwnerInvitationService implements OwnerInvitations {
                     .at(ResourceScope.tenant(row.tenantId()))
                     .target("tenant.owner_invitation", row.id())
                     .because("The owner set up their account from the invitation (ADR 0097)")
-                    .changed(Map.of("status", "ACCEPTED", "emailVerified", true))
+                    // Staff 9.3a: "status" genuinely moves -- markAccepted's own
+                    // guard above already proved row.status() was the prior value.
+                    .changed(ChangeDocuments.diff(
+                            Map.of("status", row.status()), Map.of("status", "ACCEPTED", "emailVerified", true)))
                     .correlatedBy(correlationId)
                     .occurredAt(now)
                     .build());
@@ -615,7 +626,8 @@ public class OwnerInvitationService implements OwnerInvitations {
                 .by(actor)
                 .at(scope)
                 .because(RECIPIENT_PURPOSE)
-                .changed(Map.of("revealedCount", count))
+                // Staff 9.3a: a fresh access-log fact, no prior state to diff against.
+                .changed(ChangeDocuments.created(Map.of("revealedCount", count)))
                 .usingCapability(Capability.TENANT_ONBOARDING_MANAGE.code())
                 .correlatedBy(correlationId)
                 .occurredAt(now)

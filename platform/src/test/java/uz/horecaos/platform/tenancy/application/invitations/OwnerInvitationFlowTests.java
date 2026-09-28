@@ -698,7 +698,12 @@ class OwnerInvitationFlowTests {
         assertThat(facts).singleElement().satisfies(fact -> {
             assertThat(fact.actionCode()).isEqualTo("tenant.owner_invitation.recipient_revealed");
             assertThat(fact.reason()).isEqualTo("tenancy.onboarding.invitation.recipient");
-            assertThat(fact.changeDocument()).containsEntry("revealedCount", 1);
+            // Staff 9.3a: a real created() document now -- "revealedCount"
+            // nests {before, after}, not a flat entry.
+            Map<String, Object> revealedCount = new java.util.LinkedHashMap<>();
+            revealedCount.put("before", null);
+            revealedCount.put("after", 1);
+            assertThat(fact.changeDocument()).containsEntry("revealedCount", revealedCount);
             assertThat(fact.changeDocument().toString()).doesNotContain("dilnoza");
             assertThat(fact.capabilityUsed())
                     .as("a reveal that does not name the capability it was made under attributes nothing")
