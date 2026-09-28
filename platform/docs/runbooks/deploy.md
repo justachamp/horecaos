@@ -578,6 +578,18 @@ mentions nothing about secrets until nine `Caused by` lines down.
 
 ### Create the buckets
 
+This is the bootstrap-time version, run once by hand before `deploy.sh` has
+ever executed on this host — `object_storage/platform/backup-access-key` and
+`backup-secret-key` do not exist yet at this point, which is why "Then create
+the scoped service accounts" above still runs by hand for both pairs here.
+From the first `deploy.sh` run onward, every deploy provisions
+`horecaos-media`, `horecaos-backups` (versioned) and `horecaos-audit-archive`
+(Object Lock) itself, with its own create-bucket-only credential minted fresh
+each run and the backup pair minted once and left alone thereafter — see
+`deploy.sh`'s own "Provisioning the object store's scoped service accounts"
+step. Re-running this section by hand after that is still safe (the
+`head-bucket` check below makes it idempotent) but no longer necessary.
+
 RustFS replaces MinIO as of ADR 0135; the AWS CLI replaces `mc`, and there is
 no `--ignore-existing` flag, so idempotency is a `head-bucket` check:
 

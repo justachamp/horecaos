@@ -370,6 +370,91 @@ put object_storage/platform/media-secret-key "${MEDIA_SECRET_KEY}"
 check "media service account provisioned, scoped to ${HORECAOS_MEDIA_BUCKET:-horecaos-media} only — not the object store's root credential"
 unset MEDIA_SVC_ACCOUNT_SCRIPT MEDIA_SVC_JSON MEDIA_ACCESS_KEY MEDIA_SECRET_KEY
 
+# -----------------------------------------------------------------------------
+# 4c. Provision a create-bucket-only seed service account (ADR 0135)
+# -----------------------------------------------------------------------------
+#
+# compose.production.yml's object-store-seed still fell back to the object
+# store's own root credential until this closed the gap the media account
+# closed on 2026-09-25: a seed-scoped account that can create the three named
+# buckets and enable versioning on one of them, and nothing else -- not
+# read or write a single object, and not touch any bucket it was not told
+# about by name. Same admin API, same call shape as the media account above.
+say "Provisioning a create-bucket-only seed service account"
+read -r -d '' SEED_SVC_ACCOUNT_SCRIPT <<'SCRIPT' || true
+set -euo pipefail
+policy=$(jq -nc --arg media "${MEDIA_BUCKET}" --arg backup "${BACKUP_BUCKET}" --arg audit "${AUDIT_BUCKET}" \
+    '{Version:"2012-10-17",Statement:[{Effect:"Allow",Action:["s3:CreateBucket","s3:HeadBucket","s3:PutBucketVersioning"],Resource:[("arn:aws:s3:::"+$media),("arn:aws:s3:::"+$backup),("arn:aws:s3:::"+$audit)]}]}')
+body=$(jq -nc --argjson policy "${policy}" --arg name "object-store-seed-smoke" '{policy:$policy,name:$name}')
+curl -fsS -X PUT "http://object-store:9000/rustfs/admin/v3/add-service-account" \
+    --user "${OBJECT_STORE_ROOT_ACCESS_KEY}:${OBJECT_STORE_ROOT_SECRET_KEY}" \
+    --aws-sigv4 "aws:amz:us-east-1:s3" \
+    -H "Content-Type: application/json" \
+    --data "${body}"
+SCRIPT
+
+SEED_SVC_JSON="$(compose run --rm --no-TTY \
+    -e MEDIA_BUCKET="${HORECAOS_MEDIA_BUCKET:-horecaos-media}" \
+    -e BACKUP_BUCKET="${HORECAOS_BACKUP_BUCKET:-horecaos-backups}" \
+    -e AUDIT_BUCKET="${HORECAOS_AUDIT_ARCHIVE_BUCKET:-horecaos-audit-archive}" \
+    -e OBJECT_STORE_ROOT_ACCESS_KEY="${HORECAOS_OBJECT_STORE_ACCESS_KEY:-horecaos-smoke-root}" \
+    -e OBJECT_STORE_ROOT_SECRET_KEY="${OBJECT_STORE_ROOT_PW}" \
+    ops bash -c "${SEED_SVC_ACCOUNT_SCRIPT}" 2>>"${LOG_FILE}")" \
+    || die "Could not create the seed service account against RustFS's admin API. See ${LOG_FILE}."
+SEED_ACCESS_KEY="$(printf '%s' "${SEED_SVC_JSON}" | jq -r '.credentials.accessKey // empty')"
+SEED_SECRET_KEY="$(printf '%s' "${SEED_SVC_JSON}" | jq -r '.credentials.secretKey // empty')"
+if [ -z "${SEED_ACCESS_KEY}" ] || [ -z "${SEED_SECRET_KEY}" ]; then
+    SEED_SVC_SHAPE="$(printf '%s' "${SEED_SVC_JSON}" \
+        | jq -c 'walk(if type == "string" then "<redacted>" else . end)' 2>/dev/null \
+        || echo '<response was not valid JSON>')"
+    die "RustFS did not return a service-account access key/secret at .credentials.accessKey/.credentials.secretKey. Response shape (values redacted): ${SEED_SVC_SHAPE}"
+fi
+export HORECAOS_OBJECT_STORE_SEED_ACCESS_KEY="${SEED_ACCESS_KEY}"
+write_secret object-store-seed-secret-key "${SEED_SECRET_KEY}"
+check "seed service account provisioned, create-bucket/head-bucket/put-bucket-versioning on the three named buckets only — not the object store's root credential"
+unset SEED_SVC_ACCOUNT_SCRIPT SEED_SVC_JSON SEED_ACCESS_KEY SEED_SECRET_KEY
+
+# -----------------------------------------------------------------------------
+# 4d. Provision the backup bucket's own service account (ADR 0135)
+# -----------------------------------------------------------------------------
+#
+# docs/runbooks/production-setup.md's "Then create the scoped service
+# accounts" step used to ask an operator to mint this pair by hand and paste
+# it into OpenBao. Scripted here the same way the media account already was,
+# so this proof covers what the runbook now automates rather than the manual
+# step it used to describe.
+say "Provisioning the backup bucket's own service account"
+read -r -d '' BACKUP_SVC_ACCOUNT_SCRIPT <<'SCRIPT' || true
+set -euo pipefail
+policy=$(jq -nc --arg b "${BACKUP_BUCKET}" \
+    '{Version:"2012-10-17",Statement:[{Effect:"Allow",Action:["s3:*"],Resource:[("arn:aws:s3:::"+$b),("arn:aws:s3:::"+$b+"/*")]}]}')
+body=$(jq -nc --argjson policy "${policy}" --arg name "backup-smoke" '{policy:$policy,name:$name}')
+curl -fsS -X PUT "http://object-store:9000/rustfs/admin/v3/add-service-account" \
+    --user "${OBJECT_STORE_ROOT_ACCESS_KEY}:${OBJECT_STORE_ROOT_SECRET_KEY}" \
+    --aws-sigv4 "aws:amz:us-east-1:s3" \
+    -H "Content-Type: application/json" \
+    --data "${body}"
+SCRIPT
+
+BACKUP_SVC_JSON="$(compose run --rm --no-TTY \
+    -e BACKUP_BUCKET="${HORECAOS_BACKUP_BUCKET:-horecaos-backups}" \
+    -e OBJECT_STORE_ROOT_ACCESS_KEY="${HORECAOS_OBJECT_STORE_ACCESS_KEY:-horecaos-smoke-root}" \
+    -e OBJECT_STORE_ROOT_SECRET_KEY="${OBJECT_STORE_ROOT_PW}" \
+    ops bash -c "${BACKUP_SVC_ACCOUNT_SCRIPT}" 2>>"${LOG_FILE}")" \
+    || die "Could not create the backup service account against RustFS's admin API. See ${LOG_FILE}."
+BACKUP_ACCESS_KEY="$(printf '%s' "${BACKUP_SVC_JSON}" | jq -r '.credentials.accessKey // empty')"
+BACKUP_SECRET_KEY="$(printf '%s' "${BACKUP_SVC_JSON}" | jq -r '.credentials.secretKey // empty')"
+if [ -z "${BACKUP_ACCESS_KEY}" ] || [ -z "${BACKUP_SECRET_KEY}" ]; then
+    BACKUP_SVC_SHAPE="$(printf '%s' "${BACKUP_SVC_JSON}" \
+        | jq -c 'walk(if type == "string" then "<redacted>" else . end)' 2>/dev/null \
+        || echo '<response was not valid JSON>')"
+    die "RustFS did not return a service-account access key/secret at .credentials.accessKey/.credentials.secretKey. Response shape (values redacted): ${BACKUP_SVC_SHAPE}"
+fi
+put object_storage/platform/backup-access-key "${BACKUP_ACCESS_KEY}"
+put object_storage/platform/backup-secret-key "${BACKUP_SECRET_KEY}"
+check "backup service account provisioned, scoped to ${HORECAOS_BACKUP_BUCKET:-horecaos-backups} only — production-setup.md's manual step, now scripted"
+unset BACKUP_SVC_ACCOUNT_SCRIPT BACKUP_SVC_JSON BACKUP_ACCESS_KEY BACKUP_SECRET_KEY
+
 say "Applying migrations to a fresh volume"
 export FLYWAY_PASSWORD="${DB_MIGRATOR_PW}"
 compose run --rm platform-migrate migrate >>"${LOG_FILE}" 2>&1 \

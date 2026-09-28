@@ -46,6 +46,7 @@ class LocalSmokeScriptTests {
 
     private static final Path SCRIPT = Path.of("..", "deploy", "local-smoke.sh");
     private static final Path ENV_FILE = Path.of("..", "deploy", "env.local-test");
+    private static final Path COMPOSE_PRODUCTION_FILE = Path.of("..", "deploy", "compose.production.yml");
 
     @Test
     @DisplayName("the object-store access key env.local-test sets is still what the root admin call authenticates with")
@@ -125,6 +126,83 @@ class LocalSmokeScriptTests {
                         + "resolves its HORECAOS_MEDIA_ACCESS_KEY_REF, or the application would "
                         + "start with no media credential at all")
                 .isLessThan(platformAppStart);
+    }
+
+    @Test
+    @DisplayName("the seed job's credential is minted as a create-bucket-only service account, not the root pair")
+    void provisionsTheSeedCredentialAsAScopedServiceAccount() throws IOException {
+        String script = readFile(SCRIPT);
+        String compose = readFile(COMPOSE_PRODUCTION_FILE);
+
+        assertThat(script)
+                .as("local-smoke.sh must mint a seed-scoped account through RustFS's admin API, the "
+                        + "same call shape already proved for the media account")
+                .contains("Provisioning a create-bucket-only seed service account")
+                .as("scoped to create-bucket/head-bucket/put-bucket-versioning on the three named "
+                        + "buckets only -- never s3:* the way the root credential effectively grants")
+                .contains("\"s3:CreateBucket\",\"s3:HeadBucket\",\"s3:PutBucketVersioning\"");
+
+        assertThat(script)
+                .as("the minted credential must be handed to object-store-seed under the exact names "
+                        + "compose.production.yml reads, not left in a shell variable nothing consumes")
+                .contains("export HORECAOS_OBJECT_STORE_SEED_ACCESS_KEY=")
+                .contains("write_secret object-store-seed-secret-key");
+
+        assertThat(compose)
+                .as("compose.production.yml's object-store-seed must prefer the seed-scoped access key "
+                        + "over the root one")
+                .contains("HORECAOS_OBJECT_STORE_SEED_ACCESS_KEY")
+                .contains("object-store-seed-secret-key");
+    }
+
+    @Test
+    @DisplayName("the backup credential pair is minted and written to OpenBao, not left for an operator to do by hand")
+    void provisionsTheBackupCredentialAsAScopedServiceAccount() throws IOException {
+        String script = readFile(SCRIPT);
+
+        assertThat(script)
+                .as("production-setup.md's manual 'Then create the scoped service accounts' step for "
+                        + "the backup bucket must now be scripted the same way the media account is")
+                .contains("Provisioning the backup bucket's own service account")
+                .as("scoped to the backup bucket alone, the same shape the media account's own policy "
+                        + "already uses")
+                .contains("Action:[\"s3:*\"],Resource:[(\"arn:aws:s3:::\"+$b),(\"arn:aws:s3:::\"+$b+\"/*\")]")
+                .as("and the resulting pair must be written to the exact OpenBao paths bootstrap.sh's "
+                        + "own printed instructions named")
+                .contains("put object_storage/platform/backup-access-key \"${BACKUP_ACCESS_KEY}\"")
+                .contains("put object_storage/platform/backup-secret-key \"${BACKUP_SECRET_KEY}\"");
+    }
+
+    @Test
+    @DisplayName(
+            "the seed and backup accounts are provisioned after object-store is healthy and before the seed job (or the application) starts")
+    void provisionsTheSeedAndBackupAccountsInOrder() throws IOException {
+        String script = readFile(SCRIPT);
+
+        int objectStoreHealthy = script.indexOf("wait_healthy object-store 60");
+        int mediaAccountCreated = script.indexOf("check \"media service account provisioned");
+        int seedAccountCreated = script.indexOf("check \"seed service account provisioned");
+        int backupAccountCreated = script.indexOf("check \"backup service account provisioned");
+        int platformAppStart = script.indexOf("compose up -d platform-app");
+
+        assertThat(objectStoreHealthy).isNotEqualTo(-1);
+        assertThat(mediaAccountCreated).isNotEqualTo(-1);
+        assertThat(seedAccountCreated).isNotEqualTo(-1);
+        assertThat(backupAccountCreated).isNotEqualTo(-1);
+        assertThat(platformAppStart).isNotEqualTo(-1);
+
+        assertThat(seedAccountCreated)
+                .as("RustFS must be confirmed healthy before any of these admin-API calls run")
+                .isGreaterThan(objectStoreHealthy);
+        assertThat(backupAccountCreated)
+                .as("the backup account follows the seed account, matching the order the script names " + "them in")
+                .isGreaterThan(seedAccountCreated);
+        assertThat(seedAccountCreated)
+                .as("the seed-scoped credential must exist before object-store-seed's own implicit "
+                        + "start (pulled in by platform-app's own depends_on), or it would fall back to "
+                        + "the root credential the same way it did before this closed the gap")
+                .isLessThan(platformAppStart);
+        assertThat(backupAccountCreated).isLessThan(platformAppStart);
     }
 
     private static String readFile(Path path) throws IOException {

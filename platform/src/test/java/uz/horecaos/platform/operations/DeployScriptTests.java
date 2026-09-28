@@ -78,6 +78,97 @@ class DeployScriptTests {
                 .doesNotContain("write_secret minio-root-password");
     }
 
+    @Test
+    @DisplayName("object-store-seed runs with a create-bucket-only credential, not the object store's root one")
+    void objectStoreSeedRunsWithAScopedCredential() throws IOException {
+        String compose = readFile(COMPOSE_FILE);
+        String script = readFile(SCRIPT);
+
+        assertThat(compose)
+                .as("object-store-seed's AWS_ACCESS_KEY_ID must prefer the seed-scoped access key this "
+                        + "script mints, falling back to the root one only for an ad hoc `docker compose "
+                        + "up` outside this script")
+                .contains(
+                        "AWS_ACCESS_KEY_ID: ${HORECAOS_OBJECT_STORE_SEED_ACCESS_KEY:-${HORECAOS_OBJECT_STORE_ACCESS_KEY:-${HORECAOS_MINIO_ROOT_USER:?set a non-obvious root user name}}}")
+                .as("and its secret must come from its own docker secret, not object-store-secret-key "
+                        + "(the root one)")
+                .contains("export AWS_SECRET_ACCESS_KEY=\"$$(cat /run/secrets/object-store-seed-secret-key)\"")
+                .as("the seed-scoped secret file must be declared under HORECAOS_SECRET_DIR the same way "
+                        + "every other secret in this file is")
+                .contains("object-store-seed-secret-key:\n" + "    # The seed job's own create-bucket-only credential");
+
+        assertThat(script)
+                .as("deploy.sh must mint the seed-scoped service account against RustFS's admin API, "
+                        + "the same call shape deploy/local-smoke.sh already proved against a real "
+                        + "RustFS 1.0.0 container")
+                .contains("/rustfs/admin/v3/add-service-account")
+                .as("scoped to create-bucket/head-bucket/put-bucket-versioning only -- never s3:* the "
+                        + "way the root credential effectively grants")
+                .contains("\"s3:CreateBucket\",\"s3:HeadBucket\",\"s3:PutBucketVersioning\"")
+                .as("and must export the access key and write the secret under the exact names "
+                        + "compose.production.yaml reads")
+                .contains("export HORECAOS_OBJECT_STORE_SEED_ACCESS_KEY=")
+                .contains("${SECRET_DIR}/object-store-seed-secret-key")
+                .as("object-store-seed itself must start only after the scoped credential exists, not "
+                        + "alongside the other dependencies where it would still race the root fallback")
+                .contains("compose up -d object-store-seed");
+
+        int objectStoreHealthy = script.indexOf("Waiting for the object store to become healthy");
+        int seedAccountMinted = script.indexOf("Provisioning a create-bucket-only service account");
+        int seedJobStarted = script.lastIndexOf("compose up -d object-store-seed");
+        int migrationsApplied = script.indexOf("Applying migrations");
+
+        assertThat(objectStoreHealthy).as("the health wait must exist").isNotEqualTo(-1);
+        assertThat(seedAccountMinted)
+                .as("the seed account minting step must exist")
+                .isNotEqualTo(-1);
+        assertThat(seedJobStarted).as("the explicit seed job start must exist").isNotEqualTo(-1);
+
+        assertThat(seedAccountMinted)
+                .as("RustFS must be confirmed healthy before this script asks its admin API for anything")
+                .isGreaterThan(objectStoreHealthy);
+        assertThat(seedJobStarted)
+                .as("the seed job must not start before it has a scoped credential to run with")
+                .isGreaterThan(seedAccountMinted);
+        assertThat(seedJobStarted)
+                .as("bucket creation must finish, one way or another, before migrations run against a "
+                        + "database whose application role depends on those buckets existing")
+                .isLessThan(migrationsApplied);
+    }
+
+    @Test
+    @DisplayName(
+            "the backup service account is minted and its keys are written to OpenBao, not left for an operator to do by hand")
+    void backupServiceAccountIsProvisionedAndStoredInOpenBao() throws IOException {
+        String script = readFile(SCRIPT);
+
+        assertThat(script)
+                .as("the backup account's policy must name only the backup bucket, the same shape "
+                        + "bootstrap.sh's own comment describes for the media account")
+                .contains("Action:[\"s3:*\"],Resource:[(\"arn:aws:s3:::\"+$b),(\"arn:aws:s3:::\"+$b+\"/*\")]");
+
+        assertThat(script)
+                .contains("bao_put_value \"${OBJECT_STORE_BACKUP_ACCESS_PATH}\"")
+                .contains("bao_put_value \"${OBJECT_STORE_BACKUP_SECRET_PATH}\"")
+                .as("the paths must be the exact ones bootstrap.sh's own printed instructions named")
+                .contains(
+                        "OBJECT_STORE_BACKUP_ACCESS_PATH=\"horecaos/production/object_storage/platform/backup-access-key\"")
+                .contains(
+                        "OBJECT_STORE_BACKUP_SECRET_PATH=\"horecaos/production/object_storage/platform/backup-secret-key\"");
+
+        assertThat(script)
+                .as("the secret value must travel to OpenBao over stdin, never as a `docker compose "
+                        + "exec` argument -- the same protection this file already gives OPERATOR_TOKEN, "
+                        + "for the same reason (Phase 2's own comment: an argument sits in `ps` for as "
+                        + "long as the exec runs)")
+                .contains("bao_put_value() {")
+                .contains("printf '%s\\n%s' \"${OPERATOR_TOKEN}\" \"${value}\"")
+                .as("neither call site may pass the raw key value on the compose exec command line")
+                .doesNotContain(
+                        "compose exec -T openbao sh -c 'BAO_TOKEN=\"$(cat)\"; export BAO_TOKEN; \"$@\"' _ bao kv put "
+                                + "\"${OBJECT_STORE_BACKUP_ACCESS_PATH}\"");
+    }
+
     /**
      * The line in Phase 6 ("Starting dependencies") that starts the platform
      * database, Kafka, the object store and OpenBao before migrations run —
