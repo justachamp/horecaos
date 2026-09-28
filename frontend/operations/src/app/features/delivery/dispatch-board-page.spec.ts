@@ -118,7 +118,9 @@ describe('DispatchBoardPage', () => {
   };
   /** Every listener `RealtimeClient.onFrame` was handed — the fake stub below never fires one on its own; a test dispatches a frame by calling one of these directly. */
   let frameListeners: Array<(frame: RealtimeFrame) => void>;
-  let realtimeState: ReturnType<typeof signal<'connecting' | 'open' | 'reconnecting' | 'unavailable'>>;
+  let realtimeState: ReturnType<
+    typeof signal<'connecting' | 'open' | 'reconnecting' | 'unavailable'>
+  >;
 
   function fakeRealtimeClient(): {
     onFrame: ReturnType<typeof vi.fn>;
@@ -290,6 +292,90 @@ describe('DispatchBoardPage', () => {
     expect(
       (fixture.nativeElement as HTMLElement).querySelector('[data-testid="dispatch-updated-at"]'),
     ).not.toBeNull();
+  });
+
+  /**
+   * Row 3.1 review (dispatch-board refresh race): `refresh()` is triggered
+   * by four independent, uncoordinated sources — the 10s poll, a
+   * DISPATCH_BOARD/resync realtime frame, `manualRefresh()`, and the
+   * assign/unassign `finally` block — any of which can overlap. An older
+   * `refresh()` call's response landing after a newer one's must not
+   * silently overwrite the newer, already-committed board state.
+   */
+  it('drops a refresh() response that resolves after a newer refresh() has already replaced the board', async () => {
+    let resolveSlow: ((plans: readonly PlanQueueResponse[]) => void) | undefined;
+    let resolveFast: ((plans: readonly PlanQueueResponse[]) => void) | undefined;
+
+    await render([UNASSIGNED_PLAN]);
+
+    dispatchApi.queue.mockClear();
+    dispatchApi.queue
+      .mockImplementationOnce(
+        () =>
+          new Promise<readonly PlanQueueResponse[]>((resolve) => {
+            resolveSlow = resolve;
+          }),
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise<readonly PlanQueueResponse[]>((resolve) => {
+            resolveFast = resolve;
+          }),
+      );
+
+    const host = fixture.nativeElement as HTMLElement;
+    // A dispatcher on a slow connection clicks Refresh — its request hangs.
+    (host.querySelector('.dispatch__refresh') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    expect(dispatchApi.queue).toHaveBeenCalledTimes(1);
+
+    // Before it returns, another operator's assign fires a DISPATCH_BOARD
+    // signal, triggering a second, independent refresh() over the accelerator.
+    for (const listener of frameListeners) {
+      listener({
+        kind: 'signal',
+        channel: 'dispatch_board',
+        scope: 'LOCATION:l1',
+        resourceType: 'DeliveryPlan',
+        resourceId: 'plan-2',
+        version: 2,
+        occurredAt: '2026-09-25T09:00:00Z',
+      });
+    }
+    await flushMicrotasks();
+    expect(dispatchApi.queue).toHaveBeenCalledTimes(2);
+
+    // Ordinary network jitter: the SECOND refresh's fetch, started later,
+    // resolves FIRST — with the correct, newly-assigned state.
+    expect(resolveFast).toBeDefined();
+    resolveFast!([CARRIED_PLAN]);
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(
+      host
+        .querySelector('[data-column-id="courier-1"]')
+        ?.querySelector('[data-testid="dispatch-card"]'),
+    ).not.toBeNull();
+
+    // ...and only THEN does the FIRST, slower refresh's stale response
+    // land. It must be dropped, not silently revert the board back to
+    // unassigned.
+    expect(resolveSlow).toBeDefined();
+    resolveSlow!([UNASSIGNED_PLAN]);
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(
+      host
+        .querySelector('[data-column-id="courier-1"]')
+        ?.querySelector('[data-testid="dispatch-card"]'),
+    ).not.toBeNull();
+    expect(
+      host
+        .querySelector('[data-column-id="__unassigned__"]')
+        ?.querySelector('[data-testid="dispatch-card"]'),
+    ).toBeNull();
   });
 
   it('shows the denied state when the location grant is missing', async () => {
