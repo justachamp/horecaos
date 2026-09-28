@@ -9,7 +9,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { CurrentBrand } from '../../core/auth/current-brand';
 import { CurrentLocation } from '../../core/auth/current-location';
 import { ApiError, ApiErrorCode } from '../../core/api/problem-details';
-import { I18n } from '../../core/i18n/i18n';
+import { I18n, Locale } from '../../core/i18n/i18n';
+import { LocaleSet } from '../../core/i18n/locale-set';
 import { MediaUploader } from '../../shared/ui/media-uploader';
 import { CapacityApi } from '../kitchen/capacity-api';
 import { ActivityLogApi } from '../staff/activity-log-api';
@@ -61,6 +62,17 @@ async function flushMicrotasks(): Promise<void> {
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
 }
 
+/** Row 10.12: a brand's resolved locale set, defaulting to the platform's own fallback triple — same fake `location-detail-pane.spec.ts`/`categories-page.spec.ts` use. */
+class FakeLocaleSet {
+  readonly locales = signal<readonly Locale[]>(['ru', 'uz-Latn', 'en']);
+  readonly defaultLocale = signal<Locale>('ru');
+  readonly isConfigured = signal(false);
+  ensureLoaded = vi.fn().mockResolvedValue(undefined);
+  supports(locale: Locale): boolean {
+    return this.locales().includes(locale);
+  }
+}
+
 function configure(
   catalogApi: Partial<CatalogApi>,
   activityLogApi: Partial<ActivityLogApi> = {},
@@ -69,7 +81,8 @@ function configure(
   productCommentPresetsApi: Partial<ProductCommentPresetsApi> = {},
   commentPresetsApi: Partial<CommentPresetsApi> = {},
   salesChannelsApi: Partial<SalesChannelsApi> = {},
-): void {
+  localeSet: FakeLocaleSet = new FakeLocaleSet(),
+): FakeLocaleSet {
   TestBed.configureTestingModule({
     providers: [
       provideRouter([{ path: 'catalog/products/:productId', component: ProductEditorPage }]),
@@ -89,6 +102,7 @@ function configure(
           ensureLoaded: () => Promise.resolve(),
         },
       },
+      { provide: LocaleSet, useValue: localeSet },
       {
         provide: CatalogApi,
         useValue: {
@@ -147,6 +161,7 @@ function configure(
     ],
   });
   TestBed.inject(I18n).setLocale('ru');
+  return localeSet;
 }
 
 describe('ProductEditorPage', () => {
@@ -229,6 +244,143 @@ describe('ProductEditorPage', () => {
     expect(harness.routeNativeElement!.querySelector('.editor__name')?.textContent).toContain(
       'Osh',
     );
+  });
+
+  it('opens on the brand’s own default locale, not the operator’s own console language', async () => {
+    // Row 10.12's fix: the strip used to open on toCatalogLocale(i18n.locale())
+    // — here, English — regardless of what the brand itself configured.
+    const localeSet = new FakeLocaleSet();
+    localeSet.locales.set(['en', 'ru']);
+    localeSet.defaultLocale.set('en');
+    configure(
+      {
+        productDetail: () =>
+          of(
+            productDetail({
+              translations: {
+                ru: { name: 'Плов', description: null },
+                en: { name: 'Plov', description: null },
+              },
+            }),
+          ),
+      },
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      localeSet,
+    );
+
+    const harness = await RouterTestingHarness.create('/catalog/products/product-1');
+    await flushMicrotasks();
+
+    expect(harness.routeNativeElement!.querySelector('.editor__name')?.textContent).toContain(
+      'Plov',
+    );
+    expect(
+      harness.routeNativeElement!.querySelector('[data-testid="q-localized-field-group-tab-en"]'),
+    ).not.toBeNull();
+  });
+
+  it('narrows the locale strip to the brand’s own supported set, but keeps uz writable for the catalog’s own list resolution', async () => {
+    const localeSet = new FakeLocaleSet();
+    localeSet.locales.set(['ru']);
+    localeSet.defaultLocale.set('ru');
+    configure(
+      {
+        productDetail: () =>
+          of(
+            productDetail({
+              translations: {
+                ru: { name: 'Плов', description: null },
+                // Stored before the brand narrowed its set — no longer
+                // shown as a tab, never touched by a save in another locale.
+                en: { name: 'Plov', description: 'Uzbek pilaf' },
+              },
+            }),
+          ),
+      },
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      localeSet,
+    );
+
+    const harness = await RouterTestingHarness.create('/catalog/products/product-1');
+    await flushMicrotasks();
+
+    expect(
+      harness.routeNativeElement!.querySelector('[data-testid="q-localized-field-group-tab-ru"]'),
+    ).not.toBeNull();
+    expect(
+      harness.routeNativeElement!.querySelector('[data-testid="q-localized-field-group-tab-uz"]'),
+    ).not.toBeNull();
+    expect(
+      harness.routeNativeElement!.querySelector('[data-testid="q-localized-field-group-tab-en"]'),
+    ).toBeNull();
+  });
+
+  it('never deletes a hidden locale’s stored translation when saving a locale the strip still shows', async () => {
+    const localeSet = new FakeLocaleSet();
+    localeSet.locales.set(['ru']);
+    localeSet.defaultLocale.set('ru');
+    const setTranslation = vi.fn().mockReturnValue(of(undefined));
+    configure(
+      {
+        productDetail: () =>
+          of(
+            productDetail({
+              translations: {
+                ru: { name: 'Плов', description: null },
+                en: { name: 'Plov', description: 'Uzbek pilaf' },
+              },
+            }),
+          ),
+        setTranslation,
+      },
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      localeSet,
+    );
+
+    const harness = await RouterTestingHarness.create('/catalog/products/product-1');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+
+    const nameInput = host.querySelector('[data-testid="editor-name"]') as HTMLInputElement;
+    nameInput.value = 'Плов узбекский';
+    nameInput.dispatchEvent(new Event('input'));
+    (host.querySelector('[data-testid="editor-save-basic"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    expect(setTranslation).toHaveBeenCalledTimes(1);
+    expect(setTranslation).toHaveBeenCalledWith(
+      BRAND_SCOPE,
+      expect.objectContaining({ locale: 'ru', name: 'Плов узбекский' }),
+    );
+    expect(setTranslation).not.toHaveBeenCalledWith(
+      BRAND_SCOPE,
+      expect.objectContaining({ locale: 'en' }),
+    );
+  });
+
+  it('resolves LocaleSet on load, so the locale strip never sticks on the platform fallback for a configured brand', async () => {
+    const localeSet = new FakeLocaleSet();
+    configure({ productDetail: () => of(productDetail()) }, {}, {}, {}, {}, {}, {}, localeSet);
+
+    await RouterTestingHarness.create('/catalog/products/product-1');
+    await flushMicrotasks();
+
+    expect(localeSet.ensureLoaded).toHaveBeenCalled();
   });
 
   it('renders the not-found panel on a 404 rather than a blank editor', async () => {
@@ -633,7 +785,13 @@ describe('ProductEditorPage', () => {
       {},
       {},
       {},
-      { list: () => Promise.resolve([channel(), channel({ id: 'c2', code: 'YANDEX', displayName: 'Yandex Eda' })]) },
+      {
+        list: () =>
+          Promise.resolve([
+            channel(),
+            channel({ id: 'c2', code: 'YANDEX', displayName: 'Yandex Eda' }),
+          ]),
+      },
     );
 
     const harness = await RouterTestingHarness.create('/catalog/products/product-1');
@@ -684,7 +842,12 @@ describe('ProductEditorPage', () => {
           of(
             productDetail({
               media: [
-                { mediaAssetId: 'asset-universal', role: 'PRIMARY', sortOrder: 0, channelCode: 'ALL' },
+                {
+                  mediaAssetId: 'asset-universal',
+                  role: 'PRIMARY',
+                  sortOrder: 0,
+                  channelCode: 'ALL',
+                },
                 { mediaAssetId: 'asset-uzum', role: 'PRIMARY', sortOrder: 0, channelCode: 'UZUM' },
               ],
             }),
@@ -730,7 +893,12 @@ describe('ProductEditorPage', () => {
           of(
             productDetail({
               media: [
-                { mediaAssetId: 'asset-universal', role: 'PRIMARY', sortOrder: 0, channelCode: 'ALL' },
+                {
+                  mediaAssetId: 'asset-universal',
+                  role: 'PRIMARY',
+                  sortOrder: 0,
+                  channelCode: 'ALL',
+                },
               ],
             }),
           ),
@@ -837,7 +1005,12 @@ describe('ProductEditorPage', () => {
             productDetail({
               media: [
                 { mediaAssetId: 'shared-asset', role: 'PRIMARY', sortOrder: 0, channelCode: 'ALL' },
-                { mediaAssetId: 'shared-asset', role: 'PRIMARY', sortOrder: 0, channelCode: 'UZUM' },
+                {
+                  mediaAssetId: 'shared-asset',
+                  role: 'PRIMARY',
+                  sortOrder: 0,
+                  channelCode: 'UZUM',
+                },
               ],
             }),
           ),

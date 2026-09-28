@@ -15,6 +15,7 @@ import { ApiError } from '../../core/api/problem-details';
 import { CurrentBrand } from '../../core/auth/current-brand';
 import { CurrentLocation } from '../../core/auth/current-location';
 import { I18n } from '../../core/i18n/i18n';
+import { LocaleSet } from '../../core/i18n/locale-set';
 import { MessageKey } from '../../core/i18n/messages.en';
 import { TPipe } from '../../core/i18n/t.pipe';
 import { ActorChip } from '../../shared/ui/actor-chip';
@@ -103,14 +104,19 @@ const STATION_ROLES: readonly string[] = [
   'EXPO',
 ];
 
-const EDITING_LOCALES = ['ru', 'uz', 'en'] as const;
-
 /**
  * The catalog's own default locale (`CatalogSnapshotLoader`'s
  * `horecaos.catalog.default-locale`, `uz` — see `toCatalogLocale`'s doc).
  * `q-localized-field-group`'s default marker reads this, never the viewer's
  * own UI locale (`I18n.locale()`, `ru` by default) — the two are unrelated
  * defaults for unrelated things.
+ *
+ * Row 10.12: `editingLocales()` below always includes this locale even when
+ * a brand's own `LocaleSet` does not, because `CatalogQueryService`'s list
+ * reads (the products list, `defaultLocaleNames`) resolve every entity's
+ * name in exactly this locale — an editor that could never write it would
+ * leave those reads permanently falling back to the bare code for a brand
+ * that narrowed its set away from `uz-Latn`.
  */
 const CATALOG_DEFAULT_LOCALE = 'uz';
 
@@ -203,6 +209,25 @@ const FINDING_LABEL_KEYS: Readonly<Partial<Record<string, MessageKey>>> = {
  *
  * Locale editing uses the plain `ru`/`uz`/`en` convention `toCatalogLocale`
  * documents, not the console's own `Locale` type — see that function's doc.
+ *
+ * **Row 10.12.** The locale strip used to hard-code the platform's full
+ * `ru`/`uz`/`en` triple (`EDITING_LOCALES`) and open on whichever locale the
+ * *operator's own console language* happened to be (`toCatalogLocale
+ * (i18n.locale())`) — a brand that narrowed its own supported set still had
+ * every tenant operator shown, and able to write, all three, and two
+ * operators working the same brand in different console languages opened
+ * the editor on two different tabs with no relation to the brand's own
+ * choice. {@link editingLocales} now reads `LocaleSet.locales()` — the
+ * brand's own set, default first — and the editor opens on the brand's own
+ * default locale instead. `CATALOG_DEFAULT_LOCALE` stays forced into the tab
+ * set regardless (see its own doc): the list screens' name resolution needs
+ * it writable even when a brand has not chosen it as a supported locale.
+ * Every write here (`saveTranslation`, variant/modifier-option naming) has
+ * always targeted exactly one `(entity, editingLocale())` pair and merged it
+ * into the loaded `translations` map rather than replacing the map — so a
+ * locale the brand no longer supports, and that this strip therefore no
+ * longer shows a tab for, was never at risk of being cleared by a save in
+ * a different locale, before or after this change.
  */
 @Component({
   selector: 'q-product-editor-page',
@@ -234,10 +259,24 @@ export class ProductEditorPage implements OnInit {
   private readonly brand = inject(CurrentBrand);
   private readonly location = inject(CurrentLocation);
   protected readonly i18n = inject(I18n);
+  private readonly localeSet = inject(LocaleSet);
 
   protected readonly tabs = TABS;
   protected readonly tabLabel = TAB_LABEL;
-  protected readonly editingLocales = EDITING_LOCALES;
+  /**
+   * Row 10.12: the brand's own supported locales (default first, mapped to
+   * the catalog's plain `ru`/`uz`/`en` tag convention — see {@link
+   * toCatalogLocale}), always including {@link CATALOG_DEFAULT_LOCALE} even
+   * when the brand's own set does not (that constant's own doc explains
+   * why). A brand that has not configured a set at all still sees today's
+   * platform triple, since `LocaleSet.locales()` falls back to it.
+   */
+  protected readonly editingLocales = computed<readonly string[]>(() => {
+    const brandLocales = this.localeSet.locales().map(toCatalogLocale);
+    return brandLocales.includes(CATALOG_DEFAULT_LOCALE)
+      ? brandLocales
+      : [...brandLocales, CATALOG_DEFAULT_LOCALE];
+  });
   protected readonly catalogDefaultLocale = CATALOG_DEFAULT_LOCALE;
   protected readonly activeTab = signal<EditorTab>('BASIC');
   protected readonly editingLocale = signal<string>('ru');
@@ -246,7 +285,7 @@ export class ProductEditorPage implements OnInit {
   protected readonly localeCompleteness = computed<Readonly<Record<string, boolean>>>(() => {
     const product = this.product();
     return Object.fromEntries(
-      EDITING_LOCALES.map((locale) => [locale, Boolean(product?.translations[locale]?.name)]),
+      this.editingLocales().map((locale) => [locale, Boolean(product?.translations[locale]?.name)]),
     );
   });
 
@@ -359,8 +398,14 @@ export class ProductEditorPage implements OnInit {
   });
 
   async ngOnInit(): Promise<void> {
-    this.editingLocale.set(toCatalogLocale(this.i18n.locale()));
-    await this.brand.ensureLoaded();
+    // Row 10.12: resolved alongside the brand scope, not after it, and read
+    // for the tab the editor opens on — the brand's own default locale, not
+    // the operator's own console language (this file's own EDITING_LOCALES
+    // doc explains why the two must not be conflated). Without resolving
+    // this first, editingLocale() would open on whichever locale the
+    // platform fallback names first rather than the brand's actual choice.
+    await Promise.all([this.brand.ensureLoaded(), this.localeSet.ensureLoaded()]);
+    this.editingLocale.set(toCatalogLocale(this.localeSet.defaultLocale()));
     const productId = this.route.snapshot.paramMap.get('productId');
     const scope = this.brand.scope();
     if (!scope || !productId) {
