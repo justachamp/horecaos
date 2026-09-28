@@ -347,7 +347,34 @@
     "insufficientCapability": "You do not have access to do that.",
     "entitlementRequired": "This is not available on your plan.",
     "notFound": "We could not find that.",
-    "rateLimited": "Too many attempts. Please wait a moment."
+    "rateLimited": "Too many attempts. Please wait a moment.",
+    "reason": {
+      "deliveryFeeUnresolved": "We couldn't work out the delivery fee. Choose a different address or try again later.",
+      "minimumBasketNotMet": "Your order is below the minimum for delivery.",
+      "minimumBasketAmount": "The minimum order for delivery is {{amount}}.",
+      "destinationRequired": "Choose a delivery address first.",
+      "outOfZone": "This address is outside the delivery area.",
+      "notServiceable": "This branch cannot take orders right now.",
+      "signInRequired": "Sign in to place an order.",
+      "accountBlocked": "Your account cannot place orders right now. Contact support.",
+      "cartExpired": "This basket has expired. Please start again.",
+      "cartNotEditable": "This basket can no longer be changed.",
+      "addressNotFound": "That address could not be found. Choose a different one.",
+      "codeNotFound": "That promo code could not be found.",
+      "codeNotActive": "That promo code is not active yet.",
+      "codeExpired": "That promo code has expired.",
+      "codeLimitReached": "You've reached the limit for this promo code.",
+      "channelNotEnabled": "This is not available on this channel yet.",
+      "modeUnavailable": "This option is not available right now.",
+      "closed": "This branch is closed right now.",
+      "outsideHours": "This branch is outside its opening hours.",
+      "noLiveMenu": "No menu is available right now.",
+      "atCapacity": "The kitchen is at capacity. Please try again shortly.",
+      "itemOutOfSaleWindow": "This item is not on sale right now.",
+      "presetNotOffered": "That comment is no longer offered for this item.",
+      "itemUnavailable": "This item just sold out.",
+      "holdExpired": "Your basket hold expired. Please review your order and try again."
+    }
   },
   "money": {
     "unit": {
