@@ -713,16 +713,56 @@ docker compose -f deploy/compose.production.yml --env-file /etc/horecaos/product
 
 **Then create the scoped service accounts (not the root credential — the
 application must not be able to reach the backup bucket, and the backup
-account must not be able to reach media).** This is open, not merely
-unwritten: MinIO did this through `mc admin user add` / `policy create` /
-`policy attach`, and [ADR 0135](../adr/partial/0135-object-storage-runtime-rustfs-replaces-minio.md)
-does not verify a RustFS equivalent — its Open inputs and checklist name
-this explicitly. Do not invent an `aws iam`-shaped command here without
-confirming it against a running RustFS instance first; a command that
-silently no-ops or errors past a `|| true` would leave the application
-running on the root credential while this runbook still claimed otherwise.
-Close this gap under ADR 0135 before a real production cutover, and record
-here what the confirmed mechanism turns out to be.
+account must not be able to reach media).** MinIO did this through `mc admin
+user add` / `policy create` / `policy attach`. RustFS 1.0.0 has no
+MinIO-shaped equivalent of those three commands, but it does carry its own
+admin API for the same job — **verified 2026-09-25 against a running RustFS
+1.0.0 container and the real `ops` image**: `PUT
+/rustfs/admin/v3/add-service-account`, SigV4-signed with the root credential,
+returns a long-lived access key/secret key pair whose policy is embedded at
+creation and enforced on every request after — confirmed by taking the
+returned credential and observing it write successfully to its own bucket
+and receive `AccessDenied` on the other one. It is not an `aws` CLI
+subcommand: the admin API is RustFS's own surface, not part of `s3`/`s3api`,
+so this reaches it with `curl --aws-sigv4` — supported since curl 7.75, and
+the `ops` image's Alpine `curl` package is well past that. `jq` (already in
+the `ops` image) builds the policy and request body so no bucket name is
+hand-typed into raw JSON twice.
+
+```bash
+docker compose -f deploy/compose.production.yml --env-file /etc/horecaos/production.env \
+  run --rm --no-TTY ops bash -c '
+    ROOT_ACCESS_KEY="${HORECAOS_OBJECT_STORE_ACCESS_KEY}"
+    ROOT_SECRET_KEY="$(cat /run/horecaos/secrets/object-store-secret-key)"
+    for pair in "media:horecaos-media" "backup:horecaos-backups"; do
+      name="${pair%%:*}"; bucket="${pair##*:}"
+      policy=$(jq -nc --arg b "$bucket" "{Version:\"2012-10-17\",Statement:[{Effect:\"Allow\",Action:[\"s3:*\"],Resource:[(\"arn:aws:s3:::\"+\$b),(\"arn:aws:s3:::\"+\$b+\"/*\")]}]}")
+      body=$(jq -nc --argjson policy "$policy" --arg n "${name}-platform" "{policy:\$policy,name:\$n}")
+      echo "== ${name} =="
+      curl -fsS -X PUT "http://minio:9000/rustfs/admin/v3/add-service-account" \
+        --user "${ROOT_ACCESS_KEY}:${ROOT_SECRET_KEY}" \
+        --aws-sigv4 "aws:amz:us-east-1:s3" \
+        -H "Content-Type: application/json" --data "$body"
+      echo ""
+    done'
+```
+
+This prints two `{"credentials":{"accessKey":"...","secretKey":"..."}}` lines,
+`media` first and `backup` second. Read each pair off the screen — nothing
+here writes to a file — and store them in OpenBao in the next two steps.
+**Idempotency:** re-running this mints a *second*, different service account
+each time (no `accessKey`/`secretKey` supplied means RustFS generates a fresh
+pair), which is safe but leaves the old one behind; a repeat run is not a
+no-op the way the bucket `head-bucket` check above is. List what already
+exists first if you are not sure this has run before:
+
+```bash
+docker compose -f deploy/compose.production.yml --env-file /etc/horecaos/production.env \
+  run --rm --no-TTY ops bash -c '
+    curl -fsS "http://minio:9000/rustfs/admin/v3/list-service-accounts?user=${HORECAOS_OBJECT_STORE_ACCESS_KEY}" \
+      --user "${HORECAOS_OBJECT_STORE_ACCESS_KEY}:$(cat /run/horecaos/secrets/object-store-secret-key)" \
+      --aws-sigv4 "aws:amz:us-east-1:s3"'
+```
 
 Store the resulting media credential in OpenBao (values from the commands
 above — the point of the exercise is that this pair, and the equivalent
@@ -800,8 +840,9 @@ this runbook's claim.
 ### Store the backup credentials
 
 Generate an object-store (RustFS) service account scoped to `horecaos-backups`
-only — same open gap as the media account above (ADR 0135), different bucket,
-different policy — and a real credential on whichever S3-compatible provider holds the
+only — the `backup` pair the loop in section 5 above already created,
+different bucket, different policy from the media pair, same
+`add-service-account` call (ADR 0135) — and a real credential on whichever S3-compatible provider holds the
 off-site bucket — **UzCloud S3 is the default candidate** named in ADR
 0061, chosen for staying in-country; any S3-compatible endpoint works
 because nothing here calls a provider-specific API:

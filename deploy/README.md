@@ -159,6 +159,10 @@ first (uncached) platform image build.
 - All three frontend images build and are reachable through the edge.
 - `platform-app` reaches ready and answers through Caddy over TLS that this
   script's own `curl` verifies against Caddy's internal CA root — not `-k`.
+- The media credential the application actually resolves is a RustFS service
+  account scoped to `horecaos-media` alone, minted from the object store's
+  own admin API (ADR 0135, closed 2026-09-25) — not the object store's root
+  credential, which can reach the backups bucket too.
 - A request against the fixture tenant/brand/location ids, with **no**
   fixture data ever loaded (this stack runs `db/migration` only, never the
   `local`-profile-only `db/local-fixtures`), gets a real, captured, honest
@@ -179,9 +183,6 @@ appears in this task's implementation report:
   Encrypt issuance, renewal, or the ACME HTTP-01 challenge path.
 - **DNS**, the colocation router's NAT hairpinning, or anything about the
   Sarkor box specifically.
-- **Scoped MinIO service accounts.** The script uses the MinIO root
-  credential as the media credential, a corner production-setup.md does not
-  cut.
 - **Keycloak client-secret rotation** (production-setup.md's own step) — the
   smoke test leaves the realm import's fallback secrets in place.
 - **A full browser OAuth round-trip** through the operations or
