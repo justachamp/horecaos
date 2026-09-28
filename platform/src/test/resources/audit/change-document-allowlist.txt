@@ -211,7 +211,6 @@ uz/horecaos/platform/migration/application/MigrationAudit.java:108
 uz/horecaos/platform/migration/application/MigrationAudit.java:63
 
 # --- notifications ---
-uz/horecaos/platform/notifications/application/TemplateProviderReviewService.java:171
 uz/horecaos/platform/notifications/web/ControlPlaneIncidentController.java:124
 
 # --- ordering ---

@@ -178,6 +178,9 @@ public class TemplateProviderReviewService {
                 .build());
     }
 
+    /** The provider-review fields of a template version as they stood before a write, for the audit diff. */
+    private record BeforeState(String channel, @Nullable String providerReview, @Nullable String reference) {}
+
     /** One SMS wording and where it stands with its provider. */
     public record ReviewRow(
             UUID versionId,
