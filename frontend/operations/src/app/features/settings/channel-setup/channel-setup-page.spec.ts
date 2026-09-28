@@ -5,6 +5,7 @@ import { of } from 'rxjs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LocationScope } from '../../../core/api/operations-paths';
+import { ApiError } from '../../../core/api/problem-details';
 import { CurrentLocation } from '../../../core/auth/current-location';
 import { I18n, Locale } from '../../../core/i18n/i18n';
 import { LocaleSet } from '../../../core/i18n/locale-set';
@@ -68,6 +69,10 @@ describe('ChannelSetupPage', () => {
     presentation: ReturnType<typeof vi.fn>;
     currentPage: ReturnType<typeof vi.fn>;
     setSubdomain: ReturnType<typeof vi.fn>;
+    setCustomHostname: ReturnType<typeof vi.fn>;
+    verifyHostname: ReturnType<typeof vi.fn>;
+    challenge: ReturnType<typeof vi.fn>;
+    rotateChallenge: ReturnType<typeof vi.fn>;
     publishPage: ReturnType<typeof vi.fn>;
   };
 
@@ -98,6 +103,10 @@ describe('ChannelSetupPage', () => {
           verified: true,
           baseDomain: 'stores.horecaos.uz',
         }),
+      setCustomHostname: vi.fn(),
+      verifyHostname: vi.fn(),
+      challenge: vi.fn().mockResolvedValue(null),
+      rotateChallenge: vi.fn(),
       publishPage: vi.fn().mockImplementation(
         (_scope, _channelId, slug, contentsByLocale) =>
           Promise.resolve({
@@ -158,6 +167,107 @@ describe('ChannelSetupPage', () => {
 
     expect(setupApi.setSubdomain).toHaveBeenCalledWith(SCOPE, 'chan-1', 'tandir-house', 1);
     expect(host.textContent).toContain('tandir-house.stores.horecaos.uz');
+  });
+
+  it('claiming a custom hostname shows its DNS-TXT challenge, with copy and rotate actions', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    fixture = await createFixture(channel({ systemType: 'WEB' }));
+
+    setupApi.setCustomHostname.mockResolvedValue({
+      configured: true,
+      hostname: 'orders.tandir-house.uz',
+      verified: false,
+      baseDomain: 'stores.horecaos.uz',
+    });
+    setupApi.challenge.mockResolvedValue({
+      recordName: '_horecaos-challenge.orders.tandir-house.uz',
+      recordType: 'TXT',
+      token: 'horecaos-verify-abc123',
+      issuedAt: '2026-09-28T00:00:00Z',
+    });
+
+    const host = fixture.nativeElement as HTMLElement;
+    (host.querySelector('[data-testid="hostname-mode-custom"]') as HTMLInputElement).dispatchEvent(
+      new Event('change'),
+    );
+    fixture.detectChanges();
+    const input = host.querySelector('[data-testid="hostname-custom-input"]') as HTMLInputElement;
+    input.value = 'orders.tandir-house.uz';
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    const claim = host.querySelector('[data-testid="claim-custom"]') as HTMLButtonElement;
+    expect(claim.disabled).toBe(false);
+    claim.click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(setupApi.setCustomHostname).toHaveBeenCalledWith(SCOPE, 'chan-1', 'orders.tandir-house.uz', 1);
+    // A fresh challenge is reloaded right after claiming.
+    expect(setupApi.challenge).toHaveBeenCalledWith(SCOPE, 'chan-1');
+    expect(host.querySelector('[data-testid="challenge-record-name"]')?.textContent).toContain(
+      '_horecaos-challenge.orders.tandir-house.uz',
+    );
+    expect(host.querySelector('[data-testid="challenge-token"]')?.textContent).toContain('horecaos-verify-abc123');
+
+    const copyButtons = Array.from(host.querySelectorAll('.challenge-row button'));
+    (copyButtons[1] as HTMLButtonElement).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+    expect(writeText).toHaveBeenCalledWith('horecaos-verify-abc123');
+    expect(host.textContent).toContain('Copied');
+
+    setupApi.rotateChallenge.mockResolvedValue({
+      recordName: '_horecaos-challenge.orders.tandir-house.uz',
+      recordType: 'TXT',
+      token: 'horecaos-verify-xyz789',
+      issuedAt: '2026-09-28T00:05:00Z',
+    });
+    const rotate = host.querySelector('[data-testid="rotate-challenge"]') as HTMLButtonElement;
+    rotate.click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(setupApi.rotateChallenge).toHaveBeenCalledWith(SCOPE, 'chan-1', 2);
+    expect(host.querySelector('[data-testid="challenge-token"]')?.textContent).toContain('horecaos-verify-xyz789');
+    // Rotating un-verifies the hostname -- the badge must reflect that
+    // immediately, not just after a full reload.
+    expect(host.textContent).toContain('not verified');
+  });
+
+  it('a refused verify (the TXT record does not match yet) shows an inline error, not a false "verified"', async () => {
+    fixture = await createFixture(channel({ systemType: 'WEB' }));
+
+    setupApi.setCustomHostname.mockResolvedValue({
+      configured: true,
+      hostname: 'orders.tandir-house.uz',
+      verified: false,
+      baseDomain: 'stores.horecaos.uz',
+    });
+    setupApi.verifyHostname.mockRejectedValue(new ApiError('UNPROCESSABLE_STATE', 422, null, null));
+
+    const host = fixture.nativeElement as HTMLElement;
+    (host.querySelector('[data-testid="hostname-mode-custom"]') as HTMLInputElement).dispatchEvent(
+      new Event('change'),
+    );
+    fixture.detectChanges();
+    const input = host.querySelector('[data-testid="hostname-custom-input"]') as HTMLInputElement;
+    input.value = 'orders.tandir-house.uz';
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    (host.querySelector('[data-testid="claim-custom"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    const verify = host.querySelector('[data-testid="verify-hostname"]') as HTMLButtonElement;
+    verify.click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(setupApi.verifyHostname).toHaveBeenCalled();
+    expect(host.querySelector('.error')).toBeTruthy();
+    expect(host.textContent).toContain('not verified');
   });
 
   it('shows the Telegram facet linking to the integrations hub, never a duplicate connect flow', async () => {
@@ -246,6 +356,10 @@ describe('ChannelSetupPage', () => {
         ),
       ),
       setSubdomain: vi.fn(),
+      setCustomHostname: vi.fn(),
+      verifyHostname: vi.fn(),
+      challenge: vi.fn().mockResolvedValue(null),
+      rotateChallenge: vi.fn(),
       publishPage,
     };
     const localLocaleSet = new FakeLocaleSet();
@@ -350,6 +464,10 @@ describe('ChannelSetupPage', () => {
         ),
       ),
       setSubdomain: vi.fn(),
+      setCustomHostname: vi.fn(),
+      verifyHostname: vi.fn(),
+      challenge: vi.fn().mockResolvedValue(null),
+      rotateChallenge: vi.fn(),
       publishPage: vi.fn(),
     };
     const localLocaleSet = new FakeLocaleSet();

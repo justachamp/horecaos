@@ -1110,6 +1110,13 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.channelSetup.hostname.custom.label': 'Oʻz domeningiz',
   'settings.channelSetup.hostname.custom.placeholder': 'orders.example.uz',
   'settings.channelSetup.hostname.claim': 'Band qilish',
+  'settings.channelSetup.hostname.challenge.instructions':
+    'DNS provayderingizda ushbu TXT yozuvini qoʻshing, soʻng tasdiqlang:',
+  'settings.channelSetup.hostname.challenge.recordLabel': 'Yozuv nomi',
+  'settings.channelSetup.hostname.challenge.valueLabel': 'Qiymat',
+  'settings.channelSetup.hostname.challenge.copy': 'Nusxalash',
+  'settings.channelSetup.hostname.challenge.copied': 'Nusxalandi',
+  'settings.channelSetup.hostname.challenge.rotate': 'Yangi kod olish',
   'settings.channelSetup.presentation.title': 'Qidiruv koʻrinishi',
   'settings.channelSetup.presentation.seoTitle': 'Sarlavha',
   'settings.channelSetup.presentation.seoDescription': 'Tavsif',

@@ -49,8 +49,54 @@
                   : ('settings.channelSetup.hostname.unverified' | t)
               }}
             </p>
+            @if (challenge(); as ch) {
+              <div class="dns-challenge" data-testid="dns-challenge">
+                <p class="q-body-sm ink-subtle">{{ 'settings.channelSetup.hostname.challenge.instructions' | t }}</p>
+                <div class="challenge-row">
+                  <span class="q-caption">{{ 'settings.channelSetup.hostname.challenge.recordLabel' | t }}</span>
+                  <code class="challenge-value" data-testid="challenge-record-name">{{ ch.recordName }}</code>
+                  <button
+                    type="button"
+                    class="q-body-sm link"
+                    (click)="copyChallengeValue('record', ch.recordName)"
+                  >
+                    {{
+                      (challengeCopied() === 'record'
+                        ? 'settings.channelSetup.hostname.challenge.copied'
+                        : 'settings.channelSetup.hostname.challenge.copy') | t
+                    }}
+                  </button>
+                </div>
+                <div class="challenge-row">
+                  <span class="q-caption">{{ 'settings.channelSetup.hostname.challenge.valueLabel' | t }}</span>
+                  <code class="challenge-value" data-testid="challenge-token">{{ ch.token }}</code>
+                  <button type="button" class="q-body-sm link" (click)="copyChallengeValue('token', ch.token)">
+                    {{
+                      (challengeCopied() === 'token'
+                        ? 'settings.channelSetup.hostname.challenge.copied'
+                        : 'settings.channelSetup.hostname.challenge.copy') | t
+                    }}
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  class="q-body-sm link"
+                  [disabled]="challengeSaving()"
+                  (click)="rotateChallenge()"
+                  data-testid="rotate-challenge"
+                >
+                  {{ 'settings.channelSetup.hostname.challenge.rotate' | t }}
+                </button>
+              </div>
+            }
             @if (!host.verified) {
-              <button type="button" class="q-body-sm link" [disabled]="hostnameSaving()" (click)="verifyHostname()">
+              <button
+                type="button"
+                class="q-body-sm link"
+                [disabled]="hostnameSaving()"
+                (click)="verifyHostname()"
+                data-testid="verify-hostname"
+              >
                 {{ 'settings.channelSetup.hostname.markVerified' | t }}
               </button>
             }
@@ -66,7 +112,13 @@
                 {{ 'settings.channelSetup.hostname.subdomain.label' | t }}
               </label>
               <label class="q-body-sm">
-                <input type="radio" name="hostnameMode" [checked]="hostnameMode() === 'custom'" (change)="hostnameMode.set('custom')" />
+                <input
+                  type="radio"
+                  name="hostnameMode"
+                  [checked]="hostnameMode() === 'custom'"
+                  (change)="hostnameMode.set('custom')"
+                  data-testid="hostname-mode-custom"
+                />
                 {{ 'settings.channelSetup.hostname.custom.label' | t }}
               </label>
 
@@ -99,8 +151,15 @@
                     [value]="hostnameCustom()"
                     (input)="hostnameCustom.set($any($event.target).value)"
                     [placeholder]="'settings.channelSetup.hostname.custom.placeholder' | t"
+                    data-testid="hostname-custom-input"
                   />
-                  <button type="button" class="q-body-sm link" [disabled]="!canClaimCustom()" (click)="claimCustomHostname()">
+                  <button
+                    type="button"
+                    class="q-body-sm link"
+                    [disabled]="!canClaimCustom()"
+                    (click)="claimCustomHostname()"
+                    data-testid="claim-custom"
+                  >
                     {{ 'settings.channelSetup.hostname.claim' | t }}
                   </button>
                 </div>

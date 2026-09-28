@@ -1099,6 +1099,13 @@ export const messagesRu: MessageCatalogue = {
   'settings.channelSetup.hostname.custom.label': 'Свой домен',
   'settings.channelSetup.hostname.custom.placeholder': 'orders.example.uz',
   'settings.channelSetup.hostname.claim': 'Занять',
+  'settings.channelSetup.hostname.challenge.instructions':
+    'Добавьте эту TXT-запись у вашего DNS-провайдера, затем подтвердите:',
+  'settings.channelSetup.hostname.challenge.recordLabel': 'Имя записи',
+  'settings.channelSetup.hostname.challenge.valueLabel': 'Значение',
+  'settings.channelSetup.hostname.challenge.copy': 'Копировать',
+  'settings.channelSetup.hostname.challenge.copied': 'Скопировано',
+  'settings.channelSetup.hostname.challenge.rotate': 'Получить новый код',
   'settings.channelSetup.presentation.title': 'Предпросмотр в поиске',
   'settings.channelSetup.presentation.seoTitle': 'Заголовок',
   'settings.channelSetup.presentation.seoDescription': 'Описание',

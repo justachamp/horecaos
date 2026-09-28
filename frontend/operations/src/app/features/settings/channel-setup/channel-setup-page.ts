@@ -17,6 +17,7 @@ import { InstallationView, IntegrationsApi } from '../integrations/integrations-
 import { ChannelView, SalesChannelsApi } from '../sales-channels/sales-channels-api';
 import {
   CHANNEL_PAGE_SLUGS,
+  ChannelHostnameChallengeView,
   ChannelHostnameView,
   ChannelPageVersionView,
   ChannelPresentationView,
@@ -87,6 +88,17 @@ export class ChannelSetupPage {
   /** Read from the server (`ChannelSetupController.HostnameView.baseDomain`), never hardcoded here -- a config override on the backend must not leave this label wrong. */
   protected readonly baseDomain = computed(() => this.hostname()?.baseDomain ?? '');
 
+  /**
+   * The DNS-TXT ownership challenge for a claimed custom hostname -- `null`
+   * for a platform-issued subdomain (never gets one) or an unset hostname.
+   * Reloaded after every write that can change it: claiming a custom
+   * hostname (issues one), verifying (leaves it as-is but the hostname's own
+   * `verified` moves), and rotating (replaces it).
+   */
+  protected readonly challenge = signal<ChannelHostnameChallengeView | null>(null);
+  protected readonly challengeCopied = signal<'record' | 'token' | null>(null);
+  protected readonly challengeSaving = signal(false);
+
   // ------------------------------------------------------- (c) presentation
   protected readonly presentation = signal<ChannelPresentationView | null>(null);
   protected readonly seoTitle = signal('');
@@ -156,12 +168,14 @@ export class ChannelSetupPage {
     }
 
     if (channel.systemType === 'WEB') {
-      const [hostname, presentation] = await Promise.all([
+      const [hostname, presentation, challenge] = await Promise.all([
         this.setupApi.hostname(scope, channel.id),
         this.setupApi.presentation(scope, channel.id),
+        this.setupApi.challenge(scope, channel.id),
       ]);
       this.hostname.set(hostname);
       this.presentation.set(presentation);
+      this.challenge.set(challenge);
       this.seoTitle.set(presentation.seoTitle ?? '');
       this.seoDescription.set(presentation.seoDescription ?? '');
       this.ogImageAssetId.set(presentation.ogImageAssetId);
@@ -248,6 +262,10 @@ export class ChannelSetupPage {
       this.hostname.set(updated);
       this.channel.update((current) => (current ? { ...current, version: current.version + 1 } : current));
       this.hostnameCustom.set('');
+      // A fresh challenge is issued the moment a custom hostname is claimed
+      // (ChannelSetupService#setCustomHostname) -- reload it so the record
+      // to publish shows up without a page refresh.
+      this.challenge.set(await this.setupApi.challenge(scope, channel.id));
     } catch (error) {
       this.hostnameError.set(this.describe(error));
     } finally {
@@ -268,6 +286,10 @@ export class ChannelSetupPage {
       this.hostname.set(updated);
       this.channel.update((current) => (current ? { ...current, version: current.version + 1 } : current));
     } catch (error) {
+      // UNPROCESSABLE_STATE ("the TXT record does not yet carry the issued
+      // challenge") is exactly as ordinary an outcome here as any other --
+      // DNS propagation is not instant -- so this is the same inline error
+      // banner every other hostname action uses, not a distinct treatment.
       this.hostnameError.set(this.describe(error));
     } finally {
       this.hostnameSaving.set(false);
@@ -291,10 +313,51 @@ export class ChannelSetupPage {
         baseDomain: current?.baseDomain ?? '',
       }));
       this.channel.update((current) => (current ? { ...current, version: current.version + 1 } : current));
+      this.challenge.set(null);
     } catch (error) {
       this.hostnameError.set(this.describe(error));
     } finally {
       this.hostnameSaving.set(false);
+    }
+  }
+
+  // --------------------------------------------------- (b) DNS-TXT challenge
+
+  protected async rotateChallenge(): Promise<void> {
+    const scope = this.location.scope();
+    const channel = this.channel();
+    if (!scope || !channel || this.challengeSaving()) {
+      return;
+    }
+    this.challengeSaving.set(true);
+    this.hostnameError.set(null);
+    try {
+      const rotated = await this.setupApi.rotateChallenge(scope, channel.id, this.version());
+      this.challenge.set(rotated);
+      this.channel.update((current) => (current ? { ...current, version: current.version + 1 } : current));
+      // Rotating un-verifies the hostname server-side (the DNS record still
+      // carries the pre-rotation token) -- reflect that here too, rather
+      // than showing a stale "verified" badge until the next full reload.
+      this.hostname.update((current) => (current ? { ...current, verified: false } : current));
+    } catch (error) {
+      this.hostnameError.set(this.describe(error));
+    } finally {
+      this.challengeSaving.set(false);
+    }
+  }
+
+  /** Copies the challenge record name or token, with a brief confirmation -- clipboard access can fail (permissions, an insecure context) without this being a screen-blocking error. */
+  protected async copyChallengeValue(kind: 'record' | 'token', value: string): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(value);
+      this.challengeCopied.set(kind);
+      setTimeout(() => {
+        if (this.challengeCopied() === kind) {
+          this.challengeCopied.set(null);
+        }
+      }, 2000);
+    } catch {
+      // Best effort -- the value is still shown on screen for a manual copy.
     }
   }
 

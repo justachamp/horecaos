@@ -59,6 +59,13 @@
              on Maven Central as of this change. -->
         <fastexcel.version>0.20.2</fastexcel.version>
         <java-uuid-generator.version>5.2.0</java-uuid-generator.version>
+        <!-- Row 10.5's DNS-TXT ownership challenge (ChannelSetupService,
+             DnsjavaTxtResolver's own doc explains why not JNDI): a pure-Java
+             DNS client with no native code and no dependency on the JDK's
+             own JNDI DNS service provider, which this build's error-prone
+             config already refuses (BanJNDI) as a deserialization surface.
+             Verified current on Maven Central as of this change. -->
+        <dnsjava.version>3.6.5</dnsjava.version>
         <!-- spring-boot-dependencies 4.1.1 manages kafka.version at 4.2.1;
              overridden here to the latest 4.x patch (4.3.1) per the same
              child-property mechanism Spring Boot documents for every managed
@@ -319,6 +326,18 @@
             <groupId>com.fasterxml.uuid</groupId>
             <artifactId>java-uuid-generator</artifactId>
             <version>${java-uuid-generator.version}</version>
+        </dependency>
+        <dependency>
+            <!-- Row 10.5's DnsTxtResolver: resolves the DNS-TXT ownership
+                 challenge for a custom channel hostname (DnsjavaTxtResolver's
+                 own doc). No native code (pure Java, no libc DNS resolver
+                 binding) and no transitive dependency beyond slf4j-api,
+                 already on this application's classpath via Spring Boot's
+                 own logging. Verified current on Maven Central as of this
+                 change. -->
+            <groupId>dnsjava</groupId>
+            <artifactId>dnsjava</artifactId>
+            <version>${dnsjava.version}</version>
         </dependency>
     </dependencies>
 

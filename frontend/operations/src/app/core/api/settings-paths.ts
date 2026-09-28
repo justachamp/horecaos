@@ -282,6 +282,14 @@ export const settingsPaths = {
     return `${this.channelHostname(scope, channelId)}/verify`;
   },
 
+  channelHostnameChallenge(scope: LocationScope, channelId: string): string {
+    return `${this.channelHostname(scope, channelId)}/challenge`;
+  },
+
+  channelHostnameChallengeRotate(scope: LocationScope, channelId: string): string {
+    return `${this.channelHostnameChallenge(scope, channelId)}/rotate`;
+  },
+
   channelPresentation(scope: LocationScope, channelId: string): string {
     return `${this.channelSetup(scope, channelId)}/presentation`;
   },
