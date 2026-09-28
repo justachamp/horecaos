@@ -1,5 +1,6 @@
 package uz.horecaos.platform.catalog.web;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.comparesEqualTo;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -217,6 +218,56 @@ class StorefrontCatalogControllerEndpointTests {
         mvc.perform(menuGet())
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.products[0].variants[0].orderable").value(true));
+    }
+
+    /**
+     * ADR 0033: before this wave the response's {@code ETag} was the
+     * publication id alone, and {@code Cache-Control} was {@code
+     * max-age=30, public} — a shared cache could replay a stale body for up
+     * to 30 seconds without asking the origin anything, and even a
+     * revalidating client would have gotten a matching, wrongly-cached
+     * {@code ETag} back, because a stop changes nothing about the
+     * publication. Both would have made a stop invisible for up to half a
+     * minute. This proves the fix: the same publication, read again after a
+     * stop, now carries a different {@code ETag}, and the cache directive no
+     * longer permits a stale replay at all.
+     */
+    @Test
+    void aStopChangesTheETagEvenThoughThePublicationDidNot() throws Exception {
+        UUID variantId = publishOneProduct("BURGER");
+        inventory.listVariantAtLocation(tenant, brand, location, variantId, TrackingMode.BINARY);
+
+        String etagBeforeStop = mvc.perform(menuGet())
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.products[0].variants[0].orderable").value(true))
+                .andReturn()
+                .getResponse()
+                .getHeader("ETag");
+
+        inventory.setAvailability(tenant, location, variantId, false, "SOLD_OUT", null);
+
+        String etagAfterStop = mvc.perform(menuGet())
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.products[0].variants[0].orderable").value(false))
+                .andReturn()
+                .getResponse()
+                .getHeader("ETag");
+
+        assertThat(etagBeforeStop).isNotNull();
+        assertThat(etagAfterStop).isNotNull().isNotEqualTo(etagBeforeStop);
+    }
+
+    @Test
+    void theMenuNeverAdvertisesAMaxAgeThatWouldLetAStopGoUnseen() throws Exception {
+        publishOneProduct("BURGER");
+
+        String cacheControl = mvc.perform(menuGet())
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getHeader("Cache-Control");
+
+        assertThat(cacheControl).isNotNull().contains("no-cache").doesNotContain("max-age");
     }
 
     // ------------------------------------- /variants/{id}/availability (row 4.4c)
