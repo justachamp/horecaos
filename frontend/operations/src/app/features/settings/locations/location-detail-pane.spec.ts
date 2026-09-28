@@ -438,6 +438,53 @@ describe('LocationDetailPane', () => {
   });
 
   /**
+   * Batch 12 audit finding: `LocaleSet.locales()`/`defaultLocale()` stay on
+   * the platform fallback (`ru`/`uz-Latn`/`en`, default `ru`) until
+   * `ensureLoaded()` actually resolves -- exactly like the real service,
+   * whose `configured` signal starts `null` and only advances inside
+   * `load()`. This fake mirrors that timing (the signals only move once
+   * `ensureLoaded()` is both called and awaited) so the pane fails this test
+   * if it ever reads `knownLocales()`/`isDefaultLocale()` without first
+   * calling `LocaleSet.ensureLoaded()`.
+   */
+  it('loads the brand’s own configured locale set before the content editor renders', async () => {
+    localeSet.ensureLoaded = vi.fn().mockImplementation(() => {
+      localeSet.locales.set(['en', 'uz-Latn']);
+      localeSet.defaultLocale.set('en');
+      return Promise.resolve();
+    });
+    const described: LocationView = {
+      ...LOCATION,
+      locales: [{ locale: 'en', displayName: 'Branch', description: 'Description' }],
+    };
+    api.profile.mockResolvedValue(described);
+    fixture.componentRef.setInput('locationId', 'location-1-brand-configured');
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(localeSet.ensureLoaded).toHaveBeenCalled();
+
+    const editButton = fixture.nativeElement.querySelector('.primary') as HTMLButtonElement;
+    editButton.click();
+    fixture.detectChanges();
+
+    // 'ru' is not in the brand's configured set and must get no editable row.
+    const localeRows = fixture.nativeElement.querySelectorAll(
+      '.locale-row',
+    ) as NodeListOf<HTMLElement>;
+    expect(localeRows.length).toBe(2);
+    const legendText = Array.from(localeRows).map(
+      (row) => row.querySelector('legend')?.textContent ?? '',
+    );
+    expect(legendText.some((text) => text.includes('Russian'))).toBe(false);
+
+    // 'en' is the brand's real default and must carry the marker -- not 'ru'.
+    const englishLegend = legendText.find((text) => text.includes('English'));
+    expect(englishLegend).toContain('default');
+  });
+
+  /**
    * Batch 10 finding: seats/average-cheque/virtual-tour-url had no clear
    * signal of their own, unlike the landmark's `clearLandmark` -- an emptied
    * field collapsed to an omitted key, which the backend read as "untouched"
