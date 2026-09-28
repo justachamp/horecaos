@@ -197,7 +197,7 @@ uz/horecaos/platform/ordering/application/OrderAmendmentService.java:1455
 uz/horecaos/platform/ordering/application/OrderBulkActionService.java:337
 uz/horecaos/platform/ordering/application/OrderBulkActionService.java:385
 uz/horecaos/platform/ordering/application/OrderCallProvenanceService.java:57
-uz/horecaos/platform/ordering/application/OrderQueryService.java:327
+uz/horecaos/platform/ordering/application/OrderQueryService.java:332
 uz/horecaos/platform/ordering/application/OrderStateService.java:1438
 
 # --- payments ---

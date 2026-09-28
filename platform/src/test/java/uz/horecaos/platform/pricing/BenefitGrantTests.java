@@ -195,10 +195,19 @@ class BenefitGrantTests {
 
         assertThat(audit.facts()).hasSize(1);
         AuditFact fact = audit.facts().getFirst();
-        assertThat(fact.changeDocument()).containsEntry("customerAccountId", customer);
+        // Row 9.3a: changeDocument() entries are now before/after diffs, not
+        // flat values -- see #mintingRecordsACreationDiff.
+        @SuppressWarnings("unchecked")
+        Map<String, Object> customerIdChange = Objects.requireNonNull(
+                (Map<String, Object>) fact.changeDocument().get("customerAccountId"));
+        assertThat(customerIdChange.get("after")).isEqualTo(customer);
         assertThat(fact.changeDocument().values())
                 .as("the bearer secret itself must never enter the audit trail")
-                .noneMatch(value -> value.equals(minted.plaintextCode()));
+                .allSatisfy(value -> {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> change = (Map<String, Object>) value;
+                    assertThat(change.values()).noneMatch(v -> Objects.equals(v, minted.plaintextCode()));
+                });
     }
 
     @Test
