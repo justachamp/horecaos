@@ -210,6 +210,50 @@ class AutomationRuleControllerEndpointTests {
         assertThat(notFound.getResponse().getContentAsString()).contains("RESOURCE_NOT_FOUND");
     }
 
+    @Test
+    void previewForACashbackChangeRuleIsMaskedAndScopedToItsOwnBrand() throws Exception {
+        UUID ruleId = createCashbackChangeRule("Cashback nudge", 1_000);
+
+        // In scope: this rule's own tenant and brand, above the rule's
+        // minimumChangeMinor threshold, inside the lookback window.
+        UUID inScopeCustomer = seedLoyaltyMovement(BRAND, "Aziz Karimov", 5_000);
+        // Out of scope: a sibling brand under the SAME tenant. If the query's
+        // own brand predicate ever weakens, this is the row that leaks.
+        UUID siblingBrandCustomer = seedLoyaltyMovement(OTHER_BRAND, "Should Not Appear", 5_000);
+
+        MvcResult previewed = mvc.perform(
+                        get(automationsPath() + "/" + ruleId + "/preview").with(tokenFor(ADMINISTRATOR)))
+                .andReturn();
+
+        assertThat(previewed.getResponse().getStatus()).isEqualTo(200);
+        String body = previewed.getResponse().getContentAsString();
+        assertThat(body)
+                .as("the JSON shape the frontend's AutomationPreviewCandidate binds to")
+                .contains("\"customerAccountId\":\"" + inScopeCustomer + "\"")
+                .contains("\"maskedDisplayName\":\"A*** K******\"");
+        assertThat(body)
+                .as("first name kept only its first letter -- the masking must actually mask")
+                .doesNotContain("Aziz Karimov")
+                .doesNotContain("Karimov");
+        assertThat(body)
+                .as("a sibling brand's customer, under the same tenant, must never appear in this brand's preview")
+                .doesNotContain(siblingBrandCustomer.toString())
+                .doesNotContain("Should Not Appear");
+    }
+
+    @Test
+    void previewForARuleFromASiblingBrandIsNotFound() throws Exception {
+        UUID ruleId = createRule("Birthday treat");
+
+        MvcResult notFound = mvc.perform(get("/api/v1/tenants/" + TENANT + "/brands/" + OTHER_BRAND
+                                + "/marketing/automations/" + ruleId + "/preview")
+                        .with(tokenFor(ADMINISTRATOR)))
+                .andReturn();
+
+        assertThat(notFound.getResponse().getStatus()).isEqualTo(404);
+        assertThat(notFound.getResponse().getContentAsString()).contains("RESOURCE_NOT_FOUND");
+    }
+
     // ----------------------------------------------------------------- helpers
 
     private UUID createRule(String name) throws Exception {
@@ -228,6 +272,71 @@ class AutomationRuleControllerEndpointTests {
         String marker = "\"id\":\"";
         int start = body.indexOf(marker) + marker.length();
         return UUID.fromString(body.substring(start, body.indexOf('"', start)));
+    }
+
+    private UUID createCashbackChangeRule(String name, int minimumChangeMinor) throws Exception {
+        MvcResult created = mvc.perform(post(automationsPath())
+                        .with(tokenFor(ADMINISTRATOR))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "create-" + name)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"%s","triggerType":"CASHBACK_CHANGE","channel":"MESSAGING_APP",
+                                 "consentPurpose":"MARKETING_PROMOTIONS","templateKey":"AUTOMATION_CASHBACK",
+                                 "triggerConfig":{"minimumChangeMinor":%d},"cooldownDays":1}
+                                """.formatted(name, minimumChangeMinor)))
+                .andReturn();
+        assertThat(created.getResponse().getStatus()).isEqualTo(201);
+        String body = created.getResponse().getContentAsString();
+        String marker = "\"id\":\"";
+        int start = body.indexOf(marker) + marker.length();
+        return UUID.fromString(body.substring(start, body.indexOf('"', start)));
+    }
+
+    /**
+     * A customer with a display name, a loyalty account at the given brand,
+     * and one ACCRUAL entry against it just now -- the exact shape {@code
+     * JdbcLoyaltyStore#recentCustomerMovements} reads, seeded directly
+     * because nothing in this module's own write path accrues points.
+     */
+    private UUID seedLoyaltyMovement(UUID brandId, String displayName, long amountMinor) {
+        UUID customerId = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO customer.customer_accounts (id, tenant_id, display_name, status, version)
+                VALUES (:id, :tenantId, :name, 'ACTIVE', 1)
+                """)
+                .param("id", customerId)
+                .param("tenantId", TENANT)
+                .param("name", displayName)
+                .update();
+
+        UUID accountId = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO loyalty.accounts (id, tenant_id, brand_id, customer_account_id, currency, status, version)
+                VALUES (:id, :tenantId, :brandId, :customerId, 'UZS', 'ACTIVE', 1)
+                """)
+                .param("id", accountId)
+                .param("tenantId", TENANT)
+                .param("brandId", brandId)
+                .param("customerId", customerId)
+                .update();
+
+        jdbc.sql("""
+                INSERT INTO loyalty.entries
+                    (id, tenant_id, account_id, entry_type, amount_minor, balance_after_minor,
+                     rule_id, rule_version, reason_code, actor, idempotency_key, occurred_at)
+                VALUES (:id, :tenantId, :accountId, 'ACCRUAL', :amount, :amount,
+                        :ruleId, 1, 'TEST_MOVEMENT', 'test-fixture', :idempotencyKey, :occurredAt)
+                """)
+                .param("id", UUID.randomUUID())
+                .param("tenantId", TENANT)
+                .param("accountId", accountId)
+                .param("amount", amountMinor)
+                .param("ruleId", UUID.randomUUID())
+                .param("idempotencyKey", "seed-" + UUID.randomUUID())
+                .param("occurredAt", Instant.now().atOffset(ZoneOffset.UTC))
+                .update();
+
+        return customerId;
     }
 
     private static String birthdayRuleBody(String name) {
