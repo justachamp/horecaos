@@ -741,6 +741,20 @@ class MarketingCampaignTests {
         assertThat(selfApproved).isFalse();
         assertThat(campaignStore.find(TENANT, campaign).orElseThrow().status()).isEqualTo(CampaignStatus.IN_REVIEW);
 
+        // Staff 9.3b: a self-approval refusal must not leave a permanent record
+        // claiming the campaign reached APPROVED — it never moved.
+        @SuppressWarnings("unchecked")
+        Map<String, Object> statusChange = Objects.requireNonNull((Map<String, Object>) audit.facts.stream()
+                .filter(fact -> "MARKETING_CAMPAIGN_APPROVED".equals(fact.actionCode())
+                        && fact.outcome() == AuditFact.Outcome.REJECTED)
+                .findFirst()
+                .orElseThrow()
+                .changeDocument()
+                .get("status"));
+        assertThat(statusChange.get("after"))
+                .as("the audit trail must not record APPROVED for a self-approval the system blocked")
+                .isEqualTo(CampaignStatus.IN_REVIEW.name());
+
         assertThat(campaigns.approve(
                         TENANT,
                         campaign,
@@ -1118,6 +1132,23 @@ class MarketingCampaignTests {
                         TENANT, campaign, NOW.plus(Duration.ofHours(1)), approver, "corr-reschedule-refused"))
                 .as("DRAFT is not a halted scheduled send — nothing to re-arm")
                 .isFalse();
+        assertThat(campaignStore.find(TENANT, campaign).orElseThrow().scheduledAt())
+                .as("a refused reschedule must leave the campaign exactly where it was")
+                .isNull();
+
+        // Staff 9.3b: a refused reschedule must not leave a permanent record
+        // claiming scheduledAt moved to the requested instant — it never did.
+        @SuppressWarnings("unchecked")
+        Map<String, Object> scheduledAtChange = Objects.requireNonNull((Map<String, Object>) audit.facts.stream()
+                .filter(fact -> "MARKETING_CAMPAIGN_RESCHEDULED".equals(fact.actionCode())
+                        && fact.outcome() == AuditFact.Outcome.REJECTED)
+                .findFirst()
+                .orElseThrow()
+                .changeDocument()
+                .get("scheduledAt"));
+        assertThat(scheduledAtChange.get("after"))
+                .as("the audit trail must not record the requested instant for a reschedule the system refused")
+                .isNull();
     }
 
     @Test
@@ -1711,16 +1742,20 @@ class MarketingCampaignTests {
     }
 
     /**
-     * A no-op stand-in for the ADR 0027 audit trail.
+     * A stand-in for the ADR 0027 audit trail that keeps what was recorded.
      *
-     * <p>These tests assert on database state and API/domain behaviour rather than
-     * on what was written to the audit trail, so nothing here needs to be kept.
+     * <p>Most of these tests assert on database state and API/domain behaviour
+     * rather than on the audit trail, but a refused approve/halt/resume/reschedule
+     * must not have its change document claim a transition that never happened
+     * (Staff 9.3b), so facts are kept for the handful of tests that check that.
      */
     private static final class RecordingAuditRecorder implements AuditRecorder {
 
+        private final List<AuditFact> facts = new java.util.concurrent.CopyOnWriteArrayList<>();
+
         @Override
         public void record(AuditFact fact) {
-            // Not inspected by these tests.
+            facts.add(fact);
         }
     }
 

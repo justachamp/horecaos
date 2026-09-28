@@ -12,6 +12,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import javax.sql.DataSource;
@@ -444,6 +445,61 @@ class AutomationTests {
     }
 
     @Test
+    @DisplayName("activating a rule with a stale version is refused, and the audit does not claim it armed")
+    void activateWithAStaleVersionIsRefusedAndAuditedHonestly() {
+        UUID ruleId = plainRule("StaleActivate");
+        AutomationRuleRow rule = rules.require(TENANT, BRAND, ruleId);
+
+        // A version that does not match the row -- exactly what a lost race (or a
+        // caller working from a stale read) looks like at this boundary.
+        boolean activated = rules.activate(TENANT, BRAND, ruleId, rule.version() + 1, author, "corr-stale-activate");
+
+        assertThat(activated).isFalse();
+        assertThat(rules.require(TENANT, BRAND, ruleId).active())
+                .as("a refused activation must leave the rule exactly where it was")
+                .isFalse();
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> activeChange = Objects.requireNonNull((Map<String, Object>) audit.facts.stream()
+                .filter(fact -> "MARKETING_AUTOMATION_RULE_ACTIVATED".equals(fact.actionCode())
+                        && fact.outcome() == AuditFact.Outcome.REJECTED)
+                .findFirst()
+                .orElseThrow()
+                .changeDocument()
+                .get("active"));
+        assertThat(activeChange.get("after"))
+                .as("the audit trail must not record the rule as armed when the write lost the race")
+                .isEqualTo(false);
+    }
+
+    @Test
+    @DisplayName("deactivating a rule with a stale version is refused, and the audit does not claim it stopped")
+    void deactivateWithAStaleVersionIsRefusedAndAuditedHonestly() {
+        UUID ruleId = createAndActivate(AutomationTriggerType.INACTIVITY, Map.of("inactivityDays", 90), 90);
+        AutomationRuleRow rule = rules.require(TENANT, BRAND, ruleId);
+
+        boolean deactivated =
+                rules.deactivate(TENANT, BRAND, ruleId, rule.version() + 1, author, "corr-stale-deactivate");
+
+        assertThat(deactivated).isFalse();
+        assertThat(rules.require(TENANT, BRAND, ruleId).active())
+                .as("a refused deactivation must leave the rule exactly where it was")
+                .isTrue();
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> activeChange = Objects.requireNonNull((Map<String, Object>) audit.facts.stream()
+                .filter(fact -> "MARKETING_AUTOMATION_RULE_DEACTIVATED".equals(fact.actionCode())
+                        && fact.outcome() == AuditFact.Outcome.REJECTED)
+                .findFirst()
+                .orElseThrow()
+                .changeDocument()
+                .get("active"));
+        assertThat(activeChange.get("after"))
+                .as("the audit trail must not record the rule as stopped when the write lost the race")
+                .isEqualTo(true);
+    }
+
+    @Test
     @DisplayName("a channel that stops being wired after arming is refused per firing, visibly, not silently")
     void aChannelUnwiredAfterArmingIsRefusedPerFiring() {
         UUID account = customer("+998904444442", "ru", true);
@@ -691,9 +747,11 @@ class AutomationTests {
     }
 
     private static final class RecordingAuditRecorder implements AuditRecorder {
+        private final List<AuditFact> facts = new java.util.concurrent.CopyOnWriteArrayList<>();
+
         @Override
         public void record(AuditFact fact) {
-            // Not inspected by these tests.
+            facts.add(fact);
         }
     }
 
