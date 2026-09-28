@@ -1019,6 +1019,43 @@ class CourierCompensationTests {
     }
 
     @Test
+    @DisplayName("approving hours records paidSeconds as unchanged, not newly set, since close already fixed it")
+    void approvingHoursRecordsPaidSecondsAsAlreadyFixedAtClose() {
+        ShiftRow shift = openShift();
+        clock.set(NOON.plus(Duration.ofHours(4)));
+
+        shifts.close(new CourierShiftService.CloseShift(
+                TENANT,
+                shift.id(),
+                ShiftActor.MANAGER,
+                manager(),
+                "PREMISES_CLOSING",
+                "The branch closed early",
+                null,
+                UZS));
+        Long paidSeconds = Objects.requireNonNull(
+                shiftStore.findShift(TENANT, shift.id()).orElseThrow().paidSeconds());
+
+        shifts.approveHours(TENANT, shift.id(), UUID.randomUUID(), manager(), "hours look right");
+
+        AuditFact approved = audit.facts.stream()
+                .filter(fact -> fact.actionCode().equals("courier.shift.hours-approved"))
+                .findFirst()
+                .orElseThrow();
+        @SuppressWarnings("unchecked")
+        Map<String, Object> paidSecondsChange =
+                (Map<String, Object>) approved.changeDocument().get("paidSeconds");
+        // close() already fixed paidSeconds; approveHours only moves status to
+        // CLOSED. The fact must not claim paidSeconds went from unset (null)
+        // to its value here -- that would tell an auditor investigating the
+        // shift's pay that approval assigned the hours, when close already had.
+        assertThat(paidSecondsChange)
+                .as("paidSeconds before/after on the hours-approved fact")
+                .containsEntry("before", String.valueOf(paidSeconds))
+                .containsEntry("after", String.valueOf(paidSeconds));
+    }
+
+    @Test
     @DisplayName("break seconds are not paid, and a shift spent on break earns no fixed component")
     void breakSecondsAreNotPaid() {
         ShiftRow shift = openShift();
