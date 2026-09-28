@@ -6,6 +6,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.audit.StaffSecurityAudit;
 import uz.horecaos.platform.iam.api.audit.StaffSecurityFact;
@@ -41,7 +42,10 @@ class RecordedStaffSecurityAudit implements StaffSecurityAudit {
                 .at(ResourceScope.platform())
                 .target(fact.targetType(), fact.targetId())
                 .because(fact.because())
-                .changed(fact.changed())
+                // Staff 9.3a: audit, not iam, owns ChangeDocuments (see
+                // StaffSecurityFact's own doc on before/after), so this
+                // adapter is where the before/after diff is actually built.
+                .changed(ChangeDocuments.diff(fact.before(), fact.after()))
                 .correlatedBy(fact.correlationId())
                 .occurredAt(fact.occurredAt())
                 .build());

@@ -17,6 +17,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.audit.application.AuditQueryService;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
@@ -222,10 +223,12 @@ public class AuditController {
                 .by(ActorRef.user(currentActor.get().subject(), null))
                 .at(ResourceScope.tenant(tenantId))
                 .because("Audit search")
-                .changed(Map.of(
+                // Staff 9.3a: each search is its own append-only access-log
+                // fact, with no prior search to diff against.
+                .changed(ChangeDocuments.created(Map.of(
                         "returned", returned,
                         "actorFilter", String.valueOf(actorFilter),
-                        "actionFilter", String.valueOf(actionFilter)))
+                        "actionFilter", String.valueOf(actionFilter))))
                 .usingCapability(Capability.AUDIT_READ.code())
                 .correlatedBy(UUID.randomUUID().toString())
                 .occurredAt(clock.instant())

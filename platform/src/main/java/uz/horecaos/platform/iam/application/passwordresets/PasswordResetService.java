@@ -169,12 +169,14 @@ public class PasswordResetService {
         Optional<UUID> queued =
                 store.request(Ids.newId(), subjectId, console.name(), language, now, now.minus(REQUEST_COOLDOWN));
         if (queued.isPresent()) {
+            // Staff 9.3a: a freshly queued reset row has no prior state.
             audit.record(StaffSecurityFact.byService(
                     "iam.password_reset.requested",
                     REQUEST_ENDPOINT,
                     "iam.password_reset",
                     queued.get(),
                     "A reset was asked for from a sign-in page; the requester was not authenticated (ADR 0098)",
+                    Map.of(),
                     Map.of("console", console.name(), "locale", language),
                     correlationId,
                     now));
@@ -184,6 +186,9 @@ public class PasswordResetService {
         // one caller is exactly the abuse the cooldown exists to stop and the
         // only place it becomes visible; the row is the target, so an
         // investigator still reaches the account without this fact naming it.
+        // Staff 9.3a: the row itself is untouched -- an append-only evidence
+        // fact about the caller's own attempt, with no field of the row's
+        // own that changed.
         store.forSubject(subjectId)
                 .ifPresent(row -> audit.record(StaffSecurityFact.byService(
                         "iam.password_reset.request_suppressed",
@@ -191,6 +196,7 @@ public class PasswordResetService {
                         "iam.password_reset",
                         row.id(),
                         "A reset was asked for again while a link sent minutes ago was still live (ADR 0098)",
+                        Map.of(),
                         Map.of("console", console.name(), "reason", "COOLDOWN"),
                         correlationId,
                         now)));
@@ -318,12 +324,15 @@ public class PasswordResetService {
         }
 
         boolean sessionsEnded = endSessions(row, correlationId, now);
+        // Staff 9.3a: "status" genuinely moves from SENT (JdbcPasswordResetStore
+        // #markAccepted's own WHERE status = 'SENT' guard proves it) to ACCEPTED.
         audit.record(StaffSecurityFact.byStaffMember(
                 "iam.password_reset.accepted",
                 row.subjectId(),
                 "iam.password_reset",
                 row.id(),
                 "The staff member set a new password from the emailed link (ADR 0098)",
+                Map.of("status", "SENT"),
                 Map.of("status", "ACCEPTED", "sessionsEnded", sessionsEnded),
                 correlationId,
                 now));
@@ -347,6 +356,9 @@ public class PasswordResetService {
                 row.id(),
                 correlationId,
                 failed);
+        // Staff 9.3a: the row's own status is already ACCEPTED by this point
+        // (the spend that reached this catch block set it) -- unchanged
+        // identifying context, not a transition this fact records.
         audit.record(StaffSecurityFact.byStaffMember(
                 "iam.password_reset.password_not_set",
                 row.subjectId(),
@@ -354,6 +366,7 @@ public class PasswordResetService {
                 row.id(),
                 "The link was spent and the identity provider did not answer the password write; "
                         + "whether the password changed is unknown (ADR 0098)",
+                Map.of("status", "ACCEPTED"),
                 Map.of("status", "ACCEPTED", "failure", failed.getClass().getSimpleName()),
                 correlationId,
                 now));
@@ -373,12 +386,16 @@ public class PasswordResetService {
                     row.id(),
                     correlationId,
                     failed);
+            // Staff 9.3a: the row's own status is already ACCEPTED by this
+            // point -- unchanged identifying context, not a transition this
+            // fact records.
             audit.record(StaffSecurityFact.byStaffMember(
                     "iam.password_reset.sessions_not_ended",
                     row.subjectId(),
                     "iam.password_reset",
                     row.id(),
                     "The password was reset but the account's other sessions could not be ended (ADR 0098)",
+                    Map.of("status", "ACCEPTED"),
                     Map.of("status", "ACCEPTED", "failure", failed.getClass().getSimpleName()),
                     correlationId,
                     now));
