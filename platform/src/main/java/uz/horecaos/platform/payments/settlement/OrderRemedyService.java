@@ -3,6 +3,7 @@ package uz.horecaos.platform.payments.settlement;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -22,6 +23,7 @@ import uz.horecaos.platform.audit.api.ApprovalService;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.ordering.api.OrderDirectory;
 import uz.horecaos.platform.ordering.api.OrderDirectory.OrderSummary;
@@ -619,13 +621,15 @@ public class OrderRemedyService {
                 .at(ResourceScope.brand(tenantId, remedy.brandId()))
                 .target("payments.order_remedy", remedyId)
                 .because(reason)
-                .changed(Map.of(
-                        "verificationState",
-                        state.name(),
-                        "source",
-                        source,
-                        "attestedMoneyMinor",
-                        remedy.attestedMoneyMinor()))
+                // Staff 9.3a: "verificationState" and "source" genuinely move
+                // from the remedy's prior verification to this one;
+                // attestedMoneyMinor is unchanged identifying context.
+                .changed(ChangeDocuments.diff(
+                        remedyVerificationDiffMap(
+                                remedy.verificationState().name(),
+                                remedy.verificationSource(),
+                                remedy.attestedMoneyMinor()),
+                        remedyVerificationDiffMap(state.name(), source, remedy.attestedMoneyMinor())))
                 .correlatedBy(correlationId == null ? remedyId.toString() : correlationId)
                 .occurredAt(now)
                 .build());
@@ -784,6 +788,16 @@ public class OrderRemedyService {
                 ApprovalRequestCommand.DEFAULT_VALIDITY));
     }
 
+    /** A {@code {verificationState, source, attestedMoneyMinor}} snapshot for {@link #recordVerification}'s diff. */
+    private static Map<String, Object> remedyVerificationDiffMap(
+            String verificationState, @Nullable String source, long attestedMoneyMinor) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("verificationState", verificationState);
+        map.put("source", source);
+        map.put("attestedMoneyMinor", attestedMoneyMinor);
+        return map;
+    }
+
     private void recordAudit(
             String actionCode,
             OrderSummary order,
@@ -792,7 +806,7 @@ public class OrderRemedyService {
             ActorRef actor,
             @Nullable UUID approvalId,
             @Nullable String correlationId,
-            Map<String, Object> changes,
+            Map<String, Object> after,
             Instant now) {
 
         audit.record(AuditFact.of(actionCode, AuditClass.BUSINESS)
@@ -800,7 +814,10 @@ public class OrderRemedyService {
                 .at(ResourceScope.brand(order.tenantId(), order.brandId()))
                 .target("payments.order_remedy", remedy.id())
                 .because(reason)
-                .changed(changes)
+                // Staff 9.3a: both of this helper's callers insert a freshly
+                // minted remedy row -- there is no prior remedy to diff
+                // against.
+                .changed(ChangeDocuments.created(after))
                 .underApproval(approvalId)
                 .correlatedBy(correlationId == null ? order.orderId().toString() : correlationId)
                 .occurredAt(now)

@@ -15,6 +15,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.payments.settlement.JdbcSettlementStore;
@@ -95,7 +96,8 @@ public class PaymentMethodRegistryService {
                 .at(ResourceScope.tenant(tenantId))
                 .target("PaymentMethod", row.id())
                 .because("Registered payment method '%s' (%s)".formatted(code, responsibility))
-                .changed(Map.of("code", code, "responsibility", responsibility))
+                // Staff 9.3a: a freshly registered method has no prior state.
+                .changed(ChangeDocuments.created(Map.of("code", code, "responsibility", responsibility)))
                 .correlatedBy(correlationId())
                 .occurredAt(now)
                 .build());
@@ -146,7 +148,8 @@ public class PaymentMethodRegistryService {
                 .at(ResourceScope.tenant(tenantId))
                 .target("PaymentMethod", methodId)
                 .because("Corrected payment method '%s'".formatted(existing.code()))
-                .changed(Map.of("displayName", command.displayName()))
+                // Staff 9.3a: "displayName" genuinely moves.
+                .changed(ChangeDocuments.change("displayName", existing.displayName(), command.displayName()))
                 .correlatedBy(correlationId())
                 .occurredAt(now)
                 .build());
@@ -188,7 +191,9 @@ public class PaymentMethodRegistryService {
                 .at(ResourceScope.tenant(tenantId))
                 .target("PaymentMethod", methodId)
                 .because("%s payment method '%s'".formatted(status, existing.code()))
-                .changed(Map.of("status", status))
+                // Staff 9.3a: "status" genuinely moves from the existing row's
+                // status to the requested one.
+                .changed(ChangeDocuments.change("status", existing.status(), status))
                 .correlatedBy(correlationId())
                 .occurredAt(now)
                 .build());
@@ -212,6 +217,10 @@ public class PaymentMethodRegistryService {
     @Transactional
     public PaymentMethodDetail replaceTranslations(UUID tenantId, UUID methodId, Map<String, String> byLocale) {
         MethodRow existing = require(tenantId, methodId);
+        // Staff 9.3a: read before the replace so "locales" has a real prior
+        // set to diff against, not just the new one restated as "after".
+        String localesBefore =
+                String.join(",", store.methodTranslations(tenantId, methodId).keySet());
         Instant now = clock.instant();
         try {
             store.replaceMethodTranslations(tenantId, methodId, byLocale, now);
@@ -223,7 +232,7 @@ public class PaymentMethodRegistryService {
                 .at(ResourceScope.tenant(tenantId))
                 .target("PaymentMethod", methodId)
                 .because("Set localized names for payment method '%s'".formatted(existing.code()))
-                .changed(Map.of("locales", String.join(",", byLocale.keySet())))
+                .changed(ChangeDocuments.change("locales", localesBefore, String.join(",", byLocale.keySet())))
                 .correlatedBy(correlationId())
                 .occurredAt(now)
                 .build());
