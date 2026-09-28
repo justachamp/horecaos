@@ -365,7 +365,8 @@
     "notFound": "Блюдо не найдено",
     "loadError": "Не удалось загрузить блюдо",
     "increase": "Больше",
-    "decrease": "Меньше"
+    "decrease": "Меньше",
+    "lowStock": "Осталось всего {{count}} шт."
   },
   "referral": {
     "title": "Рефералы",
