@@ -380,19 +380,61 @@ class NewOrderBranchResolutionHttpTests {
 
         // Not the override's own VALIDATION_FAILED ("needs a reason") — this
         // request reaches CartService and fails on the missing customer
-        // instead, proving isBranchOverride() correctly read false.
+        // instead. The request body's own proposedLocationId is never
+        // consulted for this decision any more (OperatorOrderingService
+        // re-resolves the branch itself): this passes because the server's
+        // own PICKUP resolution, with both branches equally idle, proposes
+        // BRANCH_HIGH_PRIORITY (the alphabetically-first display name) —
+        // the same branch this request names — not because the client left
+        // the field out. placeAtABranchTheResolverWouldNotHaveProposedStillRequiresAReason
+        // below proves the field is genuinely ignored.
         assertThat(attempt.getResponse().getContentAsString())
                 .doesNotContain("Placing at a branch other than the one the resolver proposed needs a reason");
     }
 
     @Test
-    @DisplayName("Overriding the resolver's proposal with no reason code is refused before CartService is ever reached")
-    void placeRefusesAnOverrideWithNoReason() throws Exception {
+    @DisplayName("Placing at a branch the resolver would not have proposed still requires a reason, "
+            + "even when the request never names a proposedLocationId at all")
+    void placeAtABranchTheResolverWouldNotHaveProposedStillRequiresAReason() throws Exception {
+        // BRANCH_HIGH_PRIORITY is made busier than BRANCH_LOW_PRIORITY, so
+        // PICKUP's own load-ascending ranking proposes the low-priority
+        // branch — a fact this request's body says nothing about at all.
+        seedNonTerminalOrder(BRANCH_HIGH_PRIORITY, "9301");
+        seedNonTerminalOrder(BRANCH_HIGH_PRIORITY, "9302");
+
         MvcResult refused = mvc.perform(post(ordersPath(BRANCH_HIGH_PRIORITY))
                         .with(tokenFor(LOCATION_STAFF_SUBJECT))
+                        .header("Idempotency-Key", "place-hidden-override-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(placeOrderBody(null, null, null)))
+                .andReturn();
+
+        assertThat(refused.getResponse().getStatus())
+                .as("a caller cannot make a real cross-branch placement read as an ordinary one just by "
+                        + "omitting proposedLocationId from the request body")
+                .isEqualTo(400);
+        assertThat(refused.getResponse().getContentAsString())
+                .contains("VALIDATION_FAILED")
+                .contains("needs a reason");
+    }
+
+    /**
+     * All four tests below place at {@link #BRANCH_LOW_PRIORITY} using {@link
+     * #BRAND_GRANTED} (which reaches either branch): with both branches
+     * equally idle, PICKUP's own load-then-name ranking proposes {@link
+     * #BRANCH_HIGH_PRIORITY} instead — a genuine, server-resolved override of
+     * the chosen branch, regardless of what {@code proposedLocationId} the
+     * request body does or does not carry (it is never consulted for this
+     * decision any more; {@code null} here on purpose).
+     */
+    @Test
+    @DisplayName("Overriding the resolver's proposal with no reason code is refused before CartService is ever reached")
+    void placeRefusesAnOverrideWithNoReason() throws Exception {
+        MvcResult refused = mvc.perform(post(ordersPath(BRANCH_LOW_PRIORITY))
+                        .with(tokenFor(BRAND_GRANTED))
                         .header("Idempotency-Key", "place-override-no-reason-1")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(placeOrderBody(BRANCH_LOW_PRIORITY.toString(), null, null)))
+                        .content(placeOrderBody(null, null, null)))
                 .andReturn();
 
         assertThat(refused.getResponse().getStatus()).isEqualTo(400);
@@ -404,11 +446,11 @@ class NewOrderBranchResolutionHttpTests {
     @Test
     @DisplayName("Overriding with an unknown reason code is refused")
     void placeRefusesAnOverrideWithAnUnknownReason() throws Exception {
-        MvcResult refused = mvc.perform(post(ordersPath(BRANCH_HIGH_PRIORITY))
-                        .with(tokenFor(LOCATION_STAFF_SUBJECT))
+        MvcResult refused = mvc.perform(post(ordersPath(BRANCH_LOW_PRIORITY))
+                        .with(tokenFor(BRAND_GRANTED))
                         .header("Idempotency-Key", "place-override-unknown-reason-1")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(placeOrderBody(BRANCH_LOW_PRIORITY.toString(), "NOT_A_REAL_REASON", null)))
+                        .content(placeOrderBody(null, "NOT_A_REAL_REASON", null)))
                 .andReturn();
 
         assertThat(refused.getResponse().getStatus()).isEqualTo(400);
@@ -420,11 +462,11 @@ class NewOrderBranchResolutionHttpTests {
     @Test
     @DisplayName("Overriding with OTHER and no note is refused")
     void placeRefusesAnOtherOverrideWithNoNote() throws Exception {
-        MvcResult refused = mvc.perform(post(ordersPath(BRANCH_HIGH_PRIORITY))
-                        .with(tokenFor(LOCATION_STAFF_SUBJECT))
+        MvcResult refused = mvc.perform(post(ordersPath(BRANCH_LOW_PRIORITY))
+                        .with(tokenFor(BRAND_GRANTED))
                         .header("Idempotency-Key", "place-override-other-no-note-1")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(placeOrderBody(BRANCH_LOW_PRIORITY.toString(), "OTHER", null)))
+                        .content(placeOrderBody(null, "OTHER", null)))
                 .andReturn();
 
         assertThat(refused.getResponse().getStatus()).isEqualTo(400);
@@ -436,11 +478,11 @@ class NewOrderBranchResolutionHttpTests {
     @Test
     @DisplayName("Overriding with a valid, active reason passes validation and reaches CartService")
     void placeAcceptsAValidOverrideReason() throws Exception {
-        MvcResult attempt = mvc.perform(post(ordersPath(BRANCH_HIGH_PRIORITY))
-                        .with(tokenFor(LOCATION_STAFF_SUBJECT))
+        MvcResult attempt = mvc.perform(post(ordersPath(BRANCH_LOW_PRIORITY))
+                        .with(tokenFor(BRAND_GRANTED))
                         .header("Idempotency-Key", "place-override-valid-1")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(placeOrderBody(BRANCH_LOW_PRIORITY.toString(), "PROPOSED_BRANCH_TOO_BUSY", null)))
+                        .content(placeOrderBody(null, "PROPOSED_BRANCH_TOO_BUSY", null)))
                 .andReturn();
 
         assertThat(attempt.getResponse().getContentAsString())
