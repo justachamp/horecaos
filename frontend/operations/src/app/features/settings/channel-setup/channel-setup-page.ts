@@ -6,6 +6,7 @@ import { LocationScope } from '../../../core/api/operations-paths';
 import { ApiError } from '../../../core/api/problem-details';
 import { CurrentLocation } from '../../../core/auth/current-location';
 import { I18n } from '../../../core/i18n/i18n';
+import { LocaleSet } from '../../../core/i18n/locale-set';
 import { TPipe } from '../../../core/i18n/t.pipe';
 import { MediaApi } from '../../catalog/media-api';
 import { describeApiError } from '../../orders/order-errors';
@@ -21,8 +22,6 @@ import {
   ChannelPresentationView,
   ChannelSetupApi,
 } from './channel-setup-api';
-
-const LOCALES = ['ru', 'uz-Latn', 'en'] as const;
 
 /** One bound location's own QR dine-in mode, for the read-only facet (d) summary. */
 interface LocationQrMode {
@@ -62,6 +61,7 @@ export class ChannelSetupPage {
   private readonly mediaApi = inject(MediaApi);
   private readonly location = inject(CurrentLocation);
   protected readonly i18n = inject(I18n);
+  private readonly localeSet = inject(LocaleSet);
 
   readonly channelId = input.required<string>();
 
@@ -70,7 +70,8 @@ export class ChannelSetupPage {
   protected readonly loadError = signal<string | null>(null);
   protected readonly channel = signal<ChannelView | null>(null);
 
-  protected readonly locales = LOCALES;
+  /** Staff 10.12: the brand's own supported locales (default first), falling back to the platform triple when unconfigured. */
+  protected readonly locales = computed(() => this.localeSet.locales());
   protected readonly pageSlugs = CHANNEL_PAGE_SLUGS;
 
   // -------------------------------------------------------------- (a) bot
@@ -356,7 +357,7 @@ export class ChannelSetupPage {
   protected editPage(slug: string): void {
     const current = this.pages()[slug];
     const drafts: Record<string, string> = {};
-    for (const locale of this.locales) {
+    for (const locale of this.locales()) {
       drafts[localeDraftKey(slug, locale)] = current?.contentsByLocale[locale] ?? '';
     }
     this.pageDrafts.update((existing) => ({ ...existing, ...drafts }));
@@ -378,7 +379,7 @@ export class ChannelSetupPage {
 
   /** At least one locale must carry text before Publish is enabled -- ChannelPageService's own rule, mirrored here so the button disables rather than a submit bouncing off a 400. */
   protected canPublish(slug: string): boolean {
-    return this.locales.some((locale) => this.draftFor(slug, locale).trim().length > 0);
+    return this.locales().some((locale) => this.draftFor(slug, locale).trim().length > 0);
   }
 
   protected async publishPage(slug: string): Promise<void> {
@@ -388,9 +389,21 @@ export class ChannelSetupPage {
       return;
     }
     const contentsByLocale: Record<string, string> = {};
-    for (const locale of this.locales) {
+    for (const locale of this.locales()) {
       const value = this.draftFor(slug, locale).trim();
       if (value) {
+        contentsByLocale[locale] = value;
+      }
+    }
+    // Staff 10.12: publishing always writes a brand-new version
+    // (ChannelPageService's own doc: "never edited, only superseded"), so a
+    // locale this page already carries content in but the brand no longer
+    // supports would drop out of the *live* page the moment any unrelated
+    // edit republishes it, unless it is carried forward here -- the editor
+    // above only ever shows drafts for the brand's current locales().
+    const editable: ReadonlySet<string> = new Set(this.locales());
+    for (const [locale, value] of Object.entries(this.pages()[slug]?.contentsByLocale ?? {})) {
+      if (!editable.has(locale) && value) {
         contentsByLocale[locale] = value;
       }
     }
@@ -420,6 +433,11 @@ export class ChannelSetupPage {
       default:
         return slug;
     }
+  }
+
+  /** Staff 10.12: whether this locale is the brand's own required default, for the editor's visible marker. */
+  protected isDefaultLocale(locale: string): boolean {
+    return this.localeSet.defaultLocale() === locale;
   }
 
   private describe(error: unknown): string {

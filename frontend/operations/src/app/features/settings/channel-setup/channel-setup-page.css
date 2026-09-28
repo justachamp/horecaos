@@ -90,6 +90,14 @@
   border-left: 2px solid var(--q-hairline);
 }
 
+/* Staff 10.12: the brand's own required-default locale, marked beside its label. */
+.locale-default-marker {
+  margin-left: 6px;
+  font-size: 0.85em;
+  text-transform: uppercase;
+  color: var(--q-ink-muted);
+}
+
 .link {
   color: var(--q-accent, #0e7c6b);
   background: none;
