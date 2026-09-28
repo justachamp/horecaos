@@ -1,0 +1,136 @@
+<div class="price-matrix">
+  <header class="price-matrix__toolbar">
+    <a class="q-body-sm" routerLink="/catalog/prices" data-testid="price-matrix-back">
+      &larr; {{ 'catalog.priceMatrix.back' | t }}
+    </a>
+    <h1 class="q-subhead">
+      {{ 'catalog.priceMatrix.title' | t }}
+      @if (book(); as b) {
+        <span class="q-body-sm price-matrix__book-name">— {{ b.name }}</span>
+      }
+    </h1>
+  </header>
+
+  @if (loading()) {
+    <div class="price-matrix__skeleton" [attr.aria-label]="'catalog.priceMatrix.loading' | t"></div>
+  } @else if (denied()) {
+    <div class="price-matrix__state" data-testid="price-matrix-denied">
+      <p class="q-body-sm">{{ 'catalog.priceMatrix.denied' | t }}</p>
+    </div>
+  } @else if (notFound()) {
+    <div class="price-matrix__state" data-testid="price-matrix-not-found">
+      <p class="q-body-sm">{{ 'catalog.priceMatrix.notFound' | t }}</p>
+    </div>
+  } @else {
+    <div class="price-matrix__toolbar">
+      <label class="price-matrix__field">
+        {{ 'catalog.priceMatrix.category' | t }}
+        <select
+          [value]="categoryFilter()"
+          (change)="onCategoryFilterChange($any($event.target).value)"
+          data-testid="price-matrix-category"
+        >
+          <option value="">{{ 'catalog.priceMatrix.allCategories' | t }}</option>
+          @for (category of categories(); track category.categoryId) {
+            <option [value]="category.categoryId">{{ category.name }}</option>
+          }
+        </select>
+      </label>
+      <label class="price-matrix__field price-matrix__field--checkbox">
+        <input
+          type="checkbox"
+          [checked]="differsFromBaseOnly()"
+          (change)="onDiffersFromBaseChange($any($event.target).checked)"
+          data-testid="price-matrix-differs-from-base"
+        />
+        {{ 'catalog.priceMatrix.differsFromBase' | t }}
+      </label>
+    </div>
+
+    @if (loadError(); as error) {
+      <div class="price-matrix__error-band" role="alert" data-testid="price-matrix-load-error">
+        <span class="q-body-sm">{{ error }}</span>
+      </div>
+    }
+
+    @if (rows().length === 0) {
+      <p class="q-body-sm price-matrix__empty" data-testid="price-matrix-empty">
+        {{ 'catalog.priceMatrix.empty' | t }}
+      </p>
+    } @else {
+      <table class="price-matrix__table" data-testid="price-matrix-table">
+        <thead>
+          <tr>
+            <th>{{ 'catalog.priceMatrix.column.variant' | t }}</th>
+            <th>{{ 'catalog.priceMatrix.column.category' | t }}</th>
+            <th class="q-tnum">{{ 'catalog.priceMatrix.column.bookPrice' | t }}</th>
+            <th class="q-tnum">{{ 'catalog.priceMatrix.column.basePrice' | t }}</th>
+            <th class="q-tnum">{{ 'catalog.priceMatrix.column.delta' | t }}</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of rows(); track row.variantId) {
+            <tr [attr.data-testid]="'price-matrix-row-' + row.variantId">
+              <td>{{ row.displayName }}</td>
+              <td>{{ row.categoryName ?? '—' }}</td>
+              <td class="q-mono q-tnum">
+                <input
+                  type="text"
+                  class="price-matrix__price-input"
+                  [value]="editValueFor(row)"
+                  (input)="onEditInput(row.variantId, $any($event.target).value)"
+                  [attr.data-testid]="'price-matrix-input-' + row.variantId"
+                />
+              </td>
+              <td class="q-mono q-tnum" data-testid="price-matrix-base">
+                {{ moneyLabel(row.basePriceMinor, row.currency) }}
+              </td>
+              <td class="q-mono q-tnum" data-testid="price-matrix-delta">
+                {{ deltaLabel(row) }}
+              </td>
+              <td>
+                <button
+                  type="button"
+                  (click)="savePrice(row)"
+                  [disabled]="savingRowId() === row.variantId"
+                  [attr.data-testid]="'price-matrix-save-' + row.variantId"
+                >
+                  {{
+                    savingRowId() === row.variantId
+                      ? ('catalog.priceMatrix.saving' | t)
+                      : ('catalog.priceMatrix.save' | t)
+                  }}
+                </button>
+                @if (errorFor(row.variantId); as rowMessage) {
+                  <p
+                    class="q-caption price-matrix__row-error"
+                    [attr.data-testid]="'price-matrix-error-' + row.variantId"
+                  >
+                    {{ rowMessage }}
+                  </p>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+
+      @if (hasMore()) {
+        <button
+          type="button"
+          class="price-matrix__load-more"
+          (click)="loadMore()"
+          [disabled]="loadingMore()"
+          data-testid="price-matrix-load-more"
+        >
+          {{
+            loadingMore()
+              ? ('catalog.priceMatrix.loadingMore' | t)
+              : ('catalog.priceMatrix.loadMore' | t)
+          }}
+        </button>
+      }
+    }
+  }
+</div>

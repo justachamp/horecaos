@@ -54,6 +54,13 @@
             </td>
             <td class="price-list__num-col q-tnum">{{ book.priority }}</td>
             <td class="price-list__actions">
+              <a
+                class="price-list__action"
+                [routerLink]="['/catalog/prices', book.priceBookId]"
+                data-testid="price-book-matrix"
+              >
+                {{ 'catalog.priceList.matrix' | t }}
+              </a>
               <button
                 type="button"
                 class="price-list__action"

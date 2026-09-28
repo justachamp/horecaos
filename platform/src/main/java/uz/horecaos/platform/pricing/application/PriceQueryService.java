@@ -103,6 +103,36 @@ public class PriceQueryService {
         return new ResolvedPrices(book.id(), book.currency(), amounts);
     }
 
+    /**
+     * The price-book matrix (gap map row {@code 4.8a}): every variant in the
+     * brand's draft catalog, this book's price for it, the base price (the
+     * brand's live BRAND-scope book — see {@code
+     * JdbcPricingStore#resolveBrandBaseBook}), and the delta between them.
+     * Cursor-paginated by variant id, brand-scoped (never a location or
+     * channel), narrowable to one category and to only the rows that differ
+     * from base.
+     *
+     * <p>Before this, a book's variant prices could only be seen one product
+     * at a time in the per-variant editor — nothing showed every price in a
+     * book against what the brand actually charges today in one screen.
+     */
+    public List<JdbcPricingStore.MatrixRow> priceBookMatrix(
+            UUID tenantId,
+            UUID brandId,
+            UUID priceBookId,
+            @Nullable UUID categoryId,
+            boolean differsFromBaseOnly,
+            @Nullable UUID cursor,
+            String locale,
+            int limit) {
+        Instant at = clock.instant();
+        UUID baseBookId = store.resolveBrandBaseBook(tenantId, brandId, at)
+                .map(JdbcPricingStore.PriceBookRow::id)
+                .orElse(null);
+        return store.priceBookMatrix(
+                tenantId, brandId, priceBookId, baseBookId, categoryId, differsFromBaseOnly, cursor, locale, limit, at);
+    }
+
     public record PriceBookSummary(
             UUID priceBookId,
             String name,

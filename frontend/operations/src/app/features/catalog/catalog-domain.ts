@@ -495,6 +495,26 @@ export interface PriceBookSummary {
   readonly version: number;
 }
 
+/**
+ * `PriceAuthoringController.PriceBookMatrixRowResponse` — row 4.8a's matrix
+ * screen, one row per variant. `bookPriceMinor`/`bookPriceVersion` are null
+ * together (unpriced in this book); `bookPriceVersion` reads `0` in that
+ * case, the `If-Match` the inline edit sends for a first-time price.
+ * `basePriceMinor` and `deltaMinor` are independently nullable.
+ */
+export interface PriceBookMatrixRow {
+  readonly variantId: string;
+  readonly productId: string;
+  readonly displayName: string;
+  readonly categoryId?: string | null;
+  readonly categoryName?: string | null;
+  readonly bookPriceMinor?: number | null;
+  readonly bookPriceVersion: number;
+  readonly basePriceMinor?: number | null;
+  readonly deltaMinor?: number | null;
+  readonly currency: string;
+}
+
 /** `ResolvedPricesResponse` — empty (null book) is a real state: no price book resolved yet. */
 export interface ResolvedPrices {
   readonly priceBookId?: string | null;

@@ -39,9 +39,11 @@ import uz.horecaos.platform.pricing.application.PriceBulkApplyService.BulkPriceO
 import uz.horecaos.platform.pricing.application.PriceQueryService;
 import uz.horecaos.platform.pricing.application.PriceableType;
 import uz.horecaos.platform.pricing.application.PricingEngine;
+import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPricingStore;
 import uz.horecaos.platform.web.api.AggregateVersion;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
+import uz.horecaos.platform.web.api.Page;
 import uz.horecaos.platform.web.authorization.RequiresCapability;
 
 /**
@@ -139,6 +141,45 @@ public class PriceAuthoringController {
         return respond(guarded(() -> authoring.require(tenantId, brandId, priceBookId)));
     }
 
+    @GetMapping("/price-books/{priceBookId}/matrix")
+    @RequiresCapability(value = Capability.PRICING_READ, scope = ScopeType.BRAND)
+    @Operation(
+            summary =
+                    "Every variant priced in this book, next to the brand's base price and the " + "delta between them",
+            description = "Gap map row 4.8a: before this, a book's variant prices could only be "
+                    + "seen one product at a time in the per-variant editor. Cursor-paginated by "
+                    + "variant id (ADR 0031), brand-scoped — never a location or channel, unlike "
+                    + "`resolved/prices` — so this shows every variant in the brand's draft catalog "
+                    + "regardless of where this book is assigned. `basePriceMinor` is the price the "
+                    + "brand's live BRAND-scope book currently charges (null when the brand has "
+                    + "none live yet); `deltaMinor` is `bookPriceMinor - basePriceMinor` and is null "
+                    + "whenever either side is. `categoryId` narrows to one category; "
+                    + "`differsFromBase` keeps only rows where the two prices are not the same, "
+                    + "including a row priced at brand scope but not yet in this book.")
+    public Page<PriceBookMatrixRowResponse> matrix(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID priceBookId,
+            @RequestParam(required = false) @Nullable UUID categoryId,
+            @RequestParam(required = false, defaultValue = "false") boolean differsFromBase,
+            @RequestParam(defaultValue = "uz") String locale,
+            @RequestParam(required = false) @Nullable UUID cursor,
+            @RequestParam(required = false) @Nullable Integer limit) {
+
+        PriceAuthoringService.PriceBook book = guarded(() -> authoring.require(tenantId, brandId, priceBookId));
+        int pageSize = Page.limitOrDefault(limit);
+        List<JdbcPricingStore.MatrixRow> rows = query.priceBookMatrix(
+                tenantId, brandId, priceBookId, categoryId, differsFromBase, cursor, locale, pageSize);
+
+        List<PriceBookMatrixRowResponse> items = rows.stream()
+                .map(row -> PriceBookMatrixRowResponse.of(row, book.currency()))
+                .toList();
+        String nextCursor = items.size() < pageSize
+                ? null
+                : rows.get(rows.size() - 1).variantId().toString();
+        return new Page<>(items, nextCursor);
+    }
+
     @PutMapping("/price-books/{priceBookId}/assignments/brand")
     @RequiresCapability(value = Capability.PRICING_AUTHOR, scope = ScopeType.BRAND, mutating = true)
     @Operation(
@@ -196,16 +237,29 @@ public class PriceAuthoringController {
             description = "Integer minor units, and for UZS a minor unit is a whole som: 50000 "
                     + "is 50,000 som. Under the brand's default INCLUSIVE tax profile this is what "
                     + "the customer pays, with tax extracted from inside it; under an EXCLUSIVE "
-                    + "profile it is what the customer pays before tax, added on top.")
+                    + "profile it is what the customer pays before tax, added on top. `If-Match` is "
+                    + "optional here: omitted, the write is unconditional, the editor's original "
+                    + "behaviour; given, it is checked against this row's own price version — "
+                    + "`0` for a variant not yet priced in this book — which is what the matrix "
+                    + "screen's inline edit sends (gap map row 4.8a) so one row's edit cannot "
+                    + "silently overwrite another operator's edit to the same row.")
     public ResponseEntity<PriceBookResponse> setVariantPrice(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @PathVariable UUID priceBookId,
             @PathVariable UUID variantId,
-            @Valid @RequestBody PriceRequest request) {
+            @Valid @RequestBody PriceRequest request,
+            HttpServletRequest httpRequest) {
 
+        Long expectedVersion = AggregateVersion.fromIfMatch(httpRequest).orElse(null);
         return respond(guarded(() -> authoring.setPrice(
-                tenantId, brandId, priceBookId, PriceableType.VARIANT, variantId, request.amountMinor())));
+                tenantId,
+                brandId,
+                priceBookId,
+                PriceableType.VARIANT,
+                variantId,
+                request.amountMinor(),
+                expectedVersion)));
     }
 
     @PutMapping("/price-books/{priceBookId}/modifier-option-prices/{modifierOptionId}")
@@ -501,6 +555,49 @@ public class PriceAuthoringController {
 
         static ResolvedPricesResponse of(PriceQueryService.ResolvedPrices resolved) {
             return new ResolvedPricesResponse(resolved.priceBookId(), resolved.currency(), resolved.amountsMinor());
+        }
+    }
+
+    /**
+     * One row of the price-book matrix (gap map row {@code 4.8a}).
+     *
+     * @param bookPriceMinor  this book's own price, or null when unset
+     * @param bookPriceVersion the price's own version — {@code 0} when
+     *                         {@code bookPriceMinor} is null — the value the
+     *                         inline edit's {@code If-Match} sends back
+     * @param basePriceMinor  what the brand's live BRAND-scope book charges,
+     *                        or null when it has none or does not price this
+     *                        variant
+     * @param deltaMinor      {@code bookPriceMinor - basePriceMinor}, null
+     *                        whenever either side is
+     */
+    public record PriceBookMatrixRowResponse(
+            UUID variantId,
+            UUID productId,
+            String displayName,
+            @Nullable UUID categoryId,
+            @Nullable String categoryName,
+            @Nullable Long bookPriceMinor,
+            long bookPriceVersion,
+            @Nullable Long basePriceMinor,
+            @Nullable Long deltaMinor,
+            String currency) {
+
+        static PriceBookMatrixRowResponse of(JdbcPricingStore.MatrixRow row, String currency) {
+            Long delta = row.bookPriceMinor() != null && row.basePriceMinor() != null
+                    ? row.bookPriceMinor() - row.basePriceMinor()
+                    : null;
+            return new PriceBookMatrixRowResponse(
+                    row.variantId(),
+                    row.productId(),
+                    row.displayName(),
+                    row.categoryId(),
+                    row.categoryName(),
+                    row.bookPriceMinor(),
+                    row.bookVersion() == null ? 0 : row.bookVersion(),
+                    row.basePriceMinor(),
+                    delta,
+                    currency);
         }
     }
 
