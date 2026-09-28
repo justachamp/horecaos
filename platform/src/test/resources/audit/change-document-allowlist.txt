@@ -250,11 +250,6 @@ uz/horecaos/platform/reporting/application/BusinessCalendarService.java:215
 uz/horecaos/platform/reporting/application/MetricSigningService.java:65
 uz/horecaos/platform/reporting/application/ReportExportService.java:344
 
-# --- telemetry ---
-uz/horecaos/platform/telemetry/application/CourierTrackRevealService.java:113
-uz/horecaos/platform/telemetry/application/DutySessionService.java:136
-uz/horecaos/platform/telemetry/application/DutySessionService.java:197
-
 # --- tenancy ---
 uz/horecaos/platform/tenancy/application/BranchTagService.java:72
 uz/horecaos/platform/tenancy/application/BranchTagService.java:92
