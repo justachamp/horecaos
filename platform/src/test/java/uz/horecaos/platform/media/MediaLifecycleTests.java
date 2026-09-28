@@ -319,6 +319,10 @@ class MediaLifecycleTests {
         // evidence somebody can find later, the same as one a request thread
         // decided.
         assertThat(auditActionCodes(ticket.assetId())).containsExactly("media.asset.available");
+        // Staff 9.3a: "status" genuinely moves (UPLOADED -> AVAILABLE) rather
+        // than an after-only map restating just the destination.
+        assertThat(changeDocumentField(ticket.assetId(), "media.asset.available", "status"))
+                .isEqualTo("UPLOADED->AVAILABLE");
     }
 
     @Test
@@ -347,6 +351,9 @@ class MediaLifecycleTests {
         assertThat(rejectionCode(ticket.assetId())).isEqualTo("CONTENT_NOT_AN_IMAGE");
         assertThat(media.downloadUrl(TENANT_A, ticket.assetId())).isEmpty();
         assertThat(auditActionCodes(ticket.assetId())).containsExactly("media.asset.rejected");
+        // Staff 9.3a: "status" genuinely moves (UPLOADED -> REJECTED).
+        assertThat(changeDocumentField(ticket.assetId(), "media.asset.rejected", "status"))
+                .isEqualTo("UPLOADED->REJECTED");
     }
 
     @Test
@@ -1248,6 +1255,21 @@ class MediaLifecycleTests {
                          WHERE target_type = 'media_asset' AND target_id = :id
                          ORDER BY occurred_at
                         """).param("id", assetId.value()).query(String.class).list();
+    }
+
+    /** Staff 9.3a: one field's {@code before->after} pair, from the fact written for this asset and action. */
+    private String changeDocumentField(MediaAssetId assetId, String actionCode, String field) {
+        return jdbc.sql(
+                        """
+                        SELECT change_document -> :field ->> 'before', change_document -> :field ->> 'after'
+                          FROM audit.audit_events
+                         WHERE target_type = 'media_asset' AND target_id = :id AND action_code = :actionCode
+                        """)
+                .param("id", assetId.value())
+                .param("actionCode", actionCode)
+                .param("field", field)
+                .query((row, n) -> row.getString(1) + "->" + row.getString(2))
+                .single();
     }
 
     private @Nullable String jobErrorCode(MediaAssetId assetId) {

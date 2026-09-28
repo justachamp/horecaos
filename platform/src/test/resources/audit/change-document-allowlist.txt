@@ -195,11 +195,6 @@ uz/horecaos/platform/marketing/application/CourierBroadcastService.java:83
 uz/horecaos/platform/marketing/application/MarketingSuppressionService.java:124
 uz/horecaos/platform/marketing/application/MarketingSuppressionService.java:206
 
-# --- media ---
-uz/horecaos/platform/media/application/MediaAssetIngestionService.java:241
-uz/horecaos/platform/media/application/MediaAssetService.java:423
-uz/horecaos/platform/media/application/MediaAssetService.java:443
-
 # --- migration ---
 # MigrationAudit#record and #recordRefusal forward their `changes`
 # parameter to .changed(...); every one of their ~11 call sites across
