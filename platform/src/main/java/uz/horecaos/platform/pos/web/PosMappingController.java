@@ -22,6 +22,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope;
@@ -147,10 +148,11 @@ public class PosMappingController {
                 .at(ResourceScope.tenant(tenantId))
                 .target("ProviderEntityMapping", createdId)
                 .because("Operator-sourced mapping")
-                .changed(Map.of(
+                // Staff 9.3a: a freshly created mapping has no prior state.
+                .changed(ChangeDocuments.created(Map.of(
                         "bindingId", request.bindingId().toString(),
                         "entityType", request.entityType().name(),
-                        "mappingSource", "OPERATOR"))
+                        "mappingSource", "OPERATOR")))
                 .usingCapability(Capability.POS_SYNC_MANAGE.code())
                 .correlatedBy(createdId.toString())
                 .occurredAt(clock.instant())
@@ -184,7 +186,10 @@ public class PosMappingController {
                 .at(ResourceScope.tenant(tenantId))
                 .target("ProviderEntityMapping", mappingId)
                 .because("Operator retired mapping")
-                .changed(Map.of("status", "RETIRED"))
+                // Staff 9.3a: "status" genuinely moves from ACTIVE (the only
+                // non-terminal status -- see JdbcPosMappingStore's own
+                // ACTIVE-only predicates) to RETIRED.
+                .changed(ChangeDocuments.change("status", "ACTIVE", "RETIRED"))
                 .usingCapability(Capability.POS_SYNC_MANAGE.code())
                 .correlatedBy(mappingId.toString())
                 .occurredAt(clock.instant())
@@ -209,10 +214,12 @@ public class PosMappingController {
                 .at(ResourceScope.tenant(tenantId))
                 .target("PosBinding", request.bindingId())
                 .because("Bulk auto-match by name")
-                .changed(Map.of(
+                // Staff 9.3a: each bulk auto-match run is its own append-only
+                // report fact, with no prior run's counts to diff against.
+                .changed(ChangeDocuments.created(Map.of(
                         "entityType", request.entityType().name(),
                         "matchedCount", Integer.toString(result.matchedCount()),
-                        "conflictCount", Integer.toString(result.conflicts().size())))
+                        "conflictCount", Integer.toString(result.conflicts().size()))))
                 .usingCapability(Capability.POS_SYNC_MANAGE.code())
                 .correlatedBy(request.bindingId().toString())
                 .occurredAt(clock.instant())

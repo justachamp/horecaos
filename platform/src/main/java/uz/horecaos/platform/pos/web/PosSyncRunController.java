@@ -22,6 +22,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope;
@@ -175,7 +176,8 @@ public class PosSyncRunController {
                     .at(ResourceScope.tenant(tenantId))
                     .target("PosSyncRun", runId)
                     .because("Manual catalog import")
-                    .changed(changed)
+                    // Staff 9.3a: a freshly started run has no prior state.
+                    .changed(ChangeDocuments.created(changed))
                     .usingCapability(Capability.POS_SYNC_EXECUTE.code())
                     .correlatedBy(runId.toString())
                     .occurredAt(clock.instant())
@@ -221,8 +223,10 @@ public class PosSyncRunController {
                 .at(ResourceScope.tenant(tenantId))
                 .target("PosSyncDifference", request.differenceId())
                 .because("Catalog sync review decision")
-                .changed(Map.of(
-                        "runId", runId.toString(), "outcome", request.outcome().name()))
+                // Staff 9.3a: this difference's own review decision, with no
+                // prior decision on it to diff against.
+                .changed(ChangeDocuments.created(Map.of(
+                        "runId", runId.toString(), "outcome", request.outcome().name())))
                 .usingCapability(Capability.POS_SYNC_APPLY.code())
                 .correlatedBy(runId.toString())
                 .occurredAt(clock.instant())
@@ -257,7 +261,9 @@ public class PosSyncRunController {
                 .at(ResourceScope.tenant(tenantId))
                 .target("PosSyncRun", runId)
                 .because("Catalog sync apply")
-                .changed(itemCounts(outcome.items()))
+                // Staff 9.3a: each apply run is its own append-only report
+                // fact, with no prior run's item counts to diff against.
+                .changed(ChangeDocuments.created(itemCounts(outcome.items())))
                 .usingCapability(Capability.POS_SYNC_APPLY.code())
                 .correlatedBy(runId.toString())
                 .occurredAt(clock.instant())
@@ -297,7 +303,9 @@ public class PosSyncRunController {
                 .at(ResourceScope.tenant(tenantId))
                 .target("PosSyncRun", runId)
                 .because("Catalog sync resume")
-                .changed(changed)
+                // Staff 9.3a: each resume is its own append-only report fact,
+                // with no prior resume's progress to diff against.
+                .changed(ChangeDocuments.created(changed))
                 .usingCapability(Capability.POS_SYNC_APPLY.code())
                 .correlatedBy(runId.toString())
                 .occurredAt(clock.instant())
