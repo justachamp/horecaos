@@ -93,9 +93,12 @@ class ChannelOfferingExclusionsReaderTests {
         catalogStore = new JdbcCatalogStore(jdbc, objectMapper);
         MenuPriceLookup noPrices =
                 (tenantId, brandId, locationId, channelCode, variantIds, optionIds) -> Optional.empty();
+        uz.horecaos.platform.catalog.api.MenuAvailabilityLookup alwaysAvailable =
+                (tenantId, brandId, locationId, channelCode, variantIds) -> Map.of();
         menu = new StorefrontCatalogQuery(
                 catalogStore,
                 noPrices,
+                alwaysAvailable,
                 new JdbcMenuStore(jdbc),
                 new uz.horecaos.platform.catalog.infrastructure.tenancy.JdbcCatalogTenantContext(jdbc),
                 java.time.Clock.systemUTC(),

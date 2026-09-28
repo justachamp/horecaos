@@ -950,8 +950,42 @@ export class OrderDetailPane {
         }
         this.dialog.set('amendMenu');
         return;
+      case 'RESOLVE':
+        // Gap map row 1.1e: the order-level action does not carry the
+        // amendment's own id/version the confirm dialog needs, unlike the
+        // history table's own RESOLVE click ({@link resolveAmendment}, which
+        // already has the one row in hand) — this fetches the history fresh
+        // and opens the dialog for whichever entry still carries it.
+        void this.openPendingAmendmentFromOrderAction();
+        return;
       default:
       // An action code this client does not recognise yet (§4.2: still rendered, nothing to invoke).
+    }
+  }
+
+  /**
+   * {@code RESOLVE}'s own order-level handler (gap map row 1.1e): fetches
+   * the amendment history fresh — it may not be loaded yet, and even a
+   * cached copy could be the amendment that just applied, one click before
+   * this one, not the one `actions[]` was computed against — and opens
+   * `q-order-amendment-confirm-dialog` for whichever entry still carries its
+   * own `RESOLVE` ({@code AmendmentResponse.actionsFor}'s predicate, read
+   * back through {@link amendmentsApi}'s identical wire shape). There is
+   * never more than one open amendment per order (the partial unique index
+   * {@code JdbcOrderAmendmentStore#insert} relies on), so at most one entry
+   * ever qualifies.
+   */
+  private async openPendingAmendmentFromOrderAction(): Promise<void> {
+    const detail = this.order();
+    const scope = this.location.scope();
+    if (!detail || !scope) {
+      return;
+    }
+    this.amendmentHistoryOpen.set(true);
+    await this.loadAmendmentHistory();
+    const pending = this.amendmentHistory()?.find((amendment) => (amendment.actions ?? []).includes('RESOLVE'));
+    if (pending) {
+      this.openAmendmentConfirmDialog(pending);
     }
   }
 

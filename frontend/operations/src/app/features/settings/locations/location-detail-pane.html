@@ -307,7 +307,14 @@
 
           @for (row of draftLocaleContent(); track row.locale) {
             <fieldset class="locale-row">
-              <legend class="q-caption">{{ localeLabel(row.locale) }}</legend>
+              <legend class="q-caption">
+                {{ localeLabel(row.locale) }}
+                @if (isDefaultLocale(row.locale)) {
+                  <span class="locale-default-marker">{{
+                    'settings.locations.content.defaultMarker' | t
+                  }}</span>
+                }
+              </legend>
               <input
                 class="q-body field"
                 type="text"

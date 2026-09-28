@@ -552,10 +552,16 @@ either.
 
 **RustFS's scoped-credential mechanism is not the one this section used to
 name.** MinIO provisioned these through `mc admin user add` / `policy
-create` / `policy attach`; RustFS 1.0.0's equivalent has not been verified as
-part of ADR 0135 and may not exist in the same shape. Until it is confirmed,
-treat this step as open rather than run a command that has not been checked
-against RustFS — see that record's Open inputs and checklist.
+create` / `policy attach`; RustFS 1.0.0 has no equivalent of those three
+commands, but it does carry its own admin API for the same job —
+**verified 2026-09-25 against a running RustFS 1.0.0 container and the real
+`ops` image** (ADR 0135, checklist item 3): [production-setup.md](production-setup.md),
+section 5, "Then create the scoped service accounts", has the exact command —
+`PUT /rustfs/admin/v3/add-service-account`,
+SigV4-signed with the root credential via `curl --aws-sigv4`, not an `aws`
+CLI subcommand since the admin API is RustFS's own surface. Run it once, for
+both the media and backup pairs, before this section's "Create the buckets"
+step below, which already assumes the backup pair exists in OpenBao.
 
 The **off-site** pair is not an on-box object-store credential at all. Generate it on whichever
 provider holds the off-site bucket, scoped to that one bucket, and enable
@@ -575,24 +581,33 @@ mentions nothing about secrets until nine `Caused by` lines down.
 RustFS replaces MinIO as of ADR 0135; the AWS CLI replaces `mc`, and there is
 no `--ignore-existing` flag, so idempotency is a `head-bucket` check:
 
+Each bucket is created with its *own* scoped pair — the backup credential
+gets `AccessDenied` on `horecaos-media` and the media credential gets
+`AccessDenied` on `horecaos-backups`, by design (see the paragraph above):
+
 ```bash
 qc up -d object-store
 qc run --rm --no-TTY ops bash -c '
-  export AWS_ACCESS_KEY_ID="$(bao-get.sh production/object_storage/platform/backup-access-key)"
-  export AWS_SECRET_ACCESS_KEY="$(bao-get.sh production/object_storage/platform/backup-secret-key)"
   export AWS_EC2_METADATA_DISABLED=true
   export AWS_DEFAULT_REGION=us-east-1
   ep="--endpoint-url http://minio:9000"
+
+  export AWS_ACCESS_KEY_ID="$(bao-get.sh production/object_storage/platform/media-access-key)"
+  export AWS_SECRET_ACCESS_KEY="$(bao-get.sh production/object_storage/platform/media-secret-key)"
+  aws $ep s3api head-bucket --bucket horecaos-media 2>/dev/null \
+    || aws $ep s3api create-bucket --bucket horecaos-media
+  aws $ep s3api head-bucket --bucket horecaos-media
+
+  export AWS_ACCESS_KEY_ID="$(bao-get.sh production/object_storage/platform/backup-access-key)"
+  export AWS_SECRET_ACCESS_KEY="$(bao-get.sh production/object_storage/platform/backup-secret-key)"
   aws $ep s3api head-bucket --bucket horecaos-backups 2>/dev/null \
     || aws $ep s3api create-bucket --bucket horecaos-backups
   aws $ep s3api put-bucket-versioning --bucket horecaos-backups \
     --versioning-configuration Status=Enabled
-  aws $ep s3api head-bucket --bucket horecaos-media 2>/dev/null \
-    || aws $ep s3api create-bucket --bucket horecaos-media
-  aws $ep s3 ls'
+  aws $ep s3api head-bucket --bucket horecaos-backups'
 ```
 
-**Check:** both buckets listed, and
+**Check:** both `head-bucket` calls above exit zero, and
 `aws $ep s3api get-bucket-versioning --bucket horecaos-backups` reports
 `"Status": "Enabled"`. Without versioning a single mistaken `aws s3 rm`
 removes every backup with no undo.

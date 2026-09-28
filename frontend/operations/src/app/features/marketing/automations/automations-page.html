@@ -39,6 +39,14 @@
             <button type="button" class="automations__run-link" (click)="openRuns(rule)">
               {{ 'marketing.automations.viewRuns' | t: { name: rule.name } }}
             </button>
+            <button
+              type="button"
+              class="automations__run-link"
+              data-testid="automation-preview-link"
+              (click)="openPreview(rule)"
+            >
+              {{ 'marketing.automations.preview.open' | t: { name: rule.name } }}
+            </button>
           </li>
         }
       </ul>
@@ -190,6 +198,41 @@
           }
           <div class="dialog__actions">
             <button type="button" (click)="closeRuns()">{{ 'marketing.automations.dialog.close' | t }}</button>
+          </div>
+        </div>
+      </div>
+    }
+
+    @if (previewForRule(); as rule) {
+      <div class="dialog-backdrop" (click)="closePreview()">
+        <div
+          class="dialog dialog--wide"
+          role="dialog"
+          aria-modal="true"
+          data-testid="automation-preview-dialog"
+          (click)="$event.stopPropagation()"
+        >
+          <h2 class="q-subhead">{{ 'marketing.automations.preview.title' | t: { name: rule.name } }}</h2>
+          <p class="q-body-sm">{{ 'marketing.automations.preview.intro' | t }}</p>
+          @if (previewLoading()) {
+            <p class="q-body-sm">{{ 'marketing.automations.preview.loading' | t }}</p>
+          } @else if (previewError(); as error) {
+            <p class="q-body-sm dialog__error" role="alert">{{ error }}</p>
+          } @else if (previewCandidates().length === 0) {
+            <p class="q-body-sm" data-testid="automation-preview-empty">
+              {{ 'marketing.automations.preview.empty' | t }}
+            </p>
+          } @else {
+            <ul class="automations__preview-list" data-testid="automation-preview-list">
+              @for (candidate of previewCandidates(); track candidate.customerAccountId) {
+                <li data-testid="automation-preview-row">
+                  {{ candidate.maskedDisplayName ?? ('marketing.automations.preview.unnamed' | t) }}
+                </li>
+              }
+            </ul>
+          }
+          <div class="dialog__actions">
+            <button type="button" (click)="closePreview()">{{ 'marketing.automations.dialog.close' | t }}</button>
           </div>
         </div>
       </div>

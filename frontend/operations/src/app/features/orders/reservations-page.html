@@ -40,46 +40,78 @@
             {{ 'reservations.closedToday' | t }}
           </p>
         } @else {
-          <table class="reservations__grid" data-testid="reservations-grid">
-            <thead>
-              <tr>
-                <th class="reservations__hour-header">{{ 'reservations.grid.time' | t }}</th>
-                @for (table of tables(); track table.tableId) {
-                  <th>
-                    <div class="reservations__table-header">
-                      <span class="q-body-sm">{{ table.code }}</span>
-                      <span class="q-caption reservations__seats">{{ table.seats }}</span>
-                      <span class="q-caption reservations__occupancy">{{
-                        occupancyFor(table.tableId)
-                      }}</span>
-                    </div>
-                  </th>
-                }
-              </tr>
-            </thead>
-            <tbody>
-              @for (hour of HOURS(); track hour) {
+          <div class="reservations__view-toggle" role="radiogroup">
+            <button
+              type="button"
+              class="q-caption"
+              [class.reservations__view-toggle-btn--active]="viewMode() === 'GRID'"
+              (click)="setViewMode('GRID')"
+              data-testid="reservations-view-grid"
+            >
+              {{ 'reservations.view.grid' | t }}
+            </button>
+            <button
+              type="button"
+              class="q-caption"
+              [class.reservations__view-toggle-btn--active]="viewMode() === 'TIMELINE'"
+              (click)="setViewMode('TIMELINE')"
+              data-testid="reservations-view-timeline"
+            >
+              {{ 'reservations.view.timeline' | t }}
+            </button>
+          </div>
+
+          @if (viewMode() === 'TIMELINE') {
+            <q-timeline-scheduler
+              [resources]="timelineResources()"
+              [blocks]="timelineBlocks()"
+              [startOfDayMinutes]="timelineStartMinutes()"
+              [endOfDayMinutes]="timelineEndMinutes()"
+              (blockSelect)="onTimelineBlockSelect($event)"
+              data-testid="reservations-timeline"
+            />
+          } @else {
+            <table class="reservations__grid" data-testid="reservations-grid">
+              <thead>
                 <tr>
-                  <th class="reservations__hour-header q-caption">{{ hour % 24 }}:00</th>
+                  <th class="reservations__hour-header">{{ 'reservations.grid.time' | t }}</th>
                   @for (table of tables(); track table.tableId) {
-                    @let cell = cellReservation(table.tableId, hour);
-                    <td
-                      [class.reservations__cell--free]="!cell"
-                      [class.reservations__cell--booked]="!!cell"
-                      (click)="cell && openDetail(cell)"
-                      [attr.data-testid]="cell ? 'reservations-cell-booked' : null"
-                    >
-                      @if (cell && isCellStart(cell, hour)) {
-                        <span class="q-caption reservations__cell-label"
-                          >{{ cell.partySize }}·{{ statusLabel(cell.status) }}</span
-                        >
-                      }
-                    </td>
+                    <th>
+                      <div class="reservations__table-header">
+                        <span class="q-body-sm">{{ table.code }}</span>
+                        <span class="q-caption reservations__seats">{{ table.seats }}</span>
+                        <span class="q-caption reservations__occupancy">{{
+                          occupancyFor(table.tableId)
+                        }}</span>
+                      </div>
+                    </th>
                   }
                 </tr>
-              }
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                @for (hour of HOURS(); track hour) {
+                  <tr>
+                    <th class="reservations__hour-header q-caption">{{ hour % 24 }}:00</th>
+                    @for (table of tables(); track table.tableId) {
+                      @let cell = cellReservation(table.tableId, hour);
+                      <td
+                        [class.reservations__cell--free]="!cell"
+                        [class.reservations__cell--booked]="!!cell"
+                        (click)="cell && openDetail(cell)"
+                        [attr.data-testid]="cell ? 'reservations-cell-booked' : null"
+                      >
+                        @if (cell && isCellStart(cell, hour)) {
+                          <span class="q-caption reservations__cell-label"
+                            >{{ cell.partySize }}·{{ statusLabel(cell.status) }}</span
+                          >
+                        }
+                      </td>
+                    }
+                  </tr>
+                }
+              </tbody>
+            </table>
+          }
         }
       </div>
 

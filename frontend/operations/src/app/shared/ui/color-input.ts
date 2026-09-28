@@ -22,6 +22,10 @@ const HEX_PATTERN = /^#[0-9a-fA-F]{6}$/;
  * {@link value} only ever changes to a syntactically valid six-digit hex
  * colour (`#rrggbb`); a partial or malformed typed value is held locally
  * until it resolves to one or the field blurs back to the last valid value.
+ *
+ * {@link warnings} (gap map row `X.39`) renders whatever legibility warnings
+ * a caller already computed for the current value, inline below the swatch —
+ * see that input's own doc.
  */
 @Component({
   selector: 'q-color-input',
@@ -32,6 +36,16 @@ const HEX_PATTERN = /^#[0-9a-fA-F]{6}$/;
 export class ColorInput {
   readonly value = input<string>('#000000');
   readonly ariaLabel = input<string | null>(null);
+
+  /**
+   * Already-formatted legibility warnings for the current {@link value}
+   * (gap map row `X.39`) — a caller computes these itself, typically from
+   * `evaluateHighlightColourContrast` (`shared/ui/color/highlight-contrast.ts`),
+   * since only the caller knows which reference surfaces matter for its own
+   * screen. This component stays deliberately ignorant of WCAG maths; it
+   * only renders whatever strings it is handed, inline, below the swatch.
+   */
+  readonly warnings = input<readonly string[]>([]);
 
   readonly valueChange = output<string>();
 

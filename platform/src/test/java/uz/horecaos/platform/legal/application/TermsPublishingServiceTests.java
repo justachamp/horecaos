@@ -92,6 +92,23 @@ class TermsPublishingServiceTests {
     }
 
     @Test
+    void publishingRecordsAnAuditCreationDiffWithNoPriorState() {
+        // Staff 9.3a: publishing a version is a creation -- there is no prior
+        // version 1 to diff against -- recorded honestly as before: null
+        // rather than a flat after-only map that cannot say so.
+        publishing.publish(TENANT, BRAND, Map.of("en", "Hello."), OWNER, null);
+
+        assertThat(jdbc.sql("""
+                        SELECT change_document -> 'version' ->> 'before',
+                               change_document -> 'version' ->> 'after'
+                          FROM audit.audit_events WHERE action_code = 'legal.terms.published'
+                        """)
+                        .query((resultRow, number) -> resultRow.getString(1) + "->" + resultRow.getString(2))
+                        .single())
+                .isEqualTo("null->1");
+    }
+
+    @Test
     void publishingANewVersionNeverChangesAnEarlierOne() {
         TermsVersion v1 = publishing.publish(TENANT, BRAND, Map.of("en", "Version one text."), OWNER, null);
 

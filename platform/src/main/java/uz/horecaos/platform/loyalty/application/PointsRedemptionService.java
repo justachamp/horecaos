@@ -9,8 +9,10 @@ import java.util.Optional;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import uz.horecaos.platform.loyalty.api.LoyaltyBalanceChanged;
 import uz.horecaos.platform.loyalty.api.PointsRedemptionPort;
 import uz.horecaos.platform.loyalty.domain.AccountStatus;
 import uz.horecaos.platform.loyalty.domain.EntryType;
@@ -78,11 +80,14 @@ public class PointsRedemptionService implements PointsRedemptionPort {
 
     private final JdbcLoyaltyStore store;
     private final LoyaltyPolicyService policies;
+    private final ApplicationEventPublisher events;
     private final Clock clock;
 
-    public PointsRedemptionService(JdbcLoyaltyStore store, LoyaltyPolicyService policies, Clock clock) {
+    public PointsRedemptionService(
+            JdbcLoyaltyStore store, LoyaltyPolicyService policies, ApplicationEventPublisher events, Clock clock) {
         this.store = store;
         this.policies = policies;
+        this.events = events;
         this.clock = clock;
     }
 
@@ -241,6 +246,28 @@ public class PointsRedemptionService implements PointsRedemptionPort {
                             now),
                     now);
         }
+
+        // Gap-map row 6.5's CASHBACK_CHANGE producer (ADR 0044 Triggers) — the
+        // "redemption / debit path" half of it, the debit's own event beside
+        // LoyaltyAccrualService#accrue's. reservationId stands in for a single
+        // entry id: a redemption can span several lots and therefore several
+        // ledger entries, and the reservation is the one identifier that names
+        // this debit as a whole. Published once the whole reservation is
+        // recorded — after the entry loop above, not right after debitBalance —
+        // so a failure later in this same method (the loop's own guarded writes,
+        // or a stale-idempotency-key insertReservation conflict earlier) rolls
+        // this transaction back with no commit for the consumer's AFTER_COMMIT
+        // listener to ever run against — see LoyaltyBalanceChanged's own doc.
+        events.publishEvent(new LoyaltyBalanceChanged(
+                command.tenantId(),
+                account.brandId(),
+                account.customerAccountId(),
+                account.id(),
+                reservationId,
+                EntryType.REDEMPTION.name(),
+                -command.amountMinor(),
+                running,
+                now));
 
         return new PointsHold(reservationId, account.id(), command.amountMinor(), running, plan.size());
     }

@@ -11,6 +11,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.partner.domain.HandoverChallengeStatus;
@@ -143,10 +144,16 @@ public class HandoverVerificationService {
                 .at(scope)
                 .target("order_handover_challenge", challenge.id())
                 .because(reasonCode)
-                .changed(Map.of(
-                        "orderId", orderId.toString(),
-                        "attemptsConsumed", challenge.attempts(),
-                        "challengeType", challenge.type().name()))
+                .changed(ChangeDocuments.diff(
+                        Map.of(
+                                "status", challenge.status().name(),
+                                "orderId", orderId.toString(),
+                                "challengeType", challenge.type().name()),
+                        Map.of(
+                                "status", HandoverChallengeStatus.BYPASSED.name(),
+                                "orderId", orderId.toString(),
+                                "challengeType", challenge.type().name(),
+                                "attemptsConsumed", challenge.attempts())))
                 .usingCapability(Capability.MARKETPLACE_HANDOVER_BYPASS.code())
                 .correlatedBy(correlationId == null ? challenge.id().toString() : correlationId)
                 .occurredAt(now)

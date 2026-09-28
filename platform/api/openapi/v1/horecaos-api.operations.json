@@ -1376,6 +1376,18 @@
         },
         "type" : "object"
       },
+      "AutomationPreviewResponse" : {
+        "properties" : {
+          "customerAccountId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "maskedDisplayName" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "AutomationRuleControllerReorderRequest" : {
         "properties" : {
           "orderedRuleIds" : {
@@ -34696,6 +34708,54 @@
           }
         },
         "summary" : "Stop the rule from firing",
+        "tags" : [ "Marketing automations" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/automations/{ruleId}/preview" : {
+      "get" : {
+        "description" : "A bounded, tenant-scoped sample with the display name masked the same way OperatorCustomerLookupService masks one — never a real send, never a guard claim: AutomationRulePreviewService reuses the same candidate query a live firing would, but writes nothing.",
+        "operationId" : "preview",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "ruleId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/AutomationPreviewResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Which customers this rule would match today (row X.25)",
         "tags" : [ "Marketing automations" ]
       }
     },

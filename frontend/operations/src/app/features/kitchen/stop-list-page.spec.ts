@@ -4,7 +4,7 @@ import { of } from 'rxjs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ApiClient } from '../../core/api/api-client';
-import { LocationScope, operationsPaths } from '../../core/api/operations-paths';
+import { LocationScope } from '../../core/api/operations-paths';
 import { CurrentLocation } from '../../core/auth/current-location';
 import { I18n } from '../../core/i18n/i18n';
 import { StopListPage } from './stop-list-page';
@@ -228,7 +228,15 @@ describe('StopListPage', () => {
 
     // One call, not one per row — the whole point of the batch endpoint.
     expect(post).toHaveBeenCalledTimes(1);
-    expect(post.mock.calls[0][0]).toBe(operationsPaths.inventoryBulkAvailability(SCOPE));
+    // A literal string, not `operationsPaths.inventoryBulkAvailability(SCOPE)`:
+    // comparing the call against the same builder's own output cannot fail
+    // regardless of which prefix the builder gets wrong — exactly how batch 11's
+    // /operations-prefixed bug (InventoryController has no such segment) passed
+    // unnoticed. `operations-paths.spec.ts` covers every inventory* builder the
+    // same literal way.
+    expect(post.mock.calls[0][0]).toBe(
+      '/api/v1/tenants/t1/brands/b1/locations/l1/inventory/variants/bulk-availability',
+    );
     expect(post.mock.calls[0][1].body).toEqual({
       variantIds: ['v1', 'v2'],
       available: false,
@@ -318,7 +326,10 @@ describe('StopListPage', () => {
     fixture.detectChanges();
 
     expect(put).toHaveBeenCalledTimes(1);
-    expect(put.mock.calls[0][0]).toBe(operationsPaths.inventoryVariantAvailability(SCOPE, 'v1'));
+    // Literal, for the same reason the bulk-availability assertion above is.
+    expect(put.mock.calls[0][0]).toBe(
+      '/api/v1/tenants/t1/brands/b1/locations/l1/inventory/variants/v1/availability',
+    );
     expect(put.mock.calls[0][1].body).toEqual({
       available: false,
       reasonCode: 'OPERATIONS_STOP_LIST_TOGGLE',

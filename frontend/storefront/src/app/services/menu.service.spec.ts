@@ -75,24 +75,27 @@ describe('MenuService.menu: concurrent callers for the same key share one reques
     expect(api.get).toHaveBeenCalledTimes(2);
   });
 
-  it('once cached, a later call for the same key makes no further request', async () => {
+  it('a later call for the same key still re-fetches -- the origin, not a stale local copy, decides freshness', async () => {
     const { service, api } = setUp();
     api.get.mockResolvedValue(emptyMenu());
 
     await service.menu('uz');
-    await service.menu('uz');
-
-    expect(api.get).toHaveBeenCalledTimes(1);
-  });
-
-  it('forget() drops the cache, so the next call re-fetches', async () => {
-    const { service, api } = setUp();
-    api.get.mockResolvedValue(emptyMenu());
-
-    await service.menu('uz');
-    service.forget();
     await service.menu('uz');
 
     expect(api.get).toHaveBeenCalledTimes(2);
+  });
+
+  it('a stop taken between two reads shows up on the very next call, not just after some future cache expiry', async () => {
+    const { service, api } = setUp();
+    const stillAvailable = emptyMenu();
+    const now86d: PublishedMenu = { ...emptyMenu(), publicationId: 'pub-1' };
+    api.get.mockResolvedValueOnce(stillAvailable).mockResolvedValueOnce(now86d);
+
+    const first = await service.menu('uz');
+    const second = await service.menu('uz');
+
+    expect(api.get).toHaveBeenCalledTimes(2);
+    expect(second).toBe(now86d);
+    expect(second).not.toBe(first);
   });
 });

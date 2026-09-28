@@ -702,6 +702,17 @@ export const routes: Routes = [
             loadComponent: () =>
               import('./features/catalog/tax-profile-page').then((m) => m.TaxProfilePage),
           },
+          // Row 4.8a's matrix — declared after the two static `prices/*`
+          // siblings above, so `bulk` and `tax-profile` keep matching them
+          // rather than this `:priceBookId` param (Angular matches route
+          // array order, first match wins).
+          {
+            path: 'prices/:priceBookId',
+            loadComponent: () =>
+              import('./features/catalog/price-book-matrix-page').then(
+                (m) => m.PriceBookMatrixPage,
+              ),
+          },
           // catalog.md §4.13: every vocabulary on this screen is honestly
           // "not built — ADR 0016" except Бренды, which already belongs to
           // tenancy and is not duplicated here — the spec's own instruction

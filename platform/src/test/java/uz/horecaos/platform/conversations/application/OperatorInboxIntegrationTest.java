@@ -226,6 +226,17 @@ class OperatorInboxIntegrationTest {
         entitlements.entitle(tenant);
         flowDocuments.author(
                 tenant, brand, "welcome-series", HANDOFF_WITH_RETURN_YAML, "Handoff", true, "author", "publish");
+        // Staff 9.3a: authoring a new version is a creation — no prior state
+        // to diff against, recorded honestly as before: null rather than
+        // silently having no "before" key at all.
+        assertThat(jdbc.sql("""
+                        SELECT change_document -> 'flowKey' ->> 'before',
+                               change_document -> 'flowKey' ->> 'after'
+                          FROM audit.audit_events WHERE action_code = 'conversations.flow_document.authored'
+                        """)
+                        .query((resultRow, number) -> resultRow.getString(1) + "->" + resultRow.getString(2))
+                        .single())
+                .isEqualTo("null->welcome-series");
 
         // ---- the flow hands off immediately (startState is the handoff itself)
         updateHandler.handle(installationRef(installationId, tenant), bareStartUpdate(1, chatId));
@@ -291,6 +302,18 @@ class OperatorInboxIntegrationTest {
         assertThat(conversationState(tenant, brand, chatId)).isEqualTo("IDLE");
         assertThat(auditFactCount(tenant, "conversation.returned_to_flow", "operator-a"))
                 .isEqualTo(1);
+        // Staff 9.3a: the landing state is a field-level {before, after} pair,
+        // not a flat "current state only" map.
+        assertThat(jdbc.sql("""
+                        SELECT change_document -> 'landingState' ->> 'before',
+                               change_document -> 'landingState' ->> 'after'
+                          FROM audit.audit_events WHERE action_code = 'conversation.returned_to_flow'
+                        """)
+                        .query((resultRow, number) -> resultRow.getString(1) + "->" + resultRow.getString(2))
+                        .single())
+                .as("the fact records the state the transition landed on (FLOW_ACTIVE); the flow "
+                        + "engine settling it further to IDLE, asserted above, happens after")
+                .isEqualTo("HANDED_TO_OPERATOR->FLOW_ACTIVE");
 
         // ---- close, then a new inbound message reopens it rather than being met with silence
         long versionBeforeClose =

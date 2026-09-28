@@ -8,6 +8,7 @@ import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -24,6 +25,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.configuration.rls.TenantRlsSession;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.ResourceScope;
@@ -452,11 +454,12 @@ public class InventoryService implements InventoryReservationPort {
                 .target("Variant", variantId)
                 .because(reasonCode)
                 .usingCapability(Capability.INVENTORY_ADJUST.code())
-                .changed(Map.of(
-                        "available",
-                        available,
-                        "stockItemId",
-                        before.stockItemId().toString()))
+                // Staff 9.3a: "available" genuinely moves (before.binaryAvailable()
+                // was already read above to compute the no-op check); stockItemId
+                // is unchanged identifying context.
+                .changed(ChangeDocuments.diff(
+                        availabilityDiffMap(before.binaryAvailable(), before.stockItemId()),
+                        availabilityDiffMap(available, before.stockItemId())))
                 .correlatedBy(variantId.toString())
                 .occurredAt(clock.instant())
                 .build());
@@ -840,11 +843,19 @@ public class InventoryService implements InventoryReservationPort {
                 .target("Variant", variantId)
                 .because(reasonCode)
                 .usingCapability(Capability.INVENTORY_ADJUST.code())
-                .changed(Map.of(
-                        "onHandQuantity",
-                        newOnHand.toPlainString(),
-                        "stockItemId",
-                        item.stockItemId().toString()))
+                // Staff 9.3a: "onHandQuantity" genuinely moves
+                // (item.onHandQuantity(), already compared above, -> newOnHand).
+                .changed(ChangeDocuments.diff(
+                        Map.of(
+                                "onHandQuantity",
+                                item.onHandQuantity().toPlainString(),
+                                "stockItemId",
+                                item.stockItemId().toString()),
+                        Map.of(
+                                "onHandQuantity",
+                                newOnHand.toPlainString(),
+                                "stockItemId",
+                                item.stockItemId().toString())))
                 .correlatedBy(variantId.toString())
                 .occurredAt(now)
                 .build());
@@ -891,11 +902,21 @@ public class InventoryService implements InventoryReservationPort {
                 .target("Variant", variantId)
                 .because(reasonCode)
                 .usingCapability(Capability.INVENTORY_ADJUST.code())
-                .changed(Map.of(
-                        "defaultQuantity",
-                        defaultQuantity == null ? "null" : defaultQuantity.toPlainString(),
-                        "stockItemId",
-                        item.stockItemId().toString()))
+                // Staff 9.3a: "defaultQuantity" genuinely moves
+                // (item.defaultQuantity(), already compared above, -> defaultQuantity).
+                .changed(ChangeDocuments.diff(
+                        Map.of(
+                                "defaultQuantity",
+                                item.defaultQuantity() == null
+                                        ? "null"
+                                        : item.defaultQuantity().toPlainString(),
+                                "stockItemId",
+                                item.stockItemId().toString()),
+                        Map.of(
+                                "defaultQuantity",
+                                defaultQuantity == null ? "null" : defaultQuantity.toPlainString(),
+                                "stockItemId",
+                                item.stockItemId().toString())))
                 .correlatedBy(variantId.toString())
                 .occurredAt(now)
                 .build());
@@ -924,6 +945,7 @@ public class InventoryService implements InventoryReservationPort {
             throw new IllegalArgumentException("A stop threshold cannot be negative");
         }
         StockItemRow item = requireQuantityItem(tenantId, locationId, variantId);
+        Optional<BigDecimal> previous = store.findChannelStopThreshold(tenantId, item.stockItemId(), channelSystemType);
         Instant now = clock.instant();
         store.upsertChannelStopThreshold(
                 tenantId, item.brandId(), locationId, item.stockItemId(), channelSystemType, stopAtOrBelow, now);
@@ -934,13 +956,16 @@ public class InventoryService implements InventoryReservationPort {
                 .target("Variant", variantId)
                 .because(reasonCode)
                 .usingCapability(Capability.INVENTORY_ADJUST.code())
-                .changed(Map.of(
-                        "channelSystemType",
-                        channelSystemType,
-                        "stopAtOrBelow",
-                        stopAtOrBelow.toPlainString(),
-                        "stockItemId",
-                        item.stockItemId().toString()))
+                // Staff 9.3a: "stopAtOrBelow" genuinely moves -- null if this
+                // channel had no threshold before; channelSystemType/stockItemId
+                // are unchanged identifying context.
+                .changed(ChangeDocuments.diff(
+                        channelStopThresholdDiffMap(
+                                channelSystemType,
+                                previous.map(BigDecimal::toPlainString).orElse(null),
+                                item.stockItemId()),
+                        channelStopThresholdDiffMap(
+                                channelSystemType, stopAtOrBelow.toPlainString(), item.stockItemId())))
                 .correlatedBy(variantId.toString())
                 .occurredAt(now)
                 .build());
@@ -964,6 +989,7 @@ public class InventoryService implements InventoryReservationPort {
             String actorSubject) {
         rls.bindTenant(tenantId);
         StockItemRow item = requireQuantityItem(tenantId, locationId, variantId);
+        Optional<BigDecimal> previous = store.findChannelStopThreshold(tenantId, item.stockItemId(), channelSystemType);
         boolean removed = store.deleteChannelStopThreshold(tenantId, item.stockItemId(), channelSystemType);
         if (!removed) {
             return false;
@@ -974,15 +1000,41 @@ public class InventoryService implements InventoryReservationPort {
                 .target("Variant", variantId)
                 .because(reasonCode)
                 .usingCapability(Capability.INVENTORY_ADJUST.code())
-                .changed(Map.of(
-                        "channelSystemType",
-                        channelSystemType,
-                        "stockItemId",
-                        item.stockItemId().toString()))
+                // Staff 9.3a: "stopAtOrBelow" moves from whatever this channel
+                // had (removed is true, so it existed) to null.
+                .changed(ChangeDocuments.diff(
+                        channelStopThresholdDiffMap(
+                                channelSystemType,
+                                previous.map(BigDecimal::toPlainString).orElse(null),
+                                item.stockItemId()),
+                        channelStopThresholdDiffMap(channelSystemType, null, item.stockItemId())))
                 .correlatedBy(variantId.toString())
                 .occurredAt(clock.instant())
                 .build());
         return true;
+    }
+
+    /** A {@code {channelSystemType, stopAtOrBelow, stockItemId}} snapshot -- {@code stopAtOrBelow} may be null. */
+    private static Map<String, Object> channelStopThresholdDiffMap(
+            String channelSystemType, @Nullable String stopAtOrBelow, UUID stockItemId) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("channelSystemType", channelSystemType);
+        map.put("stopAtOrBelow", stopAtOrBelow);
+        map.put("stockItemId", stockItemId.toString());
+        return map;
+    }
+
+    /**
+     * A {@code {available, stockItemId}} snapshot for {@link
+     * #setAvailabilityAudited}'s diff -- a plain {@code Map.of(...)} cannot
+     * hold {@code available} when it is null (an item read as neither
+     * BINARY-available nor -unavailable), which the before side can be.
+     */
+    private static Map<String, Object> availabilityDiffMap(@Nullable Boolean available, UUID stockItemId) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("available", available);
+        map.put("stockItemId", stockItemId.toString());
+        return map;
     }
 
     private StockItemRow requireQuantityItem(UUID tenantId, UUID locationId, UUID variantId) {
@@ -1009,6 +1061,36 @@ public class InventoryService implements InventoryReservationPort {
     public Optional<StockPositionView> findStockPosition(UUID tenantId, UUID locationId, UUID variantId) {
         rls.bindTenant(tenantId);
         return store.findStockItem(tenantId, locationId, variantId).map(item -> toView(item, variantId, List.of()));
+    }
+
+    /**
+     * Remaining quantity for exactly the QUANTITY-tracked, listed variants in
+     * {@code variantIds} — the storefront menu's own batched read (gap map
+     * rows 4.4c/4.4d, storefront half; see {@code
+     * uz.horecaos.platform.inventory.infrastructure.catalog.InventoryMenuAvailabilityLookup}),
+     * scoped to one page's variant set rather than every stock item at the
+     * location the way {@link #listStockPositions} reads for the console.
+     *
+     * @return one entry per variant that is listed here and tracked as
+     *     QUANTITY. A variant that is BINARY, UNTRACKED, or not listed at all
+     *     is simply absent — this method makes no claim about availability,
+     *     only about a remaining count, so absence is never "sold out" on its
+     *     own.
+     */
+    @Transactional(readOnly = true)
+    public Map<UUID, BigDecimal> remainingQuantitiesFor(UUID tenantId, UUID locationId, Set<UUID> variantIds) {
+        rls.bindTenant(tenantId);
+        if (variantIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, StockItemRow> items = store.findStockItems(tenantId, locationId, variantIds);
+        Map<UUID, BigDecimal> remaining = new java.util.HashMap<>();
+        items.forEach((variantId, item) -> {
+            if (item.trackingMode() == TrackingMode.QUANTITY) {
+                remaining.put(variantId, item.remainingQuantity());
+            }
+        });
+        return remaining;
     }
 
     /** Every stock item listed at a location, with its position and any channel stop thresholds. */

@@ -13,6 +13,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.telemetry.api.CourierShiftPort;
 import uz.horecaos.platform.telemetry.domain.CollectionGate;
@@ -133,11 +134,12 @@ public class DutySessionService {
                 .targetVersion(1L)
                 .because(command.reason())
                 .usingCapability(command.capabilityUsed())
-                .changed(Map.of(
+                // Staff 9.3a: a brand-new session, no prior state to diff against.
+                .changed(ChangeDocuments.created(Map.of(
                         "courierId", command.courierId().toString(),
                         "shiftId", shift.shiftId().toString(),
                         "collectionGate", command.collectionGate().name(),
-                        "registrationValidUntil", shift.registrationValidUntil().toString()))
+                        "registrationValidUntil", shift.registrationValidUntil().toString())))
                 .correlatedBy(command.correlationId())
                 .occurredAt(now)
                 .build());
@@ -194,7 +196,23 @@ public class DutySessionService {
                 .targetVersion((long) session.version() + 1)
                 .because(reason)
                 .usingCapability(capabilityUsed)
-                .changed(Map.of("courierId", session.courierId().toString(), "endReason", endReason))
+                // Staff 9.3a: "status" is the field that genuinely moves
+                // (session.status() -> CLOSED); courierId is unchanged
+                // context, kept on both sides, and endReason was unset
+                // before this close.
+                .changed(ChangeDocuments.diff(
+                        Map.of(
+                                "courierId",
+                                session.courierId().toString(),
+                                "status",
+                                session.status().name()),
+                        Map.of(
+                                "courierId",
+                                session.courierId().toString(),
+                                "status",
+                                DutySessionStatus.CLOSED.name(),
+                                "endReason",
+                                endReason)))
                 .correlatedBy(correlationId)
                 .occurredAt(now)
                 .build());

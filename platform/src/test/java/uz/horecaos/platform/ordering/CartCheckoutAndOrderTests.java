@@ -102,6 +102,7 @@ import uz.horecaos.platform.ordering.domain.PromiseBasis;
 import uz.horecaos.platform.ordering.infrastructure.catalog.JdbcOrderCatalogSnapshot;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcCartStore;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcCheckoutAttemptStore;
+import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderAmendmentStore;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderDirectory;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderProcessStore;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore;
@@ -343,7 +344,16 @@ class CartCheckoutAndOrderTests {
         // settlements themselves and so never asked whether anything else did.
         loyaltyStore = new uz.horecaos.platform.loyalty.infrastructure.persistence.JdbcLoyaltyStore(jdbc);
         var redemption = new uz.horecaos.platform.loyalty.application.PointsRedemptionService(
-                loyaltyStore, new uz.horecaos.platform.loyalty.application.LoyaltyPolicyService(loyaltyStore), clock);
+                loyaltyStore,
+                new uz.horecaos.platform.loyalty.application.LoyaltyPolicyService(loyaltyStore),
+                // A dedicated publisher, not `published`: that one's `.events` is
+                // asserted with bare hasSize(...) in several tests below for
+                // ordering/payment events only, and a LoyaltyBalanceChanged landing
+                // in the same list on any split-tender checkout would inflate those
+                // counts for a reason those tests are not about. CASHBACK_CHANGE's
+                // own producer is covered in LoyaltyLedgerAndSplitTenderTests.
+                event -> {},
+                clock);
         loyaltyAdjustments = new uz.horecaos.platform.loyalty.application.LoyaltyAdjustmentService(
                 loyaltyStore, ALWAYS_APPROVES, new JdbcAuditRecorder(jdbc, objectMapper), clock, 100_000L);
         settlementStore = new JdbcSettlementStore(jdbc);
@@ -471,7 +481,8 @@ class CartCheckoutAndOrderTests {
                 new PromoCodeEligibilityService(promoCodeStore),
                 new FakeConfigurationResolver(),
                 saleWindowRules,
-                commentPresetLookup);
+                commentPresetLookup,
+                inventory);
         inventoryProcess = new OrderInventoryProcess(processStore, inventory, objectMapper, clock);
         paymentProcess = new OrderPaymentProcess(processStore, objectMapper);
         orderState = new OrderStateService(
@@ -522,6 +533,7 @@ class CartCheckoutAndOrderTests {
                 processStore,
                 UNWIRED_PAYMENTS,
                 NO_COURIER_ASSIGNMENTS,
+                new JdbcOrderAmendmentStore(jdbc),
                 protection,
                 objectMapper,
                 new JdbcAuditRecorder(jdbc, objectMapper),
@@ -1258,6 +1270,76 @@ class CartCheckoutAndOrderTests {
                 .isEmpty();
     }
 
+    // --------------------------------------------- rows 4.4c/4.4d: inventory
+
+    /**
+     * The gap batch 11 left open on the storefront half: {@code putLine} and
+     * {@code price} never consulted inventory at all, so a dish the kitchen
+     * had 86'd, or a QUANTITY item already at zero, could be added and priced
+     * and only ever refused at checkout's own hold ({@code
+     * CheckoutReservationStep}'s {@code ItemsUnavailable}) — the exact
+     * inconsistency {@code anInventoryEightySixIsSoldOutEvenWhereTheOfferingSaysOtherwise}'s
+     * own comment already named for the menu read.
+     */
+    @Test
+    @DisplayName("adding a dish the kitchen has 86'd is refused with the same code checkout uses")
+    void addingASoldOutItemIsRefused() {
+        var cart = openCart();
+        inventory.setAvailability(TENANT, LOCATION, burgerVariant, false, "SOLD_OUT", null);
+
+        var refused = catchThrowable(() -> tx(() -> carts.putLine(
+                TENANT, BRAND, CUSTOMER, cart, cartVersion(cart), "a", burgerVariant, 1, List.of(), null)));
+
+        assertThat(refused).isInstanceOf(CartService.CartRefusedException.class);
+        assertThat(((CartService.CartRefusedException) refused).code()).isEqualTo("SOLD_OUT");
+        assertThat(carts.view(TENANT, BRAND, CUSTOMER, cart).orElseThrow().lines())
+                .as("and the line is not left behind by a rolled-back edit")
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("a variant never listed in inventory at all is refused the same way a sold-out one is")
+    void addingAnUnlistedVariantIsRefused() {
+        var cart = openCart();
+
+        var refused = catchThrowable(() -> tx(() -> carts.putLine(
+                TENANT, BRAND, CUSTOMER, cart, cartVersion(cart), "a", pizzaVariant, 1, List.of(sizeMedium), null)));
+
+        assertThat(refused).isInstanceOf(CartService.CartRefusedException.class);
+        assertThat(((CartService.CartRefusedException) refused).code()).isEqualTo("NOT_STOCKED_AT_LOCATION");
+    }
+
+    @Test
+    @DisplayName("a dish going sold out between add and price refuses pricing, not only checkout")
+    void pricingRefusesADishThatWentSoldOutAfterItWasAdded() {
+        var cart = openCart();
+        putLine(cart, "a", burgerVariant, 1);
+
+        inventory.setAvailability(TENANT, LOCATION, burgerVariant, false, "SOLD_OUT", null);
+
+        var refused = catchThrowable(() -> tx(() -> carts.price(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart))));
+
+        assertThat(refused).isInstanceOf(CartService.CartRefusedException.class);
+        assertThat(((CartService.CartRefusedException) refused).code()).isEqualTo("SOLD_OUT");
+    }
+
+    @Test
+    @DisplayName("an available dish is added and priced exactly as before this row's fix")
+    void anAvailableDishIsUnaffected() {
+        var cart = openCart();
+
+        var view = putLineAndReturn(cart, "a", burgerVariant, 1);
+
+        assertThat(view.lines()).hasSize(1);
+        var priced = tx(() -> carts.price(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart)));
+        assertThat(priced.quote().totalMinor()).isPositive();
+    }
+
+    private CartService.CartView putLineAndReturn(UUID cartId, String lineKey, UUID variantId, int quantity) {
+        return tx(() -> carts.putLine(
+                TENANT, BRAND, CUSTOMER, cartId, cartVersion(cartId), lineKey, variantId, quantity, List.of(), null));
+    }
+
     @Test
     @DisplayName("more selections than the group's maximum are refused")
     void aGroupsMaximumIsEnforced() {
@@ -1370,6 +1452,13 @@ class CartCheckoutAndOrderTests {
     @Test
     @DisplayName("a selection the published menu allows goes into the cart")
     void aValidSelectionIsAccepted() {
+        // Rows 4.4c/4.4d: putLine now checks inventory too, and this suite's
+        // shared seedPricingAndStock only lists burgerVariant (pizzaVariant is
+        // listed per-test, where a test's own premise needs it stocked or
+        // not) -- this test is about modifier selection rules, not inventory,
+        // so it lists pizza itself rather than relying on a global fixture a
+        // sibling test elsewhere already depends on being pizza-free.
+        inventory.listVariantAtLocation(TENANT, BRAND, LOCATION, pizzaVariant, TrackingMode.BINARY);
         var cart = openCart();
 
         var view = tx(() -> carts.putLine(

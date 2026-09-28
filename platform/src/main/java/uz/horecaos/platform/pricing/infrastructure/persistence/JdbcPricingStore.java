@@ -10,6 +10,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import tools.jackson.databind.ObjectMapper;
@@ -653,60 +654,156 @@ public class JdbcPricingStore {
      * in force for nobody, so there is no history to keep, and closing it would
      * violate {@code ck_price_window}, which requires the close to come strictly
      * after the open.
+     *
+     * <p>{@code expectedVersion} folds the matrix inline edit's per-row
+     * {@code If-Match} into the very UPDATE that performs the write, rather than
+     * a separate SELECT beforehand: a check done as its own statement and a write
+     * done as another leaves a gap between the two that a concurrent writer can
+     * land in, which is exactly what the version guard exists to close. Both
+     * branches below carry {@code AND version = :expectedVersion} in their own
+     * WHERE clause when a version was given, so the database — not a race with
+     * whatever else is happening between two round trips — is what decides
+     * whether the write happens. {@code null} skips the guard entirely: the
+     * single-variant editor and {@link uz.horecaos.platform.pricing.application.PriceBulkApplyService}
+     * write unconditionally and never read a row's version first. {@code 0} means
+     * the caller expects no row open yet; that case has no existing row to guard
+     * an UPDATE with, so {@code ux_price_current} is what makes the fallback
+     * insert below race-safe instead. Returns {@code false} only when a version
+     * was given and nothing matched it — the caller's one correct response is to
+     * refuse the edit, never to retry it as if it had raced nothing.
      */
-    public void setPrice(
+    public boolean setPrice(
             UUID tenantId,
             UUID brandId,
             UUID priceBookId,
             String priceableType,
             UUID priceableId,
             long amountMinor,
-            Instant now) {
+            Instant now,
+            @Nullable Integer expectedVersion) {
         OffsetDateTime at = OffsetDateTime.ofInstant(now, ZoneOffset.UTC);
+        String versionGuard = expectedVersion == null ? "" : " AND version = :expectedVersion";
 
-        int amended = jdbc.sql("""
-                UPDATE pricing.prices
-                SET amount_minor = :amount, version = version + 1
-                WHERE tenant_id = :tenantId AND brand_id = :brandId
-                  AND price_book_id = :priceBookId AND priceable_type = :type
-                  AND priceable_id = :priceableId
-                  AND valid_until IS NULL AND valid_from >= :at
-                """)
+        JdbcClient.StatementSpec amendSpec = jdbc.sql("""
+                        UPDATE pricing.prices
+                        SET amount_minor = :amount, version = version + 1
+                        WHERE tenant_id = :tenantId AND brand_id = :brandId
+                          AND price_book_id = :priceBookId AND priceable_type = :type
+                          AND priceable_id = :priceableId
+                          AND valid_until IS NULL AND valid_from >= :at""" + versionGuard)
                 .param("tenantId", tenantId)
                 .param("brandId", brandId)
                 .param("priceBookId", priceBookId)
                 .param("type", priceableType)
                 .param("priceableId", priceableId)
                 .param("amount", amountMinor)
-                .param("at", at)
-                .update();
+                .param("at", at);
+        if (expectedVersion != null) {
+            amendSpec = amendSpec.param("expectedVersion", expectedVersion);
+        }
+        int amended = amendSpec.update();
 
         if (amended > 0) {
-            return;
+            return true;
         }
 
-        jdbc.sql("""
-                UPDATE pricing.prices
-                SET valid_until = :at, version = version + 1
-                WHERE tenant_id = :tenantId AND brand_id = :brandId
-                  AND price_book_id = :priceBookId AND priceable_type = :type
-                  AND priceable_id = :priceableId
-                  AND valid_until IS NULL AND valid_from < :at
-                """)
+        // The closed row's own version carries forward rather than the new
+        // row restarting at 1: the If-Match check compares against whatever
+        // version this method last wrote, and two edits close-then-insert on
+        // every call — valid_from is always "now", so the amend branch above
+        // only ever fires on a same-instant retry. A new row that reset to 1
+        // on every ordinary edit would make every price after the first
+        // indistinguishable to that check: two operators who both read
+        // version 1 would both pass it, the second silently clobbering the
+        // first. Empty (nothing was open yet) starts the lineage at 1, the
+        // same "unset" the matrix reads as version 0.
+        JdbcClient.StatementSpec closeSpec = jdbc.sql("""
+                        UPDATE pricing.prices
+                        SET valid_until = :at
+                        WHERE tenant_id = :tenantId AND brand_id = :brandId
+                          AND price_book_id = :priceBookId AND priceable_type = :type
+                          AND priceable_id = :priceableId
+                          AND valid_until IS NULL AND valid_from < :at""" + versionGuard + """
+
+                        RETURNING version""")
                 .param("tenantId", tenantId)
                 .param("brandId", brandId)
                 .param("priceBookId", priceBookId)
                 .param("type", priceableType)
                 .param("priceableId", priceableId)
-                .param("at", at)
-                .update();
+                .param("at", at);
+        if (expectedVersion != null) {
+            closeSpec = closeSpec.param("expectedVersion", expectedVersion);
+        }
+        Optional<Integer> closedVersion = closeSpec.query(Integer.class).optional();
 
-        jdbc.sql("""
+        if (closedVersion.isPresent()) {
+            insertPrice(
+                    tenantId,
+                    brandId,
+                    priceBookId,
+                    priceableType,
+                    priceableId,
+                    amountMinor,
+                    at,
+                    closedVersion.get() + 1);
+            return true;
+        }
+
+        if (expectedVersion != null && expectedVersion != 0) {
+            // A version was expected and neither atomic write above matched
+            // it: the row either moved on to a different version or is gone
+            // — either way, stale. Never fall through to the insert below,
+            // which would otherwise silently start a brand-new lineage over
+            // whatever is actually open.
+            return false;
+        }
+
+        // No row was expected to be open (expectedVersion null, or 0 for "not
+        // priced yet") and neither UPDATE touched anything. ux_price_current
+        // is what makes this insert race-safe against a second writer landing
+        // here at the same instant: only one of two concurrent first-time
+        // inserts for the same priceable can hold that index. ON CONFLICT DO
+        // NOTHING rather than catching the unique-violation: Postgres aborts
+        // the whole transaction the instant any statement inside it errors, so
+        // a caught DataIntegrityViolationException here would leave every
+        // later statement in this same @Transactional call — including the
+        // openPriceVersion lookup PriceAuthoringService makes to name the
+        // current version in a stale-write's message — failing with "current
+        // transaction is aborted" instead of running. A no-op insert reports
+        // itself as zero rows affected, which never poisons the transaction.
+        // The loser's no-op is reported as staleness when a version was
+        // actually being enforced; an unconditional caller keeps the original,
+        // unguarded behaviour of a conflict propagating — DataIntegrityViolationException
+        // is still what GlobalApiErrorHandler maps to 409, just synthesized
+        // here instead of caught from Postgres.
+        if (insertPrice(tenantId, brandId, priceBookId, priceableType, priceableId, amountMinor, at, 1)) {
+            return true;
+        }
+        if (expectedVersion == null) {
+            throw new DataIntegrityViolationException(
+                    "A price is already current for " + priceableType + " " + priceableId + " in book " + priceBookId);
+        }
+        return false;
+    }
+
+    private boolean insertPrice(
+            UUID tenantId,
+            UUID brandId,
+            UUID priceBookId,
+            String priceableType,
+            UUID priceableId,
+            long amountMinor,
+            OffsetDateTime at,
+            int version) {
+        int inserted = jdbc.sql("""
                 INSERT INTO pricing.prices (
                     id, tenant_id, brand_id, price_book_id, priceable_type, priceable_id,
                     amount_minor, valid_from, version)
                 VALUES (:id, :tenantId, :brandId, :priceBookId, :type, :priceableId,
-                    :amount, :at, 1)
+                    :amount, :at, :version)
+                ON CONFLICT (price_book_id, priceable_type, priceable_id) WHERE valid_until IS NULL
+                DO NOTHING
                 """)
                 .param("id", UUID.randomUUID())
                 .param("tenantId", tenantId)
@@ -715,8 +812,187 @@ public class JdbcPricingStore {
                 .param("type", priceableType)
                 .param("priceableId", priceableId)
                 .param("amount", amountMinor)
+                .param("version", version)
                 .param("at", at)
                 .update();
+        return inserted > 0;
+    }
+
+    /**
+     * The version of the currently open price for one priceable in one book, or
+     * empty when nothing is priced there yet.
+     *
+     * <p>{@code setPrice}'s per-row {@code If-Match} (gap map row {@code 4.8a}'s
+     * matrix inline edit): the matrix shows one row per variant, and locking the
+     * whole book's version the way {@link #activatePriceBook} does would mean
+     * every row's cached version goes stale the moment any other row is edited
+     * — an operator correcting two prices in a row would be told the second one
+     * "changed since it was read" when nothing about that row had. The price's
+     * own version is what a matrix row actually observed, so that is what it
+     * should be checked against.
+     */
+    public Optional<Integer> openPriceVersion(
+            UUID tenantId, UUID brandId, UUID priceBookId, String priceableType, UUID priceableId) {
+        return jdbc.sql("""
+                SELECT version FROM pricing.prices
+                WHERE tenant_id = :tenantId AND brand_id = :brandId
+                  AND price_book_id = :priceBookId AND priceable_type = :type
+                  AND priceable_id = :priceableId AND valid_until IS NULL
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("priceBookId", priceBookId)
+                .param("type", priceableType)
+                .param("priceableId", priceableId)
+                .query(Integer.class)
+                .optional();
+    }
+
+    /**
+     * The book that prices the brand by default right now: whichever ACTIVE
+     * book carries a live BRAND-scope assignment, ranked the same way {@link
+     * #resolvePriceBook} ranks a tie among brand-scoped books.
+     *
+     * <p>The price-book matrix's "base price" column (gap map row {@code 4.8a})
+     * reads from here rather than from {@link #resolvePriceBook}: the matrix
+     * has no location or channel in view, only a brand, and a brand-wide
+     * comparison point is what "does this draft/alternate book differ from
+     * what's live" means without one. A brand with no live BRAND-scope
+     * assignment yet — most commonly a brand still authoring its first book —
+     * answers empty, and the matrix shows no base price and no delta rather
+     * than a wrong one.
+     */
+    public Optional<PriceBookRow> resolveBrandBaseBook(UUID tenantId, UUID brandId, Instant at) {
+        return jdbc.sql("""
+                SELECT pb.id, pb.currency, pb.version
+                FROM pricing.price_books pb
+                JOIN pricing.price_book_assignments a ON a.price_book_id = pb.id
+                WHERE pb.tenant_id = :tenantId AND pb.brand_id = :brandId
+                  AND pb.status = 'ACTIVE'
+                  AND pb.valid_from <= :at AND (pb.valid_until IS NULL OR pb.valid_until > :at)
+                  AND a.scope_type = 'BRAND'
+                  AND a.valid_from <= :at AND (a.valid_until IS NULL OR a.valid_until > :at)
+                ORDER BY a.priority DESC, pb.priority DESC, pb.id
+                LIMIT 1
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("at", OffsetDateTime.ofInstant(at, ZoneOffset.UTC))
+                .query((row, number) -> new PriceBookRow(
+                        row.getObject("id", UUID.class), row.getString("currency"), row.getInt("version")))
+                .optional();
+    }
+
+    /**
+     * The price-book matrix (gap map row {@code 4.8a}): every priceable
+     * variant in the brand's draft catalog, joined against its price in
+     * {@code priceBookId} and, when {@code baseBookId} is given, its price in
+     * the brand's base book too — one keyset-paginated query, so a category
+     * filter or the "differs from base" filter narrows the same page boundary
+     * the cursor walks rather than being applied after it and silently
+     * shrinking a page.
+     *
+     * <p>Reads {@code catalog.*} tables directly, the same move {@code
+     * JdbcCatalogPricingContext} already makes from this module — a Java-level
+     * dependency would cross the module boundary; a SQL join inside one
+     * adapter does not, and pricing is the side that needs both schemas here.
+     *
+     * <p>Draft counts and archived does not, matching {@code
+     * CatalogPricingContext#priceableExists}: an operator prices a dish before
+     * publishing the menu it belongs to.
+     *
+     * @param categoryId          narrows to variants whose product carries
+     *                            that category (a product may carry more than
+     *                            one; membership, not which category {@code
+     *                            categoryName} happens to show — see the
+     *                            single-category simplification {@code
+     *                            VariantAvailabilityRow} already makes), or
+     *                            null for every category
+     * @param differsFromBaseOnly keeps only rows where the book price and the
+     *                            base price are not the same — including a row
+     *                            priced in the base book but not yet in this
+     *                            one, which is a difference worth flagging
+     * @param cursorVariantId     the previous page's last variant id, or null
+     *                            for the first page
+     */
+    public List<MatrixRow> priceBookMatrix(
+            UUID tenantId,
+            UUID brandId,
+            UUID priceBookId,
+            @Nullable UUID baseBookId,
+            @Nullable UUID categoryId,
+            boolean differsFromBaseOnly,
+            @Nullable UUID cursorVariantId,
+            String locale,
+            int limit,
+            Instant at) {
+        OffsetDateTime atOffset = OffsetDateTime.ofInstant(at, ZoneOffset.UTC);
+        return jdbc.sql("""
+                SELECT v.id AS variant_id, v.product_id AS product_id,
+                       COALESCE(vt.name, pt.name, p.code) AS display_name,
+                       first_category.id AS category_id, ct.name AS category_name,
+                       bp.amount_minor AS book_amount_minor, bp.version AS book_version,
+                       base.amount_minor AS base_amount_minor
+                FROM catalog.variants v
+                JOIN catalog.products p
+                    ON p.id = v.product_id AND p.tenant_id = v.tenant_id AND p.brand_id = v.brand_id
+                LEFT JOIN catalog.translations vt
+                    ON vt.entity_type = 'VARIANT' AND vt.entity_id = v.id AND vt.tenant_id = v.tenant_id
+                       AND vt.brand_id = v.brand_id AND vt.locale = :locale
+                LEFT JOIN catalog.translations pt
+                    ON pt.entity_type = 'PRODUCT' AND pt.entity_id = p.id AND pt.tenant_id = p.tenant_id
+                       AND pt.brand_id = p.brand_id AND pt.locale = :locale
+                LEFT JOIN LATERAL (
+                    SELECT c.id, c.tenant_id
+                    FROM catalog.category_products cp
+                    JOIN catalog.categories c
+                        ON c.id = cp.category_id AND c.tenant_id = cp.tenant_id AND c.brand_id = cp.brand_id
+                    WHERE cp.product_id = p.id AND cp.tenant_id = p.tenant_id AND cp.brand_id = p.brand_id
+                    ORDER BY cp.sort_order, c.id
+                    LIMIT 1
+                ) first_category ON true
+                LEFT JOIN catalog.translations ct
+                    ON ct.entity_type = 'CATEGORY' AND ct.entity_id = first_category.id
+                       AND ct.tenant_id = first_category.tenant_id AND ct.locale = :locale
+                LEFT JOIN pricing.prices bp
+                    ON bp.price_book_id = :priceBookId AND bp.priceable_type = 'VARIANT'
+                       AND bp.priceable_id = v.id
+                       AND bp.valid_from <= :at AND (bp.valid_until IS NULL OR bp.valid_until > :at)
+                LEFT JOIN pricing.prices base
+                    ON base.price_book_id = :baseBookId AND base.priceable_type = 'VARIANT'
+                       AND base.priceable_id = v.id
+                       AND base.valid_from <= :at AND (base.valid_until IS NULL OR base.valid_until > :at)
+                WHERE v.tenant_id = :tenantId AND v.brand_id = :brandId
+                  AND v.status <> 'ARCHIVED' AND p.status <> 'ARCHIVED'
+                  AND (CAST(:cursor AS uuid) IS NULL OR v.id > CAST(:cursor AS uuid))
+                  AND (CAST(:categoryId AS uuid) IS NULL OR EXISTS (
+                        SELECT 1 FROM catalog.category_products cp2
+                        WHERE cp2.product_id = p.id AND cp2.tenant_id = p.tenant_id AND cp2.brand_id = p.brand_id
+                          AND cp2.category_id = :categoryId))
+                  AND (NOT :differsFromBaseOnly OR bp.amount_minor IS DISTINCT FROM base.amount_minor)
+                ORDER BY v.id
+                LIMIT :limit
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("priceBookId", priceBookId)
+                .param("baseBookId", baseBookId)
+                .param("categoryId", categoryId)
+                .param("differsFromBaseOnly", differsFromBaseOnly)
+                .param("cursor", cursorVariantId)
+                .param("locale", locale)
+                .param("at", atOffset)
+                .param("limit", limit)
+                .query((row, number) -> new MatrixRow(
+                        row.getObject("variant_id", UUID.class),
+                        row.getObject("product_id", UUID.class),
+                        row.getString("display_name"),
+                        row.getObject("category_id", UUID.class),
+                        row.getString("category_name"),
+                        (Long) row.getObject("book_amount_minor"),
+                        (Integer) row.getObject("book_version"),
+                        (Long) row.getObject("base_amount_minor")))
+                .list();
     }
 
     /** How many things this book currently prices. */
@@ -900,6 +1176,23 @@ public class JdbcPricingStore {
     }
 
     public record PriceBookRow(UUID id, String currency, int version) {}
+
+    /**
+     * One row of {@link #priceBookMatrix}. {@code bookPriceMinor} and {@code
+     * bookVersion} are null together (unpriced in this book, never one
+     * without the other — both come off the same {@code pricing.prices} row);
+     * {@code basePriceMinor} is independently nullable, since the base book
+     * may price a variant this book has not, or not exist at all.
+     */
+    public record MatrixRow(
+            UUID variantId,
+            UUID productId,
+            String displayName,
+            @Nullable UUID categoryId,
+            @Nullable String categoryName,
+            @Nullable Long bookPriceMinor,
+            @Nullable Integer bookVersion,
+            @Nullable Long basePriceMinor) {}
 
     public record TaxProfileRow(UUID id, String mode, int rateBasisPoints, int version) {}
 

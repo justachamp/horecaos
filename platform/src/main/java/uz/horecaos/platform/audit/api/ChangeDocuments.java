@@ -107,6 +107,24 @@ public final class ChangeDocuments {
         return document;
     }
 
+    /**
+     * Records a creation: every field's {@code before} is {@code null} because
+     * there is no prior state to diff against, not because a call site skipped
+     * fetching one.
+     *
+     * <p>Staff 9.3a's source-scan test (see {@code
+     * ChangeDocumentUsageTests}) treats this the same as {@link #diff} — a
+     * deliberate, self-documenting choice — and differently from a bare {@code
+     * Map.of(...)} literal, which is exactly the flat after-only shape this
+     * migration exists to remove. Reach for this only when the audited action
+     * truly has no "before": a row that did not exist a moment ago. An update
+     * that merely didn't bother loading its prior state belongs on {@link
+     * #diff} instead, once that prior state is loaded.
+     */
+    public static Map<String, Object> created(Map<String, Object> after) {
+        return diff(Map.of(), after);
+    }
+
     /** Redacts every protected field in a prepared document, including nested maps. */
     public static Map<String, Object> sanitize(Map<String, Object> document) {
         Map<String, Object> sanitized = new LinkedHashMap<>();

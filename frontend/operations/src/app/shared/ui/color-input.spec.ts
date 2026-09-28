@@ -54,6 +54,33 @@ describe('ColorInput', () => {
     expect(field.getAttribute('aria-invalid')).toBe('true');
   });
 
+  it('renders no warnings list when none are given (the default)', () => {
+    const fixture = render();
+    fixture.detectChanges();
+
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('[data-testid="q-color-input-warnings"]'),
+    ).toBeNull();
+  });
+
+  it('renders every given warning inline, below the swatch (row X.39)', () => {
+    const fixture = render();
+    fixture.componentRef.setInput('warnings', [
+      'Low contrast (2.1:1) against the page background',
+      'Low contrast (1.9:1) against the late-order tint',
+    ]);
+    fixture.detectChanges();
+
+    const list = (fixture.nativeElement as HTMLElement).querySelector(
+      '[data-testid="q-color-input-warnings"]',
+    );
+    expect(list).not.toBeNull();
+    const items = list!.querySelectorAll('li');
+    expect(items).toHaveLength(2);
+    expect(items[0].textContent).toContain('page background');
+    expect(items[1].textContent).toContain('late-order tint');
+  });
+
   it('reverts an incomplete typed value to the last good one on blur', () => {
     const fixture = render();
     fixture.componentRef.setInput('value', '#0f62fe');

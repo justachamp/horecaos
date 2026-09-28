@@ -14,6 +14,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.commercial.api.EntitlementKeys;
 import uz.horecaos.platform.commercial.api.EntitlementService;
 import uz.horecaos.platform.conversations.api.ConversationChannelRef;
@@ -298,7 +299,10 @@ public class ConversationInboxService {
                 .target("Conversation", conversationId)
                 .because("Operator returned the conversation to the flow")
                 .usingCapability(Capability.CONVERSATION_INBOX_MANAGE.code())
-                .changed(Map.of("landingState", plan.landingState().name()))
+                .changed(ChangeDocuments.change(
+                        "landingState",
+                        conversation.state().name(),
+                        plan.landingState().name()))
                 .correlatedBy(conversationId.toString())
                 .occurredAt(clock.instant())
                 .build());

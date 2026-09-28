@@ -21,6 +21,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.media.api.MalwareScanner;
 import uz.horecaos.platform.media.api.MediaAssetAvailable;
@@ -420,7 +421,7 @@ public class MediaAssetService implements MediaAvailability {
                     image.heightPx()));
 
             audit.record(auditFact("media.asset.available", asset, now)
-                    .changed(availabilityChangeDocument(asset, image, object))
+                    .changed(ChangeDocuments.diff(availabilityBefore(asset), availabilityAfter(asset, image, object)))
                     .build());
         });
     }
@@ -440,7 +441,12 @@ public class MediaAssetService implements MediaAvailability {
             audit.record(auditFact("media.asset.rejected", asset, now)
                     .outcome(AuditFact.Outcome.REJECTED)
                     .because(detail)
-                    .changed(Map.of("status", MediaAssetStatus.REJECTED.name(), "rejectionCode", code))
+                    // Staff 9.3a: "status" is what genuinely moves here
+                    // (asset.status() -> REJECTED); "rejectionCode" is new
+                    // information this verdict adds, so it has no prior value.
+                    .changed(ChangeDocuments.diff(
+                            Map.of("status", asset.status().name()),
+                            Map.of("status", MediaAssetStatus.REJECTED.name(), "rejectionCode", code)))
                     .build());
         });
         log.warn("Media asset {} rejected: {}", asset.assetId(), code);
@@ -463,16 +469,31 @@ public class MediaAssetService implements MediaAvailability {
                 .occurredAt(now);
     }
 
-    private static Map<String, Object> availabilityChangeDocument(
+    /**
+     * Staff 9.3a: {@code status}, {@code verifiedContentType} and {@code
+     * verifiedSizeBytes} genuinely move here (the asset's own fields, {@code
+     * PENDING}/null before verification); {@code uploadedBy} is provenance
+     * this verdict adds, not a field that changed, so it has no prior value
+     * ({@link #availabilityAfter}).
+     */
+    private static Map<String, Object> availabilityBefore(MediaAsset asset) {
+        Map<String, Object> before = new LinkedHashMap<>();
+        before.put("status", asset.status().name());
+        before.put("verifiedContentType", asset.verifiedContentType());
+        before.put("verifiedSizeBytes", asset.verifiedSizeBytes());
+        return before;
+    }
+
+    private static Map<String, Object> availabilityAfter(
             MediaAsset asset, ProbedImage image, ObjectStorage.StoredObject object) {
-        Map<String, Object> changed = new LinkedHashMap<>();
-        changed.put("status", MediaAssetStatus.AVAILABLE.name());
-        changed.put("verifiedContentType", image.contentType());
-        changed.put("verifiedSizeBytes", object.sizeBytes());
+        Map<String, Object> after = new LinkedHashMap<>();
+        after.put("status", MediaAssetStatus.AVAILABLE.name());
+        after.put("verifiedContentType", image.contentType());
+        after.put("verifiedSizeBytes", object.sizeBytes());
         if (asset.createdBy() != null) {
-            changed.put("uploadedBy", asset.createdBy());
+            after.put("uploadedBy", asset.createdBy());
         }
-        return changed;
+        return after;
     }
 
     /** A short-lived read URL for a private asset's original. */

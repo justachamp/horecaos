@@ -14,6 +14,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.audit.api.ActorRef;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.migration.application.MigrationQuarantineStore.QuarantineItemRow;
 import uz.horecaos.platform.migration.application.MigrationRunStore.RunRow;
 import uz.horecaos.platform.migration.application.MigrationScopeStore.ScopeRow;
@@ -182,7 +183,9 @@ public class QuarantineService {
                 item.id(),
                 null,
                 reasonCode,
-                Map.of(
+                // Staff 9.3a: a new quarantine item, so every field's "before" is
+                // null because there is no prior item, not because it was skipped.
+                ChangeDocuments.created(Map.of(
                         "scopeId",
                         scope.id(),
                         "runId",
@@ -194,7 +197,7 @@ public class QuarantineService {
                         "reasonCode",
                         reasonCode,
                         "transformationVersion",
-                        run.transformationVersion()),
+                        run.transformationVersion())),
                 null);
 
         log.info("Quarantined {} {} from run {}: {}", entityType, legacyId, runId, reasonCode);
@@ -247,17 +250,34 @@ public class QuarantineService {
                 itemId,
                 null,
                 command.reason(),
-                Map.of(
-                        "scopeId",
-                        scope.id(),
-                        "entityType",
-                        item.entityType(),
-                        "legacyId",
-                        item.legacyId(),
-                        "reasonCode",
-                        item.reasonCode(),
-                        "resolutionCode",
-                        resolutionCode),
+                // Staff 9.3a: item.status()/resolutionCode() are the state before
+                // this settle -- still OPEN, no resolutionCode -- diffed against
+                // what resolve() just made it.
+                ChangeDocuments.diff(
+                        Map.of(
+                                "scopeId",
+                                scope.id(),
+                                "status",
+                                item.status(),
+                                "entityType",
+                                item.entityType(),
+                                "legacyId",
+                                item.legacyId(),
+                                "reasonCode",
+                                item.reasonCode()),
+                        Map.of(
+                                "scopeId",
+                                scope.id(),
+                                "status",
+                                QuarantineItemRow.RESOLVED,
+                                "entityType",
+                                item.entityType(),
+                                "legacyId",
+                                item.legacyId(),
+                                "reasonCode",
+                                item.reasonCode(),
+                                "resolutionCode",
+                                resolutionCode)),
                 null);
 
         return new QuarantineItemRow(

@@ -89,6 +89,7 @@ class FakeLangService {
 
 class FakeTranslateService {
   get = vi.fn((key: string) => key);
+  getWithParams = vi.fn((key: string) => key);
   current = vi.fn(() => ({}));
 }
 
@@ -177,6 +178,7 @@ function onSaleVariant(overrides: Partial<MenuItem['variants'][number]> = {}) {
     price: 25_000,
     price_without_discount: 25_000,
     onSaleNow: true,
+    remainingQuantity: null,
     ...overrides,
   };
 }
@@ -293,6 +295,32 @@ describe('ProductComponent: row 4.2g sale-window guard', () => {
     comp.add();
 
     expect(cartService.add).toHaveBeenCalledWith('variant-1', 1, undefined, [], []);
+  });
+});
+
+describe('ProductComponent: rows 4.4c/4.4d low-stock display', () => {
+  it('shows the low-stock notice when the server reports a remaining count', async () => {
+    const menuService = new FakeMenuService();
+    menuService.item.mockResolvedValue(
+      menuItem({ variants: [onSaleVariant({ remainingQuantity: 2 })] }),
+    );
+    const { fixture } = await render({ menuService });
+    const host: HTMLElement = fixture.nativeElement;
+
+    const notice = host.querySelector('[data-testid="product-low-stock"]');
+    expect(notice).not.toBeNull();
+    expect(notice?.textContent).toContain('product.lowStock');
+  });
+
+  it('shows no low-stock notice when the server sent no remaining count (plenty of stock, or untracked)', async () => {
+    const menuService = new FakeMenuService();
+    menuService.item.mockResolvedValue(
+      menuItem({ variants: [onSaleVariant({ remainingQuantity: null })] }),
+    );
+    const { fixture } = await render({ menuService });
+    const host: HTMLElement = fixture.nativeElement;
+
+    expect(host.querySelector('[data-testid="product-low-stock"]')).toBeNull();
   });
 });
 

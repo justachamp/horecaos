@@ -166,6 +166,14 @@ select.field {
   color: var(--q-ink-muted);
 }
 
+/* Staff 10.12: the brand's own required-default locale, marked in the editor's legend. */
+.locale-default-marker {
+  margin-left: 6px;
+  font-size: 0.85em;
+  text-transform: uppercase;
+  color: var(--q-ink-muted);
+}
+
 .locale-row input.field {
   margin-top: 0;
 }

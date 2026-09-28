@@ -446,6 +446,12 @@ class FiscalDocumentLifecycleTests {
             assertThat(fact.actionCode()).isEqualTo("fiscal.document.retry");
             assertThat(fact.outcome()).isEqualTo(AuditFact.Outcome.FAILED);
             assertThat(fact.reason()).isEqualTo("tax inspection");
+            // Staff 9.3a: "outcome" is this attempt's own result, not a
+            // field the document carried before -- recorded as a creation.
+            @SuppressWarnings("unchecked")
+            var outcomeChange =
+                    (java.util.Map<String, Object>) fact.changeDocument().get("outcome");
+            assertThat(outcomeChange).containsEntry("before", null).containsEntry("after", "NOT_WIRED");
         });
     }
 
@@ -518,9 +524,15 @@ class FiscalDocumentLifecycleTests {
                 .as("keeping an expired deadline would block the document again the instant " + "it is submitted")
                 .isNull();
         assertThat(row.blockedAt()).isNotNull();
-        assertThat(audit.facts)
-                .singleElement()
-                .satisfies(fact -> assertThat(fact.actionCode()).isEqualTo("fiscal.document.unblock"));
+        assertThat(audit.facts).singleElement().satisfies(fact -> {
+            assertThat(fact.actionCode()).isEqualTo("fiscal.document.unblock");
+            // Staff 9.3a: "state" genuinely moves (BLOCKED -> PENDING, ADR
+            // 0038's own arrow).
+            @SuppressWarnings("unchecked")
+            var stateChange =
+                    (java.util.Map<String, Object>) fact.changeDocument().get("state");
+            assertThat(stateChange).containsEntry("before", "BLOCKED").containsEntry("after", "PENDING");
+        });
     }
 
     @Test

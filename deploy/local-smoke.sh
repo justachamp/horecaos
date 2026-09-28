@@ -264,15 +264,14 @@ put database/keycloak/password           "${KEYCLOAK_DB_PW}"
 put object_storage/platform/root-password "${OBJECT_STORE_ROOT_PW}"
 put data_encryption/platform/kek              "${KEK}"
 put data_encryption/platform/handover-pepper  "${HANDOVER_PEPPER}"
-# Cutting a corner real production does not: the media credential is the
-# object store's root credential rather than a bucket-scoped service
-# account. production-setup.md creates the scoped account; this script does
-# not, because creating one needs a running object store to ask, and proving
-# that step works is exactly what the runbook's own "Check" does — recorded
-# as a gap in this task's final report, not silently assumed to be
-# equivalent.
-put object_storage/platform/media-access-key  "${HORECAOS_OBJECT_STORE_ACCESS_KEY:-horecaos-smoke-root}"
-put object_storage/platform/media-secret-key  "${OBJECT_STORE_ROOT_PW}"
+# object_storage/platform/media-access-key and media-secret-key are NOT put
+# here: unlike the values above, they cannot exist yet — a bucket-scoped
+# RustFS service account has to be minted against a running object store, and
+# object-store does not start until step 4. See "Provisioning a bucket-scoped
+# media service account" below, which replaces what used to be a corner this
+# script cut and production-setup.md did not: seeding the media credential as
+# the object store's own root credential rather than a scoped account
+# (ADR 0135, closed 2026-09-25 — see that record's checklist item 3).
 # Matches horecaos-realm.json's own fallback default exactly (see that
 # file's ${VAR:default} syntax) — this script does not rotate these secrets
 # (step 6), so Keycloak is still issuing them, and the resolver must agree.
@@ -314,6 +313,62 @@ wait_healthy kafka 90          || die "kafka never became healthy."
 wait_healthy object-store 60   || die "object-store never became healthy."
 wait_healthy openbao-agent 60  || die "openbao-agent never rendered the application's secrets."
 check "platform-db, keycloak-db, kafka, object-store, openbao-agent all healthy"
+
+# -----------------------------------------------------------------------------
+# 4b. Provision a bucket-scoped media service account (ADR 0135)
+# -----------------------------------------------------------------------------
+#
+# RustFS 1.0.0 has no MinIO-shaped `mc admin user add` / `policy create` /
+# `policy attach`, but it does carry its own admin API for exactly this: a
+# long-lived, policy-scoped service account tied to the root user, created
+# with `PUT /rustfs/admin/v3/add-service-account` and SigV4-signed the same
+# way every S3 call is. Verified 2026-09-25 against a running RustFS 1.0.0
+# container — see ADR 0135's checklist item 3 and
+# docs/runbooks/production-setup.md, "Then create the scoped service
+# accounts", for the same command run by hand against a real host. It is not
+# an `aws` CLI subcommand (the admin API is RustFS's own surface, not part of
+# S3), so this reaches it with `curl --aws-sigv4` instead; the `ops` image
+# built in step 1 carries curl 8.x, which has supported `--aws-sigv4` since
+# 7.75 (Dec 2020).
+say "Provisioning a bucket-scoped media service account"
+read -r -d '' MEDIA_SVC_ACCOUNT_SCRIPT <<'SCRIPT' || true
+set -euo pipefail
+policy=$(jq -nc --arg b "${MEDIA_BUCKET}" \
+    '{Version:"2012-10-17",Statement:[{Effect:"Allow",Action:["s3:*"],Resource:[("arn:aws:s3:::"+$b),("arn:aws:s3:::"+$b+"/*")]}]}')
+body=$(jq -nc --argjson policy "${policy}" --arg name "media-smoke" '{policy:$policy,name:$name}')
+curl -fsS -X PUT "http://object-store:9000/rustfs/admin/v3/add-service-account" \
+    --user "${OBJECT_STORE_ROOT_ACCESS_KEY}:${OBJECT_STORE_ROOT_SECRET_KEY}" \
+    --aws-sigv4 "aws:amz:us-east-1:s3" \
+    -H "Content-Type: application/json" \
+    --data "${body}"
+SCRIPT
+
+MEDIA_SVC_JSON="$(compose run --rm --no-TTY \
+    -e MEDIA_BUCKET="${HORECAOS_MEDIA_BUCKET:-horecaos-media}" \
+    -e OBJECT_STORE_ROOT_ACCESS_KEY="${HORECAOS_OBJECT_STORE_ACCESS_KEY:-horecaos-smoke-root}" \
+    -e OBJECT_STORE_ROOT_SECRET_KEY="${OBJECT_STORE_ROOT_PW}" \
+    ops bash -c "${MEDIA_SVC_ACCOUNT_SCRIPT}" 2>>"${LOG_FILE}")" \
+    || die "Could not create the media service account against RustFS's admin API. See ${LOG_FILE}."
+MEDIA_ACCESS_KEY="$(printf '%s' "${MEDIA_SVC_JSON}" | jq -r '.credentials.accessKey // empty')"
+MEDIA_SECRET_KEY="$(printf '%s' "${MEDIA_SVC_JSON}" | jq -r '.credentials.secretKey // empty')"
+if [ -z "${MEDIA_ACCESS_KEY}" ] || [ -z "${MEDIA_SECRET_KEY}" ]; then
+    # Never log the raw response: if RustFS's shape ever drifts from
+    # .credentials.accessKey/.credentials.secretKey, the body can still hold a
+    # real, usable secret even though this extraction failed. Redact every
+    # string value recursively (walk descends into nested objects; only
+    # object/array structure and key names survive) so the failure is still
+    # diagnosable — the shape is visible — without ever writing a secret
+    # value to LOG_FILE or stderr (ADR 0028/0029).
+    MEDIA_SVC_SHAPE="$(printf '%s' "${MEDIA_SVC_JSON}" \
+        | jq -c 'walk(if type == "string" then "<redacted>" else . end)' 2>/dev/null \
+        || echo '<response was not valid JSON>')"
+    die "RustFS did not return a service-account access key/secret at .credentials.accessKey/.credentials.secretKey. Response shape (values redacted): ${MEDIA_SVC_SHAPE}"
+fi
+
+put object_storage/platform/media-access-key "${MEDIA_ACCESS_KEY}"
+put object_storage/platform/media-secret-key "${MEDIA_SECRET_KEY}"
+check "media service account provisioned, scoped to ${HORECAOS_MEDIA_BUCKET:-horecaos-media} only — not the object store's root credential"
+unset MEDIA_SVC_ACCOUNT_SCRIPT MEDIA_SVC_JSON MEDIA_ACCESS_KEY MEDIA_SECRET_KEY
 
 say "Applying migrations to a fresh volume"
 export FLYWAY_PASSWORD="${DB_MIGRATOR_PW}"

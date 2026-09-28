@@ -767,6 +767,7 @@ public class OperationsOrderController {
 
         Set<Capability> granted = grantedOrderActionCapabilities(tenantId, brandId, locationId);
         UUID courierId = orderQuery.courierIdFor(tenantId, orderId);
+        boolean amendmentAwaitingOperator = orderQuery.amendmentAwaitingOperatorFor(tenantId, orderId);
         return ResponseEntity.ok()
                 .eTag(AggregateVersion.toETag(detail.order().version()))
                 .body(OrderDetailResponse.of(
@@ -774,6 +775,7 @@ public class OperationsOrderController {
                         orderQuery.outcome(tenantId, orderId).orElse(null),
                         granted,
                         courierId,
+                        amendmentAwaitingOperator,
                         staffDisplayNames));
     }
 
@@ -2401,10 +2403,19 @@ public class OperationsOrderController {
          *                   OrderQueryService#courierIdFor}), since a single-order
          *                   read has no page of rows to batch a lookup over the
          *                   way {@link OrderQueryService#forLocation} does
+         * @param amendmentAwaitingOperator resolved separately by the caller
+         *                   ({@link OrderQueryService#amendmentAwaitingOperatorFor}),
+         *                   the {@code RESOLVE} counterpart to {@code courierId}
+         *                   above (gap map row 1.1e)
          */
         static OrderSummaryResponse of(
-                JdbcOrderStore.OrderRow order, Set<Capability> grantedCapabilities, @Nullable UUID courierId) {
-            return of(new JdbcOrderStore.OrderBoardRow(order, null, courierId), grantedCapabilities);
+                JdbcOrderStore.OrderRow order,
+                Set<Capability> grantedCapabilities,
+                @Nullable UUID courierId,
+                boolean amendmentAwaitingOperator) {
+            return of(
+                    new JdbcOrderStore.OrderBoardRow(order, null, courierId, amendmentAwaitingOperator),
+                    grantedCapabilities);
         }
 
         static OrderSummaryResponse of(JdbcOrderStore.OrderBoardRow row, Set<Capability> grantedCapabilities) {
@@ -2421,7 +2432,11 @@ public class OperationsOrderController {
                     order.createdAt(),
                     order.approvalDeadlineAt(),
                     OrderActionResponse.allFor(
-                            order.status(), order.fulfillmentMode(), grantedCapabilities, row.courierId()),
+                            order.status(),
+                            order.fulfillmentMode(),
+                            grantedCapabilities,
+                            row.courierId(),
+                            row.amendmentAwaitingOperator()),
                     order.promise().promisedAt(),
                     order.promise().basis().name(),
                     order.paymentStatusProjection(),
@@ -2455,8 +2470,11 @@ public class OperationsOrderController {
                 OrderStatus status,
                 uz.horecaos.platform.tenancy.api.FulfillmentMode mode,
                 Set<Capability> grantedCapabilities,
-                @Nullable UUID courierId) {
-            return OrderActionsPolicy.availableFor(status, mode, grantedCapabilities, courierId == null).stream()
+                @Nullable UUID courierId,
+                boolean amendmentAwaitingOperator) {
+            return OrderActionsPolicy.availableFor(
+                            status, mode, grantedCapabilities, courierId == null, amendmentAwaitingOperator)
+                    .stream()
                     .map(OrderActionResponse::of)
                     .toList();
         }
@@ -2522,10 +2540,11 @@ public class OperationsOrderController {
                 JdbcOrderStore.@Nullable OutcomeRow outcomeRow,
                 Set<Capability> grantedCapabilities,
                 @Nullable UUID courierId,
+                boolean amendmentAwaitingOperator,
                 StaffDisplayNames staffDisplayNames) {
             var order = detail.order();
             return new OrderDetailResponse(
-                    OrderSummaryResponse.of(order, grantedCapabilities, courierId),
+                    OrderSummaryResponse.of(order, grantedCapabilities, courierId, amendmentAwaitingOperator),
                     order.subtotalMinor(),
                     order.taxMinor(),
                     order.acceptanceMode(),

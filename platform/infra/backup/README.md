@@ -23,7 +23,10 @@ docker compose up -d
 ```
 
 It prints a baseline, runs the real path, and fails if the restored counts
-differ. Last local run: 2 tenants, 25 audit events, 12 migrations, matched.
+differ. Last local run (against a throwaway compose project, freshly migrated
+to V0416, after fixing the role `rehearse-restore.sh` connects as — see
+below): 0 tenants, 0 audit events, 246 migrations, matched; 485 tables
+dumped; off-site checksum matched.
 
 ## Configuration
 
@@ -37,6 +40,31 @@ HORECAOS_BACKUP_SECRET_KEY
 HORECAOS_BACKUP_RETENTION_DAYS  default 30
 HORECAOS_RESTORE_TARGET_URL     restore target; never production
 ```
+
+`rehearse-restore.sh` reads a separate set — it drives its own scratch
+database directly (`docker run`, not `backup.sh`), so it needs a role that
+can `CREATE`/`DROP DATABASE`, not just the S3 credentials above:
+
+```text
+HORECAOS_REHEARSAL_DB_HOST      default platform-db
+HORECAOS_REHEARSAL_DB_PORT      default 5432
+HORECAOS_REHEARSAL_DB_NAME      default horecaos
+HORECAOS_REHEARSAL_DB_USER      default horecaos_migrator
+HORECAOS_REHEARSAL_DB_PASSWORD  default horecaos_migrator (compose.yaml's own
+                                 local-only value; override from OpenBao,
+                                 production/database/platform/migrator-password,
+                                 for anything that is not a laptop)
+```
+
+`horecaos_migrator`, not the plain `horecaos` role this script named until
+2026-09-25: compose.yaml's own platform-db comment explains why that role
+does not exist any more — the local stack used to run everything as a single
+`horecaos` superuser that also owned the database, so every GRANT and REVOKE
+in sixty-one migrations was bypassed on every laptop and in every test. This
+script silently inherited that retirement as a defect: it kept asking for
+the retired role and failed with `password authentication failed for user
+"horecaos"` before dumping a single table, on any checkout created after the
+two-role split landed.
 
 ## The off-site copy
 

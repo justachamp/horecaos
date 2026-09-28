@@ -53,8 +53,24 @@ function product(overrides: Partial<MenuItem> = {}): MenuItem {
     is_favourite: false,
     delivery_duration: 30,
     variants: [
-      { id: 'v1', name: 'Kichik', active: true, preparation_time: 20, price: 48000, price_without_discount: 48000 },
-      { id: 'v2', name: 'Katta', active: true, preparation_time: 25, price: 62000, price_without_discount: 62000 },
+      {
+        id: 'v1',
+        name: 'Kichik',
+        active: true,
+        preparation_time: 20,
+        price: 48000,
+        price_without_discount: 48000,
+        remainingQuantity: null,
+      },
+      {
+        id: 'v2',
+        name: 'Katta',
+        active: true,
+        preparation_time: 25,
+        price: 62000,
+        price_without_discount: 62000,
+        remainingQuantity: null,
+      },
     ],
     modifierGroups: [],
     ...overrides,
@@ -176,5 +192,36 @@ describe('DetailsComponent', () => {
     await comp.addToCart();
 
     expect(cart.add).toHaveBeenCalledWith('v1', 3, undefined, ['o1']);
+  });
+
+  // ----------------------------------------- rows 4.4c/4.4d: low-stock display
+
+  it('shows the low-stock notice for the selected variant when the server reports a remaining count', async () => {
+    const { fixture } = await setUp(
+      product({
+        variants: [
+          {
+            id: 'v1',
+            name: 'Kichik',
+            active: true,
+            preparation_time: 20,
+            price: 48000,
+            price_without_discount: 48000,
+            remainingQuantity: 3,
+          },
+        ],
+      }),
+    );
+    const host = fixture.nativeElement as HTMLElement;
+
+    const notice = host.querySelector('[data-testid="details-low-stock"]');
+    expect(notice).not.toBeNull();
+  });
+
+  it('shows no low-stock notice when the server sent no remaining count', async () => {
+    const { fixture } = await setUp();
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(host.querySelector('[data-testid="details-low-stock"]')).toBeNull();
   });
 });

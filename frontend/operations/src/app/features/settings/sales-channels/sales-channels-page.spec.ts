@@ -396,6 +396,34 @@ describe('SalesChannelsPage', () => {
     );
   });
 
+  it('warns inline below a brand colour that fails WCAG AA against the console’s own surfaces (row X.39)', async () => {
+    const row = fixture.nativeElement.querySelectorAll('.row')[1] as HTMLElement; // Website
+    row.click();
+    fixture.detectChanges();
+
+    // No warning yet: the fixture’s own primary (#0f62fe) clears 4.5:1
+    // against every reference surface this row checks.
+    expect(
+      fixture.nativeElement.querySelector(
+        '[data-testid="edit-color-primary"] [data-testid="q-color-input-warnings"]',
+      ),
+    ).toBeNull();
+
+    const primaryText = fixture.nativeElement.querySelector(
+      '[data-testid="edit-color-primary"] [data-testid="q-color-input-text"]',
+    ) as HTMLInputElement;
+    primaryText.value = '#ffe680'; // a pale colour with no contrast against any reference surface
+    primaryText.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    const warnings = fixture.nativeElement.querySelector(
+      '[data-testid="edit-color-primary"] [data-testid="q-color-input-warnings"]',
+    ) as HTMLElement;
+    expect(warnings).not.toBeNull();
+    expect(warnings.querySelectorAll('li')).toHaveLength(4);
+    expect(warnings.textContent).toContain('WCAG AA');
+  });
+
   it('clears a brand colour back to unset', async () => {
     const row = fixture.nativeElement.querySelectorAll('.row')[1] as HTMLElement; // Website
     row.click();

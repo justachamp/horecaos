@@ -13,6 +13,7 @@ import { LocationScope } from '../../../core/api/operations-paths';
 import { ApiError } from '../../../core/api/problem-details';
 import { CurrentLocation } from '../../../core/auth/current-location';
 import { I18n } from '../../../core/i18n/i18n';
+import { LocaleSet } from '../../../core/i18n/locale-set';
 import { TPipe } from '../../../core/i18n/t.pipe';
 import { ScheduleException, ScheduleGrid, ScheduleRule } from '../../../shared/ui/schedule-grid';
 import { describeApiError } from '../../orders/order-errors';
@@ -21,7 +22,6 @@ import {
   BandRequest,
   BandView,
   ExceptionRequest,
-  LOCATION_KNOWN_LOCALES,
   LocationLocaleCode,
   LocationLocaleRequest,
   LocationsApi,
@@ -91,6 +91,7 @@ export class LocationDetailPane {
   private readonly api = inject(LocationsApi);
   private readonly baseLocation = inject(CurrentLocation);
   protected readonly i18n = inject(I18n);
+  private readonly localeSet = inject(LocaleSet);
 
   /** Route param, bound by `withComponentInputBinding()` — see `order-detail-pane.ts` for the same idiom. */
   readonly locationId = input.required<string>();
@@ -112,7 +113,17 @@ export class LocationDetailPane {
   protected readonly draftLandmark = signal('');
 
   // ------------------------------------------------------- 10.2b: venue facts
-  protected readonly knownLocales = LOCATION_KNOWN_LOCALES;
+  /**
+   * Staff 10.12: the brand's own supported-locale set (default first), or
+   * the platform triple when the brand has not configured one — never the
+   * fixed `LOCATION_KNOWN_LOCALES` triple this editor used to hard-code.
+   * Locale content this branch already has in a locale the brand no longer
+   * supports stays hidden from editing here but is never deleted on save
+   * (see {@link savePlace}'s own doc).
+   */
+  protected readonly knownLocales = computed(
+    () => this.localeSet.locales() as readonly LocationLocaleCode[],
+  );
   protected readonly draftSortOrder = signal(0);
   protected readonly draftSeats = signal('');
   protected readonly draftAverageChequeAmount = signal('');
@@ -211,7 +222,7 @@ export class LocationDetailPane {
     this.draftHasPlayground.set(current?.hasPlayground ?? false);
     this.draftVirtualTourUrl.set(current?.virtualTourUrl ?? '');
     this.draftLocaleContent.set(
-      this.knownLocales.map((locale) => {
+      this.knownLocales().map((locale) => {
         const existing = current?.locales.find((entry) => entry.locale === locale);
         return {
           locale,
@@ -288,13 +299,29 @@ export class LocationDetailPane {
       // already knows the full set it wants. A row both fields left blank is
       // dropped rather than sent as an empty entry, so clearing every field
       // for a locale actually removes it from the branch's content set.
-      const locales: LocationLocaleRequest[] = this.draftLocaleContent()
+      const editedLocales: LocationLocaleRequest[] = this.draftLocaleContent()
         .filter((row) => row.displayName.trim() !== '' || row.description.trim() !== '')
         .map((row) => ({
           locale: row.locale,
           displayName: row.displayName.trim() || undefined,
           description: row.description.trim() || undefined,
         }));
+      // Staff 10.12: `describePlace` replaces the whole content set with
+      // whatever `locales` carries (DELETE then re-INSERT,
+      // JdbcTenantControlPlaneStore#updateLocationContent) — the editor above
+      // only ever shows `knownLocales()`, the brand's current set, so a
+      // locale this branch already has content in but the brand no longer
+      // supports would silently vanish on the next save unless it is carried
+      // through here untouched. Hidden, never edited, never deleted.
+      const editableLocales = new Set<string>(this.knownLocales());
+      const hiddenLocales: LocationLocaleRequest[] = (this.profile()?.locales ?? [])
+        .filter((entry) => !editableLocales.has(entry.locale))
+        .map((entry) => ({
+          locale: entry.locale,
+          displayName: entry.displayName ?? undefined,
+          description: entry.description ?? undefined,
+        }));
+      const locales: LocationLocaleRequest[] = [...editedLocales, ...hiddenLocales];
       const updated = await this.api.describePlace(scope, {
         addressLine: this.draftAddressLine().trim() || undefined,
         district: this.draftDistrict().trim() || undefined,
@@ -332,6 +359,11 @@ export class LocationDetailPane {
       case 'en':
         return this.i18n.t('settings.brandProfile.locale.en');
     }
+  }
+
+  /** Staff 10.12: whether this locale is the brand's own required default — marked visibly in the editor's legend. */
+  protected isDefaultLocale(locale: LocationLocaleCode): boolean {
+    return this.localeSet.defaultLocale() === locale;
   }
 
   protected async changeState(): Promise<void> {
@@ -678,7 +710,11 @@ export class LocationDetailPane {
     this.rebindingMode.set(null);
     this.availableSchedules.set(null);
     this.editingBands.set(false);
-    await this.baseLocation.ensureLoaded();
+    // The brand's own locale set (Staff 10.12) is independent of the
+    // location scope, so it resolves alongside it rather than after it --
+    // without this, `knownLocales()`/`isDefaultLocale()` never advance past
+    // `LocaleSet`'s platform fallback (`locale-set.ts`'s own doc).
+    await Promise.all([this.baseLocation.ensureLoaded(), this.localeSet.ensureLoaded()]);
     const base = this.baseLocation.scope();
     if (!base) {
       this.denied.set(this.baseLocation.denied());

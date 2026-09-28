@@ -91,6 +91,18 @@ public class SecurityConfiguration {
                                 // publication rows, never authoring tables, so
                                 // there is no path from here to a draft.
                                 "/api/v1/storefront/tenants/*/brands/*/locations/*/menu",
+                                // Rows 4.4c/4.4d: whether one variant is orderable
+                                // here right now, and its remaining count where
+                                // QUANTITY tracking applies -- StorefrontInventoryController's
+                                // own doc already called this "unauthenticated by
+                                // design, matching StorefrontCatalogController's own
+                                // stance", but the allowlist below was never
+                                // extended to match, so every call answered 401
+                                // rather than the controller's own body. Same browse
+                                // moment as the menu line above it: a customer
+                                // checking whether a dish they are about to add is
+                                // still there.
+                                "/api/v1/storefront/tenants/*/locations/*/variants/*/availability",
                                 // ADR 0010, ADR 0016: the pictures on that menu.
                                 // Anonymous for the same reason the menu is -- a
                                 // customer browses before they have an account, and

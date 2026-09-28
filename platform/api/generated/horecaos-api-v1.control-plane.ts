@@ -1995,6 +1995,11 @@ export interface PagePosOrderExportControllerExportView {
   nextCursor?: string;
 }
 
+export interface PagePriceBookMatrixRowResponse {
+  items?: Array<PriceBookMatrixRowResponse>;
+  nextCursor?: string;
+}
+
 export interface PageProductSummaryResponse {
   items?: Array<ProductSummaryResponse>;
   nextCursor?: string;
@@ -2279,6 +2284,19 @@ export interface PresetResponse {
   sortOrder?: number;
   status?: string;
   version?: number;
+}
+
+export interface PriceBookMatrixRowResponse {
+  basePriceMinor?: number;
+  bookPriceMinor?: number;
+  bookPriceVersion?: number;
+  categoryId?: string;
+  categoryName?: string;
+  currency?: string;
+  deltaMinor?: number;
+  displayName?: string;
+  productId?: string;
+  variantId?: string;
 }
 
 export interface PriceBookResponse {
@@ -3483,7 +3501,7 @@ export interface Operations {
   "waiting": { method: "GET"; path: "/api/v1/control-plane/owner-invitations/waiting"; request: { parameters: Record<string, never> }; responses: { "200": Array<OwnerStateView> } };
   "planCatalogue": { method: "GET"; path: "/api/v1/control-plane/plans"; request: { parameters: Record<string, never> }; responses: { "200": Array<PlanVersionResponse> } };
   "health_1": { method: "GET"; path: "/api/v1/control-plane/platform-health"; request: { parameters: Record<string, never> }; responses: { "200": PlatformHealth } };
-  "matrix": { method: "GET"; path: "/api/v1/control-plane/pos-capability-matrix"; request: { parameters: Record<string, never> }; responses: { "200": Array<AdapterCapabilities> } };
+  "matrix_1": { method: "GET"; path: "/api/v1/control-plane/pos-capability-matrix"; request: { parameters: Record<string, never> }; responses: { "200": Array<AdapterCapabilities> } };
   "providerEnvironments": { method: "GET"; path: "/api/v1/control-plane/provider-environments"; request: { parameters: Record<string, never> }; responses: { "200": Array<ProviderEnvironmentView> } };
   "providers": { method: "GET"; path: "/api/v1/control-plane/providers"; request: { parameters: Record<string, never> }; responses: { "200": Array<ProviderConnectDeclaration> } };
   "get_6": { method: "GET"; path: "/api/v1/control-plane/reference-data"; request: { parameters: Record<string, never> }; responses: { "200": ReferenceData } };
@@ -3602,6 +3620,7 @@ export interface Operations {
   "assignToBrand": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/pricing/price-books/{priceBookId}/assignments/brand"; request: { parameters: { path: { brandId: string; priceBookId: string; tenantId: string } }; body: AssignmentRequest }; responses: { "200": PriceBookResponse } };
   "assignToChannel": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/pricing/price-books/{priceBookId}/assignments/channels/{channelId}"; request: { parameters: { path: { brandId: string; channelId: string; priceBookId: string; tenantId: string } }; body: AssignmentRequest }; responses: { "200": PriceBookResponse } };
   "assignToLocation": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/pricing/price-books/{priceBookId}/assignments/locations/{locationId}"; request: { parameters: { path: { brandId: string; locationId: string; priceBookId: string; tenantId: string } }; body: AssignmentRequest }; responses: { "200": PriceBookResponse } };
+  "matrix": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/pricing/price-books/{priceBookId}/matrix"; request: { parameters: { path: { brandId: string; priceBookId: string; tenantId: string }; query: { categoryId?: string; cursor?: string; differsFromBase?: boolean; limit?: number; locale?: string } } }; responses: { "200": PagePriceBookMatrixRowResponse } };
   "setModifierOptionPrice": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/pricing/price-books/{priceBookId}/modifier-option-prices/{modifierOptionId}"; request: { parameters: { path: { brandId: string; modifierOptionId: string; priceBookId: string; tenantId: string } }; body: PriceRequest }; responses: { "200": PriceBookResponse } };
   "bulkApplyPrices": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/pricing/price-books/{priceBookId}/prices/bulk-apply"; request: { parameters: { path: { brandId: string; priceBookId: string; tenantId: string } }; body: BulkPriceChangeRequest }; responses: { "200": BulkPriceChangeResponse } };
   "setVariantPrice": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/pricing/price-books/{priceBookId}/variant-prices/{variantId}"; request: { parameters: { path: { brandId: string; priceBookId: string; tenantId: string; variantId: string } }; body: PriceRequest }; responses: { "200": PriceBookResponse } };

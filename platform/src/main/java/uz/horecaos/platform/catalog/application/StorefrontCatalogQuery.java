@@ -1,5 +1,6 @@
 package uz.horecaos.platform.catalog.application;
 
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -13,6 +14,8 @@ import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import uz.horecaos.platform.catalog.api.MenuAvailabilityLookup;
+import uz.horecaos.platform.catalog.api.MenuAvailabilityLookup.VariantAvailability;
 import uz.horecaos.platform.catalog.api.MenuPriceLookup;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.EntityType;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.LocationOffering;
@@ -53,6 +56,7 @@ public class StorefrontCatalogQuery {
 
     private final JdbcCatalogStore store;
     private final MenuPriceLookup prices;
+    private final MenuAvailabilityLookup availability;
     private final JdbcMenuStore menus;
     private final CatalogTenantContext tenantContext;
     private final Clock clock;
@@ -61,12 +65,14 @@ public class StorefrontCatalogQuery {
     public StorefrontCatalogQuery(
             JdbcCatalogStore store,
             MenuPriceLookup prices,
+            MenuAvailabilityLookup availability,
             JdbcMenuStore menus,
             CatalogTenantContext tenantContext,
             Clock clock,
             uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCommentPresetStore commentPresets) {
         this.store = store;
         this.prices = prices;
+        this.availability = availability;
         this.menus = menus;
         this.tenantContext = tenantContext;
         this.clock = clock;
@@ -205,8 +211,17 @@ public class StorefrontCatalogQuery {
         Map<UUID, Long> optionPrices =
                 resolved.map(MenuPriceLookup.MenuPrices::modifierOptionPrices).orElse(Map.of());
 
+        // Rows 4.4c/4.4d, storefront half: one batched read for the whole
+        // page, keyed by the caller's own channel exactly as prices.pricesFor
+        // above is, so a QUANTITY item at zero remaining or a stopped BINARY
+        // item stops rendering orderable here instead of only at checkout's
+        // own inventory hold.
+        Map<UUID, VariantAvailability> availabilityByVariant =
+                availability.availabilityFor(tenantId, brandId, locationId, channelCode, variantIds);
+
         List<MenuProduct> pricedProducts = products.stream()
                 .map(product -> product.withPrices(variantPrices))
+                .map(product -> product.withAvailability(availabilityByVariant))
                 .toList();
         List<MenuModifierGroup> pricedGroups = modifierGroups.stream()
                 .map(group -> group.withPrices(optionPrices))
@@ -277,6 +292,9 @@ public class StorefrontCatalogQuery {
                     // an 86'd dish — the storefront tells the two states apart.
                     !outOfWindowVariantIds.contains(variantId),
                     // Attached after the whole menu is read; see menuFor.
+                    null,
+                    // Rows 4.4c/4.4d: attached after the whole menu is read too,
+                    // by withAvailability — see menuFor.
                     null));
         }
         return variants;
@@ -524,6 +542,32 @@ public class StorefrontCatalogQuery {
                     modifierGroupIds,
                     commentPresets);
         }
+
+        /**
+         * Rows 4.4c/4.4d, storefront half. A variant absent from {@code
+         * byVariant} carries no additional restriction — see {@code
+         * MenuAvailabilityLookup#availabilityFor}'s own doc — so it is left
+         * exactly as the offering-based read already produced it.
+         */
+        MenuProduct withAvailability(Map<UUID, VariantAvailability> byVariant) {
+            return new MenuProduct(
+                    productId,
+                    code,
+                    name,
+                    description,
+                    mediaAssetIds,
+                    imageUrls,
+                    variants.stream()
+                            .map(variant -> {
+                                VariantAvailability decision = byVariant.get(variant.variantId());
+                                return decision == null
+                                        ? variant
+                                        : variant.withAvailability(decision.orderable(), decision.remainingQuantity());
+                            })
+                            .toList(),
+                    modifierGroupIds,
+                    commentPresets);
+        }
     }
 
     /** One preset a product offers on a line, every locale so the storefront renders its own. */
@@ -542,6 +586,11 @@ public class StorefrontCatalogQuery {
      * @param amountMinor null when this variant has no active price. Not zero:
      *     an unpriced variant is a menu that is not finished, and showing it as
      *     free is how a brand sells a dish for nothing.
+     * @param remainingQuantity rows 4.4c/4.4d, storefront half: set only for a
+     *     QUANTITY item whose remaining stock has dropped to inventory's own
+     *     small displayed threshold — never above it, and never when {@code
+     *     orderable} is already false. See {@code MenuAvailabilityLookup}'s
+     *     own doc.
      */
     public record MenuVariant(
             UUID variantId,
@@ -550,10 +599,29 @@ public class StorefrontCatalogQuery {
             boolean isDefault,
             boolean orderable,
             boolean onSaleNow,
-            @Nullable Long amountMinor) {
+            @Nullable Long amountMinor,
+            @Nullable BigDecimal remainingQuantity) {
 
         MenuVariant withPrice(@Nullable Long price) {
-            return new MenuVariant(variantId, sku, unitCode, isDefault, orderable, onSaleNow, price);
+            return new MenuVariant(variantId, sku, unitCode, isDefault, orderable, onSaleNow, price, remainingQuantity);
+        }
+
+        /**
+         * Rows 4.4c/4.4d: ANDed with the offering-based {@code orderable}
+         * already computed by {@code variantsOf} — inventory can only ever
+         * take an already-orderable item off the menu, never put a
+         * catalog-hidden one back on it.
+         */
+        MenuVariant withAvailability(boolean inventoryOrderable, @Nullable BigDecimal remainingQuantity) {
+            return new MenuVariant(
+                    variantId,
+                    sku,
+                    unitCode,
+                    isDefault,
+                    orderable && inventoryOrderable,
+                    onSaleNow,
+                    amountMinor,
+                    remainingQuantity);
         }
     }
 

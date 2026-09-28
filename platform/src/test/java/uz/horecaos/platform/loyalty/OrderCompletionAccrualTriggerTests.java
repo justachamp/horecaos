@@ -127,8 +127,12 @@ class OrderCompletionAccrualTriggerTests {
         transactions = new TransactionTemplate(new DataSourceTransactionManager(dataSource));
 
         LoyaltyPolicyService policies = new LoyaltyPolicyService(store);
-        redemption = new PointsRedemptionService(store, policies, clock);
-        LoyaltyAccrualService accrual = new LoyaltyAccrualService(store, policies, clock);
+        // Not inspected by this class — LoyaltyBalanceChangeEventTests owns the
+        // CASHBACK_CHANGE producer's own behaviour. A no-op keeps this suite
+        // about OrderCompletionAccrualTrigger, unchanged.
+        org.springframework.context.ApplicationEventPublisher noEvents = event -> {};
+        redemption = new PointsRedemptionService(store, policies, noEvents, clock);
+        LoyaltyAccrualService accrual = new LoyaltyAccrualService(store, policies, noEvents, clock);
         settlements = new OrderSettlementService(settlementStore, redemption, clock);
         trigger = new OrderCompletionAccrualTrigger(accrual, store);
 

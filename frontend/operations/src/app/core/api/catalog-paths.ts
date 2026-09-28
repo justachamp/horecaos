@@ -379,6 +379,11 @@ export const pricingPaths = {
     return `${this.priceBook(scope, priceBookId)}/variant-prices/${encodeURIComponent(variantId)}`;
   },
 
+  /** Row 4.8a — every variant priced in this book, next to the brand's base price and the delta. */
+  matrix(scope: BrandScope, priceBookId: string): string {
+    return `${this.priceBook(scope, priceBookId)}/matrix`;
+  },
+
   /** Applies a price book to the whole brand — the fallback every location/channel resolves to. */
   assignBrand(scope: BrandScope, priceBookId: string): string {
     return `${this.priceBook(scope, priceBookId)}/assignments/brand`;

@@ -14,10 +14,12 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.configuration.Ids;
 import uz.horecaos.platform.fiscal.domain.FiscalTerminal;
 import uz.horecaos.platform.fiscal.domain.FiscalTerminalHealth;
 import uz.horecaos.platform.fiscal.domain.FiscalTerminalKind;
+import uz.horecaos.platform.fiscal.domain.FiscalTerminalStatus;
 import uz.horecaos.platform.fiscal.infrastructure.persistence.JdbcFiscalTerminalStore;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope;
@@ -76,9 +78,10 @@ public class FiscalTerminalService {
                 .at(ResourceScope.location(tenantId, command.brandId(), command.locationId()))
                 .target("FiscalTerminal", terminal.id())
                 .because("Registered %s terminal '%s'".formatted(command.kind(), command.terminalReference()))
-                .changed(Map.of(
+                // Staff 9.3a: a brand-new terminal, no prior state to diff against.
+                .changed(ChangeDocuments.created(Map.of(
                         "kind", command.kind().name(),
-                        "capable", String.valueOf(terminal.capable())))
+                        "capable", String.valueOf(terminal.capable()))))
                 .correlatedBy(correlationId())
                 .occurredAt(now)
                 .build());
@@ -115,6 +118,11 @@ public class FiscalTerminalService {
     @Transactional
     public FiscalTerminal checkHealth(
             UUID tenantId, UUID brandId, UUID terminalId, int expectedVersion, FiscalTerminalHealth outcome) {
+        // Staff 9.3a: read before transition() both fetches and mutates the
+        // terminal in place, so this is the only chance to see the health
+        // status as it stood before this check.
+        FiscalTerminalHealth previousHealth =
+                require(tenantId, brandId, terminalId).lastHealthStatus();
         Instant now = clock.instant();
         FiscalTerminal terminal =
                 transition(tenantId, brandId, terminalId, expectedVersion, t -> t.recordHealthCheck(outcome, now));
@@ -124,7 +132,8 @@ public class FiscalTerminalService {
                 .target("FiscalTerminal", terminal.id())
                 .targetVersion((long) terminal.version())
                 .because("Checked connectivity for terminal " + terminal.terminalReference())
-                .changed(Map.of("lastHealthStatus", outcome.name()))
+                .changed(ChangeDocuments.change(
+                        "lastHealthStatus", previousHealth == null ? null : previousHealth.name(), outcome.name()))
                 .correlatedBy(correlationId())
                 .occurredAt(now)
                 .build());
@@ -162,6 +171,11 @@ public class FiscalTerminalService {
             int expectedVersion,
             Consumer<FiscalTerminal> change,
             String actionCode) {
+        // Staff 9.3a: read before transition() both fetches and mutates the
+        // terminal in place, so this is the only chance to see its status as
+        // it stood before this transition.
+        FiscalTerminalStatus previousStatus =
+                require(tenantId, brandId, terminalId).status();
         Instant now = clock.instant();
         FiscalTerminal terminal = transition(tenantId, brandId, terminalId, expectedVersion, change);
         audit.record(AuditFact.of(actionCode, AuditClass.BUSINESS)
@@ -170,7 +184,8 @@ public class FiscalTerminalService {
                 .target("FiscalTerminal", terminal.id())
                 .targetVersion((long) terminal.version())
                 .because(actionCode + " for terminal " + terminal.terminalReference())
-                .changed(Map.of("status", terminal.status().name()))
+                .changed(ChangeDocuments.change(
+                        "status", previousStatus.name(), terminal.status().name()))
                 .correlatedBy(correlationId())
                 .occurredAt(now)
                 .build());

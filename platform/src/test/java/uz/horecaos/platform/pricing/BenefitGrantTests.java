@@ -8,6 +8,8 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterAll;
@@ -98,6 +100,27 @@ class BenefitGrantTests {
     }
 
     @Test
+    @DisplayName("minting records a creation diff, not a flat after-only map")
+    void mintingRecordsACreationDiff() {
+        UUID customer = UUID.randomUUID();
+        MintedGrant minted = mint(customer);
+
+        AuditFact fact = audit.facts().stream()
+                .filter(f -> minted.grantId().equals(f.targetId()))
+                .findFirst()
+                .orElseThrow();
+
+        // Staff 9.3a: a brand-new grant has no prior state, so every field's
+        // "before" is null -- distinguishable from a call site that just never
+        // bothered fetching one.
+        @SuppressWarnings("unchecked")
+        Map<String, Object> customerIdChange = Objects.requireNonNull(
+                (Map<String, Object>) fact.changeDocument().get("customerAccountId"));
+        assertThat(customerIdChange.get("before")).isNull();
+        assertThat(customerIdChange.get("after")).isEqualTo(customer);
+    }
+
+    @Test
     @DisplayName("a second redemption of the same code is refused, even by its own customer")
     void aSecondRedemptionIsRefused() {
         UUID customer = UUID.randomUUID();
@@ -172,10 +195,19 @@ class BenefitGrantTests {
 
         assertThat(audit.facts()).hasSize(1);
         AuditFact fact = audit.facts().getFirst();
-        assertThat(fact.changeDocument()).containsEntry("customerAccountId", customer);
+        // Row 9.3a: changeDocument() entries are now before/after diffs, not
+        // flat values -- see #mintingRecordsACreationDiff.
+        @SuppressWarnings("unchecked")
+        Map<String, Object> customerIdChange = Objects.requireNonNull(
+                (Map<String, Object>) fact.changeDocument().get("customerAccountId"));
+        assertThat(customerIdChange.get("after")).isEqualTo(customer);
         assertThat(fact.changeDocument().values())
                 .as("the bearer secret itself must never enter the audit trail")
-                .noneMatch(value -> value.equals(minted.plaintextCode()));
+                .allSatisfy(value -> {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> change = (Map<String, Object>) value;
+                    assertThat(change.values()).noneMatch(v -> Objects.equals(v, minted.plaintextCode()));
+                });
     }
 
     @Test

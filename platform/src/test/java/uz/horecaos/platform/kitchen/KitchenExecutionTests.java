@@ -811,6 +811,19 @@ class KitchenExecutionTests {
         assertThat(audit.facts)
                 .anyMatch(fact -> "kitchen.ticket.recall".equals(fact.actionCode())
                         && fact.outcome() == AuditFact.Outcome.REJECTED);
+        // Staff 9.3a: a refused attempt has no prior state to diff against —
+        // recorded through ChangeDocuments.created, so "before" is explicitly
+        // null rather than the key being silently absent.
+        @SuppressWarnings("unchecked")
+        Map<String, Object> refused = Objects.requireNonNull((Map<String, Object>) audit.facts.stream()
+                .filter(fact -> "kitchen.ticket.recall".equals(fact.actionCode()))
+                .findFirst()
+                .orElseThrow()
+                .changeDocument()
+                .get("refused"));
+        assertThat(refused).containsEntry("after", "AFTER_HANDOVER");
+        assertThat(refused).containsKey("before");
+        assertThat(refused.get("before")).isNull();
     }
 
     // --------------------------------------------------------------- hand-over
@@ -1090,6 +1103,15 @@ class KitchenExecutionTests {
                 .as("a kitchen that quietly holds a ticket to protect its own throughput "
                         + "number produces a late order nobody was warned about")
                 .anyMatch(fact -> "kitchen.ticket.release-override".equals(fact.actionCode()));
+        // Staff 9.3a: the fire time that actually changed carries a real
+        // before/after, not just the new value.
+        assertThat(audit.facts.stream()
+                        .filter(fact -> "kitchen.ticket.release-override".equals(fact.actionCode()))
+                        .findFirst()
+                        .orElseThrow()
+                        .changeDocument())
+                .extractingByKey("releaseAt")
+                .isEqualTo(Map.of("before", String.valueOf(ticket.releaseAt()), "after", String.valueOf(tooLate)));
     }
 
     @Test

@@ -18,12 +18,14 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.pricing.api.PriceBookActivated;
 import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPricingStore;
 import uz.horecaos.platform.tenancy.api.SalesChannelLookup;
+import uz.horecaos.platform.web.api.ApiException;
 
 /**
  * Price authoring (ADR 0018).
@@ -185,6 +187,43 @@ public class PriceAuthoringService {
     @Transactional
     public PriceBook setPrice(
             UUID tenantId, UUID brandId, UUID priceBookId, PriceableType type, UUID priceableId, long amountMinor) {
+        return setPrice(tenantId, brandId, priceBookId, type, priceableId, amountMinor, null);
+    }
+
+    /**
+     * The same write, with an optional row-level {@code If-Match} (gap map row
+     * {@code 4.8a}'s matrix inline edit).
+     *
+     * <p>{@code expectedVersion} is the version the matrix row's own price
+     * carried when the caller read it — {@code 0} when the row had no price
+     * yet, the same "unset" convention {@link JdbcPricingStore#openPriceVersion}
+     * answers with {@code Optional.empty()} for. A null {@code expectedVersion}
+     * skips the check entirely, unconditional-write behaviour kept for the
+     * single-variant editor and {@link PriceBulkApplyService}, neither of which
+     * reads a row's version before writing it.
+     *
+     * <p>Checked against the price's own version rather than the book's: the
+     * book's version bumps on every price write in it ({@link
+     * JdbcPricingStore#touchPriceBook}), so a matrix loaded once and edited row
+     * by row would have every row but the first rejected as stale the moment
+     * any other row changed, even though nothing about that row did.
+     *
+     * <p>The guard is enforced by {@link JdbcPricingStore#setPrice} itself, as
+     * part of the same atomic write — never by a SELECT here followed by a
+     * separate write, which would leave a gap a concurrent editor of the same
+     * row could land in between the two. {@link JdbcPricingStore#openPriceVersion}
+     * is consulted only after a stale write is reported, purely to name the
+     * current version in the error; it never decides whether the write happens.
+     */
+    @Transactional
+    public PriceBook setPrice(
+            UUID tenantId,
+            UUID brandId,
+            UUID priceBookId,
+            PriceableType type,
+            UUID priceableId,
+            long amountMinor,
+            @Nullable Long expectedVersion) {
 
         PriceBook book = require(tenantId, brandId, priceBookId);
         requireAuthorable(book);
@@ -199,7 +238,20 @@ public class PriceAuthoringService {
         }
 
         Instant now = clock.instant();
-        store.setPrice(tenantId, brandId, priceBookId, type.name(), priceableId, amountMinor, now);
+        Integer expected = expectedVersion == null ? null : Math.toIntExact(expectedVersion);
+        boolean applied =
+                store.setPrice(tenantId, brandId, priceBookId, type.name(), priceableId, amountMinor, now, expected);
+        if (!applied) {
+            // Only for the error message: the write itself already refused
+            // atomically, against whatever version was actually current at
+            // that instant, not against this follow-up read.
+            long actual = store.openPriceVersion(tenantId, brandId, priceBookId, type.name(), priceableId)
+                    .orElse(0);
+            // A version is what made `applied` false in the first place — the
+            // unconditional path (null) always either returns true or throws
+            // on its own. The fallback is unreachable, not a real "unset".
+            throw ApiException.staleVersion(expectedVersion == null ? 0 : expectedVersion, actual);
+        }
         store.touchPriceBook(tenantId, brandId, priceBookId, now);
 
         return require(tenantId, brandId, priceBookId);
@@ -275,10 +327,19 @@ public class PriceAuthoringService {
                 .targetVersion((long) activated.version())
                 .because("Price book activated")
                 .usingCapability(Capability.PRICING_ACTIVATE.code())
-                .changed(Map.of(
-                        "status", activated.status().name(),
-                        "version", activated.version(),
-                        "priority", activated.priority()))
+                // Staff 9.3a: "status" and "version" genuinely move here (DRAFT
+                // -> ACTIVE, and the optimistic-lock bump); "priority" does not,
+                // and diffing it against itself says so honestly instead of
+                // restating it as though it were new information.
+                .changed(ChangeDocuments.diff(
+                        Map.of(
+                                "status", book.status().name(),
+                                "version", book.version(),
+                                "priority", book.priority()),
+                        Map.of(
+                                "status", activated.status().name(),
+                                "version", activated.version(),
+                                "priority", activated.priority())))
                 .correlatedBy(priceBookId.toString())
                 .occurredAt(clock.instant())
                 .build());

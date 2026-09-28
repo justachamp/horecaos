@@ -18,9 +18,14 @@ import type {
  * Replaces `CustomerUiService`, which called five legacy endpoints —
  * `/customers/ui/`, `/ui/categories/{id}/items`, `/ui/items/{id}`, a search and a
  * recently-searched list. The platform serves **one**: the whole published menu
- * for a location, unauthenticated, cached for thirty seconds with the
- * publication id as its ETag. Category browse, the product page and search are
- * all reads of that one document, so they are done here rather than over the
+ * for a location, unauthenticated. Rows 4.4c/4.4d folded live inventory
+ * availability into that same response, so the server no longer hands out a
+ * flat thirty-second cache window for it (ADR 0033) — it is revalidated
+ * against the origin on every read (a fresh `ETag` combining the publication
+ * id with an availability fingerprint) rather than replayed blind, so a stop
+ * taken between two reads is never served stale. Category browse, the product
+ * page and search are all reads of that one document, so they are done here
+ * rather than over the
  * wire.
  *
  * <h2>What the platform does not send, and what this refuses to invent</h2>
@@ -51,38 +56,35 @@ export class MenuService {
   private readonly config = inject(APP_CONFIG);
 
   /**
-   * The last menu read, kept so category browse, the product page and search do
-   * not each re-fetch it. The publication id is the server's own ETag, so a
-   * changed menu is a changed document rather than a stale cache to invalidate.
-   */
-  private cached: { key: string; menu: PublishedMenu } | null = null;
-
-  /**
    * The in-flight read for the current key, if one is already on the wire.
    *
    * Without this, the home screen's own `menuService.home()` and a
    * signed-in customer's cart re-projecting itself (`UiCartService.project`)
-   * both ask for the same menu on the same page load, and since the cache
-   * above is only populated *after* a read resolves, the second caller does
-   * not see it in time -- two identical `GET .../menu` requests land instead
-   * of one. Sharing the pending promise, the same way `CartService.price`
-   * already shares its own, is what collapses them back to one.
+   * both ask for the same menu on the same page load, and two identical
+   * `GET .../menu` requests would land instead of one. Sharing the pending
+   * promise, the same way `CartService.price` already shares its own, is
+   * what collapses them back to one -- but only for callers racing the same
+   * read; it is dropped the moment that read settles, so the *next* call
+   * always goes back to the origin rather than replaying what it saw.
+   *
+   * There is deliberately no cache kept past that: the server stopped
+   * handing out a flat cache window for exactly this response (ADR 0033,
+   * rows 4.4c/4.4d) so a stop taken between two reads is never served
+   * stale, and an application-level cache that outlives one request would
+   * quietly undo that on the one layer that decides what a customer sees.
    */
   private pending: { key: string; promise: Promise<PublishedMenu> } | null = null;
 
   readonly currency = signal<string | null>(null);
 
-  /** The whole menu for a location, from cache when the key has not moved,
-   * or the already-in-flight read for that same key. */
+  /** The whole menu for a location: the already-in-flight read for that key
+   * if one is on the wire, otherwise a fresh read from the origin. */
   async menu(locale: string, locationId?: string): Promise<PublishedMenu> {
     const location = locationId ?? this.config.defaultLocationId;
     if (!location) {
       throw new Error('No location is configured for this storefront.');
     }
     const key = `${location}|${locale}|${this.config.channel}`;
-    if (this.cached?.key === key) {
-      return this.cached.menu;
-    }
     if (this.pending?.key === key) {
       return this.pending.promise;
     }
@@ -99,7 +101,6 @@ export class MenuService {
         },
       )
       .then((menu) => {
-        this.cached = { key, menu };
         this.currency.set(menu.currency);
         return menu;
       })
@@ -110,11 +111,6 @@ export class MenuService {
       });
     this.pending = { key, promise };
     return promise;
-  }
-
-  /** Drops the cache, so the next read re-fetches. */
-  forget(): void {
-    this.cached = null;
   }
 
   /** The home screen's shape, from the one menu document. */
@@ -224,6 +220,7 @@ export class MenuService {
       price: variant.amountMinor ?? 0,
       price_without_discount: variant.amountMinor ?? 0,
       onSaleNow: variant.onSaleNow,
+      remainingQuantity: variant.remainingQuantity,
     }));
 
     return {
@@ -358,6 +355,13 @@ export interface PublishedVariant {
    * page must refuse adding a variant while this is false.
    */
   readonly onSaleNow: boolean;
+  /**
+   * Rows 4.4c/4.4d: set only for a QUANTITY-tracked item once remaining
+   * stock has dropped to a small displayed threshold, and never above it
+   * (ADR 0017's own "quantity need not be exposed publicly") -- omitted
+   * (null) is the ordinary case, not "unlimited".
+   */
+  readonly remainingQuantity: number | null;
 }
 
 export interface PublishedModifierGroup {

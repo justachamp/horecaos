@@ -13,16 +13,20 @@ import { ApiClient } from '../../core/api/api-client';
 import { LocationScope, operationsPaths } from '../../core/api/operations-paths';
 import { ApiError } from '../../core/api/problem-details';
 import { CurrentLocation } from '../../core/auth/current-location';
+import { TimeZone, formatClock } from '../../core/format/datetime';
 import { I18n } from '../../core/i18n/i18n';
 import { MessageKey } from '../../core/i18n/messages.en';
 import { TPipe } from '../../core/i18n/t.pipe';
+import { RealtimeClient } from '../../core/realtime/realtime-client';
 import { ConfirmDialog } from '../../shared/ui/confirm-dialog';
+import { ConnectionStateBanner } from '../../shared/ui/connection-state-banner';
 import { DragDropAssign, QBoardCardDef } from '../../shared/ui/drag-drop-assign/drag-drop-assign';
 import {
   DragDropAssignColumn,
   DragDropAssignOutcome,
   DragDropAssignRejection,
 } from '../../shared/ui/drag-drop-assign/drag-drop-assign-types';
+import { StaleIndicator } from '../../shared/ui/stale-indicator';
 import { StatusPill, StatusTone } from '../../shared/ui/status-pill';
 import { CouriersApi, RosterEntryResponse } from '../couriers/couriers-api';
 import {
@@ -71,8 +75,11 @@ export interface BulkAssignOutcome {
   readonly reason?: string | null;
 }
 
-/** Same cadence as the order and kitchen boards, until ADR 0045 live updates exist. */
+/** Same cadence as the order and kitchen boards — the ADR 0045 fallback every live surface keeps regardless of the accelerator below (row `3.1`). */
 const POLL_INTERVAL_MS = 10_000;
+
+/** See `order-queue.ts`'s identical constant — no location carries a timezone on any response this board reaches yet. */
+const PLACEHOLDER_TIME_ZONE: TimeZone = 'Asia/Tashkent';
 
 /** `q-drag-drop-assign`'s pool column — a plan with no courier lands here. */
 const UNASSIGNED_COLUMN_ID = '__unassigned__';
@@ -136,10 +143,35 @@ const OPEN_STATUSES: ReadonlySet<string> = new Set([
  * `PlanQueueResponse` carries neither today (see `dispatch-api.ts`'s own
  * doc); a masked zone/street projection needs a new server-side field this
  * wave did not build (see the gap map's own row `3.1` audit note).
+ *
+ * **The ADR 0045 accelerator (row 3.1, this wave).** This board used to be
+ * the one live surface still standing on a bare 10-second poll after the
+ * kitchen board (row 2.1) and order board both moved to `RealtimeClient`.
+ * `fulfillment` already publishes a `DISPATCH_BOARD` signal on every
+ * assign/unassign/cancel/external-booking write (wave P08's own producer,
+ * `ManualDispatchService`/`ShipmentCancellationService`/
+ * `ManualExternalBookingService`) — what was missing was this page's own
+ * subscriber. It now listens for that signal (or a `resync`, on reconnect)
+ * and re-reads the board at once, on top of the unconditional poll above,
+ * which keeps running exactly as it always has — turning the stream off
+ * changes nothing else here, the same degrade-to-poll contract every other
+ * `RealtimeClient` consumer keeps. `q-connection-state-banner` and
+ * `q-stale-indicator` (the same freshness pairing `order-queue.ts` already
+ * shows) report the transport's own state and how long ago the board last
+ * actually refreshed, respectively.
  */
 @Component({
   selector: 'q-dispatch-board-page',
-  imports: [TPipe, DragDropAssign, QBoardCardDef, StatusPill, ConfirmDialog, ExternalCourierDialog],
+  imports: [
+    TPipe,
+    DragDropAssign,
+    QBoardCardDef,
+    StatusPill,
+    ConfirmDialog,
+    ExternalCourierDialog,
+    ConnectionStateBanner,
+    StaleIndicator,
+  ],
   templateUrl: './dispatch-board-page.html',
   styleUrl: './dispatch-board-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -151,12 +183,15 @@ export class DispatchBoardPage implements OnInit {
   private readonly location = inject(CurrentLocation);
   private readonly i18n = inject(I18n);
   private readonly destroyRef = inject(DestroyRef);
+  protected readonly realtime = inject(RealtimeClient);
 
   protected readonly UNASSIGNED_COLUMN_ID = UNASSIGNED_COLUMN_ID;
 
   protected readonly firstLoadComplete = signal(false);
   protected readonly denied = signal(false);
   protected readonly lastError = signal<ApiError | null>(null);
+  /** Row `3.1`'s own freshness marker — set on every successful `refresh()`, read by `q-stale-indicator` and `formatUpdatedAt()`. */
+  protected readonly lastUpdatedAt = signal<Date | null>(null);
 
   protected readonly plans = signal<readonly PlanQueueResponse[]>([]);
   protected readonly ordersByOrderId = signal<ReadonlyMap<string, OrderSummaryResponse>>(new Map());
@@ -185,6 +220,20 @@ export class DispatchBoardPage implements OnInit {
   protected readonly bulkResult = signal<readonly BulkAssignOutcome[] | null>(null);
 
   private pollHandle: ReturnType<typeof setInterval> | null = null;
+
+  /**
+   * Guards the {@link refresh} vs {@link refresh} race (fix12 review,
+   * dispatch board): `refresh()` is triggered by four independent,
+   * uncoordinated sources — the pre-existing 10s poll, the row-3.1 realtime
+   * accelerator's `onFrame` subscription (every `DISPATCH_BOARD` signal or
+   * `resync`), {@link manualRefresh}, and the `assign`/`unassign` `finally`
+   * block — any of which can overlap on a slow connection. Bumped by every
+   * {@link refresh} before it awaits anything; a call whose own generation
+   * has since been superseded discards its result instead of committing it
+   * — the same pattern `order-queue.ts`'s own `pageGeneration` uses for the
+   * identical `refresh()` vs `loadMore()` race there.
+   */
+  private refreshGeneration = 0;
 
   /** One column per courier, plus the unassigned pool — the drop target's own load (§3.1). */
   protected readonly boardColumns = computed<readonly DragDropAssignColumn<RosterEntryResponse>[]>(
@@ -310,10 +359,31 @@ export class DispatchBoardPage implements OnInit {
         void this.refresh();
       }
     }, POLL_INTERVAL_MS);
+
+    // Row 3.1's own accelerator: fulfillment now publishes a DISPATCH_BOARD
+    // signal on every plan/assignment/shipment change this board cares about
+    // (`ManualDispatchService.assign`/`unassign`, `ShipmentCancellationService`'s
+    // cascade and dedicated cancel, `ManualExternalBookingService.book`) — the
+    // same ADR 0045 pattern `kitchen_board` already established for the
+    // kitchen board (row 2.1) and `order_queue` for the order board. The poll
+    // above keeps running regardless — this only ever shortens the wait, and
+    // a `resync` frame (a reconnect after a drop) is treated exactly like a
+    // signal: re-read the whole board rather than trying to replay whatever
+    // was missed, since the server keeps no replay buffer either.
+    const unsubscribeRealtime = this.realtime.onFrame((frame) => {
+      if (
+        (frame.kind === 'signal' && frame.channel === 'dispatch_board') ||
+        frame.kind === 'resync'
+      ) {
+        void this.refresh();
+      }
+    });
+
     this.destroyRef.onDestroy(() => {
       if (this.pollHandle !== null) {
         clearInterval(this.pollHandle);
       }
+      unsubscribeRealtime();
     });
     void this.start();
   }
@@ -330,6 +400,12 @@ export class DispatchBoardPage implements OnInit {
       this.firstLoadComplete.set(true);
       return;
     }
+    // Captured before the first await: a refresh started later (another
+    // poll tick, another realtime frame, a manual click, the post-drop
+    // finally block) bumps this and must win — this call's own result is
+    // silently dropped once it is no longer the newest one in flight,
+    // rather than clobbering fresher board state with a stale response.
+    const generation = ++this.refreshGeneration;
     try {
       const [plans, fleet, orders] = await Promise.all([
         this.dispatch.queue(scope),
@@ -340,6 +416,19 @@ export class DispatchBoardPage implements OnInit {
           }),
         ),
       ]);
+      if (generation !== this.refreshGeneration) {
+        return;
+      }
+      // `GET .../exceptions` (built by `DispatchController`, never called
+      // before this wave) — only for the plans that need it, since it is
+      // one request per plan and most plans are never
+      // `MANUAL_ACTION_REQUIRED`. Awaited before any signal below commits,
+      // so a superseded call is caught here too rather than only at the
+      // top of this fetch.
+      const exceptionsByPlanId = await this.loadExceptions(scope, plans);
+      if (generation !== this.refreshGeneration) {
+        return;
+      }
       this.plans.set(plans);
       this.fleet.set(fleet);
       this.ordersByOrderId.set(
@@ -355,17 +444,25 @@ export class DispatchBoardPage implements OnInit {
           new Set(plans.filter((plan) => this.isBulkSelectable(plan)).map((plan) => plan.planId)),
         ),
       );
-      await this.loadExceptions(scope, plans);
+      this.exceptionsByPlanId.set(exceptionsByPlanId);
       this.denied.set(false);
       this.lastError.set(null);
+      this.lastUpdatedAt.set(new Date());
     } catch (error) {
-      if (error instanceof ApiError && error.status === 403) {
+      if (!(error instanceof ApiError)) {
+        // An unexpected, non-API error is a real defect regardless of
+        // whether a newer refresh has since superseded this call — it must
+        // still surface, never be silently dropped by the generation guard.
+        throw error;
+      }
+      if (generation !== this.refreshGeneration) {
+        return;
+      }
+      if (error.status === 403) {
         this.denied.set(true);
         this.lastError.set(null);
-      } else if (error instanceof ApiError) {
-        this.lastError.set(error);
       } else {
-        throw error;
+        this.lastError.set(error);
       }
     } finally {
       this.firstLoadComplete.set(true);
@@ -375,27 +472,38 @@ export class DispatchBoardPage implements OnInit {
   /**
    * `GET .../exceptions` (built by `DispatchController`, never called before
    * this wave) — only for the plans that need it, since it is one request
-   * per plan and most plans are never `MANUAL_ACTION_REQUIRED`.
+   * per plan and most plans are never `MANUAL_ACTION_REQUIRED`. Returns the
+   * map rather than committing it directly, so {@link refresh} can gate the
+   * commit on its own generation check alongside every other signal it reads
+   * this same round trip.
    */
   private async loadExceptions(
     scope: LocationScope,
     plans: readonly PlanQueueResponse[],
-  ): Promise<void> {
+  ): Promise<ReadonlyMap<string, readonly ExceptionResponse[]>> {
     const needing = plans.filter((plan) => plan.status === 'MANUAL_ACTION_REQUIRED');
     if (needing.length === 0) {
-      this.exceptionsByPlanId.set(new Map());
-      return;
+      return new Map();
     }
     const results = await Promise.all(
       needing.map((plan) =>
         this.dispatch.exceptions(scope, plan.planId).catch((): readonly ExceptionResponse[] => []),
       ),
     );
-    this.exceptionsByPlanId.set(new Map(needing.map((plan, i) => [plan.planId, results[i]])));
+    return new Map(needing.map((plan, i) => [plan.planId, results[i]]));
   }
 
   protected manualRefresh(): void {
     void this.refresh();
+  }
+
+  protected formatUpdatedAt(): string | null {
+    const updated = this.lastUpdatedAt();
+    return updated
+      ? this.i18n.t('delivery.dispatch.updated', {
+          time: formatClock(updated, PLACEHOLDER_TIME_ZONE),
+        })
+      : null;
   }
 
   protected orderFor(plan: PlanQueueResponse): OrderSummaryResponse | null {

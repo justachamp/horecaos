@@ -907,6 +907,9 @@
           "orderable" : {
             "type" : "boolean"
           },
+          "remainingQuantity" : {
+            "type" : "number"
+          },
           "sku" : {
             "type" : "string"
           },

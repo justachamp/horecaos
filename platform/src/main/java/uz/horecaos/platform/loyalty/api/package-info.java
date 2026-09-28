@@ -11,6 +11,13 @@
  * than left as a reason for the referral module to reach past this package into
  * {@code loyalty.application}.
  *
+ * <p>Two more, added for gap-map row 6.5's {@code CASHBACK_CHANGE} trigger
+ * (batch 12): {@link uz.horecaos.platform.loyalty.api.LoyaltyBalanceChanged} is
+ * the Modulith application event a balance movement publishes — ids and
+ * amounts only — and {@link uz.horecaos.platform.loyalty.api.LoyaltyActivityDirectory}
+ * is the bounded, read-only query a preview screen uses instead of waiting for
+ * that event to fire again.
+ *
  * <p>There is deliberately no port that credits an account from a payment and
  * none that pays one out. That absence is part of ADR 0046's decision rather
  * than a gap in the list. A referral credit is not that: see {@link

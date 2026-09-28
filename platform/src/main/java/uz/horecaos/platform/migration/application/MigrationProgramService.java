@@ -12,6 +12,7 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.audit.api.ActorRef;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.migration.api.MigrationCapability;
 import uz.horecaos.platform.migration.domain.OwnershipModes;
@@ -119,7 +120,8 @@ public class MigrationProgramService {
                 program.id(),
                 program.version(),
                 command.reason(),
-                Map.of(
+                // Staff 9.3a: a brand-new program, no prior state to diff against.
+                ChangeDocuments.created(Map.of(
                         "name",
                         program.name(),
                         "sourceEnvironment",
@@ -127,7 +129,7 @@ public class MigrationProgramService {
                         "targetEnvironment",
                         program.targetEnvironment(),
                         "policyVersion",
-                        program.policyVersion()),
+                        program.policyVersion())),
                 null);
         return program;
     }
@@ -346,7 +348,8 @@ public class MigrationProgramService {
                 scope.id(),
                 scope.version(),
                 command.reason(),
-                Map.of(
+                // Staff 9.3a: a brand-new scope, no prior state to diff against.
+                ChangeDocuments.created(Map.of(
                         "programId",
                         programId,
                         "capability",
@@ -360,7 +363,7 @@ public class MigrationProgramService {
                         "sourceOwner",
                         scope.sourceOwner(),
                         "targetOwner",
-                        scope.targetOwner()),
+                        scope.targetOwner())),
                 null);
         return scope;
     }
@@ -423,7 +426,7 @@ public class MigrationProgramService {
                 programId,
                 version,
                 reason,
-                Map.of("fromStatus", from.name(), "toStatus", to.name()),
+                ChangeDocuments.change("status", from.name(), to.name()),
                 null);
 
         return new MigrationProgramStore.ProgramRow(

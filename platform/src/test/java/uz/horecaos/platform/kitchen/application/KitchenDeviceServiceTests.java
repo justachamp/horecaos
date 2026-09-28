@@ -138,6 +138,16 @@ class KitchenDeviceServiceTests {
                 .as("the enrolment audit fact names the human approver and the device, not the other way round")
                 .containsExactly(
                         Map.of("actor", "manager-1", "targetType", "iam.device_principal", "targetId", device.id()));
+        // Staff 9.3a: enrolment is a creation — no prior device to diff
+        // against — recorded through ChangeDocuments.created.
+        assertThat(jdbc.sql("""
+                        SELECT change_document -> 'displayName' ->> 'before',
+                               change_document -> 'displayName' ->> 'after'
+                          FROM audit.audit_events WHERE action_code = 'kitchen.device.enrolled'
+                        """)
+                        .query((rs, n) -> rs.getString(1) + "->" + rs.getString(2))
+                        .single())
+                .isEqualTo("null->Line 1 KDS");
     }
 
     @Test
@@ -155,6 +165,15 @@ class KitchenDeviceServiceTests {
                         .single())
                 .as("revoking an already-revoked device is not a second security event")
                 .isEqualTo(1L);
+        // Staff 9.3a: a field-level {before, after} pair, not an empty map.
+        assertThat(jdbc.sql("""
+                        SELECT change_document -> 'revoked' ->> 'before',
+                               change_document -> 'revoked' ->> 'after'
+                          FROM audit.audit_events WHERE action_code = 'kitchen.device.revoked'
+                        """)
+                        .query((rs, n) -> rs.getString(1) + "->" + rs.getString(2))
+                        .single())
+                .isEqualTo("false->true");
     }
 
     @Test

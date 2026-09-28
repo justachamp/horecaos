@@ -305,7 +305,8 @@ class OrderAmendmentAndOutcomeTests {
                 new PromoCodeEligibilityService(promoCodeStore),
                 new FakeConfigurationResolver(),
                 saleWindowRules,
-                commentPresetLookup);
+                commentPresetLookup,
+                inventory);
         inventoryProcess = new OrderInventoryProcess(processStore, inventory, objectMapper, clock);
         paymentProcess = new OrderPaymentProcess(processStore, objectMapper);
         orderStateWith = store -> new OrderStateService(
@@ -325,6 +326,7 @@ class OrderAmendmentAndOutcomeTests {
                 processStore,
                 UNWIRED_PAYMENTS,
                 NO_COURIER_ASSIGNMENTS,
+                amendmentStore,
                 protection,
                 objectMapper,
                 auditRecorder,

@@ -554,7 +554,8 @@ class OrderActionsPolicyTests {
             case OVERRIDE -> true; // POST .../state-overrides (ADR 0110, wave P41)
             case COMPLETE -> true; // POST .../completion (wave P09)
             case ASSIGN_COURIER -> true; // DispatchController .../dispatch/plans/{id}/assign (gap map 1.1e)
-            case RESOLVE, ISSUE_INVOICE -> false;
+            case RESOLVE -> true; // POST .../amendments/{id}/confirmation (gap map 1.1e)
+            case ISSUE_INVOICE -> false;
         };
     }
 
@@ -569,18 +570,21 @@ class OrderActionsPolicyTests {
                         OrderActionCode.AMEND,
                         OrderActionCode.OVERRIDE,
                         OrderActionCode.COMPLETE,
-                        OrderActionCode.ASSIGN_COURIER);
+                        OrderActionCode.ASSIGN_COURIER,
+                        OrderActionCode.RESOLVE);
     }
 
     /**
      * The property orders.md §4.2 exists for: {@code availableFor} never
      * offers a code with no endpoint behind it, at any status, mode or grant —
      * the array cannot lead an operator to a dead end. Swept over the
-     * four-argument overload (the maximal case: it only ever adds to the
-     * three-argument form's own result — see {@link
+     * five-argument overload (the maximal case: it only ever adds to the
+     * four-argument form's own result — see {@link
+     * #theFiveArgumentOverloadAddsOnlyResolveOnTopOfTheFourArgumentForm}, which
+     * itself only ever adds to the three-argument form — see {@link
      * #theFourArgumentOverloadAddsOnlyAssignCourierOnTopOfTheThreeArgumentForm})
-     * so {@code ASSIGN_COURIER} is covered by the same sweep as everything
-     * else.
+     * so {@code ASSIGN_COURIER} and {@code RESOLVE} are covered by the same
+     * sweep as everything else.
      */
     @Test
     void theArrayNeverOffersAnActionWithNoRoute() {
@@ -590,8 +594,8 @@ class OrderActionsPolicyTests {
                 // actions for a capability present, so anything offered with less
                 // than the full grant is offered with the full grant too. Sweeping
                 // the maximum is exhaustive for "is this code ever emitted at all".
-                for (OrderAction action :
-                        OrderActionsPolicy.availableFor(status, mode, ALL_ACTION_CAPS_WITH_COURIER_ASSIGN, true)) {
+                for (OrderAction action : OrderActionsPolicy.availableFor(
+                        status, mode, ALL_ACTION_CAPS_WITH_COURIER_ASSIGN, true, true)) {
                     assertThat(hasRealRouteToday(action.code()))
                             .as("%s offered at %s/%s must have a real route", action.code(), status, mode)
                             .isTrue();
@@ -676,6 +680,84 @@ class OrderActionsPolicyTests {
             assertThat(OrderActionsPolicy.availableFor(status, FulfillmentMode.DELIVERY, ALL_ACTION_CAPS, true))
                     .as("%s, ungranted", status)
                     .noneMatch(a -> a.code() == OrderActionCode.ASSIGN_COURIER);
+        }
+    }
+
+    // -------------------------------------------------- resolve (gap map 1.1e)
+
+    /** {@code ALL_ACTION_CAPS} without {@code ORDER_AMEND} — the ungranted case for both AMEND and RESOLVE. */
+    private static final Set<Capability> ACTION_CAPS_WITHOUT_AMEND =
+            EnumSet.of(Capability.ORDER_APPROVE, Capability.ORDER_ADVANCE, Capability.ORDER_CANCEL);
+
+    /**
+     * The five-argument overload never widens what the four-argument form
+     * already offers — it only ever adds {@code RESOLVE} on top.
+     */
+    @Test
+    void theFiveArgumentOverloadAddsOnlyResolveOnTopOfTheFourArgumentForm() {
+        for (OrderStatus status : OrderStatus.values()) {
+            for (FulfillmentMode mode : FulfillmentMode.values()) {
+                for (boolean courierUnassigned : new boolean[] {true, false}) {
+                    for (boolean amendmentAwaitingOperator : new boolean[] {true, false}) {
+                        List<OrderAction> base = OrderActionsPolicy.availableFor(
+                                status, mode, ALL_ACTION_CAPS_WITH_COURIER_ASSIGN, courierUnassigned);
+                        List<OrderAction> withResolve = OrderActionsPolicy.availableFor(
+                                status,
+                                mode,
+                                ALL_ACTION_CAPS_WITH_COURIER_ASSIGN,
+                                courierUnassigned,
+                                amendmentAwaitingOperator);
+
+                        List<OrderAction> withoutResolve = withResolve.stream()
+                                .filter(a -> a.code() != OrderActionCode.RESOLVE)
+                                .toList();
+                        assertThat(withoutResolve)
+                                .as(
+                                        "%s/%s courierUnassigned=%s amendmentAwaitingOperator=%s, minus RESOLVE",
+                                        status, mode, courierUnassigned, amendmentAwaitingOperator)
+                                .isEqualTo(base);
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * {@code RESOLVE} is offered exactly when {@code amendmentAwaitingOperator}
+     * is {@code true}, the order has not ended and the caller holds {@code
+     * ORDER_AMEND} — independent of status otherwise (an amendment's own life
+     * is not one of {@link OrderStateMachine}'s edges) and independent of
+     * fulfilment mode (every mode can carry an amendment).
+     */
+    @Test
+    void resolveAppearsExactlyWhenAnAmendmentAwaitsTheOperatorAndTheOrderHasNotEnded() {
+        for (OrderStatus status : OrderStatus.values()) {
+            for (FulfillmentMode mode : FulfillmentMode.values()) {
+                boolean offered = OrderActionsPolicy.availableFor(status, mode, ALL_ACTION_CAPS, true, true).stream()
+                        .anyMatch(a -> a.code() == OrderActionCode.RESOLVE);
+                boolean expected = !status.terminal();
+
+                assertThat(offered).as("RESOLVE for %s/%s", status, mode).isEqualTo(expected);
+            }
+        }
+    }
+
+    @Test
+    void resolveNeverAppearsWhenNoAmendmentAwaitsTheOperator() {
+        for (OrderStatus status : OrderStatus.values()) {
+            assertThat(OrderActionsPolicy.availableFor(status, FulfillmentMode.PICKUP, ALL_ACTION_CAPS, true, false))
+                    .as("%s, no amendment awaiting", status)
+                    .noneMatch(a -> a.code() == OrderActionCode.RESOLVE);
+        }
+    }
+
+    @Test
+    void resolveNeverAppearsWithoutTheOrderAmendCapability() {
+        for (OrderStatus status : OrderStatus.values()) {
+            assertThat(OrderActionsPolicy.availableFor(
+                            status, FulfillmentMode.PICKUP, ACTION_CAPS_WITHOUT_AMEND, true, true))
+                    .as("%s, ungranted", status)
+                    .noneMatch(a -> a.code() == OrderActionCode.RESOLVE);
         }
     }
 

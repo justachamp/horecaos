@@ -270,7 +270,8 @@
     "modifierOption": "Option",
     "modifiersIncomplete": "Choose the required options above before adding to cart.",
     "presetsTitle": "Comments",
-    "outOfSaleWindow": "This item is not on sale right now."
+    "outOfSaleWindow": "This item is not on sale right now.",
+    "lowStock": "Only {{count}} left"
   },
   "terms": {
     "agreementTitle": "Public offer agreement",
@@ -340,7 +341,9 @@
       "noLiveMenu": "No menu is available right now.",
       "atCapacity": "The kitchen is at capacity. Please try again shortly.",
       "itemOutOfSaleWindow": "This item is not on sale right now.",
-      "presetNotOffered": "That comment is no longer offered for this item."
+      "presetNotOffered": "That comment is no longer offered for this item.",
+      "itemUnavailable": "This item just sold out.",
+      "holdExpired": "Your basket hold expired. Please review your order and try again."
     }
   },
   "money": {
