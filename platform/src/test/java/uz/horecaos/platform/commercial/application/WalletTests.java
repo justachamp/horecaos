@@ -2664,7 +2664,13 @@ class WalletTests {
         return jdbc.sql("""
                         SELECT action_code FROM audit.audit_events
                          WHERE action_code LIKE 'approval.%'
-                           AND change_document->>'subjectTenantId' = :tenantId
+                           -- Staff 9.3a: JdbcApprovalService now writes subjectTenantId
+                           -- through ChangeDocuments.diff/created, so every field --
+                           -- this one included -- is a {before, after} pair rather
+                           -- than a bare scalar; "after" is subjectTenantId's current
+                           -- value for every one of these facts, requested included
+                           -- (created's own "before" is always null).
+                           AND change_document->'subjectTenantId'->>'after' = :tenantId
                         """)
                 .param("tenantId", tenantId.toString())
                 .query(String.class)

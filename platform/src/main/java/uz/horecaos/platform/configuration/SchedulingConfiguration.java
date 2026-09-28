@@ -229,9 +229,14 @@ public class SchedulingConfiguration {
      * AutomationTriggerScheduler.sweepOnce}, gap-map row 6.5's own trigger
      * sweep — BIRTHDAY, INACTIVITY, and CART_ABANDONMENT all in one method,
      * guarded by {@code marketing.automation_runs}' own unique index rather
-     * than by running less often.
+     * than by running less often. Batch 13 added the last one so far: {@code
+     * ChannelHostnameVerificationSweeper.recheck}, which polls a pending
+     * DNS-TXT hostname challenge (V0428) and promotes it once the tenant's
+     * DNS answers, closing row 10.5's WEB verification gap that otherwise
+     * left a submitted hostname stuck at PENDING forever with nothing to
+     * ever re-check it.
      */
-    static final int DEFAULT_POOL_SIZE = 68;
+    static final int DEFAULT_POOL_SIZE = 69;
 
     /**
      * The platform's scheduler, replacing Boot's single-threaded default.
