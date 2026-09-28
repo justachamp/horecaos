@@ -53,24 +53,21 @@ export class MenuService {
   private readonly api = inject(ApiClient);
   private readonly config = inject(APP_CONFIG);
 
-  /**
-   * The last menu read, kept so category browse, the product page and search do
-   * not each re-fetch it. The publication id is the server's own ETag, so a
-   * changed menu is a changed document rather than a stale cache to invalidate.
-   */
-  private cached: { key: string; menu: PublishedMenu } | null = null;
-
   readonly currency = signal<string | null>(null);
 
-  /** The whole menu for a location, from cache when the key has not moved. */
+  /**
+   * The whole menu for a location, read fresh from the origin every time.
+   *
+   * There is deliberately no cache here: the server stopped handing out a
+   * flat cache window for this response (ADR 0033, rows 4.4c/4.4d) so that a
+   * stop taken between two reads is never served stale, and an
+   * application-level cache that outlived one request would quietly undo
+   * that on the one layer that decides what a customer sees.
+   */
   async menu(locale: string, locationId?: string): Promise<PublishedMenu> {
     const location = locationId ?? this.config.defaultLocationId;
     if (!location) {
       throw new Error('No location is configured for this storefront.');
-    }
-    const key = `${location}|${locale}|${this.config.channel}`;
-    if (this.cached?.key === key) {
-      return this.cached.menu;
     }
     const menu = await this.api.get<PublishedMenu>(
       `/storefront/tenants/${this.config.tenantId}/brands/${this.config.brandId}` +
@@ -83,14 +80,8 @@ export class MenuService {
         anonymous: true,
       },
     );
-    this.cached = { key, menu };
     this.currency.set(menu.currency);
     return menu;
-  }
-
-  /** Drops the cache, so the next read re-fetches. */
-  forget(): void {
-    this.cached = null;
   }
 
   /** The home screen's shape, from the one menu document. */
