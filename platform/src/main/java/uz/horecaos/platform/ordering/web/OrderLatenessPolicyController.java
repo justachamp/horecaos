@@ -110,14 +110,20 @@ public class OrderLatenessPolicyController {
         }
     }
 
-    /** The resolved {@code ordering.lateness} document, one threshold set per fulfilment mode. */
+    /**
+     * The resolved {@code ordering.lateness} document, one threshold set per fulfilment mode.
+     *
+     * @param lateColour the tenant's own {@code #rrggbb} for a late order (row {@code X.39}), or
+     *                   null when the boards keep the design-system token
+     */
     public record LatenessPolicyResponse(
             LatenessThresholdsResponse delivery,
             LatenessThresholdsResponse pickup,
             LatenessThresholdsResponse dineIn,
             boolean isPlatformDefault,
             @Nullable UUID policyId,
-            int policyVersion) {
+            int policyVersion,
+            @Nullable String lateColour) {
 
         static LatenessPolicyResponse of(Effective effective) {
             OrderLatenessPolicy policy = effective.policy();
@@ -127,7 +133,8 @@ public class OrderLatenessPolicyController {
                     LatenessThresholdsResponse.of(policy.dineIn()),
                     effective.isPlatformDefault(),
                     effective.policyId(),
-                    effective.policyVersion());
+                    effective.policyVersion(),
+                    effective.lateColour());
         }
     }
 

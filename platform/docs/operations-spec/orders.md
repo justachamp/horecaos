@@ -375,9 +375,23 @@ sorted by amount at 12:00 and forgot is an operator working the wrong order at
 ### 2.7 Severity, and the late overlay
 
 Delever ships a tenant-configured lateness threshold in minutes and an
-admin-chosen highlight colour. Match the threshold; refuse the colour. Severity
-colour is semantic and belongs to the design system — a tenant who picks green
-for "late" has broken every screen at once.
+admin-chosen highlight colour. Match the threshold. The colour was refused
+here at first — severity colour is semantic and belongs to the design system,
+and a tenant who picks green for "late" has broken every screen at once — and
+is now offered with its two dangers contained (gap map row `X.39`, batch 15):
+it repaints **only a `LATE` order** on the order board and the kitchen board
+(not `BLOCKED`, not the approval deadline, not the at-risk step), it is
+validated as exactly `#rrggbb` where it is written and again where it is
+served, and the settings card runs it through the same WCAG AA check the
+channel colours use and warns under the swatch below 4.5:1 against the page,
+a card, and the late and at-risk row tints. A warning, not a refusal: the
+operator can see the surface it lands on and the screen cannot. Blank keeps the
+design-system red. The tenant's at-risk minutes ride the same two settings
+(`ordering.at_risk_before_minutes`, `ordering.late_colour`, both plain ADR 0030
+scalars edited with the card's inherit/override control) and are overlaid on the
+`ordering.lateness` document, so the boards and `GET .../{orderId}/lateness`
+give one answer. Reporting's SLA buckets (ADR 0107) stay platform-fixed and are
+not read from these.
 
 **Inputs.** `now`, `status`, and a policy resolved through ADR 0030 at key
 `ordering.lateness`. The promise itself is **built**, just not from the table
@@ -1387,7 +1401,7 @@ guard so tomorrow's plan never shows "past").
 | Search resolving aggregator ids | **Match, and beat** | ADR 0040 normalises and searches across providers; Delever's is per-provider |
 | Bulk courier assignment | **Match, and beat** | Delever ships select-and-save; ADR 0039 adds per-item idempotency and a partial-failure result panel |
 | Late-order threshold | **Match** the threshold | It is the right primitive |
-| Late-order admin-chosen colour | **Skip** | Severity colour is semantic; a tenant picking green for "late" breaks every screen |
+| Late-order admin-chosen colour | **Match, contained** | Applies to `LATE` only, `#rrggbb` validated at write and read, WCAG AA warning on the settings card (§2.7) |
 | Millenium quote-delta confirmation | **Match exactly** | Estimate → re-quote → operator accepts or abandons is the best thing in Delever's order menu |
 | Cancellation reasons with dual internal/customer text | **Match** | ADR 0039 carries both, plus a system category so cross-tenant reporting survives fifty near-duplicates |
 | Completion reasons | **Match**, and add `allowed_fulfillment_modes` | Without the filter, «Самовывоз выполнен» lands on a delivery order and the SLA report loses it |

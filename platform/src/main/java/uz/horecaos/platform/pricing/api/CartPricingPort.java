@@ -42,6 +42,16 @@ public interface CartPricingPort {
      *                    Re-resolved by pricing on every call — ordering never
      *                    learns whether it is eligible, only what the resulting
      *                    quote's total and adjustments say
+     * @param carriedRedemptionOrderId ADR 0072, for repricing an order that already
+     *                    exists (an amendment): the order whose live promo-code
+     *                    redemption the price must carry, or null for a cart.
+     *                    Read by pricing from what that order's checkout
+     *                    recorded, never from the cart -- the cart's applied code
+     *                    can change or vanish after checkout, the redemption
+     *                    cannot. The redemption already holds its slot, so pricing
+     *                    does not re-check the coupon's caps or window for it;
+     *                    the promotion's own conditions are still evaluated on
+     *                    the new basket
      * @param delivery    ADR 0037: where the order is going, and who prices the
      *                    delivery leg, or null for a cart being collected. A
      *                    coordinate rather than an address — pricing has no use
@@ -59,7 +69,8 @@ public interface CartPricingPort {
             List<Item> items,
             String idempotencyKey,
             @Nullable String presentedCouponCode,
-            @Nullable Delivery delivery) {
+            @Nullable Delivery delivery,
+            @Nullable UUID carriedRedemptionOrderId) {
 
         public PricingCommand {
             Objects.requireNonNull(tenantId, "A tenant id is required");
@@ -71,6 +82,30 @@ public interface CartPricingPort {
             }
         }
 
+        /** Every call site that predates a repricing carrying an order's own redemption. */
+        public PricingCommand(
+                UUID tenantId,
+                UUID brandId,
+                UUID locationId,
+                @Nullable UUID customerAccountId,
+                String channelCode,
+                List<Item> items,
+                String idempotencyKey,
+                @Nullable String presentedCouponCode,
+                @Nullable Delivery delivery) {
+            this(
+                    tenantId,
+                    brandId,
+                    locationId,
+                    customerAccountId,
+                    channelCode,
+                    items,
+                    idempotencyKey,
+                    presentedCouponCode,
+                    delivery,
+                    null);
+        }
+
         /** Every call site that predates ADR 0072's promo code and ADR 0037's destination. */
         public PricingCommand(
                 UUID tenantId,
@@ -80,7 +115,17 @@ public interface CartPricingPort {
                 String channelCode,
                 List<Item> items,
                 String idempotencyKey) {
-            this(tenantId, brandId, locationId, customerAccountId, channelCode, items, idempotencyKey, null, null);
+            this(
+                    tenantId,
+                    brandId,
+                    locationId,
+                    customerAccountId,
+                    channelCode,
+                    items,
+                    idempotencyKey,
+                    null,
+                    null,
+                    null);
         }
 
         /** Every call site that predates ADR 0037's destination. */
@@ -102,6 +147,7 @@ public interface CartPricingPort {
                     items,
                     idempotencyKey,
                     presentedCouponCode,
+                    null,
                     null);
         }
 

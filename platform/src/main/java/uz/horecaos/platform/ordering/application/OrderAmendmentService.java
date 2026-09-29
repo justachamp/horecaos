@@ -60,6 +60,7 @@ import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore.O
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore.OrderRow;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore.RevisionRow;
 import uz.horecaos.platform.pricing.api.CartPricingPort;
+import uz.horecaos.platform.pricing.api.PromoCodeRedemptionPort;
 import uz.horecaos.platform.pricing.api.QuoteAcceptance;
 import uz.horecaos.platform.pricing.api.QuoteAcceptancePort;
 import uz.horecaos.platform.pricing.api.QuoteSnapshot;
@@ -133,6 +134,7 @@ public class OrderAmendmentService {
     private final PaymentIntentPort payments;
     private final FieldProtection protection;
     private final ConfigurationResolver configuration;
+    private final PromoCodeRedemptionPort promoCodes;
 
     @SuppressWarnings("checkstyle:ParameterNumber")
     public OrderAmendmentService(
@@ -150,7 +152,8 @@ public class OrderAmendmentService {
             ApprovalService approvals,
             PaymentIntentPort payments,
             FieldProtection protection,
-            ConfigurationResolver configuration) {
+            ConfigurationResolver configuration,
+            PromoCodeRedemptionPort promoCodes) {
         this.orders = orders;
         this.amendments = amendments;
         this.audit = audit;
@@ -165,6 +168,7 @@ public class OrderAmendmentService {
         this.payments = payments;
         this.protection = protection;
         this.configuration = configuration;
+        this.promoCodes = promoCodes;
         // A second template for the one write that has to outlive the exception it
         // accompanies, exactly as PaymentAttemptService needs for the same reason:
         // apply() settles an expired amendment and then refuses the application, and
@@ -490,6 +494,10 @@ public class OrderAmendmentService {
 
             reserveIncrease(tenantId, order, storedQuoteId, quote, liveLines, decoded.basket());
             writeLineChanges(tenantId, orderId, liveLines, decoded.basket(), quote, newRevision);
+            // The order still holds the one redemption its checkout took; a
+            // repriced basket only changes how much discount that redemption
+            // stands for. Never a second redemption (see repriceFor).
+            promoCodes.restateForOrder(tenantId, orderId, storedQuoteId);
 
             quoteId = quote.quoteId();
             contextHash = quote.contextHash();
@@ -1127,6 +1135,19 @@ public class OrderAmendmentService {
      * ways. Called exactly once, from {@link #propose}; {@link #apply} trusts
      * the stored quote id rather than pricing a second time — see that
      * method's own doc.
+     *
+     * <p><b>The order's promo-code redemption rides along (ADR 0072).</b> The
+     * command carries this order's own id as {@code carriedRedemptionOrderId},
+     * and pricing reads the redemption that order's checkout recorded --
+     * not the cart's {@code applied_coupon_code}, which is the mutable
+     * pre-checkout state and can have changed or been cleared since. Before
+     * this, the command's coupon was a hard null, so every financial
+     * amendment silently repriced a discounted order at full price and the
+     * "increase" the customer was asked to confirm included the promo they
+     * had already earned. The redemption already holds its slot, so pricing
+     * does not re-check the coupon's caps or window for it (see {@code
+     * QuoteService#resolvePromotionInputs}); no second redemption is taken
+     * here or in {@link #apply}, which only restates the existing row's amount.
      */
     private QuoteSnapshot repriceFor(OrderRow order, FinancialIntent intent, String idempotencyKey) {
         List<OrderLineRow> liveLines = orders.lines(order.tenantId(), order.orderId());
@@ -1186,7 +1207,8 @@ public class OrderAmendmentService {
                     items,
                     idempotencyKey,
                     null,
-                    delivery));
+                    delivery,
+                    order.orderId()));
         } catch (CartPricingPort.PricingRefusedException refused) {
             throw new AmendmentRefusedException(
                     refused.code(), Objects.requireNonNullElse(refused.getMessage(), refused.code()));

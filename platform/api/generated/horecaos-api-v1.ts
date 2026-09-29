@@ -3792,6 +3792,7 @@ export interface LatenessPolicyResponse {
   delivery?: LatenessThresholdsResponse;
   dineIn?: LatenessThresholdsResponse;
   isPlatformDefault?: boolean;
+  lateColour?: string;
   pickup?: LatenessThresholdsResponse;
   policyId?: string;
   policyVersion?: number;

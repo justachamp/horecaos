@@ -135,6 +135,53 @@ public final class OrderingConfigurationKeys {
             .describedAs("Minutes after acceptance at which an order is coloured late on the board.")
             .build();
 
+    /** Row {@code X.39}: how far ahead of the promise the boards start warning. */
+    public static final String AT_RISK_BEFORE_MINUTES_CODE = "ordering.at_risk_before_minutes";
+
+    /**
+     * Minutes before an order's promised time at which the boards show it as at
+     * risk. 5: exactly the {@code ordering.lateness} platform default's 300
+     * seconds, so registering the key changes nothing for a tenant that has not
+     * set it. {@code OrderLatenessPolicyService} overlays a value that was set
+     * somewhere in the chain onto {@code atRiskBeforeSeconds} of every
+     * fulfilment mode -- a scalar the settings screen edits with the same
+     * inherit/override control as every other card-2 field, where the policy
+     * document itself has no editor.
+     */
+    public static final ConfigurationKey<Integer> AT_RISK_BEFORE_MINUTES = ConfigurationKey.of(
+                    AT_RISK_BEFORE_MINUTES_CODE, Integer.class)
+            .defaultValue(5)
+            .ownedBy("ordering")
+            .tenantVisible()
+            .describedAs("Minutes before an order's promised time at which it shows as at risk on the boards.")
+            .build();
+
+    /** Row {@code X.39}: the tenant's own colour for a late order. */
+    public static final String LATE_COLOUR_CODE = "ordering.late_colour";
+
+    /**
+     * A {@code #rrggbb} colour the order board and the kitchen board use for a
+     * late order instead of the design-system SLA token; blank keeps the token.
+     * The default is blank, not a colour: "unset" has to be distinguishable
+     * from a tenant that chose the token's own red.
+     *
+     * <p>The value is validated at write time (see {@code
+     * ConfigurationValueRules}) and again where it is served, because it ends up
+     * in a style binding on the console: a string that is not exactly six hex
+     * digits never reaches a stylesheet. Legibility is the screen's job -- the
+     * order-policy card runs the chosen colour through the same WCAG contrast
+     * helper the channel colours use and warns below 4.5:1 -- and is a warning,
+     * not a refusal, because whether the colour is readable depends on the
+     * surface it lands on.
+     */
+    public static final ConfigurationKey<String> LATE_COLOUR = ConfigurationKey.of(LATE_COLOUR_CODE, String.class)
+            .defaultValue("")
+            .ownedBy("ordering")
+            .tenantVisible()
+            .describedAs("Hex colour (#rrggbb) the boards use for late orders instead of the design-system "
+                    + "token; blank keeps the token.")
+            .build();
+
     /**
      * Wave P06 (gap map rows {@code 1.1g}/{@code X.39}): the policy document
      * orders.md §2.7 actually specifies, and the one both the order board and
