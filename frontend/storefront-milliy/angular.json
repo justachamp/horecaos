@@ -65,10 +65,10 @@
           },
           "configurations": {
             "production": {
-              "buildTarget": "qoida-storefront-jizbiz:build:production"
+              "buildTarget": "storefront-milliy:build:production"
             },
             "development": {
-              "buildTarget": "qoida-storefront-jizbiz:build:development"
+              "buildTarget": "storefront-milliy:build:development"
             }
           },
           "defaultConfiguration": "development"

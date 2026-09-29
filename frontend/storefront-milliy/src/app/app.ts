@@ -5,8 +5,8 @@ import { filter, map, startWith } from 'rxjs/operators';
 
 import { BottomNavComponent } from './shared/bottom-nav/bottom-nav.component';
 
-/** Routes that own the whole viewport and hide the tab bar. */
-const FULL_BLEED = ['/checkout'];
+/** Routes that own the whole viewport and hide the tab bar. Sign-in is one: nobody signing in has anywhere to navigate to yet. */
+const FULL_BLEED = ['/checkout', '/auth'];
 
 @Component({
   selector: 'app-root',

@@ -1,13 +1,28 @@
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { provideRouter } from '@angular/router';
+import { Router, provideRouter } from '@angular/router';
 
 import { DineInTableComponent } from './dine-in-table.component';
-import { DineInService, type DineInAdmission } from '../../../services/dine-in.service';
+import { ApiClient } from '../../../core/api/api-client';
+import { ReturnDestination } from '../../../core/auth/return-destination';
+import { Session } from '../../../core/auth/session';
+import { HorecaOSApiError } from '../../../core/api/problem-details';
+import type { PlatformCart, PlatformCartLine, PricedCart } from '../../../services/cart.service';
+import { DineInCartService } from '../../../services/dine-in-cart.service';
+import {
+  DineInService,
+  type DineInAdmission,
+  type DineInBill,
+  type RoundFlush,
+} from '../../../services/dine-in.service';
 import { LangService } from '../../../services/lang.service';
 import { MenuService } from '../../../services/menu.service';
+import { PaymentSessionService } from '../../../services/payment-session.service';
 import { TranslateService } from '../../../services/translate.service';
 import type { CustomerUiResponse, MenuItem, MenuItemVariant } from '../../../types/home.types';
+
+const LOCATION = 'location-1';
+const SESSION = 'session-1';
 
 class FakeTranslateService {
   get = (key: string): string => key;
@@ -16,12 +31,138 @@ class FakeTranslateService {
   current = (): Record<string, unknown> => ({});
 }
 
+class FakeSession {
+  private authenticated = true;
+  isAuthenticated = () => this.authenticated;
+  setAuthenticated(value: boolean): void {
+    this.authenticated = value;
+  }
+}
+
 class FakeDineInService {
   private readonly admissionSig = signal<DineInAdmission | null>(null);
   admission = () => this.admissionSig();
+  bill = vi.fn<(sessionId: string) => Promise<DineInBill>>();
+  requestBill = vi.fn<(sessionId: string) => Promise<DineInBill>>();
+  attachRound = vi.fn<(sessionId: string, orderId: string) => Promise<DineInBill>>();
+  private readonly queued: { sessionId: string; orderId: string }[] = [];
+  queueRound = vi.fn((sessionId: string, orderId: string) => {
+    this.queued.push({ sessionId, orderId });
+  });
+  pendingRoundCount = (sessionId: string) => this.queued.filter((round) => round.sessionId === sessionId).length;
+  /** The real service's queue-then-attach, minus its storage and failure classification. */
+  flushPendingRounds = vi.fn(async (sessionId: string): Promise<RoundFlush> => {
+    let latest: DineInBill | null = null;
+    for (const round of this.queued.filter((entry) => entry.sessionId === sessionId)) {
+      latest = await this.attachRound(round.sessionId, round.orderId);
+      this.queued.splice(this.queued.indexOf(round), 1);
+    }
+    return { bill: latest, pending: this.pendingRoundCount(sessionId), abandoned: 0 };
+  });
+  isGuestSessionEnded = vi.fn().mockReturnValue(false);
+  clear = vi.fn(() => this.admissionSig.set(null));
+
   seed(value: DineInAdmission | null): void {
     this.admissionSig.set(value);
   }
+}
+
+/** An in-memory stand-in for the table basket: it keeps lines and bumps a version, like the platform. */
+class FakeCartService {
+  readonly cart = signal<PlatformCart | null>(null);
+  private version = 1;
+  private preloaded: readonly PlatformCartLine[] | null = null;
+
+  preload(lines: readonly PlatformCartLine[]): void {
+    this.preloaded = lines;
+  }
+
+  private open(lines: readonly PlatformCartLine[]): PlatformCart {
+    const cart = cartOf(lines, this.version);
+    this.cart.set(cart);
+    return cart;
+  }
+
+  ensure = vi.fn(async (_location: string, _mode: string, create = true) => {
+    if (this.cart()) {
+      return this.cart();
+    }
+    if (this.preloaded) {
+      return this.open(this.preloaded);
+    }
+    return create ? this.open([]) : null;
+  });
+
+  putLine = vi.fn(async (input: { variantId: string; quantity: number }) => {
+    const others = (this.cart()?.lines ?? []).filter((line) => line.lineKey !== input.variantId);
+    this.version++;
+    return this.open([
+      ...others,
+      { lineKey: input.variantId, variantId: input.variantId, quantity: input.quantity, hasCustomerNote: false },
+    ]);
+  });
+
+  removeLine = vi.fn(async (lineKey: string) => {
+    this.version++;
+    return this.open((this.cart()?.lines ?? []).filter((line) => line.lineKey !== lineKey));
+  });
+
+  price = vi.fn(async (): Promise<PricedCart> => {
+    const cart = this.cart()!;
+    const count = cart.lines.reduce((sum, line) => sum + line.quantity, 0);
+    return {
+      cartId: cart.cartId,
+      cartVersion: cart.version,
+      quoteId: 'quote-1',
+      contextHash: 'hash-1',
+      currency: 'UZS',
+      subtotalMinor: 45_000 * count,
+      taxMinor: 0,
+      totalMinor: 45_000 * count,
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+      discountMinor: 0,
+    };
+  });
+
+  paymentMethods = vi.fn(async () => ({
+    cartId: 'cart-1',
+    currency: 'UZS',
+    methodCodes: ['CASH'],
+    warnings: [],
+  }));
+
+  checkout = vi.fn(async (_input?: { priced: PricedCart; paymentMethodCode: string; idempotencyKey: string }) => ({
+    orderId: 'order-1',
+    publicOrderNumber: '0001',
+    status: 'CONFIRMED',
+    version: 1,
+    outcome: 'CREATED',
+    warnings: [],
+  }));
+
+  discard = vi.fn((_location: string, _scope?: string) => {
+    this.cart.set(null);
+    this.preloaded = null;
+  });
+}
+
+function cartOf(lines: readonly PlatformCartLine[], version = 1): PlatformCart {
+  return {
+    cartId: 'cart-1',
+    locationId: LOCATION,
+    status: 'OPEN',
+    currency: 'UZS',
+    fulfillmentMode: 'DINE_IN',
+    version,
+    quoteId: null,
+    contextHash: null,
+    expiresAt: null,
+    lines,
+  };
+}
+
+function line(variantId: string, quantity: number): PlatformCartLine {
+  return { lineKey: variantId, variantId, quantity, hasCustomerNote: false };
 }
 
 class FakeMenuService {
@@ -29,9 +170,13 @@ class FakeMenuService {
   home = vi.fn<(...args: unknown[]) => Promise<CustomerUiResponse>>();
 }
 
+class FakePaymentSessionService {
+  open = vi.fn();
+}
+
 function variant(overrides: Partial<MenuItemVariant> = {}): MenuItemVariant {
   return {
-    id: 'v1',
+    id: 'variant-1',
     name: '',
     active: true,
     onSaleNow: true,
@@ -81,35 +226,78 @@ function menu(items: MenuItem[] = [dish('p1', 'Osh')]): CustomerUiResponse {
 function admission(overrides: Partial<DineInAdmission> = {}): DineInAdmission {
   return {
     expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
-    mode: 'VIEW_ONLY',
+    mode: 'ORDER_AND_PAY',
     tenantId: 'tenant-1',
     brandId: 'brand-1',
-    locationId: 'location-1',
+    locationId: LOCATION,
     tableCode: 'T7',
-    openSessionId: null,
+    openSessionId: SESSION,
     channelCode: 'QRTABLE',
+    ...overrides,
+  };
+}
+
+function bill(overrides: Partial<DineInBill> = {}): DineInBill {
+  return {
+    sessionId: SESSION,
+    status: 'OPEN',
+    currency: 'UZS',
+    totalMinor: 0,
+    roundCount: 0,
+    orderIds: [],
     ...overrides,
   };
 }
 
 function setUp() {
   const dineIn = new FakeDineInService();
+  const carts = new FakeCartService();
   const menuService = new FakeMenuService();
+  const session = new FakeSession();
+  const payments = new FakePaymentSessionService();
+  menuService.home.mockResolvedValue(menu());
+  dineIn.bill.mockResolvedValue(bill());
+
   TestBed.configureTestingModule({
     imports: [DineInTableComponent],
     providers: [
       provideRouter([]),
       { provide: DineInService, useValue: dineIn },
+      { provide: DineInCartService, useValue: carts },
       { provide: MenuService, useValue: menuService },
+      { provide: Session, useValue: session },
+      { provide: PaymentSessionService, useValue: payments },
       { provide: LangService, useValue: { langId: () => 'uz' } },
       { provide: TranslateService, useClass: FakeTranslateService },
     ],
   });
   const fixture = TestBed.createComponent(DineInTableComponent);
-  return { fixture, dineIn, menuService, host: fixture.nativeElement as HTMLElement };
+  const router = TestBed.inject(Router);
+  const host = fixture.nativeElement as HTMLElement;
+  return {
+    fixture,
+    host,
+    dineIn,
+    carts,
+    menuService,
+    session,
+    payments,
+    router,
+    q: (testId: string) => host.querySelector<HTMLElement>(`[data-testid="${testId}"]`),
+    all: (testId: string) => Array.from(host.querySelectorAll<HTMLElement>(`[data-testid="${testId}"]`)),
+    click: async (testId: string) => {
+      host.querySelector<HTMLElement>(`[data-testid="${testId}"]`)?.click();
+      await settle(fixture);
+    },
+  };
 }
 
-async function render(fixture: ReturnType<typeof setUp>['fixture']): Promise<void> {
+type View = ReturnType<typeof setUp>;
+
+async function settle(fixture: View['fixture']): Promise<void> {
+  fixture.detectChanges();
+  await fixture.whenStable();
+  await new Promise((resolve) => setTimeout(resolve, 0));
   fixture.detectChanges();
   await fixture.whenStable();
   await new Promise((resolve) => setTimeout(resolve, 0));
@@ -117,50 +305,81 @@ async function render(fixture: ReturnType<typeof setUp>['fixture']): Promise<voi
 }
 
 describe('DineInTableComponent', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+  });
+
   it('asks the visitor to scan a table when nothing has been scanned this visit', async () => {
-    const { fixture, host, menuService } = setUp();
+    const view = setUp();
 
-    await render(fixture);
+    await settle(view.fixture);
 
-    expect(host.querySelector('[data-testid="dine-in-no-admission"]')).not.toBeNull();
-    expect(host.querySelector('[data-testid="dish-card"]')).toBeNull();
-    expect(menuService.home).not.toHaveBeenCalled();
+    expect(view.q('dine-in-no-admission')).not.toBeNull();
+    expect(view.q('dish-card')).toBeNull();
+    expect(view.menuService.home).not.toHaveBeenCalled();
+    expect(view.carts.ensure).not.toHaveBeenCalled();
   });
 
   describe('VIEW_ONLY -- the menu-only mode', () => {
     it('shows the table and its menu, read on the table\'s own location and QR channel', async () => {
-      const { fixture, host, dineIn, menuService } = setUp();
-      dineIn.seed(admission());
-      menuService.home.mockResolvedValue(menu([dish('p1', 'Osh'), dish('p2', 'Norin')]));
+      const view = setUp();
+      view.dineIn.seed(admission({ mode: 'VIEW_ONLY', openSessionId: null }));
+      view.menuService.home.mockResolvedValue(menu([dish('p1', 'Osh'), dish('p2', 'Norin')]));
 
-      await render(fixture);
+      await settle(view.fixture);
 
-      // The branch and channel come from the admission, never from this
-      // build's own config: a table's QR_TABLE channel is resolved per scan.
-      expect(menuService.home).toHaveBeenCalledWith('uz', 'location-1', 'QRTABLE');
-      expect(host.querySelector('[data-testid="dine-in-table-code"]')?.textContent).toContain('"code":"T7"');
-      expect(host.querySelectorAll('[data-testid="dish-card"]').length).toBe(2);
-      expect(host.textContent).toContain('Norin');
+      // The branch and channel come from the admission, never from this build's
+      // own config: a table's QR_TABLE channel is resolved per scan.
+      expect(view.menuService.home).toHaveBeenCalledWith('uz', LOCATION, 'QRTABLE');
+      expect(view.q('dine-in-table-code')?.textContent).toContain('"code":"T7"');
+      expect(view.all('dish-card').length).toBe(2);
+      expect(view.host.textContent).toContain('Norin');
     });
 
-    it('offers no way to order: no link into the delivery product page, no add control, no ordering notice', async () => {
-      const { fixture, host, dineIn, menuService } = setUp();
-      dineIn.seed(admission());
-      menuService.home.mockResolvedValue(menu());
+    it('offers no way to order: no link into the delivery product page, no control, no basket, no bill, no sign-in prompt', async () => {
+      const view = setUp();
+      view.dineIn.seed(admission({ mode: 'VIEW_ONLY', openSessionId: null }));
 
-      await render(fixture);
+      await settle(view.fixture);
 
-      const card = host.querySelector('[data-testid="dish-card"]') as HTMLElement;
+      const card = view.q('dish-card')!;
       expect(card.tagName).not.toBe('A');
       expect(card.getAttribute('href')).toBeNull();
-      expect(host.querySelector('a[href^="/product"]')).toBeNull();
-      expect(host.querySelector('[data-testid="dine-in-ordering-unavailable"]')).toBeNull();
+      expect(view.host.querySelector('a[href^="/product"]')).toBeNull();
+      expect(view.q('dine-in-add')).toBeNull();
+      expect(view.q('dine-in-order')).toBeNull();
+      expect(view.q('dine-in-bill')).toBeNull();
+      expect(view.q('dine-in-signin')).toBeNull();
+      expect(view.q('dine-in-not-seated')).toBeNull();
+    });
+
+    it('touches neither the basket, the bill, nor the platform\'s ordering calls', async () => {
+      const view = setUp();
+      view.dineIn.seed(admission({ mode: 'VIEW_ONLY', openSessionId: null }));
+
+      await settle(view.fixture);
+
+      expect(view.carts.ensure).not.toHaveBeenCalled();
+      expect(view.dineIn.bill).not.toHaveBeenCalled();
+      expect(view.dineIn.flushPendingRounds).not.toHaveBeenCalled();
+    });
+
+    it('even a session id on a menu-only admission opens nothing', async () => {
+      const view = setUp();
+      view.dineIn.seed(admission({ mode: 'VIEW_ONLY', openSessionId: SESSION }));
+
+      await settle(view.fixture);
+
+      expect(view.q('dine-in-add')).toBeNull();
+      expect(view.carts.ensure).not.toHaveBeenCalled();
+      expect(view.dineIn.bill).not.toHaveBeenCalled();
     });
 
     it('marks a sold-out dish and a dish outside its sale window, so a guest is not shown a dish they cannot have as if they could', async () => {
-      const { fixture, host, dineIn, menuService } = setUp();
-      dineIn.seed(admission());
-      menuService.home.mockResolvedValue(
+      const view = setUp();
+      view.dineIn.seed(admission({ mode: 'VIEW_ONLY', openSessionId: null }));
+      view.menuService.home.mockResolvedValue(
         menu([
           dish('p1', 'Osh', [variant({ active: false })]),
           dish('p2', 'Nonushta', [variant({ onSaleNow: false })]),
@@ -168,59 +387,862 @@ describe('DineInTableComponent', () => {
         ]),
       );
 
-      await render(fixture);
+      await settle(view.fixture);
 
-      expect(host.querySelectorAll('[data-testid="dish-sold-out"]').length).toBe(1);
-      expect(host.querySelectorAll('[data-testid="dish-out-of-window"]').length).toBe(1);
+      expect(view.all('dish-sold-out').length).toBe(1);
+      expect(view.all('dish-out-of-window').length).toBe(1);
     });
 
     it('omits the channel when the tenant registered none, so the build\'s own channel applies', async () => {
-      const { fixture, dineIn, menuService } = setUp();
-      dineIn.seed(admission({ channelCode: null }));
-      menuService.home.mockResolvedValue(menu());
+      const view = setUp();
+      view.dineIn.seed(admission({ mode: 'VIEW_ONLY', openSessionId: null, channelCode: null }));
 
-      await render(fixture);
+      await settle(view.fixture);
 
-      expect(menuService.home).toHaveBeenCalledWith('uz', 'location-1', undefined);
+      expect(view.menuService.home).toHaveBeenCalledWith('uz', LOCATION, undefined);
     });
 
     it('says the menu is unavailable when it cannot be read, instead of an empty page', async () => {
-      const { fixture, host, dineIn, menuService } = setUp();
-      dineIn.seed(admission());
-      menuService.home.mockRejectedValue(new Error('offline'));
+      const view = setUp();
+      view.dineIn.seed(admission({ mode: 'VIEW_ONLY', openSessionId: null }));
+      view.menuService.home.mockRejectedValue(new Error('offline'));
 
-      await render(fixture);
+      await settle(view.fixture);
 
-      expect(host.querySelector('[data-testid="dine-in-menu-unavailable"]')).not.toBeNull();
-      expect(host.querySelector('[data-testid="dish-card"]')).toBeNull();
+      expect(view.q('dine-in-menu-unavailable')).not.toBeNull();
+      expect(view.q('dish-card')).toBeNull();
     });
 
     it('says the menu is unavailable when the branch has no dishes', async () => {
-      const { fixture, host, dineIn, menuService } = setUp();
-      dineIn.seed(admission());
-      menuService.home.mockResolvedValue(menu([]));
+      const view = setUp();
+      view.dineIn.seed(admission({ mode: 'VIEW_ONLY', openSessionId: null }));
+      view.menuService.home.mockResolvedValue(menu([]));
 
-      await render(fixture);
+      await settle(view.fixture);
 
-      expect(host.querySelector('[data-testid="dine-in-menu-unavailable"]')).not.toBeNull();
+      expect(view.q('dine-in-menu-unavailable')).not.toBeNull();
     });
   });
 
-  describe('ORDER_AND_PAY -- ordering at the table is not built in this app', () => {
-    it('still shows the menu, and says plainly that ordering from the table is not available here', async () => {
-      const { fixture, host, dineIn, menuService } = setUp();
-      dineIn.seed(admission({ mode: 'ORDER_AND_PAY', openSessionId: 'session-1' }));
-      menuService.home.mockResolvedValue(menu());
+  describe('ORDER_AND_PAY at a table nobody has seated', () => {
+    it('shows the menu with an explanation instead of ordering controls, and opens nothing', async () => {
+      const view = setUp();
+      view.dineIn.seed(admission({ openSessionId: null }));
 
-      await render(fixture);
+      await settle(view.fixture);
 
-      expect(host.querySelector('[data-testid="dine-in-ordering-unavailable"]')?.textContent).toContain(
-        'dineIn.orderingUnavailable',
-      );
-      expect(host.querySelectorAll('[data-testid="dish-card"]').length).toBe(1);
-      // No cart is opened on the guest's behalf, and nothing links into the
-      // delivery flow.
-      expect(host.querySelector('a[href^="/product"]')).toBeNull();
+      expect(view.q('dine-in-not-seated')).not.toBeNull();
+      expect(view.q('dish-card')).not.toBeNull();
+      expect(view.q('dine-in-add')).toBeNull();
+      expect(view.q('dine-in-order')).toBeNull();
+      expect(view.q('dine-in-signin')).toBeNull();
+      expect(view.carts.ensure).not.toHaveBeenCalled();
+      expect(view.dineIn.bill).not.toHaveBeenCalled();
     });
+  });
+
+  describe('ORDER_AND_PAY, seated, signed out', () => {
+    it('shows the menu with add controls and a way to sign in, and touches no cart', async () => {
+      const view = setUp();
+      view.dineIn.seed(admission());
+      view.session.setAuthenticated(false);
+
+      await settle(view.fixture);
+
+      expect(view.q('dine-in-add')).not.toBeNull();
+      expect(view.q('dine-in-signin')).not.toBeNull();
+      expect(view.carts.ensure).not.toHaveBeenCalled();
+    });
+
+    it('sends a tap on add straight to sign-in without touching the basket', async () => {
+      const view = setUp();
+      view.dineIn.seed(admission());
+      view.session.setAuthenticated(false);
+      const navigate = vi.spyOn(view.router, 'navigate').mockResolvedValue(true);
+
+      await settle(view.fixture);
+      await view.click('dine-in-add');
+
+      expect(navigate).toHaveBeenCalledWith(['/auth', 'login']);
+      expect(view.carts.ensure).not.toHaveBeenCalled();
+      expect(view.carts.putLine).not.toHaveBeenCalled();
+    });
+
+    describe('returning to the table after sign-in', () => {
+      it('remembers /dine-in/table when the sign-in button is tapped', async () => {
+        const view = setUp();
+        view.dineIn.seed(admission());
+        view.session.setAuthenticated(false);
+        const navigate = vi.spyOn(view.router, 'navigate').mockResolvedValue(true);
+
+        await settle(view.fixture);
+        await view.click('dine-in-signin');
+
+        expect(navigate).toHaveBeenCalledWith(['/auth', 'login']);
+        expect(TestBed.inject(ReturnDestination).consume()).toBe('/dine-in/table');
+      });
+
+      it('remembers it when the guest taps add while signed out, too', async () => {
+        const view = setUp();
+        view.dineIn.seed(admission());
+        view.session.setAuthenticated(false);
+        vi.spyOn(view.router, 'navigate').mockResolvedValue(true);
+
+        await settle(view.fixture);
+        await view.click('dine-in-add');
+
+        expect(TestBed.inject(ReturnDestination).consume()).toBe('/dine-in/table');
+      });
+
+      it('carries nothing but the path: no query, no state, no token', async () => {
+        const view = setUp();
+        view.dineIn.seed(admission());
+        view.session.setAuthenticated(false);
+        const navigate = vi.spyOn(view.router, 'navigate').mockResolvedValue(true);
+
+        await settle(view.fixture);
+        await view.click('dine-in-signin');
+
+        expect(navigate).toHaveBeenCalledTimes(1);
+        expect(navigate.mock.calls[0]).toEqual([['/auth', 'login']]);
+        const stored = Array.from({ length: sessionStorage.length }, (_, i) =>
+          sessionStorage.getItem(sessionStorage.key(i) ?? ''),
+        ).join('|');
+        expect(stored).toContain('/dine-in/table');
+        expect(stored).not.toContain('printed');
+      });
+    });
+
+    it('still shows the running bill: it is the table\'s, read with the guest token alone', async () => {
+      const view = setUp();
+      view.dineIn.seed(admission());
+      view.session.setAuthenticated(false);
+      view.dineIn.bill.mockResolvedValue(bill({ totalMinor: 90_000, roundCount: 2 }));
+
+      await settle(view.fixture);
+
+      expect(view.dineIn.bill).toHaveBeenCalledWith(SESSION);
+      expect(view.q('dine-in-bill-total')?.textContent).toContain('90 000');
+    });
+  });
+
+  describe('ORDER_AND_PAY, seated, signed in', () => {
+    it('resumes the table: the menu, the running bill, and the table\'s own basket -- opened only if it exists', async () => {
+      const view = setUp();
+      view.dineIn.seed(admission());
+      view.dineIn.bill.mockResolvedValue(bill({ totalMinor: 45_000, roundCount: 1 }));
+
+      await settle(view.fixture);
+
+      expect(view.dineIn.bill).toHaveBeenCalledWith(SESSION);
+      expect(view.q('dine-in-bill-total')?.textContent).toContain('45 000');
+      expect(view.q('dine-in-bill-rounds')?.textContent).toContain('"count":1');
+      // A browse mints no cart: create=false. The cart is the table's own --
+      // DINE_IN, on the table's QR channel, remembered against its session.
+      expect(view.carts.ensure).toHaveBeenCalledWith(LOCATION, 'DINE_IN', false, 'QRTABLE', SESSION);
+      expect(view.q('dine-in-order')).toBeNull();
+    });
+
+    it('shows what the basket already holds and prices it', async () => {
+      const view = setUp();
+      view.dineIn.seed(admission());
+      view.carts.preload([line('variant-1', 2)]);
+
+      await settle(view.fixture);
+
+      expect(view.q('dine-in-quantity')?.textContent).toContain('2');
+      expect(view.q('dine-in-cart-count')?.textContent).toContain('"count":2');
+      expect(view.q('dine-in-cart-total')?.textContent).toContain('90 000');
+      expect(view.carts.price).toHaveBeenCalled();
+    });
+
+    it('adds a dish: opens the basket, puts the line, prices it, and offers the order', async () => {
+      const view = setUp();
+      view.dineIn.seed(admission());
+
+      await settle(view.fixture);
+      await view.click('dine-in-add');
+
+      expect(view.carts.ensure).toHaveBeenLastCalledWith(LOCATION, 'DINE_IN', true, 'QRTABLE', SESSION);
+      expect(view.carts.putLine).toHaveBeenCalledWith({ variantId: 'variant-1', quantity: 1 });
+      expect(view.carts.price).toHaveBeenCalled();
+      expect(view.q('dine-in-cart-count')?.textContent).toContain('"count":1');
+      expect(view.q('dine-in-cart-total')?.textContent).toContain('45 000');
+      expect((view.q('dine-in-checkout') as HTMLButtonElement).disabled).toBe(false);
+    });
+
+    it('steps a dish up and down, and taking the last one out removes the line and the order panel', async () => {
+      const view = setUp();
+      view.dineIn.seed(admission());
+      await settle(view.fixture);
+      await view.click('dine-in-add');
+
+      await view.click('dine-in-increase');
+      expect(view.carts.putLine).toHaveBeenLastCalledWith({ variantId: 'variant-1', quantity: 2 });
+      expect(view.q('dine-in-cart-total')?.textContent).toContain('90 000');
+
+      await view.click('dine-in-decrease');
+      expect(view.carts.putLine).toHaveBeenLastCalledWith({ variantId: 'variant-1', quantity: 1 });
+
+      await view.click('dine-in-decrease');
+      expect(view.carts.removeLine).toHaveBeenCalledWith('variant-1');
+      expect(view.q('dine-in-order')).toBeNull();
+      expect(view.q('dine-in-add')).not.toBeNull();
+    });
+
+    it('takes one write at a time: a second tap while the first is in flight is not sent', async () => {
+      const view = setUp();
+      view.dineIn.seed(admission());
+      await settle(view.fixture);
+      let release!: () => void;
+      const gate = new Promise<void>((resolve) => (release = resolve));
+      const original = view.carts.putLine.getMockImplementation()!;
+      view.carts.putLine.mockImplementation(async (input) => {
+        await gate;
+        return original(input);
+      });
+
+      view.q('dine-in-add')!.click();
+      await Promise.resolve();
+      view.fixture.detectChanges();
+      view.q('dine-in-add')?.click();
+      release();
+      await settle(view.fixture);
+
+      expect(view.carts.putLine).toHaveBeenCalledTimes(1);
+    });
+
+    it('when the platform refuses the dish, says why and leaves the basket as it was', async () => {
+      const view = setUp();
+      view.dineIn.seed(admission());
+      await settle(view.fixture);
+      view.carts.putLine.mockRejectedValue(
+        new HorecaOSApiError({
+          status: 422,
+          code: 'UNPROCESSABLE_STATE',
+          detail: 'closed',
+          problem: { status: 422, code: 'UNPROCESSABLE_STATE', reason: 'ITEM_OUT_OF_SALE_WINDOW' },
+        }),
+      );
+
+      await view.click('dine-in-add');
+
+      expect(view.q('dine-in-basket-error')?.textContent).toContain('errors.reason.itemOutOfSaleWindow');
+      expect(view.q('dine-in-order')).toBeNull();
+      expect(view.q('dine-in-add')).not.toBeNull();
+    });
+
+    it('a basket the platform will not price says why, and cannot be ordered', async () => {
+      const view = setUp();
+      view.dineIn.seed(admission());
+      await settle(view.fixture);
+      view.carts.price.mockRejectedValue(
+        new HorecaOSApiError({
+          status: 422,
+          code: 'VALIDATION_FAILED',
+          detail: 'unpriced',
+          problem: { status: 422, code: 'VALIDATION_FAILED', reason: 'ITEM_OUT_OF_SALE_WINDOW' },
+        }),
+      );
+
+      await view.click('dine-in-add');
+
+      expect(view.q('dine-in-pricing-error')?.textContent).toContain('errors.reason.itemOutOfSaleWindow');
+      expect((view.q('dine-in-checkout') as HTMLButtonElement).disabled).toBe(true);
+      // The total reads as unknown, never as free.
+      expect(view.q('dine-in-cart-total')?.textContent).toContain('—');
+    });
+
+    it('offers a choice of payment when the cart has several, and orders with the one chosen', async () => {
+      const view = setUp();
+      view.dineIn.seed(admission());
+      view.carts.paymentMethods.mockResolvedValue({
+        cartId: 'cart-1',
+        currency: 'UZS',
+        methodCodes: ['CASH', 'CLICK'],
+        warnings: [],
+      });
+      view.dineIn.attachRound.mockResolvedValue(bill({ totalMinor: 45_000, roundCount: 1 }));
+      vi.spyOn(
+        view.fixture.componentInstance as unknown as { redirectTo(url: string): void },
+        'redirectTo',
+      ).mockImplementation(() => {});
+      view.payments.open.mockResolvedValue({ checkoutUrl: 'https://pay.example/c' });
+      await settle(view.fixture);
+      await view.click('dine-in-add');
+
+      expect(view.all('dine-in-payment-option').map((option) => option.textContent?.trim())).toEqual([
+        'cart.cash',
+        'cart.click',
+      ]);
+      view.all('dine-in-payment-option')[1].click();
+      await settle(view.fixture);
+      await view.click('dine-in-checkout');
+
+      expect(view.carts.checkout).toHaveBeenCalledWith(
+        expect.objectContaining({ paymentMethodCode: 'CLICK' }),
+      );
+    });
+
+    it('shows no payment choice when there is only one way to pay, and uses it', async () => {
+      const view = setUp();
+      view.dineIn.seed(admission());
+      view.dineIn.attachRound.mockResolvedValue(bill({ totalMinor: 45_000, roundCount: 1 }));
+      await settle(view.fixture);
+      await view.click('dine-in-add');
+
+      expect(view.q('dine-in-payment-options')).toBeNull();
+      await view.click('dine-in-checkout');
+
+      expect(view.carts.checkout).toHaveBeenCalledWith(expect.objectContaining({ paymentMethodCode: 'CASH' }));
+    });
+
+    it('says so when no way to pay is offered, and does not send an order without one', async () => {
+      const view = setUp();
+      view.dineIn.seed(admission());
+      view.carts.paymentMethods.mockResolvedValue({ cartId: 'cart-1', currency: 'UZS', methodCodes: [], warnings: [] });
+      await settle(view.fixture);
+      await view.click('dine-in-add');
+
+      await view.click('dine-in-checkout');
+
+      expect(view.carts.checkout).not.toHaveBeenCalled();
+      expect(view.q('dine-in-checkout-error')?.textContent).toContain('cart.noPaymentMethodSelected');
+    });
+  });
+
+  describe('placing the order -- checkout, then the round on the table\'s bill', () => {
+    async function withBasket(configure: (view: View) => void = () => {}): Promise<View> {
+      const view = setUp();
+      view.dineIn.seed(admission());
+      view.dineIn.attachRound.mockResolvedValue(bill({ totalMinor: 45_000, roundCount: 1, orderIds: ['order-1'] }));
+      configure(view);
+      await settle(view.fixture);
+      await view.click('dine-in-add');
+      return view;
+    }
+
+    it('checks the priced basket out, queues the order for the table, attaches it, and clears the basket', async () => {
+      const view = await withBasket();
+
+      await view.click('dine-in-checkout');
+
+      expect(view.carts.checkout).toHaveBeenCalledWith({
+        priced: expect.objectContaining({ quoteId: 'quote-1', contextHash: 'hash-1' }),
+        paymentMethodCode: 'CASH',
+        idempotencyKey: expect.any(String),
+      });
+      expect(view.dineIn.queueRound).toHaveBeenCalledWith(SESSION, 'order-1');
+      expect(view.dineIn.attachRound).toHaveBeenCalledWith(SESSION, 'order-1');
+      // Remembered against the session, so the next evening's basket is a new one.
+      expect(view.carts.discard).toHaveBeenCalledWith(LOCATION, SESSION);
+      expect(view.q('dine-in-order')).toBeNull();
+      expect(view.q('dine-in-bill-total')?.textContent).toContain('45 000');
+      // Said on the screen: this app renders no toasts.
+      expect(view.q('dine-in-order-placed')?.textContent).toContain('dineIn.orderPlaced');
+    });
+
+    it('does not say the order is placed while it is not yet on the table bill', async () => {
+      const view = await withBasket((v) => {
+        v.dineIn.flushPendingRounds.mockResolvedValue({ bill: null, pending: 1, abandoned: 0 });
+      });
+
+      await view.click('dine-in-checkout');
+
+      expect(view.q('dine-in-order-placed')).toBeNull();
+    });
+
+    it('does not say the order is placed when the platform refused to put it on the bill', async () => {
+      const view = await withBasket((v) => {
+        v.dineIn.flushPendingRounds.mockResolvedValue({ bill: null, pending: 0, abandoned: 1 });
+      });
+
+      await view.click('dine-in-checkout');
+
+      expect(view.q('dine-in-order-placed')).toBeNull();
+    });
+
+    it('takes the message away as soon as the guest starts another order', async () => {
+      const view = await withBasket();
+      await view.click('dine-in-checkout');
+      expect(view.q('dine-in-order-placed')).not.toBeNull();
+
+      await view.click('dine-in-add');
+
+      expect(view.q('dine-in-order-placed')).toBeNull();
+    });
+
+    it('queues the order BEFORE the attach is tried, so a lost response cannot lose it', async () => {
+      const order: string[] = [];
+      const view = await withBasket((v) => {
+        v.dineIn.queueRound.mockImplementation(() => void order.push('queue'));
+        v.dineIn.flushPendingRounds.mockImplementation(async () => {
+          order.push('flush');
+          return { bill: null, pending: 1, abandoned: 0 };
+        });
+      });
+
+      await view.click('dine-in-checkout');
+
+      expect(order).toEqual(['queue', 'flush']);
+    });
+
+    it('keeps the same idempotency key across a retry after the network failed', async () => {
+      const view = await withBasket();
+      view.carts.checkout.mockRejectedValueOnce(
+        new HorecaOSApiError({ status: 0, code: 'NETWORK_UNREACHABLE', detail: 'offline' }),
+      );
+
+      await view.click('dine-in-checkout');
+      await view.click('dine-in-checkout');
+
+      const keys = view.carts.checkout.mock.calls.map((call) => call[0]?.idempotencyKey);
+      expect(keys).toHaveLength(2);
+      expect(keys[0]).toBe(keys[1]);
+    });
+
+    it('takes a new key after the platform really refused the first attempt', async () => {
+      const view = await withBasket();
+      view.carts.checkout.mockRejectedValueOnce(
+        new HorecaOSApiError({ status: 422, code: 'UNPROCESSABLE_STATE', detail: 'no' }),
+      );
+
+      await view.click('dine-in-checkout');
+      await view.click('dine-in-checkout');
+
+      const keys = view.carts.checkout.mock.calls.map((call) => call[0]?.idempotencyKey);
+      expect(keys[0]).not.toBe(keys[1]);
+    });
+
+    it('a refused checkout says why, queues nothing, and keeps the basket', async () => {
+      const view = await withBasket();
+      view.carts.checkout.mockRejectedValue(
+        new HorecaOSApiError({
+          status: 422,
+          code: 'UNPROCESSABLE_STATE',
+          detail: 'closed',
+          problem: { status: 422, code: 'UNPROCESSABLE_STATE', reason: 'ITEM_UNAVAILABLE' },
+        }),
+      );
+      // ITEM_UNAVAILABLE is not a reason this client maps; the ADR 0031 code is.
+
+      await view.click('dine-in-checkout');
+
+      expect(view.q('dine-in-checkout-error')).not.toBeNull();
+      expect(view.dineIn.queueRound).not.toHaveBeenCalled();
+      expect(view.carts.discard).not.toHaveBeenCalled();
+      expect(view.q('dine-in-order')).not.toBeNull();
+    });
+
+    it('an order the platform REJECTED is not an order: nothing is queued, nothing is discarded', async () => {
+      const view = await withBasket();
+      view.carts.checkout.mockResolvedValue({
+        orderId: '',
+        publicOrderNumber: '',
+        status: 'REJECTED',
+        version: 0,
+        outcome: 'REJECTED',
+        warnings: [],
+      });
+
+      await view.click('dine-in-checkout');
+
+      expect(view.q('dine-in-checkout-error')?.textContent).toContain('cart.orderRejected');
+      expect(view.dineIn.queueRound).not.toHaveBeenCalled();
+      expect(view.carts.discard).not.toHaveBeenCalled();
+    });
+
+    it('a customer session that ended mid-checkout does not throw the guest out of their table', async () => {
+      const view = await withBasket();
+      view.carts.checkout.mockRejectedValue(
+        new HorecaOSApiError({ status: 401, code: 'UNAUTHENTICATED', detail: 'session ended' }),
+      );
+      view.dineIn.isGuestSessionEnded.mockReturnValue(true);
+
+      await view.click('dine-in-checkout');
+
+      // The guest token was not involved in that call; only a call made with it
+      // may end the table visit.
+      expect(view.dineIn.clear).not.toHaveBeenCalled();
+      expect(view.q('dine-in-table-code')).not.toBeNull();
+      expect(view.q('dine-in-checkout-error')).not.toBeNull();
+    });
+
+    it('sends the guest to the provider\'s checkout for an online method -- after the round is on the bill', async () => {
+      const order: string[] = [];
+      const view = await withBasket((v) => {
+        v.carts.paymentMethods.mockResolvedValue({
+          cartId: 'cart-1',
+          currency: 'UZS',
+          methodCodes: ['CLICK'],
+          warnings: [],
+        });
+        v.dineIn.flushPendingRounds.mockImplementation(async () => {
+          order.push('attach');
+          return { bill: bill({ totalMinor: 45_000, roundCount: 1 }), pending: 0, abandoned: 0 };
+        });
+        v.payments.open.mockImplementation(async () => {
+          order.push('payment-session');
+          return { checkoutUrl: 'https://pay.example/checkout' };
+        });
+      });
+      const redirect = vi
+        .spyOn(view.fixture.componentInstance as unknown as { redirectTo(url: string): void }, 'redirectTo')
+        .mockImplementation(() => {});
+
+      await view.click('dine-in-checkout');
+
+      expect(view.payments.open).toHaveBeenCalledWith('order-1');
+      expect(redirect).toHaveBeenCalledWith('https://pay.example/checkout');
+      expect(order).toEqual(['attach', 'payment-session']);
+    });
+
+    it('says the order was placed but the payment page did not open, and does not redirect', async () => {
+      const view = await withBasket((v) => {
+        v.carts.paymentMethods.mockResolvedValue({
+          cartId: 'cart-1',
+          currency: 'UZS',
+          methodCodes: ['PAYME'],
+          warnings: [],
+        });
+        v.payments.open.mockRejectedValue(new Error('offline'));
+      });
+      const redirect = vi
+        .spyOn(view.fixture.componentInstance as unknown as { redirectTo(url: string): void }, 'redirectTo')
+        .mockImplementation(() => {});
+
+      await view.click('dine-in-checkout');
+
+      expect(redirect).not.toHaveBeenCalled();
+      expect(view.q('dine-in-payment-error')?.textContent).toContain('cart.paymentSessionError');
+      // The order is with the kitchen and on the bill whatever happened to the payment page.
+      expect(view.dineIn.attachRound).toHaveBeenCalledWith(SESSION, 'order-1');
+    });
+
+    it('opens no payment session for cash', async () => {
+      const view = await withBasket();
+
+      await view.click('dine-in-checkout');
+
+      expect(view.payments.open).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('the bill', () => {
+    it('asks for the bill and shows, on the bill, that it has been asked for', async () => {
+      const view = setUp();
+      view.dineIn.seed(admission());
+      view.dineIn.bill.mockResolvedValue(bill({ totalMinor: 45_000, roundCount: 1 }));
+      view.dineIn.requestBill.mockResolvedValue(bill({ status: 'BILL_REQUESTED', totalMinor: 45_000, roundCount: 1 }));
+      await settle(view.fixture);
+      expect(view.q('dine-in-bill-requested')).toBeNull();
+
+      await view.click('dine-in-request-bill');
+
+      expect(view.dineIn.requestBill).toHaveBeenCalledWith(SESSION);
+      expect(view.q('dine-in-bill-requested')?.textContent).toContain('dineIn.billRequested');
+      // Asking again is pointless and the platform would only answer with the same bill.
+      expect(view.q('dine-in-request-bill')).toBeNull();
+    });
+
+    it('shows a bill already asked for as asked for, on arrival', async () => {
+      const view = setUp();
+      view.dineIn.seed(admission());
+      view.dineIn.bill.mockResolvedValue(bill({ status: 'BILL_REQUESTED', totalMinor: 45_000, roundCount: 1 }));
+
+      await settle(view.fixture);
+
+      expect(view.q('dine-in-bill-requested')).not.toBeNull();
+      expect(view.q('dine-in-request-bill')).toBeNull();
+    });
+
+    it('cannot ask for a bill with nothing on it', async () => {
+      const view = setUp();
+      view.dineIn.seed(admission());
+      view.dineIn.bill.mockResolvedValue(bill({ totalMinor: 0, roundCount: 0 }));
+
+      await settle(view.fixture);
+
+      expect((view.q('dine-in-request-bill') as HTMLButtonElement).disabled).toBe(true);
+    });
+
+    it('does not offer to ask for a bill that is not there yet', async () => {
+      const view = setUp();
+      view.dineIn.seed(admission());
+      view.dineIn.bill.mockRejectedValue(new Error('offline'));
+
+      await settle(view.fixture);
+
+      expect(view.q('dine-in-request-bill')).toBeNull();
+    });
+
+    it('a guest token the platform no longer recognises clears the visit instead of leaving a broken screen up', async () => {
+      const view = setUp();
+      view.dineIn.seed(admission());
+      view.dineIn.bill.mockRejectedValue(new Error('unauthenticated'));
+      view.dineIn.isGuestSessionEnded.mockReturnValue(true);
+
+      await settle(view.fixture);
+
+      expect(view.dineIn.clear).toHaveBeenCalled();
+      expect(view.q('dine-in-no-admission')).not.toBeNull();
+    });
+
+    it('asking for the bill with a token that has ended clears the visit too', async () => {
+      const view = setUp();
+      view.dineIn.seed(admission());
+      view.dineIn.bill.mockResolvedValue(bill({ totalMinor: 45_000, roundCount: 1 }));
+      await settle(view.fixture);
+      view.dineIn.requestBill.mockRejectedValue(new Error('unauthenticated'));
+      view.dineIn.isGuestSessionEnded.mockReturnValue(true);
+
+      await view.click('dine-in-request-bill');
+
+      expect(view.dineIn.clear).toHaveBeenCalled();
+    });
+  });
+});
+
+/**
+ * The bill is the only thing that ties a guest's order to their table: the
+ * kitchen ticket's table chip, the order board's row and the running total all
+ * read `dinein.session_orders`, and the only writer for a guest order is the
+ * second call checkout makes after the order exists. These specs run the real
+ * {@link DineInService} against a fake HTTP client, because what they prove is
+ * what goes over the wire when that second call is lost -- and that the guest
+ * token goes nowhere but its header.
+ */
+describe('DineInTableComponent -- against the real DineInService', () => {
+  const ADMISSION_KEY = 'horecaos_dinein_admission';
+  const ROUNDS_PATH = `/storefront/dine-in/sessions/${SESSION}/rounds`;
+
+  interface FakeApi {
+    get: ReturnType<typeof vi.fn>;
+    mutate: ReturnType<typeof vi.fn>;
+  }
+
+  function newApi(): FakeApi {
+    const api: FakeApi = { get: vi.fn(), mutate: vi.fn() };
+    api.get.mockResolvedValue(bill());
+    return api;
+  }
+
+  function setUpReal(api: FakeApi, guestToken = 'guest-token-1') {
+    localStorage.setItem(ADMISSION_KEY, JSON.stringify({ ...admission(), guestToken }));
+    const carts = new FakeCartService();
+    const menuService = new FakeMenuService();
+      const session = new FakeSession();
+    menuService.home.mockResolvedValue(menu());
+
+    TestBed.configureTestingModule({
+      imports: [DineInTableComponent],
+      providers: [
+        provideRouter([]),
+        { provide: ApiClient, useValue: api },
+        { provide: DineInCartService, useValue: carts },
+        { provide: MenuService, useValue: menuService },
+        { provide: Session, useValue: session },
+          { provide: PaymentSessionService, useValue: new FakePaymentSessionService() },
+        { provide: LangService, useValue: { langId: () => 'uz' } },
+        { provide: TranslateService, useClass: FakeTranslateService },
+      ],
+    });
+    const fixture = TestBed.createComponent(DineInTableComponent);
+    return { fixture, carts, session, host: fixture.nativeElement as HTMLElement };
+  }
+
+  async function tick(fixture: { detectChanges(): void }): Promise<void> {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    fixture.detectChanges();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    fixture.detectChanges();
+  }
+
+  async function placeOrder(view: ReturnType<typeof setUpReal>): Promise<void> {
+    view.fixture.detectChanges();
+    await tick(view.fixture);
+    view.host.querySelector<HTMLButtonElement>('[data-testid="dine-in-add"]')?.click();
+    await tick(view.fixture);
+    view.host.querySelector<HTMLButtonElement>('[data-testid="dine-in-checkout"]')?.click();
+    await tick(view.fixture);
+  }
+
+  function roundCalls(api: FakeApi): unknown[][] {
+    return api.mutate.mock.calls.filter((call) => call[1] === ROUNDS_PATH);
+  }
+
+  const offline = () =>
+    new HorecaOSApiError({ status: 0, code: 'NETWORK_UNREACHABLE', detail: 'The request did not reach the platform.' });
+
+  beforeEach(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+  });
+
+  it('attaches the round with the guest token in the header only, beside the customer\'s own session', async () => {
+    const api = newApi();
+    api.mutate.mockResolvedValue(bill({ totalMinor: 45_000, roundCount: 1, orderIds: ['order-1'] }));
+    const view = setUpReal(api, 'guest-token-secret');
+
+    await placeOrder(view);
+
+    const [method, path, options] = roundCalls(api)[0] as [string, string, Record<string, unknown>];
+    expect(method).toBe('POST');
+    expect(path).toBe(ROUNDS_PATH);
+    expect(options['headers']).toEqual({ 'X-Dine-In-Token': 'guest-token-secret' });
+    expect(options['body']).toEqual({ orderId: 'order-1' });
+    expect(options['anonymous']).not.toBe(true);
+    expect(path).not.toContain('guest-token-secret');
+    expect(view.host.textContent).not.toContain('guest-token-secret');
+  });
+
+  it('reads the bill anonymously: the table\'s own token, never the customer\'s bearer', async () => {
+    const api = newApi();
+    const view = setUpReal(api);
+
+    view.fixture.detectChanges();
+    await tick(view.fixture);
+
+    expect(api.get).toHaveBeenCalledWith(
+      `/storefront/dine-in/sessions/${SESSION}`,
+      { anonymous: true, headers: { 'X-Dine-In-Token': 'guest-token-1' } },
+    );
+  });
+
+  it('never lets the guest token reach the sign-in flow or its storage', async () => {
+    const api = newApi();
+    const view = setUpReal(api, 'guest-token-secret');
+    view.session.setAuthenticated(false);
+    const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+    view.fixture.detectChanges();
+    await tick(view.fixture);
+
+    view.host.querySelector<HTMLButtonElement>('[data-testid="dine-in-signin"]')?.click();
+    await tick(view.fixture);
+
+    expect(JSON.stringify(navigate.mock.calls)).not.toContain('guest-token-secret');
+    const session = Array.from({ length: sessionStorage.length }, (_, i) =>
+      sessionStorage.getItem(sessionStorage.key(i) ?? ''),
+    ).join('|');
+    expect(session).not.toContain('guest-token-secret');
+    expect(session).toContain('/dine-in/table');
+  });
+
+  it('keeps the placed order and attaches it when the guest comes back to the table', async () => {
+    const api = newApi();
+    api.mutate.mockRejectedValue(offline());
+    const first = setUpReal(api);
+    await placeOrder(first);
+    expect(roundCalls(api)).toHaveLength(1);
+
+    // The phone reloads the page with signal back: the order id is not in
+    // component state any more, only in what the device remembered.
+    first.fixture.destroy();
+    TestBed.resetTestingModule();
+    api.mutate.mockResolvedValue(bill({ totalMinor: 45_000, roundCount: 1, orderIds: ['order-1'] }));
+    const reloaded = setUpReal(api);
+    reloaded.fixture.detectChanges();
+    await tick(reloaded.fixture);
+
+    expect(roundCalls(api)).toHaveLength(2);
+    expect(roundCalls(api)[1]).toEqual(['POST', ROUNDS_PATH, expect.objectContaining({ body: { orderId: 'order-1' } })]);
+    expect(reloaded.host.querySelector('[data-testid="dine-in-bill-total"]')?.textContent).toContain('45 000');
+    expect(reloaded.host.querySelector('[data-testid="dine-in-round-pending"]')).toBeNull();
+  });
+
+  it('shows the unattached order, and a retry that lands it on the bill without a reload', async () => {
+    const api = newApi();
+    api.mutate.mockRejectedValue(offline());
+    const view = setUpReal(api);
+    await placeOrder(view);
+
+    expect(view.host.querySelector('[data-testid="dine-in-round-pending"]')).not.toBeNull();
+    expect(view.host.querySelector('[data-testid="dine-in-order-placed"]')).toBeNull();
+
+    api.mutate.mockResolvedValue(bill({ totalMinor: 45_000, roundCount: 1, orderIds: ['order-1'] }));
+    view.host.querySelector<HTMLButtonElement>('[data-testid="dine-in-round-retry"]')?.click();
+    await tick(view.fixture);
+
+    expect(roundCalls(api)).toHaveLength(2);
+    expect(view.host.querySelector('[data-testid="dine-in-round-pending"]')).toBeNull();
+    expect(view.host.querySelector('[data-testid="dine-in-bill-total"]')?.textContent).toContain('45 000');
+    // Success is the notice going away and the bill moving; only the failure spoke.
+    expect(view.host.querySelector('[data-testid="dine-in-round-lost"]')).toBeNull();
+    expect(view.host.querySelector('[data-testid="dine-in-order-placed"]')).toBeNull();
+  });
+
+  it('stops retrying an order the platform refuses for good, and tells the guest to ask staff', async () => {
+    const api = newApi();
+    api.mutate.mockRejectedValue(
+      new HorecaOSApiError({ status: 409, code: 'RESOURCE_CONFLICT', detail: 'The session is closed.' }),
+    );
+    const first = setUpReal(api);
+    await placeOrder(first);
+
+    expect(first.host.querySelector('[data-testid="dine-in-round-lost"]')?.textContent).toContain(
+      'dineIn.roundAttachFailed',
+    );
+    expect(first.host.querySelector('[data-testid="dine-in-round-pending"]')).toBeNull();
+
+    first.fixture.destroy();
+    TestBed.resetTestingModule();
+    const reloaded = setUpReal(api);
+    reloaded.fixture.detectChanges();
+    await tick(reloaded.fixture);
+
+    expect(roundCalls(api)).toHaveLength(1);
+  });
+
+  it('leaves the queue alone while the guest is signed out, and sends the notice button to sign-in', async () => {
+    const api = newApi();
+    api.mutate.mockRejectedValue(offline());
+    const first = setUpReal(api);
+    await placeOrder(first);
+    first.fixture.destroy();
+    TestBed.resetTestingModule();
+
+    const reloaded = setUpReal(api);
+    reloaded.session.setAuthenticated(false);
+    const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+    reloaded.fixture.detectChanges();
+    await tick(reloaded.fixture);
+
+    expect(roundCalls(api)).toHaveLength(1);
+    expect(reloaded.host.querySelector('[data-testid="dine-in-round-pending"]')).not.toBeNull();
+
+    reloaded.host.querySelector<HTMLButtonElement>('[data-testid="dine-in-round-retry"]')?.click();
+    await tick(reloaded.fixture);
+
+    expect(navigate).toHaveBeenCalledWith(['/auth', 'login']);
+    expect(roundCalls(api)).toHaveLength(1);
+  });
+
+  it('does not treat a lost signal or a refused sign-in as a refusal: the order stays queued', async () => {
+    const api = newApi();
+    api.mutate.mockRejectedValue(new HorecaOSApiError({ status: 401, code: 'UNAUTHENTICATED', detail: 'Sign in again.' }));
+    api.get.mockResolvedValue(bill());
+    const view = setUpReal(api);
+
+    await placeOrder(view);
+
+    expect(view.host.querySelector('[data-testid="dine-in-round-pending"]')).not.toBeNull();
+    expect(view.host.querySelector('[data-testid="dine-in-round-lost"]')).toBeNull();
+  });
+
+  it('a guest token the platform refuses ends the visit, and the unattached order waits for a re-scan', async () => {
+    const api = newApi();
+    api.mutate.mockRejectedValue(new HorecaOSApiError({ status: 401, code: 'UNAUTHENTICATED', detail: 'ended' }));
+    const view = setUpReal(api);
+    await placeOrder(view);
+    expect(view.host.querySelector('[data-testid="dine-in-round-pending"]')).not.toBeNull();
+
+    // The retry reads the bill with the guest token, and is told it has ended.
+    api.get.mockRejectedValue(new HorecaOSApiError({ status: 401, code: 'UNAUTHENTICATED', detail: 'ended' }));
+    view.host.querySelector<HTMLButtonElement>('[data-testid="dine-in-round-retry"]')?.click();
+    await tick(view.fixture);
+
+    expect(view.host.querySelector('[data-testid="dine-in-no-admission"]')).not.toBeNull();
+    expect(localStorage.getItem(ADMISSION_KEY)).toBeNull();
+    expect(localStorage.getItem('horecaos_dinein_pending_rounds')).toContain('order-1');
   });
 });

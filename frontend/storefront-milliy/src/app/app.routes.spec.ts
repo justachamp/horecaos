@@ -66,3 +66,64 @@ describe('app.routes: the table-QR flow (ADR 0047)', () => {
     expect(cart?.canActivate?.length).toBeGreaterThan(0);
   });
 });
+
+/** The deepest route the router settled on, as its configured path. */
+function deepestPath(router: Router): string | undefined {
+  let route = router.routerState.snapshot.root;
+  while (route.firstChild) {
+    route = route.firstChild;
+  }
+  return route.routeConfig?.path;
+}
+
+describe('app.routes: sign-in (ADR 0051)', () => {
+  beforeEach(() => localStorage.clear());
+
+  it('/auth/login is a real screen -- not swallowed by the catch-all that sends unknown paths home', async () => {
+    const router = setUp();
+
+    const ok = await router.navigateByUrl('/auth/login');
+
+    expect(ok).toBe(true);
+    expect(router.url).toBe('/auth/login');
+    expect(deepestPath(router)).toBe('login');
+  });
+
+  it('/auth/code is a real screen too', async () => {
+    const router = setUp();
+
+    await router.navigateByUrl('/auth/code');
+
+    expect(router.url).toBe('/auth/code');
+    expect(deepestPath(router)).toBe('code');
+  });
+
+  it('a bare /auth opens the login screen', async () => {
+    const router = setUp();
+
+    await router.navigateByUrl('/auth');
+
+    expect(router.url).toBe('/auth/login');
+  });
+
+  it('is not behind the sign-in guard: nobody signing in has a session yet', () => {
+    const auth = routes.find((route) => route.path === 'auth');
+
+    expect(auth).toBeDefined();
+    expect(auth?.canActivate).toBeUndefined();
+    for (const child of auth?.children ?? []) {
+      expect(child.canActivate).toBeUndefined();
+    }
+  });
+
+  it('a screen that needs an account now really does send an anonymous visitor to the sign-in screen', async () => {
+    const router = setUp();
+
+    await router.navigateByUrl('/cart');
+
+    // Before /auth/login existed this ended on /home: the guard's redirect hit
+    // the catch-all, and the visitor was never asked to sign in at all.
+    expect(router.url).toBe('/auth/login');
+    expect(deepestPath(router)).toBe('login');
+  });
+});
