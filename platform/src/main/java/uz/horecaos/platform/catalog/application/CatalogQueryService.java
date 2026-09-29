@@ -14,6 +14,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import uz.horecaos.platform.catalog.api.CatalogNameLocales;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.Category;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.EntityType;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.ModifierGroup;
@@ -21,7 +22,6 @@ import uz.horecaos.platform.catalog.domain.CatalogEntities.ModifierOption;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.PriceableType;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.Product;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.Variant;
-import uz.horecaos.platform.catalog.domain.CatalogLocales;
 import uz.horecaos.platform.catalog.domain.FiscalClassification;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore.AttachedGroup;
@@ -83,7 +83,7 @@ public class CatalogQueryService {
     /**
      * The locale a list screen resolves this brand's names in (row 10.12): the
      * brand's own default language, mapped onto the catalog's locale vocabulary
-     * ({@link CatalogLocales}), or the server's configured default only when the
+     * ({@link CatalogNameLocales}), or the server's configured default only when the
      * brand has chosen none.
      *
      * <p>This used to be the server config for every brand, so a brand whose
@@ -92,10 +92,8 @@ public class CatalogQueryService {
      * -- which follows the brand's set -- reported the edit as saved.
      */
     private String resolutionLocale(UUID tenantId, UUID brandId) {
-        return brandLocales
-                .brandDefaultLocale(tenantId, brandId)
-                .map(CatalogLocales::forBrandLocale)
-                .orElse(defaultLocale);
+        return CatalogNameLocales.of(brandLocales, tenantId, brandId, defaultLocale)
+                .preferred();
     }
 
     /** A brand's catalogs, named in the brand's own default locale. */

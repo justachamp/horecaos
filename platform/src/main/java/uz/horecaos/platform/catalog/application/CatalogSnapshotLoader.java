@@ -9,8 +9,10 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import uz.horecaos.platform.catalog.api.CatalogNameLocales;
 import uz.horecaos.platform.catalog.api.VariantPricingLookup;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.Category;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.EntityType;
@@ -27,6 +29,7 @@ import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore.
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore.TranslationRow;
 import uz.horecaos.platform.media.api.MediaAssetId;
 import uz.horecaos.platform.media.api.MediaAvailability;
+import uz.horecaos.platform.tenancy.api.BrandLocaleLookup;
 
 /**
  * Assembles a whole catalog in one read, then turns it into publication items
@@ -56,19 +59,33 @@ public class CatalogSnapshotLoader {
     private final JdbcCatalogStore store;
     private final MediaAvailability media;
     private final VariantPricingLookup pricing;
+    private final BrandLocaleLookup brandLocales;
     private final String defaultLocale;
     private final boolean pricingWired;
 
+    /**
+     * @param defaultLocale {@code horecaos.catalog.default-locale} -- where a name is
+     *                      accepted when the brand's own default language has none
+     */
+    @Autowired
     public CatalogSnapshotLoader(
             JdbcCatalogStore store,
             MediaAvailability media,
             VariantPricingLookup pricing,
+            BrandLocaleLookup brandLocales,
             @Value("${horecaos.catalog.default-locale:uz}") String defaultLocale) {
         this.store = store;
         this.media = media;
         this.pricing = pricing;
+        this.brandLocales = brandLocales;
         this.defaultLocale = defaultLocale;
         this.pricingWired = pricing.isWired();
+    }
+
+    /** A loader that requires the configured locale for every brand, for callers with no tenancy to ask. */
+    public CatalogSnapshotLoader(
+            JdbcCatalogStore store, MediaAvailability media, VariantPricingLookup pricing, String defaultLocale) {
+        this(store, media, pricing, BrandLocaleLookup.platformFallback(), defaultLocale);
     }
 
     public CatalogValidator.Snapshot load(UUID tenantId, UUID brandId, UUID catalogId) {
@@ -126,8 +143,10 @@ public class CatalogSnapshotLoader {
         List<LocationOffering> offerings = store.offeringsForBrand(tenantId, brandId);
         Set<UUID> offered = offerings.stream().map(LocationOffering::variantId).collect(Collectors.toUnmodifiableSet());
 
+        CatalogNameLocales nameLocales = CatalogNameLocales.of(brandLocales, tenantId, brandId, defaultLocale);
         return new CatalogValidator.Snapshot(
-                defaultLocale,
+                nameLocales.preferred(),
+                nameLocales.fallback(),
                 products,
                 variants,
                 variantsByProduct,
