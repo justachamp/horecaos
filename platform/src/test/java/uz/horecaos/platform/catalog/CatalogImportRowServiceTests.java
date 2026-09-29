@@ -36,13 +36,16 @@ import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import tools.jackson.databind.json.JsonMapper;
 import uz.horecaos.platform.audit.infrastructure.persistence.JdbcAuditRecorder;
 import uz.horecaos.platform.catalog.application.CatalogAuthoringService;
+import uz.horecaos.platform.catalog.application.CatalogImportParser;
 import uz.horecaos.platform.catalog.application.CatalogImportRow;
 import uz.horecaos.platform.catalog.application.CatalogImportRowErrorReason;
 import uz.horecaos.platform.catalog.application.CatalogImportRowOutcome;
 import uz.horecaos.platform.catalog.application.CatalogImportRowService;
+import uz.horecaos.platform.catalog.application.CatalogImportService;
 import uz.horecaos.platform.catalog.application.CatalogQueryService;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.Status;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.Variant;
+import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogImportStore;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
 import uz.horecaos.platform.integration.outbox.JdbcOutboxStore;
 import uz.horecaos.platform.integration.outbox.MediaOutboxEventListener;
@@ -60,6 +63,8 @@ import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPricingStore;
 import uz.horecaos.platform.support.CommercialDefaults;
 import uz.horecaos.platform.support.ObjectStoreContainer;
 import uz.horecaos.platform.support.TestDatabase;
+import uz.horecaos.platform.tenancy.api.BrandLocaleLookup;
+import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcBrandLocaleLookup;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcSalesChannelStore;
 
 /**
@@ -95,6 +100,9 @@ class CatalogImportRowServiceTests {
     private CatalogAuthoringService authoring;
     private CatalogQueryService query;
     private CatalogImportRowService rows;
+    private CatalogImportPricing importPricing;
+    private MediaAssetIngestionService importMedia;
+    private Clock importClock;
     private UUID catalogId;
     private HttpServer httpServer;
     private int httpPort;
@@ -200,6 +208,9 @@ class CatalogImportRowServiceTests {
                 clock,
                 BUCKET);
 
+        importPricing = pricing;
+        importMedia = media;
+        importClock = clock;
         rows = new CatalogImportRowService(catalogStore, authoring, query, pricing, media, LOCALE);
 
         catalogId = authoring.createCatalog(TENANT, BRAND, "MAIN", "Asosiy menyu", LOCALE);
@@ -298,6 +309,116 @@ class CatalogImportRowServiceTests {
         assertThat(updated.type()).isEqualTo(CatalogImportRowOutcome.Type.UPDATED);
         var detail = query.productDetail(TENANT, BRAND, requireProductId(updated));
         assertThat(requireTranslation(detail).name()).isEqualTo("Osh Palov");
+    }
+
+    // ------------------------------------------------ row 10.12: the brand's language
+
+    @Test
+    @DisplayName(
+            "row 10.12: a brand whose default is ru gets a created product and category named in ru, not the server's uz")
+    void namesAreAuthoredInTheBrandDefault() {
+        brandDefault("ru");
+        CatalogImportRowService brandAware = rowsFor(new JdbcBrandLocaleLookup(jdbc));
+
+        CatalogImportRowOutcome created = brandAware.process(
+                TENANT, BRAND, catalogId, rowWithCategory("PLOV-001", "Плов", "MAINS", "Основные"), false, null);
+
+        assertThat(created.type()).isEqualTo(CatalogImportRowOutcome.Type.CREATED);
+        var translations =
+                query.productDetail(TENANT, BRAND, requireProductId(created)).translations();
+        assertThat(translations).containsOnlyKeys("ru");
+        assertThat(translations.get("ru"))
+                .isNotNull()
+                .extracting(CatalogQueryService.LocalizedFields::name)
+                .isEqualTo("Плов");
+        assertThat(categoryTranslations("MAINS")).containsExactly(java.util.Map.entry("ru", "Основные"));
+    }
+
+    @Test
+    @DisplayName(
+            "row 10.12: an unchanged file is still SKIPPED for a brand default, and a renamed row rewrites the brand-default name")
+    void reimportFollowsTheBrandDefault() {
+        brandDefault("ru");
+        CatalogImportRowService brandAware = rowsFor(new JdbcBrandLocaleLookup(jdbc));
+        CatalogImportRow original = row("PLOV-001", "Плов", null, null);
+        CatalogImportRowOutcome created = brandAware.process(TENANT, BRAND, catalogId, original, false, null);
+
+        assertThat(brandAware
+                        .process(TENANT, BRAND, catalogId, original, false, null)
+                        .type())
+                .as("nothing changed, so nothing is written")
+                .isEqualTo(CatalogImportRowOutcome.Type.SKIPPED);
+
+        CatalogImportRowOutcome renamed = brandAware.process(
+                TENANT, BRAND, catalogId, row("PLOV-001", "Плов ферганский", null, null), false, null);
+
+        assertThat(renamed.type()).isEqualTo(CatalogImportRowOutcome.Type.UPDATED);
+        var translations =
+                query.productDetail(TENANT, BRAND, requireProductId(created)).translations();
+        assertThat(translations).containsOnlyKeys("ru");
+        assertThat(translations.get("ru"))
+                .isNotNull()
+                .extracting(CatalogQueryService.LocalizedFields::name)
+                .isEqualTo("Плов ферганский");
+    }
+
+    @Test
+    @DisplayName(
+            "row 10.12: a product first imported before the brand chose a language is rewritten in it on the next import")
+    void aBrandThatLaterChoosesALanguageIsRewrittenInIt() {
+        CatalogImportRowOutcome before =
+                rows.process(TENANT, BRAND, catalogId, row("PLOV-001", "Osh", null, null), false, null);
+        brandDefault("ru");
+
+        CatalogImportRowOutcome after = rowsFor(new JdbcBrandLocaleLookup(jdbc))
+                .process(TENANT, BRAND, catalogId, row("PLOV-001", "Плов", null, null), false, null);
+
+        assertThat(after.type()).isEqualTo(CatalogImportRowOutcome.Type.UPDATED);
+        assertThat(query.productDetail(TENANT, BRAND, requireProductId(before)).translations())
+                .as("the server-locale name stays as the fallback; the brand default now has its own")
+                .containsOnlyKeys("uz", "ru");
+    }
+
+    @Test
+    @DisplayName("row 10.12: a brand with no default keeps authoring in the server's locale")
+    void aBrandWithNoDefaultKeepsTheServerLocale() {
+        CatalogImportRowOutcome created = rowsFor(new JdbcBrandLocaleLookup(jdbc))
+                .process(TENANT, BRAND, catalogId, row("PLOV-001", "Osh", null, null), false, null);
+
+        assertThat(query.productDetail(TENANT, BRAND, requireProductId(created)).translations())
+                .containsOnlyKeys(LOCALE);
+    }
+
+    @Test
+    @DisplayName(
+            "row 10.12: an export names each product in the brand default, and in the server's locale where it has none")
+    void exportReadsTheBrandDefaultThenTheServerLocale() {
+        // One product imported before the brand chose a language (uz only), one after (ru only),
+        // one with both (ru wins, and its description travels with it).
+        rows.process(TENANT, BRAND, catalogId, row("OLD-001", "Eski osh", null, null), false, null);
+        brandDefault("ru");
+        CatalogImportRowService brandAware = rowsFor(new JdbcBrandLocaleLookup(jdbc));
+        brandAware.process(TENANT, BRAND, catalogId, row("NEW-001", "Новый плов", null, null), false, null);
+        CatalogImportRowOutcome both = brandAware.process(
+                TENANT, BRAND, catalogId, rowWithDescription("BOTH-001", "Лагман", "Домашний"), false, null);
+        authoring.translate(
+                TENANT,
+                BRAND,
+                uz.horecaos.platform.catalog.domain.CatalogEntities.EntityType.PRODUCT,
+                requireProductId(both),
+                LOCALE,
+                "Lag'mon",
+                "Uy lag'moni");
+
+        String csv = exportService(new JdbcBrandLocaleLookup(jdbc)).export(TENANT, BRAND, catalogId);
+
+        assertThat(csv)
+                .contains("Eski osh", "Новый плов", "Лагман", "Домашний")
+                .doesNotContain("Lag'mon", "Uy lag'moni");
+        assertThat(exportService(BrandLocaleLookup.platformFallback()).export(TENANT, BRAND, catalogId))
+                .as("control: the config-only export reads the server's locale for every brand")
+                .contains("Eski osh", "Lag'mon", "Uy lag'moni")
+                .doesNotContain("Новый плов");
     }
 
     // -------------------------------------------------------------- errors
@@ -633,6 +754,62 @@ class CatalogImportRowServiceTests {
                 priceCurrency,
                 status,
                 null);
+    }
+
+    private CatalogImportRowService rowsFor(BrandLocaleLookup brandLocales) {
+        return new CatalogImportRowService(
+                catalogStore, authoring, query, importPricing, importMedia, brandLocales, LOCALE);
+    }
+
+    private CatalogImportService exportService(BrandLocaleLookup brandLocales) {
+        return new CatalogImportService(
+                new CatalogImportParser(),
+                rowsFor(brandLocales),
+                new JdbcCatalogImportStore(jdbc),
+                catalogStore,
+                importPricing,
+                importClock,
+                brandLocales,
+                LOCALE);
+    }
+
+    private void brandDefault(String locale) {
+        jdbc.sql("""
+                INSERT INTO tenant.brand_locales (tenant_id, brand_id, locale, is_default)
+                VALUES (:tenantId, :brandId, :locale, true)
+                """)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("locale", locale)
+                .update();
+    }
+
+    /** A category's translation rows by locale, read straight from the table. */
+    private java.util.Map<String, String> categoryTranslations(String categoryCode) {
+        java.util.Map<String, String> byLocale = new java.util.LinkedHashMap<>();
+        jdbc.sql("""
+                SELECT t.locale, t.name
+                FROM catalog.translations t
+                JOIN catalog.categories c ON c.id = t.entity_id AND c.tenant_id = t.tenant_id
+                WHERE t.entity_type = 'CATEGORY' AND t.tenant_id = :tenantId AND c.code = :code
+                ORDER BY t.locale
+                """)
+                .param("tenantId", TENANT)
+                .param("code", categoryCode)
+                .query((rs, n) -> byLocale.put(rs.getString("locale"), rs.getString("name")))
+                .list();
+        return byLocale;
+    }
+
+    private static CatalogImportRow rowWithCategory(
+            String productCode, String productName, String categoryCode, String categoryName) {
+        return new CatalogImportRow(
+                1, productCode, categoryCode, categoryName, productName, null, null, null, null, null, null, null);
+    }
+
+    private static CatalogImportRow rowWithDescription(String productCode, String productName, String description) {
+        return new CatalogImportRow(
+                1, productCode, null, null, productName, description, null, null, null, null, null, null);
     }
 
     private Variant defaultVariantOf(UUID productId) {

@@ -335,6 +335,7 @@ class CheckoutOrderWriter {
                         preset.labelRu(),
                         preset.labelUz(),
                         preset.labelEn(),
+                        preset.labels(),
                         sortOrder++);
             }
         }

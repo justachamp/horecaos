@@ -22,6 +22,7 @@ import uz.horecaos.platform.ordering.domain.OrderStatus;
 import uz.horecaos.platform.ordering.domain.PromiseBasis;
 import uz.horecaos.platform.ordering.domain.TransitionTrigger;
 import uz.horecaos.platform.tenancy.api.FulfillmentMode;
+import uz.horecaos.platform.tenancy.api.LocalizedLabels;
 
 /**
  * Order persistence (ADR 0019).
@@ -603,6 +604,11 @@ public class JdbcOrderStore {
      * text of that moment (V0397) — the identical "copy, never a join back to
      * catalog" discipline {@link #insertLineModifier} keeps for a modifier
      * option's own name.
+     *
+     * @param labels every wording the preset has at this moment, keyed by locale (row 10.12,
+     *               V0433). The three columns stay the source for the platform triple, so only
+     *               a locale beyond it is written to the label table -- a triple locale in
+     *               {@code labels} is ignored rather than stored twice.
      */
     public void insertLineCommentPreset(
             UUID tenantId,
@@ -612,14 +618,16 @@ public class JdbcOrderStore {
             String labelRu,
             String labelUz,
             String labelEn,
+            Map<String, String> labels,
             int sortOrder) {
+        UUID snapshotId = UUID.randomUUID();
         jdbc.sql("""
                 INSERT INTO ordering.order_line_comment_presets (
                     id, tenant_id, order_line_id, source_preset_id,
                     code_snapshot, label_ru_snapshot, label_uz_snapshot, label_en_snapshot, sort_order)
                 VALUES (:id, :tenantId, :lineId, :presetId, :code, :labelRu, :labelUz, :labelEn, :sortOrder)
                 """)
-                .param("id", UUID.randomUUID())
+                .param("id", snapshotId)
                 .param("tenantId", tenantId)
                 .param("lineId", orderLineId)
                 .param("presetId", sourcePresetId)
@@ -629,6 +637,21 @@ public class JdbcOrderStore {
                 .param("labelEn", labelEn)
                 .param("sortOrder", sortOrder)
                 .update();
+        labels.forEach((locale, label) -> {
+            if (LocalizedLabels.PLATFORM_TRIPLE.contains(LocalizedLabels.canonical(locale)) || label.isBlank()) {
+                return;
+            }
+            jdbc.sql("""
+                    INSERT INTO ordering.order_line_comment_preset_labels (
+                        tenant_id, order_line_comment_preset_id, locale, label)
+                    VALUES (:tenantId, :snapshotId, :locale, :label)
+                    """)
+                    .param("tenantId", tenantId)
+                    .param("snapshotId", snapshotId)
+                    .param("locale", locale)
+                    .param("label", label)
+                    .update();
+        });
     }
 
     public void insertAdjustment(
@@ -1723,8 +1746,30 @@ public class JdbcOrderStore {
      * read this, matching {@link #lineModifiers}'s own shape.
      */
     public List<OrderCommentPresetRow> lineCommentPresets(UUID tenantId, UUID orderId) {
+        // The wording of a locale beyond the platform triple (V0433), one query for the whole
+        // order and tenant-scoped on both sides of the join.
+        Map<UUID, Map<String, String>> otherLabels = new HashMap<>();
+        jdbc.sql("""
+                SELECT k.order_line_comment_preset_id, k.locale, k.label
+                FROM ordering.order_line_comment_preset_labels k
+                JOIN ordering.order_line_comment_presets p
+                    ON p.id = k.order_line_comment_preset_id AND p.tenant_id = k.tenant_id
+                JOIN ordering.order_lines l ON l.id = p.order_line_id AND l.tenant_id = p.tenant_id
+                WHERE k.tenant_id = :tenantId AND l.order_id = :orderId
+                """)
+                .param("tenantId", tenantId)
+                .param("orderId", orderId)
+                .query((row, number) -> {
+                    otherLabels
+                            .computeIfAbsent(
+                                    row.getObject("order_line_comment_preset_id", UUID.class),
+                                    key -> new java.util.LinkedHashMap<>())
+                            .put(row.getString("locale"), row.getString("label"));
+                    return row.getString("locale");
+                })
+                .list();
         return jdbc.sql("""
-                SELECT p.order_line_id, p.source_preset_id, p.code_snapshot,
+                SELECT p.id, p.order_line_id, p.source_preset_id, p.code_snapshot,
                        p.label_ru_snapshot, p.label_uz_snapshot, p.label_en_snapshot, p.sort_order
                 FROM ordering.order_line_comment_presets p
                 JOIN ordering.order_lines l ON l.id = p.order_line_id AND l.tenant_id = p.tenant_id
@@ -1740,7 +1785,12 @@ public class JdbcOrderStore {
                         row.getString("label_ru_snapshot"),
                         row.getString("label_uz_snapshot"),
                         row.getString("label_en_snapshot"),
-                        row.getInt("sort_order")))
+                        row.getInt("sort_order"),
+                        LocalizedLabels.merge(
+                                row.getString("label_ru_snapshot"),
+                                row.getString("label_uz_snapshot"),
+                                row.getString("label_en_snapshot"),
+                                otherLabels.getOrDefault(row.getObject("id", UUID.class), Map.of()))))
                 .list();
     }
 
@@ -2820,7 +2870,12 @@ public class JdbcOrderStore {
             long unitAmountMinor,
             long finalAmountMinor) {}
 
-    /** Row 2.1b: one preset a line was checked out carrying, labels as of that moment. */
+    /**
+     * Row 2.1b: one preset a line was checked out carrying, labels as of that moment.
+     *
+     * @param labels every wording the snapshot holds, keyed by locale: the platform triple from
+     *               its columns, then any locale beyond it (row 10.12, V0433)
+     */
     public record OrderCommentPresetRow(
             UUID orderLineId,
             UUID sourcePresetId,
@@ -2828,7 +2883,8 @@ public class JdbcOrderStore {
             String labelRu,
             String labelUz,
             String labelEn,
-            int sortOrder) {}
+            int sortOrder,
+            Map<String, String> labels) {}
 
     public record TransitionRow(
             int sequenceNumber,

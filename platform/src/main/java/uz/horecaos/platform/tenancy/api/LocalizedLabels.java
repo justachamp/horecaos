@@ -129,4 +129,34 @@ public final class LocalizedLabels {
         }
         return merged;
     }
+
+    /**
+     * The wording a customer-facing read shows: the first of {@code preference} the label
+     * set has, else the first label in the set's own order.
+     *
+     * <p>Falling through to "whatever there is" is deliberate. A preset comment or a zone
+     * name that exists in the brand's default language but not in the customer's is still
+     * worth showing -- a label in the wrong language beats a blank chip -- and the merged
+     * order ({@link #merge}) is deterministic, so the same set always answers the same way.
+     *
+     * @param labels     a set as {@link #merge} returns it (locale to wording)
+     * @param preference locales in the order they are wanted; a case variant of a triple
+     *                   locale matches ({@link #canonical}); blank entries are skipped
+     * @return {@code null} only for an empty set
+     */
+    public static @Nullable String pick(Map<String, String> labels, List<String> preference) {
+        for (String wanted : preference) {
+            if (wanted == null || wanted.isBlank()) {
+                continue;
+            }
+            String label = labels.get(canonical(wanted));
+            if (label != null && !label.isBlank()) {
+                return label;
+            }
+        }
+        return labels.values().stream()
+                .filter(label -> !label.isBlank())
+                .findFirst()
+                .orElse(null);
+    }
 }

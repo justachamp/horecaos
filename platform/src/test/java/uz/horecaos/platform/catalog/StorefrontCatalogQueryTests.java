@@ -41,6 +41,8 @@ import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcMenuStore;
 import uz.horecaos.platform.media.api.MediaAvailability;
 import uz.horecaos.platform.support.CommercialDefaults;
 import uz.horecaos.platform.support.TestDatabase;
+import uz.horecaos.platform.tenancy.api.BrandLocaleLookup;
+import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcBrandLocaleLookup;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcSalesChannelStore;
 
 /**
@@ -784,6 +786,160 @@ class StorefrontCatalogQueryTests {
                 .param("locationId", locationId)
                 .param("channelId", channelId)
                 .param("menuId", menuId)
+                .update();
+    }
+
+    // ------------------------------------------- row 10.12: the customer's, then the brand's language
+
+    @Test
+    @DisplayName(
+            "row 10.12: a name the customer's language lacks falls back to the brand's default, not to whichever locale was listed first")
+    void aMissingNameFallsBackToTheBrandDefault() {
+        UUID catalogId = authoring.createCatalog(TENANT, BRAND, "MAIN", "Main menu", LOCALE);
+        UUID hot = authoring.createCategory(TENANT, BRAND, catalogId, null, "HOT", "Issiq", LOCALE, 1);
+        authoring.translate(TENANT, BRAND, EntityType.CATEGORY, hot, "en", "Hot", null);
+        authoring.translate(TENANT, BRAND, EntityType.CATEGORY, hot, "ru", "Горячее", null);
+        var plov = authoring.createProduct(
+                TENANT, BRAND, catalogId, "PLOV", "Osh", null, LOCALE, "SKU-P", "PIECE", UNCLASSIFIED, ACTOR);
+        authoring.translate(TENANT, BRAND, EntityType.PRODUCT, plov.productId(), "en", "Pilaf", null);
+        authoring.translate(TENANT, BRAND, EntityType.PRODUCT, plov.productId(), "ru", "Плов", null);
+        authoring.placeProductInCategory(TENANT, BRAND, hot, plov.productId(), 1);
+        authoring.setOffering(
+                TENANT, BRAND, LOCATION, plov.defaultVariantId(), OfferingStatus.AVAILABLE, List.of("DELIVERY"));
+        publication.publish(TENANT, BRAND, catalogId, "STOREFRONT", null);
+        brandDefault("ru");
+
+        // The customer asked for a language the menu has no wording in.
+        var brandAware = storefrontWith(new JdbcBrandLocaleLookup(jdbc))
+                .menuFor(TENANT, BRAND, LOCATION, "kaa", "STOREFRONT")
+                .orElseThrow();
+        assertThat(brandAware.products()).extracting(MenuProduct::name).containsExactly("Плов");
+        assertThat(brandAware.categories())
+                .extracting(StorefrontCatalogQuery.MenuCategory::name)
+                .containsExactly("Горячее");
+
+        // And a language it does have is still the customer's own.
+        var english = storefrontWith(new JdbcBrandLocaleLookup(jdbc))
+                .menuFor(TENANT, BRAND, LOCATION, "en", "STOREFRONT")
+                .orElseThrow();
+        assertThat(english.products()).extracting(MenuProduct::name).containsExactly("Pilaf");
+
+        // Control: with no brand default the server's configured locale is next, then any.
+        var noDefault = storefrontWith(BrandLocaleLookup.platformFallback())
+                .menuFor(TENANT, BRAND, LOCATION, "kaa", "STOREFRONT")
+                .orElseThrow();
+        assertThat(noDefault.products()).extracting(MenuProduct::name).containsExactly("Osh");
+    }
+
+    @Test
+    @DisplayName("row 10.12: a preset reads in the customer's language, a locale beyond the platform triple included")
+    void presetLabelsResolveFromTheTranslationsTable() {
+        UUID presetId = publishedBurgerWithPreset();
+        // A locale outside ru / uz-Latn / en, written to the translations table alone -- what a
+        // brand supporting a fourth language will have once BrandProfile.KNOWN_LOCALES widens.
+        jdbc.sql("""
+                INSERT INTO catalog.comment_preset_translations (tenant_id, preset_id, locale, label)
+                VALUES (:tenantId, :presetId, 'kaa', 'Piyazsiz')
+                """).param("tenantId", TENANT).param("presetId", presetId).update();
+
+        var uzbek = presetOf(storefront, "uz");
+        assertThat(uzbek.label())
+                .as("the catalog's uz is the platform's uz-Latn column")
+                .isEqualTo("Piyozsiz");
+        assertThat(uzbek.labels())
+                .containsOnlyKeys("ru", "uz-Latn", "en", "kaa")
+                .containsEntry("kaa", "Piyazsiz")
+                .containsEntry("uz-Latn", "Piyozsiz");
+        assertThat(uzbek.labelRu())
+                .as("the triple's columns are still on the wire")
+                .isEqualTo("Без лука");
+        assertThat(presetOf(storefront, "ru").label()).isEqualTo("Без лука");
+        assertThat(presetOf(storefront, "en").label()).isEqualTo("No onion");
+        assertThat(presetOf(storefront, "kaa").label()).isEqualTo("Piyazsiz");
+    }
+
+    @Test
+    @DisplayName(
+            "row 10.12: a preset the customer's language lacks reads in the brand's default, then in whatever wording exists")
+    void presetLabelFallsBackToTheBrandDefault() {
+        UUID presetId = publishedBurgerWithPreset();
+        jdbc.sql("""
+                INSERT INTO catalog.comment_preset_translations (tenant_id, preset_id, locale, label)
+                VALUES (:tenantId, :presetId, 'kaa', 'Piyazsiz')
+                """).param("tenantId", TENANT).param("presetId", presetId).update();
+        brandDefault("kaa");
+
+        assertThat(presetOf(storefrontWith(new JdbcBrandLocaleLookup(jdbc)), "de")
+                        .label())
+                .as("the customer asked for German: the brand's default is next")
+                .isEqualTo("Piyazsiz");
+        assertThat(presetOf(storefrontWith(BrandLocaleLookup.platformFallback()), "de")
+                        .label())
+                .as("no brand default either: the first wording, in the merged order (ru first)")
+                .isEqualTo("Без лука");
+    }
+
+    private StorefrontCatalogQuery.CommentPresetOption presetOf(StorefrontCatalogQuery query, String locale) {
+        var menu = query.menuFor(TENANT, BRAND, LOCATION, locale, "STOREFRONT").orElseThrow();
+        return menu.products().stream()
+                .flatMap(product -> product.commentPresets().stream())
+                .findFirst()
+                .orElseThrow();
+    }
+
+    /** A published one-dish menu whose dish offers one preset, worded in the platform triple's columns. */
+    private UUID publishedBurgerWithPreset() {
+        UUID catalogId = authoring.createCatalog(TENANT, BRAND, "MAIN", "Main menu", LOCALE);
+        var burger = authoring.createProduct(
+                TENANT, BRAND, catalogId, "BURGER", "Burger", null, LOCALE, "SKU-B", "PIECE", UNCLASSIFIED, ACTOR);
+        authoring.setOffering(
+                TENANT, BRAND, LOCATION, burger.defaultVariantId(), OfferingStatus.AVAILABLE, List.of("DELIVERY"));
+        publication.publish(TENANT, BRAND, catalogId, "STOREFRONT", null);
+
+        jdbc.sql("DELETE FROM catalog.comment_presets WHERE tenant_id = :tenantId")
+                .param("tenantId", TENANT)
+                .update();
+        UUID presetId = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO catalog.comment_presets (
+                    id, tenant_id, code, label_ru, label_uz, label_en, sort_order, status, version)
+                VALUES (:id, :tenantId, 'NO_ONION', 'Без лука', 'Piyozsiz', 'No onion', 0, 'ACTIVE', 1)
+                """).param("id", presetId).param("tenantId", TENANT).update();
+        jdbc.sql("""
+                INSERT INTO catalog.product_comment_presets (
+                    id, tenant_id, brand_id, product_id, preset_id, sort_order, version)
+                VALUES (:id, :tenantId, :brandId, :productId, :presetId, 0, 1)
+                """)
+                .param("id", UUID.randomUUID())
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("productId", burger.productId())
+                .param("presetId", presetId)
+                .update();
+        return presetId;
+    }
+
+    private StorefrontCatalogQuery storefrontWith(BrandLocaleLookup brandLocales) {
+        return new StorefrontCatalogQuery(
+                store,
+                (tenantId, brandId, locationId, channel, variantIds, optionIds) -> Optional.empty(),
+                alwaysAvailable,
+                menuStore,
+                tenantContext,
+                Clock.systemUTC(),
+                commentPresetStore,
+                brandLocales,
+                LOCALE);
+    }
+
+    private void brandDefault(String locale) {
+        jdbc.sql("""
+                INSERT INTO tenant.brand_locales (tenant_id, brand_id, locale, is_default)
+                VALUES (:tenantId, :brandId, :locale, true)
+                """)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("locale", locale)
                 .update();
     }
 

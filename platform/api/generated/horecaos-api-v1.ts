@@ -1587,6 +1587,7 @@ export interface CommentPresetChip {
   labelEn?: string;
   labelRu?: string;
   labelUz?: string;
+  labels?: { [key: string]: string };
 }
 
 export interface CommentPresetControllerLocaleSetResponse {
@@ -1597,9 +1598,11 @@ export interface CommentPresetControllerLocaleSetResponse {
 
 export interface CommentPresetOption {
   code?: string;
+  label?: string;
   labelEn?: string;
   labelRu?: string;
   labelUz?: string;
+  labels?: { [key: string]: string };
 }
 
 export interface CommercialAdminControllerAdjustmentRequest {
