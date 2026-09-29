@@ -142,6 +142,7 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
   'delivery.zone.location.bound': { en: 'Delivery zone location bound', ru: 'Доставка зона локация привязано', 'uz-Latn': 'Yetkazib berish zona filial bogʻlandi' },
   'delivery.zone.location.unbound': { en: 'Delivery zone location unbound', ru: 'Доставка зона локация отвязано', 'uz-Latn': 'Yetkazib berish zona filial bogʻlanishi bekor qilindi' },
   'delivery.zone.registered': { en: 'Delivery zone registered', ru: 'Доставка зона зарегистрировано', 'uz-Latn': 'Yetkazib berish zona roʻyxatdan oʻtkazildi' },
+  'delivery.zone.renamed': { en: 'Delivery zone renamed', ru: 'Доставка зона переименовано', 'uz-Latn': 'Yetkazib berish zona qayta nomlandi' },
   'delivery.zone.version.activated': { en: 'Delivery zone version activated', ru: 'Доставка зона версия активировано', 'uz-Latn': 'Yetkazib berish zona versiya faollashtirildi' },
   'delivery.zone.version.deactivated': { en: 'Delivery zone version deactivated', ru: 'Доставка зона версия деактивировано', 'uz-Latn': 'Yetkazib berish zona versiya faolsizlantirildi' },
   'delivery.zone.version.drafted': { en: 'Delivery zone version drafted', ru: 'Доставка зона версия черновик сохранён', 'uz-Latn': 'Yetkazib berish zona versiya qoralama saqlandi' },
