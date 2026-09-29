@@ -4735,6 +4735,7 @@ export interface OperationsOrderControllerOrderSummaryResponse {
   promisedAt?: string;
   publicOrderNumber?: string;
   status?: string;
+  table?: OrderTable;
   totalMinor?: number;
   version?: number;
 }
@@ -5114,6 +5115,11 @@ export interface OrderStateResponse {
   orderId?: string;
   status?: string;
   version?: number;
+}
+
+export interface OrderTable {
+  sessionId?: string;
+  tables?: Array<TableRef>;
 }
 
 export interface OutboxFailureDetail {
@@ -7394,6 +7400,7 @@ export interface SettingsResponse {
   locationId?: string;
   qrMode?: string;
   serviceChargeRateBp?: number;
+  storefrontHostname?: string;
   turnaroundMinutes?: number;
   version?: number;
 }
@@ -7935,6 +7942,12 @@ export interface TableLayoutRequest {
   reason: string;
 }
 
+export interface TableRef {
+  code?: string;
+  displayName?: string;
+  tableId?: string;
+}
+
 export interface TableRequest {
   code: string;
   displayName: string;
@@ -8294,6 +8307,7 @@ export interface TicketResponse {
   sequenceLabel?: string;
   startedAt?: string;
   status?: string;
+  table?: OrderTable;
   targetReadyAt?: string;
   ticketId?: string;
   version?: number;

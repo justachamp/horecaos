@@ -9714,6 +9714,9 @@
           "status" : {
             "type" : "string"
           },
+          "table" : {
+            "$ref" : "#/components/schemas/OrderTable"
+          },
           "totalMinor" : {
             "format" : "int64",
             "type" : "integer"
@@ -10790,6 +10793,21 @@
           },
           "terminalStatus" : {
             "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "OrderTable" : {
+        "properties" : {
+          "sessionId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "tables" : {
+            "items" : {
+              "$ref" : "#/components/schemas/TableRef"
+            },
+            "type" : "array"
           }
         },
         "type" : "object"
@@ -14751,6 +14769,9 @@
             "format" : "int32",
             "type" : "integer"
           },
+          "storefrontHostname" : {
+            "type" : "string"
+          },
           "turnaroundMinutes" : {
             "format" : "int32",
             "type" : "integer"
@@ -15682,6 +15703,21 @@
         "required" : [ "layoutX", "layoutY", "reason" ],
         "type" : "object"
       },
+      "TableRef" : {
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "displayName" : {
+            "type" : "string"
+          },
+          "tableId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "TableRequest" : {
         "properties" : {
           "code" : {
@@ -16410,6 +16446,9 @@
           },
           "status" : {
             "type" : "string"
+          },
+          "table" : {
+            "$ref" : "#/components/schemas/OrderTable"
           },
           "targetReadyAt" : {
             "format" : "date-time",

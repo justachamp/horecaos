@@ -830,7 +830,11 @@ public class OperationsOrderController {
         Set<Capability> granted = grantedOrderActionCapabilities(tenantId, brandId, locationId);
         UUID courierId = orderQuery.courierIdFor(tenantId, orderId);
         boolean amendmentAwaitingOperator = orderQuery.amendmentAwaitingOperatorFor(tenantId, orderId);
-        OrderTablesPort.OrderTable table = orderQuery.tableFor(tenantId, orderId);
+        // Only a DINE_IN order can sit at a table; asking about a delivery or a pickup
+        // would only spend a query on an answer that is always empty.
+        OrderTablesPort.OrderTable table = detail.order().fulfillmentMode() == FulfillmentMode.DINE_IN
+                ? orderQuery.tableFor(tenantId, orderId)
+                : null;
         return ResponseEntity.ok()
                 .eTag(AggregateVersion.toETag(detail.order().version()))
                 .body(OrderDetailResponse.of(

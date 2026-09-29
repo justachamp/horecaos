@@ -3058,6 +3058,7 @@ export interface OperationsOrderControllerOrderSummaryResponse {
   promisedAt?: string;
   publicOrderNumber?: string;
   status?: string;
+  table?: OrderTable;
   totalMinor?: number;
   version?: number;
 }
@@ -3392,6 +3393,11 @@ export interface OrderRowResponse {
   secondsTotal?: number;
   taxSom?: number;
   terminalStatus?: string;
+}
+
+export interface OrderTable {
+  sessionId?: string;
+  tables?: Array<TableRef>;
 }
 
 export interface OutcomeListResponse {
@@ -4646,6 +4652,7 @@ export interface SettingsResponse {
   locationId?: string;
   qrMode?: string;
   serviceChargeRateBp?: number;
+  storefrontHostname?: string;
   turnaroundMinutes?: number;
   version?: number;
 }
@@ -4952,6 +4959,12 @@ export interface TableLayoutRequest {
   reason: string;
 }
 
+export interface TableRef {
+  code?: string;
+  displayName?: string;
+  tableId?: string;
+}
+
 export interface TableRequest {
   code: string;
   displayName: string;
@@ -5190,6 +5203,7 @@ export interface TicketResponse {
   sequenceLabel?: string;
   startedAt?: string;
   status?: string;
+  table?: OrderTable;
   targetReadyAt?: string;
   ticketId?: string;
   version?: number;
