@@ -207,6 +207,22 @@ describe('messageKeyFor', () => {
     expect(messageKeyFor(error)).toBe('errors.reason.deliveryFeeUnresolved');
   });
 
+  // The three refusals the ordering controller answers as RESOURCE_CONFLICT
+  // that used to fall through to the code's generic sentence.
+  it.each([
+    ['BELOW_MINIMUM_ORDER', 'errors.reason.belowMinimumOrder'],
+    ['DESTINATION_NOT_LOCATED', 'errors.reason.destinationNotLocated'],
+    ['DESTINATION_NOT_APPLICABLE', 'errors.reason.modeUnavailable'],
+  ] as const)('a 409 RESOURCE_CONFLICT with reason %s names it, not "something went wrong"', (reason, key) => {
+    const error = new HorecaOSApiError({
+      status: 409,
+      code: 'RESOURCE_CONFLICT',
+      detail: 'x',
+      problem: { status: 409, code: 'RESOURCE_CONFLICT', reason },
+    });
+    expect(messageKeyFor(error)).toBe(key);
+  });
+
   it('falls back to the code when the reason is present but unmapped', () => {
     const error = new HorecaOSApiError({
       status: 409,
@@ -224,6 +240,12 @@ describe('reasonMessageKey', () => {
     ['DELIVERY_MINIMUM_BASKET_NOT_MET', 'errors.reason.minimumBasketNotMet'],
     ['BELOW_MINIMUM_BASKET', 'errors.reason.minimumBasketNotMet'],
     ['DELIVERY_DESTINATION_REQUIRED', 'errors.reason.destinationRequired'],
+    // CheckoutEligibilityGuard: pickup / dine-in's own floor.
+    ['BELOW_MINIMUM_ORDER', 'errors.reason.belowMinimumOrder'],
+    // CartService.setDestination: a saved address with no coordinate, and a
+    // destination written to a cart that is not a delivery cart.
+    ['DESTINATION_NOT_LOCATED', 'errors.reason.destinationNotLocated'],
+    ['DESTINATION_NOT_APPLICABLE', 'errors.reason.modeUnavailable'],
     ['OUT_OF_ZONE', 'errors.reason.outOfZone'],
     ['OUTSIDE_CATCHMENT', 'errors.reason.outOfZone'],
     ['BEYOND_MAX_DISTANCE', 'errors.reason.outOfZone'],

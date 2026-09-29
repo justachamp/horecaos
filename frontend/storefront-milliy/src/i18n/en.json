@@ -351,6 +351,8 @@
       "deliveryFeeUnresolved": "We couldn't work out the delivery fee. Choose a different address or try again later.",
       "minimumBasketNotMet": "Your order is below the minimum for delivery.",
       "destinationRequired": "Choose a delivery address first.",
+      "belowMinimumOrder": "Your order is below the minimum order amount. Add something to continue.",
+      "destinationNotLocated": "This address has no location on the map yet, so we can't deliver to it. Choose a different address or pin this one on the map.",
       "outOfZone": "This address is outside the delivery area.",
       "notServiceable": "This branch cannot take orders right now.",
       "signInRequired": "Sign in to place an order.",

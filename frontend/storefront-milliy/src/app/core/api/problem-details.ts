@@ -213,7 +213,11 @@ export function toHorecaOSApiError(response: HttpErrorResponse): HorecaOSApiErro
  *   and `DELIVERY_MINIMUM_BASKET_NOT_MET`, and the granular
  *   `DeliveryChargeResponse.reasonCode` a priced cart's own `delivery` block
  *   carries -- `OUT_OF_ZONE`, `NO_TARIFF`, `LOCATION_NOT_LOCATED`,
- *   `OUTSIDE_CATCHMENT`, `BEYOND_MAX_DISTANCE`, `BELOW_MINIMUM_BASKET`).
+ *   `OUTSIDE_CATCHMENT`, `BEYOND_MAX_DISTANCE`, `BELOW_MINIMUM_BASKET` -- and
+ *   `CheckoutEligibilityGuard`'s `BELOW_MINIMUM_ORDER`, `CartService`'s
+ *   `DESTINATION_NOT_LOCATED` / `DESTINATION_NOT_APPLICABLE`).
+ *   The delivery-fee *preview* is read by its `outcome`, not its `reasonCode`
+ *   (see `UiCartService.deliveryUnresolvedMessage`).
  * - `uz.horecaos.platform.tenancy.api.ServiceabilityReason` (`CHANNEL_NOT_ENABLED`,
  *   `FULFILMENT_MODE_UNAVAILABLE`, `MANUALLY_CLOSED`, `CLOSED_BY_EXCEPTION`,
  *   `OUTSIDE_SERVICE_HOURS`, `NO_LIVE_MENU`, `AT_CAPACITY`), which the
@@ -232,6 +236,17 @@ const REASON_MESSAGE_KEYS: Readonly<Record<string, string>> = {
   DELIVERY_MINIMUM_BASKET_NOT_MET: 'errors.reason.minimumBasketNotMet',
   BELOW_MINIMUM_BASKET: 'errors.reason.minimumBasketNotMet',
   DELIVERY_DESTINATION_REQUIRED: 'errors.reason.destinationRequired',
+  // CheckoutEligibilityGuard: pickup / dine-in's own floor
+  // (ordering.minimum_order_amount_minor), the counterpart of the zone minimum
+  // above. Answered as RESOURCE_CONFLICT, so without an entry it read as the
+  // generic sentence.
+  BELOW_MINIMUM_ORDER: 'errors.reason.belowMinimumOrder',
+  // CartService.setDestination: the chosen saved address has no coordinate
+  // (never geocoded, no pin), so nothing can be priced or delivered to it; and
+  // a destination written to a cart that is not a delivery cart -- the mode is
+  // not one that takes an address, which modeUnavailable already says.
+  DESTINATION_NOT_LOCATED: 'errors.reason.destinationNotLocated',
+  DESTINATION_NOT_APPLICABLE: 'errors.reason.modeUnavailable',
   OUT_OF_ZONE: 'errors.reason.outOfZone',
   OUTSIDE_CATCHMENT: 'errors.reason.outOfZone',
   BEYOND_MAX_DISTANCE: 'errors.reason.outOfZone',

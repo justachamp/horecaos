@@ -384,6 +384,30 @@ describe('CheckoutComponent.confirm -- a failure names its reason instead of one
     expect(cart.discard).not.toHaveBeenCalled();
   });
 
+  it('a pickup order below the tenant minimum says the order is below the minimum', async () => {
+    const { fixture, cart } = await submit((cart) => {
+      cart.checkout = vi.fn(async () => {
+        throw refusal('BELOW_MINIMUM_ORDER');
+      });
+    });
+
+    expect(fixture.nativeElement.textContent).toContain('errors.reason.belowMinimumOrder');
+    expect(fixture.nativeElement.textContent).not.toContain('errors.generic');
+    expect(cart.discard).not.toHaveBeenCalled();
+  });
+
+  it('a saved address that was never located says the address is the problem', async () => {
+    const { fixture, cart } = await submit((cart) => {
+      cart.applyDestination = vi.fn(async () => {
+        throw refusal('DESTINATION_NOT_LOCATED');
+      });
+    });
+
+    expect(fixture.nativeElement.textContent).toContain('errors.reason.destinationNotLocated');
+    expect(fixture.nativeElement.textContent).not.toContain('errors.generic');
+    expect(cart.checkout).not.toHaveBeenCalled();
+  });
+
   it('a checkout rejected because an item just sold out says so', async () => {
     const { fixture } = await submit((cart) => {
       cart.checkout = vi.fn(async () => {
