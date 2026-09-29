@@ -211,12 +211,30 @@ export class DineInService {
   }
 
   /**
+   * Binds the guest's basket to their own table (`PUT .../carts/{id}/table`).
+   *
+   * The cart service is handed the guest token as a header and nothing else, so
+   * the token stays here: a screen that wants a bound cart calls this with its
+   * cart service and never holds the token itself. A bound cart is put on the
+   * table's bill by checkout, in the transaction that creates the order, and is
+   * refused before anything is written when nobody is seated -- which is what a
+   * later {@link attachRound} cannot promise. Refuses, like every call in this
+   * class, when no table has been scanned.
+   */
+  async bindCartToTable<T>(carts: {
+    bindTable(headers: Readonly<Record<string, string>>): Promise<T>;
+  }): Promise<T> {
+    return carts.bindTable(this.tokenHeader());
+  }
+
+  /**
    * Attaches a just-checked-out order to the guest's own table's bill.
    *
-   * Closes the gap `QrEntryController.addRound`'s own doc names: checkout does
-   * not bind a cart to a table on the platform today, so this is the call that
-   * makes an `ORDER_AND_PAY` checkout actually show up on the table's running
-   * total. Safe to call again with the same order id if a response was lost --
+   * The safety net under {@link bindCartToTable}: a basket that was bound is put
+   * on the bill by checkout itself and this only answers with the bill; a basket
+   * that was never bound (one opened before the table screen bound baskets, or a
+   * bind that could not be made) reaches its table's running total only through
+   * this call. Safe to call again with the same order id if a response was lost --
    * the platform answers the second call with the bill unchanged rather than a
    * conflict.
    *
@@ -242,11 +260,12 @@ export class DineInService {
    *
    * Called *before* the attach request, straight after checkout succeeded. A
    * guest order reaches `dinein.session_orders` -- the row the kitchen ticket's
-   * table chip, the order board and the running bill all read -- only through
-   * {@link attachRound}, and checkout gives that order no table of its own. So
-   * the order id is the one thing that ties this order to its table: it is held
-   * here, where a lost response, a dropped connection or a reload cannot
-   * discard it, until the platform has confirmed the attach.
+   * table chip, the order board and the running bill all read -- in checkout
+   * itself when its cart was bound to the table ({@link bindCartToTable}), and
+   * otherwise only through {@link attachRound}. This is the net under the second
+   * case: the order id is then the one thing that ties the order to its table, so
+   * it is held here, where a lost response, a dropped connection or a reload
+   * cannot discard it, until the platform has confirmed the attach.
    */
   queueRound(sessionId: string, orderId: string): void {
     const kept = this.pendingRoundsSignal().filter(

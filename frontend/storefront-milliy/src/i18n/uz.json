@@ -373,7 +373,8 @@
       "itemOutOfSaleWindow": "Bu taom hozir sotuvda emas.",
       "presetNotOffered": "Bu izoh endi ushbu taom uchun taklif etilmaydi.",
       "itemUnavailable": "Bu taom hozirgina tugab qoldi.",
-      "holdExpired": "Savatingiz uchun band qilingan vaqt tugadi. Buyurtmangizni qayta tekshirib, yana urinib ko'ring."
+      "holdExpired": "Savatingiz uchun band qilingan vaqt tugadi. Buyurtmangizni qayta tekshirib, yana urinib ko'ring.",
+      "tableNotAtBranch": "Bu stol boshqa filialda. O'z stolingizdagi kodni skanerlang."
     }
   },
   "money": {

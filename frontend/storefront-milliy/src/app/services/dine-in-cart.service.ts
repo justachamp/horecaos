@@ -21,7 +21,10 @@ import { CartService } from './cart.service';
  *
  * Everything else -- versioned writes, pricing, payment methods, checkout -- is
  * inherited unchanged: a table order is an ordinary order, placed by the
- * customer's own session, that the round attach afterwards ties to the table.
+ * customer's own session. What ties it to the table is the cart's binding
+ * ({@link CartService.bindTable}, made through `DineInService.bindCartToTable`),
+ * which makes checkout put the order on the table's bill itself; the round attach
+ * afterwards remains for a cart that was never bound.
  *
  * <h2>What the id is remembered against</h2>
  *

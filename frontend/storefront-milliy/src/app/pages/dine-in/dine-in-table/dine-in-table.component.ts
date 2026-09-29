@@ -59,13 +59,20 @@ const PAYMENT_LABEL_KEYS: Readonly<Record<string, string>> = {
  * `DINE_IN` fulfilment mode, location and channel (`DineInCartService`,
  * remembered against the table's session), a checkout, the running bill, and the
  * ask-for-the-bill action. Checkout is the ordinary one, placed by the guest's own
- * signed-in customer session -- there is no anonymous cart -- and the order it
- * creates is tied to the table by a second call, {@link DineInService.attachRound},
- * made with the guest token. The order id is queued on the device before that
- * call, because it is the only thing tying the order to its table: the kitchen
- * ticket's table chip, the order board and the bill all read the row the attach
- * writes. When the attach cannot be confirmed the screen says so and keeps the
- * order queued, rather than telling the guest all is well.
+ * signed-in customer session -- there is no anonymous cart.
+ *
+ * The basket is *bound to the table* before its first line
+ * ({@link DineInService.bindCartToTable}, `PUT .../carts/{id}/table`). A bound
+ * basket is put on the table's bill by checkout itself, in the transaction that
+ * creates the order, so a lost response or a reload cannot leave a cooking order on
+ * no bill, and checkout refuses it before writing anything when nobody is seated
+ * any more (`TABLE_NOT_SEATED`). The order id is nevertheless queued on the device
+ * and attached with {@link DineInService.attachRound} straight after: a safety net
+ * for a basket that was never bound (opened by an earlier build, or a bind that
+ * could not be made after a reload), and harmless for a bound one -- the platform
+ * answers the attach of an order already on the bill with the bill unchanged. When
+ * the attach cannot be confirmed the screen says so and keeps the order queued,
+ * rather than telling the guest all is well.
  *
  * <h2>Why an `ORDER_AND_PAY` table can still have nothing to order onto</h2>
  *
@@ -165,6 +172,8 @@ export class DineInTableComponent implements OnInit {
   });
 
   private pendingCheckoutKey: string | null = null;
+  /** The basket this screen has bound to the table -- once per basket, before its first line. */
+  private boundCartId: string | null = null;
 
   async ngOnInit(): Promise<void> {
     const admission = this.admission();
@@ -215,6 +224,12 @@ export class DineInTableComponent implements OnInit {
         sessionId,
       );
       if (cart && cart.lines.length > 0) {
+        // A basket found after a reload was bound when it was opened -- or was
+        // opened before baskets were bound. Binding again is harmless and clears
+        // its quote, so it comes before the price this is about to ask for.
+        // Best effort: an unbound basket is still put on the bill by the queued
+        // attach after checkout, and the next change to it tries again.
+        await this.bindToTable(cart.cartId).catch(() => undefined);
         await this.reprice();
       }
     } catch {
@@ -242,6 +257,12 @@ export class DineInTableComponent implements OnInit {
         admission.channelCode ?? undefined,
         sessionId,
       );
+      const cartId = this.carts.cart()?.cartId;
+      if (cartId) {
+        // Strict here, unlike a reload: a basket that cannot be bound gets no line,
+        // so what the guest orders is what checkout puts on the table's bill.
+        await this.bindToTable(cartId);
+      }
       if (change.quantity <= 0) {
         const held = this.carts.cart()?.lines.find((line) => line.lineKey === change.variantId);
         if (held) {
@@ -294,6 +315,28 @@ export class DineInTableComponent implements OnInit {
   }
 
   /**
+   * Binds the basket to this table (`PUT .../carts/{id}/table`), once per basket.
+   *
+   * A bound basket is put on the table's bill by checkout itself, in the
+   * transaction that creates the order: a response lost on the way back, or a
+   * page reloaded before the second call, cannot leave a cooking order on no
+   * table's bill; and checkout refuses the order before anything is written when
+   * nobody is seated any more (`TABLE_NOT_SEATED`) rather than creating an order
+   * the attach must then fail to place.
+   *
+   * The write clears any quote the basket holds, so callers bind before they
+   * price. The guest token is not seen here: {@link DineInService.bindCartToTable}
+   * hands the cart service the header.
+   */
+  private async bindToTable(cartId: string): Promise<void> {
+    if (this.boundCartId === cartId) {
+      return;
+    }
+    await this.dineIn.bindCartToTable(this.carts);
+    this.boundCartId = cartId;
+  }
+
+  /**
    * Prices the basket as it now stands and asks what it may be paid with.
    *
    * The total is the platform's own answer, never a sum of the dishes' prices:
@@ -336,11 +379,13 @@ export class DineInTableComponent implements OnInit {
    * Checks the basket out and puts the resulting order on the table's bill in the
    * same gesture -- from the guest's point of view, "order".
    *
-   * Checkout is the customer's own and knows nothing of the table; what ties the
-   * order to it is {@link DineInService.attachRound}, a second call, which can
-   * fail on its own. The order exists and is in the kitchen whatever happens to
-   * that call, so the outcome is reported in two parts and the second is never
-   * folded into the first: "order sent" is said only when the bill has it too.
+   * Checkout is the customer's own. A basket bound to the table
+   * ({@link bindToTable}) is put on the table's bill by checkout itself; the
+   * {@link DineInService.attachRound} that follows is the net under a basket that
+   * was never bound, and it is a second call that can fail on its own. The order
+   * exists and is in the kitchen whatever happens to that call, so the outcome is
+   * reported in two parts and the second is never folded into the first: "order
+   * sent" is said only when the bill has it too.
    *
    * A customer session that has ended mid-checkout is a matter for the sign-in
    * prompt, not for the table visit: the guest token is not involved in the

@@ -345,6 +345,33 @@ export class CartService {
   }
 
   /**
+   * Binds a `DINE_IN` cart to the table the guest scanned (ADR 0047).
+   *
+   * The table is never sent: the platform reads it from the table-scoped guest
+   * token in `headers` (`X-Dine-In-Token`), so a request edited to name the next
+   * table's cart binding has nothing to edit. With the binding in place checkout
+   * puts the order on the table's bill in the transaction that creates it -- the
+   * round cannot be lost between two requests -- and refuses the order outright,
+   * before anything is written, if nobody is seated there (`TABLE_NOT_SEATED`).
+   *
+   * The caller supplies the headers because the token is not this class's to
+   * hold: `DineInService.bindCartToTable` builds them and is the only way a table
+   * screen gets a cart bound.
+   *
+   * A write to the cart like any other: the version moves and a price already
+   * attached is cleared, so call it before pricing.
+   */
+  async bindTable(headers: Readonly<Record<string, string>>): Promise<PlatformCart> {
+    return this.withVersion((cart, version) =>
+      this.api.mutate<PlatformCart>('PUT', `${this.brandPath}/carts/${cart.cartId}/table`, {
+        expectedVersion: version,
+        idempotencyKey: newIdempotencyKey(),
+        headers,
+      }),
+    );
+  }
+
+  /**
    * Forgets this location's cart entirely. Called after a successful checkout.
    *
    * @param scope what the id was remembered against when that was not the

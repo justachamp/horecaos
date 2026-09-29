@@ -309,6 +309,25 @@ describe('DineInService (ADR 0047)', () => {
       }
     });
 
+    it('binds a cart to the table by handing the cart only the header, never the token itself', async () => {
+      const { service } = seated({ guestToken: 'secret-guest-token' });
+      const bindTable = vi.fn().mockResolvedValue({ cartId: 'cart-1' });
+
+      const result = await service.bindCartToTable({ bindTable });
+
+      expect(bindTable).toHaveBeenCalledWith({ 'X-Dine-In-Token': 'secret-guest-token' });
+      expect(result).toEqual({ cartId: 'cart-1' });
+    });
+
+    it('binds nothing when no table has been scanned', async () => {
+      const { service } = setUp();
+      const bindTable = vi.fn();
+
+      await expect(service.bindCartToTable({ bindTable })).rejects.toThrow();
+
+      expect(bindTable).not.toHaveBeenCalled();
+    });
+
     it.each([
       ['bill', (service: DineInService) => service.bill('session-1')],
       ['requestBill', (service: DineInService) => service.requestBill('session-1')],
