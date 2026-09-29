@@ -2116,6 +2116,8 @@ export const messagesRu: MessageCatalogue = {
   'catalog.products.create.action': 'Создать товар',
   'catalog.products.create.title': 'Создать товар',
   'catalog.products.create.name': 'Название',
+  'catalog.products.create.language':
+    'Язык названия: {language} — язык бренда по умолчанию. Другие языки добавляются в редакторе товара.',
   'catalog.products.create.code': 'Код',
   'catalog.products.create.required': 'Обязательное поле',
   'catalog.products.create.confirm': 'Создать',

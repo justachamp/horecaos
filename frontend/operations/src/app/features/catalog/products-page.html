@@ -188,8 +188,8 @@
 
   @if (createDialogOpen()) {
     <q-create-product-dialog
-      [locale]="listLocale()"
       [busy]="creating()"
+      [languageName]="listLocaleName()"
       [error]="createError()"
       (confirm)="submitCreate($event)"
       (dismiss)="closeCreateDialog()"

@@ -1,33 +1,27 @@
-import {
-  ChangeDetectionStrategy,
-  Component,
-  computed,
-  input,
-  output,
-  signal,
-} from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, input, output, signal } from '@angular/core';
 
 import { TPipe } from '../../core/i18n/t.pipe';
 
 export interface CreateProductSubmission {
   readonly code: string;
   readonly name: string;
-  readonly locale: string;
 }
 
 /**
  * `Создать товар` — catalog.md §4.1. `CreateProductRequest` needs only
  * `code`/`name`/`locale` at the edge (everything else — description, SKU,
  * fiscal — is filled in afterwards on the full editor), so this dialog asks
- * for exactly those three and hands off to `ProductEditorPage` once the
+ * for the code and the name and hands off to `ProductEditorPage` once the
  * product exists.
  *
- * **Row 10.12.** The `locale` is not the operator's own console language: the
- * name a person types here is the brand's, so it is written in the locale the
- * catalog lists resolve names in (`listResolutionLocale`), which the page
- * passes in. A create authored in whatever the operator's UI was set to would
- * leave a brand-new product showing its bare code in every list that reads the
- * brand's default.
+ * **Row 10.12 — the name's language is the brand's, not the operator's.** The
+ * dialog does not choose a `locale`: {@link ProductsPage} writes the name in
+ * the catalog locale its own list reads resolve in (the brand's default
+ * language, or the server's when the brand has chosen none), because a name
+ * authored in whatever the operator's console happened to be set to shows the
+ * product's bare code in that list. {@link languageName} tells the operator
+ * which language that is, so typing a Russian name into a brand whose default
+ * is Uzbek is a visible choice rather than a silent one.
  */
 @Component({
   selector: 'q-create-product-dialog',
@@ -37,9 +31,9 @@ export interface CreateProductSubmission {
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class CreateProductDialog {
-  /** The catalog locale the brand's list screens resolve names in; the name typed here is written under it. */
-  readonly locale = input.required<string>();
   readonly busy = input(false);
+  /** The name of the language the product is written in ("Uzbek (Latin)"), shown under the name field. */
+  readonly languageName = input<string | null>(null);
   readonly error = input<string | null>(null);
 
   readonly confirm = output<CreateProductSubmission>();
@@ -67,9 +61,7 @@ export class CreateProductDialog {
     if (!code || !name) {
       return;
     }
-    // The brand's list locale, never the operator's console language; the other
-    // locales are added afterwards on the editor's locale switcher.
-    this.confirm.emit({ code, name, locale: this.locale() });
+    this.confirm.emit({ code, name });
   }
 
   protected close(): void {

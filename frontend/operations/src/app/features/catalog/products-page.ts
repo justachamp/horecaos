@@ -14,6 +14,7 @@ import { CursorState, firstPage, nextPage } from '../../core/api/page';
 import { ApiError } from '../../core/api/problem-details';
 import { CurrentBrand } from '../../core/auth/current-brand';
 import { I18n } from '../../core/i18n/i18n';
+import { localeDisplayName } from '../../core/i18n/locale-labels';
 import { LocaleSet } from '../../core/i18n/locale-set';
 import { MessageKey } from '../../core/i18n/messages.en';
 import { TPipe } from '../../core/i18n/t.pipe';
@@ -33,6 +34,7 @@ import {
   CatalogSummary,
   CategorySummary,
   ProductSummary,
+  fromCatalogLocale,
   listResolutionLocale,
 } from './catalog-domain';
 import { CreateProductDialog, CreateProductSubmission } from './create-product-dialog';
@@ -106,19 +108,9 @@ interface ProductFilters {
 export class ProductsPage implements OnInit {
   private readonly api = inject(CatalogApi);
   private readonly brand = inject(CurrentBrand);
+  private readonly localeSet = inject(LocaleSet);
   private readonly router = inject(Router);
   protected readonly i18n = inject(I18n);
-  private readonly localeSet = inject(LocaleSet);
-
-  /**
-   * Row 10.12: the catalog locale the brand's list screens resolve names in --
-   * the brand's own default when it has configured a set, the server's
-   * configured locale otherwise (`listResolutionLocale`). The create dialog
-   * writes the new product's name under it.
-   */
-  protected readonly listLocale = computed<string>(() =>
-    listResolutionLocale(this.localeSet.isConfigured(), this.localeSet.defaultLocale()),
-  );
 
   protected readonly columns = computed<readonly DataTableColumn[]>(() => {
     this.i18n.locale();
@@ -251,6 +243,22 @@ export class ProductsPage implements OnInit {
   protected readonly createDialogOpen = signal(false);
   protected readonly creating = signal(false);
   protected readonly createError = signal<string | null>(null);
+
+  /**
+   * Row 10.12: the catalog locale this brand's product list resolves names in
+   * — its own default language when it has chosen a set, the server's
+   * configured locale otherwise ({@link listResolutionLocale} explains why the
+   * second half is not the platform default). A create authors the name there,
+   * so the new row is named in the very list the operator is looking at.
+   */
+  private readonly listLocale = computed<string>(() =>
+    listResolutionLocale(this.localeSet.isConfigured(), this.localeSet.defaultLocale()),
+  );
+
+  /** {@link listLocale} as an operator would say it ("Uzbek (Latin)"), shown in the create dialog. */
+  protected readonly listLocaleName = computed<string>(() =>
+    localeDisplayName(this.i18n, fromCatalogLocale(this.listLocale())),
+  );
 
   private searchDebounceHandle: ReturnType<typeof setTimeout> | null = null;
 
@@ -498,7 +506,10 @@ export class ProductsPage implements OnInit {
         this.api.createProduct(scope, catalogId, {
           code: submission.code,
           name: submission.name,
-          locale: submission.locale,
+          // The locale the list reads (listLocale), not the operator's own
+          // transient console language: a product authored in whatever the UI
+          // happened to be set to shows its bare code in this brand's list.
+          locale: this.listLocale(),
         }),
       );
       this.createDialogOpen.set(false);

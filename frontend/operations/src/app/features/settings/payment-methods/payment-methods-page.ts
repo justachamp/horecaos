@@ -2,7 +2,8 @@ import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@a
 
 import { ApiError } from '../../../core/api/problem-details';
 import { CurrentLocation } from '../../../core/auth/current-location';
-import { I18n, LOCALES } from '../../../core/i18n/i18n';
+import { I18n } from '../../../core/i18n/i18n';
+import { LocaleSet } from '../../../core/i18n/locale-set';
 import { MessageKey } from '../../../core/i18n/messages.en';
 import { TPipe } from '../../../core/i18n/t.pipe';
 import { LocalizedFieldGroup } from '../../../shared/ui/localized-field-group';
@@ -26,6 +27,18 @@ import {
  * the door — register, rename, localize, icon, order, activate, disable, and
  * bind an acquirer installation — and the tenant-scoped list row 10.4b's
  * channel matrix reads its columns from instead of a frontend constant.
+ *
+ * **Row 10.12 — the localized names are per the brand's own languages, not a
+ * fixed ru/uz/en triple.** The tabs are {@link LocaleSet}'s locales (default
+ * first, the platform triple for a brand that has chosen none), the default
+ * one is marked and is where the editor opens — never the operator's own
+ * console language, which says nothing about the brand. `PUT .../translations`
+ * replaces the whole set, so a name in a language the tabs do not show is sent
+ * back unchanged with every save ({@link editTranslations} starts from every
+ * stored name, and only the visible fields are ever edited): narrowing a
+ * brand's languages later cannot delete a translation. The registry is
+ * tenant-wide, so a tenant with several brands sees the operator's own
+ * brand's languages here — a menu, not a constraint, for the reason above.
  */
 @Component({
   selector: 'q-payment-methods-page',
@@ -38,6 +51,7 @@ export class PaymentMethodsPage {
   private readonly api = inject(PaymentMethodsApi);
   private readonly integrations = inject(IntegrationsApi);
   private readonly location = inject(CurrentLocation);
+  private readonly localeSet = inject(LocaleSet);
   protected readonly i18n = inject(I18n);
 
   protected readonly loading = signal(true);
@@ -47,7 +61,9 @@ export class PaymentMethodsPage {
   protected readonly installations = signal<readonly InstallationView[]>([]);
 
   protected readonly responsibilities = PAYMENT_METHOD_RESPONSIBILITIES;
-  protected readonly locales = LOCALES;
+  /** Row 10.12: the brand's own languages, default first (the platform triple when it has chosen none). */
+  protected readonly locales = computed(() => this.localeSet.locales());
+  protected readonly defaultLocale = computed(() => this.localeSet.defaultLocale());
 
   protected readonly showCreateForm = signal(false);
   protected readonly createSubmitting = signal(false);
@@ -64,7 +80,7 @@ export class PaymentMethodsPage {
   protected readonly editSortOrder = signal(0);
   protected readonly editInstallationId = signal('');
   protected readonly editContractReference = signal('');
-  protected readonly editLocale = signal<string>(this.i18n.locale());
+  protected readonly editLocale = signal<string>(this.localeSet.defaultLocale());
   protected readonly editTranslations = signal<Record<string, string>>({});
   protected readonly rowSaving = signal(false);
   protected readonly rowError = signal<string | null>(null);
@@ -83,10 +99,18 @@ export class PaymentMethodsPage {
   protected readonly translationCompleteness = computed<Readonly<Record<string, boolean>>>(() => {
     const values = this.editTranslations();
     const result: Record<string, boolean> = {};
-    for (const locale of this.locales) {
+    for (const locale of this.locales()) {
       result[locale] = (values[locale] ?? '').trim().length > 0;
     }
     return result;
+  });
+
+  /** Languages this method has a name in that the tabs do not offer — kept on save, never shown. */
+  protected readonly hiddenLocales = computed<readonly string[]>(() => {
+    const offered = new Set<string>(this.locales());
+    return Object.entries(this.editTranslations())
+      .filter(([locale, value]) => !offered.has(locale) && value.trim().length > 0)
+      .map(([locale]) => locale);
   });
 
   protected responsibilityKey(responsibility: PaymentMethodResponsibility): MessageKey {
@@ -143,6 +167,7 @@ export class PaymentMethodsPage {
     this.editInstallationId.set(method.providerInstallationId ?? '');
     this.editContractReference.set(method.contractReference ?? '');
     this.editTranslations.set({ ...method.localizedNames });
+    this.editLocale.set(this.defaultLocale());
     this.rowError.set(null);
   }
 
@@ -199,7 +224,10 @@ export class PaymentMethodsPage {
 
   private async load(): Promise<void> {
     this.loading.set(true);
-    await this.location.ensureLoaded();
+    // The brand's language set is independent of the location scope, so it
+    // resolves alongside it; without this the tabs never advance past
+    // `LocaleSet`'s platform fallback (`locale-set.ts`'s own doc).
+    await Promise.all([this.location.ensureLoaded(), this.localeSet.ensureLoaded()]);
     const scope = this.location.scope();
     if (!scope) {
       this.denied.set(this.location.denied());
