@@ -165,22 +165,48 @@ location.**
    already is, and takes no `Idempotency-Key` (there is no operator to protect).
 
 4. **A claim becomes a session when a round the restaurant has accepted is on it,
-   or it lapses.** `addRound` on a claim sets `confirmed_at` at once when the
-   attached order is already accepted (`CONFIRMED` or later — a cash order at an
-   auto-accepting branch, say). Otherwise the sweeper decides when
-   `claim_expires_at` passes, reading the statuses of the rounds attached to the
-   claim: an accepted round confirms it (`confirmed_by = 'round:<orderId>'`); a round
-   still in flight (`RECEIVED`, `PAYMENT_AUTHORIZING`, `AWAITING_APPROVAL`) defers
-   the decision to the next sweep, for at most the 30-minute default
-   `OrderPaymentProcess` waits before it flags a stuck order; no rounds, or only
-   failed, rejected, expired or cancelled ones, lapses it. A lapse is
-   `TableSessionService.move` to `CLOSED` with `close_reason_code =
-   'CLAIM_LAPSED'`, so the audit fact, the table release
-   (`tr_session_close_releases_tables`) and the revocation of the table's guest
-   tokens all happen exactly as for a staff close. Attaching alone confirms nothing:
+   or it lapses — in whatever status it has been moved to.** `addRound` on a claim
+   sets `confirmed_at` at once when the attached order is already accepted
+   (`CONFIRMED` or later — a cash order at an auto-accepting branch, say).
+   Otherwise the sweeper decides when `claim_expires_at` passes, reading the
+   statuses of the rounds attached to the claim: an accepted round confirms it
+   (`confirmed_by = 'round:<orderId>'`); a round still in flight (`RECEIVED`,
+   `PAYMENT_AUTHORIZING`, `AWAITING_APPROVAL`) defers the decision to the next
+   sweep, but only until `claim_expires_at + walk_in_payment_defer_minutes` (a
+   location setting, default 30). That bound is anchored on the claim's own expiry,
+   is not renewable, and is deliberately not `OrderPaymentProcess`'s
+   `horecaos.ordering.workers.payment.stale-after`: that is a deploy property which
+   flags a stuck order for a person and never ends its payment, so it bounds
+   nothing per claim. Past the bound a claim whose rounds are still in flight
+   lapses like one with none; no rounds, or only failed, rejected, expired or
+   cancelled ones, lapses it at once. Attaching alone confirms nothing:
    `BILLABLE` counts `PAYMENT_AUTHORIZING` orders, and a claim that a guest could
    turn into a held table by starting a payment and abandoning it would be the
    denial this design exists to bound.
+
+   **The sweeper selects every live unconfirmed claim, in any live status.** A
+   guest can move a session to `BILL_REQUESTED` with the table's guest token alone —
+   `QrEntryController.requestBill` asks for no round and no sign-in — and
+   `DineInStateMachine` permits `OPEN -> CLOSED` and `SETTLING -> CLOSED` but not
+   `BILL_REQUESTED -> CLOSED` (its only exits are `SETTLING`, `OPEN` and
+   `FORCE_CLOSED`). A sweeper indexed on `status = 'OPEN'` and closing with a bare
+   `move(..., CLOSED)` would therefore never see, and could not close, a claim one
+   tap had moved out of `OPEN`. A lapse is `TableSessionService.move` to `CLOSED`
+   with `close_reason_code = 'CLAIM_LAPSED'` from `OPEN` or `SETTLING`; from
+   `BILL_REQUESTED` it is `move` to `OPEN` (the machine's existing return-to-service
+   edge, so ADR 0047's machine is untouched) and then to `CLOSED`, in one
+   transaction and both hops under the system actor with the reason "claim
+   lapsed". The audit fact, the table release (`tr_session_close_releases_tables`)
+   and the revocation of the table's guest tokens then happen exactly as for a
+   staff close; the price is one intermediate `dinein.session.open` fact, which
+   reads as a reopening and carries that reason.
+
+   Two guards make that state rare, and the sweeper relies on neither. A guest's
+   `bill-requests` call on an unconfirmed claim is refused (`409 RESOURCE_CONFLICT
+   { conflict: "CLAIM_UNCONFIRMED" }`), because there is nothing the restaurant has
+   accepted to bill; and a staff move of a claim past `OPEN` (`state-actions`)
+   confirms it, with `confirmed_by` set to the staff subject, because someone in the
+   room has then taken charge of the table.
 
 5. **Reservation holds win at the moment of opening.** The route refuses when a
    `CONFIRMED` booking holds the table for any part of `[now, now + walk-in
@@ -258,7 +284,8 @@ location.**
   "occupied, held or disabled" without a reason. It names no time, guest or
   booking, and occupancy is already visible in `openSessionId`; the leak is one
   boolean about a table they are physically at.
-- A guest whose payment outlasts the deferral bound loses the claim; the round they
+- A guest whose payment outlasts the deferral bound (`claim_expires_at +
+  walk_in_payment_defer_minutes`) loses the claim; the round they
   paid for stays an order but is no longer on a table's bill until staff open a
   session and attach it through the existing operator route.
 - `party_size` is the guest's own word.
@@ -292,6 +319,7 @@ dinein.location_settings   (columns added)
   walk_in_horizon_minutes  integer not null default 90     check 0..480
   walk_in_max_unconfirmed  integer not null default 5      check 0..100
   walk_in_daily_claims_per_account integer not null default 3   check 1..20
+  walk_in_payment_defer_minutes integer not null default 30  check 0..120
   session_currency         char(3)  not null default 'UZS' -- interim, ADR 0055; replaced by a location-currency read
 
 dinein.table_sessions      (columns added)
@@ -303,7 +331,10 @@ dinein.table_sessions      (columns added)
   check ( origin = 'STAFF' AND opened_by_account_id IS NULL AND claim_expires_at IS NULL
        OR origin = 'GUEST_QR' AND opened_by_account_id IS NOT NULL
           AND (confirmed_at IS NOT NULL OR claim_expires_at IS NOT NULL) )
-  index (claim_expires_at) WHERE origin = 'GUEST_QR' AND confirmed_at IS NULL AND status = 'OPEN'
+  index (claim_expires_at) WHERE origin = 'GUEST_QR' AND confirmed_at IS NULL AND closed_at IS NULL
+        -- every live status, not OPEN alone: ck_session_closed_at makes "closed_at IS NULL"
+        -- exactly "not CLOSED or FORCE_CLOSED", and a status list would go stale the way
+        -- ix_sessions_live's does the day a sixth status is added
   index (tenant_id, location_id, opened_by_account_id, opened_at) WHERE origin = 'GUEST_QR'
 ```
 
@@ -376,14 +407,18 @@ refuse. `TableSessionService.open` on the staff path records `bookedOver` and
 
 `TableSessionClaimSweeper`, `@Scheduled`, log-and-continue, with its own switch
 (`horecaos.dinein.claim-sweeper.enabled`), in the genre of
-`InventoryReservationSweeper`. One conditional read selects unconfirmed `GUEST_QR`
-claims past `claim_expires_at`; for each, a new `SessionOrderSource` read returns
+`InventoryReservationSweeper`. One conditional read selects live unconfirmed `GUEST_QR`
+claims past `claim_expires_at` in any live status (`OPEN`, `BILL_REQUESTED` or
+`SETTLING`); for each, a new `SessionOrderSource` read returns
 the statuses of its attached rounds (the module's existing way to read order facts
 without importing ordering), and the sweeper confirms, defers or lapses as Decision
-4 says, closing through `TableSessionService.move` under a system actor. A lapse
-racing an attach loses cleanly: `move` is a conditional update on the expected
-version, and `addRound` already refuses a closed session with the stable "takes no
-more rounds" answer that `dineIn.roundAttachRetry` renders.
+4 says, closing through `TableSessionService.move` under a system actor — by way of
+`OPEN` when the claim is in `BILL_REQUESTED`. A lapse racing an attach loses
+cleanly: `move` is a conditional update on the expected version, and `addRound`
+already refuses a closed session with the stable "takes no more rounds" answer
+that `dineIn.roundAttachRetry` renders. A lapse racing a guest's bill request
+loses or wins cleanly for the same reason, and either outcome is handled: the
+next sweep sees a claim that moved to `BILL_REQUESTED` and lapses it.
 
 ### Audit, events, observability
 
@@ -400,7 +435,9 @@ stays generic). A branch whose lapse rate is high is the signal to look at abuse
 this table" control with a party-size stepper when `canOrder && !isSeated &&
 walkInAvailable`, requires sign-in first (the component already sends a guest to
 login to order), calls the route, updates the stored admission with the returned
-`openSessionId`, and shows the claim's remaining time. `dineIn.notSeated` remains
+`openSessionId`, and shows the claim's remaining time. The existing "ask for the
+bill" control (`DineInService.requestBill`) is not offered while the claim is
+unconfirmed, matching the `CLAIM_UNCONFIRMED` refusal. `dineIn.notSeated` remains
 the message for every other case. ru / uz-latn / en strings. `frontend/storefront-milliy`
 has no dine-in flow and is out of scope.
 
@@ -417,9 +454,18 @@ has no dine-in flow and is out of scope.
   daily cap; branch cap; per-token rate limit; all refusals share one response.
 - A claim with no round lapses at the TTL and frees the table. A round already
   `CONFIRMED` at attach confirms it at once. A round in `PAYMENT_AUTHORIZING`
-  neither confirms it nor lets it lapse until the 30-minute bound; a round that
-  then fails lapses it. A lapse racing an attach produces one outcome. The clock is
+  neither confirms it nor lets it lapse until `claim_expires_at +
+  walk_in_payment_defer_minutes`, and a round that then fails lapses it; a round
+  still in flight past that bound lapses the claim, and a second sweep does not
+  extend the bound. A lapse racing an attach produces one outcome. The clock is
   advanced, not asserted at an instant.
+- Tap-and-leave: a claim with no round, moved to `BILL_REQUESTED` by the guest's
+  own token (the call is refused with `CLAIM_UNCONFIRMED`; the test then puts the
+  row in that status directly, as a race would) and a second claim moved there by
+  a staff `state-action` (which confirms it) — the first lapses at the TTL through
+  `OPEN` and frees the table, the second is left alone. The table can be claimed
+  again after the lapse. The test fails against a sweeper that selects
+  `status = 'OPEN'` or closes with a single `move(..., CLOSED)`.
 - `VIEW_ONLY`, feature off, expired, rotated and archived tokens all refuse with the
   dead-code response; rotation revokes a claim's guest token.
 - A guest cannot supply a table, tenant or location; another table's token cannot
@@ -449,7 +495,10 @@ that need nothing done.
       strings.
 - [ ] `claim-confirmations` endpoint; `origin`, `claimExpiresAt`, `confirmedAt` on
       the live list; settings fields with `If-Match` and audit.
-- [ ] `TableSessionClaimSweeper` and the pending-order read on `SessionOrderSource`.
+- [ ] `TableSessionClaimSweeper` (every live status; the lapse by way of `OPEN` for
+      `BILL_REQUESTED`) and the pending-order read on `SessionOrderSource`; the
+      `CLAIM_UNCONFIRMED` refusal in `QrEntryController.requestBill`; staff moves
+      past `OPEN` confirm a claim in `TableSessionService.move`.
 - [ ] `EndpointCapabilityDeclarationTests` allow-list entry (exact path) and
       `StorefrontReadAuthenticationTests` case.
 - [ ] Reporting: exclude `CLAIM_LAPSED` from opened-session and cover counts; carry
@@ -465,8 +514,10 @@ At a venue that has enabled it, a guest who scans a free table, signs in, states
 party size and taps once is seated: their next order attaches to a bill at that
 table with no staff action. A guest cannot take a table a confirmed booking holds
 inside the horizon, cannot exceed its seats, and cannot hold one indefinitely by
-tapping and leaving: the table returns to the room within the claim TTL, or the
-payment bound when a round's payment is still in flight. A host
+tapping and leaving: the table returns to the room within the claim TTL — whatever
+status the claim has been moved to in the meantime — or within the payment bound
+(`claim_expires_at + walk_in_payment_defer_minutes`) when a round's payment is
+still in flight. A host
 sees every self-seated table, who is still unconfirmed, and can close, confirm or
 disable it. With the setting off, behaviour is unchanged.
 
