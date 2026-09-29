@@ -235,19 +235,22 @@ deliberately once step 7 says it is no longer needed (or, on a step-8
 rollback, once the rollback itself is confirmed complete): `rm -f
 "${TARGET_CRED_FILE}"`.
 
-**Known gap, not silently papered over:** production's current MinIO setup
-gives the application *scoped* service accounts per purpose (`media-service`,
-a backup account) rather than the root credential, created with
-`mc admin user add` / `mc admin policy attach`
-(`docs/runbooks/production-setup.md` section 4). RustFS's S3 API surface was
-verified for this migration (bucket/object operations, Object Lock,
-versioning, presigned URLs); its IAM surface — whether it has any equivalent
-to MinIO's admin API for scoped users and policies — was **not** verified and
-is not documented in what the orchestrator confirmed. Until that is checked
-against RustFS's own documentation, provision the application's OpenBao
-credentials (step 6) as the **root** credential for all three purposes. This
-is a real reduction in defence-in-depth from today's setup — a compromised
-media-upload path could now reach the backup bucket too — and should be
+**Scoped credentials, and the one pair that still is not (ADR 0135, checklist
+item 3).** Production's MinIO setup gave the application *scoped* service
+accounts per purpose (`media-service`, a backup account), created with
+`mc admin user add` / `mc admin policy attach`. RustFS 1.0.0 has no equivalent of
+those commands, but its own admin API does the same job —
+`PUT /rustfs/admin/v3/add-service-account`, SigV4-signed with the root credential
+(`docs/runbooks/production-setup.md` section 5 has the request). Verified
+2026-09-25, and again 2026-09-29 for the exact media policy: a credential minted
+with `s3:*` on `horecaos-media` and its objects put, listed, head-ed and deleted
+there and got `AccessDenied` on `horecaos-backups`. So the **media and backup
+pairs are no longer the root credential** — step 6 mints them scoped, by
+script. The **audit-archive pair is the exception**: nothing mints a scoped
+account for it yet (its policy is a decision of its own, not the media one
+copied, because the archive bucket has Object Lock), so it stays the root
+credential for now. That is a real reduction in defence-in-depth — a
+compromised audit-archive write path can reach the other buckets — and should be
 tracked and closed, not left as a permanent decision. It does not block this
 migration; it is a decision to make explicitly rather than not notice.
 
@@ -382,9 +385,37 @@ horecaos/production/object_storage/platform/backup-secret-key
 ```
 
 (`backup-offsite-*` is untouched — the off-site destination is a different
-provider entirely and this migration does not reach it.) Per the "known gap"
-note in step 2, write the new RustFS root credential's values into all six of
-these for now, and track scoping them down separately.
+provider entirely and this migration does not reach it.) The six fall into two
+groups:
+
+- **`media-*` and `backup-*` (four values): minted, not typed.** They are
+  bucket-scoped RustFS service accounts; the root credential is never written
+  into them (see the note in step 2). OpenBao currently holds a MinIO-era pair
+  at those four paths, which means nothing to RustFS, and `deploy.sh` leaves an
+  existing pair alone unless told otherwise — so tell it:
+
+  ```bash
+  sudo HORECAOS_ENV_FILE=/etc/horecaos/production.env \
+    HORECAOS_REMINT_OBJECT_STORE_CREDENTIALS=1 infra/production/deploy.sh
+  ```
+
+  Phase 6a of that script mints both accounts against the running RustFS
+  (`s3:*` on their one bucket each), writes the four values to OpenBao over
+  stdin (nothing is printed or left in the shell), and only then lets the
+  application start. It is a full deploy of the checked-out release on the
+  build-on-server stack (`platform/compose.production.yaml`), so run it from a
+  checkout of the release you mean to run. On the registry-pull stack that this
+  runbook's `qc` alias drives there is no deploy script yet: run the by-hand
+  request in `production-setup.md` section 5 ("Then create the scoped service
+  accounts") against the new store and store the two values per pair with
+  `bao kv put`. Either way each write is a new KV version and the MinIO-era
+  values stay behind it, which is exactly what the rollback loop in step 8
+  reads back. Nothing here deletes a service account; an account minted
+  earlier on *this* RustFS stays valid until you remove it
+  (`production-setup.md`, "Superseded service accounts").
+- **`audit-archive-*` (two values): still the RustFS root credential, for now**
+  (step 2's note says why). Write the new root credential's values into both
+  and track scoping them down separately.
 
 `docs/runbooks/production-setup.md` section 4's own list of secrets to
 provision only names the media and backup pairs, not
@@ -396,9 +427,10 @@ first-time write. Either way, `S3AuditArchiveStore` reads exactly this
 reference pair (`application.yml`'s `HORECAOS_AUDIT_ARCHIVE_ACCESS_KEY_REF`
 default), so it is the correct path regardless of whether it is new.
 
-Values are written with `bao kv put`, run by a person, never pasted into this
-file or a chat transcript — `platform/infra/production/README.md` says the
-same about every value on this list.
+The values that *are* typed — the audit-archive pair — are written with
+`bao kv put`, run by a person, never pasted into this file or a chat
+transcript; `platform/infra/production/README.md` says the same about every
+value on this list.
 
 **B. One value delivered as a file at container start, which does need a
 restart to pick up.** The object-store's own root credential —

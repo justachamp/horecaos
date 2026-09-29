@@ -383,6 +383,16 @@ horecaos/production/object_storage/platform/backup-offsite-access-key
 horecaos/production/object_storage/platform/backup-offsite-secret-key
 ```
 
+The `media-*` and `backup-*` pairs are RustFS service accounts, each scoped to
+one bucket, and nobody should type them. On the build-on-server stack
+(`platform/compose.production.yaml`) `platform/infra/production/deploy.sh`
+Phase 6a mints both against the running object store on the first deploy and
+writes all four values to OpenBao itself — nothing is printed, pasted or
+stored in a shell variable that outlives the step. On the registry-pull stack
+this runbook deploys there is no deploy script yet, so section 5 runs the same
+call by hand. The `backup-offsite-*` pair is created at the off-site provider
+and is always yours to store.
+
 **Rollback for this whole section:** none past the unseal — an initialised
 OpenBao cannot be un-initialised without destroying its volume. If something
 here goes wrong before any real secret is loaded, `docker compose down -v`
@@ -698,8 +708,8 @@ docker compose -f deploy/compose.production.yml --env-file /etc/horecaos/product
   up -d object-store
 docker compose -f deploy/compose.production.yml --env-file /etc/horecaos/production.env \
   run --rm --no-TTY ops bash -c '
-    export AWS_ACCESS_KEY_ID="${HORECAOS_OBJECT_STORE_ACCESS_KEY}"
-    export AWS_SECRET_ACCESS_KEY="$(cat /run/horecaos/secrets/object-store-secret-key)"
+    export AWS_ACCESS_KEY_ID="${OBJECT_STORE_ROOT_ACCESS_KEY}"
+    export AWS_SECRET_ACCESS_KEY="$(cat /run/secrets/object-store-secret-key)"
     export AWS_EC2_METADATA_DISABLED=true
     export AWS_DEFAULT_REGION=us-east-1
     ep="--endpoint-url http://minio:9000"
@@ -729,11 +739,30 @@ the `ops` image's Alpine `curl` package is well past that. `jq` (already in
 the `ops` image) builds the policy and request body so no bucket name is
 hand-typed into raw JSON twice.
 
+**On the build-on-server stack, skip this block.**
+`platform/infra/production/deploy.sh` Phase 6a sends exactly this request
+for the media pair and the backup pair (`s3:*` on that one bucket and its
+objects, nothing else — checked 2026-09-29 against RustFS 1.0.0: the media
+credential put, listed, head-ed and deleted in `horecaos-media` and got
+`AccessDenied` on `horecaos-backups`), then writes all four values to OpenBao
+over stdin. It asks OpenBao first, so a second deploy mints nothing; a lone
+half of a pair is treated as a failed earlier run and both halves are
+replaced. Running `sudo HORECAOS_ENV_FILE=/etc/horecaos/production.env
+HORECAOS_REMINT_OBJECT_STORE_CREDENTIALS=1 infra/production/deploy.sh` forces
+a fresh pair — the way to replace a pair
+that belongs to a different object store (the MinIO-era one, see
+[object-store-migration.md](object-store-migration.md) step 6) or to rotate
+one. The previous values stay recoverable as earlier KV versions, but see
+"Superseded service accounts" below: the old account is not revoked for you.
+
+The registry-pull stack has no deploy script, so for it the same call is made
+by hand:
+
 ```bash
 docker compose -f deploy/compose.production.yml --env-file /etc/horecaos/production.env \
   run --rm --no-TTY ops bash -c '
-    ROOT_ACCESS_KEY="${HORECAOS_OBJECT_STORE_ACCESS_KEY}"
-    ROOT_SECRET_KEY="$(cat /run/horecaos/secrets/object-store-secret-key)"
+    ROOT_ACCESS_KEY="${OBJECT_STORE_ROOT_ACCESS_KEY}"
+    ROOT_SECRET_KEY="$(cat /run/secrets/object-store-secret-key)"
     for pair in "media:horecaos-media" "backup:horecaos-backups"; do
       name="${pair%%:*}"; bucket="${pair##*:}"
       policy=$(jq -nc --arg b "$bucket" "{Version:\"2012-10-17\",Statement:[{Effect:\"Allow\",Action:[\"s3:*\"],Resource:[(\"arn:aws:s3:::\"+\$b),(\"arn:aws:s3:::\"+\$b+\"/*\")]}]}")
@@ -759,14 +788,40 @@ exists first if you are not sure this has run before:
 ```bash
 docker compose -f deploy/compose.production.yml --env-file /etc/horecaos/production.env \
   run --rm --no-TTY ops bash -c '
-    curl -fsS "http://minio:9000/rustfs/admin/v3/list-service-accounts?user=${HORECAOS_OBJECT_STORE_ACCESS_KEY}" \
-      --user "${HORECAOS_OBJECT_STORE_ACCESS_KEY}:$(cat /run/horecaos/secrets/object-store-secret-key)" \
+    curl -fsS "http://minio:9000/rustfs/admin/v3/list-service-accounts?user=${OBJECT_STORE_ROOT_ACCESS_KEY}" \
+      --user "${OBJECT_STORE_ROOT_ACCESS_KEY}:$(cat /run/secrets/object-store-secret-key)" \
       --aws-sigv4 "aws:amz:us-east-1:s3"'
 ```
 
-Store the resulting media credential in OpenBao (values from the commands
-above — the point of the exercise is that this pair, and the equivalent
-backup pair, never touch `deploy/env.template` or this shell's history file):
+The listing shows each account's `accessKey`, `name` and `accountStatus`
+(verified 2026-09-29: it does not return secret keys).
+
+#### Superseded service accounts
+
+Neither `deploy.sh` nor the by-hand loop revokes anything. After a forced
+remint or a repeated by-hand run on the same object store, the previous
+account is still valid — bucket-wide on the bucket it was scoped to — until
+it is deleted. Find it in the listing above (`name` is `media-production` or
+`backup-production` for the ones `deploy.sh` mints, `media-platform` /
+`backup-platform` for the by-hand loop), confirm its `accessKey` is **not**
+the one now in OpenBao, and delete it (verified 2026-09-29: HTTP 200, and the
+deleted credential is refused on its next request):
+
+```bash
+docker compose -f deploy/compose.production.yml --env-file /etc/horecaos/production.env \
+  run --rm --no-TTY ops bash -c '
+    curl -fsS -X DELETE "http://minio:9000/rustfs/admin/v3/delete-service-account?accessKey=<the superseded access key>" \
+      --user "${OBJECT_STORE_ROOT_ACCESS_KEY}:$(cat /run/secrets/object-store-secret-key)" \
+      --aws-sigv4 "aws:amz:us-east-1:s3"'
+```
+
+An account that belonged to the *old* object store (MinIO) does not exist on
+RustFS and needs no deleting.
+
+On the registry-pull stack only (`deploy.sh` does this itself), store the
+resulting media credential in OpenBao (values from the commands above — the
+point of the exercise is that this pair, and the equivalent backup pair, never
+touch `deploy/env.template` or this shell's history file):
 
 ```text
 horecaos/production/object_storage/platform/media-access-key

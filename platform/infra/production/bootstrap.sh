@@ -187,10 +187,18 @@ cat <<-'EOF'
 	  horecaos/production/identity_admin/keycloak/reader-secret
 	      Copied from the Keycloak clients after the realm is imported.
 
+	The object store's own credentials are not on that list on purpose:
+
 	  horecaos/production/object_storage/platform/media-access-key
 	  horecaos/production/object_storage/platform/media-secret-key
-	      A RustFS service account scoped to the media bucket. Not the root
-	      credential: the application should not be able to delete the backups.
+	  horecaos/production/object_storage/platform/backup-access-key
+	  horecaos/production/object_storage/platform/backup-secret-key
+	      RustFS service accounts, each scoped to its one bucket (never the
+	      root credential: the application must not be able to delete the
+	      backups). A service account can only be created against a running
+	      object store, which does not exist yet, so infra/production/deploy.sh
+	      mints these on its first run and writes them to OpenBao itself.
+	      Nothing to type; nothing printed.
 
 	The backup passphrase belongs in
 	  horecaos/production/data_encryption/platform/backup-passphrase
@@ -220,7 +228,9 @@ cat <<-'EOF'
 	  1. Store the remaining secrets listed above.
 	  2. Create an operator login (userpass or OIDC) with the horecaos-platform
 	     policy plus whatever it needs to write secrets. The deploy script asks
-	     for that token, not for a root one.
+	     for that token, not for a root one. It needs write access to the four
+	     object_storage/platform/{media,backup}-{access,secret}-key paths, because
+	     deploy.sh stores the service accounts it mints there.
 	  3. Run infra/production/deploy.sh.
 
 EOF
