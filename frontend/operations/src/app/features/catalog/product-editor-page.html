@@ -704,6 +704,20 @@
                                 : ('catalog.editor.availability.listEverywhere' | t)
                             }}
                           </button>
+                          @if (listingNoticeByVariant()[row.variantId]; as notice) {
+                            <p
+                              class="q-caption editor__unlisted-note"
+                              role="status"
+                              [attr.data-testid]="'editor-listing-notice-' + row.variantId"
+                            >
+                              {{
+                                notice.kind === 'partial'
+                                  ? ('catalog.editor.availability.listPartial'
+                                    | t: { listed: notice.listed, candidate: notice.candidate })
+                                  : ('catalog.editor.availability.listRecountFailed' | t)
+                              }}
+                            </p>
+                          }
                         </li>
                       }
                     </ul>

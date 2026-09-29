@@ -67,9 +67,15 @@
 
 .editor__unlisted-list li {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+}
+
+/* The outcome note sits under its row, not beside the button. */
+.editor__unlisted-note {
+  flex-basis: 100%;
 }
 
 .editor__unlisted-banner button {

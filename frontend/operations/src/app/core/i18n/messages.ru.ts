@@ -2268,6 +2268,10 @@ export const messagesRu: MessageCatalogue = {
   'catalog.editor.availability.notListedVariantRow': '{variant} — не размещено в {count} филиал(ах)',
   'catalog.editor.availability.listEverywhere': 'Разместить во всех филиалах',
   'catalog.editor.availability.listingInProgress': 'Размещение…',
+  'catalog.editor.availability.listPartial':
+    'Размещено в {listed} из {candidate} филиалов. Остальные разместить не удалось — повторите или обратитесь в поддержку, если ошибка повторяется.',
+  'catalog.editor.availability.listRecountFailed':
+    'Размещение выполнено, но остаток не удалось прочитать — число выше может быть устаревшим. Откройте вкладку заново, чтобы проверить.',
   'catalog.editor.schedule.hint':
     'Пусто — значит товар всегда в продаже. Окна ниже ограничивают время продажи и рассчитываются по местному времени филиала.',
   'catalog.editor.schedule.loading': 'Загрузка графика…',
