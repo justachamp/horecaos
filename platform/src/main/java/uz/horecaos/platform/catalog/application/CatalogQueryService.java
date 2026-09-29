@@ -460,8 +460,10 @@ public class CatalogQueryService {
         // rather than reporting a brand with an unclassified menu as though its
         // delivery fee did not need classifying.
         store.ensureFee(tenantId, brandId, "DELIVERY");
+        // The same resolution the list screens use (defaultLocaleNames): the brand's own
+        // default, then the server's locale for a node with no name there.
         List<JdbcCatalogStore.FiscalCoverageNodeRow> rows =
-                store.fiscalCoverageNodes(tenantId, brandId, resolutionLocale(tenantId, brandId));
+                store.fiscalCoverageNodes(tenantId, brandId, resolutionLocale(tenantId, brandId), defaultLocale);
         List<FiscalCoverageNode> unclassified = rows.stream()
                 .filter(JdbcCatalogStore.FiscalCoverageNodeRow::unclassified)
                 .sorted(java.util.Comparator.<JdbcCatalogStore.FiscalCoverageNodeRow>comparingInt(
