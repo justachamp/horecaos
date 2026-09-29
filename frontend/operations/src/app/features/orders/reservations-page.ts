@@ -31,7 +31,7 @@ import {
   ReservationsApi,
   TableAvailability,
 } from './reservations-api';
-import { TableSessionsApi } from './table-sessions-api';
+import { SESSION_CURRENCY, TableSessionsApi } from './table-sessions-api';
 
 /** The day grid, or `X.36`'s timeline — same tables, same bookings, a different read of them. */
 type ViewMode = 'GRID' | 'TIMELINE';
@@ -67,19 +67,6 @@ const FALLBACK_WINDOW: ServiceWindow = { startHour: 8, endHour: 23 };
  * HorecaOS operates in Uzbekistan today).
  */
 const FALLBACK_TIME_ZONE: TimeZone = 'Asia/Tashkent';
-
-/**
- * A table session names a currency (`TableSessionController.OpenRequest`)
- * that this screen has no clean operations-level read for: the tenant's own
- * `defaultCurrency` is control-plane-only today, and the only read that
- * carries one at this screen's scope is the catalog/menu fetch the new-order
- * screen makes for an unrelated reason — pulling that in here to seat a
- * booking would be a real cross-feature coupling for one string. ADR 0055
- * keeps the platform single-currency per tenant for the pilot, so a fixed
- * constant is the least-wrong value available; replace it with a real read
- * the moment one exists at this scope.
- */
-const SESSION_CURRENCY = 'UZS';
 
 /** Fixed, English, machine-facing — read by whoever reviews the audit log, not the operator, same as `customer-detail-pane.ts`'s own `REVEAL_PURPOSE`. */
 const GUEST_REVEAL_PURPOSE = 'Operations console: match a walk-in to a booking';

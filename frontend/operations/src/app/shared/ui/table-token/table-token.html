@@ -3,6 +3,7 @@
   [class.token--dragging]="dragging()"
   [class.token--outOfService]="table().status === 'OUT_OF_SERVICE'"
   [class.token--archived]="table().status === 'ARCHIVED'"
+  [class.token--occupied]="table().occupied === true"
   [class.token--disabled]="disabled()"
   [style.transform]="'translate(' + renderX() + 'px, ' + renderY() + 'px)'"
   (pointerdown)="onPointerDown($event)"
@@ -16,6 +17,13 @@
 >
   <span class="token__code q-body-sm">{{ table().code }}</span>
   <span class="token__seats q-caption">{{ table().seats }}</span>
+  @if (table().occupied === true) {
+    <span
+      class="token__occupied"
+      data-testid="table-token-occupied-badge"
+      aria-hidden="true"
+    ></span>
+  }
   @if (table().qrIssued) {
     <span class="token__qr" data-testid="table-token-qr-badge" aria-hidden="true">▦</span>
   }

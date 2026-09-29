@@ -1,6 +1,7 @@
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ActivatedRoute, Router, convertToParamMap, provideRouter } from '@angular/router';
+import { of, throwError } from 'rxjs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { LocationScope } from '../../../core/api/operations-paths';
@@ -10,6 +11,8 @@ import { I18n } from '../../../core/i18n/i18n';
 import { Toasts } from '../../../shared/ui/toast';
 import { CustomersApi, RevealedCustomerAddress } from '../../customers/customers-api';
 import { ChannelView, SalesChannelsApi } from '../../settings/sales-channels/sales-channels-api';
+import { ReservationsApi } from '../reservations-api';
+import { SessionView, TableSessionsApi } from '../table-sessions-api';
 import {
   BranchCandidate,
   BranchOverrideReason,
@@ -134,6 +137,25 @@ function address(overrides: Partial<RevealedCustomerAddress> = {}): RevealedCust
   };
 }
 
+function partySession(overrides: Partial<SessionView> = {}): SessionView {
+  return {
+    sessionId: 'ses-1',
+    reservationId: null,
+    partySize: 3,
+    businessDate: '2026-09-29',
+    openedAt: '2026-09-29T14:00:00Z',
+    status: 'OPEN',
+    serviceChargeRateBp: null,
+    currency: 'UZS',
+    settledTotalMinor: null,
+    closedAt: null,
+    closeReasonCode: null,
+    version: 1,
+    tables: [{ tableId: 'tb-7', code: 'T7', displayName: 'Table 7' }],
+    ...overrides,
+  };
+}
+
 async function flushMicrotasks(): Promise<void> {
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
@@ -162,6 +184,13 @@ describe('NewOrderPage', () => {
     /** Row 5.2d: the reorder deep link's own bootstrap read — no default resolution, only the tests that set query params call it. */
     profile: ReturnType<typeof vi.fn>;
   };
+  /** ADR 0047: the staff-side session reads and the round attach the DINE_IN mode makes. */
+  let sessionsApi: {
+    live: ReturnType<typeof vi.fn>;
+    open: ReturnType<typeof vi.fn>;
+    attachRound: ReturnType<typeof vi.fn>;
+  };
+  let reservationsApi: { availability: ReturnType<typeof vi.fn> };
   let router: Router;
 
   afterEach(async () => {
@@ -214,10 +243,20 @@ describe('NewOrderPage', () => {
       profile: vi.fn().mockRejectedValue(new Error('no reorder deep link in this test')),
       ...customersOverrides,
     };
+    sessionsApi = {
+      live: vi.fn().mockReturnValue(of([])),
+      open: vi.fn(),
+      attachRound: vi
+        .fn()
+        .mockReturnValue(of({ sessionId: 'ses-1', orderId: 'order-1', sequence: 1 })),
+    };
+    reservationsApi = { availability: vi.fn().mockResolvedValue([]) };
     await TestBed.configureTestingModule({
       imports: [NewOrderPage],
       providers: [
         provideRouter([]),
+        { provide: TableSessionsApi, useValue: sessionsApi },
+        { provide: ReservationsApi, useValue: reservationsApi },
         {
           provide: ActivatedRoute,
           useValue: { snapshot: { queryParamMap: convertToParamMap(queryParams) } },
@@ -1504,5 +1543,210 @@ describe('NewOrderPage', () => {
     expect(fixture.componentInstance['canSubmitAggregator']()).toBe(false);
     await fixture.componentInstance['submitAggregator']();
     expect(aggregatorEntry).not.toHaveBeenCalled();
+  });
+
+  // ------------------------------------------------ DINE_IN: name the table (ADR 0047)
+
+  const PLACED: PlaceOrderResult = {
+    orderId: 'order-1',
+    publicOrderNumber: '#0001',
+    status: 'CONFIRMED',
+    version: 1,
+    outcome: 'PLACED',
+    warnings: [],
+  };
+
+  /** An operator with a customer, a dish and a room with one party already seated at T7. */
+  async function renderDineIn(overrides: Partial<typeof newOrderApi> = {}): Promise<HTMLElement> {
+    await render({ placeOrder: vi.fn().mockResolvedValue(PLACED), ...overrides });
+    sessionsApi.live.mockReturnValue(of([partySession()]));
+    fixture.componentInstance['selectCandidate'](candidate());
+    fixture.componentInstance['onItemSelected']({ id: 'v-1', label: 'Cheeseburger' });
+    fixture.componentInstance['setFulfillmentMode']('DINE_IN');
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+    return fixture.nativeElement as HTMLElement;
+  }
+
+  function pickParty(host: HTMLElement): void {
+    host.querySelector<HTMLButtonElement>('[data-testid="new-order-table-session"]')!.click();
+    fixture.detectChanges();
+  }
+
+  it('DINE_IN swaps the address pane for the table picker, and never asks the branch resolver about it', async () => {
+    const host = await renderDineIn();
+
+    expect(host.querySelector('[data-testid="new-order-table-picker"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="new-order-address"]')).toBeNull();
+    expect(host.querySelector('[data-testid="new-order-pre-order-toggle"]')).toBeNull();
+    expect(
+      newOrderApi.resolveBranches.mock.calls.map((call) => call[1]),
+      'the resolver refuses DINE_IN outright: a table is a room in this branch',
+    ).not.toContain('DINE_IN');
+    expect(host.querySelector('[data-testid="new-order-table-required"]')).not.toBeNull();
+  });
+
+  it('DINE_IN cannot be placed until the operator has named a party', async () => {
+    const host = await renderDineIn();
+    expect(fixture.componentInstance['canSubmit']()).toBe(false);
+    await fixture.componentInstance['submit']();
+    expect(newOrderApi.placeOrder).not.toHaveBeenCalled();
+
+    pickParty(host);
+
+    expect(fixture.componentInstance['canSubmit']()).toBe(true);
+    expect(host.querySelector('[data-testid="new-order-table-selected"]')?.textContent).toContain(
+      'T7',
+    );
+  });
+
+  it('places a DINE_IN order at the operator’s own branch, then attaches it as a round of the chosen party', async () => {
+    const host = await renderDineIn();
+    const navigateSpy = vi.spyOn(router, 'navigate').mockResolvedValue(true);
+    pickParty(host);
+
+    await fixture.componentInstance['submit']();
+
+    expect(newOrderApi.placeOrder).toHaveBeenCalledTimes(1);
+    const [scope, request] = newOrderApi.placeOrder.mock.calls[0];
+    expect(scope).toEqual(SCOPE);
+    expect(request.fulfillmentMode).toBe('DINE_IN');
+    expect(request.destination).toBeNull();
+    expect(request.proposedLocationId).toBeNull();
+    expect(request.requestedFor).toBeNull();
+
+    expect(sessionsApi.attachRound).toHaveBeenCalledTimes(1);
+    expect(sessionsApi.attachRound).toHaveBeenCalledWith(
+      SCOPE,
+      'ses-1',
+      'order-1',
+      'Keyed in at the console',
+    );
+    expect(newOrderApi.placeOrder.mock.invocationCallOrder[0]).toBeLessThan(
+      sessionsApi.attachRound.mock.invocationCallOrder[0],
+    );
+    expect(navigateSpy).toHaveBeenCalledWith(['/orders', 'order-1']);
+  });
+
+  it('a pickup order the resolver sent to another branch is placed here once the operator switches to DINE_IN', async () => {
+    const host = await renderDineIn({
+      resolveBranches: vi.fn().mockResolvedValue({
+        candidates: [
+          branchCandidate({ locationId: 'l2', displayName: 'Yunusabad' }),
+          branchCandidate({ locationId: 'l1', displayName: 'Chilanzar' }),
+        ],
+        proposedLocationId: 'l2',
+      }),
+    });
+    vi.spyOn(router, 'navigate').mockResolvedValue(true);
+    pickParty(host);
+
+    expect(fixture.componentInstance['selectedLocationId']()).toBe('l1');
+    await fixture.componentInstance['submit']();
+
+    expect(newOrderApi.placeOrder.mock.calls[0][0]).toEqual(SCOPE);
+    expect(newOrderApi.placeOrder.mock.calls[0][1].overrideReasonCode).toBeNull();
+  });
+
+  it('an attach that fails leaves the order placed, blocks a second placement, and retrying puts it on the bill', async () => {
+    const host = await renderDineIn();
+    const navigateSpy = vi.spyOn(router, 'navigate').mockResolvedValue(true);
+    sessionsApi.attachRound
+      .mockReturnValueOnce(
+        throwError(() => new ApiError(ApiErrorCode.NETWORK_UNREACHABLE, 0, null, null)),
+      )
+      .mockReturnValue(of({ sessionId: 'ses-1', orderId: 'order-1', sequence: 1 }));
+    pickParty(host);
+
+    await fixture.componentInstance['submit']();
+    fixture.detectChanges();
+
+    expect(newOrderApi.placeOrder).toHaveBeenCalledTimes(1);
+    expect(navigateSpy).not.toHaveBeenCalled();
+    const banner = host.querySelector('[data-testid="new-order-attach-failed"]');
+    expect(banner?.textContent).toContain('#0001');
+    expect(fixture.componentInstance['canSubmit']()).toBe(false);
+
+    // A second «Создать» here would be a second order for the same table.
+    await fixture.componentInstance['submit']();
+    expect(newOrderApi.placeOrder).toHaveBeenCalledTimes(1);
+
+    host.querySelector<HTMLButtonElement>('[data-testid="new-order-attach-retry"]')!.click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(sessionsApi.attachRound).toHaveBeenCalledTimes(2);
+    expect(sessionsApi.attachRound.mock.calls[1]).toEqual(sessionsApi.attachRound.mock.calls[0]);
+    expect(newOrderApi.placeOrder).toHaveBeenCalledTimes(1);
+    expect(navigateSpy).toHaveBeenCalledWith(['/orders', 'order-1']);
+    expect(host.querySelector('[data-testid="new-order-attach-failed"]')).toBeNull();
+  });
+
+  it('“Open the order” after a failed attach leaves for the placed order without placing another', async () => {
+    const host = await renderDineIn();
+    const navigateSpy = vi.spyOn(router, 'navigate').mockResolvedValue(true);
+    sessionsApi.attachRound.mockReturnValue(
+      throwError(() => new ApiError(ApiErrorCode.NETWORK_UNREACHABLE, 0, null, null)),
+    );
+    pickParty(host);
+    await fixture.componentInstance['submit']();
+    fixture.detectChanges();
+
+    host.querySelector<HTMLButtonElement>('[data-testid="new-order-attach-open"]')!.click();
+
+    expect(navigateSpy).toHaveBeenCalledWith(['/orders', 'order-1']);
+    expect(newOrderApi.placeOrder).toHaveBeenCalledTimes(1);
+  });
+
+  it('a NOT_SERVICEABLE refusal on a table order says the branch is not taking dine-in, not that an address is out of zone', async () => {
+    const refusal = new ApiError(
+      ApiErrorCode.RESOURCE_CONFLICT,
+      409,
+      { status: 409, reason: 'NOT_SERVICEABLE' },
+      null,
+    );
+    const host = await renderDineIn({ placeOrder: vi.fn().mockRejectedValue(refusal) });
+    pickParty(host);
+
+    await fixture.componentInstance['submit']();
+
+    expect(fixture.componentInstance['submitError']()).toBe(
+      TestBed.inject(I18n).t('orders.newOrder.table.notServiceable'),
+    );
+    expect(
+      sessionsApi.attachRound,
+      'nothing was placed, so nothing is attached',
+    ).not.toHaveBeenCalled();
+    expect(fixture.componentInstance['placedAwaitingBill']()).toBeNull();
+  });
+
+  it('a pickup order attaches nothing, and switching to DINE_IN discards a pre-order time', async () => {
+    await render({ placeOrder: vi.fn().mockResolvedValue(PLACED) });
+    vi.spyOn(router, 'navigate').mockResolvedValue(true);
+    fixture.componentInstance['selectCandidate'](candidate());
+    fixture.componentInstance['onItemSelected']({ id: 'v-1', label: 'Cheeseburger' });
+    fixture.componentInstance['togglePreOrder']();
+    fixture.componentInstance['setRequestedForLocal']('2099-01-01T12:00');
+    fixture.componentInstance['setFulfillmentMode']('DINE_IN');
+    fixture.componentInstance['setFulfillmentMode']('PICKUP');
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance['preOrderEnabled']()).toBe(false);
+    expect(fixture.componentInstance['requestedForLocal']()).toBe('');
+
+    await fixture.componentInstance['submit']();
+
+    expect(newOrderApi.placeOrder.mock.calls[0][1].fulfillmentMode).toBe('PICKUP');
+    expect(sessionsApi.attachRound).not.toHaveBeenCalled();
+  });
+
+  it('switching the aggregator entry on leaves DINE_IN: a marketplace order is never eaten at our table', async () => {
+    await render();
+    fixture.componentInstance['setFulfillmentMode']('DINE_IN');
+
+    fixture.componentInstance['toggleAggregatorMode']();
+
+    expect(fixture.componentInstance['fulfillmentMode']()).toBe('PICKUP');
   });
 });

@@ -79,6 +79,42 @@
         {{ message }}
       </p>
     }
+    @if (placedAwaitingBill(); as placed) {
+      <!-- ADR 0047: the order exists, and the table's bill does not have it yet. -->
+      <div class="new-order__notice" role="alert" data-testid="new-order-attach-failed">
+        <p class="q-caption">
+          {{ 'orders.newOrder.table.attachFailed' | t: { number: placed.publicOrderNumber } }}
+        </p>
+        @if (attachError(); as message) {
+          <p class="q-caption new-order__error-inline" data-testid="new-order-attach-error">
+            {{ message }}
+          </p>
+        }
+        <div class="new-order__notice-actions">
+          <button
+            type="button"
+            class="new-order__create-button q-caption"
+            [disabled]="attaching()"
+            (click)="retryPutOnTheBill()"
+            data-testid="new-order-attach-retry"
+          >
+            {{
+              attaching()
+                ? ('orders.newOrder.table.attachRetrying' | t)
+                : ('orders.newOrder.table.attachRetry' | t)
+            }}
+          </button>
+          <button
+            type="button"
+            class="new-order__link q-caption"
+            (click)="openPlacedOrder()"
+            data-testid="new-order-attach-open"
+          >
+            {{ 'orders.newOrder.table.attachOpenOrder' | t }}
+          </button>
+        </div>
+      </div>
+    }
 
     <div class="new-order__panes">
       <!-- ================================================== КЛИЕНТ / АГРЕГАТОР -->
@@ -259,7 +295,22 @@
               >
                 {{ 'orders.fulfillmentMode.DELIVERY' | t }}
               </button>
+              <button
+                type="button"
+                class="q-caption new-order__mode-button"
+                [class.new-order__mode-button--active]="fulfillmentMode() === 'DINE_IN'"
+                (click)="setFulfillmentMode('DINE_IN')"
+                data-testid="new-order-mode-dine-in"
+              >
+                {{ 'orders.fulfillmentMode.DINE_IN' | t }}
+              </button>
             </div>
+
+            @if (fulfillmentMode() === 'DINE_IN') {
+              @if (locationScope(); as pickerScope) {
+                <q-dine-in-table-picker [scope]="pickerScope" (picked)="onTablePicked($event)" />
+              }
+            }
 
             @if (fulfillmentMode() === 'DELIVERY') {
               <div class="new-order__address" data-testid="new-order-address">
@@ -652,6 +703,18 @@
             <span>{{ fulfillmentModeLabel(fulfillmentMode()) }}</span>
           </p>
 
+          @if (fulfillmentMode() === 'DINE_IN') {
+            @if (tablePick(); as pick) {
+              <p class="q-caption new-order__order-row" data-testid="new-order-table-selected">
+                {{ 'orders.newOrder.table.selected' | t: { tables: pick.tables } }}
+              </p>
+            } @else {
+              <p class="q-caption new-order__hint" data-testid="new-order-table-required">
+                {{ 'orders.newOrder.table.required' | t }}
+              </p>
+            }
+          }
+
           <div class="new-order__field" data-testid="new-order-branch-row">
             <span class="q-caption">{{ 'orders.newOrder.order.branch' | t }}</span>
             @if (branchResolutionLoading()) {
@@ -721,15 +784,17 @@
             }
           }
 
-          <label class="new-order__aggregator-toggle q-caption">
-            <input
-              type="checkbox"
-              [checked]="preOrderEnabled()"
-              (change)="togglePreOrder()"
-              data-testid="new-order-pre-order-toggle"
-            />
-            {{ 'orders.newOrder.order.preOrder.toggle' | t }}
-          </label>
+          @if (fulfillmentMode() !== 'DINE_IN') {
+            <label class="new-order__aggregator-toggle q-caption">
+              <input
+                type="checkbox"
+                [checked]="preOrderEnabled()"
+                (change)="togglePreOrder()"
+                data-testid="new-order-pre-order-toggle"
+              />
+              {{ 'orders.newOrder.order.preOrder.toggle' | t }}
+            </label>
+          }
           @if (preOrderEnabled()) {
             <label class="new-order__field">
               <span class="q-caption">{{ 'orders.newOrder.order.preOrder.time' | t }}</span>

@@ -10,6 +10,7 @@ import {
   viewChild,
 } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
+import { firstValueFrom } from 'rxjs';
 
 import { LocationScope } from '../../../core/api/operations-paths';
 import { firstPage } from '../../../core/api/page';
@@ -38,6 +39,8 @@ import {
 } from '../../customers/customers-api';
 import { ChannelView, SalesChannelsApi } from '../../settings/sales-channels/sales-channels-api';
 import { accessRefusal, describeApiError } from '../order-errors';
+import { TableSessionsApi } from '../table-sessions-api';
+import { DineInTablePicker, TablePick } from './dine-in-table-picker';
 import { ItemModifierDialog, ModifierDialogConfirmation } from './item-modifier-dialog';
 import {
   AggregatorOrderLine,
@@ -236,6 +239,19 @@ interface PendingModifierSelection {
  * 86'd one already was; a window that closes after the line was added is
  * caught server-side at `Создать` and shown through {@link
  * describeDeliveryRefusal} rather than silently dropping the line.
+ *
+ * **Wave 15 (ADR 0047, operator side): a third mode, `DINE_IN`.** The operator
+ * names the table the order is for -- a party already seated, or one seated from
+ * here -- through {@link DineInTablePicker}; `Создать` then places the order at the
+ * operator's own branch (a table is a room, and there is no cross-branch question
+ * to resolve for one) and attaches it as a round of that party's session through
+ * `TableSessionController`'s staff-side rounds endpoint in the same flow, so the
+ * order shows its table on the board, the detail and the kitchen ticket at once.
+ * Those are two calls, and the second can fail after the first landed: the order
+ * exists and the screen says so, keeps the basket out of reach of a second
+ * `Создать` (which would place a duplicate), and offers to put the order on the
+ * bill again -- the attach is safe to repeat, the server answers a repeat with the
+ * sequence it already has.
  */
 @Component({
   selector: 'q-new-order-page',
@@ -247,6 +263,7 @@ interface PendingModifierSelection {
     ItemModifierDialog,
     DeniedState,
     MoneyInput,
+    DineInTablePicker,
   ],
   templateUrl: './new-order-page.html',
   styleUrl: './new-order-page.css',
@@ -256,6 +273,7 @@ export class NewOrderPage implements OnInit {
   private readonly api = inject(NewOrderApi);
   private readonly customersApi = inject(CustomersApi);
   private readonly channelsApi = inject(SalesChannelsApi);
+  private readonly sessionsApi = inject(TableSessionsApi);
   private readonly location = inject(CurrentLocation);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
@@ -703,7 +721,7 @@ export class NewOrderPage implements OnInit {
 
   // ---------------------------------------------------------------- §5.4 address pane
 
-  protected readonly fulfillmentMode = signal<'PICKUP' | 'DELIVERY'>('PICKUP');
+  protected readonly fulfillmentMode = signal<'PICKUP' | 'DELIVERY' | 'DINE_IN'>('PICKUP');
 
   protected readonly addresses = signal<readonly RevealedCustomerAddress[]>([]);
   protected readonly addressesLoading = signal(false);
@@ -742,14 +760,26 @@ export class NewOrderPage implements OnInit {
   });
 
   /** Same two keys `order-queue.ts`'s own `fulfillmentModeLabel` already reads — a dynamically built key does not typecheck against `MessageKey`. */
-  protected fulfillmentModeLabel(mode: 'PICKUP' | 'DELIVERY'): string {
-    return mode === 'DELIVERY'
-      ? this.i18n.t('orders.fulfillmentMode.DELIVERY')
-      : this.i18n.t('orders.fulfillmentMode.PICKUP');
+  protected fulfillmentModeLabel(mode: 'PICKUP' | 'DELIVERY' | 'DINE_IN'): string {
+    switch (mode) {
+      case 'DELIVERY':
+        return this.i18n.t('orders.fulfillmentMode.DELIVERY');
+      case 'DINE_IN':
+        return this.i18n.t('orders.fulfillmentMode.DINE_IN');
+      case 'PICKUP':
+        return this.i18n.t('orders.fulfillmentMode.PICKUP');
+    }
   }
 
-  protected setFulfillmentMode(mode: 'PICKUP' | 'DELIVERY'): void {
+  protected setFulfillmentMode(mode: 'PICKUP' | 'DELIVERY' | 'DINE_IN'): void {
     this.fulfillmentMode.set(mode);
+    if (mode === 'DINE_IN' && this.preOrderEnabled()) {
+      // Food eaten at a table is eaten now: there is no promise time to ask for.
+      this.preOrderEnabled.set(false);
+      this.requestedForLocal.set('');
+      this.requestedForError.set(null);
+      this.outOfHoursConfirmReason.set(null);
+    }
     if (
       mode === 'DELIVERY' &&
       this.selectedCustomer() &&
@@ -1165,6 +1195,20 @@ export class NewOrderPage implements OnInit {
       this.overrideReasonCode.set(null);
       this.overrideNote.set('');
 
+      if (mode === 'DINE_IN') {
+        // A table is a room in this branch: there is no cross-branch question to
+        // ask (the resolver refuses DINE_IN outright), and the order is placed
+        // here. selectedLocationId is set, not merely left alone, because the
+        // operator may arrive from a pickup order the resolver had sent elsewhere.
+        this.branchCandidates.set([]);
+        this.proposedLocationId.set(null);
+        const here = this.location.scope()?.locationId ?? null;
+        if (here !== null) {
+          this.selectedLocationId.set(here);
+        }
+        return;
+      }
+
       if (mode === 'DELIVERY' && (address === null || address.latitude === null || address.longitude === null)) {
         this.branchCandidates.set([]);
         this.proposedLocationId.set(null);
@@ -1401,12 +1445,41 @@ export class NewOrderPage implements OnInit {
   protected readonly submitDenied = signal(false);
   protected readonly unavailableItemIds = signal<readonly string[]>([]);
 
+  // ------------------------------------------------------------- DINE_IN table (ADR 0047)
+
+  /** The party the DINE_IN order goes to, as {@link DineInTablePicker} last reported it. */
+  protected readonly tablePick = signal<TablePick | null>(null);
+
+  /**
+   * An order that was placed but is not yet on its table's bill: the attach that
+   * follows a DINE_IN placement failed. While this is set the screen cannot place
+   * another order -- pressing `Создать` again would be a second order for the same
+   * table -- and offers only to put this one on the bill again or to open it.
+   */
+  protected readonly placedAwaitingBill = signal<{
+    readonly orderId: string;
+    readonly publicOrderNumber: string;
+    readonly sessionId: string;
+  } | null>(null);
+  protected readonly attaching = signal(false);
+  protected readonly attachError = signal<string | null>(null);
+
+  /** The operator's branch as the picker's scope: a table is looked for, and seated at, here. */
+  protected readonly locationScope = computed(() => this.location.scope());
+
+  protected onTablePicked(pick: TablePick | null): void {
+    this.tablePick.set(pick);
+  }
+
   protected readonly canSubmit = computed(
     () =>
       this.basket().length > 0 &&
       this.selectedCustomer() !== null &&
       this.total().allAvailable &&
-      (this.fulfillmentMode() === 'PICKUP' || this.selectedAddressId() !== null) &&
+      (this.fulfillmentMode() === 'PICKUP' ||
+        (this.fulfillmentMode() === 'DELIVERY' && this.selectedAddressId() !== null) ||
+        (this.fulfillmentMode() === 'DINE_IN' && this.tablePick() !== null)) &&
+      this.placedAwaitingBill() === null &&
       (!this.preOrderEnabled() || this.requestedForLocal().trim() !== '') &&
       this.selectedLocationId() !== null &&
       (!this.isBranchOverride() ||
@@ -1426,7 +1499,10 @@ export class NewOrderPage implements OnInit {
     if (delivery && addressId === null) {
       return;
     }
-    const placeAtLocationId = this.selectedLocationId() ?? scope.locationId;
+    const dineIn = this.fulfillmentMode() === 'DINE_IN';
+    // A table is a room in the operator's own branch: a DINE_IN order is placed
+    // here, whatever a pickup order earlier in this session had resolved elsewhere.
+    const placeAtLocationId = dineIn ? scope.locationId : (this.selectedLocationId() ?? scope.locationId);
     // Row 1.3: POST .../orders at the resolved (or overridden) branch, not
     // always the operator's own logged-in one.
     const placeAtScope = { ...scope, locationId: placeAtLocationId };
@@ -1480,6 +1556,7 @@ export class NewOrderPage implements OnInit {
       };
       const result = await this.api.placeOrder(placeAtScope, request);
       this.outOfHoursConfirmReason.set(null);
+      // The order exists from here on, and everything below is about not losing it.
       if (this.callEventId) {
         try {
           // The order's own branch — placeAtScope, not the operator's own
@@ -1489,6 +1566,20 @@ export class NewOrderPage implements OnInit {
           // The order already exists and is worth keeping either way — a
           // lost provenance link is an operator-KPI gap, not a reason to
           // treat an order that already succeeded as a failure.
+        }
+      }
+      const pick = this.tablePick();
+      if (dineIn && pick !== null) {
+        // The second call of the flow: the order is placed and priced, and this
+        // records that it belongs to the party's evening, which is what puts the
+        // table beside it on the board, the detail and the kitchen ticket.
+        const landed = await this.putOnTheBill(scope, {
+          orderId: result.orderId,
+          publicOrderNumber: result.publicOrderNumber,
+          sessionId: pick.sessionId,
+        });
+        if (!landed) {
+          return;
         }
       }
       this.toasts.show({
@@ -1531,6 +1622,67 @@ export class NewOrderPage implements OnInit {
   }
 
   /**
+   * Attaches a just-placed DINE_IN order to its party's bill. Never throws: a
+   * failure leaves {@link placedAwaitingBill} set, which is what stops the screen
+   * placing the same order twice while it is unresolved.
+   *
+   * @return whether the order is on the bill
+   */
+  private async putOnTheBill(
+    scope: LocationScope,
+    placed: { orderId: string; publicOrderNumber: string; sessionId: string },
+  ): Promise<boolean> {
+    this.attaching.set(true);
+    this.attachError.set(null);
+    try {
+      await firstValueFrom(
+        this.sessionsApi.attachRound(
+          scope,
+          placed.sessionId,
+          placed.orderId,
+          this.i18n.t('orders.newOrder.table.attachReason'),
+        ),
+      );
+      this.placedAwaitingBill.set(null);
+      return true;
+    } catch (error) {
+      this.placedAwaitingBill.set(placed);
+      this.attachError.set(
+        error instanceof ApiError
+          ? describeApiError(error, (key, values) => this.i18n.t(key, values))
+          : this.i18n.t('error.unknown.noReference'),
+      );
+      return false;
+    } finally {
+      this.attaching.set(false);
+    }
+  }
+
+  /** «Добавить в счёт» after a failed attach: safe to repeat -- the server answers a repeat with the sequence it already has. */
+  protected async retryPutOnTheBill(): Promise<void> {
+    const scope = this.location.scope();
+    const placed = this.placedAwaitingBill();
+    if (!scope || placed === null || this.attaching()) {
+      return;
+    }
+    if (await this.putOnTheBill(scope, placed)) {
+      this.toasts.show({
+        message: this.i18n.t('orders.newOrder.order.created', { number: placed.publicOrderNumber }),
+        tone: 'success',
+      });
+      void this.router.navigate(['/orders', placed.orderId]);
+    }
+  }
+
+  /** Leaves for the placed order without attaching it; the round can still be attached later. */
+  protected openPlacedOrder(): void {
+    const placed = this.placedAwaitingBill();
+    if (placed !== null) {
+      void this.router.navigate(['/orders', placed.orderId]);
+    }
+  }
+
+  /**
    * Row 1.3b's "out-of-zone shows the refusal reason_code in words": the
    * checkout refusals a delivery order can hit (`DESTINATION_NOT_LOCATED`,
    * `NOT_SERVICEABLE`) carry their code in `problem.reason` — see
@@ -1554,7 +1706,13 @@ export class NewOrderPage implements OnInit {
       return this.i18n.t('orders.newOrder.address.notLocated');
     }
     if (reason === 'NOT_SERVICEABLE') {
-      return this.i18n.t('orders.newOrder.address.notServiceable');
+      // For a table order this is not about a delivery zone: the branch or the
+      // channel does not take DINE_IN right now (a schedule or a channel mode
+      // nobody has switched on), and saying "outside every delivery zone" would
+      // send the operator looking for an address that does not exist.
+      return this.fulfillmentMode() === 'DINE_IN'
+        ? this.i18n.t('orders.newOrder.table.notServiceable')
+        : this.i18n.t('orders.newOrder.address.notServiceable');
     }
     if (reason === 'BRANCH_CLOSED_AT_REQUESTED_TIME') {
       return this.i18n.t('orders.newOrder.order.preOrder.closedNoOverride');
@@ -1591,6 +1749,11 @@ export class NewOrderPage implements OnInit {
 
   protected toggleAggregatorMode(): void {
     this.aggregatorMode.update((current) => !current);
+    if (this.aggregatorMode() && this.fulfillmentMode() === 'DINE_IN') {
+      // A marketplace order is collected or delivered, never eaten at one of our
+      // tables: the aggregator panel reads the page's mode and has no third case.
+      this.setFulfillmentMode('PICKUP');
+    }
     const first = this.aggregatorChannels()[0];
     if (this.aggregatorMode() && first && this.aggregatorChannelCode() === null) {
       this.aggregatorChannelCode.set(first.code);
@@ -1611,6 +1774,7 @@ export class NewOrderPage implements OnInit {
       this.aggregatorChannelCode() !== null &&
       this.aggregatorExternalOrderId().trim() !== '' &&
       this.aggregatorTotalMinor() > 0 &&
+      this.fulfillmentMode() !== 'DINE_IN' &&
       (this.fulfillmentMode() === 'PICKUP' ||
         (this.selectedCustomer() !== null && this.selectedAddressId() !== null)) &&
       !this.aggregatorSubmitting(),

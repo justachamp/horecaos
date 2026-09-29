@@ -177,3 +177,26 @@
 .addTableButton {
   margin-top: 12px;
 }
+
+/* "Seat a walk-in": the host's action on a free table, above the QR card actions. */
+.seat {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 8px 0 12px;
+  padding: 8px 0;
+  border-top: 1px solid var(--q-hairline);
+  border-bottom: 1px solid var(--q-hairline);
+}
+
+.seat__title {
+  margin: 0;
+  color: var(--q-ink-subtle);
+}
+
+.seat__warning {
+  margin: 0;
+  padding: 6px 8px;
+  color: var(--q-warning-text);
+  background: var(--q-warning-tint);
+}

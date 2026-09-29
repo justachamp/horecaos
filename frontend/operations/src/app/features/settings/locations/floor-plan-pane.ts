@@ -8,8 +8,11 @@ import {
   signal,
 } from '@angular/core';
 
+import { firstValueFrom } from 'rxjs';
+
 import { LocationScope } from '../../../core/api/operations-paths';
 import { ApiError } from '../../../core/api/problem-details';
+import { SessionCapabilities } from '../../../core/auth/session-capabilities';
 import { I18n } from '../../../core/i18n/i18n';
 import { TPipe } from '../../../core/i18n/t.pipe';
 import {
@@ -18,7 +21,18 @@ import {
 } from '../../../shared/ui/floor-plan-canvas/floor-plan-canvas';
 import { TablePrintCard } from '../../../shared/ui/table-print-card/table-print-card';
 import { describeApiError } from '../../orders/order-errors';
+import { ReservationsApi } from '../../orders/reservations-api';
+import { SESSION_CURRENCY, SessionView, TableSessionsApi } from '../../orders/table-sessions-api';
 import { DineInApi, DineInSettingsView, QrMode, SectionView, TableView } from './dinein-api';
+
+/**
+ * How far ahead a confirmed booking counts as "soon" when seating a walk-in.
+ * Advisory only -- `table-availability`'s `booked` flag is, in its own words,
+ * a read and not a hold, and a host who knows the party will be gone by then may
+ * seat them regardless. Nothing here refuses; ADR 0047 states no override rule
+ * and the guest-side horizon of ADR 0143 is Proposed, not built.
+ */
+const BOOKED_SOON_WINDOW_MINUTES = 90;
 
 /** couriers.md/ADR 0047: refused everywhere until a POS adapter declares both open-ticket ports. */
 const QR_MODES: readonly { readonly value: QrMode; readonly selectable: boolean }[] = [
@@ -52,6 +66,9 @@ const QR_MODES: readonly { readonly value: QrMode; readonly selectable: boolean 
 })
 export class FloorPlanPane {
   private readonly api = inject(DineInApi);
+  private readonly sessionsApi = inject(TableSessionsApi);
+  private readonly reservationsApi = inject(ReservationsApi);
+  private readonly capabilities = inject(SessionCapabilities);
   protected readonly i18n = inject(I18n);
 
   readonly scope = input.required<LocationScope>();
@@ -84,8 +101,44 @@ export class FloorPlanPane {
 
   protected readonly tablesInSection = computed(() => {
     const sectionId = this.activeSectionId();
-    return sectionId ? this.tables().filter((table) => table.sectionId === sectionId) : [];
+    if (!sectionId) {
+      return [];
+    }
+    const occupied = this.occupiedTableIds();
+    return this.tables()
+      .filter((table) => table.sectionId === sectionId)
+      .map((table) => ({ ...table, occupied: occupied.has(table.tableId) }));
   });
+
+  // ---------------------------------------------------------------- seating
+
+  /** Every party not yet closed, and null until the room has been read (or when the read was refused). */
+  protected readonly liveSessions = signal<readonly SessionView[] | null>(null);
+  /** Tables a confirmed booking holds inside {@link BOOKED_SOON_WINDOW_MINUTES}. */
+  private readonly bookedSoonTableIds = signal<ReadonlySet<string>>(new Set());
+
+  private readonly occupiedTableIds = computed<ReadonlySet<string>>(
+    () =>
+      new Set(
+        (this.liveSessions() ?? []).flatMap((session) => session.tables.map((t) => t.tableId)),
+      ),
+  );
+
+  protected readonly bookedSoonMinutes = BOOKED_SOON_WINDOW_MINUTES;
+  protected readonly seatPartySize = signal(2);
+  protected readonly seatReason = signal('');
+  protected readonly seating = signal(false);
+  protected readonly seatError = signal<string | null>(null);
+  protected readonly seatedNotice = signal<string | null>(null);
+
+  /**
+   * A usability affordance, never the authorization decision -- the server
+   * re-checks `dinein.session.manage` at this branch on the call itself
+   * (`SessionCapabilities`' own doc).
+   */
+  protected canManageSessions(): boolean {
+    return this.capabilities.has('DINEIN_SESSION_MANAGE');
+  }
 
   protected readonly addingSection = signal(false);
   protected readonly draftSectionCode = signal('');
@@ -124,6 +177,11 @@ export class FloorPlanPane {
       const scope = this.scope();
       void this.loadSettings(scope);
       void this.loadFloor(scope);
+    });
+    // Its own effect: it also follows the operator's capabilities, which settle
+    // after the session context loads, and that must not re-read the floor plan.
+    effect(() => {
+      void this.loadRoom(this.scope());
     });
   }
 
@@ -336,10 +394,102 @@ export class FloorPlanPane {
     }
   }
 
+  // -------------------------------------------------------------- seating
+
+  /**
+   * Who is sitting where, and which tables a booking holds soon. Two advisory
+   * reads (`DINEIN_SESSION_READ`, `RESERVATION_READ`) that only a host who can
+   * seat a party is shown the result of; a refusal leaves {@link liveSessions}
+   * null, which hides the action rather than offering one the pane cannot judge.
+   */
+  private async loadRoom(scope: LocationScope): Promise<void> {
+    if (!this.canManageSessions()) {
+      this.liveSessions.set(null);
+      return;
+    }
+    const now = new Date();
+    const until = new Date(now.getTime() + BOOKED_SOON_WINDOW_MINUTES * 60_000);
+    try {
+      const [live, availability] = await Promise.all([
+        firstValueFrom(this.sessionsApi.live(scope)),
+        this.reservationsApi.availability(scope, now.toISOString(), until.toISOString()),
+      ]);
+      this.liveSessions.set(live);
+      this.bookedSoonTableIds.set(
+        new Set(availability.filter((table) => table.booked).map((table) => table.tableId)),
+      );
+    } catch {
+      this.liveSessions.set(null);
+      this.bookedSoonTableIds.set(new Set());
+    }
+  }
+
+  protected isOccupied(table: TableView): boolean {
+    return this.occupiedTableIds().has(table.tableId);
+  }
+
+  protected isBookedSoon(table: TableView): boolean {
+    return this.bookedSoonTableIds().has(table.tableId);
+  }
+
+  /** The table's seat action is offered only where the room is known and the table is free and in service. */
+  protected canSeat(table: TableView): boolean {
+    return (
+      this.canManageSessions() &&
+      this.liveSessions() !== null &&
+      table.status === 'ACTIVE' &&
+      !this.isOccupied(table) &&
+      this.seatPartySize() >= 1 &&
+      this.seatReason().trim().length > 0 &&
+      !this.seating()
+    );
+  }
+
+  protected async seatWalkIn(): Promise<void> {
+    const table = this.selectedTable();
+    if (!table || !this.canSeat(table)) {
+      return;
+    }
+    this.seating.set(true);
+    this.seatError.set(null);
+    this.seatedNotice.set(null);
+    try {
+      // No reservation: a walk-in, which is most covers (ADR 0047). The same endpoint
+      // and the same capability the reservations screen seats a booking through.
+      const opened = await firstValueFrom(
+        this.sessionsApi.open(this.scope(), {
+          tableIds: [table.tableId],
+          partySize: this.seatPartySize(),
+          currency: SESSION_CURRENCY,
+          reason: this.seatReason().trim(),
+        }),
+      );
+      this.liveSessions.set([...(this.liveSessions() ?? []), opened]);
+      this.seatedNotice.set(
+        this.i18n.t('settings.locations.floorPlan.seat.done', { table: table.code }),
+      );
+    } catch (error) {
+      if (error instanceof ApiError && error.problem?.['conflict'] === 'TABLE_OCCUPIED') {
+        this.seatError.set(this.i18n.t('settings.locations.floorPlan.seat.errorOccupied'));
+        // Somebody seated it in the instant since the room was read: read it again.
+        await this.loadRoom(this.scope());
+      } else {
+        this.seatError.set(this.describe(error));
+      }
+    } finally {
+      this.seating.set(false);
+    }
+  }
+
   // ------------------------------------------------------------------- QR
 
   protected onTableSelected(tableId: string): void {
     this.selectedTableId.set(tableId);
+    const chosen = this.tables().find((table) => table.tableId === tableId);
+    this.seatPartySize.set(chosen ? Math.min(2, Math.max(1, chosen.seats)) : 2);
+    this.seatReason.set(this.i18n.t('settings.locations.floorPlan.seat.defaultReason'));
+    this.seatError.set(null);
+    this.seatedNotice.set(null);
     this.lastIssuedToken.set(null);
     this.lastRevokedGuestSessions.set(null);
     this.rotateReason.set('');

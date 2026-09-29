@@ -1747,6 +1747,21 @@ export const messagesEn = {
   'settings.locations.floorPlan.rotating': 'Rotating…',
   'settings.locations.floorPlan.revokedGuestSessions':
     '{count} guest session(s) on the old code were cut off.',
+  'settings.locations.floorPlan.seat.title': 'Seat a walk-in',
+  'settings.locations.floorPlan.seat.partySize': 'Guests',
+  'settings.locations.floorPlan.seat.defaultReason': 'Walk-in seated from the floor plan',
+  'settings.locations.floorPlan.seat.action': 'Seat',
+  'settings.locations.floorPlan.seat.seating': 'Seating…',
+  'settings.locations.floorPlan.seat.occupied': 'A party is already seated at this table.',
+  'settings.locations.floorPlan.seat.bookedSoon':
+    'A confirmed booking holds this table within the next {minutes} minutes. Seat only if the party will be gone by then.',
+  'settings.locations.floorPlan.seat.overCapacity':
+    'This table seats {seats}, fewer than the party.',
+  'settings.locations.floorPlan.seat.unavailable':
+    'This table is out of service and cannot be seated.',
+  'settings.locations.floorPlan.seat.done': 'Seated at {table}.',
+  'settings.locations.floorPlan.seat.errorOccupied':
+    'A party was seated at this table a moment ago.',
 
   'finance.scope.denied': 'This account is not permitted to see Finance.',
 
@@ -5774,6 +5789,36 @@ export const messagesEn = {
   'orders.newOrder.address.recipientName': 'Recipient',
   'orders.newOrder.address.recipientPhone': 'Recipient phone',
   'orders.newOrder.address.deliveryNote': 'Note for the courier',
+
+  // wave 15: the DINE_IN table picker (ADR 0047, operator side)
+  'orders.newOrder.table.title': 'Table',
+  'orders.newOrder.table.loading': 'Loading the dining room…',
+  'orders.newOrder.table.denied': 'No access to the dining room’s tables',
+  'orders.newOrder.table.error': 'The dining room could not be loaded',
+  'orders.newOrder.table.seatedNow': 'Seated now',
+  'orders.newOrder.table.noSessions': 'Nobody is seated yet — seat a party below',
+  'orders.newOrder.table.sessionLabel': '{tables} · {count} guests',
+  'orders.newOrder.table.sessionLabelNoCount': '{tables}',
+  'orders.newOrder.table.seatTitle': 'Seat a party',
+  'orders.newOrder.table.pickTable': 'Choose a free table',
+  'orders.newOrder.table.noFreeTables': 'Every table is taken',
+  'orders.newOrder.table.tableOption': '{code} · seats {seats}',
+  'orders.newOrder.table.tableOptionBooked': '{code} · seats {seats} · booking soon',
+  'orders.newOrder.table.partySize': 'Guests',
+  'orders.newOrder.table.seat': 'Seat',
+  'orders.newOrder.table.seating': 'Seating…',
+  'orders.newOrder.table.seatReason': 'Walk-in seated from the New order screen',
+  'orders.newOrder.table.seatOccupied': 'That table was taken a moment ago — pick another',
+  'orders.newOrder.table.selected': 'This order goes to {tables}',
+  'orders.newOrder.table.required': 'Choose the table this order is for',
+  'orders.newOrder.table.attachReason': 'Keyed in at the console',
+  'orders.newOrder.table.attachFailed':
+    'Order {number} was placed, but it is not on the table’s bill yet.',
+  'orders.newOrder.table.attachRetry': 'Put on the bill',
+  'orders.newOrder.table.attachRetrying': 'Adding…',
+  'orders.newOrder.table.attachOpenOrder': 'Open the order',
+  'orders.newOrder.table.notServiceable':
+    'This branch is not taking dine-in orders through this channel right now',
 
   // wave P14: §5.3 «Повторить» (row 1.3f)
   'orders.newOrder.reorder.action': 'Repeat',

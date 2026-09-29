@@ -9,6 +9,12 @@ export interface TableTokenView {
   readonly layoutX: number | null;
   readonly layoutY: number | null;
   readonly qrIssued: boolean;
+  /**
+   * Somebody is sitting here now (`table-availability`'s `occupied`, ADR 0047).
+   * Optional because most hosts of this token draw a plan, not a room: absent
+   * and false read the same, a free table.
+   */
+  readonly occupied?: boolean;
 }
 
 /** The position `(positionChange)` emits — always the token's real canvas coordinates, never a delta. */

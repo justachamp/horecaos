@@ -1732,6 +1732,20 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.locations.floorPlan.rotating': 'Yangilanmoqda…',
   'settings.locations.floorPlan.revokedGuestSessions':
     'Eski kod boʻyicha {count} mehmon sessiyasi uzildi.',
+  'settings.locations.floorPlan.seat.title': 'Bronsiz mehmonlarni oʻtqazish',
+  'settings.locations.floorPlan.seat.partySize': 'Mehmonlar soni',
+  'settings.locations.floorPlan.seat.defaultReason': 'Bronsiz mehmonlar zal rejasidan oʻtqazildi',
+  'settings.locations.floorPlan.seat.action': 'Oʻtqazish',
+  'settings.locations.floorPlan.seat.seating': 'Oʻtqazilmoqda…',
+  'settings.locations.floorPlan.seat.occupied': 'Bu stolda allaqachon mehmonlar oʻtirishibdi.',
+  'settings.locations.floorPlan.seat.bookedSoon':
+    'Bu stol keyingi {minutes} daqiqa ichida tasdiqlangan bron bilan band. Mehmonlar undan oldin ketsagina oʻtqazing.',
+  'settings.locations.floorPlan.seat.overCapacity':
+    'Bu stolda {seats} oʻrin bor — mehmonlardan kam.',
+  'settings.locations.floorPlan.seat.unavailable':
+    'Stol ishlamayapti, mehmonlarni oʻtqazib boʻlmaydi.',
+  'settings.locations.floorPlan.seat.done': 'Mehmonlar {table} stolga oʻtqazildi.',
+  'settings.locations.floorPlan.seat.errorOccupied': 'Bu stolga hozirgina mehmonlar oʻtqazildi.',
 
   'finance.scope.denied': 'Bu hisobga Moliya boʻlimiga ruxsat berilmagan.',
 
@@ -5784,6 +5798,36 @@ export const messagesUzLatn: MessageCatalogue = {
   'orders.newOrder.address.recipientName': 'Qabul qiluvchi',
   'orders.newOrder.address.recipientPhone': 'Qabul qiluvchi telefoni',
   'orders.newOrder.address.deliveryNote': 'Kuryer uchun izoh',
+
+  // wave 15: the DINE_IN table picker (ADR 0047, operator side)
+  'orders.newOrder.table.title': 'Stol',
+  'orders.newOrder.table.loading': 'Zal yuklanmoqda…',
+  'orders.newOrder.table.denied': 'Zal stollariga kirish huquqi yoʻq',
+  'orders.newOrder.table.error': 'Zalni yuklab boʻlmadi',
+  'orders.newOrder.table.seatedNow': 'Hozir stollarda',
+  'orders.newOrder.table.noSessions': 'Hozircha hech kim oʻtirmagan — mehmonlarni quyida oʻtqazing',
+  'orders.newOrder.table.sessionLabel': '{tables} · {count} mehmon',
+  'orders.newOrder.table.sessionLabelNoCount': '{tables}',
+  'orders.newOrder.table.seatTitle': 'Mehmonlarni oʻtqazish',
+  'orders.newOrder.table.pickTable': 'Boʻsh stolni tanlang',
+  'orders.newOrder.table.noFreeTables': 'Barcha stollar band',
+  'orders.newOrder.table.tableOption': '{code} · {seats} oʻrin',
+  'orders.newOrder.table.tableOptionBooked': '{code} · {seats} oʻrin · tez orada bron',
+  'orders.newOrder.table.partySize': 'Mehmonlar soni',
+  'orders.newOrder.table.seat': 'Oʻtqazish',
+  'orders.newOrder.table.seating': 'Oʻtqazilmoqda…',
+  'orders.newOrder.table.seatReason': 'Bronsiz mehmonlar yangi buyurtma ekranidan oʻtqazildi',
+  'orders.newOrder.table.seatOccupied': 'Bu stol hozirgina band boʻldi — boshqasini tanlang',
+  'orders.newOrder.table.selected': 'Buyurtma {tables} ga boradi',
+  'orders.newOrder.table.required': 'Buyurtma qaysi stol uchun ekanini tanlang',
+  'orders.newOrder.table.attachReason': 'Konsolda kiritildi',
+  'orders.newOrder.table.attachFailed':
+    '{number} buyurtma yaratildi, lekin u hali stol hisobiga qoʻshilmadi.',
+  'orders.newOrder.table.attachRetry': 'Hisobga qoʻshish',
+  'orders.newOrder.table.attachRetrying': 'Qoʻshilmoqda…',
+  'orders.newOrder.table.attachOpenOrder': 'Buyurtmani ochish',
+  'orders.newOrder.table.notServiceable':
+    'Bu filial hozir bu kanal orqali zaldagi buyurtmalarni qabul qilmayapti',
 
   // wave P14: §5.3 «Takrorlash» (1.3f qatori)
   'orders.newOrder.reorder.action': 'Takrorlash',

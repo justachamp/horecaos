@@ -235,6 +235,87 @@
                 {{ 'settings.locations.floorPlan.tableSeats' | t: { count: table.seats } }}
               </p>
 
+              @if (canManageSessions() && liveSessions() !== null) {
+                <div class="seat" data-testid="floorplan-seat">
+                  <h5 class="q-caption seat__title">
+                    {{ 'settings.locations.floorPlan.seat.title' | t }}
+                  </h5>
+                  @if (table.status !== 'ACTIVE') {
+                    <p class="q-body-sm" data-testid="floorplan-seat-unavailable">
+                      {{ 'settings.locations.floorPlan.seat.unavailable' | t }}
+                    </p>
+                  } @else if (isOccupied(table)) {
+                    <p class="q-body-sm" data-testid="floorplan-seat-occupied">
+                      {{ 'settings.locations.floorPlan.seat.occupied' | t }}
+                    </p>
+                  } @else {
+                    @if (isBookedSoon(table)) {
+                      <p class="q-body-sm seat__warning" data-testid="floorplan-seat-booked-soon">
+                        {{
+                          'settings.locations.floorPlan.seat.bookedSoon'
+                            | t: { minutes: bookedSoonMinutes }
+                        }}
+                      </p>
+                    }
+                    @if (seatPartySize() > table.seats) {
+                      <p class="q-body-sm seat__warning" data-testid="floorplan-seat-over-capacity">
+                        {{
+                          'settings.locations.floorPlan.seat.overCapacity'
+                            | t: { seats: table.seats }
+                        }}
+                      </p>
+                    }
+                    <label class="q-caption" for="floorplan-seat-party">{{
+                      'settings.locations.floorPlan.seat.partySize' | t
+                    }}</label>
+                    <input
+                      id="floorplan-seat-party"
+                      class="q-body field"
+                      type="number"
+                      min="1"
+                      max="200"
+                      [value]="seatPartySize()"
+                      (input)="seatPartySize.set(+$any($event.target).value)"
+                      data-testid="floorplan-seat-party"
+                    />
+                    <label class="q-caption" for="floorplan-seat-reason">{{
+                      'settings.locations.floorPlan.reason' | t
+                    }}</label>
+                    <input
+                      id="floorplan-seat-reason"
+                      class="q-body field"
+                      type="text"
+                      [value]="seatReason()"
+                      (input)="seatReason.set($any($event.target).value)"
+                      data-testid="floorplan-seat-reason"
+                    />
+                    <button
+                      type="button"
+                      class="q-body primary"
+                      (click)="seatWalkIn()"
+                      [disabled]="!canSeat(table)"
+                      data-testid="floorplan-seat-button"
+                    >
+                      {{
+                        seating()
+                          ? ('settings.locations.floorPlan.seat.seating' | t)
+                          : ('settings.locations.floorPlan.seat.action' | t)
+                      }}
+                    </button>
+                  }
+                  @if (seatError(); as error) {
+                    <p class="q-body-sm error" role="alert" data-testid="floorplan-seat-error">
+                      {{ error }}
+                    </p>
+                  }
+                  @if (seatedNotice(); as notice) {
+                    <p class="q-body-sm" role="status" data-testid="floorplan-seat-done">
+                      {{ notice }}
+                    </p>
+                  }
+                </div>
+              }
+
               <label class="q-caption" for="floorplan-rotate-reason">{{
                 'settings.locations.floorPlan.reason' | t
               }}</label>

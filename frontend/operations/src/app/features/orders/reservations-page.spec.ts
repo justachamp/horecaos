@@ -148,6 +148,7 @@ function sessionView(overrides: Partial<SessionView> = {}): SessionView {
     closedAt: null,
     closeReasonCode: null,
     version: 1,
+    tables: [{ tableId: 't1', code: 'T1', displayName: 'Table 1' }],
     ...overrides,
   };
 }

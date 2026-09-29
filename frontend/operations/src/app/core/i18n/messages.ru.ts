@@ -1717,6 +1717,19 @@ export const messagesRu: MessageCatalogue = {
   'settings.locations.floorPlan.rotating': 'Перевыпуск…',
   'settings.locations.floorPlan.revokedGuestSessions':
     'Отключено гостевых сессий по старому коду: {count}.',
+  'settings.locations.floorPlan.seat.title': 'Посадить гостей без брони',
+  'settings.locations.floorPlan.seat.partySize': 'Гостей',
+  'settings.locations.floorPlan.seat.defaultReason': 'Гости без брони посажены с плана зала',
+  'settings.locations.floorPlan.seat.action': 'Посадить',
+  'settings.locations.floorPlan.seat.seating': 'Сажаем…',
+  'settings.locations.floorPlan.seat.occupied': 'За этим столом уже сидят гости.',
+  'settings.locations.floorPlan.seat.bookedSoon':
+    'Стол занят подтверждённой бронью в ближайшие {minutes} мин. Сажайте, только если гости уйдут раньше.',
+  'settings.locations.floorPlan.seat.overCapacity':
+    'За этим столом мест: {seats} — меньше, чем гостей.',
+  'settings.locations.floorPlan.seat.unavailable': 'Стол не в работе, посадить гостей нельзя.',
+  'settings.locations.floorPlan.seat.done': 'Гости посажены за стол {table}.',
+  'settings.locations.floorPlan.seat.errorOccupied': 'За этим столом только что посадили гостей.',
 
   'finance.scope.denied': 'Этому аккаунту не разрешён раздел «Финансы».',
 
@@ -5747,6 +5760,36 @@ export const messagesRu: MessageCatalogue = {
   'orders.newOrder.address.recipientName': 'Получатель',
   'orders.newOrder.address.recipientPhone': 'Телефон получателя',
   'orders.newOrder.address.deliveryNote': 'Комментарий курьеру',
+
+  // wave 15: the DINE_IN table picker (ADR 0047, operator side)
+  'orders.newOrder.table.title': 'Стол',
+  'orders.newOrder.table.loading': 'Загрузка зала…',
+  'orders.newOrder.table.denied': 'Нет доступа к столам зала',
+  'orders.newOrder.table.error': 'Не удалось загрузить зал',
+  'orders.newOrder.table.seatedNow': 'Сейчас за столами',
+  'orders.newOrder.table.noSessions': 'Пока никто не сидит — посадите гостей ниже',
+  'orders.newOrder.table.sessionLabel': '{tables} · гостей: {count}',
+  'orders.newOrder.table.sessionLabelNoCount': '{tables}',
+  'orders.newOrder.table.seatTitle': 'Посадить гостей',
+  'orders.newOrder.table.pickTable': 'Выберите свободный стол',
+  'orders.newOrder.table.noFreeTables': 'Все столы заняты',
+  'orders.newOrder.table.tableOption': '{code} · мест: {seats}',
+  'orders.newOrder.table.tableOptionBooked': '{code} · мест: {seats} · скоро бронь',
+  'orders.newOrder.table.partySize': 'Гостей',
+  'orders.newOrder.table.seat': 'Посадить',
+  'orders.newOrder.table.seating': 'Сажаем…',
+  'orders.newOrder.table.seatReason': 'Гости без брони посажены с экрана нового заказа',
+  'orders.newOrder.table.seatOccupied': 'Этот стол только что заняли — выберите другой',
+  'orders.newOrder.table.selected': 'Заказ пойдёт на: {tables}',
+  'orders.newOrder.table.required': 'Выберите стол для этого заказа',
+  'orders.newOrder.table.attachReason': 'Принят в консоли',
+  'orders.newOrder.table.attachFailed':
+    'Заказ {number} создан, но в счёт стола он ещё не добавлен.',
+  'orders.newOrder.table.attachRetry': 'Добавить в счёт',
+  'orders.newOrder.table.attachRetrying': 'Добавляем…',
+  'orders.newOrder.table.attachOpenOrder': 'Открыть заказ',
+  'orders.newOrder.table.notServiceable':
+    'Этот филиал сейчас не принимает заказы в зал через этот канал',
 
   // wave P14: §5.3 «Повторить» (строка 1.3f)
   'orders.newOrder.reorder.action': 'Повторить',

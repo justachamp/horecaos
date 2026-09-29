@@ -1,0 +1,98 @@
+:host {
+  display: block;
+}
+
+.picker {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--q-hairline);
+}
+
+.picker__title,
+.picker__subtitle {
+  margin: 0 0 6px;
+}
+
+.picker__subtitle {
+  margin-top: 10px;
+  color: var(--q-ink-subtle);
+}
+
+.picker__hint {
+  color: var(--q-ink-subtle);
+  margin: 2px 0 8px;
+}
+
+.picker__notice {
+  color: var(--q-warning-text);
+  background: var(--q-warning-tint);
+  padding: 6px 8px;
+  margin: 4px 0;
+}
+
+.picker__error {
+  color: var(--q-error-text);
+  margin: 4px 0;
+}
+
+.picker__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.picker__option {
+  width: 100%;
+  padding: 8px 10px;
+  text-align: left;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  cursor: pointer;
+}
+
+.picker__option--selected {
+  border-color: var(--q-primary);
+}
+
+.picker__seat {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.picker__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.picker__input {
+  padding: 8px 10px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  font-family: var(--q-font-sans);
+}
+
+.picker__seat-button {
+  align-self: flex-start;
+  padding: 6px 12px;
+  border: 1px solid var(--q-primary);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-primary);
+  cursor: pointer;
+}
+
+.picker__seat-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+  border-color: var(--q-hairline);
+  color: var(--q-ink-subtle);
+}

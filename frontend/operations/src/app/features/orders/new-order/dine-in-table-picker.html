@@ -1,0 +1,92 @@
+<div class="picker" data-testid="new-order-table-picker">
+  <h3 class="q-caption picker__title">{{ 'orders.newOrder.table.title' | t }}</h3>
+
+  @if (loading()) {
+    <p class="q-caption" data-testid="new-order-table-loading">
+      {{ 'orders.newOrder.table.loading' | t }}
+    </p>
+  } @else if (denied()) {
+    <p class="q-caption picker__notice" data-testid="new-order-table-denied">
+      {{ 'orders.newOrder.table.denied' | t }}
+    </p>
+  } @else if (loadError(); as message) {
+    <p class="q-caption picker__error" data-testid="new-order-table-error">{{ message }}</p>
+  } @else {
+    <h4 class="q-caption picker__subtitle">{{ 'orders.newOrder.table.seatedNow' | t }}</h4>
+    @if (sessions().length === 0) {
+      <p class="q-caption picker__hint" data-testid="new-order-table-no-sessions">
+        {{ 'orders.newOrder.table.noSessions' | t }}
+      </p>
+    } @else {
+      <ul class="picker__list" role="radiogroup">
+        @for (session of sessions(); track session.sessionId) {
+          <li>
+            <button
+              type="button"
+              class="picker__option q-caption"
+              role="radio"
+              [attr.aria-checked]="selectedSessionId() === session.sessionId"
+              [class.picker__option--selected]="selectedSessionId() === session.sessionId"
+              (click)="selectSession(session)"
+              data-testid="new-order-table-session"
+            >
+              {{ sessionLabel(session) }}
+            </button>
+          </li>
+        }
+      </ul>
+    }
+
+    <h4 class="q-caption picker__subtitle">{{ 'orders.newOrder.table.seatTitle' | t }}</h4>
+    @if (freeTables().length === 0) {
+      <p class="q-caption picker__hint" data-testid="new-order-table-no-free">
+        {{ 'orders.newOrder.table.noFreeTables' | t }}
+      </p>
+    } @else {
+      <div class="picker__seat">
+        <label class="picker__field">
+          <span class="q-caption">{{ 'orders.newOrder.table.pickTable' | t }}</span>
+          <select
+            class="picker__input q-body-sm"
+            [value]="seatTableId() ?? ''"
+            (change)="seatTableId.set($any($event.target).value || null)"
+            data-testid="new-order-table-free-select"
+          >
+            <option value="">—</option>
+            @for (table of freeTables(); track table.tableId) {
+              <option [value]="table.tableId">{{ tableOptionLabel(table) }}</option>
+            }
+          </select>
+        </label>
+        <label class="picker__field">
+          <span class="q-caption">{{ 'orders.newOrder.table.partySize' | t }}</span>
+          <input
+            type="number"
+            min="1"
+            max="200"
+            class="picker__input q-body-sm"
+            [value]="partySize()"
+            (input)="partySize.set(+$any($event.target).value)"
+            data-testid="new-order-table-party-size"
+          />
+        </label>
+        <button
+          type="button"
+          class="picker__seat-button q-caption"
+          [disabled]="!canSeat()"
+          (click)="seat()"
+          data-testid="new-order-table-seat"
+        >
+          {{
+            seating() ? ('orders.newOrder.table.seating' | t) : ('orders.newOrder.table.seat' | t)
+          }}
+        </button>
+      </div>
+    }
+    @if (seatError(); as message) {
+      <p class="q-caption picker__error" role="alert" data-testid="new-order-table-seat-error">
+        {{ message }}
+      </p>
+    }
+  }
+</div>
