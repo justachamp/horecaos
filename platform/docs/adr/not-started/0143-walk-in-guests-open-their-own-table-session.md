@@ -225,11 +225,18 @@ location.**
    table that is not `ACTIVE`. A larger party is a host's job (join, or seat
    several tables), on the existing staff path.
 
-7. **Abuse is bounded, not eliminated, by five controls.** A verified signed-in
-   customer who is not blacklisted (`CustomerBlacklistPort`, the same check
-   checkout applies); at most one live unconfirmed claim per account per branch;
-   a daily cap on claims opened per account per branch; a branch-wide cap on
-   simultaneous unconfirmed claims; and the per-token limit on the route.
+7. **Abuse is bounded, not eliminated, by five controls — and the counting ones
+   are enforced by the database or under a lock, never by a bare count.** A
+   verified signed-in customer who is not blacklisted (`CustomerBlacklistPort`, the
+   same check checkout applies); at most one live unconfirmed claim per account per
+   branch, which a partial unique index refuses whatever the application read; a
+   daily cap on claims opened per account per branch and a branch-wide cap on
+   simultaneous unconfirmed claims, both counted only after the transaction holds
+   the branch's settings-row lock (Eligibility); and the per-token limit on the
+   route. The table-row lock of Decision 5 serializes two claims on one table and
+   nothing else: a person holding photographs of several codes fires claims at
+   *different* tables, each transaction counting zero peers under READ COMMITTED, so
+   a check-then-insert under that lock alone would let all of them through.
    Numbers are settings with proposed defaults (Specification). Rotating a table's
    printed code remains the remedy for a leaked one.
 
@@ -295,6 +302,10 @@ location.**
 - The session row now carries a customer account id. It is an identifier, not the
   name, phone or address ADR 0029 protects, but it is one more place an account
   id lives, and erasure (ADR 0015) must clear it.
+- Every self-seat open at a branch takes turns on that branch's settings row, and a
+  settings `PUT` queues behind an open in flight. Bounded by the per-token rate limit
+  and one short transaction; it is the price of counting caps that cannot be
+  enforced by a constraint (the branch cap and the daily cap are aggregates).
 - One more scheduled job (the claim sweeper) and one more registry entry each in
   the audit vocabulary and the storefront route allow-list.
 
@@ -335,7 +346,12 @@ dinein.table_sessions      (columns added)
         -- every live status, not OPEN alone: ck_session_closed_at makes "closed_at IS NULL"
         -- exactly "not CLOSED or FORCE_CLOSED", and a status list would go stale the way
         -- ix_sessions_live's does the day a sixth status is added
+  unique index ux_claim_account_branch (tenant_id, location_id, opened_by_account_id)
+        WHERE origin = 'GUEST_QR' AND confirmed_at IS NULL AND closed_at IS NULL
+        -- one live unconfirmed claim per account per branch, enforced by the database;
+        -- its (tenant_id, location_id) prefix also serves the branch-cap count
   index (tenant_id, location_id, opened_by_account_id, opened_at) WHERE origin = 'GUEST_QR'
+        -- the daily-cap count
 ```
 
 The close reason `CLAIM_LAPSED` is a value in the existing free `close_reason_code
@@ -370,18 +386,38 @@ guest token proves the table and the customer session proves the person.
 
 ```text
 1. resolve guest token -> table, mode                     (refuse: VIEW_ONLY)
-2. read location_settings; walk_in_self_seat must be true
+2. lock the branch's dinein.location_settings row FOR NO KEY UPDATE and read it;
+   walk_in_self_seat must be true   (no row = off; nothing to lock)
 3. lock the dinein.tables row FOR UPDATE
 4. live session at table? -> return it, created = false
 5. table ACTIVE; 1 <= partySize <= seats
 6. no CONFIRMED booking with held_during && [now, now + horizon)
-7. account not blacklisted; caps:
+7. account not blacklisted; caps, counted now that this transaction holds the
+   step-2 lock, so every earlier claim at the branch is committed and visible:
      - no other live unconfirmed claim by this account at this branch
      - claims opened by this account at this branch in the last 24h < daily cap
      - live unconfirmed claims at this branch < walk_in_max_unconfirmed
 8. TableSessionService.open(no reservation, [tableId], partySize, session_currency,
-     openedBy = "guest:" + accountId); set origin, opened_by_account_id, claim_expires_at
+     openedBy = "guest:" + accountId, claim = (accountId, now + claim TTL)) -- the
+     claim columns travel in the INSERT, not in a second statement
 ```
+
+**Why step 2 is a lock and not a read.** The counts in step 7 are aggregates over
+rows that do not exist yet, and a row lock on the one table being claimed says
+nothing about a claim on another table. The settings row is the one row every claim
+at a branch has in common and the row the caps are defined on, so locking it makes
+the branch's claims take turns: each waits for the previous transaction to commit or
+roll back and then counts, on a fresh READ COMMITTED snapshot, everything it left.
+The lock order is fixed — settings row, then table row — and nothing else takes both
+in the other order (`ReservationService` confirm and amend take table rows only, the
+staff settings `PUT` takes the settings row only), so there is no cycle. The lock is
+held for one short transaction of indexed reads and one insert, behind a per-token
+rate limit; a settings `PUT` queues behind it. The per-account cap does not rest on
+the lock alone: `ux_claim_account_branch` refuses a second live unconfirmed claim by
+one account whatever any transaction counted, so a path that forgets the lock
+reopens the branch and daily caps at worst and never the account cap. A unique
+violation on that index answers exactly as a reached cap does — `409
+TABLE_NOT_AVAILABLE`, no reason.
 
 The route's per-token limit uses ADR 0033's `RateLimiter` (`strictPerMinute(5)`,
 keyed on the digest before the lookup, like the exchange). The per-account daily
@@ -452,6 +488,15 @@ has no dine-in flow and is out of scope.
 - Party of 5 at a 4-seat table refused; 4 accepted; a non-`ACTIVE` table refused.
 - Blacklisted account refused; second claim by one account at one branch refused;
   daily cap; branch cap; per-token rate limit; all refusals share one response.
+- Concurrency, with real threads against a real PostgreSQL (Testcontainers), a
+  latch releasing every caller at once and no mock of the store: one verified
+  account firing N claims at N different free tables of one branch ends with
+  exactly one live claim, the other N-1 answered `TABLE_NOT_AVAILABLE`; M accounts
+  each claiming a different table against `walk_in_max_unconfirmed = K` (M > K) ends
+  with exactly K live unconfirmed claims. Seen failing first: the one-account test
+  with the unique index and the lock both removed, the branch-cap test with the lock
+  removed. The one-account test must also pass with the lock removed and the index
+  kept, because the index, not the lock, is what holds that cap.
 - A claim with no round lapses at the TTL and frees the table. A round already
   `CONFIRMED` at attach confirms it at once. A round in `PAYMENT_AUTHORIZING`
   neither confirms it nor lets it lapse until `claim_expires_at +
@@ -487,10 +532,13 @@ that need nothing done.
 ## Implementation checklist
 
 - [ ] Flyway: the `location_settings` and `table_sessions` columns and checks
-      above; indexes; interim `session_currency`.
+      above; indexes, including `ux_claim_account_branch`; interim
+      `session_currency`.
 - [ ] `QrEntryController` route, `QrEntryService`/`TableSessionService` open path
-      for a claim, the eligibility transaction and the table row lock (also taken
-      by `ReservationService` confirm and amend).
+      for a claim (claim columns in the INSERT), the eligibility transaction with
+      the settings-row lock before the table-row lock, the mapping of a
+      `ux_claim_account_branch` violation to `TABLE_NOT_AVAILABLE`, and the table row
+      lock (also taken by `ReservationService` confirm and amend).
 - [ ] `AdmissionResponse.walkInAvailable`; storefront service, component, tests and
       strings.
 - [ ] `claim-confirmations` endpoint; `origin`, `claimExpiresAt`, `confirmedAt` on
