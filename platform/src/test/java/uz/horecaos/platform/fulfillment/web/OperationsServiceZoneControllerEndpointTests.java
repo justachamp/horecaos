@@ -6,6 +6,7 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -32,6 +33,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.testcontainers.DockerClientFactory;
+import tools.jackson.databind.json.JsonMapper;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.PlatformRole;
 import uz.horecaos.platform.iam.infrastructure.authorization.RoleRegistrySynchronizer;
@@ -444,6 +446,211 @@ class OperationsServiceZoneControllerEndpointTests {
                         {"circle":{"originLocationId":"%s","radiusMeters":3000},
                          "priority":10,"currency":"UZS"}
                         """.formatted(LOCATION)));
+    }
+
+    // ------------------------------------------------- row 10.12: per-locale names
+
+    private static final JsonMapper JSON = JsonMapper.builder().build();
+
+    private UUID registerZoneNamed(String code, String displayNamesJson) throws Exception {
+        MvcResult created = mvc.perform(post(zonesPath(TENANT))
+                        .with(tokenFor(OWNER))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "register-" + UUID.randomUUID())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"role":"DELIVERY","code":"%s","displayNames":%s}
+                                """.formatted(code, displayNamesJson)))
+                .andReturn();
+        assertThat(created.getResponse().getStatus())
+                .as(created.getResponse().getContentAsString())
+                .isEqualTo(200);
+        return zoneIdOf(code);
+    }
+
+    private UUID zoneIdOf(String code) {
+        return jdbc.sql("SELECT id FROM fulfillment.service_zones WHERE tenant_id = :tenantId AND code = :code")
+                .param("tenantId", TENANT)
+                .param("code", code)
+                .query(UUID.class)
+                .single();
+    }
+
+    private Map<String, String> zoneTranslationRows(UUID zoneId) {
+        Map<String, String> rows = new java.util.LinkedHashMap<>();
+        jdbc.sql(
+                        "SELECT locale, display_name FROM fulfillment.service_zone_translations WHERE zone_id = :id ORDER BY locale")
+                .param("id", zoneId)
+                .query((rs, n) -> rows.put(rs.getString("locale"), rs.getString("display_name")))
+                .list();
+        return rows;
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, String> listedNamesOf(String code) throws Exception {
+        MvcResult listed =
+                mvc.perform(get(zonesPath(TENANT)).with(tokenFor(OWNER))).andReturn();
+        assertThat(listed.getResponse().getStatus()).isEqualTo(200);
+        List<Map<String, Object>> zones = JSON.readValue(listed.getResponse().getContentAsString(), List.class);
+        return zones.stream()
+                .filter(zone -> code.equals(zone.get("code")))
+                .map(zone -> (Map<String, String>) zone.get("displayNames"))
+                .findFirst()
+                .orElseThrow();
+    }
+
+    @Test
+    void aZoneNamedPerLocaleWritesTheColumnsAndTheTableAndReadsBackMerged() throws Exception {
+        // No brand locale set, so the brand's default is the platform's ru.
+        UUID zoneId = registerZoneNamed("CENTRE", "{\"ru\":\"Центр\",\"en\":\"Centre\",\"kaa\":\"Orayı\"}");
+
+        assertThat(jdbc.sql("""
+                        SELECT display_name_ru || '|' || display_name_uz || '|' || display_name_en
+                          FROM fulfillment.service_zones WHERE id = :id
+                        """).param("id", zoneId).query(String.class).single())
+                .as("uz-Latn was not supplied; its NOT NULL column takes the brand's default (ru) name")
+                .isEqualTo("Центр|Центр|Centre");
+        assertThat(zoneTranslationRows(zoneId))
+                .containsOnly(Map.entry("ru", "Центр"), Map.entry("en", "Centre"), Map.entry("kaa", "Orayı"));
+        assertThat(listedNamesOf("CENTRE"))
+                .containsExactly(
+                        Map.entry("ru", "Центр"),
+                        Map.entry("uz-Latn", "Центр"),
+                        Map.entry("en", "Centre"),
+                        Map.entry("kaa", "Orayı"));
+
+        MvcResult detail = mvc.perform(get(zonesPath(TENANT) + "/" + zoneId).with(tokenFor(OWNER)))
+                .andReturn();
+        assertThat(detail.getResponse().getContentAsString()).contains("\"kaa\":\"Orayı\"");
+    }
+
+    @Test
+    void aZoneWithoutTheBrandsDefaultLanguageNameIsRefusedAndWritesNothing() throws Exception {
+        jdbc.sql("""
+                INSERT INTO tenant.brand_locales (tenant_id, brand_id, locale, is_default)
+                VALUES (:t, :b, 'uz-Latn', true), (:t, :b, 'ru', false)
+                """).param("t", TENANT).param("b", BRAND).update();
+
+        MvcResult refused = mvc.perform(post(zonesPath(TENANT))
+                        .with(tokenFor(OWNER))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "zone-nodefault")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"role":"DELIVERY","code":"CENTRE","displayNames":{"ru":"Центр"}}
+                                """))
+                .andReturn();
+
+        assertThat(refused.getResponse().getStatus()).isEqualTo(400);
+        assertThat(refused.getResponse().getContentAsString())
+                .contains("VALIDATION_FAILED")
+                .contains("(uz-Latn)");
+        assertThat(jdbc.sql("SELECT count(*) FROM fulfillment.service_zones")
+                        .query(Long.class)
+                        .single())
+                .isZero();
+    }
+
+    @Test
+    void aRenameThatNamesOneLocaleNeverDeletesTheOthers() throws Exception {
+        UUID zoneId = registerZoneNamed(
+                "CENTRE", "{\"ru\":\"Центр\",\"uz-Latn\":\"Markaz\",\"en\":\"Centre\",\"kaa\":\"Orayı\"}");
+
+        // The editor shows the brand's supported languages (ru and en); it sends only those.
+        MvcResult renamed = mvc.perform(put(zonesPath(TENANT) + "/" + zoneId + "/names")
+                        .with(tokenFor(OWNER))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "rename-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"displayNames":{"ru":"Центр города","en":"City centre"}}
+                                """))
+                .andReturn();
+
+        assertThat(renamed.getResponse().getStatus()).isEqualTo(200);
+        assertThat(listedNamesOf("CENTRE"))
+                .as("uz-Latn and kaa were not in the request and must survive it")
+                .containsExactly(
+                        Map.entry("ru", "Центр города"),
+                        Map.entry("uz-Latn", "Markaz"),
+                        Map.entry("en", "City centre"),
+                        Map.entry("kaa", "Orayı"));
+        assertThat(jdbc.sql("SELECT display_name_uz FROM fulfillment.service_zones WHERE id = :id")
+                        .param("id", zoneId)
+                        .query(String.class)
+                        .single())
+                .isEqualTo("Markaz");
+        assertThat(auditActionCounts()).containsEntry("delivery.zone.renamed", 1L);
+    }
+
+    @Test
+    void aRenameThatNamesNothingIsRefused() throws Exception {
+        UUID zoneId = registerZoneNamed("CENTRE", "{\"ru\":\"Центр\"}");
+
+        MvcResult refused = mvc.perform(put(zonesPath(TENANT) + "/" + zoneId + "/names")
+                        .with(tokenFor(OWNER))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "rename-empty")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"displayNames\":{\"ru\":\"   \"}}"))
+                .andReturn();
+
+        assertThat(refused.getResponse().getStatus()).isEqualTo(400);
+        assertThat(zoneTranslationRows(zoneId)).containsOnly(Map.entry("ru", "Центр"));
+    }
+
+    @Test
+    void anotherTenantsOrAnotherBrandsZoneCannotBeRenamed() throws Exception {
+        UUID zoneId = registerZoneNamed("CENTRE", "{\"ru\":\"Центр\",\"kaa\":\"Orayı\"}");
+
+        // The other tenant's owner, authorised for their own tenant and brand, names this zone's id.
+        MvcResult foreignTenant = mvc.perform(put(zonesPath(OTHER_TENANT, OTHER_TENANT_BRAND) + "/" + zoneId + "/names")
+                        .with(tokenFor(OTHER_TENANT_OWNER))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "rename-foreign-tenant")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"displayNames\":{\"ru\":\"HIJACKED\",\"kaa\":\"HIJACKED\"}}"))
+                .andReturn();
+        assertThat(foreignTenant.getResponse().getStatus()).isEqualTo(404);
+
+        // The same tenant's owner, but a sibling brand: the zone belongs to BRAND, not to this one.
+        UUID siblingBrand = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO tenant.brands (id, tenant_id, code, slug, display_name, status, version)
+                VALUES (:id, :tenantId, 'SIB', 'sib', 'Sibling', 'ACTIVE', 0)
+                """).param("id", siblingBrand).param("tenantId", TENANT).update();
+        MvcResult siblingRename = mvc.perform(put(zonesPath(TENANT, siblingBrand) + "/" + zoneId + "/names")
+                        .with(tokenFor(OWNER))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "rename-sibling-brand")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"displayNames\":{\"ru\":\"HIJACKED\"}}"))
+                .andReturn();
+        assertThat(siblingRename.getResponse().getStatus()).isEqualTo(404);
+
+        assertThat(zoneTranslationRows(zoneId))
+                .as("neither attempt touched a name")
+                .containsOnly(Map.entry("ru", "Центр"), Map.entry("kaa", "Orayı"));
+    }
+
+    @Test
+    void renamingNeedsTheManageCapabilityAtBrandScope() throws Exception {
+        UUID zoneId = registerZoneNamed("CENTRE", "{\"ru\":\"Центр\"}");
+
+        MvcResult refused = mvc.perform(put(zonesPath(TENANT) + "/" + zoneId + "/names")
+                        .with(tokenFor(NO_DELIVERY_GRANT))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "rename-no-grant")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"displayNames\":{\"ru\":\"HIJACKED\"}}"))
+                .andReturn();
+
+        assertThat(refused.getResponse().getStatus()).isEqualTo(403);
+        assertThat(refused.getResponse().getContentAsString())
+                .contains("INSUFFICIENT_CAPABILITY")
+                .contains(Capability.DELIVERY_ZONE_MANAGE.code());
+        MvcResult noKey = mvc.perform(put(zonesPath(TENANT) + "/" + zoneId + "/names")
+                        .with(tokenFor(OWNER))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"displayNames\":{\"ru\":\"x\"}}"))
+                .andReturn();
+        assertThat(noKey.getResponse().getStatus())
+                .as("a mutating endpoint requires an Idempotency-Key (ADR 0031)")
+                .isEqualTo(400);
+        assertThat(zoneTranslationRows(zoneId)).containsOnly(Map.entry("ru", "Центр"));
     }
 
     private UUID registerZone(String subject) throws Exception {
