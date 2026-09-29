@@ -374,10 +374,6 @@ jobs:
         app: [control-plane, operations, storefront, storefront-milliy]
     steps:
       - uses: actions/checkout@v4
-        with:
-          # The format check below measures a change against its merge base, so
-          # it needs the history between the two. The repository is small.
-          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
@@ -397,26 +393,26 @@ jobs:
           npm run lint
           npm run lint:rules
 
-      - name: Format check on changed files (operations)
-        # NOT `npm run format:check`: about a hundred files under
-        # frontend/operations/src predate the prettier config and were never
-        # formatted, so the whole-tree check is red on code nobody touched. A
-        # blanket reformat now would conflict with every open branch, so it is
-        # done once, in its own commit, at the end of a batch; after that this
-        # step can be replaced by `npm run format:check`. Until then the
-        # ratchet is: a file a change adds or edits must be prettier-clean.
-        #
-        # frontend/tools/format_changed.py lists the src/ files that differ from
-        # the merge base -- the pull request's base branch, or on a push the tip
-        # the push replaced -- and runs prettier --check on exactly those. Its
-        # selection logic has its own tests, run first. Run the same command
-        # locally: python3 frontend/tools/format_changed.py --app operations --base main
+      - name: Format check (operations)
+        # The whole tree, so a file cannot slip through unchecked. This step used
+        # to run prettier only on the files a change touched (measured against a
+        # merge base, or against the tip a push replaced); a push whose run was
+        # cancelled by a later one, or whose previous tip was missing from the
+        # clone, was never checked for the files it brought. The tree has been
+        # prettier-clean since it was reformatted in one commit, so the plain
+        # script the app already has does the job. To fix a failure:
+        # `npm run format` in the app. The other apps have no format script yet.
         if: matrix.app == 'operations'
-        env:
-          FORMAT_BASE: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || github.event.before }}
-        run: |
-          python3 frontend/tools/test_format_changed.py
-          python3 frontend/tools/format_changed.py --app operations --base "$FORMAT_BASE"
+        working-directory: frontend/${{ matrix.app }}
+        run: npm run format:check
+
+      - name: Tooling tests (operations)
+        # frontend/tools/test_format_changed.py tests the local changed-files
+        # helper AND reads this file to prove that the lint and format steps
+        # above are still wired in. It also runs prettier for real when the
+        # dependencies are installed, which is why it comes after Install.
+        if: matrix.app == 'operations'
+        run: python3 frontend/tools/test_format_changed.py
 
       - name: Test and build
         working-directory: frontend/${{ matrix.app }}

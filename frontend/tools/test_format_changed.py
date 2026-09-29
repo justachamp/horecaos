@@ -4,20 +4,26 @@
 Run: python3 frontend/tools/test_format_changed.py
 
 The selection logic is exercised against throwaway git repositories, so no Node.js is
-needed; the prettier invocation itself is proved by a local dry run (see the README's
-"Formatting" section) and, in CI, by the step that runs the script.
+needed. The prettier invocation is exercised twice: against a stub `npx` and `prettier`
+that record how they were called (so the exit status of a failing check, a passing one, a
+missing install and a chunked run are all pinned without Node.js), and, when the app's
+node_modules is installed, against the real prettier and the app's real config.
 """
 from __future__ import annotations
 
 import contextlib
 import io
 import json
+import os
 import re
+import shutil
+import stat
 import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
@@ -27,6 +33,36 @@ import format_changed as fc  # noqa: E402
 REPO = HERE.parents[1]
 WORKFLOW = REPO / ".github" / "workflows" / "ci.yml"
 APP = "frontend/operations"
+
+
+def code(step: str) -> str:
+    """A workflow step without its comment lines: what the runner reads, not what a reader is told."""
+    return "\n".join(line for line in step.split("\n") if not line.strip().startswith("#"))
+
+
+def run_lines(step: str) -> list[str]:
+    """The commands of a workflow step's `run:`, one per line, without the step's comments.
+
+    Handles `run: cmd` and a `run: |` block; blank lines and `#` lines inside the block are
+    dropped. A substring test over the whole step also matches its comments, so the tests
+    below look only at what would actually be executed.
+    """
+    lines = step.split("\n")
+    for index, line in enumerate(lines):
+        match = re.match(r"^        run:\s*(.*)$", line)
+        if match is None:
+            continue
+        inline = match.group(1).strip()
+        if inline not in ("|", "|-", ">", ">-"):
+            return [inline]
+        body: list[str] = []
+        for following in lines[index + 1 :]:
+            if following.strip() and not following.startswith("          "):
+                break
+            if following.strip() and not following.strip().startswith("#"):
+                body.append(following.strip())
+        return body
+    return []
 
 
 class TempRepo:
@@ -212,12 +248,17 @@ class ChangedFilesTests(unittest.TestCase):
         self.assertEqual(["src/pr.ts"], self.files(main_tip))
 
 
+def run_cli(*argv: str) -> tuple[int, str, str]:
+    """format_changed.main(argv) with stdout and stderr captured: (exit status, stdout, stderr)."""
+    out, err = io.StringIO(), io.StringIO()
+    with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+        code = fc.main(list(argv))
+    return code, out.getvalue(), err.getvalue()
+
+
 class CommandLineTests(unittest.TestCase):
     def run_main(self, *argv: str) -> tuple[int, str, str]:
-        out, err = io.StringIO(), io.StringIO()
-        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-            code = fc.main(list(argv))
-        return code, out.getvalue(), err.getvalue()
+        return run_cli(*argv)
 
     def test_list_prints_the_files_and_runs_nothing(self) -> None:
         repo = TempRepo()
@@ -257,8 +298,159 @@ class CommandLineTests(unittest.TestCase):
         self.assertEqual({"." + ext for ext in glob.group(1).split(",")}, set(fc.EXTENSIONS))
 
 
+STUB_PRETTIER = """#!/bin/sh
+# Stands in for prettier: records each call, fails on a file that contains UNFORMATTED.
+[ "$1" = "--check" ] || { echo "stub prettier: expected --check first, got: $*" >&2; exit 64; }
+shift
+echo "$*" >> "$(dirname "$0")/calls.log"
+status=0
+for file in "$@"; do
+  if grep -q UNFORMATTED "$file"; then echo "[warn] $file" >&2; status=1; fi
+done
+exit $status
+"""
+
+STUB_NPX = """#!/bin/sh
+# Stands in for npx: the script must run the LOCAL prettier and never download one.
+[ "$1" = "--no-install" ] || { echo "stub npx: expected --no-install first, got: $*" >&2; exit 64; }
+shift
+tool="$1"
+shift
+exec "$PWD/node_modules/.bin/$tool" "$@"
+"""
+
+
+def write_executable(path: Path, text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+    path.chmod(path.stat().st_mode | stat.S_IXUSR)
+
+
+class PrettierGateTests(unittest.TestCase):
+    """What the script does with prettier's verdict: the part that makes it a gate.
+
+    A stub prettier fails on any file whose text contains UNFORMATTED and records every
+    call in node_modules/.bin/calls.log. If run_prettier or main() stopped propagating a
+    non-zero status, every "fails" test below would go red.
+    """
+
+    def setUp(self) -> None:
+        self.repo = TempRepo()
+        self.addCleanup(self.repo.close)
+        self.repo.write(".gitignore", "node_modules/\nbin/\n")
+        self.repo.write(f"{APP}/package.json", "{}\n")
+        write_executable(self.repo.path / APP / "node_modules" / ".bin" / "prettier", STUB_PRETTIER)
+        write_executable(self.repo.path / "bin" / "npx", STUB_NPX)
+        self.base = self.repo.commit("base")
+        path = f"{self.repo.path / 'bin'}{os.pathsep}{os.environ.get('PATH', '')}"
+        patcher = mock.patch.dict(os.environ, {"PATH": path})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def check(self) -> tuple[int, str, str]:
+        return run_cli("--app", "operations", "--base", self.base, "--repo", str(self.repo.path))
+
+    def calls(self) -> list[str]:
+        log = self.repo.path / APP / "node_modules" / ".bin" / "calls.log"
+        return log.read_text(encoding="utf-8").splitlines() if log.exists() else []
+
+    def test_an_unformatted_changed_file_fails_the_gate_and_says_how_to_fix_it(self) -> None:
+        self.repo.write(f"{APP}/src/bad.ts", "UNFORMATTED\n")
+        self.repo.commit("bad")
+        code, out, err = self.check()
+        self.assertEqual(1, code)
+        self.assertIn("checking 1 changed file", out)
+        self.assertIn("not prettier-formatted", err)
+        self.assertIn("npx prettier --write", err)
+
+    def test_a_formatted_changed_file_passes(self) -> None:
+        self.repo.write(f"{APP}/src/good.ts", "formatted\n")
+        self.repo.commit("good")
+        code, _, err = self.check()
+        self.assertEqual(0, code, err)
+        self.assertEqual(["src/good.ts"], self.calls()[0].split())
+
+    def test_only_the_changed_files_reach_prettier(self) -> None:
+        # An unformatted file this change did not touch is not this change's problem here.
+        self.repo.write(f"{APP}/src/backlog.ts", "UNFORMATTED\n")
+        self.repo.commit("backlog")
+        touched_base = self.repo.git("rev-parse", "HEAD")
+        self.repo.write(f"{APP}/src/touched.ts", "formatted\n")
+        self.repo.commit("touch")
+        code, _, err = run_cli("--app", "operations", "--base", touched_base, "--repo", str(self.repo.path))
+        self.assertEqual(0, code, err)
+        self.assertEqual(["src/touched.ts"], self.calls()[0].split())
+
+    def test_a_failure_in_any_chunk_fails_the_gate_and_every_chunk_still_runs(self) -> None:
+        for index in range(5):
+            self.repo.write(f"{APP}/src/f{index}.ts", "UNFORMATTED\n" if index == 0 else "formatted\n")
+        self.repo.commit("five files")
+        with mock.patch.object(fc, "CHUNK", 2):
+            code, _, _ = self.check()
+        self.assertEqual(1, code, "the failing file is in the first chunk; later chunks must not overwrite its status")
+        self.assertEqual(3, len(self.calls()), "5 files in chunks of 2 is 3 prettier runs")
+
+    def test_a_late_failing_chunk_fails_the_gate(self) -> None:
+        for index in range(5):
+            self.repo.write(f"{APP}/src/f{index}.ts", "UNFORMATTED\n" if index == 4 else "formatted\n")
+        self.repo.commit("five files")
+        with mock.patch.object(fc, "CHUNK", 2):
+            code, _, _ = self.check()
+        self.assertEqual(1, code)
+
+    def test_a_missing_install_is_an_error_not_a_pass(self) -> None:
+        shutil.rmtree(self.repo.path / APP / "node_modules")
+        self.repo.write(f"{APP}/src/any.ts", "formatted\n")
+        self.repo.commit("change")
+        code, _, err = self.check()
+        self.assertEqual(2, code)
+        self.assertIn("npm ci", err)
+
+    def test_a_missing_npx_is_an_error_not_a_pass(self) -> None:
+        self.repo.write(f"{APP}/src/any.ts", "formatted\n")
+        self.repo.commit("change")
+        with mock.patch.object(fc.shutil, "which", return_value=None):
+            code, _, err = self.check()
+        self.assertEqual(2, code)
+        self.assertIn("npx is not on PATH", err)
+
+
+REAL_PRETTIER = REPO / APP / "node_modules" / ".bin" / "prettier"
+
+
+@unittest.skipUnless(REAL_PRETTIER.exists() and shutil.which("npx"), "needs `npm ci` in frontend/operations")
+class RealPrettierTests(unittest.TestCase):
+    """The same gate against the real prettier and the app's real .prettierrc.
+
+    CI installs the app before it runs this file, so this is where the exact invocation
+    (`npx --no-install prettier --check <files>`) is proved rather than assumed.
+    """
+
+    def setUp(self) -> None:
+        self.repo = TempRepo()
+        self.addCleanup(self.repo.close)
+        app = self.repo.path / APP
+        app.mkdir(parents=True)
+        (app / "package.json").write_text("{}\n", encoding="utf-8")
+        shutil.copy(REPO / APP / ".prettierrc", app / ".prettierrc")
+        (app / "node_modules").symlink_to(REPO / APP / "node_modules", target_is_directory=True)
+        self.repo.write(".gitignore", "node_modules\n")
+        self.base = self.repo.commit("base")
+
+    def check(self) -> int:
+        return run_cli("--app", "operations", "--base", self.base, "--repo", str(self.repo.path))[0]
+
+    def test_an_unformatted_file_fails_and_the_formatted_one_passes(self) -> None:
+        self.repo.write(f"{APP}/src/ok.ts", "export const answer = 'x';\n")
+        self.repo.commit("formatted")
+        self.assertEqual(0, self.check())
+        self.repo.write(f"{APP}/src/bad.ts", "export   const answer=\"x\"\n")
+        self.repo.commit("unformatted")
+        self.assertNotEqual(0, self.check())
+
+
 class WorkflowWiringTests(unittest.TestCase):
-    """The steps that make lint and the format ratchet real must stay in ci.yml."""
+    """The steps that make lint and the whole-tree format check real must stay in ci.yml."""
 
     @classmethod
     def setUpClass(cls) -> None:
@@ -273,38 +465,50 @@ class WorkflowWiringTests(unittest.TestCase):
         assert found is not None
         return found.group(1)
 
-    def test_the_checkout_has_history_so_the_merge_base_exists(self) -> None:
-        self.assertRegex(self.block, r"fetch-depth:\s*0\b")
+    def assert_only_for_operations(self, step: str) -> None:
+        self.assertRegex(code(step), r"(?m)^        if: matrix\.app == 'operations'$")
+
+    def assert_runs_in_the_app_directory(self, step: str) -> None:
+        self.assertRegex(code(step), r"(?m)^        working-directory: frontend/\$\{\{ matrix\.app \}\}$")
 
     def test_operations_lint_runs_in_ci_and_only_for_operations(self) -> None:
+        # Each command must be a line of the step's `run:` block. The step's comments name
+        # `npm run lint`, and `npm run lint:rules` contains it as a substring, so a substring
+        # test over the step passes after the real `npm run lint` has been deleted -- which
+        # leaves only the rule's own fixture run and lets a raw px font-size back in.
         step = self.step("Lint (operations)")
-        self.assertIn("if: matrix.app == 'operations'", step)
-        self.assertIn("npm run lint", step)
-        self.assertIn("npm run lint:rules", step)
+        self.assert_only_for_operations(step)
+        self.assert_runs_in_the_app_directory(step)
+        commands = run_lines(step)
+        self.assertIn("npm run lint", commands)
+        self.assertIn("npm run lint:rules", commands)
         scripts = json.loads((REPO / APP / "package.json").read_text(encoding="utf-8"))["scripts"]
         self.assertIn("lint", scripts)
         self.assertIn("lint:rules", scripts)
 
-    def test_the_format_check_looks_only_at_changed_files(self) -> None:
-        step = self.step("Format check on changed files (operations)")
-        self.assertIn("if: matrix.app == 'operations'", step)
-        commands = step.split("run: |", 1)[1]  # the comments may name format:check; the commands must not run it
-        self.assertIn("frontend/tools/format_changed.py --app operations", commands)
-        self.assertIn('--base "$FORMAT_BASE"', commands)
-        self.assertNotIn("format:check", commands, "the whole-tree check would fail on the unformatted backlog")
-        self.assertIn("github.event.before", step)
-        self.assertIn("github.base_ref", step)
+    def test_the_format_check_covers_the_whole_tree(self) -> None:
+        # A changed-files-only check misses a file whose push was cancelled by a later one and
+        # a `before` commit missing from the clone; the whole-tree check cannot.
+        step = self.step("Format check (operations)")
+        self.assert_only_for_operations(step)
+        self.assert_runs_in_the_app_directory(step)
+        self.assertEqual(["npm run format:check"], run_lines(step))
+        self.assertNotIn("format_changed", code(step))
+        self.assertNotIn("github.event.before", code(step))
+        self.assertNotIn("github.base_ref", code(step))
 
     def test_lint_and_format_run_after_install_and_before_the_slow_tests(self) -> None:
         names = re.findall(r"^      - name: (.+)$", self.block, re.MULTILINE)
         order = {name: index for index, name in enumerate(names)}
         install = order["Install"]
-        for gate in ("Lint (operations)", "Format check on changed files (operations)"):
+        for gate in ("Lint (operations)", "Format check (operations)"):
             self.assertGreater(order[gate], install)
             self.assertLess(order[gate], order["Test and build"])
 
-    def test_the_selection_tests_run_in_ci(self) -> None:
-        self.assertIn("frontend/tools/test_format_changed.py", self.block)
+    def test_this_file_runs_in_ci_because_it_also_guards_the_wiring(self) -> None:
+        step = self.step("Tooling tests (operations)")
+        self.assert_only_for_operations(step)
+        self.assertEqual(["python3 frontend/tools/test_format_changed.py"], run_lines(step))
 
 
 if __name__ == "__main__":

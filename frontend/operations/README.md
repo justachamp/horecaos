@@ -61,10 +61,9 @@ npm run lint       # eslint: no raw px font-size (the closed type scale owns siz
 npm run lint:rules # the lint rule's own fixtures
 ```
 
-CI runs `lint` and `lint:rules` on every change, and runs Prettier on the files a
-change touched (not `npm run format:check`, which is red on the files that predate the
-config until the tree is reformatted once). To run the same check CI runs:
-`python3 ../tools/format_changed.py --app operations --base main`. See
+CI runs `lint`, `lint:rules` and `format:check` (Prettier over the whole tree) on every
+change; `npm run format` fixes a failure. To check only the files you touched, see
+`python3 ../tools/format_changed.py` and
 [`../README.md`](../README.md#formatting-and-lint-in-ci).
 
 `npm start` uses `src/environments/environment.development.ts`, which points at

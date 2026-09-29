@@ -65,21 +65,15 @@ Only `operations` has a lint script and a `format`/`format:check` pair today; th
 - **`npm run lint` and `npm run lint:rules`.** `eslint-plugin-horecaos` rejects a raw
   `font-size: 10px` anywhere under `src/` (use a `--q-type-*` token or a `.q-*` class from
   `tokens.css`). Both are clean; the job fails on the first regression.
-- **Prettier on changed files only** (`tools/format_changed.py`). About a hundred
-  `operations` files predate the Prettier config, so `npm run format:check` on the whole
-  tree is red on code nobody changed, and reformatting it mid-batch would conflict with
-  every open branch. The script lists the `src/` files (`ts`, `html`, `css`, `json` -- the
-  same extensions as `format:check`) that differ from the merge base and runs
-  `prettier --check` on just those: a pull request is measured against its base branch,
-  a push against the tip it replaced, and a base that is missing (new branch, force push)
-  falls back to the tip commit. A file you touch must be formatted; the backlog cannot
-  grow. Once the tree has been reformatted in one dedicated commit, replace the step with
-  `npm run format:check`.
+- **`npm run format:check`** on the whole `src/` tree (`ts`, `html`, `css`, `json`). The
+  tree is prettier-clean and CI keeps it so; fix a failure with `npm run format` in the
+  app. `tools/format_changed.py` is a local shortcut that checks (or, with `--list`, only
+  names) the files your change touched against a base branch; CI does not use it.
 
   ```bash
   python3 frontend/tools/format_changed.py --app operations --base main --list   # what would be checked
   python3 frontend/tools/format_changed.py --app operations --base main          # check it (needs npm ci)
-  python3 frontend/tools/test_format_changed.py                                  # the script's own tests
+  python3 frontend/tools/test_format_changed.py                                  # the tooling tests, also run in CI
   ```
 
 ## Known debts
