@@ -6,6 +6,7 @@ import { LocationScope } from '../../../core/api/operations-paths';
 import { ApiError, ApiErrorCode } from '../../../core/api/problem-details';
 import { CurrentLocation } from '../../../core/auth/current-location';
 import { I18n, Locale } from '../../../core/i18n/i18n';
+import { LocaleSetView } from '../../../core/i18n/locale-labels';
 import { LocaleSet } from '../../../core/i18n/locale-set';
 import { IntegrationsApi } from '../integrations/integrations-api';
 import { PaymentMethodView, PaymentMethodsApi } from './payment-methods-api';
@@ -34,11 +35,20 @@ class FakeCurrentLocation {
   ensureLoaded = vi.fn().mockResolvedValue(undefined);
 }
 
-/** The brand's own language set (row 10.12); the platform triple until a test narrows it. */
+/**
+ * The operator's <em>own brand's</em> language set. A payment method is a
+ * tenant-wide row, so the page must not read this: it is pinned to one brand
+ * (ru alone here) while the tenant's other brands offer more.
+ */
 class FakeLocaleSet {
-  readonly locales = signal<readonly Locale[]>(['ru', 'uz-Latn', 'en']);
+  readonly locales = signal<readonly Locale[]>(['ru']);
   readonly defaultLocale = signal<Locale>('ru');
   ensureLoaded = vi.fn().mockResolvedValue(undefined);
+}
+
+/** What `GET .../payment-methods/locale-set` answers: the union of the tenant's brands (row 10.12). */
+function tenantSet(locales: readonly string[], defaultLocale: string): LocaleSetView {
+  return { locales, defaultLocale, configured: true };
 }
 
 async function flushMicrotasks(): Promise<void> {
@@ -55,6 +65,7 @@ describe('PaymentMethodsPage', () => {
     replaceTranslations: ReturnType<typeof vi.fn>;
     activate: ReturnType<typeof vi.fn>;
     disable: ReturnType<typeof vi.fn>;
+    localeSet: ReturnType<typeof vi.fn>;
   };
   let integrationsApi: { listInstallations: ReturnType<typeof vi.fn> };
   let localeSet: FakeLocaleSet;
@@ -68,6 +79,7 @@ describe('PaymentMethodsPage', () => {
       replaceTranslations: vi.fn().mockResolvedValue(CASH),
       activate: vi.fn().mockResolvedValue({ ...CASH, status: 'ACTIVE' }),
       disable: vi.fn().mockResolvedValue({ ...CASH, status: 'DISABLED' }),
+      localeSet: vi.fn().mockResolvedValue(tenantSet(['ru', 'uz-Latn', 'en'], 'ru')),
     };
     integrationsApi = { listInstallations: vi.fn().mockResolvedValue([]) };
 
@@ -87,7 +99,11 @@ describe('PaymentMethodsPage', () => {
     fixture.detectChanges();
   });
 
-  /** Re-renders the page after narrowing the brand's language set, then opens the first method's editor. */
+  /**
+   * Re-renders the page after the tenant's language set (the union of its brands)
+   * changes, then opens the first method's editor. The operator's own brand keeps
+   * offering ru alone throughout: it must make no difference.
+   */
   async function openEditorOffering(
     locales: readonly Locale[],
     defaultLocale: Locale,
@@ -95,8 +111,7 @@ describe('PaymentMethodsPage', () => {
   ): Promise<void> {
     TestBed.resetTestingModule();
     localeSet = new FakeLocaleSet();
-    localeSet.locales.set(locales);
-    localeSet.defaultLocale.set(defaultLocale);
+    api.localeSet.mockResolvedValue(tenantSet(locales, defaultLocale));
     api.list.mockResolvedValue([method]);
     await TestBed.configureTestingModule({
       imports: [PaymentMethodsPage],
@@ -208,11 +223,63 @@ describe('PaymentMethodsPage', () => {
 
   // ------------------------------------------------------------------ 10.12
 
-  it("loads the brand's language set with the registry", () => {
-    expect(localeSet.ensureLoaded).toHaveBeenCalled();
+  it("loads the tenant's language set with the registry", () => {
+    expect(api.localeSet).toHaveBeenCalledWith(SCOPE);
   });
 
-  it("offers the brand's own languages as tabs, default first and marked, and opens on the default", async () => {
+  it("offers the tenant's languages, not the operator's brand's, however narrow that brand is", async () => {
+    // The fixture's operator is pinned to a brand offering ru alone; the tenant's other
+    // brand offers uz-Latn and en. A payment method is shared by both.
+    await openEditorOffering(['ru', 'uz-Latn', 'en'], 'ru');
+
+    expect(localeSet.locales()).toEqual(['ru']);
+    expect(tabIds()).toEqual([
+      'q-localized-field-group-tab-ru',
+      'q-localized-field-group-tab-uz-Latn',
+      'q-localized-field-group-tab-en',
+    ]);
+  });
+
+  it("marks the tenant's default, not the operator's brand's", async () => {
+    // The tenant's first brand defaults to uz-Latn; the operator's own brand to ru.
+    await openEditorOffering(['uz-Latn', 'ru', 'en'], 'uz-Latn');
+
+    expect(
+      fixture.nativeElement.querySelector(
+        '[data-testid="q-localized-field-group-tab-uz-Latn"] [data-testid="q-localized-field-group-default-marker"]',
+      ),
+    ).toBeTruthy();
+    expect(fixture.nativeElement.querySelector('[data-testid="translation-uz-Latn"]')).toBeTruthy();
+  });
+
+  it("falls back to the platform triple when the tenant's set cannot be read", async () => {
+    api.localeSet.mockRejectedValue(new Error('boom'));
+    TestBed.resetTestingModule();
+    await TestBed.configureTestingModule({
+      imports: [PaymentMethodsPage],
+      providers: [
+        { provide: PaymentMethodsApi, useValue: api },
+        { provide: IntegrationsApi, useValue: integrationsApi },
+        { provide: CurrentLocation, useValue: new FakeCurrentLocation() },
+        { provide: LocaleSet, useValue: new FakeLocaleSet() },
+      ],
+    }).compileComponents();
+    TestBed.inject(I18n).setLocale('en');
+    fixture = TestBed.createComponent(PaymentMethodsPage);
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+    (fixture.nativeElement.querySelector('.row') as HTMLElement).click();
+    fixture.detectChanges();
+
+    expect(tabIds()).toEqual([
+      'q-localized-field-group-tab-ru',
+      'q-localized-field-group-tab-uz-Latn',
+      'q-localized-field-group-tab-en',
+    ]);
+  });
+
+  it("offers the tenant's own languages as tabs, default first and marked, and opens on the default", async () => {
     await openEditorOffering(['uz-Latn', 'en'], 'uz-Latn');
 
     expect(tabIds()).toEqual([

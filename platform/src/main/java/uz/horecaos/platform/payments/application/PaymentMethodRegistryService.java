@@ -8,6 +8,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,6 +21,8 @@ import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.payments.settlement.JdbcSettlementStore;
 import uz.horecaos.platform.payments.settlement.JdbcSettlementStore.MethodRow;
+import uz.horecaos.platform.tenancy.api.BrandLocaleLookup;
+import uz.horecaos.platform.tenancy.api.TenantLocaleSet;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
 
@@ -60,13 +63,35 @@ public class PaymentMethodRegistryService {
     private final Clock clock;
     private final AuditRecorder audit;
     private final CurrentActor currentActor;
+    private final BrandLocaleLookup brandLocales;
 
+    @Autowired
     public PaymentMethodRegistryService(
-            JdbcSettlementStore store, Clock clock, AuditRecorder audit, CurrentActor currentActor) {
+            JdbcSettlementStore store,
+            Clock clock,
+            AuditRecorder audit,
+            CurrentActor currentActor,
+            BrandLocaleLookup brandLocales) {
         this.store = store;
         this.clock = clock;
         this.audit = audit;
         this.currentActor = currentActor;
+        this.brandLocales = brandLocales;
+    }
+
+    /** A service that treats every tenant as sitting on the platform locale fallback (row 10.12). */
+    public PaymentMethodRegistryService(
+            JdbcSettlementStore store, Clock clock, AuditRecorder audit, CurrentActor currentActor) {
+        this(store, clock, audit, currentActor, BrandLocaleLookup.platformFallback());
+    }
+
+    /**
+     * The locale set a method's names are edited in. A method belongs to the tenant,
+     * not to a brand, so it is edited in the union of the tenant's brands' supported
+     * locales -- see {@link TenantLocaleSet}.
+     */
+    public TenantLocaleSet localeSet(UUID tenantId) {
+        return brandLocales.tenantLocaleSet(tenantId);
     }
 
     @Transactional

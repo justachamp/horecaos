@@ -3,7 +3,7 @@ import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@a
 import { ApiError } from '../../../core/api/problem-details';
 import { CurrentLocation } from '../../../core/auth/current-location';
 import { I18n } from '../../../core/i18n/i18n';
-import { LocaleSet } from '../../../core/i18n/locale-set';
+import { PLATFORM_LOCALE_SET } from '../../../core/i18n/locale-labels';
 import { MessageKey } from '../../../core/i18n/messages.en';
 import { TPipe } from '../../../core/i18n/t.pipe';
 import { LocalizedFieldGroup } from '../../../shared/ui/localized-field-group';
@@ -28,17 +28,21 @@ import {
  * bind an acquirer installation — and the tenant-scoped list row 10.4b's
  * channel matrix reads its columns from instead of a frontend constant.
  *
- * **Row 10.12 — the localized names are per the brand's own languages, not a
- * fixed ru/uz/en triple.** The tabs are {@link LocaleSet}'s locales (default
- * first, the platform triple for a brand that has chosen none), the default
- * one is marked and is where the editor opens — never the operator's own
- * console language, which says nothing about the brand. `PUT .../translations`
+ * **Row 10.12 — the localized names are per the tenant's languages, not a
+ * fixed ru/uz/en triple and not one brand's.** A payment method is a
+ * tenant-level row every brand's customers read, so it is edited in the union
+ * of the tenant's brands' supported languages (`GET .../payment-methods/
+ * locale-set`, the same decision comment presets and regions follow): a manager
+ * pinned to one brand can still author the names another brand offers. The
+ * tabs are that set (default first, the platform triple for a tenant whose
+ * brands have chosen none), the default one is marked and is where the editor
+ * opens — never the operator's own console language, which says nothing about
+ * the tenant, and never the pinned brand's default. `PUT .../translations`
  * replaces the whole set, so a name in a language the tabs do not show is sent
  * back unchanged with every save ({@link editTranslations} starts from every
- * stored name, and only the visible fields are ever edited): narrowing a
- * brand's languages later cannot delete a translation. The registry is
- * tenant-wide, so a tenant with several brands sees the operator's own
- * brand's languages here — a menu, not a constraint, for the reason above.
+ * stored name, and only the visible fields are ever edited): narrowing the
+ * brands' languages later cannot delete a translation. The set is a menu, not
+ * a constraint.
  */
 @Component({
   selector: 'q-payment-methods-page',
@@ -51,7 +55,6 @@ export class PaymentMethodsPage {
   private readonly api = inject(PaymentMethodsApi);
   private readonly integrations = inject(IntegrationsApi);
   private readonly location = inject(CurrentLocation);
-  private readonly localeSet = inject(LocaleSet);
   protected readonly i18n = inject(I18n);
 
   protected readonly loading = signal(true);
@@ -61,9 +64,14 @@ export class PaymentMethodsPage {
   protected readonly installations = signal<readonly InstallationView[]>([]);
 
   protected readonly responsibilities = PAYMENT_METHOD_RESPONSIBILITIES;
-  /** Row 10.12: the brand's own languages, default first (the platform triple when it has chosen none). */
-  protected readonly locales = computed(() => this.localeSet.locales());
-  protected readonly defaultLocale = computed(() => this.localeSet.defaultLocale());
+  /**
+   * Row 10.12: the tenant's languages — the union of its brands', default first —
+   * as `GET .../payment-methods/locale-set` answers. The platform triple until it
+   * loads, and when it cannot be read.
+   */
+  private readonly tenantLocaleSet = signal(PLATFORM_LOCALE_SET);
+  protected readonly locales = computed(() => this.tenantLocaleSet().locales);
+  protected readonly defaultLocale = computed(() => this.tenantLocaleSet().defaultLocale);
 
   protected readonly showCreateForm = signal(false);
   protected readonly createSubmitting = signal(false);
@@ -80,7 +88,7 @@ export class PaymentMethodsPage {
   protected readonly editSortOrder = signal(0);
   protected readonly editInstallationId = signal('');
   protected readonly editContractReference = signal('');
-  protected readonly editLocale = signal<string>(this.localeSet.defaultLocale());
+  protected readonly editLocale = signal<string>(PLATFORM_LOCALE_SET.defaultLocale);
   protected readonly editTranslations = signal<Record<string, string>>({});
   protected readonly rowSaving = signal(false);
   protected readonly rowError = signal<string | null>(null);
@@ -224,10 +232,7 @@ export class PaymentMethodsPage {
 
   private async load(): Promise<void> {
     this.loading.set(true);
-    // The brand's language set is independent of the location scope, so it
-    // resolves alongside it; without this the tabs never advance past
-    // `LocaleSet`'s platform fallback (`locale-set.ts`'s own doc).
-    await Promise.all([this.location.ensureLoaded(), this.localeSet.ensureLoaded()]);
+    await this.location.ensureLoaded();
     const scope = this.location.scope();
     if (!scope) {
       this.denied.set(this.location.denied());
@@ -235,12 +240,16 @@ export class PaymentMethodsPage {
       return;
     }
     try {
-      const [methods, installations] = await Promise.all([
+      const [methods, installations, localeSet] = await Promise.all([
         this.api.list(scope),
         this.integrations.listInstallations(scope),
+        // A language set that cannot be read must not lose the registry: the
+        // editor then offers the platform triple, as it did before the read existed.
+        this.api.localeSet(scope).catch(() => PLATFORM_LOCALE_SET),
       ]);
       this.methods.set(methods);
       this.installations.set(installations);
+      this.tenantLocaleSet.set(localeSet);
     } catch (error) {
       if (error instanceof ApiError && error.status === 403) {
         this.denied.set(true);
