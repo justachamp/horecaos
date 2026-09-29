@@ -42,9 +42,8 @@
 
 .editor__unlisted-banner {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  flex-direction: column;
+  gap: 8px;
   padding: 10px 14px;
   margin-bottom: 12px;
   background: var(--q-warning-tint);
@@ -55,6 +54,28 @@
 
 .editor__unlisted-banner p {
   margin: 0;
+}
+
+.editor__unlisted-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.editor__unlisted-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+/* The outcome note sits under its row, not beside the button. */
+.editor__unlisted-note {
+  flex-basis: 100%;
 }
 
 .editor__unlisted-banner button {

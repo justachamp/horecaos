@@ -127,7 +127,6 @@
     "noPaymentMethods": "Hozircha bu buyurtma uchun to'lov usuli mavjud emas.",
     "paymentSessionError": "Buyurtma qabul qilindi, lekin to'lov sahifasi ochilmadi. \"Buyurtmalar\" bo'limini tekshiring.",
     "paymentReturnChecking": "To'lov tekshirilmoqda...",
-    "deliveryNotServiceable": "Bu manzilga yetkazib berish mavjud emas.",
     "recipient": "Qabul qiluvchi",
     "recipientName": "Qabul qiluvchi ismi",
     "recipientPhone": "Qabul qiluvchi telefoni",
@@ -351,8 +350,9 @@
     "reason": {
       "deliveryFeeUnresolved": "Yetkazib berish narxini hisoblab bo'lmadi. Boshqa manzil tanlang yoki keyinroq urinib ko'ring.",
       "minimumBasketNotMet": "Yetkazib berish uchun buyurtma summasi yetarli emas.",
-      "minimumBasketAmount": "Yetkazib berish uchun eng kamida {{amount}}lik buyurtma bering.",
       "destinationRequired": "Avval yetkazib berish manzilini tanlang.",
+      "belowMinimumOrder": "Buyurtma summasi minimal summadan past. Davom etish uchun yana biror narsa qo'shing.",
+      "destinationNotLocated": "Bu manzil xaritada hali belgilanmagan, shuning uchun bu yerga yetkazib bera olmaymiz. Boshqa manzil tanlang yoki bu manzilni xaritada belgilang.",
       "outOfZone": "Bu manzil yetkazib berish zonasidan tashqarida.",
       "notServiceable": "Hozir bu filialdan xizmat ko'rsatib bo'lmaydi.",
       "signInRequired": "Buyurtma berish uchun tizimga kiring.",
@@ -425,5 +425,21 @@
     "notEligible": "Bu kodni ushbu hisobda ishlatib bo'lmaydi.",
     "noFriendCountNotice": "Hozircha kodingizdan nechta do'stingiz foydalanganini ko'rsatmaymiz — keyinroq qayta tekshiring.",
     "shareMessage": "Ro'yxatdan o'tayotganda mening {{code}} referal kodimdan foydalaning."
+  },
+  "dish": {
+    "soldOut": "Tugagan",
+    "outOfSaleWindow": "Hozir sotuvda emas",
+    "lowStock": "Faqat {{count}} ta qoldi"
+  },
+  "dineIn": {
+    "scanFailedTitle": "Bu kod endi ishlamaydi",
+    "scanFailedBody": "Yordam uchun xodimga murojaat qiling.",
+    "backHome": "Menyuga",
+    "scanLoading": "Stol kodi o'qilmoqda...",
+    "noAdmissionTitle": "Menyuni ko'rish uchun stolni skanerlang",
+    "noAdmissionBody": "Menyuni ko'rish uchun stolingizdagi QR-kodni skanerlang.",
+    "tableLabel": "{{code}}-stol",
+    "orderingUnavailable": "Stoldan buyurtma berish bu ilovada hozircha mavjud emas. Menyuni shu yerda ko'rishingiz mumkin, buyurtma uchun xodimga murojaat qiling.",
+    "menuUnavailable": "Hozircha menyu mavjud emas."
   }
 }

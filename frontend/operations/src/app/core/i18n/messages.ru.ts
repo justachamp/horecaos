@@ -309,6 +309,7 @@ export const messagesRu: MessageCatalogue = {
   'orders.detail.loading': 'Загрузка заказа',
   'orders.detail.denied': 'Нет доступа к этому заказу',
   'orders.detail.version': 'Версия {version}',
+  'orders.table.chip': 'Стол {tables}',
 
   'orders.detail.section.lines': 'Состав',
   'orders.detail.section.money': 'Деньги',
@@ -1230,6 +1231,8 @@ export const messagesRu: MessageCatalogue = {
 
   // Пункт 2.1b: пресеты комментариев к блюду
   'settings.commentPresets.title': 'Пресеты комментариев к блюду',
+  'locales.defaultMarker': 'по умолчанию',
+  'locales.hiddenKept': 'Тексты на других языках сохраняются как есть.',
   'settings.commentPresets.lead':
     'Кодовая инструкция для кухни («без лука», «хорошо прожарить»), которую строка заказа несёт вместо свободного текста.',
   'settings.commentPresets.tenantWideNote': 'Общий для всех брендов этого тенанта.',
@@ -1237,9 +1240,7 @@ export const messagesRu: MessageCatalogue = {
   'settings.commentPresets.status.active': 'Активен',
   'settings.commentPresets.status.archived': 'В архиве',
   'settings.commentPresets.table.code': 'Код',
-  'settings.commentPresets.table.labelRu': 'Метка (ru)',
-  'settings.commentPresets.table.labelUz': 'Метка (uz)',
-  'settings.commentPresets.table.labelEn': 'Метка (en)',
+  'settings.commentPresets.table.labelIn': 'Метка ({locale})',
   'settings.commentPresets.table.posModifierCode': 'Модификатор кассы',
   'settings.commentPresets.table.sortOrder': 'Порядок',
   'settings.commentPresets.table.status': 'Статус',
@@ -1251,16 +1252,14 @@ export const messagesRu: MessageCatalogue = {
   'settings.commentPresets.create.code': 'Код',
   'settings.commentPresets.create.codeHint':
     'Только заглавные буквы, цифры, «_» и «-». Клиенту никогда не показывается.',
-  'settings.commentPresets.create.labelRu': 'Метка (ru)',
-  'settings.commentPresets.create.labelUz': 'Метка (uz)',
-  'settings.commentPresets.create.labelEn': 'Метка (en)',
+  'settings.commentPresets.create.labelIn': 'Метка ({locale})',
   'settings.commentPresets.create.posModifierCode': 'Код модификатора кассы',
   'settings.commentPresets.create.posModifierCodeHint':
     'Необязательно. Кодовое значение, в которое экспорт на кассу превращает этот пресет там, где ожидается модификатор.',
   'settings.commentPresets.create.sortOrder': 'Порядок',
   'settings.commentPresets.create.submit': 'Зарегистрировать',
   'settings.commentPresets.create.submitting': 'Регистрация…',
-  'settings.commentPresets.create.incomplete': 'Нужны код и все три метки.',
+  'settings.commentPresets.create.incomplete': 'Нужны код и метка на языке по умолчанию.',
 
   // 10.7 Фискализация
   'settings.fiscalization.title': 'Фискализация',
@@ -2264,10 +2263,15 @@ export const messagesRu: MessageCatalogue = {
   'catalog.editor.availability.quantityHint':
     'Остаток, суточное значение по умолчанию и пороги остановки по каналам для варианта с учётом QUANTITY находятся на странице «Остатки».',
   'catalog.editor.availability.quantityHintLink': 'Открыть Остатки',
-  'catalog.editor.availability.notListedAtBranches':
-    'Не размещено в {count} филиал(ах) — предлагается там, но недоступно для заказа, пока не размещено.',
+  'catalog.editor.availability.notListedHeading':
+    'Предлагается в некоторых филиалах, но там ещё не размещено в учёте — недоступно для заказа, пока не размещено.',
+  'catalog.editor.availability.notListedVariantRow': '{variant} — не размещено в {count} филиал(ах)',
   'catalog.editor.availability.listEverywhere': 'Разместить во всех филиалах',
   'catalog.editor.availability.listingInProgress': 'Размещение…',
+  'catalog.editor.availability.listPartial':
+    'Размещено в {listed} из {candidate} филиалов. Остальные разместить не удалось — повторите или обратитесь в поддержку, если ошибка повторяется.',
+  'catalog.editor.availability.listRecountFailed':
+    'Размещение выполнено, но остаток не удалось прочитать — число выше может быть устаревшим. Откройте вкладку заново, чтобы проверить.',
   'catalog.editor.schedule.hint':
     'Пусто — значит товар всегда в продаже. Окна ниже ограничивают время продажи и рассчитываются по местному времени филиала.',
   'catalog.editor.schedule.loading': 'Загрузка графика…',
@@ -2376,6 +2380,17 @@ export const messagesRu: MessageCatalogue = {
   'catalog.stock.loading': 'Загрузка остатков',
   'catalog.stock.noLocation': 'Для этого аккаунта ещё не определён филиал',
   'catalog.stock.denied': 'Нет доступа к остаткам этого филиала',
+  'catalog.stock.unlisted.title': 'Предлагается здесь, но не размещено в учёте: {count}',
+  'catalog.stock.unlisted.body':
+    'Эти блюда отмечены доступными в меню филиала, но не размещены в складском учёте, поэтому гости видят их недоступными, пока они не размещены.',
+  'catalog.stock.unlisted.listAll': 'Разместить все ({count})',
+  'catalog.stock.unlisted.listing': 'Размещение…',
+  'catalog.stock.unlisted.more': '…и ещё {count}',
+  'catalog.stock.unlisted.outcome': 'Размещено {listed} из {candidate} блюд.',
+  'catalog.stock.unlisted.outcomePartial':
+    'Размещено {listed} из {candidate} блюд. Обновите страницу, чтобы увидеть остаток.',
+  'catalog.stock.unlisted.moreRemain': 'Остались ещё — разместите снова, чтобы продолжить.',
+  'catalog.stock.unlisted.loadFailed': 'Не удалось загрузить отчёт о неразмещённых блюдах.',
   'catalog.stock.empty': 'В этом филиале пока нет позиций с учётом QUANTITY',
   'catalog.stock.column.variant': 'Вариант',
   'catalog.stock.column.onHand': 'В наличии',
@@ -3053,9 +3068,10 @@ export const messagesRu: MessageCatalogue = {
   'delivery.zones.create.role': 'Роль',
   'delivery.zones.create.roleHint':
     'Зона доставки решает, можно ли доставить по адресу и по какой цене. Зона филиала решает, какой филиал может взять заказ, и тарифа не несёт вовсе.',
-  'delivery.zones.create.nameRu': 'Название (русский)',
-  'delivery.zones.create.nameUz': 'Название (узбекский)',
-  'delivery.zones.create.nameEn': 'Название (английский)',
+  'delivery.zones.create.nameIn': 'Название ({locale})',
+  'delivery.zones.rename.action': 'Переименовать',
+  'delivery.zones.rename.title': 'Переименование зоны {code}',
+  'delivery.zones.rename.submit': 'Сохранить названия',
   'delivery.zones.draft.origin': 'Центр — филиал',
   'delivery.zones.draft.region': 'Регион',
   'delivery.zones.draft.regionNone': 'Без региона',
@@ -3214,9 +3230,7 @@ export const messagesRu: MessageCatalogue = {
   'delivery.regions.status.ACTIVE': 'Активен',
   'delivery.regions.status.ARCHIVED': 'В архиве',
   'delivery.regions.field.code': 'Код',
-  'delivery.regions.field.nameRu': 'Название (русский)',
-  'delivery.regions.field.nameUz': 'Название (узбекский)',
-  'delivery.regions.field.nameEn': 'Название (английский)',
+  'delivery.regions.field.nameIn': 'Название ({locale})',
   'delivery.regions.field.boxHint':
     'Северо-восточный угол должен быть севернее и восточнее юго-западного, а центр — внутри прямоугольника.',
   'delivery.regions.field.swLat': 'ЮЗ широта',
@@ -6014,6 +6028,11 @@ export const messagesRu: MessageCatalogue = {
   'shared.tablePrintCard.qrLabel': 'QR-код этого стола',
   'shared.tablePrintCard.tokenLabel': 'Код (введите вручную, если скан не сработал)',
   'shared.tablePrintCard.none': 'Для этого стола код ещё не выпущен.',
+  'shared.tablePrintCard.hostLabel': 'Сканирование откроет {host}',
+  'shared.tablePrintCard.noHostWarning':
+    'Подтверждённый адрес витрины не настроен, поэтому в этом коде только сам код стола, и камера телефона не сможет его открыть. Подтвердите хостнейм в настройке канала и выпустите код заново.',
+  'shared.tablePrintCard.hostTooLongWarning':
+    'Адрес витрины {host} слишком длинный для QR-кода, поэтому в этом коде только сам код стола, и камера телефона не сможет его открыть. Займите более короткий адрес в настройке канала и выпустите код заново.',
   // --- shared/ui q-secret-input (ADR 0106, gap-map row X.14) --------------
   'secretInput.reveal': 'Показать',
   'secretInput.hide': 'Скрыть',

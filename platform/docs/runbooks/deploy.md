@@ -43,7 +43,7 @@ these phases:
 |---|---|---|
 | 0 | Refuses a dirty working tree | The image tag is the git sha; a dirty tree makes the tag a lie and rollback meaningless |
 | 1 | Mounts a tmpfs at `/run/horecaos/secrets` | Not root |
-| 2 | Authenticates you to OpenBao | Sealed, or wrong token |
+| 2 | Authenticates you to OpenBao, then checks that a token which is about to mint the media or backup object-store keys can also store them | Sealed, or wrong token; or a read-only `horecaos-deploy` token on a deploy that has to mint (nothing has been minted — log in with a token that can create and update the four `object_storage/platform/{media,backup}-{access,secret}-key` paths and run again) |
 | 3 | Writes four startup passwords onto the tmpfs | A secret is missing from OpenBao |
 | 4 | Issues a fresh AppRole secret-id | The AppRole does not exist — the host was never bootstrapped |
 | 5 | Builds `horecaos/platform:<sha>` and `horecaos/platform-migrate:<sha>` | Compile failure, or the disk is full |
@@ -559,9 +559,20 @@ commands, but it does carry its own admin API for the same job —
 section 5, "Then create the scoped service accounts", has the exact command —
 `PUT /rustfs/admin/v3/add-service-account`,
 SigV4-signed with the root credential via `curl --aws-sigv4`, not an `aws`
-CLI subcommand since the admin API is RustFS's own surface. Run it once, for
-both the media and backup pairs, before this section's "Create the buckets"
-step below, which already assumes the backup pair exists in OpenBao.
+CLI subcommand since the admin API is RustFS's own surface.
+
+**`deploy.sh` runs that call for you, for both pairs.** Phase 6a mints the
+media pair and the backup pair against the running object store (`s3:*` on one
+bucket each), and writes the four values to OpenBao over stdin — nothing is
+printed, so there is nothing to copy off the screen. It asks OpenBao first and
+leaves a complete pair alone, so it mints once, on the first deploy after
+`bootstrap.sh`; `HORECAOS_REMINT_OBJECT_STORE_CREDENTIALS=1` forces a fresh
+pair (an object store that was replaced, or a rotation), and any service
+account it supersedes has to be deleted by hand (`production-setup.md`,
+"Superseded service accounts"). The by-hand call in `production-setup.md`
+section 5 is now only for a stack that has no deploy script. The application
+will not start without the media pair, but on this stack nothing starts it
+before Phase 6a has written it.
 
 The **off-site** pair is not an on-box object-store credential at all. Generate it on whichever
 provider holds the off-site bucket, scoped to that one bucket, and enable
@@ -579,15 +590,15 @@ mentions nothing about secrets until nine `Caused by` lines down.
 ### Create the buckets
 
 This is the bootstrap-time version, run once by hand before `deploy.sh` has
-ever executed on this host — `object_storage/platform/backup-access-key` and
-`backup-secret-key` do not exist yet at this point, which is why "Then create
-the scoped service accounts" above still runs by hand for both pairs here.
-From the first `deploy.sh` run onward, every deploy provisions
-`horecaos-media`, `horecaos-backups` (versioned) and `horecaos-audit-archive`
-(Object Lock) itself, with its own create-bucket-only credential minted fresh
-each run and the backup pair minted once and left alone thereafter — see
-`deploy.sh`'s own "Provisioning the object store's scoped service accounts"
-step. Re-running this section by hand after that is still safe (the
+ever executed on this host — the media and backup pairs do not exist in
+OpenBao yet at this point, which is why the scoped service accounts above
+still have to be minted by hand if you take this path at all. You do not need
+to: `deploy.sh` mints both pairs and creates the buckets itself. From the first
+`deploy.sh` run onward, every deploy provisions `horecaos-media`,
+`horecaos-backups` (versioned) and `horecaos-audit-archive` (Object Lock)
+itself, with its own create-bucket-only credential minted fresh each run and
+the media and backup pairs minted once and left alone thereafter — see
+`deploy.sh`'s own Phase 6a. Running this section by hand is still safe (the
 `head-bucket` check below makes it idempotent) but no longer necessary.
 
 RustFS replaces MinIO as of ADR 0135; the AWS CLI replaces `mc`, and there is

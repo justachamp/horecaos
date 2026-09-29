@@ -51,6 +51,7 @@ import uz.horecaos.platform.iam.api.AuthenticatedActor;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.api.GeoPoint;
+import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcBrandLocaleLookup;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
 
@@ -552,6 +553,141 @@ class ZoneLifecycleAndRegionTests {
     }
 
     // ----------------------------------------------------------------- fixtures
+
+    // ------------------------------------------- row 10.12: the default language
+
+    private void brandOffers(String defaultLocale, String... others) {
+        jdbc.sql("""
+                INSERT INTO tenant.brand_locales (tenant_id, brand_id, locale, is_default)
+                VALUES (:t, :b, :locale, true)
+                """)
+                .param("t", TENANT)
+                .param("b", BRAND)
+                .param("locale", defaultLocale)
+                .update();
+        for (String other : others) {
+            jdbc.sql("""
+                    INSERT INTO tenant.brand_locales (tenant_id, brand_id, locale, is_default)
+                    VALUES (:t, :b, :locale, false)
+                    """)
+                    .param("t", TENANT)
+                    .param("b", BRAND)
+                    .param("locale", other)
+                    .update();
+        }
+    }
+
+    @Test
+    @DisplayName(
+            "a region must be named in the tenant's default language, and the other platform columns take that name")
+    void aRegionNeedsTheTenantsDefaultLanguageAndFillsTheOtherColumnsFromIt() {
+        brandOffers("uz-Latn", "en");
+        CurrentActor actor = () -> new AuthenticatedActor(ACTOR.toString(), Set.of(), Map.of());
+        var service =
+                new RegionService(new JdbcRegionStore(jdbc), clock, audit, actor, new JdbcBrandLocaleLookup(jdbc));
+
+        // English alone: the tenant's default is Uzbek (its first brand's), so this is refused.
+        var englishOnly = new RegionGeography(
+                "SAMARKAND", null, null, null, 39.65, 66.96, 39.5, 66.8, 39.8, 67.1, Map.of("en", "Samarkand"));
+        Throwable refused = catchThrowable(() -> service.create(TENANT, englishOnly));
+        assertThat(refused).isInstanceOf(RegionService.RegionRefusedException.class);
+        assertThat(refused.getMessage()).contains("uz-Latn");
+        assertThat(jdbc.sql("SELECT count(*) FROM fulfillment.regions")
+                        .query(Long.class)
+                        .single())
+                .isZero();
+
+        // Uzbek and English: the Russian column is NOT NULL and not offered, so it takes the
+        // default (Uzbek) name.
+        var withDefault = new RegionGeography(
+                "SAMARKAND", null, "Samarqand", null, 39.65, 66.96, 39.5, 66.8, 39.8, 67.1, Map.of("en", "Samarkand"));
+        UUID id = service.create(TENANT, withDefault);
+        assertThat(jdbc.sql("""
+                        SELECT display_name_ru || '|' || display_name_uz || '|' || display_name_en
+                          FROM fulfillment.regions WHERE id = :id
+                        """).param("id", id).query(String.class).single())
+                .isEqualTo("Samarqand|Samarqand|Samarkand");
+    }
+
+    @Test
+    @DisplayName("a zone must be named in its brand's default language, and the other platform columns take that name")
+    void aZoneNeedsTheBrandsDefaultLanguageAndFillsTheOtherColumnsFromIt() {
+        brandOffers("uz-Latn", "en");
+        CurrentActor actor = () -> new AuthenticatedActor(ACTOR.toString(), Set.of(), Map.of());
+        var service = new ServiceZoneService(
+                new JdbcServiceZoneStore(jdbc),
+                JsonMapper.builder().build(),
+                clock,
+                audit,
+                actor,
+                new JdbcBrandLocaleLookup(jdbc));
+
+        Throwable refused = catchThrowable(() -> service.createZone(
+                TENANT, BRAND, ZoneRole.DELIVERY, "CENTRE", null, null, null, Map.of("en", "Centre")));
+        assertThat(refused).isInstanceOf(ApiException.class);
+        assertThat(((ApiException) refused).errorCode()).isEqualTo(ErrorCode.VALIDATION_FAILED);
+        assertThat(refused.getMessage()).contains("uz-Latn");
+        assertThat(jdbc.sql("SELECT count(*) FROM fulfillment.service_zones")
+                        .query(Long.class)
+                        .single())
+                .isZero();
+
+        UUID id = service.createZone(
+                TENANT, BRAND, ZoneRole.DELIVERY, "CENTRE", null, "Markaz", null, Map.of("en", "Centre"));
+        assertThat(jdbc.sql("""
+                        SELECT display_name_ru || '|' || display_name_uz || '|' || display_name_en
+                          FROM fulfillment.service_zones WHERE id = :id
+                        """).param("id", id).query(String.class).single()).isEqualTo("Markaz|Markaz|Centre");
+    }
+
+    @Test
+    @DisplayName(
+            "a rewrite that names no language for a column leaves that column, and a language it does not name, as they were")
+    void aRegionRewriteLeavesWhatItDoesNotName() {
+        UUID id = regions.create(
+                TENANT,
+                new RegionGeography(
+                        "SAMARKAND",
+                        "Самарканд",
+                        "Samarqand",
+                        "Samarkand",
+                        39.65,
+                        66.96,
+                        39.5,
+                        66.8,
+                        39.8,
+                        67.1,
+                        Map.of("kaa", "Samarqand-kaa")));
+
+        // Only English is named (and re-worded): the Russian and Uzbek columns, and the
+        // Karakalpak row only the translations table holds, must all survive.
+        regions.update(
+                TENANT,
+                id,
+                new RegionGeography(
+                        "SAMARKAND",
+                        null,
+                        null,
+                        null,
+                        39.65,
+                        66.96,
+                        39.5,
+                        66.8,
+                        39.8,
+                        67.1,
+                        Map.of("en", "Samarkand city")),
+                1);
+
+        assertThat(jdbc.sql("""
+                        SELECT display_name_ru || '|' || display_name_uz || '|' || display_name_en
+                          FROM fulfillment.regions WHERE id = :id
+                        """).param("id", id).query(String.class).single())
+                .isEqualTo("Самарканд|Samarqand|Samarkand city");
+        assertThat(jdbc.sql("""
+                        SELECT display_name FROM fulfillment.region_translations
+                         WHERE region_id = :id AND locale = 'kaa'
+                        """).param("id", id).query(String.class).single()).isEqualTo("Samarqand-kaa");
+    }
 
     private DeliveryFeeQuery feeQuery(GeoPoint destination) {
         return new DeliveryFeeQuery(

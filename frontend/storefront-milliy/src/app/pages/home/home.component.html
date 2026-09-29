@@ -21,28 +21,9 @@
     </div>
   }
   @case ('ready') {
-    <nav class="rail chips" [attr.aria-label]="'home.categories' | t">
-      <button
-        type="button"
-        class="chip"
-        [class.is-active]="activeCategoryId() === null"
-        (click)="selectCategory(null)"
-      >
-        {{ 'home.allCategories' | t }}
-      </button>
-      @for (category of categories(); track category.id) {
-        <button
-          type="button"
-          class="chip"
-          [class.is-active]="activeCategoryId() === category.id"
-          (click)="selectCategory(category.id)"
-        >
-          {{ category.name }}
-        </button>
-      }
-    </nav>
-
-    @if (items().length === 0) {
+    @if (hasDishes()) {
+      <app-menu-grid [categories]="categories()" [sections]="items()" [currency]="currency()" />
+    } @else {
       <p class="state">{{ 'home.emptyMenu' | t }}</p>
     }
   }

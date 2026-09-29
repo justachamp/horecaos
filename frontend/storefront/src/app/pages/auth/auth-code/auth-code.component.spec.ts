@@ -2,6 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
 
 import { AuthCodeComponent } from './auth-code.component';
+import { ReturnDestination } from '../../../core/auth/return-destination';
 import {
   CustomerOtp,
   CustomerSignInUnavailableError,
@@ -340,6 +341,93 @@ describe('AuthCodeComponent.submit', () => {
     await comp.submit();
 
     expect(navigateSpy).toHaveBeenCalledWith(['/locations']);
+  });
+
+  // Batch 14: a guest who tapped «sign in to order» at a table QR comes back to
+  // the table, not to /locations. The destination is remembered by the table
+  // screen (`ReturnDestination`) and spent here, once, after sign-in succeeds.
+  describe('returning a guest to their table (batch 14)', () => {
+    beforeEach(() => {
+      sessionStorage.clear();
+    });
+
+    it('navigates to the remembered table screen instead of /locations', async () => {
+      const { fixture, comp, otp, navigateSpy } = setUp(validState());
+      TestBed.inject(ReturnDestination).remember('/dine-in/table');
+      fixture.detectChanges();
+      comp.code.set('123456');
+      otp.submitCode.mockResolvedValue({ grant: 'grant-xyz', expiresAt: '2026-01-01T00:02:00Z' });
+      otp.signIn.mockResolvedValue({ created: true, accountId: 'acc-1' });
+
+      await comp.submit();
+
+      expect(navigateSpy).toHaveBeenCalledWith(['/dine-in/table']);
+      expect(navigateSpy).not.toHaveBeenCalledWith(['/locations']);
+    });
+
+    it('carries the table through the terms screen so a first-time guest still ends up back at it', async () => {
+      const { fixture, comp, otp, terms, navigateSpy } = setUp(validState());
+      TestBed.inject(ReturnDestination).remember('/dine-in/table');
+      fixture.detectChanges();
+      comp.code.set('123456');
+      otp.submitCode.mockResolvedValue({ grant: 'grant-xyz', expiresAt: '2026-01-01T00:02:00Z' });
+      otp.signIn.mockResolvedValue({ created: true, accountId: 'acc-1' });
+      terms.status.mockResolvedValue({
+        accepted: false,
+        currentVersion: 'v2:en',
+        lastAcceptedVersion: 'v1:en',
+        lastAcceptedAt: '2026-01-01T00:00:00Z',
+      });
+
+      await comp.submit();
+
+      expect(navigateSpy).toHaveBeenCalledWith(['/terms'], {
+        state: { mustAccept: true, returnTo: '/dine-in/table' },
+      });
+    });
+
+    it('still returns to the table when the acceptance-status check itself errors', async () => {
+      const { fixture, comp, otp, terms, navigateSpy } = setUp(validState());
+      TestBed.inject(ReturnDestination).remember('/dine-in/table');
+      fixture.detectChanges();
+      comp.code.set('123456');
+      otp.submitCode.mockResolvedValue({ grant: 'grant-xyz', expiresAt: '2026-01-01T00:02:00Z' });
+      otp.signIn.mockResolvedValue({ created: true, accountId: 'acc-1' });
+      terms.status.mockRejectedValue(new Error('network'));
+
+      await comp.submit();
+
+      expect(navigateSpy).toHaveBeenCalledWith(['/dine-in/table']);
+    });
+
+    it('spends the destination: the next sign-in goes to /locations again', async () => {
+      const { fixture, comp, otp, navigateSpy } = setUp(validState());
+      TestBed.inject(ReturnDestination).remember('/dine-in/table');
+      fixture.detectChanges();
+      comp.code.set('123456');
+      otp.submitCode.mockResolvedValue({ grant: 'grant-xyz', expiresAt: '2026-01-01T00:02:00Z' });
+      otp.signIn.mockResolvedValue({ created: true, accountId: 'acc-1' });
+
+      await comp.submit();
+      navigateSpy.mockClear();
+      comp.code.set('123456');
+      await comp.submit();
+
+      expect(navigateSpy).toHaveBeenCalledWith(['/locations']);
+    });
+
+    it('keeps the destination through a wrong code, so the retry still returns to the table', async () => {
+      const { fixture, comp, otp } = setUp(validState());
+      const destination = TestBed.inject(ReturnDestination);
+      destination.remember('/dine-in/table');
+      fixture.detectChanges();
+      comp.code.set('000000');
+      otp.submitCode.mockRejectedValue(new OtpCodeRejectedError(2));
+
+      await comp.submit();
+
+      expect(destination.consume()).toBe('/dine-in/table');
+    });
   });
 
   it.each([

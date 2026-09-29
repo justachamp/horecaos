@@ -2,7 +2,7 @@ import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
-import { of } from 'rxjs';
+import { Subject, of, throwError } from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
 
 import { CurrentLocation } from '../../core/auth/current-location';
@@ -248,5 +248,213 @@ describe('StockPage', () => {
       5,
       'Kitchen buffer',
     );
+  });
+
+  describe('unlisted offered dishes report (gap map rows 4.4c/4.1)', () => {
+    const REPORT = {
+      totalCount: 2,
+      hasMore: false,
+      items: [
+        { variantId: 'u1', productName: 'Plov', variantName: null, sku: 'PLOV-1' },
+        { variantId: 'u2', productName: 'Samsa', variantName: 'Large', sku: null },
+      ],
+    };
+
+    function text(harness: RouterTestingHarness, testId: string): string {
+      return (
+        harness.routeNativeElement!.querySelector(`[data-testid="${testId}"]`)?.textContent ?? ''
+      );
+    }
+
+    it('names every offered dish that has no inventory listing, even with no QUANTITY items', async () => {
+      configure({
+        listPositions: () => of([]),
+        unlistedOfferings: () => of(REPORT),
+      });
+
+      const harness = await RouterTestingHarness.create('/catalog/stock');
+      await flushMicrotasks();
+
+      const report = harness.routeNativeElement!.querySelector(
+        '[data-testid="stock-unlisted-report"]',
+      );
+      expect(report).toBeTruthy();
+      expect(text(harness, 'stock-unlisted-u1')).toContain('Plov');
+      expect(text(harness, 'stock-unlisted-u1')).toContain('PLOV-1');
+      expect(text(harness, 'stock-unlisted-u2')).toContain('Samsa');
+      expect(text(harness, 'stock-unlisted-u2')).toContain('Large');
+      expect(text(harness, 'stock-list-all-unlisted')).toContain('2');
+      // The QUANTITY empty state is unaffected.
+      expect(harness.routeNativeElement!.querySelector('[data-testid="stock-empty"]')).toBeTruthy();
+    });
+
+    it('shows nothing when every offered dish is already listed', async () => {
+      configure({
+        listPositions: () => of([position()]),
+        unlistedOfferings: () => of({ totalCount: 0, hasMore: false, items: [] }),
+      });
+
+      const harness = await RouterTestingHarness.create('/catalog/stock');
+      await flushMicrotasks();
+
+      expect(
+        harness.routeNativeElement!.querySelector('[data-testid="stock-unlisted-report"]'),
+      ).toBeFalsy();
+      expect(
+        harness.routeNativeElement!.querySelector('[data-testid="stock-row-v1"]'),
+      ).toBeTruthy();
+    });
+
+    it('says how many more exist when the report is a page of a bigger backlog', async () => {
+      configure({
+        listPositions: () => of([]),
+        unlistedOfferings: () => of({ ...REPORT, totalCount: 250, hasMore: true }),
+      });
+
+      const harness = await RouterTestingHarness.create('/catalog/stock');
+      await flushMicrotasks();
+
+      expect(text(harness, 'stock-unlisted-more')).toContain('248');
+      expect(text(harness, 'stock-list-all-unlisted')).toContain('250');
+    });
+
+    it('lists them all through the backfill endpoint, then re-reads the report', async () => {
+      const backfillLocationListing = vi
+        .fn()
+        .mockReturnValue(of({ candidateCount: 2, listedCount: 2, mayHaveMore: false }));
+      const unlistedOfferings = vi
+        .fn()
+        .mockReturnValueOnce(of(REPORT))
+        .mockReturnValueOnce(of({ totalCount: 0, hasMore: false, items: [] }));
+      configure({ listPositions: () => of([]), unlistedOfferings, backfillLocationListing });
+
+      const harness = await RouterTestingHarness.create('/catalog/stock');
+      await flushMicrotasks();
+      (
+        harness.routeNativeElement!.querySelector(
+          '[data-testid="stock-list-all-unlisted"]',
+        ) as HTMLButtonElement
+      ).click();
+      await flushMicrotasks();
+      harness.detectChanges();
+
+      expect(backfillLocationListing).toHaveBeenCalledTimes(1);
+      expect(backfillLocationListing).toHaveBeenCalledWith(FAKE_SCOPE);
+      expect(unlistedOfferings).toHaveBeenCalledTimes(2);
+      expect(
+        harness.routeNativeElement!.querySelector('[data-testid="stock-unlisted-report"]'),
+      ).toBeFalsy();
+      const outcome = text(harness, 'stock-list-all-outcome');
+      expect(outcome).toContain('2');
+    });
+
+    it('tells the operator to list again when the call hit its cap', async () => {
+      const backfillLocationListing = vi
+        .fn()
+        .mockReturnValue(of({ candidateCount: 500, listedCount: 500, mayHaveMore: true }));
+      const unlistedOfferings = vi
+        .fn()
+        .mockReturnValueOnce(of({ ...REPORT, totalCount: 600, hasMore: true }))
+        .mockReturnValueOnce(of({ ...REPORT, totalCount: 100, hasMore: true }));
+      configure({ listPositions: () => of([]), unlistedOfferings, backfillLocationListing });
+
+      const harness = await RouterTestingHarness.create('/catalog/stock');
+      await flushMicrotasks();
+      (
+        harness.routeNativeElement!.querySelector(
+          '[data-testid="stock-list-all-unlisted"]',
+        ) as HTMLButtonElement
+      ).click();
+      await flushMicrotasks();
+      harness.detectChanges();
+
+      expect(text(harness, 'stock-list-all-outcome')).toContain('500');
+      expect(text(harness, 'stock-list-all-more')).not.toBe('');
+      // What is left is still offered for another go.
+      expect(text(harness, 'stock-list-all-unlisted')).toContain('100');
+    });
+
+    it('surfaces a failed list-all and lets the operator retry', async () => {
+      const backfillLocationListing = vi
+        .fn()
+        .mockReturnValueOnce(throwError(() => new Error('boom')))
+        .mockReturnValueOnce(of({ candidateCount: 2, listedCount: 2, mayHaveMore: false }));
+      const unlistedOfferings = vi.fn().mockReturnValue(of(REPORT));
+      configure({ listPositions: () => of([]), unlistedOfferings, backfillLocationListing });
+
+      const harness = await RouterTestingHarness.create('/catalog/stock');
+      await flushMicrotasks();
+      const button = harness.routeNativeElement!.querySelector(
+        '[data-testid="stock-list-all-unlisted"]',
+      ) as HTMLButtonElement;
+      button.click();
+      await flushMicrotasks();
+      harness.detectChanges();
+
+      expect(
+        harness.routeNativeElement!.querySelector('[data-testid="stock-list-all-error"]'),
+      ).toBeTruthy();
+      expect(button.disabled).toBe(false);
+
+      button.click();
+      await flushMicrotasks();
+      harness.detectChanges();
+
+      expect(backfillLocationListing).toHaveBeenCalledTimes(2);
+      expect(
+        harness.routeNativeElement!.querySelector('[data-testid="stock-list-all-error"]'),
+      ).toBeFalsy();
+    });
+
+    it('swallows a second click while the first list-all is still running', async () => {
+      const pending = new Subject<{
+        candidateCount: number;
+        listedCount: number;
+        mayHaveMore: boolean;
+      }>();
+      const backfillLocationListing = vi.fn().mockReturnValue(pending);
+      configure({
+        listPositions: () => of([]),
+        unlistedOfferings: () => of(REPORT),
+        backfillLocationListing,
+      });
+
+      const harness = await RouterTestingHarness.create('/catalog/stock');
+      await flushMicrotasks();
+      const button = harness.routeNativeElement!.querySelector(
+        '[data-testid="stock-list-all-unlisted"]',
+      ) as HTMLButtonElement;
+      button.click();
+      await flushMicrotasks();
+      harness.detectChanges();
+
+      expect(button.disabled).toBe(true);
+      button.click();
+      expect(backfillLocationListing).toHaveBeenCalledTimes(1);
+
+      pending.next({ candidateCount: 2, listedCount: 2, mayHaveMore: false });
+      pending.complete();
+      await flushMicrotasks();
+    });
+
+    it('still renders the QUANTITY table when the report itself cannot be read', async () => {
+      configure({
+        listPositions: () => of([position()]),
+        unlistedOfferings: () => throwError(() => new Error('boom')),
+      });
+
+      const harness = await RouterTestingHarness.create('/catalog/stock');
+      await flushMicrotasks();
+
+      expect(
+        harness.routeNativeElement!.querySelector('[data-testid="stock-row-v1"]'),
+      ).toBeTruthy();
+      expect(
+        harness.routeNativeElement!.querySelector('[data-testid="stock-unlisted-report"]'),
+      ).toBeFalsy();
+      expect(
+        harness.routeNativeElement!.querySelector('[data-testid="stock-unlisted-error"]'),
+      ).toBeTruthy();
+    });
   });
 });

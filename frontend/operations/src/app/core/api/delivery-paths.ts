@@ -48,6 +48,11 @@ export const deliveryZonePaths = {
     return this.base(scope);
   },
 
+  /** Rename a zone in the languages named (row 10.12). Mutation: key required. */
+  zoneNames(scope: BrandScope, zoneId: string): string {
+    return `${this.zone(scope, zoneId)}/names`;
+  },
+
   /** Draft a new version (circle or polygon). Mutation: key required. */
   zoneVersions(scope: BrandScope, zoneId: string): string {
     return `${this.zone(scope, zoneId)}/versions`;

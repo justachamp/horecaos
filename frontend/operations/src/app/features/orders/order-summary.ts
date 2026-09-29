@@ -1,3 +1,4 @@
+import { OrderTableView } from '../../shared/ui/order-table-chip/order-table-chip';
 import { OrderActionResponse } from './order-actions';
 
 /**
@@ -107,4 +108,15 @@ export interface OrderSummaryResponse {
    * `courierDisplayReference` resolves its own.
    */
   readonly courierId?: string | null;
+  /**
+   * The table (or joined tables) and session a DINE_IN order was seated at,
+   * resolved server-side through `OrderTablesPort` (`dinein.api`, ADR 0047) —
+   * codes and display names only, never a guest, a party size or a bill
+   * (ADR 0029). Null for every order not attached to a table session: a
+   * delivery, a pickup, or a DINE_IN order an operator keyed in without
+   * seating anyone. Absent on a response from before this field existed.
+   * Rendered by `q-order-table-chip` on the board's Type cell, the detail
+   * header and the kitchen ticket.
+   */
+  readonly table?: OrderTableView | null;
 }

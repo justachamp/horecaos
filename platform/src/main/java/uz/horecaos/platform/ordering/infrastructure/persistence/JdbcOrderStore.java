@@ -14,6 +14,7 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
+import uz.horecaos.platform.dinein.api.OrderTablesPort;
 import uz.horecaos.platform.ordering.api.OrderDirectory.ApprovalDeadlineWarning;
 import uz.horecaos.platform.ordering.domain.OrderOutcome;
 import uz.horecaos.platform.ordering.domain.OrderPromise;
@@ -1331,8 +1332,7 @@ public class JdbcOrderStore {
                 .param("beforeCreatedAt", utcOrNull(beforeCreatedAt))
                 .param("beforeId", beforeId == null ? null : beforeId.toString())
                 .param("limit", limit)
-                .query((row, number) ->
-                        new OrderBoardRow(mapOrder(row, number), row.getString("process_attention"), null, false))
+                .query((row, number) -> new OrderBoardRow(mapOrder(row, number), row.getString("process_attention")))
                 .list();
     }
 
@@ -2545,21 +2545,45 @@ public class JdbcOrderStore {
      *                         #ordersAwaitingOperatorResolution}, exactly the
      *                         same two-step shape {@code courierId} already
      *                         has
+     * @param table            the table (or joined tables) and session a DINE_IN
+     *                         order was placed at, or null for every order that
+     *                         was not attached to a table session. Always null
+     *                         as this class constructs the row --
+     *                         {@code dinein.*} is not this store's to join -- and
+     *                         filled in afterward by {@link
+     *                         uz.horecaos.platform.ordering.application.OrderQueryService#forLocation}
+     *                         through {@link OrderTablesPort}, the same two-step
+     *                         shape {@code courierId} has
      */
     public record OrderBoardRow(
             OrderRow order,
             @Nullable String processAttention,
             @Nullable UUID courierId,
-            boolean amendmentAwaitingOperator) {
+            boolean amendmentAwaitingOperator,
+            OrderTablesPort.@Nullable OrderTable table) {
+
+        /**
+         * The row as this store constructs it: no courier, no open amendment and
+         * no table, each filled in afterward by {@code OrderQueryService} through
+         * the port or store that owns the fact.
+         */
+        public OrderBoardRow(OrderRow order, @Nullable String processAttention) {
+            this(order, processAttention, null, false, null);
+        }
 
         /** {@link #courierId} filled in, once the caller has resolved it through the port. */
         public OrderBoardRow withCourierId(@Nullable UUID resolvedCourierId) {
-            return new OrderBoardRow(order, processAttention, resolvedCourierId, amendmentAwaitingOperator);
+            return new OrderBoardRow(order, processAttention, resolvedCourierId, amendmentAwaitingOperator, table);
         }
 
         /** {@link #amendmentAwaitingOperator} filled in, once the caller has resolved it through the store. */
         public OrderBoardRow withAmendmentAwaitingOperator(boolean resolvedAmendmentAwaitingOperator) {
-            return new OrderBoardRow(order, processAttention, courierId, resolvedAmendmentAwaitingOperator);
+            return new OrderBoardRow(order, processAttention, courierId, resolvedAmendmentAwaitingOperator, table);
+        }
+
+        /** {@link #table} filled in, once the caller has resolved it through {@link OrderTablesPort}. */
+        public OrderBoardRow withTable(OrderTablesPort.@Nullable OrderTable resolvedTable) {
+            return new OrderBoardRow(order, processAttention, courierId, amendmentAwaitingOperator, resolvedTable);
         }
     }
 

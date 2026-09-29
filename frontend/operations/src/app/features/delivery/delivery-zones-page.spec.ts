@@ -8,6 +8,7 @@ import { Auth } from '../../core/auth/auth';
 import { CurrentBrand } from '../../core/auth/current-brand';
 import { CurrentLocation } from '../../core/auth/current-location';
 import { I18n, Locale } from '../../core/i18n/i18n';
+import { LocaleSet } from '../../core/i18n/locale-set';
 import {
   ActiveVersionResponse,
   DeliveryTariffsApi,
@@ -90,6 +91,14 @@ function detailOf(
   return { tariff, activeVersion: active };
 }
 
+/** Row 10.12: a brand's resolved locale set, defaulting to the platform's own fallback triple — same fake the other converted editors' specs use. */
+class FakeLocaleSet {
+  readonly locales = signal<readonly Locale[]>(['ru', 'uz-Latn', 'en']);
+  readonly defaultLocale = signal<Locale>('ru');
+  readonly isConfigured = signal(false);
+  ensureLoaded = vi.fn().mockResolvedValue(undefined);
+}
+
 async function flushMicrotasks(): Promise<void> {
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
@@ -102,6 +111,7 @@ describe('DeliveryZonesPage', () => {
     api: Partial<DeliveryZonesApi>,
     tariffs: Partial<DeliveryTariffsApi> = { list: vi.fn().mockResolvedValue([]) },
     locale: Locale = 'en',
+    localeSet: FakeLocaleSet = new FakeLocaleSet(),
   ): Promise<void> {
     await TestBed.configureTestingModule({
       imports: [DeliveryZonesPage],
@@ -127,6 +137,7 @@ describe('DeliveryZonesPage', () => {
         { provide: DeliveryZonesApi, useValue: api },
         { provide: DeliveryTariffsApi, useValue: tariffs },
         { provide: RegionsApi, useValue: { list: vi.fn().mockResolvedValue([]) } },
+        { provide: LocaleSet, useValue: localeSet },
         provideRouter([]),
       ],
     }).compileComponents();
@@ -157,6 +168,151 @@ describe('DeliveryZonesPage', () => {
     TestBed.inject(I18n).setLocale('ru');
     fixture.detectChanges();
     expect(host().querySelector('[data-testid="zone-name"]')?.textContent?.trim()).toBe('Город');
+  });
+
+  it('shows a zone named only in the per-locale map, falling back through the brand’s languages', async () => {
+    const named: ZoneSummaryResponse = {
+      ...ZONE,
+      displayNameRu: '',
+      displayNameUz: '',
+      displayNameEn: '',
+      displayNames: { kaa: 'Orayı', en: 'Centre' },
+    };
+    await render({ list: vi.fn().mockResolvedValue([named]) }, undefined, 'ru');
+
+    expect(host().querySelector('[data-testid="zone-name"]')?.textContent?.trim()).toBe('Centre');
+  });
+
+  it('offers one name field per language of the brand’s set, default first, and requires the default', async () => {
+    const create = vi
+      .fn()
+      .mockResolvedValue({ zoneId: 'zone-new', code: 'RING', role: 'DELIVERY' });
+    const localeSet = new FakeLocaleSet();
+    localeSet.isConfigured.set(true);
+    localeSet.locales.set(['uz-Latn', 'en']);
+    localeSet.defaultLocale.set('uz-Latn');
+    await render({ list: vi.fn().mockResolvedValue([]), create }, undefined, 'en', localeSet);
+
+    host().querySelector<HTMLButtonElement>('.zones__create')!.click();
+    fixture.detectChanges();
+    expect(host().querySelector('[data-testid="zone-name-uz-Latn"]')).not.toBeNull();
+    expect(host().querySelector('[data-testid="zone-name-en"]')).not.toBeNull();
+    expect(host().querySelector('[data-testid="zone-name-ru"]')).toBeNull();
+
+    const type = (el: HTMLInputElement, value: string): void => {
+      el.value = value;
+      el.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+    };
+    const dialogInputs = host().querySelectorAll<HTMLInputElement>('.dialog input[type="text"]');
+    type(dialogInputs[0], 'ring'); // code
+    type(host().querySelector<HTMLInputElement>('[data-testid="zone-name-en"]')!, 'Ring road');
+    const submit = [...host().querySelectorAll<HTMLButtonElement>('.dialog__actions button')].at(
+      -1,
+    )!;
+    expect(submit.disabled).toBe(true); // English alone is not the default language
+
+    type(host().querySelector<HTMLInputElement>('[data-testid="zone-name-uz-Latn"]')!, 'Halqa');
+    submit.click();
+    await flushMicrotasks();
+
+    expect(create).toHaveBeenCalledWith(BRAND_SCOPE, {
+      role: 'DELIVERY',
+      code: 'ring',
+      // The contract keeps the platform triple required: ru is not offered, so it takes the default's name.
+      displayNameRu: 'Halqa',
+      displayNameUz: 'Halqa',
+      displayNameEn: 'Ring road',
+      displayNames: { 'uz-Latn': 'Halqa', en: 'Ring road' },
+    });
+  });
+
+  it('renames a zone through the names endpoint, sending only the offered, filled-in languages', async () => {
+    const rename = vi.fn().mockResolvedValue({ zoneId: 'zone-1', displayNames: {} });
+    await render({ list: vi.fn().mockResolvedValue([ZONE]), rename });
+
+    host().querySelector<HTMLButtonElement>('[data-testid="zone-rename"]')!.click();
+    fixture.detectChanges();
+    // Prefilled from the zone's own names.
+    expect(
+      host().querySelector<HTMLInputElement>('[data-testid="zone-rename-name-ru"]')!.value,
+    ).toBe('Город');
+    const en = host().querySelector<HTMLInputElement>('[data-testid="zone-rename-name-en"]')!;
+    en.value = 'City centre';
+    en.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    host().querySelector<HTMLButtonElement>('[data-testid="zone-rename-submit"]')!.click();
+    await flushMicrotasks();
+
+    // Only the language the operator changed: the prefilled ru and uz-Latn are the
+    // values the list held when the dialog opened, and resending them would write a
+    // stale copy over whatever another operator saved since (the rename is not
+    // versioned).
+    expect(rename).toHaveBeenCalledWith(BRAND_SCOPE, 'zone-1', { en: 'City centre' });
+    expect(host().querySelector('[data-testid="zone-rename-dialog"]')).toBeNull();
+  });
+
+  it('does not resend a name the operator left as it was loaded, so a concurrent rename is not reverted', async () => {
+    const rename = vi.fn().mockResolvedValue({ zoneId: 'zone-1', displayNames: {} });
+    await render({ list: vi.fn().mockResolvedValue([ZONE]), rename });
+
+    host().querySelector<HTMLButtonElement>('[data-testid="zone-rename"]')!.click();
+    fixture.detectChanges();
+    const submit = host().querySelector<HTMLButtonElement>('[data-testid="zone-rename-submit"]')!;
+    expect(submit.disabled, 'nothing was changed').toBe(true);
+
+    const ru = host().querySelector<HTMLInputElement>('[data-testid="zone-rename-name-ru"]')!;
+    ru.value = '  Центр  ';
+    ru.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    expect(submit.disabled).toBe(false);
+    submit.click();
+    await flushMicrotasks();
+
+    const sent = rename.mock.calls[0][2];
+    expect(sent).toEqual({ ru: 'Центр' });
+    expect(Object.keys(sent)).not.toContain('en');
+    expect(Object.keys(sent)).not.toContain('uz-Latn');
+  });
+
+  it('never sends, blanks or deletes a language the brand does not offer when it renames a zone', async () => {
+    const carrying: ZoneSummaryResponse = {
+      ...ZONE,
+      displayNames: { ru: 'Город', 'uz-Latn': 'Shahar', en: 'City', kaa: 'Orayı' },
+    };
+    const rename = vi.fn().mockResolvedValue({ zoneId: 'zone-1', displayNames: {} });
+    const localeSet = new FakeLocaleSet();
+    localeSet.isConfigured.set(true);
+    localeSet.locales.set(['ru', 'en']);
+    localeSet.defaultLocale.set('ru');
+    await render(
+      { list: vi.fn().mockResolvedValue([carrying]), rename },
+      undefined,
+      'en',
+      localeSet,
+    );
+
+    host().querySelector<HTMLButtonElement>('[data-testid="zone-rename"]')!.click();
+    fixture.detectChanges();
+    expect(host().querySelector('[data-testid="zone-rename-name-uz-Latn"]')).toBeNull();
+    expect(host().querySelector('[data-testid="zone-rename-name-kaa"]')).toBeNull();
+    expect(host().querySelector('[data-testid="zone-hidden-kept"]')).not.toBeNull();
+
+    // Clearing an offered, non-default field is "leave it", not "delete it".
+    const en = host().querySelector<HTMLInputElement>('[data-testid="zone-rename-name-en"]')!;
+    en.value = '';
+    en.dispatchEvent(new Event('input'));
+    const ru = host().querySelector<HTMLInputElement>('[data-testid="zone-rename-name-ru"]')!;
+    ru.value = 'Центр';
+    ru.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    host().querySelector<HTMLButtonElement>('[data-testid="zone-rename-submit"]')!.click();
+    await flushMicrotasks();
+
+    const sent = rename.mock.calls[0][2];
+    expect(sent).toEqual({ ru: 'Центр' });
+    expect(Object.keys(sent)).not.toContain('uz-Latn');
+    expect(Object.keys(sent)).not.toContain('kaa');
   });
 
   it('marks a zone bound to a zero-resolving tariff as free, and one bound to a priced tariff not (§3.6d)', async () => {

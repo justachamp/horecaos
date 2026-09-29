@@ -16,6 +16,16 @@ export interface DineInSettingsView {
   readonly guestSessionTtlMinutes: number;
   readonly serviceChargeRateBp: number;
   readonly version: number;
+  /**
+   * The verified hostname the storefront answers on
+   * (`QrChannelSource.storefrontHostname`): the tenant's `QR_TABLE` channel's
+   * own, else its one `WEB` channel's. Null when none qualifies — an
+   * unverified custom domain does not, and neither do two candidates with no
+   * telling which is the guest's storefront. A printed table card encodes
+   * `https://<hostname>/dine-in/<token>` from it, and falls back to the bare
+   * token with a warning when it is null. A public DNS name, not a secret.
+   */
+  readonly storefrontHostname?: string | null;
 }
 
 /** Mirrors `FloorPlanController.SettingsRequest`. */

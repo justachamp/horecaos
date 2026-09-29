@@ -3,7 +3,7 @@ import { TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { provideRouter } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
-import { of, throwError } from 'rxjs';
+import { Subject, of, throwError } from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
 
 import { CurrentBrand } from '../../core/auth/current-brand';
@@ -177,7 +177,7 @@ describe('ProductEditorPage', () => {
     );
   });
 
-  it('marks uz — the catalog’s own default locale — even while the UI runs in ru', async () => {
+  it('marks uz — the server’s own default — for a brand with no locale set, even while the UI runs in ru', async () => {
     configure({ productDetail: () => of(productDetail()) });
 
     const harness = await RouterTestingHarness.create('/catalog/products/product-1');
@@ -194,6 +194,33 @@ describe('ProductEditorPage', () => {
     expect(
       localeGroup
         .querySelector('[data-testid="q-localized-field-group-tab-ru"]')
+        ?.querySelector('[data-testid="q-localized-field-group-default-marker"]'),
+    ).toBeNull();
+  });
+
+  it('marks the brand’s own default locale once it has chosen one — the locale the list screens now resolve', async () => {
+    // Batch 14: CatalogQueryService resolves the products list in the brand's
+    // default language, so the marker follows it (it used to stay on `uz`).
+    const localeSet = new FakeLocaleSet();
+    localeSet.isConfigured.set(true);
+    localeSet.locales.set(['ru', 'uz-Latn', 'en']);
+    localeSet.defaultLocale.set('ru');
+    configure({ productDetail: () => of(productDetail()) }, {}, {}, {}, {}, {}, {}, {}, localeSet);
+
+    const harness = await RouterTestingHarness.create('/catalog/products/product-1');
+    await flushMicrotasks();
+
+    const localeGroup = harness.routeNativeElement!.querySelector(
+      '[data-testid="editor-locale-group"]',
+    )!;
+    expect(
+      localeGroup
+        .querySelector('[data-testid="q-localized-field-group-tab-ru"]')
+        ?.querySelector('[data-testid="q-localized-field-group-default-marker"]'),
+    ).not.toBeNull();
+    expect(
+      localeGroup
+        .querySelector('[data-testid="q-localized-field-group-tab-uz"]')
         ?.querySelector('[data-testid="q-localized-field-group-default-marker"]'),
     ).toBeNull();
   });
@@ -286,8 +313,9 @@ describe('ProductEditorPage', () => {
     ).not.toBeNull();
   });
 
-  it('narrows the locale strip to the brand’s own supported set, but keeps uz writable for the catalog’s own list resolution', async () => {
+  it('narrows the locale strip to the brand’s own supported set — nothing is forced in any more, the list screens read the brand’s default', async () => {
     const localeSet = new FakeLocaleSet();
+    localeSet.isConfigured.set(true);
     localeSet.locales.set(['ru']);
     localeSet.defaultLocale.set('ru');
     configure(
@@ -322,7 +350,7 @@ describe('ProductEditorPage', () => {
     ).not.toBeNull();
     expect(
       harness.routeNativeElement!.querySelector('[data-testid="q-localized-field-group-tab-uz"]'),
-    ).not.toBeNull();
+    ).toBeNull();
     expect(
       harness.routeNativeElement!.querySelector('[data-testid="q-localized-field-group-tab-en"]'),
     ).toBeNull();
@@ -599,7 +627,9 @@ describe('ProductEditorPage', () => {
 
   it('shows "not listed at N branches" and lists everywhere on click (gap map row 4.1)', async () => {
     const unlistedLocations = vi.fn().mockReturnValue(of(['l2', 'l3']));
-    const backfillVariantListing = vi.fn().mockReturnValue(of({ candidateCount: 2, listedCount: 2 }));
+    const backfillVariantListing = vi
+      .fn()
+      .mockReturnValue(of({ candidateCount: 2, listedCount: 2 }));
     configure(
       { productDetail: () => of(productDetail()) },
       {},
@@ -625,12 +655,212 @@ describe('ProductEditorPage', () => {
 
     // A second call, with none left unlisted, hides the banner.
     unlistedLocations.mockReturnValue(of([]));
-    (host.querySelector('[data-testid="editor-list-missing-branches"]') as HTMLButtonElement).click();
+    (
+      host.querySelector(
+        '[data-testid="editor-list-missing-branches-variant-1"]',
+      ) as HTMLButtonElement
+    ).click();
     await flushMicrotasks();
     harness.detectChanges();
 
     expect(backfillVariantListing).toHaveBeenCalledWith(LOCATION_SCOPE, 'variant-1');
     expect(host.querySelector('[data-testid="editor-unlisted-branches-banner"]')).toBeFalsy();
+  });
+
+  describe('what "list at every branch" reports back', () => {
+    async function clickListEverywhere(inventoryApi: Partial<InventoryApi>) {
+      configure({ productDetail: () => of(productDetail()) }, {}, {}, {}, {}, {}, {}, inventoryApi);
+      const harness = await RouterTestingHarness.create('/catalog/products/product-1');
+      await flushMicrotasks();
+      const host = harness.routeNativeElement!;
+      (host.querySelector('[data-testid="editor-tab-AVAILABILITY"]') as HTMLButtonElement).click();
+      await flushMicrotasks();
+      harness.detectChanges();
+      (
+        host.querySelector(
+          '[data-testid="editor-list-missing-branches-variant-1"]',
+        ) as HTMLButtonElement
+      ).click();
+      await flushMicrotasks();
+      harness.detectChanges();
+      return host;
+    }
+
+    it('says so when only some branches were listed, and keeps what is still missing', async () => {
+      const unlistedLocations = vi
+        .fn()
+        .mockReturnValueOnce(of(['l2', 'l3', 'l4']))
+        .mockReturnValueOnce(of(['l3', 'l4']));
+      const host = await clickListEverywhere({
+        unlistedLocations,
+        backfillVariantListing: vi.fn().mockReturnValue(of({ candidateCount: 3, listedCount: 1 })),
+      });
+
+      const row = host.querySelector('[data-testid="editor-unlisted-variant-variant-1"]');
+      expect(row?.textContent).toContain('2');
+      const notice = host.querySelector('[data-testid="editor-listing-notice-variant-1"]');
+      expect(notice?.textContent).toContain('1');
+      expect(notice?.textContent).toContain('3');
+    });
+
+    it('keeps the row, with a notice, when the count cannot be re-read afterwards', async () => {
+      const unlistedLocations = vi
+        .fn()
+        .mockReturnValueOnce(of(['l2', 'l3']))
+        .mockReturnValueOnce(throwError(() => new Error('503')));
+      const host = await clickListEverywhere({
+        unlistedLocations,
+        backfillVariantListing: vi.fn().mockReturnValue(of({ candidateCount: 2, listedCount: 2 })),
+      });
+
+      // A failed re-read is not "nothing left": the banner must not claim every branch is listed.
+      expect(host.querySelector('[data-testid="editor-unlisted-variant-variant-1"]')).toBeTruthy();
+      expect(host.querySelector('[data-testid="editor-listing-notice-variant-1"]')).toBeTruthy();
+    });
+
+    it('shows no notice when everything was listed and the recount agrees', async () => {
+      const unlistedLocations = vi
+        .fn()
+        .mockReturnValueOnce(of(['l2']))
+        .mockReturnValueOnce(of([]));
+      const host = await clickListEverywhere({
+        unlistedLocations,
+        backfillVariantListing: vi.fn().mockReturnValue(of({ candidateCount: 1, listedCount: 1 })),
+      });
+
+      expect(host.querySelector('[data-testid="editor-unlisted-branches-banner"]')).toBeFalsy();
+      expect(host.querySelector('[data-testid="editor-listing-notice-variant-1"]')).toBeFalsy();
+    });
+  });
+
+  // Batch 13 follow-up: the banner read only the product's default variant, so
+  // a second variant offered at branches that never listed it stayed silent.
+  describe('every variant, not only the default one', () => {
+    function twoVariants(): ProductDetail {
+      const base = productDetail();
+      return productDetail({
+        variants: [
+          ...base.variants,
+          {
+            variantId: 'variant-2',
+            sku: 'PLOV-2',
+            unitCode: 'PIECE',
+            isDefault: false,
+            sortOrder: 1,
+            status: 'ACTIVE',
+            version: 1,
+            translations: { ru: { name: 'Плов, двойная порция' } },
+            fiscal: null,
+          },
+        ],
+      });
+    }
+
+    async function openAvailability(
+      inventoryApi: Partial<InventoryApi>,
+      detail: ProductDetail = twoVariants(),
+    ) {
+      configure({ productDetail: () => of(detail) }, {}, {}, {}, {}, {}, {}, inventoryApi);
+      const harness = await RouterTestingHarness.create('/catalog/products/product-1');
+      await flushMicrotasks();
+      const host = harness.routeNativeElement!;
+      (host.querySelector('[data-testid="editor-tab-AVAILABILITY"]') as HTMLButtonElement).click();
+      await flushMicrotasks();
+      harness.detectChanges();
+      return { harness, host };
+    }
+
+    it('shows the banner for a non-default variant even when the default one is fully listed', async () => {
+      const unlistedLocations = vi.fn((_scope: unknown, variantId: string) =>
+        of(variantId === 'variant-2' ? ['l2', 'l3', 'l4'] : []),
+      );
+      const { host } = await openAvailability({ unlistedLocations });
+
+      expect(unlistedLocations).toHaveBeenCalledWith(LOCATION_SCOPE, 'variant-1');
+      expect(unlistedLocations).toHaveBeenCalledWith(LOCATION_SCOPE, 'variant-2');
+      expect(host.querySelector('[data-testid="editor-unlisted-branches-banner"]')).toBeTruthy();
+      expect(host.querySelector('[data-testid="editor-unlisted-variant-variant-1"]')).toBeFalsy();
+      const row = host.querySelector('[data-testid="editor-unlisted-variant-variant-2"]');
+      expect(row?.textContent).toContain('Плов, двойная порция');
+      expect(row?.textContent).toContain('3');
+    });
+
+    it('lists one variant only, and leaves the other variant’s row in place', async () => {
+      const remaining: Record<string, string[]> = {
+        'variant-1': ['l2', 'l3'],
+        'variant-2': ['l2'],
+      };
+      const unlistedLocations = vi.fn((_scope: unknown, variantId: string) =>
+        of(remaining[variantId] ?? []),
+      );
+      const backfillVariantListing = vi.fn((_scope: unknown, variantId: string) => {
+        remaining[variantId] = [];
+        return of({ candidateCount: 1, listedCount: 1 });
+      });
+      const { harness, host } = await openAvailability({
+        unlistedLocations,
+        backfillVariantListing,
+      });
+
+      expect(host.querySelector('[data-testid="editor-unlisted-variant-variant-1"]')).toBeTruthy();
+      expect(host.querySelector('[data-testid="editor-unlisted-variant-variant-2"]')).toBeTruthy();
+
+      (
+        host.querySelector(
+          '[data-testid="editor-list-missing-branches-variant-2"]',
+        ) as HTMLButtonElement
+      ).click();
+      await flushMicrotasks();
+      harness.detectChanges();
+
+      expect(backfillVariantListing).toHaveBeenCalledTimes(1);
+      expect(backfillVariantListing).toHaveBeenCalledWith(LOCATION_SCOPE, 'variant-2');
+      expect(host.querySelector('[data-testid="editor-unlisted-variant-variant-2"]')).toBeFalsy();
+      expect(host.querySelector('[data-testid="editor-unlisted-variant-variant-1"]')).toBeTruthy();
+      expect(host.querySelector('[data-testid="editor-unlisted-branches-banner"]')).toBeTruthy();
+    });
+
+    it('keeps the other variants’ rows when one variant’s read fails', async () => {
+      const unlistedLocations = vi.fn((_scope: unknown, variantId: string) =>
+        variantId === 'variant-1' ? throwError(() => new Error('boom')) : of(['l2']),
+      );
+      const { host } = await openAvailability({ unlistedLocations });
+
+      expect(host.querySelector('[data-testid="editor-unlisted-variant-variant-1"]')).toBeFalsy();
+      expect(host.querySelector('[data-testid="editor-unlisted-variant-variant-2"]')).toBeTruthy();
+    });
+
+    it('disables only the variant being listed while its request is in flight', async () => {
+      const pending = new Subject<{ candidateCount: number; listedCount: number }>();
+      const unlistedLocations = vi.fn().mockReturnValue(of(['l2']));
+      const backfillVariantListing = vi.fn().mockReturnValue(pending);
+      const { harness, host } = await openAvailability({
+        unlistedLocations,
+        backfillVariantListing,
+      });
+
+      const first = host.querySelector(
+        '[data-testid="editor-list-missing-branches-variant-1"]',
+      ) as HTMLButtonElement;
+      const second = host.querySelector(
+        '[data-testid="editor-list-missing-branches-variant-2"]',
+      ) as HTMLButtonElement;
+      first.click();
+      await flushMicrotasks();
+      harness.detectChanges();
+
+      expect(first.disabled).toBe(true);
+      expect(second.disabled).toBe(false);
+
+      // A second click on the in-flight variant is swallowed, not a second request.
+      first.click();
+      expect(backfillVariantListing).toHaveBeenCalledTimes(1);
+
+      unlistedLocations.mockReturnValue(of([]));
+      pending.next({ candidateCount: 1, listedCount: 1 });
+      pending.complete();
+      await flushMicrotasks();
+    });
   });
 
   it('never shows the "not listed" banner once every branch is already listed', async () => {
@@ -1516,6 +1746,7 @@ describe('ProductEditorPage', () => {
               labelRu: 'Без лука',
               labelUz: 'Piyozsiz',
               labelEn: 'No onion',
+              labels: { ru: 'Без лука', 'uz-Latn': 'Piyozsiz', en: 'No onion' },
               posModifierCode: null,
               sortOrder: 0,
               status: 'ACTIVE',
@@ -1527,6 +1758,7 @@ describe('ProductEditorPage', () => {
               labelRu: 'Поострее',
               labelUz: 'Achchiqroq',
               labelEn: 'Extra spicy',
+              labels: { ru: 'Поострее', 'uz-Latn': 'Achchiqroq', en: 'Extra spicy' },
               posModifierCode: null,
               sortOrder: 1,
               status: 'ACTIVE',
@@ -1637,6 +1869,7 @@ describe('ProductEditorPage', () => {
               labelRu: 'Без лука',
               labelUz: 'Piyozsiz',
               labelEn: 'No onion',
+              labels: { ru: 'Без лука', 'uz-Latn': 'Piyozsiz', en: 'No onion' },
               posModifierCode: null,
               sortOrder: 0,
               status: 'ACTIVE',

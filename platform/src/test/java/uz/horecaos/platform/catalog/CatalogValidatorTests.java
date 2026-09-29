@@ -353,6 +353,61 @@ class CatalogValidatorTests {
                 .doesNotContain("MISSING_TRANSLATION");
     }
 
+    @Test
+    @DisplayName("a name in the catalog's fallback locale satisfies the requirement when the brand default has none")
+    void aNameInTheFallbackLocaleSatisfiesTheRequirement() {
+        UUID productId = UUID.randomUUID();
+        Product product = new Product(productId, TENANT, BRAND, "IMPORTED", Status.ACTIVE, 1);
+        Variant variant =
+                new Variant(UUID.randomUUID(), TENANT, BRAND, productId, "SKU", "PIECE", true, 0, Status.ACTIVE, 1);
+        Snapshot base = snapshotOf(
+                List.of(product),
+                List.of(variant),
+                List.of(),
+                List.of(),
+                Map.of(),
+                nameIn(EntityType.PRODUCT, productId, "uz", "Osh"),
+                Set.of(variant.id()),
+                Set.of());
+
+        // The brand's default is ru; the menu was imported in the server's uz and never
+        // named in ru. Its editor (a {ru, en} brand) offers no uz tab to add one with.
+        assertThat(validator.validate(withLocales(base, "ru", "uz")).blockers())
+                .extracting(ValidationFinding::code)
+                .doesNotContain("MISSING_TRANSLATION");
+        // Control: the server's locale alone -- the rule before the brand default counted --
+        // has nothing for a brand whose fallback is not where the name was written.
+        assertThat(validator.validate(withLocales(base, "ru", "ru")).blockers())
+                .extracting(ValidationFinding::code)
+                .contains("MISSING_TRANSLATION");
+    }
+
+    @Test
+    @DisplayName("a name in the brand default satisfies the requirement even with none in the fallback locale")
+    void aNameInTheBrandDefaultSatisfiesTheRequirement() {
+        UUID productId = UUID.randomUUID();
+        Product product = new Product(productId, TENANT, BRAND, "RU_NAMED", Status.ACTIVE, 1);
+        Variant variant =
+                new Variant(UUID.randomUUID(), TENANT, BRAND, productId, "SKU", "PIECE", true, 0, Status.ACTIVE, 1);
+        Snapshot base = snapshotOf(
+                List.of(product),
+                List.of(variant),
+                List.of(),
+                List.of(),
+                Map.of(),
+                nameIn(EntityType.PRODUCT, productId, "ru", "Плов"),
+                Set.of(variant.id()),
+                Set.of());
+
+        assertThat(validator.validate(withLocales(base, "ru", "uz")).blockers())
+                .extracting(ValidationFinding::code)
+                .doesNotContain("MISSING_TRANSLATION");
+        assertThat(validator.validate(withLocales(base, "en", "uz")).blockers())
+                .as("named in neither the default nor the fallback")
+                .extracting(ValidationFinding::code)
+                .contains("MISSING_TRANSLATION");
+    }
+
     // ---------------------------------------------------------- media
 
     @Test
@@ -450,6 +505,29 @@ class CatalogValidatorTests {
 
     // ---------------------------------------------------------- fixtures
 
+    /** The same snapshot, resolving names in another pair of locales. */
+    private static Snapshot withLocales(Snapshot base, String defaultLocale, String fallbackLocale) {
+        return new Snapshot(
+                defaultLocale,
+                fallbackLocale,
+                base.products(),
+                base.variants(),
+                base.variantsByProduct(),
+                base.categories(),
+                base.categoriesById(),
+                base.productIdsByCategory(),
+                base.modifierGroupIdsByProduct(),
+                base.modifierGroups(),
+                base.optionsByGroup(),
+                base.translations(),
+                base.mediaReferences(),
+                base.displayableMedia(),
+                base.pricedVariantIds(),
+                base.offeredVariantIds(),
+                base.fiscal(),
+                base.pricingWired());
+    }
+
     private static Map<String, LocalizedText> nameIn(EntityType type, UUID entityId, String locale, String name) {
         return Map.of(Snapshot.translationKey(type, entityId, locale), new LocalizedText(locale, name, null));
     }
@@ -496,6 +574,7 @@ class CatalogValidatorTests {
         categories.forEach(category -> categoriesById.put(category.id(), category));
 
         return new Snapshot(
+                LOCALE,
                 LOCALE,
                 products,
                 variants,

@@ -47,7 +47,13 @@ export interface CartResponseItem {
   price: number;
   item_id: string;
   name: string;
+  /** False when the menu no longer lets the customer buy this line right now. */
   active: boolean;
+  /**
+   * Why {@link active} is false: 'SOLD_OUT' (86'd) or 'OUT_OF_SALE_WINDOW'
+   * (row 4.2g: its own schedule excludes this moment). Absent for an ordinary line.
+   */
+  unavailableReason?: 'SOLD_OUT' | 'OUT_OF_SALE_WINDOW';
   image: string | null;
   quantity: number;
   note: string | null;

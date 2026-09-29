@@ -1499,6 +1499,7 @@ export interface CreateZoneRequest {
   displayNameEn: string;
   displayNameRu: string;
   displayNameUz: string;
+  displayNames?: { [key: string]: string };
   role: "DELIVERY" | "CATCHMENT";
 }
 
@@ -3058,6 +3059,7 @@ export interface OperationsOrderControllerOrderSummaryResponse {
   promisedAt?: string;
   publicOrderNumber?: string;
   status?: string;
+  table?: OrderTable;
   totalMinor?: number;
   version?: number;
 }
@@ -3079,6 +3081,12 @@ export interface OperationsPaymentControllerPaymentSessionResponse {
   provider?: string;
   qrPayload?: string;
   rePresented?: boolean;
+}
+
+export interface OperationsRegionControllerLocaleSetResponse {
+  configured?: boolean;
+  defaultLocale?: string;
+  locales?: Array<string>;
 }
 
 export interface OperationsRemedyControllerVerificationRequest {
@@ -3392,6 +3400,11 @@ export interface OrderRowResponse {
   secondsTotal?: number;
   taxSom?: number;
   terminalStatus?: string;
+}
+
+export interface OrderTable {
+  sessionId?: string;
+  tables?: Array<TableRef>;
 }
 
 export interface OutcomeListResponse {
@@ -4017,6 +4030,7 @@ export interface RegionGeographyRequest {
   displayNameEn: string;
   displayNameRu: string;
   displayNameUz: string;
+  displayNames?: { [key: string]: string };
   expectedVersion?: number;
 }
 
@@ -4036,6 +4050,7 @@ export interface RegionResponse {
   displayNameEn?: string;
   displayNameRu?: string;
   displayNameUz?: string;
+  displayNames?: { [key: string]: string };
   platform?: boolean;
   regionId?: string;
   status?: string;
@@ -4144,6 +4159,13 @@ export interface RemedyTotalsResponse {
 
 export interface RemoveTenantCalendarHolidayRequest {
   reason: string;
+}
+
+export interface RenameZoneRequest {
+  displayNameEn?: string;
+  displayNameRu?: string;
+  displayNameUz?: string;
+  displayNames?: { [key: string]: string };
 }
 
 export interface ReorderLineResponse {
@@ -4646,6 +4668,7 @@ export interface SettingsResponse {
   locationId?: string;
   qrMode?: string;
   serviceChargeRateBp?: number;
+  storefrontHostname?: string;
   turnaroundMinutes?: number;
   version?: number;
 }
@@ -4952,6 +4975,12 @@ export interface TableLayoutRequest {
   reason: string;
 }
 
+export interface TableRef {
+  code?: string;
+  displayName?: string;
+  tableId?: string;
+}
+
 export interface TableRequest {
   code: string;
   displayName: string;
@@ -5190,6 +5219,7 @@ export interface TicketResponse {
   sequenceLabel?: string;
   startedAt?: string;
   status?: string;
+  table?: OrderTable;
   targetReadyAt?: string;
   ticketId?: string;
   version?: number;
@@ -5246,6 +5276,19 @@ export interface UnlinkResponse {
 
 export interface UnlistedLocationsResponse {
   locationIds?: Array<string>;
+}
+
+export interface UnlistedOfferingResponse {
+  productName?: string;
+  sku?: string;
+  variantId?: string;
+  variantName?: string;
+}
+
+export interface UnlistedOfferingsResponse {
+  hasMore?: boolean;
+  items?: Array<UnlistedOfferingResponse>;
+  totalCount?: number;
 }
 
 export interface UpdateCloposSettingsRequest {
@@ -5413,6 +5456,11 @@ export interface ZoneDetailResponse {
   zone?: ZoneSummaryResponse;
 }
 
+export interface ZoneNamesResponse {
+  displayNames?: { [key: string]: string };
+  zoneId?: string;
+}
+
 export interface ZoneSummaryResponse {
   activeVersion?: number;
   areaSquareMeters?: number;
@@ -5422,6 +5470,7 @@ export interface ZoneSummaryResponse {
   displayNameEn?: string;
   displayNameRu?: string;
   displayNameUz?: string;
+  displayNames?: { [key: string]: string };
   freeDeliveryFromMinor?: number;
   minBasketMinor?: number;
   priority?: number;
@@ -5563,6 +5612,7 @@ export interface Operations {
   "detail_2": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/service-zones/{zoneId}"; request: { parameters: { path: { brandId: string; tenantId: string; zoneId: string } } }; responses: { "200": ZoneDetailResponse } };
   "bind_1": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/service-zones/{zoneId}/locations"; request: { parameters: { path: { brandId: string; tenantId: string; zoneId: string } }; body: ServiceZoneControllerBindLocationRequest }; responses: { "200": unknown } };
   "unbind_1": { method: "DELETE"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/service-zones/{zoneId}/locations/{locationId}"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string; zoneId: string } } }; responses: { "200": unknown } };
+  "rename": { method: "PUT"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/service-zones/{zoneId}/names"; request: { parameters: { path: { brandId: string; tenantId: string; zoneId: string } }; body: RenameZoneRequest }; responses: { "200": ZoneNamesResponse } };
   "versions_1": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/service-zones/{zoneId}/versions"; request: { parameters: { path: { brandId: string; tenantId: string; zoneId: string } } }; responses: { "200": Array<ZoneVersionResponse> } };
   "draftVersion": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/service-zones/{zoneId}/versions"; request: { parameters: { path: { brandId: string; tenantId: string; zoneId: string } }; body: OperationsServiceZoneControllerDraftVersionRequest }; responses: { "200": ServiceZoneControllerVersionView } };
   "activate_5": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/service-zones/{zoneId}/versions/{version}/activate"; request: { parameters: { path: { brandId: string; tenantId: string; version: number; zoneId: string } } }; responses: { "200": ServiceZoneControllerVersionView } };
@@ -5694,6 +5744,7 @@ export interface Operations {
   "activateRateCard": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/rate-cards/{cardId}/activation"; request: { parameters: { path: { cardId: string; tenantId: string } }; body: ActivateRateCardRequest }; responses: { "200": unknown } };
   "list_8": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/regions"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<RegionResponse> } };
   "create_4": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/regions"; request: { parameters: { path: { tenantId: string } }; body: RegionGeographyRequest }; responses: { "200": RegionRegisteredView } };
+  "localeSet": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/regions/locale-set"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": OperationsRegionControllerLocaleSetResponse } };
   "update_1": { method: "PUT"; path: "/api/v1/operations/tenants/{tenantId}/regions/{regionId}"; request: { parameters: { path: { regionId: string; tenantId: string } }; body: RegionGeographyRequest }; responses: { "200": unknown } };
   "archive_2": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/regions/{regionId}/archive"; request: { parameters: { path: { regionId: string; tenantId: string } } }; responses: { "200": unknown } };
   "unverified": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/remedies/unverified"; request: { parameters: { path: { tenantId: string }; query: { limit?: number; settlingHours?: number } } }; responses: { "200": PageRemedyResponse } };
@@ -5740,6 +5791,7 @@ export interface Operations {
   "backfillLocationListing": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/inventory/listing-backfill"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } } }; responses: { "200": InventoryControllerBackfillResponse } };
   "listPositions": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/inventory/positions"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } } }; responses: { "200": Array<StockPositionResponse> } };
   "listVariant": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/inventory/stock-items"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } }; body: ListVariantRequest }; responses: { "200": StockItemResponse } };
+  "unlistedOfferings": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/inventory/unlisted-offerings"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string }; query: { limit?: number; locale?: string } } }; responses: { "200": UnlistedOfferingsResponse } };
   "bulkSetAvailability": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/inventory/variants/bulk-availability"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } }; body: BulkAvailabilityRequest }; responses: { "200": BulkAvailabilityResponse } };
   "setAvailability": { method: "PUT"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/inventory/variants/{variantId}/availability"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string; variantId: string } }; body: AvailabilityRequest }; responses: { "200": unknown } };
   "clearChannelStopThreshold": { method: "DELETE"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/inventory/variants/{variantId}/channel-stop-thresholds/{channelType}"; request: { parameters: { path: { brandId: string; channelType: string; locationId: string; tenantId: string; variantId: string }; query: { reasonCode: string } } }; responses: { "200": unknown } };

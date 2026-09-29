@@ -396,45 +396,38 @@ public class CatalogValidator {
     }
 
     /**
-     * Every published entity needs a name in the brand's default locale.
+     * Every published entity needs a name in the brand's default locale -- or, only
+     * where it has none there, in the server's configured one, the same resolution
+     * {@code CatalogQueryService} gives a list screen (row 10.12).
      *
      * <p>Without this the storefront falls back to a code, and a customer is
-     * shown something like {@code BURG-DBL-01} where a dish name should be.
+     * shown something like {@code BURG-DBL-01} where a dish name should be. The
+     * server's locale alone used to be the requirement, which refused to publish a
+     * menu a {ru, en} brand had named completely in its own default language: its
+     * editor offers no {@code uz} tab to satisfy it with.
      */
     private void validateTranslations(Snapshot snapshot, List<ValidationFinding> findings) {
         String locale = snapshot.defaultLocale();
+        String reason = snapshot.fallbackLocale().equals(locale)
+                ? "No name in the brand default locale " + locale
+                : "No name in the brand default locale " + locale + " or the catalog's " + snapshot.fallbackLocale();
 
         for (Product product : snapshot.products()) {
-            if (product.status() == Status.ACTIVE
-                    && !snapshot.hasTranslation(EntityType.PRODUCT, product.id(), locale)) {
+            if (product.status() == Status.ACTIVE && !snapshot.hasName(EntityType.PRODUCT, product.id())) {
                 findings.add(ValidationFinding.blocker(
-                        "MISSING_TRANSLATION",
-                        EntityType.PRODUCT,
-                        product.id(),
-                        product.code(),
-                        "No name in the brand default locale " + locale));
+                        "MISSING_TRANSLATION", EntityType.PRODUCT, product.id(), product.code(), reason));
             }
         }
         for (Category category : snapshot.categories()) {
-            if (category.status() == Status.ACTIVE
-                    && !snapshot.hasTranslation(EntityType.CATEGORY, category.id(), locale)) {
+            if (category.status() == Status.ACTIVE && !snapshot.hasName(EntityType.CATEGORY, category.id())) {
                 findings.add(ValidationFinding.blocker(
-                        "MISSING_TRANSLATION",
-                        EntityType.CATEGORY,
-                        category.id(),
-                        category.code(),
-                        "No name in the brand default locale " + locale));
+                        "MISSING_TRANSLATION", EntityType.CATEGORY, category.id(), category.code(), reason));
             }
         }
         for (ModifierGroup group : snapshot.modifierGroups()) {
-            if (group.status() == Status.ACTIVE
-                    && !snapshot.hasTranslation(EntityType.MODIFIER_GROUP, group.id(), locale)) {
+            if (group.status() == Status.ACTIVE && !snapshot.hasName(EntityType.MODIFIER_GROUP, group.id())) {
                 findings.add(ValidationFinding.blocker(
-                        "MISSING_TRANSLATION",
-                        EntityType.MODIFIER_GROUP,
-                        group.id(),
-                        group.code(),
-                        "No name in the brand default locale " + locale));
+                        "MISSING_TRANSLATION", EntityType.MODIFIER_GROUP, group.id(), group.code(), reason));
             }
         }
     }
@@ -482,11 +475,16 @@ public class CatalogValidator {
     /**
      * Everything the rules need, loaded once.
      *
+     * @param defaultLocale    the brand's own default language on the catalog's locale
+     *                         vocabulary (the server's when the brand has chosen none)
+     * @param fallbackLocale   {@code horecaos.catalog.default-locale}: where an entity with
+     *                         no name in {@code defaultLocale} may have one instead
      * @param pricedVariantIds contributed by pricing; catalog does not own money
      * @param displayableMedia contributed by media; catalog does not own bytes
      */
     public record Snapshot(
             String defaultLocale,
+            String fallbackLocale,
             List<Product> products,
             List<Variant> variants,
             Map<UUID, List<Variant>> variantsByProduct,
@@ -548,14 +546,26 @@ public class CatalogValidator {
             return translations.containsKey(translationKey(type, entityId, locale));
         }
 
+        /** Whether the entity has a name in the brand's default locale or, failing that, the catalog's fallback. */
+        public boolean hasName(EntityType type, UUID entityId) {
+            return hasTranslation(type, entityId, defaultLocale) || hasTranslation(type, entityId, fallbackLocale);
+        }
+
         /**
          * Resolves a name by ADR 0016's fallback order: requested locale, then
-         * the brand default. Publication refuses to proceed without the default,
-         * so a published item always has at least one name.
+         * the brand default, then the catalog's fallback. Publication refuses to
+         * proceed without a name in one of the last two, so a published item
+         * always has at least one name.
          */
         public @Nullable LocalizedText text(EntityType type, UUID entityId, String locale) {
             LocalizedText requested = translations.get(translationKey(type, entityId, locale));
-            return requested != null ? requested : translations.get(translationKey(type, entityId, defaultLocale));
+            if (requested != null) {
+                return requested;
+            }
+            LocalizedText brandDefault = translations.get(translationKey(type, entityId, defaultLocale));
+            return brandDefault != null
+                    ? brandDefault
+                    : translations.get(translationKey(type, entityId, fallbackLocale));
         }
 
         public static String translationKey(EntityType type, UUID entityId, String locale) {

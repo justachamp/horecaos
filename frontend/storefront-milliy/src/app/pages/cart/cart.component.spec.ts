@@ -32,6 +32,9 @@ function line(overrides: Partial<CartResponseItem> = {}): CartResponseItem {
 class FakeUiCartService {
   readonly items = signal<CartResponseItem[]>([]);
   readonly error = signal<string | null>(null);
+  readonly errorKey = signal<string | null>(null);
+  readonly priceRefusalKey = signal<string | null>(null);
+  deliveryUnresolvedMessage = (): string | null => null;
   totalItemsCount = () => this.items().reduce((sum, i) => sum + i.quantity, 0);
   subtotalFormatted = () => '25 000 so\'m';
   deliveryFee = () => '10 000 so\'m';
@@ -138,5 +141,124 @@ describe('CartComponent', () => {
     (fixture.nativeElement.querySelector('.cta') as HTMLButtonElement).click();
 
     expect(navigateSpy).toHaveBeenCalledWith(['/checkout']);
+  });
+});
+
+describe('CartComponent -- failures and unavailable lines say why', () => {
+  it('a load failure with a specific reason names it under the headline', async () => {
+    const fake = new FakeUiCartService();
+    fake.error.set('errors.offline');
+    fake.errorKey.set('errors.offline');
+    const { fixture } = await setUp(fake);
+
+    expect(fixture.nativeElement.textContent).toContain('cart.loadError');
+    expect(fixture.nativeElement.querySelector('[data-testid="cart-error-detail"]')?.textContent).toContain(
+      'errors.offline',
+    );
+  });
+
+  it('a load failure with only the generic sentence adds no second, redundant line', async () => {
+    const fake = new FakeUiCartService();
+    fake.error.set('errors.generic');
+    fake.errorKey.set('errors.generic');
+    const { fixture } = await setUp(fake);
+
+    expect(fixture.nativeElement.querySelector('[data-testid="cart-error-detail"]')).toBeNull();
+  });
+
+  it('a refused quantity change shows its sentence over the basket instead of failing silently', async () => {
+    const fake = new FakeUiCartService();
+    fake.items.set([line()]);
+    const { fixture } = await setUp(fake);
+    expect(fixture.nativeElement.querySelector('[data-testid="cart-error"]')).toBeNull();
+
+    fake.errorKey.set('errors.reason.itemUnavailable');
+    fixture.detectChanges();
+
+    const alert = fixture.nativeElement.querySelector('[data-testid="cart-error"]') as HTMLElement;
+    expect(alert.textContent).toContain('errors.reason.itemUnavailable');
+    expect(alert.getAttribute('role')).toBe('alert');
+  });
+
+  it('explains an unresolved delivery fee beside the delivery line', async () => {
+    const fake = new FakeUiCartService();
+    fake.items.set([line()]);
+    fake.deliveryUnresolvedMessage = () => 'errors.reason.outOfZone';
+    const { fixture } = await setUp(fake);
+
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="delivery-unresolved"]')?.textContent,
+    ).toContain('errors.reason.outOfZone');
+  });
+
+  it('marks a line that has gone out of its sale window, and says that rather than "sold out"', async () => {
+    const fake = new FakeUiCartService();
+    fake.items.set([line({ item_id: 'a', active: false, unavailableReason: 'OUT_OF_SALE_WINDOW' })]);
+    const { fixture } = await setUp(fake);
+
+    const note = fixture.nativeElement.querySelector('[data-testid="cart-line-unavailable"]');
+    expect(note?.textContent).toContain('errors.reason.itemOutOfSaleWindow');
+    expect(fixture.nativeElement.querySelector('.line')?.classList).toContain('is-unavailable');
+  });
+
+  it('marks a line that has sold out', async () => {
+    const fake = new FakeUiCartService();
+    fake.items.set([line({ item_id: 'a', active: false, unavailableReason: 'SOLD_OUT' })]);
+    const { fixture } = await setUp(fake);
+
+    const note = fixture.nativeElement.querySelector('[data-testid="cart-line-unavailable"]');
+    expect(note?.textContent).toContain('errors.reason.itemUnavailable');
+  });
+
+  it('leaves an ordinary line unmarked', async () => {
+    const fake = new FakeUiCartService();
+    fake.items.set([line()]);
+    const { fixture } = await setUp(fake);
+
+    expect(fixture.nativeElement.querySelector('[data-testid="cart-line-unavailable"]')).toBeNull();
+    expect(fixture.nativeElement.querySelector('.line')?.classList).not.toContain('is-unavailable');
+  });
+});
+
+describe('CartComponent -- a basket the platform would not price', () => {
+  it('says why the total is a dash, over the basket, without turning the page into a load error', async () => {
+    const fake = new FakeUiCartService();
+    fake.items.set([line({ active: false, unavailableReason: 'OUT_OF_SALE_WINDOW' })]);
+    fake.priceRefusalKey.set('errors.reason.itemOutOfSaleWindow');
+    const { fixture } = await setUp(fake);
+
+    const note = fixture.nativeElement.querySelector('[data-testid="cart-pricing-error"]') as HTMLElement;
+    expect(note.textContent).toContain('errors.reason.itemOutOfSaleWindow');
+    expect(note.getAttribute('role')).toBe('alert');
+    expect(fixture.nativeElement.textContent).not.toContain('cart.loadError');
+    expect(fixture.nativeElement.querySelector('.line')).not.toBeNull();
+  });
+
+  it('shows no pricing note for a basket that priced', async () => {
+    const fake = new FakeUiCartService();
+    fake.items.set([line()]);
+    const { fixture } = await setUp(fake);
+
+    expect(fixture.nativeElement.querySelector('[data-testid="cart-pricing-error"]')).toBeNull();
+  });
+
+  it('does not offer checkout while a line cannot be bought, and offers it again once that line is gone', async () => {
+    const fake = new FakeUiCartService();
+    fake.items.set([
+      line({ item_id: 'a' }),
+      line({ item_id: 'b', active: false, unavailableReason: 'OUT_OF_SALE_WINDOW' }),
+    ]);
+    const { fixture, router } = await setUp(fake);
+    const navigateSpy = vi.spyOn(router, 'navigate');
+    const cta = fixture.nativeElement.querySelector('.cta') as HTMLButtonElement;
+
+    expect(cta.disabled).toBe(true);
+    cta.click();
+    expect(navigateSpy).not.toHaveBeenCalled();
+
+    fake.items.set([line({ item_id: 'a' })]);
+    fixture.detectChanges();
+
+    expect((fixture.nativeElement.querySelector('.cta') as HTMLButtonElement).disabled).toBe(false);
   });
 });

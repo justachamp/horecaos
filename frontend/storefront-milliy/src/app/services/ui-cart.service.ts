@@ -3,7 +3,7 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 import { ApiClient } from '../core/api/api-client';
 import { APP_CONFIG } from '../core/config/app-config';
 import { CustomerApi } from '../core/api/customer-api';
-import { HorecaOSApiError, messageKeyFor } from '../core/api/problem-details';
+import { HorecaOSApiError, messageKeyFor, reasonMessageKey } from '../core/api/problem-details';
 import type { CartResponse, CartResponseItem, CartResponseModifierSelection } from '../types/cart.types';
 import {
   CartService,
@@ -17,6 +17,7 @@ import { MenuService, type PublishedModifierGroup } from './menu.service';
 import { LangService } from './lang.service';
 import { DeliverySelectionService } from './delivery-selection.service';
 import { TranslateService } from './translate.service';
+import { variantAvailability } from '../utils/item-availability';
 
 const FALLBACK_IMAGE = '/assets/logo/Logo-sq.png';
 
@@ -74,7 +75,20 @@ export class UiCartService {
   readonly cartData = signal<CartResponse | null>(null);
 
   readonly loading = signal(false);
-  readonly error = signal<string | null>(null);
+  /**
+   * The translation key of the last cart failure, or null. Set from the platform's
+   * own answer -- a refusal's business `reason` first, then its ADR 0031 code
+   * (see {@link failureKey}) -- so a screen can name the specific problem and a
+   * caller that only has a boolean can ask "why" afterwards.
+   */
+  readonly errorKey = signal<string | null>(null);
+
+  /** {@link errorKey}, in the customer's language; recomputed when the language changes. */
+  readonly error = computed<string | null>(() => {
+    this.translate.current();
+    const key = this.errorKey();
+    return key ? this.translate.get(key) : null;
+  });
   readonly updating = signal(false);
 
   /** The last pricing answer, or null when the cart has not been priced. */
@@ -98,16 +112,37 @@ export class UiCartService {
     this.items().reduce((sum, item) => sum + item.quantity, 0),
   );
 
+  /**
+   * The platform's own total, or a dash while the cart holds no price -- never
+   * a zero. A basket with lines and a total of 0 reads as free, so a cart the
+   * platform refused to price (a dish gone out of its sale window, a variant
+   * off the menu, a dropped connection) shows "unknown" and, beside it,
+   * {@link priceRefusalKey} says why.
+   */
   readonly totalAmount = computed(() => {
     this.translate.current();
     const total = this.priced()?.totalMinor;
-    return total != null ? this.formatPrice(total) : this.getZeroPrice();
+    return total != null ? this.formatPrice(total) : UNRESOLVED;
   });
 
+  /** The platform's own subtotal, or a dash when the cart holds no price (see {@link totalAmount}). */
   readonly subtotalFormatted = computed(() => {
     this.translate.current();
-    return this.formatPrice(this.priced()?.subtotalMinor ?? 0);
+    const subtotal = this.priced()?.subtotalMinor;
+    return subtotal != null ? this.formatPrice(subtotal) : UNRESOLVED;
   });
+
+  /**
+   * The translation key of why the basket could not be priced, or null when it
+   * was priced (or has nothing to price).
+   *
+   * Deliberately not {@link errorKey}: a basket the platform will not price is
+   * still a basket the customer must see, and the screens read a non-null
+   * `errorKey` after `load()` as "the basket could not be read at all". The
+   * reason comes from the refusal itself, so a line that has left its sale
+   * window reads as that and not as "something went wrong".
+   */
+  readonly priceRefusalKey = signal<string | null>(null);
 
   readonly totalWithDelivery = computed(() => this.totalAmount());
 
@@ -143,18 +178,19 @@ export class UiCartService {
   });
 
   /**
-   * A preview of what delivery will cost, from `GET .../delivery-fee`
+   * A preview of what delivery will cost, from `POST .../delivery-fee`
    * (`DeliveryFeeController.quote`) -- unauthenticated, like the menu, and
    * priced against a point rather than against the cart, so it is available
    * before the cart's own destination is ever set.
    *
-   * Three states, and each is shown as itself rather than folded into the
-   * others:
-   * - no delivery destination chosen yet, or this is not a delivery cart: a
-   *   dash, because a zero here would read as free delivery;
-   * - chosen but outside every zone this branch delivers to: the platform's
-   *   own refusal, honestly, and never re-homed to "delivery unavailable"
-   *   generically -- the reason is what the customer needs to act on;
+   * Two states, and neither is a zero:
+   * - no price to show -- not a delivery cart, no destination chosen yet, or
+   *   the platform said no (outside every zone, no tariff, past the tariff's
+   *   reach, ...): a dash, because a zero here would read as free delivery.
+   *   *Why* there is no price is {@link deliveryUnresolvedMessage}, read
+   *   separately so a template can show it as an explanation beside the line
+   *   -- the platform's own reason, never re-homed to one generic "delivery
+   *   unavailable";
    * - resolved: the fee itself.
    */
   readonly deliveryFee = computed(() => {
@@ -163,13 +199,46 @@ export class UiCartService {
       return UNRESOLVED;
     }
     const quote = this.deliveryFeeQuote();
-    if (!quote) {
+    if (!quote || !quote.available) {
       return UNRESOLVED;
     }
-    if (!quote.available) {
-      return this.translate.get('cart.deliveryNotServiceable');
-    }
     return this.formatPrice(quote.feeMinor ?? 0);
+  });
+
+  /**
+   * Why the delivery fee is not a price, in the customer's language, or `null`
+   * when there is nothing to explain -- not a delivery cart, no preview to read
+   * (no destination chosen, an address with no marker, or the read failed), or
+   * the fee is resolved.
+   *
+   * Read from the preview's `outcome` (`DeliveryFeeOutcome`: `OUT_OF_ZONE`,
+   * `OUTSIDE_CATCHMENT`, `NO_TARIFF`, `BEYOND_MAX_DISTANCE`,
+   * `LOCATION_NOT_LOCATED`), which is the stable code the controller documents
+   * as the one a storefront branches on. Its `reasonCode` is the resolver's
+   * granular evidence string (`NO_ZONE_COVERS_ADDRESS`, `NO_TARIFF_CONFIGURED`,
+   * ...) and is not in the vocabulary a checkout refusal uses -- mapping it
+   * would read every real refusal as "we couldn't work out the fee".
+   *
+   * The outcome goes through the same map a checkout refusal uses, so the
+   * sentence beside the delivery line and the one under the order button agree.
+   * The preview never reports a below-minimum basket: the resolver does not
+   * compare the basket against the zone's floor, the pricing engine does, at
+   * checkout, and a refusal there arrives as `DELIVERY_MINIMUM_BASKET_NOT_MET`.
+   * An outcome this build has no sentence for reads as the honest "we couldn't
+   * work out the fee", never as the raw code.
+   */
+  readonly deliveryUnresolvedMessage = computed<string | null>(() => {
+    this.translate.current();
+    if (this.fulfillmentMode() !== 'DELIVERY') {
+      return null;
+    }
+    const quote = this.deliveryFeeQuote();
+    if (!quote || quote.available) {
+      return null;
+    }
+    return this.translate.get(
+      reasonMessageKey(quote.outcome) ?? 'errors.reason.deliveryFeeUnresolved',
+    );
   });
 
   /** No packaging charge exists on the platform, so there is nothing to state. */
@@ -229,7 +298,7 @@ export class UiCartService {
     }
 
     this.updating.set(true);
-    this.error.set(null);
+    this.errorKey.set(null);
     try {
       const location = this.locationId();
       this.carts.discard(location);
@@ -242,8 +311,8 @@ export class UiCartService {
         });
       }
       await this.project(this.carts.cart());
-    } catch {
-      this.error.set(this.translate.get('errors.generic'));
+    } catch (failure) {
+      this.fail(failure);
     } finally {
       this.updating.set(false);
     }
@@ -257,12 +326,12 @@ export class UiCartService {
    */
   async load(): Promise<void> {
     this.loading.set(true);
-    this.error.set(null);
+    this.errorKey.set(null);
     try {
       const cart = await this.carts.ensure(this.locationId(), this.fulfillmentMode(), false);
       await this.project(cart);
-    } catch {
-      this.error.set(this.translate.get('errors.generic'));
+    } catch (failure) {
+      this.fail(failure);
     } finally {
       this.loading.set(false);
     }
@@ -277,15 +346,19 @@ export class UiCartService {
    *        (`CartService.lineKeyFor`), so "osh" and "osh with extra meat" are
    *        two lines and never one whose modifiers depend on which request
    *        landed last.
+   * @returns whether the platform took the line. On false, {@link errorKey}
+   *          names why -- a sale-window or sold-out refusal, an expired basket,
+   *          a dropped connection -- so the caller can say so instead of
+   *          carrying on as if the dish were in the basket.
    */
   async add(
     variantId: string,
     quantity = 1,
     note?: string,
     modifierOptionIds?: readonly string[],
-  ): Promise<void> {
+  ): Promise<boolean> {
     this.updating.set(true);
-    this.error.set(null);
+    this.errorKey.set(null);
     try {
       await this.carts.ensure(this.locationId(), this.fulfillmentMode(), true);
       const cart = await this.carts.putLine({
@@ -295,8 +368,10 @@ export class UiCartService {
         modifierOptionIds,
       });
       await this.project(cart);
-    } catch {
-      this.error.set(this.translate.get('errors.generic'));
+      return true;
+    } catch (failure) {
+      this.fail(failure);
+      return false;
     } finally {
       this.updating.set(false);
     }
@@ -317,7 +392,7 @@ export class UiCartService {
    */
   async setQuantity(item: CartResponseItem, quantity: number): Promise<void> {
     this.updating.set(true);
-    this.error.set(null);
+    this.errorKey.set(null);
     try {
       const cart =
         quantity <= 0
@@ -328,8 +403,8 @@ export class UiCartService {
               modifierOptionIds: item.modifierOptionIds,
             });
       await this.project(cart);
-    } catch {
-      this.error.set(this.translate.get('errors.generic'));
+    } catch (failure) {
+      this.fail(failure);
     } finally {
       this.updating.set(false);
     }
@@ -350,11 +425,12 @@ export class UiCartService {
   /** Empties the basket, one line at a time; the platform has no clear call. */
   async clearCart(): Promise<void> {
     this.updating.set(true);
+    this.errorKey.set(null);
     try {
       const cart = await this.carts.clear();
       await this.project(cart);
-    } catch {
-      this.error.set(this.translate.get('errors.generic'));
+    } catch (failure) {
+      this.fail(failure);
     } finally {
       this.updating.set(false);
     }
@@ -368,9 +444,10 @@ export class UiCartService {
     try {
       const priced = await this.carts.price();
       this.priced.set(priced);
+      this.priceRefusalKey.set(null);
       return priced;
-    } catch {
-      this.error.set(this.translate.get('errors.generic'));
+    } catch (failure) {
+      this.fail(failure);
       return null;
     }
   }
@@ -413,8 +490,8 @@ export class UiCartService {
     try {
       const cart = await this.carts.removePromoCode();
       await this.project(cart);
-    } catch {
-      this.promoError.set(this.translate.get('errors.generic'));
+    } catch (failure) {
+      this.promoError.set(this.promoErrorMessage(failure));
     } finally {
       this.promoBusy.set(false);
     }
@@ -428,9 +505,13 @@ export class UiCartService {
       if (key) {
         return this.translate.get(key);
       }
-      return this.translate.get(messageKeyFor(failure));
     }
-    return this.translate.get('errors.generic');
+    return this.translate.get(failureKey(failure));
+  }
+
+  /** Records a failure as the specific sentence the customer should read. */
+  private fail(failure: unknown): void {
+    this.errorKey.set(failureKey(failure));
   }
 
   /**
@@ -488,6 +569,7 @@ export class UiCartService {
     this.carts.discard(this.locationId());
     this.cartData.set(null);
     this.priced.set(null);
+    this.priceRefusalKey.set(null);
     this.deliveryFeeQuote.set(null);
   }
 
@@ -510,6 +592,7 @@ export class UiCartService {
     if (!cart || cart.lines.length === 0) {
       this.cartData.set(null);
       this.priced.set(null);
+      this.priceRefusalKey.set(null);
       this.deliveryFeeQuote.set(null);
       return;
     }
@@ -523,21 +606,30 @@ export class UiCartService {
     //
     // Best effort: an unpriced item or a withdrawn price book makes pricing
     // refuse, and that must not stop the customer seeing what is in their
-    // basket. The total then stays unknown, which is the honest reading.
+    // basket. The total then reads as unknown (a dash, see `totalAmount`) and
+    // the refusal's own reason is kept in `priceRefusalKey` for the screens.
+    this.priceRefusalKey.set(null);
     try {
       this.priced.set(await this.carts.price());
-    } catch {
+    } catch (failure) {
       this.priced.set(null);
+      this.priceRefusalKey.set(failureKey(failure));
     }
 
     const menu = await this.menu.menu(this.lang.langId(), cart.locationId);
-    const byVariant = new Map<string, { name: string; image: string | null; price: number }>();
+    const byVariant = new Map<
+      string,
+      { name: string; image: string | null; price: number; orderable: boolean; onSaleNow: boolean }
+    >();
     for (const product of menu.products) {
       for (const variant of product.variants) {
         byVariant.set(variant.variantId, {
           name: product.name,
           image: product.imageUrls[0] ?? null,
           price: variant.amountMinor ?? 0,
+          orderable: variant.orderable,
+          // See MenuService.toMenuItem: absent means on sale.
+          onSaleNow: variant.onSaleNow !== false,
         });
       }
     }
@@ -571,6 +663,14 @@ export class UiCartService {
               : null;
           })
           .filter((selection): selection is CartResponseModifierSelection => selection !== null);
+        // Row 4.2g / rows 4.4c-d: the menu was just read, so this is the
+        // platform's current word on whether this line can still be sold.
+        // A line the customer added earlier can have gone out of its window or
+        // sold out since; it stays visible, marked, rather than vanishing.
+        const availability = variantAvailability({
+          active: known.orderable,
+          onSaleNow: known.onSaleNow,
+        });
         const projected: CartResponseItem = {
           variant_id: line.variantId,
           // The line key, which is what an update or a removal addresses. The
@@ -580,7 +680,8 @@ export class UiCartService {
           name: known.name,
           image: known.image ?? FALLBACK_IMAGE,
           price: known.price,
-          active: true,
+          active: availability === 'AVAILABLE',
+          ...(availability === 'AVAILABLE' ? {} : { unavailableReason: availability }),
           quantity: line.quantity,
           // Write-only on the platform; only its existence is reported.
           note: null,
@@ -655,14 +756,14 @@ export class UiCartService {
           anonymous: true,
         },
       );
-      this.deliveryFeeQuote.set({ available: view.available, feeMinor: view.feeMinor });
+      this.deliveryFeeQuote.set({
+        available: view.available,
+        feeMinor: view.feeMinor,
+        outcome: view.outcome,
+      });
     } catch {
       this.deliveryFeeQuote.set(null);
     }
-  }
-
-  private getZeroPrice(): string {
-    return this.formatPrice(0);
   }
 
   /** Public: also used by screens that render a line total or a discount amount. */
@@ -673,10 +774,18 @@ export class UiCartService {
   }
 }
 
-/** The two facts a screen needs from `DeliveryFeeController.DeliveryFeeView`. */
+/**
+ * What a screen needs from `DeliveryFeeController.DeliveryFeeView`: whether and
+ * how much, and -- when not -- why. The why is the `outcome` (`OUT_OF_ZONE`,
+ * `NO_TARIFF`, ...), a machine code that is only ever mapped to a sentence,
+ * never shown (see {@link UiCartService.deliveryUnresolvedMessage}). The view's
+ * own `reasonCode` is deliberately not carried: it is the resolver's granular
+ * evidence string and no sentence is keyed on it.
+ */
 export interface DeliveryFeeQuote {
   readonly available: boolean;
   readonly feeMinor: number | null;
+  readonly outcome: string;
 }
 
 /** `DeliveryFeeController.DeliveryFeeView`, transcribed from the controller. */
@@ -690,6 +799,19 @@ interface DeliveryFeeView {
   readonly freeDeliveryFromMinor: number | null;
   readonly distanceMeters: number | null;
   readonly distanceSource: string | null;
+}
+
+/**
+ * The translation key for a cart failure.
+ *
+ * A platform answer resolves through {@link messageKeyFor} -- its business
+ * `reason` first (`ITEM_OUT_OF_SALE_WINDOW`, `SOLD_OUT`, `CART_EXPIRED`, ...),
+ * then its ADR 0031 code -- so the customer reads what actually went wrong.
+ * Anything that is not a platform answer (a thrown `Error`, a programming
+ * slip) is the one generic sentence: there is nothing more honest to say.
+ */
+function failureKey(failure: unknown): string {
+  return failure instanceof HorecaOSApiError ? messageKeyFor(failure) : 'errors.generic';
 }
 
 /**

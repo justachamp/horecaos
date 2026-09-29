@@ -37,4 +37,34 @@ public class JdbcQrChannelSource implements QrChannelSource {
                 """).param("tenantId", tenantId).query(String.class).list();
         return codes.size() == 1 ? Optional.of(codes.getFirst()) : Optional.empty();
     }
+
+    @Override
+    public Optional<String> storefrontHostname(UUID tenantId) {
+        Optional<String> own = verifiedHostnameOf(tenantId, "QR_TABLE");
+        return own.isPresent() ? own : verifiedHostnameOf(tenantId, "WEB");
+    }
+
+    /**
+     * The one verified hostname among the tenant's active channels of this type,
+     * or empty for none or for several -- the same "exactly one answers" rule
+     * {@link #qrTableChannelCode} applies, for the same reason: with two
+     * candidates there is no telling which is the storefront the guest should
+     * reach.
+     */
+    private Optional<String> verifiedHostnameOf(UUID tenantId, String systemType) {
+        List<String> hostnames = jdbc.sql("""
+                SELECT h.hostname
+                FROM tenant.channel_hostnames h
+                JOIN tenant.sales_channels c ON c.tenant_id = h.tenant_id AND c.id = h.channel_id
+                WHERE h.tenant_id = :tenantId AND c.system_type = :systemType
+                  AND c.status = 'ACTIVE' AND h.verified
+                ORDER BY h.hostname
+                LIMIT 2
+                """)
+                .param("tenantId", tenantId)
+                .param("systemType", systemType)
+                .query(String.class)
+                .list();
+        return hostnames.size() == 1 ? Optional.of(hostnames.getFirst()) : Optional.empty();
+    }
 }

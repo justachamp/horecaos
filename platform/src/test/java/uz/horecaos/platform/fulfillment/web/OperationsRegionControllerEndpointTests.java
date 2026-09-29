@@ -32,6 +32,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.testcontainers.DockerClientFactory;
+import tools.jackson.databind.json.JsonMapper;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.PlatformRole;
 import uz.horecaos.platform.iam.infrastructure.authorization.RoleRegistrySynchronizer;
@@ -332,6 +333,241 @@ class OperationsRegionControllerEndpointTests {
                         .query(Long.class)
                         .single())
                 .isZero();
+    }
+
+    // ------------------------------------------------- row 10.12: per-locale names
+
+    private static final JsonMapper JSON = JsonMapper.builder().build();
+
+    /**
+     * Tashkent named in the platform triple (the contract keeps those three required; uz-Latn
+     * takes the default wording, as the console fills a language the tenant does not offer)
+     * and, beyond it, in a language only the translations table can hold.
+     */
+    private static final String TASHKENT_BY_LOCALE = """
+            {"code":"TASHKENT","displayNameRu":"Ташкент","displayNameUz":"Ташкент","displayNameEn":"Tashkent",
+             "displayNames":{"kaa":"Toshkent"},"centreLat":41.31,"centreLon":69.24,
+             "bboxSwLat":40.5,"bboxSwLon":68.5,"bboxNeLat":42.0,"bboxNeLon":70.0}
+            """;
+
+    @Test
+    void aRegionNamedPerLocaleWritesTheColumnsAndTheTableAndReadsBackMerged() throws Exception {
+        MvcResult created = mvc.perform(post(regionsPath(TENANT))
+                        .with(tokenFor(OWNER))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "region-names-create")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(TASHKENT_BY_LOCALE))
+                .andReturn();
+        assertThat(created.getResponse().getStatus()).isEqualTo(200);
+        UUID regionId = tenantRegionId();
+
+        assertThat(jdbc.sql("""
+                        SELECT display_name_ru || '|' || display_name_uz || '|' || display_name_en
+                          FROM fulfillment.regions WHERE id = :id
+                        """).param("id", regionId).query(String.class).single())
+                .isEqualTo("Ташкент|Ташкент|Tashkent");
+        assertThat(translationRows(regionId))
+                .as("written alongside the columns: the triple, and the language only the table can hold")
+                .containsOnly(
+                        Map.entry("ru", "Ташкент"),
+                        Map.entry("uz-Latn", "Ташкент"),
+                        Map.entry("en", "Tashkent"),
+                        Map.entry("kaa", "Toshkent"));
+
+        Map<String, Object> listed = onlyTenantRegion(
+                mvc.perform(get(regionsPath(TENANT)).with(tokenFor(OWNER))).andReturn());
+        assertThat(namesOf(listed))
+                .containsExactly(
+                        Map.entry("ru", "Ташкент"),
+                        Map.entry("uz-Latn", "Ташкент"),
+                        Map.entry("en", "Tashkent"),
+                        Map.entry("kaa", "Toshkent"));
+    }
+
+    @Test
+    void aStaleMirrorRowNeverShadowsTheColumnAndNoLocaleIsReportedTwice() throws Exception {
+        mvc.perform(post(regionsPath(TENANT))
+                .with(tokenFor(OWNER))
+                .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "region-mirror-create")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(TASHKENT));
+        UUID regionId = tenantRegionId();
+        jdbc.sql("""
+                UPDATE fulfillment.region_translations SET display_name = 'STALE MIRROR'
+                 WHERE region_id = :id AND locale = 'ru'
+                """).param("id", regionId).update();
+
+        Map<String, Object> listed = onlyTenantRegion(
+                mvc.perform(get(regionsPath(TENANT)).with(tokenFor(OWNER))).andReturn());
+
+        assertThat(namesOf(listed))
+                .as("the column is the source for a triple locale")
+                .containsExactly(
+                        Map.entry("ru", "Ташкент"), Map.entry("uz-Latn", "Toshkent"), Map.entry("en", "Tashkent"));
+    }
+
+    @Test
+    void aRewriteThatNamesOneLocaleNeverDeletesTheOthers() throws Exception {
+        mvc.perform(post(regionsPath(TENANT))
+                .with(tokenFor(OWNER))
+                .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "region-hidden-create")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(TASHKENT_BY_LOCALE.replace(
+                        "\"displayNameUz\":\"Ташкент\"", "\"displayNameUz\":\"Toshkent-uz\"")));
+        UUID regionId = tenantRegionId();
+
+        // The editor offers ru and en only. It sends the geography, those two names, and -- the
+        // contract keeps the platform triple required -- the uz-Latn name the region already has,
+        // unchanged. kaa is not named at all.
+        String rewrite = withExpectedVersion(
+                TASHKENT_BY_LOCALE
+                        .replace("\"displayNameRu\":\"Ташкент\"", "\"displayNameRu\":\"Ташкент (город)\"")
+                        .replace("\"displayNameUz\":\"Ташкент\"", "\"displayNameUz\":\"Toshkent-uz\"")
+                        .replace("\"displayNameEn\":\"Tashkent\"", "\"displayNameEn\":\"Tashkent city\"")
+                        .replace("\"displayNames\":{\"kaa\":\"Toshkent\"}", "\"displayNames\":{}"),
+                1);
+        MvcResult rewritten = mvc.perform(put(regionsPath(TENANT) + "/" + regionId)
+                        .with(tokenFor(OWNER))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "region-hidden-update")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(rewrite))
+                .andReturn();
+
+        assertThat(rewritten.getResponse().getStatus()).isEqualTo(204);
+        Map<String, Object> listed = onlyTenantRegion(
+                mvc.perform(get(regionsPath(TENANT)).with(tokenFor(OWNER))).andReturn());
+        assertThat(namesOf(listed))
+                .as("uz-Latn came back unchanged and kaa was not in the request: both survive")
+                .containsExactly(
+                        Map.entry("ru", "Ташкент (город)"),
+                        Map.entry("uz-Latn", "Toshkent-uz"),
+                        Map.entry("en", "Tashkent city"),
+                        Map.entry("kaa", "Toshkent"));
+        assertThat(jdbc.sql("SELECT display_name_uz FROM fulfillment.regions WHERE id = :id")
+                        .param("id", regionId)
+                        .query(String.class)
+                        .single())
+                .isEqualTo("Toshkent-uz");
+    }
+
+    @Test
+    void aPlatformRegionAnswersItsColumnsAlone() throws Exception {
+        UUID platformRegion = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO fulfillment.regions (id, tenant_id, code, display_name_ru, display_name_uz,
+                    display_name_en, centre_lat, centre_lon, bbox_sw_lat, bbox_sw_lon, bbox_ne_lat, bbox_ne_lon)
+                VALUES (:id, NULL, 'UZB', 'Узбекистан', 'Oʻzbekiston', 'Uzbekistan', 41.3, 69.2, 37, 56, 45.6, 73.2)
+                """).param("id", platformRegion).update();
+
+        MvcResult listed =
+                mvc.perform(get(regionsPath(TENANT)).with(tokenFor(OWNER))).andReturn();
+
+        List<Map<String, Object>> regions = JSON.readValue(listed.getResponse().getContentAsString(), List.class);
+        assertThat(regions).hasSize(1);
+        assertThat(regions.getFirst()).containsEntry("platform", true);
+        assertThat(namesOf(regions.getFirst()))
+                .containsExactly(
+                        Map.entry("ru", "Узбекистан"),
+                        Map.entry("uz-Latn", "Oʻzbekiston"),
+                        Map.entry("en", "Uzbekistan"));
+    }
+
+    @Test
+    void anotherTenantsRegionNamesAreInvisibleAndUntouchable() throws Exception {
+        mvc.perform(post(regionsPath(TENANT))
+                .with(tokenFor(OWNER))
+                .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "region-iso-create")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(TASHKENT_BY_LOCALE));
+        UUID regionId = tenantRegionId();
+
+        MvcResult foreignList = mvc.perform(get(regionsPath(OTHER_TENANT)).with(tokenFor(OTHER_TENANT_OWNER)))
+                .andReturn();
+        assertThat(foreignList.getResponse().getStatus()).isEqualTo(200);
+        assertThat(foreignList.getResponse().getContentAsString())
+                .as("the other tenant sees neither the region nor a name of it")
+                .isEqualTo("[]");
+
+        MvcResult foreignWrite = mvc.perform(put(regionsPath(OTHER_TENANT) + "/" + regionId)
+                        .with(tokenFor(OTHER_TENANT_OWNER))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "region-iso-write")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(withExpectedVersion(TASHKENT_BY_LOCALE.replace("Toshkent", "HIJACKED"), 1)))
+                .andReturn();
+        assertThat(foreignWrite.getResponse().getStatus()).isEqualTo(404);
+        assertThat(translationRows(regionId))
+                .containsOnly(
+                        Map.entry("ru", "Ташкент"),
+                        Map.entry("uz-Latn", "Ташкент"),
+                        Map.entry("en", "Tashkent"),
+                        Map.entry("kaa", "Toshkent"));
+    }
+
+    @Test
+    void theRegionEditorsLocaleSetIsTheUnionOfTheTenantsBrandsAndNeedsZoneRead() throws Exception {
+        // 'Alpha' sorts before the fixture's 'Brand', so Alpha is the first brand and its
+        // default (en) is the tenant's; 'Brand' configured nothing and so contributes the
+        // platform triple.
+        UUID alpha = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO tenant.brands (id, tenant_id, code, slug, display_name, status, version)
+                VALUES (:id, :tenantId, 'ALPHA', 'alpha', 'Alpha', 'ACTIVE', 0)
+                """).param("id", alpha).param("tenantId", TENANT).update();
+        jdbc.sql("""
+                INSERT INTO tenant.brand_locales (tenant_id, brand_id, locale, is_default)
+                VALUES (:tenantId, :brandId, 'en', true)
+                """).param("tenantId", TENANT).param("brandId", alpha).update();
+
+        MvcResult result = mvc.perform(get(regionsPath(TENANT) + "/locale-set").with(tokenFor(OWNER)))
+                .andReturn();
+
+        assertThat(result.getResponse().getStatus()).isEqualTo(200);
+        Map<String, Object> set = JSON.readValue(result.getResponse().getContentAsString(), Map.class);
+        assertThat(set)
+                .containsEntry("locales", List.of("en", "ru", "uz-Latn"))
+                .containsEntry("defaultLocale", "en")
+                .containsEntry("configured", true);
+
+        MvcResult brandScoped = mvc.perform(
+                        get(regionsPath(TENANT) + "/locale-set").with(tokenFor(BRAND_MANAGER)))
+                .andReturn();
+        assertThat(brandScoped.getResponse().getStatus())
+                .as("a region is tenant-wide, so its editor's locale set is read at TENANT scope")
+                .isEqualTo(403);
+        MvcResult foreign = mvc.perform(get(regionsPath(TENANT) + "/locale-set").with(tokenFor(OTHER_TENANT_OWNER)))
+                .andReturn();
+        assertThat(foreign.getResponse().getStatus()).isEqualTo(403);
+    }
+
+    private UUID tenantRegionId() {
+        return jdbc.sql("SELECT id FROM fulfillment.regions WHERE tenant_id = :tenantId")
+                .param("tenantId", TENANT)
+                .query(UUID.class)
+                .single();
+    }
+
+    private Map<String, String> translationRows(UUID regionId) {
+        Map<String, String> rows = new java.util.LinkedHashMap<>();
+        jdbc.sql(
+                        "SELECT locale, display_name FROM fulfillment.region_translations WHERE region_id = :id ORDER BY locale")
+                .param("id", regionId)
+                .query((rs, n) -> rows.put(rs.getString("locale"), rs.getString("display_name")))
+                .list();
+        return rows;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> onlyTenantRegion(MvcResult listResult) throws Exception {
+        assertThat(listResult.getResponse().getStatus()).isEqualTo(200);
+        List<Map<String, Object>> regions =
+                JSON.readValue(listResult.getResponse().getContentAsString(), List.class);
+        assertThat(regions).hasSize(1);
+        return regions.getFirst();
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, String> namesOf(Map<String, Object> region) {
+        return java.util.Objects.requireNonNull((Map<String, String>) region.get("displayNames"));
     }
 
     private Map<String, Long> auditActionCounts() {

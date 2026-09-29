@@ -5,6 +5,7 @@ import { ApiClient } from '../../core/api/api-client';
 import { BrandScope } from '../../core/api/catalog-paths';
 import { deliveryZonePaths } from '../../core/api/delivery-paths';
 import { command } from '../../core/api/idempotency';
+import { LabelsByLocale } from '../../core/i18n/locale-labels';
 
 /** Mirrors `ServiceZoneController.ZoneSummaryResponse`. */
 export interface ZoneSummaryResponse {
@@ -15,6 +16,8 @@ export interface ZoneSummaryResponse {
   readonly displayNameRu: string;
   readonly displayNameUz: string;
   readonly displayNameEn: string;
+  /** Every language the zone has a name in (row 10.12), the platform triple first, each once. */
+  readonly displayNames?: LabelsByLocale;
   readonly status: string;
   readonly activeVersion?: number | null;
   readonly priority?: number | null;
@@ -53,9 +56,18 @@ export interface ZoneVersionResponse {
 export interface CreateZoneRequest {
   readonly role: 'DELIVERY' | 'CATCHMENT';
   readonly code: string;
+  /** The platform triple's names — still *required*, see `platformColumns`. */
   readonly displayNameRu: string;
   readonly displayNameUz: string;
   readonly displayNameEn: string;
+  /** The name per locale (row 10.12), additive: the way to name a language beyond the triple. */
+  readonly displayNames: LabelsByLocale;
+}
+
+/** `OperationsServiceZoneController.ZoneNamesResponse`. */
+export interface ZoneNamesResponse {
+  readonly zoneId: string;
+  readonly displayNames: LabelsByLocale;
 }
 
 export interface ZoneView {
@@ -184,6 +196,24 @@ export class DeliveryZonesApi {
       this.api.post<CreateZoneRequest, ZoneView>(
         deliveryZonePaths.zoneCreate(scope),
         command(request),
+      ),
+    );
+  }
+
+  /**
+   * Writes the zone's name in each locale in `displayNames` and no other
+   * (row 10.12): a locale left out keeps its name, so an editor that offers
+   * only the brand's supported languages never deletes the rest.
+   */
+  async rename(
+    scope: BrandScope,
+    zoneId: string,
+    displayNames: LabelsByLocale,
+  ): Promise<ZoneNamesResponse> {
+    return firstValueFrom(
+      this.api.put<{ displayNames: LabelsByLocale }, ZoneNamesResponse>(
+        deliveryZonePaths.zoneNames(scope, zoneId),
+        command({ displayNames }),
       ),
     );
   }

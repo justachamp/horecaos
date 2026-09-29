@@ -31,6 +31,7 @@ import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
 import uz.horecaos.platform.media.api.MediaAssetId;
 import uz.horecaos.platform.support.CommercialDefaults;
 import uz.horecaos.platform.support.TestDatabase;
+import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcBrandLocaleLookup;
 
 /**
  * {@code CatalogQueryController}'s read side, over the same tables {@code
@@ -794,6 +795,230 @@ class CatalogQueryServiceTests {
                 .param("slug", code.toLowerCase(Locale.ROOT))
                 .update();
         return locationId;
+    }
+
+    // ------------------------------------------- row 10.12: the brand's own default
+
+    /** A query service that resolves names through the brand's real {@code tenant.brand_locales} rows. */
+    private CatalogQueryService brandAwareQuery() {
+        return new CatalogQueryService(store, new JdbcBrandLocaleLookup(jdbc), LOCALE);
+    }
+
+    private void brandSupports(UUID tenantId, UUID brandId, String defaultLocale, String... others) {
+        insertBrandLocale(tenantId, brandId, defaultLocale, true);
+        for (String other : others) {
+            insertBrandLocale(tenantId, brandId, other, false);
+        }
+    }
+
+    private void insertBrandLocale(UUID tenantId, UUID brandId, String locale, boolean isDefault) {
+        jdbc.sql("""
+                INSERT INTO tenant.brand_locales (tenant_id, brand_id, locale, is_default)
+                VALUES (:tenantId, :brandId, :locale, :isDefault)
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("locale", locale)
+                .param("isDefault", isDefault)
+                .update();
+    }
+
+    @Test
+    @DisplayName("a brand whose default is ru sees its categories named in ru, not in the server's uz")
+    void categoriesResolveInTheBrandsOwnDefaultLocale() {
+        UUID catalogId = authoring.createCatalog(TENANT, BRAND, "MAIN", "Asosiy menyu", LOCALE);
+        UUID hot = authoring.createCategory(TENANT, BRAND, catalogId, null, "HOT", "Issiq", LOCALE, 1);
+        authoring.translate(TENANT, BRAND, EntityType.CATEGORY, hot, "ru", "Горячее", "Горячие блюда");
+        brandSupports(TENANT, BRAND, "ru", "uz-Latn");
+
+        CatalogQueryService.CategorySummary category = brandAwareQuery().categories(TENANT, BRAND, catalogId).stream()
+                .filter(c -> c.categoryId().equals(hot))
+                .findFirst()
+                .orElseThrow();
+
+        assertThat(category.name())
+                .as("the brand chose ru; a read that still resolves horecaos.catalog.default-locale "
+                        + "(uz) would answer 'Issiq' here")
+                .isEqualTo("Горячее");
+        assertThat(category.description()).isEqualTo("Горячие блюда");
+        assertThat(query.categories(TENANT, BRAND, catalogId).stream()
+                        .filter(c -> c.categoryId().equals(hot))
+                        .findFirst()
+                        .orElseThrow()
+                        .name())
+                .as("control: the config-only service still answers the server's locale")
+                .isEqualTo("Issiq");
+    }
+
+    @Test
+    @DisplayName("a brand default of uz-Latn reads the catalog's own 'uz' rows")
+    void uzLatnMapsOntoTheCatalogsUzLocale() {
+        UUID catalogId = authoring.createCatalog(TENANT, BRAND, "MAIN", "Asosiy menyu", "uz");
+        UUID hot = authoring.createCategory(TENANT, BRAND, catalogId, null, "HOT", "Issiq", "uz", 1);
+        authoring.translate(TENANT, BRAND, EntityType.CATEGORY, hot, "ru", "Горячее", null);
+        brandSupports(TENANT, BRAND, "uz-Latn", "ru");
+
+        assertThat(brandAwareQuery().categories(TENANT, BRAND, catalogId))
+                .filteredOn(c -> c.categoryId().equals(hot))
+                .singleElement()
+                .extracting(CatalogQueryService.CategorySummary::name)
+                .as("catalog.translations names Uzbek 'uz', tenant.brand_locales names it 'uz-Latn'")
+                .isEqualTo("Issiq");
+    }
+
+    @Test
+    @DisplayName("a brand that has chosen no default falls back to the server's configured locale")
+    void aBrandWithNoDefaultFallsBackToTheServersLocale() {
+        UUID catalogId = authoring.createCatalog(TENANT, BRAND, "MAIN", "Asosiy menyu", LOCALE);
+        UUID hot = authoring.createCategory(TENANT, BRAND, catalogId, null, "HOT", "Issiq", LOCALE, 1);
+        authoring.translate(TENANT, BRAND, EntityType.CATEGORY, hot, "ru", "Горячее", null);
+        // No tenant.brand_locales row at all: "not configured yet", never "supports nothing".
+
+        assertThat(brandAwareQuery().categories(TENANT, BRAND, catalogId))
+                .filteredOn(c -> c.categoryId().equals(hot))
+                .singleElement()
+                .extracting(CatalogQueryService.CategorySummary::name)
+                .isEqualTo("Issiq");
+    }
+
+    @Test
+    @DisplayName("an entity named only in the server's locale keeps its name when the brand picks another default")
+    void aNameOnlyInTheServersLocaleIsNotLostToTheBrandsDefault() {
+        // A menu imported or sampled in the server's locale writes only 'uz'. The
+        // moment its brand chooses ru as default, those rows must still read as
+        // names, not fall to bare codes.
+        UUID catalogId = authoring.createCatalog(TENANT, BRAND, "MAIN", "Asosiy menyu", LOCALE);
+        UUID imported = authoring.createCategory(TENANT, BRAND, catalogId, null, "IMPORTED", "Yuklangan", LOCALE, 1);
+        UUID named = authoring.createCategory(TENANT, BRAND, catalogId, null, "NAMED", "Nomlangan", LOCALE, 2);
+        authoring.translate(TENANT, BRAND, EntityType.CATEGORY, named, "ru", "Названо", null);
+        brandSupports(TENANT, BRAND, "ru");
+
+        List<CatalogQueryService.CategorySummary> categories = brandAwareQuery().categories(TENANT, BRAND, catalogId);
+
+        assertThat(categories)
+                .filteredOn(c -> c.categoryId().equals(imported))
+                .singleElement()
+                .extracting(CatalogQueryService.CategorySummary::name)
+                .isEqualTo("Yuklangan");
+        assertThat(categories)
+                .filteredOn(c -> c.categoryId().equals(named))
+                .singleElement()
+                .extracting(CatalogQueryService.CategorySummary::name)
+                .as("the brand's own default still wins where it has a name")
+                .isEqualTo("Названо");
+    }
+
+    @Test
+    @DisplayName("the description a rename resends is the brand default's own, never borrowed from another locale")
+    void aDescriptionIsNeverBorrowedAcrossLocales() {
+        UUID catalogId = authoring.createCatalog(TENANT, BRAND, "MAIN", "Asosiy menyu", LOCALE);
+        UUID hot = authoring.createCategory(TENANT, BRAND, catalogId, null, "HOT", "Issiq", LOCALE, 1);
+        authoring.translate(TENANT, BRAND, EntityType.CATEGORY, hot, "uz", "Issiq", "Issiq taomlar");
+        brandSupports(TENANT, BRAND, "ru");
+
+        assertThat(brandAwareQuery().categories(TENANT, BRAND, catalogId))
+                .filteredOn(c -> c.categoryId().equals(hot))
+                .singleElement()
+                .satisfies(c -> {
+                    assertThat(c.name()).isEqualTo("Issiq");
+                    assertThat(c.description())
+                            .as("a rename writes name AND description into ru; copying the uz description "
+                                    + "across would mix languages")
+                            .isNull();
+                });
+    }
+
+    @Test
+    @DisplayName("products, catalogs and modifier groups resolve in the brand's default locale too")
+    void everyListReadFollowsTheBrandsDefault() {
+        UUID catalogId = authoring.createCatalog(TENANT, BRAND, "MAIN", "Asosiy menyu", LOCALE);
+        authoring.translate(TENANT, BRAND, EntityType.CATALOG, catalogId, "ru", "Основное меню", null);
+        var plov = authoring.createProduct(
+                TENANT, BRAND, catalogId, "PLOV", "Osh", null, LOCALE, "SKU-PLOV", "PIECE", UNCLASSIFIED, ACTOR);
+        authoring.translate(TENANT, BRAND, EntityType.PRODUCT, plov.productId(), "ru", "Плов", null);
+        brandSupports(TENANT, BRAND, "ru");
+        CatalogQueryService brandAware = brandAwareQuery();
+
+        assertThat(brandAware.catalogs(TENANT, BRAND))
+                .extracting(CatalogQueryService.CatalogSummary::name)
+                .containsExactly("Основное меню");
+        assertThat(brandAware.products(TENANT, BRAND, catalogId, null, 10, null, null))
+                .extracting(CatalogQueryService.ProductSummary::name)
+                .containsExactly("Плов");
+    }
+
+    @Test
+    @DisplayName("the fiscal coverage list names an entity only in the server's locale when the brand default is ru")
+    void fiscalCoverageFallsBackToTheServersLocaleForNames() {
+        // A menu imported or sampled in the server's locale writes only 'uz'; its brand
+        // then picks ru. The unclassified list must still name every node -- with no name
+        // the console shows the delivery-fee label for a dish and the operator cannot
+        // tell which one needs an IKPU/MXIK code.
+        UUID catalogId = authoring.createCatalog(TENANT, BRAND, "MAIN", "Asosiy menyu", LOCALE);
+        UUID hot = authoring.createCategory(TENANT, BRAND, catalogId, null, "HOT", "Issiq", LOCALE, 1);
+        var imported = authoring.createProduct(
+                TENANT, BRAND, catalogId, "PLOV", "Osh", null, LOCALE, "SKU-PLOV", "PIECE", UNCLASSIFIED, ACTOR);
+        var named = authoring.createProduct(
+                TENANT,
+                BRAND,
+                catalogId,
+                "LAGMAN",
+                "Lag'mon",
+                null,
+                LOCALE,
+                "SKU-LAGMAN",
+                "PIECE",
+                UNCLASSIFIED,
+                ACTOR);
+        authoring.translate(TENANT, BRAND, EntityType.PRODUCT, named.productId(), "ru", "Лагман", null);
+        authoring.placeProductInCategory(TENANT, BRAND, hot, imported.productId(), 1);
+        UUID groupId =
+                authoring.createModifierGroup(TENANT, BRAND, "EXTRAS", "Qo'shimchalar", LOCALE, false, 0, 3, false);
+        UUID cheese = authoring.addModifierOption(
+                TENANT, BRAND, groupId, "CHEESE", "Pishloq", LOCALE, null, 1, 1, UNCLASSIFIED, ACTOR);
+        brandSupports(TENANT, BRAND, "ru");
+
+        List<CatalogQueryService.FiscalCoverageNode> nodes =
+                brandAwareQuery().fiscalCoverage(TENANT, BRAND).nodes();
+
+        UUID importedVariant = store.variantsForProduct(TENANT, BRAND, imported.productId())
+                .getFirst()
+                .id();
+        UUID namedVariant = store.variantsForProduct(TENANT, BRAND, named.productId())
+                .getFirst()
+                .id();
+        assertThat(nodes)
+                .filteredOn(node -> node.nodeId().equals(importedVariant))
+                .singleElement()
+                .satisfies(node -> {
+                    assertThat(node.name()).as("named only in uz").isEqualTo("Osh");
+                    assertThat(node.categoryName())
+                            .as("category named only in uz")
+                            .isEqualTo("Issiq");
+                });
+        assertThat(nodes)
+                .filteredOn(node -> node.nodeId().equals(namedVariant))
+                .singleElement()
+                .satisfies(node -> assertThat(node.name())
+                        .as("the brand's own default still wins where it has a name")
+                        .isEqualTo("Лагман"));
+        assertThat(nodes)
+                .filteredOn(node -> node.nodeId().equals(cheese))
+                .singleElement()
+                .satisfies(node -> assertThat(node.name()).isEqualTo("Pishloq"));
+    }
+
+    @Test
+    @DisplayName("another tenant's brand default never leaks in: a brand id under the wrong tenant answers empty")
+    void aBrandDefaultIsTenantScoped() {
+        brandSupports(OTHER_TENANT, OTHER_BRAND, "en");
+        JdbcBrandLocaleLookup lookup = new JdbcBrandLocaleLookup(jdbc);
+
+        assertThat(lookup.brandDefaultLocale(OTHER_TENANT, OTHER_BRAND)).contains("en");
+        assertThat(lookup.brandDefaultLocale(TENANT, OTHER_BRAND))
+                .as("TENANT names OTHER_TENANT's brand id -- a lookup that matched on brand id alone "
+                        + "would answer 'en'")
+                .isEmpty();
     }
 
     private void insertTenantAndBrand(UUID tenantId, UUID brandId, String tenantSlug, String brandCode) {

@@ -36,8 +36,35 @@ export interface DineInBill {
   readonly orderIds: readonly string[];
 }
 
+/**
+ * A placed order that has not yet been confirmed onto its table's bill.
+ *
+ * Only ids and a clock reading -- no name, phone, address or token -- so it is
+ * safe to keep in `localStorage` (ADR 0029).
+ */
+export interface PendingRound {
+  readonly sessionId: string;
+  readonly orderId: string;
+  /** Epoch milliseconds when checkout succeeded on this device. */
+  readonly queuedAt: number;
+}
+
+/** What one pass over a session's pending rounds achieved. */
+export interface RoundFlush {
+  /** The bill as of the last round that landed, or null if none did. */
+  readonly bill: DineInBill | null;
+  /** Rounds still queued: the platform could not be reached, or the guest must sign in again. */
+  readonly pending: number;
+  /** Rounds the platform refused for good in this pass -- they are dropped, not retried. */
+  readonly abandoned: number;
+}
+
 const GUEST_TOKEN_HEADER = 'X-Dine-In-Token';
 const STORAGE_KEY = 'horecaos_dinein_admission';
+const PENDING_ROUNDS_KEY = 'horecaos_dinein_pending_rounds';
+/** A table's evening is over long before this; an older entry is stale, not pending. */
+const PENDING_ROUND_TTL_MS = 24 * 60 * 60 * 1000;
+const PENDING_ROUND_LIMIT = 20;
 
 /**
  * The guest side of ADR 0047's QR dine-in flow: exchanging a scanned table
@@ -72,6 +99,8 @@ export class DineInService {
   private readonly api = inject(ApiClient);
 
   private readonly admissionSignal = signal<DineInAdmission | null>(this.restore());
+  private readonly pendingRoundsSignal = signal<readonly PendingRound[]>(this.restorePendingRounds());
+  private readonly flushesInFlight = new Map<string, Promise<RoundFlush>>();
 
   /** The current table's admission, or null once it has expired or nothing
    * has been scanned this visit. A plain read of the clock on every call,
@@ -161,6 +190,131 @@ export class DineInService {
     );
   }
 
+  /**
+   * Remembers, on this device, that `orderId` was placed at the table of
+   * `sessionId` and still has to be attached to its bill.
+   *
+   * Called *before* the attach request, straight after checkout succeeded.
+   * A guest order reaches `dinein.session_orders` -- the row the kitchen
+   * ticket's table chip, the order board and the running bill all read --
+   * only through {@link attachRound}, and checkout gives that order no table
+   * of its own. So the order id is the one thing that ties this order to its
+   * table: it is held here, where a lost response, a dropped connection or a
+   * reload cannot discard it, until the platform has confirmed the attach.
+   */
+  queueRound(sessionId: string, orderId: string): void {
+    const kept = this.pendingRoundsSignal().filter(
+      (round) => !(round.sessionId === sessionId && round.orderId === orderId),
+    );
+    this.setPendingRounds([...kept, { sessionId, orderId, queuedAt: Date.now() }].slice(-PENDING_ROUND_LIMIT));
+  }
+
+  /**
+   * How many placed orders at `sessionId` are still waiting to be confirmed
+   * onto the bill. Reactive: reads the signal, so a `computed()` follows it.
+   */
+  pendingRoundCount(sessionId: string): number {
+    const now = Date.now();
+    return this.pendingRoundsSignal().filter(
+      (round) => round.sessionId === sessionId && now - round.queuedAt < PENDING_ROUND_TTL_MS,
+    ).length;
+  }
+
+  /**
+   * Tries to attach every queued round of `sessionId`, oldest first.
+   *
+   * A round leaves the queue when the platform confirms it (the call is
+   * idempotent -- a round already on the bill answers with the bill) or
+   * refuses it for good (a 4xx that a second attempt cannot change: the
+   * session closed, the order is not this table's). Anything that might
+   * succeed later keeps it queued: no connection, a 5xx, a rate limit, or a
+   * 401 -- the guest token ended or the customer session must be renewed,
+   * and both are things the guest can fix. The pass stops at the first such
+   * failure rather than hammering an unreachable platform once per round.
+   *
+   * A call that arrives while a pass is running waits for it and then makes
+   * its own, so a round queued after that pass began is not left behind.
+   */
+  flushPendingRounds(sessionId: string): Promise<RoundFlush> {
+    const running = this.flushesInFlight.get(sessionId);
+    if (running) {
+      return running.then(() => this.flushPendingRounds(sessionId));
+    }
+    const pass = this.attachQueuedRounds(sessionId).finally(() => this.flushesInFlight.delete(sessionId));
+    this.flushesInFlight.set(sessionId, pass);
+    return pass;
+  }
+
+  private async attachQueuedRounds(sessionId: string): Promise<RoundFlush> {
+    const now = Date.now();
+    let bill: DineInBill | null = null;
+    let abandoned = 0;
+    for (const round of this.pendingRoundsSignal()) {
+      if (round.sessionId !== sessionId) {
+        continue;
+      }
+      if (now - round.queuedAt >= PENDING_ROUND_TTL_MS) {
+        this.dropPendingRound(round);
+        continue;
+      }
+      try {
+        bill = await this.attachRound(round.sessionId, round.orderId);
+        this.dropPendingRound(round);
+      } catch (failure) {
+        if (isFinalRefusal(failure)) {
+          this.dropPendingRound(round);
+          abandoned++;
+          continue;
+        }
+        break;
+      }
+    }
+    return { bill, pending: this.pendingRoundCount(sessionId), abandoned };
+  }
+
+  private dropPendingRound(round: PendingRound): void {
+    this.setPendingRounds(
+      this.pendingRoundsSignal().filter(
+        (other) => !(other.sessionId === round.sessionId && other.orderId === round.orderId),
+      ),
+    );
+  }
+
+  private setPendingRounds(rounds: readonly PendingRound[]): void {
+    this.pendingRoundsSignal.set(rounds);
+    safely(() =>
+      rounds.length === 0
+        ? localStorage.removeItem(PENDING_ROUNDS_KEY)
+        : localStorage.setItem(PENDING_ROUNDS_KEY, JSON.stringify(rounds)),
+    );
+  }
+
+  private restorePendingRounds(): readonly PendingRound[] {
+    const raw = safely(() => localStorage.getItem(PENDING_ROUNDS_KEY));
+    if (!raw) {
+      return [];
+    }
+    try {
+      const parsed = JSON.parse(raw) as unknown;
+      if (!Array.isArray(parsed)) {
+        return [];
+      }
+      const now = Date.now();
+      return parsed
+        .filter(
+          (entry): entry is PendingRound =>
+            !!entry &&
+            typeof entry.sessionId === 'string' &&
+            typeof entry.orderId === 'string' &&
+            typeof entry.queuedAt === 'number' &&
+            now - entry.queuedAt < PENDING_ROUND_TTL_MS,
+        )
+        .slice(-PENDING_ROUND_LIMIT);
+    } catch {
+      return [];
+    }
+  }
+
   /** True for the one refusal every dine-in endpoint gives a token the
    * platform no longer recognises (expired, or the table's code was
    * rotated) -- the caller's cue to send the guest back to scanning. */
@@ -199,6 +353,23 @@ export class DineInService {
       return null;
     }
   }
+}
+
+/**
+ * True when the platform answered and a second attempt cannot change its
+ * answer: a 4xx other than the three that are about the moment rather than
+ * the request -- 401 (a token to renew, see {@link DineInService.flushPendingRounds}),
+ * 408 and 429.
+ */
+function isFinalRefusal(failure: unknown): boolean {
+  return (
+    failure instanceof HorecaOSApiError &&
+    failure.status >= 400 &&
+    failure.status < 500 &&
+    failure.status !== 401 &&
+    failure.status !== 408 &&
+    failure.status !== 429
+  );
 }
 
 /**

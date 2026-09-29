@@ -54,6 +54,9 @@ class FakeTranslateService {
   get(key: string): string {
     return key;
   }
+  getWithParams(key: string, params?: Record<string, string | number>): string {
+    return params ? `${key}(${JSON.stringify(params)})` : key;
+  }
   current(): Record<string, unknown> {
     return {};
   }
@@ -219,6 +222,7 @@ describe('UiCartService project() (via load())', () => {
                 unitCode: null,
                 isDefault: true,
                 orderable: true,
+                onSaleNow: true,
                 amountMinor: 25_000,
                 remainingQuantity: null,
               },
@@ -336,6 +340,7 @@ describe('UiCartService delivery-fee preview (refreshDeliveryFee, via load())', 
                 unitCode: null,
                 isDefault: true,
                 orderable: true,
+                onSaleNow: true,
                 amountMinor: 1000,
                 remainingQuantity: null,
               },
@@ -347,9 +352,11 @@ describe('UiCartService delivery-fee preview (refreshDeliveryFee, via load())', 
     );
     delivery.addressId.mockReturnValue('addr-1');
     customerApi.address.mockResolvedValue(geocodedAddress());
+    // Copied from DeliveryFeeResolver, not invented: an address no zone covers
+    // is outcome OUT_OF_ZONE with the granular reason NO_ZONE_COVERS_ADDRESS.
     api.mutate.mockResolvedValue({
-      outcome: 'NOT_SERVICEABLE',
-      reasonCode: 'OUT_OF_ZONE',
+      outcome: 'OUT_OF_ZONE',
+      reasonCode: 'NO_ZONE_COVERS_ADDRESS',
       available: false,
       feeMinor: null,
       currency: null,
@@ -363,10 +370,19 @@ describe('UiCartService delivery-fee preview (refreshDeliveryFee, via load())', 
 
     expect(customerApi.address).toHaveBeenCalledWith('addr-1');
     const quote = service.deliveryFeeQuote() as DeliveryFeeQuote;
-    expect(quote).toEqual({ available: false, feeMinor: null });
-    // The dedicated "not serviceable" string, not the unresolved dash and
-    // not a fee of 0 (which would read as free delivery).
-    expect(service.deliveryFee()).toBe('cart.deliveryNotServiceable');
+    // The outcome travels with the quote instead of being dropped on the
+    // floor -- it is what the customer needs to act on. The granular
+    // reasonCode is not what the sentence is keyed on.
+    expect(quote).toEqual({
+      available: false,
+      feeMinor: null,
+      outcome: 'OUT_OF_ZONE',
+    });
+    // Neither a fee of 0 (which would read as free delivery) nor a generic
+    // "not serviceable" in the price slot: the slot stays the honest dash, and
+    // the specific sentence is explained beside it.
+    expect(service.deliveryFee()).toBe('—');
+    expect(service.deliveryUnresolvedMessage()).toBe('errors.reason.outOfZone');
   });
 
   it('resolves a normal fee when the address is serviceable', async () => {
@@ -378,7 +394,7 @@ describe('UiCartService delivery-fee preview (refreshDeliveryFee, via load())', 
     delivery.addressId.mockReturnValue('addr-1');
     customerApi.address.mockResolvedValue(geocodedAddress());
     api.mutate.mockResolvedValue({
-      outcome: 'OK',
+      outcome: 'RESOLVED',
       reasonCode: null,
       available: true,
       feeMinor: 12_000,
@@ -391,8 +407,13 @@ describe('UiCartService delivery-fee preview (refreshDeliveryFee, via load())', 
 
     await service.load();
 
-    expect(service.deliveryFeeQuote()).toEqual({ available: true, feeMinor: 12_000 });
-    expect(service.deliveryFee()).not.toBe('cart.deliveryNotServiceable');
+    expect(service.deliveryFeeQuote()).toEqual({
+      available: true,
+      feeMinor: 12_000,
+      outcome: 'RESOLVED',
+    });
+    expect(service.deliveryFee()).not.toBe('—');
+    expect(service.deliveryUnresolvedMessage()).toBeNull();
   });
 
   it('leaves the preview unresolved (not an error) when no destination has been chosen yet', async () => {
@@ -419,7 +440,7 @@ describe('UiCartService delivery-fee preview (refreshDeliveryFee, via load())', 
     delivery.addressId.mockReturnValue('addr-1');
     customerApi.address.mockResolvedValue(geocodedAddress());
     api.mutate.mockResolvedValue({
-      outcome: 'OK',
+      outcome: 'RESOLVED',
       reasonCode: null,
       available: true,
       feeMinor: 12_000,
@@ -518,5 +539,377 @@ describe('UiCartService.applyPromoCode / removePromoCode (ADR 0072)', () => {
     expect(carts.removePromoCode).toHaveBeenCalled();
     expect(service.appliedPromoCode()).toBeNull();
     expect(service.hasDiscount()).toBe(false);
+  });
+});
+
+/** A platform refusal the way `ApiClient` normalises it: code plus a business `reason`. */
+function refusal(reason: string, code = 'RESOURCE_CONFLICT', status = 409): HorecaOSApiError {
+  return new HorecaOSApiError({
+    status,
+    code,
+    detail: 'refused',
+    problem: { status, code, reason },
+  });
+}
+
+function offline(): HorecaOSApiError {
+  return new HorecaOSApiError({
+    status: 0,
+    code: 'NETWORK_UNREACHABLE',
+    detail: 'The request did not reach the platform.',
+  });
+}
+
+describe('UiCartService: every cart failure reaches the customer as the specific sentence', () => {
+  it('add: a sale-window refusal returns false and names the sale window, not "something went wrong"', async () => {
+    const { service, carts } = setUp();
+    carts.ensure.mockResolvedValue(baseCart());
+    carts.putLine.mockRejectedValue(refusal('ITEM_OUT_OF_SALE_WINDOW'));
+
+    const ok = await service.add('v1', 1);
+
+    expect(ok).toBe(false);
+    expect(service.errorKey()).toBe('errors.reason.itemOutOfSaleWindow');
+    // The fake TranslateService echoes the key, so this is the key the
+    // sentence resolves through -- never the raw reason code.
+    expect(service.error()).toBe('errors.reason.itemOutOfSaleWindow');
+  });
+
+  it('add: a sold-out refusal says the item just sold out', async () => {
+    const { service, carts } = setUp();
+    carts.ensure.mockResolvedValue(baseCart());
+    carts.putLine.mockRejectedValue(refusal('SOLD_OUT'));
+
+    expect(await service.add('v1', 1)).toBe(false);
+    expect(service.errorKey()).toBe('errors.reason.itemUnavailable');
+  });
+
+  it('add: success returns true and clears the last failure', async () => {
+    const { service, carts } = setUp();
+    carts.ensure.mockResolvedValue(baseCart());
+    carts.putLine.mockRejectedValueOnce(refusal('SOLD_OUT'));
+    await service.add('v1', 1);
+    expect(service.errorKey()).not.toBeNull();
+
+    const cart = baseCart({
+      lines: [{ lineKey: 'v1', variantId: 'v1', quantity: 1, hasCustomerNote: false }],
+    });
+    carts.putLine.mockResolvedValueOnce(cart);
+    carts.price.mockResolvedValue(pricedFor(cart));
+
+    expect(await service.add('v1', 1)).toBe(true);
+    expect(service.errorKey()).toBeNull();
+    expect(service.error()).toBeNull();
+  });
+
+  it('add: a failure that is not a platform answer stays the generic sentence', async () => {
+    const { service, carts } = setUp();
+    carts.ensure.mockRejectedValue(new Error('boom'));
+
+    expect(await service.add('v1', 1)).toBe(false);
+    expect(service.errorKey()).toBe('errors.generic');
+  });
+
+  it('add: a dropped connection says offline, so the customer knows to check their network', async () => {
+    const { service, carts } = setUp();
+    carts.ensure.mockResolvedValue(baseCart());
+    carts.putLine.mockRejectedValue(offline());
+
+    await service.add('v1', 1);
+
+    expect(service.errorKey()).toBe('errors.offline');
+  });
+
+  it('setQuantity: a refusal on a quantity change is named too', async () => {
+    const { service, carts } = setUp();
+    carts.putLine.mockRejectedValue(refusal('CART_EXPIRED'));
+    const item: CartResponseItem = {
+      variant_id: 'v1',
+      price: 5000,
+      item_id: 'v1',
+      name: 'Osh',
+      active: true,
+      image: null,
+      quantity: 1,
+      note: null,
+      modifierOptionIds: [],
+      modifiers: [],
+    };
+
+    await service.setQuantity(item, 2);
+
+    expect(service.errorKey()).toBe('errors.reason.cartExpired');
+  });
+
+  it('setQuantity: a stale cart version says the basket changed, not a generic failure', async () => {
+    const { service, carts } = setUp();
+    carts.removeLine.mockRejectedValue(
+      new HorecaOSApiError({ status: 409, code: 'STALE_VERSION', detail: 'stale' }),
+    );
+    const item = { variant_id: 'v1', item_id: 'v1' } as CartResponseItem;
+
+    await service.setQuantity(item, 0);
+
+    expect(service.errorKey()).toBe('errors.staleVersion');
+  });
+
+  it('load: a dropped connection says offline', async () => {
+    const { service, carts } = setUp();
+    carts.ensure.mockRejectedValue(offline());
+
+    await service.load();
+
+    expect(service.errorKey()).toBe('errors.offline');
+  });
+
+  it('clearCart: a refusal is named', async () => {
+    const { service, carts } = setUp();
+    carts.clear.mockRejectedValue(refusal('CART_NOT_EDITABLE'));
+
+    await service.clearCart();
+
+    expect(service.errorKey()).toBe('errors.reason.cartNotEditable');
+  });
+
+  it('switchFulfillmentMode: a branch that cannot take the new mode says so', async () => {
+    const { service, carts } = setUp();
+    carts.cart.set(
+      baseCart({
+        lines: [{ lineKey: 'v1', variantId: 'v1', quantity: 1, hasCustomerNote: false }],
+      }),
+    );
+    carts.create.mockRejectedValue(refusal('NOT_SERVICEABLE'));
+
+    await service.switchFulfillmentMode('PICKUP');
+
+    expect(service.errorKey()).toBe('errors.reason.notServiceable');
+  });
+
+  it('priceCart: returns null and keeps the refusal\'s own sentence for the checkout screen to show', async () => {
+    const { service, carts } = setUp();
+    carts.cart.set(baseCart());
+    carts.price.mockRejectedValue(refusal('DELIVERY_DESTINATION_REQUIRED'));
+
+    const priced = await service.priceCart();
+
+    expect(priced).toBeNull();
+    expect(service.errorKey()).toBe('errors.reason.destinationRequired');
+  });
+
+  it('removePromoCode: a refusal is named, not flattened to the generic sentence', async () => {
+    const { service, carts } = setUp();
+    carts.removePromoCode.mockRejectedValue(refusal('CART_NOT_EDITABLE'));
+
+    await service.removePromoCode();
+
+    expect(service.promoError()).toBe('errors.reason.cartNotEditable');
+  });
+});
+
+describe('UiCartService.deliveryUnresolvedMessage: why the fee preview is not a price', () => {
+  const quote = (overrides: Partial<DeliveryFeeQuote> = {}): DeliveryFeeQuote => ({
+    available: false,
+    feeMinor: null,
+    outcome: 'OUT_OF_ZONE',
+    ...overrides,
+  });
+
+  it('is null for a resolved fee', () => {
+    const { service } = setUp();
+    service.deliveryFeeQuote.set(quote({ available: true, feeMinor: 12_000, outcome: 'RESOLVED' }));
+
+    expect(service.deliveryUnresolvedMessage()).toBeNull();
+  });
+
+  it('is null when there is no preview to explain (no destination chosen, or the read failed)', () => {
+    const { service } = setUp();
+
+    expect(service.deliveryUnresolvedMessage()).toBeNull();
+  });
+
+  it('is null for a collection cart, whatever the preview last said', () => {
+    const { service } = setUp();
+    service.fulfillmentMode.set('PICKUP');
+    service.deliveryFeeQuote.set(quote());
+
+    expect(service.deliveryUnresolvedMessage()).toBeNull();
+  });
+
+  // Every refusal DeliveryFeeResolver can produce, by DeliveryFeeOutcome name
+  // (the field the storefront branches on), with the sentence it must read as.
+  it.each([
+    ['OUT_OF_ZONE', 'errors.reason.outOfZone'],
+    ['OUTSIDE_CATCHMENT', 'errors.reason.outOfZone'],
+    ['BEYOND_MAX_DISTANCE', 'errors.reason.outOfZone'],
+    ['NO_TARIFF', 'errors.reason.deliveryFeeUnresolved'],
+    ['LOCATION_NOT_LOCATED', 'errors.reason.deliveryFeeUnresolved'],
+  ])('maps the resolver outcome %s to its own sentence', (outcome, key) => {
+    const { service } = setUp();
+    service.deliveryFeeQuote.set(quote({ outcome }));
+
+    expect(service.deliveryUnresolvedMessage()).toBe(key);
+  });
+
+  it('never leaks an outcome this build has no sentence for', () => {
+    const { service } = setUp();
+    service.deliveryFeeQuote.set(quote({ outcome: 'SOMETHING_NEW' }));
+
+    expect(service.deliveryUnresolvedMessage()).toBe('errors.reason.deliveryFeeUnresolved');
+  });
+});
+
+describe('UiCartService project(): a line the menu no longer lets the customer buy is marked, with the reason (row 4.2g)', () => {
+  function productWith(orderable: boolean, onSaleNow: boolean) {
+    return {
+      productId: 'p1',
+      code: null,
+      name: 'Osh',
+      description: null,
+      mediaAssetIds: [],
+      imageUrls: [],
+      variants: [
+        {
+          variantId: 'v1',
+          sku: null,
+          unitCode: null,
+          isDefault: true,
+          orderable,
+          onSaleNow,
+          amountMinor: 25_000,
+          remainingQuantity: null,
+        },
+      ],
+      modifierGroupIds: [],
+    };
+  }
+
+  async function projected(orderable: boolean, onSaleNow: boolean) {
+    const { service, carts, menu } = setUp();
+    const cart = baseCart({
+      lines: [{ lineKey: 'v1', variantId: 'v1', quantity: 1, hasCustomerNote: false }],
+    });
+    carts.ensure.mockResolvedValue(cart);
+    carts.price.mockResolvedValue(pricedFor(cart));
+    menu.menu.mockResolvedValue(emptyMenu({ products: [productWith(orderable, onSaleNow)] }));
+    await service.load();
+    return service.cartData()?.items[0];
+  }
+
+  it('an ordinary line is active with no reason', async () => {
+    const item = await projected(true, true);
+
+    expect(item?.active).toBe(true);
+    expect(item?.unavailableReason).toBeUndefined();
+  });
+
+  it('a sold-out line is inactive and says sold out', async () => {
+    const item = await projected(false, true);
+
+    expect(item?.active).toBe(false);
+    expect(item?.unavailableReason).toBe('SOLD_OUT');
+  });
+
+  it('a line outside its sale window is inactive and says so -- not "sold out"', async () => {
+    const item = await projected(true, false);
+
+    expect(item?.active).toBe(false);
+    expect(item?.unavailableReason).toBe('OUT_OF_SALE_WINDOW');
+  });
+});
+
+describe('UiCartService project(): a refused pricing never renders as a zero total', () => {
+  function offWindowMenu() {
+    return emptyMenu({
+      products: [
+        {
+          productId: 'p1',
+          code: null,
+          name: 'Breakfast osh',
+          description: null,
+          mediaAssetIds: [],
+          imageUrls: [],
+          variants: [
+            {
+              variantId: 'v1',
+              sku: null,
+              unitCode: null,
+              isDefault: true,
+              orderable: true,
+              onSaleNow: false,
+              amountMinor: 45_000,
+              remainingQuantity: null,
+            },
+          ],
+          modifierGroupIds: [],
+        },
+      ],
+    });
+  }
+
+  function heldCart(): PlatformCart {
+    return baseCart({
+      lines: [{ lineKey: 'v1', variantId: 'v1', quantity: 1, hasCustomerNote: false }],
+    });
+  }
+
+  it('reads the subtotal and total as unknown, not free, when POST /pricing refuses during load()', async () => {
+    const { service, carts, menu } = setUp();
+    carts.ensure.mockResolvedValue(heldCart());
+    carts.price.mockRejectedValue(refusal('ITEM_OUT_OF_SALE_WINDOW'));
+    menu.menu.mockResolvedValue(offWindowMenu());
+
+    await service.load();
+
+    expect(service.priced()).toBeNull();
+    expect(service.totalAmount()).toBe('—');
+    expect(service.subtotalFormatted()).toBe('—');
+    // The refusal's own sentence is kept -- and it is not a load failure: the
+    // basket stays on screen, so errorKey (which turns the page into "could
+    // not be loaded") stays clear.
+    expect(service.priceRefusalKey()).toBe('errors.reason.itemOutOfSaleWindow');
+    expect(service.errorKey()).toBeNull();
+    expect(service.items()).toHaveLength(1);
+  });
+
+  it('names a dropped connection as such, not as a sale-window problem', async () => {
+    const { service, carts, menu } = setUp();
+    carts.ensure.mockResolvedValue(heldCart());
+    carts.price.mockRejectedValue(offline());
+    menu.menu.mockResolvedValue(offWindowMenu());
+
+    await service.load();
+
+    expect(service.priceRefusalKey()).toBe('errors.offline');
+    expect(service.totalAmount()).toBe('—');
+  });
+
+  it('forgets the refusal once the cart prices again', async () => {
+    const { service, carts, menu } = setUp();
+    const cart = heldCart();
+    carts.ensure.mockResolvedValue(cart);
+    carts.price.mockRejectedValueOnce(refusal('ITEM_OUT_OF_SALE_WINDOW'));
+    menu.menu.mockResolvedValue(offWindowMenu());
+    await service.load();
+    expect(service.priceRefusalKey()).not.toBeNull();
+
+    carts.price.mockResolvedValue(pricedFor(cart));
+    await service.load();
+
+    expect(service.priceRefusalKey()).toBeNull();
+    expect(service.totalAmount()).toBe(service.formatPrice(1000));
+  });
+
+  it('still reads the platform\'s own numbers once a price is held', async () => {
+    const { service, carts, menu } = setUp();
+    const cart = heldCart();
+    carts.ensure.mockResolvedValue(cart);
+    carts.price.mockResolvedValue(pricedFor(cart));
+    menu.menu.mockResolvedValue(emptyMenu());
+
+    await service.load();
+
+    expect(service.totalAmount()).toBe(service.formatPrice(1000));
+    expect(service.subtotalFormatted()).toBe(service.formatPrice(1000));
+    expect(service.priceRefusalKey()).toBeNull();
   });
 });

@@ -41,6 +41,7 @@ import {
   ValidationFinding,
   VariantAvailabilityRow,
   VariantDetail,
+  listResolutionLocale,
   toCatalogLocale,
 } from './catalog-domain';
 import { PricingApi } from './pricing-api';
@@ -55,6 +56,11 @@ import { CommentPresetsApi, PresetResponse } from '../settings/comment-presets/c
 import { ChannelView, SalesChannelsApi } from '../settings/sales-channels/sales-channels-api';
 
 const STATUSES: readonly CatalogStatus[] = ['DRAFT', 'ACTIVE', 'ARCHIVED'];
+
+/** What a list-everywhere click left unresolved (see `listingNoticeByVariant`). */
+type ListingNotice =
+  | { readonly kind: 'partial'; readonly listed: number; readonly candidate: number }
+  | { readonly kind: 'recountFailed' };
 
 type EditorTab =
   | 'BASIC'
@@ -103,22 +109,6 @@ const STATION_ROLES: readonly string[] = [
   'PACKING',
   'EXPO',
 ];
-
-/**
- * The catalog's own default locale (`CatalogSnapshotLoader`'s
- * `horecaos.catalog.default-locale`, `uz` — see `toCatalogLocale`'s doc).
- * `q-localized-field-group`'s default marker reads this, never the viewer's
- * own UI locale (`I18n.locale()`, `ru` by default) — the two are unrelated
- * defaults for unrelated things.
- *
- * Row 10.12: `editingLocales()` below always includes this locale even when
- * a brand's own `LocaleSet` does not, because `CatalogQueryService`'s list
- * reads (the products list, `defaultLocaleNames`) resolve every entity's
- * name in exactly this locale — an editor that could never write it would
- * leave those reads permanently falling back to the bare code for a brand
- * that narrowed its set away from `uz-Latn`.
- */
-const CATALOG_DEFAULT_LOCALE = 'uz';
 
 /**
  * `catalog.media_relations`' own primary key since V0223 (gap map row 4.2f):
@@ -219,10 +209,11 @@ const FINDING_LABEL_KEYS: Readonly<Partial<Record<string, MessageKey>>> = {
  * the editor on two different tabs with no relation to the brand's own
  * choice. {@link editingLocales} now reads `LocaleSet.locales()` — the
  * brand's own set, default first — and the editor opens on the brand's own
- * default locale instead. `CATALOG_DEFAULT_LOCALE` stays forced into the tab
- * set regardless (see its own doc): the list screens' name resolution needs
- * it writable even when a brand has not chosen it as a supported locale.
- * Every write here (`saveTranslation`, variant/modifier-option naming) has
+ * default locale instead. Batch 14: `CatalogQueryService` now resolves the
+ * list screens' names in that same brand default (falling back to the
+ * server's configured `uz` only for a brand with no set), so the tab set no
+ * longer needs a locale forced into it and the "default" marker follows
+ * {@link listLocale}. Every write here (`saveTranslation`, variant/modifier-option naming) has
  * always targeted exactly one `(entity, editingLocale())` pair and merged it
  * into the loaded `translations` map rather than replacing the map — so a
  * locale the brand no longer supports, and that this strip therefore no
@@ -266,18 +257,23 @@ export class ProductEditorPage implements OnInit {
   /**
    * Row 10.12: the brand's own supported locales (default first, mapped to
    * the catalog's plain `ru`/`uz`/`en` tag convention — see {@link
-   * toCatalogLocale}), always including {@link CATALOG_DEFAULT_LOCALE} even
-   * when the brand's own set does not (that constant's own doc explains
-   * why). A brand that has not configured a set at all still sees today's
-   * platform triple, since `LocaleSet.locales()` falls back to it.
+   * toCatalogLocale}). A brand that has not configured a set at all still sees
+   * today's platform triple, since `LocaleSet.locales()` falls back to it. The
+   * locale the list screens read ({@link listLocale}) is always among them.
    */
-  protected readonly editingLocales = computed<readonly string[]>(() => {
-    const brandLocales = this.localeSet.locales().map(toCatalogLocale);
-    return brandLocales.includes(CATALOG_DEFAULT_LOCALE)
-      ? brandLocales
-      : [...brandLocales, CATALOG_DEFAULT_LOCALE];
-  });
-  protected readonly catalogDefaultLocale = CATALOG_DEFAULT_LOCALE;
+  protected readonly editingLocales = computed<readonly string[]>(() =>
+    this.localeSet.locales().map(toCatalogLocale),
+  );
+
+  /**
+   * The catalog locale the list screens resolve this brand's names in —
+   * `q-localized-field-group`'s default marker. Never the viewer's own UI
+   * locale (`I18n.locale()`, `ru` by default): the two are unrelated
+   * defaults for unrelated things. See {@link listResolutionLocale}.
+   */
+  protected readonly listLocale = computed<string>(() =>
+    listResolutionLocale(this.localeSet.isConfigured(), this.localeSet.defaultLocale()),
+  );
   protected readonly activeTab = signal<EditorTab>('BASIC');
   protected readonly editingLocale = signal<string>('ru');
 
@@ -307,16 +303,30 @@ export class ProductEditorPage implements OnInit {
   protected readonly availabilityRows = signal<readonly VariantAvailabilityRow[]>([]);
 
   /**
-   * "Not listed at N branches" (gap map row 4.1): the default variant's own
-   * unlisted-branch count. `null` before the first load or when the count
-   * has never been fetched; `0` once every AVAILABLE offering of this
-   * variant has a stock item somewhere — the common case, so the banner
-   * stays hidden almost always. Scoped to the product's default variant
-   * only, the same "one variant per row" simplification `CatalogImportRow`'s
-   * own doc documents for the CSV import.
+   * "Not listed at N branches" (gap map row 4.1), per variant: how many
+   * branches offer each of this product's variants `AVAILABLE` without ever
+   * having listed it. A variant absent from the record, or at `0`, has
+   * nothing to list — the common case, so the banner stays hidden almost
+   * always. Batch 13 covered only the default variant; a second variant
+   * offered at a branch that never listed it stayed silent.
    */
-  protected readonly unlistedBranchCount = signal<number | null>(null);
-  protected readonly listingBackfillPending = signal(false);
+  protected readonly unlistedByVariant = signal<Readonly<Record<string, number>>>({});
+  /** The variants whose list-everywhere request is in flight; each button disables on its own. */
+  protected readonly listingPendingVariantIds = signal<ReadonlySet<string>>(new Set());
+  /**
+   * What the last list-everywhere click on a variant left unresolved, so a
+   * partial outcome or an unreadable recount is never silent. Absent means the
+   * click did everything it found and the recount agreed.
+   */
+  protected readonly listingNoticeByVariant = signal<Readonly<Record<string, ListingNotice>>>({});
+
+  /** The banner's rows: only variants with something to list, in the product's own variant order. */
+  protected readonly unlistedVariantRows = computed(() => {
+    const counts = this.unlistedByVariant();
+    return (this.product()?.variants ?? [])
+      .map((variant) => ({ variantId: variant.variantId, count: counts[variant.variantId] ?? 0 }))
+      .filter((row) => row.count > 0);
+  });
 
   protected readonly historyLoading = signal(false);
   protected readonly historyLoaded = signal(false);
@@ -629,42 +639,93 @@ export class ProductEditorPage implements OnInit {
     } catch {
       this.availabilityRows.set([]);
     }
-    void this.loadUnlistedBranchCount();
+    void this.loadUnlistedBranchCounts();
   }
 
-  private async loadUnlistedBranchCount(): Promise<void> {
-    const locationScope = this.location.scope();
-    const variantId = this.defaultVariantId();
-    if (!locationScope || !variantId) {
-      this.unlistedBranchCount.set(null);
+  /**
+   * Reads every variant's unlisted-branch count in parallel. Read-only banner:
+   * one variant's failed read just leaves that variant's row hidden, without
+   * interrupting the tab or hiding the other variants' rows.
+   */
+  private async loadUnlistedBranchCounts(): Promise<void> {
+    const product = this.product();
+    if (!product || !this.location.scope()) {
+      this.unlistedByVariant.set({});
       return;
     }
+    const counts = await Promise.all(
+      product.variants.map(
+        async (variant) =>
+          [variant.variantId, await this.readUnlistedBranchCount(variant.variantId)] as const,
+      ),
+    );
+    this.unlistedByVariant.set(Object.fromEntries(counts));
+  }
+
+  /** The banner's own read: a failed one hides that variant's row (nothing is claimed either way). */
+  private async readUnlistedBranchCount(variantId: string): Promise<number> {
+    return (await this.tryReadUnlistedBranchCount(variantId)) ?? 0;
+  }
+
+  /** `null` when the count could not be read, so a caller can tell "none left" from "could not tell". */
+  private async tryReadUnlistedBranchCount(variantId: string): Promise<number | null> {
+    const locationScope = this.location.scope();
+    if (!locationScope) {
+      return null;
+    }
     try {
-      const locationIds = await firstValueFrom(this.inventoryApi.unlistedLocations(locationScope, variantId));
-      this.unlistedBranchCount.set(locationIds.length);
+      const locationIds = await firstValueFrom(
+        this.inventoryApi.unlistedLocations(locationScope, variantId),
+      );
+      return locationIds.length;
     } catch {
-      // Read-only banner: a failure here just leaves it hidden rather than
-      // interrupting the tab the way `availabilityRows`'s own catch does.
-      this.unlistedBranchCount.set(null);
+      return null;
     }
   }
 
-  /** The Availability tab's own one-click action behind the "not listed at N branches" banner. */
-  protected async listAtMissingBranches(): Promise<void> {
+  /** The Availability tab's own one-click action behind one variant's "not listed at N branches" row. */
+  protected async listAtMissingBranches(variantId: string): Promise<void> {
     const locationScope = this.location.scope();
-    const variantId = this.defaultVariantId();
-    if (!locationScope || !variantId || this.listingBackfillPending()) {
+    if (!locationScope || this.listingPendingVariantIds().has(variantId)) {
       return;
     }
-    this.listingBackfillPending.set(true);
+    this.listingPendingVariantIds.update((pending) => new Set(pending).add(variantId));
+    this.setListingNotice(variantId, null);
     try {
-      await firstValueFrom(this.inventoryApi.backfillVariantListing(locationScope, variantId));
-      await this.loadUnlistedBranchCount();
+      const outcome = await firstValueFrom(
+        this.inventoryApi.backfillVariantListing(locationScope, variantId),
+      );
+      const remaining = await this.tryReadUnlistedBranchCount(variantId);
+      // A failed recount keeps the count already shown: dropping the row would
+      // tell the operator every branch is listed when nobody has checked.
+      if (remaining !== null) {
+        this.unlistedByVariant.update((counts) => ({ ...counts, [variantId]: remaining }));
+      }
+      if (outcome.listedCount < outcome.candidateCount) {
+        this.setListingNotice(variantId, {
+          kind: 'partial',
+          listed: outcome.listedCount,
+          candidate: outcome.candidateCount,
+        });
+      } else if (remaining === null) {
+        this.setListingNotice(variantId, { kind: 'recountFailed' });
+      }
     } catch (error) {
       this.handleSaveError(error);
     } finally {
-      this.listingBackfillPending.set(false);
+      this.listingPendingVariantIds.update((pending) => {
+        const next = new Set(pending);
+        next.delete(variantId);
+        return next;
+      });
     }
+  }
+
+  private setListingNotice(variantId: string, notice: ListingNotice | null): void {
+    this.listingNoticeByVariant.update((notices) => {
+      const { [variantId]: _previous, ...rest } = notices;
+      return notice === null ? rest : { ...rest, [variantId]: notice };
+    });
   }
 
   /**

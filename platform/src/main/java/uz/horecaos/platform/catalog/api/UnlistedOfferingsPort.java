@@ -2,6 +2,7 @@ package uz.horecaos.platform.catalog.api;
 
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 /**
  * The backfill read {@link OfferingBecameAvailable}'s listener cannot answer
@@ -43,4 +44,41 @@ public interface UnlistedOfferingsPort {
      *              but a cap keeps one call bounded regardless
      */
     List<UUID> unlistedLocationsForVariant(UUID tenantId, UUID brandId, UUID variantId, int limit);
+
+    /**
+     * The same set {@link #unlistedAvailableVariantsAtLocation} lists, described
+     * for a human (gap-map row 4.4c's stock-page report, and the backfill
+     * runbook's dry run): every variant this location offers {@code AVAILABLE}
+     * that inventory has never listed, with the name an operator recognises it
+     * by, plus the exact size of the backlog. Read-only — the action that
+     * clears it is the backfill.
+     *
+     * @param locale the locale to prefer for names; a product with no name in
+     *               it falls back to another locale, then to its product code,
+     *               so a row is never nameless
+     * @param limit  the most items to describe; {@link UnlistedOfferings#totalCount}
+     *               stays the exact backlog regardless
+     */
+    UnlistedOfferings describeUnlistedAvailableAtLocation(
+            UUID tenantId, UUID brandId, UUID locationId, String locale, int limit);
+
+    /**
+     * @param productName the product's name in the asked locale (or a fallback)
+     * @param variantName the variant's own name when it has one — a
+     *                    single-variant product usually does not
+     * @param sku         the variant's SKU when it has one
+     */
+    record UnlistedOffering(
+            UUID variantId,
+            String productName,
+            @Nullable String variantName,
+            @Nullable String sku) {}
+
+    /**
+     * @param totalCount every AVAILABLE, never-listed offering at the
+     *                   location — not just the {@code items} returned
+     * @param items      at most the asked {@code limit} of them, by product
+     *                   name then variant id
+     */
+    record UnlistedOfferings(int totalCount, List<UnlistedOffering> items) {}
 }

@@ -1,4 +1,11 @@
-import { ChangeDetectionStrategy, Component, type OnInit, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  type OnInit,
+  computed,
+  inject,
+  signal,
+} from '@angular/core';
 import { Router } from '@angular/router';
 
 import { IconComponent } from '../../shared/icon/icon.component';
@@ -36,6 +43,26 @@ export class CartComponent implements OnInit {
   private readonly router = inject(Router);
 
   protected readonly state = signal<LoadState>('loading');
+
+  /**
+   * The specific reason the basket could not be loaded, or null when there is
+   * nothing more to say than "it could not be loaded".
+   *
+   * The generic sentence is left out on purpose: printing "Something went
+   * wrong" under "The cart could not be loaded" says the same thing twice.
+   */
+  protected readonly loadErrorDetail = computed(() => {
+    const key = this.cart.errorKey();
+    return key && key !== 'errors.generic' ? key : null;
+  });
+
+  /**
+   * Checkout is offered only while every line can still be bought. A line the
+   * menu has marked unavailable (sold out, or outside its sale window) makes
+   * the platform refuse to price the whole basket, so the way forward is to
+   * remove it -- not to tap through to a checkout that cannot succeed.
+   */
+  protected readonly canCheckout = computed(() => this.cart.items().every((item) => item.active));
 
   ngOnInit(): void {
     void this.refresh();

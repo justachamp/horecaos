@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { LocationScope } from '../../../core/api/operations-paths';
 import { I18n } from '../../../core/i18n/i18n';
+import { encodeQrMatrix } from '../../../shared/ui/qr-encode';
 import {
   DineInApi,
   DineInSettingsView,
@@ -174,6 +175,89 @@ describe('FloorPlanPane', () => {
     );
     expect(host.querySelector('[data-testid="table-print-card-token"]')?.textContent).toContain(
       'plaintext-token-abc',
+    );
+  });
+
+  // Batch 14: the card used to encode only the bare token. It now encodes the
+  // absolute storefront address on the verified hostname the settings read
+  // carries, and warns when that read carries none.
+  async function issueQr(host: HTMLElement): Promise<void> {
+    host
+      .querySelector<HTMLElement>('[data-testid="table-token-tb1"]')!
+      .dispatchEvent(
+        new PointerEvent('pointerdown', { bubbles: true, clientX: 0, clientY: 0, pointerId: 1 }),
+      );
+    fixture.detectChanges();
+    const reasonInput = host.querySelector<HTMLInputElement>(
+      '[data-testid="floorplan-rotate-reason"]',
+    )!;
+    reasonInput.value = 'First issue for this table';
+    reasonInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    host.querySelector<HTMLButtonElement>('[data-testid="floorplan-rotate-button"]')!.click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+  }
+
+  const ROTATION: QrRotationView = {
+    tableId: 'tb1',
+    qrToken: 'plaintext-token-abc',
+    rotatedAt: '2026-09-14T12:00:00Z',
+    version: 2,
+    revokedGuestSessions: 0,
+  };
+
+  function darkModules(host: HTMLElement): string[] {
+    return Array.from(
+      host
+        .querySelector('[data-testid="table-print-card-qr"]')!
+        .querySelectorAll('rect[width="1"]'),
+    )
+      .map((cell) => `${cell.getAttribute('y')},${cell.getAttribute('x')}`)
+      .sort();
+  }
+
+  function modulesOf(text: string): string[] {
+    const cells: string[] = [];
+    encodeQrMatrix(text).modules.forEach((row, rowIndex) =>
+      row.forEach((dark, colIndex) => {
+        if (dark) {
+          cells.push(`${rowIndex},${colIndex}`);
+        }
+      }),
+    );
+    return cells.sort();
+  }
+
+  it('encodes the absolute storefront URL on the verified hostname the settings read carries', async () => {
+    const host = await render({
+      settings: () =>
+        Promise.resolve({ ...SETTINGS, storefrontHostname: 'acme.stores.horecaos.uz' }),
+      rotateQrToken: vi.fn().mockResolvedValue(ROTATION),
+    });
+
+    await issueQr(host);
+
+    expect(darkModules(host)).toEqual(
+      modulesOf('https://acme.stores.horecaos.uz/dine-in/plaintext-token-abc'),
+    );
+    expect(host.querySelector('[data-testid="table-print-card-host"]')?.textContent).toContain(
+      'acme.stores.horecaos.uz',
+    );
+    expect(host.querySelector('[data-testid="table-print-card-no-host"]')).toBeNull();
+  });
+
+  it('falls back to the bare token with a visible warning when the tenant has no verified hostname', async () => {
+    const host = await render({
+      settings: () => Promise.resolve({ ...SETTINGS, storefrontHostname: null }),
+      rotateQrToken: vi.fn().mockResolvedValue(ROTATION),
+    });
+
+    await issueQr(host);
+
+    expect(darkModules(host)).toEqual(modulesOf('plaintext-token-abc'));
+    expect(host.querySelector('[data-testid="table-print-card-no-host"]')?.textContent).toContain(
+      'No verified storefront address',
     );
   });
 

@@ -2,6 +2,7 @@ package uz.horecaos.platform.catalog.web;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -31,6 +32,8 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.testcontainers.DockerClientFactory;
+import tools.jackson.databind.json.JsonMapper;
+import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCommentPresetStore;
 import uz.horecaos.platform.iam.api.PlatformRole;
 import uz.horecaos.platform.iam.infrastructure.authorization.RoleRegistrySynchronizer;
 import uz.horecaos.platform.support.StubJwtIssuer;
@@ -57,6 +60,8 @@ import uz.horecaos.platform.support.TestDatabase;
 class CommentPresetControllerTests {
 
     private static final UUID TENANT = UUID.randomUUID();
+    private static final UUID OTHER_TENANT = UUID.randomUUID();
+    private static final JsonMapper JSON = JsonMapper.builder().build();
 
     /** Holds {@code catalog.read} only — the capability the sibling GET accepts, not what POST/PUT require. */
     private static final String READ_ONLY_STAFF = "comment-preset-http-read-only";
@@ -64,6 +69,8 @@ class CommentPresetControllerTests {
     private static final String NO_CATALOG_ACCESS = "comment-preset-http-no-catalog";
     /** Holds {@code catalog.author} (and {@code catalog.read}) — what POST/PUT actually require. */
     private static final String AUTHOR = "comment-preset-http-author";
+    /** The other tenant's owner: the isolation tests' second party. */
+    private static final String OTHER_TENANT_OWNER = "comment-preset-http-other-owner";
 
     @SuppressWarnings("NullAway")
     private static TestDatabase.Handle db;
@@ -97,6 +104,10 @@ class CommentPresetControllerTests {
     @SuppressWarnings("NullAway")
     private RoleRegistrySynchronizer roleRegistry;
 
+    @Autowired
+    @SuppressWarnings("NullAway")
+    private JdbcCommentPresetStore presetStore;
+
     @BeforeEach
     void reset() {
         jdbc.sql("TRUNCATE TABLE catalog.product_comment_presets, catalog.comment_presets CASCADE")
@@ -108,6 +119,11 @@ class CommentPresetControllerTests {
                     default_timezone, status, version)
                 VALUES (:id, 'comment-preset-http', 'Legal', 'Display', 'UZS', 'Asia/Tashkent', 'ACTIVE', 0)
                 """).param("id", TENANT).update();
+        jdbc.sql("""
+                INSERT INTO tenant.tenants (id, slug, legal_name, display_name, default_currency,
+                    default_timezone, status, version)
+                VALUES (:id, 'comment-preset-http-other', 'Legal', 'Display', 'UZS', 'Asia/Tashkent', 'ACTIVE', 0)
+                """).param("id", OTHER_TENANT).update();
 
         roleRegistry.synchronize();
         // LOCATION_MANAGER's own ScopeType is LOCATION, but a grant's stored
@@ -119,6 +135,7 @@ class CommentPresetControllerTests {
         grant(READ_ONLY_STAFF, PlatformRole.LOCATION_MANAGER);
         grant(NO_CATALOG_ACCESS, PlatformRole.COURIER_DISPATCHER);
         grant(AUTHOR, PlatformRole.TENANT_OWNER);
+        grantAt(OTHER_TENANT_OWNER, PlatformRole.TENANT_OWNER, OTHER_TENANT);
     }
 
     // ------------------------------------------------------------------- GET
@@ -348,6 +365,258 @@ class CommentPresetControllerTests {
                 .isEqualTo(1);
     }
 
+    // ------------------------------------------------- row 10.12: per-locale wording
+
+    @Test
+    @DisplayName(
+            "POST mirrors every label - the platform triple and a language beyond it - into the translations table")
+    void createMirrorsEveryLabelIntoTheTranslationsTable() throws Exception {
+        // The tenant offers ru and kaa only. The contract keeps labelUz/labelEn required
+        // (a published required request field cannot be relaxed), so the console names
+        // the two platform languages it does not offer with the default wording.
+        MvcResult result = mvc.perform(post(path())
+                        .with(tokenFor(AUTHOR))
+                        .header("Idempotency-Key", "comment-preset-labels-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"code":"NO_ONION","labelRu":"Без лука","labelUz":"Без лука","labelEn":"Без лука",
+                                 "posModifierCode":null,"sortOrder":0,"labels":{"kaa":"Piyazsiz"}}
+                                """))
+                .andReturn();
+
+        assertThat(result.getResponse().getStatus()).isEqualTo(200);
+        UUID presetId = presetIdByCode("NO_ONION");
+        assertThat(jdbc.sql(
+                                "SELECT label_ru || '|' || label_uz || '|' || label_en FROM catalog.comment_presets WHERE id = :id")
+                        .param("id", presetId)
+                        .query(String.class)
+                        .single())
+                .isEqualTo("Без лука|Без лука|Без лука");
+        assertThat(translationRows(presetId))
+                .as("written alongside the columns: the triple, and the language only the table can hold")
+                .containsOnly(
+                        Map.entry("ru", "Без лука"),
+                        Map.entry("uz-Latn", "Без лука"),
+                        Map.entry("en", "Без лука"),
+                        Map.entry("kaa", "Piyazsiz"));
+    }
+
+    @Test
+    @DisplayName("a locale outside the platform triple lives in the table and round-trips through the list")
+    void aLocaleOutsideTheTripleRoundTrips() throws Exception {
+        mvc.perform(post(path())
+                .with(tokenFor(AUTHOR))
+                .header("Idempotency-Key", "comment-preset-kaa-1")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"code":"NO_ONION","labelRu":"Без лука","labelUz":"Piyozsiz","labelEn":"No onion",
+                         "posModifierCode":null,"sortOrder":0,"labels":{"kaa":"Piyazsiz"}}
+                        """));
+
+        Map<String, Object> listed =
+                onlyPresetOf(mvc.perform(get(path()).with(tokenFor(AUTHOR))).andReturn());
+
+        assertThat(labelsOf(listed))
+                .containsExactly(
+                        Map.entry("ru", "Без лука"),
+                        Map.entry("uz-Latn", "Piyozsiz"),
+                        Map.entry("en", "No onion"),
+                        Map.entry("kaa", "Piyazsiz"));
+        assertThat(listed).containsEntry("labelRu", "Без лука").doesNotContainKey("labelKaa");
+    }
+
+    @Test
+    @DisplayName("a stale mirror row never shadows the column, and no locale is reported twice")
+    void aStaleMirrorNeverShadowsTheColumn() throws Exception {
+        UUID presetId = seedPreset("NO_ONION", "Без лука", "Piyozsiz", "No onion");
+        jdbc.sql("""
+                INSERT INTO catalog.comment_preset_translations (tenant_id, preset_id, locale, label)
+                VALUES (:t, :p, 'ru', 'STALE MIRROR'), (:t, :p, 'kaa', 'Piyazsiz')
+                """).param("t", TENANT).param("p", presetId).update();
+
+        Map<String, Object> listed =
+                onlyPresetOf(mvc.perform(get(path()).with(tokenFor(AUTHOR))).andReturn());
+
+        assertThat(labelsOf(listed))
+                .as("the column is the source for a triple locale; kaa comes from the table; each once")
+                .containsExactly(
+                        Map.entry("ru", "Без лука"),
+                        Map.entry("uz-Latn", "Piyozsiz"),
+                        Map.entry("en", "No onion"),
+                        Map.entry("kaa", "Piyazsiz"));
+    }
+
+    @Test
+    @DisplayName("an edit never deletes or rewrites a language beyond the triple that it does not name")
+    void anEditNeverDeletesAHiddenLocale() throws Exception {
+        // The editor shows only the locales the tenant supports; the preset also carries
+        // kaa wording the editor does not show, and uz-Latn wording it round-trips
+        // unchanged (the contract keeps the platform triple required). Editing en must
+        // leave both exactly as they were.
+        mvc.perform(post(path())
+                .with(tokenFor(AUTHOR))
+                .header("Idempotency-Key", "comment-preset-hidden-1")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"code":"NO_ONION","labelRu":"Без лука","labelUz":"Piyozsiz","labelEn":"No onion",
+                         "posModifierCode":null,"sortOrder":0,"labels":{"kaa":"Piyazsiz"}}
+                        """));
+        UUID presetId = presetIdByCode("NO_ONION");
+
+        MvcResult edited = mvc.perform(put(path() + "/" + presetId)
+                        .with(tokenFor(AUTHOR))
+                        .header("Idempotency-Key", "comment-preset-hidden-2")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"labelRu":"Без лука","labelUz":"Piyozsiz","labelEn":"No onion",
+                                 "posModifierCode":null,"sortOrder":2,"status":"ACTIVE","expectedVersion":1,
+                                 "labels":{"en":"Hold the onion"}}
+                                """))
+                .andReturn();
+
+        assertThat(edited.getResponse().getStatus()).isEqualTo(200);
+        Map<String, Object> answer = JSON.readValue(edited.getResponse().getContentAsString(), Map.class);
+        assertThat(labelsOf(answer))
+                .containsExactly(
+                        Map.entry("ru", "Без лука"),
+                        Map.entry("uz-Latn", "Piyozsiz"),
+                        Map.entry("en", "Hold the onion"),
+                        Map.entry("kaa", "Piyazsiz"));
+        assertThat(jdbc.sql(
+                                "SELECT label_ru || '|' || label_uz || '|' || label_en FROM catalog.comment_presets WHERE id = :id")
+                        .param("id", presetId)
+                        .query(String.class)
+                        .single())
+                .as("the columns of the locales the edit did not name are untouched, not blanked")
+                .isEqualTo("Без лука|Piyozsiz|Hold the onion");
+        assertThat(translationRows(presetId)).contains(Map.entry("kaa", "Piyazsiz"), Map.entry("uz-Latn", "Piyozsiz"));
+    }
+
+    @Test
+    @DisplayName("a bare 'uz' and a malformed locale are refused before they reach the table's CHECK")
+    void aBareUzAndAMalformedLocaleAreRefused() throws Exception {
+        for (String bad : List.of("uz", "RU_ru")) {
+            MvcResult refused = mvc.perform(post(path())
+                            .with(tokenFor(AUTHOR))
+                            .header("Idempotency-Key", "comment-preset-badlocale-" + bad)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {"code":"NO_ONION","labelRu":"Без лука","labelUz":"Piyozsiz","labelEn":"No onion",
+                                     "posModifierCode":null,"sortOrder":0,"labels":{"%s":"x"}}
+                                    """.formatted(bad)))
+                    .andReturn();
+
+            assertThat(refused.getResponse().getStatus()).as("locale %s", bad).isEqualTo(400);
+        }
+        assertThat(presetCount()).isZero();
+    }
+
+    @Test
+    @DisplayName("the locale set is the union of the tenant's brands, the first brand's default first")
+    void theLocaleSetIsTheUnionWithTheFirstBrandsDefault() throws Exception {
+        // 'Alpha' sorts before 'Beta' in the console's brand order, so Alpha's default wins.
+        UUID alpha = insertBrand(TENANT, "ALPHA", "Alpha");
+        UUID beta = insertBrand(TENANT, "BETA", "Beta");
+        setBrandLocales(TENANT, alpha, "uz-Latn", "en");
+        setBrandLocales(TENANT, beta, "ru", "en");
+        // The other tenant's brand must not widen this tenant's set.
+        UUID foreign = insertBrand(OTHER_TENANT, "FOREIGN", "Aaa");
+        setBrandLocales(OTHER_TENANT, foreign, "kaa");
+
+        MvcResult result = mvc.perform(get(path() + "/locale-set").with(tokenFor(READ_ONLY_STAFF)))
+                .andReturn();
+
+        assertThat(result.getResponse().getStatus()).isEqualTo(200);
+        Map<String, Object> set = JSON.readValue(result.getResponse().getContentAsString(), Map.class);
+        assertThat(set)
+                .containsEntry("locales", List.of("uz-Latn", "ru", "en"))
+                .containsEntry("defaultLocale", "uz-Latn")
+                .containsEntry("configured", true);
+    }
+
+    @Test
+    @DisplayName("GET locale-set refuses a caller holding neither catalog.read nor catalog.author")
+    void theLocaleSetRefusesACallerWithoutCatalogRead() throws Exception {
+        MvcResult refused = mvc.perform(get(path() + "/locale-set").with(tokenFor(NO_CATALOG_ACCESS)))
+                .andReturn();
+
+        assertThat(refused.getResponse().getStatus()).isEqualTo(403);
+    }
+
+    @Test
+    @DisplayName("another tenant can neither read nor rewrite this tenant's preset translations")
+    void translationsAreTenantIsolatedOverHttp() throws Exception {
+        mvc.perform(post(path())
+                .with(tokenFor(AUTHOR))
+                .header("Idempotency-Key", "comment-preset-iso-1")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"code":"NO_ONION","labelRu":"Без лука","labelUz":"Без лука","labelEn":"Без лука",
+                         "posModifierCode":null,"sortOrder":0,"labels":{"kaa":"Piyazsiz"}}
+                        """));
+        UUID presetId = presetIdByCode("NO_ONION");
+
+        // The other tenant's own list shows nothing of it.
+        MvcResult foreignList = mvc.perform(get(pathOf(OTHER_TENANT)).with(tokenFor(OTHER_TENANT_OWNER)))
+                .andReturn();
+        assertThat(foreignList.getResponse().getStatus()).isEqualTo(200);
+        assertThat(foreignList.getResponse().getContentAsString()).isEqualTo("[]");
+
+        // Authorised for their own tenant's path, naming this tenant's preset id: not found.
+        MvcResult foreignWrite = mvc.perform(put(pathOf(OTHER_TENANT) + "/" + presetId)
+                        .with(tokenFor(OTHER_TENANT_OWNER))
+                        .header("Idempotency-Key", "comment-preset-iso-2")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"labelRu":"HIJACKED","labelUz":"HIJACKED","labelEn":"HIJACKED",
+                                 "posModifierCode":null,"sortOrder":0,"status":"ACTIVE","expectedVersion":1,
+                                 "labels":{"kaa":"HIJACKED"}}
+                                """))
+                .andReturn();
+        assertThat(foreignWrite.getResponse().getStatus()).isEqualTo(404);
+
+        // And this tenant's path is closed to the other tenant's owner.
+        MvcResult foreignPath =
+                mvc.perform(get(path()).with(tokenFor(OTHER_TENANT_OWNER))).andReturn();
+        assertThat(foreignPath.getResponse().getStatus()).isEqualTo(403);
+
+        assertThat(translationRows(presetId))
+                .containsOnly(
+                        Map.entry("ru", "Без лука"),
+                        Map.entry("uz-Latn", "Без лука"),
+                        Map.entry("en", "Без лука"),
+                        Map.entry("kaa", "Piyazsiz"));
+    }
+
+    @Test
+    @DisplayName("the store's upsert cannot be turned on another tenant's row: it neither rewrites nor inserts")
+    void theUpsertCannotCrossTenants() throws Exception {
+        mvc.perform(post(path())
+                .with(tokenFor(AUTHOR))
+                .header("Idempotency-Key", "comment-preset-upsert-1")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"code":"NO_ONION","labelRu":"Без лука","labelUz":"Без лука","labelEn":"Без лука",
+                         "posModifierCode":null,"sortOrder":0}
+                        """));
+        UUID presetId = presetIdByCode("NO_ONION");
+
+        // The conflict target (preset_id, locale) names no tenant. Without the tenant
+        // condition on DO UPDATE this rewrites the victim's ru wording.
+        presetStore.upsertTranslations(OTHER_TENANT, presetId, Map.of("ru", "HIJACKED"), Instant.now());
+        assertThat(translationRows(presetId))
+                .as("the existing row was left alone, not taken over")
+                .containsEntry("ru", "Без лука")
+                .doesNotContainKey("kaa");
+
+        // A locale with no row takes the INSERT path, where the composite foreign key
+        // (preset_id, tenant_id) refuses a preset that is not the other tenant's.
+        Throwable failure = catchThrowable(
+                () -> presetStore.upsertTranslations(OTHER_TENANT, presetId, Map.of("kaa", "x"), Instant.now()));
+        assertThat(failure).isNotNull();
+        assertThat(translationRows(presetId)).doesNotContainKey("kaa");
+    }
+
     // ------------------------------------------------------------------ fixtures
 
     private static String path() {
@@ -420,6 +689,88 @@ class CommentPresetControllerTests {
                 .param("id", presetId)
                 .query(Integer.class)
                 .single();
+    }
+
+    private UUID presetIdByCode(String code) {
+        return jdbc.sql("SELECT id FROM catalog.comment_presets WHERE tenant_id = :t AND code = :c")
+                .param("t", TENANT)
+                .param("c", code)
+                .query(UUID.class)
+                .single();
+    }
+
+    private Map<String, String> translationRows(UUID presetId) {
+        Map<String, String> rows = new java.util.LinkedHashMap<>();
+        jdbc.sql("SELECT locale, label FROM catalog.comment_preset_translations WHERE preset_id = :p ORDER BY locale")
+                .param("p", presetId)
+                .query((rs, n) -> rows.put(rs.getString("locale"), rs.getString("label")))
+                .list();
+        return rows;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> onlyPresetOf(MvcResult listResult) throws Exception {
+        assertThat(listResult.getResponse().getStatus()).isEqualTo(200);
+        List<Map<String, Object>> presets =
+                JSON.readValue(listResult.getResponse().getContentAsString(), List.class);
+        assertThat(presets).hasSize(1);
+        return presets.getFirst();
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, String> labelsOf(Map<String, Object> preset) {
+        return java.util.Objects.requireNonNull((Map<String, String>) preset.get("labels"));
+    }
+
+    private static String pathOf(UUID tenantId) {
+        return "/api/v1/control-plane/tenants/" + tenantId + "/comment-presets";
+    }
+
+    private UUID insertBrand(UUID tenantId, String code, String displayName) {
+        UUID id = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO tenant.brands (id, tenant_id, code, slug, display_name, status, version)
+                VALUES (:id, :tenantId, :code, :slug, :displayName, 'ACTIVE', 0)
+                """)
+                .param("id", id)
+                .param("tenantId", tenantId)
+                .param("code", code)
+                .param("slug", code.toLowerCase(java.util.Locale.ROOT))
+                .param("displayName", displayName)
+                .update();
+        return id;
+    }
+
+    /** The first locale is the brand's default. */
+    private void setBrandLocales(UUID tenantId, UUID brandId, String... locales) {
+        for (int i = 0; i < locales.length; i++) {
+            jdbc.sql("""
+                    INSERT INTO tenant.brand_locales (tenant_id, brand_id, locale, is_default)
+                    VALUES (:tenantId, :brandId, :locale, :isDefault)
+                    """)
+                    .param("tenantId", tenantId)
+                    .param("brandId", brandId)
+                    .param("locale", locales[i])
+                    .param("isDefault", i == 0)
+                    .update();
+        }
+    }
+
+    private void grantAt(String subject, PlatformRole role, UUID tenantId) {
+        jdbc.sql("""
+                INSERT INTO iam.grants
+                    (id, tenant_id, principal_subject, role_id, role_is_platform, scope_type, scope_id,
+                     status, granted_by, reason, valid_from)
+                VALUES (:id, :tenantId, :subject, :roleId, true, 'TENANT', :tenantId,
+                        'ACTIVE', 'test-fixture', 'comment preset http test', :validFrom)
+                ON CONFLICT DO NOTHING
+                """)
+                .param("id", UUID.nameUUIDFromBytes((subject + role.code() + tenantId).getBytes(UTF_8)))
+                .param("tenantId", tenantId)
+                .param("subject", subject)
+                .param("roleId", RoleRegistrySynchronizer.platformRoleId(role))
+                .param("validFrom", Instant.now().minus(Duration.ofHours(1)).atOffset(ZoneOffset.UTC))
+                .update();
     }
 
     private void grant(String subject, PlatformRole role) {

@@ -130,6 +130,39 @@ describe('BufferPage', () => {
     expect(rows[1].textContent).toContain('A-020');
   });
 
+  it('batch 14: a held dine-in ticket names its table, a delivery one does not', async () => {
+    const board: BoardResponse = {
+      tickets: [
+        held({
+          ticketId: 't-hall',
+          sequenceLabel: 'H-007',
+          fulfilmentMode: 'DINE_IN',
+          releaseAt: new Date(Date.now() + 5 * 60_000).toISOString(),
+          table: {
+            sessionId: 'session-1',
+            tables: [{ tableId: 'table-7', code: 'T7', displayName: 'Table 7' }],
+          },
+        }),
+        held({
+          ticketId: 't-delivery',
+          sequenceLabel: 'D-001',
+          releaseAt: new Date(Date.now() + 30 * 60_000).toISOString(),
+        }),
+      ],
+      warnings: [],
+    };
+    await render({ board: () => Promise.resolve(board) });
+
+    const rows = (fixture.nativeElement as HTMLElement).querySelectorAll(
+      '[data-testid="buffer-row"]',
+    );
+    expect(rows).toHaveLength(2);
+    expect(rows[0].querySelector('[data-testid="order-table-chip"]')?.textContent?.trim()).toBe(
+      'Table T7',
+    );
+    expect(rows[1].querySelector('[data-testid="order-table-chip"]')).toBeNull();
+  });
+
   it('releases a ticket and removes it from the buffer', async () => {
     const board: BoardResponse = { tickets: [held({})], warnings: [] };
     const release = vi.fn().mockReturnValue(of({ ...held({}), status: 'FIRED' }));
@@ -159,6 +192,86 @@ describe('BufferPage', () => {
     fixture.detectChanges();
 
     expect(reschedule).toHaveBeenCalledWith(SCOPE, 'ticket-1', 1, 'MANUAL_HOLD', null, undefined);
+  });
+
+  describe('a held DINE_IN ticket keeps what only a board read knows after its own mutation', () => {
+    const TABLE = {
+      sessionId: 'session-7',
+      tables: [{ tableId: 'table-7', code: 'T7', displayName: 'Table 7' }],
+    };
+
+    /** The row as `KitchenApi.board` returns it: the table, the channel type and the ETA are resolved there. */
+    function seatedRow(): TicketResponse {
+      return held({
+        fulfilmentMode: 'DINE_IN',
+        channelCode: 'QRTABLE',
+        channelSystemType: 'QR_TABLE',
+        externalReference: 'EXT-7',
+        courierEtaAt: null,
+        table: TABLE,
+      });
+    }
+
+    /** What `KitchenBoardController.reschedule` answers: `TicketResponse.of(after, items)` -- no table, no channel type, no reference. */
+    function mutationResponse(overrides: Partial<TicketResponse>): TicketResponse {
+      return {
+        ...held({ fulfilmentMode: 'DINE_IN', channelCode: 'QRTABLE', version: 2 }),
+        table: null,
+        channelSystemType: null,
+        externalReference: null,
+        courierEtaAt: null,
+        ...overrides,
+      };
+    }
+
+    function chipText(host: HTMLElement): string | undefined {
+      return host.querySelector('[data-testid="order-table-chip"]')?.textContent?.trim();
+    }
+
+    it('still shows the table chip after the ticket is placed on hold', async () => {
+      const board: BoardResponse = { tickets: [seatedRow()], warnings: [] };
+      const reschedule = vi
+        .fn()
+        .mockReturnValue(of(mutationResponse({ releaseMode: 'MANUAL_HOLD', releaseAt: null })));
+      await render({ board: () => Promise.resolve(board), reschedule });
+      const host = fixture.nativeElement as HTMLElement;
+      expect(chipText(host)).toBe('Table T7');
+
+      (host.querySelector('[data-testid="buffer-hold"]') as HTMLButtonElement).click();
+      await flushMicrotasks();
+      fixture.detectChanges();
+
+      expect(reschedule).toHaveBeenCalledTimes(1);
+      expect(chipText(host)).toBe('Table T7');
+    });
+
+    it('still shows the table chip after the fire time is edited, and adopts what the response did change', async () => {
+      const board: BoardResponse = { tickets: [seatedRow()], warnings: [] };
+      const releaseAt = new Date(Date.now() + 40 * 60_000).toISOString();
+      const reschedule = vi
+        .fn()
+        .mockReturnValue(of(mutationResponse({ releaseMode: 'SCHEDULED', releaseAt })));
+      await render({ board: () => Promise.resolve(board), reschedule });
+      const host = fixture.nativeElement as HTMLElement;
+
+      (host.querySelector('[data-testid="buffer-edit"]') as HTMLButtonElement).click();
+      fixture.detectChanges();
+      const input = host.querySelector(
+        '[data-testid="buffer-edit-release-at"]',
+      ) as HTMLInputElement;
+      input.value = '2026-09-14T19:30';
+      input.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+      (host.querySelector('[data-testid="buffer-edit-submit"]') as HTMLButtonElement).click();
+      await flushMicrotasks();
+      fixture.detectChanges();
+
+      expect(chipText(host)).toBe('Table T7');
+      // The response's own fields still win: the next mutation sends its version.
+      (host.querySelector('[data-testid="buffer-hold"]') as HTMLButtonElement).click();
+      await flushMicrotasks();
+      expect(reschedule.mock.calls[1][2]).toBe(2);
+    });
   });
 
   it('edits a held ticket’s fire time through PUT .../release-schedule', async () => {

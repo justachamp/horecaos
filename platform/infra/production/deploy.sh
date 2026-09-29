@@ -13,6 +13,10 @@
 # Usage:
 #   sudo HORECAOS_ENV_FILE=/etc/horecaos/production.env infra/production/deploy.sh
 #
+# Optional switch: HORECAOS_REMINT_OBJECT_STORE_CREDENTIALS=1 mints the media and
+# backup object-store credentials again even though OpenBao already holds them
+# (Phase 6a). For a replaced object store or a rotation; see the note there.
+#
 # Root is required for two things and nothing else: mounting the tmpfs that
 # holds secrets, and talking to the Docker socket.
 
@@ -36,6 +40,22 @@ OBJECT_STORE_ROOT_PATH="horecaos/production/object_storage/platform/root-passwor
 # bootstrap.
 OBJECT_STORE_BACKUP_ACCESS_PATH="horecaos/production/object_storage/platform/backup-access-key"
 OBJECT_STORE_BACKUP_SECRET_PATH="horecaos/production/object_storage/platform/backup-secret-key"
+# The application's own media pair (ADR 0135, checklist item 3). platform-app
+# resolves these two by reference at call time (compose.production.yaml's
+# HORECAOS_MEDIA_ACCESS_KEY_REF / HORECAOS_MEDIA_SECRET_KEY_REF), so they must be
+# in OpenBao before the application starts. bootstrap.sh and
+# docs/runbooks/production-setup.md used to leave minting them to an operator;
+# Phase 6a below does it, the same way it does the backup pair.
+OBJECT_STORE_MEDIA_ACCESS_PATH="horecaos/production/object_storage/platform/media-access-key"
+OBJECT_STORE_MEDIA_SECRET_PATH="horecaos/production/object_storage/platform/media-secret-key"
+# 1 = mint the media and backup pairs even though OpenBao already holds them.
+# For the two situations where the pair on file is wrong: the object store was
+# replaced underneath it (docs/runbooks/object-store-migration.md, step 6 -- a
+# MinIO-era pair means nothing to RustFS) and a deliberate rotation. The old
+# value stays recoverable as a previous KV version; the old service account, if
+# it lives on this same object store, stays valid until someone deletes it
+# (docs/runbooks/production-setup.md says how).
+REMINT_OBJECT_STORE_CREDENTIALS="${HORECAOS_REMINT_OBJECT_STORE_CREDENTIALS:-0}"
 
 say()  { printf '\n==> %s\n' "$*"; }
 warn() { printf '\n!!  %s\n' "$*" >&2; }
@@ -160,11 +180,83 @@ bao_put_value() {
             bao kv put "$1" "value=${VALUE}"' _ "${path}"
 }
 
+# -- Write-access preflight ----------------------------------------------------
+#
+# Phase 6a mints object-store service accounts and only then stores their keys
+# in OpenBao. A mint cannot be taken back from here, and the secret key exists
+# nowhere but a shell variable: a token that turns out unable to store it leaves
+# a live s3:* account that nobody holds and nothing records, and every retry
+# adds another one. So before anything is minted, ask OpenBao what THIS token
+# may do on the paths that would be written, and stop while nothing has changed.
+#
+# 0 = the token may create and update the KV v2 secret at this logical path,
+# 1 = it may not, 2 = OpenBao would not say (which is treated as a no).
+token_can_store() {
+    # KV v2 authorises the API path, which carries a data/ segment that
+    # `bao kv put` adds and this script's logical paths leave out.
+    local api_path="horecaos/data/${1#horecaos/}" caps
+    caps="$(bao_run bao token capabilities "${api_path}" 2>/dev/null)" || return 2
+    # `create, read, update` or `root`; compare whole words.
+    caps=",$(printf '%s' "${caps}" | tr -d '[:space:]'),"
+    case "${caps}" in *,root,*) return 0 ;; esac
+    # create for a path that is new, update for one that is overwritten (a
+    # remint, or the surviving half of a failed run): a deploy cannot know
+    # which it will meet, so it needs both.
+    case "${caps}" in *,create,*) ;; *) return 1 ;; esac
+    case "${caps}" in *,update,*) return 0 ;; esac
+    return 1
+}
+
+# Decides which pairs Phase 6a will mint exactly as Phase 6a decides it (the
+# switch, or a missing half), then holds only those paths to the rule. A routine
+# deploy with both pairs on file writes nothing, so a read-only horecaos-deploy
+# token still deploys.
+require_write_access_before_minting() {
+    local -a to_write=()
+    if [ "${REMINT_OBJECT_STORE_CREDENTIALS}" = "1" ] \
+        || ! bao_field "${OBJECT_STORE_BACKUP_ACCESS_PATH}" >/dev/null 2>&1; then
+        to_write+=("${OBJECT_STORE_BACKUP_ACCESS_PATH}" "${OBJECT_STORE_BACKUP_SECRET_PATH}")
+    fi
+    if [ "${REMINT_OBJECT_STORE_CREDENTIALS}" = "1" ] \
+        || ! bao_field "${OBJECT_STORE_MEDIA_ACCESS_PATH}" >/dev/null 2>&1 \
+        || ! bao_field "${OBJECT_STORE_MEDIA_SECRET_PATH}" >/dev/null 2>&1; then
+        to_write+=("${OBJECT_STORE_MEDIA_ACCESS_PATH}" "${OBJECT_STORE_MEDIA_SECRET_PATH}")
+    fi
+    [ "${#to_write[@]}" -gt 0 ] || return 0
+
+    local path status refused="" unanswered=0
+    for path in "${to_write[@]}"; do
+        status=0
+        token_can_store "${path}" || status=$?
+        case "${status}" in
+            0) ;;
+            1) refused="${refused}
+        ${path}" ;;
+            *) unanswered=1 ;;
+        esac
+    done
+
+    [ "${unanswered}" -eq 0 ] \
+        || die "OpenBao would not say what this token may do (\`bao token capabilities\` failed).
+    Nothing has been minted. Use a token that carries the default policy, or a
+    policy that names sys/capabilities-self (horecaos-deploy.hcl does)."
+    [ -z "${refused}" ] \
+        || die "This token cannot store the object-store service-account keys this deploy
+    is about to mint, so nothing has been minted. It needs create and update on:${refused}
+    A token with only the horecaos-deploy policy is read-only and cannot. Log in
+    with a token that can write these paths (bootstrap.sh's closing note says
+    which), then run the deploy again."
+}
+# end of the write-access preflight helpers
+
 compose exec -T openbao sh -c 'true' >/dev/null 2>&1 \
     || die "Cannot exec into the OpenBao container."
 
 bao_run bao token lookup >/dev/null 2>&1 \
     || die "OpenBao rejected that token."
+
+# Before anything on the object store is touched (Phase 6a): see the helper above.
+require_write_access_before_minting
 
 
 # -----------------------------------------------------------------------------
@@ -296,14 +388,15 @@ done
 # Phase 6a — provision the object store's own scoped service accounts
 # -----------------------------------------------------------------------------
 #
-# Two service accounts, minted against the object store's root credential
+# Three service accounts, minted against the object store's root credential
 # and used nowhere but here: a create-bucket-only account for the seed job
-# below, and the backup account docs/runbooks/production-setup.md used to
-# ask an operator to create by hand, "Then create the scoped service
-# accounts". Neither is the root credential, and neither is the media
-# credential platform-app itself runs with (that one is provisioned once, at
-# bootstrap — see infra/production/bootstrap.sh — not re-minted on every
-# deploy). RustFS 1.0.0 has no MinIO-shaped `mc admin user add`; its own
+# below, and the backup and media accounts docs/runbooks/production-setup.md
+# used to ask an operator to create by hand, "Then create the scoped service
+# accounts". None of them is the root credential. The backup and media pairs
+# are long-lived (see the notes on each below) and are written to OpenBao, where
+# the nightly backup job and platform-app read them; the seed pair is re-minted
+# every run and never leaves the secret tmpfs. RustFS 1.0.0 has no MinIO-shaped
+# `mc admin user add`; its own
 # admin API is `PUT /rustfs/admin/v3/add-service-account`, SigV4-signed —
 # reached here through the `ops` container the same way
 # deploy/local-smoke.sh's own proof of this call does (verified 2026-09-25
@@ -347,10 +440,12 @@ unset SEED_SVC_ACCOUNT_SCRIPT SEED_SVC_JSON SEED_ACCESS_KEY SEED_SECRET_KEY
 # ever-growing set of valid, backup-bucket-wide credentials nobody is
 # tracking. So this checks OpenBao first and only mints when the pair is
 # genuinely missing -- the first deploy after infra/production/bootstrap.sh
-# on a fresh host, or after an operator has deliberately cleared it to force
-# a rotation.
+# on a fresh host -- or when the operator says so with
+# HORECAOS_REMINT_OBJECT_STORE_CREDENTIALS=1 (see REMINT_OBJECT_STORE_CREDENTIALS
+# above).
 say "Provisioning the backup bucket's own service account"
-if bao_field "${OBJECT_STORE_BACKUP_ACCESS_PATH}" >/dev/null 2>&1; then
+if [ "${REMINT_OBJECT_STORE_CREDENTIALS}" != "1" ] \
+    && bao_field "${OBJECT_STORE_BACKUP_ACCESS_PATH}" >/dev/null 2>&1; then
     say "Backup service account already provisioned; leaving it as it is"
 else
     read -r -d '' BACKUP_SVC_ACCOUNT_SCRIPT <<'SCRIPT' || true
@@ -377,6 +472,77 @@ SCRIPT
     bao_put_value "${OBJECT_STORE_BACKUP_SECRET_PATH}" "${BACKUP_SECRET_KEY}" \
         || die "Could not write ${OBJECT_STORE_BACKUP_SECRET_PATH} to OpenBao."
     unset BACKUP_SVC_ACCOUNT_SCRIPT BACKUP_SVC_JSON BACKUP_ACCESS_KEY BACKUP_SECRET_KEY
+fi
+
+# The media pair follows the backup pair's rule -- long-lived, checked and then
+# minted only when missing -- for the same reason: RustFS's admin API cannot say
+# "already exists", so a mint on every deploy would leave every earlier media
+# pair live, un-revoked and untracked, each one bucket-wide on the bucket that
+# holds customer uploads. Unlike the backup pair the check needs BOTH halves: a
+# lone access key or secret key is a failed earlier run, and the cure for a
+# half-written pair is a new whole one.
+#
+# `s3:*` on the media bucket and its objects and on nothing else: platform-app
+# presigns, uploads, lists and deletes there, and must not be able to reach the
+# backup bucket. Verified 2026-09-29 against RustFS 1.0.0: this policy put,
+# listed, head-ed and deleted in horecaos-media and got AccessDenied on
+# horecaos-backups.
+#
+# Storing them needs an operator token that can create and update these two
+# paths (and the backup pair's). infra/openbao/policies/horecaos-deploy.hcl is
+# read-only, so a token carrying only that policy cannot. That is found out
+# BEFORE this block runs: require_write_access_before_minting (Phase 2) asks
+# OpenBao what the token may do on the paths a mint would write and stops while
+# nothing has been minted. The dies below are for a write that fails anyway
+# (OpenBao sealed mid-run, a policy changed under the token) -- bootstrap.sh's
+# closing note says which paths the operator login needs.
+#
+# The response holds the secret key. It is captured into a variable and read
+# with jq; none of it reaches a die/warn/say line (a parse failure below names
+# the JSON paths, never the body), and the values reach OpenBao over stdin
+# through bao_put_value, not through an argument list.
+say "Provisioning the media bucket's own service account"
+media_access_present=0
+media_secret_present=0
+bao_field "${OBJECT_STORE_MEDIA_ACCESS_PATH}" >/dev/null 2>&1 && media_access_present=1
+bao_field "${OBJECT_STORE_MEDIA_SECRET_PATH}" >/dev/null 2>&1 && media_secret_present=1
+if [ "${media_access_present}" -eq 1 ] && [ "${media_secret_present}" -eq 1 ] \
+    && [ "${REMINT_OBJECT_STORE_CREDENTIALS}" != "1" ]; then
+    say "Media service account already provisioned; leaving it as it is"
+else
+    if [ "${media_access_present}" -ne "${media_secret_present}" ]; then
+        warn "OpenBao holds only one half of the media pair. Minting a whole new pair and
+    overwriting both. Whatever service account the surviving half belonged to is
+    still live on the object store: docs/runbooks/production-setup.md says how to
+    list and delete it."
+    fi
+    read -r -d '' MEDIA_SVC_ACCOUNT_SCRIPT <<'SCRIPT' || true
+set -euo pipefail
+root_secret="$(cat /run/secrets/object-store-secret-key)"
+policy=$(jq -nc --arg b "${HORECAOS_MEDIA_BUCKET}" \
+    '{Version:"2012-10-17",Statement:[{Effect:"Allow",Action:["s3:*"],Resource:[("arn:aws:s3:::"+$b),("arn:aws:s3:::"+$b+"/*")]}]}')
+body=$(jq -nc --argjson policy "${policy}" --arg name "media-production" '{policy:$policy,name:$name}')
+curl -fsS -X PUT "http://object-store:9000/rustfs/admin/v3/add-service-account" \
+    --user "${OBJECT_STORE_ROOT_ACCESS_KEY}:${root_secret}" \
+    --aws-sigv4 "aws:amz:us-east-1:s3" \
+    -H "Content-Type: application/json" \
+    --data "${body}"
+SCRIPT
+    MEDIA_SVC_JSON="$(compose run --rm --no-TTY ops bash -c "${MEDIA_SVC_ACCOUNT_SCRIPT}")" \
+        || die "Could not create the media service account against RustFS's admin API."
+    MEDIA_ACCESS_KEY="$(printf '%s' "${MEDIA_SVC_JSON}" | jq -r '.credentials.accessKey // empty')"
+    MEDIA_SECRET_KEY="$(printf '%s' "${MEDIA_SVC_JSON}" | jq -r '.credentials.secretKey // empty')"
+    if [ -z "${MEDIA_ACCESS_KEY}" ] || [ -z "${MEDIA_SECRET_KEY}" ]; then
+        die "RustFS did not return a service-account access key/secret for the media account at .credentials.accessKey/.credentials.secretKey."
+    fi
+    bao_put_value "${OBJECT_STORE_MEDIA_ACCESS_PATH}" "${MEDIA_ACCESS_KEY}" \
+        || die "Could not write ${OBJECT_STORE_MEDIA_ACCESS_PATH} to OpenBao.
+    Re-run with HORECAOS_REMINT_OBJECT_STORE_CREDENTIALS=1 to mint a consistent pair."
+    bao_put_value "${OBJECT_STORE_MEDIA_SECRET_PATH}" "${MEDIA_SECRET_KEY}" \
+        || die "Could not write ${OBJECT_STORE_MEDIA_SECRET_PATH} to OpenBao.
+    OpenBao now holds a mismatched media pair. Re-run with
+    HORECAOS_REMINT_OBJECT_STORE_CREDENTIALS=1 to mint a consistent one."
+    unset MEDIA_SVC_ACCOUNT_SCRIPT MEDIA_SVC_JSON MEDIA_ACCESS_KEY MEDIA_SECRET_KEY
 fi
 
 say "Starting the bucket-creation seed job with its own scoped credential"

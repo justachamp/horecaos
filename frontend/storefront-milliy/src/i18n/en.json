@@ -127,7 +127,6 @@
     "noPaymentMethods": "No payment method is available for this order right now.",
     "paymentSessionError": "The order was placed, but the payment page could not be opened. Check your orders.",
     "paymentReturnChecking": "Checking your payment...",
-    "deliveryNotServiceable": "Delivery is not available to this address.",
     "recipient": "Recipient",
     "recipientName": "Recipient name",
     "recipientPhone": "Recipient phone",
@@ -351,8 +350,9 @@
     "reason": {
       "deliveryFeeUnresolved": "We couldn't work out the delivery fee. Choose a different address or try again later.",
       "minimumBasketNotMet": "Your order is below the minimum for delivery.",
-      "minimumBasketAmount": "The minimum order for delivery is {{amount}}.",
       "destinationRequired": "Choose a delivery address first.",
+      "belowMinimumOrder": "Your order is below the minimum order amount. Add something to continue.",
+      "destinationNotLocated": "This address has no location on the map yet, so we can't deliver to it. Choose a different address or pin this one on the map.",
       "outOfZone": "This address is outside the delivery area.",
       "notServiceable": "This branch cannot take orders right now.",
       "signInRequired": "Sign in to place an order.",
@@ -425,5 +425,21 @@
     "notEligible": "This code cannot be redeemed on this account.",
     "noFriendCountNotice": "We don't yet show how many friends have used your code — check back here after they order.",
     "shareMessage": "Use my referral code {{code}} when you sign up."
+  },
+  "dish": {
+    "soldOut": "Sold out",
+    "outOfSaleWindow": "Not on sale right now",
+    "lowStock": "Only {{count}} left"
+  },
+  "dineIn": {
+    "scanFailedTitle": "This code is not in service",
+    "scanFailedBody": "Please ask a member of staff for help.",
+    "backHome": "Back to menu",
+    "scanLoading": "Reading the table's code...",
+    "noAdmissionTitle": "Scan a table to see its menu",
+    "noAdmissionBody": "Scan the QR code on your table to see the menu.",
+    "tableLabel": "Table {{code}}",
+    "orderingUnavailable": "Ordering from the table is not available in this app yet. You can browse the menu here; please order with a member of staff.",
+    "menuUnavailable": "The menu is not available right now."
   }
 }

@@ -41,6 +41,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.infrastructure.persistence.JdbcAuditRecorder;
 import uz.horecaos.platform.customers.application.CustomerBlacklistService;
 import uz.horecaos.platform.customers.infrastructure.persistence.JdbcCustomerStore;
+import uz.horecaos.platform.dinein.api.OrderTablesPort;
 import uz.horecaos.platform.fiscal.infrastructure.persistence.JdbcFiscalTerminalStore;
 import uz.horecaos.platform.fulfillment.api.ActiveCourierAssignmentsPort;
 import uz.horecaos.platform.fulfillment.api.DeliveryFeeOutcome;
@@ -533,6 +534,7 @@ class CartCheckoutAndOrderTests {
                 processStore,
                 UNWIRED_PAYMENTS,
                 NO_COURIER_ASSIGNMENTS,
+                NO_ORDER_TABLES,
                 new JdbcOrderAmendmentStore(jdbc),
                 protection,
                 objectMapper,
@@ -5781,6 +5783,9 @@ class CartCheckoutAndOrderTests {
 
     /** No order in this suite has a courier assigned; nothing here exercises the board's Курьер column. */
     private static final ActiveCourierAssignmentsPort NO_COURIER_ASSIGNMENTS = (tenantId, orderIds) -> Map.of();
+
+    /** No order here was seated at a table, so the dine-in lookup has nothing to answer. */
+    private static final OrderTablesPort NO_ORDER_TABLES = (tenantId, orderIds) -> Map.of();
 
     private static final PaymentIntentPort UNWIRED_PAYMENTS = new PaymentIntentPort() {
         @Override

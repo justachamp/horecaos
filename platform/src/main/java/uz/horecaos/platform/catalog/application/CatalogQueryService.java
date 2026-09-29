@@ -10,9 +10,11 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import uz.horecaos.platform.catalog.api.CatalogNameLocales;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.Category;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.EntityType;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.ModifierGroup;
@@ -27,6 +29,7 @@ import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore.
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore.MxikReferenceRow;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore.ProductRow;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore.TranslationRow;
+import uz.horecaos.platform.tenancy.api.BrandLocaleLookup;
 
 /**
  * Reading back what {@link CatalogAuthoringService} wrote (ADR 0016).
@@ -50,15 +53,50 @@ import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore.
 public class CatalogQueryService {
 
     private final JdbcCatalogStore store;
+    private final BrandLocaleLookup brandLocales;
     private final String defaultLocale;
 
+    /**
+     * @param defaultLocale {@code horecaos.catalog.default-locale} -- what a list
+     *                      read resolves names in for a brand that has chosen no
+     *                      default language of its own, and only for that brand
+     */
+    @Autowired
     public CatalogQueryService(
-            JdbcCatalogStore store, @Value("${horecaos.catalog.default-locale:uz}") String defaultLocale) {
+            JdbcCatalogStore store,
+            BrandLocaleLookup brandLocales,
+            @Value("${horecaos.catalog.default-locale:uz}") String defaultLocale) {
         this.store = store;
+        this.brandLocales = brandLocales;
         this.defaultLocale = defaultLocale;
     }
 
-    /** A brand's catalogs, named in the configured default locale. */
+    /**
+     * A service that resolves every brand in the configured default locale, never
+     * the brand's own -- the behaviour before row 10.12's default-locale fix, kept
+     * for the tests that build the read side without a brand-locale port.
+     */
+    public CatalogQueryService(JdbcCatalogStore store, String defaultLocale) {
+        this(store, BrandLocaleLookup.platformFallback(), defaultLocale);
+    }
+
+    /**
+     * The locale a list screen resolves this brand's names in (row 10.12): the
+     * brand's own default language, mapped onto the catalog's locale vocabulary
+     * ({@link CatalogNameLocales}), or the server's configured default only when the
+     * brand has chosen none.
+     *
+     * <p>This used to be the server config for every brand, so a brand whose
+     * default was {@code ru} or {@code en} saw the bare code for anything it had
+     * named in its own language and not in {@code uz}, while the console's editor
+     * -- which follows the brand's set -- reported the edit as saved.
+     */
+    private String resolutionLocale(UUID tenantId, UUID brandId) {
+        return CatalogNameLocales.of(brandLocales, tenantId, brandId, defaultLocale)
+                .preferred();
+    }
+
+    /** A brand's catalogs, named in the brand's own default locale. */
     public List<CatalogSummary> catalogs(UUID tenantId, UUID brandId) {
         Map<UUID, String> names = defaultLocaleNames(tenantId, brandId, EntityType.CATALOG);
         return store.catalogsForBrand(tenantId, brandId).stream()
@@ -312,28 +350,47 @@ public class CatalogQueryService {
         return byEntity;
     }
 
-    /** Each entity's name in the brand's configured default locale, keyed by entity id. */
+    /**
+     * Each entity's name for a list screen, keyed by entity id: in the brand's own
+     * default locale, and -- only for an entity with no name there -- in the
+     * server's configured locale, so a menu imported or sampled in that locale
+     * (which writes it there, {@code CatalogImportRowService}) does not fall to
+     * bare codes the moment a brand picks a different default language.
+     */
     private Map<UUID, String> defaultLocaleNames(UUID tenantId, UUID brandId, EntityType type) {
+        String preferred = resolutionLocale(tenantId, brandId);
         Map<UUID, String> names = new HashMap<>();
+        Map<UUID, String> preferredNames = new HashMap<>();
         for (TranslationRow row : store.translations(tenantId, brandId)) {
-            if (row.entityType() == type && defaultLocale.equals(row.locale())) {
+            if (row.entityType() != type) {
+                continue;
+            }
+            if (preferred.equals(row.locale())) {
+                preferredNames.put(row.entityId(), row.name());
+            } else if (defaultLocale.equals(row.locale())) {
                 names.put(row.entityId(), row.name());
             }
         }
+        names.putAll(preferredNames);
         return names;
     }
 
     /**
-     * The default locale's description per entity, absent when there is none.
+     * The brand's default locale's description per entity, absent when there is
+     * none -- deliberately without {@link #defaultLocaleNames}' fallback: the
+     * console's inline rename writes the name <em>and</em> this description into
+     * the brand's default locale, so a description borrowed from another locale
+     * would be copied across languages by a rename.
      * {@link #categories} needs this alongside {@link #defaultLocaleNames} so
      * the console's inline rename can resend the description unchanged — a PUT
      * /translations that carried the request's own new name but a null
      * description would silently clear whatever an operator had written.
      */
     private Map<UUID, String> defaultLocaleDescriptions(UUID tenantId, UUID brandId, EntityType type) {
+        String locale = resolutionLocale(tenantId, brandId);
         Map<UUID, String> descriptions = new HashMap<>();
         for (TranslationRow row : store.translations(tenantId, brandId)) {
-            if (row.entityType() == type && defaultLocale.equals(row.locale()) && row.description() != null) {
+            if (row.entityType() == type && locale.equals(row.locale()) && row.description() != null) {
                 descriptions.put(row.entityId(), row.description());
             }
         }
@@ -401,7 +458,10 @@ public class CatalogQueryService {
         // rather than reporting a brand with an unclassified menu as though its
         // delivery fee did not need classifying.
         store.ensureFee(tenantId, brandId, "DELIVERY");
-        List<JdbcCatalogStore.FiscalCoverageNodeRow> rows = store.fiscalCoverageNodes(tenantId, brandId, defaultLocale);
+        // The same resolution the list screens use (defaultLocaleNames): the brand's own
+        // default, then the server's locale for a node with no name there.
+        List<JdbcCatalogStore.FiscalCoverageNodeRow> rows =
+                store.fiscalCoverageNodes(tenantId, brandId, resolutionLocale(tenantId, brandId), defaultLocale);
         List<FiscalCoverageNode> unclassified = rows.stream()
                 .filter(JdbcCatalogStore.FiscalCoverageNodeRow::unclassified)
                 .sorted(java.util.Comparator.<JdbcCatalogStore.FiscalCoverageNodeRow>comparingInt(

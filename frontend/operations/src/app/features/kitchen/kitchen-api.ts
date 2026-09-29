@@ -4,6 +4,7 @@ import { Observable, firstValueFrom } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client';
 import { command } from '../../core/api/idempotency';
 import { LocationScope, operationsPaths } from '../../core/api/operations-paths';
+import { OrderTableView } from '../../shared/ui/order-table-chip/order-table-chip';
 
 /**
  * Mirrors `KitchenBoardController.ItemView` — deliberately no dish name or
@@ -73,6 +74,18 @@ export interface TicketResponse {
    * same rule `channelSystemType` already follows.
    */
   readonly courierEtaAt?: string | null;
+  /**
+   * The table (or joined tables) and session a DINE_IN ticket's order was
+   * seated at (batch 14, `OrderTablesPort`, ADR 0047) — codes and display
+   * names only, never a guest. Resolved by `board()` and the single-ticket
+   * read for DINE_IN tickets only; null for every other ticket and for a
+   * DINE_IN order an operator keyed in without seating anyone. A mutation
+   * response carries `null` (see `courierEtaAt`'s own rule), so
+   * `kitchen-queue-page.ts` (which patches only the fields a mutation
+   * changes) and `buffer-page.ts` (`mergeMutation`) keep whichever value the
+   * last board read gave.
+   */
+  readonly table?: OrderTableView | null;
   readonly items: readonly TicketItemView[];
 }
 

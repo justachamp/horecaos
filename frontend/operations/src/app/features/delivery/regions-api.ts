@@ -4,6 +4,7 @@ import { firstValueFrom } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client';
 import { regionPaths } from '../../core/api/delivery-paths';
 import { command } from '../../core/api/idempotency';
+import { LabelsByLocale, LocaleSetView } from '../../core/i18n/locale-labels';
 
 /** Mirrors `OperationsRegionController.RegionResponse`. */
 export interface RegionResponse {
@@ -18,6 +19,12 @@ export interface RegionResponse {
   readonly displayNameRu: string;
   readonly displayNameUz: string;
   readonly displayNameEn: string;
+  /**
+   * Every language the region has a name in (row 10.12): the platform triple
+   * from its columns, then any other from the per-locale table, each once. A
+   * platform region answers its three columns alone.
+   */
+  readonly displayNames?: LabelsByLocale;
   readonly centreLat: number;
   readonly centreLon: number;
   readonly bboxSwLat: number;
@@ -39,9 +46,20 @@ export interface RegionResponse {
  */
 export interface RegionGeographyRequest {
   readonly code: string;
+  /**
+   * The platform triple's names — still *required* (the OpenAPI contract cannot
+   * relax a published required request field), so an editor that offers only
+   * some of the platform languages fills the others (see `platformColumns`).
+   */
   readonly displayNameRu: string;
   readonly displayNameUz: string;
   readonly displayNameEn: string;
+  /**
+   * The name per locale (row 10.12), additive: the way to name a language
+   * beyond the triple. On a rewrite only the languages named are written, so a
+   * language the editor does not offer keeps its name.
+   */
+  readonly displayNames: LabelsByLocale;
   readonly centreLat: number;
   readonly centreLon: number;
   readonly bboxSwLat: number;
@@ -78,6 +96,14 @@ export class RegionsApi {
       this.api.get<readonly RegionResponse[]>(regionPaths.regions(tenantId)),
     );
     return result.value ?? [];
+  }
+
+  /** The languages this editor offers — the union of the tenant's brands' (row 10.12). */
+  async localeSet(tenantId: string): Promise<LocaleSetView> {
+    const result = await firstValueFrom(
+      this.api.get<LocaleSetView>(`${regionPaths.regions(tenantId)}/locale-set`),
+    );
+    return result.value;
   }
 
   async create(tenantId: string, request: RegionGeographyRequest): Promise<RegionRegisteredView> {

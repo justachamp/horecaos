@@ -81,6 +81,13 @@
               <button type="button" (click)="$event.stopPropagation(); openDraftForm(zone)">
                 {{ 'delivery.zones.draft.action' | t }}
               </button>
+              <button
+                type="button"
+                data-testid="zone-rename"
+                (click)="$event.stopPropagation(); openRenameForm(zone)"
+              >
+                {{ 'delivery.zones.rename.action' | t }}
+              </button>
             </td>
           </tr>
           @if (isExpanded(zone)) {
@@ -241,33 +248,22 @@
           <span class="q-caption">{{ 'delivery.zones.create.code' | t }}</span>
           <input type="text" [value]="newCode()" (input)="newCode.set($any($event.target).value)" />
         </label>
-        <label class="field">
-          <span class="q-caption">{{ 'delivery.zones.create.nameRu' | t }}</span>
-          <input
-            type="text"
-            data-testid="zone-name-ru"
-            [value]="newNameRu()"
-            (input)="newNameRu.set($any($event.target).value)"
-          />
-        </label>
-        <label class="field">
-          <span class="q-caption">{{ 'delivery.zones.create.nameUz' | t }}</span>
-          <input
-            type="text"
-            data-testid="zone-name-uz"
-            [value]="newNameUz()"
-            (input)="newNameUz.set($any($event.target).value)"
-          />
-        </label>
-        <label class="field">
-          <span class="q-caption">{{ 'delivery.zones.create.nameEn' | t }}</span>
-          <input
-            type="text"
-            data-testid="zone-name-en"
-            [value]="newNameEn()"
-            (input)="newNameEn.set($any($event.target).value)"
-          />
-        </label>
+        @for (locale of locales(); track locale) {
+          <label class="field">
+            <span class="q-caption">
+              {{ 'delivery.zones.create.nameIn' | t: { locale: localeName(locale) } }}
+              @if (isDefault(locale)) {
+                ({{ 'locales.defaultMarker' | t }})
+              }
+            </span>
+            <input
+              type="text"
+              [attr.data-testid]="'zone-name-' + locale"
+              [value]="newNames()[locale] ?? ''"
+              (input)="setNewName(locale, $any($event.target).value)"
+            />
+          </label>
+        }
         @if (createError(); as error) {
           <p class="dialog__error q-body-sm">{{ error }}</p>
         }
@@ -277,6 +273,49 @@
           </button>
           <button type="button" [disabled]="!canCreate()" (click)="submitCreate()">
             {{ 'delivery.zones.create.submit' | t }}
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+
+  @if (renamingZone(); as zone) {
+    <div class="dialog-backdrop" (click)="closeRenameForm()">
+      <div class="dialog" (click)="$event.stopPropagation()" data-testid="zone-rename-dialog">
+        <h2 class="q-subhead">{{ 'delivery.zones.rename.title' | t: { code: zone.code } }}</h2>
+        @for (locale of locales(); track locale) {
+          <label class="field">
+            <span class="q-caption">
+              {{ 'delivery.zones.create.nameIn' | t: { locale: localeName(locale) } }}
+              @if (isDefault(locale)) {
+                ({{ 'locales.defaultMarker' | t }})
+              }
+            </span>
+            <input
+              type="text"
+              [attr.data-testid]="'zone-rename-name-' + locale"
+              [value]="renameNames()[locale] ?? ''"
+              (input)="setRenameName(locale, $any($event.target).value)"
+            />
+          </label>
+        }
+        @if (hiddenLocales(zone).length > 0) {
+          <p class="q-caption" data-testid="zone-hidden-kept">{{ 'locales.hiddenKept' | t }}</p>
+        }
+        @if (renameError(); as error) {
+          <p class="dialog__error q-body-sm">{{ error }}</p>
+        }
+        <div class="dialog__actions">
+          <button type="button" (click)="closeRenameForm()">
+            {{ 'delivery.dialog.cancel' | t }}
+          </button>
+          <button
+            type="button"
+            data-testid="zone-rename-submit"
+            [disabled]="!canRename()"
+            (click)="submitRename()"
+          >
+            {{ 'delivery.zones.rename.submit' | t }}
           </button>
         </div>
       </div>

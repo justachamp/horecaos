@@ -56,7 +56,7 @@ public class ServiceZoneController {
     @RequiresCapability(value = Capability.DELIVERY_ZONE_READ, scope = ScopeType.BRAND)
     @Operation(summary = "Every zone this brand has registered", description = "Operations §3.6.")
     public ResponseEntity<List<ZoneSummaryResponse>> list(@PathVariable UUID tenantId, @PathVariable UUID brandId) {
-        return ResponseEntity.ok(zones.listZones(tenantId, brandId).stream()
+        return ResponseEntity.ok(zones.listZonesWithNames(tenantId, brandId).stream()
                 .map(ZoneSummaryResponse::of)
                 .toList());
     }
@@ -69,7 +69,7 @@ public class ServiceZoneController {
     public ResponseEntity<ZoneDetailResponse> detail(
             @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID zoneId) {
         try {
-            return ResponseEntity.ok(ZoneDetailResponse.of(zones.zoneDetail(tenantId, brandId, zoneId)));
+            return ResponseEntity.ok(ZoneDetailResponse.of(zones.zoneDetailWithNames(tenantId, brandId, zoneId)));
         } catch (ServiceZoneService.DeliveryResourceNotFoundException missing) {
             throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, missing.getMessage());
         }
@@ -91,7 +91,8 @@ public class ServiceZoneController {
                 body.code(),
                 body.displayNameRu(),
                 body.displayNameUz(),
-                body.displayNameEn());
+                body.displayNameEn(),
+                body.displayNames() == null ? Map.of() : body.displayNames());
         return ResponseEntity.ok(new ZoneView(zoneId, body.code(), body.role().name()));
     }
 
@@ -194,12 +195,23 @@ public class ServiceZoneController {
                         () -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No zone " + zoneId + " for this brand"));
     }
 
+    /**
+     * @param displayNameRu/displayNameUz/displayNameEn the platform triple's names.
+     *        <strong>Still required</strong>: {@code OpenApiContractTests} refuses to make a
+     *        published required request field optional, so row 10.12 could not relax them. A
+     *        brand that does not offer one of the three languages names it with its default
+     *        language's name -- what the console does
+     * @param displayNames the name per locale (optional, additive): the way to name a
+     *        language outside the platform triple. It overlays the three fields above where
+     *        both name a locale
+     */
     public record CreateZoneRequest(
             @NotNull ZoneRole role,
             @NotBlank @Size(max = 32) String code,
             @NotBlank @Size(max = 200) String displayNameRu,
             @NotBlank @Size(max = 200) String displayNameUz,
-            @NotBlank @Size(max = 200) String displayNameEn) {}
+            @NotBlank @Size(max = 200) String displayNameEn,
+            @Nullable @Size(max = 32) Map<String, @Size(max = 200) String> displayNames) {}
 
     /**
      * A new draft version of a zone's geometry and delivery terms.
@@ -245,6 +257,9 @@ public class ServiceZoneController {
      * are null together, for a zone drawn but never activated — see {@link
      * ZoneSummaryRow}'s own doc for why that is a real state and not an
      * omission.
+     *
+     * @param displayNames every locale the zone has a name in, the platform triple
+     *                     first then any other by code, each once (row 10.12)
      */
     public record ZoneSummaryResponse(
             UUID zoneId,
@@ -260,9 +275,11 @@ public class ServiceZoneController {
             @Nullable UUID deliveryTariffId,
             @Nullable Long freeDeliveryFromMinor,
             @Nullable Long minBasketMinor,
-            @Nullable Double areaSquareMeters) {
+            @Nullable Double areaSquareMeters,
+            Map<String, String> displayNames) {
 
-        static ZoneSummaryResponse of(ZoneSummaryRow row) {
+        static ZoneSummaryResponse of(ServiceZoneService.ZoneView view) {
+            ZoneSummaryRow row = view.zone();
             return new ZoneSummaryResponse(
                     row.id(),
                     row.role().name(),
@@ -277,13 +294,14 @@ public class ServiceZoneController {
                     row.deliveryTariffId(),
                     row.freeDeliveryFromMinor(),
                     row.minBasketMinor(),
-                    row.areaSquareMeters());
+                    row.areaSquareMeters(),
+                    view.names());
         }
     }
 
     public record ZoneDetailResponse(ZoneSummaryResponse zone, List<UUID> boundLocationIds) {
 
-        static ZoneDetailResponse of(ServiceZoneService.ZoneDetail detail) {
+        static ZoneDetailResponse of(ServiceZoneService.ZoneDetailView detail) {
             return new ZoneDetailResponse(ZoneSummaryResponse.of(detail.zone()), detail.boundLocationIds());
         }
     }

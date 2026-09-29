@@ -29,6 +29,7 @@ import { ServiceStatus } from '../../shell/service-status';
 import { ConnectionStateBanner } from '../../shared/ui/connection-state-banner';
 import { DateRange, DateRangePicker } from '../../shared/ui/date-range-picker';
 import { FilterBar, FilterBarChip } from '../../shared/ui/filter-bar';
+import { OrderTableChip } from '../../shared/ui/order-table-chip/order-table-chip';
 import { StaleIndicator } from '../../shared/ui/stale-indicator';
 import { StatusPill } from '../../shared/ui/status-pill';
 import { Toasts } from '../../shared/ui/toast';
@@ -219,6 +220,7 @@ interface RowDialogState {
   selector: 'q-order-queue',
   imports: [
     TPipe,
+    OrderTableChip,
     OrderReasonDialog,
     OrderRejectReasonDialog,
     OrderOutcomeReasonDialog,

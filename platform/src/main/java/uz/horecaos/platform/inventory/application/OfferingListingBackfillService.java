@@ -6,6 +6,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import uz.horecaos.platform.catalog.api.UnlistedOfferingsPort;
+import uz.horecaos.platform.catalog.api.UnlistedOfferingsPort.UnlistedOfferings;
 import uz.horecaos.platform.inventory.api.StockListingPort;
 
 /**
@@ -43,6 +44,13 @@ public class OfferingListingBackfillService {
      */
     public static final int MAX_VARIANT_BACKFILL = 500;
 
+    /**
+     * The most offerings one {@link #describeUnlistedAtLocation} call names.
+     * The report's {@code totalCount} is exact regardless; this only bounds
+     * how many rows the stock page is sent to read.
+     */
+    public static final int MAX_REPORTED_OFFERINGS = 200;
+
     private final UnlistedOfferingsPort unlisted;
     private final StockListingPort stock;
 
@@ -65,6 +73,18 @@ public class OfferingListingBackfillService {
             }
         }
         return new LocationBackfillResult(candidates.size(), listed, candidates.size() >= MAX_LOCATION_BACKFILL);
+    }
+
+    /**
+     * The stock page's "unlisted offered dishes" report, and the runbook's dry
+     * run: the same set {@link #backfillLocation} would list, described but
+     * not touched. Its {@code totalCount} is the exact backlog, so it can be
+     * compared with a later {@link LocationBackfillResult#candidateCount()}.
+     */
+    public UnlistedOfferings describeUnlistedAtLocation(
+            UUID tenantId, UUID brandId, UUID locationId, String locale, int limit) {
+        return unlisted.describeUnlistedAvailableAtLocation(
+                tenantId, brandId, locationId, locale, Math.min(Math.max(limit, 1), MAX_REPORTED_OFFERINGS));
     }
 
     /** The product editor's own read: every branch offering this variant AVAILABLE but never listing it. */

@@ -17,6 +17,9 @@
   @case ('error') {
     <div class="state">
       <p>{{ 'cart.loadError' | t }}</p>
+      @if (loadErrorDetail(); as detail) {
+        <p class="state__detail" data-testid="cart-error-detail">{{ detail | t }}</p>
+      }
       <button type="button" class="btn" (click)="refresh()">{{ 'common.retry' | t }}</button>
     </div>
   }
@@ -31,7 +34,7 @@
     } @else {
       <div class="lines">
         @for (item of cart.items(); track item.item_id) {
-          <div class="line">
+          <div class="line" [class.is-unavailable]="!item.active">
             <div
               class="line__img"
               role="img"
@@ -46,6 +49,15 @@
                 }
               }
               <span class="line__price">{{ cart.formatPrice(item.price * item.quantity) }}</span>
+              @if (!item.active) {
+                <span class="line__unavailable" data-testid="cart-line-unavailable">
+                  {{
+                    (item.unavailableReason === 'OUT_OF_SALE_WINDOW'
+                      ? 'errors.reason.itemOutOfSaleWindow'
+                      : 'errors.reason.itemUnavailable') | t
+                  }}
+                </span>
+              }
             </div>
             <div class="qty">
               <button
@@ -66,6 +78,16 @@
         }
       </div>
 
+      @if (cart.errorKey(); as errorKey) {
+        <p class="hint hint--error" role="alert" data-testid="cart-error">{{ errorKey | t }}</p>
+      }
+
+      @if (cart.priceRefusalKey(); as pricingRefusal) {
+        <p class="hint hint--error" role="alert" data-testid="cart-pricing-error">
+          {{ pricingRefusal | t }}
+        </p>
+      }
+
       <div class="summary">
         <div class="summary__row">
           <span>{{ 'cart.subtotalLabel' | t }}</span>
@@ -75,6 +97,9 @@
           <span>{{ 'cart.delivery' | t }}</span>
           <span class="summary__value">{{ cart.deliveryFee() }}</span>
         </div>
+        @if (cart.deliveryUnresolvedMessage(); as unresolved) {
+          <p class="summary__note" data-testid="delivery-unresolved">{{ unresolved }}</p>
+        }
         @if (cart.hasDiscount()) {
           <div class="summary__row summary__row--discount">
             <span>{{ 'cart.promoCode' | t }} {{ cart.appliedPromoCode() }}</span>
@@ -93,7 +118,7 @@
 
 @if (state() === 'ready' && cart.items().length > 0) {
   <footer class="foot">
-    <button type="button" class="cta" (click)="goCheckout()">
+    <button type="button" class="cta" [disabled]="!canCheckout()" (click)="goCheckout()">
       {{ 'cart.checkoutCta' | t }} · {{ cart.totalAmount() }}
     </button>
   </footer>

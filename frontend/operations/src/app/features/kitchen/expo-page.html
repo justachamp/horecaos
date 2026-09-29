@@ -29,6 +29,7 @@
           <div class="ticket__header">
             <div class="ticket__number">
               <span class="q-emphasis">{{ ticket.sequenceLabel }}</span>
+              <q-order-table-chip [table]="ticket.table" />
               @if (ticket.channelCode) {
                 <span class="chip chip--muted">{{ ticket.channelCode }}</span>
               }

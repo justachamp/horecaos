@@ -637,6 +637,12 @@ export interface CloposSettingsView {
   requireClerkApproval?: boolean;
 }
 
+export interface CommentPresetControllerLocaleSetResponse {
+  configured?: boolean;
+  defaultLocale?: string;
+  locales?: Array<string>;
+}
+
 export interface CommercialAdminControllerAdjustmentRequest {
   approvedBy: string;
   entitlementKey: string;
@@ -921,6 +927,7 @@ export interface CreateZoneRequest {
   displayNameEn: string;
   displayNameRu: string;
   displayNameUz: string;
+  displayNames?: { [key: string]: string };
   role: "DELIVERY" | "CATCHMENT";
 }
 
@@ -1755,6 +1762,7 @@ export interface NewPresetRequest {
   labelEn: string;
   labelRu: string;
   labelUz: string;
+  labels?: { [key: string]: string };
   posModifierCode?: string;
   sortOrder?: number;
 }
@@ -2287,6 +2295,7 @@ export interface PresetResponse {
   labelEn?: string;
   labelRu?: string;
   labelUz?: string;
+  labels?: { [key: string]: string };
   posModifierCode?: string;
   presetId?: string;
   sortOrder?: number;
@@ -3284,6 +3293,7 @@ export interface UpdatePresetRequest {
   labelEn: string;
   labelRu: string;
   labelUz: string;
+  labels?: { [key: string]: string };
   posModifierCode?: string;
   sortOrder?: number;
   status: string;
@@ -3441,6 +3451,7 @@ export interface ZoneSummaryResponse {
   displayNameEn?: string;
   displayNameRu?: string;
   displayNameUz?: string;
+  displayNames?: { [key: string]: string };
   freeDeliveryFromMinor?: number;
   minBasketMinor?: number;
   priority?: number;
@@ -3653,6 +3664,7 @@ export interface Operations {
   "setBusinessType": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/business-type"; request: { parameters: { path: { tenantId: string } }; body: BusinessTypeRequest }; responses: { "200": unknown } };
   "list_7": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/comment-presets"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<PresetResponse> } };
   "create_4": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/comment-presets"; request: { parameters: { path: { tenantId: string } }; body: NewPresetRequest }; responses: { "200": PresetResponse } };
+  "localeSet": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/comment-presets/locale-set"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": CommentPresetControllerLocaleSetResponse } };
   "update_3": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/comment-presets/{presetId}"; request: { parameters: { path: { presetId: string; tenantId: string } }; body: UpdatePresetRequest }; responses: { "200": PresetResponse } };
   "changeCountry": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/country-change"; request: { parameters: { path: { tenantId: string } }; body: CountryChangeRequest }; responses: { "200": CountryChangeView } };
   "due": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/credentials-due"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": CredentialsDue } };

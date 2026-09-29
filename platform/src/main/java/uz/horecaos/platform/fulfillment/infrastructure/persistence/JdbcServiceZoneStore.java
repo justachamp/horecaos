@@ -406,6 +406,102 @@ public class JdbcServiceZoneStore {
 
     // ------------------------------------------------------------------ writes
 
+    /**
+     * Every per-locale name this brand's zones carry, grouped by zone (row 10.12).
+     * Tenant- and brand-scoped in the query: a zone id is a UUID a caller may have
+     * received from anywhere.
+     */
+    public Map<UUID, Map<String, String>> translationsForBrand(UUID tenantId, UUID brandId) {
+        Map<UUID, Map<String, String>> byZone = new java.util.LinkedHashMap<>();
+        jdbc.sql("""
+                SELECT zone_id, locale, display_name FROM fulfillment.service_zone_translations
+                WHERE tenant_id = :tenantId AND brand_id = :brandId ORDER BY zone_id, locale
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .query((row, number) -> {
+                    byZone.computeIfAbsent(row.getObject("zone_id", UUID.class), id -> new java.util.LinkedHashMap<>())
+                            .put(row.getString("locale"), row.getString("display_name"));
+                    return row.getString("locale");
+                })
+                .list();
+        return byZone;
+    }
+
+    /** One zone's translation rows, tenant- and brand-scoped in the query. */
+    public Map<String, String> translationsFor(UUID tenantId, UUID brandId, UUID zoneId) {
+        Map<String, String> names = new java.util.LinkedHashMap<>();
+        jdbc.sql("""
+                SELECT locale, display_name FROM fulfillment.service_zone_translations
+                WHERE tenant_id = :tenantId AND brand_id = :brandId AND zone_id = :zoneId ORDER BY locale
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("zoneId", zoneId)
+                .query((row, number) -> names.put(row.getString("locale"), row.getString("display_name")))
+                .list();
+        return names;
+    }
+
+    /**
+     * Writes the named locales and touches no other. The {@code DO UPDATE} is
+     * conditioned on the row's own tenant and brand for the reason {@code
+     * JdbcCommentPresetStore#upsertTranslations} spells out: the conflict target
+     * {@code (zone_id, locale)} names neither.
+     */
+    public void upsertTranslations(UUID tenantId, UUID brandId, UUID zoneId, Map<String, String> names, Instant now) {
+        for (Map.Entry<String, String> entry : names.entrySet()) {
+            jdbc.sql("""
+                    INSERT INTO fulfillment.service_zone_translations (
+                        tenant_id, brand_id, zone_id, locale, display_name, created_at, updated_at)
+                    VALUES (:tenantId, :brandId, :zoneId, :locale, :name, :now, :now)
+                    ON CONFLICT (zone_id, locale) DO UPDATE
+                    SET display_name = EXCLUDED.display_name, updated_at = EXCLUDED.updated_at
+                    WHERE fulfillment.service_zone_translations.tenant_id = EXCLUDED.tenant_id
+                      AND fulfillment.service_zone_translations.brand_id = EXCLUDED.brand_id
+                    """)
+                    .param("tenantId", tenantId)
+                    .param("brandId", brandId)
+                    .param("zoneId", zoneId)
+                    .param("locale", entry.getKey())
+                    .param("name", entry.getValue())
+                    .param("now", timestamp(now))
+                    .update();
+        }
+    }
+
+    /**
+     * Updates the platform-triple name columns a caller supplied and leaves the
+     * others exactly as they were (row 10.12).
+     *
+     * @return 1 when the brand has this zone, 0 otherwise
+     */
+    public int updateNames(
+            UUID tenantId,
+            UUID brandId,
+            UUID zoneId,
+            @Nullable String nameRu,
+            @Nullable String nameUz,
+            @Nullable String nameEn,
+            Instant now) {
+        return jdbc.sql("""
+                UPDATE fulfillment.service_zones
+                   SET display_name_ru = COALESCE(:nameRu, display_name_ru),
+                       display_name_uz = COALESCE(:nameUz, display_name_uz),
+                       display_name_en = COALESCE(:nameEn, display_name_en),
+                       updated_at = :now
+                 WHERE tenant_id = :tenantId AND brand_id = :brandId AND id = :zoneId
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("zoneId", zoneId)
+                .param("nameRu", nameRu)
+                .param("nameUz", nameUz)
+                .param("nameEn", nameEn)
+                .param("now", timestamp(now))
+                .update();
+    }
+
     public void insertZone(
             UUID id,
             UUID tenantId,

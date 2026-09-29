@@ -25,6 +25,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import uz.horecaos.platform.dinein.api.OrderTablesPort;
 import uz.horecaos.platform.fulfillment.api.CourierEtaPort;
 import uz.horecaos.platform.fulfillment.api.OrderProgressPort;
 import uz.horecaos.platform.iam.api.AuthorizationService;
@@ -68,16 +69,19 @@ public class KitchenBoardController {
     private final CurrentActor currentActor;
     private final AuthorizationService authorization;
     private final CourierEtaPort courierEta;
+    private final OrderTablesPort orderTables;
 
     public KitchenBoardController(
             KitchenTicketService tickets,
             CurrentActor currentActor,
             AuthorizationService authorization,
-            CourierEtaPort courierEta) {
+            CourierEtaPort courierEta,
+            OrderTablesPort orderTables) {
         this.tickets = tickets;
         this.currentActor = currentActor;
         this.authorization = authorization;
         this.courierEta = courierEta;
+        this.orderTables = orderTables;
     }
 
     @GetMapping("/tickets")
@@ -123,13 +127,25 @@ public class KitchenBoardController {
         Map<UUID, String> externalReferences = tickets.externalReferencesByOrder(tenantId, orderIds);
         Map<UUID, Instant> courierEtaByOrder = courierEta.etaByOrders(tenantId, orderIds);
 
+        // The table beside a dine-in ticket: one batch over the page's DINE_IN
+        // orders only -- a delivery or pickup ticket can never sit at a table --
+        // through the port dine-in owns, rather than a join into dinein.* from
+        // this module (ADR 0047).
+        Set<UUID> dineInOrderIds = ticketRows.stream()
+                .filter(ticket -> "DINE_IN".equals(ticket.fulfilmentMode()))
+                .map(TicketRow::orderId)
+                .collect(Collectors.toSet());
+        Map<UUID, OrderTablesPort.OrderTable> tableByOrder =
+                dineInOrderIds.isEmpty() ? Map.of() : orderTables.tablesByOrders(tenantId, dineInOrderIds);
+
         List<TicketResponse> board = ticketRows.stream()
                 .map(ticket -> TicketResponse.of(
                         ticket,
                         tickets.items(tenantId, ticket.id()),
                         channelSystemTypes.get(ticket.channelCode()),
                         externalReferences.get(ticket.orderId()),
-                        courierEtaByOrder.get(ticket.orderId())))
+                        courierEtaByOrder.get(ticket.orderId()),
+                        tableByOrder.get(ticket.orderId())))
                 .toList();
 
         // The gap travels on every response rather than in a startup log. A branch
@@ -217,9 +233,12 @@ public class KitchenBoardController {
 
         TicketRow ticket = atLocation(tenantId, ticketId, locationId);
         Instant eta = courierEta.etaByOrders(tenantId, Set.of(ticket.orderId())).get(ticket.orderId());
+        OrderTablesPort.OrderTable table = "DINE_IN".equals(ticket.fulfilmentMode())
+                ? orderTables.tablesByOrders(tenantId, Set.of(ticket.orderId())).get(ticket.orderId())
+                : null;
         return ResponseEntity.ok()
                 .eTag(AggregateVersion.toETag(ticket.version()))
-                .body(TicketResponse.of(ticket, tickets.items(tenantId, ticket.id()), null, null, eta));
+                .body(TicketResponse.of(ticket, tickets.items(tenantId, ticket.id()), null, null, eta, table));
     }
 
     /**
@@ -482,6 +501,14 @@ public class KitchenBoardController {
      * #of(TicketRow, List)} overload, carrying neither — a client that
      * already holds either value from its last board read loses nothing by a
      * mutation response not repeating it.
+     *
+     * <p>{@code table} (batch 14, gap map rows {@code 1.1}/{@code 2.1}'s
+     * dine-in visibility) is the table -- or joined tables -- and session a
+     * DINE_IN ticket's order was seated at, resolved through {@link
+     * OrderTablesPort} for DINE_IN tickets only. Codes and display names, never
+     * a guest. Null for every other ticket, for a DINE_IN order an operator keyed
+     * in without seating anyone, and on every mutation response, which follows
+     * the same keep-the-last-board-read rule {@code courierEtaAt} does.
      */
     record TicketResponse(
             UUID ticketId,
@@ -502,6 +529,7 @@ public class KitchenBoardController {
             int version,
             Instant createdAt,
             @Nullable Instant courierEtaAt,
+            OrderTablesPort.@Nullable OrderTable table,
             List<ItemView> items) {
 
         static TicketResponse of(TicketRow ticket, List<TicketItemRow> items) {
@@ -518,6 +546,16 @@ public class KitchenBoardController {
                 @Nullable String channelSystemType,
                 @Nullable String externalReference,
                 @Nullable Instant courierEtaAt) {
+            return of(ticket, items, channelSystemType, externalReference, courierEtaAt, null);
+        }
+
+        static TicketResponse of(
+                TicketRow ticket,
+                List<TicketItemRow> items,
+                @Nullable String channelSystemType,
+                @Nullable String externalReference,
+                @Nullable Instant courierEtaAt,
+                OrderTablesPort.@Nullable OrderTable table) {
             return new TicketResponse(
                     ticket.id(),
                     ticket.orderId(),
@@ -537,6 +575,7 @@ public class KitchenBoardController {
                     ticket.version(),
                     ticket.createdAt(),
                     courierEtaAt,
+                    table,
                     items.stream().map(ItemView::of).toList());
         }
     }

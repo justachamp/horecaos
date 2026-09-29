@@ -6,7 +6,13 @@ import { I18n } from '../../core/i18n/i18n';
 import { TPipe } from '../../core/i18n/t.pipe';
 import { describeApiError } from '../orders/order-errors';
 import { ApiError } from '../../core/api/problem-details';
-import { ChannelSystemType, InventoryApi, StockPosition } from './inventory-api';
+import {
+  ChannelSystemType,
+  InventoryApi,
+  LocationBackfillResult,
+  StockPosition,
+  UnlistedOfferingsReport,
+} from './inventory-api';
 
 /** `tenant.sales_channels.system_type`'s closed set — the threshold form's own options. */
 const CHANNEL_TYPES: readonly ChannelSystemType[] = [
@@ -41,6 +47,13 @@ const CHANNEL_TYPES: readonly ChannelSystemType[] = [
  * per-item time this page would duplicate. This page only shows each item's
  * own default and the business date it was last reset on, and links out to
  * that setting rather than re-implementing it.
+ *
+ * **The unlisted-dishes report** (rows 4.4c/4.1, batch 14) sits above the
+ * table and is not about QUANTITY at all: it names the dishes this branch
+ * offers `AVAILABLE` that inventory has never listed — they read as
+ * unavailable to customers whatever the stock-logic setting — and lists them
+ * all in one click through the idempotent backfill endpoint. It reads
+ * independently of the positions, so a failed report never hides the table.
  */
 @Component({
   selector: 'q-stock-page',
@@ -63,6 +76,12 @@ export class StockPage implements OnInit {
 
   protected readonly positions = signal<readonly StockPosition[]>([]);
 
+  protected readonly unlistedReport = signal<UnlistedOfferingsReport | null>(null);
+  protected readonly unlistedError = signal<string | null>(null);
+  protected readonly listingAll = signal(false);
+  protected readonly listAllOutcome = signal<LocationBackfillResult | null>(null);
+  protected readonly listAllError = signal<string | null>(null);
+
   protected readonly editingVariantId = signal<string | null>(null);
   protected readonly draftOnHand = signal('');
   protected readonly draftOnHandReason = signal('');
@@ -81,7 +100,49 @@ export class StockPage implements OnInit {
   protected readonly thresholdError = signal<string | null>(null);
 
   ngOnInit(): void {
-    void this.load();
+    void Promise.all([this.load(), this.loadUnlistedReport()]);
+  }
+
+  /**
+   * The bulk "list all" behind the report: `POST .../inventory/listing-backfill`.
+   * `InventoryApi` holds one `Idempotency-Key` per intent, so a click retried
+   * after a failure replays rather than re-runs, while a click after a success
+   * (the next page of a backlog past the per-call cap) is a fresh intent.
+   */
+  protected async listAllUnlisted(): Promise<void> {
+    const scope = this.location.scope();
+    if (!scope || this.listingAll()) {
+      return;
+    }
+    this.listingAll.set(true);
+    this.listAllError.set(null);
+    this.listAllOutcome.set(null);
+    try {
+      this.listAllOutcome.set(
+        await firstValueFrom(this.inventoryApi.backfillLocationListing(scope)),
+      );
+      await this.loadUnlistedReport();
+    } catch (error) {
+      this.listAllError.set(this.describe(error));
+    } finally {
+      this.listingAll.set(false);
+    }
+  }
+
+  private async loadUnlistedReport(): Promise<void> {
+    await this.location.ensureLoaded();
+    const scope = this.location.scope();
+    if (!scope) {
+      return;
+    }
+    try {
+      this.unlistedReport.set(await firstValueFrom(this.inventoryApi.unlistedOfferings(scope)));
+      this.unlistedError.set(null);
+    } catch {
+      // Read-only extra: the positions table below stands on its own.
+      this.unlistedReport.set(null);
+      this.unlistedError.set(this.i18n.t('catalog.stock.unlisted.loadFailed'));
+    }
   }
 
   protected quantityRows(): readonly StockPosition[] {

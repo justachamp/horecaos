@@ -10,6 +10,7 @@ import type {
   MenuItemModifierGroup,
   MenuItemVariant,
 } from '../types/home.types';
+import { preferredSellableVariant } from '../utils/item-availability';
 
 /**
  * The published menu, and every browse screen built on it.
@@ -63,8 +64,15 @@ export class MenuService {
    * stop taken between two reads is never served stale, and an
    * application-level cache that outlived one request would quietly undo
    * that on the one layer that decides what a customer sees.
+   *
+   * @param channel overrides this deployment's own configured channel. The one
+   *        caller today is the dine-in QR flow (`DineInTableComponent`): a
+   *        table's `QR_TABLE` channel is resolved per scan, from the guest
+   *        admission, and is never this build's `config.channel` -- see
+   *        `AppConfig.channel`'s own doc on why a static build config cannot
+   *        answer that.
    */
-  async menu(locale: string, locationId?: string): Promise<PublishedMenu> {
+  async menu(locale: string, locationId?: string, channel?: string): Promise<PublishedMenu> {
     const location = locationId ?? this.config.defaultLocationId;
     if (!location) {
       throw new Error('No location is configured for this storefront.');
@@ -76,7 +84,7 @@ export class MenuService {
         // The channel is required and is this deployment's own: ADR 0036 makes it
         // supply both the publication and the price plane, so a menu fetched on
         // another channel is a menu whose prices change at checkout.
-        query: { locale, channel: this.config.channel },
+        query: { locale, channel: channel ?? this.config.channel },
         anonymous: true,
       },
     );
@@ -84,9 +92,14 @@ export class MenuService {
     return menu;
   }
 
-  /** The home screen's shape, from the one menu document. */
-  async home(locale: string, locationId?: string): Promise<CustomerUiResponse> {
-    const menu = await this.menu(locale, locationId);
+  /**
+   * The home screen's shape, from the one menu document.
+   *
+   * @param channel see {@link menu}: the table-QR screen reads the same shape
+   *        on the table's own channel.
+   */
+  async home(locale: string, locationId?: string, channel?: string): Promise<CustomerUiResponse> {
+    const menu = await this.menu(locale, locationId, channel);
     const byId = new Map(menu.products.map((product) => [product.productId, product]));
 
     const groupsById = modifierGroupsById(menu);
@@ -180,18 +193,22 @@ export class MenuService {
     currency: string | null,
     modifierGroups: ReadonlyMap<string, PublishedModifierGroup>,
   ): MenuItem {
-    const preferred = preferredVariant(product);
     const variants: MenuItemVariant[] = product.variants.map((variant) => ({
       id: variant.variantId,
+      isDefault: variant.isDefault,
       // Not a name. See the class comment: the wire carries no customer-facing
       // text for a variant, and a SKU printed as a label is a database value.
       name: variant.unitCode ?? '',
       active: variant.orderable,
+      // Absent means an older platform that has no schedules: on sale, never
+      // "off-window" -- the failure that would hide a whole menu.
+      onSaleNow: variant.onSaleNow !== false,
       preparation_time: 0,
       price: variant.amountMinor ?? 0,
       price_without_discount: variant.amountMinor ?? 0,
       remainingQuantity: variant.remainingQuantity,
     }));
+    const preferred = preferredVariant(variants);
 
     return {
       id: product.productId,
@@ -201,8 +218,8 @@ export class MenuService {
       // Promotions are not surfaced on the menu, so nothing claims a discount.
       has_discount: false,
       preparation_time: 0,
-      price: preferred?.amountMinor ?? 0,
-      price_without_discount: preferred?.amountMinor ?? 0,
+      price: preferred?.price ?? 0,
+      price_without_discount: preferred?.price_without_discount ?? 0,
       image: product.imageUrls[0] ?? null,
       start: null,
       finish: null,
@@ -243,14 +260,22 @@ function toMenuItemModifierGroup(group: PublishedModifierGroup): MenuItemModifie
 }
 
 /**
- * The variant a screen should preselect: the authored default when orderable,
- * otherwise the first orderable one, otherwise the default, otherwise the first.
+ * The variant a screen should price a dish card from and preselect: the one a
+ * customer can buy right now -- the authored default when that can be bought,
+ * otherwise the first that can (see {@link preferredSellableVariant}).
+ *
+ * Only when none can be bought does it fall back to the earlier reading, so a
+ * closed dish still shows a price: the authored default when orderable, then the
+ * first orderable (waiting for its window), then the default, then the first.
+ * "Orderable" alone is not enough to lead with: a default that is orderable but
+ * off its sale window would put a price on the card that the portion the
+ * customer is actually offered does not have.
  */
-function preferredVariant(product: PublishedProduct): PublishedVariant | null {
-  const { variants } = product;
+function preferredVariant(variants: readonly MenuItemVariant[]): MenuItemVariant | null {
   return (
-    variants.find((variant) => variant.isDefault && variant.orderable) ??
-    variants.find((variant) => variant.orderable) ??
+    preferredSellableVariant({ variants }) ??
+    variants.find((variant) => variant.isDefault && variant.active) ??
+    variants.find((variant) => variant.active) ??
     variants.find((variant) => variant.isDefault) ??
     variants[0] ??
     null
@@ -297,6 +322,12 @@ export interface PublishedVariant {
   /** False means shown and sold out, not hidden. The server already dropped what
    * this location does not offer. */
   readonly orderable: boolean;
+  /**
+   * Row 4.2g: false means this variant's own sale schedule excludes the
+   * current moment -- shown, distinct from `orderable` (86'd). Always true for
+   * a variant with no schedule.
+   */
+  readonly onSaleNow: boolean;
   /** Null when unpriced. Never zero for "no price". */
   readonly amountMinor: number | null;
   /**

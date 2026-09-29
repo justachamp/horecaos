@@ -9,8 +9,9 @@ import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
 /**
  * The {@code catalog.api} face of the backfill reads (gap-map row 4.1),
  * matching {@link StopListPortAdapter}'s own shape: a translation layer only,
- * over {@link JdbcCatalogStore#unlistedAvailableVariantsAtLocation} and
- * {@link JdbcCatalogStore#unlistedLocationsForVariant}.
+ * over {@link JdbcCatalogStore#unlistedAvailableVariantsAtLocation},
+ * {@link JdbcCatalogStore#unlistedLocationsForVariant} and
+ * {@link JdbcCatalogStore#describeUnlistedAvailableAtLocation}.
  */
 @Component
 public class UnlistedOfferingsPortAdapter implements UnlistedOfferingsPort {
@@ -31,5 +32,18 @@ public class UnlistedOfferingsPortAdapter implements UnlistedOfferingsPort {
     @Override
     public List<UUID> unlistedLocationsForVariant(UUID tenantId, UUID brandId, UUID variantId, int limit) {
         return store.unlistedLocationsForVariant(tenantId, brandId, variantId, limit);
+    }
+
+    @Override
+    public UnlistedOfferings describeUnlistedAvailableAtLocation(
+            UUID tenantId, UUID brandId, UUID locationId, String locale, int limit) {
+        JdbcCatalogStore.UnlistedOfferingsPage page =
+                store.describeUnlistedAvailableAtLocation(tenantId, brandId, locationId, locale, limit);
+        return new UnlistedOfferings(
+                page.totalCount(),
+                page.items().stream()
+                        .map(row ->
+                                new UnlistedOffering(row.variantId(), row.productName(), row.variantName(), row.sku()))
+                        .toList());
     }
 }

@@ -39,6 +39,7 @@
             <tr data-testid="buffer-row">
               <td>
                 <span class="q-emphasis">{{ ticket.sequenceLabel }}</span>
+                <q-order-table-chip [table]="ticket.table" />
                 @if (ticket.channelCode) {
                   <span class="chip chip--muted">{{ ticket.channelCode }}</span>
                 }

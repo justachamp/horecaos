@@ -2,10 +2,24 @@
 export interface MenuItemVariant {
   id: string;
   name: string;
+  /** False means sold out (86'd): shown, not hidden. */
   active: boolean;
+  /**
+   * Row 4.2g: false means this variant has its own sale schedule and the
+   * current moment falls outside every window on it -- shown, distinct from
+   * `active` (sold out), so a customer can tell "gone for today" from "not on
+   * the menu at this hour". Always true for a variant with no schedule.
+   */
+  onSaleNow: boolean;
   preparation_time: number;
   price: number;
   price_without_discount: number;
+  /**
+   * The portion the menu's author marked as the default, when they marked one.
+   * Optional: a variant built without it is simply not the default, and
+   * `preferredSellableVariant` (utils/item-availability) falls back to list order.
+   */
+  isDefault?: boolean;
   /**
    * Rows 4.4c/4.4d: a low remaining count for a QUANTITY-tracked item,
    * shown only once stock has dropped to a small threshold -- never above

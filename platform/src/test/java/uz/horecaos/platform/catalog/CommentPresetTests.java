@@ -33,6 +33,7 @@ import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCommentPreset
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCommentPresetStore.ProductPresetRow;
 import uz.horecaos.platform.support.CommercialDefaults;
 import uz.horecaos.platform.support.TestDatabase;
+import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcBrandLocaleLookup;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
 
@@ -291,6 +292,88 @@ class CommentPresetTests {
         audited.clear();
         capturing.detachFromProduct(TENANT, BRAND, burger.productId(), noOnion.id(), ACTOR_SUBJECT);
         assertThat(audited).isEmpty();
+    }
+
+    // ------------------------------------------- row 10.12: the tenant's default language
+
+    /** A service that reads the tenant's real {@code tenant.brand_locales} rows for its default language. */
+    private CommentPresetService brandAware() {
+        return new CommentPresetService(
+                presetStore,
+                catalogStore,
+                new uz.horecaos.platform.audit.infrastructure.persistence.JdbcAuditRecorder(
+                        jdbc, JsonMapper.builder().build()),
+                Clock.systemUTC(),
+                new JdbcBrandLocaleLookup(jdbc));
+    }
+
+    private void brandOffers(String defaultLocale, String... others) {
+        jdbc.sql("""
+                INSERT INTO tenant.brand_locales (tenant_id, brand_id, locale, is_default)
+                VALUES (:tenantId, :brandId, :locale, true)
+                """)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("locale", defaultLocale)
+                .update();
+        for (String other : others) {
+            jdbc.sql("""
+                    INSERT INTO tenant.brand_locales (tenant_id, brand_id, locale, is_default)
+                    VALUES (:tenantId, :brandId, :locale, false)
+                    """)
+                    .param("tenantId", TENANT)
+                    .param("brandId", BRAND)
+                    .param("locale", other)
+                    .update();
+        }
+    }
+
+    @Test
+    @DisplayName(
+            "a preset must be worded in the tenant's default language, and the other platform columns take that wording")
+    void aPresetNeedsTheTenantsDefaultLanguageAndFillsTheOtherColumnsFromIt() {
+        brandOffers("uz-Latn", "en");
+        CommentPresetService service = brandAware();
+
+        // English alone: the tenant's default is Uzbek (its first brand's), so this is refused.
+        Throwable refused = catchThrowable(() -> service.createWithLabels(
+                TENANT,
+                new NewPreset("NO_ONION", null, null, null, null, 0, java.util.Map.of("en", "No onion")),
+                ACTOR_SUBJECT));
+        assertThat(refused).isInstanceOf(ApiException.class);
+        assertThat(((ApiException) refused).errorCode()).isEqualTo(ErrorCode.VALIDATION_FAILED);
+        assertThat(refused.getMessage()).contains("uz-Latn");
+        assertThat(presets.list(TENANT)).isEmpty();
+
+        // Uzbek and English: Russian is a NOT NULL column the tenant does not offer, so it
+        // takes the default (Uzbek) wording rather than English or a blank.
+        CommentPresetService.PresetView created = service.createWithLabels(
+                TENANT,
+                new NewPreset("NO_ONION", null, "Piyozsiz", null, null, 0, java.util.Map.of("en", "No onion")),
+                ACTOR_SUBJECT);
+        assertThat(created.row().labelRu()).isEqualTo("Piyozsiz");
+        assertThat(created.row().labelUz()).isEqualTo("Piyozsiz");
+        assertThat(created.row().labelEn()).isEqualTo("No onion");
+    }
+
+    @Test
+    @DisplayName("an edit that names no language for a column leaves that column as it was")
+    void anEditLeavesAColumnItDoesNotNameAsItWas() {
+        PresetRow created =
+                presets.create(TENANT, newPreset("NO_ONION", "Без лука", "Piyozsiz", "No onion", null), ACTOR_SUBJECT);
+
+        PresetRow edited = presets.update(
+                TENANT,
+                created.id(),
+                new PresetEdit(null, null, "No onions!", null, 0, "ACTIVE", created.version(), java.util.Map.of()),
+                ACTOR_SUBJECT);
+
+        assertThat(edited.labelRu()).isEqualTo("Без лука");
+        assertThat(edited.labelUz()).isEqualTo("Piyozsiz");
+        assertThat(edited.labelEn()).isEqualTo("No onions!");
+        assertThat(presets.list(TENANT))
+                .singleElement()
+                .satisfies(row -> assertThat(row.labelUz()).isEqualTo("Piyozsiz"));
     }
 
     // ------------------------------------------------------------------------ fixture

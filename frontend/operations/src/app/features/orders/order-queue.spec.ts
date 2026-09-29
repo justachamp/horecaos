@@ -2758,3 +2758,106 @@ describe('OrderQueue: the Клиент column batches customer labels by page (g
     }
   });
 });
+
+/**
+ * Batch 14 (gap map rows 1.1/X.36's dine-in visibility): a DINE_IN order seated
+ * at a table shows a small chip beside its type, from the `table` the board
+ * read now carries. Everything else — a delivery, a pickup, a DINE_IN order
+ * nobody seated — renders exactly as before.
+ */
+describe('OrderQueue: the table chip beside a dine-in order (batch 14)', () => {
+  function configureWithOrders(orders: readonly OrderSummaryResponse[]): void {
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter([{ path: 'orders', component: OrderQueue }]),
+        {
+          provide: CurrentLocation,
+          useValue: {
+            scope: signal(FAKE_SCOPE),
+            denied: signal(false),
+            ensureLoaded: () => Promise.resolve(),
+          },
+        },
+        { provide: ApiClient, useValue: { get: ordersResponse(orders) } },
+        { provide: OrderCounts, useValue: { forOrders: () => Promise.resolve(zeroTabCounts()) } },
+        { provide: RejectReasonsApi, useValue: stubRejectReasons() },
+        {
+          provide: LatenessPolicyApi,
+          useValue: { resolve: () => Promise.resolve(PLATFORM_DEFAULT_LATENESS_POLICY) },
+        },
+      ],
+    });
+    TestBed.inject(I18n).setLocale('en');
+  }
+
+  function chipsByOrder(host: HTMLElement): Record<string, string | null> {
+    const result: Record<string, string | null> = {};
+    host.querySelectorAll('[data-testid="order-row"]').forEach((row) => {
+      const number = row.querySelector('.q-mono')?.textContent?.trim() ?? '';
+      result[number] =
+        row.querySelector('[data-testid="order-table-chip"]')?.textContent?.trim() ?? null;
+    });
+    return result;
+  }
+
+  it('shows the table of a seated dine-in order and nothing on every other row', async () => {
+    configureWithOrders([
+      order({
+        orderId: 'order-seated',
+        publicOrderNumber: '0101',
+        fulfillmentMode: 'DINE_IN',
+        table: {
+          sessionId: 'session-1',
+          tables: [{ tableId: 'table-7', code: 'T7', displayName: 'Table 7' }],
+        },
+      }),
+      order({
+        orderId: 'order-joined',
+        publicOrderNumber: '0102',
+        fulfillmentMode: 'DINE_IN',
+        table: {
+          sessionId: 'session-2',
+          tables: [
+            { tableId: 'table-8', code: 'T8', displayName: 'Table 8' },
+            { tableId: 'table-9', code: 'T9', displayName: 'Table 9' },
+          ],
+        },
+      }),
+      order({ orderId: 'order-keyed', publicOrderNumber: '0103', fulfillmentMode: 'DINE_IN' }),
+      order({
+        orderId: 'order-delivery',
+        publicOrderNumber: '0104',
+        fulfillmentMode: 'DELIVERY',
+        table: null,
+      }),
+    ]);
+    const harness = await RouterTestingHarness.create('/orders?tab=new');
+    await flushMicrotasks();
+
+    expect(chipsByOrder(harness.routeNativeElement!)).toEqual({
+      '0101': 'Table T7',
+      '0102': 'Table T8 + T9',
+      '0103': null,
+      '0104': null,
+    });
+  });
+
+  it('names the chip in the operator language', async () => {
+    configureWithOrders([
+      order({
+        orderId: 'order-seated',
+        publicOrderNumber: '0101',
+        fulfillmentMode: 'DINE_IN',
+        table: {
+          sessionId: 'session-1',
+          tables: [{ tableId: 'table-7', code: 'T7', displayName: 'Table 7' }],
+        },
+      }),
+    ]);
+    TestBed.inject(I18n).setLocale('ru');
+    const harness = await RouterTestingHarness.create('/orders?tab=new');
+    await flushMicrotasks();
+
+    expect(chipsByOrder(harness.routeNativeElement!)['0101']).toBe('Стол T7');
+  });
+});

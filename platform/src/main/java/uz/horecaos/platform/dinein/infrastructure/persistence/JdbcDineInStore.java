@@ -7,6 +7,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -699,6 +700,15 @@ public class JdbcDineInStore {
                 """).params(params).update();
     }
 
+    /**
+     * Records that a session sits at a table.
+     *
+     * @param joinedAt when the table was joined. It is also the only thing that
+     *                 orders a party's tables ({@link #tablesForSession}, {@link
+     *                 #tablesForOrders}), so a caller joining several at once
+     *                 stamps each a distinct instant, in join order -- see {@code
+     *                 TableSessionService.open}
+     */
     public void occupyTable(UUID sessionId, UUID tableId, UUID tenantId, UUID locationId, Instant joinedAt) {
 
         jdbc.sql("""
@@ -805,6 +815,46 @@ public class JdbcDineInStore {
                 .query((row, number) -> row.getObject("table_id", UUID.class))
                 .list();
     }
+
+    /**
+     * The tables behind each of a batch of orders, in one round trip
+     * (ADR 0047, {@code OrderTablesPort}).
+     *
+     * <p>Order id to session to occupied tables to the table's own row. Every hop
+     * carries the tenant -- the order id is a UUID a caller supplies, and matching
+     * it alone would let a session of another tenant answer for it. Ordered by the
+     * moment each table was joined, so a party pushed together reads in the order
+     * the room was arranged ({@code TableSessionService.open} gives each table of
+     * one request its own instant). The table code is only the last tie-break, so
+     * two rows can never come back in a different order from one read to the next.
+     */
+    public List<OrderTableRow> tablesForOrders(UUID tenantId, Collection<UUID> orderIds) {
+        if (orderIds.isEmpty()) {
+            return List.of();
+        }
+        return jdbc.sql("""
+                SELECT so.order_id, so.session_id, t.id AS table_id, t.code, t.display_name
+                FROM dinein.session_orders so
+                JOIN dinein.session_tables st
+                  ON st.session_id = so.session_id AND st.tenant_id = so.tenant_id
+                JOIN dinein.tables t
+                  ON t.id = st.table_id AND t.tenant_id = st.tenant_id
+                WHERE so.tenant_id = :tenantId AND so.order_id IN (:orderIds)
+                ORDER BY so.order_id, st.joined_at, t.code
+                """)
+                .param("tenantId", tenantId)
+                .param("orderIds", orderIds)
+                .query((row, number) -> new OrderTableRow(
+                        row.getObject("order_id", UUID.class),
+                        row.getObject("session_id", UUID.class),
+                        row.getObject("table_id", UUID.class),
+                        row.getString("code"),
+                        row.getString("display_name")))
+                .list();
+    }
+
+    /** One (order, table) pair of {@link #tablesForOrders}. */
+    public record OrderTableRow(UUID orderId, UUID sessionId, UUID tableId, String code, String displayName) {}
 
     // ---------------------------------------------------------------- rounds
 

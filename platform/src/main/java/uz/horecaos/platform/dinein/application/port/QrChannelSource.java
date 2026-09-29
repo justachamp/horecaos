@@ -31,4 +31,34 @@ public interface QrChannelSource {
      *         falls back to "no code" rather than guessing
      */
     Optional<String> qrTableChannelCode(UUID tenantId);
+
+    /**
+     * The verified hostname a printed table card should send a phone to
+     * (ADR 0047, ADR 0036, gap map row {@code 10.5}): the address the
+     * storefront answers on, so a scan opens {@code
+     * https://<hostname>/dine-in/<token>} and not a bare string a camera cannot
+     * follow.
+     *
+     * <p>Two tiers, each requiring exactly one candidate, never a guess:
+     * the tenant's own {@code QR_TABLE} channel's verified hostname first, then
+     * the verified hostname of the tenant's one active {@code WEB} channel --
+     * the console only lets a {@code WEB} channel claim a hostname, so for most
+     * tenants the storefront the guest lands on is that one. Two candidates at a
+     * tier are ambiguous (which brand's site?) and answer as if there were none.
+     *
+     * <p>Verified only: an unverified custom domain is one whose DNS the tenant
+     * has not proven, and printing it on a card puts a guest's phone on a host
+     * nobody has confirmed answers. A platform-issued subdomain is verified the
+     * moment it is claimed and so qualifies.
+     *
+     * <p>Defaulted to empty so the hand-written {@code QrChannelSource} lambdas
+     * that predate the printed card need no implementation of a read the QR
+     * exchange never makes.
+     *
+     * @return empty when no hostname qualifies -- the caller then prints the bare
+     *         token and says so, rather than inventing an address
+     */
+    default Optional<String> storefrontHostname(UUID tenantId) {
+        return Optional.empty();
+    }
 }

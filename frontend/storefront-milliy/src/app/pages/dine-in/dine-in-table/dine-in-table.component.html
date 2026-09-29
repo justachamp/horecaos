@@ -1,0 +1,38 @@
+<div class="table" data-testid="dine-in-table">
+  @if (!admission()) {
+    <div class="table__empty" data-testid="dine-in-no-admission">
+      <p class="table__title">{{ 'dineIn.noAdmissionTitle' | t }}</p>
+      <p class="table__body">{{ 'dineIn.noAdmissionBody' | t }}</p>
+      <a class="table__home" routerLink="/home" data-testid="dine-in-home-link">
+        {{ 'dineIn.backHome' | t }}
+      </a>
+    </div>
+  } @else {
+    <header class="table__header">
+      <h1 class="table__code" data-testid="dine-in-table-code">
+        {{ 'dineIn.tableLabel' | t: { code: admission()!.tableCode } }}
+      </h1>
+    </header>
+
+    @if (!viewOnly()) {
+      <div class="table__notice" role="status" data-testid="dine-in-ordering-unavailable">
+        {{ 'dineIn.orderingUnavailable' | t }}
+      </div>
+    }
+
+    @if (loading()) {
+      <p class="table__state" data-testid="dine-in-menu-loading">{{ 'common.loading' | t }}</p>
+    } @else if (failed() || !hasDishes()) {
+      <p class="table__state" data-testid="dine-in-menu-unavailable">
+        {{ 'dineIn.menuUnavailable' | t }}
+      </p>
+    } @else {
+      <app-menu-grid
+        [categories]="categories()"
+        [sections]="sections()"
+        [currency]="currency()"
+        [linked]="false"
+      />
+    }
+  }
+</div>

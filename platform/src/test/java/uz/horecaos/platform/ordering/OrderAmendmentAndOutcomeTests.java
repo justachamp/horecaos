@@ -32,6 +32,7 @@ import tools.jackson.databind.json.JsonMapper;
 import uz.horecaos.platform.audit.infrastructure.persistence.JdbcAuditRecorder;
 import uz.horecaos.platform.customers.application.CustomerBlacklistService;
 import uz.horecaos.platform.customers.infrastructure.persistence.JdbcCustomerStore;
+import uz.horecaos.platform.dinein.api.OrderTablesPort;
 import uz.horecaos.platform.fulfillment.api.ActiveCourierAssignmentsPort;
 import uz.horecaos.platform.iam.api.protection.FieldProtection;
 import uz.horecaos.platform.iam.infrastructure.protection.DataEncryptionKeyProvider;
@@ -326,6 +327,7 @@ class OrderAmendmentAndOutcomeTests {
                 processStore,
                 UNWIRED_PAYMENTS,
                 NO_COURIER_ASSIGNMENTS,
+                NO_ORDER_TABLES,
                 amendmentStore,
                 protection,
                 objectMapper,
@@ -3663,6 +3665,9 @@ class OrderAmendmentAndOutcomeTests {
 
     /** No order in this suite has a courier assigned; nothing here exercises the board's Курьер column. */
     private static final ActiveCourierAssignmentsPort NO_COURIER_ASSIGNMENTS = (tenantId, orderIds) -> Map.of();
+
+    /** No order here was seated at a table, so the dine-in lookup has nothing to answer. */
+    private static final OrderTablesPort NO_ORDER_TABLES = (tenantId, orderIds) -> Map.of();
 
     /** The unwired payments port, which is a stand-in in production too. */
     private static final PaymentIntentPort UNWIRED_PAYMENTS = new PaymentIntentPort() {

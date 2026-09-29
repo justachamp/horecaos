@@ -295,6 +295,35 @@ describe('FiscalizationPage', () => {
     expect(text()).toContain('Delivery fee');
   });
 
+  it('never labels an unnamed dish or modifier as the delivery fee', async () => {
+    api.fiscalCoverage.mockResolvedValue({
+      totalNodes: 2,
+      unclassifiedCount: 2,
+      nodes: [
+        {
+          nodeType: 'VARIANT',
+          nodeId: 'variant-1',
+          name: null,
+          categoryName: null,
+          locationCount: 2,
+        },
+        {
+          nodeType: 'MODIFIER_OPTION',
+          nodeId: 'option-1',
+          name: 'Cheese',
+          categoryName: null,
+          locationCount: 0,
+        },
+      ],
+    } satisfies FiscalCoverageSummary);
+    selectTab(2);
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(text()).toContain('Cheese');
+    expect(text()).not.toContain('Delivery fee');
+  });
+
   it('classifies the delivery fee with an ИКПУ code and the marking control', async () => {
     selectTab(2);
     await flushMicrotasks();
