@@ -41,6 +41,7 @@ import uz.horecaos.platform.iam.api.secrets.SecretReference;
 import uz.horecaos.platform.iam.api.secrets.SecretResolver;
 import uz.horecaos.platform.iam.infrastructure.authorization.RoleRegistrySynchronizer;
 import uz.horecaos.platform.support.TestDatabase;
+import uz.horecaos.platform.support.ThreadSafeListAppender;
 import uz.horecaos.platform.web.idempotency.IdempotencyInterceptor;
 
 /**
@@ -332,7 +333,7 @@ class SecretIngressControllerEndpointTests {
      * chasing a bug with tracing turned on would see.
      */
     private static ListAppender<ILoggingEvent> captureAllLogs() {
-        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        ListAppender<ILoggingEvent> appender = new ThreadSafeListAppender();
         appender.start();
         Logger root = rootLogger();
         previousRootLevel = root.getLevel();
