@@ -46,7 +46,10 @@ public final class LocalizedLabels {
      * <p>A bare {@code uz} is refused rather than passed through: the platform's
      * Uzbek locale is {@code uz-Latn} (ADR 0035, a bare {@code uz} is ambiguous
      * between scripts), and a row stored under {@code uz} would sit beside the
-     * {@code label_uz} column as a second, never-read Uzbek.
+     * {@code label_uz} column as a second, never-read Uzbek. A tag that is a case
+     * variant of a triple locale ({@code uz-latn}, {@code uz-LATN}) passes the
+     * well-formedness pattern and is the same language, so it is written under the
+     * canonical tag ({@link #canonical}) instead of becoming that second Uzbek.
      *
      * @param maxLength the column width each label must fit
      * @throws IllegalArgumentException a locale that is not a well-formed tag, is a
@@ -71,7 +74,7 @@ public final class LocalizedLabels {
                     throw new IllegalArgumentException(
                             "Use 'uz-Latn' for Uzbek: a bare 'uz' does not say which script the wording is in");
                 }
-                putIfPresent(labels, locale, label);
+                putIfPresent(labels, canonical(locale), label);
             });
         }
         labels.forEach((locale, label) -> {
@@ -81,6 +84,20 @@ public final class LocalizedLabels {
             }
         });
         return labels;
+    }
+
+    /**
+     * The tag a locale is stored and reported under: a triple locale's own spelling for
+     * any case variant of it, every other tag as given. BCP 47 tags are case-insensitive,
+     * the columns and the {@code ck_*_translation_locale} constraints are not.
+     */
+    public static String canonical(String locale) {
+        for (String triple : PLATFORM_TRIPLE) {
+            if (triple.equalsIgnoreCase(locale)) {
+                return triple;
+            }
+        }
+        return locale;
     }
 
     private static void putIfPresent(Map<String, String> labels, String locale, @Nullable String label) {
@@ -95,7 +112,9 @@ public final class LocalizedLabels {
      *
      * <p>A translations row for a triple locale (the transition's mirror of the
      * column) is ignored — the column is the source, so a stale mirror cannot show
-     * through. A blank column is skipped so the map never carries an empty wording.
+     * through — and so is one stored under a case variant of it ({@code uz-latn}),
+     * which would otherwise be reported as a second language. A blank column is
+     * skipped so the map never carries an empty wording.
      */
     public static Map<String, String> merge(String ru, String uz, String en, Map<String, String> translationRows) {
         Map<String, String> merged = new LinkedHashMap<>();
@@ -103,7 +122,7 @@ public final class LocalizedLabels {
         putIfPresent(merged, UZ_LATN, uz);
         putIfPresent(merged, EN, en);
         List<String> others = new ArrayList<>(translationRows.keySet());
-        others.removeAll(PLATFORM_TRIPLE);
+        others.removeIf(locale -> PLATFORM_TRIPLE.contains(canonical(locale)));
         others.sort(null);
         for (String locale : others) {
             putIfPresent(merged, locale, translationRows.get(locale));
