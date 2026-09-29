@@ -4,6 +4,8 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
@@ -25,6 +27,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import uz.horecaos.platform.catalog.api.UnlistedOfferingsPort.UnlistedOffering;
+import uz.horecaos.platform.catalog.api.UnlistedOfferingsPort.UnlistedOfferings;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
@@ -106,6 +110,27 @@ public class InventoryController {
         LocationBackfillResult result = backfill.backfillLocation(tenantId, brandId, locationId);
         return ResponseEntity.ok(
                 new BackfillResponse(result.candidateCount(), result.listedCount(), result.mayHaveMore()));
+    }
+
+    @GetMapping("/unlisted-offerings")
+    @RequiresCapability(value = Capability.INVENTORY_READ, scope = ScopeType.LOCATION)
+    @Operation(
+            summary = "Which dishes this branch offers but has never listed in inventory",
+            description = "Gap map row 4.4c's stock-page report, and the dry run for the listing-backfill "
+                    + "runbook: the exact set POST .../listing-backfill would list, described and not "
+                    + "touched. `totalCount` is the whole backlog; `items` is at most `limit` of it "
+                    + "(default 100, capped at 200), and `hasMore` says whether more exist. A branch "
+                    + "with nothing unlisted answers `totalCount: 0`. Names prefer `locale`, then fall "
+                    + "back to another locale, then to the product code.")
+    public ResponseEntity<UnlistedOfferingsResponse> unlistedOfferings(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID locationId,
+            @RequestParam(defaultValue = "uz") @Pattern(regexp = "^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})?$") String locale,
+            @RequestParam(defaultValue = "100") @Min(1) @Max(OfferingListingBackfillService.MAX_REPORTED_OFFERINGS)
+                    int limit) {
+        UnlistedOfferings report = backfill.describeUnlistedAtLocation(tenantId, brandId, locationId, locale, limit);
+        return ResponseEntity.ok(UnlistedOfferingsResponse.of(report));
     }
 
     @PutMapping("/variants/{variantId}/availability")
@@ -354,6 +379,30 @@ public class InventoryController {
      * @param mayHaveMore    the read hit its own page cap; call again to continue
      */
     public record BackfillResponse(int candidateCount, int listedCount, boolean mayHaveMore) {}
+
+    /**
+     * @param totalCount the whole unlisted backlog at this branch
+     * @param hasMore    more exist than {@code items} carries
+     */
+    public record UnlistedOfferingsResponse(int totalCount, boolean hasMore, List<UnlistedOfferingResponse> items) {
+        static UnlistedOfferingsResponse of(UnlistedOfferings report) {
+            return new UnlistedOfferingsResponse(
+                    report.totalCount(),
+                    report.totalCount() > report.items().size(),
+                    report.items().stream().map(UnlistedOfferingResponse::of).toList());
+        }
+    }
+
+    public record UnlistedOfferingResponse(
+            UUID variantId,
+            String productName,
+            @Nullable String variantName,
+            @Nullable String sku) {
+        static UnlistedOfferingResponse of(UnlistedOffering offering) {
+            return new UnlistedOfferingResponse(
+                    offering.variantId(), offering.productName(), offering.variantName(), offering.sku());
+        }
+    }
 
     /** {@code reasonCode} is a short enumerated code — see {@link AvailabilityRequest}'s own doc. */
     public record BulkAvailabilityRequest(

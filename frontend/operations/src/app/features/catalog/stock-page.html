@@ -4,6 +4,75 @@
     <p class="q-caption stock__note">{{ 'catalog.stock.resetNote' | t }}</p>
   </div>
 
+  @if (unlistedReport(); as report) {
+    @if (report.totalCount > 0) {
+      <section class="stock__unlisted" data-testid="stock-unlisted-report">
+        <div class="stock__unlisted-head">
+          <div class="stock__unlisted-copy">
+            <h3 class="q-subhead">
+              {{ 'catalog.stock.unlisted.title' | t: { count: report.totalCount } }}
+            </h3>
+            <p class="q-caption">{{ 'catalog.stock.unlisted.body' | t }}</p>
+          </div>
+          <button
+            type="button"
+            class="q-body primary"
+            [disabled]="listingAll()"
+            (click)="listAllUnlisted()"
+            data-testid="stock-list-all-unlisted"
+          >
+            {{
+              listingAll()
+                ? ('catalog.stock.unlisted.listing' | t)
+                : ('catalog.stock.unlisted.listAll' | t: { count: report.totalCount })
+            }}
+          </button>
+        </div>
+        <ul class="stock__unlisted-list">
+          @for (item of report.items; track item.variantId) {
+            <li class="q-body-sm" [attr.data-testid]="'stock-unlisted-' + item.variantId">
+              <span>{{ item.productName }}</span>
+              @if (item.variantName) {
+                <span class="q-caption"> · {{ item.variantName }}</span>
+              }
+              @if (item.sku) {
+                <span class="q-caption q-tnum"> · {{ item.sku }}</span>
+              }
+            </li>
+          }
+        </ul>
+        @if (report.hasMore) {
+          <p class="q-caption" data-testid="stock-unlisted-more">
+            {{
+              'catalog.stock.unlisted.more' | t: { count: report.totalCount - report.items.length }
+            }}
+          </p>
+        }
+      </section>
+    }
+  } @else if (unlistedError(); as message) {
+    @if (!denied() && !noLocation()) {
+      <p class="q-body-sm error" role="alert" data-testid="stock-unlisted-error">{{ message }}</p>
+    }
+  }
+  @if (listAllOutcome(); as outcome) {
+    <p class="q-body-sm stock__unlisted-outcome" role="status" data-testid="stock-list-all-outcome">
+      {{
+        outcome.listedCount < outcome.candidateCount
+          ? ('catalog.stock.unlisted.outcomePartial'
+            | t: { listed: outcome.listedCount, candidate: outcome.candidateCount })
+          : ('catalog.stock.unlisted.outcome'
+            | t: { listed: outcome.listedCount, candidate: outcome.candidateCount })
+      }}
+      @if (outcome.mayHaveMore) {
+        <span data-testid="stock-list-all-more">{{ 'catalog.stock.unlisted.moreRemain' | t }}</span>
+      }
+    </p>
+  }
+  @if (listAllError(); as message) {
+    <p class="q-body-sm error" role="alert" data-testid="stock-list-all-error">{{ message }}</p>
+  }
+
   @if (!firstLoadComplete()) {
     <p class="q-body-sm stock__status">{{ 'catalog.stock.loading' | t }}</p>
   } @else if (noLocation()) {

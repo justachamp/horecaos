@@ -1956,6 +1956,83 @@ public class JdbcCatalogStore {
     public record UnlistedVariantRow(UUID variantId) {}
 
     /**
+     * {@link #unlistedAvailableVariantsAtLocation}'s own set, described for the
+     * stock page's "unlisted offered dishes" report (gap-map row 4.4c) and the
+     * backfill runbook's dry run. The {@code WHERE} clause is that method's
+     * verbatim — the same anti-join, the same {@code AVAILABLE} filter — so the
+     * count here is exactly the number the backfill will list; the joins to
+     * {@code variants}/{@code products} only add names and are FK-guaranteed
+     * to drop nothing ({@code fk_offering_variant}, {@code fk_variant_product}).
+     *
+     * <p>The total is a window count over the whole match, taken before {@code
+     * LIMIT}, so one round trip gives both the page and the exact backlog.
+     * The product name prefers {@code locale}, then falls back by the same
+     * ru, uz, en order {@link #productNamesFor} uses, then to the product
+     * code — a row an operator has to act on is never nameless.
+     */
+    public UnlistedOfferingsPage describeUnlistedAvailableAtLocation(
+            UUID tenantId, UUID brandId, UUID locationId, String locale, int limit) {
+        int[] total = {0};
+        List<UnlistedOfferingRow> items = jdbc.sql("""
+                SELECT lo.variant_id,
+                       COALESCE(pt.name, p.code) AS product_name,
+                       vt.name AS variant_name,
+                       v.sku AS sku,
+                       COUNT(*) OVER () AS total_count
+                FROM catalog.location_offerings lo
+                JOIN catalog.variants v
+                    ON v.id = lo.variant_id AND v.tenant_id = lo.tenant_id AND v.brand_id = lo.brand_id
+                JOIN catalog.products p
+                    ON p.id = v.product_id AND p.tenant_id = v.tenant_id AND p.brand_id = v.brand_id
+                LEFT JOIN LATERAL (
+                    SELECT t.name
+                    FROM catalog.translations t
+                    WHERE t.entity_type = 'PRODUCT' AND t.entity_id = p.id AND t.tenant_id = p.tenant_id
+                    ORDER BY (t.locale = :locale) DESC,
+                             CASE t.locale WHEN 'ru' THEN 0 WHEN 'uz' THEN 1 WHEN 'uz-Latn' THEN 2
+                                           WHEN 'en' THEN 3 ELSE 4 END,
+                             t.locale
+                    LIMIT 1
+                ) pt ON true
+                LEFT JOIN catalog.translations vt
+                    ON vt.entity_type = 'VARIANT' AND vt.entity_id = v.id AND vt.tenant_id = v.tenant_id
+                       AND vt.locale = :locale
+                LEFT JOIN inventory.stock_items si
+                    ON si.variant_id = lo.variant_id AND si.tenant_id = lo.tenant_id
+                       AND si.location_id = lo.location_id
+                WHERE lo.tenant_id = :tenantId AND lo.brand_id = :brandId AND lo.location_id = :locationId
+                  AND lo.status = 'AVAILABLE' AND si.id IS NULL
+                ORDER BY COALESCE(pt.name, p.code), lo.variant_id
+                LIMIT :limit
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("locationId", locationId)
+                .param("locale", locale)
+                .param("limit", limit)
+                .query((row, number) -> {
+                    total[0] = row.getInt("total_count");
+                    return new UnlistedOfferingRow(
+                            java.util.Objects.requireNonNull(row.getObject("variant_id", UUID.class)),
+                            java.util.Objects.requireNonNull(row.getString("product_name")),
+                            row.getString("variant_name"),
+                            row.getString("sku"));
+                })
+                .list();
+        return new UnlistedOfferingsPage(total[0], items);
+    }
+
+    /** One described row of {@link #describeUnlistedAvailableAtLocation}. */
+    public record UnlistedOfferingRow(
+            UUID variantId,
+            String productName,
+            @Nullable String variantName,
+            @Nullable String sku) {}
+
+    /** {@link #describeUnlistedAvailableAtLocation}'s result: the exact backlog size and its first rows. */
+    public record UnlistedOfferingsPage(int totalCount, List<UnlistedOfferingRow> items) {}
+
+    /**
      * One offering's current row, unfiltered by status — unlike {@link
      * #offeringsForLocation}, which drops {@code HIDDEN} rows for the
      * customer-facing read it backs, an audit before-state must see a

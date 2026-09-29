@@ -677,32 +677,37 @@
             }
             @case ('AVAILABILITY') {
               <div class="editor__section">
-                @if (unlistedBranchCount(); as unlistedCount) {
-                  @if (unlistedCount > 0) {
-                    <div
-                      class="editor__unlisted-banner"
-                      data-testid="editor-unlisted-branches-banner"
-                    >
-                      <p>
-                        {{
-                          'catalog.editor.availability.notListedAtBranches'
-                            | t: { count: unlistedCount }
-                        }}
-                      </p>
-                      <button
-                        type="button"
-                        (click)="listAtMissingBranches()"
-                        [disabled]="listingBackfillPending()"
-                        data-testid="editor-list-missing-branches"
-                      >
-                        {{
-                          listingBackfillPending()
-                            ? ('catalog.editor.availability.listingInProgress' | t)
-                            : ('catalog.editor.availability.listEverywhere' | t)
-                        }}
-                      </button>
-                    </div>
-                  }
+                @if (unlistedVariantRows().length > 0) {
+                  <div
+                    class="editor__unlisted-banner"
+                    data-testid="editor-unlisted-branches-banner"
+                  >
+                    <p>{{ 'catalog.editor.availability.notListedHeading' | t }}</p>
+                    <ul class="editor__unlisted-list">
+                      @for (row of unlistedVariantRows(); track row.variantId) {
+                        <li [attr.data-testid]="'editor-unlisted-variant-' + row.variantId">
+                          <span>
+                            {{
+                              'catalog.editor.availability.notListedVariantRow'
+                                | t: { variant: variantLabel(row.variantId), count: row.count }
+                            }}
+                          </span>
+                          <button
+                            type="button"
+                            (click)="listAtMissingBranches(row.variantId)"
+                            [disabled]="listingPendingVariantIds().has(row.variantId)"
+                            [attr.data-testid]="'editor-list-missing-branches-' + row.variantId"
+                          >
+                            {{
+                              listingPendingVariantIds().has(row.variantId)
+                                ? ('catalog.editor.availability.listingInProgress' | t)
+                                : ('catalog.editor.availability.listEverywhere' | t)
+                            }}
+                          </button>
+                        </li>
+                      }
+                    </ul>
+                  </div>
                 }
                 @if (availabilityRows().length === 0) {
                   <p class="q-caption">{{ 'catalog.editor.availability.empty' | t }}</p>

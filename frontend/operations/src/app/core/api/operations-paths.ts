@@ -468,6 +468,16 @@ export const operationsPaths = {
   },
 
   /**
+   * The stock page's "unlisted offered dishes" report (gap map row 4.4c):
+   * `GET` reads which AVAILABLE offerings at this location have no inventory
+   * listing — `InventoryController#unlistedOfferings`, the read the bulk
+   * {@link inventoryListingBackfill} action clears, and the runbook's dry run.
+   */
+  inventoryUnlistedOfferings(scope: LocationScope): string {
+    return `${LEGACY_TENANT_PREFIX}${tenantBrandLocation(scope)}/inventory/unlisted-offerings`;
+  },
+
+  /**
    * One variant's own unlisted branches across the whole brand (gap map row
    * 4.1) — `InventoryVariantListingController`, brand-scoped like {@link
    * conversations}: only `scope.tenantId`/`scope.brandId` are read.

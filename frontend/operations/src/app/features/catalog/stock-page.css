@@ -132,3 +132,51 @@
   padding: 6px 10px;
   border-radius: var(--q-radius);
 }
+
+.stock__unlisted {
+  margin-top: 16px;
+  padding: 12px 16px;
+  background: var(--q-warning-tint);
+  color: var(--q-warning-text);
+  border: 1px solid var(--q-warning);
+  border-radius: var(--q-radius);
+}
+
+.stock__unlisted-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.stock__unlisted-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 720px;
+}
+
+.stock__unlisted-copy h3,
+.stock__unlisted-copy p {
+  margin: 0;
+}
+
+.stock__unlisted-head button {
+  flex-shrink: 0;
+}
+
+.stock__unlisted-list {
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.stock__unlisted-outcome {
+  margin-top: 12px;
+  color: var(--q-ink-muted);
+}

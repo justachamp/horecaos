@@ -6,6 +6,8 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -28,15 +30,13 @@ class CatalogOfferingListingBackfillRunbookIdempotencyKeyTests {
     void backfillCurlExampleSendsIdempotencyKey() throws IOException {
         String runbook = Files.readString(RUNBOOK, StandardCharsets.UTF_8);
 
-        int postIndex = runbook.indexOf("curl -sS -X POST");
-        assertThat(postIndex).as("runbook's listing-backfill curl example").isNotNegative();
-
-        // The header block is the few lines right after the curl invocation, up to the
-        // closing of that shell command (the blank line that ends the code fence's loop
-        // body). Collapse whitespace so a header spread across a wrapped line is not missed.
-        int blockEnd = runbook.indexOf("```", postIndex);
-        String curlBlock = runbook.substring(postIndex, blockEnd < 0 ? runbook.length() : blockEnd)
-                .replaceAll("\\s+", " ");
+        // Backslash-continued lines are one command to a shell; join them so a header on a
+        // wrapped line is not missed, and find the POST by its flag rather than by the exact
+        // spelling of the other flags in front of it.
+        String flat = runbook.replaceAll("\\\\\\R\\s*", " ");
+        Matcher post = Pattern.compile("curl\\s+-[^\\n]*-X POST[^\\n]*").matcher(flat);
+        assertThat(post.find()).as("runbook's listing-backfill curl example").isTrue();
+        String curlBlock = post.group().replaceAll("\\s+", " ");
 
         assertThat(curlBlock)
                 .as("every call this loop makes to a mutating, capability-guarded endpoint "

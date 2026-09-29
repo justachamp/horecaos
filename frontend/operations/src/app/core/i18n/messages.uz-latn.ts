@@ -2281,8 +2281,9 @@ export const messagesUzLatn: MessageCatalogue = {
   'catalog.editor.availability.quantityHint':
     'QUANTITY rejimidagi variant uchun mavjud miqdor, kunlik standart qiymat va kanal boʻyicha toʻxtatish chegaralari «Qoldiqlar» sahifasida joylashgan.',
   'catalog.editor.availability.quantityHintLink': 'Qoldiqlarni ochish',
-  'catalog.editor.availability.notListedAtBranches':
-    "{count} ta filialda hali joylashtirilmagan — taklif qilingan, lekin joylashtirilguncha buyurtma qabul qilinmaydi.",
+  'catalog.editor.availability.notListedHeading':
+    "Baʻzi filiallarda taklif qilingan, lekin u yerda hisobda hali joylashtirilmagan — joylashtirilguncha buyurtma qabul qilinmaydi.",
+  'catalog.editor.availability.notListedVariantRow': "{variant} — {count} ta filialda joylashtirilmagan",
   'catalog.editor.availability.listEverywhere': "Barcha filiallarda joylashtirish",
   'catalog.editor.availability.listingInProgress': 'Joylashtirilmoqda…',
   'catalog.editor.schedule.hint':
@@ -2393,6 +2394,17 @@ export const messagesUzLatn: MessageCatalogue = {
   'catalog.stock.loading': 'Qoldiqlar yuklanmoqda',
   'catalog.stock.noLocation': 'Bu hisob uchun hali filial aniqlanmagan',
   'catalog.stock.denied': 'Bu filial qoldiqlariga kirish huquqi yoʻq',
+  'catalog.stock.unlisted.title': 'Bu yerda taklif qilingan, lekin hisobda joylashtirilmagan: {count}',
+  'catalog.stock.unlisted.body':
+    'Bu taomlar filial menyusida mavjud deb belgilangan, lekin ombor hisobida joylashtirilmagan, shu sababli joylashtirilguncha mijozlarga mavjud emas deb koʻrinadi.',
+  'catalog.stock.unlisted.listAll': 'Hammasini joylashtirish ({count})',
+  'catalog.stock.unlisted.listing': 'Joylashtirilmoqda…',
+  'catalog.stock.unlisted.more': '…yana {count} ta',
+  'catalog.stock.unlisted.outcome': '{candidate} ta taomdan {listed} tasi joylashtirildi.',
+  'catalog.stock.unlisted.outcomePartial':
+    '{candidate} ta taomdan {listed} tasi joylashtirildi. Qolganini koʻrish uchun sahifani yangilang.',
+  'catalog.stock.unlisted.moreRemain': 'Yana qoldi — davom ettirish uchun qayta joylashtiring.',
+  'catalog.stock.unlisted.loadFailed': 'Joylashtirilmagan taomlar hisobotini yuklab boʻlmadi.',
   'catalog.stock.empty': 'Bu filialda hali QUANTITY rejimidagi mahsulotlar yoʻq',
   'catalog.stock.column.variant': 'Variant',
   'catalog.stock.column.onHand': 'Mavjud',

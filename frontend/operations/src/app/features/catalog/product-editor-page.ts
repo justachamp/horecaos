@@ -298,16 +298,24 @@ export class ProductEditorPage implements OnInit {
   protected readonly availabilityRows = signal<readonly VariantAvailabilityRow[]>([]);
 
   /**
-   * "Not listed at N branches" (gap map row 4.1): the default variant's own
-   * unlisted-branch count. `null` before the first load or when the count
-   * has never been fetched; `0` once every AVAILABLE offering of this
-   * variant has a stock item somewhere — the common case, so the banner
-   * stays hidden almost always. Scoped to the product's default variant
-   * only, the same "one variant per row" simplification `CatalogImportRow`'s
-   * own doc documents for the CSV import.
+   * "Not listed at N branches" (gap map row 4.1), per variant: how many
+   * branches offer each of this product's variants `AVAILABLE` without ever
+   * having listed it. A variant absent from the record, or at `0`, has
+   * nothing to list — the common case, so the banner stays hidden almost
+   * always. Batch 13 covered only the default variant; a second variant
+   * offered at a branch that never listed it stayed silent.
    */
-  protected readonly unlistedBranchCount = signal<number | null>(null);
-  protected readonly listingBackfillPending = signal(false);
+  protected readonly unlistedByVariant = signal<Readonly<Record<string, number>>>({});
+  /** The variants whose list-everywhere request is in flight; each button disables on its own. */
+  protected readonly listingPendingVariantIds = signal<ReadonlySet<string>>(new Set());
+
+  /** The banner's rows: only variants with something to list, in the product's own variant order. */
+  protected readonly unlistedVariantRows = computed(() => {
+    const counts = this.unlistedByVariant();
+    return (this.product()?.variants ?? [])
+      .map((variant) => ({ variantId: variant.variantId, count: counts[variant.variantId] ?? 0 }))
+      .filter((row) => row.count > 0);
+  });
 
   protected readonly historyLoading = signal(false);
   protected readonly historyLoaded = signal(false);
@@ -620,43 +628,63 @@ export class ProductEditorPage implements OnInit {
     } catch {
       this.availabilityRows.set([]);
     }
-    void this.loadUnlistedBranchCount();
+    void this.loadUnlistedBranchCounts();
   }
 
-  private async loadUnlistedBranchCount(): Promise<void> {
-    const locationScope = this.location.scope();
-    const variantId = this.defaultVariantId();
-    if (!locationScope || !variantId) {
-      this.unlistedBranchCount.set(null);
+  /**
+   * Reads every variant's unlisted-branch count in parallel. Read-only banner:
+   * one variant's failed read just leaves that variant's row hidden, without
+   * interrupting the tab or hiding the other variants' rows.
+   */
+  private async loadUnlistedBranchCounts(): Promise<void> {
+    const product = this.product();
+    if (!product || !this.location.scope()) {
+      this.unlistedByVariant.set({});
       return;
+    }
+    const counts = await Promise.all(
+      product.variants.map(
+        async (variant) =>
+          [variant.variantId, await this.readUnlistedBranchCount(variant.variantId)] as const,
+      ),
+    );
+    this.unlistedByVariant.set(Object.fromEntries(counts));
+  }
+
+  private async readUnlistedBranchCount(variantId: string): Promise<number> {
+    const locationScope = this.location.scope();
+    if (!locationScope) {
+      return 0;
     }
     try {
       const locationIds = await firstValueFrom(
         this.inventoryApi.unlistedLocations(locationScope, variantId),
       );
-      this.unlistedBranchCount.set(locationIds.length);
+      return locationIds.length;
     } catch {
-      // Read-only banner: a failure here just leaves it hidden rather than
-      // interrupting the tab the way `availabilityRows`'s own catch does.
-      this.unlistedBranchCount.set(null);
+      return 0;
     }
   }
 
-  /** The Availability tab's own one-click action behind the "not listed at N branches" banner. */
-  protected async listAtMissingBranches(): Promise<void> {
+  /** The Availability tab's own one-click action behind one variant's "not listed at N branches" row. */
+  protected async listAtMissingBranches(variantId: string): Promise<void> {
     const locationScope = this.location.scope();
-    const variantId = this.defaultVariantId();
-    if (!locationScope || !variantId || this.listingBackfillPending()) {
+    if (!locationScope || this.listingPendingVariantIds().has(variantId)) {
       return;
     }
-    this.listingBackfillPending.set(true);
+    this.listingPendingVariantIds.update((pending) => new Set(pending).add(variantId));
     try {
       await firstValueFrom(this.inventoryApi.backfillVariantListing(locationScope, variantId));
-      await this.loadUnlistedBranchCount();
+      const remaining = await this.readUnlistedBranchCount(variantId);
+      this.unlistedByVariant.update((counts) => ({ ...counts, [variantId]: remaining }));
     } catch (error) {
       this.handleSaveError(error);
     } finally {
-      this.listingBackfillPending.set(false);
+      this.listingPendingVariantIds.update((pending) => {
+        const next = new Set(pending);
+        next.delete(variantId);
+        return next;
+      });
     }
   }
 

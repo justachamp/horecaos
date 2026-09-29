@@ -146,7 +146,9 @@ describe('InventoryApi', () => {
 
   it('reads a variant’s unlisted branches on the brand-scoped, non-/operations inventory-listing path', async () => {
     const promise = firstValue(api.unlistedLocations(SCOPE, 'v1'));
-    const request = http.expectOne(url('/api/v1/tenants/t1/brands/b1/variants/v1/inventory-listing'));
+    const request = http.expectOne(
+      url('/api/v1/tenants/t1/brands/b1/variants/v1/inventory-listing'),
+    );
     expect(request.request.method).toBe('GET');
     request.flush({ locationIds: ['l2', 'l3'] });
     await expect(promise).resolves.toEqual(['l2', 'l3']);
@@ -154,11 +156,108 @@ describe('InventoryApi', () => {
 
   it('backfills a variant’s listing with a POST to the same brand-scoped path GET reads', async () => {
     const promise = firstValue(api.backfillVariantListing(SCOPE, 'v1'));
-    const request = http.expectOne(url('/api/v1/tenants/t1/brands/b1/variants/v1/inventory-listing'));
+    const request = http.expectOne(
+      url('/api/v1/tenants/t1/brands/b1/variants/v1/inventory-listing'),
+    );
     expect(request.request.method).toBe('POST');
     expect(request.request.headers.has('Idempotency-Key')).toBe(true);
     request.flush({ candidateCount: 2, listedCount: 2 });
     await expect(promise).resolves.toEqual({ candidateCount: 2, listedCount: 2 });
+  });
+
+  it('reads the location’s unlisted-offerings report on the legacy inventory path', async () => {
+    const promise = firstValue(api.unlistedOfferings(SCOPE));
+    const request = http.expectOne(
+      url('/api/v1/tenants/t1/brands/b1/locations/l1/inventory/unlisted-offerings'),
+    );
+    expect(request.request.method).toBe('GET');
+    const report = {
+      totalCount: 1,
+      hasMore: false,
+      items: [{ variantId: 'v1', productName: 'Plov', variantName: null, sku: 'SKU-1' }],
+    };
+    request.flush(report);
+    await expect(promise).resolves.toEqual(report);
+  });
+
+  it('lists the whole location backlog with a POST to listing-backfill and an Idempotency-Key', async () => {
+    const promise = firstValue(api.backfillLocationListing(SCOPE));
+    const request = http.expectOne(
+      url('/api/v1/tenants/t1/brands/b1/locations/l1/inventory/listing-backfill'),
+    );
+    expect(request.request.method).toBe('POST');
+    expect(request.request.headers.has('Idempotency-Key')).toBe(true);
+    request.flush({ candidateCount: 3, listedCount: 3, mayHaveMore: false });
+    await expect(promise).resolves.toEqual({
+      candidateCount: 3,
+      listedCount: 3,
+      mayHaveMore: false,
+    });
+  });
+
+  describe('one Idempotency-Key per intent (ADR 0031)', () => {
+    const LOCATION_URL = url(
+      '/api/v1/tenants/t1/brands/b1/locations/l1/inventory/listing-backfill',
+    );
+    const VARIANT_URL = url('/api/v1/tenants/t1/brands/b1/variants/v1/inventory-listing');
+
+    it('reuses the location list-all key on a retry after a failure, then mints a new one after success', async () => {
+      const failed = firstValue(api.backfillLocationListing(SCOPE)).catch(() => 'failed');
+      const first = http.expectOne(LOCATION_URL);
+      const firstKey = first.request.headers.get('Idempotency-Key');
+      first.flush('nope', { status: 503, statusText: 'Service Unavailable' });
+      await failed;
+
+      // The operator clicks the same button again: the same intent, so the same key.
+      const retried = firstValue(api.backfillLocationListing(SCOPE));
+      const second = http.expectOne(LOCATION_URL);
+      expect(second.request.headers.get('Idempotency-Key')).toBe(firstKey);
+      second.flush({ candidateCount: 2, listedCount: 2, mayHaveMore: true });
+      await retried;
+
+      // It landed. Whatever is clicked next is a new intent — the server would
+      // otherwise replay page one for a backlog that has moved on.
+      const next = firstValue(api.backfillLocationListing(SCOPE));
+      const third = http.expectOne(LOCATION_URL);
+      expect(third.request.headers.get('Idempotency-Key')).not.toBe(firstKey);
+      third.flush({ candidateCount: 0, listedCount: 0, mayHaveMore: false });
+      await next;
+    });
+
+    it('reuses the per-variant list-everywhere key on a retry after a failure, then mints a new one', async () => {
+      const failed = firstValue(api.backfillVariantListing(SCOPE, 'v1')).catch(() => 'failed');
+      const first = http.expectOne(VARIANT_URL);
+      const firstKey = first.request.headers.get('Idempotency-Key');
+      first.flush('nope', { status: 503, statusText: 'Service Unavailable' });
+      await failed;
+
+      const retried = firstValue(api.backfillVariantListing(SCOPE, 'v1'));
+      const second = http.expectOne(VARIANT_URL);
+      expect(second.request.headers.get('Idempotency-Key')).toBe(firstKey);
+      second.flush({ candidateCount: 1, listedCount: 1 });
+      await retried;
+
+      const next = firstValue(api.backfillVariantListing(SCOPE, 'v1'));
+      const third = http.expectOne(VARIANT_URL);
+      expect(third.request.headers.get('Idempotency-Key')).not.toBe(firstKey);
+      third.flush({ candidateCount: 0, listedCount: 0 });
+      await next;
+    });
+
+    it('does not share a key between two different variants', async () => {
+      const a = firstValue(api.backfillVariantListing(SCOPE, 'v1'));
+      const reqA = http.expectOne(VARIANT_URL);
+      const b = firstValue(api.backfillVariantListing(SCOPE, 'v2'));
+      const reqB = http.expectOne(
+        url('/api/v1/tenants/t1/brands/b1/variants/v2/inventory-listing'),
+      );
+      expect(reqA.request.headers.get('Idempotency-Key')).not.toBe(
+        reqB.request.headers.get('Idempotency-Key'),
+      );
+      reqA.flush({ candidateCount: 0, listedCount: 0 });
+      reqB.flush({ candidateCount: 0, listedCount: 0 });
+      await Promise.all([a, b]);
+    });
   });
 
   it('clears a channel stop threshold with a DELETE to the same path, reasonCode as a query param', async () => {
