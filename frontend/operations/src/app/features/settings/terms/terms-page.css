@@ -53,6 +53,32 @@ q-rich-text {
   margin-top: 4px;
 }
 
+/* One language's editor; the label inside sits flush against it. */
+.locale-editor {
+  margin-top: 16px;
+}
+
+.locale-editor:first-of-type {
+  margin-top: 0;
+}
+
+.card .locale-editor > label {
+  margin-top: 0;
+}
+
+/* The note field follows the last editor, so it is no longer the card's first label. */
+.card label.note-label {
+  margin-top: 16px;
+}
+
+/* Row 10.12: the brand's default language, marked beside its label. */
+.locale-default-marker {
+  margin-left: 6px;
+  font-size: 0.85em;
+  text-transform: uppercase;
+  color: var(--q-ink-muted);
+}
+
 .form__actions {
   margin-top: 16px;
   display: flex;

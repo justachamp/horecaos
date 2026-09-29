@@ -80,8 +80,11 @@ export class TermsApi {
 
   /**
    * Publish a new version. Never edits a previous one — the server always
-   * creates the next version number, carrying forward whichever locale the
-   * caller omitted from `request.contentsByLocale`.
+   * creates the next version number, holding exactly the languages in
+   * `request.contentsByLocale`. It does **not** copy over a language the caller
+   * leaves out (`TermsPublishingService.normalize`: an omitted or blank language
+   * is dropped from the new version), so a caller that does not show a language
+   * must send the current version's text for it back unchanged.
    */
   async publish(
     tenantId: string,
