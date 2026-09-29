@@ -28,7 +28,7 @@
   border: 1px solid var(--q-hairline);
   background: transparent;
   color: var(--q-ink-subtle);
-  font-size: 10px;
+  font-size: var(--q-type-caption-sm);
   line-height: 1;
   cursor: pointer;
 }
