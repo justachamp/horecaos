@@ -9,6 +9,22 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  # Parallel Java test shards. Keep in step with `matrix.shard` in test-shard;
+  # `make shards-test` fails when they disagree, because a shard nobody runs is a
+  # slice of the suite that never runs.
+  TEST_SHARDS: "3"
+  # Two forks with an explicit ceiling each: the hosted runner's memory is the
+  # binding constraint, not its cores. Measured 2026-09-16 with the full suite
+  # (4866 tests) under exactly these flags: a long-lived fork peaks at ~2.3GB of
+  # live heap once Spring's test-context cache fills (1.5g died of heap
+  # exhaustion while loading a context), and metaspace stays under 1g; capping the
+  # context cache at 8 keeps that peak bounded as the suite grows. A shard holds a
+  # third of the suite, so its peak is no higher. The 'OutOfMemoryError: Metaspace'
+  # lines in earlier CI logs were a test (ProcessFatalErrorTests) throwing that
+  # error on purpose.
+  TEST_JVM_ARGS: "-Xmx3g -XX:MaxMetaspaceSize=1g -Dspring.test.context.cache.maxSize=8"
+
 jobs:
   changes:
     name: Path filter
@@ -64,6 +80,15 @@ jobs:
       - name: Control-band detection
         run: python3 ops/test_control_band.py
 
+      - name: Test-shard partition is exact
+        # Every test class in exactly one Java job, and ci.yml agreeing with the
+        # partition about how many jobs there are. No JVM: this is the cheap half
+        # of a guarantee whose other half (what the shards actually ran) is the
+        # aggregator's verify-reports step.
+        run: |
+          python3 tools/ci/test_shard_tests.py
+          python3 tools/ci/shard_tests.py check
+
       - name: Applied migrations are append-only
         if: github.event_name == 'pull_request'
         run: |
@@ -77,16 +102,30 @@ jobs:
           fi
           echo "No applied migration was modified."
 
-  verify:
-    name: Build and test
+  # The Java job used to be one runner, one `mvnw verify`, and took about eighty
+  # minutes. It is now three kinds of job, so the wall time is the slowest shard
+  # rather than the sum of all of them:
+  #
+  #   verify-static   spotless, the enforcer, packaging and the OpenAPI
+  #                   compatibility/client diff -- the verify steps that are not
+  #                   tests -- plus the one test class that writes the OpenAPI
+  #                   documents. The only job that owns them.
+  #   test-shard x N  a deterministic slice of the remaining test classes each,
+  #                   chosen by tools/ci/shard_tests.py (recorded durations,
+  #                   longest first, ties by name).
+  #   verify          "Build and test": waits for both, proves every test class
+  #                   ran exactly once, and enforces the JaCoCo coverage floor on
+  #                   the union of every job's execution data.
+  #
+  # The aggregator keeps the id `verify` and the name "Build and test" so that
+  # publish-images (and any branch protection added later) keeps depending on
+  # one job that means "the whole Java build is green".
+  verify-static:
+    name: Static gates and OpenAPI
     needs: changes
     if: needs.changes.outputs.platform == 'true'
     runs-on: ubuntu-latest
-    # The full suite took 46 minutes at 3db855b (5,000 tests) and 75 minutes at
-    # 60e3241 after batch 10 added the amendment and checkout suites; the run for
-    # 7217ba0 was cancelled at the old 90-minute ceiling with eight classes still
-    # queued, after five minio image pulls each spent seven minutes timing out.
-    timeout-minutes: 150
+    timeout-minutes: 60
     defaults:
       run:
         working-directory: platform
@@ -103,41 +142,23 @@ jobs:
         run: nproc && free -h && df -h / | tail -1
 
       - name: Pre-pull Testcontainers images
-        # Testcontainers gives a pull two minutes and every suite that needs the
-        # image retries on its own, so a registry hiccup costs seven minutes per
-        # affected class inside the forks. Pull the three images up front with
-        # retries instead, so a registry outage fails fast and a slow one is
-        # paid for once. The Postgres image is the base of
-        # infra/postgres/Dockerfile, which TestDatabase builds locally.
-        #
-        # rustfs/rustfs, not quay.io/minio/minio (ADR 0135, 2026-09-25): MinIO's
-        # public images were withdrawn -- quay.io/minio/minio answers 401
-        # anonymously -- which is exactly the "registry hiccup" this step exists
-        # to survive, except a withdrawn image never recovers no matter how many
-        # of the five attempts run. RustFS is the pinned replacement the six
-        # Testcontainers test classes that used to start a `minio`
-        # GenericContainer now start instead.
-        run: |
-          set -u
-          POSTGRES_IMAGE=$(sed -nE 's/^FROM (postgres:[^ ]+).*/\1/p' infra/postgres/Dockerfile | head -1)
-          for image in "$POSTGRES_IMAGE" rustfs/rustfs:1.0.0@sha256:8cc9801755448b71a786705ce76692c77e14936cccd87cf2fc31842e58f4d1ff apache/kafka:4.3.1; do
-            for attempt in 1 2 3 4 5; do
-              if docker pull --quiet "$image"; then break; fi
-              if [ "$attempt" = 5 ]; then echo "could not pull $image after 5 attempts" >&2; exit 1; fi
-              sleep 30
-            done
-          done
+        run: tools/ci/pull-test-images.sh
+
+      - name: Select the gate test classes
+        run: python3 tools/ci/shard_tests.py includes --gate --out target/ci/gate-includes.txt
 
       - name: Verify
-        # Two forks with an explicit ceiling each: the hosted runner's memory is
-        # the binding constraint, not its cores. Measured 2026-09-16 with the full
-        # suite (4866 tests) under exactly these flags: a long-lived fork peaks at
-        # ~2.3GB of live heap once Spring's test-context cache fills (1.5g died of
-        # heap exhaustion while loading a context), and metaspace stays under 1g;
-        # capping the context cache at 8 keeps that peak bounded as the suite grows.
-        # The 'OutOfMemoryError: Metaspace' lines in earlier CI logs were a test
-        # (ProcessFatalErrorTests) throwing that error on purpose.
-        run: ./mvnw --batch-mode verify -Dhorecaos.test.forks=2 "-Dhorecaos.test.jvmArgs=-Xmx3g -XX:MaxMetaspaceSize=1g -Dspring.test.context.cache.maxSize=8"
+        # `verify` is where spotless:check, the enforcer and the jar packaging
+        # live, so this job runs it whole -- but with only the gate classes as
+        # tests. Their coverage is a fraction of the suite's, so the floor is
+        # zeroed here; the aggregator enforces the real one over every job's
+        # execution data. One fork is plenty for one class.
+        run: >-
+          ./mvnw --batch-mode verify
+          -Dsurefire.includesFile="$PWD/target/ci/gate-includes.txt"
+          -Dhorecaos.test.forks=1
+          "-Dhorecaos.test.jvmArgs=$TEST_JVM_ARGS"
+          -Dhorecaos.coverage.floor=0
 
       - name: OpenAPI compatibility and generated TypeScript clients
         run: |
@@ -152,14 +173,178 @@ jobs:
             diff -u "api/generated/horecaos-api-v1.$group.ts" "target/openapi/horecaos-api-v1.$group.ts"
           done
 
+      - name: Name this job's coverage data
+        if: always()
+        run: cp target/jacoco.exec target/jacoco-gate.exec || true
+
       - name: Publish test report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-results
-          path: |
-            platform/target/surefire-reports/
-            platform/target/failsafe-reports/
+          name: test-results-gate
+          path: platform/target/surefire-reports/
+          if-no-files-found: ignore
+
+      - name: Publish coverage data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jacoco-exec-gate
+          path: platform/target/jacoco-gate.exec
+          if-no-files-found: ignore
+
+  test-shard:
+    name: Tests (shard ${{ matrix.shard }})
+    needs: changes
+    if: needs.changes.outputs.platform == 'true'
+    runs-on: ubuntu-latest
+    # A shard should take a third of the old eighty minutes. The ceiling is well
+    # past that but far below the old 150, so a wedged fork still fails the job.
+    timeout-minutes: 90
+    strategy:
+      # A red shard must not hide a second red shard: every failure in the run
+      # is worth seeing at once, and an aborted shard has no report to verify.
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    defaults:
+      run:
+        working-directory: platform
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          java-version: "25"
+          distribution: temurin
+          cache: maven
+
+      - name: Runner resources
+        run: nproc && free -h && df -h / | tail -1
+
+      - name: Pre-pull Testcontainers images
+        run: tools/ci/pull-test-images.sh
+
+      - name: Select this shard's test classes
+        run: >-
+          python3 tools/ci/shard_tests.py includes
+          --shards "$TEST_SHARDS" --index ${{ matrix.shard }}
+          --out target/ci/shard-includes.txt
+
+      - name: Test
+        # `test`, not `verify`: formatting, packaging and the OpenAPI diff belong
+        # to verify-static, and the coverage floor to the aggregator, because a
+        # third of the suite covers a third of the code. The JaCoCo agent still
+        # runs (it is bound before the tests), which is what produces the
+        # execution data uploaded below.
+        #
+        # The include file, never -Dtest: Surefire falls back to running the
+        # whole suite when a include file is empty, and the selection script
+        # refuses to write an empty one.
+        run: >-
+          ./mvnw --batch-mode test
+          -Dsurefire.includesFile="$PWD/target/ci/shard-includes.txt"
+          -Dhorecaos.test.forks=2
+          "-Dhorecaos.test.jvmArgs=$TEST_JVM_ARGS"
+
+      - name: Name this shard's coverage data
+        if: always()
+        run: cp target/jacoco.exec "target/jacoco-shard-${{ matrix.shard }}.exec" || true
+
+      - name: Publish test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-shard-${{ matrix.shard }}
+          path: platform/target/surefire-reports/
+          if-no-files-found: ignore
+
+      - name: Publish coverage data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jacoco-exec-shard-${{ matrix.shard }}
+          path: platform/target/jacoco-shard-${{ matrix.shard }}.exec
+          if-no-files-found: ignore
+
+  verify:
+    name: Build and test
+    needs: [changes, verify-static, test-shard]
+    # always(), and the explicit result check in the first step, are not
+    # decoration. A job whose dependency failed is SKIPPED by default, and
+    # publish-images reads "skipped" as "the path filter said nothing to test".
+    # Without this the failure of any shard would let an untested tree publish.
+    # The path-filter condition still skips this job when no platform file
+    # changed, which is the only skip publish-images should accept.
+    if: always() && needs.changes.outputs.platform == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: platform
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Every upstream job passed
+        run: |
+          echo "static gates: ${{ needs.verify-static.result }}"
+          echo "test shards:  ${{ needs.test-shard.result }}"
+          if [ "${{ needs.verify-static.result }}" != success ] || [ "${{ needs.test-shard.result }}" != success ]; then
+            echo "::error::A Java job did not succeed, so the build is not green."
+            exit 1
+          fi
+
+      - name: Download every job's test reports
+        uses: actions/download-artifact@v4
+        with:
+          pattern: test-results-*
+          path: platform/target/ci-reports
+
+      - name: Every test class ran exactly once
+        # The partition is exact on paper (make shards-test); this proves the
+        # runners did what the plan said. A class that produced no report, ran
+        # in the wrong job, or ran twice fails the build here.
+        run: python3 tools/ci/shard_tests.py verify-reports --reports target/ci-reports
+
+      - name: Rebuild the recorded test durations
+        run: python3 tools/ci/shard_tests.py record --reports target/ci-reports/test-results-* --out target/ci/test-durations.tsv
+
+      - name: Publish refreshed durations
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-durations
+          path: platform/target/ci/test-durations.tsv
+
+      - name: Download every job's coverage data
+        uses: actions/download-artifact@v4
+        with:
+          pattern: jacoco-exec-*
+          path: platform/target/jacoco-shards
+          merge-multiple: true
+
+      - uses: actions/setup-java@v4
+        with:
+          java-version: "25"
+          distribution: temurin
+          cache: maven
+
+      - name: Coverage floor over the merged execution data
+        # ADR 0054's floor, unchanged, now applied to the union of what the
+        # gate job and every shard executed. `compile` puts the classes the
+        # execution data refers to in place; the three JaCoCo executions are the
+        # ones pom.xml already defines (merge is unbound there on purpose).
+        run: >-
+          ./mvnw --batch-mode -DskipTests compile
+          jacoco:merge@jacoco-merge-shards
+          jacoco:report@jacoco-report
+          jacoco:check@jacoco-check
+
+      - name: Publish coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jacoco-report
+          path: platform/target/site/jacoco/
           if-no-files-found: ignore
 
   # Frontend jobs are placeholders until the workspace toolchain decision
@@ -196,6 +381,10 @@ jobs:
   # that runbook covers installing a CI deploy key if the owner ever wants
   # this job followed by an automatic deploy, but nothing here assumes that
   # will happen.
+  #
+  # `verify` below is the "Build and test" aggregator: it is green only when the
+  # static-gate job and every test shard are, so this job needs no knowledge of
+  # how many shards there are.
   #
   # Runs only on a push to main, after lint/verify/frontend-build succeed
   # (or were legitimately skipped by the path filter — a frontend-only merge

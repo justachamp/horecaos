@@ -247,7 +247,11 @@ Everything in this repository is already wired. What is left is outside it:
 
 1. **`ANTHROPIC_API_KEY`** as a GitHub Actions secret — the three Claude workflows need it.
 2. **Branch protection on `main`**: require CI, require a code owner review. The agent has
-   no direct push route; changes arrive as PRs.
+   no direct push route; changes arrive as PRs. The required Java check is the one named
+   **Build and test**: it is the aggregator that waits for the parallel test shards and the
+   static-gate job (see [development.md](development.md#how-ci-runs-the-suite)), so it goes
+   red when any of them does. Do not require the individual shard jobs by name; the shard
+   count can change.
 3. **A `CODEOWNERS` file** naming who holds the stage 5 gate per area.
 4. **Schedule the watcher** from the ops host, not a GitHub runner — it needs production
    database access, which should not be reachable from CI:
