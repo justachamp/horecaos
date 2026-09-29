@@ -66,7 +66,18 @@ alias qc='docker compose -f compose.production.yaml --env-file /etc/horecaos/pro
 HOST=api.horecaos.uz   # production; a pre-prod host is its own API host
 ```
 
-`jq` and `uuidgen` are both on the host.
+Steps 2 and 3 also need `curl`, `jq` and `uuidgen` on the host they run from,
+and nothing here guarantees them: [deploy.md](deploy.md) runs its own `curl` and
+`jq` scripts in the `ops` container precisely because the host needs neither.
+Check before step 2, and install whatever is missing:
+
+```bash
+for tool in curl jq uuidgen; do
+  command -v "$tool" >/dev/null || echo "MISSING on this host: ${tool}"
+done
+```
+
+**Check:** no `MISSING` line.
 
 **The token is per tenant.** Steps 2 and 3 call tenant endpoints, and a
 token only acts inside the tenant it was issued for. Use an access token of
@@ -141,7 +152,9 @@ while IFS=',' read -r tenant brand location count; do
       -H "Idempotency-Key: $(uuidgen)" \
       -H "Content-Type: application/json")" || { echo "FAILED at location ${location}"; break; }
     echo "location ${location}: ${result}"
-    [ "$(jq -r '.mayHaveMore and .listedCount > 0' <<<"${result}")" = "true" ] || break
+    more="$(jq -r '.mayHaveMore and .listedCount > 0' <<<"${result}")" \
+      || { echo "jq could not read the response at location ${location}"; break; }
+    [ "${more}" = "true" ] || break
   done
 done < <(grep "^${TENANT}," backlog.csv)
 ```
@@ -149,6 +162,9 @@ done < <(grep "^${TENANT}," backlog.csv)
 The loop runs in bash. It stops re-calling a location when a call lists nothing
 (`listedCount: 0`), so a location whose remaining variants keep failing cannot
 spin forever — that is the case to investigate from the logs, not to loop on.
+It also stops, and says so (`jq could not read the response`), when `jq` cannot
+parse a response, so a missing `jq` never ends a location quietly after its
+first page of a bigger backlog.
 
 The call is a `POST` that takes **no body** and needs the `Idempotency-Key`
 header (ADR 0031) — without it the API answers `400 IDEMPOTENCY_KEY_REQUIRED`.
