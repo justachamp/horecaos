@@ -59,7 +59,9 @@ describe('ColorInput', () => {
     fixture.detectChanges();
 
     expect(
-      (fixture.nativeElement as HTMLElement).querySelector('[data-testid="q-color-input-warnings"]'),
+      (fixture.nativeElement as HTMLElement).querySelector(
+        '[data-testid="q-color-input-warnings"]',
+      ),
     ).toBeNull();
   });
 

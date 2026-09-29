@@ -166,7 +166,13 @@ describe('CouriersPage', () => {
     const host = await render({
       roster: vi.fn().mockResolvedValue([
         COURIER,
-        { ...COURIER, courierId: 'courier-2', displayReference: 'K-015', online: false, lastSeenAt: null },
+        {
+          ...COURIER,
+          courierId: 'courier-2',
+          displayReference: 'K-015',
+          online: false,
+          lastSeenAt: null,
+        },
       ]),
       types: vi.fn().mockResolvedValue([]),
     });

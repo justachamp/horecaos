@@ -676,9 +676,9 @@ describe('NewOrderPage', () => {
     fixture.detectChanges();
 
     const host: HTMLElement = fixture.nativeElement;
-    expect(
-      host.querySelector('[data-testid="new-order-branch-select"]')?.textContent,
-    ).toContain('closed');
+    expect(host.querySelector('[data-testid="new-order-branch-select"]')?.textContent).toContain(
+      'closed',
+    );
   });
 
   it('switching to DELIVERY re-resolves once the address carries a coordinate', async () => {
@@ -688,7 +688,11 @@ describe('NewOrderPage', () => {
     });
     await render(
       { resolveBranches },
-      { revealAddresses: vi.fn().mockResolvedValue([address({ latitude: 41.31, longitude: 69.28 })]) },
+      {
+        revealAddresses: vi
+          .fn()
+          .mockResolvedValue([address({ latitude: 41.31, longitude: 69.28 })]),
+      },
     );
     resolveBranches.mockClear();
     fixture.componentInstance['selectCandidate'](candidate());
@@ -707,10 +711,7 @@ describe('NewOrderPage', () => {
 
   it('a DELIVERY address with no coordinate resolves nothing and keeps the operator’s own branch as the fallback', async () => {
     const resolveBranches = vi.fn();
-    await render(
-      { resolveBranches },
-      { revealAddresses: vi.fn().mockResolvedValue([address()]) },
-    );
+    await render({ resolveBranches }, { revealAddresses: vi.fn().mockResolvedValue([address()]) });
     resolveBranches.mockClear();
     fixture.componentInstance['selectCandidate'](candidate());
     fixture.componentInstance['setFulfillmentMode']('DELIVERY');

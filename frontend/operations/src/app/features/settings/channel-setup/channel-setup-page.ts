@@ -182,14 +182,18 @@ export class ChannelSetupPage {
       if (presentation.ogImageAssetId) {
         try {
           this.ogImagePreviewUrl.set(
-            await firstValueFrom(this.mediaApi.downloadUrl(scope.tenantId, presentation.ogImageAssetId, 'THUMBNAIL')),
+            await firstValueFrom(
+              this.mediaApi.downloadUrl(scope.tenantId, presentation.ogImageAssetId, 'THUMBNAIL'),
+            ),
           );
         } catch {
           this.ogImagePreviewUrl.set(null);
         }
       }
       const pageEntries = await Promise.all(
-        this.pageSlugs.map(async (slug) => [slug, await this.setupApi.currentPage(scope, channel.id, slug)] as const),
+        this.pageSlugs.map(
+          async (slug) => [slug, await this.setupApi.currentPage(scope, channel.id, slug)] as const,
+        ),
       );
       this.pages.set(Object.fromEntries(pageEntries));
     }
@@ -199,10 +203,16 @@ export class ChannelSetupPage {
         this.channelsApi.matrices(scope, channel.id),
         this.locationsApi.list(scope),
       ]);
-      const byId = new Map<string, LocationView>(locations.map((location) => [location.id, location]));
+      const byId = new Map<string, LocationView>(
+        locations.map((location) => [location.id, location]),
+      );
       const settled = await Promise.all(
         matrices.locationIds.map(async (locationId) => {
-          const locationScope: LocationScope = { tenantId: scope.tenantId, brandId: scope.brandId, locationId };
+          const locationScope: LocationScope = {
+            tenantId: scope.tenantId,
+            brandId: scope.brandId,
+            locationId,
+          };
           try {
             const settings: DineInSettingsView = await this.dineInApi.settings(locationScope);
             return {
@@ -238,9 +248,16 @@ export class ChannelSetupPage {
     this.hostnameSaving.set(true);
     this.hostnameError.set(null);
     try {
-      const updated = await this.setupApi.setSubdomain(scope, channel.id, this.hostnameSlug().trim(), this.version());
+      const updated = await this.setupApi.setSubdomain(
+        scope,
+        channel.id,
+        this.hostnameSlug().trim(),
+        this.version(),
+      );
       this.hostname.set(updated);
-      this.channel.update((current) => (current ? { ...current, version: current.version + 1 } : current));
+      this.channel.update((current) =>
+        current ? { ...current, version: current.version + 1 } : current,
+      );
       this.hostnameSlug.set('');
     } catch (error) {
       this.hostnameError.set(this.describe(error));
@@ -258,9 +275,16 @@ export class ChannelSetupPage {
     this.hostnameSaving.set(true);
     this.hostnameError.set(null);
     try {
-      const updated = await this.setupApi.setCustomHostname(scope, channel.id, this.hostnameCustom().trim(), this.version());
+      const updated = await this.setupApi.setCustomHostname(
+        scope,
+        channel.id,
+        this.hostnameCustom().trim(),
+        this.version(),
+      );
       this.hostname.set(updated);
-      this.channel.update((current) => (current ? { ...current, version: current.version + 1 } : current));
+      this.channel.update((current) =>
+        current ? { ...current, version: current.version + 1 } : current,
+      );
       this.hostnameCustom.set('');
       // A fresh challenge is issued the moment a custom hostname is claimed
       // (ChannelSetupService#setCustomHostname) -- reload it so the record
@@ -284,7 +308,9 @@ export class ChannelSetupPage {
     try {
       const updated = await this.setupApi.verifyHostname(scope, channel.id, this.version());
       this.hostname.set(updated);
-      this.channel.update((current) => (current ? { ...current, version: current.version + 1 } : current));
+      this.channel.update((current) =>
+        current ? { ...current, version: current.version + 1 } : current,
+      );
     } catch (error) {
       // UNPROCESSABLE_STATE ("the TXT record does not yet carry the issued
       // challenge") is exactly as ordinary an outcome here as any other --
@@ -312,7 +338,9 @@ export class ChannelSetupPage {
         verified: false,
         baseDomain: current?.baseDomain ?? '',
       }));
-      this.channel.update((current) => (current ? { ...current, version: current.version + 1 } : current));
+      this.channel.update((current) =>
+        current ? { ...current, version: current.version + 1 } : current,
+      );
       this.challenge.set(null);
     } catch (error) {
       this.hostnameError.set(this.describe(error));
@@ -334,7 +362,9 @@ export class ChannelSetupPage {
     try {
       const rotated = await this.setupApi.rotateChallenge(scope, channel.id, this.version());
       this.challenge.set(rotated);
-      this.channel.update((current) => (current ? { ...current, version: current.version + 1 } : current));
+      this.channel.update((current) =>
+        current ? { ...current, version: current.version + 1 } : current,
+      );
       // Rotating un-verifies the hostname server-side (the DNS record still
       // carries the pre-rotation token) -- reflect that here too, rather
       // than showing a stale "verified" badge until the next full reload.
@@ -383,7 +413,9 @@ export class ChannelSetupPage {
         this.version(),
       );
       this.presentation.set(updated);
-      this.channel.update((current) => (current ? { ...current, version: current.version + 1 } : current));
+      this.channel.update((current) =>
+        current ? { ...current, version: current.version + 1 } : current,
+      );
     } catch (error) {
       this.presentationError.set(this.describe(error));
     } finally {
@@ -399,7 +431,9 @@ export class ChannelSetupPage {
     this.uploadingOgImage.set(true);
     this.presentationError.set(null);
     try {
-      const asset = await firstValueFrom(this.mediaApi.upload(scope.tenantId, 'TENANT', scope.tenantId, 'PUBLIC', file));
+      const asset = await firstValueFrom(
+        this.mediaApi.upload(scope.tenantId, 'TENANT', scope.tenantId, 'PUBLIC', file),
+      );
       this.ogImageAssetId.set(asset.assetId);
       const previous = this.ogImagePreviewUrl();
       if (previous) {
@@ -415,7 +449,9 @@ export class ChannelSetupPage {
 
   protected onMediaRejected(reason: string): void {
     this.presentationError.set(
-      this.i18n.t(reason === 'tooLarge' ? 'ui.mediaUploader.tooLarge' : 'ui.mediaUploader.unsupportedType'),
+      this.i18n.t(
+        reason === 'tooLarge' ? 'ui.mediaUploader.tooLarge' : 'ui.mediaUploader.unsupportedType',
+      ),
     );
   }
 

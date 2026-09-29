@@ -25,7 +25,12 @@
             >
               {{
                 'catalog.taxProfile.existingRow'
-                  | t: { code: profile.jurisdictionCode, mode: profile.mode, rate: profile.rateBasisPoints / 100 }
+                  | t
+                    : {
+                        code: profile.jurisdictionCode,
+                        mode: profile.mode,
+                        rate: profile.rateBasisPoints / 100,
+                      }
               }}
             </button>
           </li>
@@ -58,12 +63,19 @@
         <p class="q-body-sm tax-profile__in-force" data-testid="tax-profile-in-force">
           {{
             'catalog.taxProfile.inForce'
-              | t: { code: profile.jurisdictionCode, mode: profile.mode, rate: profile.rateBasisPoints / 100 }
+              | t
+                : {
+                    code: profile.jurisdictionCode,
+                    mode: profile.mode,
+                    rate: profile.rateBasisPoints / 100,
+                  }
           }}
         </p>
       } @else if (inForce() === null) {
         <p class="q-body-sm tax-profile__in-force" data-testid="tax-profile-in-force-none">
-          {{ 'catalog.taxProfile.inForceNone' | t: { code: jurisdictionCode().trim().toUpperCase() } }}
+          {{
+            'catalog.taxProfile.inForceNone' | t: { code: jurisdictionCode().trim().toUpperCase() }
+          }}
         </p>
       }
 

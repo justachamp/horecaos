@@ -6,7 +6,9 @@
   @if (loading()) {
     <p class="q-body-sm ink-subtle">{{ 'settings.integrations.loading' | t }}</p>
   } @else if (denied()) {
-    <p class="q-body-sm ink-subtle" data-testid="channel-setup-denied">{{ 'settings.scope.denied' | t }}</p>
+    <p class="q-body-sm ink-subtle" data-testid="channel-setup-denied">
+      {{ 'settings.scope.denied' | t }}
+    </p>
   } @else if (loadError()) {
     <p class="q-body-sm error">{{ loadError() }}</p>
   } @else if (channel(); as ch) {
@@ -18,16 +20,23 @@
       <section class="facet-card">
         <h2 class="q-subhead">{{ 'settings.channelSetup.telegram.title' | t }}</h2>
         @if (installation(); as inst) {
-          <p class="q-body-sm status" [class.configured]="inst.webhookRegistered" [class.not-configured]="!inst.webhookRegistered">
+          <p
+            class="q-body-sm status"
+            [class.configured]="inst.webhookRegistered"
+            [class.not-configured]="!inst.webhookRegistered"
+          >
             {{
               (inst.webhookRegistered
                 ? 'settings.channelSetup.status.configured'
-                : 'settings.channelSetup.status.notConfigured') | t
+                : 'settings.channelSetup.status.notConfigured'
+              ) | t
             }}
             — {{ inst.displayName }}
           </p>
         } @else {
-          <p class="q-body-sm status not-configured">{{ 'settings.channelSetup.status.notConfigured' | t }}</p>
+          <p class="q-body-sm status not-configured">
+            {{ 'settings.channelSetup.status.notConfigured' | t }}
+          </p>
         }
         <a routerLink="/settings/integrations" class="q-body-sm link">
           → {{ 'settings.nav.integrations' | t }}
@@ -51,10 +60,16 @@
             </p>
             @if (challenge(); as ch) {
               <div class="dns-challenge" data-testid="dns-challenge">
-                <p class="q-body-sm ink-subtle">{{ 'settings.channelSetup.hostname.challenge.instructions' | t }}</p>
+                <p class="q-body-sm ink-subtle">
+                  {{ 'settings.channelSetup.hostname.challenge.instructions' | t }}
+                </p>
                 <div class="challenge-row">
-                  <span class="q-caption">{{ 'settings.channelSetup.hostname.challenge.recordLabel' | t }}</span>
-                  <code class="challenge-value" data-testid="challenge-record-name">{{ ch.recordName }}</code>
+                  <span class="q-caption">{{
+                    'settings.channelSetup.hostname.challenge.recordLabel' | t
+                  }}</span>
+                  <code class="challenge-value" data-testid="challenge-record-name">{{
+                    ch.recordName
+                  }}</code>
                   <button
                     type="button"
                     class="q-body-sm link"
@@ -63,18 +78,26 @@
                     {{
                       (challengeCopied() === 'record'
                         ? 'settings.channelSetup.hostname.challenge.copied'
-                        : 'settings.channelSetup.hostname.challenge.copy') | t
+                        : 'settings.channelSetup.hostname.challenge.copy'
+                      ) | t
                     }}
                   </button>
                 </div>
                 <div class="challenge-row">
-                  <span class="q-caption">{{ 'settings.channelSetup.hostname.challenge.valueLabel' | t }}</span>
+                  <span class="q-caption">{{
+                    'settings.channelSetup.hostname.challenge.valueLabel' | t
+                  }}</span>
                   <code class="challenge-value" data-testid="challenge-token">{{ ch.token }}</code>
-                  <button type="button" class="q-body-sm link" (click)="copyChallengeValue('token', ch.token)">
+                  <button
+                    type="button"
+                    class="q-body-sm link"
+                    (click)="copyChallengeValue('token', ch.token)"
+                  >
                     {{
                       (challengeCopied() === 'token'
                         ? 'settings.channelSetup.hostname.challenge.copied'
-                        : 'settings.channelSetup.hostname.challenge.copy') | t
+                        : 'settings.channelSetup.hostname.challenge.copy'
+                      ) | t
                     }}
                   </button>
                 </div>
@@ -100,15 +123,27 @@
                 {{ 'settings.channelSetup.hostname.markVerified' | t }}
               </button>
             }
-            <button type="button" class="q-body-sm link" [disabled]="hostnameSaving()" (click)="clearHostname()">
+            <button
+              type="button"
+              class="q-body-sm link"
+              [disabled]="hostnameSaving()"
+              (click)="clearHostname()"
+            >
               {{ 'settings.channelSetup.hostname.release' | t }}
             </button>
           } @else {
-            <p class="q-body-sm status not-configured">{{ 'settings.channelSetup.status.notConfigured' | t }}</p>
+            <p class="q-body-sm status not-configured">
+              {{ 'settings.channelSetup.status.notConfigured' | t }}
+            </p>
 
             <div class="hostname-form">
               <label class="q-body-sm">
-                <input type="radio" name="hostnameMode" [checked]="hostnameMode() === 'subdomain'" (change)="hostnameMode.set('subdomain')" />
+                <input
+                  type="radio"
+                  name="hostnameMode"
+                  [checked]="hostnameMode() === 'subdomain'"
+                  (change)="hostnameMode.set('subdomain')"
+                />
                 {{ 'settings.channelSetup.hostname.subdomain.label' | t }}
               </label>
               <label class="q-body-sm">
@@ -183,7 +218,9 @@
           (input)="seoTitle.set($any($event.target).value)"
           maxlength="200"
         />
-        <label class="q-caption">{{ 'settings.channelSetup.presentation.seoDescription' | t }}</label>
+        <label class="q-caption">{{
+          'settings.channelSetup.presentation.seoDescription' | t
+        }}</label>
         <textarea
           class="q-input"
           [value]="seoDescription()"
@@ -195,7 +232,11 @@
         <label class="q-caption">{{ 'settings.channelSetup.presentation.ogImage' | t }}</label>
         <div class="media-editor">
           @if (ogImagePreviewUrl(); as url) {
-            <img [src]="url" [alt]="'settings.channelSetup.presentation.ogImage' | t" class="og-preview" />
+            <img
+              [src]="url"
+              [alt]="'settings.channelSetup.presentation.ogImage' | t"
+              class="og-preview"
+            />
           }
           <q-media-uploader
             [aspectRatios]="['3:2']"
@@ -230,12 +271,21 @@
             <span class="q-body-sm">{{ pageSlugLabel(slug) }}</span>
             @if (pages()[slug]?.published) {
               <span class="q-body-sm status configured">
-                {{ 'settings.channelSetup.pages.published' | t: { version: pages()[slug]!.version! } }}
+                {{
+                  'settings.channelSetup.pages.published' | t: { version: pages()[slug]!.version! }
+                }}
               </span>
             } @else {
-              <span class="q-body-sm status not-configured">{{ 'settings.channelSetup.status.notConfigured' | t }}</span>
+              <span class="q-body-sm status not-configured">{{
+                'settings.channelSetup.status.notConfigured' | t
+              }}</span>
             }
-            <button type="button" class="q-body-sm link" (click)="editPage(slug)" [attr.data-testid]="'edit-page-' + slug">
+            <button
+              type="button"
+              class="q-body-sm link"
+              (click)="editPage(slug)"
+              [attr.data-testid]="'edit-page-' + slug"
+            >
               {{ 'settings.channelSetup.pages.edit' | t }}
             </button>
           </div>
@@ -283,7 +333,9 @@
       <section class="facet-card">
         <h2 class="q-subhead">{{ 'settings.channelSetup.dineIn.title' | t }}</h2>
         @if (locationQrModes().length === 0) {
-          <p class="q-body-sm status not-configured">{{ 'settings.channelSetup.status.notConfigured' | t }}</p>
+          <p class="q-body-sm status not-configured">
+            {{ 'settings.channelSetup.status.notConfigured' | t }}
+          </p>
         } @else {
           @for (row of locationQrModes(); track row.locationId) {
             <div class="page-row">

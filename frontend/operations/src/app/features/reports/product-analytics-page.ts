@@ -201,8 +201,12 @@ export class ProductAnalyticsPage {
     }));
   });
 
-  protected readonly abcCurveThresholdA = computed(() => this.abcCurveResult()?.abcThresholdAPercent ?? 80);
-  protected readonly abcCurveThresholdB = computed(() => this.abcCurveResult()?.abcThresholdBPercent ?? 95);
+  protected readonly abcCurveThresholdA = computed(
+    () => this.abcCurveResult()?.abcThresholdAPercent ?? 80,
+  );
+  protected readonly abcCurveThresholdB = computed(
+    () => this.abcCurveResult()?.abcThresholdBPercent ?? 95,
+  );
   protected readonly abcCurveMaybeMore = computed(() => this.abcCurveResult()?.maybeMore ?? false);
 
   protected readonly classificationRangeDays = computed(() => daysInRange(this.filters.range()));

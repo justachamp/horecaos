@@ -26,13 +26,17 @@ interface SupportSessionView {
     @if (tenant) {
       <div class="support q-caption" role="status">
         @if (session(); as current) {
-          <strong>{{ (current.access === 'ASSIST' ? 'support.banner.assist' : 'support.banner.view') | t }}</strong>
+          <strong>{{
+            (current.access === 'ASSIST' ? 'support.banner.assist' : 'support.banner.view') | t
+          }}</strong>
           <span>{{ 'support.banner.until' | t: { time: until(current.expiresAt) } }}</span>
           <span class="reason">{{ current.reason }}</span>
         } @else if (checked()) {
           <strong>{{ 'support.banner.none' | t }}</strong>
         }
-        <button type="button" class="leave q-caption" (click)="leave()">{{ 'support.banner.leave' | t }}</button>
+        <button type="button" class="leave q-caption" (click)="leave()">
+          {{ 'support.banner.leave' | t }}
+        </button>
       </div>
     }
   `,
@@ -76,7 +80,9 @@ export class SupportBanner {
   private async load(tenant: string): Promise<void> {
     try {
       const result = await firstValueFrom(
-        this.api.get<SupportSessionView>(`/api/v1/operations/tenants/${tenant}/support-sessions/current`),
+        this.api.get<SupportSessionView>(
+          `/api/v1/operations/tenants/${tenant}/support-sessions/current`,
+        ),
       );
       this.session.set(result.value);
     } catch {

@@ -7,7 +7,8 @@ import { command } from '../../../core/api/idempotency';
 import { marketingPaths } from '../../../core/api/marketing-paths';
 
 /** The trigger kinds this build offers. See `AutomationTriggerType`'s own doc for why not five. */
-export type AutomationTriggerKind = 'BIRTHDAY' | 'INACTIVITY' | 'CART_ABANDONMENT' | 'CASHBACK_CHANGE';
+export type AutomationTriggerKind =
+  'BIRTHDAY' | 'INACTIVITY' | 'CART_ABANDONMENT' | 'CASHBACK_CHANGE';
 
 /** The one `trigger_config` key each trigger kind reads — `AutomationTriggerType.configKey()`. */
 export const AUTOMATION_TRIGGER_CONFIG_KEY: Readonly<Record<AutomationTriggerKind, string>> = {
@@ -161,7 +162,9 @@ export class AutomationsApi {
    */
   async preview(scope: BrandScope, ruleId: string): Promise<readonly AutomationPreviewCandidate[]> {
     const result = await firstValueFrom(
-      this.api.get<readonly AutomationPreviewCandidate[]>(marketingPaths.automationPreview(scope, ruleId)),
+      this.api.get<readonly AutomationPreviewCandidate[]>(
+        marketingPaths.automationPreview(scope, ruleId),
+      ),
     );
     return result.value ?? [];
   }

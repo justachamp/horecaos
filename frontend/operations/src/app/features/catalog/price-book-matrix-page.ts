@@ -208,7 +208,10 @@ export class PriceBookMatrixPage implements OnInit {
       return '—';
     }
     const sign = row.deltaMinor > 0 ? '+' : '';
-    return sign + formatMoney({ amountMinor: row.deltaMinor, currency: row.currency }, this.i18n.locale());
+    return (
+      sign +
+      formatMoney({ amountMinor: row.deltaMinor, currency: row.currency }, this.i18n.locale())
+    );
   }
 
   protected errorFor(variantId: string): string | null {

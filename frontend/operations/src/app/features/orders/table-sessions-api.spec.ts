@@ -41,7 +41,12 @@ describe('TableSessionsApi.open', () => {
     const { api, http } = setUp();
 
     api
-      .open(SCOPE, { reservationId: 'r1', tableIds: ['t1'], currency: 'UZS', reason: 'Seating a booking' })
+      .open(SCOPE, {
+        reservationId: 'r1',
+        tableIds: ['t1'],
+        currency: 'UZS',
+        reason: 'Seating a booking',
+      })
       .subscribe();
     const request = http.expectOne(URL);
 
@@ -55,7 +60,12 @@ describe('TableSessionsApi.open', () => {
   // this used to open two sessions for the same booking.
   it('reuses the same Idempotency-Key for two still-in-flight opens of the same reservation', () => {
     const { api, http } = setUp();
-    const body = { reservationId: 'r1', tableIds: ['t1'], currency: 'UZS', reason: 'Seating a booking' };
+    const body = {
+      reservationId: 'r1',
+      tableIds: ['t1'],
+      currency: 'UZS',
+      reason: 'Seating a booking',
+    };
 
     api.open(SCOPE, body).subscribe();
     const first = http.expectOne(URL);
@@ -89,14 +99,24 @@ describe('TableSessionsApi.open', () => {
     const { api, http } = setUp();
 
     api
-      .open(SCOPE, { reservationId: 'r1', tableIds: ['t1'], currency: 'UZS', reason: 'Seating a booking' })
+      .open(SCOPE, {
+        reservationId: 'r1',
+        tableIds: ['t1'],
+        currency: 'UZS',
+        reason: 'Seating a booking',
+      })
       .subscribe();
     const first = http.expectOne(URL);
     const firstKey = first.request.headers.get('Idempotency-Key');
     first.flush(session());
 
     api
-      .open(SCOPE, { reservationId: 'r2', tableIds: ['t2'], currency: 'UZS', reason: 'Seating a booking' })
+      .open(SCOPE, {
+        reservationId: 'r2',
+        tableIds: ['t2'],
+        currency: 'UZS',
+        reason: 'Seating a booking',
+      })
       .subscribe();
     const second = http.expectOne(URL);
 

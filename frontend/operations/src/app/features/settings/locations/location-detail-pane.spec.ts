@@ -689,9 +689,7 @@ describe('LocationDetailPane', () => {
     fresh.detectChanges();
 
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
-    (
-      fresh.nativeElement.querySelector('[data-testid="save-hours"]') as HTMLButtonElement
-    ).click();
+    (fresh.nativeElement.querySelector('[data-testid="save-hours"]') as HTMLButtonElement).click();
     await flushMicrotasks();
 
     expect(api.deleteScheduleException).toHaveBeenCalledWith(SCOPE, 'schedule-1', '2026-12-31', 4);
@@ -736,9 +734,7 @@ describe('LocationDetailPane', () => {
     }
 
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
-    (
-      fresh.nativeElement.querySelector('[data-testid="save-hours"]') as HTMLButtonElement
-    ).click();
+    (fresh.nativeElement.querySelector('[data-testid="save-hours"]') as HTMLButtonElement).click();
     await flushMicrotasks();
 
     expect(api.deleteScheduleException).toHaveBeenNthCalledWith(

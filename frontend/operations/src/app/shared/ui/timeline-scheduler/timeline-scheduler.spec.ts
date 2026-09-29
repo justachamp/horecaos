@@ -73,7 +73,14 @@ describe('TimelineScheduler', () => {
   it('marks a block conflict with its own class, and leaves an ordinary block without it', () => {
     const host = render({
       blocks: [
-        { id: 'b1', resourceId: 't1', startMinutes: 60, endMinutes: 120, label: 'A', conflict: true },
+        {
+          id: 'b1',
+          resourceId: 't1',
+          startMinutes: 60,
+          endMinutes: 120,
+          label: 'A',
+          conflict: true,
+        },
         { id: 'b2', resourceId: 't2', startMinutes: 90, endMinutes: 150, label: 'B' },
       ],
     });

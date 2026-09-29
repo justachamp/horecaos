@@ -45,7 +45,11 @@ export function leaveSupportTenant(): void {
 /** Names the support tenant on every session-context read that does not already name one. */
 export const supportTenantInterceptor: HttpInterceptorFn = (request, next) => {
   const tenant = supportTenant();
-  if (tenant === null || !request.url.endsWith('/api/v1/session/context') || request.params.has('tenantId')) {
+  if (
+    tenant === null ||
+    !request.url.endsWith('/api/v1/session/context') ||
+    request.params.has('tenantId')
+  ) {
     return next(request);
   }
   return next(request.clone({ params: request.params.set('tenantId', tenant) }));

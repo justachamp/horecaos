@@ -92,8 +92,16 @@ export class AbcCurveChart {
   }));
 
   protected readonly thresholdLines = computed(() => [
-    { key: 'a' as const, percent: this.thresholdAPercent(), y: this.yToPixel(this.thresholdAPercent()) },
-    { key: 'b' as const, percent: this.thresholdBPercent(), y: this.yToPixel(this.thresholdBPercent()) },
+    {
+      key: 'a' as const,
+      percent: this.thresholdAPercent(),
+      y: this.yToPixel(this.thresholdAPercent()),
+    },
+    {
+      key: 'b' as const,
+      percent: this.thresholdBPercent(),
+      y: this.yToPixel(this.thresholdBPercent()),
+    },
   ]);
 
   protected readonly plotted = computed<readonly PlottedPoint[]>(() =>

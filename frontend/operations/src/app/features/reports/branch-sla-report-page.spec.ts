@@ -223,9 +223,9 @@ describe('BranchSlaReportPage: the tenant-wide SLA histogram', () => {
     ]);
     const host = fixture.nativeElement as HTMLElement;
 
-    const cells = Array.from(
-      host.querySelectorAll('[data-testid="branch-row-delivery-time"]'),
-    ).map((cell) => cell.textContent?.trim());
+    const cells = Array.from(host.querySelectorAll('[data-testid="branch-row-delivery-time"]')).map(
+      (cell) => cell.textContent?.trim(),
+    );
 
     // 900 seconds -> 15 min for l1; l2 had no settled delivery in range, "—" not "0 min".
     expect(cells).toContain('15 min');

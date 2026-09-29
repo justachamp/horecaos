@@ -1,10 +1,4 @@
-import {
-  ChangeDetectionStrategy,
-  Component,
-  WritableSignal,
-  inject,
-  signal,
-} from '@angular/core';
+import { ChangeDetectionStrategy, Component, WritableSignal, inject, signal } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 
 import { ApiError } from '../../../core/api/problem-details';
@@ -265,11 +259,21 @@ export class BrandProfilePage {
    * attach, so the finalized asset id is the whole write.
    */
   protected async uploadLogo(file: File): Promise<void> {
-    await this.uploadBrandMedia(file, this.draftLogoAssetId, this.logoPreviewUrl, this.uploadingLogo);
+    await this.uploadBrandMedia(
+      file,
+      this.draftLogoAssetId,
+      this.logoPreviewUrl,
+      this.uploadingLogo,
+    );
   }
 
   protected async uploadBanner(file: File): Promise<void> {
-    await this.uploadBrandMedia(file, this.draftBannerAssetId, this.bannerPreviewUrl, this.uploadingBanner);
+    await this.uploadBrandMedia(
+      file,
+      this.draftBannerAssetId,
+      this.bannerPreviewUrl,
+      this.uploadingBanner,
+    );
   }
 
   private async uploadBrandMedia(
@@ -375,7 +379,10 @@ export class BrandProfilePage {
     }
   }
 
-  private async downloadUrlOrNull(tenantId: string, assetId: string | null): Promise<string | null> {
+  private async downloadUrlOrNull(
+    tenantId: string,
+    assetId: string | null,
+  ): Promise<string | null> {
     if (!assetId) {
       return null;
     }

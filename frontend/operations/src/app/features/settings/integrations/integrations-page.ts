@@ -218,7 +218,9 @@ export class IntegrationsPage {
   protected readonly bindToBranchNeedsCapabilityPicker = computed(() => {
     const installationId = this.bindToBranchInstallationId();
     const installation = this.installations().find((candidate) => candidate.id === installationId);
-    return installation !== undefined && CAPABILITY_CATALOGUED_CATEGORIES.has(installation.category);
+    return (
+      installation !== undefined && CAPABILITY_CATALOGUED_CATEGORIES.has(installation.category)
+    );
   });
 
   /** One row per branch that has at least one resolved capability, branch name resolved for display. */
@@ -276,7 +278,11 @@ export class IntegrationsPage {
   private async loadBindToBranchCatalogue(installationId: string | null): Promise<void> {
     const scope = this.location.scope();
     const installation = this.installations().find((candidate) => candidate.id === installationId);
-    if (!scope || installation === undefined || !CAPABILITY_CATALOGUED_CATEGORIES.has(installation.category)) {
+    if (
+      !scope ||
+      installation === undefined ||
+      !CAPABILITY_CATALOGUED_CATEGORIES.has(installation.category)
+    ) {
       this.bindToBranchCatalogue.set([]);
       this.selectedCapabilities.set(new Set());
       return;
@@ -284,7 +290,10 @@ export class IntegrationsPage {
     this.bindToBranchCatalogueLoading.set(true);
     this.bindToBranchError.set(null);
     try {
-      const view: CapabilityCatalogueView = await this.api.capabilityCatalogue(scope, installation.id);
+      const view: CapabilityCatalogueView = await this.api.capabilityCatalogue(
+        scope,
+        installation.id,
+      );
       this.bindToBranchCatalogue.set(view.capabilities);
       // Default = every capability the installation's provider declares,
       // exactly as gap-map row 10.8a's own fix-path text asks for.

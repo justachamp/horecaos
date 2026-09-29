@@ -57,8 +57,14 @@
       }
       @case ('ready') {
         <div class="sort-controls">
-          <span class="q-caption sort-controls__label">{{ 'reports.products.sort.label' | t }}</span>
-          <div class="sort-controls__group" role="group" [attr.aria-label]="'reports.products.sort.label' | t">
+          <span class="q-caption sort-controls__label">{{
+            'reports.products.sort.label' | t
+          }}</span>
+          <div
+            class="sort-controls__group"
+            role="group"
+            [attr.aria-label]="'reports.products.sort.label' | t"
+          >
             @for (option of sortOptions; track option.id) {
               <button
                 type="button"
@@ -128,7 +134,10 @@
             (click)="loadMoreSales()"
             data-testid="products-load-more"
           >
-            {{ (loadingMore() ? 'reports.products.loadMore.loading' : 'reports.products.loadMore') | t }}
+            {{
+              (loadingMore() ? 'reports.products.loadMore.loading' : 'reports.products.loadMore')
+                | t
+            }}
           </button>
         }
         <p class="q-caption dine-in-note">{{ 'reports.products.dineInNote' | t }}</p>
@@ -162,7 +171,9 @@
             [ariaLabel]="'reports.products.abcCurve.title' | t"
           />
           @if (abcCurveMaybeMore()) {
-            <p class="q-caption">{{ 'reports.products.abcCurve.maybeMore' | t: { limit: abcCurveLimit } }}</p>
+            <p class="q-caption">
+              {{ 'reports.products.abcCurve.maybeMore' | t: { limit: abcCurveLimit } }}
+            </p>
           }
         }
       }

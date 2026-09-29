@@ -97,7 +97,9 @@ export class TemplateEditor {
   protected readonly catalogue = signal<readonly VariableCatalogueEntry[]>([]);
   protected readonly catalogueLoading = signal(true);
   protected readonly variablesForClass = computed(
-    () => this.catalogue().find((entry) => entry.notificationClass === this.notificationClass())?.variables ?? [],
+    () =>
+      this.catalogue().find((entry) => entry.notificationClass === this.notificationClass())
+        ?.variables ?? [],
   );
 
   protected readonly submitting = signal(false);

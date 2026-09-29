@@ -158,7 +158,9 @@ export function actionLabel(
     case 'OVERRIDE': {
       const target = action.targetStatus ?? '';
       const key = OVERRIDE_LABEL_KEYS[target];
-      return key ? translate(key) : translate('orders.action.override.generic', { status: statusLabel(target) });
+      return key
+        ? translate(key)
+        : translate('orders.action.override.generic', { status: statusLabel(target) });
     }
     case 'ADVANCE': {
       const target = action.targetStatus ?? '';

@@ -372,7 +372,9 @@ export class CustomersPage {
 
   protected exportApprovalNoticeText(status: 'PENDING' | 'DECLINED'): string {
     return this.i18n.t(
-      status === 'PENDING' ? 'customers.export.approvalPending' : 'customers.export.approvalDeclined',
+      status === 'PENDING'
+        ? 'customers.export.approvalPending'
+        : 'customers.export.approvalDeclined',
     );
   }
 

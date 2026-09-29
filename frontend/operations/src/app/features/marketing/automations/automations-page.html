@@ -1,6 +1,9 @@
 <div class="automations">
   @if (loading()) {
-    <div class="automations__skeleton" [attr.aria-label]="'marketing.automations.loading' | t"></div>
+    <div
+      class="automations__skeleton"
+      [attr.aria-label]="'marketing.automations.loading' | t"
+    ></div>
   } @else if (denied()) {
     <div class="automations__denied" data-testid="automations-denied">
       <p class="q-body-sm">{{ 'marketing.automations.denied' | t }}</p>
@@ -26,7 +29,9 @@
     }
 
     @if (rules().length === 0) {
-      <p class="q-body-sm" data-testid="automations-empty">{{ 'marketing.automations.empty' | t }}</p>
+      <p class="q-body-sm" data-testid="automations-empty">
+        {{ 'marketing.automations.empty' | t }}
+      </p>
     } @else {
       <q-rule-list
         [items]="listItems()"
@@ -146,7 +151,9 @@
           }
 
           <div class="dialog__actions">
-            <button type="button" (click)="closeForm()">{{ 'marketing.automations.dialog.cancel' | t }}</button>
+            <button type="button" (click)="closeForm()">
+              {{ 'marketing.automations.dialog.cancel' | t }}
+            </button>
             <button
               type="button"
               data-testid="automation-form-submit"
@@ -169,7 +176,9 @@
           data-testid="automation-runs-dialog"
           (click)="$event.stopPropagation()"
         >
-          <h2 class="q-subhead">{{ 'marketing.automations.runs.title' | t: { name: rule.name } }}</h2>
+          <h2 class="q-subhead">
+            {{ 'marketing.automations.runs.title' | t: { name: rule.name } }}
+          </h2>
           @if (runsLoading()) {
             <p class="q-body-sm">{{ 'marketing.automations.runs.loading' | t }}</p>
           } @else if (runsError(); as error) {
@@ -197,7 +206,9 @@
             </table>
           }
           <div class="dialog__actions">
-            <button type="button" (click)="closeRuns()">{{ 'marketing.automations.dialog.close' | t }}</button>
+            <button type="button" (click)="closeRuns()">
+              {{ 'marketing.automations.dialog.close' | t }}
+            </button>
           </div>
         </div>
       </div>
@@ -212,7 +223,9 @@
           data-testid="automation-preview-dialog"
           (click)="$event.stopPropagation()"
         >
-          <h2 class="q-subhead">{{ 'marketing.automations.preview.title' | t: { name: rule.name } }}</h2>
+          <h2 class="q-subhead">
+            {{ 'marketing.automations.preview.title' | t: { name: rule.name } }}
+          </h2>
           <p class="q-body-sm">{{ 'marketing.automations.preview.intro' | t }}</p>
           @if (previewLoading()) {
             <p class="q-body-sm">{{ 'marketing.automations.preview.loading' | t }}</p>
@@ -232,7 +245,9 @@
             </ul>
           }
           <div class="dialog__actions">
-            <button type="button" (click)="closePreview()">{{ 'marketing.automations.dialog.close' | t }}</button>
+            <button type="button" (click)="closePreview()">
+              {{ 'marketing.automations.dialog.close' | t }}
+            </button>
           </div>
         </div>
       </div>

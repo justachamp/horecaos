@@ -1209,7 +1209,10 @@ export class NewOrderPage implements OnInit {
         return;
       }
 
-      if (mode === 'DELIVERY' && (address === null || address.latitude === null || address.longitude === null)) {
+      if (
+        mode === 'DELIVERY' &&
+        (address === null || address.latitude === null || address.longitude === null)
+      ) {
         this.branchCandidates.set([]);
         this.proposedLocationId.set(null);
         // selectedLocationId is left alone: it stays at the operator's own
@@ -1218,7 +1221,9 @@ export class NewOrderPage implements OnInit {
         return;
       }
       const point =
-        mode === 'DELIVERY' && address ? { lat: address.latitude as number, lon: address.longitude as number } : null;
+        mode === 'DELIVERY' && address
+          ? { lat: address.latitude as number, lon: address.longitude as number }
+          : null;
       void this.refreshBranchResolution(mode, point, channelCode);
     });
   }
@@ -1314,13 +1319,17 @@ export class NewOrderPage implements OnInit {
   });
 
   protected readonly selectedBranchCandidate = computed(
-    () => this.branchCandidates().find((candidate) => candidate.locationId === this.selectedLocationId()) ?? null,
+    () =>
+      this.branchCandidates().find(
+        (candidate) => candidate.locationId === this.selectedLocationId(),
+      ) ?? null,
   );
 
   /** {@code requiresNote} of whichever override reason is currently picked, or false while none is. */
   protected readonly overrideReasonRequiresNote = computed(
     () =>
-      this.overrideReasons().find((reason) => reason.code === this.overrideReasonCode())?.requiresNote ?? false,
+      this.overrideReasons().find((reason) => reason.code === this.overrideReasonCode())
+        ?.requiresNote ?? false,
   );
 
   private async refreshBranchResolution(
@@ -1373,8 +1382,12 @@ export class NewOrderPage implements OnInit {
   }
 
   protected branchCandidateLabel(candidate: BranchCandidate): string {
-    const load = this.i18n.t('orders.newOrder.order.branchLoad', { count: candidate.activeOrderCount });
-    const closed = candidate.available ? '' : ` · ${this.i18n.t('orders.newOrder.order.branchClosed')}`;
+    const load = this.i18n.t('orders.newOrder.order.branchLoad', {
+      count: candidate.activeOrderCount,
+    });
+    const closed = candidate.available
+      ? ''
+      : ` · ${this.i18n.t('orders.newOrder.order.branchClosed')}`;
     return `${candidate.displayName} — ${load}${closed}`;
   }
 
@@ -1502,7 +1515,9 @@ export class NewOrderPage implements OnInit {
     const dineIn = this.fulfillmentMode() === 'DINE_IN';
     // A table is a room in the operator's own branch: a DINE_IN order is placed
     // here, whatever a pickup order earlier in this session had resolved elsewhere.
-    const placeAtLocationId = dineIn ? scope.locationId : (this.selectedLocationId() ?? scope.locationId);
+    const placeAtLocationId = dineIn
+      ? scope.locationId
+      : (this.selectedLocationId() ?? scope.locationId);
     // Row 1.3: POST .../orders at the resolved (or overridden) branch, not
     // always the operator's own logged-in one.
     const placeAtScope = { ...scope, locationId: placeAtLocationId };

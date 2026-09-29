@@ -96,7 +96,9 @@ function slaBuckets(overrides: Partial<SlaResponse> = {}): SlaResponse {
 }
 
 /** Row 7.10b: the distance histogram's own fixture — mirrors `slaBuckets()`'s shape. */
-function distanceBucketsResponse(overrides: Partial<DistanceBucketsResponse> = {}): DistanceBucketsResponse {
+function distanceBucketsResponse(
+  overrides: Partial<DistanceBucketsResponse> = {},
+): DistanceBucketsResponse {
   const buckets: DistanceBucketResponse[] = [
     { bucketCode: 'UNDER_1KM', deliveryCount: 6 },
     { bucketCode: 'KM1_2', deliveryCount: 0 },

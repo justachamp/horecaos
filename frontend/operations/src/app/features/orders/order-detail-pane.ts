@@ -729,14 +729,20 @@ export class OrderDetailPane {
    */
   protected openPosExportMapping(): void {
     const exportView = this.posExport()?.export;
-    if (!exportView || exportView.unmappedEntityType === null || exportView.unmappedHorecaosEntityId === null) {
+    if (
+      !exportView ||
+      exportView.unmappedEntityType === null ||
+      exportView.unmappedHorecaosEntityId === null
+    ) {
       return;
     }
     void this.router.navigate(['/catalog/import'], {
       queryParams: {
         entityType: exportView.unmappedEntityType,
         focusHorecaosId: exportView.unmappedHorecaosEntityId,
-        ...(exportView.unmappedBindingId === null ? {} : { bindingId: exportView.unmappedBindingId }),
+        ...(exportView.unmappedBindingId === null
+          ? {}
+          : { bindingId: exportView.unmappedBindingId }),
       },
     });
   }
@@ -994,7 +1000,9 @@ export class OrderDetailPane {
     }
     this.amendmentHistoryOpen.set(true);
     await this.loadAmendmentHistory();
-    const pending = this.amendmentHistory()?.find((amendment) => (amendment.actions ?? []).includes('RESOLVE'));
+    const pending = this.amendmentHistory()?.find((amendment) =>
+      (amendment.actions ?? []).includes('RESOLVE'),
+    );
     if (pending) {
       this.openAmendmentConfirmDialog(pending);
     }

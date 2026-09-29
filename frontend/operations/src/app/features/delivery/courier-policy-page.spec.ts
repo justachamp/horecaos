@@ -93,7 +93,9 @@ describe('CourierPolicyPage', () => {
   // Row 3.3: onlineWithinMinutes is genuinely enforced (the roster reads it),
   // so unlike the four fields above it stays an ordinary editable row.
   it('renders and edits onlineWithinMinutes as an ordinary field, not a locked one', async () => {
-    const writePolicy = vi.fn().mockResolvedValue({ ...POLICY, onlineWithinMinutes: 3, policyVersion: 2 });
+    const writePolicy = vi
+      .fn()
+      .mockResolvedValue({ ...POLICY, onlineWithinMinutes: 3, policyVersion: 2 });
     const host = await render({ policy: () => Promise.resolve(POLICY), writePolicy });
 
     const row = host.querySelector('[data-testid="policy-row-onlineWithinMinutes"]')!;

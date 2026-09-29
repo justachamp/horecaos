@@ -247,7 +247,9 @@ export class LiveMapPage implements OnInit {
       });
     } catch (error) {
       if (error instanceof ApiError) {
-        this.revealErrorText.set(describeApiError(error, (key, values) => this.i18n.t(key, values)));
+        this.revealErrorText.set(
+          describeApiError(error, (key, values) => this.i18n.t(key, values)),
+        );
       } else {
         throw error;
       }

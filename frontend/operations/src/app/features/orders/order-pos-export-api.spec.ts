@@ -83,11 +83,15 @@ describe('OrderPosExportApi.push', () => {
 
   it('holds independent commands per order', () => {
     const forOrderA = api.push(SCOPE, 'order-a', 'Manual push');
-    const requestA = http.expectOne(`${environment.apiBaseUrl}/api/v1/operations/tenants/t1/orders/order-a/pos-export/push`);
+    const requestA = http.expectOne(
+      `${environment.apiBaseUrl}/api/v1/operations/tenants/t1/orders/order-a/pos-export/push`,
+    );
     const keyA = requestA.request.headers.get('Idempotency-Key');
 
     const forOrderB = api.push(SCOPE, 'order-b', 'Manual push');
-    const requestB = http.expectOne(`${environment.apiBaseUrl}/api/v1/operations/tenants/t1/orders/order-b/pos-export/push`);
+    const requestB = http.expectOne(
+      `${environment.apiBaseUrl}/api/v1/operations/tenants/t1/orders/order-b/pos-export/push`,
+    );
     const keyB = requestB.request.headers.get('Idempotency-Key');
 
     expect(keyA).not.toBe(keyB);
@@ -106,7 +110,9 @@ describe('OrderPosExportApi.forOrder', () => {
     const http = TestBed.inject(HttpTestingController);
 
     const resultPromise = api.forOrder(SCOPE, 'o1');
-    const request = http.expectOne(`${environment.apiBaseUrl}/api/v1/operations/tenants/t1/orders/o1/pos-export`);
+    const request = http.expectOne(
+      `${environment.apiBaseUrl}/api/v1/operations/tenants/t1/orders/o1/pos-export`,
+    );
     expect(request.request.method).toBe('GET');
     request.flush({ posCapable: true, export: null });
 

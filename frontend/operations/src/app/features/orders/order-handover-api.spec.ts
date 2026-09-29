@@ -89,7 +89,10 @@ describe('OrderHandoverApi.bypass', () => {
     const request = http.expectOne(BYPASS_URL);
 
     expect(request.request.headers.has('Idempotency-Key')).toBe(true);
-    expect(request.request.body).toEqual({ reasonCode: 'CUSTOMER_UNREACHABLE', supervisorName: 'A. Karimov' });
+    expect(request.request.body).toEqual({
+      reasonCode: 'CUSTOMER_UNREACHABLE',
+      supervisorName: 'A. Karimov',
+    });
     request.flush(null);
   });
 

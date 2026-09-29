@@ -110,13 +110,7 @@ type LoadState = 'loading' | 'ready' | 'denied' | 'error' | 'singleLocation';
 
 /** Wave T06 (7.3): the branch leaderboard's persistent secondary sort control. */
 type SortKey =
-  | 'revenue'
-  | 'orders'
-  | 'averageCheck'
-  | 'cancelShare'
-  | 'onTime'
-  | 'prepTime'
-  | 'deliveryTime';
+  'revenue' | 'orders' | 'averageCheck' | 'cancelShare' | 'onTime' | 'prepTime' | 'deliveryTime';
 
 /**
  * 7.3 Branch & SLA reports (`frontend-information-architecture.md` §7.3,
@@ -323,34 +317,41 @@ export class BranchSlaReportPage {
 
       const range = this.filters.range();
 
-      const [query, sla, prepByLocation, deliveryTimeByLocation, fulfilmentAndOnTime, channelMoney, mix] =
-        await Promise.all([
-          this.api.query(scope.tenantId, {
-            from: range.from,
-            to: range.to,
-            metric: ['revenue.gross.v1', 'orders.count.v1', 'orders.cancelled.v1'],
-            groupBy: ['LOCATION'],
-          }),
-          this.api.slaBuckets(scope.tenantId, { from: range.from, to: range.to }),
-          this.api.preparationTimeByLocation(scope.tenantId, { from: range.from, to: range.to }),
-          this.api.deliveryTransitTimeByLocation(scope.tenantId, { from: range.from, to: range.to }),
-          this.api.query(scope.tenantId, {
-            from: range.from,
-            to: range.to,
-            metric: ['orders.count.v1', 'orders.promised.v1', 'orders.late.v1'],
-            groupBy: ['LOCATION', 'FULFILMENT_TYPE', 'CHANNEL'],
-          }),
-          this.api.query(scope.tenantId, {
-            from: range.from,
-            to: range.to,
-            metric: ['orders.count.v1', 'revenue.gross.v1'],
-            // Money, so LEGAL_ENTITY is always named (ADR 0038) and folded back
-            // out below — the same move every other money-plus-axis query on
-            // this console makes.
-            groupBy: ['LOCATION', 'CHANNEL', 'LEGAL_ENTITY'],
-          }),
-          this.api.paymentMix(scope.tenantId, { from: range.from, to: range.to }),
-        ]);
+      const [
+        query,
+        sla,
+        prepByLocation,
+        deliveryTimeByLocation,
+        fulfilmentAndOnTime,
+        channelMoney,
+        mix,
+      ] = await Promise.all([
+        this.api.query(scope.tenantId, {
+          from: range.from,
+          to: range.to,
+          metric: ['revenue.gross.v1', 'orders.count.v1', 'orders.cancelled.v1'],
+          groupBy: ['LOCATION'],
+        }),
+        this.api.slaBuckets(scope.tenantId, { from: range.from, to: range.to }),
+        this.api.preparationTimeByLocation(scope.tenantId, { from: range.from, to: range.to }),
+        this.api.deliveryTransitTimeByLocation(scope.tenantId, { from: range.from, to: range.to }),
+        this.api.query(scope.tenantId, {
+          from: range.from,
+          to: range.to,
+          metric: ['orders.count.v1', 'orders.promised.v1', 'orders.late.v1'],
+          groupBy: ['LOCATION', 'FULFILMENT_TYPE', 'CHANNEL'],
+        }),
+        this.api.query(scope.tenantId, {
+          from: range.from,
+          to: range.to,
+          metric: ['orders.count.v1', 'revenue.gross.v1'],
+          // Money, so LEGAL_ENTITY is always named (ADR 0038) and folded back
+          // out below — the same move every other money-plus-axis query on
+          // this console makes.
+          groupBy: ['LOCATION', 'CHANNEL', 'LEGAL_ENTITY'],
+        }),
+        this.api.paymentMix(scope.tenantId, { from: range.from, to: range.to }),
+      ]);
 
       this.provenance.set(query.provenance);
       const prepById = new Map(

@@ -537,10 +537,7 @@ export const settingsPaths = {
    * branch-binding dialog's own capability-assignment picker, which
    * defaults to every capability this read returns.
    */
-  integrationInstallationCapabilityCatalogue(
-    scope: LocationScope,
-    installationId: string,
-  ): string {
+  integrationInstallationCapabilityCatalogue(scope: LocationScope, installationId: string): string {
     return `${this.integrationInstallations(scope)}/${enc(installationId)}/capability-catalogue`;
   },
 

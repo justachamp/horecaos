@@ -3,7 +3,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LocationScope } from '../../../core/api/operations-paths';
 import { I18n } from '../../../core/i18n/i18n';
-import { AddVersionRequest, NotificationsApi, VariableCatalogueEntry, WordingResponse } from './notifications-api';
+import {
+  AddVersionRequest,
+  NotificationsApi,
+  VariableCatalogueEntry,
+  WordingResponse,
+} from './notifications-api';
 import { TemplateEditor } from './template-editor';
 
 const SCOPE: LocationScope = { tenantId: 'tenant-1', brandId: 'brand-1', locationId: 'location-1' };
@@ -29,7 +34,9 @@ describe('TemplateEditor', () => {
 
   beforeEach(async () => {
     api = {
-      addVersion: vi.fn().mockResolvedValue({ templateId: 't1', versionNumber: 1, awaitsProviderReview: false }),
+      addVersion: vi
+        .fn()
+        .mockResolvedValue({ templateId: 't1', versionNumber: 1, awaitsProviderReview: false }),
       variableCatalogue: vi.fn().mockResolvedValue(CATALOGUE),
     };
 
@@ -51,7 +58,9 @@ describe('TemplateEditor', () => {
   });
 
   function setBody(text: string): void {
-    const textarea = fixture.nativeElement.querySelector('[data-testid="editor-body"]') as HTMLTextAreaElement;
+    const textarea = fixture.nativeElement.querySelector(
+      '[data-testid="editor-body"]',
+    ) as HTMLTextAreaElement;
     textarea.value = text;
     textarea.dispatchEvent(new Event('input'));
     fixture.detectChanges();
@@ -59,7 +68,9 @@ describe('TemplateEditor', () => {
 
   it('offers the variable catalogue for the template’s own class, fixing the empty-schema defect (gap map X.27)', () => {
     expect(api.variableCatalogue).toHaveBeenCalledWith(SCOPE);
-    const chips = fixture.nativeElement.querySelectorAll('[data-testid="variable-chips"] .variable-chip');
+    const chips = fixture.nativeElement.querySelectorAll(
+      '[data-testid="variable-chips"] .variable-chip',
+    );
     expect(chips.length).toBe(2);
     expect((chips[0] as HTMLElement).textContent).toContain('orderNumber');
   });
@@ -72,18 +83,24 @@ describe('TemplateEditor', () => {
     chip.click();
     fixture.detectChanges();
 
-    const textarea = fixture.nativeElement.querySelector('[data-testid="editor-body"]') as HTMLTextAreaElement;
+    const textarea = fixture.nativeElement.querySelector(
+      '[data-testid="editor-body"]',
+    ) as HTMLTextAreaElement;
     expect(textarea.value).toBe('Order {{orderNumber}}');
   });
 
   it('renders a live preview substituting a sample value for the placeholder', () => {
     setBody('Order {{orderNumber}} is ready');
-    const preview = fixture.nativeElement.querySelector('[data-testid="preview-body"]') as HTMLElement;
+    const preview = fixture.nativeElement.querySelector(
+      '[data-testid="preview-body"]',
+    ) as HTMLElement;
     expect(preview.textContent).toBe('Order A-1042 is ready');
   });
 
   it('disables save until all three locales have text', () => {
-    const save = fixture.nativeElement.querySelector('[data-testid="editor-save"]') as HTMLButtonElement;
+    const save = fixture.nativeElement.querySelector(
+      '[data-testid="editor-save"]',
+    ) as HTMLButtonElement;
     expect(save.disabled).toBe(true);
   });
 
@@ -91,7 +108,11 @@ describe('TemplateEditor', () => {
     // The exact defect this wave fixes: the old page always sent {},
     // and TemplateRenderer.validate correctly refuses an undeclared
     // placeholder — so a variable-bearing template could never be saved.
-    const bodies = ['Ваш заказ {{orderNumber}} готов', 'Buyurtmangiz {{orderNumber}} tayyor', 'Order {{orderNumber}} is ready'];
+    const bodies = [
+      'Ваш заказ {{orderNumber}} готов',
+      'Buyurtmangiz {{orderNumber}} tayyor',
+      'Order {{orderNumber}} is ready',
+    ];
     const textareas = () => fixture.nativeElement.querySelectorAll('[data-testid="editor-body"]');
     const tabs = fixture.nativeElement.querySelectorAll('.locale-tab');
 
@@ -104,19 +125,29 @@ describe('TemplateEditor', () => {
       fixture.detectChanges();
     }
 
-    const save = fixture.nativeElement.querySelector('[data-testid="editor-save"]') as HTMLButtonElement;
+    const save = fixture.nativeElement.querySelector(
+      '[data-testid="editor-save"]',
+    ) as HTMLButtonElement;
     expect(save.disabled).toBe(false);
     save.click();
     await flushMicrotasks();
 
     expect(api.addVersion).toHaveBeenCalledTimes(1);
-    const [, , request] = api.addVersion.mock.calls[0] as [LocationScope, string, AddVersionRequest];
+    const [, , request] = api.addVersion.mock.calls[0] as [
+      LocationScope,
+      string,
+      AddVersionRequest,
+    ];
     expect(request.variablesSchema).toEqual({ orderNumber: 'string' });
     expect(Object.keys(request.variablesSchema)).not.toHaveLength(0);
   });
 
   it('warns when the saved version awaits its SMS gateway’s approval (ADR 0091, gap map 10.9c)', async () => {
-    api.addVersion.mockResolvedValue({ templateId: 't1', versionNumber: 3, awaitsProviderReview: true });
+    api.addVersion.mockResolvedValue({
+      templateId: 't1',
+      versionNumber: 3,
+      awaitsProviderReview: true,
+    });
     const tabs = fixture.nativeElement.querySelectorAll('.locale-tab');
     for (let i = 0; i < 3; i += 1) {
       (tabs[i] as HTMLButtonElement).click();
@@ -124,13 +155,18 @@ describe('TemplateEditor', () => {
       setBody('Text');
     }
 
-    const save = fixture.nativeElement.querySelector('[data-testid="editor-save"]') as HTMLButtonElement;
+    const save = fixture.nativeElement.querySelector(
+      '[data-testid="editor-save"]',
+    ) as HTMLButtonElement;
     save.click();
     await flushMicrotasks();
     fixture.detectChanges();
 
-    expect((fixture.nativeElement as HTMLElement).querySelector('[data-testid="save-provider-review-warning"]'))
-      .toBeTruthy();
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector(
+        '[data-testid="save-provider-review-warning"]',
+      ),
+    ).toBeTruthy();
   });
 
   it('starts from the active version’s own wording when a prefill is supplied', async () => {

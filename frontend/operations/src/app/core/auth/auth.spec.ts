@@ -267,7 +267,9 @@ describe('Auth bootstrap from a reload', () => {
 
     const status = auth.initialise();
     const request = http.expectOne(url(REFRESH_PATH));
-    expect(request.request.body).toEqual({ refreshToken: 'a-refresh-token-from-before-the-reload' });
+    expect(request.request.body).toEqual({
+      refreshToken: 'a-refresh-token-from-before-the-reload',
+    });
     request.flush(session());
 
     expect(await status).toBe('signed-in');

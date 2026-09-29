@@ -199,15 +199,24 @@
             @if (selectedCustomer(); as customer) {
               @if (selectedAddress(); as address) {
                 <p class="q-caption new-order__hint" data-testid="new-order-aggregator-delivery-to">
-                  {{ 'orders.newOrder.aggregator.deliveryTo' | t: { customer: customer.label, address: address.label } }}
+                  {{
+                    'orders.newOrder.aggregator.deliveryTo'
+                      | t: { customer: customer.label, address: address.label }
+                  }}
                 </p>
               } @else {
-                <p class="q-caption new-order__notice" data-testid="new-order-aggregator-delivery-missing">
+                <p
+                  class="q-caption new-order__notice"
+                  data-testid="new-order-aggregator-delivery-missing"
+                >
                   {{ 'orders.newOrder.aggregator.deliveryMissing' | t }}
                 </p>
               }
             } @else {
-              <p class="q-caption new-order__notice" data-testid="new-order-aggregator-delivery-missing">
+              <p
+                class="q-caption new-order__notice"
+                data-testid="new-order-aggregator-delivery-missing"
+              >
                 {{ 'orders.newOrder.aggregator.deliveryMissing' | t }}
               </p>
             }
@@ -764,7 +773,9 @@
                 (change)="setOverrideReasonCode($any($event.target).value)"
                 data-testid="new-order-branch-override-reason"
               >
-                <option value="">{{ 'orders.newOrder.order.branchOverrideReasonPlaceholder' | t }}</option>
+                <option value="">
+                  {{ 'orders.newOrder.order.branchOverrideReasonPlaceholder' | t }}
+                </option>
                 @for (reason of overrideReasons(); track reason.code) {
                   <option [value]="reason.code">{{ branchOverrideReasonLabel(reason) }}</option>
                 }

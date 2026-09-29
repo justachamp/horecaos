@@ -67,9 +67,12 @@ describe('CustomersPage', () => {
         .fn()
         .mockResolvedValue({ items: [CUSTOMER], nextCursor: null } satisfies Page<CustomerSummary>),
       counts: vi.fn().mockResolvedValue(COUNTS),
-      exportFiltered: vi
-        .fn()
-        .mockResolvedValue({ rows: [], truncated: false, approvalStatus: 'NOT_REQUIRED', approvalRequestId: null }),
+      exportFiltered: vi.fn().mockResolvedValue({
+        rows: [],
+        truncated: false,
+        approvalStatus: 'NOT_REQUIRED',
+        approvalRequestId: null,
+      }),
       create: vi.fn().mockResolvedValue('new-customer-id'),
     };
 

@@ -180,8 +180,9 @@ export class GeographyPage implements OnInit {
   protected readonly distanceBuckets = signal<readonly ChartCategory[]>([]);
   protected readonly histogramProvenance = signal<ProvenanceResponse | null>(null);
   /** Row 7.10b's own published-formula panel — fetched once, tenant-wide and period-independent. */
-  protected readonly distanceBucketDefinitions =
-    signal<readonly DistanceBucketDefinitionResponse[]>([]);
+  protected readonly distanceBucketDefinitions = signal<
+    readonly DistanceBucketDefinitionResponse[]
+  >([]);
 
   // ---------------------------------------------------------------- 7.10c
   protected readonly sampleSize = signal<number>(SAMPLE_SIZE_OPTIONS[0]);

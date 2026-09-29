@@ -330,21 +330,19 @@ describe('CampaignDetailPane', () => {
 
   // ---------------------------------------- row 6.4: audience-snapshot CSV export
 
-  it('6.4: exports the campaign\'s own snapshot as pseudonymous account ids', async () => {
+  it("6.4: exports the campaign's own snapshot as pseudonymous account ids", async () => {
     await render(OTHER_ID, campaign({ status: 'SENT', snapshotId: 'snapshot-1' }));
     const host = fixture.nativeElement as HTMLElement;
 
-    const button = host.querySelector('[data-testid="campaign-export-snapshot"]') as HTMLButtonElement;
+    const button = host.querySelector(
+      '[data-testid="campaign-export-snapshot"]',
+    ) as HTMLButtonElement;
     expect(button).not.toBeNull();
     button.click();
     await flushMicrotasks();
     fixture.detectChanges();
 
-    expect(api['exportSnapshot']).toHaveBeenCalledWith(
-      SCOPE,
-      'snapshot-1',
-      expect.any(String),
-    );
+    expect(api['exportSnapshot']).toHaveBeenCalledWith(SCOPE, 'snapshot-1', expect.any(String));
     expect(host.querySelector('[data-testid="campaign-export-count"]')?.textContent).toContain('2');
   });
 
@@ -359,7 +357,9 @@ describe('CampaignDetailPane', () => {
     await render(OTHER_ID, campaign({ status: 'SENT', snapshotId: 'snapshot-1' }));
     api['exportSnapshot'] = vi
       .fn()
-      .mockRejectedValue(new ApiError(ApiErrorCode.INSUFFICIENT_CAPABILITY, 403, { status: 403 }, null));
+      .mockRejectedValue(
+        new ApiError(ApiErrorCode.INSUFFICIENT_CAPABILITY, 403, { status: 403 }, null),
+      );
     const host = fixture.nativeElement as HTMLElement;
 
     (host.querySelector('[data-testid="campaign-export-snapshot"]') as HTMLButtonElement).click();

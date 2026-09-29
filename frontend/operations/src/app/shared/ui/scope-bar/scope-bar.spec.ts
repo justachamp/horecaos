@@ -133,7 +133,9 @@ describe('ScopeBar', () => {
     fixture.componentInstance.tenantWideChange.subscribe((value) => (emitted = value));
 
     (
-      fixture.nativeElement.querySelector('[data-testid="scope-bar-tenant-wide"]') as HTMLButtonElement
+      fixture.nativeElement.querySelector(
+        '[data-testid="scope-bar-tenant-wide"]',
+      ) as HTMLButtonElement
     ).click();
 
     expect(emitted).toBe(true);
@@ -145,7 +147,9 @@ describe('ScopeBar', () => {
     fixture.componentInstance.tenantWideChange.subscribe((value) => (emitted = value));
 
     (
-      fixture.nativeElement.querySelector('[data-testid="scope-bar-per-brand"]') as HTMLButtonElement
+      fixture.nativeElement.querySelector(
+        '[data-testid="scope-bar-per-brand"]',
+      ) as HTMLButtonElement
     ).click();
 
     expect(emitted).toBe(false);

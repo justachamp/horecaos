@@ -235,36 +235,34 @@ describe('MenuSetsPage', () => {
         list: vi.fn().mockResolvedValue([{ ...MAIN_MENU, status: 'ACTIVE' }]),
       },
       locations: {
-        list: vi
-          .fn()
-          .mockResolvedValue([
-            {
-              id: 'loc-1',
-              tenantId: 't1',
-              brandId: 'b1',
-              code: 'MAIN',
-              slug: 'main',
-              displayName: 'Main branch',
-              timezone: 'Asia/Tashkent',
-              status: 'ACTIVE',
-              addressLine: null,
-              district: null,
-              city: null,
-              landmark: null,
-              contactPhone: null,
-              latitude: null,
-              longitude: null,
-              coordinateSource: 'NOT_GEOCODED',
-              sortOrder: 0,
-              seats: null,
-              averageChequeAmount: null,
-              averageChequeCurrency: null,
-              hasParking: false,
-              hasPlayground: false,
-              virtualTourUrl: null,
-              locales: [],
-            },
-          ]),
+        list: vi.fn().mockResolvedValue([
+          {
+            id: 'loc-1',
+            tenantId: 't1',
+            brandId: 'b1',
+            code: 'MAIN',
+            slug: 'main',
+            displayName: 'Main branch',
+            timezone: 'Asia/Tashkent',
+            status: 'ACTIVE',
+            addressLine: null,
+            district: null,
+            city: null,
+            landmark: null,
+            contactPhone: null,
+            latitude: null,
+            longitude: null,
+            coordinateSource: 'NOT_GEOCODED',
+            sortOrder: 0,
+            seats: null,
+            averageChequeAmount: null,
+            averageChequeCurrency: null,
+            hasParking: false,
+            hasPlayground: false,
+            virtualTourUrl: null,
+            locales: [],
+          },
+        ]),
       },
     });
     await render(SCOPE, apis);
@@ -296,9 +294,7 @@ describe('MenuSetsPage', () => {
     await flushMicrotasks();
     fixture.detectChanges();
 
-    const submit = host.querySelector(
-      '[data-testid="menu-sets-bind-submit"]',
-    ) as HTMLButtonElement;
+    const submit = host.querySelector('[data-testid="menu-sets-bind-submit"]') as HTMLButtonElement;
     expect(submit.disabled).toBe(true);
     expect(host.querySelector('[data-testid="menu-sets-bind-not-active"]')).toBeTruthy();
 

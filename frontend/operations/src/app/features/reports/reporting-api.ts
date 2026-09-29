@@ -847,9 +847,12 @@ export class ReportingApi {
     params: RangeParams,
   ): Promise<LocationAverageListResponse> {
     const result = await firstValueFrom(
-      this.api.get<LocationAverageListResponse>(reportsPaths.deliveryTransitTimeByLocation(tenantId), {
-        params: { from: params.from, to: params.to, locationId: params.locationId },
-      }),
+      this.api.get<LocationAverageListResponse>(
+        reportsPaths.deliveryTransitTimeByLocation(tenantId),
+        {
+          params: { from: params.from, to: params.to, locationId: params.locationId },
+        },
+      ),
     );
     return result.value;
   }
@@ -1085,7 +1088,12 @@ export class ReportingApi {
   ): Promise<AbcCurveListResponse> {
     const result = await firstValueFrom(
       this.api.get<AbcCurveListResponse>(reportsPaths.abcCurve(tenantId), {
-        params: { from: params.from, to: params.to, locationId: params.locationId, limit: params.limit },
+        params: {
+          from: params.from,
+          to: params.to,
+          locationId: params.locationId,
+          limit: params.limit,
+        },
       }),
     );
     return result.value;

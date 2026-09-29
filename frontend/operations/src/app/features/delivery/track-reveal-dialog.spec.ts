@@ -13,7 +13,8 @@ function render(): { fixture: ReturnType<typeof TestBed.createComponent<TrackRev
 }
 
 function setField(host: HTMLElement, testId: string, value: string): void {
-  const el = host.querySelector(`[data-testid="${testId}"]`) as HTMLInputElement | HTMLTextAreaElement;
+  const el = host.querySelector(`[data-testid="${testId}"]`) as
+    HTMLInputElement | HTMLTextAreaElement;
   el.value = value;
   el.dispatchEvent(new Event('input'));
 }
@@ -31,7 +32,9 @@ describe('TrackRevealDialog', () => {
     fixture.componentInstance.confirm.subscribe((s) => submissions.push(s));
 
     setField(host, 'track-reveal-dialog-purpose', 'too short');
-    (host.querySelector('[data-testid="track-reveal-dialog-confirm"]') as HTMLButtonElement).click();
+    (
+      host.querySelector('[data-testid="track-reveal-dialog-confirm"]') as HTMLButtonElement
+    ).click();
     fixture.detectChanges();
 
     expect(host.querySelector('[data-testid="track-reveal-dialog-purpose-error"]')).not.toBeNull();
@@ -47,7 +50,9 @@ describe('TrackRevealDialog', () => {
     setField(host, 'track-reveal-dialog-purpose', 'Customer says the order never arrived');
     setField(host, 'track-reveal-dialog-from', '2026-09-12T12:00');
     setField(host, 'track-reveal-dialog-to', '2026-09-12T11:00');
-    (host.querySelector('[data-testid="track-reveal-dialog-confirm"]') as HTMLButtonElement).click();
+    (
+      host.querySelector('[data-testid="track-reveal-dialog-confirm"]') as HTMLButtonElement
+    ).click();
     fixture.detectChanges();
 
     expect(host.querySelector('[data-testid="track-reveal-dialog-window-error"]')).not.toBeNull();
@@ -63,7 +68,9 @@ describe('TrackRevealDialog', () => {
     setField(host, 'track-reveal-dialog-purpose', '  Customer says the order never arrived  ');
     setField(host, 'track-reveal-dialog-from', '2026-09-12T10:00');
     setField(host, 'track-reveal-dialog-to', '2026-09-12T11:00');
-    (host.querySelector('[data-testid="track-reveal-dialog-confirm"]') as HTMLButtonElement).click();
+    (
+      host.querySelector('[data-testid="track-reveal-dialog-confirm"]') as HTMLButtonElement
+    ).click();
 
     expect(submissions).toHaveLength(1);
     expect(submissions[0].purpose).toBe('Customer says the order never arrived');

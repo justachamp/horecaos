@@ -389,7 +389,9 @@ export class NewOrderApi {
   /** Row 1.3: the curated list the branch-override dialog picks from. */
   async branchOverrideReasons(scope: LocationScope): Promise<readonly BranchOverrideReason[]> {
     return firstValueFrom(
-      this.api.get<readonly BranchOverrideReason[]>(operationsPaths.orderBranchOverrideReasons(scope)),
+      this.api.get<readonly BranchOverrideReason[]>(
+        operationsPaths.orderBranchOverrideReasons(scope),
+      ),
     ).then((result) => result.value);
   }
 

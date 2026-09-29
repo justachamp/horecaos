@@ -118,20 +118,30 @@
         <div class="field">
           <dt class="q-caption">{{ 'settings.locations.field.hasParking' | t }}</dt>
           <dd class="q-body">
-            {{ (location.hasParking ? 'settings.locations.field.yes' : 'settings.locations.field.no') | t }}
+            {{
+              (location.hasParking ? 'settings.locations.field.yes' : 'settings.locations.field.no')
+                | t
+            }}
           </dd>
         </div>
         <div class="field">
           <dt class="q-caption">{{ 'settings.locations.field.hasPlayground' | t }}</dt>
           <dd class="q-body">
-            {{ (location.hasPlayground ? 'settings.locations.field.yes' : 'settings.locations.field.no') | t }}
+            {{
+              (location.hasPlayground
+                ? 'settings.locations.field.yes'
+                : 'settings.locations.field.no'
+              ) | t
+            }}
           </dd>
         </div>
         <div class="field">
           <dt class="q-caption">{{ 'settings.locations.field.virtualTourUrl' | t }}</dt>
           <dd class="q-body">
             @if (location.virtualTourUrl) {
-              <a [href]="location.virtualTourUrl" target="_blank" rel="noopener">{{ location.virtualTourUrl }}</a>
+              <a [href]="location.virtualTourUrl" target="_blank" rel="noopener">{{
+                location.virtualTourUrl
+              }}</a>
             } @else {
               —
             }
@@ -232,7 +242,9 @@
             [disabled]="placeSaving()"
           />
 
-          <label class="q-caption" for="place-seats">{{ 'settings.locations.field.seats' | t }}</label>
+          <label class="q-caption" for="place-seats">{{
+            'settings.locations.field.seats' | t
+          }}</label>
           <input
             id="place-seats"
             class="q-body field"

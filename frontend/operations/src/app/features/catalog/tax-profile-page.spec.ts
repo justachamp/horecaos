@@ -121,7 +121,9 @@ describe('TaxProfilePage', () => {
     const host = fixture.nativeElement as HTMLElement;
     expect(taxProfiles).toHaveBeenCalledWith(SCOPE);
     expect(taxProfile).toHaveBeenCalledWith(SCOPE, 'UZ');
-    expect(host.querySelector('[data-testid="tax-profile-existing-UZ"]')?.textContent).toContain('UZ');
+    expect(host.querySelector('[data-testid="tax-profile-existing-UZ"]')?.textContent).toContain(
+      'UZ',
+    );
     expect(host.querySelector('[data-testid="tax-profile-in-force"]')?.textContent).toContain('UZ');
     expect(host.querySelector('[data-testid="tax-profile-none-yet"]')).toBeNull();
   });
@@ -133,7 +135,9 @@ describe('TaxProfilePage', () => {
 
     const host = fixture.nativeElement as HTMLElement;
     expect(host.querySelector('[data-testid="tax-profile-none-yet"]')).not.toBeNull();
-    expect(host.querySelector('[data-testid="tax-profile-in-force-none"]')?.textContent).toContain('UZ');
+    expect(host.querySelector('[data-testid="tax-profile-in-force-none"]')?.textContent).toContain(
+      'UZ',
+    );
   });
 
   it('loads a different jurisdiction’s in-force rate into the form when it is selected from the list', async () => {
@@ -146,7 +150,11 @@ describe('TaxProfilePage', () => {
       version: 1,
     };
     const taxProfiles = vi.fn().mockReturnValue(of([uzProfile]));
-    const taxProfile = vi.fn().mockReturnValue(of(null)).mockReturnValueOnce(of(null)).mockReturnValueOnce(of(uzProfile));
+    const taxProfile = vi
+      .fn()
+      .mockReturnValue(of(null))
+      .mockReturnValueOnce(of(null))
+      .mockReturnValueOnce(of(uzProfile));
     await render(SCOPE, { setTaxProfile: vi.fn(), taxProfiles, taxProfile });
 
     const host = fixture.nativeElement as HTMLElement;

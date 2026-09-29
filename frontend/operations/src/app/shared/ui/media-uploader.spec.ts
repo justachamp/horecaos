@@ -91,7 +91,7 @@ describe('MediaUploader', () => {
     ).toBeNull();
   });
 
-  it('still lists video in the file picker\'s own accept attribute, so a video is selectable and this refusal is what an operator sees (row X.12)', () => {
+  it("still lists video in the file picker's own accept attribute, so a video is selectable and this refusal is what an operator sees (row X.12)", () => {
     const fixture = render();
 
     expect(fileInput(fixture).accept).toContain('video/mp4');

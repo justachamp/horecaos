@@ -418,7 +418,9 @@ describe('SettingsHomePage', () => {
     input.dispatchEvent(new Event('input'));
     fixture.detectChanges();
 
-    const options = [...fixture.nativeElement.querySelectorAll('[data-testid="q-combobox-option"]')];
+    const options = [
+      ...fixture.nativeElement.querySelectorAll('[data-testid="q-combobox-option"]'),
+    ];
     expect(options.map((option: Element) => option.textContent)).toEqual([
       expect.stringContaining('ordering.vat_rate_percent'),
     ]);
@@ -434,7 +436,9 @@ describe('SettingsHomePage', () => {
     input.dispatchEvent(new Event('input'));
     fixture.detectChanges();
 
-    (fixture.nativeElement.querySelector('[data-testid="q-combobox-option"]') as HTMLElement).click();
+    (
+      fixture.nativeElement.querySelector('[data-testid="q-combobox-option"]') as HTMLElement
+    ).click();
     fixture.detectChanges();
 
     expect(navigateSpy).toHaveBeenCalledWith(['/settings', 'order-policy']);

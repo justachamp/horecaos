@@ -56,7 +56,8 @@ const READINESS_CODE_KEYS: Readonly<Record<string, MessageKey>> = {
   // Row 10.0: NOTIFICATION_TEMPLATE_MODERATION_VALIDATE, the one check
   // `OnboardingService.validate` runs ad hoc rather than through a formal
   // `OnboardingStep` — see that method's own doc.
-  TEMPLATE_AWAITING_PROVIDER_REVIEW: 'settings.home.readiness.code.TEMPLATE_AWAITING_PROVIDER_REVIEW',
+  TEMPLATE_AWAITING_PROVIDER_REVIEW:
+    'settings.home.readiness.code.TEMPLATE_AWAITING_PROVIDER_REVIEW',
   TEMPLATE_REJECTED_BY_PROVIDER: 'settings.home.readiness.code.TEMPLATE_REJECTED_BY_PROVIDER',
   // Row 10.0, the three remaining settings.md §10.0 conditions: fiscal
   // classification coverage, channel-payment coverage and secret-rotation age.

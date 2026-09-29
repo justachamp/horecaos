@@ -1988,7 +1988,12 @@ describe('OrderQueue: Оплата and Доставка columns (orders.md §2.5
         // silently swaps the sort order and this test's `cells[0]`/`cells[1]`
         // indices with it. Fixed timestamps make the row order deterministic
         // regardless of how fast the real clock is ticking.
-        order({ orderId: 'a', feeMinor: 1_500_000, currency: 'UZS', createdAt: '2026-01-01T10:01:00.000Z' }),
+        order({
+          orderId: 'a',
+          feeMinor: 1_500_000,
+          currency: 'UZS',
+          createdAt: '2026-01-01T10:01:00.000Z',
+        }),
         order({ orderId: 'b', feeMinor: 0, createdAt: '2026-01-01T10:00:00.000Z' }),
       ]),
     );
@@ -2041,7 +2046,11 @@ describe('OrderQueue: cursor paging and Load more (row 1.1, X.18)', () => {
         of({
           value: {
             items: [
-              order({ orderId: 'a', publicOrderNumber: '0001', createdAt: '2026-01-01T10:01:00.000Z' }),
+              order({
+                orderId: 'a',
+                publicOrderNumber: '0001',
+                createdAt: '2026-01-01T10:01:00.000Z',
+              }),
             ],
             nextCursor: 'c1',
           },
@@ -2052,7 +2061,11 @@ describe('OrderQueue: cursor paging and Load more (row 1.1, X.18)', () => {
         of({
           value: {
             items: [
-              order({ orderId: 'b', publicOrderNumber: '0002', createdAt: '2026-01-01T10:00:00.000Z' }),
+              order({
+                orderId: 'b',
+                publicOrderNumber: '0002',
+                createdAt: '2026-01-01T10:00:00.000Z',
+              }),
             ],
             nextCursor: null,
           },

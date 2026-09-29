@@ -121,7 +121,10 @@ describe('AutomationsPage', () => {
 
   it('disarms an active rule through the enabled toggle, calling deactivate', async () => {
     const deactivate = vi.fn().mockResolvedValue(rule({ active: false, version: 3 }));
-    const api = fakeApi({ list: vi.fn().mockResolvedValue([rule({ active: true, version: 2 })]), deactivate });
+    const api = fakeApi({
+      list: vi.fn().mockResolvedValue([rule({ active: true, version: 2 })]),
+      deactivate,
+    });
     await render(api);
     const host = fixture.nativeElement as HTMLElement;
 
@@ -155,7 +158,10 @@ describe('AutomationsPage', () => {
     const api = fakeApi({
       list: vi
         .fn()
-        .mockResolvedValue([rule({ id: 'rule-1', name: 'First' }), rule({ id: 'rule-2', name: 'Second', priority: 1 })]),
+        .mockResolvedValue([
+          rule({ id: 'rule-1', name: 'First' }),
+          rule({ id: 'rule-2', name: 'Second', priority: 1 }),
+        ]),
       reorder,
     });
     await render(api);
@@ -181,7 +187,9 @@ describe('AutomationsPage', () => {
     (host.querySelector('[data-testid="automations-create"]') as HTMLButtonElement).click();
     fixture.detectChanges();
 
-    const nameInput = host.querySelector('[data-testid="automation-form-name"]') as HTMLInputElement;
+    const nameInput = host.querySelector(
+      '[data-testid="automation-form-name"]',
+    ) as HTMLInputElement;
     nameInput.value = 'Birthday treat';
     nameInput.dispatchEvent(new Event('input'));
     const templateInput = host.querySelector(
@@ -213,13 +221,13 @@ describe('AutomationsPage', () => {
     (host.querySelector('[data-testid="automations-create"]') as HTMLButtonElement).click();
     fixture.detectChanges();
 
-    const options = [...host.querySelectorAll('[data-testid="automation-form-trigger"] option')].map(
-      (option) => (option as HTMLOptionElement).value,
-    );
+    const options = [
+      ...host.querySelectorAll('[data-testid="automation-form-trigger"] option'),
+    ].map((option) => (option as HTMLOptionElement).value);
     expect(options).toEqual(['BIRTHDAY', 'INACTIVITY', 'CART_ABANDONMENT', 'CASHBACK_CHANGE']);
   });
 
-  it('shows a rule\'s recent firing history, including a refusal reason', async () => {
+  it("shows a rule's recent firing history, including a refusal reason", async () => {
     const run: AutomationRunView = {
       id: 'run-1',
       customerAccountId: 'acct-1',
@@ -228,7 +236,10 @@ describe('AutomationsPage', () => {
       cancelledReason: null,
       firedAt: '2026-09-25T09:00:00Z',
     };
-    const api = fakeApi({ list: vi.fn().mockResolvedValue([rule()]), runs: vi.fn().mockResolvedValue([run]) });
+    const api = fakeApi({
+      list: vi.fn().mockResolvedValue([rule()]),
+      runs: vi.fn().mockResolvedValue([run]),
+    });
     await render(api);
     const host = fixture.nativeElement as HTMLElement;
 
@@ -265,7 +276,10 @@ describe('AutomationsPage', () => {
   });
 
   it('shows the empty state when no customer matches the rule today', async () => {
-    const api = fakeApi({ list: vi.fn().mockResolvedValue([rule()]), preview: vi.fn().mockResolvedValue([]) });
+    const api = fakeApi({
+      list: vi.fn().mockResolvedValue([rule()]),
+      preview: vi.fn().mockResolvedValue([]),
+    });
     await render(api);
     const host = fixture.nativeElement as HTMLElement;
 

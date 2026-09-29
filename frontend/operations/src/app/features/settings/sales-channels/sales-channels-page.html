@@ -304,7 +304,9 @@
                       data-testid="edit-icon"
                     />
 
-                    <span class="q-caption">{{ 'settings.salesChannels.field.brandColorPrimary' | t }}</span>
+                    <span class="q-caption">{{
+                      'settings.salesChannels.field.brandColorPrimary' | t
+                    }}</span>
                     <div class="color-row">
                       <q-color-input
                         [value]="editBrandColorPrimary() || '#000000'"
@@ -314,13 +316,19 @@
                         data-testid="edit-color-primary"
                       />
                       @if (editBrandColorPrimary()) {
-                        <button type="button" class="q-body-sm link" (click)="clearBrandColorPrimary()">
+                        <button
+                          type="button"
+                          class="q-body-sm link"
+                          (click)="clearBrandColorPrimary()"
+                        >
                           {{ 'settings.salesChannels.field.color.clear' | t }}
                         </button>
                       }
                     </div>
 
-                    <span class="q-caption">{{ 'settings.salesChannels.field.brandColorSecondary' | t }}</span>
+                    <span class="q-caption">{{
+                      'settings.salesChannels.field.brandColorSecondary' | t
+                    }}</span>
                     <div class="color-row">
                       <q-color-input
                         [value]="editBrandColorSecondary() || '#000000'"
@@ -330,7 +338,11 @@
                         data-testid="edit-color-secondary"
                       />
                       @if (editBrandColorSecondary()) {
-                        <button type="button" class="q-body-sm link" (click)="clearBrandColorSecondary()">
+                        <button
+                          type="button"
+                          class="q-body-sm link"
+                          (click)="clearBrandColorSecondary()"
+                        >
                           {{ 'settings.salesChannels.field.color.clear' | t }}
                         </button>
                       }

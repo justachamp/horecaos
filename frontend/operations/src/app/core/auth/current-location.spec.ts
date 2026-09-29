@@ -90,16 +90,14 @@ describe('CurrentLocation', () => {
   it('resolves a location via a BRAND-scoped grant, fetching the brand’s own locations', async () => {
     const loc = location();
     const promise = loc.ensureLoaded();
-    http
-      .expectOne(url('/api/v1/session/context'))
-      .flush(
-        context([
-          {
-            scope: { type: 'BRAND', tenantId: 't1', brandId: 'b1', locationId: null },
-            roleCode: 'MANAGER',
-          },
-        ]),
-      );
+    http.expectOne(url('/api/v1/session/context')).flush(
+      context([
+        {
+          scope: { type: 'BRAND', tenantId: 't1', brandId: 'b1', locationId: null },
+          roleCode: 'MANAGER',
+        },
+      ]),
+    );
     await tick();
 
     http
@@ -118,30 +116,26 @@ describe('CurrentLocation', () => {
   it('resolves a location via a TENANT-scoped grant that covers brands, when no BRAND or LOCATION grant exists', async () => {
     const loc = location();
     const promise = loc.ensureLoaded();
-    http
-      .expectOne(url('/api/v1/session/context'))
-      .flush(
-        context([
-          {
-            scope: { type: 'TENANT', tenantId: 't1', brandId: null, locationId: null },
-            roleCode: 'OWNER',
-          },
-        ]),
-      );
+    http.expectOne(url('/api/v1/session/context')).flush(
+      context([
+        {
+          scope: { type: 'TENANT', tenantId: 't1', brandId: null, locationId: null },
+          roleCode: 'OWNER',
+        },
+      ]),
+    );
     await tick();
 
-    http
-      .expectOne(url('/api/v1/operations/tenants/t1/brands'))
-      .flush([
-        {
-          id: 'b1',
-          tenantId: 't1',
-          code: 'MAIN',
-          slug: 'main',
-          displayName: 'Rayhon',
-          status: 'ACTIVE',
-        },
-      ]);
+    http.expectOne(url('/api/v1/operations/tenants/t1/brands')).flush([
+      {
+        id: 'b1',
+        tenantId: 't1',
+        code: 'MAIN',
+        slug: 'main',
+        displayName: 'Rayhon',
+        status: 'ACTIVE',
+      },
+    ]);
     await tick();
 
     http
@@ -169,16 +163,14 @@ describe('CurrentLocation', () => {
   it('is denied when a resolved brand turns out to have zero locations', async () => {
     const loc = location();
     const promise = loc.ensureLoaded();
-    http
-      .expectOne(url('/api/v1/session/context'))
-      .flush(
-        context([
-          {
-            scope: { type: 'BRAND', tenantId: 't1', brandId: 'b1', locationId: null },
-            roleCode: 'MANAGER',
-          },
-        ]),
-      );
+    http.expectOne(url('/api/v1/session/context')).flush(
+      context([
+        {
+          scope: { type: 'BRAND', tenantId: 't1', brandId: 'b1', locationId: null },
+          roleCode: 'MANAGER',
+        },
+      ]),
+    );
     await tick();
 
     http.expectOne(url('/api/v1/operations/tenants/t1/brands/b1/locations')).flush([]);
@@ -218,16 +210,14 @@ describe('CurrentLocation', () => {
     const loc = location(); // constructed only now, so it reads the value above
 
     const promise = loc.ensureLoaded();
-    http
-      .expectOne(url('/api/v1/session/context'))
-      .flush(
-        context([
-          {
-            scope: { type: 'BRAND', tenantId: 't1', brandId: 'b1', locationId: null },
-            roleCode: 'MANAGER',
-          },
-        ]),
-      );
+    http.expectOne(url('/api/v1/session/context')).flush(
+      context([
+        {
+          scope: { type: 'BRAND', tenantId: 't1', brandId: 'b1', locationId: null },
+          roleCode: 'MANAGER',
+        },
+      ]),
+    );
     await tick();
 
     http
@@ -243,16 +233,14 @@ describe('CurrentLocation', () => {
     const loc = location();
 
     const promise = loc.ensureLoaded();
-    http
-      .expectOne(url('/api/v1/session/context'))
-      .flush(
-        context([
-          {
-            scope: { type: 'BRAND', tenantId: 't1', brandId: 'b1', locationId: null },
-            roleCode: 'MANAGER',
-          },
-        ]),
-      );
+    http.expectOne(url('/api/v1/session/context')).flush(
+      context([
+        {
+          scope: { type: 'BRAND', tenantId: 't1', brandId: 'b1', locationId: null },
+          roleCode: 'MANAGER',
+        },
+      ]),
+    );
     await tick();
 
     http
@@ -268,16 +256,14 @@ describe('CurrentLocation', () => {
   it('switches the resolved location and remembers the choice for the next reload', async () => {
     const loc = location();
     const promise = loc.ensureLoaded();
-    http
-      .expectOne(url('/api/v1/session/context'))
-      .flush(
-        context([
-          {
-            scope: { type: 'BRAND', tenantId: 't1', brandId: 'b1', locationId: null },
-            roleCode: 'MANAGER',
-          },
-        ]),
-      );
+    http.expectOne(url('/api/v1/session/context')).flush(
+      context([
+        {
+          scope: { type: 'BRAND', tenantId: 't1', brandId: 'b1', locationId: null },
+          roleCode: 'MANAGER',
+        },
+      ]),
+    );
     await tick();
     http
       .expectOne(url('/api/v1/operations/tenants/t1/brands/b1/locations'))
@@ -293,16 +279,14 @@ describe('CurrentLocation', () => {
   it('offers exactly one option when the resolved brand has exactly one location', async () => {
     const loc = location();
     const promise = loc.ensureLoaded();
-    http
-      .expectOne(url('/api/v1/session/context'))
-      .flush(
-        context([
-          {
-            scope: { type: 'BRAND', tenantId: 't1', brandId: 'b1', locationId: null },
-            roleCode: 'MANAGER',
-          },
-        ]),
-      );
+    http.expectOne(url('/api/v1/session/context')).flush(
+      context([
+        {
+          scope: { type: 'BRAND', tenantId: 't1', brandId: 'b1', locationId: null },
+          roleCode: 'MANAGER',
+        },
+      ]),
+    );
     await tick();
     http
       .expectOne(url('/api/v1/operations/tenants/t1/brands/b1/locations'))

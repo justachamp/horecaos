@@ -76,16 +76,25 @@ describe('ChannelSetupPage', () => {
     publishPage: ReturnType<typeof vi.fn>;
   };
 
-  async function createFixture(theChannel: ChannelView): Promise<ComponentFixture<ChannelSetupPage>> {
+  async function createFixture(
+    theChannel: ChannelView,
+  ): Promise<ComponentFixture<ChannelSetupPage>> {
     channelsApi = {
       list: vi.fn().mockResolvedValue([theChannel]),
-      matrices: vi.fn().mockResolvedValue({ paymentMethods: {}, fulfillmentModes: {}, locationIds: [] }),
+      matrices: vi
+        .fn()
+        .mockResolvedValue({ paymentMethods: {}, fulfillmentModes: {}, locationIds: [] }),
     };
     setupApi = {
-      hostname: vi
+      hostname: vi.fn().mockResolvedValue({
+        configured: false,
+        hostname: null,
+        verified: false,
+        baseDomain: 'stores.horecaos.uz',
+      }),
+      presentation: vi
         .fn()
-        .mockResolvedValue({ configured: false, hostname: null, verified: false, baseDomain: 'stores.horecaos.uz' }),
-      presentation: vi.fn().mockResolvedValue({ seoTitle: null, seoDescription: null, ogImageAssetId: null }),
+        .mockResolvedValue({ seoTitle: null, seoDescription: null, ogImageAssetId: null }),
       currentPage: vi.fn().mockResolvedValue({
         published: false,
         slug: 'about',
@@ -95,29 +104,26 @@ describe('ChannelSetupPage', () => {
         publishedBy: null,
         publishedAt: null,
       }),
-      setSubdomain: vi
-        .fn()
-        .mockResolvedValue({
-          configured: true,
-          hostname: 'tandir-house.stores.horecaos.uz',
-          verified: true,
-          baseDomain: 'stores.horecaos.uz',
-        }),
+      setSubdomain: vi.fn().mockResolvedValue({
+        configured: true,
+        hostname: 'tandir-house.stores.horecaos.uz',
+        verified: true,
+        baseDomain: 'stores.horecaos.uz',
+      }),
       setCustomHostname: vi.fn(),
       verifyHostname: vi.fn(),
       challenge: vi.fn().mockResolvedValue(null),
       rotateChallenge: vi.fn(),
-      publishPage: vi.fn().mockImplementation(
-        (_scope, _channelId, slug, contentsByLocale) =>
-          Promise.resolve({
-            published: true,
-            slug,
-            id: 'page-1',
-            version: 1,
-            contentsByLocale,
-            publishedBy: 'operator-1',
-            publishedAt: '2026-09-28T00:00:00Z',
-          }),
+      publishPage: vi.fn().mockImplementation((_scope, _channelId, slug, contentsByLocale) =>
+        Promise.resolve({
+          published: true,
+          slug,
+          id: 'page-1',
+          version: 1,
+          contentsByLocale,
+          publishedBy: 'operator-1',
+          publishedAt: '2026-09-28T00:00:00Z',
+        }),
       ),
     };
     localeSet = new FakeLocaleSet();
@@ -127,9 +133,15 @@ describe('ChannelSetupPage', () => {
       providers: [
         { provide: SalesChannelsApi, useValue: channelsApi },
         { provide: ChannelSetupApi, useValue: setupApi },
-        { provide: IntegrationsApi, useValue: { listInstallations: vi.fn().mockResolvedValue([]) } },
+        {
+          provide: IntegrationsApi,
+          useValue: { listInstallations: vi.fn().mockResolvedValue([]) },
+        },
         { provide: LocationsApi, useValue: { list: vi.fn().mockResolvedValue([]) } },
-        { provide: DineInApi, useValue: { settings: vi.fn().mockRejectedValue(new Error('not needed')) } },
+        {
+          provide: DineInApi,
+          useValue: { settings: vi.fn().mockRejectedValue(new Error('not needed')) },
+        },
         { provide: LocaleSet, useValue: localeSet },
         {
           provide: MediaApi,
@@ -203,13 +215,20 @@ describe('ChannelSetupPage', () => {
     await flushMicrotasks();
     fixture.detectChanges();
 
-    expect(setupApi.setCustomHostname).toHaveBeenCalledWith(SCOPE, 'chan-1', 'orders.tandir-house.uz', 1);
+    expect(setupApi.setCustomHostname).toHaveBeenCalledWith(
+      SCOPE,
+      'chan-1',
+      'orders.tandir-house.uz',
+      1,
+    );
     // A fresh challenge is reloaded right after claiming.
     expect(setupApi.challenge).toHaveBeenCalledWith(SCOPE, 'chan-1');
     expect(host.querySelector('[data-testid="challenge-record-name"]')?.textContent).toContain(
       '_horecaos-challenge.orders.tandir-house.uz',
     );
-    expect(host.querySelector('[data-testid="challenge-token"]')?.textContent).toContain('horecaos-verify-abc123');
+    expect(host.querySelector('[data-testid="challenge-token"]')?.textContent).toContain(
+      'horecaos-verify-abc123',
+    );
 
     const copyButtons = Array.from(host.querySelectorAll('.challenge-row button'));
     (copyButtons[1] as HTMLButtonElement).click();
@@ -230,7 +249,9 @@ describe('ChannelSetupPage', () => {
     fixture.detectChanges();
 
     expect(setupApi.rotateChallenge).toHaveBeenCalledWith(SCOPE, 'chan-1', 2);
-    expect(host.querySelector('[data-testid="challenge-token"]')?.textContent).toContain('horecaos-verify-xyz789');
+    expect(host.querySelector('[data-testid="challenge-token"]')?.textContent).toContain(
+      'horecaos-verify-xyz789',
+    );
     // Rotating un-verifies the hostname -- the badge must reflect that
     // immediately, not just after a full reload.
     expect(host.textContent).toContain('not verified');
@@ -313,25 +334,39 @@ describe('ChannelSetupPage', () => {
     const theChannel = channel({ systemType: 'WEB' });
     const channelsApi = {
       list: vi.fn().mockResolvedValue([theChannel]),
-      matrices: vi.fn().mockResolvedValue({ paymentMethods: {}, fulfillmentModes: {}, locationIds: [] }),
-    };
-    const publishPage = vi.fn().mockImplementation(
-      (_scope: unknown, _channelId: string, slug: string, contentsByLocale: Record<string, string>) =>
-        Promise.resolve({
-          published: true,
-          slug,
-          id: 'page-1',
-          version: 4,
-          contentsByLocale,
-          publishedBy: 'operator-1',
-          publishedAt: '2026-09-28T00:00:00Z',
-        }),
-    );
-    const localSetupApi = {
-      hostname: vi
+      matrices: vi
         .fn()
-        .mockResolvedValue({ configured: false, hostname: null, verified: false, baseDomain: 'stores.horecaos.uz' }),
-      presentation: vi.fn().mockResolvedValue({ seoTitle: null, seoDescription: null, ogImageAssetId: null }),
+        .mockResolvedValue({ paymentMethods: {}, fulfillmentModes: {}, locationIds: [] }),
+    };
+    const publishPage = vi
+      .fn()
+      .mockImplementation(
+        (
+          _scope: unknown,
+          _channelId: string,
+          slug: string,
+          contentsByLocale: Record<string, string>,
+        ) =>
+          Promise.resolve({
+            published: true,
+            slug,
+            id: 'page-1',
+            version: 4,
+            contentsByLocale,
+            publishedBy: 'operator-1',
+            publishedAt: '2026-09-28T00:00:00Z',
+          }),
+      );
+    const localSetupApi = {
+      hostname: vi.fn().mockResolvedValue({
+        configured: false,
+        hostname: null,
+        verified: false,
+        baseDomain: 'stores.horecaos.uz',
+      }),
+      presentation: vi
+        .fn()
+        .mockResolvedValue({ seoTitle: null, seoDescription: null, ogImageAssetId: null }),
       currentPage: vi.fn().mockImplementation((_scope: unknown, _channelId: string, slug: string) =>
         Promise.resolve(
           slug === 'about'
@@ -371,9 +406,15 @@ describe('ChannelSetupPage', () => {
       providers: [
         { provide: SalesChannelsApi, useValue: channelsApi },
         { provide: ChannelSetupApi, useValue: localSetupApi },
-        { provide: IntegrationsApi, useValue: { listInstallations: vi.fn().mockResolvedValue([]) } },
+        {
+          provide: IntegrationsApi,
+          useValue: { listInstallations: vi.fn().mockResolvedValue([]) },
+        },
         { provide: LocationsApi, useValue: { list: vi.fn().mockResolvedValue([]) } },
-        { provide: DineInApi, useValue: { settings: vi.fn().mockRejectedValue(new Error('not needed')) } },
+        {
+          provide: DineInApi,
+          useValue: { settings: vi.fn().mockRejectedValue(new Error('not needed')) },
+        },
         { provide: LocaleSet, useValue: localLocaleSet },
         {
           provide: MediaApi,
@@ -433,13 +474,20 @@ describe('ChannelSetupPage', () => {
     const theChannel = channel({ systemType: 'WEB' });
     const channelsApi = {
       list: vi.fn().mockResolvedValue([theChannel]),
-      matrices: vi.fn().mockResolvedValue({ paymentMethods: {}, fulfillmentModes: {}, locationIds: [] }),
+      matrices: vi
+        .fn()
+        .mockResolvedValue({ paymentMethods: {}, fulfillmentModes: {}, locationIds: [] }),
     };
     const setupApiLocal = {
-      hostname: vi
+      hostname: vi.fn().mockResolvedValue({
+        configured: false,
+        hostname: null,
+        verified: false,
+        baseDomain: 'stores.horecaos.uz',
+      }),
+      presentation: vi
         .fn()
-        .mockResolvedValue({ configured: false, hostname: null, verified: false, baseDomain: 'stores.horecaos.uz' }),
-      presentation: vi.fn().mockResolvedValue({ seoTitle: null, seoDescription: null, ogImageAssetId: null }),
+        .mockResolvedValue({ seoTitle: null, seoDescription: null, ogImageAssetId: null }),
       currentPage: vi.fn().mockImplementation((_scope: unknown, _channelId: string, slug: string) =>
         Promise.resolve(
           slug === 'about'
@@ -482,9 +530,15 @@ describe('ChannelSetupPage', () => {
       providers: [
         { provide: SalesChannelsApi, useValue: channelsApi },
         { provide: ChannelSetupApi, useValue: setupApiLocal },
-        { provide: IntegrationsApi, useValue: { listInstallations: vi.fn().mockResolvedValue([]) } },
+        {
+          provide: IntegrationsApi,
+          useValue: { listInstallations: vi.fn().mockResolvedValue([]) },
+        },
         { provide: LocationsApi, useValue: { list: vi.fn().mockResolvedValue([]) } },
-        { provide: DineInApi, useValue: { settings: vi.fn().mockRejectedValue(new Error('not needed')) } },
+        {
+          provide: DineInApi,
+          useValue: { settings: vi.fn().mockRejectedValue(new Error('not needed')) },
+        },
         { provide: LocaleSet, useValue: localLocaleSet },
         {
           provide: MediaApi,

@@ -176,9 +176,7 @@ describe('I18n — lazy loading', () => {
 
   it('retries a locale after a failed import instead of caching the rejection forever', async () => {
     resetCatalogueCacheForTesting();
-    const restore = setLoaderForTesting('en', () =>
-      Promise.reject(new Error('network blip')),
-    );
+    const restore = setLoaderForTesting('en', () => Promise.reject(new Error('network blip')));
 
     await expect(preloadLocale('en')).rejects.toThrow('network blip');
     restore();
@@ -194,9 +192,7 @@ describe('I18n — lazy loading', () => {
     TestBed.configureTestingModule({});
     const i18n = TestBed.inject(I18n);
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    const restore = setLoaderForTesting('en', () =>
-      Promise.reject(new Error('network blip')),
-    );
+    const restore = setLoaderForTesting('en', () => Promise.reject(new Error('network blip')));
 
     i18n.setLocale('en');
     await expect(preloadLocale('en')).rejects.toThrow('network blip');

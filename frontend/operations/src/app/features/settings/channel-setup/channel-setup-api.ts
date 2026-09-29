@@ -49,7 +49,12 @@ export interface ChannelPageVersionView {
 }
 
 /** Row 10.5's closed set — `ChannelPageSlug` (Java) mirrored one to one. */
-export const CHANNEL_PAGE_SLUGS: readonly string[] = ['about', 'contacts', 'delivery-terms', 'privacy-offer'];
+export const CHANNEL_PAGE_SLUGS: readonly string[] = [
+  'about',
+  'contacts',
+  'delivery-terms',
+  'privacy-offer',
+];
 
 /**
  * Row 10.5's channel setup hub: `ChannelSetupController` and
@@ -119,10 +124,15 @@ export class ChannelSetupApi {
    * custom hostname claimed -- including one that has claimed a
    * platform-issued subdomain, which never gets a challenge.
    */
-  async challenge(scope: LocationScope, channelId: string): Promise<ChannelHostnameChallengeView | null> {
+  async challenge(
+    scope: LocationScope,
+    channelId: string,
+  ): Promise<ChannelHostnameChallengeView | null> {
     try {
       const result = await firstValueFrom(
-        this.api.get<ChannelHostnameChallengeView>(settingsPaths.channelHostnameChallenge(scope, channelId)),
+        this.api.get<ChannelHostnameChallengeView>(
+          settingsPaths.channelHostnameChallenge(scope, channelId),
+        ),
       );
       return result.value;
     } catch (error) {
@@ -147,11 +157,20 @@ export class ChannelSetupApi {
     );
   }
 
-  async clearHostname(scope: LocationScope, channelId: string, expectedVersion: number): Promise<void> {
+  async clearHostname(
+    scope: LocationScope,
+    channelId: string,
+    expectedVersion: number,
+  ): Promise<void> {
     await firstValueFrom(
-      this.api.send<null, void>('DELETE', settingsPaths.channelHostname(scope, channelId), command(null), {
-        params: { expectedVersion },
-      }),
+      this.api.send<null, void>(
+        'DELETE',
+        settingsPaths.channelHostname(scope, channelId),
+        command(null),
+        {
+          params: { expectedVersion },
+        },
+      ),
     );
   }
 
@@ -181,9 +200,15 @@ export class ChannelSetupApi {
 
   // -------------------------------------------------------------- pages
 
-  async currentPage(scope: LocationScope, channelId: string, slug: string): Promise<ChannelPageVersionView> {
+  async currentPage(
+    scope: LocationScope,
+    channelId: string,
+    slug: string,
+  ): Promise<ChannelPageVersionView> {
     const result = await firstValueFrom(
-      this.api.get<ChannelPageVersionView>(settingsPaths.channelPageCurrent(scope, channelId, slug)),
+      this.api.get<ChannelPageVersionView>(
+        settingsPaths.channelPageCurrent(scope, channelId, slug),
+      ),
     );
     return result.value;
   }

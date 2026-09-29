@@ -2318,14 +2318,15 @@ export const messagesUzLatn: MessageCatalogue = {
     'QUANTITY rejimidagi variant uchun mavjud miqdor, kunlik standart qiymat va kanal boʻyicha toʻxtatish chegaralari «Qoldiqlar» sahifasida joylashgan.',
   'catalog.editor.availability.quantityHintLink': 'Qoldiqlarni ochish',
   'catalog.editor.availability.notListedHeading':
-    "Baʻzi filiallarda taklif qilingan, lekin u yerda hisobda hali joylashtirilmagan — joylashtirilguncha buyurtma qabul qilinmaydi.",
-  'catalog.editor.availability.notListedVariantRow': "{variant} — {count} ta filialda joylashtirilmagan",
-  'catalog.editor.availability.listEverywhere': "Barcha filiallarda joylashtirish",
+    'Baʻzi filiallarda taklif qilingan, lekin u yerda hisobda hali joylashtirilmagan — joylashtirilguncha buyurtma qabul qilinmaydi.',
+  'catalog.editor.availability.notListedVariantRow':
+    '{variant} — {count} ta filialda joylashtirilmagan',
+  'catalog.editor.availability.listEverywhere': 'Barcha filiallarda joylashtirish',
   'catalog.editor.availability.listingInProgress': 'Joylashtirilmoqda…',
   'catalog.editor.availability.listPartial':
-    "{candidate} ta filialdan {listed} tasida joylashtirildi. Qolganlarini joylashtirib boʻlmadi — qayta urinib koʻring, takrorlansa qoʻllab-quvvatlashga murojaat qiling.",
+    '{candidate} ta filialdan {listed} tasida joylashtirildi. Qolganlarini joylashtirib boʻlmadi — qayta urinib koʻring, takrorlansa qoʻllab-quvvatlashga murojaat qiling.',
   'catalog.editor.availability.listRecountFailed':
-    "Joylashtirish bajarildi, lekin qolgan sonni oʻqib boʻlmadi — yuqoridagi raqam eskirgan boʻlishi mumkin. Tekshirish uchun bu boʻlimni qayta oching.",
+    'Joylashtirish bajarildi, lekin qolgan sonni oʻqib boʻlmadi — yuqoridagi raqam eskirgan boʻlishi mumkin. Tekshirish uchun bu boʻlimni qayta oching.',
   'catalog.editor.schedule.hint':
     'Boʻsh boʻlsa — tovar doim sotuvda. Quyidagi oynalar sotuv vaqtini cheklaydi va filialning oʻz mahalliy vaqtida hisoblanadi.',
   'catalog.editor.schedule.loading': 'Jadval yuklanmoqda…',
@@ -2434,7 +2435,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'catalog.stock.loading': 'Qoldiqlar yuklanmoqda',
   'catalog.stock.noLocation': 'Bu hisob uchun hali filial aniqlanmagan',
   'catalog.stock.denied': 'Bu filial qoldiqlariga kirish huquqi yoʻq',
-  'catalog.stock.unlisted.title': 'Bu yerda taklif qilingan, lekin hisobda joylashtirilmagan: {count}',
+  'catalog.stock.unlisted.title':
+    'Bu yerda taklif qilingan, lekin hisobda joylashtirilmagan: {count}',
   'catalog.stock.unlisted.body':
     'Bu taomlar filial menyusida mavjud deb belgilangan, lekin ombor hisobida joylashtirilmagan, shu sababli joylashtirilguncha mijozlarga mavjud emas deb koʻrinadi.',
   'catalog.stock.unlisted.listAll': 'Hammasini joylashtirish ({count})',
@@ -5787,7 +5789,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'orders.newOrder.order.branchLoad': '{count} ta faol buyurtma',
   'orders.newOrder.order.branchClosed': 'yopiq',
   'orders.newOrder.order.branchProposedSuffix': '(taklif qilingan)',
-  'orders.newOrder.order.branchResolutionFailed': 'Filial tanlab boʻlmadi — joriy filialda rasmiylashtiramiz',
+  'orders.newOrder.order.branchResolutionFailed':
+    'Filial tanlab boʻlmadi — joriy filialda rasmiylashtiramiz',
   'orders.newOrder.order.branchNoCandidates': 'Bu manzilga hech qaysi filial yetkazib bermaydi',
   'orders.newOrder.order.branchOverrideReason': 'Boshqa filial tanlash sababi',
   'orders.newOrder.order.branchOverrideReasonPlaceholder': 'Sababni tanlang',

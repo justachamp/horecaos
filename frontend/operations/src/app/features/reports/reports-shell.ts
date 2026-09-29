@@ -67,7 +67,15 @@ import { Granularity, PeriodPreset, ReportsFilterState } from './reports-filter-
  */
 @Component({
   selector: 'q-reports-shell',
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, TPipe, FilterBar, Combobox, DateRangePicker],
+  imports: [
+    RouterOutlet,
+    RouterLink,
+    RouterLinkActive,
+    TPipe,
+    FilterBar,
+    Combobox,
+    DateRangePicker,
+  ],
   providers: [ReportsFilterState],
   templateUrl: './reports-shell.html',
   styleUrl: './reports-shell.css',

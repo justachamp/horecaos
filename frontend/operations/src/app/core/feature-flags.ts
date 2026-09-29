@@ -37,7 +37,9 @@ export class FeatureFlags {
     }
     try {
       const result = await firstValueFrom(
-        this.api.get<Record<string, boolean>>(`/api/v1/operations/tenants/${tenantId}/feature-flags`),
+        this.api.get<Record<string, boolean>>(
+          `/api/v1/operations/tenants/${tenantId}/feature-flags`,
+        ),
       );
       this.flags.set(result.value ?? {});
     } catch {
