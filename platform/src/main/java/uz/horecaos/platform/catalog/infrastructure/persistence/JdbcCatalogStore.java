@@ -1966,9 +1966,13 @@ public class JdbcCatalogStore {
      *
      * <p>The total is a window count over the whole match, taken before {@code
      * LIMIT}, so one round trip gives both the page and the exact backlog.
-     * The product name prefers {@code locale}, then falls back by the same
-     * ru, uz, en order {@link #productNamesFor} uses, then to the product
-     * code — a row an operator has to act on is never nameless.
+     * The product name and the variant name each prefer {@code locale}, then
+     * fall back by the same ru, uz, en order {@link #productNamesFor} uses; a
+     * product with no translation at all reads as its code, and a variant with
+     * none has a {@code null} name (its {@code sku} then tells it apart). A
+     * variant authored in one language only is therefore still named for an
+     * operator asking in another — sibling sizes of one dish never come back
+     * as identical rows.
      */
     public UnlistedOfferingsPage describeUnlistedAvailableAtLocation(
             UUID tenantId, UUID brandId, UUID locationId, String locale, int limit) {
@@ -1994,9 +1998,16 @@ public class JdbcCatalogStore {
                              t.locale
                     LIMIT 1
                 ) pt ON true
-                LEFT JOIN catalog.translations vt
-                    ON vt.entity_type = 'VARIANT' AND vt.entity_id = v.id AND vt.tenant_id = v.tenant_id
-                       AND vt.locale = :locale
+                LEFT JOIN LATERAL (
+                    SELECT t.name
+                    FROM catalog.translations t
+                    WHERE t.entity_type = 'VARIANT' AND t.entity_id = v.id AND t.tenant_id = v.tenant_id
+                    ORDER BY (t.locale = :locale) DESC,
+                             CASE t.locale WHEN 'ru' THEN 0 WHEN 'uz' THEN 1 WHEN 'uz-Latn' THEN 2
+                                           WHEN 'en' THEN 3 ELSE 4 END,
+                             t.locale
+                    LIMIT 1
+                ) vt ON true
                 LEFT JOIN inventory.stock_items si
                     ON si.variant_id = lo.variant_id AND si.tenant_id = lo.tenant_id
                        AND si.location_id = lo.location_id

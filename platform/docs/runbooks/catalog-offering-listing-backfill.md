@@ -9,11 +9,19 @@ before trusting this file on a real host.
   the one expected location with `unlisted_count = 3`.
 - Steps 2 to 4 were **not** run with `curl` against a running API. Signing
   in needs a staff access token, and standing up the app, Keycloak and a
-  grant for one runbook was out of proportion. Instead
-  `CatalogOfferingListingBackfillRunbookConformanceTests` parses this very
-  file and dispatches its own `curl` commands (method, path, headers) at the
-  real controllers over MockMvc, then asserts the response fields the checks
-  below read. A renamed path or field fails that test rather than an operator.
+  grant for one runbook was out of proportion. Instead these tests in
+  `platform/src/test/java/uz/horecaos/platform/inventory/web/` guard it:
+  - `InventoryUnlistedOfferingsReportTests#runbookCommandsAreRealAndItsChecksHold`
+    parses this very file and dispatches its own `curl` commands (method,
+    path, headers) at the real controllers over MockMvc, then asserts the
+    response fields the checks below read.
+  - `InventoryUnlistedOfferingsReportTests#runbookMintsAFreshIdempotencyKeyPerCall`
+    runs step 3's command twice and fails if it stops minting a new
+    `Idempotency-Key` per call.
+  - `InventoryUnlistedOfferingsReportTests#runbookNamesOnlyTestsThatExist`
+    fails if this note cites a test that is not there.
+
+  A renamed path or field fails one of those rather than an operator.
 - Not yet run against pre-prod or production. Do that once after the
   auto-listing fix ships, then update this line with the date and what it
   found.
@@ -58,7 +66,18 @@ alias qc='docker compose -f compose.production.yaml --env-file /etc/horecaos/pro
 HOST=api.horecaos.uz   # production; a pre-prod host is its own API host
 ```
 
-`jq` and `uuidgen` are both on the host.
+Steps 2 and 3 also need `curl`, `jq` and `uuidgen` on the host they run from,
+and nothing here guarantees them: [deploy.md](deploy.md) runs its own `curl` and
+`jq` scripts in the `ops` container precisely because the host needs neither.
+Check before step 2, and install whatever is missing:
+
+```bash
+for tool in curl jq uuidgen; do
+  command -v "$tool" >/dev/null || echo "MISSING on this host: ${tool}"
+done
+```
+
+**Check:** no `MISSING` line.
 
 **The token is per tenant.** Steps 2 and 3 call tenant endpoints, and a
 token only acts inside the tenant it was issued for. Use an access token of
@@ -133,7 +152,9 @@ while IFS=',' read -r tenant brand location count; do
       -H "Idempotency-Key: $(uuidgen)" \
       -H "Content-Type: application/json")" || { echo "FAILED at location ${location}"; break; }
     echo "location ${location}: ${result}"
-    [ "$(jq -r '.mayHaveMore and .listedCount > 0' <<<"${result}")" = "true" ] || break
+    more="$(jq -r '.mayHaveMore and .listedCount > 0' <<<"${result}")" \
+      || { echo "jq could not read the response at location ${location}"; break; }
+    [ "${more}" = "true" ] || break
   done
 done < <(grep "^${TENANT}," backlog.csv)
 ```
@@ -141,6 +162,9 @@ done < <(grep "^${TENANT}," backlog.csv)
 The loop runs in bash. It stops re-calling a location when a call lists nothing
 (`listedCount: 0`), so a location whose remaining variants keep failing cannot
 spin forever — that is the case to investigate from the logs, not to loop on.
+It also stops, and says so (`jq could not read the response`), when `jq` cannot
+parse a response, so a missing `jq` never ends a location quietly after its
+first page of a bigger backlog.
 
 The call is a `POST` that takes **no body** and needs the `Idempotency-Key`
 header (ADR 0031) — without it the API answers `400 IDEMPOTENCY_KEY_REQUIRED`.

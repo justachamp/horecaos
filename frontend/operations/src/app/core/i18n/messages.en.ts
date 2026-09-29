@@ -2299,6 +2299,10 @@ export const messagesEn = {
   'catalog.editor.availability.notListedVariantRow': '{variant} — not listed at {count} branch(es)',
   'catalog.editor.availability.listEverywhere': 'List at every branch',
   'catalog.editor.availability.listingInProgress': 'Listing…',
+  'catalog.editor.availability.listPartial':
+    'Listed at {listed} of {candidate} branches. The rest could not be listed — try again, or ask support if it keeps happening.',
+  'catalog.editor.availability.listRecountFailed':
+    'Listing ran, but the remaining count could not be read — the number above may be out of date. Reopen this tab to check.',
   'catalog.editor.schedule.hint':
     'Empty means always on sale. Windows below limit when this item can be sold, resolved in this branch’s own local time.',
   'catalog.editor.schedule.loading': 'Loading schedule…',

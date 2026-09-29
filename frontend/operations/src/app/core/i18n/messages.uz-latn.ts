@@ -2286,6 +2286,10 @@ export const messagesUzLatn: MessageCatalogue = {
   'catalog.editor.availability.notListedVariantRow': "{variant} — {count} ta filialda joylashtirilmagan",
   'catalog.editor.availability.listEverywhere': "Barcha filiallarda joylashtirish",
   'catalog.editor.availability.listingInProgress': 'Joylashtirilmoqda…',
+  'catalog.editor.availability.listPartial':
+    "{candidate} ta filialdan {listed} tasida joylashtirildi. Qolganlarini joylashtirib boʻlmadi — qayta urinib koʻring, takrorlansa qoʻllab-quvvatlashga murojaat qiling.",
+  'catalog.editor.availability.listRecountFailed':
+    "Joylashtirish bajarildi, lekin qolgan sonni oʻqib boʻlmadi — yuqoridagi raqam eskirgan boʻlishi mumkin. Tekshirish uchun bu boʻlimni qayta oching.",
   'catalog.editor.schedule.hint':
     'Boʻsh boʻlsa — tovar doim sotuvda. Quyidagi oynalar sotuv vaqtini cheklaydi va filialning oʻz mahalliy vaqtida hisoblanadi.',
   'catalog.editor.schedule.loading': 'Jadval yuklanmoqda…',

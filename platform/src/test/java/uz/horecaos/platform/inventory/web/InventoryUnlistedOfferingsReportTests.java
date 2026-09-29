@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -250,6 +251,42 @@ class InventoryUnlistedOfferingsReportTests {
     }
 
     @Test
+    @DisplayName("variants named only in ru are named in the report, whatever locale is asked for")
+    void variantNamesFallBackLikeProductNames() throws Exception {
+        // 'Plov' authored in Russian alone: a product name, two sized variants, no SKUs.
+        UUID big = offer(TENANT, BRAND, LOCATION, "PILAF", "Плов", "AVAILABLE", "ru");
+        jdbc.sql("UPDATE catalog.variants SET sku = NULL WHERE id = :id")
+                .param("id", big)
+                .update();
+        nameVariant(big, "ru", "Большая");
+        UUID small = addVariant(big, null, "AVAILABLE", LOCATION);
+        nameVariant(small, "ru", "Малая");
+        // A variant named in both: each operator sees their own language.
+        UUID both = addVariant(big, "PILAF-BOTH", "AVAILABLE", LOCATION);
+        nameVariant(both, "ru", "Семейная");
+        nameVariant(both, "uz", "Oilaviy");
+
+        for (String asked : List.of("?locale=uz", "?locale=ru", "?locale=en", "")) {
+            JsonNode report = read(TENANT, BRAND, LOCATION, OWNER, asked);
+            assertThat(variantNameOf(report, big))
+                    .as("the ru-only variant, asked %s", asked)
+                    .isEqualTo("Большая");
+            assertThat(variantNameOf(report, small))
+                    .as("the ru-only variant, asked %s", asked)
+                    .isEqualTo("Малая");
+        }
+        assertThat(variantNameOf(read(TENANT, BRAND, LOCATION, OWNER, "?locale=uz"), both))
+                .isEqualTo("Oilaviy");
+        assertThat(variantNameOf(read(TENANT, BRAND, LOCATION, OWNER, "?locale=ru"), both))
+                .isEqualTo("Семейная");
+        assertThat(read(TENANT, BRAND, LOCATION, OWNER, "?locale=en")
+                        .get("totalCount")
+                        .asInt())
+                .as("a fallback join must not multiply rows")
+                .isEqualTo(3);
+    }
+
+    @Test
     @DisplayName("the report count equals what the bulk list-all lists, and the second run is a no-op")
     void reportCountEqualsWhatTheBackfillLists() throws Exception {
         offer(TENANT, BRAND, LOCATION, "A-ITEM", "Alpha", "AVAILABLE");
@@ -380,11 +417,86 @@ class InventoryUnlistedOfferingsReportTests {
         assertThat(remaining).extracting(row -> row.get(2)).containsExactly("2");
     }
 
+    @Test
+    @DisplayName("the runbook's list-all mints a new Idempotency-Key per call, so page two is not a replay of page one")
+    void runbookMintsAFreshIdempotencyKeyPerCall() throws Exception {
+        List<RunbookCurl> curls = curlCommands(runbookText());
+        RunbookCurl listAll = curls.get(1);
+        assertThat(listAll.method()).isEqualTo("POST");
+        List<String> row = List.of(TENANT.toString(), BRAND.toString(), LOCATION.toString(), "1");
+
+        // The runbook as written: one call lists what is there, a dish added
+        // afterwards is listed by the NEXT call -- the loop's next page.
+        offer(TENANT, BRAND, LOCATION, "PAGE-1", "Page one", "AVAILABLE");
+        JsonNode first = dispatch(listAll, row);
+        assertThat(first.get("listedCount").asInt()).isEqualTo(1);
+        offer(TENANT, BRAND, LOCATION, "PAGE-2", "Page two", "AVAILABLE");
+        MvcResult next = dispatchRaw(listAll, row);
+        assertThat(next.getResponse().getHeader(IdempotencyInterceptor.REPLAYED_HEADER))
+                .as("a key minted per call is a new intent, never a replay")
+                .isNull();
+        assertThat(JSON.readTree(next.getResponse().getContentAsString())
+                        .get("listedCount")
+                        .asInt())
+                .as("the second call really listed the second dish")
+                .isEqualTo(1);
+        assertThat(headerValue(listAll, "Idempotency-Key"))
+                .as("the runbook must keep minting the key inside the loop; a fixed key loops forever")
+                .isEqualTo(UUIDGEN);
+
+        // The edit this guards against: a pasted fixed key. The same two calls
+        // now replay page one's stored answer and the new dish stays unlisted,
+        // which is what would make the loop's mayHaveMore never turn false.
+        RunbookCurl fixed = withHeader(listAll, "Idempotency-Key", "listing-backfill-1");
+        offer(TENANT, BRAND, LOCATION, "PAGE-3", "Page three", "AVAILABLE");
+        assertThat(dispatch(fixed, row).get("listedCount").asInt()).isEqualTo(1);
+        offer(TENANT, BRAND, LOCATION, "PAGE-4", "Page four", "AVAILABLE");
+        MvcResult replay = dispatchRaw(fixed, row);
+        assertThat(replay.getResponse().getHeader(IdempotencyInterceptor.REPLAYED_HEADER))
+                .as("a fixed key replays -- so a fixed-key runbook would fail the check above")
+                .isEqualTo("true");
+        assertThat(read(TENANT, BRAND, LOCATION, OWNER, "").get("totalCount").asInt())
+                .as("the dish added after the fixed key's first call was never listed")
+                .isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("every test the runbook names as its own validation exists, and this class is among them")
+    void runbookNamesOnlyTestsThatExist() throws Exception {
+        Matcher named = Pattern.compile("`(\\w+Tests)(?:#(\\w+))?`").matcher(runbookText());
+        Map<String, Path> sources = new LinkedHashMap<>();
+        try (java.util.stream.Stream<Path> files = Files.walk(Path.of("src/test/java"))) {
+            files.filter(file -> file.getFileName().toString().endsWith("Tests.java"))
+                    .forEach(file -> sources.put(file.getFileName().toString().replace(".java", ""), file));
+        }
+
+        List<String> mentioned = new ArrayList<>();
+        while (named.find()) {
+            String testClass = named.group(1);
+            mentioned.add(testClass);
+            assertThat(sources)
+                    .as("the runbook cites %s, which must be a real test class", testClass)
+                    .containsKey(testClass);
+            String method = named.group(2);
+            if (method != null) {
+                assertThat(Files.readString(sources.get(testClass), UTF_8))
+                        .as("the runbook cites %s#%s, which must be a real test method", testClass, method)
+                        .contains("void " + method + "(");
+            }
+        }
+        assertThat(mentioned)
+                .as("the runbook's 'Last executed' note points at the test that keeps it honest")
+                .contains(getClass().getSimpleName());
+    }
+
     // ------------------------------------------------------------------ helpers
 
     // -------------------------------------------------------- runbook parsing
 
     private static final Path RUNBOOK = Path.of("docs/runbooks/catalog-offering-listing-backfill.md");
+
+    /** The runbook's per-call key: a command substitution, so the shell mints a new one each time it runs. */
+    private static final String UUIDGEN = "$(uuidgen)";
 
     /** One {@code curl} the runbook tells an operator to run, as far as the API can tell. */
     private record RunbookCurl(String method, String urlTemplate, Map<String, String> headers) {}
@@ -465,6 +577,17 @@ class InventoryUnlistedOfferingsReportTests {
      * {@code Idempotency-Key} each time, as {@code $(uuidgen)} would mint.
      */
     private JsonNode dispatch(RunbookCurl curl, List<String> row) throws Exception {
+        MvcResult result = dispatchRaw(curl, row);
+        assertThat(result.getResponse().getStatus())
+                .as(
+                        "%s %s -> %s",
+                        curl.method(), curl.urlTemplate(), result.getResponse().getContentAsString())
+                .isEqualTo(200);
+        return JSON.readTree(result.getResponse().getContentAsString());
+    }
+
+    /** {@link #dispatch}, without judging the answer. */
+    private MvcResult dispatchRaw(RunbookCurl curl, List<String> row) throws Exception {
         Map<String, String> vars = new LinkedHashMap<>();
         Matcher assignment =
                 Pattern.compile("(?m)^\\s*(\\w+)=\"([^\"]*)\"\\s*$").matcher(runbookText());
@@ -494,16 +617,26 @@ class InventoryUnlistedOfferingsReportTests {
                     .as("a header the API understands")
                     .isIn("Authorization", "Accept", "Idempotency-Key", "Content-Type");
             if (header.getKey().equals("Idempotency-Key")) {
-                request.header("Idempotency-Key", UUID.randomUUID().toString());
+                // Exactly what the shell would send: $(uuidgen) mints a key per
+                // call, any other value is the same string every time.
+                request.header(
+                        "Idempotency-Key",
+                        header.getValue().equals(UUIDGEN) ? UUID.randomUUID().toString() : header.getValue());
             } else if (!header.getKey().equals("Authorization")) {
                 request.header(header.getKey(), header.getValue());
             }
         }
-        MvcResult result = mvc.perform(request).andReturn();
-        assertThat(result.getResponse().getStatus())
-                .as("%s %s -> %s", curl.method(), path, result.getResponse().getContentAsString())
-                .isEqualTo(200);
-        return JSON.readTree(result.getResponse().getContentAsString());
+        return mvc.perform(request).andReturn();
+    }
+
+    private static String headerValue(RunbookCurl curl, String name) {
+        return Objects.requireNonNull(curl.headers().get(name), name);
+    }
+
+    private static RunbookCurl withHeader(RunbookCurl curl, String name, String value) {
+        Map<String, String> headers = new LinkedHashMap<>(curl.headers());
+        headers.put(name, value);
+        return new RunbookCurl(curl.method(), curl.urlTemplate(), headers);
     }
 
     private static String runbookText() throws IOException {
@@ -539,6 +672,54 @@ class InventoryUnlistedOfferingsReportTests {
                                 """.formatted(variant)))
                 .andReturn();
         assertThat(result.getResponse().getStatus()).isEqualTo(200);
+    }
+
+    private static @Nullable String variantNameOf(JsonNode report, UUID variant) {
+        for (JsonNode item : report.get("items")) {
+            if (variant.toString().equals(item.get("variantId").asString())) {
+                JsonNode name = item.get("variantName");
+                return name == null || name.isNull() ? null : name.asString();
+            }
+        }
+        throw new AssertionError("variant " + variant + " is not in the report: " + report);
+    }
+
+    /** A further, non-default variant of the same product as {@code sibling}, offered at {@code location}. */
+    private UUID addVariant(UUID sibling, @Nullable String sku, String status, UUID location) {
+        UUID variant = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO catalog.variants (id, tenant_id, brand_id, product_id, sku, is_default, status)
+                SELECT :id, tenant_id, brand_id, product_id, :sku, false, 'ACTIVE'
+                FROM catalog.variants WHERE id = :sibling
+                """)
+                .param("id", variant)
+                .param("sku", sku)
+                .param("sibling", sibling)
+                .update();
+        jdbc.sql("""
+                INSERT INTO catalog.location_offerings (id, tenant_id, brand_id, location_id, variant_id, status)
+                SELECT :id, tenant_id, brand_id, :locationId, :id2, :status
+                FROM catalog.variants WHERE id = :sibling
+                """)
+                .param("id", UUID.randomUUID())
+                .param("locationId", location)
+                .param("id2", variant)
+                .param("status", status)
+                .param("sibling", sibling)
+                .update();
+        return variant;
+    }
+
+    private void nameVariant(UUID variant, String locale, String name) {
+        jdbc.sql("""
+                INSERT INTO catalog.translations (tenant_id, brand_id, entity_type, entity_id, locale, name)
+                SELECT tenant_id, brand_id, 'VARIANT', id, :locale, :name
+                FROM catalog.variants WHERE id = :variant
+                """)
+                .param("locale", locale)
+                .param("name", name)
+                .param("variant", variant)
+                .update();
     }
 
     private static String nameOf(JsonNode report, UUID variant) {

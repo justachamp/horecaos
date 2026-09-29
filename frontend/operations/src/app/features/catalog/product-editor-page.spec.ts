@@ -667,6 +667,72 @@ describe('ProductEditorPage', () => {
     expect(host.querySelector('[data-testid="editor-unlisted-branches-banner"]')).toBeFalsy();
   });
 
+  describe('what "list at every branch" reports back', () => {
+    async function clickListEverywhere(inventoryApi: Partial<InventoryApi>) {
+      configure({ productDetail: () => of(productDetail()) }, {}, {}, {}, {}, {}, {}, inventoryApi);
+      const harness = await RouterTestingHarness.create('/catalog/products/product-1');
+      await flushMicrotasks();
+      const host = harness.routeNativeElement!;
+      (host.querySelector('[data-testid="editor-tab-AVAILABILITY"]') as HTMLButtonElement).click();
+      await flushMicrotasks();
+      harness.detectChanges();
+      (
+        host.querySelector(
+          '[data-testid="editor-list-missing-branches-variant-1"]',
+        ) as HTMLButtonElement
+      ).click();
+      await flushMicrotasks();
+      harness.detectChanges();
+      return host;
+    }
+
+    it('says so when only some branches were listed, and keeps what is still missing', async () => {
+      const unlistedLocations = vi
+        .fn()
+        .mockReturnValueOnce(of(['l2', 'l3', 'l4']))
+        .mockReturnValueOnce(of(['l3', 'l4']));
+      const host = await clickListEverywhere({
+        unlistedLocations,
+        backfillVariantListing: vi.fn().mockReturnValue(of({ candidateCount: 3, listedCount: 1 })),
+      });
+
+      const row = host.querySelector('[data-testid="editor-unlisted-variant-variant-1"]');
+      expect(row?.textContent).toContain('2');
+      const notice = host.querySelector('[data-testid="editor-listing-notice-variant-1"]');
+      expect(notice?.textContent).toContain('1');
+      expect(notice?.textContent).toContain('3');
+    });
+
+    it('keeps the row, with a notice, when the count cannot be re-read afterwards', async () => {
+      const unlistedLocations = vi
+        .fn()
+        .mockReturnValueOnce(of(['l2', 'l3']))
+        .mockReturnValueOnce(throwError(() => new Error('503')));
+      const host = await clickListEverywhere({
+        unlistedLocations,
+        backfillVariantListing: vi.fn().mockReturnValue(of({ candidateCount: 2, listedCount: 2 })),
+      });
+
+      // A failed re-read is not "nothing left": the banner must not claim every branch is listed.
+      expect(host.querySelector('[data-testid="editor-unlisted-variant-variant-1"]')).toBeTruthy();
+      expect(host.querySelector('[data-testid="editor-listing-notice-variant-1"]')).toBeTruthy();
+    });
+
+    it('shows no notice when everything was listed and the recount agrees', async () => {
+      const unlistedLocations = vi
+        .fn()
+        .mockReturnValueOnce(of(['l2']))
+        .mockReturnValueOnce(of([]));
+      const host = await clickListEverywhere({
+        unlistedLocations,
+        backfillVariantListing: vi.fn().mockReturnValue(of({ candidateCount: 1, listedCount: 1 })),
+      });
+
+      expect(host.querySelector('[data-testid="editor-unlisted-branches-banner"]')).toBeFalsy();
+      expect(host.querySelector('[data-testid="editor-listing-notice-variant-1"]')).toBeFalsy();
+    });
+  });
+
   // Batch 13 follow-up: the banner read only the product's default variant, so
   // a second variant offered at branches that never listed it stayed silent.
   describe('every variant, not only the default one', () => {

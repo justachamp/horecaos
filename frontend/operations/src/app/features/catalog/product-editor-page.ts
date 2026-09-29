@@ -57,6 +57,11 @@ import { ChannelView, SalesChannelsApi } from '../settings/sales-channels/sales-
 
 const STATUSES: readonly CatalogStatus[] = ['DRAFT', 'ACTIVE', 'ARCHIVED'];
 
+/** What a list-everywhere click left unresolved (see `listingNoticeByVariant`). */
+type ListingNotice =
+  | { readonly kind: 'partial'; readonly listed: number; readonly candidate: number }
+  | { readonly kind: 'recountFailed' };
+
 type EditorTab =
   | 'BASIC'
   | 'VARIANTS'
@@ -308,6 +313,12 @@ export class ProductEditorPage implements OnInit {
   protected readonly unlistedByVariant = signal<Readonly<Record<string, number>>>({});
   /** The variants whose list-everywhere request is in flight; each button disables on its own. */
   protected readonly listingPendingVariantIds = signal<ReadonlySet<string>>(new Set());
+  /**
+   * What the last list-everywhere click on a variant left unresolved, so a
+   * partial outcome or an unreadable recount is never silent. Absent means the
+   * click did everything it found and the recount agreed.
+   */
+  protected readonly listingNoticeByVariant = signal<Readonly<Record<string, ListingNotice>>>({});
 
   /** The banner's rows: only variants with something to list, in the product's own variant order. */
   protected readonly unlistedVariantRows = computed(() => {
@@ -651,10 +662,16 @@ export class ProductEditorPage implements OnInit {
     this.unlistedByVariant.set(Object.fromEntries(counts));
   }
 
+  /** The banner's own read: a failed one hides that variant's row (nothing is claimed either way). */
   private async readUnlistedBranchCount(variantId: string): Promise<number> {
+    return (await this.tryReadUnlistedBranchCount(variantId)) ?? 0;
+  }
+
+  /** `null` when the count could not be read, so a caller can tell "none left" from "could not tell". */
+  private async tryReadUnlistedBranchCount(variantId: string): Promise<number | null> {
     const locationScope = this.location.scope();
     if (!locationScope) {
-      return 0;
+      return null;
     }
     try {
       const locationIds = await firstValueFrom(
@@ -662,7 +679,7 @@ export class ProductEditorPage implements OnInit {
       );
       return locationIds.length;
     } catch {
-      return 0;
+      return null;
     }
   }
 
@@ -673,10 +690,26 @@ export class ProductEditorPage implements OnInit {
       return;
     }
     this.listingPendingVariantIds.update((pending) => new Set(pending).add(variantId));
+    this.setListingNotice(variantId, null);
     try {
-      await firstValueFrom(this.inventoryApi.backfillVariantListing(locationScope, variantId));
-      const remaining = await this.readUnlistedBranchCount(variantId);
-      this.unlistedByVariant.update((counts) => ({ ...counts, [variantId]: remaining }));
+      const outcome = await firstValueFrom(
+        this.inventoryApi.backfillVariantListing(locationScope, variantId),
+      );
+      const remaining = await this.tryReadUnlistedBranchCount(variantId);
+      // A failed recount keeps the count already shown: dropping the row would
+      // tell the operator every branch is listed when nobody has checked.
+      if (remaining !== null) {
+        this.unlistedByVariant.update((counts) => ({ ...counts, [variantId]: remaining }));
+      }
+      if (outcome.listedCount < outcome.candidateCount) {
+        this.setListingNotice(variantId, {
+          kind: 'partial',
+          listed: outcome.listedCount,
+          candidate: outcome.candidateCount,
+        });
+      } else if (remaining === null) {
+        this.setListingNotice(variantId, { kind: 'recountFailed' });
+      }
     } catch (error) {
       this.handleSaveError(error);
     } finally {
@@ -686,6 +719,13 @@ export class ProductEditorPage implements OnInit {
         return next;
       });
     }
+  }
+
+  private setListingNotice(variantId: string, notice: ListingNotice | null): void {
+    this.listingNoticeByVariant.update((notices) => {
+      const { [variantId]: _previous, ...rest } = notices;
+      return notice === null ? rest : { ...rest, [variantId]: notice };
+    });
   }
 
   /**
