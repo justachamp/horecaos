@@ -273,7 +273,7 @@ class SecretIngressControllerEndpointTests {
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(writeRequest("PROVIDER_NOTIFICATION", "TELEGRAM_BOT_API", secretValue)));
 
-            assertThat(lines.list)
+            assertThat(snapshot(lines))
                     .as("ADR 0028: no secret value appears in any captured output")
                     .noneMatch(event -> event.getFormattedMessage().contains(secretValue));
         } finally {
@@ -361,6 +361,19 @@ class SecretIngressControllerEndpointTests {
                     .header("alg", "none")
                     .claim("sub", "unused")
                     .build();
+        }
+    }
+
+    /**
+     * A consistent copy of what the appender has captured so far. The appender sits on the
+     * root logger at ALL, so background threads keep appending while an assertion iterates;
+     * iterating {@code lines.list} directly raced them (a ConcurrentModificationException on
+     * CI shard 3 of run 36545048373, 2026-09-29). Logback's {@code AppenderBase#doAppend}
+     * synchronizes on the appender, so copying under the same lock sees a stable list.
+     */
+    private static List<ILoggingEvent> snapshot(ListAppender<ILoggingEvent> appender) {
+        synchronized (appender) {
+            return List.copyOf(appender.list);
         }
     }
 }

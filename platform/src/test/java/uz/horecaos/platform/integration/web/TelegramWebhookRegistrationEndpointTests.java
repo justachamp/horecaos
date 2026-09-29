@@ -209,7 +209,7 @@ class TelegramWebhookRegistrationEndpointTests {
             assertThat(String.valueOf(auditRows.getFirst().get("change_document")))
                     .as("the audit fact names the reference, never the token")
                     .doesNotContain(sentToken);
-            assertThat(lines.list)
+            assertThat(snapshot(lines))
                     .as("no captured log line ever carries the webhook secret token")
                     .noneMatch(event -> event.getFormattedMessage().contains(sentToken));
         } finally {
@@ -346,7 +346,7 @@ class TelegramWebhookRegistrationEndpointTests {
                         .as("tells the operator Telegram already accepted the new secret")
                         .containsIgnoringCase("retry");
 
-                assertThat(lines.list)
+                assertThat(snapshot(lines))
                         .as("the desync (Telegram accepted, the platform did not record it) is logged for on-call")
                         .anyMatch(event -> event.getLevel() == ch.qos.logback.classic.Level.ERROR
                                 && event.getFormattedMessage().contains(TELEGRAM_INSTALLATION.toString()));
@@ -700,6 +700,19 @@ class TelegramWebhookRegistrationEndpointTests {
                     .header("alg", "none")
                     .claim("sub", "unused")
                     .build();
+        }
+    }
+
+    /**
+     * A consistent copy of what the appender has captured so far. The appender sits on the
+     * root logger at ALL, so background threads keep appending while an assertion iterates;
+     * iterating {@code lines.list} directly raced them (a ConcurrentModificationException on
+     * CI shard 3 of run 36545048373, 2026-09-29). Logback's {@code AppenderBase#doAppend}
+     * synchronizes on the appender, so copying under the same lock sees a stable list.
+     */
+    private static List<ILoggingEvent> snapshot(ListAppender<ILoggingEvent> appender) {
+        synchronized (appender) {
+            return List.copyOf(appender.list);
         }
     }
 }
