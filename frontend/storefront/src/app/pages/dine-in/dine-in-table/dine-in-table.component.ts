@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, OnInit, computed, effect, inject, s
 import { CommonModule } from '@angular/common';
 import { Router, RouterLink } from '@angular/router';
 
+import { ReturnDestination } from '../../../core/auth/return-destination';
 import { Session } from '../../../core/auth/session';
 import { newIdempotencyKey } from '../../../core/api/idempotency';
 import { HorecaOSApiError } from '../../../core/api/problem-details';
@@ -68,6 +69,7 @@ export class DineInTableComponent implements OnInit {
   private readonly notification = inject(NotificationService);
   private readonly translate = inject(TranslateService);
   private readonly router = inject(Router);
+  private readonly returnDestination = inject(ReturnDestination);
 
   readonly loading = signal(true);
   readonly branchName = signal<string | null>(null);
@@ -195,7 +197,7 @@ export class DineInTableComponent implements OnInit {
       return;
     }
     if (!this.session.isAuthenticated()) {
-      void this.router.navigate(['/auth', 'login']);
+      this.signIn();
       return;
     }
     try {
@@ -330,7 +332,18 @@ export class DineInTableComponent implements OnInit {
     }
   }
 
+  /**
+   * Sends the guest to sign in and remembers to bring them back to this table
+   * afterwards, rather than to `/locations` like every other sign-in.
+   *
+   * What is remembered is the token-free path `/dine-in/table`, never the
+   * printed table token: that token was spent by the scan and is not held
+   * anywhere, so the auth flow never sees it. The table itself is recovered
+   * from the guest token `DineInService` persisted, which is unaffected by
+   * signing in.
+   */
   signIn(): void {
+    this.returnDestination.remember('/dine-in/table');
     void this.router.navigate(['/auth', 'login']);
   }
 

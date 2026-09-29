@@ -11,6 +11,7 @@ import {
 } from '../../../core/session/customer-otp';
 import { formatUzPhone } from '../../../core/session/phone';
 import { TranslateService } from '../../../services/translate.service';
+import { ReturnDestination } from '../../../core/auth/return-destination';
 import { DeliverySelectionService } from '../../../services/delivery-selection.service';
 import { TelegramWebappService } from '../../../services/telegram-webapp.service';
 import { TermsService } from '../../../services/terms.service';
@@ -61,6 +62,7 @@ export class AuthCodeComponent implements OnInit, OnDestroy {
   private readonly translate = inject(TranslateService);
   private readonly delivery = inject(DeliverySelectionService);
   private readonly terms = inject(TermsService);
+  private readonly returnDestination = inject(ReturnDestination);
 
   constructor(private router: Router) {}
 
@@ -282,18 +284,25 @@ export class AuthCodeComponent implements OnInit, OnDestroy {
    * order for a stale acceptance -- so a failure here (the network, a slow
    * backend) fails open to `/locations` rather than trap a customer who just
    * successfully signed in behind a screen that cannot load.
+   *
+   * Where the customer lands is `/locations` unless they signed in on their way
+   * somewhere specific -- today only a guest at a table QR who tapped «sign in
+   * to order» (`ReturnDestination`). The destination is read once, here, after
+   * the sign-in has succeeded, and rides through the terms screen so a customer
+   * who must accept them still ends up back at their table.
    */
   private async continuePastTerms(): Promise<void> {
+    const destination = this.returnDestination.consume() ?? '/locations';
     try {
       const status = await this.terms.status();
       if (!status.accepted) {
-        await this.router.navigate(['/terms'], { state: { mustAccept: true, returnTo: '/locations' } });
+        await this.router.navigate(['/terms'], { state: { mustAccept: true, returnTo: destination } });
         return;
       }
     } catch {
-      // Fall through to /locations -- see this method's own doc comment.
+      // Fall through to the destination -- see this method's own doc comment.
     }
-    await this.router.navigate(['/locations']);
+    await this.router.navigate([destination]);
   }
 
   /**
