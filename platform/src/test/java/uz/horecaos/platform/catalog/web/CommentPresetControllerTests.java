@@ -368,17 +368,19 @@ class CommentPresetControllerTests {
     // ------------------------------------------------- row 10.12: per-locale wording
 
     @Test
-    @DisplayName("POST with per-locale labels writes the platform columns AND the translations table")
-    void createWithLabelsWritesBothHomes() throws Exception {
-        // The tenant has no brand, so its default is the platform's ru. ru and en are
-        // supplied; uz-Latn is not, and its NOT NULL column takes the default wording.
+    @DisplayName(
+            "POST mirrors every label - the platform triple and a language beyond it - into the translations table")
+    void createMirrorsEveryLabelIntoTheTranslationsTable() throws Exception {
+        // The tenant offers ru and kaa only. The contract keeps labelUz/labelEn required
+        // (a published required request field cannot be relaxed), so the console names
+        // the two platform languages it does not offer with the default wording.
         MvcResult result = mvc.perform(post(path())
                         .with(tokenFor(AUTHOR))
                         .header("Idempotency-Key", "comment-preset-labels-1")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"code":"NO_ONION","posModifierCode":null,"sortOrder":0,
-                                 "labels":{"ru":"Без лука","en":"No onion"}}
+                                {"code":"NO_ONION","labelRu":"Без лука","labelUz":"Без лука","labelEn":"Без лука",
+                                 "posModifierCode":null,"sortOrder":0,"labels":{"kaa":"Piyazsiz"}}
                                 """))
                 .andReturn();
 
@@ -389,11 +391,14 @@ class CommentPresetControllerTests {
                         .param("id", presetId)
                         .query(String.class)
                         .single())
-                .as("the uz-Latn column is NOT NULL, so it takes the tenant's default (ru) wording")
-                .isEqualTo("Без лука|Без лука|No onion");
+                .isEqualTo("Без лука|Без лука|Без лука");
         assertThat(translationRows(presetId))
-                .as("only what the caller supplied is mirrored -- no invented uz-Latn translation")
-                .containsOnly(Map.entry("ru", "Без лука"), Map.entry("en", "No onion"));
+                .as("written alongside the columns: the triple, and the language only the table can hold")
+                .containsOnly(
+                        Map.entry("ru", "Без лука"),
+                        Map.entry("uz-Latn", "Без лука"),
+                        Map.entry("en", "Без лука"),
+                        Map.entry("kaa", "Piyazsiz"));
     }
 
     @Test
@@ -404,8 +409,8 @@ class CommentPresetControllerTests {
                 .header("Idempotency-Key", "comment-preset-kaa-1")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
-                        {"code":"NO_ONION","posModifierCode":null,"sortOrder":0,
-                         "labels":{"ru":"Без лука","uz-Latn":"Piyozsiz","en":"No onion","kaa":"Piyazsiz"}}
+                        {"code":"NO_ONION","labelRu":"Без лука","labelUz":"Piyozsiz","labelEn":"No onion",
+                         "posModifierCode":null,"sortOrder":0,"labels":{"kaa":"Piyazsiz"}}
                         """));
 
         Map<String, Object> listed =
@@ -442,17 +447,19 @@ class CommentPresetControllerTests {
     }
 
     @Test
-    @DisplayName("an edit that names one locale never deletes or rewrites the ones it does not name")
+    @DisplayName("an edit never deletes or rewrites a language beyond the triple that it does not name")
     void anEditNeverDeletesAHiddenLocale() throws Exception {
         // The editor shows only the locales the tenant supports; the preset also carries
-        // kaa and uz-Latn wording the editor does not show. Editing en must leave them.
+        // kaa wording the editor does not show, and uz-Latn wording it round-trips
+        // unchanged (the contract keeps the platform triple required). Editing en must
+        // leave both exactly as they were.
         mvc.perform(post(path())
                 .with(tokenFor(AUTHOR))
                 .header("Idempotency-Key", "comment-preset-hidden-1")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
-                        {"code":"NO_ONION","posModifierCode":null,"sortOrder":0,
-                         "labels":{"ru":"Без лука","uz-Latn":"Piyozsiz","en":"No onion","kaa":"Piyazsiz"}}
+                        {"code":"NO_ONION","labelRu":"Без лука","labelUz":"Piyozsiz","labelEn":"No onion",
+                         "posModifierCode":null,"sortOrder":0,"labels":{"kaa":"Piyazsiz"}}
                         """));
         UUID presetId = presetIdByCode("NO_ONION");
 
@@ -461,7 +468,8 @@ class CommentPresetControllerTests {
                         .header("Idempotency-Key", "comment-preset-hidden-2")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"posModifierCode":null,"sortOrder":2,"status":"ACTIVE","expectedVersion":1,
+                                {"labelRu":"Без лука","labelUz":"Piyozsiz","labelEn":"No onion",
+                                 "posModifierCode":null,"sortOrder":2,"status":"ACTIVE","expectedVersion":1,
                                  "labels":{"en":"Hold the onion"}}
                                 """))
                 .andReturn();
@@ -485,26 +493,6 @@ class CommentPresetControllerTests {
     }
 
     @Test
-    @DisplayName("a create without the tenant's default-language wording is refused, and writes nothing")
-    void aCreateWithoutTheDefaultLanguageIsRefused() throws Exception {
-        MvcResult refused = mvc.perform(post(path())
-                        .with(tokenFor(AUTHOR))
-                        .header("Idempotency-Key", "comment-preset-nodefault-1")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"code":"NO_ONION","posModifierCode":null,"sortOrder":0,
-                                 "labels":{"en":"No onion"}}
-                                """))
-                .andReturn();
-
-        assertThat(refused.getResponse().getStatus()).isEqualTo(400);
-        assertThat(refused.getResponse().getContentAsString())
-                .contains("VALIDATION_FAILED")
-                .contains("(ru)");
-        assertThat(presetCount()).isZero();
-    }
-
-    @Test
     @DisplayName("a bare 'uz' and a malformed locale are refused before they reach the table's CHECK")
     void aBareUzAndAMalformedLocaleAreRefused() throws Exception {
         for (String bad : List.of("uz", "RU_ru")) {
@@ -513,8 +501,8 @@ class CommentPresetControllerTests {
                             .header("Idempotency-Key", "comment-preset-badlocale-" + bad)
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("""
-                                    {"code":"NO_ONION","posModifierCode":null,"sortOrder":0,
-                                     "labels":{"ru":"Без лука","%s":"x"}}
+                                    {"code":"NO_ONION","labelRu":"Без лука","labelUz":"Piyozsiz","labelEn":"No onion",
+                                     "posModifierCode":null,"sortOrder":0,"labels":{"%s":"x"}}
                                     """.formatted(bad)))
                     .andReturn();
 
@@ -547,43 +535,6 @@ class CommentPresetControllerTests {
     }
 
     @Test
-    @DisplayName(
-            "with the default set by the first brand, a create needs that language, and fills the other columns from it")
-    void theFirstBrandsDefaultIsWhatACreateRequires() throws Exception {
-        UUID alpha = insertBrand(TENANT, "ALPHA", "Alpha");
-        setBrandLocales(TENANT, alpha, "uz-Latn");
-
-        MvcResult withoutIt = mvc.perform(post(path())
-                        .with(tokenFor(AUTHOR))
-                        .header("Idempotency-Key", "comment-preset-uzdefault-1")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"code":"NO_ONION","posModifierCode":null,"sortOrder":0,
-                                 "labels":{"ru":"Без лука"}}
-                                """))
-                .andReturn();
-        assertThat(withoutIt.getResponse().getStatus())
-                .as("uz-Latn is this tenant's default and was not supplied")
-                .isEqualTo(400);
-
-        MvcResult withIt = mvc.perform(post(path())
-                        .with(tokenFor(AUTHOR))
-                        .header("Idempotency-Key", "comment-preset-uzdefault-2")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"code":"NO_ONION","posModifierCode":null,"sortOrder":0,
-                                 "labels":{"uz-Latn":"Piyozsiz"}}
-                                """))
-                .andReturn();
-        assertThat(withIt.getResponse().getStatus()).isEqualTo(200);
-        assertThat(jdbc.sql(
-                                "SELECT label_ru || '|' || label_uz || '|' || label_en FROM catalog.comment_presets WHERE code = 'NO_ONION'")
-                        .query(String.class)
-                        .single())
-                .isEqualTo("Piyozsiz|Piyozsiz|Piyozsiz");
-    }
-
-    @Test
     @DisplayName("GET locale-set refuses a caller holding neither catalog.read nor catalog.author")
     void theLocaleSetRefusesACallerWithoutCatalogRead() throws Exception {
         MvcResult refused = mvc.perform(get(path() + "/locale-set").with(tokenFor(NO_CATALOG_ACCESS)))
@@ -600,8 +551,8 @@ class CommentPresetControllerTests {
                 .header("Idempotency-Key", "comment-preset-iso-1")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
-                        {"code":"NO_ONION","posModifierCode":null,"sortOrder":0,
-                         "labels":{"ru":"Без лука","kaa":"Piyazsiz"}}
+                        {"code":"NO_ONION","labelRu":"Без лука","labelUz":"Без лука","labelEn":"Без лука",
+                         "posModifierCode":null,"sortOrder":0,"labels":{"kaa":"Piyazsiz"}}
                         """));
         UUID presetId = presetIdByCode("NO_ONION");
 
@@ -617,8 +568,9 @@ class CommentPresetControllerTests {
                         .header("Idempotency-Key", "comment-preset-iso-2")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"posModifierCode":null,"sortOrder":0,"status":"ACTIVE","expectedVersion":1,
-                                 "labels":{"ru":"HIJACKED","kaa":"HIJACKED"}}
+                                {"labelRu":"HIJACKED","labelUz":"HIJACKED","labelEn":"HIJACKED",
+                                 "posModifierCode":null,"sortOrder":0,"status":"ACTIVE","expectedVersion":1,
+                                 "labels":{"kaa":"HIJACKED"}}
                                 """))
                 .andReturn();
         assertThat(foreignWrite.getResponse().getStatus()).isEqualTo(404);
@@ -628,7 +580,12 @@ class CommentPresetControllerTests {
                 mvc.perform(get(path()).with(tokenFor(OTHER_TENANT_OWNER))).andReturn();
         assertThat(foreignPath.getResponse().getStatus()).isEqualTo(403);
 
-        assertThat(translationRows(presetId)).containsOnly(Map.entry("ru", "Без лука"), Map.entry("kaa", "Piyazsiz"));
+        assertThat(translationRows(presetId))
+                .containsOnly(
+                        Map.entry("ru", "Без лука"),
+                        Map.entry("uz-Latn", "Без лука"),
+                        Map.entry("en", "Без лука"),
+                        Map.entry("kaa", "Piyazsiz"));
     }
 
     @Test
@@ -639,8 +596,8 @@ class CommentPresetControllerTests {
                 .header("Idempotency-Key", "comment-preset-upsert-1")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
-                        {"code":"NO_ONION","posModifierCode":null,"sortOrder":0,
-                         "labels":{"ru":"Без лука"}}
+                        {"code":"NO_ONION","labelRu":"Без лука","labelUz":"Без лука","labelEn":"Без лука",
+                         "posModifierCode":null,"sortOrder":0}
                         """));
         UUID presetId = presetIdByCode("NO_ONION");
 
@@ -649,7 +606,8 @@ class CommentPresetControllerTests {
         presetStore.upsertTranslations(OTHER_TENANT, presetId, Map.of("ru", "HIJACKED"), Instant.now());
         assertThat(translationRows(presetId))
                 .as("the existing row was left alone, not taken over")
-                .containsOnly(Map.entry("ru", "Без лука"));
+                .containsEntry("ru", "Без лука")
+                .doesNotContainKey("kaa");
 
         // A locale with no row takes the INSERT path, where the composite foreign key
         // (preset_id, tenant_id) refuses a preset that is not the other tenant's.

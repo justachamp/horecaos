@@ -96,10 +96,9 @@ public class OperationsRegionController {
             description = "The SW/NE box is what constrains the geocoder and what a zone "
                     + "activation is checked against, so a box that is inverted, has no area, or "
                     + "does not contain its own centre is refused with every reason at once. The "
-                    + "name is given per locale in `displayNames` (row 10.12); the tenant's "
-                    + "default language is required, every other locale optional. "
-                    + "displayNameRu/displayNameUz/displayNameEn remain accepted for callers that "
-                    + "predate `displayNames`, and `displayNames` wins where both name a locale.")
+                    + "name is displayNameRu/displayNameUz/displayNameEn (the platform triple, "
+                    + "required) plus `displayNames` (row 10.12, optional) for any language "
+                    + "beyond them; `displayNames` wins where both name a locale.")
     public ResponseEntity<RegionRegisteredView> create(
             @PathVariable UUID tenantId, @Valid @RequestBody RegionGeographyRequest body) {
 
@@ -121,9 +120,12 @@ public class OperationsRegionController {
                     + "be used to discover which platform regions exist. expectedVersion is "
                     + "required and is the version RegionResponse last reported for this row; a "
                     + "stale one is refused with STALE_VERSION, the optimistic-locking convention "
-                    + "every other mutable aggregate on this surface already carries. Names are "
-                    + "written only for the locales the request names; one left out keeps its "
-                    + "name, so an editor that shows only some languages never deletes the others.")
+                    + "every other mutable aggregate on this surface already carries. A language "
+                    + "beyond the platform triple that the request does not name in "
+                    + "`displayNames` keeps its name, so an editor that shows only some languages "
+                    + "never deletes the others; the triple is always named (it is required), and "
+                    + "an editor keeps a language it does not show by sending the name the region "
+                    + "already has.")
     public ResponseEntity<Void> update(
             @PathVariable UUID tenantId, @PathVariable UUID regionId, @Valid @RequestBody RegionGeographyRequest body) {
 
@@ -178,13 +180,24 @@ public class OperationsRegionController {
      * convention {@code JdbcLegalEntityStore}/{@code JdbcSalesChannelStore}
      * already carry for their own aggregates.
      */
+    /**
+     * @param displayNameRu/displayNameUz/displayNameEn the platform triple's names.
+     *        <strong>Still required</strong>: {@code OpenApiContractTests} refuses to make a
+     *        published required request field optional, so row 10.12 could not relax them. A
+     *        caller whose tenant does not offer one of the three languages names it with the
+     *        default language's name -- what the console does -- or, on a rewrite, with the
+     *        name the region already has
+     * @param displayNames the name per locale (optional, additive): the way to name a
+     *        language outside the platform triple. It overlays the three fields above where
+     *        both name a locale
+     */
     public record RegionGeographyRequest(
             @NotBlank @Size(max = 32) @Pattern(regexp = "^[A-Z0-9][A-Z0-9_-]{0,31}$")
             String code,
 
-            @Nullable @Size(max = 200) String displayNameRu,
-            @Nullable @Size(max = 200) String displayNameUz,
-            @Nullable @Size(max = 200) String displayNameEn,
+            @NotBlank @Size(max = 200) String displayNameRu,
+            @NotBlank @Size(max = 200) String displayNameUz,
+            @NotBlank @Size(max = 200) String displayNameEn,
             double centreLat,
             double centreLon,
             double bboxSwLat,

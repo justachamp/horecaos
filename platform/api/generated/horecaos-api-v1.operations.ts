@@ -1499,6 +1499,7 @@ export interface CreateZoneRequest {
   displayNameEn: string;
   displayNameRu: string;
   displayNameUz: string;
+  displayNames?: { [key: string]: string };
   role: "DELIVERY" | "CATCHMENT";
 }
 
@@ -3081,6 +3082,12 @@ export interface OperationsPaymentControllerPaymentSessionResponse {
   rePresented?: boolean;
 }
 
+export interface OperationsRegionControllerLocaleSetResponse {
+  configured?: boolean;
+  defaultLocale?: string;
+  locales?: Array<string>;
+}
+
 export interface OperationsRemedyControllerVerificationRequest {
   correlationId?: string;
   reason: string;
@@ -4017,6 +4024,7 @@ export interface RegionGeographyRequest {
   displayNameEn: string;
   displayNameRu: string;
   displayNameUz: string;
+  displayNames?: { [key: string]: string };
   expectedVersion?: number;
 }
 
@@ -4036,6 +4044,7 @@ export interface RegionResponse {
   displayNameEn?: string;
   displayNameRu?: string;
   displayNameUz?: string;
+  displayNames?: { [key: string]: string };
   platform?: boolean;
   regionId?: string;
   status?: string;
@@ -4144,6 +4153,13 @@ export interface RemedyTotalsResponse {
 
 export interface RemoveTenantCalendarHolidayRequest {
   reason: string;
+}
+
+export interface RenameZoneRequest {
+  displayNameEn?: string;
+  displayNameRu?: string;
+  displayNameUz?: string;
+  displayNames?: { [key: string]: string };
 }
 
 export interface ReorderLineResponse {
@@ -5413,6 +5429,11 @@ export interface ZoneDetailResponse {
   zone?: ZoneSummaryResponse;
 }
 
+export interface ZoneNamesResponse {
+  displayNames?: { [key: string]: string };
+  zoneId?: string;
+}
+
 export interface ZoneSummaryResponse {
   activeVersion?: number;
   areaSquareMeters?: number;
@@ -5422,6 +5443,7 @@ export interface ZoneSummaryResponse {
   displayNameEn?: string;
   displayNameRu?: string;
   displayNameUz?: string;
+  displayNames?: { [key: string]: string };
   freeDeliveryFromMinor?: number;
   minBasketMinor?: number;
   priority?: number;
@@ -5563,6 +5585,7 @@ export interface Operations {
   "detail_2": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/service-zones/{zoneId}"; request: { parameters: { path: { brandId: string; tenantId: string; zoneId: string } } }; responses: { "200": ZoneDetailResponse } };
   "bind_1": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/service-zones/{zoneId}/locations"; request: { parameters: { path: { brandId: string; tenantId: string; zoneId: string } }; body: ServiceZoneControllerBindLocationRequest }; responses: { "200": unknown } };
   "unbind_1": { method: "DELETE"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/service-zones/{zoneId}/locations/{locationId}"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string; zoneId: string } } }; responses: { "200": unknown } };
+  "rename": { method: "PUT"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/service-zones/{zoneId}/names"; request: { parameters: { path: { brandId: string; tenantId: string; zoneId: string } }; body: RenameZoneRequest }; responses: { "200": ZoneNamesResponse } };
   "versions_1": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/service-zones/{zoneId}/versions"; request: { parameters: { path: { brandId: string; tenantId: string; zoneId: string } } }; responses: { "200": Array<ZoneVersionResponse> } };
   "draftVersion": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/service-zones/{zoneId}/versions"; request: { parameters: { path: { brandId: string; tenantId: string; zoneId: string } }; body: OperationsServiceZoneControllerDraftVersionRequest }; responses: { "200": ServiceZoneControllerVersionView } };
   "activate_5": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/service-zones/{zoneId}/versions/{version}/activate"; request: { parameters: { path: { brandId: string; tenantId: string; version: number; zoneId: string } } }; responses: { "200": ServiceZoneControllerVersionView } };
@@ -5694,6 +5717,7 @@ export interface Operations {
   "activateRateCard": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/rate-cards/{cardId}/activation"; request: { parameters: { path: { cardId: string; tenantId: string } }; body: ActivateRateCardRequest }; responses: { "200": unknown } };
   "list_8": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/regions"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<RegionResponse> } };
   "create_4": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/regions"; request: { parameters: { path: { tenantId: string } }; body: RegionGeographyRequest }; responses: { "200": RegionRegisteredView } };
+  "localeSet": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/regions/locale-set"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": OperationsRegionControllerLocaleSetResponse } };
   "update_1": { method: "PUT"; path: "/api/v1/operations/tenants/{tenantId}/regions/{regionId}"; request: { parameters: { path: { regionId: string; tenantId: string } }; body: RegionGeographyRequest }; responses: { "200": unknown } };
   "archive_2": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/regions/{regionId}/archive"; request: { parameters: { path: { regionId: string; tenantId: string } } }; responses: { "200": unknown } };
   "unverified": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/remedies/unverified"; request: { parameters: { path: { tenantId: string }; query: { limit?: number; settlingHours?: number } } }; responses: { "200": PageRemedyResponse } };

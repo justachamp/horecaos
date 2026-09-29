@@ -196,19 +196,21 @@ public class ServiceZoneController {
     }
 
     /**
-     * @param displayNameRu/displayNameUz/displayNameEn the platform triple, each optional
-     *        since row 10.12: a brand whose set does not offer a language need not name
-     *        the zone in it
-     * @param displayNames the name per locale, {@code {"ru": "...", "en": "..."}}; wins
-     *        over the three fields above where both name a locale. The brand's default
-     *        language is required
+     * @param displayNameRu/displayNameUz/displayNameEn the platform triple's names.
+     *        <strong>Still required</strong>: {@code OpenApiContractTests} refuses to make a
+     *        published required request field optional, so row 10.12 could not relax them. A
+     *        brand that does not offer one of the three languages names it with its default
+     *        language's name -- what the console does
+     * @param displayNames the name per locale (optional, additive): the way to name a
+     *        language outside the platform triple. It overlays the three fields above where
+     *        both name a locale
      */
     public record CreateZoneRequest(
             @NotNull ZoneRole role,
             @NotBlank @Size(max = 32) String code,
-            @Nullable @Size(max = 200) String displayNameRu,
-            @Nullable @Size(max = 200) String displayNameUz,
-            @Nullable @Size(max = 200) String displayNameEn,
+            @NotBlank @Size(max = 200) String displayNameRu,
+            @NotBlank @Size(max = 200) String displayNameUz,
+            @NotBlank @Size(max = 200) String displayNameEn,
             @Nullable @Size(max = 32) Map<String, @Size(max = 200) String> displayNames) {}
 
     /**

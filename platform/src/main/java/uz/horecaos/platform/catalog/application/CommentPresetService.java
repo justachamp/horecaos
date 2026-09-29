@@ -84,9 +84,13 @@ public class CommentPresetService {
      * Registers a preset. The wording it needs is the tenant's <em>default</em>
      * language (row 10.12, {@link TenantLocaleSet}); every other supported locale is
      * optional. The three platform columns are NOT NULL, so a triple locale the
-     * caller did not supply is filled with the default wording -- the storefront and
-     * the order snapshot already fall back to it, and the editor never shows that
-     * column as a translation because the tenant's set does not include the locale.
+     * caller did not supply takes the default wording.
+     *
+     * <p>Through HTTP that fallback is never reached: {@code CommentPresetController}
+     * keeps the three platform fields required (the OpenAPI contract cannot relax a
+     * published required field), so the console fills a language the tenant does not
+     * offer with the default wording itself. It covers service callers, and a tenant
+     * whose default language is one the triple does not include.
      *
      * <p>Every supplied label is also written to the per-locale table
      * ({@code V0430}), the triple included, for the release that drops the columns.

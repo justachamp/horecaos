@@ -1937,6 +1937,23 @@
         },
         "type" : "object"
       },
+      "CommentPresetControllerLocaleSetResponse" : {
+        "properties" : {
+          "configured" : {
+            "type" : "boolean"
+          },
+          "defaultLocale" : {
+            "type" : "string"
+          },
+          "locales" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
       "CommercialAdminControllerAdjustmentRequest" : {
         "properties" : {
           "approvedBy" : {
@@ -2863,6 +2880,12 @@
             "maxLength" : 200,
             "minLength" : 0,
             "type" : "string"
+          },
+          "displayNames" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "type" : "object"
           },
           "role" : {
             "enum" : [ "DELIVERY", "CATCHMENT" ],
@@ -5480,6 +5503,12 @@
             "minLength" : 0,
             "type" : "string"
           },
+          "labels" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "type" : "object"
+          },
           "posModifierCode" : {
             "maxLength" : 64,
             "minLength" : 0,
@@ -7078,6 +7107,12 @@
           },
           "labelUz" : {
             "type" : "string"
+          },
+          "labels" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "type" : "object"
           },
           "posModifierCode" : {
             "type" : "string"
@@ -10150,6 +10185,12 @@
             "minLength" : 0,
             "type" : "string"
           },
+          "labels" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "type" : "object"
+          },
           "posModifierCode" : {
             "maxLength" : 64,
             "minLength" : 0,
@@ -10617,6 +10658,12 @@
           },
           "displayNameUz" : {
             "type" : "string"
+          },
+          "displayNames" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "type" : "object"
           },
           "freeDeliveryFromMinor" : {
             "format" : "int64",
@@ -19110,7 +19157,7 @@
         "tags" : [ "Preset product comments" ]
       },
       "post" : {
-        "description" : "Refused (409) when the code is already registered for this tenant. pos_modifier_code is the coded value a POS export maps this preset to where it expects a modifier; left null, the preset still renders on the KDS and exports nowhere.",
+        "description" : "Refused (409) when the code is already registered for this tenant. pos_modifier_code is the coded value a POS export maps this preset to where it expects a modifier; left null, the preset still renders on the KDS and exports nowhere. labelRu/labelUz/labelEn are the platform triple and stay required; `labels` (row 10.12, optional) carries wording by locale for any language beyond them and wins where both name a locale. The tenant's default language must have wording, in one or the other.",
         "operationId" : "create_4",
         "parameters" : [ {
           "in" : "path",
@@ -19147,9 +19194,38 @@
         "tags" : [ "Preset product comments" ]
       }
     },
+    "/api/v1/control-plane/tenants/{tenantId}/comment-presets/locale-set" : {
+      "get" : {
+        "description" : "Row 10.12. A preset is a tenant-level object shared by every brand, so it is edited in the union of the tenant's brands' supported languages, default first; the default is the tenant's first brand's. A brand that has chosen no set contributes the platform triple (ru, uz-Latn, en). The set is a menu, not a constraint: a language outside it that a preset already carries is kept, never deleted, by an edit.",
+        "operationId" : "localeSet",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CommentPresetControllerLocaleSetResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The languages the preset editor offers",
+        "tags" : [ "Preset product comments" ]
+      }
+    },
     "/api/v1/control-plane/tenants/{tenantId}/comment-presets/{presetId}" : {
       "put" : {
-        "description" : "Whole-record PUT with an expected version, the same discipline every other versioned reference table in this platform uses. Archiving is status=ARCHIVED here, not a DELETE: a preset already selected on an open order's line must stay resolvable.",
+        "description" : "Whole-record PUT with an expected version, the same discipline every other versioned reference table in this platform uses. Archiving is status=ARCHIVED here, not a DELETE: a preset already selected on an open order's line must stay resolvable. A language beyond the platform triple that the request does not name in `labels` keeps its wording, so an editor that shows only some languages never deletes the others; the triple is always named (it is required), and an editor keeps a language it does not show by sending the wording the preset already has.",
         "operationId" : "update_3",
         "parameters" : [ {
           "in" : "path",

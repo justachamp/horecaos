@@ -339,10 +339,14 @@ class OperationsRegionControllerEndpointTests {
 
     private static final JsonMapper JSON = JsonMapper.builder().build();
 
-    /** Tashkent named per locale: no legacy triple at all, and a locale outside the platform's. */
+    /**
+     * Tashkent named in the platform triple (the contract keeps those three required; uz-Latn
+     * takes the default wording, as the console fills a language the tenant does not offer)
+     * and, beyond it, in a language only the translations table can hold.
+     */
     private static final String TASHKENT_BY_LOCALE = """
-            {"code":"TASHKENT","displayNames":{"ru":"Ташкент","en":"Tashkent","kaa":"Toshkent"},
-             "centreLat":41.31,"centreLon":69.24,
+            {"code":"TASHKENT","displayNameRu":"Ташкент","displayNameUz":"Ташкент","displayNameEn":"Tashkent",
+             "displayNames":{"kaa":"Toshkent"},"centreLat":41.31,"centreLon":69.24,
              "bboxSwLat":40.5,"bboxSwLon":68.5,"bboxNeLat":42.0,"bboxNeLon":70.0}
             """;
 
@@ -361,10 +365,14 @@ class OperationsRegionControllerEndpointTests {
                         SELECT display_name_ru || '|' || display_name_uz || '|' || display_name_en
                           FROM fulfillment.regions WHERE id = :id
                         """).param("id", regionId).query(String.class).single())
-                .as("uz-Latn was not supplied; its NOT NULL column takes the tenant's default (ru) name")
                 .isEqualTo("Ташкент|Ташкент|Tashkent");
         assertThat(translationRows(regionId))
-                .containsOnly(Map.entry("ru", "Ташкент"), Map.entry("en", "Tashkent"), Map.entry("kaa", "Toshkent"));
+                .as("written alongside the columns: the triple, and the language only the table can hold")
+                .containsOnly(
+                        Map.entry("ru", "Ташкент"),
+                        Map.entry("uz-Latn", "Ташкент"),
+                        Map.entry("en", "Tashkent"),
+                        Map.entry("kaa", "Toshkent"));
 
         Map<String, Object> listed = onlyTenantRegion(
                 mvc.perform(get(regionsPath(TENANT)).with(tokenFor(OWNER))).andReturn());
@@ -405,14 +413,18 @@ class OperationsRegionControllerEndpointTests {
                 .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "region-hidden-create")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(TASHKENT_BY_LOCALE.replace(
-                        "\"kaa\":\"Toshkent\"", "\"kaa\":\"Toshkent\",\"uz-Latn\":\"Toshkent-uz\"")));
+                        "\"displayNameUz\":\"Ташкент\"", "\"displayNameUz\":\"Toshkent-uz\"")));
         UUID regionId = tenantRegionId();
 
-        // The editor shows ru and en only; it sends the geography and those two names.
+        // The editor offers ru and en only. It sends the geography, those two names, and -- the
+        // contract keeps the platform triple required -- the uz-Latn name the region already has,
+        // unchanged. kaa is not named at all.
         String rewrite = withExpectedVersion(
-                TASHKENT_BY_LOCALE.replace(
-                        "{\"ru\":\"Ташкент\",\"en\":\"Tashkent\",\"kaa\":\"Toshkent\"}",
-                        "{\"ru\":\"Ташкент (город)\",\"en\":\"Tashkent city\"}"),
+                TASHKENT_BY_LOCALE
+                        .replace("\"displayNameRu\":\"Ташкент\"", "\"displayNameRu\":\"Ташкент (город)\"")
+                        .replace("\"displayNameUz\":\"Ташкент\"", "\"displayNameUz\":\"Toshkent-uz\"")
+                        .replace("\"displayNameEn\":\"Tashkent\"", "\"displayNameEn\":\"Tashkent city\"")
+                        .replace("\"displayNames\":{\"kaa\":\"Toshkent\"}", "\"displayNames\":{}"),
                 1);
         MvcResult rewritten = mvc.perform(put(regionsPath(TENANT) + "/" + regionId)
                         .with(tokenFor(OWNER))
@@ -425,7 +437,7 @@ class OperationsRegionControllerEndpointTests {
         Map<String, Object> listed = onlyTenantRegion(
                 mvc.perform(get(regionsPath(TENANT)).with(tokenFor(OWNER))).andReturn());
         assertThat(namesOf(listed))
-                .as("uz-Latn and kaa were not in the request and must survive it")
+                .as("uz-Latn came back unchanged and kaa was not in the request: both survive")
                 .containsExactly(
                         Map.entry("ru", "Ташкент (город)"),
                         Map.entry("uz-Latn", "Toshkent-uz"),
@@ -436,25 +448,6 @@ class OperationsRegionControllerEndpointTests {
                         .query(String.class)
                         .single())
                 .isEqualTo("Toshkent-uz");
-    }
-
-    @Test
-    void aRegionWithoutTheTenantsDefaultLanguageNameIsRefusedAndWritesNothing() throws Exception {
-        MvcResult refused = mvc.perform(post(regionsPath(TENANT))
-                        .with(tokenFor(OWNER))
-                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "region-nodefault")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(TASHKENT_BY_LOCALE.replace("\"ru\":\"Ташкент\",", "")))
-                .andReturn();
-
-        assertThat(refused.getResponse().getStatus()).isEqualTo(400);
-        assertThat(refused.getResponse().getContentAsString())
-                .contains("VALIDATION_FAILED")
-                .contains("(ru)");
-        assertThat(jdbc.sql("SELECT count(*) FROM fulfillment.regions")
-                        .query(Long.class)
-                        .single())
-                .isZero();
     }
 
     @Test
@@ -503,7 +496,11 @@ class OperationsRegionControllerEndpointTests {
                 .andReturn();
         assertThat(foreignWrite.getResponse().getStatus()).isEqualTo(404);
         assertThat(translationRows(regionId))
-                .containsOnly(Map.entry("ru", "Ташкент"), Map.entry("en", "Tashkent"), Map.entry("kaa", "Toshkent"));
+                .containsOnly(
+                        Map.entry("ru", "Ташкент"),
+                        Map.entry("uz-Latn", "Ташкент"),
+                        Map.entry("en", "Tashkent"),
+                        Map.entry("kaa", "Toshkent"));
     }
 
     @Test
