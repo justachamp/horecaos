@@ -57,6 +57,31 @@ comments) and is wired into its `npm run verify`, but nothing calls that script 
 there is no CI configured for any of the three apps yet. `operations`'s vendored copy is
 verified by eye, not by a script.
 
+## Formatting and lint in CI
+
+Only `operations` has a lint script and a `format`/`format:check` pair today; the CI job
+`Frontend builds (operations)` runs two gates the other three apps do not:
+
+- **`npm run lint` and `npm run lint:rules`.** `eslint-plugin-horecaos` rejects a raw
+  `font-size: 10px` anywhere under `src/` (use a `--q-type-*` token or a `.q-*` class from
+  `tokens.css`). Both are clean; the job fails on the first regression.
+- **Prettier on changed files only** (`tools/format_changed.py`). About a hundred
+  `operations` files predate the Prettier config, so `npm run format:check` on the whole
+  tree is red on code nobody changed, and reformatting it mid-batch would conflict with
+  every open branch. The script lists the `src/` files (`ts`, `html`, `css`, `json` -- the
+  same extensions as `format:check`) that differ from the merge base and runs
+  `prettier --check` on just those: a pull request is measured against its base branch,
+  a push against the tip it replaced, and a base that is missing (new branch, force push)
+  falls back to the tip commit. A file you touch must be formatted; the backlog cannot
+  grow. Once the tree has been reformatted in one dedicated commit, replace the step with
+  `npm run format:check`.
+
+  ```bash
+  python3 frontend/tools/format_changed.py --app operations --base main --list   # what would be checked
+  python3 frontend/tools/format_changed.py --app operations --base main          # check it (needs npm ci)
+  python3 frontend/tools/test_format_changed.py                                  # the script's own tests
+  ```
+
 ## Known debts
 
 - **Two OIDC libraries against one Keycloak realm.** `control-plane` uses
