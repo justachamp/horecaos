@@ -38,9 +38,23 @@ import uz.horecaos.platform.web.authorization.RequiresCapability;
  * someone else's account" operation. That is why the capability is granted
  * broadly across the front-line role bundles rather than reserved to an
  * administrator.
+ *
+ * <p><strong>Two routes issue the code, because a grant serves only the routes
+ * whose path names its level</strong> (ADR 0025: a scope covers downward,
+ * never upward or sideways). The capability is carried by the {@code
+ * brand-manager}, {@code location-manager} and {@code location-staff} bundles
+ * at <em>their own</em> scope, so the original {@code TENANT}-scope route
+ * refused every one of them — a line cook holding {@code location-staff} at
+ * one branch could not mint the code the bundle exists to let them mint.
+ * {@link #issueAtLocation} names the caller's branch in its path and so
+ * resolves the capability at {@code LOCATION} scope, which a location grant
+ * covers exactly and a brand or tenant grant covers from above; {@link
+ * #issue} stays for a tenant-wide holder with no branch to name. The location
+ * chosen decides only which grants count and where the audit fact lands, never
+ * whose account is linked: the subject is always {@code currentActor}.
  */
 @RestController
-@RequestMapping("/api/v1/tenants/{tenantId}/staff/telegram")
+@RequestMapping("/api/v1/tenants/{tenantId}")
 @Tag(name = "Telegram staff linking", description = "ADR 0060 section 3: the staff identity /link handshake")
 public class TelegramStaffLinkCodeController {
 
@@ -57,7 +71,7 @@ public class TelegramStaffLinkCodeController {
         this.clock = clock;
     }
 
-    @PostMapping("/link-codes")
+    @PostMapping("/staff/telegram/link-codes")
     @RequiresCapability(
             value = Capability.INTEGRATION_TELEGRAM_STAFF_LINK_ISSUE,
             scope = ScopeType.TENANT,
@@ -66,14 +80,37 @@ public class TelegramStaffLinkCodeController {
             summary = "Issue a staff Telegram identity-link code",
             description = "Send \"/link <code>\" to the bot in a 1:1 chat. Binds the caller's own "
                     + "Telegram account to the caller's own principal in this tenant; a Telegram "
-                    + "account may hold one such link per tenant, and many tenants at once.")
+                    + "account may hold one such link per tenant, and many tenants at once. "
+                    + "Tenant-scope: satisfied by a tenant-wide grant only. A brand or branch "
+                    + "member uses the branch-scoped route instead.")
     public ResponseEntity<LinkCodeResponse> issue(@PathVariable UUID tenantId) {
+        return issueFor(tenantId, ResourceScope.tenant(tenantId));
+    }
+
+    @PostMapping("/brands/{brandId}/locations/{locationId}/staff/telegram/link-codes")
+    @RequiresCapability(
+            value = Capability.INTEGRATION_TELEGRAM_STAFF_LINK_ISSUE,
+            scope = ScopeType.LOCATION,
+            mutating = true)
+    @Operation(
+            summary = "Issue a staff Telegram identity-link code from a branch",
+            description = "The same self-service code as the tenant-scope route, for a brand or "
+                    + "branch member: name the branch you work at and the capability is checked "
+                    + "there. A location grant covers only its own branch, so naming another "
+                    + "branch is refused; a brand or tenant grant covers the branches beneath it. "
+                    + "The code always binds the caller's own account, whatever branch is named.")
+    public ResponseEntity<LinkCodeResponse> issueAtLocation(
+            @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID locationId) {
+        return issueFor(tenantId, ResourceScope.location(tenantId, brandId, locationId));
+    }
+
+    private ResponseEntity<LinkCodeResponse> issueFor(UUID tenantId, ResourceScope auditScope) {
         String subject = currentActor.get().subject();
         String code = links.issueCode(tenantId, subject);
 
         audit.record(AuditFact.of("integration.telegram_staff_link_code_issued", AuditClass.SECURITY)
                 .by(ActorRef.user(subject, null))
-                .at(ResourceScope.tenant(tenantId))
+                .at(auditScope)
                 .because("Issued a staff Telegram identity-link code")
                 .usingCapability(Capability.INTEGRATION_TELEGRAM_STAFF_LINK_ISSUE.code())
                 .correlatedBy(tenantId.toString())
@@ -100,7 +137,7 @@ public class TelegramStaffLinkCodeController {
      * (staff-and-access.md §9.1's People screen and §9.2's Безопасность tab),
      * not something the self-link capability was ever meant to expose.
      */
-    @GetMapping("/links")
+    @GetMapping("/staff/telegram/links")
     @RequiresCapability(value = Capability.IAM_GRANT_MANAGE, scope = ScopeType.TENANT)
     @Operation(
             summary = "List staff Telegram links in the tenant",
@@ -124,7 +161,7 @@ public class TelegramStaffLinkCodeController {
      * of it; only the Telegram binding is gone, and she may link a new (or the
      * same) account again with a fresh code.
      */
-    @DeleteMapping("/links/{linkId}")
+    @DeleteMapping("/staff/telegram/links/{linkId}")
     @RequiresCapability(value = Capability.IAM_GRANT_MANAGE, scope = ScopeType.TENANT, mutating = true)
     @Operation(
             summary = "Unlink a staff Telegram identity link",
