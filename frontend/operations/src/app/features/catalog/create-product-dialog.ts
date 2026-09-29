@@ -1,29 +1,27 @@
-import {
-  ChangeDetectionStrategy,
-  Component,
-  computed,
-  inject,
-  input,
-  output,
-  signal,
-} from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, input, output, signal } from '@angular/core';
 
-import { I18n } from '../../core/i18n/i18n';
 import { TPipe } from '../../core/i18n/t.pipe';
-import { toCatalogLocale } from './catalog-domain';
 
 export interface CreateProductSubmission {
   readonly code: string;
   readonly name: string;
-  readonly locale: string;
 }
 
 /**
  * `Создать товар` — catalog.md §4.1. `CreateProductRequest` needs only
  * `code`/`name`/`locale` at the edge (everything else — description, SKU,
  * fiscal — is filled in afterwards on the full editor), so this dialog asks
- * for exactly those three and hands off to `ProductEditorPage` once the
+ * for the code and the name and hands off to `ProductEditorPage` once the
  * product exists.
+ *
+ * **Row 10.12 — the name's language is the brand's, not the operator's.** The
+ * dialog does not choose a `locale`: {@link ProductsPage} writes the name in
+ * the catalog locale its own list reads resolve in (the brand's default
+ * language, or the server's when the brand has chosen none), because a name
+ * authored in whatever the operator's console happened to be set to shows the
+ * product's bare code in that list. {@link languageName} tells the operator
+ * which language that is, so typing a Russian name into a brand whose default
+ * is Uzbek is a visible choice rather than a silent one.
  */
 @Component({
   selector: 'q-create-product-dialog',
@@ -33,9 +31,9 @@ export interface CreateProductSubmission {
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class CreateProductDialog {
-  private readonly i18n = inject(I18n);
-
   readonly busy = input(false);
+  /** The name of the language the product is written in ("Uzbek (Latin)"), shown under the name field. */
+  readonly languageName = input<string | null>(null);
   readonly error = input<string | null>(null);
 
   readonly confirm = output<CreateProductSubmission>();
@@ -63,12 +61,7 @@ export class CreateProductDialog {
     if (!code || !name) {
       return;
     }
-    // `locale` is the brand's default locale in the general case; until a
-    // brand-configuration read exists on this console (`current-brand.ts`'s
-    // own scope note), the operator's own console locale is the
-    // least-wrong choice available — an author can add the other locales
-    // immediately afterwards on Tab 1's locale switcher.
-    this.confirm.emit({ code, name, locale: toCatalogLocale(this.i18n.locale()) });
+    this.confirm.emit({ code, name });
   }
 
   protected close(): void {

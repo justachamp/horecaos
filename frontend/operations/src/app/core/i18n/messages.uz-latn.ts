@@ -2124,6 +2124,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'catalog.products.create.action': 'Mahsulot yaratish',
   'catalog.products.create.title': 'Mahsulot yaratish',
   'catalog.products.create.name': 'Nomi',
+  'catalog.products.create.language':
+    'Nomi quyidagi tilda yoziladi: {language} — brendning asosiy tili. Boshqa tillarni mahsulot tahrirlagichida qoʻshing.',
   'catalog.products.create.code': 'Kodi',
   'catalog.products.create.required': 'Toʻldirilishi shart',
   'catalog.products.create.confirm': 'Yaratish',
