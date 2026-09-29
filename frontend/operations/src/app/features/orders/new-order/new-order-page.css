@@ -384,3 +384,16 @@
   color: var(--q-ink-subtle);
   margin-left: 4px;
 }
+
+/* ADR 0047: the order exists but its table's bill does not have it yet. */
+.new-order__notice-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 6px;
+}
+
+.new-order__error-inline {
+  color: var(--q-error-text);
+  margin: 2px 0;
+}

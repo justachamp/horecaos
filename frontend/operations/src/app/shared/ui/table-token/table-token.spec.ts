@@ -33,6 +33,27 @@ describe('TableToken', () => {
     return fixture.nativeElement as HTMLElement;
   }
 
+  it('marks a table somebody is sitting at, and only that one', () => {
+    const occupied = render({ occupied: true });
+    expect(occupied.querySelector('[data-testid="table-token-occupied-badge"]')).not.toBeNull();
+    expect(
+      occupied
+        .querySelector('[data-testid="table-token-t-1"]')!
+        .classList.contains('token--occupied'),
+    ).toBe(true);
+
+    fixture.destroy();
+    const free = render({ occupied: false });
+    expect(free.querySelector('[data-testid="table-token-occupied-badge"]')).toBeNull();
+    expect(
+      free.querySelector('[data-testid="table-token-t-1"]')!.classList.contains('token--occupied'),
+    ).toBe(false);
+
+    fixture.destroy();
+    const unknown = render();
+    expect(unknown.querySelector('[data-testid="table-token-occupied-badge"]')).toBeNull();
+  });
+
   it('renders at its table’s layoutX/layoutY', () => {
     const host = render();
     const token = host.querySelector<HTMLElement>('[data-testid="table-token-t-1"]')!;

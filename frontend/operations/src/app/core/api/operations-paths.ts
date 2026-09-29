@@ -664,6 +664,15 @@ export const operationsPaths = {
   },
 
   /**
+   * One session's rounds (ADR 0047, `TableSessionController#addRound`). `POST`
+   * attaches an already-placed order to the session's bill; `DINEIN_SESSION_MANAGE`,
+   * `Idempotency-Key` required. The New Order screen's DINE_IN mode is its caller.
+   */
+  dineInSessionRounds(scope: LocationScope, sessionId: string): string {
+    return `${this.dineInSessions(scope)}/${encodeURIComponent(sessionId)}/rounds`;
+  },
+
+  /**
    * Floor plan settings (ADR 0047, `FloorPlanController`, rows `10.2d`/
    * `10.5b`, wave P38): `qrMode`, turnaround buffer, guest-session TTL,
    * service-charge rate. `GET`/`PUT`, both `DINEIN_FLOORPLAN_MANAGE`.

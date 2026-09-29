@@ -85,6 +85,14 @@ import uz.horecaos.platform.web.idempotency.Idempotent;
 @Tag(name = "Storefront ordering", description = "Carts, checkout, and a customer's own orders")
 public class StorefrontOrderingController {
 
+    /**
+     * The table-scoped guest token a scan minted (ADR 0047). The same header
+     * {@code QrEntryController} reads, and deliberately not {@code Authorization:
+     * Bearer}: this call carries both credentials -- the customer's session, for
+     * whose cart it is, and this token, for which table it is eaten at.
+     */
+    static final String DINE_IN_TOKEN_HEADER = "X-Dine-In-Token";
+
     private final CartService carts;
     private final CheckoutService checkout;
     private final CartPaymentOptions paymentOptions;
@@ -261,6 +269,35 @@ public class StorefrontOrderingController {
                     new CartService.DestinationCommand(
                             body.addressId(), body.recipientName(), body.recipientPhone(), body.deliveryNote()));
             return ResponseEntity.ok(CartResponse.of(view));
+        } catch (CartService.StaleCartException stale) {
+            throw ApiException.staleVersion(stale.expected(), stale.actual());
+        } catch (CartService.CartRefusedException refused) {
+            throw refusal(refused);
+        }
+    }
+
+    @PutMapping("/carts/{cartId}/table")
+    @CustomerOwned
+    @Idempotent
+    @Operation(
+            summary = "Bind a dine-in cart to the table the guest scanned",
+            description = "ADR 0047's cart-to-table binding. The table is read from the guest's "
+                    + "dine-in token (X-Dine-In-Token), never from the request: a body that named "
+                    + "its own table would be a claim a client could edit to reach the next "
+                    + "table's bill. Checkout then refuses the order if nobody is seated and "
+                    + "otherwise puts it on the table's bill in the same transaction that creates "
+                    + "it, so the round cannot be lost between two requests. Clears any attached "
+                    + "quote, because a bound cart is another cart; re-price before checkout.")
+    public ResponseEntity<CartResponse> bindTable(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID cartId,
+            @RequestHeader(DINE_IN_TOKEN_HEADER) @NotBlank String guestToken,
+            jakarta.servlet.http.HttpServletRequest request) {
+        try {
+            long expected = AggregateVersion.requireIfMatch(request);
+            return ResponseEntity.ok(CartResponse.of(carts.bindTable(
+                    tenantId, brandId, accountId(tenantId, brandId), cartId, (int) expected, guestToken)));
         } catch (CartService.StaleCartException stale) {
             throw ApiException.staleVersion(stale.expected(), stale.actual());
         } catch (CartService.CartRefusedException refused) {
@@ -637,6 +674,12 @@ public class StorefrontOrderingController {
                             "CUSTOMER_BLACKLISTED",
                             "DESTINATION_NOT_APPLICABLE",
                             "DESTINATION_NOT_LOCATED",
+                            // ADR 0047: a table binding asked of a cart that is not
+                            // eaten at one, or scanned at another branch -- a request
+                            // the cart's own identity refuses, the same class as the
+                            // destination pair above.
+                            "TABLE_NOT_APPLICABLE",
+                            "TABLE_NOT_AT_THIS_BRANCH",
                             // ADR 0072: a well-formed request against a code whose current
                             // state refuses it — nothing in the body is wrong, the coupon is
                             // just not usable right now, the same class of answer
@@ -677,6 +720,10 @@ public class StorefrontOrderingController {
             // order (its subtotal against the tenant's configured floor)
             // rather than anything wrong with the request body.
             case "BELOW_MINIMUM_ORDER" -> ErrorCode.RESOURCE_CONFLICT;
+            // ADR 0047: the cart is bound to a table nobody is sitting at now -- the
+            // party left or a host closed the session while the guest was choosing.
+            // Nothing in the body is wrong; a fact about the room moved.
+            case "TABLE_NOT_SEATED" -> ErrorCode.RESOURCE_CONFLICT;
             // A well-formed request against an account this checkout will never
             // accept. A conflict for the same reason GUEST_ORDERS_NOT_ALLOWED and
             // NOT_SERVICEABLE are (below, by way of the default): nothing in the

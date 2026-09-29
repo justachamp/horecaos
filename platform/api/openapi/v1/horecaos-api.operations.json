@@ -14705,9 +14705,30 @@
           "status" : {
             "type" : "string"
           },
+          "tables" : {
+            "items" : {
+              "$ref" : "#/components/schemas/SessionTableResponse"
+            },
+            "type" : "array"
+          },
           "version" : {
             "format" : "int32",
             "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "SessionTableResponse" : {
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "displayName" : {
+            "type" : "string"
+          },
+          "tableId" : {
+            "format" : "uuid",
+            "type" : "string"
           }
         },
         "type" : "object"

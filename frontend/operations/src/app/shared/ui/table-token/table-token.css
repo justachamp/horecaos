@@ -30,6 +30,10 @@
   background: var(--q-warning-tint, #fdf6e3);
 }
 
+.token--occupied {
+  background: var(--q-info-tint);
+}
+
 .token--archived {
   border-color: var(--q-hairline);
   background: var(--q-surface-1);
@@ -62,4 +66,16 @@
   font-size: 10px;
   line-height: 16px;
   text-align: center;
+}
+
+/* A filled dot on the corner opposite the QR badge: a party is seated here now. */
+.token__occupied {
+  position: absolute;
+  top: -6px;
+  left: -6px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--q-canvas);
+  background: var(--q-error-text);
 }

@@ -7,7 +7,7 @@ import { Session } from '../../../core/auth/session';
 import { newIdempotencyKey } from '../../../core/api/idempotency';
 import { HorecaOSApiError } from '../../../core/api/problem-details';
 import { CartService, type PricedCart } from '../../../services/cart.service';
-import { DineInBill, DineInService, type RoundFlush } from '../../../services/dine-in.service';
+import { type DineInAdmission, DineInBill, DineInService, type RoundFlush } from '../../../services/dine-in.service';
 import { LangService } from '../../../services/lang.service';
 import { LocationProfileService } from '../../../services/location-profile.service';
 import { MenuService, type PublishedMenu, type PublishedProduct } from '../../../services/menu.service';
@@ -100,6 +100,7 @@ export class DineInTableComponent implements OnInit {
 
   private pendingCheckoutKey: string | null = null;
   private pricedCartId: string | null = null;
+  private boundCartId: string | null = null;
 
   constructor() {
     // Reprices whenever the cart's own version moves (a line added, changed
@@ -212,6 +213,7 @@ export class DineInTableComponent implements OnInit {
     }
     try {
       await this.carts.ensure(admission.locationId, 'DINE_IN', true, admission.channelCode ?? undefined);
+      await this.bindCartToTable(admission);
       const cart = this.carts.cart();
       const lineKey = cart?.lines.find((line) => line.variantId === variantId)?.lineKey;
       if (quantity <= 0 && lineKey) {
@@ -219,8 +221,37 @@ export class DineInTableComponent implements OnInit {
       } else if (quantity > 0) {
         await this.carts.putLine({ variantId, quantity });
       }
-    } catch {
+    } catch (failure) {
+      if (this.dineIn.isGuestSessionEnded(failure)) {
+        this.dineIn.clear();
+        return;
+      }
       this.notification.show(this.translate.get('errors.generic'));
+    }
+  }
+
+  /**
+   * Binds the cart to this table once per cart, before its first line.
+   *
+   * Best-effort on purpose. A bound cart makes the platform put the order on the
+   * table's bill inside checkout; an unbound one still works, through the queued
+   * attach after checkout (`DineInService.queueRound`), which stays exactly as it
+   * was. So a failed bind costs the guest nothing they had before, and is not worth
+   * blocking an add-to-cart on -- except a guest token the platform no longer
+   * recognises, which nothing on this screen works without.
+   */
+  private async bindCartToTable(admission: DineInAdmission): Promise<void> {
+    const cart = this.carts.cart();
+    if (!cart || this.boundCartId === cart.cartId) {
+      return;
+    }
+    try {
+      await this.carts.bindTable(admission.guestToken);
+      this.boundCartId = cart.cartId;
+    } catch (failure) {
+      if (this.dineIn.isGuestSessionEnded(failure)) {
+        throw failure;
+      }
     }
   }
 
@@ -294,10 +325,15 @@ export class DineInTableComponent implements OnInit {
         this.dineIn.clear();
         return;
       }
+      // A bound cart is refused, before anything is written, when the party has
+      // left or a host closed the table while the guest was choosing.
+      const tableEmpty = failure instanceof HorecaOSApiError && failure.problem?.reason === 'TABLE_NOT_SEATED';
       this.checkoutError.set(
-        failure instanceof HorecaOSApiError
-          ? this.translate.get('cart.orderError')
-          : this.translate.get('errors.generic'),
+        tableEmpty
+          ? this.translate.get('dineIn.notSeated')
+          : failure instanceof HorecaOSApiError
+            ? this.translate.get('cart.orderError')
+            : this.translate.get('errors.generic'),
       );
       if (!(failure instanceof HorecaOSApiError) || failure.code !== 'NETWORK_UNREACHABLE') {
         this.pendingCheckoutKey = null;

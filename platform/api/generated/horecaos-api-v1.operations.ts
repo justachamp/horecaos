@@ -4631,7 +4631,14 @@ export interface SessionResponse {
   sessionId?: string;
   settledTotalMinor?: number;
   status?: string;
+  tables?: Array<SessionTableResponse>;
   version?: number;
+}
+
+export interface SessionTableResponse {
+  code?: string;
+  displayName?: string;
+  tableId?: string;
 }
 
 export interface SetLocationTagsRequest {

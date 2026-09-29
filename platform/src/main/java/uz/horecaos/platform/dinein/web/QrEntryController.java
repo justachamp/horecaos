@@ -167,13 +167,14 @@ public class QrEntryController {
     @PostMapping("/sessions/{sessionId}/rounds")
     @Operation(
             summary = "Attach a just-placed order to the table's bill",
-            description = "Checkout does not itself bind a cart to a table (ADR 0047's own "
-                    + "'what was not built' notes this: 'ordering's cart-to-table binding'). "
-                    + "This closes that loop for a guest ordering from the table's own device: "
-                    + "the order was already priced, reserved and confirmed by the ordinary "
-                    + "checkout, and this only records that it belongs to this table's evening -- "
-                    + "the exact write TableSessionController's operator endpoint makes, reached "
-                    + "here through the guest's own token instead of a capability. Calling it "
+            description = "A cart bound to the table (PUT .../carts/{cartId}/table) is put on "
+                    + "this bill by checkout itself, in the transaction that creates the order, "
+                    + "and needs no call here. This is the attach for a cart that was never "
+                    + "bound: the order was already priced, reserved and confirmed by the "
+                    + "ordinary checkout, and this only records that it belongs to this table's "
+                    + "evening -- the exact write TableSessionController's operator endpoint "
+                    + "makes, reached here through the guest's own token instead of a "
+                    + "capability. Calling it "
                     + "twice with the same order is not an error: the second call finds the order "
                     + "already on this bill and answers with the bill unchanged. The guest token "
                     + "alone proves the caller is at this table, not that the order named in the "

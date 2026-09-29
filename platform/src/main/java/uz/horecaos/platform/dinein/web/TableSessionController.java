@@ -13,6 +13,7 @@ import jakarta.validation.constraints.Size;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
@@ -61,8 +62,13 @@ public class TableSessionController {
     public ResponseEntity<List<SessionResponse>> live(
             @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID locationId) {
 
-        return ResponseEntity.ok(sessions.live(tenantId, locationId).stream()
-                .map(SessionResponse::of)
+        List<SessionRow> live = sessions.live(tenantId, locationId);
+        // One read for every party's tables, not one per row: the New Order screen's
+        // table picker and the floor plan both name a session by where it sits.
+        Map<UUID, List<TableSessionService.SessionTable>> tables =
+                sessions.tablesOf(tenantId, live.stream().map(SessionRow::id).toList());
+        return ResponseEntity.ok(live.stream()
+                .map(row -> SessionResponse.of(row, tables.getOrDefault(row.id(), List.of())))
                 .toList());
     }
 
@@ -91,7 +97,7 @@ public class TableSessionController {
                         currentActor.get().subject()),
                 body.reason());
 
-        return ResponseEntity.ok(SessionResponse.of(opened));
+        return ResponseEntity.ok(respond(tenantId, opened));
     }
 
     @GetMapping("/{sessionId}")
@@ -107,11 +113,11 @@ public class TableSessionController {
             @PathVariable UUID locationId,
             @PathVariable UUID sessionId) {
 
-        SessionRow session = sessions.find(tenantId, sessionId);
+        SessionRow session = sessions.findAtLocation(tenantId, locationId, sessionId);
         SessionBill bill = sessions.bill(tenantId, sessionId);
 
         return ResponseEntity.ok(new SessionDetailResponse(
-                SessionResponse.of(session),
+                respond(tenantId, session),
                 sessions.rounds(tenantId, sessionId),
                 bill.currency() == null ? session.currency() : bill.currency(),
                 bill.totalMinor(),
@@ -133,6 +139,7 @@ public class TableSessionController {
             @PathVariable UUID sessionId,
             @Valid @RequestBody RoundRequest body) {
 
+        sessions.findAtLocation(tenantId, locationId, sessionId);
         // null: an operator's write is gated by DINEIN_SESSION_MANAGE above, not by
         // matching the order's own customer -- a manager recording a phone order
         // onto a table's bill is exactly the case QrEntryController's own guest
@@ -159,6 +166,7 @@ public class TableSessionController {
             HttpServletRequest request) {
 
         long expected = AggregateVersion.requireIfMatch(request);
+        sessions.findAtLocation(tenantId, locationId, sessionId);
         SessionStatus target = parse(body.targetStatus());
 
         if (target == SessionStatus.FORCE_CLOSED) {
@@ -168,14 +176,16 @@ public class TableSessionController {
                             + "capability (dinein.session.force_close)");
         }
 
-        return ResponseEntity.ok(SessionResponse.of(sessions.move(
+        return ResponseEntity.ok(respond(
                 tenantId,
-                sessionId,
-                target,
-                (int) expected,
-                null,
-                currentActor.get().subject(),
-                body.reason())));
+                sessions.move(
+                        tenantId,
+                        sessionId,
+                        target,
+                        (int) expected,
+                        null,
+                        currentActor.get().subject(),
+                        body.reason())));
     }
 
     @PostMapping("/{sessionId}/force-closures")
@@ -194,14 +204,22 @@ public class TableSessionController {
             HttpServletRequest request) {
 
         long expected = AggregateVersion.requireIfMatch(request);
-        return ResponseEntity.ok(SessionResponse.of(sessions.move(
+        sessions.findAtLocation(tenantId, locationId, sessionId);
+        return ResponseEntity.ok(respond(
                 tenantId,
-                sessionId,
-                SessionStatus.FORCE_CLOSED,
-                (int) expected,
-                body.reasonCode(),
-                currentActor.get().subject(),
-                body.reason())));
+                sessions.move(
+                        tenantId,
+                        sessionId,
+                        SessionStatus.FORCE_CLOSED,
+                        (int) expected,
+                        body.reasonCode(),
+                        currentActor.get().subject(),
+                        body.reason())));
+    }
+
+    private SessionResponse respond(UUID tenantId, SessionRow row) {
+        return SessionResponse.of(
+                row, sessions.tablesOf(tenantId, List.of(row.id())).getOrDefault(row.id(), List.of()));
     }
 
     private static SessionStatus parse(String value) {
@@ -233,9 +251,10 @@ public class TableSessionController {
             @Nullable Long settledTotalMinor,
             @Nullable Instant closedAt,
             @Nullable String closeReasonCode,
-            int version) {
+            int version,
+            List<SessionTableResponse> tables) {
 
-        static SessionResponse of(SessionRow row) {
+        static SessionResponse of(SessionRow row, List<TableSessionService.SessionTable> tables) {
             return new SessionResponse(
                     row.id(),
                     row.reservationId(),
@@ -248,9 +267,18 @@ public class TableSessionController {
                     row.settledTotalMinor(),
                     row.closedAt(),
                     row.closeReasonCode(),
-                    row.version());
+                    row.version(),
+                    tables.stream()
+                            .map(table -> new SessionTableResponse(table.tableId(), table.code(), table.displayName()))
+                            .toList());
         }
     }
+
+    /**
+     * A table a party sits at: its code (printed on the QR card) and display name.
+     * Facts about the room, never about the guest (ADR 0029).
+     */
+    record SessionTableResponse(UUID tableId, String code, String displayName) {}
 
     /**
      * @param totalMinor minor units, and for UZS a minor unit is a whole som.

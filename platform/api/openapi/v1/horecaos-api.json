@@ -23195,9 +23195,30 @@
           "status" : {
             "type" : "string"
           },
+          "tables" : {
+            "items" : {
+              "$ref" : "#/components/schemas/SessionTableResponse"
+            },
+            "type" : "array"
+          },
           "version" : {
             "format" : "int32",
             "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "SessionTableResponse" : {
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "displayName" : {
+            "type" : "string"
+          },
+          "tableId" : {
+            "format" : "uuid",
+            "type" : "string"
           }
         },
         "type" : "object"
@@ -54543,7 +54564,7 @@
     },
     "/api/v1/storefront/dine-in/sessions/{sessionId}/rounds" : {
       "post" : {
-        "description" : "Checkout does not itself bind a cart to a table (ADR 0047's own 'what was not built' notes this: 'ordering's cart-to-table binding'). This closes that loop for a guest ordering from the table's own device: the order was already priced, reserved and confirmed by the ordinary checkout, and this only records that it belongs to this table's evening -- the exact write TableSessionController's operator endpoint makes, reached here through the guest's own token instead of a capability. Calling it twice with the same order is not an error: the second call finds the order already on this bill and answers with the bill unchanged. The guest token alone proves the caller is at this table, not that the order named in the body is theirs, so this also requires the ordinary signed-in session (Authorization: Bearer) the checkout that created the order was placed under -- see requireOwnOrder's own doc.",
+        "description" : "A cart bound to the table (PUT .../carts/{cartId}/table) is put on this bill by checkout itself, in the transaction that creates the order, and needs no call here. This is the attach for a cart that was never bound: the order was already priced, reserved and confirmed by the ordinary checkout, and this only records that it belongs to this table's evening -- the exact write TableSessionController's operator endpoint makes, reached here through the guest's own token instead of a capability. Calling it twice with the same order is not an error: the second call finds the order already on this bill and answers with the bill unchanged. The guest token alone proves the caller is at this table, not that the order named in the body is theirs, so this also requires the ordinary signed-in session (Authorization: Bearer) the checkout that created the order was placed under -- see requireOwnOrder's own doc.",
         "operationId" : "addRound_1",
         "parameters" : [ {
           "in" : "path",
@@ -55272,6 +55293,59 @@
           }
         },
         "summary" : "Apply a promo code to the cart",
+        "tags" : [ "Storefront ordering" ]
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts/{cartId}/table" : {
+      "put" : {
+        "description" : "ADR 0047's cart-to-table binding. The table is read from the guest's dine-in token (X-Dine-In-Token), never from the request: a body that named its own table would be a claim a client could edit to reach the next table's bill. Checkout then refuses the order if nobody is seated and otherwise puts it on the table's bill in the same transaction that creates it, so the round cannot be lost between two requests. Clears any attached quote, because a bound cart is another cart; re-price before checkout.",
+        "operationId" : "bindTable",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "cartId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "X-Dine-In-Token",
+          "required" : true,
+          "schema" : {
+            "minLength" : 1,
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CartResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Bind a dine-in cart to the table the guest scanned",
         "tags" : [ "Storefront ordering" ]
       }
     },

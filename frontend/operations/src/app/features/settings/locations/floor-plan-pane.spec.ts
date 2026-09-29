@@ -1,9 +1,15 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { describe, expect, it, vi } from 'vitest';
 
+import { of, throwError } from 'rxjs';
+
 import { LocationScope } from '../../../core/api/operations-paths';
+import { ApiError, ApiErrorCode } from '../../../core/api/problem-details';
+import { Capability, SessionCapabilities } from '../../../core/auth/session-capabilities';
 import { I18n } from '../../../core/i18n/i18n';
 import { encodeQrMatrix } from '../../../shared/ui/qr-encode';
+import { ReservationsApi, TableAvailability } from '../../orders/reservations-api';
+import { SessionView, TableSessionsApi } from '../../orders/table-sessions-api';
 import {
   DineInApi,
   DineInSettingsView,
@@ -48,6 +54,37 @@ const TABLE: TableView = {
   version: 1,
 };
 
+function session(overrides: Partial<SessionView> = {}): SessionView {
+  return {
+    sessionId: 'ses1',
+    reservationId: null,
+    partySize: 3,
+    businessDate: '2026-09-29',
+    openedAt: '2026-09-29T14:00:00Z',
+    status: 'OPEN',
+    serviceChargeRateBp: null,
+    currency: 'UZS',
+    settledTotalMinor: null,
+    closedAt: null,
+    closeReasonCode: null,
+    version: 1,
+    tables: [{ tableId: 'tb1', code: 'T1', displayName: 'Table 1' }],
+    ...overrides,
+  };
+}
+
+function availability(overrides: Partial<TableAvailability> = {}): TableAvailability {
+  return {
+    tableId: 'tb1',
+    code: 'T1',
+    seats: 4,
+    sectionId: 's1',
+    booked: false,
+    occupied: false,
+    ...overrides,
+  };
+}
+
 async function flushMicrotasks(): Promise<void> {
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
@@ -56,16 +93,43 @@ async function flushMicrotasks(): Promise<void> {
 describe('FloorPlanPane', () => {
   let fixture: ComponentFixture<FloorPlanPane>;
 
-  async function render(api: Partial<DineInApi> = {}): Promise<HTMLElement> {
+  /**
+   * `held` is what the signed-in operator's grants add up to; a plain floor-plan
+   * editor (the default here) holds neither dine-in session capability, so the
+   * pre-existing cases below keep meaning what they meant.
+   */
+  async function render(
+    api: Partial<DineInApi> = {},
+    room: {
+      readonly held?: readonly Capability[];
+      readonly sessions?: Partial<TableSessionsApi>;
+      readonly reservations?: Partial<ReservationsApi>;
+    } = {},
+  ): Promise<HTMLElement> {
     const defaults: Partial<DineInApi> = {
       settings: () => Promise.resolve(SETTINGS),
       sections: () => Promise.resolve([SECTION]),
       tables: () => Promise.resolve([TABLE]),
       ...api,
     };
+    const held = new Set<Capability>(room.held ?? []);
     await TestBed.configureTestingModule({
       imports: [FloorPlanPane],
-      providers: [{ provide: DineInApi, useValue: defaults }],
+      providers: [
+        { provide: DineInApi, useValue: defaults },
+        {
+          provide: TableSessionsApi,
+          useValue: { live: () => of([]), ...room.sessions } satisfies Partial<TableSessionsApi>,
+        },
+        {
+          provide: ReservationsApi,
+          useValue: {
+            availability: () => Promise.resolve([availability()]),
+            ...room.reservations,
+          } satisfies Partial<ReservationsApi>,
+        },
+        { provide: SessionCapabilities, useValue: { has: (c: Capability) => held.has(c) } },
+      ],
     }).compileComponents();
     TestBed.inject(I18n).setLocale('en');
     fixture = TestBed.createComponent(FloorPlanPane);
@@ -266,5 +330,161 @@ describe('FloorPlanPane', () => {
 
     expect(host.textContent).toContain('No sections yet');
     expect(host.querySelector('[data-testid="floor-plan-canvas"]')).toBeNull();
+  });
+
+  // ------------------------------------------------------------ seat a walk-in
+
+  const MANAGES_SESSIONS: readonly Capability[] = ['DINEIN_SESSION_MANAGE', 'DINEIN_SESSION_READ'];
+
+  function selectTable(host: HTMLElement, tableId = 'tb1'): void {
+    host
+      .querySelector<HTMLElement>(`[data-testid="table-token-${tableId}"]`)!
+      .dispatchEvent(
+        new PointerEvent('pointerdown', { bubbles: true, clientX: 0, clientY: 0, pointerId: 1 }),
+      );
+    fixture.detectChanges();
+  }
+
+  function type(host: HTMLElement, testId: string, value: string): void {
+    const input = host.querySelector<HTMLInputElement>(`[data-testid="${testId}"]`)!;
+    input.value = value;
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+  }
+
+  it('seats a walk-in at a free table: no booking, the party size and a reason, then marks the table occupied', async () => {
+    const open = vi.fn().mockReturnValue(of(session({ partySize: 3 })));
+    const host = await render(
+      {},
+      { held: MANAGES_SESSIONS, sessions: { live: () => of([]), open } },
+    );
+
+    selectTable(host);
+    expect(host.querySelector('[data-testid="floorplan-seat"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="table-token-occupied-badge"]')).toBeNull();
+
+    type(host, 'floorplan-seat-party', '3');
+    host.querySelector<HTMLButtonElement>('[data-testid="floorplan-seat-button"]')!.click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(open).toHaveBeenCalledTimes(1);
+    const [scope, body] = open.mock.calls[0];
+    expect(scope).toEqual(SCOPE);
+    expect(body).toEqual({
+      tableIds: ['tb1'],
+      partySize: 3,
+      currency: 'UZS',
+      reason: 'Walk-in seated from the floor plan',
+    });
+    expect(body).not.toHaveProperty('reservationId');
+    expect(host.querySelector('[data-testid="floorplan-seat-done"]')?.textContent).toContain('T1');
+    expect(host.querySelector('[data-testid="table-token-occupied-badge"]')).not.toBeNull();
+    // The table is taken now: the form is replaced by the note, not offered twice.
+    expect(host.querySelector('[data-testid="floorplan-seat-button"]')).toBeNull();
+    expect(host.querySelector('[data-testid="floorplan-seat-occupied"]')).not.toBeNull();
+  });
+
+  it('offers no seat action to an operator who cannot manage sessions', async () => {
+    const host = await render({}, { held: [] });
+
+    selectTable(host);
+
+    expect(host.querySelector('[data-testid="floorplan-seat"]')).toBeNull();
+    expect(host.querySelector('[data-testid="floorplan-rotate-button"]')).not.toBeNull();
+  });
+
+  it('offers no seat action when the room could not be read, rather than guessing the table is free', async () => {
+    const host = await render(
+      {},
+      {
+        held: MANAGES_SESSIONS,
+        sessions: { live: () => throwError(() => new Error('down')) },
+      },
+    );
+
+    selectTable(host);
+
+    expect(host.querySelector('[data-testid="floorplan-seat"]')).toBeNull();
+  });
+
+  it('shows a table somebody is sitting at as occupied and offers no second party', async () => {
+    const host = await render(
+      {},
+      { held: MANAGES_SESSIONS, sessions: { live: () => of([session()]) } },
+    );
+
+    expect(host.querySelector('[data-testid="table-token-occupied-badge"]')).not.toBeNull();
+    selectTable(host);
+
+    expect(host.querySelector('[data-testid="floorplan-seat-occupied"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="floorplan-seat-button"]')).toBeNull();
+  });
+
+  it('warns about a booking soon and a party larger than the table, and still lets the host decide', async () => {
+    const open = vi.fn().mockReturnValue(of(session({ partySize: 6 })));
+    const host = await render(
+      {},
+      {
+        held: MANAGES_SESSIONS,
+        sessions: { live: () => of([]), open },
+        reservations: { availability: () => Promise.resolve([availability({ booked: true })]) },
+      },
+    );
+
+    selectTable(host);
+    expect(host.querySelector('[data-testid="floorplan-seat-booked-soon"]')?.textContent).toContain(
+      '90',
+    );
+    expect(host.querySelector('[data-testid="floorplan-seat-over-capacity"]')).toBeNull();
+
+    type(host, 'floorplan-seat-party', '6');
+    expect(
+      host.querySelector('[data-testid="floorplan-seat-over-capacity"]')?.textContent,
+    ).toContain('4');
+
+    const button = host.querySelector<HTMLButtonElement>('[data-testid="floorplan-seat-button"]')!;
+    expect(button.disabled).toBe(false);
+    button.click();
+    await flushMicrotasks();
+    expect(open).toHaveBeenCalledTimes(1);
+  });
+
+  it('will not seat a table that is out of service', async () => {
+    const host = await render(
+      { tables: () => Promise.resolve([{ ...TABLE, status: 'OUT_OF_SERVICE' as const }]) },
+      { held: MANAGES_SESSIONS },
+    );
+
+    selectTable(host);
+
+    expect(host.querySelector('[data-testid="floorplan-seat-unavailable"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="floorplan-seat-button"]')).toBeNull();
+  });
+
+  it('turns a lost race for the table into a plain sentence and reads the room again', async () => {
+    const taken = new ApiError(
+      ApiErrorCode.RESOURCE_CONFLICT,
+      409,
+      { status: 409, conflict: 'TABLE_OCCUPIED' },
+      null,
+    );
+    const open = vi.fn().mockReturnValue(throwError(() => taken));
+    const live = vi
+      .fn()
+      .mockReturnValueOnce(of([]))
+      .mockReturnValue(of([session()]));
+    const host = await render({}, { held: MANAGES_SESSIONS, sessions: { live, open } });
+
+    selectTable(host);
+    host.querySelector<HTMLButtonElement>('[data-testid="floorplan-seat-button"]')!.click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(host.querySelector('[data-testid="floorplan-seat-error"]')?.textContent).toContain(
+      'a moment ago',
+    );
+    expect(live).toHaveBeenCalledTimes(2);
+    expect(host.querySelector('[data-testid="table-token-occupied-badge"]')).not.toBeNull();
   });
 });
