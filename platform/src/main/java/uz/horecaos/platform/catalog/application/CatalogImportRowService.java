@@ -8,10 +8,12 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.catalog.api.CatalogImportPricingPort;
+import uz.horecaos.platform.catalog.api.CatalogNameLocales;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.Category;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.EntityType;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.Product;
@@ -21,6 +23,7 @@ import uz.horecaos.platform.catalog.domain.FiscalClassification;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
 import uz.horecaos.platform.media.api.MediaAssetId;
 import uz.horecaos.platform.media.api.MediaAssetIngestion;
+import uz.horecaos.platform.tenancy.api.BrandLocaleLookup;
 
 /**
  * One row of a catalog CSV/Excel import, planned and — on {@code apply} —
@@ -100,21 +103,44 @@ public class CatalogImportRowService {
     private final CatalogQueryService query;
     private final CatalogImportPricingPort pricing;
     private final MediaAssetIngestion media;
+    private final BrandLocaleLookup brandLocales;
     private final String defaultLocale;
 
+    /**
+     * @param brandLocales  the brand's own default language, which a CSV row's name is authored in
+     *                      (row 10.12): the console's editors offer a brand exactly its own set, so a
+     *                      name written under the server's locale instead is one the product editor
+     *                      has no tab to edit
+     * @param defaultLocale {@code horecaos.catalog.default-locale} -- the language a brand that has
+     *                      chosen none is authored in
+     */
+    @Autowired
     public CatalogImportRowService(
             JdbcCatalogStore store,
             CatalogAuthoringService authoring,
             CatalogQueryService query,
             CatalogImportPricingPort pricing,
             MediaAssetIngestion media,
+            BrandLocaleLookup brandLocales,
             @Value("${horecaos.catalog.default-locale:uz}") String defaultLocale) {
         this.store = store;
         this.authoring = authoring;
         this.query = query;
         this.pricing = pricing;
         this.media = media;
+        this.brandLocales = brandLocales;
         this.defaultLocale = defaultLocale;
+    }
+
+    /** An importer for callers with no tenancy to ask: every brand is authored in the configured locale. */
+    public CatalogImportRowService(
+            JdbcCatalogStore store,
+            CatalogAuthoringService authoring,
+            CatalogQueryService query,
+            CatalogImportPricingPort pricing,
+            MediaAssetIngestion media,
+            String defaultLocale) {
+        this(store, authoring, query, pricing, media, BrandLocaleLookup.platformFallback(), defaultLocale);
     }
 
     @Transactional
@@ -127,17 +153,23 @@ public class CatalogImportRowService {
         }
         ParsedFields.Ok fields = (ParsedFields.Ok) parsed;
 
+        // The language a row's names are authored in: the brand's own default, the server's
+        // configured locale only for a brand that has chosen none.
+        String locale = CatalogNameLocales.of(brandLocales, tenantId, brandId, defaultLocale)
+                .preferred();
+
         Optional<Product> existing = store.productByCode(tenantId, brandId, fields.productCode());
         if (existing.isEmpty()) {
-            return create(tenantId, brandId, catalogId, fields, dryRun, actorId);
+            return create(tenantId, brandId, catalogId, locale, fields, dryRun, actorId);
         }
-        return update(tenantId, brandId, catalogId, existing.get(), fields, dryRun, actorId);
+        return update(tenantId, brandId, catalogId, locale, existing.get(), fields, dryRun, actorId);
     }
 
     private CatalogImportRowOutcome create(
             UUID tenantId,
             UUID brandId,
             UUID catalogId,
+            String locale,
             ParsedFields.Ok fields,
             boolean dryRun,
             @Nullable UUID actorId) {
@@ -182,7 +214,7 @@ public class CatalogImportRowService {
                 fields.productCode(),
                 fields.productName(),
                 fields.description(),
-                defaultLocale,
+                locale,
                 sku,
                 unitCode,
                 FiscalClassification.unclassified(),
@@ -193,7 +225,7 @@ public class CatalogImportRowService {
         }
         String categoryCode = fields.categoryCode();
         if (categoryCode != null) {
-            UUID categoryId = categoryFor(tenantId, brandId, catalogId, categoryCode, fields.categoryName());
+            UUID categoryId = categoryFor(tenantId, brandId, catalogId, locale, categoryCode, fields.categoryName());
             authoring.placeProductInCategory(tenantId, brandId, categoryId, created.productId(), 0);
         }
         if (fields.priceAmountMinor() != null) {
@@ -211,6 +243,7 @@ public class CatalogImportRowService {
             UUID tenantId,
             UUID brandId,
             UUID catalogId,
+            String locale,
             Product product,
             ParsedFields.Ok fields,
             boolean dryRun,
@@ -223,7 +256,7 @@ public class CatalogImportRowService {
                 .orElseThrow(
                         () -> new IllegalStateException("Product %s has no default variant".formatted(product.id())));
 
-        Diff diff = diff(tenantId, brandId, catalogId, product, defaultVariant, fields);
+        Diff diff = diff(tenantId, brandId, catalogId, locale, product, defaultVariant, fields);
         String imageUrl = fields.imageUrl();
 
         if (dryRun) {
@@ -277,7 +310,7 @@ public class CatalogImportRowService {
                     brandId,
                     EntityType.PRODUCT,
                     product.id(),
-                    defaultLocale,
+                    locale,
                     fields.productName(),
                     fields.description());
         }
@@ -306,7 +339,7 @@ public class CatalogImportRowService {
         }
         String categoryCode = fields.categoryCode();
         if (diff.categoryChanged() && categoryCode != null) {
-            UUID categoryId = categoryFor(tenantId, brandId, catalogId, categoryCode, fields.categoryName());
+            UUID categoryId = categoryFor(tenantId, brandId, catalogId, locale, categoryCode, fields.categoryName());
             authoring.placeProductInCategory(tenantId, brandId, categoryId, product.id(), 0);
         }
         if (diff.priceChanged() && fields.priceAmountMinor() != null) {
@@ -365,12 +398,13 @@ public class CatalogImportRowService {
             UUID tenantId,
             UUID brandId,
             UUID catalogId,
+            String locale,
             Product product,
             Variant defaultVariant,
             ParsedFields.Ok fields) {
 
         var translations = query.productDetail(tenantId, brandId, product.id()).translations();
-        var current = translations.get(defaultLocale);
+        var current = translations.get(locale);
         boolean nameOrDescriptionChanged = current == null
                 || !fields.productName().equals(current.name())
                 || !Objects.equals(fields.description(), current.description());
@@ -420,7 +454,12 @@ public class CatalogImportRowService {
     }
 
     private UUID categoryFor(
-            UUID tenantId, UUID brandId, UUID catalogId, String categoryCode, @Nullable String categoryName) {
+            UUID tenantId,
+            UUID brandId,
+            UUID catalogId,
+            String locale,
+            String categoryCode,
+            @Nullable String categoryName) {
         return store.categoryByCode(tenantId, brandId, catalogId, categoryCode)
                 .map(Category::id)
                 .orElseGet(() -> authoring.createCategory(
@@ -430,7 +469,7 @@ public class CatalogImportRowService {
                         null,
                         categoryCode,
                         categoryName == null ? categoryCode : categoryName,
-                        defaultLocale,
+                        locale,
                         0));
     }
 

@@ -5002,6 +5002,12 @@
           },
           "labelUz" : {
             "type" : "string"
+          },
+          "labels" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "type" : "object"
           }
         },
         "type" : "object"
@@ -5028,6 +5034,9 @@
           "code" : {
             "type" : "string"
           },
+          "label" : {
+            "type" : "string"
+          },
           "labelEn" : {
             "type" : "string"
           },
@@ -5036,6 +5045,12 @@
           },
           "labelUz" : {
             "type" : "string"
+          },
+          "labels" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "type" : "object"
           }
         },
         "type" : "object"

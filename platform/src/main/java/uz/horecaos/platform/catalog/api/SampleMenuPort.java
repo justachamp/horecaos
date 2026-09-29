@@ -39,14 +39,14 @@ public interface SampleMenuPort {
      * deliberately sold-out stock item. Nothing is published: publishing is
      * {@link #publishSample}, after the variants have prices.
      *
-     * <p>The authoring locale is deliberately not a parameter. Catalog
-     * validation requires a name in the locale {@code CatalogSnapshotLoader}
-     * calls default, which is catalog's own configuration
-     * ({@code horecaos.catalog.default-locale}) — a caller that passed the
-     * owner's language instead would author a menu that then failed to publish
-     * with {@code MISSING_TRANSLATION}. All three locales are written either
-     * way; only which one is the authoring locale is at stake, and that is not
-     * the caller's to decide.
+     * <p>The authoring locale is deliberately not a parameter. Catalog validation
+     * requires a name in the brand's own default language (row 10.12) or, where that
+     * has none, in catalog's configured one ({@code horecaos.catalog.default-locale}) --
+     * a caller that passed the owner's language instead would author a menu that then
+     * failed to publish with {@code MISSING_TRANSLATION}. The sample is authored in the
+     * brand's default when it carries wording in it, in the configured locale otherwise.
+     * All three locales are written either way; only which one is the authoring locale
+     * is at stake, and that is not the caller's to decide.
      *
      * @param locationIds every location the menu should be offered at
      */

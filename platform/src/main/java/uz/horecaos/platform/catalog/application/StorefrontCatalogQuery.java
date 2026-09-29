@@ -12,6 +12,8 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.catalog.api.MenuAvailabilityLookup;
@@ -21,9 +23,12 @@ import uz.horecaos.platform.catalog.domain.CatalogEntities.EntityType;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.LocationOffering;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.OfferingStatus;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.PublicationItem;
+import uz.horecaos.platform.catalog.domain.CatalogLocales;
 import uz.horecaos.platform.catalog.domain.ItemSaleSchedule;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcMenuStore;
+import uz.horecaos.platform.tenancy.api.BrandLocaleLookup;
+import uz.horecaos.platform.tenancy.api.LocalizedLabels;
 
 /**
  * What a customer sees (ADR 0016).
@@ -61,7 +66,39 @@ public class StorefrontCatalogQuery {
     private final CatalogTenantContext tenantContext;
     private final Clock clock;
     private final uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCommentPresetStore commentPresets;
+    private final BrandLocaleLookup brandLocales;
+    private final String defaultLocale;
 
+    /**
+     * @param brandLocales  the brand's own default language, which a name or a preset label the
+     *                      customer's language does not have falls back to (row 10.12)
+     * @param defaultLocale {@code horecaos.catalog.default-locale} -- the last named fallback,
+     *                      where a menu imported or sampled without a brand-specific language
+     *                      put its names
+     */
+    @Autowired
+    public StorefrontCatalogQuery(
+            JdbcCatalogStore store,
+            MenuPriceLookup prices,
+            MenuAvailabilityLookup availability,
+            JdbcMenuStore menus,
+            CatalogTenantContext tenantContext,
+            Clock clock,
+            uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCommentPresetStore commentPresets,
+            BrandLocaleLookup brandLocales,
+            @Value("${horecaos.catalog.default-locale:uz}") String defaultLocale) {
+        this.store = store;
+        this.prices = prices;
+        this.availability = availability;
+        this.menus = menus;
+        this.tenantContext = tenantContext;
+        this.clock = clock;
+        this.commentPresets = commentPresets;
+        this.brandLocales = brandLocales;
+        this.defaultLocale = defaultLocale;
+    }
+
+    /** A storefront read for callers with no tenancy to ask: no brand has a default language of its own. */
     public StorefrontCatalogQuery(
             JdbcCatalogStore store,
             MenuPriceLookup prices,
@@ -70,13 +107,16 @@ public class StorefrontCatalogQuery {
             CatalogTenantContext tenantContext,
             Clock clock,
             uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCommentPresetStore commentPresets) {
-        this.store = store;
-        this.prices = prices;
-        this.availability = availability;
-        this.menus = menus;
-        this.tenantContext = tenantContext;
-        this.clock = clock;
-        this.commentPresets = commentPresets;
+        this(
+                store,
+                prices,
+                availability,
+                menus,
+                tenantContext,
+                clock,
+                commentPresets,
+                BrandLocaleLookup.platformFallback(),
+                "uz");
     }
 
     /**
@@ -99,6 +139,11 @@ public class StorefrontCatalogQuery {
             return Optional.empty();
         }
         UUID publication = publicationId.get();
+
+        // Row 10.12: what a customer is shown when their own language has no wording is the
+        // brand's default language, not whichever locale the publication happened to list first.
+        Optional<String> brandDefault = brandLocales.brandDefaultLocale(tenantId, brandId);
+        List<String> namePreference = namePreference(locale, brandDefault);
 
         Map<UUID, OfferingStatus> offeringByVariant = offeringsFor(tenantId, brandId, locationId, channelCode);
 
@@ -126,6 +171,17 @@ public class StorefrontCatalogQuery {
                 productItems.stream().map(PublicationItem::entityId).collect(Collectors.toUnmodifiableSet());
         Map<UUID, List<uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCommentPresetStore.ProductPresetRow>>
                 presetsByProduct = commentPresets.listForProducts(tenantId, brandId, productIds);
+        // Row 10.12: a preset's wording in every locale it has, not only the platform triple's
+        // columns -- one bulk read for the whole menu.
+        Map<UUID, Map<String, String>> presetTranslations = commentPresets.translationsForPresets(
+                tenantId,
+                presetsByProduct.values().stream()
+                        .flatMap(List::stream)
+                        .map(
+                                uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCommentPresetStore
+                                                .ProductPresetRow::presetId)
+                        .collect(Collectors.toUnmodifiableSet()));
+        List<String> presetPreference = presetPreference(locale, brandDefault);
 
         List<MenuProduct> products = new ArrayList<>();
         for (PublicationItem item : productItems) {
@@ -140,7 +196,7 @@ public class StorefrontCatalogQuery {
             products.add(new MenuProduct(
                     item.entityId(),
                     code(item.content()),
-                    name(item.content(), locale),
+                    name(item.content(), namePreference),
                     description(item.content(), locale),
                     mediaIds,
                     imageUrls(tenantId, mediaIds),
@@ -149,7 +205,10 @@ public class StorefrontCatalogQuery {
                     // the menu is known, so the price book is read once rather
                     // than once per dish.
                     idList(item.content(), "modifierGroupIds"),
-                    commentPresetsOf(presetsByProduct.getOrDefault(item.entityId(), List.of()))));
+                    commentPresetsOf(
+                            presetsByProduct.getOrDefault(item.entityId(), List.of()),
+                            presetTranslations,
+                            presetPreference)));
         }
 
         // A product the location does not offer was dropped above. Its id must
@@ -162,7 +221,7 @@ public class StorefrontCatalogQuery {
                 .map(item -> new MenuCategory(
                         item.entityId(),
                         code(item.content()),
-                        name(item.content(), locale),
+                        name(item.content(), namePreference),
                         parentOf(item.content()),
                         intOf(item.content(), "sortOrder"),
                         idList(item.content(), "productIds").stream()
@@ -180,7 +239,7 @@ public class StorefrontCatalogQuery {
                 .map(item -> new MenuModifierGroup(
                         item.entityId(),
                         code(item.content()),
-                        name(item.content(), locale),
+                        name(item.content(), namePreference),
                         Boolean.TRUE.equals(item.content().get("required")),
                         intOf(item.content(), "minimumSelections"),
                         intOf(item.content(), "maximumSelections"),
@@ -301,11 +360,51 @@ public class StorefrontCatalogQuery {
     }
 
     private static List<CommentPresetOption> commentPresetsOf(
-            List<uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCommentPresetStore.ProductPresetRow>
-                    rows) {
+            List<uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCommentPresetStore.ProductPresetRow> rows,
+            Map<UUID, Map<String, String>> translations,
+            List<String> preference) {
         return rows.stream()
-                .map(row -> new CommentPresetOption(row.code(), row.labelRu(), row.labelUz(), row.labelEn()))
+                .map(row -> {
+                    Map<String, String> labels = LocalizedLabels.merge(
+                            row.labelRu(),
+                            row.labelUz(),
+                            row.labelEn(),
+                            translations.getOrDefault(row.presetId(), Map.of()));
+                    String label = LocalizedLabels.pick(labels, preference);
+                    return new CommentPresetOption(
+                            row.code(),
+                            row.labelRu(),
+                            row.labelUz(),
+                            row.labelEn(),
+                            labels,
+                            label == null ? row.code() : label);
+                })
                 .toList();
+    }
+
+    /**
+     * The locales a preset's wording is wanted in, best first: the customer's own (the storefront
+     * sends the catalog's code, so {@code uz} is the platform's {@code uz-Latn}), then the brand's
+     * default. {@link LocalizedLabels#pick} falls through to whatever wording exists after that.
+     */
+    private static List<String> presetPreference(String requested, Optional<String> brandDefault) {
+        List<String> preference = new ArrayList<>();
+        preference.add(CatalogLocales.toPlatformLocale(requested));
+        brandDefault.ifPresent(preference::add);
+        return preference;
+    }
+
+    /**
+     * The catalog locales a published name is wanted in, best first: the customer's own, the
+     * brand's default, then the server's configured one. A name in none of them is still shown
+     * (see {@link #name}) rather than the code.
+     */
+    private List<String> namePreference(String requested, Optional<String> brandDefault) {
+        List<String> preference = new ArrayList<>();
+        preference.add(requested);
+        brandDefault.map(CatalogLocales::forBrandLocale).ifPresent(preference::add);
+        preference.add(defaultLocale);
+        return preference;
     }
 
     /**
@@ -356,7 +455,8 @@ public class StorefrontCatalogQuery {
     }
 
     /**
-     * Resolves a name in the requested locale, falling back to any published one.
+     * Resolves a name in the first of {@code preference} the entity has -- the customer's
+     * language, then the brand's default, then the server's -- falling back to any published one.
      *
      * <p>Publication already refused to proceed without a name in the brand
      * default, so this cannot normally return the code — but it returns the code
@@ -364,15 +464,15 @@ public class StorefrontCatalogQuery {
      * beats a menu that fails to load.
      */
     @SuppressWarnings("unchecked")
-    private static String name(Map<String, Object> content, String locale) {
+    private static String name(Map<String, Object> content, List<String> preference) {
         Object raw = content.get("names");
         if (raw instanceof Map<?, ?> names && !names.isEmpty()) {
             Map<String, Map<String, String>> byLocale = (Map<String, Map<String, String>>) names;
-            Map<String, String> requested = byLocale.get(locale);
-            if (requested != null) {
-                String requestedName = requested.get("name");
-                if (requestedName != null) {
-                    return requestedName;
+            for (String wanted : preference) {
+                Map<String, String> entry = byLocale.get(wanted);
+                String wantedName = entry == null ? null : entry.get("name");
+                if (wantedName != null) {
+                    return wantedName;
                 }
             }
             String fallback = byLocale.values().iterator().next().get("name");
@@ -570,8 +670,19 @@ public class StorefrontCatalogQuery {
         }
     }
 
-    /** One preset a product offers on a line, every locale so the storefront renders its own. */
-    public record CommentPresetOption(String code, String labelRu, String labelUz, String labelEn) {}
+    /**
+     * One preset a product offers on a line, every locale so the storefront renders its own.
+     *
+     * @param labelRu/labelUz/labelEn the platform triple's columns, kept for a client that
+     *     reads only them
+     * @param labels every wording the preset has, keyed by locale -- the triple plus any locale
+     *     a tenant's brands support beyond it (row 10.12, V0430)
+     * @param label the wording resolved for the locale the menu was requested in, then the
+     *     brand's default, then whichever exists; the preset's code only if it has no wording
+     *     at all, which the schema does not allow
+     */
+    public record CommentPresetOption(
+            String code, String labelRu, String labelUz, String labelEn, Map<String, String> labels, String label) {}
 
     /**
      * One orderable size or form of a product.

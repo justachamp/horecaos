@@ -376,6 +376,66 @@ class CommentPresetTests {
                 .satisfies(row -> assertThat(row.labelUz()).isEqualTo("Piyozsiz"));
     }
 
+    // ---------------------------------------------- row 10.12: the customer-facing reads
+
+    @Test
+    @DisplayName("row 10.12: a bulk translations read is scoped to the tenant in the query, not after loading")
+    void bulkTranslationsAreTenantScoped() {
+        PresetRow mine =
+                presets.create(TENANT, newPreset("NO_ONION", "Без лука", "Piyozsiz", "No onion", null), ACTOR_SUBJECT);
+        insertTranslation(TENANT, mine.id(), "kaa", "Piyazsiz");
+
+        assertThat(presetStore.translationsForPresets(TENANT, java.util.Set.of(mine.id())))
+                .containsOnlyKeys(mine.id())
+                .satisfies(byPreset -> assertThat(byPreset.get(mine.id()))
+                        .containsEntry("kaa", "Piyazsiz")
+                        .containsKeys("ru", "uz-Latn", "en"));
+        assertThat(presetStore.translationsForPresets(OTHER_TENANT, java.util.Set.of(mine.id())))
+                .as("another tenant naming this preset's id reads nothing")
+                .isEmpty();
+        assertThat(presetStore.translationsForPresets(TENANT, java.util.Set.of()))
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("row 10.12: checkout's preset lookup answers every wording, a locale beyond the triple included")
+    void resolveAnswersEveryWording() {
+        PresetRow created =
+                presets.create(TENANT, newPreset("NO_ONION", "Без лука", "Piyozsiz", "No onion", null), ACTOR_SUBJECT);
+        insertTranslation(TENANT, created.id(), "kaa", "Piyazsiz");
+        // A stale mirror of a triple locale must lose to the column, the way every merged read does.
+        jdbc.sql("""
+                UPDATE catalog.comment_preset_translations SET label = 'STALE'
+                WHERE preset_id = :id AND locale = 'ru'
+                """).param("id", created.id()).update();
+
+        var resolved = new uz.horecaos.platform.catalog.application.CommentPresetLookupAdapter(
+                        catalogStore, presetStore)
+                .resolve(TENANT, java.util.Set.of("NO_ONION"));
+
+        assertThat(resolved).containsOnlyKeys("NO_ONION");
+        var noOnion = java.util.Objects.requireNonNull(resolved.get("NO_ONION"));
+        assertThat(noOnion.labels())
+                .containsExactly(
+                        java.util.Map.entry("ru", "Без лука"),
+                        java.util.Map.entry("uz-Latn", "Piyozsiz"),
+                        java.util.Map.entry("en", "No onion"),
+                        java.util.Map.entry("kaa", "Piyazsiz"));
+        assertThat(noOnion.labelRu()).isEqualTo("Без лука");
+    }
+
+    private void insertTranslation(UUID tenantId, UUID presetId, String locale, String label) {
+        jdbc.sql("""
+                INSERT INTO catalog.comment_preset_translations (tenant_id, preset_id, locale, label)
+                VALUES (:tenantId, :presetId, :locale, :label)
+                """)
+                .param("tenantId", tenantId)
+                .param("presetId", presetId)
+                .param("locale", locale)
+                .param("label", label)
+                .update();
+    }
+
     // ------------------------------------------------------------------------ fixture
 
     private static NewPreset newPreset(

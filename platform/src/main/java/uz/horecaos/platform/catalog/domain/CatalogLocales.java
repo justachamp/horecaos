@@ -18,4 +18,14 @@ public final class CatalogLocales {
     public static String forBrandLocale(String brandLocale) {
         return "uz-Latn".equals(brandLocale) ? "uz" : brandLocale;
     }
+
+    /**
+     * The platform-wide locale for a code a customer's client sends (the storefront's
+     * {@code ?locale=}) -- {@link #forBrandLocale}'s inverse. The vocabularies that follow
+     * ADR 0035 (the per-locale preset, region and zone tables, {@code tenant.brand_locales})
+     * know Uzbek as {@code uz-Latn}, never a bare {@code uz}.
+     */
+    public static String toPlatformLocale(String catalogLocale) {
+        return "uz".equals(catalogLocale) ? "uz-Latn" : catalogLocale;
+    }
 }

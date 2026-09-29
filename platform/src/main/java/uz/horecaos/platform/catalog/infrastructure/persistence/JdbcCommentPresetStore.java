@@ -162,6 +162,33 @@ public class JdbcCommentPresetStore {
         return byPreset;
     }
 
+    /**
+     * The per-locale label rows of several presets, grouped by preset -- one query for a
+     * whole menu or checkout rather than one per preset, filtered on the tenant in the query
+     * (a preset id is a UUID a caller may have received from anywhere).
+     */
+    public Map<UUID, Map<String, String>> translationsForPresets(UUID tenantId, Set<UUID> presetIds) {
+        if (presetIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, Map<String, String>> byPreset = new java.util.LinkedHashMap<>();
+        jdbc.sql("""
+                SELECT preset_id, locale, label FROM catalog.comment_preset_translations
+                WHERE tenant_id = :tenantId AND preset_id = ANY(:presetIds)
+                ORDER BY preset_id, locale
+                """)
+                .param("tenantId", tenantId)
+                .param("presetIds", presetIds.toArray(UUID[]::new))
+                .query((row, number) -> {
+                    byPreset.computeIfAbsent(
+                                    row.getObject("preset_id", UUID.class), id -> new java.util.LinkedHashMap<>())
+                            .put(row.getString("locale"), row.getString("label"));
+                    return row.getString("locale");
+                })
+                .list();
+        return byPreset;
+    }
+
     /** One preset's translation rows, tenant-scoped in the query. */
     public Map<String, String> translationsFor(UUID tenantId, UUID presetId) {
         Map<String, String> labels = new java.util.LinkedHashMap<>();

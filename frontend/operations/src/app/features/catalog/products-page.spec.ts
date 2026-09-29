@@ -9,7 +9,8 @@ import { BrandScope } from '../../core/api/catalog-paths';
 import { CursorState } from '../../core/api/page';
 import { CurrentBrand } from '../../core/auth/current-brand';
 import { ApiError, ApiErrorCode } from '../../core/api/problem-details';
-import { I18n } from '../../core/i18n/i18n';
+import { I18n, Locale } from '../../core/i18n/i18n';
+import { LocaleSet } from '../../core/i18n/locale-set';
 import { CatalogApi, ProductListFilters } from './catalog-api';
 import { CatalogSummary, CategorySummary, ProductSummary } from './catalog-domain';
 import { ProductsPage } from './products-page';
@@ -73,7 +74,18 @@ function serverFilteredListProducts(all: readonly ProductSummary[]) {
   );
 }
 
-function configure(catalogApi: Partial<CatalogApi>): void {
+/** Row 10.12: a brand's resolved locale set; unconfigured by default, the way `categories-page.spec.ts` fakes it. */
+class FakeLocaleSet {
+  readonly locales = signal<readonly Locale[]>(['ru', 'uz-Latn', 'en']);
+  readonly defaultLocale = signal<Locale>('ru');
+  readonly isConfigured = signal(false);
+  ensureLoaded = vi.fn().mockResolvedValue(undefined);
+}
+
+function configure(
+  catalogApi: Partial<CatalogApi>,
+  localeSet: FakeLocaleSet = new FakeLocaleSet(),
+): void {
   TestBed.configureTestingModule({
     providers: [
       provideRouter([
@@ -91,6 +103,7 @@ function configure(catalogApi: Partial<CatalogApi>): void {
           ensureLoaded: () => Promise.resolve(),
         },
       },
+      { provide: LocaleSet, useValue: localeSet },
       { provide: CatalogApi, useValue: catalogApi },
     ],
   });
@@ -236,6 +249,85 @@ describe('ProductsPage', () => {
       FAKE_SCOPE,
       'catalog-1',
       expect.objectContaining({ code: 'PLOV', name: 'Плов' }),
+    );
+  });
+
+  /** Opens the create dialog on an empty catalog, types a name and a code, and confirms. */
+  async function createProductThroughTheDialog(
+    createProduct: CatalogApi['createProduct'],
+    localeSet: FakeLocaleSet,
+  ): Promise<void> {
+    configure(
+      {
+        listCatalogs: () => of(FAKE_CATALOGS),
+        listProducts: () => of({ items: [], nextCursor: null }),
+        createProduct,
+      },
+      localeSet,
+    );
+
+    const harness = await RouterTestingHarness.create('/catalog/products');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+
+    (host.querySelector('[data-testid="products-create"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    const nameInput = host.querySelector(
+      '[data-testid="create-product-dialog-name"]',
+    ) as HTMLInputElement;
+    const codeInput = host.querySelector(
+      '[data-testid="create-product-dialog-code"]',
+    ) as HTMLInputElement;
+    nameInput.value = 'Osh';
+    nameInput.dispatchEvent(new Event('input'));
+    codeInput.value = 'PLOV';
+    codeInput.dispatchEvent(new Event('input'));
+    await flushMicrotasks();
+    (
+      host.querySelector('[data-testid="create-product-dialog-confirm"]') as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+  }
+
+  it('writes the new product’s name in the brand’s own default language, not the operator’s console language', async () => {
+    // Console is Russian (configure sets it); the brand's menu is in English.
+    const localeSet = new FakeLocaleSet();
+    localeSet.locales.set(['en', 'ru']);
+    localeSet.defaultLocale.set('en');
+    localeSet.isConfigured.set(true);
+    const createProduct = vi.fn().mockReturnValue(of({ productId: 'x', defaultVariantId: 'y' }));
+
+    await createProductThroughTheDialog(createProduct, localeSet);
+
+    expect(createProduct).toHaveBeenCalledWith(
+      FAKE_SCOPE,
+      'catalog-1',
+      expect.objectContaining({ code: 'PLOV', name: 'Osh', locale: 'en' }),
+    );
+  });
+
+  it('maps a brand default of uz-Latn to the catalog’s uz, and an unconfigured brand to the server’s uz', async () => {
+    const uzbekBrand = new FakeLocaleSet();
+    uzbekBrand.locales.set(['uz-Latn', 'ru']);
+    uzbekBrand.defaultLocale.set('uz-Latn');
+    uzbekBrand.isConfigured.set(true);
+    const configured = vi.fn().mockReturnValue(of({ productId: 'x', defaultVariantId: 'y' }));
+    await createProductThroughTheDialog(configured, uzbekBrand);
+    expect(configured).toHaveBeenCalledWith(
+      FAKE_SCOPE,
+      'catalog-1',
+      expect.objectContaining({ locale: 'uz' }),
+    );
+
+    TestBed.resetTestingModule();
+    const unconfigured = vi.fn().mockReturnValue(of({ productId: 'x', defaultVariantId: 'y' }));
+    // LocaleSet's platform fallback is `ru`, which is not what the server reads for a brand that
+    // has chosen nothing (`uz`) -- a product written in `ru` would look unnamed in every list.
+    await createProductThroughTheDialog(unconfigured, new FakeLocaleSet());
+    expect(unconfigured).toHaveBeenCalledWith(
+      FAKE_SCOPE,
+      'catalog-1',
+      expect.objectContaining({ locale: 'uz' }),
     );
   });
 

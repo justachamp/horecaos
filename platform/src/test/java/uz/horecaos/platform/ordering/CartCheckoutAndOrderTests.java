@@ -2760,6 +2760,66 @@ class CartCheckoutAndOrderTests {
                                 tuple(extraSpicy, "EXTRA_SPICY", "Поострее")));
     }
 
+    /**
+     * Row 10.12: a preset worded in a locale beyond the platform triple keeps that wording on the
+     * order line, because checkout copies every wording the preset has, not only the three
+     * columns V0397 has room for. The translation row is inserted straight into the table -- what
+     * a brand supporting a fourth language will have once BrandProfile.KNOWN_LOCALES widens.
+     */
+    @Test
+    @DisplayName(
+            "row 10.12: a preset's wording in a locale beyond the triple is frozen onto the order line with the rest")
+    void commentPresetSnapshotCarriesALocaleBeyondTheTriple() {
+        // A code of its own: presets outlive a test (this class truncates the catalog, not the
+        // tenant-wide preset vocabulary), and the round-trip test above seeds NO_ONIONS.
+        UUID noOnions = seedCommentPresetForBurger("NO_ONIONS_KAA", "Без лука");
+        jdbc.sql("""
+                INSERT INTO catalog.comment_preset_translations (tenant_id, preset_id, locale, label)
+                VALUES (:tenantId, :presetId, 'kaa', 'Piyazsiz')
+                """).param("tenantId", TENANT).param("presetId", noOnions).update();
+
+        UUID cart = openCart();
+        tx(() -> carts.putLine(
+                TENANT,
+                BRAND,
+                CUSTOMER,
+                cart,
+                cartVersion(cart),
+                "a",
+                burgerVariant,
+                1,
+                List.of(),
+                List.of("NO_ONIONS_KAA"),
+                null));
+        tx(() -> carts.price(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart)));
+        var result = tx(() -> checkout.checkout(checkoutCommand(cart, "idem-preset-labels")));
+
+        // The preset is reworded afterwards: the receipt must keep what the customer was shown.
+        jdbc.sql("""
+                UPDATE catalog.comment_preset_translations SET label = 'Piyazsiz (yangi)'
+                WHERE preset_id = :presetId AND locale = 'kaa'
+                """).param("presetId", noOnions).update();
+
+        var detail = orderQuery.detail(TENANT, orderIdOf(result)).orElseThrow();
+        assertThat(detail.lines())
+                .singleElement()
+                .satisfies(line -> assertThat(line.commentPresets())
+                        .singleElement()
+                        .satisfies(snapshot -> {
+                            assertThat(snapshot.labels())
+                                    .containsOnlyKeys("ru", "uz-Latn", "en", "kaa")
+                                    .containsEntry("kaa", "Piyazsiz")
+                                    .containsEntry("ru", "Без лука");
+                            assertThat(snapshot.labelRu()).isEqualTo("Без лука");
+                        }));
+        assertThat(jdbc.sql("""
+                                SELECT locale FROM ordering.order_line_comment_preset_labels
+                                WHERE tenant_id = :tenantId
+                                """).param("tenantId", TENANT).query(String.class).list())
+                .as("the triple stays in the snapshot's own columns, not stored twice")
+                .containsExactly("kaa");
+    }
+
     @Test
     @DisplayName("row 2.1b: a preset the product does not offer is refused")
     void aPresetTheProductDoesNotOfferIsRefused() {

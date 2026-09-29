@@ -9,9 +9,11 @@ import java.util.Optional;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import uz.horecaos.platform.catalog.api.CatalogNameLocales;
 import uz.horecaos.platform.catalog.api.SampleMenuPort;
 import uz.horecaos.platform.catalog.application.SampleMenuContent.SampleCategory;
 import uz.horecaos.platform.catalog.application.SampleMenuContent.SampleProduct;
@@ -24,6 +26,7 @@ import uz.horecaos.platform.catalog.domain.CatalogEntities.Variant;
 import uz.horecaos.platform.catalog.domain.FiscalClassification;
 import uz.horecaos.platform.catalog.domain.PublicationStatus;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
+import uz.horecaos.platform.tenancy.api.BrandLocaleLookup;
 
 /**
  * Builds and publishes the onboarding sample menu (ADR 0099).
@@ -59,23 +62,54 @@ public class SampleMenuService implements SampleMenuPort {
     private final CatalogAuthoringService authoring;
     private final CatalogPublicationService publications;
 
+    private final BrandLocaleLookup brandLocales;
+
     /**
-     * The locale {@link CatalogValidator} requires a name in, read from the same
-     * property {@code CatalogSnapshotLoader} and {@code CatalogQueryService}
-     * read. Authoring the sample in any other locale would publish-reject it
-     * with {@code MISSING_TRANSLATION}.
+     * {@code horecaos.catalog.default-locale}: the authoring locale for a brand that has chosen
+     * no default language of its own, and the fallback {@link CatalogValidator} accepts a name in
+     * when the brand's default has none.
      */
     private final String defaultLocale;
 
+    /**
+     * @param brandLocales  the brand's own default language, which the sample is authored in (row
+     *                      10.12): {@link CatalogValidator} requires a name in it, and it is the
+     *                      tab the product editor opens on
+     * @param defaultLocale {@code horecaos.catalog.default-locale}
+     */
+    @Autowired
     public SampleMenuService(
             JdbcCatalogStore store,
             CatalogAuthoringService authoring,
             CatalogPublicationService publications,
+            BrandLocaleLookup brandLocales,
             @Value("${horecaos.catalog.default-locale:uz}") String defaultLocale) {
         this.store = store;
         this.authoring = authoring;
         this.publications = publications;
+        this.brandLocales = brandLocales;
         this.defaultLocale = defaultLocale;
+    }
+
+    /** A sample builder for callers with no tenancy to ask: every brand is authored in the configured locale. */
+    public SampleMenuService(
+            JdbcCatalogStore store,
+            CatalogAuthoringService authoring,
+            CatalogPublicationService publications,
+            String defaultLocale) {
+        this(store, authoring, publications, BrandLocaleLookup.platformFallback(), defaultLocale);
+    }
+
+    /**
+     * The language the sample's authoring locale is: the brand's own default when the sample
+     * carries wording in it, the server's configured locale otherwise (a brand with no default,
+     * or one whose default the sample has no translation for -- {@link CatalogValidator} accepts
+     * the server's locale as the fallback, so the sample still publishes).
+     */
+    private String authoringLocale(UUID tenantId, UUID brandId) {
+        String preferred = CatalogNameLocales.of(brandLocales, tenantId, brandId, defaultLocale)
+                .preferred();
+        return SampleMenuContent.locales().contains(preferred) ? preferred : defaultLocale;
     }
 
     @Override
@@ -98,7 +132,7 @@ public class SampleMenuService implements SampleMenuPort {
     @Override
     @Transactional
     public SampleMenu installSample(UUID tenantId, UUID brandId, List<UUID> locationIds) {
-        String locale = defaultLocale;
+        String locale = authoringLocale(tenantId, brandId);
         Optional<UUID> existing = sampleCatalogId(tenantId, brandId);
         boolean created = existing.isEmpty();
         UUID catalogId = existing.orElseGet(() -> authoring.createCatalog(

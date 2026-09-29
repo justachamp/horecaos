@@ -128,9 +128,11 @@ export interface CheckoutResponse {
 
 export interface CommentPresetOption {
   code?: string;
+  label?: string;
   labelEn?: string;
   labelRu?: string;
   labelUz?: string;
+  labels?: { [key: string]: string };
 }
 
 export interface ContactPointSummary {

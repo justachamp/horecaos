@@ -265,6 +265,8 @@ function toMenuItemCommentPreset(preset: PublishedCommentPreset): MenuItemCommen
     labelRu: preset.labelRu,
     labelUz: preset.labelUz,
     labelEn: preset.labelEn,
+    ...(preset.labels ? { labels: preset.labels } : {}),
+    ...(preset.label ? { label: preset.label } : {}),
   };
 }
 
@@ -347,6 +349,10 @@ export interface PublishedCommentPreset {
   readonly labelRu: string;
   readonly labelUz: string;
   readonly labelEn: string;
+  /** Every wording the preset has, by locale: the triple plus any locale a brand offers beyond it. */
+  readonly labels?: Readonly<Record<string, string>>;
+  /** The wording resolved for the requested language, then the brand's default. */
+  readonly label?: string;
 }
 
 export interface PublishedVariant {

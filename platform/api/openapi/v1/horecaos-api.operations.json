@@ -3372,6 +3372,12 @@
           },
           "labelUz" : {
             "type" : "string"
+          },
+          "labels" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "type" : "object"
           }
         },
         "type" : "object"

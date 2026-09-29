@@ -110,4 +110,25 @@ class LocalizedLabelsTests {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("en");
     }
+
+    @Test
+    @DisplayName("pick answers the first wanted locale the set has, a locale beyond the triple included")
+    void pickFollowsThePreferenceOrder() {
+        Map<String, String> merged = LocalizedLabels.merge(
+                "Без лука", "Piyozsiz", "No onion", new LinkedHashMap<>(Map.of("kaa", "Piyazsiz")));
+
+        assertThat(LocalizedLabels.pick(merged, java.util.List.of("kaa", "ru"))).isEqualTo("Piyazsiz");
+        assertThat(LocalizedLabels.pick(merged, java.util.List.of("de", "uz-latn", "ru")))
+                .as("an unknown locale is skipped and a case variant of a triple locale matches")
+                .isEqualTo("Piyozsiz");
+    }
+
+    @Test
+    @DisplayName("pick falls through to the set's first wording rather than blank, and to null only for an empty set")
+    void pickFallsThroughToWhateverThereIs() {
+        Map<String, String> onlyKaa = Map.of("kaa", "Piyazsiz");
+
+        assertThat(LocalizedLabels.pick(onlyKaa, java.util.List.of("ru", "en"))).isEqualTo("Piyazsiz");
+        assertThat(LocalizedLabels.pick(Map.of(), java.util.List.of("ru"))).isNull();
+    }
 }

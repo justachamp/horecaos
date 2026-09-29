@@ -1050,6 +1050,7 @@ export interface CommentPresetChip {
   labelEn?: string;
   labelRu?: string;
   labelUz?: string;
+  labels?: { [key: string]: string };
 }
 
 export interface CommercialOperationsControllerEntitlementSnapshotResponse {

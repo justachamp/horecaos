@@ -99,3 +99,75 @@ describe('MenuService.menu: concurrent callers for the same key share one reques
     expect(second).not.toBe(first);
   });
 });
+
+describe('MenuService.item: row 10.12 comment preset wording', () => {
+  it('carries a preset’s per-locale wording and its resolved label through to the screens', async () => {
+    const { service, api } = setUp();
+    api.get.mockResolvedValue({
+      ...emptyMenu(),
+      products: [
+        {
+          productId: 'p1',
+          code: 'PLOV',
+          name: 'Osh',
+          description: null,
+          mediaAssetIds: [],
+          imageUrls: [],
+          variants: [],
+          modifierGroupIds: [],
+          commentPresets: [
+            {
+              code: 'NO_ONIONS',
+              labelRu: 'Без лука',
+              labelUz: 'Piyozsiz',
+              labelEn: 'No onions',
+              labels: { ru: 'Без лука', 'uz-Latn': 'Piyozsiz', en: 'No onions', kaa: 'Piyazsiz' },
+              label: 'Piyozsiz',
+            },
+          ],
+        },
+      ],
+    } satisfies PublishedMenu);
+
+    const item = await service.item('p1', 'uz');
+
+    expect(item?.commentPresets).toEqual([
+      {
+        code: 'NO_ONIONS',
+        labelRu: 'Без лука',
+        labelUz: 'Piyozsiz',
+        labelEn: 'No onions',
+        labels: { ru: 'Без лука', 'uz-Latn': 'Piyozsiz', en: 'No onions', kaa: 'Piyazsiz' },
+        label: 'Piyozsiz',
+      },
+    ]);
+  });
+
+  it('still reads a preset from a platform that sends only the triple', async () => {
+    const { service, api } = setUp();
+    api.get.mockResolvedValue({
+      ...emptyMenu(),
+      products: [
+        {
+          productId: 'p1',
+          code: 'PLOV',
+          name: 'Osh',
+          description: null,
+          mediaAssetIds: [],
+          imageUrls: [],
+          variants: [],
+          modifierGroupIds: [],
+          commentPresets: [
+            { code: 'NO_ONIONS', labelRu: 'Без лука', labelUz: 'Piyozsiz', labelEn: 'No onions' },
+          ],
+        },
+      ],
+    } satisfies PublishedMenu);
+
+    const item = await service.item('p1', 'uz');
+
+    expect(item?.commentPresets).toEqual([
+      { code: 'NO_ONIONS', labelRu: 'Без лука', labelUz: 'Piyozsiz', labelEn: 'No onions' },
+    ]);
+  });
+});
