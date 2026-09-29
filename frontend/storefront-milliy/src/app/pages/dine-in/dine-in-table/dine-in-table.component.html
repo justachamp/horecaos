@@ -61,16 +61,26 @@
               {{ 'dineIn.roundCount' | t: { count: currentBill.roundCount } }}
             </p>
           </div>
-          <button
-            type="button"
-            class="bill__ask"
-            data-testid="dine-in-request-bill"
-            [disabled]="billBusy()"
-            (click)="requestBill()"
-          >
-            {{ 'dineIn.askForBill' | t }}
-          </button>
+          @if (currentBill.status === 'BILL_REQUESTED') {
+            <p class="bill__requested" role="status" data-testid="dine-in-bill-requested">
+              {{ 'dineIn.billRequested' | t }}
+            </p>
+          } @else {
+            <button
+              type="button"
+              class="bill__ask"
+              data-testid="dine-in-request-bill"
+              [disabled]="billBusy() || currentBill.roundCount === 0"
+              (click)="requestBill()"
+            >
+              {{ 'dineIn.askForBill' | t }}
+            </button>
+          }
         </section>
+      }
+
+      @if (orderPlaced()) {
+        <p class="table__ok" role="status" data-testid="dine-in-order-placed">{{ 'dineIn.orderPlaced' | t }}</p>
       }
 
       @if (basketErrorKey(); as key) {

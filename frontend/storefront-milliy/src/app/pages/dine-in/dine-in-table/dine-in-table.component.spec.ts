@@ -17,7 +17,6 @@ import {
 } from '../../../services/dine-in.service';
 import { LangService } from '../../../services/lang.service';
 import { MenuService } from '../../../services/menu.service';
-import { NotificationService } from '../../../services/notification.service';
 import { PaymentSessionService } from '../../../services/payment-session.service';
 import { TranslateService } from '../../../services/translate.service';
 import type { CustomerUiResponse, MenuItem, MenuItemVariant } from '../../../types/home.types';
@@ -171,10 +170,6 @@ class FakeMenuService {
   home = vi.fn<(...args: unknown[]) => Promise<CustomerUiResponse>>();
 }
 
-class FakeNotificationService {
-  show = vi.fn();
-}
-
 class FakePaymentSessionService {
   open = vi.fn();
 }
@@ -259,7 +254,6 @@ function setUp() {
   const carts = new FakeCartService();
   const menuService = new FakeMenuService();
   const session = new FakeSession();
-  const notification = new FakeNotificationService();
   const payments = new FakePaymentSessionService();
   menuService.home.mockResolvedValue(menu());
   dineIn.bill.mockResolvedValue(bill());
@@ -272,7 +266,6 @@ function setUp() {
       { provide: DineInCartService, useValue: carts },
       { provide: MenuService, useValue: menuService },
       { provide: Session, useValue: session },
-      { provide: NotificationService, useValue: notification },
       { provide: PaymentSessionService, useValue: payments },
       { provide: LangService, useValue: { langId: () => 'uz' } },
       { provide: TranslateService, useClass: FakeTranslateService },
@@ -288,7 +281,6 @@ function setUp() {
     carts,
     menuService,
     session,
-    notification,
     payments,
     router,
     q: (testId: string) => host.querySelector<HTMLElement>(`[data-testid="${testId}"]`),
@@ -746,7 +738,38 @@ describe('DineInTableComponent', () => {
       expect(view.carts.discard).toHaveBeenCalledWith(LOCATION, SESSION);
       expect(view.q('dine-in-order')).toBeNull();
       expect(view.q('dine-in-bill-total')?.textContent).toContain('45 000');
-      expect(view.notification.show).toHaveBeenCalledWith('dineIn.orderPlaced');
+      // Said on the screen: this app renders no toasts.
+      expect(view.q('dine-in-order-placed')?.textContent).toContain('dineIn.orderPlaced');
+    });
+
+    it('does not say the order is placed while it is not yet on the table bill', async () => {
+      const view = await withBasket((v) => {
+        v.dineIn.flushPendingRounds.mockResolvedValue({ bill: null, pending: 1, abandoned: 0 });
+      });
+
+      await view.click('dine-in-checkout');
+
+      expect(view.q('dine-in-order-placed')).toBeNull();
+    });
+
+    it('does not say the order is placed when the platform refused to put it on the bill', async () => {
+      const view = await withBasket((v) => {
+        v.dineIn.flushPendingRounds.mockResolvedValue({ bill: null, pending: 0, abandoned: 1 });
+      });
+
+      await view.click('dine-in-checkout');
+
+      expect(view.q('dine-in-order-placed')).toBeNull();
+    });
+
+    it('takes the message away as soon as the guest starts another order', async () => {
+      const view = await withBasket();
+      await view.click('dine-in-checkout');
+      expect(view.q('dine-in-order-placed')).not.toBeNull();
+
+      await view.click('dine-in-add');
+
+      expect(view.q('dine-in-order-placed')).toBeNull();
     });
 
     it('queues the order BEFORE the attach is tried, so a lost response cannot lose it', async () => {
@@ -906,17 +929,41 @@ describe('DineInTableComponent', () => {
   });
 
   describe('the bill', () => {
-    it('asks for the bill and shows the state it comes back in', async () => {
+    it('asks for the bill and shows, on the bill, that it has been asked for', async () => {
       const view = setUp();
       view.dineIn.seed(admission());
       view.dineIn.bill.mockResolvedValue(bill({ totalMinor: 45_000, roundCount: 1 }));
       view.dineIn.requestBill.mockResolvedValue(bill({ status: 'BILL_REQUESTED', totalMinor: 45_000, roundCount: 1 }));
       await settle(view.fixture);
+      expect(view.q('dine-in-bill-requested')).toBeNull();
 
       await view.click('dine-in-request-bill');
 
       expect(view.dineIn.requestBill).toHaveBeenCalledWith(SESSION);
-      expect(view.notification.show).toHaveBeenCalledWith('dineIn.billRequested');
+      expect(view.q('dine-in-bill-requested')?.textContent).toContain('dineIn.billRequested');
+      // Asking again is pointless and the platform would only answer with the same bill.
+      expect(view.q('dine-in-request-bill')).toBeNull();
+    });
+
+    it('shows a bill already asked for as asked for, on arrival', async () => {
+      const view = setUp();
+      view.dineIn.seed(admission());
+      view.dineIn.bill.mockResolvedValue(bill({ status: 'BILL_REQUESTED', totalMinor: 45_000, roundCount: 1 }));
+
+      await settle(view.fixture);
+
+      expect(view.q('dine-in-bill-requested')).not.toBeNull();
+      expect(view.q('dine-in-request-bill')).toBeNull();
+    });
+
+    it('cannot ask for a bill with nothing on it', async () => {
+      const view = setUp();
+      view.dineIn.seed(admission());
+      view.dineIn.bill.mockResolvedValue(bill({ totalMinor: 0, roundCount: 0 }));
+
+      await settle(view.fixture);
+
+      expect((view.q('dine-in-request-bill') as HTMLButtonElement).disabled).toBe(true);
     });
 
     it('does not offer to ask for a bill that is not there yet', async () => {
@@ -984,8 +1031,7 @@ describe('DineInTableComponent -- against the real DineInService', () => {
     localStorage.setItem(ADMISSION_KEY, JSON.stringify({ ...admission(), guestToken }));
     const carts = new FakeCartService();
     const menuService = new FakeMenuService();
-    const notification = new FakeNotificationService();
-    const session = new FakeSession();
+      const session = new FakeSession();
     menuService.home.mockResolvedValue(menu());
 
     TestBed.configureTestingModule({
@@ -996,14 +1042,13 @@ describe('DineInTableComponent -- against the real DineInService', () => {
         { provide: DineInCartService, useValue: carts },
         { provide: MenuService, useValue: menuService },
         { provide: Session, useValue: session },
-        { provide: NotificationService, useValue: notification },
-        { provide: PaymentSessionService, useValue: new FakePaymentSessionService() },
+          { provide: PaymentSessionService, useValue: new FakePaymentSessionService() },
         { provide: LangService, useValue: { langId: () => 'uz' } },
         { provide: TranslateService, useClass: FakeTranslateService },
       ],
     });
     const fixture = TestBed.createComponent(DineInTableComponent);
-    return { fixture, carts, notification, session, host: fixture.nativeElement as HTMLElement };
+    return { fixture, carts, session, host: fixture.nativeElement as HTMLElement };
   }
 
   async function tick(fixture: { detectChanges(): void }): Promise<void> {
@@ -1112,8 +1157,7 @@ describe('DineInTableComponent -- against the real DineInService', () => {
     await placeOrder(view);
 
     expect(view.host.querySelector('[data-testid="dine-in-round-pending"]')).not.toBeNull();
-    expect(view.notification.show).toHaveBeenCalledWith('dineIn.roundAttachRetry');
-    expect(view.notification.show).not.toHaveBeenCalledWith('dineIn.orderPlaced');
+    expect(view.host.querySelector('[data-testid="dine-in-order-placed"]')).toBeNull();
 
     api.mutate.mockResolvedValue(bill({ totalMinor: 45_000, roundCount: 1, orderIds: ['order-1'] }));
     view.host.querySelector<HTMLButtonElement>('[data-testid="dine-in-round-retry"]')?.click();
@@ -1123,7 +1167,8 @@ describe('DineInTableComponent -- against the real DineInService', () => {
     expect(view.host.querySelector('[data-testid="dine-in-round-pending"]')).toBeNull();
     expect(view.host.querySelector('[data-testid="dine-in-bill-total"]')?.textContent).toContain('45 000');
     // Success is the notice going away and the bill moving; only the failure spoke.
-    expect(view.notification.show).toHaveBeenCalledTimes(1);
+    expect(view.host.querySelector('[data-testid="dine-in-round-lost"]')).toBeNull();
+    expect(view.host.querySelector('[data-testid="dine-in-order-placed"]')).toBeNull();
   });
 
   it('stops retrying an order the platform refuses for good, and tells the guest to ask staff', async () => {
@@ -1134,8 +1179,9 @@ describe('DineInTableComponent -- against the real DineInService', () => {
     const first = setUpReal(api);
     await placeOrder(first);
 
-    expect(first.notification.show).toHaveBeenCalledWith('dineIn.roundAttachFailed');
-    expect(first.host.querySelector('[data-testid="dine-in-round-lost"]')).not.toBeNull();
+    expect(first.host.querySelector('[data-testid="dine-in-round-lost"]')?.textContent).toContain(
+      'dineIn.roundAttachFailed',
+    );
     expect(first.host.querySelector('[data-testid="dine-in-round-pending"]')).toBeNull();
 
     first.fixture.destroy();
@@ -1180,7 +1226,7 @@ describe('DineInTableComponent -- against the real DineInService', () => {
     await placeOrder(view);
 
     expect(view.host.querySelector('[data-testid="dine-in-round-pending"]')).not.toBeNull();
-    expect(view.notification.show).not.toHaveBeenCalledWith('dineIn.roundAttachFailed');
+    expect(view.host.querySelector('[data-testid="dine-in-round-lost"]')).toBeNull();
   });
 
   it('a guest token the platform refuses ends the visit, and the unattached order waits for a re-scan', async () => {

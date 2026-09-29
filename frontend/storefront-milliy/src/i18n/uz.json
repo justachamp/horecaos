@@ -450,7 +450,6 @@
     "askForBill": "Hisobni so'rash",
     "orderPlaced": "Buyurtma oshxonaga yuborildi",
     "billRequested": "Hisob so'raldi",
-    "roundAttachRetry": "Buyurtma oshxonaga yuborildi, lekin hali stol hisobida yo'q. «Qayta urinish» tugmasini bosing.",
     "roundPending": "Oxirgi buyurtmangiz oshxonada, lekin hali stol hisobiga qo'shilmadi.",
     "roundRetry": "Qayta urinish",
     "roundAttachFailed": "Buyurtma oshxonada, lekin uni stol hisobiga qo'shib bo'lmadi. Xodimga ayting."

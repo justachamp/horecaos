@@ -147,7 +147,6 @@ describe('i18n content: the keys the new cart / sale-window / table screens rend
     'dineIn.askForBill',
     'dineIn.orderPlaced',
     'dineIn.billRequested',
-    'dineIn.roundAttachRetry',
     'dineIn.roundPending',
     'dineIn.roundRetry',
     'dineIn.roundAttachFailed',

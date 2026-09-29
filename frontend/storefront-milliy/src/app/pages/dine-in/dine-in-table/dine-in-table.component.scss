@@ -161,3 +161,20 @@
 
   &:disabled { background: var(--line-default); color: var(--text-muted); box-shadow: none; cursor: not-allowed; }
 }
+
+.table__ok {
+  margin: 10px 24px 0;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  background: var(--surface-accent-wash);
+  color: var(--brand-accent-deep);
+  font: 700 13px/1.4 var(--font-ui);
+}
+
+.bill__requested {
+  margin: 0;
+  max-width: 130px;
+  color: var(--brand-accent-deep);
+  font: 700 12px/1.4 var(--font-ui);
+  text-align: right;
+}

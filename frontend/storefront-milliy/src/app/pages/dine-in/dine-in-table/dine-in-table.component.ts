@@ -23,7 +23,6 @@ import {
 } from '../../../services/dine-in.service';
 import { LangService } from '../../../services/lang.service';
 import { MenuService } from '../../../services/menu.service';
-import { NotificationService } from '../../../services/notification.service';
 import { PaymentSessionService } from '../../../services/payment-session.service';
 import { TranslateService } from '../../../services/translate.service';
 import { MenuGridComponent } from '../../../shared/menu-grid/menu-grid.component';
@@ -97,7 +96,6 @@ export class DineInTableComponent implements OnInit {
   protected readonly session = inject(Session);
   private readonly menuService = inject(MenuService);
   private readonly lang = inject(LangService);
-  private readonly notification = inject(NotificationService);
   private readonly paymentSession = inject(PaymentSessionService);
   private readonly translate = inject(TranslateService);
   private readonly router = inject(Router);
@@ -124,6 +122,12 @@ export class DineInTableComponent implements OnInit {
   protected readonly billBusy = signal(false);
   /** An order the platform refused to put on the bill for good -- the guest is told to ask staff. */
   protected readonly roundLost = signal(false);
+  /**
+   * The last order is in the kitchen *and* on the bill. Said on the screen, not
+   * in a toast: this app renders no toasts, so a message sent to
+   * `NotificationService` would never be seen by the guest.
+   */
+  protected readonly orderPlaced = signal(false);
 
   protected readonly priced = signal<PricedCart | null>(null);
   protected readonly paymentOptions = signal<readonly string[]>([]);
@@ -233,6 +237,7 @@ export class DineInTableComponent implements OnInit {
     this.updating.set(true);
     this.basketErrorKey.set(null);
     this.checkoutErrorKey.set(null);
+    this.orderPlaced.set(false);
     try {
       await this.carts.ensure(
         admission.locationId,
@@ -326,6 +331,7 @@ export class DineInTableComponent implements OnInit {
     this.checkoutErrorKey.set(null);
     this.paymentErrorKey.set(null);
     this.roundLost.set(false);
+    this.orderPlaced.set(false);
     try {
       const result = await this.carts.checkout({
         priced,
@@ -346,9 +352,7 @@ export class DineInTableComponent implements OnInit {
       // the device before the call, so a lost response or a reload cannot lose it.
       this.dineIn.queueRound(sessionId, result.orderId);
       const flush = await this.attachPendingRounds(sessionId);
-      if (flush.pending === 0 && flush.abandoned === 0) {
-        this.notification.show(this.translate.get('dineIn.orderPlaced'));
-      }
+      this.orderPlaced.set(flush.pending === 0 && flush.abandoned === 0);
 
       if (PaymentSessionService.requiresOnlineSession(paymentMethodCode)) {
         await this.openPaymentSession(result.orderId);
@@ -367,13 +371,14 @@ export class DineInTableComponent implements OnInit {
 
   /**
    * Puts every order this device placed at the table onto the table's bill and
-   * reports what is left. Says so when something is still not on it; says nothing
-   * on success, because the bill changing is the answer.
+   * reports what is left, on the screen. Says nothing on success, because the
+   * bill changing is the answer.
    *
    * What is at stake is the bill and the table chip, so a round that could not be
-   * confirmed stays queued -- the notice below the bill offers a retry and the
-   * next visit to this screen tries again -- and a round the platform refused for
-   * good is said out loud rather than dropped silently.
+   * confirmed stays queued -- the notice above the bill (`pendingRounds`) offers a
+   * retry and the next visit to this screen tries again -- and a round the
+   * platform refused for good is said out loud (`roundLost`) rather than dropped
+   * silently.
    */
   private async attachPendingRounds(sessionId: string): Promise<RoundFlush> {
     const flush = await this.dineIn.flushPendingRounds(sessionId);
@@ -382,9 +387,6 @@ export class DineInTableComponent implements OnInit {
     }
     if (flush.abandoned > 0) {
       this.roundLost.set(true);
-      this.notification.show(this.translate.get('dineIn.roundAttachFailed'));
-    } else if (flush.pending > 0) {
-      this.notification.show(this.translate.get('dineIn.roundAttachRetry'));
     }
     return flush;
   }
@@ -449,7 +451,6 @@ export class DineInTableComponent implements OnInit {
     this.billBusy.set(true);
     try {
       this.bill.set(await this.dineIn.requestBill(sessionId));
-      this.notification.show(this.translate.get('dineIn.billRequested'));
     } catch (failure) {
       if (this.dineIn.isGuestSessionEnded(failure)) {
         this.dineIn.clear();

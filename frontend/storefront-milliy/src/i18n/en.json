@@ -450,7 +450,6 @@
     "askForBill": "Ask for the bill",
     "orderPlaced": "Order sent to the kitchen",
     "billRequested": "The bill has been requested",
-    "roundAttachRetry": "Order sent to the kitchen, but it is not on the table bill yet. Tap Try again.",
     "roundPending": "Your last order is with the kitchen but is not on the table bill yet.",
     "roundRetry": "Try again",
     "roundAttachFailed": "Your order is with the kitchen, but it could not be added to the table bill. Please tell a member of staff."
