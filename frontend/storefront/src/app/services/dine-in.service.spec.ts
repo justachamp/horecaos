@@ -168,4 +168,191 @@ describe('DineInService', () => {
       expect(localStorage.getItem('horecaos_dinein_admission')).toBeNull();
     });
   });
+
+  describe('queued rounds -- an order that still has to reach its table\'s bill', () => {
+    const PENDING_KEY = 'horecaos_dinein_pending_rounds';
+    const billAfter = (orderIds: string[]) => ({
+      sessionId: 'session-1',
+      status: 'OPEN',
+      currency: 'UZS',
+      totalMinor: 45000 * orderIds.length,
+      roundCount: orderIds.length,
+      orderIds,
+    });
+    const offline = () =>
+      new HorecaOSApiError({ status: 0, code: 'NETWORK_UNREACHABLE', detail: 'The request did not reach the platform.' });
+
+    function seated(): { service: DineInService; api: FakeApiClient } {
+      localStorage.setItem('horecaos_dinein_admission', JSON.stringify(admission()));
+      return setUp();
+    }
+
+    it('counts what was queued for a session and nothing for another one', () => {
+      const { service } = seated();
+
+      service.queueRound('session-1', 'order-1');
+      service.queueRound('session-1', 'order-2');
+      service.queueRound('session-2', 'order-3');
+
+      expect(service.pendingRoundCount('session-1')).toBe(2);
+      expect(service.pendingRoundCount('session-2')).toBe(1);
+      expect(service.pendingRoundCount('session-9')).toBe(0);
+    });
+
+    it('queues an order once however often it is queued', () => {
+      const { service } = seated();
+
+      service.queueRound('session-1', 'order-1');
+      service.queueRound('session-1', 'order-1');
+
+      expect(service.pendingRoundCount('session-1')).toBe(1);
+    });
+
+    it('survives a reload, and stores ids only -- never the guest token', () => {
+      const { service } = seated();
+      service.queueRound('session-1', 'order-1');
+
+      expect(localStorage.getItem(PENDING_KEY)).not.toContain('guest-token-1');
+      TestBed.resetTestingModule();
+      const { service: reloaded } = setUp();
+
+      expect(reloaded.pendingRoundCount('session-1')).toBe(1);
+    });
+
+    it('forgets an order older than a day, on restore and when counting', () => {
+      localStorage.setItem(
+        PENDING_KEY,
+        JSON.stringify([
+          { sessionId: 'session-1', orderId: 'order-old', queuedAt: Date.now() - 25 * 60 * 60 * 1000 },
+          { sessionId: 'session-1', orderId: 'order-new', queuedAt: Date.now() - 60 * 1000 },
+        ]),
+      );
+
+      const { service } = seated();
+
+      expect(service.pendingRoundCount('session-1')).toBe(1);
+    });
+
+    it('survives a corrupt entry in storage', () => {
+      localStorage.setItem(PENDING_KEY, '{not json');
+      const { service } = seated();
+
+      expect(service.pendingRoundCount('session-1')).toBe(0);
+    });
+
+    it('attaches queued rounds oldest first, removes each once confirmed, and returns the last bill', async () => {
+      const { service, api } = seated();
+      service.queueRound('session-1', 'order-1');
+      service.queueRound('session-1', 'order-2');
+      api.mutate
+        .mockResolvedValueOnce(billAfter(['order-1']))
+        .mockResolvedValueOnce(billAfter(['order-1', 'order-2']));
+
+      const flush = await service.flushPendingRounds('session-1');
+
+      expect(api.mutate.mock.calls.map((call) => call[2].body)).toEqual([
+        { orderId: 'order-1' },
+        { orderId: 'order-2' },
+      ]);
+      expect(flush).toEqual({ bill: billAfter(['order-1', 'order-2']), pending: 0, abandoned: 0 });
+      expect(service.pendingRoundCount('session-1')).toBe(0);
+      expect(localStorage.getItem(PENDING_KEY)).toBeNull();
+    });
+
+    it('keeps every round queued when the platform cannot be reached, and stops at the first failure', async () => {
+      const { service, api } = seated();
+      service.queueRound('session-1', 'order-1');
+      service.queueRound('session-1', 'order-2');
+      api.mutate.mockRejectedValue(offline());
+
+      const flush = await service.flushPendingRounds('session-1');
+
+      expect(api.mutate).toHaveBeenCalledTimes(1);
+      expect(flush).toEqual({ bill: null, pending: 2, abandoned: 0 });
+      expect(service.pendingRoundCount('session-1')).toBe(2);
+    });
+
+    it.each([
+      ['a 401, because the guest token or the customer session can be renewed', 401, 'UNAUTHENTICATED'],
+      ['a 429', 429, 'RATE_LIMIT_EXCEEDED'],
+      ['a 503', 503, 'INTERNAL_ERROR'],
+    ])('keeps a round queued after %s', async (_label, status, code) => {
+      const { service, api } = seated();
+      service.queueRound('session-1', 'order-1');
+      api.mutate.mockRejectedValue(new HorecaOSApiError({ status, code, detail: 'later' }));
+
+      const flush = await service.flushPendingRounds('session-1');
+
+      expect(flush).toEqual({ bill: null, pending: 1, abandoned: 0 });
+    });
+
+    it('keeps a round queued when no table is scanned on this device any more', async () => {
+      const { service, api } = setUp();
+      service.queueRound('session-1', 'order-1');
+
+      const flush = await service.flushPendingRounds('session-1');
+
+      expect(api.mutate).not.toHaveBeenCalled();
+      expect(flush).toEqual({ bill: null, pending: 1, abandoned: 0 });
+    });
+
+    it('drops a round the platform refuses for good, counts it, and carries on with the next', async () => {
+      const { service, api } = seated();
+      service.queueRound('session-1', 'order-1');
+      service.queueRound('session-1', 'order-2');
+      api.mutate
+        .mockRejectedValueOnce(new HorecaOSApiError({ status: 409, code: 'RESOURCE_CONFLICT', detail: 'closed' }))
+        .mockResolvedValueOnce(billAfter(['order-2']));
+
+      const flush = await service.flushPendingRounds('session-1');
+
+      expect(api.mutate).toHaveBeenCalledTimes(2);
+      expect(flush).toEqual({ bill: billAfter(['order-2']), pending: 0, abandoned: 1 });
+      expect(service.pendingRoundCount('session-1')).toBe(0);
+    });
+
+    it('leaves another session\'s rounds alone', async () => {
+      const { service, api } = seated();
+      service.queueRound('session-2', 'order-elsewhere');
+
+      const flush = await service.flushPendingRounds('session-1');
+
+      expect(api.mutate).not.toHaveBeenCalled();
+      expect(flush).toEqual({ bill: null, pending: 0, abandoned: 0 });
+      expect(service.pendingRoundCount('session-2')).toBe(1);
+    });
+
+    it('does not send one order twice when two passes overlap', async () => {
+      const { service, api } = seated();
+      service.queueRound('session-1', 'order-1');
+      api.mutate.mockResolvedValue(billAfter(['order-1']));
+
+      await Promise.all([service.flushPendingRounds('session-1'), service.flushPendingRounds('session-1')]);
+
+      expect(api.mutate).toHaveBeenCalledTimes(1);
+    });
+
+    it('picks up a round queued while a pass was already running', async () => {
+      const { service, api } = seated();
+      service.queueRound('session-1', 'order-1');
+      api.mutate.mockResolvedValue(billAfter([]));
+
+      const running = service.flushPendingRounds('session-1');
+      service.queueRound('session-1', 'order-2');
+      const flush = await service.flushPendingRounds('session-1');
+      await running;
+
+      expect(api.mutate.mock.calls.map((call) => call[2].body.orderId)).toEqual(['order-1', 'order-2']);
+      expect(flush.pending).toBe(0);
+    });
+
+    it('is not forgotten when the table visit is cleared -- a re-scan can still attach it', () => {
+      const { service } = seated();
+      service.queueRound('session-1', 'order-1');
+
+      service.clear();
+
+      expect(service.pendingRoundCount('session-1')).toBe(1);
+    });
+  });
 });

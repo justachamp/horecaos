@@ -195,6 +195,40 @@
   margin: 0 0 10px;
 }
 
+.table__pending {
+  background: var(--surface-raised);
+  border: 1px solid var(--brand-accent);
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin: 14px 0 0;
+}
+
+.table__pending-text,
+.table__lost {
+  font-size: 14px;
+  color: var(--text-primary);
+  margin: 0 0 10px;
+}
+
+.table__lost {
+  color: #d64545;
+  margin-top: 14px;
+}
+
+.table__pending-retry {
+  width: 100%;
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px solid var(--brand-accent);
+  background: transparent;
+  color: var(--brand-accent);
+  font-weight: 700;
+}
+
+.table__pending-retry:disabled {
+  opacity: 0.5;
+}
+
 .table__bill {
   margin-top: 14px;
   padding-top: 14px;
