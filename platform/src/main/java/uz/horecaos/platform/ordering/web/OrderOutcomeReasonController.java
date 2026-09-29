@@ -23,7 +23,9 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.iam.api.Capability;
+import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.ordering.application.OrderOutcomeReasonService;
 import uz.horecaos.platform.ordering.domain.CustomerRefund;
@@ -58,9 +60,21 @@ import uz.horecaos.platform.web.authorization.RequiresCapability;
 public class OrderOutcomeReasonController {
 
     private final OrderOutcomeReasonService reasons;
+    private final CurrentActor currentActor;
 
-    public OrderOutcomeReasonController(OrderOutcomeReasonService reasons) {
+    public OrderOutcomeReasonController(OrderOutcomeReasonService reasons, CurrentActor currentActor) {
         this.reasons = reasons;
+        this.currentActor = currentActor;
+    }
+
+    /**
+     * Who is authoring, for the ADR 0027 fact every mutation here leaves. The wire
+     * carries no reason (the console form has none, and a new field is an OpenAPI
+     * change for every client), so the service words one from the action itself.
+     */
+    private OrderOutcomeReasonService.Authorship authorship() {
+        return OrderOutcomeReasonService.Authorship.of(
+                ActorRef.user(currentActor.get().subject(), null));
     }
 
     @GetMapping
@@ -107,7 +121,7 @@ public class OrderOutcomeReasonController {
                     + "and the courier SLA report quietly loses it.")
     public ResponseEntity<IdResponse> create(@PathVariable UUID tenantId, @Valid @RequestBody ReasonRequest body) {
         try {
-            return ResponseEntity.ok(new IdResponse(reasons.create(tenantId, body.toCommand())));
+            return ResponseEntity.ok(new IdResponse(reasons.create(tenantId, authorship(), body.toCommand())));
         } catch (IllegalArgumentException refused) {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, refused.getMessage());
         }
@@ -128,7 +142,7 @@ public class OrderOutcomeReasonController {
         try {
             long expected = AggregateVersion.requireIfMatch(request);
             return ResponseEntity.ok(new VersionResponse(
-                    reasonId, reasons.update(tenantId, reasonId, (int) expected, body.toCommand())));
+                    reasonId, reasons.update(tenantId, authorship(), reasonId, (int) expected, body.toCommand())));
         } catch (OrderOutcomeReasonService.StaleReasonException stale) {
             throw ApiException.staleVersion(stale.expected(), stale.actual());
         } catch (OrderOutcomeReasonService.ReasonNotFoundException missing) {
@@ -147,7 +161,7 @@ public class OrderOutcomeReasonController {
     public ResponseEntity<Void> archive(
             @PathVariable UUID tenantId, @PathVariable UUID reasonId, HttpServletRequest request) {
         try {
-            reasons.archive(tenantId, reasonId, (int) AggregateVersion.requireIfMatch(request));
+            reasons.archive(tenantId, authorship(), reasonId, (int) AggregateVersion.requireIfMatch(request));
             return ResponseEntity.noContent().build();
         } catch (OrderOutcomeReasonService.StaleReasonException stale) {
             throw ApiException.staleVersion(stale.expected(), stale.actual());
@@ -169,8 +183,8 @@ public class OrderOutcomeReasonController {
     public ResponseEntity<List<ReasonResponse>> reorder(
             @PathVariable UUID tenantId, @Valid @RequestBody ReorderRequest body, HttpServletRequest request) {
         try {
-            reasons.reorder(
-                    tenantId, body.kind(), body.orderedReasonIds(), (int) AggregateVersion.requireIfMatch(request));
+            reasons.reorder(tenantId, authorship(), body.kind(), body.orderedReasonIds(), (int)
+                    AggregateVersion.requireIfMatch(request));
         } catch (OrderOutcomeReasonService.StaleReasonException stale) {
             throw ApiException.staleVersion(stale.expected(), stale.actual());
         } catch (IllegalArgumentException refused) {

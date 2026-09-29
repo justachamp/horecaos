@@ -82,6 +82,9 @@ export class WallboardVduPage implements OnInit {
   private clockHandle: ReturnType<typeof setInterval> | null = null;
   private latenessPolicy: LatenessPolicy = PLATFORM_DEFAULT_LATENESS_POLICY;
 
+  /** The tenant's `#rrggbb` for a late order (row `X.39`), or null for the design-system `--q-sla-late` token. */
+  protected readonly lateColour = signal<string | null>(null);
+
   ngOnInit(): void {
     this.pollHandle = setInterval(() => void this.refresh(), POLL_INTERVAL_MS);
     this.clockHandle = setInterval(() => this.now.set(Date.now()), CLOCK_TICK_MS);
@@ -113,6 +116,7 @@ export class WallboardVduPage implements OnInit {
     const scope = this.location.scope();
     if (scope) {
       this.latenessPolicy = await this.latenessPolicyApi.resolve(scope);
+      this.lateColour.set(this.latenessPolicy.lateColour ?? null);
       try {
         this.stations.set(await this.kitchen.stations(scope));
       } catch {
@@ -175,6 +179,11 @@ export class WallboardVduPage implements OnInit {
           time: formatClock(new Date(ticket.courierEtaAt), PLACEHOLDER_TIME_ZONE),
         })
       : null;
+  }
+
+  /** A breached ticket takes the tenant's late colour; an at-risk one keeps the platform's amber. */
+  protected lateColourFor(ticket: VduTicketResponse): string | null {
+    return this.severityTone(ticket) === 'danger' ? this.lateColour() : null;
   }
 
   protected severityTone(ticket: VduTicketResponse): 'danger' | 'warning' | 'none' {

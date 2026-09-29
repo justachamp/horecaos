@@ -51,6 +51,7 @@
             class="wv__card"
             [class.wv__card--warning]="severityTone(ticket) === 'warning'"
             [class.wv__card--danger]="severityTone(ticket) === 'danger'"
+            [style.--q-sla-late]="lateColourFor(ticket)"
             data-testid="wallboard-vdu-card"
           >
             <div class="wv__card-sequence q-display-tv q-tnum" data-testid="wallboard-vdu-sequence">

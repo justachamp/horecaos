@@ -27,6 +27,8 @@ export const CONFIGURATION_KEY_ROUTES: Readonly<Record<string, string>> = {
   'ordering.average_order_minutes': 'order-policy',
   'ordering.maximum_order_minutes': 'order-policy',
   'ordering.late_order_threshold_minutes': 'order-policy',
+  'ordering.at_risk_before_minutes': 'order-policy',
+  'ordering.late_colour': 'order-policy',
   'ordering.minimum_order_amount_minor': 'order-policy',
   'ordering.vat_rate_percent': 'order-policy',
   'ordering.routing_poll_interval_minutes': 'order-policy',

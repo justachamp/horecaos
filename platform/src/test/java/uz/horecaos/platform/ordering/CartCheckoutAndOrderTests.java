@@ -445,14 +445,14 @@ class CartCheckoutAndOrderTests {
 
         var tenantContext = new JdbcOrderingTenantContext(jdbc);
         var catalogSnapshot = new JdbcOrderCatalogSnapshot(jdbc, "uz");
+        var policyAudit =
+                new uz.horecaos.platform.audit.infrastructure.persistence.JdbcAuditRecorder(jdbc, objectMapper);
         var policies = new OrderAcceptancePolicyService(
                 new JdbcPolicyResolver(jdbc, objectMapper),
                 new uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcPolicyAuthor(
-                        jdbc,
-                        objectMapper,
-                        new uz.horecaos.platform.audit.infrastructure.persistence.JdbcAuditRecorder(jdbc, objectMapper),
-                        clock,
-                        (keyCode, scope) -> {}));
+                        jdbc, objectMapper, policyAudit, clock, (keyCode, scope) -> {}),
+                policyAudit,
+                clock);
 
         orderingConfig = new MutableConfigurationResolver();
         // Row 4.2g: the real per-item sale window read, over the real

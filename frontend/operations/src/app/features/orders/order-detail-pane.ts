@@ -479,6 +479,9 @@ export class OrderDetailPane {
   /** The resolved `ordering.lateness` policy (wave P06) — fetched once per order load in {@link load}. */
   private latenessPolicy: LatenessPolicy = PLATFORM_DEFAULT_LATENESS_POLICY;
 
+  /** The tenant's `#rrggbb` for a late order (row `X.39`), or null for the design-system `--q-sla-late` token. */
+  protected readonly lateColour = signal<string | null>(null);
+
   constructor() {
     // `orderId` is a signal input: navigating from one order to another under
     // the same `:orderId` route config reuses this component (Angular's
@@ -642,6 +645,7 @@ export class OrderDetailPane {
    */
   private async loadLatenessPolicy(scope: LocationScope): Promise<void> {
     this.latenessPolicy = await this.latenessPolicyApi.resolve(scope);
+    this.lateColour.set(this.latenessPolicy.lateColour ?? null);
   }
 
   protected manualRetry(): void {
@@ -822,6 +826,11 @@ export class OrderDetailPane {
   }
 
   // ------------------------------------------------------------ header severity
+
+  /** Only a `LATE` header takes the tenant's colour; `BLOCKED` and the approval deadline keep the platform's danger step. */
+  protected lateColourFor(severity: OrderSeverity): string | null {
+    return severity.level === 'LATE' ? this.lateColour() : null;
+  }
 
   protected headerSeverity(): OrderSeverity | null {
     const detail = this.order();

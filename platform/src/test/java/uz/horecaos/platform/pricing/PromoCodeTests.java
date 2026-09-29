@@ -506,6 +506,164 @@ class PromoCodeTests {
                 .isEqualTo(PromoCodeRedemptionPort.RedemptionResult.Result.NO_CODE_APPLIED);
     }
 
+    // ------------------------------------------- repricing an existing order
+
+    /**
+     * An amendment reprices an order that already redeemed its code. The
+     * ordinary state of a one-per-customer or single-use code after that
+     * checkout is "at its cap" -- the order's own redemption filled the last
+     * slot -- so presenting the code again reads LIMIT_REACHED and prices
+     * without the discount. Carrying the order's redemption must not.
+     */
+    @Test
+    @DisplayName("repricing an order carries the redemption it already holds even though the code is now at its cap")
+    void repricingCarriesAnOrdersOwnRedemptionAtTheCap() {
+        var code = activate(percentageDraftWithLimits("OWNSLOT", 1_000, 1, 1));
+        UUID orderId = UUID.randomUUID();
+        Quote checkoutQuote = quotes.quote(cartWithCode(Map.of(burgerVariant, 1), "OWNSLOT", "k-own-slot"));
+        assertThat(redemptions
+                        .reserveForQuote(TENANT, BRAND, checkoutQuote.quoteId(), orderId, CUSTOMER, NOW)
+                        .result())
+                .isEqualTo(PromoCodeRedemptionPort.RedemptionResult.Result.REDEEMED);
+
+        // What a naive amendment would do -- present the code again: refused, no discount.
+        var presentedAgain = quotes.quote(cartWithCode(Map.of(burgerVariant, 2), "OWNSLOT", "k-presented-again"));
+        assertThat(presentedAgain.discount().minor())
+                .as("the code is at its total and per-customer cap, so presenting it again drops the discount")
+                .isZero();
+
+        var carried = quotes.quote(carryingRedemptionOf(orderId, Map.of(burgerVariant, 2), "k-carried"));
+        assertThat(carried.discount().minor())
+                .as("10% of the two-burger basket, because the order's own redemption is carried")
+                .isEqualTo(10_000L);
+        assertThat(carried.total().minor()).isEqualTo(90_000L);
+        assertThat(carried.contextHash())
+                .as("the carried promotion is an input to the hash, like a presented one")
+                .isNotEqualTo(presentedAgain.contextHash());
+        assertThat(consumedCount(code.couponId()))
+                .as("pricing a carried redemption takes no slot -- pricing never writes consumed_count")
+                .isEqualTo(1);
+        assertThat(liveRedemptions(code.couponId())).isEqualTo(1L);
+    }
+
+    @Test
+    @DisplayName("a redemption is final: a code retired after the order was placed still discounts its repricing, "
+            + "while presenting it no longer does")
+    void aRetiredCodeStillDiscountsTheOrderThatRedeemedIt() {
+        var code = activate(percentageDraftWithLimits("RETIREDLATER", 1_000, null, 100));
+        UUID orderId = UUID.randomUUID();
+        Quote checkoutQuote = quotes.quote(cartWithCode(Map.of(burgerVariant, 1), "RETIREDLATER", "k-retired-1"));
+        redemptions.reserveForQuote(TENANT, BRAND, checkoutQuote.quoteId(), orderId, CUSTOMER, NOW);
+
+        authoring.retire(TENANT, BRAND, code.couponId());
+
+        assertThat(quotes.quote(cartWithCode(Map.of(burgerVariant, 2), "RETIREDLATER", "k-retired-presented"))
+                        .discount()
+                        .minor())
+                .as("a fresh customer typing a retired code gets nothing (ADR 0072)")
+                .isZero();
+        assertThat(quotes.quote(carryingRedemptionOf(orderId, Map.of(burgerVariant, 2), "k-retired-carried"))
+                        .discount()
+                        .minor())
+                .as("the order that redeemed it while it was live keeps the discount on its amended basket")
+                .isEqualTo(10_000L);
+    }
+
+    @Test
+    @DisplayName(
+            "an expired code (its window closed after the order was placed) still discounts that order's repricing")
+    void anExpiredCodeStillDiscountsTheOrderThatRedeemedIt() {
+        var code = activate(percentageDraft("ENDSSOON", 1_000, null, null, NOW.plus(Duration.ofHours(1))));
+        UUID orderId = UUID.randomUUID();
+        Quote checkoutQuote = quotes.quote(cartWithCode(Map.of(burgerVariant, 1), "ENDSSOON", "k-expiry-1"));
+        redemptions.reserveForQuote(TENANT, BRAND, checkoutQuote.quoteId(), orderId, CUSTOMER, NOW);
+
+        clock.advanceBy(Duration.ofHours(2));
+
+        assertThat(quotes.quote(cartWithCode(Map.of(burgerVariant, 2), "ENDSSOON", "k-expiry-presented"))
+                        .discount()
+                        .minor())
+                .isZero();
+        assertThat(quotes.quote(carryingRedemptionOf(orderId, Map.of(burgerVariant, 2), "k-expiry-carried"))
+                        .discount()
+                        .minor())
+                .isEqualTo(10_000L);
+        assertThat(code.couponId()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("only a live redemption of the same tenant and brand is carried: released, unknown and "
+            + "sibling-tenant orders price without the discount")
+    void onlyALiveRedemptionOfTheSameTenantIsCarried() {
+        activate(percentageDraftWithLimits("CARRYSCOPE", 1_000, null, 100));
+        UUID orderId = UUID.randomUUID();
+        Quote checkoutQuote = quotes.quote(cartWithCode(Map.of(burgerVariant, 1), "CARRYSCOPE", "k-scope-1"));
+        redemptions.reserveForQuote(TENANT, BRAND, checkoutQuote.quoteId(), orderId, CUSTOMER, NOW);
+
+        assertThat(quotes.quote(carryingRedemptionOf(orderId, Map.of(burgerVariant, 1), "k-scope-live"))
+                        .discount()
+                        .minor())
+                .as("positive control: the live redemption of this very order is carried")
+                .isEqualTo(5_000L);
+        assertThat(quotes.quote(carryingRedemptionOf(UUID.randomUUID(), Map.of(burgerVariant, 1), "k-scope-unknown"))
+                        .discount()
+                        .minor())
+                .as("an order with no redemption carries nothing")
+                .isZero();
+
+        // Another tenant asking about this tenant's order id: the lookup is keyed by tenant.
+        UUID otherTenant = UUID.randomUUID();
+        assertThat(new JdbcPromoCodeStore(jdbc, JsonMapper.builder().build())
+                        .findRedemptionHeldByOrder(otherTenant, orderId))
+                .isEmpty();
+
+        redemptions.release(TENANT, checkoutQuote.quoteId());
+        assertThat(quotes.quote(carryingRedemptionOf(orderId, Map.of(burgerVariant, 1), "k-scope-released"))
+                        .discount()
+                        .minor())
+                .as("a released redemption is not held any more -- the order ended without completing")
+                .isZero();
+    }
+
+    @Test
+    @DisplayName("restating an order's redemption after an amendment moves only the amount, never a second slot")
+    void restatingARedemptionMovesOnlyItsAmount() {
+        var code = activate(percentageDraftWithLimits("RESTATE", 1_000, 5, 5));
+        UUID orderId = UUID.randomUUID();
+        Quote checkoutQuote = quotes.quote(cartWithCode(Map.of(burgerVariant, 1), "RESTATE", "k-restate-1"));
+        redemptions.reserveForQuote(TENANT, BRAND, checkoutQuote.quoteId(), orderId, CUSTOMER, NOW);
+        assertThat(redemptionAmount(orderId)).isEqualTo(5_000L);
+
+        var amended = quotes.quote(carryingRedemptionOf(orderId, Map.of(burgerVariant, 3), "k-restate-2"));
+        assertThat(amended.discount().minor()).isEqualTo(15_000L);
+
+        assertThat(redemptions.restateForOrder(TENANT, orderId, amended.quoteId()))
+                .as("the order holds a live redemption, so there is something to restate")
+                .isTrue();
+        assertThat(redemptionAmount(orderId))
+                .as("now the discount the order carries")
+                .isEqualTo(15_000L);
+        assertThat(consumedCount(code.couponId())).as("no second slot").isEqualTo(1);
+        assertThat(liveRedemptions(code.couponId())).isEqualTo(1L);
+        assertThat(jdbc.sql("SELECT quote_id FROM pricing.coupon_redemptions WHERE order_id = :id")
+                        .param("id", orderId)
+                        .query(UUID.class)
+                        .single())
+                .as("the row stays keyed by the checkout quote, which is what cancellation releases it by")
+                .isEqualTo(checkoutQuote.quoteId());
+
+        // And the cancellation path still finds it.
+        assertThat(redemptions.release(TENANT, checkoutQuote.quoteId())).isTrue();
+        assertThat(consumedCount(code.couponId())).isZero();
+
+        assertThat(redemptions.restateForOrder(TENANT, orderId, amended.quoteId()))
+                .as("a released redemption is not restated")
+                .isFalse();
+        assertThat(redemptions.restateForOrder(TENANT, UUID.randomUUID(), amended.quoteId()))
+                .as("a promo-free order has nothing to restate")
+                .isFalse();
+    }
+
     @Test
     @DisplayName("authoring rejects a discount shape outside the closed set's own value rules")
     void authoringValidatesTheClosedShapeSet() {
@@ -612,6 +770,37 @@ class PromoCodeTests {
             lines.add(new QuoteRequest.Line("line-" + index++, entry.getKey(), entry.getValue(), List.of()));
         }
         return new QuoteRequest(TENANT, BRAND, LOCATION, CUSTOMER, "STOREFRONT", lines, idempotencyKey, null, code);
+    }
+
+    private QuoteRequest carryingRedemptionOf(UUID orderId, Map<UUID, Integer> quantities, String idempotencyKey) {
+        List<QuoteRequest.Line> lines = new ArrayList<>();
+        int index = 0;
+        for (var entry : quantities.entrySet()) {
+            lines.add(new QuoteRequest.Line("line-" + index++, entry.getKey(), entry.getValue(), List.of()));
+        }
+        return new QuoteRequest(
+                TENANT, BRAND, LOCATION, CUSTOMER, "STOREFRONT", lines, idempotencyKey, null, null, orderId);
+    }
+
+    private int consumedCount(UUID couponId) {
+        return jdbc.sql("SELECT consumed_count FROM pricing.coupon_codes WHERE id = :id")
+                .param("id", couponId)
+                .query(Integer.class)
+                .single();
+    }
+
+    private long liveRedemptions(UUID couponId) {
+        return jdbc.sql("SELECT count(*) FROM pricing.coupon_redemptions WHERE coupon_id = :id AND status = 'REDEEMED'")
+                .param("id", couponId)
+                .query(Long.class)
+                .single();
+    }
+
+    private long redemptionAmount(UUID orderId) {
+        return jdbc.sql("SELECT amount_minor FROM pricing.coupon_redemptions WHERE order_id = :id")
+                .param("id", orderId)
+                .query(Long.class)
+                .single();
     }
 
     private void seedTenancyAndCatalog() {

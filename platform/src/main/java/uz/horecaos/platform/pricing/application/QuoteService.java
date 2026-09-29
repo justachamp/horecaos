@@ -5,6 +5,8 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoField;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -307,6 +309,42 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
             }
         }
 
+        // A repricing of an order that already exists (an amendment) carries the
+        // redemption that order's own checkout took. That redemption holds its
+        // slot: the coupon's consumed_count and the customer's usage row already
+        // include this very order, so re-running the eligibility check above would
+        // read "limit reached" for a coupon whose last slot is this order's own --
+        // which is the ordinary state of a one-per-customer code -- and quietly
+        // drop the discount the customer was promised. The promotion is therefore
+        // presented as recorded, loaded by id because a later expiry, suspension
+        // or retirement of the code is not a reason to take a redemption off an
+        // order that still exists (ADR 0072: a redemption is final once checkout
+        // commits). What is not carried over is any exemption from the promotion's
+        // own conditions -- minimum basket, channel, location, the discount cap --
+        // which PromotionEvaluator still evaluates on the new basket.
+        if (request.carriedRedemptionOrderId() != null) {
+            Optional<JdbcPromoCodeStore.HeldRedemption> held =
+                    promoCodes.findRedemptionHeldByOrder(request.tenantId(), request.carriedRedemptionOrderId());
+            if (held.isPresent() && held.get().brandId().equals(request.brandId())) {
+                UUID heldPromotionId = held.get().promotionId();
+                List<Promotion> heldPromotions = promoCodes.promotionsForPricingByIds(
+                        request.tenantId(), request.brandId(), List.of(heldPromotionId));
+                if (!heldPromotions.isEmpty()) {
+                    // Replaces the same promotion if the active list already had it,
+                    // so it is never priced twice, and stays in force past the close
+                    // of a window the order redeemed inside.
+                    List<Promotion> withHeld = new ArrayList<>(promotions.stream()
+                            .filter(p -> !p.promotionId().equals(heldPromotionId))
+                            .toList());
+                    heldPromotions.forEach(p -> withHeld.add(p.heldPastItsWindow()));
+                    promotions = withHeld;
+                    Set<UUID> presented = new HashSet<>(presentedCouponPromotionIds);
+                    presented.add(heldPromotionId);
+                    presentedCouponPromotionIds = Set.copyOf(presented);
+                }
+            }
+        }
+
         // firstOrder and customerSegments are always the same neutral value:
         // no condition this ADR's authoring surface writes ever reads either
         // (FIRST_ORDER and CUSTOMER_SEGMENT are outside the closed condition
@@ -421,7 +459,8 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
                         : new QuoteRequest.Delivery(
                                 command.delivery().destination(),
                                 command.delivery().pricingAuthority()),
-                command.presentedCouponCode());
+                command.presentedCouponCode(),
+                command.carriedRedemptionOrderId());
 
         try {
             Quote quote = quote(request);

@@ -1205,6 +1205,17 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.orderPolicy.field.averageOrderMinutes': 'Oʻrtacha buyurtma vaqti (daqiqa)',
   'settings.orderPolicy.field.maximumOrderMinutes': 'Maksimal buyurtma vaqti (daqiqa)',
   'settings.orderPolicy.field.lateOrderThresholdMinutes': 'Buyurtma kechikadi (daqiqa)',
+  'settings.orderPolicy.field.atRiskBeforeMinutes':
+    'Belgilangan vaqtdan oldin ogohlantirish (daqiqa)',
+  'settings.orderPolicy.atRiskBeforeMinutes.hint':
+    'Buyurtma belgilangan vaqtdan necha daqiqa oldin «xavf ostida» deb koʻrsatiladi. Buyurtmaning barcha turlariga, buyurtmalar taxtasida ham, oshxona taxtasida ham amal qiladi.',
+  'settings.orderPolicy.field.lateColour': 'Kechikkan buyurtma rangi',
+  'settings.orderPolicy.lateColour.hint':
+    'Kechikkan buyurtmalar buyurtmalar taxtasida va oshxona taxtasida shu rangda koʻrsatiladi. Brendingiz boshqasini talab qilmasa, standart rangni qoldiring: qatorda yomon koʻrinadigan rang eng koʻp diqqat talab qiladigan buyurtmalarni yashiradi — kontrast ogohlantirishiga eʻtibor bering.',
+  'settings.orderPolicy.lateColour.standard': 'Standart',
+  'settings.orderPolicy.lateColour.useStandard': 'Standart rangni qaytarish',
+  'settings.orderPolicy.lateColour.standardHint':
+    'Dizayn tizimidagi kechikish uchun standart qizil rang.',
   'settings.orderPolicy.field.minimumOrderAmount': 'Buyurtmaning eng kam summasi',
   'settings.orderPolicy.minimumOrderAmount.hint':
     'Faqat oʻzi olib ketish va zalda — yetkazib berishning oʻz minimal summasi xizmat zonasida belgilanadi.',

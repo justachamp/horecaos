@@ -1,10 +1,18 @@
 package uz.horecaos.platform.ordering.application;
 
+import java.time.Clock;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.audit.api.ActorRef;
+import uz.horecaos.platform.audit.api.AuditClass;
+import uz.horecaos.platform.audit.api.AuditFact;
+import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.ordering.domain.OrderAcceptancePolicy;
@@ -38,10 +46,15 @@ public class OrderAcceptancePolicyService {
 
     private final PolicyResolver policies;
     private final PolicyAuthor author;
+    private final AuditRecorder audit;
+    private final Clock clock;
 
-    public OrderAcceptancePolicyService(PolicyResolver policies, PolicyAuthor author) {
+    public OrderAcceptancePolicyService(
+            PolicyResolver policies, PolicyAuthor author, AuditRecorder audit, Clock clock) {
         this.policies = policies;
         this.author = author;
+        this.audit = audit;
+        this.clock = clock;
     }
 
     /**
@@ -71,9 +84,45 @@ public class OrderAcceptancePolicyService {
      * for every order that already resolved an earlier one, exactly as ADR
      * 0030 requires.
      */
+    @Transactional
     public Effective author(ResourceScope scope, OrderAcceptancePolicy document, ActorRef authoredBy, String reason) {
+        // What this scope resolved to a moment ago -- its own version, or the
+        // one it inherits from a broader scope, or the platform default. That is
+        // the "before" an operator means by "who changed how orders are
+        // accepted": the shared mechanism's own fact (tenant.policy.authored)
+        // records only that a new version exists, with a hash, and cannot say
+        // the mode went from AUTO_CONFIRM to RESTAURANT_APPROVAL.
+        Effective before = resolveAt(scope);
         ResolvedPolicy<OrderAcceptancePolicy> resolved = author.author(ACCEPTANCE, scope, document, authoredBy, reason);
-        return new Effective(resolved.document(), resolved.policyId(), resolved.policyVersion());
+        Effective after = new Effective(resolved.document(), resolved.policyId(), resolved.policyVersion());
+
+        // Staff 9.3a (ADR 0027): a field-level before/after in the same
+        // transaction as the publication. Only the policy's own fields and
+        // versions -- the reason is the fact's "because", not a diffed field.
+        audit.record(AuditFact.of("ordering.acceptance-policy.authored", AuditClass.BUSINESS)
+                .by(authoredBy)
+                .at(scope)
+                .target("ordering.acceptance-policy", resolved.policyId())
+                .targetVersion((long) resolved.policyVersion())
+                .because(reason)
+                .changed(ChangeDocuments.diff(snapshotOf(before), snapshotOf(after)))
+                .correlatedBy(resolved.policyId().toString())
+                .occurredAt(clock.instant())
+                .build());
+        return after;
+    }
+
+    private static Map<String, Object> snapshotOf(Effective effective) {
+        OrderAcceptancePolicy policy = effective.policy();
+        Map<String, Object> snapshot = new LinkedHashMap<>();
+        snapshot.put("mode", policy.mode().name());
+        snapshot.put("approvalChannel", policy.approvalChannel().name());
+        snapshot.put("approvalTimeoutSeconds", policy.approvalTimeoutSeconds());
+        snapshot.put("timeoutAction", policy.timeoutAction().name());
+        snapshot.put("rejectionReasonRequired", policy.rejectionReasonRequired());
+        snapshot.put("notifyCustomerWhilePending", policy.notifyCustomerWhilePending());
+        snapshot.put("policyVersion", effective.policyVersion());
+        return snapshot;
     }
 
     /**

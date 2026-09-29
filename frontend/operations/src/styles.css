@@ -63,3 +63,11 @@ q-root {
   clip-path: inset(50%);
   white-space: nowrap;
 }
+
+/* Row X.39: a late order row drawn in the tenant's own colour (--q-sla-late set
+   inline on the row by the order board) takes a tint derived from that colour.
+   Global rather than in order-queue.css, whose component style budget has no
+   room; the extra type selector outranks the encapsulated .order-row--danger. */
+tr.order-row.order-row--late-custom {
+  background: color-mix(in srgb, var(--q-sla-late) 10%, var(--q-canvas));
+}

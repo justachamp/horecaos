@@ -9,6 +9,7 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -400,23 +401,58 @@ public class JdbcPromoCodeStore {
                 .param("tenantId", tenantId)
                 .param("brandId", brandId)
                 .param("now", utc(now))
-                .query((row, n) -> new PromotionBase(
-                        row.getObject("id", UUID.class),
-                        row.getString("scope"),
-                        row.getString("stacking_group"),
-                        row.getBoolean("exclusive"),
-                        row.getInt("priority"),
-                        row.getBoolean("requires_coupon"),
-                        row.getObject("maximum_discount_minor", Long.class),
-                        row.getString("currency"),
-                        row.getObject("valid_from", OffsetDateTime.class).toInstant(),
-                        row.getObject("valid_until", OffsetDateTime.class) == null
-                                ? null
-                                : row.getObject("valid_until", OffsetDateTime.class)
-                                        .toInstant(),
-                        row.getInt("definition_version")))
+                .query(JdbcPromoCodeStore::mapPromotionBase)
                 .list();
+        return assemblePromotions(tenantId, brandId, bases);
+    }
 
+    /**
+     * The named promotions of this brand, in whatever state they are in now --
+     * {@code ACTIVE} or not, inside their window or not.
+     *
+     * <p>The one caller is a repricing that must carry a redemption an order
+     * already holds (ADR 0072, see {@link #findRedemptionHeldByOrder}): the
+     * order redeemed the code while it was live, and a later expiry, suspension
+     * or retirement of the promotion is not a reason to take the discount off
+     * a basket the customer is still paying for. Everything else prices
+     * through {@link #listActivePromotionsForPricing}.
+     */
+    public List<Promotion> promotionsForPricingByIds(UUID tenantId, UUID brandId, Collection<UUID> promotionIds) {
+        if (promotionIds.isEmpty()) {
+            return List.of();
+        }
+        List<PromotionBase> bases = jdbc.sql("""
+                SELECT id, scope, stacking_group, exclusive, priority, requires_coupon,
+                       maximum_discount_minor, currency, valid_from, valid_until, definition_version
+                FROM pricing.promotions
+                WHERE tenant_id = :tenantId AND brand_id = :brandId AND id = ANY(:ids)
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("ids", promotionIds.toArray(UUID[]::new))
+                .query(JdbcPromoCodeStore::mapPromotionBase)
+                .list();
+        return assemblePromotions(tenantId, brandId, bases);
+    }
+
+    private static PromotionBase mapPromotionBase(ResultSet row, int number) throws SQLException {
+        return new PromotionBase(
+                row.getObject("id", UUID.class),
+                row.getString("scope"),
+                row.getString("stacking_group"),
+                row.getBoolean("exclusive"),
+                row.getInt("priority"),
+                row.getBoolean("requires_coupon"),
+                row.getObject("maximum_discount_minor", Long.class),
+                row.getString("currency"),
+                row.getObject("valid_from", OffsetDateTime.class).toInstant(),
+                row.getObject("valid_until", OffsetDateTime.class) == null
+                        ? null
+                        : row.getObject("valid_until", OffsetDateTime.class).toInstant(),
+                row.getInt("definition_version"));
+    }
+
+    private List<Promotion> assemblePromotions(UUID tenantId, UUID brandId, List<PromotionBase> bases) {
         if (bases.isEmpty()) {
             return List.of();
         }
@@ -678,6 +714,52 @@ public class JdbcPromoCodeStore {
                 .optional();
     }
 
+    /**
+     * The redemption this order holds, if its checkout took one (ADR 0072).
+     *
+     * <p>Keyed by the order id checkout minted before it redeemed, so it names
+     * exactly the promotion the accepted checkout quote was priced with -- read
+     * from what checkout recorded, never from the mutable cart and never from a
+     * value a caller supplies. A {@code RELEASED} row (the order ended without
+     * completing) is not held any more and is not returned.
+     */
+    public Optional<HeldRedemption> findRedemptionHeldByOrder(UUID tenantId, UUID orderId) {
+        return jdbc.sql("""
+                SELECT brand_id, coupon_id, promotion_id
+                FROM pricing.coupon_redemptions
+                WHERE tenant_id = :tenantId AND order_id = :orderId AND status = 'REDEEMED'
+                LIMIT 1
+                """)
+                .param("tenantId", tenantId)
+                .param("orderId", orderId)
+                .query((row, n) -> new HeldRedemption(
+                        row.getObject("brand_id", UUID.class),
+                        row.getObject("coupon_id", UUID.class),
+                        row.getObject("promotion_id", UUID.class)))
+                .optional();
+    }
+
+    /**
+     * Restates what a held redemption stands for after the order it belongs to
+     * was repriced, so the coupon's redemption list and a customer's discount
+     * history show the discount the order now carries rather than the one it
+     * was placed with.
+     *
+     * @return false when the order holds no live redemption
+     */
+    public boolean restateHeldRedemptionAmount(UUID tenantId, UUID orderId, long amountMinor) {
+        return jdbc.sql("""
+                UPDATE pricing.coupon_redemptions
+                SET amount_minor = :amount
+                WHERE tenant_id = :tenantId AND order_id = :orderId AND status = 'REDEEMED'
+                """)
+                        .param("tenantId", tenantId)
+                        .param("orderId", orderId)
+                        .param("amount", amountMinor)
+                        .update()
+                > 0;
+    }
+
     /** @return the released redemption's coupon and customer, or empty when nothing was reserved for this quote */
     public Optional<ReleasedRedemption> releaseRedemptionByQuote(UUID tenantId, UUID quoteId, Instant now) {
         return jdbc.sql("""
@@ -841,6 +923,9 @@ public class JdbcPromoCodeStore {
     }
 
     public record AppliedCoupon(UUID couponId, UUID promotionId, String currency, long discountMinor) {}
+
+    /** A live {@code REDEEMED} row: which coupon and promotion an order took, and the brand it took them under. */
+    public record HeldRedemption(UUID brandId, UUID couponId, UUID promotionId) {}
 
     /**
      * One row of {@link #redemptionsForCoupon}.

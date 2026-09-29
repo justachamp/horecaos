@@ -52,6 +52,26 @@ public interface PromoCodeRedemptionPort {
      */
     boolean release(UUID tenantId, UUID quoteId);
 
+    /**
+     * Restates what an order's live redemption stands for after the order was
+     * repriced by an amendment, so the coupon's redemption list and a
+     * customer's discount history show the discount the order carries now.
+     *
+     * <p>Not a second redemption: an amendment never consumes another slot,
+     * because the order still holds the one its checkout took ({@link
+     * #reserveForQuote}), and never moves that row to a new quote -- the
+     * cancellation path releases it by the checkout quote, and this leaves that
+     * key alone. Only {@code amount_minor} moves. Like {@link #reserveForQuote}
+     * the amount is read from the quote's own {@code PROMOTION} adjustments,
+     * never from a value the caller supplies; a quote whose conditions no
+     * longer produce the coupon's discount restates the redemption to zero.
+     *
+     * @param amendedQuoteId the quote the amendment repriced the order under
+     * @return false when the order holds no live redemption (a promo-free order,
+     *         a guest order that never had one, a released one) -- not an error
+     */
+    boolean restateForOrder(UUID tenantId, UUID orderId, UUID amendedQuoteId);
+
     record RedemptionResult(Result result) {
 
         public boolean isRefused() {

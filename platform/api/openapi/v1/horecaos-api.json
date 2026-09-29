@@ -11976,6 +11976,9 @@
           "isPlatformDefault" : {
             "type" : "boolean"
           },
+          "lateColour" : {
+            "type" : "string"
+          },
           "pickup" : {
             "$ref" : "#/components/schemas/LatenessThresholdsResponse"
           },

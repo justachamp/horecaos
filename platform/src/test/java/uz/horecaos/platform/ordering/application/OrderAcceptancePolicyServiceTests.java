@@ -77,14 +77,17 @@ class OrderAcceptancePolicyServiceTests {
         jdbc.sql("TRUNCATE TABLE tenant.tenants CASCADE").update();
         jdbc.sql("TRUNCATE TABLE audit.audit_events").update();
         evictions.clear();
+        var audit = new JdbcAuditRecorder(jdbc, JsonMapper.builder().build());
         service = new OrderAcceptancePolicyService(
                 new JdbcPolicyResolver(jdbc, JsonMapper.builder().build()),
                 new JdbcPolicyAuthor(
                         jdbc,
                         JsonMapper.builder().build(),
-                        new JdbcAuditRecorder(jdbc, JsonMapper.builder().build()),
+                        audit,
                         java.time.Clock.systemUTC(),
-                        (keyCode, scope) -> evictions.add(new Eviction(keyCode, scope))));
+                        (keyCode, scope) -> evictions.add(new Eviction(keyCode, scope))),
+                audit,
+                java.time.Clock.systemUTC());
         insertHierarchy();
     }
 

@@ -23,6 +23,15 @@ import uz.horecaos.platform.tenancy.api.GeoPoint;
  *                          from an earlier answer — and, when still eligible,
  *                          folded into {@code presentedCouponPromotionIds},
  *                          which is already part of the context hash
+ * @param carriedRedemptionOrderId ADR 0072, for repricing an order that already
+ *                          exists (an amendment): the order whose live coupon
+ *                          redemption this price must carry. That redemption
+ *                          already holds its slot, so it is not re-checked
+ *                          against the coupon's caps or window the way a
+ *                          {@code presentedCouponCode} is -- the promotion it
+ *                          was taken for is presented as-is and only its own
+ *                          conditions are evaluated on the new basket. Null
+ *                          for every cart price
  */
 public record QuoteRequest(
         UUID tenantId,
@@ -33,7 +42,8 @@ public record QuoteRequest(
         List<Line> lines,
         @Nullable String idempotencyKey,
         @Nullable Delivery delivery,
-        @Nullable String presentedCouponCode) {
+        @Nullable String presentedCouponCode,
+        @Nullable UUID carriedRedemptionOrderId) {
 
     public QuoteRequest {
         Objects.requireNonNull(tenantId, "A tenant id is required");
@@ -45,6 +55,30 @@ public record QuoteRequest(
         }
         channel = channel == null ? "STOREFRONT" : channel;
         lines = List.copyOf(lines);
+    }
+
+    /** Every call site that predates a repricing carrying an order's own redemption. */
+    public QuoteRequest(
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            @Nullable UUID customerAccountId,
+            String channel,
+            List<Line> lines,
+            @Nullable String idempotencyKey,
+            @Nullable Delivery delivery,
+            @Nullable String presentedCouponCode) {
+        this(
+                tenantId,
+                brandId,
+                locationId,
+                customerAccountId,
+                channel,
+                lines,
+                idempotencyKey,
+                delivery,
+                presentedCouponCode,
+                null);
     }
 
     /** A cart being collected, with no promo code, and every call site that predates ADR 0037/0072. */

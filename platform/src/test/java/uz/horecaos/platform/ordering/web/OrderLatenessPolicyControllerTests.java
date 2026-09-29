@@ -65,7 +65,7 @@ class OrderLatenessPolicyControllerTests {
     void servesThePlatformDefaultAtLocationScope() {
         FakeResolver resolver = new FakeResolver();
         OrderLatenessPolicyController controller = new OrderLatenessPolicyController(
-                new OrderLatenessPolicyService(resolver),
+                new OrderLatenessPolicyService(resolver, new uz.horecaos.platform.support.FakeConfigurationResolver()),
                 mock(OrderQueryService.class),
                 Clock.fixed(NOW, ZoneOffset.UTC));
 
@@ -89,7 +89,9 @@ class OrderLatenessPolicyControllerTests {
                 .thenReturn(Optional.of(orderDetail(promisedAt, OrderStatus.PREPARING)));
 
         OrderLatenessPolicyController controller = new OrderLatenessPolicyController(
-                new OrderLatenessPolicyService(resolver), orders, Clock.fixed(NOW, ZoneOffset.UTC));
+                new OrderLatenessPolicyService(resolver, new uz.horecaos.platform.support.FakeConfigurationResolver()),
+                orders,
+                Clock.fixed(NOW, ZoneOffset.UTC));
 
         OrderLatenessPolicyController.OrderLatenessResponse response =
                 controller.severity(TENANT_ID, BRAND_ID, LOCATION_ID, ORDER_ID);
@@ -97,6 +99,73 @@ class OrderLatenessPolicyControllerTests {
         assertThat(response.level())
                 .as("4 minutes before the promise is inside the 300s (5 min) at-risk window")
                 .isEqualTo(OrderLatenessPolicy.LatenessLevel.AT_RISK.name());
+    }
+
+    /**
+     * Row {@code X.39}: the server-side severity answer and the boards read one
+     * document. A tenant's at-risk minutes reach {@code GET .../{orderId}/lateness}
+     * exactly as they reach {@code GET .../lateness-policy}, so a caller that is not
+     * a per-render UI cannot disagree with the boards about the same order.
+     */
+    @Test
+    void aTenantsAtRiskMinutesMoveTheServerSideSeverityToo() {
+        FakeResolver resolver = new FakeResolver();
+        OrderQueryService orders = mock(OrderQueryService.class);
+        // 30 minutes before the promise: NORMAL under the platform's 5-minute window.
+        Instant promisedAt = NOW.plus(Duration.ofMinutes(30));
+        when(orders.detail(TENANT_ID, ORDER_ID))
+                .thenReturn(Optional.of(orderDetail(promisedAt, OrderStatus.PREPARING)));
+
+        OrderLatenessPolicyController withDefaults = new OrderLatenessPolicyController(
+                new OrderLatenessPolicyService(resolver, new uz.horecaos.platform.support.FakeConfigurationResolver()),
+                orders,
+                Clock.fixed(NOW, ZoneOffset.UTC));
+        OrderLatenessPolicyController withTenantWindow = new OrderLatenessPolicyController(
+                new OrderLatenessPolicyService(
+                        resolver,
+                        new uz.horecaos.platform.support.FakeConfigurationResolver(
+                                java.util.Map.of("ordering.at_risk_before_minutes", 45))),
+                orders,
+                Clock.fixed(NOW, ZoneOffset.UTC));
+
+        assertThat(withDefaults
+                        .severity(TENANT_ID, BRAND_ID, LOCATION_ID, ORDER_ID)
+                        .level())
+                .isEqualTo(OrderLatenessPolicy.LatenessLevel.NORMAL.name());
+        assertThat(withTenantWindow
+                        .severity(TENANT_ID, BRAND_ID, LOCATION_ID, ORDER_ID)
+                        .level())
+                .as("the tenant asked to be warned 45 minutes ahead, and 30 minutes ahead is inside that")
+                .isEqualTo(OrderLatenessPolicy.LatenessLevel.AT_RISK.name());
+        assertThat(withTenantWindow
+                        .policy(TENANT_ID, BRAND_ID, LOCATION_ID)
+                        .pickup()
+                        .atRiskBeforeSeconds())
+                .isEqualTo(45 * 60);
+    }
+
+    @Test
+    void theLateColourRidesOnTheServedPolicyOnlyWhenItIsAValidHex() {
+        OrderLatenessPolicyController controller = new OrderLatenessPolicyController(
+                new OrderLatenessPolicyService(
+                        new FakeResolver(),
+                        new uz.horecaos.platform.support.FakeConfigurationResolver(
+                                java.util.Map.of("ordering.late_colour", "#8A3FFC"))),
+                mock(OrderQueryService.class),
+                Clock.fixed(NOW, ZoneOffset.UTC));
+        OrderLatenessPolicyController injected = new OrderLatenessPolicyController(
+                new OrderLatenessPolicyService(
+                        new FakeResolver(),
+                        new uz.horecaos.platform.support.FakeConfigurationResolver(
+                                java.util.Map.of("ordering.late_colour", "red; background:url(x)"))),
+                mock(OrderQueryService.class),
+                Clock.fixed(NOW, ZoneOffset.UTC));
+
+        assertThat(controller.policy(TENANT_ID, BRAND_ID, LOCATION_ID).lateColour())
+                .isEqualTo("#8a3ffc");
+        assertThat(injected.policy(TENANT_ID, BRAND_ID, LOCATION_ID).lateColour())
+                .as("nothing but exactly #rrggbb is served to a style binding")
+                .isNull();
     }
 
     @Test
@@ -108,7 +177,9 @@ class OrderLatenessPolicyControllerTests {
                 .thenReturn(Optional.of(orderDetail(promisedAt, OrderStatus.COMPLETED)));
 
         OrderLatenessPolicyController controller = new OrderLatenessPolicyController(
-                new OrderLatenessPolicyService(resolver), orders, Clock.fixed(NOW, ZoneOffset.UTC));
+                new OrderLatenessPolicyService(resolver, new uz.horecaos.platform.support.FakeConfigurationResolver()),
+                orders,
+                Clock.fixed(NOW, ZoneOffset.UTC));
 
         assertThat(controller
                         .severity(TENANT_ID, BRAND_ID, LOCATION_ID, ORDER_ID)
@@ -124,7 +195,9 @@ class OrderLatenessPolicyControllerTests {
                 .thenReturn(Optional.of(orderDetail(NOW.plusSeconds(600), OrderStatus.PREPARING, OTHER_LOCATION_ID)));
 
         OrderLatenessPolicyController controller = new OrderLatenessPolicyController(
-                new OrderLatenessPolicyService(resolver), orders, Clock.fixed(NOW, ZoneOffset.UTC));
+                new OrderLatenessPolicyService(resolver, new uz.horecaos.platform.support.FakeConfigurationResolver()),
+                orders,
+                Clock.fixed(NOW, ZoneOffset.UTC));
 
         assertThatThrownBy(() -> controller.severity(TENANT_ID, BRAND_ID, LOCATION_ID, ORDER_ID))
                 .isInstanceOf(ApiException.class);

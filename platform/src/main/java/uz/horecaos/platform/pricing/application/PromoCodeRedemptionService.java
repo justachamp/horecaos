@@ -128,6 +128,18 @@ public class PromoCodeRedemptionService implements PromoCodeRedemptionPort {
 
     @Override
     @Transactional
+    public boolean restateForOrder(UUID tenantId, UUID orderId, UUID amendedQuoteId) {
+        if (store.findRedemptionHeldByOrder(tenantId, orderId).isEmpty()) {
+            return false;
+        }
+        long discountMinor = store.findCouponAppliedToQuote(tenantId, amendedQuoteId)
+                .map(AppliedCoupon::discountMinor)
+                .orElse(0L);
+        return store.restateHeldRedemptionAmount(tenantId, orderId, discountMinor);
+    }
+
+    @Override
+    @Transactional
     public boolean release(UUID tenantId, UUID quoteId) {
         Optional<JdbcPromoCodeStore.ReleasedRedemption> released =
                 store.releaseRedemptionByQuote(tenantId, quoteId, clock.instant());

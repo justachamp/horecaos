@@ -60,6 +60,28 @@
   `frontend/storefront` (the original app) still has no promo-code UI of its
   own, and the implementation checklist's remaining unchecked items are
   unaffected by this fix.
+  **Update, 2026-09-29 (batch 15, `w1-ordering-money-audit`): an amendment
+  keeps the order's promo-code discount.** `OrderAmendmentService#repriceFor`
+  used to hand pricing a null coupon, so every financial amendment repriced a
+  discounted order at full price and the increase the customer was asked to
+  confirm included the promo they had already earned. This record was silent on
+  amendments; the reading built is the one its own text supports. The
+  redemption is final once the checkout commits and is keyed by the order id
+  the checkout minted, so an amendment reprices with *that* redemption
+  (`PricingCommand.carriedRedemptionOrderId`, read by pricing from
+  `pricing.coupon_redemptions` -- never from the mutable cart's
+  `applied_coupon_code`) instead of re-presenting a code. Consequences: the
+  order's own slot is not re-checked against the coupon's total or per-customer
+  cap (a one-per-customer code is always at its cap after its own checkout, so
+  re-checking would drop the discount in the ordinary case); a coupon that has
+  since expired, been suspended or been retired still discounts the order that
+  redeemed it while it was live (a fresh customer typing it still gets nothing);
+  the promotion's own conditions -- minimum basket, channel, location, the
+  discount cap -- are still evaluated by the engine on the amended basket; and
+  no second redemption is ever taken: `restateForOrder` only restates the
+  existing row's `amount_minor` to the amended quote's discount, leaves it keyed
+  by the checkout quote (so a cancellation still releases it), and touches no
+  counter. Proven by `OrderAmendmentAndOutcomeTests` and `PromoCodeTests`.
 - Date proposed: 2026-09-05
 - Date decided: 2026-09-05
 - Deciders: Ayubkhon Abbosov (platform architecture), product, finance

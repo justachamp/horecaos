@@ -101,6 +101,10 @@ public class JdbcConfigurationValueAuthor implements ConfigurationValueAuthor {
                 throw new IllegalArgumentException("%s expects a %s value, got %s"
                         .formatted(key.code(), key.valueType().getSimpleName(), value.getClass()));
             }
+            // A rule narrower than the type (a colour, a bounded minute count):
+            // refused here, at the one place every writer passes through, rather
+            // than stored and tripping whoever reads it.
+            ConfigurationValueRules.validate(key, value);
         }
 
         StoredColumns columns = StoredColumns.of(key, explicitNull ? null : value);
