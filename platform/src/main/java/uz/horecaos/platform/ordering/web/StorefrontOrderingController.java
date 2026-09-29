@@ -284,10 +284,12 @@ public class StorefrontOrderingController {
             description = "ADR 0047's cart-to-table binding. The table is read from the guest's "
                     + "dine-in token (X-Dine-In-Token), never from the request: a body that named "
                     + "its own table would be a claim a client could edit to reach the next "
-                    + "table's bill. Checkout then refuses the order if nobody is seated and "
-                    + "otherwise puts it on the table's bill in the same transaction that creates "
-                    + "it, so the round cannot be lost between two requests. Clears any attached "
-                    + "quote, because a bound cart is another cart; re-price before checkout.")
+                    + "table's bill. Checkout then asks for the same token again (the binding "
+                    + "is remembered state, so the guest is re-proved), refuses the order if "
+                    + "nobody is seated and otherwise puts it on the table's bill in the same "
+                    + "transaction that creates it, so the round cannot be lost between two "
+                    + "requests. Clears any attached quote, because a bound cart is another "
+                    + "cart; re-price before checkout.")
     public ResponseEntity<CartResponse> bindTable(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,

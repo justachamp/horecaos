@@ -552,9 +552,11 @@ public class CartService {
      * at Yunusobod.
      *
      * <p>What the binding is for is checkout, not this call. Checkout re-reads the
-     * binding, refuses an order whose table nobody is sitting at, and puts the order
-     * on the table's bill in the same transaction that creates it, so the round
-     * cannot be lost between two requests the way a client-held retry queue can.
+     * binding, re-proves the guest from a live token ({@link #guestStandingAt}: the
+     * binding is stored state and a party may have left or a guest moved since),
+     * refuses an order whose table nobody is sitting at, and puts the order on the
+     * table's bill in the same transaction that creates it, so the round cannot be
+     * lost between two requests the way a client-held retry queue can.
      *
      * <p>The version precondition and the quote invalidation are a destination's
      * own, for consistency and one more reason: a binding is a change to what the
