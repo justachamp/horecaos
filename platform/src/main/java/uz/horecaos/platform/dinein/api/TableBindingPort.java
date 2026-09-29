@@ -1,5 +1,6 @@
 package uz.horecaos.platform.dinein.api;
 
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -9,13 +10,17 @@ import java.util.UUID;
  *
  * <p>The reverse of {@link OrderTablesPort}, and it runs the same way at the Java
  * level: ordering asks, dine-in answers from its own tables, and dine-in imports
- * nothing from ordering. Three questions, and nothing of the room, the guest or
+ * nothing from ordering. Four questions, and nothing of the room, the guest or
  * the bill crosses back:
  *
  * <ol>
  *   <li>{@link #resolveGuestTable} -- which table a scanned table's guest token
  *       was minted for. The table is never a request field, so a guest cannot
  *       bind a cart to the next table by editing a body;
+ *   <li>{@link #findGuestTable} -- the same question asked again at checkout, by a
+ *       caller that must not throw: the binding is remembered state, and a token
+ *       that has since ended or moved to another table is a reason to refuse the
+ *       order, not a fault;
  *   <li>{@link #isSeated} -- whether somebody is sitting there now, asked by
  *       checkout's read-only validation before anything is written;
  *   <li>{@link #attachRound} -- the write, made inside checkout's own
@@ -33,6 +38,18 @@ public interface TableBindingPort {
      * to scan again.
      */
     GuestTable resolveGuestTable(String guestToken);
+
+    /**
+     * The table behind a guest token, or empty when the token cannot act now: it
+     * has expired, was revoked (a party closed, a code rotated), was never minted,
+     * or belongs to a branch that no longer takes QR orders.
+     *
+     * <p>{@link #resolveGuestTable} for a caller that has to keep going. It never
+     * throws for a token, so it can be asked inside checkout's read-only validation
+     * without marking that transaction rollback-only, and every reason a token
+     * cannot act reads the same to the caller.
+     */
+    Optional<GuestTable> findGuestTable(String guestToken);
 
     /** Whether a live session sits at the table right now. Tenant is a predicate. */
     boolean isSeated(UUID tenantId, UUID tableId);

@@ -1333,7 +1333,7 @@ class CartCheckoutAndOrderTests {
         UUID cart = boundDineInCart("guest-token", TABLE);
         tableBinding.seated.add(TABLE);
 
-        var result = tx(() -> checkout.checkout(checkoutCommand(cart, "idem-bound-1")));
+        var result = tx(() -> checkout.checkout(tableCheckoutCommand(cart, "idem-bound-1", "guest-token")));
 
         assertThat(result.created()).isTrue();
         assertThat(orderStore.find(TENANT, orderIdOf(result)).orElseThrow().fulfillmentMode())
@@ -1357,7 +1357,7 @@ class CartCheckoutAndOrderTests {
         UUID cart = boundDineInCart("guest-token", TABLE);
         long reservationsBefore = reservationCount();
 
-        var refused = tx(() -> checkout.checkout(checkoutCommand(cart, "idem-bound-2")));
+        var refused = tx(() -> checkout.checkout(tableCheckoutCommand(cart, "idem-bound-2", "guest-token")));
 
         assertThat(refused.created()).isFalse();
         assertThat(refused.rejectionCode()).isEqualTo("TABLE_NOT_SEATED");
@@ -1381,7 +1381,7 @@ class CartCheckoutAndOrderTests {
                 new ApiException(ErrorCode.RESOURCE_CONFLICT, "The session closed in the instant since we looked");
         long reservationsBefore = reservationCount();
 
-        assertThatThrownBy(() -> tx(() -> checkout.checkout(checkoutCommand(cart, "idem-bound-3"))))
+        assertThatThrownBy(() -> tx(() -> checkout.checkout(tableCheckoutCommand(cart, "idem-bound-3", "guest-token"))))
                 .isInstanceOf(ApiException.class);
 
         assertThat(tableBinding.attaches).as("the attach was attempted").hasSize(1);
@@ -1394,7 +1394,7 @@ class CartCheckoutAndOrderTests {
         // The same key, once the room allows it: the failed attempt left no ledger row
         // that would answer for it.
         tableBinding.refuseAttach = null;
-        var retried = tx(() -> checkout.checkout(checkoutCommand(cart, "idem-bound-3")));
+        var retried = tx(() -> checkout.checkout(tableCheckoutCommand(cart, "idem-bound-3", "guest-token")));
         assertThat(retried.outcome()).isEqualTo(CheckoutService.CheckoutResult.Outcome.CREATED);
         assertThat(countOrders()).isEqualTo(1L);
     }
@@ -1469,7 +1469,7 @@ class CartCheckoutAndOrderTests {
         tableBinding.delegate = room.adapter();
         UUID cart = boundDineInCart("guest-token", room.tableId());
 
-        var result = tx(() -> checkout.checkout(checkoutCommand(cart, "idem-real-1")));
+        var result = tx(() -> checkout.checkout(tableCheckoutCommand(cart, "idem-real-1", "guest-token")));
 
         UUID orderId = orderIdOf(result);
         assertThat(room.sessions().rounds(TENANT, room.sessionId())).containsExactly(orderId);
@@ -1493,7 +1493,7 @@ class CartCheckoutAndOrderTests {
         UUID cart = boundDineInCart("guest-token", room.tableId());
         long reservationsBefore = reservationCount();
 
-        assertThatThrownBy(() -> tx(() -> checkout.checkout(checkoutCommand(cart, "idem-real-2"))))
+        assertThatThrownBy(() -> tx(() -> checkout.checkout(tableCheckoutCommand(cart, "idem-real-2", "guest-token"))))
                 .isInstanceOf(ApiException.class);
 
         assertThat(countOrders()).as("no order: it could not be on the bill").isZero();
@@ -1502,11 +1502,140 @@ class CartCheckoutAndOrderTests {
         assertThat(readCart(cart).status()).isEqualTo(CartStatus.ACTIVE);
     }
 
+    @Test
+    @DisplayName("a bound cart checked out with no table token is refused: the binding alone proves nobody is there")
+    void aBoundCartWithoutATokenIsRefused() {
+        enableDineIn();
+        UUID cart = boundDineInCart("guest-token", TABLE);
+        tableBinding.seated.add(TABLE);
+        long reservationsBefore = reservationCount();
+
+        var refused = tx(() -> checkout.checkout(tableCheckoutCommand(cart, "idem-no-token", null)));
+
+        assertThat(refused.created()).isFalse();
+        assertThat(refused.rejectionCode()).isEqualTo("TABLE_TOKEN_REQUIRED");
+        assertThat(countOrders()).isZero();
+        assertThat(tableBinding.attaches).isEmpty();
+        assertThat(reservationCount()).isEqualTo(reservationsBefore);
+        assertThat(readCart(cart).status()).isEqualTo(CartStatus.ACTIVE);
+    }
+
+    @Test
+    @DisplayName("a bound cart whose guest token has ended is refused, even while someone else sits at the table")
+    void aBoundCartWithAnEndedTokenIsRefused() {
+        enableDineIn();
+        UUID cart = boundDineInCart("guest-token", TABLE);
+        tableBinding.seated.add(TABLE);
+        // The party the token was minted for has left and its tokens were revoked;
+        // a stranger has been seated since. The cart's binding still says this table.
+        tableBinding.guests.remove("guest-token");
+
+        var refused = tx(() -> checkout.checkout(tableCheckoutCommand(cart, "idem-ended-token", "guest-token")));
+
+        assertThat(refused.created()).isFalse();
+        assertThat(refused.rejectionCode()).isEqualTo("TABLE_TOKEN_ENDED");
+        assertThat(countOrders()).isZero();
+        assertThat(tableBinding.attaches)
+                .as("nothing was put on the stranger's bill")
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("a cart bound to one table is not checked out from another: the guest re-binds, then it goes through")
+    void aBoundCartCheckedOutFromAnotherTableIsRefusedUntilRebound() {
+        enableDineIn();
+        UUID otherTable = UUID.randomUUID();
+        UUID cart = boundDineInCart("guest-at-seven", TABLE);
+        guestAtTable("guest-at-nine", otherTable, LOCATION);
+        // The guest was moved to table nine and scanned it. A stranger now sits at
+        // seven, where the cart is still bound.
+        tableBinding.seated.add(TABLE);
+        tableBinding.seated.add(otherTable);
+
+        var refused = tx(() -> checkout.checkout(tableCheckoutCommand(cart, "idem-moved-1", "guest-at-nine")));
+
+        assertThat(refused.created()).isFalse();
+        assertThat(refused.rejectionCode()).isEqualTo("TABLE_BINDING_STALE");
+        assertThat(countOrders()).isZero();
+        assertThat(tableBinding.attaches)
+                .as("the stranger at table seven was not billed for the guest's dinner")
+                .isEmpty();
+
+        // What the storefront does on scanning table nine: bind again, then price.
+        tx(() -> carts.bindTable(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart), "guest-at-nine"));
+        tx(() -> carts.price(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart)));
+
+        var placed = tx(() -> checkout.checkout(tableCheckoutCommand(cart, "idem-moved-2", "guest-at-nine")));
+
+        assertThat(placed.created()).isTrue();
+        assertThat(tableBinding.attaches).hasSize(1);
+        assertThat(tableBinding.attaches.get(0).tableId()).isEqualTo(otherTable);
+    }
+
+    @Test
+    @DisplayName("against the real dine-in stack, a closed party's old cart cannot reach the next party's bill")
+    void aClosedPartysCartCannotReachTheNextPartysBill() {
+        enableDineIn();
+        RealDineIn room = realDineIn("UZS");
+        tableBinding.delegate = room.adapter();
+        tableBinding.delegateGuestLookups = true;
+        mintGuestToken(room, "guest-one");
+        UUID cart = boundDineInCart("guest-one", room.tableId());
+        assertThat(tableBinding.findGuestTable("guest-one"))
+                .as("the token is live while the first party is seated")
+                .isPresent();
+
+        // The first party leaves: closing the session revokes the tokens minted at its
+        // table (TableSessionService.move). A second party is seated.
+        tx(() -> room.sessions()
+                .move(
+                        TENANT,
+                        room.sessionId(),
+                        uz.horecaos.platform.dinein.domain.SessionStatus.CLOSED,
+                        room.sessions().find(TENANT, room.sessionId()).version(),
+                        null,
+                        "waiter",
+                        "Party left"));
+        var second = tx(() -> room.sessions()
+                .open(
+                        new uz.horecaos.platform.dinein.application.TableSessionService.OpenSession(
+                                TENANT, BRAND, LOCATION, null, List.of(room.tableId()), 2, "UZS", "waiter"),
+                        "Walk-in"));
+
+        var refused = tx(() -> checkout.checkout(tableCheckoutCommand(cart, "idem-real-3", "guest-one")));
+
+        assertThat(refused.created()).isFalse();
+        assertThat(refused.rejectionCode()).isEqualTo("TABLE_TOKEN_ENDED");
+        assertThat(countOrders()).isZero();
+        assertThat(room.sessions().rounds(TENANT, second.id()))
+                .as("nothing landed on the second party's bill")
+                .isEmpty();
+    }
+
+    /** Mints the guest token a real scan would, for the table of a {@link #realDineIn} room. */
+    private void mintGuestToken(RealDineIn room, String guestToken) {
+        room.store()
+                .insertGuestSession(
+                        new uz.horecaos.platform.dinein.infrastructure.persistence.JdbcDineInStore.GuestSessionRow(
+                                UUID.randomUUID(),
+                                TENANT,
+                                BRAND,
+                                LOCATION,
+                                room.tableId(),
+                                uz.horecaos.platform.dinein.domain.BearerToken.hash(guestToken),
+                                uz.horecaos.platform.dinein.domain.QrMode.ORDER_AND_PAY,
+                                clock.instant(),
+                                clock.instant().plus(Duration.ofHours(4)),
+                                null,
+                                null));
+    }
+
     /** The dine-in stack the storefront runs against, hand-wired over this suite's database, with one party seated. */
     private record RealDineIn(
             uz.horecaos.platform.dinein.application.TableSessionService sessions,
             uz.horecaos.platform.dinein.application.TableBindingPortAdapter adapter,
             uz.horecaos.platform.dinein.application.OrderTablesPortAdapter orderTables,
+            uz.horecaos.platform.dinein.infrastructure.persistence.JdbcDineInStore store,
             UUID tableId,
             UUID sessionId) {}
 
@@ -1547,6 +1676,7 @@ class CartCheckoutAndOrderTests {
                 sessions,
                 new uz.horecaos.platform.dinein.application.TableBindingPortAdapter(qr, sessions, store),
                 new uz.horecaos.platform.dinein.application.OrderTablesPortAdapter(store),
+                store,
                 table,
                 session);
     }
@@ -6494,6 +6624,21 @@ class CartCheckoutAndOrderTests {
 
     private CheckoutService.CheckoutCommand checkoutCommand(
             UUID cartId, String idempotencyKey, @Nullable String paymentMethodCode, long redeemFromBalanceMinor) {
+        return checkoutCommand(cartId, idempotencyKey, paymentMethodCode, redeemFromBalanceMinor, null);
+    }
+
+    /** A checkout from a guest at a table: the token is the one the storefront sends as X-Dine-In-Token. */
+    private CheckoutService.CheckoutCommand tableCheckoutCommand(
+            UUID cartId, String idempotencyKey, @Nullable String guestToken) {
+        return checkoutCommand(cartId, idempotencyKey, "CASH", 0L, guestToken);
+    }
+
+    private CheckoutService.CheckoutCommand checkoutCommand(
+            UUID cartId,
+            String idempotencyKey,
+            @Nullable String paymentMethodCode,
+            long redeemFromBalanceMinor,
+            @Nullable String guestToken) {
         var cart = readCart(cartId);
         return new CheckoutService.CheckoutCommand(
                 TENANT,
@@ -6509,7 +6654,8 @@ class CartCheckoutAndOrderTests {
                 CUSTOMER.toString(),
                 null,
                 null,
-                false);
+                false,
+                guestToken);
     }
 
     private OrderStateService.DecisionCommand decision(String decisionId, OrderStateService.DecisionAction action) {

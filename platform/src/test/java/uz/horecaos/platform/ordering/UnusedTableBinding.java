@@ -1,5 +1,6 @@
 package uz.horecaos.platform.ordering;
 
+import java.util.Optional;
 import java.util.UUID;
 import uz.horecaos.platform.dinein.api.TableBindingPort;
 
@@ -17,6 +18,11 @@ final class UnusedTableBinding implements TableBindingPort {
 
     @Override
     public GuestTable resolveGuestTable(String guestToken) {
+        throw new UnsupportedOperationException("This suite does not bind carts to tables");
+    }
+
+    @Override
+    public Optional<GuestTable> findGuestTable(String guestToken) {
         throw new UnsupportedOperationException("This suite does not bind carts to tables");
     }
 

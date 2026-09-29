@@ -601,6 +601,47 @@ public class CartService {
         return carts.findTableBinding(tenantId, cartId);
     }
 
+    /** Where a guest stands against the table their cart is bound to, read from a live token. */
+    public enum GuestStanding {
+        /** The presented token is live and was minted for the bound table. */
+        AT_BOUND_TABLE,
+        /** No token was presented at all. */
+        NO_TOKEN,
+        /** A token was presented and cannot act now: ended, revoked, never minted, or the branch stopped taking QR orders. */
+        TOKEN_ENDED,
+        /** The token is live, for another table (or another brand) than the one the cart is bound to. */
+        AT_ANOTHER_TABLE
+    }
+
+    /**
+     * Re-proves, at checkout, that the guest is still at the table their cart was
+     * bound to (ADR 0047).
+     *
+     * <p>{@link #bindTable} validates a token once and stores only the table. Stored
+     * state outlives what proved it: a party closes and its tokens are revoked while
+     * the cart, good for the cart TTL, still names the table; a guest is moved to
+     * another table and scans it while the basket they reload still names the old
+     * one. Checkout then puts the order on the bill of whoever sits at the bound
+     * table now. The customer JWT proves who is ordering, never where they are, so
+     * the table is proved again here from a token the platform still honours.
+     *
+     * <p>Read-only and non-throwing for a token that cannot act, so checkout can
+     * refuse and settle the refusal under its idempotency key rather than roll back.
+     */
+    @Transactional(readOnly = true)
+    public GuestStanding guestStandingAt(UUID tenantId, UUID brandId, UUID boundTableId, @Nullable String guestToken) {
+        if (guestToken == null || guestToken.isBlank()) {
+            return GuestStanding.NO_TOKEN;
+        }
+        return tables.findGuestTable(guestToken)
+                .map(table -> table.tenantId().equals(tenantId)
+                                && table.brandId().equals(brandId)
+                                && table.tableId().equals(boundTableId)
+                        ? GuestStanding.AT_BOUND_TABLE
+                        : GuestStanding.AT_ANOTHER_TABLE)
+                .orElse(GuestStanding.TOKEN_ENDED);
+    }
+
     /** Whether a party is sitting at the table now: checkout's read-only refusal. */
     @Transactional(readOnly = true)
     public boolean tableIsSeated(UUID tenantId, UUID tableId) {

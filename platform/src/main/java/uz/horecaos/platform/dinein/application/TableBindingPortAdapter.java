@@ -1,6 +1,7 @@
 package uz.horecaos.platform.dinein.application;
 
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -52,6 +53,20 @@ public class TableBindingPortAdapter implements TableBindingPort {
                 .orElseThrow(() -> new ApiException(
                         ErrorCode.RESOURCE_NOT_FOUND, "This code is not in service. Ask a member of staff."));
         return new GuestTable(guest.tenantId(), guest.brandId(), guest.locationId(), table.id(), table.code());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<GuestTable> findGuestTable(String guestToken) {
+        try {
+            return Optional.of(resolveGuestTable(guestToken));
+        } catch (ApiException cannotAct) {
+            // Every reason a token cannot act (ended, revoked, unknown, a branch that
+            // takes no QR orders) is one answer. QrEntryService.resolve and the table
+            // read are plain store reads outside any transaction proxy, so catching
+            // here does not leave the caller's transaction marked rollback-only.
+            return Optional.empty();
+        }
     }
 
     @Override

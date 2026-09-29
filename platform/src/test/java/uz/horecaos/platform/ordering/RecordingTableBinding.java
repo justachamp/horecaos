@@ -5,6 +5,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -48,9 +49,14 @@ final class RecordingTableBinding implements TableBindingPort {
      * recording), so a suite can run a checkout against the real dine-in adapter and
      * still see what ordering asked it. {@link #resolveGuestTable} stays this class's:
      * the guest tokens are minted by the real scan in {@code CartTableBindingHttpTests}.
+     * {@link #findGuestTable} is this class's too, until {@link #delegateGuestLookups}
+     * is set, so a test can present a token the real store minted and then revoked.
      */
     @Nullable
     TableBindingPort delegate;
+
+    /** When set (and a {@link #delegate} is), {@link #findGuestTable} asks the real adapter. */
+    boolean delegateGuestLookups;
 
     RecordingTableBinding(JdbcClient jdbc) {
         this.jdbc = jdbc;
@@ -62,6 +68,7 @@ final class RecordingTableBinding implements TableBindingPort {
         attaches.clear();
         refuseAttach = null;
         delegate = null;
+        delegateGuestLookups = false;
     }
 
     @Override
@@ -71,6 +78,15 @@ final class RecordingTableBinding implements TableBindingPort {
             throw new ApiException(ErrorCode.UNAUTHENTICATED, "This table session has ended. Scan the code again.");
         }
         return table;
+    }
+
+    @Override
+    public Optional<GuestTable> findGuestTable(String guestToken) {
+        TableBindingPort real = delegate;
+        if (real != null && delegateGuestLookups) {
+            return real.findGuestTable(guestToken);
+        }
+        return Optional.ofNullable(guests.get(guestToken));
     }
 
     @Override

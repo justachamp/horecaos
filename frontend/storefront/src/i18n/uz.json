@@ -301,6 +301,7 @@
     "thisBranch": "Ushbu filial",
     "tableLabel": "{{code}}-stol",
     "notSeated": "Xodimdan sizni stolga o'tqazishini so'rang, so'ng kodni qayta skanerlang.",
+    "tableChanged": "Siz endi boshqa stoldasiz. Buyurtmangizni shu stolga ko'chirdik: tekshirib, qayta yuboring.",
     "menuUnavailable": "Hozircha menyu mavjud emas.",
     "signInToOrder": "Buyurtma berish uchun kiring",
     "itemsInCart": "Savatda: {{count}} ta",

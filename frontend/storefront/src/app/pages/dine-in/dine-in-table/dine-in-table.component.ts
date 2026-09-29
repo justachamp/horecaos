@@ -6,7 +6,7 @@ import { ReturnDestination } from '../../../core/auth/return-destination';
 import { Session } from '../../../core/auth/session';
 import { newIdempotencyKey } from '../../../core/api/idempotency';
 import { HorecaOSApiError } from '../../../core/api/problem-details';
-import { CartService, type PricedCart } from '../../../services/cart.service';
+import { CartService, type PlatformCart, type PricedCart } from '../../../services/cart.service';
 import { type DineInAdmission, DineInBill, DineInService, type RoundFlush } from '../../../services/dine-in.service';
 import { LangService } from '../../../services/lang.service';
 import { LocationProfileService } from '../../../services/location-profile.service';
@@ -101,6 +101,7 @@ export class DineInTableComponent implements OnInit {
   private pendingCheckoutKey: string | null = null;
   private pricedCartId: string | null = null;
   private boundCartId: string | null = null;
+  private bindInFlight: Promise<void> | null = null;
 
   constructor() {
     // Reprices whenever the cart's own version moves (a line added, changed
@@ -152,6 +153,11 @@ export class DineInTableComponent implements OnInit {
             .ensure(admission.locationId, 'DINE_IN', false, admission.channelCode ?? undefined)
             .catch(() => null)
         : Promise.resolve(null);
+
+    // Not part of `loading`: the menu is usable while the basket is being re-pointed
+    // at this table, and `bindCartToTable` is single-flight, so a dish tapped in the
+    // meantime waits for this rather than racing it.
+    void cartLoad.then((cart) => this.rebindExistingCart(admission, cart));
 
     Promise.all([menuLoad, billLoad, cartLoad]).finally(() => this.loading.set(false));
   }
@@ -231,6 +237,30 @@ export class DineInTableComponent implements OnInit {
   }
 
   /**
+   * Binds a cart the guest already had to the table they have just scanned.
+   *
+   * The binding lives on the cart, and the cart outlives the visit: a guest who
+   * was moved to another table, or who scanned again after their party changed,
+   * reloads a basket bound to the table they left. Rebinding is only ever done
+   * from `setQuantity`, which a guest who does not touch a line never reaches, so
+   * without this an unedited basket is placed against the old table. Checkout now
+   * refuses that (`TABLE_BINDING_STALE`), but the guest should not be the one to
+   * find out. A basket with no lines has nothing to place; its first line binds it.
+   */
+  private async rebindExistingCart(admission: DineInAdmission, cart: PlatformCart | null): Promise<void> {
+    if (!cart || cart.lines.length === 0) {
+      return;
+    }
+    try {
+      await this.bindCartToTable(admission);
+    } catch (failure) {
+      if (this.dineIn.isGuestSessionEnded(failure)) {
+        this.dineIn.clear();
+      }
+    }
+  }
+
+  /**
    * Binds the cart to this table once per cart, before its first line.
    *
    * Best-effort on purpose. A bound cart makes the platform put the order on the
@@ -240,14 +270,25 @@ export class DineInTableComponent implements OnInit {
    * blocking an add-to-cart on -- except a guest token the platform no longer
    * recognises, which nothing on this screen works without.
    */
-  private async bindCartToTable(admission: DineInAdmission): Promise<void> {
+  private bindCartToTable(admission: DineInAdmission): Promise<void> {
+    if (this.bindInFlight) {
+      return this.bindInFlight;
+    }
     const cart = this.carts.cart();
     if (!cart || this.boundCartId === cart.cartId) {
-      return;
+      return Promise.resolve();
     }
+    const inFlight = this.bindNow(admission, cart.cartId).finally(() => {
+      this.bindInFlight = null;
+    });
+    this.bindInFlight = inFlight;
+    return inFlight;
+  }
+
+  private async bindNow(admission: DineInAdmission, cartId: string): Promise<void> {
     try {
       await this.carts.bindTable(admission.guestToken);
-      this.boundCartId = cart.cartId;
+      this.boundCartId = cartId;
     } catch (failure) {
       if (this.dineIn.isGuestSessionEnded(failure)) {
         throw failure;
@@ -301,6 +342,9 @@ export class DineInTableComponent implements OnInit {
         priced,
         paymentMethodCode,
         idempotencyKey: this.checkoutKey(),
+        // The binding is remembered state; this is what proves the guest is still
+        // at the table it names.
+        guestToken: admission.guestToken,
       });
       if (result.outcome === 'REJECTED') {
         this.checkoutError.set(this.translate.get('cart.orderRejected'));
@@ -327,7 +371,32 @@ export class DineInTableComponent implements OnInit {
       }
       // A bound cart is refused, before anything is written, when the party has
       // left or a host closed the table while the guest was choosing.
-      const tableEmpty = failure instanceof HorecaOSApiError && failure.problem?.reason === 'TABLE_NOT_SEATED';
+      const reason = failure instanceof HorecaOSApiError ? failure.problem?.reason : undefined;
+      const tableEmpty = reason === 'TABLE_NOT_SEATED';
+      if (!(failure instanceof HorecaOSApiError) || failure.code !== 'NETWORK_UNREACHABLE') {
+        this.pendingCheckoutKey = null;
+      }
+      if (reason === 'TABLE_TOKEN_ENDED' || reason === 'TABLE_TOKEN_REQUIRED') {
+        // The same cue as a guest token the platform stopped recognising: the
+        // party this device scanned for is over, so scan the code again.
+        this.dineIn.clear();
+        return;
+      }
+      if (reason === 'TABLE_BINDING_STALE') {
+        // The cart still says the table the guest left. Bind it to this one (which
+        // reprices it) and ask them to look before ordering again.
+        this.boundCartId = null;
+        try {
+          await this.bindCartToTable(admission);
+        } catch (rebind) {
+          if (this.dineIn.isGuestSessionEnded(rebind)) {
+            this.dineIn.clear();
+            return;
+          }
+        }
+        this.checkoutError.set(this.translate.get('dineIn.tableChanged'));
+        return;
+      }
       this.checkoutError.set(
         tableEmpty
           ? this.translate.get('dineIn.notSeated')
@@ -335,9 +404,6 @@ export class DineInTableComponent implements OnInit {
             ? this.translate.get('cart.orderError')
             : this.translate.get('errors.generic'),
       );
-      if (!(failure instanceof HorecaOSApiError) || failure.code !== 'NETWORK_UNREACHABLE') {
-        this.pendingCheckoutKey = null;
-      }
     } finally {
       this.checkingOut.set(false);
     }

@@ -1155,6 +1155,40 @@ class DineInTests {
         assertThat(((ApiException) unknown).errorCode()).isEqualTo(ErrorCode.UNAUTHENTICATED);
     }
 
+    @Test
+    @DisplayName("findGuestTable answers empty, and never throws, for every token that cannot act now")
+    void findGuestTableIsEmptyForATokenThatCannotActNow() {
+        String printed = issueToken(tableOne);
+        enableOrdering();
+        SessionRow party = openWalkIn(tableOne);
+        String guestToken = transactions.execute(status -> qr.exchange(printed)).guestToken();
+
+        assertThat(tableBinding.findGuestTable(guestToken))
+                .map(TableBindingPort.GuestTable::tableId)
+                .as("live while the party the token was minted for is seated")
+                .contains(tableOne);
+        assertThat(tableBinding.findGuestTable("nobody-minted-this"))
+                .as("an unknown token is not an error to a caller that has to keep going")
+                .isEmpty();
+        assertThat(tableBinding.findGuestTable(" ")).isEmpty();
+
+        // Closing the party revokes the tokens minted at its table: the next party's
+        // bill is not reachable with what the last one held.
+        move(party.id(), SessionStatus.CLOSED, party.version());
+        assertThat(tableBinding.findGuestTable(guestToken)).isEmpty();
+
+        // A branch that stops taking QR orders: a token minted for it is not one that
+        // can place an order, and reads like any other token that cannot act.
+        String fresh = transactions.execute(status -> qr.exchange(printed)).guestToken();
+        assertThat(tableBinding.findGuestTable(fresh)).isPresent();
+        transactions.executeWithoutResult(status -> floorPlan.configure(
+                new FloorPlanService.BranchSettings(TENANT, BRAND, branch, "VIEW_ONLY", null, null, null),
+                "manager",
+                "Menu only for now"));
+        String viewOnly = transactions.execute(status -> qr.exchange(printed)).guestToken();
+        assertThat(tableBinding.findGuestTable(viewOnly)).isEmpty();
+    }
+
     // ------------------------------------------------------------------ helpers
 
     /** Gives an order a customer account of its own, as a signed-in guest's checkout does. */

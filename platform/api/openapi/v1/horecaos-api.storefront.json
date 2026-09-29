@@ -2951,7 +2951,7 @@
     },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/checkouts" : {
       "post" : {
-        "description" : "Idempotent under the tenant-scoped Idempotency-Key. Repeating the request returns the same order; a settled business rejection returns the same rejection rather than running again against a changed cart.",
+        "description" : "Idempotent under the tenant-scoped Idempotency-Key. Repeating the request returns the same order; a settled business rejection returns the same rejection rather than running again against a changed cart. A cart bound to a table (ADR 0047) also needs the guest's live dine-in token (X-Dine-In-Token) at the table it is bound to: the binding is remembered state, and the order goes on the bill of whoever sits there now, so the guest is re-proved at checkout. Without it the answer is a conflict (reason TABLE_TOKEN_REQUIRED, TABLE_TOKEN_ENDED or TABLE_BINDING_STALE).",
         "operationId" : "checkout",
         "parameters" : [ {
           "in" : "path",
@@ -2975,6 +2975,13 @@
           "required" : true,
           "schema" : {
             "minLength" : 1,
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "X-Dine-In-Token",
+          "required" : false,
+          "schema" : {
             "type" : "string"
           }
         } ],
