@@ -1,0 +1,31 @@
+<nav class="rail chips" [attr.aria-label]="'home.categories' | t">
+  <button
+    type="button"
+    class="chip"
+    [class.is-active]="activeCategoryId() === null"
+    (click)="selectCategory(null)"
+  >
+    {{ 'home.allCategories' | t }}
+  </button>
+  @for (category of categories(); track category.id) {
+    <button
+      type="button"
+      class="chip"
+      [class.is-active]="activeCategoryId() === category.id"
+      (click)="selectCategory(category.id)"
+    >
+      {{ category.name }}
+    </button>
+  }
+</nav>
+
+@for (section of visible(); track section.id) {
+  <section class="section">
+    <h2 class="section__title">{{ section.name }}</h2>
+    <div class="section__list">
+      @for (item of section.items; track item.id) {
+        <app-dish-card [item]="item" [currency]="currency()" [linked]="linked()" />
+      }
+    </div>
+  </section>
+}

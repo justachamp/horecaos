@@ -9,6 +9,7 @@ import { AddressBookService } from '../../services/address-book.service';
 import { PaymentSessionService } from '../../services/payment-session.service';
 import { TranslateService } from '../../services/translate.service';
 import type { PricedCart, CheckoutResult, FulfillmentMode } from '../../services/cart.service';
+import { HorecaOSApiError } from '../../core/api/problem-details';
 import type { CartResponse } from '../../types/cart.types';
 
 class FakeTranslateService {
@@ -78,6 +79,7 @@ class FakeUiCartService {
   readonly fulfillmentMode = signal<FulfillmentMode>('DELIVERY');
   readonly promoBusy = signal(false);
   readonly promoError = signal<string | null>(null);
+  readonly errorKey = signal<string | null>(null);
   orderComment = '';
 
   items = () => this.cartData()?.items ?? [];
@@ -88,6 +90,7 @@ class FakeUiCartService {
   discountFormatted = () => '0 so\'m';
   appliedPromoCode = (): string | null => null;
   deliveryTimeDisplay = (): string | null => null;
+  deliveryUnresolvedMessage = (): string | null => null;
 
   load = vi.fn(async () => {});
   paymentMethods = vi.fn(async (): Promise<readonly string[]> => ['CASH']);
@@ -351,5 +354,164 @@ describe('CheckoutComponent -- promo code (ADR 0072)', () => {
     await fixture.whenStable();
 
     expect(cart.removePromoCode).toHaveBeenCalled();
+  });
+});
+
+/** A platform refusal the way `ApiClient` normalises it: code plus a business `reason`. */
+function refusal(reason: string, code = 'RESOURCE_CONFLICT', status = 409): HorecaOSApiError {
+  return new HorecaOSApiError({ status, code, detail: 'refused', problem: { status, code, reason } });
+}
+
+describe('CheckoutComponent.confirm -- a failure names its reason instead of one generic sentence', () => {
+  async function submit(configure: (cart: FakeUiCartService) => void) {
+    const setUpResult = await setUp(configure);
+    (setUpResult.fixture.nativeElement.querySelector('.cta') as HTMLButtonElement).click();
+    await setUpResult.fixture.whenStable();
+    setUpResult.fixture.detectChanges();
+    return setUpResult;
+  }
+
+  it('an unresolved delivery fee at checkout says the fee could not be worked out', async () => {
+    const { fixture, cart } = await submit((cart) => {
+      cart.checkout = vi.fn(async () => {
+        throw refusal('DELIVERY_FEE_UNRESOLVED');
+      });
+    });
+
+    expect(fixture.nativeElement.textContent).toContain('errors.reason.deliveryFeeUnresolved');
+    expect(fixture.nativeElement.textContent).not.toContain('errors.generic');
+    expect(cart.discard).not.toHaveBeenCalled();
+  });
+
+  it('a checkout rejected because an item just sold out says so', async () => {
+    const { fixture } = await submit((cart) => {
+      cart.checkout = vi.fn(async () => {
+        throw refusal('SOLD_OUT');
+      });
+    });
+
+    expect(fixture.nativeElement.textContent).toContain('errors.reason.itemUnavailable');
+  });
+
+  it('a checkout rejected for a dish outside its sale window says so (row 4.2g)', async () => {
+    const { fixture } = await submit((cart) => {
+      cart.checkout = vi.fn(async () => {
+        throw refusal('ITEM_OUT_OF_SALE_WINDOW');
+      });
+    });
+
+    expect(fixture.nativeElement.textContent).toContain('errors.reason.itemOutOfSaleWindow');
+  });
+
+  it('a price that moved says the price changed', async () => {
+    const { fixture } = await submit((cart) => {
+      cart.checkout = vi.fn(async () => {
+        throw new HorecaOSApiError({ status: 409, code: 'PRICE_CHANGED', detail: 'moved' });
+      });
+    });
+
+    expect(fixture.nativeElement.textContent).toContain('errors.priceChanged');
+  });
+
+  it('a dropped connection says offline', async () => {
+    const { fixture } = await submit((cart) => {
+      cart.checkout = vi.fn(async () => {
+        throw new HorecaOSApiError({ status: 0, code: 'NETWORK_UNREACHABLE', detail: 'no route' });
+      });
+    });
+
+    expect(fixture.nativeElement.textContent).toContain('errors.offline');
+  });
+
+  it('writing the destination can be refused too (an address that no longer exists)', async () => {
+    const { fixture, cart } = await submit((cart) => {
+      cart.applyDestination = vi.fn(async () => {
+        throw refusal('ADDRESS_NOT_FOUND', 'RESOURCE_NOT_FOUND', 404);
+      });
+    });
+
+    expect(fixture.nativeElement.textContent).toContain('errors.reason.addressNotFound');
+    expect(cart.checkout).not.toHaveBeenCalled();
+  });
+
+  it('a pricing refusal shows the sentence UiCartService kept for it, not a bare generic one', async () => {
+    const { fixture, cart } = await submit((cart) => {
+      cart.priceCart = vi.fn(async () => {
+        cart.errorKey.set('errors.reason.notServiceable');
+        return null as never;
+      });
+    });
+
+    expect(fixture.nativeElement.textContent).toContain('errors.reason.notServiceable');
+    expect(cart.checkout).not.toHaveBeenCalled();
+  });
+
+  it('a pricing failure with nothing more specific to say is still the generic sentence', async () => {
+    const { fixture } = await submit((cart) => {
+      cart.priceCart = vi.fn(async () => null as never);
+    });
+
+    expect(fixture.nativeElement.textContent).toContain('errors.generic');
+  });
+
+  it('a failure that is not a platform answer stays the generic sentence', async () => {
+    const { fixture } = await submit((cart) => {
+      cart.checkout = vi.fn(async () => {
+        throw new Error('boom');
+      });
+    });
+
+    expect(fixture.nativeElement.textContent).toContain('errors.generic');
+  });
+});
+
+describe('CheckoutComponent -- a basket that could not be loaded is not an empty basket', () => {
+  it('shows the load failure, with its specific reason, instead of "your cart is empty"', async () => {
+    const { fixture } = await setUp((cart) => {
+      cart.cartData.set(null);
+      cart.errorKey.set('errors.offline');
+    });
+
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.textContent).toContain('checkout.loadError');
+    expect(host.querySelector('[data-testid="checkout-error-detail"]')?.textContent).toContain(
+      'errors.offline',
+    );
+    expect(host.textContent).not.toContain('checkout.emptyCartTitle');
+    expect(host.querySelector('.cta')).toBeNull();
+  });
+
+  it('adds no redundant second line when the only thing known is the generic sentence', async () => {
+    const { fixture } = await setUp((cart) => {
+      cart.cartData.set(null);
+      cart.errorKey.set('errors.generic');
+    });
+
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.textContent).toContain('checkout.loadError');
+    expect(host.querySelector('[data-testid="checkout-error-detail"]')).toBeNull();
+  });
+
+  it('still says the basket is empty when it loaded fine and simply has nothing in it', async () => {
+    const { fixture } = await setUp((cart) => cart.cartData.set(null));
+
+    expect(fixture.nativeElement.textContent).toContain('checkout.emptyCartTitle');
+  });
+});
+
+describe('CheckoutComponent -- the delivery-fee preview explains itself', () => {
+  it('shows why the fee is not a price, beside the delivery line', async () => {
+    const { fixture } = await setUp((cart) => {
+      cart.deliveryUnresolvedMessage = () => 'errors.reason.outOfZone';
+    });
+
+    const note = fixture.nativeElement.querySelector('[data-testid="delivery-unresolved"]');
+    expect(note?.textContent).toContain('errors.reason.outOfZone');
+  });
+
+  it('shows nothing when there is nothing to explain', async () => {
+    const { fixture } = await setUp();
+
+    expect(fixture.nativeElement.querySelector('[data-testid="delivery-unresolved"]')).toBeNull();
   });
 });

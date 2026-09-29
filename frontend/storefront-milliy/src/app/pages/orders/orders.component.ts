@@ -220,10 +220,13 @@ export class OrdersComponent implements OnInit {
    * -- every line available -- so there is no partial outcome to report and no
    * "3 of 4 added" message.
    *
-   * The plan is still a snapshot. A dish 86'd between reading it and this call
-   * makes the add fail, and `UiCartService` surfaces that; pricing refuses
-   * afterwards regardless. Narrowing that window is what the plan is for;
-   * closing it is not possible from a client.
+   * The plan is still a snapshot. A dish 86'd -- or gone out of its sale
+   * window (row 4.2g) -- between reading it and this call makes the add be
+   * refused. The repeat then stops at that line and names the reason
+   * (`UiCartService.errorKey`), instead of announcing "added all" and walking
+   * the customer into a basket that is missing a dish. Lines already added stay
+   * in the basket; pricing refuses afterwards regardless. Narrowing that window
+   * is what the plan is for; closing it is not possible from a client.
    */
   protected async repeat(order: ApiOrder): Promise<void> {
     const plan = this.repeatablePlan();
@@ -235,7 +238,16 @@ export class OrdersComponent implements OnInit {
     this.repeatMessage.set(null);
     try {
       for (const line of plan.lines) {
-        await this.cart.add(line.variantId, line.quantity, undefined, line.modifierOptionIds);
+        const added = await this.cart.add(
+          line.variantId,
+          line.quantity,
+          undefined,
+          line.modifierOptionIds,
+        );
+        if (!added) {
+          this.repeatMessage.set({ key: this.cart.errorKey() ?? 'errors.generic' });
+          return;
+        }
       }
       this.repeatMessage.set({ key: 'orders.repeatAddedAll', params: { count: plan.lines.length } });
       await this.router.navigate(['/cart']);

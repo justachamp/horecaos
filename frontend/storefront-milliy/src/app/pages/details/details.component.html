@@ -32,6 +32,7 @@
                 type="button"
                 class="option"
                 [class.is-active]="variantId() === variant.id"
+                [class.is-off]="variant.active && !variant.onSaleNow"
                 [disabled]="!variant.active"
                 (click)="variantId.set(variant.id)"
               >
@@ -41,8 +42,19 @@
           </div>
         }
 
+        @switch (availability()) {
+          @case ('SOLD_OUT') {
+            <p class="hint hint--error" data-testid="details-sold-out">{{ 'dish.soldOut' | t }}</p>
+          }
+          @case ('OUT_OF_SALE_WINDOW') {
+            <p class="hint hint--error" data-testid="details-out-of-sale-window">
+              {{ 'dish.outOfSaleWindow' | t }}
+            </p>
+          }
+        }
+
         @if (selectedVariant(); as variant) {
-          @if (variant.remainingQuantity !== null) {
+          @if (variant.remainingQuantity !== null && availability() === 'AVAILABLE') {
             <p class="hint" data-testid="details-low-stock">
               {{ 'details.lowStock' | t: { count: variant.remainingQuantity } }}
             </p>

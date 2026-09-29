@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { Component } from '@angular/core';
+import { Component, signal } from '@angular/core';
 import { Router, provideRouter } from '@angular/router';
 import { of, throwError } from 'rxjs';
 
@@ -94,7 +94,8 @@ class FakeLangService {
 }
 
 class FakeUiCartService {
-  add = vi.fn(async () => {});
+  readonly errorKey = signal<string | null>(null);
+  add = vi.fn(async (..._args: unknown[]) => true);
   formatPrice = (value: number) => `${value} so'm`;
 }
 
@@ -286,5 +287,74 @@ describe("OrdersComponent.repeat -- driven by the platform's plan (ADR 0074)", (
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(orders.getOrderDetail).not.toHaveBeenCalled();
+  });
+});
+
+describe('OrdersComponent.repeat -- a refused line stops the repeat and says why', () => {
+  const completed = () => order({ id: 'r1', status: { id: 'COMPLETED', name: 'COMPLETED' } });
+
+  async function setUpRepeat(fail: (cart: FakeUiCartService) => void) {
+    const result = await setUp((orders) => {
+      orders.getOrders.mockReturnValue(of([completed()]));
+      orders.getReorderPlan.mockReturnValue(
+        of(
+          plan('READY', [
+            planLine({ lineNumber: 1, variantId: 'v1', quantity: 1 }),
+            planLine({ lineNumber: 2, variantId: 'v2', quantity: 1 }),
+          ]),
+        ),
+      );
+    });
+    fail(result.cart);
+    return result;
+  }
+
+  async function pressRepeat(fixture: Awaited<ReturnType<typeof setUp>>['fixture']) {
+    (fixture.nativeElement.querySelector('.repeat-btn') as HTMLButtonElement).click();
+    await fixture.whenStable();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    fixture.detectChanges();
+  }
+
+  it('does not announce "added all" or go to the basket when a dish was refused', async () => {
+    const { fixture, cart, router } = await setUpRepeat((cart) => {
+      cart.add.mockImplementationOnce(async () => true).mockImplementationOnce(async () => {
+        cart.errorKey.set('errors.reason.itemOutOfSaleWindow');
+        return false;
+      });
+    });
+    const navigateSpy = vi.spyOn(router, 'navigate');
+
+    await pressRepeat(fixture);
+
+    expect(cart.add).toHaveBeenCalledTimes(2);
+    expect(navigateSpy).not.toHaveBeenCalledWith(['/cart']);
+    const text = fixture.nativeElement.textContent as string;
+    expect(text).not.toContain('orders.repeatAddedAll');
+    expect(text).toContain('errors.reason.itemOutOfSaleWindow');
+  });
+
+  it('stops at the first refused line instead of piling more onto a basket that is already short', async () => {
+    const { fixture, cart } = await setUpRepeat((cart) => {
+      cart.add.mockImplementationOnce(async () => {
+        cart.errorKey.set('errors.reason.itemUnavailable');
+        return false;
+      });
+    });
+
+    await pressRepeat(fixture);
+
+    expect(cart.add).toHaveBeenCalledTimes(1);
+    expect(fixture.nativeElement.textContent).toContain('errors.reason.itemUnavailable');
+  });
+
+  it('falls back to the generic sentence when the failure had nothing more specific to say', async () => {
+    const { fixture } = await setUpRepeat((cart) => {
+      cart.add.mockImplementationOnce(async () => false);
+    });
+
+    await pressRepeat(fixture);
+
+    expect(fixture.nativeElement.textContent).toContain('errors.generic');
   });
 });

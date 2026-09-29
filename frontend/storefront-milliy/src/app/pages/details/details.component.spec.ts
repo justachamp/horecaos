@@ -1,5 +1,6 @@
 import { TestBed } from '@angular/core/testing';
-import { provideRouter } from '@angular/router';
+import { Router, provideRouter } from '@angular/router';
+import { signal } from '@angular/core';
 
 import { APP_CONFIG, type AppConfig } from '../../core/config/app-config';
 import { DetailsComponent } from './details.component';
@@ -57,6 +58,7 @@ function product(overrides: Partial<MenuItem> = {}): MenuItem {
         id: 'v1',
         name: 'Kichik',
         active: true,
+        onSaleNow: true,
         preparation_time: 20,
         price: 48000,
         price_without_discount: 48000,
@@ -66,6 +68,7 @@ function product(overrides: Partial<MenuItem> = {}): MenuItem {
         id: 'v2',
         name: 'Katta',
         active: true,
+        onSaleNow: true,
         preparation_time: 25,
         price: 62000,
         price_without_discount: 62000,
@@ -81,7 +84,8 @@ class FakeMenuService {
   item = vi.fn(async () => product());
 }
 class FakeUiCartService {
-  add = vi.fn(async () => {});
+  readonly errorKey = signal<string | null>(null);
+  add = vi.fn(async (..._args: unknown[]) => true);
   totalItemsCount = () => 0;
 }
 class FakeLangService {
@@ -116,7 +120,13 @@ async function setUp(item: MenuItem = product()) {
   await fixture.whenStable();
   await new Promise((resolve) => setTimeout(resolve, 0));
   fixture.detectChanges();
-  return { fixture, comp: fixture.componentInstance as never as InternalDetails, menu, cart };
+  return {
+    fixture,
+    comp: fixture.componentInstance as never as InternalDetails,
+    menu,
+    cart,
+    router: TestBed.inject(Router),
+  };
 }
 
 /** The protected surface these tests drive, named once rather than cast inline. */
@@ -126,6 +136,7 @@ interface InternalDetails {
   chosenIn(groupId: string): readonly string[];
   toggleOption(group: MenuItemModifierGroup, optionId: string): void;
   canAdd(): boolean;
+  addError(): string | null;
   step(by: number): void;
   addToCart(): Promise<void>;
 }
@@ -204,6 +215,7 @@ describe('DetailsComponent', () => {
             id: 'v1',
             name: 'Kichik',
             active: true,
+            onSaleNow: true,
             preparation_time: 20,
             price: 48000,
             price_without_discount: 48000,
@@ -223,5 +235,155 @@ describe('DetailsComponent', () => {
     const host = fixture.nativeElement as HTMLElement;
 
     expect(host.querySelector('[data-testid="details-low-stock"]')).toBeNull();
+  });
+});
+
+describe('DetailsComponent -- sold out and the sale window (rows 4.4c/4.4d, 4.2g)', () => {
+  function variantOf(overrides: Record<string, unknown> = {}) {
+    return {
+      id: 'v1',
+      name: 'Kichik',
+      active: true,
+      onSaleNow: true,
+      preparation_time: 20,
+      price: 48000,
+      price_without_discount: 48000,
+      remainingQuantity: null,
+      ...overrides,
+    };
+  }
+
+  it('says so and refuses the add when every portion is sold out -- the button no longer sits enabled over nothing', async () => {
+    const { comp, fixture, cart } = await setUp(
+      product({ active: false, variants: [variantOf({ active: false })] }),
+    );
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(comp.canAdd()).toBe(false);
+    expect(host.querySelector('[data-testid="details-sold-out"]')?.textContent).toContain('dish.soldOut');
+    expect((host.querySelector('.cta') as HTMLButtonElement).disabled).toBe(true);
+
+    await comp.addToCart();
+    expect(cart.add).not.toHaveBeenCalled();
+  });
+
+  it('shows the sale-window text and refuses the add for a dish outside its window, without calling it sold out', async () => {
+    const { comp, fixture, cart } = await setUp(product({ variants: [variantOf({ onSaleNow: false })] }));
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(comp.canAdd()).toBe(false);
+    expect(host.querySelector('[data-testid="details-out-of-sale-window"]')?.textContent).toContain(
+      'dish.outOfSaleWindow',
+    );
+    expect(host.querySelector('[data-testid="details-sold-out"]')).toBeNull();
+    expect((host.querySelector('.cta') as HTMLButtonElement).disabled).toBe(true);
+
+    await comp.addToCart();
+    expect(cart.add).not.toHaveBeenCalled();
+  });
+
+  it('preselects a portion that can be bought right now over an earlier one waiting for its window', async () => {
+    const { comp } = await setUp(
+      product({
+        variants: [variantOf({ id: 'v1', onSaleNow: false }), variantOf({ id: 'v2', name: 'Katta' })],
+      }),
+    );
+
+    expect(comp.variantId()).toBe('v2');
+    expect(comp.canAdd()).toBe(true);
+  });
+
+  it('follows the chosen portion: picking the off-window one blocks the add, picking the other frees it', async () => {
+    const { comp, fixture } = await setUp(
+      product({
+        variants: [variantOf({ id: 'v1' }), variantOf({ id: 'v2', name: 'Katta', onSaleNow: false })],
+      }),
+    );
+    const host = fixture.nativeElement as HTMLElement;
+    expect(comp.canAdd()).toBe(true);
+
+    const chips = host.querySelectorAll<HTMLButtonElement>('.option');
+    chips[1].click();
+    fixture.detectChanges();
+    expect(comp.canAdd()).toBe(false);
+    expect(host.querySelector('[data-testid="details-out-of-sale-window"]')).not.toBeNull();
+
+    chips[0].click();
+    fixture.detectChanges();
+    expect(comp.canAdd()).toBe(true);
+    expect(host.querySelector('[data-testid="details-out-of-sale-window"]')).toBeNull();
+  });
+
+  it('shows neither notice for an ordinary dish', async () => {
+    const { fixture } = await setUp();
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(host.querySelector('[data-testid="details-sold-out"]')).toBeNull();
+    expect(host.querySelector('[data-testid="details-out-of-sale-window"]')).toBeNull();
+  });
+});
+
+describe('DetailsComponent.addToCart -- a refusal stays on the page and says why', () => {
+  it('goes to the basket when the platform took the line', async () => {
+    const { comp, router } = await setUp();
+    const navigate = vi.spyOn(router, 'navigate').mockResolvedValue(true);
+
+    await comp.addToCart();
+
+    expect(navigate).toHaveBeenCalledWith(['/cart']);
+    expect(comp.addError()).toBeNull();
+  });
+
+  it('a sale-window refusal (the menu was read a moment before the window closed) shows its sentence and does not navigate away', async () => {
+    const { comp, cart, router, fixture } = await setUp();
+    const navigate = vi.spyOn(router, 'navigate').mockResolvedValue(true);
+    cart.add.mockImplementation(async () => {
+      cart.errorKey.set('errors.reason.itemOutOfSaleWindow');
+      return false;
+    });
+
+    await comp.addToCart();
+    fixture.detectChanges();
+
+    expect(navigate).not.toHaveBeenCalled();
+    expect(comp.addError()).toBe('errors.reason.itemOutOfSaleWindow');
+    expect((fixture.nativeElement as HTMLElement).querySelector('[role="alert"]')?.textContent).toContain(
+      'errors.reason.itemOutOfSaleWindow',
+    );
+  });
+
+  it('a sold-out refusal is named too', async () => {
+    const { comp, cart } = await setUp();
+    cart.add.mockImplementation(async () => {
+      cart.errorKey.set('errors.reason.itemUnavailable');
+      return false;
+    });
+
+    await comp.addToCart();
+
+    expect(comp.addError()).toBe('errors.reason.itemUnavailable');
+  });
+
+  it('a failure with nothing more specific to say keeps this screen\'s own "could not add" sentence', async () => {
+    const { comp, cart } = await setUp();
+    cart.add.mockImplementation(async () => {
+      cart.errorKey.set('errors.generic');
+      return false;
+    });
+
+    await comp.addToCart();
+
+    expect(comp.addError()).toBe('details.addFailed');
+  });
+
+  it('lets the customer try again after a refusal (the busy flag is released)', async () => {
+    const { comp, cart } = await setUp();
+    cart.add.mockImplementationOnce(async () => {
+      cart.errorKey.set('errors.offline');
+      return false;
+    });
+
+    await comp.addToCart();
+    expect(comp.canAdd()).toBe(true);
   });
 });

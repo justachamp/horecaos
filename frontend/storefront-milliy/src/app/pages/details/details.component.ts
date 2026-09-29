@@ -15,6 +15,12 @@ import { MenuService } from '../../services/menu.service';
 import { TranslatePipe } from '../../shared/translate/translate.pipe';
 import { UiCartService } from '../../services/ui-cart.service';
 import type { MenuItem, MenuItemModifierGroup } from '../../types/home.types';
+import {
+  firstSellableVariant,
+  itemAvailability,
+  variantAvailability,
+  type ItemAvailability,
+} from '../../utils/item-availability';
 
 type LoadState = 'loading' | 'ready' | 'missing' | 'error';
 
@@ -69,10 +75,15 @@ export class DetailsComponent implements OnInit {
         return;
       }
       this.item.set(item);
-      // The platform does not mark a default variant, so the first active one
-      // stands in -- chosen rather than assumed, and only when exactly one
-      // choice would otherwise be forced on a customer who cannot see it.
-      this.variantId.set(item.variants.find((variant) => variant.active)?.id ?? null);
+      // The platform does not mark a default variant, so the first one that can
+      // be bought right now stands in -- chosen rather than assumed, and only
+      // when exactly one choice would otherwise be forced on a customer who
+      // cannot see it. A portion still waiting for its sale window (row 4.2g)
+      // is not preferred over one that is on sale; if none is on sale, the
+      // first orderable one is selected so the screen can say why it is closed.
+      this.variantId.set(
+        (firstSellableVariant(item) ?? item.variants.find((variant) => variant.active))?.id ?? null,
+      );
       this.state.set('ready');
     } catch {
       this.state.set('error');
@@ -113,8 +124,27 @@ export class DetailsComponent implements OnInit {
     () => this.item()?.variants.find((variant) => variant.id === this.variantId()) ?? null,
   );
 
+  /**
+   * Whether the chosen portion can be bought right now, and if not, which of
+   * the two reasons it is: sold out (rows 4.4c/4.4d) or outside its sale
+   * window (row 4.2g). With no portion selected at all -- every one is 86'd --
+   * the product itself answers.
+   */
+  protected readonly availability = computed<ItemAvailability>(() => {
+    const selected = this.selectedVariant();
+    if (selected) {
+      return variantAvailability(selected);
+    }
+    const item = this.item();
+    return item ? itemAvailability(item) : 'AVAILABLE';
+  });
+
   protected readonly canAdd = computed(
-    () => this.state() === 'ready' && this.unsatisfied().length === 0 && !this.adding(),
+    () =>
+      this.state() === 'ready' &&
+      this.availability() === 'AVAILABLE' &&
+      this.unsatisfied().length === 0 &&
+      !this.adding(),
   );
 
   protected step(by: number): void {
@@ -141,7 +171,16 @@ export class DetailsComponent implements OnInit {
     this.addError.set(null);
     try {
       const options = Object.values(this.chosen()).flat();
-      await this.cart.add(variantId, this.quantity(), undefined, options);
+      const added = await this.cart.add(variantId, this.quantity(), undefined, options);
+      if (!added) {
+        // The platform refused the line -- most usefully with `ITEM_OUT_OF_SALE_WINDOW`
+        // (the menu was read a moment before the window closed) or a sold-out
+        // reason. Stay on the dish and say so: navigating to a basket that does
+        // not contain it would look like a success and hide the refusal.
+        const reason = this.cart.errorKey();
+        this.addError.set(reason && reason !== 'errors.generic' ? reason : 'details.addFailed');
+        return;
+      }
       await this.router.navigate(['/cart']);
     } catch {
       this.addError.set('details.addFailed');

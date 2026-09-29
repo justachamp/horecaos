@@ -56,6 +56,8 @@
   }
 
   &:disabled { opacity: 0.45; cursor: not-allowed; }
+  /* Orderable, but outside its sale window: selectable so the screen can say why. */
+  &.is-off { border-style: dashed; color: var(--text-muted); }
   &:focus-visible { outline: 2px solid var(--brand-accent-deep); outline-offset: 2px; }
 }
 
