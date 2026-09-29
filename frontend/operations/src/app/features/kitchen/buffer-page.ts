@@ -333,7 +333,9 @@ export class BufferPage implements OnInit {
         ),
       );
       this.tickets.update((current) =>
-        current.map((row) => (row.ticketId === updated.ticketId ? updated : row)),
+        current.map((row) =>
+          row.ticketId === updated.ticketId ? mergeMutation(row, updated) : row,
+        ),
       );
       return true;
     } catch (error) {
@@ -366,6 +368,29 @@ export class BufferPage implements OnInit {
       return next;
     });
   }
+}
+
+/**
+ * A reschedule response laid over the row the last board read gave.
+ *
+ * `KitchenBoardController.reschedule` answers `TicketResponse.of(after, items)`:
+ * the ticket's own state, with every fact only `board()` joins in -- the
+ * dine-in table, the courier ETA, the channel's system type and the provider
+ * reference -- left null (see `TicketResponse.table`'s own doc in
+ * `kitchen-api.ts`). Replacing the row with that response would blank those
+ * until the next 10-second poll: a held DINE_IN ticket would lose its
+ * `Table T7` chip and read like one nobody seated. The response wins on
+ * everything it does carry; the four board-only facts keep the last board
+ * read's value.
+ */
+function mergeMutation(row: TicketResponse, updated: TicketResponse): TicketResponse {
+  return {
+    ...updated,
+    table: row.table,
+    courierEtaAt: row.courierEtaAt,
+    channelSystemType: row.channelSystemType,
+    externalReference: row.externalReference,
+  };
 }
 
 function releaseInstant(ticket: TicketResponse): number {
