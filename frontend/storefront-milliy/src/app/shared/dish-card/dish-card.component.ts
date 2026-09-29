@@ -1,13 +1,14 @@
 import { NgTemplateOutlet } from '@angular/common';
-import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, input, output } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
 import { formatMoney, money } from '../../core/money/money';
 import { TranslateService } from '../../services/translate.service';
-import type { MenuItem } from '../../types/home.types';
+import type { MenuItem, MenuItemVariant } from '../../types/home.types';
 import {
   itemAvailability,
   preferredSellableVariant,
+  variantAvailability,
   type ItemAvailability,
 } from '../../utils/item-availability';
 import { TranslatePipe } from '../translate/translate.pipe';
@@ -35,6 +36,21 @@ import { TranslatePipe } from '../translate/translate.pipe';
  * The table-QR screen shows the same cards without a link: the product page
  * adds to the delivery/pickup basket, which is not what a guest seated at a
  * table is ordering into.
+ *
+ * <h2>`ordering`</h2>
+ *
+ * At a table that takes orders (ADR 0047, `ORDER_AND_PAY`) the card carries its
+ * own way into the *table's* basket: an add button, then a stepper, for each
+ * portion that can be bought right now. The card only reports what the guest
+ * asked for (`quantityChange`); the basket, the sign-in and the platform are the
+ * screen's. Controls are drawn only on an unlinked card -- a button inside a link
+ * is two actions in one tap target -- and never on a dish that cannot be bought
+ * (its badge says why).
+ *
+ * A dish whose modifier group *must* be chosen from (`required`, or a non-zero
+ * minimum) is not offered here: choosing needs the product page's picker, and
+ * that page adds to the delivery basket. The card says a member of staff will
+ * help rather than adding a plain dish the kitchen would have to refuse.
  */
 @Component({
   selector: 'app-dish-card',
@@ -52,6 +68,15 @@ export class DishCardComponent {
   readonly currency = input<string | null>(null);
   readonly linked = input(true);
 
+  /** Draw the controls that put this dish in the table's basket. Off everywhere but an ordering table. */
+  readonly ordering = input(false);
+  /** What the table's basket holds of each portion of this dish, by variant id. */
+  readonly quantities = input<Readonly<Record<string, number>>>({});
+  /** A write to the basket is in flight: the controls wait rather than stack. */
+  readonly busy = input(false);
+  /** The guest asked for `quantity` of a portion (0 takes it out of the basket). */
+  readonly quantityChange = output<{ variantId: string; quantity: number }>();
+
   protected readonly availability = computed<ItemAvailability>(() => itemAvailability(this.item()));
 
   protected readonly unavailable = computed(() => this.availability() !== 'AVAILABLE');
@@ -67,6 +92,40 @@ export class DishCardComponent {
     }
     return preferredSellableVariant(this.item())?.remainingQuantity ?? null;
   });
+
+  /** True when the dish cannot be added plain: a group the guest must choose from. */
+  protected readonly needsStaff = computed(() =>
+    this.item().modifierGroups.some((group) => group.required || group.minimumSelections > 0),
+  );
+
+  /** Only the portions that can be bought right now: an 86'd or out-of-window one is not offered. */
+  protected readonly portions = computed<readonly MenuItemVariant[]>(() =>
+    this.item().variants.filter((variant) => variantAvailability(variant) === 'AVAILABLE'),
+  );
+
+  protected readonly showControls = computed(
+    () => this.ordering() && !this.linked() && !this.needsStaff() && this.portions().length > 0,
+  );
+
+  protected readonly showStaffNote = computed(
+    () => this.ordering() && !this.linked() && !this.unavailable() && this.needsStaff(),
+  );
+
+  protected quantityOf(variantId: string): number {
+    return this.quantities()[variantId] ?? 0;
+  }
+
+  protected request(variantId: string, quantity: number): void {
+    if (!this.busy()) {
+      this.quantityChange.emit({ variantId, quantity: Math.max(0, quantity) });
+    }
+  }
+
+  protected portionPrice(variant: MenuItemVariant): string {
+    this.translate.current();
+    const unit = this.translate.get('common.currency') || "so'm";
+    return formatMoney(money(variant.price, this.currency() ?? 'UZS'), unit);
+  }
 
   protected readonly priceLabel = computed(() => {
     this.translate.current();

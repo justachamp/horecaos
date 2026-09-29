@@ -439,7 +439,20 @@
     "noAdmissionTitle": "Menyuni ko'rish uchun stolni skanerlang",
     "noAdmissionBody": "Menyuni ko'rish uchun stolingizdagi QR-kodni skanerlang.",
     "tableLabel": "{{code}}-stol",
-    "orderingUnavailable": "Stoldan buyurtma berish bu ilovada hozircha mavjud emas. Menyuni shu yerda ko'rishingiz mumkin, buyurtma uchun xodimga murojaat qiling.",
-    "menuUnavailable": "Hozircha menyu mavjud emas."
+    "menuUnavailable": "Hozircha menyu mavjud emas.",
+    "notSeated": "Xodimdan sizni stolga o'tqazishini so'rang, so'ng kodni qayta skanerlang.",
+    "signInToOrder": "Buyurtma berish uchun kiring",
+    "itemsInCart": "Savatda: {{count}} ta",
+    "orderRound": "Buyurtma berish",
+    "needsStaff": "Bu taomni xodim orqali buyurtma qiling.",
+    "tableBill": "Stol hisobi",
+    "roundCount": "Buyurtma qilingan: {{count}} marta",
+    "askForBill": "Hisobni so'rash",
+    "orderPlaced": "Buyurtma oshxonaga yuborildi",
+    "billRequested": "Hisob so'raldi",
+    "roundAttachRetry": "Buyurtma oshxonaga yuborildi, lekin hali stol hisobida yo'q. «Qayta urinish» tugmasini bosing.",
+    "roundPending": "Oxirgi buyurtmangiz oshxonada, lekin hali stol hisobiga qo'shilmadi.",
+    "roundRetry": "Qayta urinish",
+    "roundAttachFailed": "Buyurtma oshxonada, lekin uni stol hisobiga qo'shib bo'lmadi. Xodimga ayting."
   }
 }

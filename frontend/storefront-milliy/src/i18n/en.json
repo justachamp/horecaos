@@ -439,7 +439,20 @@
     "noAdmissionTitle": "Scan a table to see its menu",
     "noAdmissionBody": "Scan the QR code on your table to see the menu.",
     "tableLabel": "Table {{code}}",
-    "orderingUnavailable": "Ordering from the table is not available in this app yet. You can browse the menu here; please order with a member of staff.",
-    "menuUnavailable": "The menu is not available right now."
+    "menuUnavailable": "The menu is not available right now.",
+    "notSeated": "Ask a member of staff to seat you, then scan the code again.",
+    "signInToOrder": "Sign in to order",
+    "itemsInCart": "{{count}} items in cart",
+    "orderRound": "Order",
+    "needsStaff": "Ask a member of staff to order this dish.",
+    "tableBill": "Table bill",
+    "roundCount": "{{count}} rounds ordered",
+    "askForBill": "Ask for the bill",
+    "orderPlaced": "Order sent to the kitchen",
+    "billRequested": "The bill has been requested",
+    "roundAttachRetry": "Order sent to the kitchen, but it is not on the table bill yet. Tap Try again.",
+    "roundPending": "Your last order is with the kitchen but is not on the table bill yet.",
+    "roundRetry": "Try again",
+    "roundAttachFailed": "Your order is with the kitchen, but it could not be added to the table bill. Please tell a member of staff."
   }
 }

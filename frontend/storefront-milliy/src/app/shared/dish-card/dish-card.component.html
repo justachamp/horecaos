@@ -27,6 +27,60 @@
         {{ 'dish.lowStock' | t: { count: left } }}
       </span>
     }
+    @if (showStaffNote()) {
+      <span class="dish__note" data-testid="dine-in-needs-staff">{{ 'dineIn.needsStaff' | t }}</span>
+    }
+    @if (showControls()) {
+      <span class="dish__order">
+        @for (variant of portions(); track variant.id) {
+          <span class="portion">
+            @if (item().variants.length > 1) {
+              <span class="portion__label">
+                @if (variant.name) {
+                  {{ variant.name }} ·
+                }
+                {{ portionPrice(variant) }}
+              </span>
+            }
+            @if (quantityOf(variant.id) === 0) {
+              <button
+                type="button"
+                class="portion__add"
+                data-testid="dine-in-add"
+                [disabled]="busy()"
+                (click)="request(variant.id, 1)"
+              >
+                {{ 'common.add' | t }}
+              </button>
+            } @else {
+              <span class="stepper">
+                <button
+                  type="button"
+                  class="stepper__btn"
+                  data-testid="dine-in-decrease"
+                  [disabled]="busy()"
+                  [attr.aria-label]="'common.decrease' | t"
+                  (click)="request(variant.id, quantityOf(variant.id) - 1)"
+                >
+                  −
+                </button>
+                <span class="stepper__value" data-testid="dine-in-quantity">{{ quantityOf(variant.id) }}</span>
+                <button
+                  type="button"
+                  class="stepper__btn stepper__btn--add"
+                  data-testid="dine-in-increase"
+                  [disabled]="busy()"
+                  [attr.aria-label]="'common.increase' | t"
+                  (click)="request(variant.id, quantityOf(variant.id) + 1)"
+                >
+                  +
+                </button>
+              </span>
+            }
+          </span>
+        }
+      </span>
+    }
   </span>
 </ng-template>
 

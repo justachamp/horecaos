@@ -24,7 +24,15 @@
     <h2 class="section__title">{{ section.name }}</h2>
     <div class="section__list">
       @for (item of section.items; track item.id) {
-        <app-dish-card [item]="item" [currency]="currency()" [linked]="linked()" />
+        <app-dish-card
+          [item]="item"
+          [currency]="currency()"
+          [linked]="linked()"
+          [ordering]="ordering()"
+          [quantities]="quantities()"
+          [busy]="busy()"
+          (quantityChange)="quantityChange.emit($event)"
+        />
       }
     </div>
   </section>
