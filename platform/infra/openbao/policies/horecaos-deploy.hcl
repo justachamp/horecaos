@@ -9,6 +9,15 @@
 # It can read the startup secrets and issue an AppRole secret-id. It cannot write
 # secrets, cannot change policy, cannot unseal, and cannot generate a root token:
 # those need three unseal shares, which are not on the machine.
+#
+# Read-only is enough for a routine deploy, and deliberately not enough for the
+# one that provisions the object-store service accounts (infra/production/
+# deploy.sh, Phase 6a): storing a minted media or backup key is a KV write. A
+# deploy that would mint asks OpenBao what its token may do BEFORE it asks the
+# object store for anything, and stops with the four paths named if the token
+# cannot create and update them. That deploy needs a token that carries write
+# access to those paths as well (bootstrap.sh's closing note), not this policy
+# alone -- this file is not widened for it.
 
 # Reading the four startup passwords, to write them onto the deploy tmpfs.
 path "horecaos/data/production/*" {
@@ -33,6 +42,14 @@ path "auth/approle/role/horecaos-platform/role-id" {
 
 path "auth/token/lookup-self" {
   capabilities = ["read"]
+}
+
+# deploy.sh asks what this token may do before it mints anything. The default
+# policy grants the same; naming it here keeps that check working for a token
+# created without the default policy, and grants nothing beyond a question about
+# the token's own capabilities.
+path "sys/capabilities-self" {
+  capabilities = ["update"]
 }
 
 path "auth/token/renew-self" {

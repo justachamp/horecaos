@@ -238,6 +238,23 @@ class DurationTests(unittest.TestCase):
             recorded = st.record_durations([directory])
             self.assertEqual({"a.Outer": 5.5, "b.Other": 4.0}, recorded)
 
+    def test_recording_creates_the_output_directory_it_writes_into(self) -> None:
+        # The CI aggregator runs `record --out target/ci/test-durations.tsv` in a
+        # job that never creates target/ci; write_text on a missing directory
+        # used to die with an uncaught FileNotFoundError and turn "Build and
+        # test" red on every platform run.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            names = synthetic_tree(root / "src", 2)
+            reports = root / "reports" / "test-results-shard-1"
+            for name in names:
+                report(reports, name, 2.0)
+            out = root / "target" / "ci" / "test-durations.tsv"
+            self.assertFalse(out.parent.exists())
+            code = st.main(["record", "--reports", str(reports), "--tests", str(root / "src"), "--out", str(out)])
+            self.assertEqual(0, code)
+            self.assertEqual({name: 2.0 for name in names}, st.load_durations(out))
+
 
 class ReportVerificationTests(unittest.TestCase):
     """The runtime half of the guarantee: what the shards actually executed."""
@@ -421,6 +438,18 @@ class WorkflowWiringTests(unittest.TestCase):
         self.assertIn("-Xmx3g", self.text)
         self.assertIn("MaxMetaspaceSize=1g", self.text)
         self.assertIn("spring.test.context.cache.maxSize=8", self.text)
+
+    def test_the_duration_refresh_only_feeds_a_future_rebalance_so_it_never_gates(self) -> None:
+        # The recorded durations change how evenly the shards split, never what
+        # runs. A hiccup while rebuilding them must not turn the required
+        # "Build and test" check red or stop images from publishing.
+        block = self.jobs["verify"]
+        for step in ("Rebuild the recorded test durations", "Publish refreshed durations"):
+            with self.subTest(step=step):
+                match = re.search(r"- name:\s*" + re.escape(step) + r"\n(.*?)(?=\n      - |\Z)", block, re.DOTALL)
+                self.assertIsNotNone(match, f"no step named {step!r} in the aggregator")
+                assert match is not None
+                self.assertRegex(match.group(1), r"continue-on-error:\s*true")
 
     def test_every_job_that_produces_evidence_uploads_it(self) -> None:
         self.assertIn("test-results-shard-${{ matrix.shard }}", self.jobs["test-shard"])
