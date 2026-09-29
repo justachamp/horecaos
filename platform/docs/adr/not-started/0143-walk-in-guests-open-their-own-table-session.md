@@ -1,0 +1,487 @@
+# ADR 0143: Walk-in guests open their own table session
+
+- Decision status: Proposed
+- Implementation status: Not started — no guest-side call creates a table
+  session. The only writer is staff-side: `TableSessionController.open`
+  (`POST /api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/dine-in/sessions`)
+  declares `dinein.session.manage` at `LOCATION` scope, and
+  `TableSessionService.open` — which the controller calls — takes an
+  `openedBy` string and authorizes nothing itself, so the gate is the
+  controller's declaration. The one console caller, `ReservationsPage.submitSeat`,
+  always sends a `reservationId`: no screen anywhere seats a walk-in, even though
+  `OpenSessionRequest` documents `reservationId = null` as one. ADR 0047's API
+  sketch names `POST /api/v1/storefront/qr/{tableToken}/sessions` for the guest's
+  own open; it was never built, and ADR 0047's own checklist has already moved the
+  token exchange from a path segment into a request body
+  (`POST /api/v1/storefront/dine-in/qr/token-exchanges`). What is built and this
+  record keeps: the table token and its exchange for a short-lived guest token
+  (`QrEntryService`), the guest's bill, bill request and round attach
+  (`QrEntryController`), the one-live-party-per-table index
+  (`ux_session_table_occupied`), the reservation exclusion constraint, and batch
+  13's storefront `/dine-in` flow, which for an `ORDER_AND_PAY` table with no live
+  session renders `dineIn.notSeated` ("Ask a member of staff to seat you, then
+  scan the code again") and disables ordering.
+- Date proposed: 2026-09-29
+- Date decided: —
+- Deciders: proposed by Claude (wave batch 14, w7-adrs-stops-dispatch-walkin) as an
+  addition to ADR 0047 after batch 13's storefront `DineInTableComponent` recorded
+  self-seating as an undecided product question; Ayubkhon Abbosov (platform owner)
+  decides. No numbered gap-map row is blocked on this; the nearest are `1.5a`
+  (seating from the reservations screen) and `10.5b` (QR dine-in modes and table
+  QR cards), both `BUILT` for the staff side.
+- Depends on: ADR 0015, ADR 0019, ADR 0025, ADR 0029, ADR 0031, ADR 0033,
+  ADR 0036, ADR 0047, ADR 0051
+- Supersedes / Superseded by: — (extends ADR 0047; replaces only its never-built
+  `POST /api/v1/storefront/qr/{tableToken}/sessions` sketch, the way ADR 0047's
+  own checklist already replaced its token-in-path exchange)
+- Open inputs:
+  - Whether the pilot wants guests to seat themselves at all, and at which
+    venues. This record ships the capability off by default per location
+    (product, owner).
+  - The walk-in horizon: how long before a confirmed booking's hold a walk-in may
+    no longer take the table. This record proposes 90 minutes; the right number is
+    the venue's typical dwell (operations).
+  - Whether a self-seated table may place a cash round. There is no table binding
+    at cart or checkout today (see Context), so nothing in this design can
+    prevent a cash `DINE_IN` order for a table nobody sat at — the same exposure
+    any signed-in customer already has through `POST .../carts`. Whether to require
+    that a self-seating venue's `QR_TABLE` channel offer only payment-first methods
+    is a configuration policy to be decided, not built here (finance, owner).
+  - Presence proof stronger than possession of a printed code — a rotating code
+    on the table, a device-side location check — which cost hardware or personal
+    data. Not proposed; a trigger is named below (security, product).
+  - Whether the host stand wants a realtime signal when a guest opens a session.
+    ADR 0045's channel catalogue is closed and code-owned, so a `FLOOR` channel is
+    an amendment to that record; until it is decided the host stand reads the live
+    list (operations).
+  - The session currency for a guest-opened session. No location-currency read
+    exists (`ReservationsPage` sends a fixed `'UZS'`, ADR 0055's single-currency
+    pilot); this record adds a per-location interim setting (finance).
+
+## Context
+
+**What a guest with a phone can do at a table today.** Scanning the printed code
+posts the token once (`POST /api/v1/storefront/dine-in/qr/token-exchanges`) and
+receives a guest token, the branch, the table code, the QR mode pinned at that
+instant, the tenant's `QR_TABLE` channel code and `openSessionId`. In
+`ORDER_AND_PAY` mode that token can read the running bill of the session live at
+its own table, ask for the bill, and attach an already-placed order to that
+session, provided the caller also holds an ordinary signed-in customer session
+whose account placed the order (`requireOwnOrder`, added in batch 13 after a
+cross-table attachment exploit). Every one of those calls resolves the table from
+the token and never from the request, and every one begins with
+`store.findLiveSessionAtTable`. With no live session at the table there is
+nothing to read or attach to, `openSessionId` is null, and the storefront tells the
+guest to find a waiter.
+
+**Who can create the session, and why the walk-in case is the common one.**
+ADR 0047 calls the walk-in "most covers", and the session model was built for it:
+`table_sessions.reservation_id` is nullable, and the doc on
+`TableSessionService.OpenSession` says `null` is a walk-in.
+But the staff path that creates the row is reachable in the console only from a
+confirmed booking, so for a pure walk-in the row can be created only by calling
+the API by hand. `DineInTableComponent`'s own doc names the gap: opening a
+session is capability-gated to an operator, and "creating a real table occupancy
+from an unauthenticated scan is a product decision about self-seating and its
+interaction with reservation holds that ADR 0047 does not settle." This record is
+the answer that doc was waiting for. It does not remove the need for a staff
+walk-in seating screen (some guests have no phone, some venues run `VIEW_ONLY`);
+it adds the guest's path beside it.
+
+**What already protects the room, and what it does not cover.**
+
+- One live party per table, in the database: `ux_session_table_occupied` on
+  `dinein.session_tables (table_id) WHERE left_at IS NULL`. Two guests scanning a
+  free table at once cannot both create a session.
+- One party per booking: `ux_session_reservation`.
+- No double-booked table, in the database: `ex_reservation_table_no_double_booking`
+  over `reservation_tables.held_during` for `CONFIRMED` and `SEATED` bookings.
+  **That constraint reads only bookings.** A session occupies a table with no end
+  time, so nothing stops a session opening on a table whose `CONFIRMED` booking
+  starts in ten minutes, and nothing stops a booking being confirmed over a table
+  a party is sitting at. `TableSessionService.open` does not consult holds even on
+  the staff path; `tableAvailability` returns `booked` and `occupied` as separate,
+  explicitly "advisory" flags. Today that is a host's judgement made with the room
+  in view. Self-seating moves the decision to a phone, so the check has to exist.
+- Capacity is not checked anywhere: `dinein.tables.seats` (1–100) and `joinable`
+  exist, and `table_sessions.party_size` is optional and unvalidated against them.
+- Nothing distinguishes a session a host opened from one a guest opened, and no
+  claim can lapse: a session ends only by a staff `state-action` or a force close.
+- The printed token is a permanent bearer credential (ADR 0047 accepts this):
+  128 bits, stored as a digest, exchanged for a guest token under a per-token limit
+  of 20 a minute (`QrEntryService.EXCHANGE_LIMIT`). `qr_guest_sessions` records no
+  address, agent or fingerprint on purpose (ADR 0029), so per-source abuse
+  controls are the edge's, and per-token and per-account ones are the module's.
+  A photographed code stays valid until the table's token is rotated
+  (`dinein.qr.rotate`), which revokes every guest token minted from it.
+
+**What checkout does and does not know about a table.** `POST .../carts` with
+`DINE_IN` needs a location and a signed-in customer and nothing about a table:
+nothing under `ordering` refers to one, `CheckoutEligibilityGuard` applies the
+minimum-order floor to a `DINE_IN` cart exactly as it does to a `PICKUP` one, and
+ADR 0047 records "ordering's cart-to-table binding" (`cart_fulfillment.dinein_table_id`,
+named in `V0034`'s header) as not built. An order reaches a table's bill only by
+`addRound` afterwards. So the phantom-order risk —
+food cooked for a table nobody is at, paid in cash — exists today for any
+signed-in customer who calls the API directly; the storefront's `isSeated` guard is
+a UI courtesy, not a control. Self-seating does not create that risk. It makes the
+UI guard satisfiable by anyone holding a token, which is why this record does not
+claim to solve it.
+
+**The threat this design is mostly about is table denial**, not food fraud: a person
+with a photograph of a printed code, opening sessions on empty tables so real
+guests cannot use them. The constraint that makes one-party-per-table safe is the
+same constraint that makes a fake party costly to the room.
+
+## Decision
+
+**A guest may seat themselves at a free table through an explicit action that opens
+a provisional session — a claim — which becomes an ordinary session once an
+accepted round is on it and lapses if nothing follows. It ships off, per
+location.**
+
+1. **Off by default, per location.** `dinein.location_settings.walk_in_self_seat`
+   is false until a venue turns it on, with a reason and an audit fact, through the
+   same settings endpoint that already carries `qr_mode` (`PUT .../dine-in/settings`,
+   `dinein.floorplan.manage`; it takes a reason and an idempotency key today and no
+   `If-Match`, which the build adds, ADR 0031). It is meaningful only while
+   `qr_mode = ORDER_AND_PAY`.
+
+2. **An explicit, authenticated action; never a side effect of scanning.** A new
+   guest route, `POST /api/v1/storefront/dine-in/sessions`, takes the guest token
+   in `X-Dine-In-Token` (the table proof) and the customer's ordinary signed-in
+   session in `Authorization` (an identity with a verified phone, ADR 0051) — the
+   two-credential shape `addRound` already uses — and a body of `{ "partySize" }`
+   only. It never accepts a table id, a location or a tenant. Scanning stays
+   read-only: link previews and prefetchers that fetch the QR's URL open nothing.
+
+3. **It opens the same row staff open, marked as a claim.** The route calls
+   `TableSessionService.open` (no reservation, one table, `openedBy =
+   "guest:" + accountId`), and the row carries `origin = GUEST_QR`, the claimant's
+   `opened_by_account_id`, and `claim_expires_at = now + claim TTL`. The claim
+   occupies the table through the same partial unique index, so a second guest
+   scanning the same table gets the live session back with `created = false`
+   rather than a second one; this is idempotent by observation, as `requestBill`
+   already is, and takes no `Idempotency-Key` (there is no operator to protect).
+
+4. **A claim becomes a session when a round the restaurant has accepted is on it,
+   or it lapses.** `addRound` on a claim sets `confirmed_at` at once when the
+   attached order is already accepted (`CONFIRMED` or later — a cash order at an
+   auto-accepting branch, say). Otherwise the sweeper decides when
+   `claim_expires_at` passes, reading the statuses of the rounds attached to the
+   claim: an accepted round confirms it (`confirmed_by = 'round:<orderId>'`); a round
+   still in flight (`RECEIVED`, `PAYMENT_AUTHORIZING`, `AWAITING_APPROVAL`) defers
+   the decision to the next sweep, for at most the 30-minute default
+   `OrderPaymentProcess` waits before it flags a stuck order; no rounds, or only
+   failed, rejected, expired or cancelled ones, lapses it. A lapse is
+   `TableSessionService.move` to `CLOSED` with `close_reason_code =
+   'CLAIM_LAPSED'`, so the audit fact, the table release
+   (`tr_session_close_releases_tables`) and the revocation of the table's guest
+   tokens all happen exactly as for a staff close. Attaching alone confirms nothing:
+   `BILLABLE` counts `PAYMENT_AUTHORIZING` orders, and a claim that a guest could
+   turn into a held table by starting a payment and abandoning it would be the
+   denial this design exists to bound.
+
+5. **Reservation holds win at the moment of opening.** The route refuses when a
+   `CONFIRMED` booking holds the table for any part of `[now, now + walk-in
+   horizon)` (`reservation_tables.held_during`, the interval the exclusion
+   constraint already keeps). The refusal is the same generic "ask a member of
+   staff" as every other ineligibility: it names no time and no guest. The reverse
+   direction is unchanged: confirming a booking never bumps a party already
+   seated; the confirm response reports `tableOccupiedNow` so the host sees it,
+   and the host decides. Both paths take a row lock on the table
+   (`dinein.tables ... FOR UPDATE`, in id order when several) so that a guest
+   opening and a host confirming the same table serialize instead of both
+   succeeding on stale reads.
+
+6. **Capacity is strict for guests.** `partySize` must be between 1 and the table's
+   `seats`. A guest cannot join tables, cannot exceed seats, and cannot open at a
+   table that is not `ACTIVE`. A larger party is a host's job (join, or seat
+   several tables), on the existing staff path.
+
+7. **Abuse is bounded, not eliminated, by five controls.** A verified signed-in
+   customer who is not blacklisted (`CustomerBlacklistPort`, the same check
+   checkout applies); at most one live unconfirmed claim per account per branch;
+   a daily cap on claims opened per account per branch; a branch-wide cap on
+   simultaneous unconfirmed claims; and the per-token limit on the route.
+   Numbers are settings with proposed defaults (Specification). Rotating a table's
+   printed code remains the remedy for a leaked one.
+
+8. **Staff keep every override.** The staff open path is unchanged and may seat
+   anyone anywhere, over a hold or over capacity, recording `bookedOver` or
+   `overCapacity` in the audit fact. Staff see a claim's origin, expiry and
+   confirmation on the live list; can confirm it (`claim-confirmations`, keeping
+   the table for a guest who has not ordered yet), close it with the existing
+   `state-actions`, turn the feature off per branch, and rotate the table's code.
+
+## Alternatives considered
+
+| Option | Why not chosen | Revisit when |
+|---|---|---|
+| Keep sessions staff-only and build the operations "seat a walk-in" screen | Necessary anyway, and not rejected — it stays. As the *only* way in, it makes every QR-ordered table wait for a waiter to start, which is the dependency ADR 0047's channel model exists to measure and remove ("how much hall revenue now arrives without a waiter"), and it leaves each QR table waiting on whichever waiter is free | The pilot shows claim abuse or reservation conflict costing more than the waiter tap saves |
+| Open a full session the instant a token is exchanged | A scan is the one action with no identity and no intent: a link preview, a prefetcher or a curious neighbour would occupy the table. Unbounded table denial with no per-account handle | Never |
+| Guest requests, staff approves (a `REQUESTED` session that orders cannot use until approved) | Safe, and puts a human tap back in the loop for every table, defeating the reason to build this. The same safety is bought more cheaply by a lapsing claim plus a branch cap | A venue's abuse is bad enough that an approval step is worth its cost — offer it as a per-branch mode then |
+| No explicit open: create the session lazily when the first round attaches | Removes the empty-claim problem entirely, but the order is already placed, priced, and possibly cooking before anything checks that the table is free or held. It needs ADR 0047's cart-to-table binding first, so the table can be checked at cart creation | The cart-to-table binding exists; the claim step can then move to cart creation and this endpoint can shrink |
+| Model the claim as a new `CLAIMED` session status | Cleaner to read, but every place that means "live" — `SessionStatus.live()`, `findLiveSessionAtTable`, `ix_sessions_live`, the occupancy predicates, the guest routes' status checks — must learn a fifth value, and a missed one leaves a claim that occupies nothing or blocks nothing. Columns leave the state machine untouched | The claim grows behaviour the status columns cannot carry cleanly |
+| Make the claim a real hold in the reservation exclusion constraint (a synthetic booking of `[now, now + horizon)`) | The only design in which the database, not application code, refuses a walk-in over a booking and a booking over a walk-in. A booking row carries an encrypted guest, phone and note and would pollute the day plan, the no-show rate and every reservation report with rows nobody made | Race conditions between guest-open and host-confirm are observed in practice; then a dedicated occupancy range with its own exclusion constraint |
+| Presence proof: a rotating code on the table, NFC, or a location check in the browser | Real cost — hardware to maintain, or precise location, which ADR 0029 treats as personal data and which a browser can be made to spoof. Possession of the printed code plus a verified phone plus caps is the proportionate first step | Measured phantom or denial abuse at a venue |
+| Let a guest exceed seats, or join tables | A party size that is the guest's word alone can grab the room's best table; joining has no API even for staff | Staff can join tables through an API and a venue asks for guest-side joining |
+
+## Consequences
+
+### Positive
+
+- A guest at a free table can start ordering without finding a waiter, and the
+  platform can tell those covers apart (`origin`), which is the measurement ADR
+  0047 wanted.
+- Reservation holds are finally consulted by a session opening; the gap between
+  "advisory" and "enforced" narrows from the guest side.
+- Table denial is bounded: an unconfirmed claim costs a verified phone number, an
+  account-level and a branch-level cap, and fifteen minutes.
+- Nothing changes for a venue that leaves the switch off, or for the staff path.
+
+### Negative
+
+- The hold check is not backed by the database. A row lock serializes the two
+  application paths; the exclusion constraint still reads bookings only, so a
+  path that forgets the lock reopens the race. Failure mode: a booking arrives at
+  an occupied table and the host handles it as they do an overstay today.
+- Denial is bounded, not prevented. Someone with several verified phones can hold
+  claims up to the branch cap, and the cap itself can be used to lock genuine guests
+  out of self-seating for fifteen minutes at a time. The mitigations are staff
+  (`state-actions`, rotate the code, switch off) and the per-account limits.
+- The phantom-cash-order exposure described in Context is not reduced. A self-
+  seated table can place a cash `DINE_IN` round exactly as any signed-in customer
+  can today; the design names it as an open input and does not close it.
+- `walkInAvailable` on the exchange response tells a token holder that self-seating
+  is or is not possible at this instant, which lets them distinguish "free" from
+  "occupied, held or disabled" without a reason. It names no time, guest or
+  booking, and occupancy is already visible in `openSessionId`; the leak is one
+  boolean about a table they are physically at.
+- A guest whose payment outlasts the deferral bound loses the claim; the round they
+  paid for stays an order but is no longer on a table's bill until staff open a
+  session and attach it through the existing operator route.
+- `party_size` is the guest's own word.
+- A closed claim with no rounds is a `table_sessions` row that reports and
+  operational counts must exclude (`CLAIM_LAPSED`), or "sessions opened" and
+  "covers" inflate. Business-day reporting (ADR 0043) has to learn `origin`.
+- The session row now carries a customer account id. It is an identifier, not the
+  name, phone or address ADR 0029 protects, but it is one more place an account
+  id lives, and erasure (ADR 0015) must clear it.
+- One more scheduled job (the claim sweeper) and one more registry entry each in
+  the audit vocabulary and the storefront route allow-list.
+
+### Accepted trade-offs
+
+- A guest with no account cannot self-seat. They could not order either: every
+  cart needs a signed-in customer.
+- A large party is always a host's decision.
+- The claim TTL is short enough to release a table promptly and long enough that a
+  guest reading the menu is not evicted; fifteen minutes is a proposal, not a finding.
+- Feature is off until a venue opts in; the pilot will not learn about self-seating
+  from venues that never enable it.
+
+## Specification
+
+### Physical model (additive; number reserved by the wave that builds it)
+
+```text
+dinein.location_settings   (columns added)
+  walk_in_self_seat        boolean  not null default false
+  walk_in_claim_ttl_minutes integer not null default 15    check 2..60
+  walk_in_horizon_minutes  integer not null default 90     check 0..480
+  walk_in_max_unconfirmed  integer not null default 5      check 0..100
+  walk_in_daily_claims_per_account integer not null default 3   check 1..20
+  session_currency         char(3)  not null default 'UZS' -- interim, ADR 0055; replaced by a location-currency read
+
+dinein.table_sessions      (columns added)
+  origin                   varchar(12) not null default 'STAFF'      check IN ('STAFF','GUEST_QR')
+  opened_by_account_id     uuid null       -- the claimant; GUEST_QR only
+  claim_expires_at         timestamptz null
+  confirmed_at             timestamptz null
+  confirmed_by             varchar(128) null   -- 'round:<orderId>' or the staff subject
+  check ( origin = 'STAFF' AND opened_by_account_id IS NULL AND claim_expires_at IS NULL
+       OR origin = 'GUEST_QR' AND opened_by_account_id IS NOT NULL
+          AND (confirmed_at IS NOT NULL OR claim_expires_at IS NOT NULL) )
+  index (claim_expires_at) WHERE origin = 'GUEST_QR' AND confirmed_at IS NULL AND status = 'OPEN'
+  index (tenant_id, location_id, opened_by_account_id, opened_at) WHERE origin = 'GUEST_QR'
+```
+
+The close reason `CLAIM_LAPSED` is a value in the existing free `close_reason_code
+varchar(64)`; `qr_guest_sessions.revoked_reason` reuses `SESSION_CLOSED`. No change
+to `ux_session_table_occupied`, `ux_session_reservation` or the reservation
+constraint. GRANTs are unchanged (no new table).
+
+### The guest route
+
+```text
+POST /api/v1/storefront/dine-in/sessions
+  X-Dine-In-Token: <guest token>      Authorization: Bearer <customer session>
+  { "partySize": 2 }
+-> 200 { sessionId, status, currency, totalMinor, roundCount, orderIds,   -- GuestBillResponse
+         origin, created, claimExpiresAt | null, confirmed }
+-> 404 (same generic body as every dead code) when the token is unknown, expired, rotated or VIEW_ONLY
+-> 409 RESOURCE_CONFLICT { conflict: "TABLE_NOT_AVAILABLE" }
+       -- self-seat off, table held, cap reached, blacklisted, not ACTIVE: one answer, no reason
+-> 422 VALIDATION_FAILED { seats }   -- the party is larger than the table, or smaller than one
+-> 429 RATE_LIMIT_EXCEEDED
+```
+
+`AdmissionResponse` gains `walkInAvailable` (boolean; `true` only when the feature
+is on, the table is `ACTIVE`, unoccupied and not held inside the horizon). The
+route is exactly the path `/api/v1/storefront/dine-in/sessions`: it is added to
+`EndpointCapabilityDeclarationTests.isGuestBearerEndpoint` by exact match, and
+`StorefrontReadAuthenticationTests` gains its case. It declares no capability for
+the same reason its three siblings do — there is no principal to hold one; the
+guest token proves the table and the customer session proves the person.
+
+### Eligibility, in one transaction
+
+```text
+1. resolve guest token -> table, mode                     (refuse: VIEW_ONLY)
+2. read location_settings; walk_in_self_seat must be true
+3. lock the dinein.tables row FOR UPDATE
+4. live session at table? -> return it, created = false
+5. table ACTIVE; 1 <= partySize <= seats
+6. no CONFIRMED booking with held_during && [now, now + horizon)
+7. account not blacklisted; caps:
+     - no other live unconfirmed claim by this account at this branch
+     - claims opened by this account at this branch in the last 24h < daily cap
+     - live unconfirmed claims at this branch < walk_in_max_unconfirmed
+8. TableSessionService.open(no reservation, [tableId], partySize, session_currency,
+     openedBy = "guest:" + accountId); set origin, opened_by_account_id, claim_expires_at
+```
+
+The route's per-token limit uses ADR 0033's `RateLimiter` (`strictPerMinute(5)`,
+keyed on the digest before the lookup, like the exchange). The per-account daily
+cap is a count over `table_sessions`, so it survives a cache flush and is the same
+number an operator can query. Neither stores an address.
+
+### Staff surface
+
+```text
+PUT  .../dine-in/settings                                     adds the walk_in_* fields; dinein.floorplan.manage, reason, and an If-Match the endpoint lacks today
+GET  .../dine-in/sessions                                     adds origin, claimExpiresAt, confirmedAt to each row (never the account id)
+POST .../dine-in/sessions/{sessionId}/claim-confirmations     dinein.session.manage, If-Match, reason -> sets confirmed_at / confirmed_by
+POST .../dine-in/sessions/{sessionId}/state-actions           existing; CLOSED releases a claim
+POST .../dine-in/tables/{tableId}/qr-token-rotations          existing; the remedy for a leaked code
+```
+
+`ReservationService.move(... CONFIRMED ...)` and a confirmed booking's amendment take
+the same table row lock, and their response gains `tableOccupiedNow`; they do not
+refuse. `TableSessionService.open` on the staff path records `bookedOver` and
+`overCapacity` in the `ChangeDocuments.created` map of its existing audit fact.
+
+### The sweeper
+
+`TableSessionClaimSweeper`, `@Scheduled`, log-and-continue, with its own switch
+(`horecaos.dinein.claim-sweeper.enabled`), in the genre of
+`InventoryReservationSweeper`. One conditional read selects unconfirmed `GUEST_QR`
+claims past `claim_expires_at`; for each, a new `SessionOrderSource` read returns
+the statuses of its attached rounds (the module's existing way to read order facts
+without importing ordering), and the sweeper confirms, defers or lapses as Decision
+4 says, closing through `TableSessionService.move` under a system actor. A lapse
+racing an attach loses cleanly: `move` is a conditional update on the expected
+version, and `addRound` already refuses a closed session with the stable "takes no
+more rounds" answer that `dineIn.roundAttachRetry` renders.
+
+### Audit, events, observability
+
+`dinein.session.opened` (existing) gains `origin` and `walkIn` in its diff map;
+new facts `dinein.session.claim-confirmed` and `dinein.session.claim-lapsed`, both
+through `ChangeDocuments`. No external event: ADR 0047 deferred the dine-in
+contracts and nothing subscribes. Counters with bounded labels: claims opened,
+confirmed, lapsed, and refused by class (the class is internal; the response
+stays generic). A branch whose lapse rate is high is the signal to look at abuse.
+
+### Storefront
+
+`DineInAdmission` gains `walkInAvailable`. `DineInTableComponent` shows a "Sit at
+this table" control with a party-size stepper when `canOrder && !isSeated &&
+walkInAvailable`, requires sign-in first (the component already sends a guest to
+login to order), calls the route, updates the stored admission with the returned
+`openSessionId`, and shows the claim's remaining time. `dineIn.notSeated` remains
+the message for every other case. ru / uz-latn / en strings. `frontend/storefront-milliy`
+has no dine-in flow and is out of scope.
+
+### Testing
+
+- Two guests opening one free table concurrently: exactly one session, the other
+  gets it back with `created = false`.
+- A `CONFIRMED` booking starting inside the horizon: refused; just outside it:
+  allowed; a `REQUESTED` booking and a `CANCELLED` one: allowed. A host confirming
+  a booking while a guest opens the same table: one order of operations wins, and
+  the loser sees the winner's state.
+- Party of 5 at a 4-seat table refused; 4 accepted; a non-`ACTIVE` table refused.
+- Blacklisted account refused; second claim by one account at one branch refused;
+  daily cap; branch cap; per-token rate limit; all refusals share one response.
+- A claim with no round lapses at the TTL and frees the table. A round already
+  `CONFIRMED` at attach confirms it at once. A round in `PAYMENT_AUTHORIZING`
+  neither confirms it nor lets it lapse until the 30-minute bound; a round that
+  then fails lapses it. A lapse racing an attach produces one outcome. The clock is
+  advanced, not asserted at an instant.
+- `VIEW_ONLY`, feature off, expired, rotated and archived tokens all refuse with the
+  dead-code response; rotation revokes a claim's guest token.
+- A guest cannot supply a table, tenant or location; another table's token cannot
+  reach this claim; cross-tenant reads fail.
+- The staff path still seats anyone, and audits `bookedOver` and `overCapacity`.
+- `EndpointCapabilityDeclarationTests` and `ModularArchitectureTests` stay green
+  with the new route and the `customers.api` dependency.
+
+## Rollout and rollback
+
+Migration and code ship with `walk_in_self_seat = false` everywhere; nothing
+changes. Turn it on at one venue with a short claim TTL and the branch cap at a
+small number, watch claims opened, confirmed and lapsed for a week against what the
+host stand reports, then widen. The staff walk-in seating screen is built
+regardless. Rollback is the setting: no new claims are accepted, existing ones
+lapse by TTL or are closed by staff, and confirmed sessions are ordinary sessions
+that need nothing done.
+
+## Implementation checklist
+
+- [ ] Flyway: the `location_settings` and `table_sessions` columns and checks
+      above; indexes; interim `session_currency`.
+- [ ] `QrEntryController` route, `QrEntryService`/`TableSessionService` open path
+      for a claim, the eligibility transaction and the table row lock (also taken
+      by `ReservationService` confirm and amend).
+- [ ] `AdmissionResponse.walkInAvailable`; storefront service, component, tests and
+      strings.
+- [ ] `claim-confirmations` endpoint; `origin`, `claimExpiresAt`, `confirmedAt` on
+      the live list; settings fields with `If-Match` and audit.
+- [ ] `TableSessionClaimSweeper` and the pending-order read on `SessionOrderSource`.
+- [ ] `EndpointCapabilityDeclarationTests` allow-list entry (exact path) and
+      `StorefrontReadAuthenticationTests` case.
+- [ ] Reporting: exclude `CLAIM_LAPSED` from opened-session and cover counts; carry
+      `origin` into the business-day facts (ADR 0043).
+- [ ] Erasure (ADR 0015) clears `opened_by_account_id`.
+- [ ] Tests listed under Testing, each seen failing first.
+- [ ] Record on ADR 0047 that this extends it; decide the cash-round policy and the
+      realtime signal before enabling at a second venue.
+
+## Exit criteria
+
+At a venue that has enabled it, a guest who scans a free table, signs in, states a
+party size and taps once is seated: their next order attaches to a bill at that
+table with no staff action. A guest cannot take a table a confirmed booking holds
+inside the horizon, cannot exceed its seats, and cannot hold one indefinitely by
+tapping and leaving: the table returns to the room within the claim TTL, or the
+payment bound when a round's payment is still in flight. A host
+sees every self-seated table, who is still unconfirmed, and can close, confirm or
+disable it. With the setting off, behaviour is unchanged.
+
+## References
+
+- ADR 0047 (dine-in; the API sketch this record replaces, the accepted
+  possession-of-a-printed-code model, what was not built), ADR 0015 (customer
+  identity and erasure), ADR 0019 (checkout; no table binding), ADR 0025, ADR
+  0029 (no address or fingerprint on `qr_guest_sessions`), ADR 0031, ADR 0033
+  (rate limits), ADR 0036 (`QR_TABLE` channel), ADR 0043 (business day), ADR 0045
+  (closed channel catalogue), ADR 0051 (customer sessions)
+- `platform/docs/operations-gap-map.md` rows `1.5a`, `10.5b`
+- `TableSessionController#open`, `TableSessionService#open`, `QrEntryController`,
+  `QrEntryService`, `ReservationService`, `JdbcDineInStore#tableAvailability`,
+  `JdbcSessionOrderSource`, `CheckoutEligibilityGuard`,
+  `V0034__create_dinein_floorplan_reservations_and_sessions.sql`
+- `frontend/storefront/src/app/pages/dine-in/dine-in-table/dine-in-table.component.ts`
+  and `services/dine-in.service.ts`; `frontend/operations/src/app/features/orders/reservations-page.ts`
