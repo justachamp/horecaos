@@ -34,6 +34,12 @@ export class CreateProductDialog {
   readonly busy = input(false);
   /** The name of the language the product is written in ("Uzbek (Latin)"), shown under the name field. */
   readonly languageName = input<string | null>(null);
+  /**
+   * Whether {@link languageName} is a language the brand itself chose. False for a
+   * brand that has chosen none: the name is then written in the catalog's own
+   * default, and the hint must not credit the brand with a choice it never made.
+   */
+  readonly languageChosenByBrand = input(true);
   readonly error = input<string | null>(null);
 
   readonly confirm = output<CreateProductSubmission>();

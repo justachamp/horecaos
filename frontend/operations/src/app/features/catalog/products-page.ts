@@ -255,6 +255,11 @@ export class ProductsPage implements OnInit {
     listResolutionLocale(this.localeSet.isConfigured(), this.localeSet.defaultLocale()),
   );
 
+  /** Whether {@link listLocale} is the brand's own choice — false while it sits on the server's fallback. */
+  protected readonly listLocaleChosenByBrand = computed<boolean>(() =>
+    this.localeSet.isConfigured(),
+  );
+
   /** {@link listLocale} as an operator would say it ("Uzbek (Latin)"), shown in the create dialog. */
   protected readonly listLocaleName = computed<string>(() =>
     localeDisplayName(this.i18n, fromCatalogLocale(this.listLocale())),

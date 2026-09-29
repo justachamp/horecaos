@@ -2174,6 +2174,8 @@ export const messagesEn = {
   'catalog.products.create.name': 'Name',
   'catalog.products.create.language':
     'Written in: {language} — the brand’s default language. Add other languages in the product editor.',
+  'catalog.products.create.languageFallback':
+    'Written in: {language} — the catalog’s default language, because this brand has not chosen its languages yet. Add other languages in the product editor.',
   'catalog.products.create.code': 'Code',
   'catalog.products.create.required': 'Required',
   'catalog.products.create.confirm': 'Create',
