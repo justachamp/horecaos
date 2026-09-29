@@ -32,6 +32,7 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.dinein.api.OrderTablesPort;
 import uz.horecaos.platform.fulfillment.api.CourierEtaPort;
 import uz.horecaos.platform.fulfillment.api.OrderProgressPort;
 import uz.horecaos.platform.iam.api.AuthenticatedActor;
@@ -884,8 +885,8 @@ class KitchenExecutionTests {
         assertThat(tickets.board(TENANT, branch, List.of("FIRED", "IN_PRODUCTION", "READY"), 200))
                 .noneMatch(row -> row.id().equals(ticket.id()));
 
-        KitchenBoardController board =
-                new KitchenBoardController(tickets, cookAtSiblingBranch(), refusesEverything(), noCourierEtas());
+        KitchenBoardController board = new KitchenBoardController(
+                tickets, cookAtSiblingBranch(), refusesEverything(), noCourierEtas(), noOrderTables());
 
         KitchenBoardController.KitchenEventsResponse response = Objects.requireNonNull(
                 board.eventsForOrder(TENANT, BRAND, branch, orderId).getBody());
@@ -901,8 +902,8 @@ class KitchenExecutionTests {
     @Test
     @DisplayName("an order that never opened a ticket answers empty, not an error")
     void anOrderWithNoTicketAnswersEmptyEvents() {
-        KitchenBoardController board =
-                new KitchenBoardController(tickets, cookAtSiblingBranch(), refusesEverything(), noCourierEtas());
+        KitchenBoardController board = new KitchenBoardController(
+                tickets, cookAtSiblingBranch(), refusesEverything(), noCourierEtas(), noOrderTables());
 
         KitchenBoardController.KitchenEventsResponse response = Objects.requireNonNull(
                 board.eventsForOrder(TENANT, BRAND, branch, UUID.randomUUID()).getBody());
@@ -919,8 +920,8 @@ class KitchenExecutionTests {
         UUID orderId = seedConfirmedOrder("A-061", null, null, null, burger);
         tickets.open(TENANT, orderId, ReleaseMode.AUTO_ON_CONFIRM);
 
-        KitchenBoardController board =
-                new KitchenBoardController(tickets, cookAtSiblingBranch(), refusesEverything(), noCourierEtas());
+        KitchenBoardController board = new KitchenBoardController(
+                tickets, cookAtSiblingBranch(), refusesEverything(), noCourierEtas(), noOrderTables());
 
         Throwable refusal = catchThrowable(() -> board.eventsForOrder(TENANT, BRAND, siblingBranch, orderId));
 
@@ -1213,8 +1214,8 @@ class KitchenExecutionTests {
         TicketItemRow item = store.itemsOf(TENANT, ticket.id()).getFirst();
         TicketItemStatus before = item.status();
 
-        KitchenBoardController board =
-                new KitchenBoardController(tickets, cookAtSiblingBranch(), refusesEverything(), noCourierEtas());
+        KitchenBoardController board = new KitchenBoardController(
+                tickets, cookAtSiblingBranch(), refusesEverything(), noCourierEtas(), noOrderTables());
 
         Throwable refusal = catchThrowable(() -> board.start(TENANT, BRAND, siblingBranch, item.id()));
 
@@ -1239,6 +1240,11 @@ class KitchenExecutionTests {
 
     /** No item here has a delivery plan at all, so the join has nothing to answer. */
     private CourierEtaPort noCourierEtas() {
+        return (tenantId, orderIds) -> java.util.Map.of();
+    }
+
+    /** No order here was seated at a table, so the dine-in lookup has nothing to answer. */
+    private OrderTablesPort noOrderTables() {
         return (tenantId, orderIds) -> java.util.Map.of();
     }
 

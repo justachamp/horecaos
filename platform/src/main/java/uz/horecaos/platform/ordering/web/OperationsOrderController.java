@@ -38,6 +38,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.catalog.api.ItemDisplayLookup;
+import uz.horecaos.platform.dinein.api.OrderTablesPort;
 import uz.horecaos.platform.fulfillment.api.ShipmentCancellationPort;
 import uz.horecaos.platform.fulfillment.api.ShipmentCancellationPort.Outcome;
 import uz.horecaos.platform.iam.api.AuthorizationService;
@@ -829,6 +830,7 @@ public class OperationsOrderController {
         Set<Capability> granted = grantedOrderActionCapabilities(tenantId, brandId, locationId);
         UUID courierId = orderQuery.courierIdFor(tenantId, orderId);
         boolean amendmentAwaitingOperator = orderQuery.amendmentAwaitingOperatorFor(tenantId, orderId);
+        OrderTablesPort.OrderTable table = orderQuery.tableFor(tenantId, orderId);
         return ResponseEntity.ok()
                 .eTag(AggregateVersion.toETag(detail.order().version()))
                 .body(OrderDetailResponse.of(
@@ -837,6 +839,7 @@ public class OperationsOrderController {
                         granted,
                         courierId,
                         amendmentAwaitingOperator,
+                        table,
                         staffDisplayNames));
     }
 
@@ -2522,6 +2525,13 @@ public class OperationsOrderController {
      *                   exactly as the order detail pane resolves its own.
      *                   Absent on a summary read outside the board for the
      *                   same reason {@code processAttention} is
+     * @param table      the table (or joined tables) and session a DINE_IN order
+     *                   was placed at, resolved through {@link
+     *                   uz.horecaos.platform.dinein.api.OrderTablesPort} -- codes
+     *                   and display names only, never a guest, a party size or a
+     *                   bill (ADR 0029). Null for every order not attached to a
+     *                   table session: a delivery, a pickup, or a DINE_IN order
+     *                   an operator keyed in without seating anyone
      */
     public record OrderSummaryResponse(
             UUID orderId,
@@ -2547,7 +2557,8 @@ public class OperationsOrderController {
             @Nullable String acceptedByActorType,
             @Nullable String acceptedByActorId,
             @Nullable String processAttention,
-            @Nullable UUID courierId) {
+            @Nullable UUID courierId,
+            OrderTablesPort.@Nullable OrderTable table) {
 
         /**
          * The summary of an order read outside the board — the detail read's own
@@ -2561,14 +2572,18 @@ public class OperationsOrderController {
          *                   ({@link OrderQueryService#amendmentAwaitingOperatorFor}),
          *                   the {@code RESOLVE} counterpart to {@code courierId}
          *                   above (gap map row 1.1e)
+         * @param table      resolved separately by the caller ({@link
+         *                   OrderQueryService#tableFor}), the single-order
+         *                   counterpart to the board's batched lookup
          */
         static OrderSummaryResponse of(
                 JdbcOrderStore.OrderRow order,
                 Set<Capability> grantedCapabilities,
                 @Nullable UUID courierId,
-                boolean amendmentAwaitingOperator) {
+                boolean amendmentAwaitingOperator,
+                OrderTablesPort.@Nullable OrderTable table) {
             return of(
-                    new JdbcOrderStore.OrderBoardRow(order, null, courierId, amendmentAwaitingOperator),
+                    new JdbcOrderStore.OrderBoardRow(order, null, courierId, amendmentAwaitingOperator, table),
                     grantedCapabilities);
         }
 
@@ -2603,7 +2618,8 @@ public class OperationsOrderController {
                     order.acceptedByActorType(),
                     order.acceptedByActorId(),
                     row.processAttention(),
-                    row.courierId());
+                    row.courierId(),
+                    row.table());
         }
     }
 
@@ -2695,10 +2711,11 @@ public class OperationsOrderController {
                 Set<Capability> grantedCapabilities,
                 @Nullable UUID courierId,
                 boolean amendmentAwaitingOperator,
+                OrderTablesPort.@Nullable OrderTable table,
                 StaffDisplayNames staffDisplayNames) {
             var order = detail.order();
             return new OrderDetailResponse(
-                    OrderSummaryResponse.of(order, grantedCapabilities, courierId, amendmentAwaitingOperator),
+                    OrderSummaryResponse.of(order, grantedCapabilities, courierId, amendmentAwaitingOperator, table),
                     order.subtotalMinor(),
                     order.taxMinor(),
                     order.acceptanceMode(),

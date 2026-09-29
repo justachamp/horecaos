@@ -19,6 +19,7 @@ import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.audit.api.ChangeDocuments;
+import uz.horecaos.platform.dinein.api.OrderTablesPort;
 import uz.horecaos.platform.fulfillment.api.ActiveCourierAssignmentsPort;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.ResourceScope;
@@ -38,6 +39,7 @@ import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore.O
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore.OrderModifierRow;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore.OrderRow;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore.TransitionRow;
+import uz.horecaos.platform.tenancy.api.FulfillmentMode;
 
 /**
  * Reading orders (ADR 0019).
@@ -76,6 +78,7 @@ public class OrderQueryService implements OrderCountsQuery {
     private final JdbcOrderProcessStore processes;
     private final PaymentIntentPort payments;
     private final ActiveCourierAssignmentsPort courierAssignments;
+    private final OrderTablesPort orderTables;
     private final JdbcOrderAmendmentStore amendments;
     private final FieldProtection protection;
     private final ObjectMapper objectMapper;
@@ -88,6 +91,7 @@ public class OrderQueryService implements OrderCountsQuery {
             JdbcOrderProcessStore processes,
             PaymentIntentPort payments,
             ActiveCourierAssignmentsPort courierAssignments,
+            OrderTablesPort orderTables,
             JdbcOrderAmendmentStore amendments,
             FieldProtection protection,
             ObjectMapper objectMapper,
@@ -97,6 +101,7 @@ public class OrderQueryService implements OrderCountsQuery {
         this.processes = processes;
         this.payments = payments;
         this.courierAssignments = courierAssignments;
+        this.orderTables = orderTables;
         this.amendments = amendments;
         this.protection = protection;
         this.objectMapper = objectMapper;
@@ -423,7 +428,33 @@ public class OrderQueryService implements OrderCountsQuery {
                     .orElseThrow(UnknownCursorException::new);
         }
         List<JdbcOrderStore.OrderBoardRow> rows = orders.listForLocation(query, before, cursorOrderId, limit);
-        return withAmendmentAwaitingOperator(query.tenantId(), withCourierAssignments(query.tenantId(), rows));
+        return withTables(
+                query.tenantId(),
+                withAmendmentAwaitingOperator(query.tenantId(), withCourierAssignments(query.tenantId(), rows)));
+    }
+
+    /**
+     * Fills in {@link JdbcOrderStore.OrderBoardRow#table()} for a page of board
+     * rows: one round trip through {@link OrderTablesPort} over the page's
+     * DINE_IN orders only -- a delivery or pickup order can never sit at a
+     * table, so asking about it would only widen the statement -- rather than a
+     * query per row or a join into {@code dinein.*} from this module.
+     */
+    private List<JdbcOrderStore.OrderBoardRow> withTables(UUID tenantId, List<JdbcOrderStore.OrderBoardRow> rows) {
+        Set<UUID> dineInOrderIds = rows.stream()
+                .filter(row -> row.order().fulfillmentMode() == FulfillmentMode.DINE_IN)
+                .map(row -> row.order().orderId())
+                .collect(Collectors.toSet());
+        if (dineInOrderIds.isEmpty()) {
+            return rows;
+        }
+        Map<UUID, OrderTablesPort.OrderTable> tableByOrder = orderTables.tablesByOrders(tenantId, dineInOrderIds);
+        if (tableByOrder.isEmpty()) {
+            return rows;
+        }
+        return rows.stream()
+                .map(row -> row.withTable(tableByOrder.get(row.order().orderId())))
+                .toList();
     }
 
     /**
@@ -532,6 +563,18 @@ public class OrderQueryService implements OrderCountsQuery {
     @Transactional(readOnly = true)
     public @Nullable UUID courierIdFor(UUID tenantId, UUID orderId) {
         return courierAssignments.assignedCouriers(tenantId, Set.of(orderId)).get(orderId);
+    }
+
+    /**
+     * The table (or joined tables) and session this order was placed at, or null
+     * when it was not attached to a table session -- the detail-screen
+     * counterpart to {@link #forLocation}'s batched {@link
+     * JdbcOrderStore.OrderBoardRow#table()}, so the two screens never disagree
+     * about which table an order is at.
+     */
+    @Transactional(readOnly = true)
+    public OrderTablesPort.@Nullable OrderTable tableFor(UUID tenantId, UUID orderId) {
+        return orderTables.tablesByOrders(tenantId, Set.of(orderId)).get(orderId);
     }
 
     /**
