@@ -1,3 +1,5 @@
+import { LocationScope } from './operations-paths';
+
 /**
  * Where the Staff section's endpoints live (operations IA §9.1, ADR 0025).
  *
@@ -46,6 +48,17 @@ export const staffPaths = {
    */
   telegramStaffLinkCodes(tenantId: string): string {
     return `${OPERATIONS}/tenants/${enc(tenantId)}/staff/telegram/link-codes`;
+  },
+
+  /**
+   * `TelegramStaffLinkCodeController.issueAtLocation` — the same self-service
+   * code, checked at the caller's own branch. A brand or branch member holds
+   * `integration.telegram-staff-link.issue` at their own scope, and a grant
+   * covers only the routes whose path names its level (ADR 0025), so the
+   * tenant-scope route above refuses them; this one is what they can reach.
+   */
+  telegramStaffLinkCodesAtLocation(scope: LocationScope): string {
+    return `${OPERATIONS}/tenants/${enc(scope.tenantId)}/brands/${enc(scope.brandId)}/locations/${enc(scope.locationId)}/staff/telegram/link-codes`;
   },
 
   /** `OperationsBrandController.list` — reused from `settings-paths.ts`'s own tree; see this file's doc. */

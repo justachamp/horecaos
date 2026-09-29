@@ -605,6 +605,7 @@ export const ru: Messages = {
     'Все проверки пройдены. Возобновите запуск, чтобы это зафиксировать.',
   'onboarding.validate.passed': 'Пройдено',
   'onboarding.validate.failed': 'Не пройдено',
+  'onboarding.validate.advisory': 'Рекомендация',
   'onboarding.cancel.title': 'Отменить запуск',
   'onboarding.cancel.lead':
     'Останавливает запуск окончательно; потом можно начать новый. Уже настроенное не отменяется.',

@@ -830,6 +830,15 @@ export const messagesUzLatn: MessageCatalogue = {
     'SMS shabloni shlyuz tasdigʻini kutmoqda.',
   'settings.home.readiness.code.TEMPLATE_REJECTED_BY_PROVIDER':
     'SMS shabloni shlyuz tomonidan rad etildi.',
+  'settings.home.readiness.advisory': 'Tavsiya',
+  'settings.home.readiness.code.FISCAL_CLASSIFICATION_INCOMPLETE':
+    'Menyudagi ayrim pozitsiyalarda fiskal tasnif toʻliq emas (IKPU, qadoq kodi, birlik yoki fiskal nom).',
+  'settings.home.readiness.code.CHANNEL_NO_PAYMENT_METHOD':
+    'Savdo kanalida yoqilgan toʻlov usuli yoʻq, shuning uchun u orqali buyurtma qabul qilib boʻlmaydi.',
+  'settings.home.readiness.code.INSTALLATION_SECRET_ROTATION_DUE':
+    'Provayder ulanishining kirish maʻlumotlarini almashtirish muddati oʻtib ketgan.',
+  'settings.home.readiness.code.MERCHANT_SECRET_ROTATION_DUE':
+    'Hisob-kitob raqamining kirish maʻlumotlarini almashtirish muddati oʻtib ketgan.',
   'settings.home.search.label': 'Sozlamani topish',
   'settings.home.search.placeholder': 'Sozlamani topish (/ bosing)',
   'settings.home.search.empty': '«{query}» boʻyicha hech narsa topilmadi.',

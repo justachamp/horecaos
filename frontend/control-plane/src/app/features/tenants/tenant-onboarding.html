@@ -95,13 +95,20 @@
           <p class="q-body-sm success">{{ i18n.t('onboarding.validate.allPassed') }}</p>
         }
         <ul class="checks">
-          @for (check of result.checks; track check.stepKey) {
-            <li class="q-body-sm" [class.failed]="!check.passed">
-              <span class="pill" [class]="check.passed ? 'pill-COMPLETED' : 'pill-FAILED'">
+          @for (check of result.checks; track $index) {
+            <li class="q-body-sm" [class.failed]="!check.passed && !check.advisory">
+              <span
+                class="pill"
+                [class]="
+                  check.passed ? 'pill-COMPLETED' : check.advisory ? 'pill-PENDING' : 'pill-FAILED'
+                "
+              >
                 {{
                   check.passed
                     ? i18n.t('onboarding.validate.passed')
-                    : i18n.t('onboarding.validate.failed')
+                    : check.advisory
+                      ? i18n.t('onboarding.validate.advisory')
+                      : i18n.t('onboarding.validate.failed')
                 }}
               </span>
               <span>{{ stepName(check.stepKey) }}</span>

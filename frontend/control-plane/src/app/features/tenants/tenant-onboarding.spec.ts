@@ -492,6 +492,42 @@ describe('TenantOnboarding', () => {
     expect(checks).toContain(ru['onboarding.hint.NO_MERCHANT_BINDING']);
   });
 
+  it('shows an advisory finding as advice, not as a failure, and still says every check passes', async () => {
+    await createWith(RUN);
+    api.validateOnboarding.mockResolvedValue({
+      allPassed: true,
+      checks: [
+        { stepKey: 'BRANDS_AND_LOCATIONS_VALIDATE', passed: true, errorCode: null, detail: null },
+        {
+          stepKey: 'SECRET_ROTATION_AGE_VALIDATE',
+          passed: false,
+          advisory: true,
+          errorCode: 'INSTALLATION_SECRET_ROTATION_DUE',
+          detail: 'Provider connection Clopos main (CLOPOS) has a credential 200 days old',
+        },
+        {
+          stepKey: 'SECRET_ROTATION_AGE_VALIDATE',
+          passed: false,
+          advisory: true,
+          errorCode: 'MERCHANT_SECRET_ROTATION_DUE',
+          detail: 'The CLICK merchant account has a credential 300 days old',
+        },
+      ],
+    });
+
+    (panel(ru['onboarding.validate.title']).querySelector('button') as HTMLButtonElement).click();
+    await settle();
+
+    const checks = panel(ru['onboarding.validate.title']);
+    const text = checks.textContent as string;
+    expect(text).toContain(ru['onboarding.validate.allPassed']);
+    expect(text).toContain(ru['onboarding.validate.advisory']);
+    expect(text).not.toContain(ru['onboarding.validate.failed']);
+    // Two rows from one check share a step key; both must render.
+    expect(text).toContain('300 days old');
+    expect(text).toContain('200 days old');
+  });
+
   it('cancels a run in flight with a reason, and then offers a fresh start', async () => {
     const inFlight: OnboardingRunView = { ...RUN, run: { ...RUN.run, status: 'PROVISIONING' } };
     await createWith(inFlight);

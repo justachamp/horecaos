@@ -8579,6 +8579,7 @@ export interface ValidationResponse {
 }
 
 export interface ValidationResult {
+  advisory?: boolean;
   detail?: string;
   errorCode?: string;
   locationId?: string;
@@ -9621,6 +9622,7 @@ export interface Operations {
   "find": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/reservations/{reservationId}"; request: { parameters: { path: { brandId: string; locationId: string; reservationId: string; tenantId: string }; query: { purpose?: string } } }; responses: { "200": ReservationResponse } };
   "amend": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/reservations/{reservationId}/amendments"; request: { parameters: { path: { brandId: string; locationId: string; reservationId: string; tenantId: string } }; body: AmendmentRequest }; responses: { "200": ReservationResponse } };
   "stateAction": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/reservations/{reservationId}/state-actions"; request: { parameters: { path: { brandId: string; locationId: string; reservationId: string; tenantId: string } }; body: ReservationControllerStateActionRequest }; responses: { "200": ReservationResponse } };
+  "issueAtLocation": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/staff/telegram/link-codes"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } } }; responses: { "200": LinkCodeResponse } };
   "availability": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/table-availability"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string }; query: { from: string; to: string } } }; responses: { "200": Array<AvailabilityResponse> } };
   "list_4": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/attribution-links"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<AttributionLinkResponse> } };
   "mint": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/attribution-links"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: MintRequest }; responses: { "200": AttributionLinkResponse } };

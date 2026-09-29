@@ -34533,6 +34533,51 @@
         "tags" : [ "Reservations" ]
       }
     },
+    "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/staff/telegram/link-codes" : {
+      "post" : {
+        "description" : "The same self-service code as the tenant-scope route, for a brand or branch member: name the branch you work at and the capability is checked there. A location grant covers only its own branch, so naming another branch is refused; a brand or tenant grant covers the branches beneath it. The code always binds the caller's own account, whatever branch is named.",
+        "operationId" : "issueAtLocation",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/LinkCodeResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Issue a staff Telegram identity-link code from a branch",
+        "tags" : [ "Telegram staff linking" ]
+      }
+    },
     "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/table-availability" : {
       "get" : {
         "description" : "Advisory, and honestly so. Two hosts reading this in the same second both see a free table; the database decides between them when they confirm. A screen that treated this as a hold would be the check-on-read ADR 0047 rejects.",
@@ -41836,7 +41881,7 @@
     },
     "/api/v1/tenants/{tenantId}/staff/telegram/link-codes" : {
       "post" : {
-        "description" : "Send \"/link <code>\" to the bot in a 1:1 chat. Binds the caller's own Telegram account to the caller's own principal in this tenant; a Telegram account may hold one such link per tenant, and many tenants at once.",
+        "description" : "Send \"/link <code>\" to the bot in a 1:1 chat. Binds the caller's own Telegram account to the caller's own principal in this tenant; a Telegram account may hold one such link per tenant, and many tenants at once. Tenant-scope: satisfied by a tenant-wide grant only. A brand or branch member uses the branch-scoped route instead.",
         "operationId" : "issue",
         "parameters" : [ {
           "in" : "path",

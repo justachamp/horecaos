@@ -207,6 +207,8 @@ export interface ValidationOutcome {
     readonly passed: boolean;
     readonly errorCode: string | null;
     readonly detail: string | null;
+    /** True for a finding from an advisory check: shown, but not counted against `allPassed`. */
+    readonly advisory?: boolean;
   }[];
 }
 

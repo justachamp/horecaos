@@ -854,6 +854,15 @@ export const messagesEn = {
     'An SMS template is awaiting the gateway’s approval.',
   'settings.home.readiness.code.TEMPLATE_REJECTED_BY_PROVIDER':
     'An SMS template was rejected by the gateway.',
+  'settings.home.readiness.advisory': 'Advisory',
+  'settings.home.readiness.code.FISCAL_CLASSIFICATION_INCOMPLETE':
+    'Some menu items still lack a complete fiscal classification (ИКПУ, package code, unit or fiscal name).',
+  'settings.home.readiness.code.CHANNEL_NO_PAYMENT_METHOD':
+    'A sales channel has no payment method enabled, so no order can be taken through it.',
+  'settings.home.readiness.code.INSTALLATION_SECRET_ROTATION_DUE':
+    'A provider connection’s credential is overdue for rotation.',
+  'settings.home.readiness.code.MERCHANT_SECRET_ROTATION_DUE':
+    'A merchant account’s credential is overdue for rotation.',
   'settings.home.search.label': 'Find a setting',
   'settings.home.search.placeholder': 'Find a setting (press /)',
   'settings.home.search.empty': 'No setting matches "{query}".',

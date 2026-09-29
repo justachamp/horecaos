@@ -611,6 +611,7 @@ export const uzLatn: Messages = {
     'Barcha tekshiruvlar o‘tdi. Buni qayd etish uchun jarayonni davom ettiring.',
   'onboarding.validate.passed': 'O‘tdi',
   'onboarding.validate.failed': 'O‘tmadi',
+  'onboarding.validate.advisory': 'Tavsiya',
   'onboarding.cancel.title': 'Jarayonni bekor qilish',
   'onboarding.cancel.lead':
     'Jarayonni butunlay to‘xtatadi; keyin yangisini boshlash mumkin. Allaqachon sozlangan narsalar bekor qilinmaydi.',

@@ -869,9 +869,13 @@ public enum Capability {
      * <p>Separate from {@link #INTEGRATION_TELEGRAM_LINK_ISSUE}, which issues a
      * code for a <em>group</em> to receive operations alerts and is scoped to a
      * brand. This one is self-service and per-principal — nobody can request a
-     * code that would link somebody else's account — so it is granted at
-     * {@code TENANT} scope to every staff bundle that can act on an order or the
-     * stop list, rather than reserved to an administrator.
+     * code that would link somebody else's account — so it is granted to every
+     * staff bundle that can act on an order or the stop list, rather than
+     * reserved to an administrator. Each bundle carries it at <em>its own</em>
+     * scope ({@code brand-manager} at brand, {@code location-manager} and
+     * {@code location-staff} at location), which is why the endpoint is served
+     * at both {@code TENANT} and {@code LOCATION} scope: a grant covers only
+     * the routes whose path names its level (ADR 0025).
      */
     INTEGRATION_TELEGRAM_STAFF_LINK_ISSUE(
             "integration.telegram-staff-link.issue", "integration", "telegram-staff-link.issue"),

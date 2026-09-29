@@ -1,7 +1,15 @@
 # Single-command feedback loop for humans, agents, and CI.
 # Every target exits non-zero on failure. See docs/sdlc.md.
 
-MVN := ./mvnw
+# Maven runs through tools/mvn-serial, which holds a per-worktree lock: every
+# Maven invocation in a single-module project compiles into the same
+# target/classes, so two concurrent runs in one tree corrupt each other and
+# fail as NoClassDefFoundError rather than cleanly. Plain ./mvnw bypasses that
+# lock. The path is anchored to this Makefile so `make -f platform/Makefile`
+# from elsewhere still finds it. Override with `make MVN=./mvnw verify` (or an
+# MVN environment variable) when the lock is unwanted, e.g. inside a container
+# that only ever runs one build.
+MVN ?= $(dir $(abspath $(lastword $(MAKEFILE_LIST))))tools/mvn-serial
 
 # The OpenApiSurface groups (ADR 0031). Keep in sync with
 # src/main/java/uz/horecaos/platform/configuration/OpenApiSurface.java — the

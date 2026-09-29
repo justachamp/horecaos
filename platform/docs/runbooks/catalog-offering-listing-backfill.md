@@ -1,7 +1,10 @@
 # Listing a tenant's pre-existing offerings into inventory
 
-**Last executed:** 2026-09-29, locally, in two halves — read the second one
-before trusting this file on a real host.
+**Last executed:** 2026-09-29 on **pre-prod**: 10 candidate offerings, 0 listed
+at both JizBiz branches — every offering was already listed in inventory, so
+the backfill found nothing to do. Also 2026-09-29, locally, in two halves —
+read the second one before trusting the rest of this file on a real host.
+Not yet run against production.
 
 - Step 1's query ran against the local Postgres: an empty backlog (the
   local fixtures are fully listed), then the same query on three
@@ -22,9 +25,12 @@ before trusting this file on a real host.
     fails if this note cites a test that is not there.
 
   A renamed path or field fails one of those rather than an operator.
-- Not yet run against pre-prod or production. Do that once after the
-  auto-listing fix ships, then update this line with the date and what it
-  found.
+- Pre-prod (2026-09-29): run after the auto-listing fix shipped. Ten
+  candidate offerings were checked and **zero** were listed at either of the
+  two JizBiz branches — everything was already listed, so there was nothing
+  to backfill.
+- Production: not yet run. When it is, update the "Last executed" line at the
+  top of this file with the date, the host, and what it found.
 
 One-time catch-up, not a recurring job. From this wave onward,
 `CatalogAuthoringService` publishes `OfferingBecameAvailable` whenever an

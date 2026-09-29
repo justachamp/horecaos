@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 
 import { Auth } from '../../core/auth/auth';
+import { CurrentLocation } from '../../core/auth/current-location';
 import { CurrentTenant } from '../../core/auth/current-tenant';
 import { ScopeGrant } from '../../core/auth/session-context';
 import { ApiError } from '../../core/api/problem-details';
@@ -57,6 +58,7 @@ interface CapabilityGroup {
 })
 export class MyProfilePage {
   private readonly tenant = inject(CurrentTenant);
+  private readonly location = inject(CurrentLocation);
   private readonly api = inject(StaffApi);
   protected readonly auth = inject(Auth);
   protected readonly i18n = inject(I18n);
@@ -125,7 +127,12 @@ export class MyProfilePage {
     this.telegramBusy.set(true);
     this.telegramError.set(null);
     try {
-      this.telegramCode.set(await this.api.issueTelegramLinkCode(tenantId));
+      // The branch the operator is working at, when there is one: a brand or
+      // branch member holds the capability at their own scope, and only the
+      // branch-scoped route covers it (see `staffPaths.telegramStaffLinkCodesAtLocation`).
+      // A tenant-wide holder with no branch at all falls back to the tenant route.
+      await this.location.ensureLoaded();
+      this.telegramCode.set(await this.api.issueTelegramLinkCode(tenantId, this.location.scope()));
     } catch (error) {
       this.telegramError.set(this.describe(error));
     } finally {

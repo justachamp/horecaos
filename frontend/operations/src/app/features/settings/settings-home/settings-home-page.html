@@ -25,11 +25,19 @@
             finding of findings();
             track finding.stepKey + (finding.locationId ?? '') + (finding.errorCode ?? '')
           ) {
-            <li class="readiness__row q-body-sm">
+            <li
+              class="readiness__row q-body-sm"
+              [class.readiness__row--advisory]="isAdvisory(finding)"
+            >
               @if (readinessLink(finding); as link) {
                 <a [routerLink]="link">{{ readinessMessage(finding) }}</a>
               } @else {
                 <span>{{ readinessMessage(finding) }}</span>
+              }
+              @if (isAdvisory(finding)) {
+                <span class="readiness__advisory q-caption">{{
+                  'settings.home.readiness.advisory' | t
+                }}</span>
               }
             </li>
           }

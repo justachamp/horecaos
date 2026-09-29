@@ -3317,6 +3317,7 @@ export interface ValidationResponse {
 }
 
 export interface ValidationResult {
+  advisory?: boolean;
   detail?: string;
   errorCode?: string;
   locationId?: string;

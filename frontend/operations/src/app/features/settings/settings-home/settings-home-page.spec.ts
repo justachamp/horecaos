@@ -243,6 +243,123 @@ describe('SettingsHomePage', () => {
     expect(link.getAttribute('href')).toBe('/settings/brand');
   });
 
+  describe('the three settings.md §10.0 conditions that had no read behind them (row 10.0)', () => {
+    const CHANNEL: ValidationOutcome['checks'][number] = {
+      stepKey: 'CHANNEL_PAYMENT_COVERAGE_VALIDATE',
+      passed: false,
+      errorCode: 'CHANNEL_NO_PAYMENT_METHOD',
+      detail: 'Sales channel STOREFRONT has no enabled payment method',
+      locationId: null,
+    };
+    const FISCAL: ValidationOutcome['checks'][number] = {
+      stepKey: 'FISCAL_CLASSIFICATION_COVERAGE_VALIDATE',
+      passed: false,
+      errorCode: 'FISCAL_CLASSIFICATION_INCOMPLETE',
+      detail: 'Brand MAIN has 2 of 3 menu items without a complete fiscal classification',
+      locationId: null,
+      advisory: true,
+    };
+    const INSTALLATION_SECRET: ValidationOutcome['checks'][number] = {
+      stepKey: 'SECRET_ROTATION_AGE_VALIDATE',
+      passed: false,
+      errorCode: 'INSTALLATION_SECRET_ROTATION_DUE',
+      detail: 'Provider connection Clopos main (CLOPOS) has a credential 200 days old',
+      locationId: null,
+      advisory: true,
+    };
+    const MERCHANT_SECRET: ValidationOutcome['checks'][number] = {
+      stepKey: 'SECRET_ROTATION_AGE_VALIDATE',
+      passed: false,
+      errorCode: 'MERCHANT_SECRET_ROTATION_DUE',
+      detail: 'The CLICK merchant account has a credential 300 days old',
+      locationId: null,
+      advisory: true,
+    };
+
+    function outcomeOf(...checks: ValidationOutcome['checks'][number][]): ValidationOutcome {
+      return { allPassed: false, checks };
+    }
+
+    function hrefs(fixture: ComponentFixture<SettingsHomePage>): (string | null)[] {
+      return [...fixture.nativeElement.querySelectorAll('.readiness__row a')].map(
+        (link: HTMLAnchorElement) => link.getAttribute('href'),
+      );
+    }
+
+    it('deep-links a channel with no payment method into the sales-channels screen', async () => {
+      const fixture = await render({ validate: () => Promise.resolve(outcomeOf(CHANNEL)) });
+
+      expect(hrefs(fixture)).toEqual(['/settings/sales-channels']);
+      expect(fixture.nativeElement.querySelector('.readiness__row')?.textContent).toContain(
+        'A sales channel has no payment method enabled',
+      );
+    });
+
+    it('deep-links incomplete fiscal classification into the fiscalization screen', async () => {
+      const fixture = await render({ validate: () => Promise.resolve(outcomeOf(FISCAL)) });
+
+      expect(hrefs(fixture)).toEqual(['/settings/fiscalization']);
+      expect(fixture.nativeElement.querySelector('.readiness__row')?.textContent).toContain(
+        'fiscal classification',
+      );
+    });
+
+    it('deep-links both rotation findings — a provider connection and a merchant account — into integrations', async () => {
+      const fixture = await render({
+        validate: () => Promise.resolve(outcomeOf(INSTALLATION_SECRET, MERCHANT_SECRET)),
+      });
+
+      expect(hrefs(fixture)).toEqual(['/settings/integrations', '/settings/integrations']);
+      const text = fixture.nativeElement.querySelector('.readiness__list')?.textContent ?? '';
+      expect(text).toContain('provider connection');
+      expect(text).toContain('merchant account');
+    });
+
+    it('lists blocking findings first and tags advisory ones, keeping the server order inside each group', async () => {
+      const fixture = await render({
+        // Server order: advisory, blocking, advisory, blocking.
+        validate: () =>
+          Promise.resolve(
+            outcomeOf(FISCAL, CHANNEL, INSTALLATION_SECRET, {
+              ...CHANNEL,
+              detail: 'Sales channel KIOSK has no enabled payment method',
+            }),
+          ),
+      });
+
+      const rows: HTMLElement[] = [...fixture.nativeElement.querySelectorAll('.readiness__row')];
+      expect(rows.map((row) => row.classList.contains('readiness__row--advisory'))).toEqual([
+        false,
+        false,
+        true,
+        true,
+      ]);
+      expect(rows.map((row) => row.querySelector('.readiness__advisory') !== null)).toEqual([
+        false,
+        false,
+        true,
+        true,
+      ]);
+      expect(rows[2].textContent).toContain('fiscal classification');
+      expect(rows[3].textContent).toContain('provider connection');
+    });
+
+    it('treats a finding from an older server, which sends no advisory flag, as blocking', async () => {
+      const legacy = {
+        stepKey: 'PAYMENT_CONFIGURATION_VALIDATE',
+        passed: false,
+        errorCode: 'NO_LEGAL_ENTITY',
+        detail: 'Location CHI has no active legal entity assigned',
+        locationId: 'loc-1',
+      };
+      const fixture = await render({ validate: () => Promise.resolve(outcomeOf(legacy)) });
+
+      const row: HTMLElement = fixture.nativeElement.querySelector('.readiness__row');
+      expect(row.classList.contains('readiness__row--advisory')).toBe(false);
+      expect(row.querySelector('.readiness__advisory')).toBeNull();
+    });
+  });
+
   it('renders the denied state on a 403 from the readiness check', async () => {
     const fixture = await render({
       validate: () => Promise.reject(new ApiError('INSUFFICIENT_CAPABILITY', 403, null, null)),

@@ -821,6 +821,15 @@ export const messagesRu: MessageCatalogue = {
   'settings.home.readiness.code.TEMPLATE_AWAITING_PROVIDER_REVIEW':
     'SMS-шаблон ожидает одобрения шлюза.',
   'settings.home.readiness.code.TEMPLATE_REJECTED_BY_PROVIDER': 'SMS-шаблон отклонён шлюзом.',
+  'settings.home.readiness.advisory': 'Рекомендация',
+  'settings.home.readiness.code.FISCAL_CLASSIFICATION_INCOMPLETE':
+    'У части позиций меню фискальная классификация заполнена не полностью (ИКПУ, код упаковки, единица или фискальное название).',
+  'settings.home.readiness.code.CHANNEL_NO_PAYMENT_METHOD':
+    'У канала продаж не включён ни один способ оплаты, поэтому заказ через него принять нельзя.',
+  'settings.home.readiness.code.INSTALLATION_SECRET_ROTATION_DUE':
+    'Учётные данные подключения к провайдеру не обновлялись дольше срока ротации.',
+  'settings.home.readiness.code.MERCHANT_SECRET_ROTATION_DUE':
+    'Учётные данные расчётного счёта не обновлялись дольше срока ротации.',
   'settings.home.search.label': 'Найти настройку',
   'settings.home.search.placeholder': 'Найти настройку (нажмите /)',
   'settings.home.search.empty': 'Ничего не найдено по запросу «{query}».',
