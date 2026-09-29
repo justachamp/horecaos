@@ -25,6 +25,30 @@ export function toCatalogLocale(locale: Locale): string {
   return locale === 'uz-Latn' ? 'uz' : locale;
 }
 
+/**
+ * `horecaos.catalog.default-locale` — what `CatalogQueryService` resolves a
+ * list screen's names in for a brand that has chosen no default language of
+ * its own (and only for that brand).
+ */
+export const SERVER_CATALOG_DEFAULT_LOCALE = 'uz';
+
+/**
+ * The catalog locale a list screen resolves this brand's names in — and
+ * therefore the one a quick rename, a create, and every "default" marker
+ * must target (row 10.12).
+ *
+ * `CatalogQueryService` reads the brand's own default language (mapped by
+ * {@link toCatalogLocale}) and falls back to the server's configured locale
+ * only when the brand has none. `LocaleSet.defaultLocale()` alone cannot say
+ * which of the two applies: an unconfigured brand reports the *platform*
+ * default (`ru`), which is not what the server reads (`uz`) — an edit
+ * written there would appear to do nothing. So the answer depends on
+ * whether the brand has configured its set at all.
+ */
+export function listResolutionLocale(isConfigured: boolean, defaultLocale: Locale): string {
+  return isConfigured ? toCatalogLocale(defaultLocale) : SERVER_CATALOG_DEFAULT_LOCALE;
+}
+
 // ------------------------------------------------------------ shared
 
 /** `EntityType` — the six catalog entities that carry a `catalog.translations` row. */

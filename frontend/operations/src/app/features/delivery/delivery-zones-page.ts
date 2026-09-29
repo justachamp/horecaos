@@ -12,6 +12,14 @@ import { ApiError } from '../../core/api/problem-details';
 import { CurrentBrand } from '../../core/auth/current-brand';
 import { CurrentLocation } from '../../core/auth/current-location';
 import { I18n } from '../../core/i18n/i18n';
+import {
+  LabelsByLocale,
+  labelDrafts,
+  labelsToSend,
+  localeDisplayName,
+  platformColumns,
+} from '../../core/i18n/locale-labels';
+import { LocaleSet } from '../../core/i18n/locale-set';
 import { MessageKey } from '../../core/i18n/messages.en';
 import { TPipe } from '../../core/i18n/t.pipe';
 import { describeApiError } from '../orders/order-errors';
@@ -72,7 +80,14 @@ interface TariffOption {
  *    no tariff and no thresholds — `ck_zone_version_catchment_is_not_priced`
  *    refuses them — so the form hides those fields for it rather than letting
  *    the database answer.
- * 4. **Three locale names, not one string written three times.**
+ * 4. **A name per locale, not one string written three times.** Row 10.12:
+ *    the create form and the rename form offer the *brand's own* supported
+ *    languages (`LocaleSet`, default first) instead of a fixed ru/uz/en
+ *    triple; the brand's default language is the one name a zone must have.
+ *    **A language the brand does not offer is never touched by a rename**: the
+ *    body carries only the offered, filled-in names ({@link labelsToSend}),
+ *    the server writes exactly the languages named
+ *    (`PUT .../service-zones/{zoneId}/names`), and the zone keeps the rest.
  * 5. **Draft, activate and bind are three acts.** They used to run inside one
  *    `submitDraft`, so a mis-typed radius went live and stayed live. There is
  *    now a version list, a deactivate and an unbind.
@@ -97,6 +112,7 @@ export class DeliveryZonesPage implements OnInit {
   private readonly regionsApi = inject(RegionsApi);
   private readonly brand = inject(CurrentBrand);
   private readonly location = inject(CurrentLocation);
+  private readonly localeSet = inject(LocaleSet);
   protected readonly i18n = inject(I18n);
 
   protected readonly loading = signal(true);
@@ -119,9 +135,16 @@ export class DeliveryZonesPage implements OnInit {
   protected readonly createError = signal<string | null>(null);
   protected readonly newRole = signal<'DELIVERY' | 'CATCHMENT'>('DELIVERY');
   protected readonly newCode = signal('');
-  protected readonly newNameRu = signal('');
-  protected readonly newNameUz = signal('');
-  protected readonly newNameEn = signal('');
+  protected readonly newNames = signal<LabelsByLocale>({});
+
+  /** Row 10.12: the languages a zone's name is offered in — the brand's own set, default first. */
+  protected readonly locales = computed<readonly string[]>(() => this.localeSet.locales());
+  protected readonly defaultLocale = computed<string>(() => this.localeSet.defaultLocale());
+
+  protected readonly renamingZone = signal<ZoneSummaryResponse | null>(null);
+  protected readonly renameNames = signal<LabelsByLocale>({});
+  protected readonly renameSubmitting = signal(false);
+  protected readonly renameError = signal<string | null>(null);
 
   protected readonly draftingZone = signal<ZoneSummaryResponse | null>(null);
   protected readonly draftSubmitting = signal(false);
@@ -150,7 +173,9 @@ export class DeliveryZonesPage implements OnInit {
 
   private async load(): Promise<void> {
     this.loading.set(true);
-    await this.brand.ensureLoaded();
+    // Row 10.12: resolved alongside the brand scope, so the name form never
+    // sticks on LocaleSet's platform fallback for a configured brand.
+    await Promise.all([this.brand.ensureLoaded(), this.localeSet.ensureLoaded()]);
     const scope = this.brand.scope();
     if (!scope) {
       this.denied.set(this.brand.denied());
@@ -302,9 +327,7 @@ export class DeliveryZonesPage implements OnInit {
   protected openCreateForm(): void {
     this.newRole.set('DELIVERY');
     this.newCode.set('');
-    this.newNameRu.set('');
-    this.newNameUz.set('');
-    this.newNameEn.set('');
+    this.newNames.set({});
     this.createError.set(null);
     this.showCreateForm.set(true);
   }
@@ -317,9 +340,8 @@ export class DeliveryZonesPage implements OnInit {
     return (
       !this.createSubmitting() &&
       this.newCode().trim().length > 0 &&
-      this.newNameRu().trim().length > 0 &&
-      this.newNameUz().trim().length > 0 &&
-      this.newNameEn().trim().length > 0
+      // The brand's default language is the one name a zone must have.
+      (this.newNames()[this.defaultLocale()] ?? '').trim().length > 0
     );
   }
 
@@ -331,12 +353,16 @@ export class DeliveryZonesPage implements OnInit {
     this.createSubmitting.set(true);
     this.createError.set(null);
     try {
+      // The platform triple stays required by the contract: a platform language
+      // the brand does not offer takes the default language's name.
+      const columns = platformColumns(this.locales(), this.newNames(), this.defaultLocale());
       await this.api.create(scope, {
         role: this.newRole(),
         code: this.newCode().trim(),
-        displayNameRu: this.newNameRu().trim(),
-        displayNameUz: this.newNameUz().trim(),
-        displayNameEn: this.newNameEn().trim(),
+        displayNameRu: columns.ru,
+        displayNameUz: columns['uz-Latn'],
+        displayNameEn: columns.en,
+        displayNames: labelsToSend(this.locales(), this.newNames()),
       });
       this.showCreateForm.set(false);
       await this.load();
@@ -344,6 +370,72 @@ export class DeliveryZonesPage implements OnInit {
       this.createError.set(this.describe(error));
     } finally {
       this.createSubmitting.set(false);
+    }
+  }
+
+  // --------------------------------------------------------------- names
+
+  protected localeName(locale: string): string {
+    return localeDisplayName(this.i18n, locale);
+  }
+
+  protected isDefault(locale: string): boolean {
+    return locale === this.defaultLocale();
+  }
+
+  protected setNewName(locale: string, value: string): void {
+    this.newNames.update((names) => ({ ...names, [locale]: value }));
+  }
+
+  protected setRenameName(locale: string, value: string): void {
+    this.renameNames.update((names) => ({ ...names, [locale]: value }));
+  }
+
+  /** Languages the zone is named in that the brand does not offer — kept, not shown. */
+  protected hiddenLocales(zone: ZoneSummaryResponse | null): readonly string[] {
+    const offered = new Set(this.locales());
+    return Object.keys(zone?.displayNames ?? {}).filter((locale) => !offered.has(locale));
+  }
+
+  protected openRenameForm(zone: ZoneSummaryResponse): void {
+    this.renameNames.set(labelDrafts(this.locales(), zone.displayNames ?? triple(zone)));
+    this.renameError.set(null);
+    this.renamingZone.set(zone);
+  }
+
+  protected closeRenameForm(): void {
+    this.renamingZone.set(null);
+  }
+
+  protected canRename(): boolean {
+    return (
+      !this.renameSubmitting() &&
+      Object.keys(labelsToSend(this.locales(), this.renameNames())).length > 0
+    );
+  }
+
+  /**
+   * Writes the names of the offered languages the operator filled in and no
+   * other — a language the brand does not offer is not in the body and keeps
+   * its name, and a blank field is left out rather than sent as an empty
+   * string (row 10.12's never-delete guarantee, client half).
+   */
+  protected async submitRename(): Promise<void> {
+    const scope = this.brand.scope();
+    const zone = this.renamingZone();
+    if (!scope || !zone || !this.canRename()) {
+      return;
+    }
+    this.renameSubmitting.set(true);
+    this.renameError.set(null);
+    try {
+      await this.api.rename(scope, zone.zoneId, labelsToSend(this.locales(), this.renameNames()));
+      this.renamingZone.set(null);
+      this.zones.set(await this.api.list(scope));
+    } catch (error) {
+      this.renameError.set(this.describe(error));
+    } finally {
+      this.renameSubmitting.set(false);
     }
   }
 
@@ -520,4 +612,9 @@ function problemsOf(error: unknown): readonly string[] {
   }
   const problems = error.problem?.['problems'];
   return Array.isArray(problems) ? problems.map((entry) => String(entry)) : [];
+}
+
+/** A zone's platform-triple name columns keyed by locale — for a response that predates `displayNames`. */
+function triple(zone: ZoneSummaryResponse): LabelsByLocale {
+  return { ru: zone.displayNameRu, 'uz-Latn': zone.displayNameUz, en: zone.displayNameEn };
 }

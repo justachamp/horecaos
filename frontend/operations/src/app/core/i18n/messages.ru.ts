@@ -1230,6 +1230,8 @@ export const messagesRu: MessageCatalogue = {
 
   // Пункт 2.1b: пресеты комментариев к блюду
   'settings.commentPresets.title': 'Пресеты комментариев к блюду',
+  'locales.defaultMarker': 'по умолчанию',
+  'locales.hiddenKept': 'Тексты на других языках сохраняются как есть.',
   'settings.commentPresets.lead':
     'Кодовая инструкция для кухни («без лука», «хорошо прожарить»), которую строка заказа несёт вместо свободного текста.',
   'settings.commentPresets.tenantWideNote': 'Общий для всех брендов этого тенанта.',
@@ -1237,9 +1239,7 @@ export const messagesRu: MessageCatalogue = {
   'settings.commentPresets.status.active': 'Активен',
   'settings.commentPresets.status.archived': 'В архиве',
   'settings.commentPresets.table.code': 'Код',
-  'settings.commentPresets.table.labelRu': 'Метка (ru)',
-  'settings.commentPresets.table.labelUz': 'Метка (uz)',
-  'settings.commentPresets.table.labelEn': 'Метка (en)',
+  'settings.commentPresets.table.labelIn': 'Метка ({locale})',
   'settings.commentPresets.table.posModifierCode': 'Модификатор кассы',
   'settings.commentPresets.table.sortOrder': 'Порядок',
   'settings.commentPresets.table.status': 'Статус',
@@ -1251,16 +1251,14 @@ export const messagesRu: MessageCatalogue = {
   'settings.commentPresets.create.code': 'Код',
   'settings.commentPresets.create.codeHint':
     'Только заглавные буквы, цифры, «_» и «-». Клиенту никогда не показывается.',
-  'settings.commentPresets.create.labelRu': 'Метка (ru)',
-  'settings.commentPresets.create.labelUz': 'Метка (uz)',
-  'settings.commentPresets.create.labelEn': 'Метка (en)',
+  'settings.commentPresets.create.labelIn': 'Метка ({locale})',
   'settings.commentPresets.create.posModifierCode': 'Код модификатора кассы',
   'settings.commentPresets.create.posModifierCodeHint':
     'Необязательно. Кодовое значение, в которое экспорт на кассу превращает этот пресет там, где ожидается модификатор.',
   'settings.commentPresets.create.sortOrder': 'Порядок',
   'settings.commentPresets.create.submit': 'Зарегистрировать',
   'settings.commentPresets.create.submitting': 'Регистрация…',
-  'settings.commentPresets.create.incomplete': 'Нужны код и все три метки.',
+  'settings.commentPresets.create.incomplete': 'Нужны код и метка на языке по умолчанию.',
 
   // 10.7 Фискализация
   'settings.fiscalization.title': 'Фискализация',
@@ -3053,9 +3051,10 @@ export const messagesRu: MessageCatalogue = {
   'delivery.zones.create.role': 'Роль',
   'delivery.zones.create.roleHint':
     'Зона доставки решает, можно ли доставить по адресу и по какой цене. Зона филиала решает, какой филиал может взять заказ, и тарифа не несёт вовсе.',
-  'delivery.zones.create.nameRu': 'Название (русский)',
-  'delivery.zones.create.nameUz': 'Название (узбекский)',
-  'delivery.zones.create.nameEn': 'Название (английский)',
+  'delivery.zones.create.nameIn': 'Название ({locale})',
+  'delivery.zones.rename.action': 'Переименовать',
+  'delivery.zones.rename.title': 'Переименование зоны {code}',
+  'delivery.zones.rename.submit': 'Сохранить названия',
   'delivery.zones.draft.origin': 'Центр — филиал',
   'delivery.zones.draft.region': 'Регион',
   'delivery.zones.draft.regionNone': 'Без региона',
@@ -3214,9 +3213,7 @@ export const messagesRu: MessageCatalogue = {
   'delivery.regions.status.ACTIVE': 'Активен',
   'delivery.regions.status.ARCHIVED': 'В архиве',
   'delivery.regions.field.code': 'Код',
-  'delivery.regions.field.nameRu': 'Название (русский)',
-  'delivery.regions.field.nameUz': 'Название (узбекский)',
-  'delivery.regions.field.nameEn': 'Название (английский)',
+  'delivery.regions.field.nameIn': 'Название ({locale})',
   'delivery.regions.field.boxHint':
     'Северо-восточный угол должен быть севернее и восточнее юго-западного, а центр — внутри прямоугольника.',
   'delivery.regions.field.swLat': 'ЮЗ широта',

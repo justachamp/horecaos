@@ -105,18 +105,25 @@
             (input)="code.set($any($event.target).value)"
           />
         </label>
-        <label class="field">
-          <span class="q-caption">{{ 'delivery.regions.field.nameRu' | t }}</span>
-          <input type="text" [value]="nameRu()" (input)="nameRu.set($any($event.target).value)" />
-        </label>
-        <label class="field">
-          <span class="q-caption">{{ 'delivery.regions.field.nameUz' | t }}</span>
-          <input type="text" [value]="nameUz()" (input)="nameUz.set($any($event.target).value)" />
-        </label>
-        <label class="field">
-          <span class="q-caption">{{ 'delivery.regions.field.nameEn' | t }}</span>
-          <input type="text" [value]="nameEn()" (input)="nameEn.set($any($event.target).value)" />
-        </label>
+        @for (locale of locales(); track locale) {
+          <label class="field">
+            <span class="q-caption">
+              {{ 'delivery.regions.field.nameIn' | t: { locale: localeName(locale) } }}
+              @if (isDefault(locale)) {
+                ({{ 'locales.defaultMarker' | t }})
+              }
+            </span>
+            <input
+              type="text"
+              [attr.data-testid]="'region-name-' + locale"
+              [value]="names()[locale] ?? ''"
+              (input)="setName(locale, $any($event.target).value)"
+            />
+          </label>
+        }
+        @if (hiddenLocales(editing()).length > 0) {
+          <p class="q-caption" data-testid="region-hidden-kept">{{ 'locales.hiddenKept' | t }}</p>
+        }
 
         <p class="q-caption">{{ 'delivery.regions.field.boxHint' | t }}</p>
         <div class="field-row">

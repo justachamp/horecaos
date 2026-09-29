@@ -3,6 +3,7 @@ import { Observable, firstValueFrom } from 'rxjs';
 
 import { ApiClient } from '../../../core/api/api-client';
 import { command } from '../../../core/api/idempotency';
+import { LabelsByLocale, LocaleSetView } from '../../../core/i18n/locale-labels';
 
 /**
  * `CommentPresetController` — control-plane, not the operations prefix, the
@@ -21,6 +22,13 @@ export interface PresetResponse {
   readonly labelRu: string;
   readonly labelUz: string;
   readonly labelEn: string;
+  /**
+   * Every language the preset has wording in (row 10.12): the platform triple
+   * from its columns, then any other from the per-locale table, each once.
+   * A screen reads this, not the three fields above, which stay for callers
+   * that predate it.
+   */
+  readonly labels: LabelsByLocale;
   readonly posModifierCode: string | null;
   readonly sortOrder: number;
   /** `ACTIVE` or `ARCHIVED`. */
@@ -28,20 +36,36 @@ export interface PresetResponse {
   readonly version: number;
 }
 
+/**
+ * `labelRu`/`labelUz`/`labelEn` are the platform triple and stay *required* —
+ * the OpenAPI contract cannot relax a published required request field — so an
+ * editor that offers only some of the platform languages fills the others (see
+ * `platformColumns`). `labels` is wording by locale, additive: the way to word
+ * a language beyond the triple, and what the tenant's default language is
+ * checked against.
+ */
 export interface NewPreset {
   readonly code: string;
   readonly labelRu: string;
   readonly labelUz: string;
   readonly labelEn: string;
+  readonly labels: LabelsByLocale;
   readonly posModifierCode?: string | null;
   readonly sortOrder?: number;
 }
 
-/** Whole-record edit: labels, POS mapping, sort order and status together, with an expected version. */
+/**
+ * Whole-record edit: POS mapping, sort order and status together, with an
+ * expected version. The platform triple is always named — for a language the
+ * editor does not offer, with the wording the preset already has, unchanged —
+ * and `labels` names only the offered languages the operator filled in, so a
+ * language beyond the triple that is not offered keeps its wording.
+ */
 export interface PresetEdit {
   readonly labelRu: string;
   readonly labelUz: string;
   readonly labelEn: string;
+  readonly labels: LabelsByLocale;
   readonly posModifierCode?: string | null;
   readonly sortOrder: number;
   readonly status: string;
@@ -58,6 +82,14 @@ export class CommentPresetsApi {
       this.api.get<readonly PresetResponse[]>(this.path(tenantId)),
     );
     return result.value ?? [];
+  }
+
+  /** The languages this editor offers — the union of the tenant's brands' (row 10.12). */
+  async localeSet(tenantId: string): Promise<LocaleSetView> {
+    const result = await firstValueFrom(
+      this.api.get<LocaleSetView>(`${this.path(tenantId)}/locale-set`),
+    );
+    return result.value;
   }
 
   /** Refused (409) when the code is already registered for this tenant. */

@@ -41,7 +41,7 @@
         [locales]="editingLocales()"
         [activeLocale]="editingLocale()"
         (activeLocaleChange)="editingLocale.set($event)"
-        [defaultLocale]="catalogDefaultLocale"
+        [defaultLocale]="listLocale()"
         [completeness]="localeCompleteness()"
         data-testid="editor-locale-group"
       />
@@ -679,7 +679,10 @@
               <div class="editor__section">
                 @if (unlistedBranchCount(); as unlistedCount) {
                   @if (unlistedCount > 0) {
-                    <div class="editor__unlisted-banner" data-testid="editor-unlisted-branches-banner">
+                    <div
+                      class="editor__unlisted-banner"
+                      data-testid="editor-unlisted-branches-banner"
+                    >
                       <p>
                         {{
                           'catalog.editor.availability.notListedAtBranches'

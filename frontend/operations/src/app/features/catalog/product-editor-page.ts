@@ -41,6 +41,7 @@ import {
   ValidationFinding,
   VariantAvailabilityRow,
   VariantDetail,
+  listResolutionLocale,
   toCatalogLocale,
 } from './catalog-domain';
 import { PricingApi } from './pricing-api';
@@ -103,22 +104,6 @@ const STATION_ROLES: readonly string[] = [
   'PACKING',
   'EXPO',
 ];
-
-/**
- * The catalog's own default locale (`CatalogSnapshotLoader`'s
- * `horecaos.catalog.default-locale`, `uz` — see `toCatalogLocale`'s doc).
- * `q-localized-field-group`'s default marker reads this, never the viewer's
- * own UI locale (`I18n.locale()`, `ru` by default) — the two are unrelated
- * defaults for unrelated things.
- *
- * Row 10.12: `editingLocales()` below always includes this locale even when
- * a brand's own `LocaleSet` does not, because `CatalogQueryService`'s list
- * reads (the products list, `defaultLocaleNames`) resolve every entity's
- * name in exactly this locale — an editor that could never write it would
- * leave those reads permanently falling back to the bare code for a brand
- * that narrowed its set away from `uz-Latn`.
- */
-const CATALOG_DEFAULT_LOCALE = 'uz';
 
 /**
  * `catalog.media_relations`' own primary key since V0223 (gap map row 4.2f):
@@ -219,10 +204,11 @@ const FINDING_LABEL_KEYS: Readonly<Partial<Record<string, MessageKey>>> = {
  * the editor on two different tabs with no relation to the brand's own
  * choice. {@link editingLocales} now reads `LocaleSet.locales()` — the
  * brand's own set, default first — and the editor opens on the brand's own
- * default locale instead. `CATALOG_DEFAULT_LOCALE` stays forced into the tab
- * set regardless (see its own doc): the list screens' name resolution needs
- * it writable even when a brand has not chosen it as a supported locale.
- * Every write here (`saveTranslation`, variant/modifier-option naming) has
+ * default locale instead. Batch 14: `CatalogQueryService` now resolves the
+ * list screens' names in that same brand default (falling back to the
+ * server's configured `uz` only for a brand with no set), so the tab set no
+ * longer needs a locale forced into it and the "default" marker follows
+ * {@link listLocale}. Every write here (`saveTranslation`, variant/modifier-option naming) has
  * always targeted exactly one `(entity, editingLocale())` pair and merged it
  * into the loaded `translations` map rather than replacing the map — so a
  * locale the brand no longer supports, and that this strip therefore no
@@ -266,18 +252,23 @@ export class ProductEditorPage implements OnInit {
   /**
    * Row 10.12: the brand's own supported locales (default first, mapped to
    * the catalog's plain `ru`/`uz`/`en` tag convention — see {@link
-   * toCatalogLocale}), always including {@link CATALOG_DEFAULT_LOCALE} even
-   * when the brand's own set does not (that constant's own doc explains
-   * why). A brand that has not configured a set at all still sees today's
-   * platform triple, since `LocaleSet.locales()` falls back to it.
+   * toCatalogLocale}). A brand that has not configured a set at all still sees
+   * today's platform triple, since `LocaleSet.locales()` falls back to it. The
+   * locale the list screens read ({@link listLocale}) is always among them.
    */
-  protected readonly editingLocales = computed<readonly string[]>(() => {
-    const brandLocales = this.localeSet.locales().map(toCatalogLocale);
-    return brandLocales.includes(CATALOG_DEFAULT_LOCALE)
-      ? brandLocales
-      : [...brandLocales, CATALOG_DEFAULT_LOCALE];
-  });
-  protected readonly catalogDefaultLocale = CATALOG_DEFAULT_LOCALE;
+  protected readonly editingLocales = computed<readonly string[]>(() =>
+    this.localeSet.locales().map(toCatalogLocale),
+  );
+
+  /**
+   * The catalog locale the list screens resolve this brand's names in —
+   * `q-localized-field-group`'s default marker. Never the viewer's own UI
+   * locale (`I18n.locale()`, `ru` by default): the two are unrelated
+   * defaults for unrelated things. See {@link listResolutionLocale}.
+   */
+  protected readonly listLocale = computed<string>(() =>
+    listResolutionLocale(this.localeSet.isConfigured(), this.localeSet.defaultLocale()),
+  );
   protected readonly activeTab = signal<EditorTab>('BASIC');
   protected readonly editingLocale = signal<string>('ru');
 
@@ -640,7 +631,9 @@ export class ProductEditorPage implements OnInit {
       return;
     }
     try {
-      const locationIds = await firstValueFrom(this.inventoryApi.unlistedLocations(locationScope, variantId));
+      const locationIds = await firstValueFrom(
+        this.inventoryApi.unlistedLocations(locationScope, variantId),
+      );
       this.unlistedBranchCount.set(locationIds.length);
     } catch {
       // Read-only banner: a failure here just leaves it hidden rather than

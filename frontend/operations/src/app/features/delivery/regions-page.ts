@@ -1,8 +1,23 @@
-import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  OnInit,
+  computed,
+  inject,
+  signal,
+} from '@angular/core';
 
 import { ApiError } from '../../core/api/problem-details';
 import { CurrentBrand } from '../../core/auth/current-brand';
 import { I18n } from '../../core/i18n/i18n';
+import {
+  LabelsByLocale,
+  PLATFORM_LOCALE_SET,
+  labelDrafts,
+  labelsToSend,
+  localeDisplayName,
+  platformColumns,
+} from '../../core/i18n/locale-labels';
 import { MessageKey } from '../../core/i18n/messages.en';
 import { TPipe } from '../../core/i18n/t.pipe';
 import { describeApiError } from '../orders/order-errors';
@@ -35,6 +50,18 @@ const STATUS_KEYS: Readonly<Record<string, MessageKey>> = {
  * as sentences an operator can act on, listed here rather than collapsed into
  * one line.
  *
+ * **Row 10.12 — the name is per locale, not a fixed ru/uz/en triple.** A
+ * region belongs to the tenant, not to a brand, so its name is edited in the
+ * *union of the tenant's brands' supported languages*, default first (the
+ * tenant's first brand's), read from `GET .../regions/locale-set`. The
+ * default language is the one name a region must have; every other offered
+ * language is optional. **A language the tenant does not offer is never
+ * touched by a rewrite**: `displayNames` carries only the offered, filled-in
+ * names ({@link labelsToSend}) so the server keeps every other one beyond the
+ * platform triple, and the three platform fields — which the OpenAPI contract
+ * keeps required — go back for a language the tenant does not offer with the
+ * name the region already has, unchanged ({@link platformColumns}).
+ *
  * **Platform regions are visible and read-only.** V0025's nullable tenant —
  * "Tashkent is not one tenant's fact" — means a tenant may reference the
  * platform's regions and may not edit them. The list says which is which
@@ -63,10 +90,13 @@ export class RegionsPage implements OnInit {
   protected readonly formError = signal<string | null>(null);
   protected readonly problems = signal<readonly string[]>([]);
 
+  /** The languages this editor offers (row 10.12): the platform triple until the tenant's set loads. */
+  protected readonly localeSet = signal(PLATFORM_LOCALE_SET);
+  protected readonly locales = computed(() => this.localeSet().locales);
+  protected readonly defaultLocale = computed(() => this.localeSet().defaultLocale);
+
   protected readonly code = signal('');
-  protected readonly nameRu = signal('');
-  protected readonly nameUz = signal('');
-  protected readonly nameEn = signal('');
+  protected readonly names = signal<LabelsByLocale>({});
   protected readonly centreLat = signal(41.311081);
   protected readonly centreLon = signal(69.240562);
   protected readonly swLat = signal(40.5);
@@ -88,7 +118,14 @@ export class RegionsPage implements OnInit {
       return;
     }
     try {
-      this.regions.set(await this.api.list(scope.tenantId));
+      const [regions, localeSet] = await Promise.all([
+        this.api.list(scope.tenantId),
+        // The set only decides which languages the form offers; a tenant whose
+        // set cannot be read still gets a working editor on the platform triple.
+        this.api.localeSet(scope.tenantId).catch(() => PLATFORM_LOCALE_SET),
+      ]);
+      this.regions.set(regions);
+      this.localeSet.set(localeSet);
     } catch (error) {
       if (error instanceof ApiError && error.status === 403) {
         this.denied.set(true);
@@ -105,6 +142,24 @@ export class RegionsPage implements OnInit {
     return localisedName(this.i18n.locale(), region);
   }
 
+  protected localeName(locale: string): string {
+    return localeDisplayName(this.i18n, locale);
+  }
+
+  protected isDefault(locale: string): boolean {
+    return locale === this.defaultLocale();
+  }
+
+  protected setName(locale: string, value: string): void {
+    this.names.update((names) => ({ ...names, [locale]: value }));
+  }
+
+  /** Languages the region is named in that this editor does not offer — kept, not shown. */
+  protected hiddenLocales(region: RegionResponse | null): readonly string[] {
+    const offered = new Set(this.locales());
+    return Object.keys(region?.displayNames ?? {}).filter((locale) => !offered.has(locale));
+  }
+
   protected statusKey(status: string): MessageKey {
     return STATUS_KEYS[status] ?? 'delivery.regions.status.ACTIVE';
   }
@@ -112,9 +167,7 @@ export class RegionsPage implements OnInit {
   protected openCreateForm(): void {
     this.editing.set(null);
     this.code.set('');
-    this.nameRu.set('');
-    this.nameUz.set('');
-    this.nameEn.set('');
+    this.names.set({});
     this.centreLat.set(41.311081);
     this.centreLon.set(69.240562);
     this.swLat.set(40.5);
@@ -129,9 +182,7 @@ export class RegionsPage implements OnInit {
   protected openEditForm(region: RegionResponse): void {
     this.editing.set(region);
     this.code.set(region.code);
-    this.nameRu.set(region.displayNameRu);
-    this.nameUz.set(region.displayNameUz);
-    this.nameEn.set(region.displayNameEn);
+    this.names.set(labelDrafts(this.locales(), region.displayNames ?? triple(region)));
     this.centreLat.set(region.centreLat);
     this.centreLon.set(region.centreLon);
     this.swLat.set(region.bboxSwLat);
@@ -151,9 +202,8 @@ export class RegionsPage implements OnInit {
     return (
       !this.submitting() &&
       this.code().trim().length > 0 &&
-      this.nameRu().trim().length > 0 &&
-      this.nameUz().trim().length > 0 &&
-      this.nameEn().trim().length > 0
+      // The tenant's default language is the one name a region must have.
+      (this.names()[this.defaultLocale()] ?? '').trim().length > 0
     );
   }
 
@@ -162,11 +212,29 @@ export class RegionsPage implements OnInit {
     if (!scope || !this.canSubmit()) {
       return;
     }
+    const existingRegion = this.editing();
+    const columns = platformColumns(
+      this.locales(),
+      this.names(),
+      this.defaultLocale(),
+      existingRegion
+        ? {
+            ru: existingRegion.displayNameRu,
+            'uz-Latn': existingRegion.displayNameUz,
+            en: existingRegion.displayNameEn,
+          }
+        : null,
+    );
     const request: RegionGeographyRequest = {
       code: this.code().trim().toUpperCase(),
-      displayNameRu: this.nameRu().trim(),
-      displayNameUz: this.nameUz().trim(),
-      displayNameEn: this.nameEn().trim(),
+      // The platform triple stays required by the contract: a platform language
+      // the tenant does not offer goes back as the region already has it
+      // (unchanged), and `displayNames` names only the offered, filled-in
+      // languages, so one beyond the triple that is not offered keeps its name.
+      displayNameRu: columns.ru,
+      displayNameUz: columns['uz-Latn'],
+      displayNameEn: columns.en,
+      displayNames: labelsToSend(this.locales(), this.names()),
       centreLat: this.centreLat(),
       centreLon: this.centreLon(),
       bboxSwLat: this.swLat(),
@@ -230,4 +298,9 @@ function problemsOf(error: unknown): readonly string[] {
   }
   const problems = error.problem?.['problems'];
   return Array.isArray(problems) ? problems.map((entry) => String(entry)) : [];
+}
+
+/** A region's platform-triple name columns keyed by locale — for a response that predates `displayNames`. */
+function triple(region: RegionResponse): LabelsByLocale {
+  return { ru: region.displayNameRu, 'uz-Latn': region.displayNameUz, en: region.displayNameEn };
 }

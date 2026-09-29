@@ -177,7 +177,7 @@ describe('ProductEditorPage', () => {
     );
   });
 
-  it('marks uz — the catalog’s own default locale — even while the UI runs in ru', async () => {
+  it('marks uz — the server’s own default — for a brand with no locale set, even while the UI runs in ru', async () => {
     configure({ productDetail: () => of(productDetail()) });
 
     const harness = await RouterTestingHarness.create('/catalog/products/product-1');
@@ -194,6 +194,33 @@ describe('ProductEditorPage', () => {
     expect(
       localeGroup
         .querySelector('[data-testid="q-localized-field-group-tab-ru"]')
+        ?.querySelector('[data-testid="q-localized-field-group-default-marker"]'),
+    ).toBeNull();
+  });
+
+  it('marks the brand’s own default locale once it has chosen one — the locale the list screens now resolve', async () => {
+    // Batch 14: CatalogQueryService resolves the products list in the brand's
+    // default language, so the marker follows it (it used to stay on `uz`).
+    const localeSet = new FakeLocaleSet();
+    localeSet.isConfigured.set(true);
+    localeSet.locales.set(['ru', 'uz-Latn', 'en']);
+    localeSet.defaultLocale.set('ru');
+    configure({ productDetail: () => of(productDetail()) }, {}, {}, {}, {}, {}, {}, {}, localeSet);
+
+    const harness = await RouterTestingHarness.create('/catalog/products/product-1');
+    await flushMicrotasks();
+
+    const localeGroup = harness.routeNativeElement!.querySelector(
+      '[data-testid="editor-locale-group"]',
+    )!;
+    expect(
+      localeGroup
+        .querySelector('[data-testid="q-localized-field-group-tab-ru"]')
+        ?.querySelector('[data-testid="q-localized-field-group-default-marker"]'),
+    ).not.toBeNull();
+    expect(
+      localeGroup
+        .querySelector('[data-testid="q-localized-field-group-tab-uz"]')
         ?.querySelector('[data-testid="q-localized-field-group-default-marker"]'),
     ).toBeNull();
   });
@@ -286,8 +313,9 @@ describe('ProductEditorPage', () => {
     ).not.toBeNull();
   });
 
-  it('narrows the locale strip to the brand’s own supported set, but keeps uz writable for the catalog’s own list resolution', async () => {
+  it('narrows the locale strip to the brand’s own supported set — nothing is forced in any more, the list screens read the brand’s default', async () => {
     const localeSet = new FakeLocaleSet();
+    localeSet.isConfigured.set(true);
     localeSet.locales.set(['ru']);
     localeSet.defaultLocale.set('ru');
     configure(
@@ -322,7 +350,7 @@ describe('ProductEditorPage', () => {
     ).not.toBeNull();
     expect(
       harness.routeNativeElement!.querySelector('[data-testid="q-localized-field-group-tab-uz"]'),
-    ).not.toBeNull();
+    ).toBeNull();
     expect(
       harness.routeNativeElement!.querySelector('[data-testid="q-localized-field-group-tab-en"]'),
     ).toBeNull();
@@ -599,7 +627,9 @@ describe('ProductEditorPage', () => {
 
   it('shows "not listed at N branches" and lists everywhere on click (gap map row 4.1)', async () => {
     const unlistedLocations = vi.fn().mockReturnValue(of(['l2', 'l3']));
-    const backfillVariantListing = vi.fn().mockReturnValue(of({ candidateCount: 2, listedCount: 2 }));
+    const backfillVariantListing = vi
+      .fn()
+      .mockReturnValue(of({ candidateCount: 2, listedCount: 2 }));
     configure(
       { productDetail: () => of(productDetail()) },
       {},
@@ -625,7 +655,9 @@ describe('ProductEditorPage', () => {
 
     // A second call, with none left unlisted, hides the banner.
     unlistedLocations.mockReturnValue(of([]));
-    (host.querySelector('[data-testid="editor-list-missing-branches"]') as HTMLButtonElement).click();
+    (
+      host.querySelector('[data-testid="editor-list-missing-branches"]') as HTMLButtonElement
+    ).click();
     await flushMicrotasks();
     harness.detectChanges();
 
@@ -1516,6 +1548,7 @@ describe('ProductEditorPage', () => {
               labelRu: 'Без лука',
               labelUz: 'Piyozsiz',
               labelEn: 'No onion',
+              labels: { ru: 'Без лука', 'uz-Latn': 'Piyozsiz', en: 'No onion' },
               posModifierCode: null,
               sortOrder: 0,
               status: 'ACTIVE',
@@ -1527,6 +1560,7 @@ describe('ProductEditorPage', () => {
               labelRu: 'Поострее',
               labelUz: 'Achchiqroq',
               labelEn: 'Extra spicy',
+              labels: { ru: 'Поострее', 'uz-Latn': 'Achchiqroq', en: 'Extra spicy' },
               posModifierCode: null,
               sortOrder: 1,
               status: 'ACTIVE',
@@ -1637,6 +1671,7 @@ describe('ProductEditorPage', () => {
               labelRu: 'Без лука',
               labelUz: 'Piyozsiz',
               labelEn: 'No onion',
+              labels: { ru: 'Без лука', 'uz-Latn': 'Piyozsiz', en: 'No onion' },
               posModifierCode: null,
               sortOrder: 0,
               status: 'ACTIVE',

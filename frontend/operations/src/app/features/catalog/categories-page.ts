@@ -25,22 +25,15 @@ import {
 } from '../../shared/ui/tree-view';
 import { describeApiError } from '../orders/order-errors';
 import { CatalogApi } from './catalog-api';
-import { CatalogSummary, CategorySummary, ProductSummary, toCatalogLocale } from './catalog-domain';
+import {
+  CatalogSummary,
+  CategorySummary,
+  ProductSummary,
+  listResolutionLocale,
+  toCatalogLocale,
+} from './catalog-domain';
 import { CreateCategoryDialog, CreateCategorySubmission } from './create-category-dialog';
 import { MediaApi } from './media-api';
-
-/**
- * The catalog's own configured default locale (`CatalogSnapshotLoader`'s
- * `horecaos.catalog.default-locale`, `uz` — see `toCatalogLocale`'s doc and
- * `product-editor-page.ts`'s own `CATALOG_DEFAULT_LOCALE`). `treeNodes()`'s
- * label and every list read (`CategorySummary.name`) resolve to this locale
- * specifically, never the viewer's own console language — so the tree's
- * quick-rename gesture (`onRename`) writes here too: writing wherever the
- * operator's own UI happened to be set (the bug this wave fixes) left a
- * rename that visibly did nothing, because the tree never reads the locale
- * that write landed in.
- */
-const CATALOG_DEFAULT_LOCALE = 'uz';
 
 /** One locale row of the content editor's per-locale grid (row 10.12). */
 interface LocaleContentDraft {
@@ -95,6 +88,16 @@ interface LocaleContentDraft {
  * stopped supporting is simply never written here — hidden from the grid,
  * never touched, never deleted, with no merge step required the way a
  * whole-array write (`location-detail-pane.ts`'s own `savePlace`) needs one.
+ *
+ * **Which locale the tree reads (row 10.12, batch 14).** `CatalogQueryService`
+ * resolves a list screen's names — the tree label, `CategorySummary.name` —
+ * in the *brand's own default language* (`LocaleSet.defaultLocale()`, mapped
+ * by `toCatalogLocale`), falling back to the server's configured locale only
+ * for a brand that has configured none. It used to read the server's locale
+ * (`uz`) for every brand, and this page compensated by pinning "Default" to
+ * that constant and forcing `uz-Latn` into the grid; both are gone. {@link
+ * listLocale} is the one place the answer lives, and the quick rename, the
+ * create dialog and the grid's "Default" marker all follow it.
  */
 @Component({
   selector: 'q-categories-page',
@@ -133,19 +136,23 @@ export class CategoriesPage implements OnInit {
   protected readonly uploadingPhoto = signal(false);
 
   /**
-   * Row 10.12: the brand's own supported locales (default first), or the
-   * platform triple when unconfigured — always including `uz-Latn` even
-   * when the brand's own set does not, the same forced inclusion
-   * `product-editor-page.ts`'s own `editingLocales` applies to
-   * `CATALOG_DEFAULT_LOCALE`: `treeNodes()`'s label and every list read
-   * resolve a category's name in that locale specifically (this file's own
-   * doc), so a grid that could never write it would leave those reads
-   * permanently falling back to the bare code for a brand that dropped it.
+   * Row 10.12: the catalog locale the tree, the quick rename and every list
+   * read resolve names in — the brand's own default when it has configured a
+   * set, the server's configured locale otherwise ({@link
+   * listResolutionLocale} explains why the second half is not the platform
+   * default).
    */
-  protected readonly knownLocales = computed<readonly Locale[]>(() => {
-    const brandLocales = this.localeSet.locales();
-    return brandLocales.includes('uz-Latn') ? brandLocales : [...brandLocales, 'uz-Latn'];
-  });
+  protected readonly listLocale = computed<string>(() =>
+    listResolutionLocale(this.localeSet.isConfigured(), this.localeSet.defaultLocale()),
+  );
+
+  /**
+   * Row 10.12: the brand's own supported locales (default first), or the
+   * platform triple when unconfigured. The locale the tree reads is always
+   * among them — it is the brand's own default, or (unconfigured) `uz` inside
+   * the triple — so, unlike the batch-13 grid, nothing is forced in.
+   */
+  protected readonly knownLocales = computed<readonly Locale[]>(() => this.localeSet.locales());
   protected readonly localeContentDraft = signal<readonly LocaleContentDraft[]>([]);
   protected readonly savingContent = signal(false);
   protected readonly contentError = signal<string | null>(null);
@@ -265,20 +272,12 @@ export class CategoriesPage implements OnInit {
   }
 
   /**
-   * Row 10.12 fix: whether this locale is `CATALOG_DEFAULT_LOCALE`, for the
-   * grid's visible marker — not `LocaleSet.defaultLocale()` (the brand's own
-   * preferred locale), which this used to bind to. The two are unrelated
-   * once a brand's default differs from `CATALOG_DEFAULT_LOCALE`: the tree
-   * label right next to this grid, and every other list-screen read
-   * (`CatalogQueryService.categories()`/`products()`/`catalogs()` via
-   * `defaultLocaleNames`), always resolve a category's display name from
-   * `CATALOG_DEFAULT_LOCALE` specifically, so that is the locale an operator
-   * actually needs filled in for a name to show up anywhere else in the
-   * console — matching the same marker `product-editor-page.ts` already
-   * exposes off its own `CATALOG_DEFAULT_LOCALE` constant.
+   * Whether this locale is the one the tree and every list read resolve a
+   * category's name in ({@link listLocale}) — the grid's visible marker, so an
+   * operator can see which tab a rename/list label comes from.
    */
   protected isDefaultLocale(locale: Locale): boolean {
-    return toCatalogLocale(locale) === CATALOG_DEFAULT_LOCALE;
+    return toCatalogLocale(locale) === this.listLocale();
   }
 
   protected localeLabel(locale: Locale): string {
@@ -378,15 +377,12 @@ export class CategoriesPage implements OnInit {
           parentCategoryId: submission.parentCategoryId,
           code: submission.code,
           name: submission.name,
-          // CATALOG_DEFAULT_LOCALE, not the operator's own transient console
-          // language: the tree and every other list read resolve a
-          // category's name in the catalog's configured default locale (see
-          // this file's own doc), so a create authored in whatever the
+          // The locale the tree reads (listLocale), not the operator's own
+          // transient console language: a create authored in whatever the
           // operator's UI happened to be set to could leave a brand-new
-          // category showing its bare code instead of a name the moment a
-          // different operator's session — or this one's, after a locale
-          // switch — reloads the tree.
-          locale: CATALOG_DEFAULT_LOCALE,
+          // category showing its bare code the moment a different operator's
+          // session — or this one's, after a locale switch — reloads the tree.
+          locale: this.listLocale(),
           sortOrder: this.categories().filter(
             (c) => (c.parentCategoryId ?? null) === (submission.parentCategoryId ?? null),
           ).length,
@@ -466,11 +462,12 @@ export class CategoriesPage implements OnInit {
   }
 
   /**
-   * "Enter to rename" — name only, in `CATALOG_DEFAULT_LOCALE`, never the
-   * operator's own console language (this file's own doc explains why: the
-   * tree's label resolves that locale specifically, so writing anywhere else
-   * left a rename that appeared to do nothing). Description is untouched,
-   * resent as it already was in that same locale.
+   * "Enter to rename" — name only, in {@link listLocale} (the brand's own
+   * default language), never the operator's own console language (this
+   * file's own doc explains why: the tree's label resolves that locale
+   * specifically, so writing anywhere else left a rename that appeared to do
+   * nothing). Description is untouched, resent as it already was in that same
+   * locale.
    */
   protected async onRename(rename: TreeViewRename): Promise<void> {
     const scope = this.brand.scope();
@@ -485,7 +482,7 @@ export class CategoriesPage implements OnInit {
         this.api.setTranslation(scope, {
           entityType: 'CATEGORY',
           entityId: rename.id,
-          locale: CATALOG_DEFAULT_LOCALE,
+          locale: this.listLocale(),
           name: rename.name,
           description: category.description ?? null,
         }),

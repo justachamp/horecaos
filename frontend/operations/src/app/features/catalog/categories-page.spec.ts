@@ -206,11 +206,13 @@ describe('CategoriesPage', () => {
     );
   });
 
-  it('renaming through the tree always writes the catalog’s default locale, never the operator’s own console language', async () => {
-    // Row 10.12's fix: the tree's own label always resolves the catalog's
-    // configured default locale (`uz`, mirrored by CATALOG_DEFAULT_LOCALE),
-    // so a rename written anywhere else — such as wherever the operator's
-    // own UI happens to be set — used to leave the tree looking untouched.
+  it('renaming through the tree writes the server’s configured locale for a brand with no set, never the operator’s own console language', async () => {
+    // Row 10.12's fix: the tree's own label resolves the locale
+    // CatalogQueryService reads — for a brand that has configured no set,
+    // the server's own `uz` — so a rename written anywhere else, such as
+    // wherever the operator's own UI happens to be set, used to leave the
+    // tree looking untouched. LocaleSet's platform fallback (`ru`) is NOT
+    // that locale, which is why this brand still writes `uz`.
     const setTranslation = vi.fn().mockReturnValue(of(undefined));
     configure({
       listCatalogs: () =>
@@ -239,6 +241,56 @@ describe('CategoriesPage', () => {
       FAKE_SCOPE,
       expect.objectContaining({ locale: 'uz', name: 'Vegetables' }),
     );
+  });
+
+  it('renaming through the tree writes the brand’s own default locale once it has chosen one', async () => {
+    // Batch 14 (the CatalogQueryService mismatch): the tree label is now
+    // resolved in the brand's own default language, so a rename must land
+    // there. The server's `uz` no longer applies to this brand at all.
+    for (const [brandDefault, wire] of [
+      ['ru', 'ru'],
+      ['en', 'en'],
+      ['uz-Latn', 'uz'],
+    ] as const) {
+      TestBed.resetTestingModule();
+      const setTranslation = vi.fn().mockReturnValue(of(undefined));
+      const localeSet = new FakeLocaleSet();
+      localeSet.isConfigured.set(true);
+      localeSet.locales.set([
+        brandDefault,
+        ...(['ru', 'uz-Latn', 'en'] as const).filter((l) => l !== brandDefault),
+      ]);
+      localeSet.defaultLocale.set(brandDefault);
+      configure(
+        {
+          listCatalogs: () =>
+            of([{ catalogId: 'catalog-1', code: 'MAIN', name: 'Основной', status: 'ACTIVE' }]),
+          listCategories: () => of([category({ categoryId: 'cat-1', name: 'Салаты' })]),
+          setTranslation,
+        },
+        localeSet,
+      );
+      TestBed.inject(I18n).setLocale('en');
+
+      const harness = await RouterTestingHarness.create('/catalog/categories');
+      await flushMicrotasks();
+      const host = harness.routeNativeElement!;
+      const row = host.querySelector('[data-node-id="cat-1"]') as HTMLElement;
+      row.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      await flushMicrotasks();
+      const input = host.querySelector(
+        '[data-testid="tree-node-rename-input"]',
+      ) as HTMLInputElement;
+      input.value = 'Vegetables';
+      input.dispatchEvent(new Event('input'));
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      await flushMicrotasks();
+
+      expect(setTranslation, `brand default ${brandDefault}`).toHaveBeenCalledWith(
+        FAKE_SCOPE,
+        expect.objectContaining({ locale: wire, name: 'Vegetables' }),
+      );
+    }
   });
 
   it('creating a category always authors it in the catalog’s default locale, not the operator’s own console language', async () => {
@@ -277,6 +329,51 @@ describe('CategoriesPage', () => {
       FAKE_SCOPE,
       'catalog-1',
       expect.objectContaining({ locale: 'uz', name: 'Desserts' }),
+    );
+  });
+
+  it('creating a category authors it in the brand’s own default locale once it has chosen one', async () => {
+    const createCategory = vi.fn().mockReturnValue(of({ id: 'new-cat' }));
+    const localeSet = new FakeLocaleSet();
+    localeSet.isConfigured.set(true);
+    localeSet.locales.set(['en', 'ru']);
+    localeSet.defaultLocale.set('en');
+    configure(
+      {
+        listCatalogs: () =>
+          of([{ catalogId: 'catalog-1', code: 'MAIN', name: 'Основной', status: 'ACTIVE' }]),
+        listCategories: vi.fn().mockReturnValue(of([])),
+        createCategory,
+      },
+      localeSet,
+    );
+    TestBed.inject(I18n).setLocale('ru');
+
+    const harness = await RouterTestingHarness.create('/catalog/categories');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+    (host.querySelector('[data-testid="categories-create"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    const nameInput = host.querySelector(
+      '[data-testid="create-category-dialog-name"]',
+    ) as HTMLInputElement;
+    const codeInput = host.querySelector(
+      '[data-testid="create-category-dialog-code"]',
+    ) as HTMLInputElement;
+    nameInput.value = 'Desserts';
+    nameInput.dispatchEvent(new Event('input'));
+    codeInput.value = 'DESSERTS';
+    codeInput.dispatchEvent(new Event('input'));
+    await flushMicrotasks();
+    (
+      host.querySelector('[data-testid="create-category-dialog-confirm"]') as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+
+    expect(createCategory).toHaveBeenCalledWith(
+      FAKE_SCOPE,
+      'catalog-1',
+      expect.objectContaining({ locale: 'en', name: 'Desserts' }),
     );
   });
 
@@ -324,17 +421,14 @@ describe('CategoriesPage', () => {
     expect(nameInputs.map((el) => el.value)).toEqual(['Salads', 'Салаты', '']);
   });
 
-  it('marks uz-Latn as the default row — the locale the tree label and every list read actually resolve a name from — even when the brand’s own configured default locale is different', async () => {
-    // Row 10.12 regression: the grid used to mark whichever locale
-    // `LocaleSet.defaultLocale()` returned (the brand's own preference).
-    // The tree node right next to this grid, and every list-screen read
-    // (`CatalogQueryService.categories()`/`products()`/`catalogs()`), always
-    // resolve a category's display name against the catalog's own fixed
-    // `CATALOG_DEFAULT_LOCALE` ('uz'/'uz-Latn' on the wire), never the
-    // brand's own default. An operator who fills in only the row the old
-    // badge called "Default" — here, `en` — saves a translation that never
-    // shows up anywhere else in the console, with no error to explain why.
+  it('marks the brand’s own default locale as the default row — the locale the tree label and every list read now resolve', async () => {
+    // Batch 14: CatalogQueryService resolves a list screen's names in the
+    // brand's own default language. The marker (batch 13 pinned it to the
+    // server's `uz` while the read ignored the brand) follows the brand's
+    // choice again, so an operator who fills in the row marked "Default"
+    // sees the name in the tree and everywhere else in the console.
     const localeSet = new FakeLocaleSet();
+    localeSet.isConfigured.set(true);
     localeSet.locales.set(['en', 'ru', 'uz-Latn']);
     localeSet.defaultLocale.set('en');
     configure(
@@ -355,6 +449,29 @@ describe('CategoriesPage', () => {
       },
       localeSet,
     );
+    TestBed.inject(I18n).setLocale('en');
+
+    const harness = await RouterTestingHarness.create('/catalog/categories');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+    (host.querySelector('[data-testid="tree-node"]') as HTMLElement).click();
+    await flushMicrotasks();
+
+    const rows = [...host.querySelectorAll('.categories__locale-row')] as HTMLElement[];
+    const markedLocales = rows
+      .filter((row) => row.querySelector('legend')!.textContent!.includes('Default'))
+      .map((row) => row.querySelector('input')!.getAttribute('data-testid'));
+    expect(markedLocales).toEqual(['category-locale-name-en']);
+  });
+
+  it('marks uz-Latn as the default row for a brand with no set — the locale the server reads for it', async () => {
+    // An unconfigured brand reports LocaleSet's platform default (`ru`), which
+    // is not what CatalogQueryService reads for it (the server's `uz`).
+    configure({
+      listCatalogs: () =>
+        of([{ catalogId: 'catalog-1', code: 'MAIN', name: 'Основной', status: 'ACTIVE' }]),
+      listCategories: () => of([category({ categoryId: 'cat-1', name: 'Салаты' })]),
+    });
     TestBed.inject(I18n).setLocale('en');
 
     const harness = await RouterTestingHarness.create('/catalog/categories');
@@ -404,13 +521,13 @@ describe('CategoriesPage', () => {
     (host.querySelector('[data-testid="tree-node"]') as HTMLElement).click();
     await flushMicrotasks();
 
-    // Two rows: the brand's one supported locale, plus uz-Latn — forced in
-    // regardless (this file's own knownLocales doc) since the tree and
-    // every list read resolve a category's name in that locale specifically.
-    // en never appears: the brand narrowed its own set away from it, and it
-    // is not the forced one.
-    expect(host.querySelectorAll('.categories__locale-row').length).toBe(2);
+    // One row: the brand's one supported locale. Batch 13 forced uz-Latn in as
+    // a second row because the list reads resolved the server's `uz`; they
+    // now resolve the brand's own default, so nothing is forced. en never
+    // appears: the brand narrowed its own set away from it.
+    expect(host.querySelectorAll('.categories__locale-row').length).toBe(1);
     expect(host.querySelector('[data-testid="category-locale-name-en"]')).toBeNull();
+    expect(host.querySelector('[data-testid="category-locale-name-uz-Latn"]')).toBeNull();
     const nameInput = host.querySelector(
       '[data-testid="category-locale-name-ru"]',
     ) as HTMLInputElement;

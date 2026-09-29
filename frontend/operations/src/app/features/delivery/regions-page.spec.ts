@@ -7,6 +7,7 @@ import { ApiError } from '../../core/api/problem-details';
 import { Auth } from '../../core/auth/auth';
 import { CurrentBrand } from '../../core/auth/current-brand';
 import { I18n, Locale } from '../../core/i18n/i18n';
+import { LocaleSetView } from '../../core/i18n/locale-labels';
 import { RegionResponse, RegionsApi } from './regions-api';
 import { RegionsPage } from './regions-page';
 
@@ -39,6 +40,13 @@ const PLATFORM_REGION: RegionResponse = {
   displayNameEn: 'Tashkent',
 };
 
+/** The tenant whose brands have not chosen a set: the platform triple, ru first. */
+const PLATFORM_SET: LocaleSetView = {
+  locales: ['ru', 'uz-Latn', 'en'],
+  defaultLocale: 'ru',
+  configured: false,
+};
+
 async function flushMicrotasks(): Promise<void> {
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
@@ -48,6 +56,10 @@ describe('RegionsPage', () => {
   let fixture: ComponentFixture<RegionsPage>;
 
   async function render(api: Partial<RegionsApi>, locale: Locale = 'en'): Promise<void> {
+    const withLocaleSet: Partial<RegionsApi> = {
+      localeSet: () => Promise.resolve(PLATFORM_SET),
+      ...api,
+    };
     await TestBed.configureTestingModule({
       imports: [RegionsPage],
       providers: [
@@ -60,7 +72,7 @@ describe('RegionsPage', () => {
           },
         },
         { provide: Auth, useValue: { subject: signal('actor-1') } },
-        { provide: RegionsApi, useValue: api },
+        { provide: RegionsApi, useValue: withLocaleSet },
       ],
     }).compileComponents();
     TestBed.inject(I18n).setLocale(locale);
@@ -200,6 +212,129 @@ describe('RegionsPage', () => {
     expect(listed).toHaveLength(2);
     expect(listed[0].textContent).toContain('north-east');
     expect(listed[1].textContent).toContain('centre');
+  });
+
+  it('shows a region named only in the per-locale map, and falls back through the tenant’s languages', async () => {
+    // The platform columns are blank (a hand-written row); the map carries the
+    // names. A row must not render as an empty cell.
+    const named: RegionResponse = {
+      ...TENANT_REGION,
+      displayNameRu: '',
+      displayNameUz: '',
+      displayNameEn: '',
+      displayNames: { kaa: 'Samarqand-kaa', en: 'Samarkand' },
+    };
+    await render({ list: vi.fn().mockResolvedValue([named]) }, 'ru');
+
+    expect(host().querySelector('[data-testid="region-name"]')?.textContent?.trim()).toBe(
+      'Samarkand',
+    );
+  });
+
+  it('offers one name field per language of the tenant’s set, default first, and requires the default', async () => {
+    const create = vi.fn().mockResolvedValue({ regionId: 'region-new', code: 'BUKHARA' });
+    await render({
+      list: vi.fn().mockResolvedValue([]),
+      localeSet: () =>
+        Promise.resolve({
+          locales: ['uz-Latn', 'en'],
+          defaultLocale: 'uz-Latn',
+          configured: true,
+        }),
+      create,
+    });
+
+    host().querySelector<HTMLButtonElement>('.regions__create')!.click();
+    fixture.detectChanges();
+    expect(host().querySelector('[data-testid="region-name-uz-Latn"]')).not.toBeNull();
+    expect(host().querySelector('[data-testid="region-name-en"]')).not.toBeNull();
+    expect(host().querySelector('[data-testid="region-name-ru"]')).toBeNull();
+
+    const type = (testid: string, value: string): void => {
+      const input = host().querySelector<HTMLInputElement>(`[data-testid="${testid}"]`)!;
+      input.value = value;
+      input.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+    };
+    type('region-code', 'bukhara');
+    // English alone is not enough: the default language (uz-Latn) is the one name required.
+    type('region-name-en', 'Bukhara');
+    expect(host().querySelector<HTMLButtonElement>('[data-testid="region-submit"]')!.disabled).toBe(
+      true,
+    );
+
+    type('region-name-uz-Latn', 'Buxoro');
+    host().querySelector<HTMLButtonElement>('[data-testid="region-submit"]')!.click();
+    await flushMicrotasks();
+
+    expect(create).toHaveBeenCalledTimes(1);
+    const body = create.mock.calls[0][1];
+    expect(body.displayNames).toEqual({ 'uz-Latn': 'Buxoro', en: 'Bukhara' });
+    // The contract keeps the platform triple required: ru is not offered, so it takes the default's name.
+    expect(body.displayNameRu).toBe('Buxoro');
+    expect(body.displayNameUz).toBe('Buxoro');
+    expect(body.displayNameEn).toBe('Bukhara');
+  });
+
+  it('never sends, blanks or deletes a language the tenant does not offer when it rewrites the region', async () => {
+    const carrying: RegionResponse = {
+      ...TENANT_REGION,
+      displayNames: {
+        ru: 'Самарканд',
+        'uz-Latn': 'Samarqand',
+        en: 'Samarkand',
+        kaa: 'Samarqand-kaa',
+      },
+    };
+    const update = vi.fn().mockResolvedValue(undefined);
+    await render({
+      list: vi.fn().mockResolvedValue([carrying]),
+      localeSet: () =>
+        Promise.resolve({ locales: ['ru', 'en'], defaultLocale: 'ru', configured: true }),
+      update,
+    });
+
+    host().querySelector<HTMLButtonElement>('[data-testid="region-edit"]')!.click();
+    fixture.detectChanges();
+    expect(host().querySelector('[data-testid="region-name-uz-Latn"]')).toBeNull();
+    expect(host().querySelector('[data-testid="region-name-kaa"]')).toBeNull();
+    expect(host().querySelector('[data-testid="region-hidden-kept"]')).not.toBeNull();
+
+    // Clearing an offered, non-default field is "leave it", not "delete it".
+    const en = host().querySelector<HTMLInputElement>('[data-testid="region-name-en"]')!;
+    en.value = '';
+    en.dispatchEvent(new Event('input'));
+    const ru = host().querySelector<HTMLInputElement>('[data-testid="region-name-ru"]')!;
+    ru.value = 'Самарканд (город)';
+    ru.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    host().querySelector<HTMLButtonElement>('[data-testid="region-submit"]')!.click();
+    await flushMicrotasks();
+
+    expect(update).toHaveBeenCalledTimes(1);
+    const body = update.mock.calls[0][2];
+    expect(body.displayNames).toEqual({ ru: 'Самарканд (город)' });
+    expect(Object.keys(body.displayNames)).not.toContain('uz-Latn');
+    expect(Object.keys(body.displayNames)).not.toContain('kaa');
+    expect(Object.values(body.displayNames)).not.toContain('');
+    // The contract keeps the platform triple required, so the columns still go back: the
+    // edited one changed, the hidden uz-Latn and the cleared en exactly as the region has them.
+    expect(body.displayNameRu).toBe('Самарканд (город)');
+    expect(body.displayNameUz).toBe('Samarqand');
+    expect(body.displayNameEn).toBe('Samarkand');
+  });
+
+  it('falls back to the platform triple when the tenant’s language set cannot be read', async () => {
+    await render({
+      list: vi.fn().mockResolvedValue([]),
+      localeSet: () => Promise.reject(new Error('unreachable')),
+    });
+
+    host().querySelector<HTMLButtonElement>('.regions__create')!.click();
+    fixture.detectChanges();
+    expect(host().querySelector('[data-testid="region-name-ru"]')).not.toBeNull();
+    expect(host().querySelector('[data-testid="region-name-uz-Latn"]')).not.toBeNull();
+    expect(host().querySelector('[data-testid="region-name-en"]')).not.toBeNull();
   });
 
   it('archives a region rather than deleting it, and reloads', async () => {
