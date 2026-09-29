@@ -25,8 +25,14 @@ import uz.horecaos.platform.web.authorization.RequiresCapability;
  * <p>Provider credentials do not tell the platform when they expire, so the
  * rule is their age: a credential not rotated through the platform within the
  * rotation interval is due, counted from its last rotation or, if it never
- * was, from when it was set up. The values stay in the secrets manager; this
- * reads only the dates beside their references.
+ * was, from when it was set up. A retired installation or merchant binding is
+ * never due: nothing uses its credential. The values stay in the secrets
+ * manager; this reads only the dates beside their references.
+ *
+ * <p>The settings readiness panel applies this same rule through {@code
+ * OnboardingReadinessChecks.SecretRotationAge}; {@code
+ * CredentialRotationControllerTests} reads one fixture through both, so a change
+ * to either rule that the other does not follow fails there.
  */
 @RestController
 @Tag(name = "Platform integration administration", description = "Cross-tenant provider registry and installations")
@@ -65,7 +71,7 @@ public class CredentialRotationController {
                         SELECT 'MERCHANT_ACCOUNT' AS kind, id, provider_type, merchant_account_reference AS label,
                                last_secret_rotated_at, created_at
                           FROM payments.merchant_bindings
-                         WHERE tenant_id = :tenantId
+                         WHERE tenant_id = :tenantId AND status <> 'RETIRED'
                            AND coalesce(last_secret_rotated_at, created_at) < :cutoff
                          ORDER BY 5 NULLS FIRST, 6
                         """)
