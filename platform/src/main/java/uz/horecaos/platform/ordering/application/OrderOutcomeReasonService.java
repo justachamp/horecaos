@@ -152,6 +152,7 @@ public class OrderOutcomeReasonService {
                         tenantId,
                         reasonId,
                         expectedVersion,
+                        command.systemCategory().name(),
                         command.internalName().strip(),
                         command.kind() == OutcomeReasonKind.CANCELLATION
                                 ? requireCancellationField(command.stockDisposition())
@@ -175,6 +176,11 @@ public class OrderOutcomeReasonService {
 
         reasons.replaceTexts(reasonId, command.customerTexts());
 
+        // The "after" is what the row holds now, read back -- not what the
+        // request asked for. The two were the same only for as long as every
+        // field of the request reached the UPDATE; a fact built from the request
+        // states a change the store may never have made.
+        ReasonRow stored = reasons.find(tenantId, reasonId).orElseThrow(() -> new ReasonNotFoundException(reasonId));
         recordAudit(
                 "ordering.outcome-reason.updated",
                 tenantId,
@@ -183,7 +189,7 @@ public class OrderOutcomeReasonService {
                 by,
                 by.reasonOr("Order outcome reason updated"),
                 before,
-                snapshotOfCommand(command, existing.status()),
+                snapshotOfRow(stored, reasons.texts(reasonId)),
                 clock.instant());
         return version;
     }
