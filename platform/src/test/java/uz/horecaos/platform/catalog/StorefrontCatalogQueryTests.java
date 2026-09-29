@@ -832,6 +832,80 @@ class StorefrontCatalogQueryTests {
     }
 
     @Test
+    @DisplayName(
+            "row 10.12: a description is the one published with the name shown, so a brand-default dish is not stripped of it")
+    void aDescriptionTravelsWithTheNameItIsShownUnder() {
+        brandDefault("ru");
+        UUID catalogId = authoring.createCatalog(TENANT, BRAND, "MAIN", "Основное меню", "ru");
+        // Imported under the brand default: its only wording is ru, description included.
+        var plov = authoring.createProduct(
+                TENANT, BRAND, catalogId, "PLOV", "Плов", "Домашний плов", "ru", "SKU-P", "PIECE", UNCLASSIFIED, ACTOR);
+        // Worded in the customer's own language too.
+        var lagman = authoring.createProduct(
+                TENANT,
+                BRAND,
+                catalogId,
+                "LAGMAN",
+                "Lag'mon",
+                "Qo'lda cho'zilgan",
+                LOCALE,
+                "SKU-L",
+                "PIECE",
+                UNCLASSIFIED,
+                ACTOR);
+        authoring.translate(TENANT, BRAND, EntityType.PRODUCT, lagman.productId(), "ru", "Лагман", "Домашний лагман");
+        // The customer's language has a name but no description: it must not borrow another
+        // language's, which would print a Russian sentence under an Uzbek title.
+        var shashlik = authoring.createProduct(
+                TENANT, BRAND, catalogId, "SHASHLIK", "Shashlik", null, LOCALE, "SKU-S", "PIECE", UNCLASSIFIED, ACTOR);
+        authoring.translate(TENANT, BRAND, EntityType.PRODUCT, shashlik.productId(), "ru", "Шашлык", "Угольный");
+        for (var product : List.of(plov, lagman, shashlik)) {
+            authoring.setOffering(
+                    TENANT, BRAND, LOCATION, product.defaultVariantId(), OfferingStatus.AVAILABLE, List.of("DELIVERY"));
+        }
+        brandAwarePublication().publish(TENANT, BRAND, catalogId, "STOREFRONT", null);
+
+        var uzbek = storefrontWith(new JdbcBrandLocaleLookup(jdbc))
+                .menuFor(TENANT, BRAND, LOCATION, "uz", "STOREFRONT")
+                .orElseThrow();
+        assertThat(productByCode(uzbek, "PLOV").name()).isEqualTo("Плов");
+        assertThat(productByCode(uzbek, "PLOV").description())
+                .as("named from the brand default: described from it too")
+                .isEqualTo("Домашний плов");
+        assertThat(productByCode(uzbek, "LAGMAN").description()).isEqualTo("Qo'lda cho'zilgan");
+        assertThat(productByCode(uzbek, "SHASHLIK").name()).isEqualTo("Shashlik");
+        assertThat(productByCode(uzbek, "SHASHLIK").description())
+                .as("the customer's own wording has no description: none, not another language's")
+                .isNull();
+
+        var english = storefrontWith(new JdbcBrandLocaleLookup(jdbc))
+                .menuFor(TENANT, BRAND, LOCATION, "en", "STOREFRONT")
+                .orElseThrow();
+        assertThat(productByCode(english, "LAGMAN").name()).isEqualTo("Лагман");
+        assertThat(productByCode(english, "LAGMAN").description())
+                .as("no English wording: the brand default's name and its description")
+                .isEqualTo("Домашний лагман");
+    }
+
+    private static MenuProduct productByCode(StorefrontCatalogQuery.StorefrontMenu menu, String code) {
+        return menu.products().stream()
+                .filter(product -> product.code().equals(code))
+                .findFirst()
+                .orElseThrow();
+    }
+
+    private CatalogPublicationService brandAwarePublication() {
+        CatalogSnapshotLoader loader = new CatalogSnapshotLoader(
+                store, (tenantId, assets) -> true, allPriced(), new JdbcBrandLocaleLookup(jdbc), LOCALE);
+        return new CatalogPublicationService(
+                store,
+                new CatalogValidator(),
+                loader,
+                new JdbcSalesChannelStore(jdbc),
+                Clock.fixed(Instant.parse("2026-08-21T10:00:00Z"), ZoneOffset.UTC));
+    }
+
+    @Test
     @DisplayName("row 10.12: a preset reads in the customer's language, a locale beyond the platform triple included")
     void presetLabelsResolveFromTheTranslationsTable() {
         UUID presetId = publishedBurgerWithPreset();
