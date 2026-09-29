@@ -5,13 +5,21 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.request;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -23,6 +31,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Bean;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -31,6 +40,7 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.testcontainers.DockerClientFactory;
 import tools.jackson.databind.JsonNode;
@@ -215,6 +225,16 @@ class InventoryUnlistedOfferingsReportTests {
         assertThat(report.get("hasMore").asBoolean()).isTrue();
         assertThat(report.get("items").get(0).get("productName").asString()).isEqualTo("Alpha");
         assertThat(report.get("items").get(1).get("productName").asString()).isEqualTo("Bravo");
+
+        for (String invalid : List.of("?limit=0", "?limit=201", "?locale=not%20a%20locale")) {
+            assertThat(mvc.perform(get(reportPath(TENANT, BRAND, LOCATION) + invalid)
+                                    .with(tokenFor(OWNER)))
+                            .andReturn()
+                            .getResponse()
+                            .getStatus())
+                    .as(invalid)
+                    .isEqualTo(400);
+        }
     }
 
     @Test
@@ -296,7 +316,199 @@ class InventoryUnlistedOfferingsReportTests {
                 .isEqualTo(1);
     }
 
+    @Test
+    @DisplayName("the runbook's own SQL and curl commands hit real endpoints, and its checks hold")
+    void runbookCommandsAreRealAndItsChecksHold() throws Exception {
+        // Tenant A: two branches with a backlog. Tenant B: one, that must stay
+        // untouched because the runbook does one tenant at a time.
+        offer(TENANT, BRAND, LOCATION, "A-1", "Alpha", "AVAILABLE");
+        offer(TENANT, BRAND, LOCATION, "A-2", "Bravo", "AVAILABLE");
+        offer(TENANT, BRAND, LOCATION, "A-3", "Charlie", "AVAILABLE");
+        offer(TENANT, BRAND, OTHER_LOCATION, "A-4", "Delta", "AVAILABLE");
+        offer(OTHER_TENANT, OTHER_BRAND, OTHER_TENANT_LOCATION, "B-1", "Echo", "AVAILABLE");
+        offer(OTHER_TENANT, OTHER_BRAND, OTHER_TENANT_LOCATION, "B-2", "Foxtrot", "AVAILABLE");
+
+        String runbook = Files.readString(RUNBOOK, UTF_8);
+        List<String> sql = sqlBlocks(runbook);
+        assertThat(sql).as("step 1's query and step 4's confirmation query").hasSize(2);
+
+        // Step 1: run verbatim -> what `psql -At -F','` would write to backlog.csv.
+        List<List<String>> backlog = runSql(sql.get(0));
+        assertThat(backlog).as("both tenants carry a backlog").hasSize(3);
+        // `grep "^${TENANT},"` -- one tenant at a time.
+        List<List<String>> mine = backlog.stream()
+                .filter(row -> row.get(0).equals(TENANT.toString()))
+                .toList();
+        assertThat(mine).extracting(row -> row.get(3)).containsExactlyInAnyOrder("3", "1");
+
+        List<RunbookCurl> curls = curlCommands(runbook);
+        assertThat(curls)
+                .as("step 2's dry run, then step 3's list-all, in the order the runbook runs them")
+                .extracting(RunbookCurl::method)
+                .containsExactly("GET", "POST");
+        RunbookCurl dryRun = curls.get(0);
+        RunbookCurl listAll = curls.get(1);
+        assertThat(listAll.headers())
+                .as("a mutating call needs its intent key (ADR 0031)")
+                .containsKey("Idempotency-Key");
+        assertThat(listAll.headers()).containsKey("Authorization");
+
+        // Step 2: totalCount equals that location's unlisted_count from step 1.
+        for (List<String> row : mine) {
+            JsonNode dry = dispatch(dryRun, row);
+            assertThat(dry.get("totalCount").asInt()).isEqualTo(Integer.parseInt(row.get(3)));
+            assertThat(dry.has("hasMore")).isTrue();
+            assertThat(dry.get("items").get(0).has("productName")).isTrue();
+        }
+
+        // Step 3: candidateCount == listedCount, and one call was the whole backlog.
+        for (List<String> row : mine) {
+            JsonNode result = dispatch(listAll, row);
+            assertThat(result.get("candidateCount").asInt()).isEqualTo(Integer.parseInt(row.get(3)));
+            assertThat(result.get("listedCount").asInt())
+                    .isEqualTo(result.get("candidateCount").asInt());
+            assertThat(result.get("mayHaveMore").asBoolean()).isFalse();
+        }
+
+        // Step 4: the dry run says zero, and the query has no row for this tenant...
+        for (List<String> row : mine) {
+            assertThat(dispatch(dryRun, row).get("totalCount").asInt()).isZero();
+        }
+        List<List<String>> remaining = runSql(sql.get(1));
+        assertThat(remaining).extracting(row -> row.get(0)).containsOnly(OTHER_TENANT.toString());
+        // ...while the tenant the operator has not reached yet is exactly as it was.
+        assertThat(remaining).extracting(row -> row.get(2)).containsExactly("2");
+    }
+
     // ------------------------------------------------------------------ helpers
+
+    // -------------------------------------------------------- runbook parsing
+
+    private static final Path RUNBOOK = Path.of("docs/runbooks/catalog-offering-listing-backfill.md");
+
+    /** One {@code curl} the runbook tells an operator to run, as far as the API can tell. */
+    private record RunbookCurl(String method, String urlTemplate, Map<String, String> headers) {}
+
+    /** Every {@code <<'SQL' ... SQL} heredoc body, in document order. */
+    private static List<String> sqlBlocks(String runbook) {
+        Matcher matcher = Pattern.compile("<<'SQL'[^\\n]*\\n(.*?)\\nSQL\\n", Pattern.DOTALL)
+                .matcher(runbook);
+        List<String> blocks = new ArrayList<>();
+        while (matcher.find()) {
+            blocks.add(matcher.group(1));
+        }
+        return blocks;
+    }
+
+    private List<List<String>> runSql(String sql) {
+        return jdbc.sql(sql)
+                .query((row, number) -> {
+                    List<String> cells = new ArrayList<>();
+                    for (int column = 1; column <= row.getMetaData().getColumnCount(); column++) {
+                        cells.add(row.getString(column));
+                    }
+                    return cells;
+                })
+                .list();
+    }
+
+    /**
+     * The runbook's {@code curl} commands, tokenised the way a shell would read
+     * their flags: {@code -X METHOD}, every {@code -H "Name: value"}, and the
+     * first other quoted word as the URL. Backslash continuations are joined
+     * first. Prose that merely mentions curl is ignored — a real command is
+     * {@code curl} followed by a flag.
+     */
+    private static List<RunbookCurl> curlCommands(String runbook) {
+        String flat = runbook.replaceAll("\\\\\\R\\s*", " ");
+        Matcher command = Pattern.compile("curl\\s+(-[^\\n]*)").matcher(flat);
+        List<RunbookCurl> commands = new ArrayList<>();
+        while (command.find()) {
+            Matcher token = Pattern.compile("\"([^\"]*)\"|(\\S+)").matcher(command.group(1));
+            String method = "GET";
+            String url = null;
+            Map<String, String> headers = new LinkedHashMap<>();
+            boolean expectMethod = false;
+            boolean expectHeader = false;
+            while (token.find()) {
+                String quoted = token.group(1);
+                String word = quoted != null ? quoted : token.group(2);
+                if (expectMethod) {
+                    method = word;
+                    expectMethod = false;
+                } else if (expectHeader) {
+                    int colon = word.indexOf(':');
+                    headers.put(
+                            word.substring(0, colon).trim(),
+                            word.substring(colon + 1).trim());
+                    expectHeader = false;
+                } else if (quoted == null && word.equals("-X")) {
+                    expectMethod = true;
+                } else if (quoted == null && word.equals("-H")) {
+                    expectHeader = true;
+                } else if (quoted != null && url == null && word.contains("${")) {
+                    url = word;
+                }
+            }
+            if (url == null) {
+                throw new AssertionError("no URL in: curl " + command.group(1));
+            }
+            commands.add(new RunbookCurl(method, url, headers));
+        }
+        return commands;
+    }
+
+    /**
+     * Resolves the runbook's own shell variables ({@code API=...}, {@code
+     * base=...}) with the row a loop iteration is on, then sends the command
+     * to the real controllers with exactly the headers it names — a fresh
+     * {@code Idempotency-Key} each time, as {@code $(uuidgen)} would mint.
+     */
+    private JsonNode dispatch(RunbookCurl curl, List<String> row) throws Exception {
+        Map<String, String> vars = new LinkedHashMap<>();
+        Matcher assignment =
+                Pattern.compile("(?m)^\\s*(\\w+)=\"([^\"]*)\"\\s*$").matcher(runbookText());
+        while (assignment.find()) {
+            vars.put(assignment.group(1), assignment.group(2));
+        }
+        vars.put("HOST", "api.test.invalid");
+        vars.put("tenant", row.get(0));
+        vars.put("brand", row.get(1));
+        vars.put("location", row.get(2));
+
+        String url = curl.urlTemplate();
+        for (int pass = 0; pass < 6 && url.contains("${"); pass++) {
+            for (Map.Entry<String, String> variable : vars.entrySet()) {
+                url = url.replace("${" + variable.getKey() + "}", variable.getValue());
+            }
+        }
+        assertThat(url)
+                .as("every variable in the URL is one the runbook defines")
+                .doesNotContain("${");
+        String path = url.replaceFirst("^https://[^/]+", "");
+
+        MockHttpServletRequestBuilder request =
+                request(HttpMethod.valueOf(curl.method()), path).with(tokenFor(OWNER));
+        for (Map.Entry<String, String> header : curl.headers().entrySet()) {
+            assertThat(header.getKey())
+                    .as("a header the API understands")
+                    .isIn("Authorization", "Accept", "Idempotency-Key", "Content-Type");
+            if (header.getKey().equals("Idempotency-Key")) {
+                request.header("Idempotency-Key", UUID.randomUUID().toString());
+            } else if (!header.getKey().equals("Authorization")) {
+                request.header(header.getKey(), header.getValue());
+            }
+        }
+        MvcResult result = mvc.perform(request).andReturn();
+        assertThat(result.getResponse().getStatus())
+                .as("%s %s -> %s", curl.method(), path, result.getResponse().getContentAsString())
+                .isEqualTo(200);
+        return JSON.readTree(result.getResponse().getContentAsString());
+    }
+
+    private static String runbookText() throws IOException {
+        return Files.readString(RUNBOOK, UTF_8);
+    }
 
     private JsonNode read(UUID tenant, UUID brand, UUID location, String subject, String query) throws Exception {
         MvcResult result = mvc.perform(
