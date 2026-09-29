@@ -350,7 +350,6 @@
     "reason": {
       "deliveryFeeUnresolved": "We couldn't work out the delivery fee. Choose a different address or try again later.",
       "minimumBasketNotMet": "Your order is below the minimum for delivery.",
-      "minimumBasketAmount": "The minimum order for delivery is {{amount}}.",
       "destinationRequired": "Choose a delivery address first.",
       "outOfZone": "This address is outside the delivery area.",
       "notServiceable": "This branch cannot take orders right now.",

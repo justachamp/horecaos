@@ -157,15 +157,15 @@ export class UiCartService {
   });
 
   /**
-   * A preview of what delivery will cost, from `GET .../delivery-fee`
+   * A preview of what delivery will cost, from `POST .../delivery-fee`
    * (`DeliveryFeeController.quote`) -- unauthenticated, like the menu, and
    * priced against a point rather than against the cart, so it is available
    * before the cart's own destination is ever set.
    *
    * Two states, and neither is a zero:
    * - no price to show -- not a delivery cart, no destination chosen yet, or
-   *   the platform said no (outside every zone, below the zone's minimum
-   *   basket, ...): a dash, because a zero here would read as free delivery.
+   *   the platform said no (outside every zone, no tariff, past the tariff's
+   *   reach, ...): a dash, because a zero here would read as free delivery.
    *   *Why* there is no price is {@link deliveryUnresolvedMessage}, read
    *   separately so a template can show it as an explanation beside the line
    *   -- the platform's own reason, never re-homed to one generic "delivery
@@ -190,12 +190,21 @@ export class UiCartService {
    * (no destination chosen, an address with no marker, or the read failed), or
    * the fee is resolved.
    *
-   * The resolver's own `reasonCode` (`DeliveryFeeView.reasonCode`) is mapped
-   * through the same vocabulary a checkout refusal uses, so the sentence beside
-   * the delivery line and the one under the order button agree. A below-minimum
-   * refusal names the amount when the zone sent one. A code this build has no
-   * sentence for reads as the honest "we couldn't work out the fee", never as
-   * the raw code.
+   * Read from the preview's `outcome` (`DeliveryFeeOutcome`: `OUT_OF_ZONE`,
+   * `OUTSIDE_CATCHMENT`, `NO_TARIFF`, `BEYOND_MAX_DISTANCE`,
+   * `LOCATION_NOT_LOCATED`), which is the stable code the controller documents
+   * as the one a storefront branches on. Its `reasonCode` is the resolver's
+   * granular evidence string (`NO_ZONE_COVERS_ADDRESS`, `NO_TARIFF_CONFIGURED`,
+   * ...) and is not in the vocabulary a checkout refusal uses -- mapping it
+   * would read every real refusal as "we couldn't work out the fee".
+   *
+   * The outcome goes through the same map a checkout refusal uses, so the
+   * sentence beside the delivery line and the one under the order button agree.
+   * The preview never reports a below-minimum basket: the resolver does not
+   * compare the basket against the zone's floor, the pricing engine does, at
+   * checkout, and a refusal there arrives as `DELIVERY_MINIMUM_BASKET_NOT_MET`.
+   * An outcome this build has no sentence for reads as the honest "we couldn't
+   * work out the fee", never as the raw code.
    */
   readonly deliveryUnresolvedMessage = computed<string | null>(() => {
     this.translate.current();
@@ -206,13 +215,8 @@ export class UiCartService {
     if (!quote || quote.available) {
       return null;
     }
-    if (quote.reasonCode === 'BELOW_MINIMUM_BASKET' && quote.minBasketMinor != null) {
-      return this.translate.getWithParams('errors.reason.minimumBasketAmount', {
-        amount: this.formatPrice(quote.minBasketMinor),
-      });
-    }
     return this.translate.get(
-      reasonMessageKey(quote.reasonCode) ?? 'errors.reason.deliveryFeeUnresolved',
+      reasonMessageKey(quote.outcome) ?? 'errors.reason.deliveryFeeUnresolved',
     );
   });
 
@@ -728,8 +732,7 @@ export class UiCartService {
       this.deliveryFeeQuote.set({
         available: view.available,
         feeMinor: view.feeMinor,
-        reasonCode: view.reasonCode,
-        minBasketMinor: view.minBasketMinor,
+        outcome: view.outcome,
       });
     } catch {
       this.deliveryFeeQuote.set(null);
@@ -750,16 +753,16 @@ export class UiCartService {
 
 /**
  * What a screen needs from `DeliveryFeeController.DeliveryFeeView`: whether and
- * how much, and -- when not -- why. The reason is a machine code
- * (`OUT_OF_ZONE`, `BELOW_MINIMUM_BASKET`, ...) that is only ever mapped to a
- * sentence, never shown (see {@link UiCartService.deliveryUnresolvedMessage}).
+ * how much, and -- when not -- why. The why is the `outcome` (`OUT_OF_ZONE`,
+ * `NO_TARIFF`, ...), a machine code that is only ever mapped to a sentence,
+ * never shown (see {@link UiCartService.deliveryUnresolvedMessage}). The view's
+ * own `reasonCode` is deliberately not carried: it is the resolver's granular
+ * evidence string and no sentence is keyed on it.
  */
 export interface DeliveryFeeQuote {
   readonly available: boolean;
   readonly feeMinor: number | null;
-  readonly reasonCode: string | null;
-  /** The zone's minimum basket, present only when the zone sets one. */
-  readonly minBasketMinor: number | null;
+  readonly outcome: string;
 }
 
 /** `DeliveryFeeController.DeliveryFeeView`, transcribed from the controller. */

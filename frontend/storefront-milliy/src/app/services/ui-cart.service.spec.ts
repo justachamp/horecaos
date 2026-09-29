@@ -352,9 +352,11 @@ describe('UiCartService delivery-fee preview (refreshDeliveryFee, via load())', 
     );
     delivery.addressId.mockReturnValue('addr-1');
     customerApi.address.mockResolvedValue(geocodedAddress());
+    // Copied from DeliveryFeeResolver, not invented: an address no zone covers
+    // is outcome OUT_OF_ZONE with the granular reason NO_ZONE_COVERS_ADDRESS.
     api.mutate.mockResolvedValue({
-      outcome: 'NOT_SERVICEABLE',
-      reasonCode: 'OUT_OF_ZONE',
+      outcome: 'OUT_OF_ZONE',
+      reasonCode: 'NO_ZONE_COVERS_ADDRESS',
       available: false,
       feeMinor: null,
       currency: null,
@@ -368,13 +370,13 @@ describe('UiCartService delivery-fee preview (refreshDeliveryFee, via load())', 
 
     expect(customerApi.address).toHaveBeenCalledWith('addr-1');
     const quote = service.deliveryFeeQuote() as DeliveryFeeQuote;
-    // The reason the resolver gave travels with the quote instead of being
-    // dropped on the floor -- it is what the customer needs to act on.
+    // The outcome travels with the quote instead of being dropped on the
+    // floor -- it is what the customer needs to act on. The granular
+    // reasonCode is not what the sentence is keyed on.
     expect(quote).toEqual({
       available: false,
       feeMinor: null,
-      reasonCode: 'OUT_OF_ZONE',
-      minBasketMinor: null,
+      outcome: 'OUT_OF_ZONE',
     });
     // Neither a fee of 0 (which would read as free delivery) nor a generic
     // "not serviceable" in the price slot: the slot stays the honest dash, and
@@ -392,7 +394,7 @@ describe('UiCartService delivery-fee preview (refreshDeliveryFee, via load())', 
     delivery.addressId.mockReturnValue('addr-1');
     customerApi.address.mockResolvedValue(geocodedAddress());
     api.mutate.mockResolvedValue({
-      outcome: 'OK',
+      outcome: 'RESOLVED',
       reasonCode: null,
       available: true,
       feeMinor: 12_000,
@@ -408,8 +410,7 @@ describe('UiCartService delivery-fee preview (refreshDeliveryFee, via load())', 
     expect(service.deliveryFeeQuote()).toEqual({
       available: true,
       feeMinor: 12_000,
-      reasonCode: null,
-      minBasketMinor: null,
+      outcome: 'RESOLVED',
     });
     expect(service.deliveryFee()).not.toBe('—');
     expect(service.deliveryUnresolvedMessage()).toBeNull();
@@ -439,7 +440,7 @@ describe('UiCartService delivery-fee preview (refreshDeliveryFee, via load())', 
     delivery.addressId.mockReturnValue('addr-1');
     customerApi.address.mockResolvedValue(geocodedAddress());
     api.mutate.mockResolvedValue({
-      outcome: 'OK',
+      outcome: 'RESOLVED',
       reasonCode: null,
       available: true,
       feeMinor: 12_000,
@@ -709,14 +710,13 @@ describe('UiCartService.deliveryUnresolvedMessage: why the fee preview is not a 
   const quote = (overrides: Partial<DeliveryFeeQuote> = {}): DeliveryFeeQuote => ({
     available: false,
     feeMinor: null,
-    reasonCode: 'OUT_OF_ZONE',
-    minBasketMinor: null,
+    outcome: 'OUT_OF_ZONE',
     ...overrides,
   });
 
   it('is null for a resolved fee', () => {
     const { service } = setUp();
-    service.deliveryFeeQuote.set(quote({ available: true, feeMinor: 12_000, reasonCode: null }));
+    service.deliveryFeeQuote.set(quote({ available: true, feeMinor: 12_000, outcome: 'RESOLVED' }));
 
     expect(service.deliveryUnresolvedMessage()).toBeNull();
   });
@@ -735,43 +735,24 @@ describe('UiCartService.deliveryUnresolvedMessage: why the fee preview is not a 
     expect(service.deliveryUnresolvedMessage()).toBeNull();
   });
 
-  it('names the minimum basket amount when that is why', () => {
+  // Every refusal DeliveryFeeResolver can produce, by DeliveryFeeOutcome name
+  // (the field the storefront branches on), with the sentence it must read as.
+  it.each([
+    ['OUT_OF_ZONE', 'errors.reason.outOfZone'],
+    ['OUTSIDE_CATCHMENT', 'errors.reason.outOfZone'],
+    ['BEYOND_MAX_DISTANCE', 'errors.reason.outOfZone'],
+    ['NO_TARIFF', 'errors.reason.deliveryFeeUnresolved'],
+    ['LOCATION_NOT_LOCATED', 'errors.reason.deliveryFeeUnresolved'],
+  ])('maps the resolver outcome %s to its own sentence', (outcome, key) => {
     const { service } = setUp();
-    service.deliveryFeeQuote.set(
-      quote({ reasonCode: 'BELOW_MINIMUM_BASKET', minBasketMinor: 50_000 }),
-    );
+    service.deliveryFeeQuote.set(quote({ outcome }));
 
-    expect(service.deliveryUnresolvedMessage()).toBe(
-      `errors.reason.minimumBasketAmount(${JSON.stringify({ amount: service.formatPrice(50_000) })})`,
-    );
+    expect(service.deliveryUnresolvedMessage()).toBe(key);
   });
 
-  it('falls back to the generic minimum-basket sentence when the zone did not send the amount', () => {
+  it('never leaks an outcome this build has no sentence for', () => {
     const { service } = setUp();
-    service.deliveryFeeQuote.set(quote({ reasonCode: 'BELOW_MINIMUM_BASKET', minBasketMinor: null }));
-
-    expect(service.deliveryUnresolvedMessage()).toBe('errors.reason.minimumBasketNotMet');
-  });
-
-  it('maps every resolver reason through the same vocabulary the checkout refusal uses', () => {
-    const { service } = setUp();
-
-    service.deliveryFeeQuote.set(quote({ reasonCode: 'NO_TARIFF' }));
-    expect(service.deliveryUnresolvedMessage()).toBe('errors.reason.deliveryFeeUnresolved');
-    service.deliveryFeeQuote.set(quote({ reasonCode: 'BEYOND_MAX_DISTANCE' }));
-    expect(service.deliveryUnresolvedMessage()).toBe('errors.reason.outOfZone');
-  });
-
-  it('never leaks a reason code this build has no sentence for', () => {
-    const { service } = setUp();
-    service.deliveryFeeQuote.set(quote({ reasonCode: 'SOMETHING_NEW' }));
-
-    expect(service.deliveryUnresolvedMessage()).toBe('errors.reason.deliveryFeeUnresolved');
-  });
-
-  it('a refusal with no reason at all is still one honest sentence', () => {
-    const { service } = setUp();
-    service.deliveryFeeQuote.set(quote({ reasonCode: null }));
+    service.deliveryFeeQuote.set(quote({ outcome: 'SOMETHING_NEW' }));
 
     expect(service.deliveryUnresolvedMessage()).toBe('errors.reason.deliveryFeeUnresolved');
   });
