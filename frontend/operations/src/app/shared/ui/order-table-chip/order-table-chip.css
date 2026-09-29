@@ -1,0 +1,14 @@
+/* A small text chip beside an order: flat square, hairline border, no glyph —
+ * the console's palette has no icons. Sits inline so the board's Type cell, the
+ * detail header and the kitchen ticket can each place it without a wrapper. */
+
+.q-order-table-chip {
+  display: inline-block;
+  padding: 1px 6px;
+  border: 1px solid var(--q-hairline);
+  background: var(--q-surface-1);
+  color: var(--q-ink);
+  font-weight: 600;
+  white-space: nowrap;
+  vertical-align: middle;
+}

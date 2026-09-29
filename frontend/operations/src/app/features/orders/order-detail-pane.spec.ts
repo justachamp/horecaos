@@ -312,6 +312,43 @@ describe('OrderDetailPane: rendering the loaded order', () => {
     expect(presets?.textContent).toContain('Extra spicy');
   });
 
+  it('batch 14: shows the table a dine-in order was seated at in the header, beside its number', async () => {
+    const base = detail();
+    configure({
+      get: apiGet({
+        value: detail({
+          summary: {
+            ...base.summary,
+            fulfillmentMode: 'DINE_IN',
+            table: {
+              sessionId: 'session-1',
+              tables: [
+                { tableId: 'table-7', code: 'T7', displayName: 'Table 7' },
+                { tableId: 'table-8', code: 'T8', displayName: 'Table 8' },
+              ],
+            },
+          },
+        }),
+        version: 3,
+      }),
+    });
+    const fixture = await render();
+    const host: HTMLElement = fixture.nativeElement;
+
+    const chip = host.querySelector('.pane__header-row [data-testid="order-table-chip"]');
+    expect(chip?.textContent?.trim()).toBe('Table T7 + T8');
+    expect(chip?.getAttribute('title')).toBe('Table 7, Table 8');
+  });
+
+  it('batch 14: an order with no table (a delivery, or a dine-in order nobody seated) shows no chip', async () => {
+    configure({ get: apiGet({ value: detail(), version: 3 }) });
+    const fixture = await render();
+    const host: HTMLElement = fixture.nativeElement;
+
+    expect(host.textContent).toContain('0142');
+    expect(host.querySelector('[data-testid="order-table-chip"]')).toBeNull();
+  });
+
   it('always shows the raw route order id, even before the fetch settles', () => {
     configure({ get: apiGet({ value: detail(), version: 3 }) });
     const fixture = TestBed.createComponent(OrderDetailPane);

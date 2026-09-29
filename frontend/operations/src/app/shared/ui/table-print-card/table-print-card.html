@@ -6,12 +6,25 @@
   @if (qrToken(); as token) {
     <div class="card__mark" data-testid="table-print-card-mark">
       <q-qr-code
-        [value]="token"
+        [value]="markValue()"
         [size]="120"
         [label]="'shared.tablePrintCard.qrLabel' | t"
         data-testid="table-print-card-qr"
       />
     </div>
+    @if (scanHost(); as host) {
+      <p class="card__host q-caption" data-testid="table-print-card-host">
+        {{ 'shared.tablePrintCard.hostLabel' | t: { host: host } }}
+      </p>
+    } @else if (fallback() === 'TOO_LONG') {
+      <p class="card__warning q-body-sm" role="alert" data-testid="table-print-card-too-long">
+        {{ 'shared.tablePrintCard.hostTooLongWarning' | t: { host: storefrontHostname() ?? '' } }}
+      </p>
+    } @else {
+      <p class="card__warning q-body-sm" role="alert" data-testid="table-print-card-no-host">
+        {{ 'shared.tablePrintCard.noHostWarning' | t }}
+      </p>
+    }
     <p class="card__tokenLabel q-caption">{{ 'shared.tablePrintCard.tokenLabel' | t }}</p>
     <p class="card__token q-mono" data-testid="table-print-card-token">{{ token }}</p>
   } @else {

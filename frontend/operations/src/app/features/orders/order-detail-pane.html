@@ -52,6 +52,7 @@
       <div class="pane__header-row">
         <span class="q-mono pane__order-number">{{ detail.value.summary.publicOrderNumber }}</span>
         <span class="status-badge">{{ statusLabel(detail.value.summary.status) }}</span>
+        <q-order-table-chip [table]="detail.value.summary.table" />
       </div>
       @if (headerSeverity(); as severity) {
         @if (severityCaption(severity); as caption) {

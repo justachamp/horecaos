@@ -47,6 +47,23 @@
   font-size: var(--q-type-body-xs);
 }
 
+.card__host {
+  margin: 0 0 8px;
+  color: var(--q-ink-muted);
+  word-break: break-all;
+}
+
+/* For the manager holding the card, not for a guest: a printed page must not
+ * carry a warning meant for whoever is at the printer. */
+.card__warning {
+  margin: 0 0 8px;
+  padding: 8px;
+  border: 1px solid var(--q-warning-text);
+  background: var(--q-warning-tint);
+  color: var(--q-warning-text);
+  text-align: start;
+}
+
 .card__none {
   padding: 24px 0;
   color: var(--q-ink-muted);
@@ -55,5 +72,9 @@
 @media print {
   .card {
     border: none;
+  }
+
+  .card__warning {
+    display: none;
   }
 }

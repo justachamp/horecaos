@@ -311,6 +311,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'orders.detail.loading': 'Buyurtma yuklanmoqda',
   'orders.detail.denied': 'Ushbu buyurtmaga kirish yoʻq',
   'orders.detail.version': 'Versiya {version}',
+  'orders.table.chip': 'Stol {tables}',
 
   'orders.detail.section.lines': 'Tarkibi',
   'orders.detail.section.money': 'Pul',
@@ -6055,6 +6056,11 @@ export const messagesUzLatn: MessageCatalogue = {
   'shared.tablePrintCard.qrLabel': 'Ushbu stolning QR kodi',
   'shared.tablePrintCard.tokenLabel': 'Kod (skanerlash ishlamasa, qoʻlda kiriting)',
   'shared.tablePrintCard.none': 'Bu stol uchun hali kod berilmagan.',
+  'shared.tablePrintCard.hostLabel': 'Skanerlash {host} manzilini ochadi',
+  'shared.tablePrintCard.noHostWarning':
+    'Tasdiqlangan vitrina manzili sozlanmagan, shu sababli bu kodda faqat stol kodining oʻzi bor va telefon kamerasi uni ocha olmaydi. Kanal sozlamalarida xostnomni tasdiqlang va kodni qaytadan bering.',
+  'shared.tablePrintCard.hostTooLongWarning':
+    'Vitrina manzili {host} QR kodga sigʻmaydigan darajada uzun, shu sababli bu kodda faqat stol kodining oʻzi bor va telefon kamerasi uni ocha olmaydi. Kanal sozlamalarida qisqaroq manzil oling va kodni qaytadan bering.',
   // --- shared/ui q-secret-input (ADR 0106, gap-map row X.14) --------------
   'secretInput.reveal': 'Koʻrsatish',
   'secretInput.hide': 'Yashirish',

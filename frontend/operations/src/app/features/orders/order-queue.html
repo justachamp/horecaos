@@ -339,7 +339,10 @@
                 }
               </td>
               <td class="q-tnum">{{ formatCreated(row.createdAt) }}</td>
-              <td>{{ typeLabel(row.order) }}</td>
+              <td>
+                {{ typeLabel(row.order) }}
+                <q-order-table-chip [table]="row.order.table" />
+              </td>
               <td class="order-queue__num-col q-mono q-tnum">{{ formatTotal(row.order) }}</td>
               <td class="order-queue__num-col q-mono q-tnum" data-testid="order-row-fee">
                 {{ formatFee(row.order) }}

@@ -15,6 +15,7 @@ import { CurrentLocation } from '../../core/auth/current-location';
 import { I18n } from '../../core/i18n/i18n';
 import { TPipe } from '../../core/i18n/t.pipe';
 import { describeApiError } from '../orders/order-errors';
+import { OrderTableChip } from '../../shared/ui/order-table-chip/order-table-chip';
 import { OrderDetailResponse, OrderLine } from '../orders/order-detail';
 import { ChallengeState } from '../orders/order-handover-api';
 import { OrderHandoverPanel } from '../orders/order-handover-panel';
@@ -52,7 +53,7 @@ const POLL_INTERVAL_MS = 10_000;
  */
 @Component({
   selector: 'q-expo-page',
-  imports: [TPipe, OrderHandoverPanel],
+  imports: [TPipe, OrderHandoverPanel, OrderTableChip],
   templateUrl: './expo-page.html',
   styleUrl: './expo-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
