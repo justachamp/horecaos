@@ -16,8 +16,8 @@ import { TranslatePipe } from '../../shared/translate/translate.pipe';
 import { UiCartService } from '../../services/ui-cart.service';
 import type { MenuItem, MenuItemModifierGroup } from '../../types/home.types';
 import {
-  firstSellableVariant,
   itemAvailability,
+  preferredSellableVariant,
   variantAvailability,
   type ItemAvailability,
 } from '../../utils/item-availability';
@@ -75,14 +75,16 @@ export class DetailsComponent implements OnInit {
         return;
       }
       this.item.set(item);
-      // The platform does not mark a default variant, so the first one that can
-      // be bought right now stands in -- chosen rather than assumed, and only
-      // when exactly one choice would otherwise be forced on a customer who
-      // cannot see it. A portion still waiting for its sale window (row 4.2g)
-      // is not preferred over one that is on sale; if none is on sale, the
-      // first orderable one is selected so the screen can say why it is closed.
+      // The authored default when it can be bought right now, otherwise the
+      // first portion that can -- the same portion the menu grid priced the
+      // card from (see preferredSellableVariant), so the price the customer
+      // tapped is the price of what lands in the basket. A portion still
+      // waiting for its sale window (row 4.2g) is not preferred over one that
+      // is on sale; if none is on sale, the first orderable one is selected so
+      // the screen can say why it is closed.
       this.variantId.set(
-        (firstSellableVariant(item) ?? item.variants.find((variant) => variant.active))?.id ?? null,
+        (preferredSellableVariant(item) ?? item.variants.find((variant) => variant.active))?.id ??
+          null,
       );
       this.state.set('ready');
     } catch {

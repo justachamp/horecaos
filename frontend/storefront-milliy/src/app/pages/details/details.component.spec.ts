@@ -293,6 +293,33 @@ describe('DetailsComponent -- sold out and the sale window (rows 4.4c/4.4d, 4.2g
     expect(comp.canAdd()).toBe(true);
   });
 
+  it('preselects the authored default when it can be bought, even if an earlier portion can be too -- the portion the card priced', async () => {
+    const { comp } = await setUp(
+      product({
+        variants: [
+          variantOf({ id: 'v1', name: 'Kichik', price: 10_000 }),
+          variantOf({ id: 'v2', name: 'Katta', price: 18_000, isDefault: true }),
+        ],
+      }),
+    );
+
+    expect(comp.variantId()).toBe('v2');
+  });
+
+  it('skips an authored default that is off its window for the portion that is on sale', async () => {
+    const { comp } = await setUp(
+      product({
+        variants: [
+          variantOf({ id: 'v1', name: 'Nonushta', price: 10_000, isDefault: true, onSaleNow: false }),
+          variantOf({ id: 'v2', name: 'Kunlik', price: 18_000 }),
+        ],
+      }),
+    );
+
+    expect(comp.variantId()).toBe('v2');
+    expect(comp.canAdd()).toBe(true);
+  });
+
   it('follows the chosen portion: picking the off-window one blocks the add, picking the other frees it', async () => {
     const { comp, fixture } = await setUp(
       product({

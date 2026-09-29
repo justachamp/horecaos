@@ -1,6 +1,7 @@
 import {
   firstSellableVariant,
   itemAvailability,
+  preferredSellableVariant,
   variantAvailability,
 } from './item-availability';
 
@@ -56,5 +57,38 @@ describe('firstSellableVariant', () => {
 
   it('is null when nothing can be bought right now', () => {
     expect(firstSellableVariant({ variants: [v(false, true), v(true, false)] })).toBeNull();
+  });
+});
+
+describe('preferredSellableVariant', () => {
+  const d = (active: boolean, onSaleNow: boolean, id: string, isDefault = false) => ({
+    ...v(active, onSaleNow, id),
+    isDefault,
+  });
+
+  it('is the authored default when it can be bought, wherever it sits in the list', () => {
+    const variants = [d(true, true, 'a'), d(true, true, 'b', true)];
+
+    expect(preferredSellableVariant({ variants })?.id).toBe('b');
+  });
+
+  it('skips a default that is sold out or off its sale window for the first portion that can be bought', () => {
+    expect(
+      preferredSellableVariant({ variants: [d(false, true, 'a', true), d(true, true, 'b')] })?.id,
+    ).toBe('b');
+    expect(
+      preferredSellableVariant({ variants: [d(true, false, 'a', true), d(true, true, 'b')] })?.id,
+    ).toBe('b');
+  });
+
+  it('is the first sellable portion when nothing is marked default', () => {
+    expect(
+      preferredSellableVariant({ variants: [v(true, false, 'a'), v(true, true, 'b'), v(true, true, 'c')] })
+        ?.id,
+    ).toBe('b');
+  });
+
+  it('is null when nothing can be bought right now', () => {
+    expect(preferredSellableVariant({ variants: [d(false, true, 'a', true), d(true, false, 'b')] })).toBeNull();
   });
 });

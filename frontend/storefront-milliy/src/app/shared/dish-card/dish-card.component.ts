@@ -6,8 +6,8 @@ import { formatMoney, money } from '../../core/money/money';
 import { TranslateService } from '../../services/translate.service';
 import type { MenuItem } from '../../types/home.types';
 import {
-  firstSellableVariant,
   itemAvailability,
+  preferredSellableVariant,
   type ItemAvailability,
 } from '../../utils/item-availability';
 import { TranslatePipe } from '../translate/translate.pipe';
@@ -65,7 +65,7 @@ export class DishCardComponent {
     if (this.unavailable()) {
       return null;
     }
-    return firstSellableVariant(this.item())?.remainingQuantity ?? null;
+    return preferredSellableVariant(this.item())?.remainingQuantity ?? null;
   });
 
   protected readonly priceLabel = computed(() => {

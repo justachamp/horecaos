@@ -184,3 +184,86 @@ describe('MenuService: a variant\'s sale window reaches the screens (row 4.2g)',
     expect(item?.variants[0].onSaleNow).toBe(true);
   });
 });
+
+describe('MenuService: the price on the dish card is the price of the portion a customer can actually get', () => {
+  function portion(id: string, amountMinor: number, overrides: Record<string, unknown> = {}) {
+    return {
+      variantId: id,
+      sku: null,
+      unitCode: null,
+      isDefault: false,
+      orderable: true,
+      onSaleNow: true,
+      amountMinor,
+      remainingQuantity: null,
+      ...overrides,
+    };
+  }
+
+  async function cardPrice(variants: readonly Record<string, unknown>[]): Promise<number | undefined> {
+    const { service, api } = setUp();
+    api.get.mockResolvedValue({
+      ...emptyMenu(),
+      products: [
+        {
+          productId: 'p1',
+          code: null,
+          name: 'Osh',
+          description: null,
+          mediaAssetIds: [],
+          imageUrls: [],
+          variants,
+          modifierGroupIds: [],
+        },
+      ],
+    } as never);
+    const item = await service.item('p1', 'uz');
+    return item?.price;
+  }
+
+  it('skips an authored default that is off its sale window when another portion is sellable', async () => {
+    // 15:00: the breakfast-only default (10,000) is closed, the all-day portion (18,000) is not.
+    const price = await cardPrice([
+      portion('breakfast', 10_000, { isDefault: true, onSaleNow: false }),
+      portion('all-day', 18_000),
+    ]);
+
+    expect(price).toBe(18_000);
+  });
+
+  it('skips a sold-out default when another portion is sellable', async () => {
+    const price = await cardPrice([
+      portion('small', 10_000, { isDefault: true, orderable: false }),
+      portion('large', 18_000),
+    ]);
+
+    expect(price).toBe(18_000);
+  });
+
+  it('keeps the authored default when it can be bought, even if it is not listed first', async () => {
+    const price = await cardPrice([
+      portion('small', 10_000),
+      portion('large', 18_000, { isDefault: true }),
+    ]);
+
+    expect(price).toBe(18_000);
+  });
+
+  it('with nothing sellable, still prices the authored default rather than inventing a number', async () => {
+    const price = await cardPrice([
+      portion('breakfast', 10_000, { isDefault: true, onSaleNow: false }),
+      portion('lunch', 18_000, { onSaleNow: false }),
+    ]);
+
+    expect(price).toBe(10_000);
+  });
+
+  it('with nothing sellable and one portion merely sold out, prefers the one still orderable', async () => {
+    const price = await cardPrice([
+      portion('gone', 10_000, { isDefault: true, orderable: false }),
+      portion('later', 18_000, { onSaleNow: false }),
+    ]);
+
+    expect(price).toBe(18_000);
+  });
+});

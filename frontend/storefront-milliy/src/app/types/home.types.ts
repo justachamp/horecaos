@@ -15,6 +15,12 @@ export interface MenuItemVariant {
   price: number;
   price_without_discount: number;
   /**
+   * The portion the menu's author marked as the default, when they marked one.
+   * Optional: a variant built without it is simply not the default, and
+   * `preferredSellableVariant` (utils/item-availability) falls back to list order.
+   */
+  isDefault?: boolean;
+  /**
    * Rows 4.4c/4.4d: a low remaining count for a QUANTITY-tracked item,
    * shown only once stock has dropped to a small threshold -- never above
    * it. `null` is the ordinary case (plenty of stock, or not
