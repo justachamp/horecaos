@@ -322,6 +322,78 @@ class MenuControllerTests {
                 .isEqualTo("Burger");
     }
 
+    @Test
+    @DisplayName("bulk-add-by-filter finds a name the brand default lacks through the server-locale fallback")
+    void bulkAddByFilterFindsAFallbackName() throws Exception {
+        brandDefault("ru");
+        UUID menuId = createMenuDirectly("Main menu");
+        UUID catalogId = jdbc.sql("SELECT id FROM catalog.catalogs WHERE tenant_id = :t")
+                .param("t", TENANT)
+                .query(UUID.class)
+                .single();
+        // Named only in the server's uz, and the brand now defaults to ru: the operator sees "Osh"
+        // through the fallback, so the search must find it too. Its SKU shares nothing with the name.
+        authoring.createProduct(
+                TENANT,
+                BRAND,
+                catalogId,
+                "PLOV",
+                "Osh",
+                null,
+                LOCALE,
+                "SKU-PLOV",
+                "PIECE",
+                FiscalClassification.unclassified(),
+                null);
+
+        MvcResult found = mvc.perform(post(path() + "/" + menuId + "/items/bulk-add-by-filter")
+                        .with(tokenFor(BRAND_AUTHOR))
+                        .header("Idempotency-Key", "menu-bulk-add-fallback-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"categoryId":null,"search":"Osh","availabilityDefault":"AVAILABLE","locale":"ru"}"""))
+                .andReturn();
+
+        assertThat(found.getResponse().getStatus()).isEqualTo(200);
+        assertThat(found.getResponse().getContentAsString()).contains("\"added\":1");
+    }
+
+    @Test
+    @DisplayName("bulk-add-by-filter with the locale left out resolves the brand default on the server")
+    void bulkAddByFilterResolvesTheBrandDefaultServerSide() throws Exception {
+        brandDefault("ru");
+        UUID menuId = createMenuDirectly("Main menu");
+        UUID catalogId = jdbc.sql("SELECT id FROM catalog.catalogs WHERE tenant_id = :t")
+                .param("t", TENANT)
+                .query(UUID.class)
+                .single();
+        authoring.createProduct(
+                TENANT,
+                BRAND,
+                catalogId,
+                "PLOV",
+                "Плов",
+                null,
+                "ru",
+                "SKU-PLOV",
+                "PIECE",
+                FiscalClassification.unclassified(),
+                null);
+
+        MvcResult found = mvc.perform(post(path() + "/" + menuId + "/items/bulk-add-by-filter")
+                        .with(tokenFor(BRAND_AUTHOR))
+                        .header("Idempotency-Key", "menu-bulk-add-noloc-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"categoryId":null,"search":"Плов","availabilityDefault":"AVAILABLE"}"""))
+                .andReturn();
+
+        assertThat(found.getResponse().getStatus()).isEqualTo(200);
+        assertThat(found.getResponse().getContentAsString(UTF_8))
+                .as("the server no longer assumes uz when the client names no locale")
+                .contains("\"added\":1");
+    }
+
     // -------------------------------------------------------------------- bind
 
     @Test

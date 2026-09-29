@@ -8,6 +8,8 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPricingStore;
@@ -33,13 +35,29 @@ public class PriceQueryService {
     private final SalesChannelLookup channels;
     private final Clock clock;
     private final ConfigurationResolver configuration;
+    private final String defaultLocale;
 
+    /**
+     * @param defaultLocale {@code horecaos.catalog.default-locale} -- where the price-book matrix
+     *                      reads a name the caller's locale lacks (row 10.12)
+     */
+    @Autowired
     public PriceQueryService(
-            JdbcPricingStore store, SalesChannelLookup channels, Clock clock, ConfigurationResolver configuration) {
+            JdbcPricingStore store,
+            SalesChannelLookup channels,
+            Clock clock,
+            ConfigurationResolver configuration,
+            @Value("${horecaos.catalog.default-locale:uz}") String defaultLocale) {
         this.store = store;
         this.channels = channels;
         this.clock = clock;
         this.configuration = configuration;
+        this.defaultLocale = defaultLocale;
+    }
+
+    public PriceQueryService(
+            JdbcPricingStore store, SalesChannelLookup channels, Clock clock, ConfigurationResolver configuration) {
+        this(store, channels, clock, configuration, "uz");
     }
 
     /** A brand's price books, ranked the way {@code resolvePriceBook} ranks them. */
@@ -115,6 +133,11 @@ public class PriceQueryService {
      * <p>Before this, a book's variant prices could only be seen one product
      * at a time in the per-variant editor — nothing showed every price in a
      * book against what the brand actually charges today in one screen.
+     *
+     * <p>Names are read in {@code locale} -- the brand's own default, which the console
+     * sends -- and, where a product or category has none there, in the server's configured
+     * locale (row 10.12), so a menu named before the brand chose its language does not fall
+     * to bare codes.
      */
     public List<JdbcPricingStore.MatrixRow> priceBookMatrix(
             UUID tenantId,
@@ -130,7 +153,17 @@ public class PriceQueryService {
                 .map(JdbcPricingStore.PriceBookRow::id)
                 .orElse(null);
         return store.priceBookMatrix(
-                tenantId, brandId, priceBookId, baseBookId, categoryId, differsFromBaseOnly, cursor, locale, limit, at);
+                tenantId,
+                brandId,
+                priceBookId,
+                baseBookId,
+                categoryId,
+                differsFromBaseOnly,
+                cursor,
+                locale,
+                defaultLocale,
+                limit,
+                at);
     }
 
     public record PriceBookSummary(

@@ -291,6 +291,9 @@ public class MenuAuthoringService {
      * touch), so a caller asking to filter by tag has nothing to filter
      * against; category and search cover what the schema can actually answer.
      *
+     * @param locale the language the search matches names in first, or null for the brand's own
+     *               default; a product with no name there is matched by its name in the server's
+     *               configured locale (row 10.12)
      * @return how many variants were added or re-defaulted
      */
     @Transactional
@@ -301,13 +304,22 @@ public class MenuAuthoringService {
             @Nullable UUID categoryId,
             @Nullable String search,
             String availabilityDefault,
-            String locale,
+            @Nullable String locale,
             String actorSubject) {
         requireMenu(tenantId, brandId, menuId);
         if (categoryId != null && !catalog.entityExistsInBrand(tenantId, brandId, EntityType.CATEGORY, categoryId)) {
             throw new UnknownCategoryException(categoryId);
         }
-        int added = menus.addByFilter(tenantId, brandId, menuId, categoryId, search, availabilityDefault, locale);
+        // The search matches the name the operator is looking at: in the language the console asks
+        // for and, only where the product has none there, in the server's configured one -- the
+        // order every list screen reads a name in. A caller that names no language gets the brand's
+        // own default rather than an assumed uz.
+        String preferred = locale != null
+                ? locale
+                : CatalogNameLocales.of(brandLocales, tenantId, brandId, defaultLocale)
+                        .preferred();
+        int added = menus.addByFilter(
+                tenantId, brandId, menuId, categoryId, search, availabilityDefault, preferred, defaultLocale);
         audit.record(AuditFact.of("catalog.menu.items-added-by-filter", AuditClass.BUSINESS)
                 .by(ActorRef.user(actorSubject, null))
                 .at(ResourceScope.brand(tenantId, brandId))

@@ -199,7 +199,8 @@ public class JdbcMenuStore {
      * batch written with a single multi-row {@code INSERT}.
      *
      * @param categoryId restricts to products placed in this category; {@code null} for every category
-     * @param search     matches product name (this locale) or SKU, case-insensitively; {@code null} for no filter
+     * @param search     matches the product name an operator sees -- in {@code preferredLocale}, else in
+     *                   {@code fallbackLocale} -- or the SKU, case-insensitively; {@code null} for no filter
      * @return how many (menu, variant) rows this call inserted or updated
      */
     public int addByFilter(
@@ -209,7 +210,8 @@ public class JdbcMenuStore {
             @Nullable UUID categoryId,
             @Nullable String search,
             String availabilityDefault,
-            String locale) {
+            String preferredLocale,
+            String fallbackLocale) {
         String searchPattern = search == null || search.isBlank() ? null : "%" + search.trim() + "%";
         List<MatchedItem> matched = jdbc.sql("""
                 WITH base AS (
@@ -228,7 +230,10 @@ public class JdbcMenuStore {
                         ON p.id = v.product_id AND p.tenant_id = v.tenant_id AND p.brand_id = v.brand_id
                     LEFT JOIN catalog.translations t
                         ON t.entity_type = 'PRODUCT' AND t.entity_id = p.id AND t.tenant_id = p.tenant_id
-                           AND t.brand_id = p.brand_id AND t.locale = :locale
+                           AND t.brand_id = p.brand_id AND t.locale = :preferredLocale
+                    LEFT JOIN catalog.translations tf
+                        ON tf.entity_type = 'PRODUCT' AND tf.entity_id = p.id AND tf.tenant_id = p.tenant_id
+                           AND tf.brand_id = p.brand_id AND tf.locale = :fallbackLocale
                     WHERE v.tenant_id = :tenantId AND v.brand_id = :brandId
                       AND v.status = 'ACTIVE' AND p.status = 'ACTIVE'
                       AND (CAST(:categoryId AS uuid) IS NULL OR EXISTS (
@@ -237,7 +242,7 @@ public class JdbcMenuStore {
                             AND cp.product_id = p.id AND cp.category_id = :categoryId
                       ))
                       AND (CAST(:search AS varchar) IS NULL
-                           OR t.name ILIKE :search OR v.sku ILIKE :search)
+                           OR COALESCE(t.name, tf.name) ILIKE :search OR v.sku ILIKE :search)
                 )
                 SELECT candidates.variant_id, start.next_order + candidates.rank AS sort_order
                 FROM candidates, start
@@ -248,7 +253,8 @@ public class JdbcMenuStore {
                 .param("menuId", menuId)
                 .param("categoryId", categoryId)
                 .param("search", searchPattern)
-                .param("locale", locale)
+                .param("preferredLocale", preferredLocale)
+                .param("fallbackLocale", fallbackLocale)
                 .query((row, number) ->
                         new MatchedItem(row.getObject("variant_id", UUID.class), row.getInt("sort_order")))
                 .list();
