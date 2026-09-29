@@ -54,6 +54,13 @@
   color: var(--q-warning-text);
 }
 
+/* Which brand, channel, connection or legal entity the row is about. */
+.readiness__row .readiness__scope {
+  display: block;
+  margin-top: 2px;
+  color: var(--q-ink-subtle);
+}
+
 .muted {
   color: var(--q-ink-subtle);
 }

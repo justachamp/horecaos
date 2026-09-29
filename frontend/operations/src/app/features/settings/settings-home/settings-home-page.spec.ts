@@ -344,6 +344,127 @@ describe('SettingsHomePage', () => {
       expect(rows[3].textContent).toContain('provider connection');
     });
 
+    describe('several offending items of one kind', () => {
+      const KIOSK: ValidationOutcome['checks'][number] = {
+        ...CHANNEL,
+        detail: 'Sales channel KIOSK has no enabled payment method',
+      };
+
+      /**
+       * Angular reports a duplicated `@for` track key (NG0955) on the console in
+       * dev mode, but only when it reconciles a list that is already on screen —
+       * the first render creates every row without comparing keys.
+       */
+      function duplicateKeyWarnings(spies: readonly { mock: { calls: unknown[][] } }[]): string[] {
+        return spies
+          .flatMap((spy) => spy.mock.calls)
+          .map((call) => call.map((part) => String(part)).join(' '))
+          .filter((line) => line.includes('NG0955'));
+      }
+
+      it('tells two channels with no payment method apart instead of repeating one sentence', async () => {
+        const fixture = await render({
+          validate: () => Promise.resolve(outcomeOf(CHANNEL, KIOSK)),
+        });
+
+        const rows: HTMLElement[] = [...fixture.nativeElement.querySelectorAll('.readiness__row')];
+        expect(rows.length).toBe(2);
+        expect(rows[0].textContent).toContain('STOREFRONT');
+        expect(rows[0].textContent).not.toContain('KIOSK');
+        expect(rows[1].textContent).toContain('KIOSK');
+        expect(rows[1].textContent).not.toContain('STOREFRONT');
+      });
+
+      it('names each brand whose fiscal classification is incomplete', async () => {
+        const fixture = await render({
+          validate: () =>
+            Promise.resolve(
+              outcomeOf(FISCAL, {
+                ...FISCAL,
+                detail:
+                  'Brand SECOND has 1 of 4 menu items without a complete fiscal classification',
+              }),
+            ),
+        });
+
+        const rows: HTMLElement[] = [...fixture.nativeElement.querySelectorAll('.readiness__row')];
+        expect(rows.map((row) => /Brand (\w+) has/.exec(row.textContent ?? '')?.[1])).toEqual([
+          'MAIN',
+          'SECOND',
+        ]);
+      });
+
+      it('names the legal entity of each merchant account past its rotation period', async () => {
+        const fixture = await render({
+          validate: () =>
+            Promise.resolve(
+              outcomeOf(
+                {
+                  ...MERCHANT_SECRET,
+                  detail:
+                    'The CLICK merchant account of legal entity ACME has a credential 300 days old',
+                },
+                {
+                  ...MERCHANT_SECRET,
+                  detail:
+                    'The CLICK merchant account of legal entity BETA has a credential 250 days old',
+                },
+              ),
+            ),
+        });
+
+        const rows: HTMLElement[] = [...fixture.nativeElement.querySelectorAll('.readiness__row')];
+        expect(rows[0].textContent).toContain('ACME');
+        expect(rows[1].textContent).toContain('BETA');
+      });
+
+      it('keeps the fixed sentence and its link beside the detail', async () => {
+        const fixture = await render({ validate: () => Promise.resolve(outcomeOf(CHANNEL)) });
+
+        const link: HTMLAnchorElement = fixture.nativeElement.querySelector('.readiness__row a');
+        expect(link.textContent).toContain('A sales channel has no payment method enabled');
+        expect(link.textContent).not.toContain('STOREFRONT');
+        expect(fixture.nativeElement.querySelector('.readiness__scope')?.textContent).toContain(
+          'STOREFRONT',
+        );
+      });
+
+      it('does not repeat the detail of an unknown code, which is already its whole message', async () => {
+        const unknown = {
+          stepKey: 'SOMETHING_NEW_VALIDATE',
+          passed: false,
+          errorCode: 'SOMETHING_NEW',
+          detail: 'A condition this console has no sentence for',
+          locationId: null,
+        };
+        const fixture = await render({ validate: () => Promise.resolve(outcomeOf(unknown)) });
+
+        const text: string = fixture.nativeElement.querySelector('.readiness__row').textContent;
+        expect(text.split('A condition this console has no sentence for').length - 1).toBe(1);
+        expect(fixture.nativeElement.querySelector('.readiness__scope')).toBeNull();
+      });
+
+      it('gives every row its own track key, even when two findings read exactly alike', async () => {
+        const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        const warnings = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        try {
+          const same = [MERCHANT_SECRET, MERCHANT_SECRET, CHANNEL, KIOSK];
+          const fixture = await render({ validate: () => Promise.resolve(outcomeOf(...same)) });
+          expect(fixture.nativeElement.querySelectorAll('.readiness__row').length).toBe(4);
+
+          // The list is replaced while rows are on screen: this is what makes Angular compare keys.
+          fixture.componentInstance['findings'].set([...same]);
+          fixture.detectChanges();
+
+          expect(fixture.nativeElement.querySelectorAll('.readiness__row').length).toBe(4);
+          expect(duplicateKeyWarnings([errors, warnings])).toEqual([]);
+        } finally {
+          errors.mockRestore();
+          warnings.mockRestore();
+        }
+      });
+    });
+
     it('treats a finding from an older server, which sends no advisory flag, as blocking', async () => {
       const legacy = {
         stepKey: 'PAYMENT_CONFIGURATION_VALIDATE',

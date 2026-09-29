@@ -229,9 +229,12 @@ public final class OnboardingReadinessChecks {
      * retired merchant bindings are not counted: nothing uses their credential.
      *
      * <p>Reads only the dates beside the secret references, never a value (ADR
-     * 0028), and names each credential by its provider type and, for an
-     * installation, its own display name — never the merchant account reference
-     * or the secret reference.
+     * 0028), and names each credential by its provider type and by what tells
+     * two of them apart — an installation's own display name, a merchant
+     * account's legal entity code (one ACTIVE account per entity per provider, so
+     * the pair is unique among live accounts) — never the merchant account reference or the secret
+     * reference. The panel shows one row per credential, so two rows must not
+     * read alike.
      */
     @Component
     public static class SecretRotationAge implements OnboardingReadinessCheck {
@@ -275,11 +278,13 @@ public final class OnboardingReadinessChecks {
                                AND status <> 'RETIRED'
                                AND coalesce(last_secret_rotated_at, created_at) < :cutoff
                             UNION ALL
-                            SELECT 'MERCHANT_ACCOUNT' AS kind, provider_type AS label, provider_type,
-                                   coalesce(last_secret_rotated_at, created_at) AS since
-                              FROM payments.merchant_bindings
-                             WHERE tenant_id = :tenantId AND status <> 'RETIRED'
-                               AND coalesce(last_secret_rotated_at, created_at) < :cutoff
+                            SELECT 'MERCHANT_ACCOUNT' AS kind, le.code AS label, mb.provider_type,
+                                   coalesce(mb.last_secret_rotated_at, mb.created_at) AS since
+                              FROM payments.merchant_bindings mb
+                              JOIN tenant.legal_entities le
+                                ON le.tenant_id = mb.tenant_id AND le.id = mb.legal_entity_id
+                             WHERE mb.tenant_id = :tenantId AND mb.status <> 'RETIRED'
+                               AND coalesce(mb.last_secret_rotated_at, mb.created_at) < :cutoff
                              ORDER BY since, kind, label
                             """)
                     .param("tenantId", tenantId)
@@ -304,8 +309,8 @@ public final class OnboardingReadinessChecks {
                         }
                         return new StepResult.Finding(
                                 MERCHANT_DUE,
-                                "The %s merchant account has a credential %d days old; the rotation period is %d days"
-                                        .formatted(providerType, days, period),
+                                "The %s merchant account of legal entity %s has a credential %d days old; the rotation period is %d days"
+                                        .formatted(providerType, label, days, period),
                                 null);
                     })
                     .list();

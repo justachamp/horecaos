@@ -114,6 +114,36 @@ function readinessLink(finding: ValidationResult): readonly string[] | null {
 }
 
 /**
+ * One row of the readiness list, with the key `@for` tracks it by.
+ *
+ * A check that names N offending items sends N findings that differ only in
+ * their `detail`, and two items can read exactly alike (two CLICK merchant
+ * accounts, say), so no field of a finding is a safe identity on its own. The
+ * key is therefore the finding's own fields plus how many identical findings
+ * came before it: unique whatever the server sends, and stable while the same
+ * list is shown again.
+ */
+interface ReadinessRow {
+  readonly key: string;
+  readonly finding: ValidationResult;
+}
+
+function withUniqueKeys(findings: readonly ValidationResult[]): readonly ReadinessRow[] {
+  const seen = new Map<string, number>();
+  return findings.map((finding) => {
+    const base = [
+      finding.stepKey,
+      finding.locationId ?? '',
+      finding.errorCode ?? '',
+      finding.detail ?? '',
+    ].join('|');
+    const ordinal = seen.get(base) ?? 0;
+    seen.set(base, ordinal + 1);
+    return { key: `${base}#${ordinal}`, finding };
+  });
+}
+
+/**
  * Blocking findings first, advisory ones after, each group keeping the order
  * the server named them in (settings.md §10.0: blocking → expiring → advisory).
  * `Array.prototype.sort` is stable, so equal severities never reshuffle.
@@ -229,6 +259,7 @@ export class SettingsHomePage {
   protected readonly readinessState = signal<ReadinessState>('loading');
   protected readonly readinessErrorText = signal<string | null>(null);
   protected readonly findings = signal<readonly ValidationResult[]>([]);
+  protected readonly rows = computed(() => withUniqueKeys(this.findings()));
 
   constructor() {
     void this.flags.ensureLoaded();
@@ -305,6 +336,21 @@ export class SettingsHomePage {
   protected readinessMessage(finding: ValidationResult): string {
     const key = finding.errorCode ? READINESS_CODE_KEYS[finding.errorCode] : undefined;
     return key ? this.i18n.t(key) : (finding.detail ?? finding.errorCode ?? '');
+  }
+
+  /**
+   * Which one it is (settings.md §10.0: «each row states the scope»). The fixed
+   * sentence above says what is wrong in the operator's language; the server's
+   * `detail` names the brand, channel, provider connection or legal entity it
+   * is about, so N offending items read as N different rows. A code with no
+   * sentence of its own already shows `detail` as its whole message, so it is
+   * not repeated. The detail is the server's English text with tenant-chosen
+   * codes and names in it, never a secret or a personal value (ADR 0028).
+   */
+  protected readinessScope(finding: ValidationResult): string | null {
+    const known =
+      finding.errorCode !== null && READINESS_CODE_KEYS[finding.errorCode] !== undefined;
+    return known ? finding.detail : null;
   }
 
   protected readinessLink(finding: ValidationResult): readonly string[] | null {
