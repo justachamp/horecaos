@@ -51,6 +51,12 @@ import { TranslatePipe } from '../translate/translate.pipe';
  * minimum) is not offered here: choosing needs the product page's picker, and
  * that page adds to the delivery basket. The card says a member of staff will
  * help rather than adding a plain dish the kitchen would have to refuse.
+ *
+ * A portion the basket *already holds* keeps its stepper even when it can no
+ * longer be bought (sold out, out of its window, or its dish now needs staff):
+ * the stepper is then a way out only -- it cannot be raised -- and says why. The
+ * platform refuses to price a basket with an unavailable line, so a line the
+ * guest could not remove would stop the whole table ordering.
  */
 @Component({
   selector: 'app-dish-card',
@@ -98,13 +104,23 @@ export class DishCardComponent {
     this.item().modifierGroups.some((group) => group.required || group.minimumSelections > 0),
   );
 
-  /** Only the portions that can be bought right now: an 86'd or out-of-window one is not offered. */
+  /**
+   * The portions the card draws controls for: the ones that can be bought right
+   * now, and -- always -- the ones the basket already holds.
+   *
+   * A held portion stays on the card when it sold out, left its sale window or
+   * its dish became one that needs staff, because the platform prices the whole
+   * basket and refuses it while any line is unavailable: a stepper that
+   * disappeared with the dish's availability would leave the guest holding a line
+   * they cannot take out, and so unable to order at all. It can only be lowered
+   * ({@link canAdd}).
+   */
   protected readonly portions = computed<readonly MenuItemVariant[]>(() =>
-    this.item().variants.filter((variant) => variantAvailability(variant) === 'AVAILABLE'),
+    this.item().variants.filter((variant) => this.canAdd(variant) || this.quantityOf(variant.id) > 0),
   );
 
   protected readonly showControls = computed(
-    () => this.ordering() && !this.linked() && !this.needsStaff() && this.portions().length > 0,
+    () => this.ordering() && !this.linked() && this.portions().length > 0,
   );
 
   protected readonly showStaffNote = computed(
@@ -113,6 +129,11 @@ export class DishCardComponent {
 
   protected quantityOf(variantId: string): number {
     return this.quantities()[variantId] ?? 0;
+  }
+
+  /** A portion may be put in the basket (or more of it) only while it can be bought plain. */
+  protected canAdd(variant: MenuItemVariant): boolean {
+    return !this.needsStaff() && variantAvailability(variant) === 'AVAILABLE';
   }
 
   protected request(variantId: string, quantity: number): void {

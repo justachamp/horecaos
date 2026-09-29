@@ -373,7 +373,9 @@
       "itemOutOfSaleWindow": "Bu taom hozir sotuvda emas.",
       "presetNotOffered": "Bu izoh endi ushbu taom uchun taklif etilmaydi.",
       "itemUnavailable": "Bu taom hozirgina tugab qoldi.",
-      "holdExpired": "Savatingiz uchun band qilingan vaqt tugadi. Buyurtmangizni qayta tekshirib, yana urinib ko'ring."
+      "holdExpired": "Savatingiz uchun band qilingan vaqt tugadi. Buyurtmangizni qayta tekshirib, yana urinib ko'ring.",
+      "tableNotAtBranch": "Bu stol boshqa filialda. O'z stolingizdagi kodni skanerlang.",
+      "quoteExpired": "Narx eskirdi. Buyurtmangizni tekshirib, yana urinib ko'ring."
     }
   },
   "money": {
@@ -452,6 +454,10 @@
     "billRequested": "Hisob so'raldi",
     "roundPending": "Oxirgi buyurtmangiz oshxonada, lekin hali stol hisobiga qo'shilmadi.",
     "roundRetry": "Qayta urinish",
-    "roundAttachFailed": "Buyurtma oshxonada, lekin uni stol hisobiga qo'shib bo'lmadi. Xodimga ayting."
+    "roundAttachFailed": "Buyurtma oshxonada, lekin uni stol hisobiga qo'shib bo'lmadi. Xodimga ayting.",
+    "heldUnavailable": "Endi mavjud emas. Davom etish uchun uni buyurtmadan olib tashlang.",
+    "clearOrder": "Buyurtmani tozalash",
+    "priceRefreshed": "Narx yangilandi, buyurtma yuborilmadi. Jamini tekshirib, «Buyurtma berish» tugmasini yana bosing.",
+    "sessionEnded": "Bu stoldagi tashrif tugadi. Buyurtmani davom ettirish uchun stolingizdagi kodni qayta skanerlang."
   }
 }

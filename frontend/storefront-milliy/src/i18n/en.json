@@ -373,7 +373,9 @@
       "itemOutOfSaleWindow": "This item is not on sale right now.",
       "presetNotOffered": "That comment is no longer offered for this item.",
       "itemUnavailable": "This item just sold out.",
-      "holdExpired": "Your basket hold expired. Please review your order and try again."
+      "holdExpired": "Your basket hold expired. Please review your order and try again.",
+      "tableNotAtBranch": "This table is at another branch. Scan the code on your own table.",
+      "quoteExpired": "The price has expired. Please review your order and try again."
     }
   },
   "money": {
@@ -452,6 +454,10 @@
     "billRequested": "The bill has been requested",
     "roundPending": "Your last order is with the kitchen but is not on the table bill yet.",
     "roundRetry": "Try again",
-    "roundAttachFailed": "Your order is with the kitchen, but it could not be added to the table bill. Please tell a member of staff."
+    "roundAttachFailed": "Your order is with the kitchen, but it could not be added to the table bill. Please tell a member of staff.",
+    "heldUnavailable": "No longer available. Take it out of your order to continue.",
+    "clearOrder": "Clear the order",
+    "priceRefreshed": "The price was updated and your order has not been sent. Check the total and press Order again.",
+    "sessionEnded": "This table visit has ended. Scan the code on your table again to keep ordering."
   }
 }

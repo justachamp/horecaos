@@ -20,6 +20,12 @@
       </div>
     }
 
+    @if (sessionEnded()) {
+      <p class="table__lost" role="alert" data-testid="dine-in-session-ended">
+        {{ 'dineIn.sessionEnded' | t }}
+      </p>
+    }
+
     @if (ordering()) {
       @if (!session.isAuthenticated()) {
         <button type="button" class="table__signin" data-testid="dine-in-signin" (click)="signIn()">
@@ -50,6 +56,23 @@
 
       @if (paymentErrorKey(); as key) {
         <p class="table__lost" role="alert" data-testid="dine-in-payment-error">{{ key | t }}</p>
+      }
+
+      @if (billErrorKey(); as key) {
+        <div class="table__pending" role="alert">
+          <p class="table__pending-text" data-testid="dine-in-bill-error">{{ key | t }}</p>
+          @if (!bill()) {
+            <button
+              type="button"
+              class="table__pending-retry"
+              data-testid="dine-in-bill-retry"
+              [disabled]="billBusy()"
+              (click)="refreshBill()"
+            >
+              {{ 'dineIn.roundRetry' | t }}
+            </button>
+          }
+        </div>
       }
 
       @if (bill(); as currentBill) {
@@ -133,6 +156,15 @@
 
         @if (priceRefusalKey(); as key) {
           <p class="table__error" role="alert" data-testid="dine-in-pricing-error">{{ key | t }}</p>
+          <button
+            type="button"
+            class="order__clear"
+            data-testid="dine-in-clear"
+            [disabled]="updating() || checkingOut()"
+            (click)="clearOrder()"
+          >
+            {{ 'dineIn.clearOrder' | t }}
+          </button>
         }
         @if (checkoutErrorKey(); as key) {
           <p class="table__error" role="alert" data-testid="dine-in-checkout-error">{{ key | t }}</p>

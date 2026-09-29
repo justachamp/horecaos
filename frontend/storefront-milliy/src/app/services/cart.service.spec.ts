@@ -209,6 +209,43 @@ describe('CartService.applyPromoCode / removePromoCode', () => {
   });
 });
 
+describe('CartService.bindTable (ADR 0047)', () => {
+  it("puts to the cart's table sub-resource with the version and the caller's headers, and no body naming a table", async () => {
+    const { service, api } = setUp();
+    service.cart.set(baseCart({ version: 4, fulfillmentMode: 'DINE_IN' }));
+    api.mutate.mockResolvedValue(baseCart({ version: 5, fulfillmentMode: 'DINE_IN' }));
+
+    await service.bindTable({ 'X-Dine-In-Token': 'guest-token-9' });
+
+    expect(api.mutate).toHaveBeenCalledTimes(1);
+    const [method, path, options] = api.mutate.mock.calls[0];
+    expect(method).toBe('PUT');
+    expect(path).toBe(
+      `/storefront/tenants/${CONFIG.tenantId}/brands/${CONFIG.brandId}/carts/cart-1/table`,
+    );
+    expect(options.expectedVersion).toBe(4);
+    expect(options.headers).toEqual({ 'X-Dine-In-Token': 'guest-token-9' });
+    expect(options.body).toBeUndefined();
+    expect(options.idempotencyKey).toEqual(expect.any(String));
+    expect(service.cart()?.version).toBe(5);
+  });
+
+  it('retries once on a stale version, exactly like every other write to the cart', async () => {
+    const { service, api } = setUp();
+    service.cart.set(baseCart({ version: 1, fulfillmentMode: 'DINE_IN' }));
+    api.mutate
+      .mockRejectedValueOnce(staleVersion(3))
+      .mockResolvedValueOnce(baseCart({ version: 4, fulfillmentMode: 'DINE_IN' }));
+    api.get.mockResolvedValue(baseCart({ version: 3, fulfillmentMode: 'DINE_IN' }));
+
+    await service.bindTable({ 'X-Dine-In-Token': 'guest-token-9' });
+
+    expect(api.mutate).toHaveBeenCalledTimes(2);
+    expect(api.mutate.mock.calls[1][2].expectedVersion).toBe(3);
+    expect(api.mutate.mock.calls[1][2].headers).toEqual({ 'X-Dine-In-Token': 'guest-token-9' });
+  });
+});
+
 describe('CartService.checkout', () => {
   const priced: PricedCart = {
     cartId: 'cart-1',

@@ -119,6 +119,20 @@
   &.is-active { border-color: var(--brand-accent-deep); background: var(--surface-accent-wash); color: var(--brand-accent-deep); }
 }
 
+.order__clear {
+  margin: 8px 0 0;
+  height: 36px;
+  padding: 0 16px;
+  border: 1.5px solid var(--status-error);
+  border-radius: var(--radius-pill);
+  background: var(--surface-base);
+  color: var(--status-error);
+  font: 600 13px/1 var(--font-display);
+  cursor: pointer;
+
+  &:disabled { opacity: 0.5; cursor: not-allowed; }
+}
+
 .order__cta {
   margin-top: 12px;
   width: 100%;

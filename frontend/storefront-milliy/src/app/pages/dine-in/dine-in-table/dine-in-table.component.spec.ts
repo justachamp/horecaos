@@ -59,6 +59,11 @@ class FakeDineInService {
     }
     return { bill: latest, pending: this.pendingRoundCount(sessionId), abandoned: 0 };
   });
+  /** The real service hands the cart the guest token as a header; the fake hands it a stand-in. */
+  bindCartToTable = vi.fn(
+    async (carts: { bindTable(headers: Readonly<Record<string, string>>): Promise<PlatformCart> }) =>
+      carts.bindTable({ 'X-Dine-In-Token': 'guest-token' }),
+  );
   isGuestSessionEnded = vi.fn().mockReturnValue(false);
   clear = vi.fn(() => this.admissionSig.set(null));
 
@@ -139,6 +144,16 @@ class FakeCartService {
     outcome: 'CREATED',
     warnings: [],
   }));
+
+  bindTable = vi.fn(async (_headers: Readonly<Record<string, string>>) => {
+    this.version++;
+    return this.open(this.cart()?.lines ?? []);
+  });
+
+  clear = vi.fn(async () => {
+    this.version++;
+    return this.open([]);
+  });
 
   discard = vi.fn((_location: string, _scope?: string) => {
     this.cart.set(null);
@@ -653,6 +668,173 @@ describe('DineInTableComponent', () => {
       expect(view.q('dine-in-cart-total')?.textContent).toContain('—');
     });
 
+    describe('binding the basket to the table (PUT .../carts/{id}/table)', () => {
+      it('binds the basket before its first line, and only once per basket', async () => {
+        const view = setUp();
+        view.dineIn.seed(admission());
+        await settle(view.fixture);
+
+        await view.click('dine-in-add');
+        await view.click('dine-in-increase');
+
+        expect(view.dineIn.bindCartToTable).toHaveBeenCalledTimes(1);
+        expect(view.dineIn.bindCartToTable).toHaveBeenCalledWith(view.carts);
+        expect(view.carts.bindTable).toHaveBeenCalledTimes(1);
+        // Binding clears the quote, so it has to precede both the line and the pricing.
+        const [bound] = view.dineIn.bindCartToTable.mock.invocationCallOrder;
+        expect(bound).toBeLessThan(view.carts.putLine.mock.invocationCallOrder[0]);
+        expect(bound).toBeLessThan(view.carts.price.mock.invocationCallOrder[0]);
+      });
+
+      it('binds a basket found after a reload before pricing it, so an earlier basket is atomic too', async () => {
+        const view = setUp();
+        view.dineIn.seed(admission());
+        view.carts.preload([line('variant-1', 1)]);
+
+        await settle(view.fixture);
+
+        expect(view.dineIn.bindCartToTable).toHaveBeenCalledTimes(1);
+        const [bound] = view.dineIn.bindCartToTable.mock.invocationCallOrder;
+        expect(bound).toBeLessThan(view.carts.price.mock.invocationCallOrder[0]);
+        expect(view.q('dine-in-order')).not.toBeNull();
+      });
+
+      it('does not bind a browse: no basket is opened, so there is nothing to bind', async () => {
+        const view = setUp();
+        view.dineIn.seed(admission());
+
+        await settle(view.fixture);
+
+        expect(view.dineIn.bindCartToTable).not.toHaveBeenCalled();
+      });
+
+      it('a basket that cannot be bound gets no line, says why, and tries again on the next add', async () => {
+        const view = setUp();
+        view.dineIn.seed(admission());
+        await settle(view.fixture);
+        view.dineIn.bindCartToTable.mockRejectedValueOnce(
+          new HorecaOSApiError({
+            status: 409,
+            code: 'RESOURCE_CONFLICT',
+            detail: 'elsewhere',
+            problem: { status: 409, code: 'RESOURCE_CONFLICT', reason: 'TABLE_NOT_AT_THIS_BRANCH' },
+          }),
+        );
+
+        await view.click('dine-in-add');
+
+        expect(view.carts.putLine).not.toHaveBeenCalled();
+        expect(view.q('dine-in-basket-error')?.textContent).toContain('errors.reason.tableNotAtBranch');
+
+        await view.click('dine-in-add');
+
+        expect(view.dineIn.bindCartToTable).toHaveBeenCalledTimes(2);
+        expect(view.carts.putLine).toHaveBeenCalledTimes(1);
+      });
+
+      it('a basket restored after a reload that cannot be bound is still priced: the queued attach covers it', async () => {
+        const view = setUp();
+        view.dineIn.seed(admission());
+        view.carts.preload([line('variant-1', 1)]);
+        view.dineIn.bindCartToTable.mockRejectedValue(
+          new HorecaOSApiError({ status: 0, code: 'NETWORK_UNREACHABLE', detail: 'offline' }),
+        );
+
+        await settle(view.fixture);
+
+        expect(view.carts.price).toHaveBeenCalled();
+        expect(view.q('dine-in-order')).not.toBeNull();
+      });
+    });
+
+    describe('a basket line the menu can no longer sell', () => {
+      it('keeps the dish\'s stepper when it has sold out since, so the line can be taken out', async () => {
+        const view = setUp();
+        view.dineIn.seed(admission());
+        view.menuService.home.mockResolvedValue(
+          menu([dish('p1', 'Osh', [variant({ active: false })])]),
+        );
+        view.carts.preload([line('variant-1', 1)]);
+
+        await settle(view.fixture);
+
+        expect(view.q('dish-sold-out')).not.toBeNull();
+        expect(view.q('dine-in-decrease')).not.toBeNull();
+        await view.click('dine-in-decrease');
+
+        expect(view.carts.removeLine).toHaveBeenCalledWith('variant-1');
+        expect(view.q('dine-in-order')).toBeNull();
+      });
+
+      it('offers to clear the order when the platform will not price it, and ordering works again afterwards', async () => {
+        const view = setUp();
+        view.dineIn.seed(admission());
+        // A line for a portion that is not on the menu at all: no card carries it.
+        view.carts.preload([line('variant-1', 1), line('gone-variant', 1)]);
+        const priceable = view.carts.price.getMockImplementation()!;
+        view.carts.price.mockImplementation(async () => {
+          if (view.carts.cart()?.lines.some((entry) => entry.variantId === 'gone-variant')) {
+            throw new HorecaOSApiError({
+              status: 422,
+              code: 'VALIDATION_FAILED',
+              detail: 'unpriced',
+              problem: { status: 422, code: 'VALIDATION_FAILED', reason: 'SOLD_OUT' },
+            });
+          }
+          return priceable();
+        });
+
+        await settle(view.fixture);
+
+        expect(view.q('dine-in-pricing-error')).not.toBeNull();
+        expect((view.q('dine-in-checkout') as HTMLButtonElement).disabled).toBe(true);
+        expect(view.q('dine-in-clear')).not.toBeNull();
+
+        await view.click('dine-in-clear');
+
+        expect(view.carts.clear).toHaveBeenCalledTimes(1);
+        expect(view.q('dine-in-order')).toBeNull();
+        expect(view.q('dine-in-pricing-error')).toBeNull();
+
+        await view.click('dine-in-add');
+        expect((view.q('dine-in-checkout') as HTMLButtonElement).disabled).toBe(false);
+      });
+
+      it('offers no clear button while the basket prices fine: an order is never one tap from being thrown away', async () => {
+        const view = setUp();
+        view.dineIn.seed(admission());
+        view.carts.preload([line('variant-1', 1)]);
+
+        await settle(view.fixture);
+
+        expect(view.q('dine-in-order')).not.toBeNull();
+        expect(view.q('dine-in-clear')).toBeNull();
+      });
+
+      it('says why when the basket could not be cleared, and keeps the order panel', async () => {
+        const view = setUp();
+        view.dineIn.seed(admission());
+        view.carts.preload([line('variant-1', 1)]);
+        view.carts.price.mockRejectedValue(
+          new HorecaOSApiError({
+            status: 422,
+            code: 'VALIDATION_FAILED',
+            detail: 'unpriced',
+            problem: { status: 422, code: 'VALIDATION_FAILED', reason: 'SOLD_OUT' },
+          }),
+        );
+        view.carts.clear.mockRejectedValue(
+          new HorecaOSApiError({ status: 503, code: 'INTERNAL_ERROR', detail: 'down' }),
+        );
+        await settle(view.fixture);
+
+        await view.click('dine-in-clear');
+
+        expect(view.q('dine-in-basket-error')).not.toBeNull();
+        expect(view.q('dine-in-order')).not.toBeNull();
+      });
+    });
+
     it('offers a choice of payment when the cart has several, and orders with the one chosen', async () => {
       const view = setUp();
       view.dineIn.seed(admission());
@@ -834,6 +1016,132 @@ describe('DineInTableComponent', () => {
       expect(view.q('dine-in-order')).not.toBeNull();
     });
 
+    it('an order refused because nobody is seated at the table any more says so, before anything is written', async () => {
+      const view = await withBasket();
+      view.carts.checkout.mockRejectedValue(
+        new HorecaOSApiError({
+          status: 409,
+          code: 'RESOURCE_CONFLICT',
+          detail: 'Nobody is seated at this table',
+          problem: { status: 409, code: 'RESOURCE_CONFLICT', reason: 'TABLE_NOT_SEATED' },
+        }),
+      );
+
+      await view.click('dine-in-checkout');
+
+      expect(view.q('dine-in-checkout-error')?.textContent).toContain('dineIn.notSeated');
+      expect(view.dineIn.queueRound).not.toHaveBeenCalled();
+      expect(view.carts.discard).not.toHaveBeenCalled();
+      expect(view.q('dine-in-order')).not.toBeNull();
+    });
+
+    describe('a price that has gone stale before the guest presses Order', () => {
+      const PAST = () => new Date(Date.now() - 60_000).toISOString();
+
+      /** The first price of the basket is already expired; later ones are fresh, at `laterTotalMinor`. */
+      async function withExpiredQuote(laterTotalMinor = 45_000): Promise<View> {
+        return withBasket((v) => {
+          const fresh = v.carts.price.getMockImplementation()!;
+          v.carts.price
+            .mockImplementationOnce(async () => ({ ...(await fresh()), expiresAt: PAST() }))
+            .mockImplementation(async () => ({ ...(await fresh()), totalMinor: laterTotalMinor }));
+        });
+      }
+
+      it('reprices an expired quote instead of sending it, and orders when the total has not moved', async () => {
+        const view = await withExpiredQuote(45_000);
+        expect(view.carts.price).toHaveBeenCalledTimes(1);
+
+        await view.click('dine-in-checkout');
+
+        expect(view.carts.price).toHaveBeenCalledTimes(2);
+        expect(view.carts.checkout).toHaveBeenCalledTimes(1);
+        const sent = view.carts.checkout.mock.calls[0][0]!.priced;
+        expect(Date.parse(sent.expiresAt)).toBeGreaterThan(Date.now());
+        expect(view.dineIn.queueRound).toHaveBeenCalledWith(SESSION, 'order-1');
+      });
+
+      it('shows the new total instead of ordering when the repriced basket costs something else', async () => {
+        const view = await withExpiredQuote(50_000);
+
+        await view.click('dine-in-checkout');
+
+        expect(view.carts.checkout).not.toHaveBeenCalled();
+        expect(view.q('dine-in-checkout-error')?.textContent).toContain('dineIn.priceRefreshed');
+        expect(view.q('dine-in-cart-total')?.textContent).toContain('50\u00a0000');
+        expect((view.q('dine-in-checkout') as HTMLButtonElement).disabled).toBe(false);
+
+        await view.click('dine-in-checkout');
+
+        expect(view.carts.checkout).toHaveBeenCalledTimes(1);
+        expect(view.carts.checkout.mock.calls[0][0]!.priced.totalMinor).toBe(50_000);
+        expect(view.q('dine-in-checkout-error')).toBeNull();
+      });
+
+      it('says why and orders nothing when the expired basket can no longer be priced', async () => {
+        const view = await withExpiredQuote();
+        view.carts.price.mockRejectedValue(
+          new HorecaOSApiError({
+            status: 422,
+            code: 'VALIDATION_FAILED',
+            detail: 'unpriced',
+            problem: { status: 422, code: 'VALIDATION_FAILED', reason: 'SOLD_OUT' },
+          }),
+        );
+
+        await view.click('dine-in-checkout');
+
+        expect(view.carts.checkout).not.toHaveBeenCalled();
+        expect(view.q('dine-in-pricing-error')?.textContent).toContain('errors.reason.itemUnavailable');
+        expect(view.q('dine-in-checkout-error')).toBeNull();
+        expect((view.q('dine-in-checkout') as HTMLButtonElement).disabled).toBe(true);
+      });
+
+      it.each([
+        ['the quote expired on the platform\'s clock', 409, 'RESOURCE_CONFLICT', 'QUOTE_EXPIRED'],
+        ['the price changed', 409, 'PRICE_CHANGED', 'PRICE_CHANGED'],
+        ['the basket moved under the quote', 409, 'STALE_VERSION', 'CART_VERSION_STALE'],
+        ['the quote is gone', 404, 'RESOURCE_NOT_FOUND', 'QUOTE_NOT_FOUND'],
+      ])(
+        'when %s, prices the basket again, says so, and the next press uses the new quote',
+        async (_name, status, code, reason) => {
+          const view = await withBasket();
+          view.carts.checkout.mockRejectedValueOnce(
+            new HorecaOSApiError({ status, code, detail: 'stale', problem: { status, code, reason } }),
+          );
+          const pricedBefore = view.carts.price.mock.calls.length;
+
+          await view.click('dine-in-checkout');
+
+          expect(view.carts.price.mock.calls.length).toBe(pricedBefore + 1);
+          expect(view.q('dine-in-checkout-error')?.textContent).toContain('dineIn.priceRefreshed');
+          expect(view.dineIn.queueRound).not.toHaveBeenCalled();
+          expect((view.q('dine-in-checkout') as HTMLButtonElement).disabled).toBe(false);
+
+          await view.click('dine-in-checkout');
+
+          expect(view.carts.checkout).toHaveBeenCalledTimes(2);
+          expect(view.dineIn.queueRound).toHaveBeenCalledWith(SESSION, 'order-1');
+          // A new quote is a new request: it never reuses the refused attempt's key.
+          const keys = view.carts.checkout.mock.calls.map((call) => call[0]?.idempotencyKey);
+          expect(keys[0]).not.toBe(keys[1]);
+        },
+      );
+
+      it('does not reprice for a failure that is not about the quote', async () => {
+        const view = await withBasket();
+        view.carts.checkout.mockRejectedValueOnce(
+          new HorecaOSApiError({ status: 503, code: 'INTERNAL_ERROR', detail: 'down' }),
+        );
+        const pricedBefore = view.carts.price.mock.calls.length;
+
+        await view.click('dine-in-checkout');
+
+        expect(view.carts.price.mock.calls.length).toBe(pricedBefore);
+        expect(view.q('dine-in-checkout-error')?.textContent).not.toContain('dineIn.priceRefreshed');
+      });
+    });
+
     it('an order the platform REJECTED is not an order: nothing is queued, nothing is discarded', async () => {
       const view = await withBasket();
       view.carts.checkout.mockResolvedValue({
@@ -976,6 +1284,98 @@ describe('DineInTableComponent', () => {
       expect(view.q('dine-in-request-bill')).toBeNull();
     });
 
+    describe('when the bill cannot be reached', () => {
+      const offlineFailure = () =>
+        new HorecaOSApiError({ status: 0, code: 'NETWORK_UNREACHABLE', detail: 'offline' });
+      const noSuchSession = () =>
+        new HorecaOSApiError({ status: 404, code: 'RESOURCE_NOT_FOUND', detail: 'no such session' });
+
+      it('asking for the bill that fails says so, keeps the button, and clears the message on the next try', async () => {
+        const view = setUp();
+        view.dineIn.seed(admission());
+        view.dineIn.bill.mockResolvedValue(bill({ totalMinor: 45_000, roundCount: 1 }));
+        await settle(view.fixture);
+        view.dineIn.requestBill.mockRejectedValueOnce(offlineFailure());
+
+        await view.click('dine-in-request-bill');
+
+        expect(view.q('dine-in-bill-error')?.textContent).toContain('errors.offline');
+        expect(view.q('dine-in-bill-requested')).toBeNull();
+        expect((view.q('dine-in-request-bill') as HTMLButtonElement).disabled).toBe(false);
+
+        view.dineIn.requestBill.mockResolvedValue(
+          bill({ status: 'BILL_REQUESTED', totalMinor: 45_000, roundCount: 1 }),
+        );
+        await view.click('dine-in-request-bill');
+
+        expect(view.q('dine-in-bill-error')).toBeNull();
+        expect(view.q('dine-in-bill-requested')).not.toBeNull();
+      });
+
+      it('a bill that cannot be read on arrival says so and offers to try again', async () => {
+        const view = setUp();
+        view.dineIn.seed(admission());
+        view.dineIn.bill.mockRejectedValueOnce(offlineFailure());
+
+        await settle(view.fixture);
+
+        expect(view.q('dine-in-bill')).toBeNull();
+        expect(view.q('dine-in-bill-error')?.textContent).toContain('errors.offline');
+        expect(view.q('dine-in-bill-retry')).not.toBeNull();
+
+        view.dineIn.bill.mockResolvedValue(bill({ totalMinor: 45_000, roundCount: 1 }));
+        await view.click('dine-in-bill-retry');
+
+        expect(view.q('dine-in-bill-error')).toBeNull();
+        expect(view.q('dine-in-bill-retry')).toBeNull();
+        expect(view.q('dine-in-bill-total')?.textContent).toContain('45\u00a0000');
+      });
+
+      it('keeps the last bill it read on screen when a refresh fails, and says so', async () => {
+        const view = setUp();
+        view.dineIn.seed(admission());
+        view.dineIn.bill.mockResolvedValue(bill({ totalMinor: 45_000, roundCount: 1 }));
+        await settle(view.fixture);
+        view.dineIn.requestBill.mockRejectedValue(offlineFailure());
+
+        await view.click('dine-in-request-bill');
+
+        expect(view.q('dine-in-bill-total')?.textContent).toContain('45\u00a0000');
+        expect(view.q('dine-in-bill-error')).not.toBeNull();
+        // The ask has its own button; a second "try again" beside it would be two answers to one question.
+        expect(view.q('dine-in-bill-retry')).toBeNull();
+      });
+
+      it('a session the platform no longer knows ends ordering and says why, leaving the menu', async () => {
+        const view = setUp();
+        view.dineIn.seed(admission());
+        view.dineIn.bill.mockRejectedValue(noSuchSession());
+
+        await settle(view.fixture);
+
+        expect(view.q('dine-in-session-ended')?.textContent).toContain('dineIn.sessionEnded');
+        expect(view.q('dine-in-add')).toBeNull();
+        expect(view.q('dine-in-order')).toBeNull();
+        expect(view.q('dine-in-signin')).toBeNull();
+        expect(view.q('dish-card')).not.toBeNull();
+        // Not a guest token problem: the visit is kept, so the menu stays readable.
+        expect(view.dineIn.clear).not.toHaveBeenCalled();
+      });
+
+      it('asking for the bill of a session the platform no longer knows ends ordering too', async () => {
+        const view = setUp();
+        view.dineIn.seed(admission());
+        view.dineIn.bill.mockResolvedValue(bill({ totalMinor: 45_000, roundCount: 1 }));
+        await settle(view.fixture);
+        view.dineIn.requestBill.mockRejectedValue(noSuchSession());
+
+        await view.click('dine-in-request-bill');
+
+        expect(view.q('dine-in-session-ended')).not.toBeNull();
+        expect(view.q('dine-in-add')).toBeNull();
+      });
+    });
+
     it('a guest token the platform no longer recognises clears the visit instead of leaving a broken screen up', async () => {
       const view = setUp();
       view.dineIn.seed(admission());
@@ -1093,6 +1493,18 @@ describe('DineInTableComponent -- against the real DineInService', () => {
     expect(options['body']).toEqual({ orderId: 'order-1' });
     expect(options['anonymous']).not.toBe(true);
     expect(path).not.toContain('guest-token-secret');
+    expect(view.host.textContent).not.toContain('guest-token-secret');
+  });
+
+  it('binds the basket to the table with the guest token in a header only, and never on the screen', async () => {
+    const api = newApi();
+    api.mutate.mockResolvedValue(bill({ totalMinor: 45_000, roundCount: 1, orderIds: ['order-1'] }));
+    const view = setUpReal(api, 'guest-token-secret');
+
+    await placeOrder(view);
+
+    expect(view.carts.bindTable).toHaveBeenCalledTimes(1);
+    expect(view.carts.bindTable).toHaveBeenCalledWith({ 'X-Dine-In-Token': 'guest-token-secret' });
     expect(view.host.textContent).not.toContain('guest-token-secret');
   });
 

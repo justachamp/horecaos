@@ -9,7 +9,7 @@ import {
 import { Router, RouterLink } from '@angular/router';
 
 import { newIdempotencyKey } from '../../../core/api/idempotency';
-import { HorecaOSApiError, messageKeyFor } from '../../../core/api/problem-details';
+import { HorecaOSApiError, isNotFound, messageKeyFor } from '../../../core/api/problem-details';
 import { ReturnDestination } from '../../../core/auth/return-destination';
 import { Session } from '../../../core/auth/session';
 import { formatMoney, money } from '../../../core/money/money';
@@ -35,6 +35,25 @@ const UNRESOLVED = '—';
 /** The path a sign-in from this screen returns to: token-free, and the only one `ReturnDestination` allows. */
 const THIS_SCREEN = '/dine-in/table';
 
+/**
+ * A quote is good for about fifteen minutes. One that ends within this margin is
+ * repriced rather than sent: a request in flight when the deadline passes is
+ * answered `QUOTE_EXPIRED`, and the guest would have nothing to act on.
+ */
+const QUOTE_MARGIN_MS = 5_000;
+
+/**
+ * The checkout refusals that mean "the price you are holding is no longer the
+ * platform's": the quote lapsed or was cleared, the price moved, or the basket
+ * changed under it. All are cured by pricing again, none by pressing Order again.
+ */
+const STALE_QUOTE_REASONS: ReadonlySet<string> = new Set([
+  'QUOTE_EXPIRED',
+  'QUOTE_NOT_FOUND',
+  'PRICE_CHANGED',
+  'CART_VERSION_STALE',
+]);
+
 /** The payment codes this deployment has a label for; any other shows its own code. */
 const PAYMENT_LABEL_KEYS: Readonly<Record<string, string>> = {
   CASH: 'cart.cash',
@@ -59,13 +78,20 @@ const PAYMENT_LABEL_KEYS: Readonly<Record<string, string>> = {
  * `DINE_IN` fulfilment mode, location and channel (`DineInCartService`,
  * remembered against the table's session), a checkout, the running bill, and the
  * ask-for-the-bill action. Checkout is the ordinary one, placed by the guest's own
- * signed-in customer session -- there is no anonymous cart -- and the order it
- * creates is tied to the table by a second call, {@link DineInService.attachRound},
- * made with the guest token. The order id is queued on the device before that
- * call, because it is the only thing tying the order to its table: the kitchen
- * ticket's table chip, the order board and the bill all read the row the attach
- * writes. When the attach cannot be confirmed the screen says so and keeps the
- * order queued, rather than telling the guest all is well.
+ * signed-in customer session -- there is no anonymous cart.
+ *
+ * The basket is *bound to the table* before its first line
+ * ({@link DineInService.bindCartToTable}, `PUT .../carts/{id}/table`). A bound
+ * basket is put on the table's bill by checkout itself, in the transaction that
+ * creates the order, so a lost response or a reload cannot leave a cooking order on
+ * no bill, and checkout refuses it before writing anything when nobody is seated
+ * any more (`TABLE_NOT_SEATED`). The order id is nevertheless queued on the device
+ * and attached with {@link DineInService.attachRound} straight after: a safety net
+ * for a basket that was never bound (opened by an earlier build, or a bind that
+ * could not be made after a reload), and harmless for a bound one -- the platform
+ * answers the attach of an order already on the bill with the bill unchanged. When
+ * the attach cannot be confirmed the screen says so and keeps the order queued,
+ * rather than telling the guest all is well.
  *
  * <h2>Why an `ORDER_AND_PAY` table can still have nothing to order onto</h2>
  *
@@ -105,8 +131,16 @@ export class DineInTableComponent implements OnInit {
   /** Only `ORDER_AND_PAY` orders; `VIEW_ONLY` -- and any mode this build does not know -- is a menu. */
   protected readonly canOrder = computed(() => this.admission()?.mode === 'ORDER_AND_PAY');
   protected readonly isSeated = computed(() => !!this.admission()?.openSessionId);
+  /**
+   * The platform answered that the session this screen was opened with is not the
+   * table's live one any more (closed, and perhaps the table seated afresh). A
+   * round put on it would be refused, so nothing is offered to put on it.
+   */
+  protected readonly sessionEnded = signal(false);
   /** The table takes orders and has a session to put them on. */
-  protected readonly ordering = computed(() => this.canOrder() && this.isSeated());
+  protected readonly ordering = computed(
+    () => this.canOrder() && this.isSeated() && !this.sessionEnded(),
+  );
 
   protected readonly loading = signal(true);
   protected readonly failed = signal(false);
@@ -120,6 +154,8 @@ export class DineInTableComponent implements OnInit {
 
   protected readonly bill = signal<DineInBill | null>(null);
   protected readonly billBusy = signal(false);
+  /** Why the bill could not be read or asked for; said on the screen, cleared by the next try. */
+  protected readonly billErrorKey = signal<string | null>(null);
   /** An order the platform refused to put on the bill for good -- the guest is told to ask staff. */
   protected readonly roundLost = signal(false);
   /**
@@ -165,6 +201,8 @@ export class DineInTableComponent implements OnInit {
   });
 
   private pendingCheckoutKey: string | null = null;
+  /** The basket this screen has bound to the table -- once per basket, before its first line. */
+  private boundCartId: string | null = null;
 
   async ngOnInit(): Promise<void> {
     const admission = this.admission();
@@ -215,6 +253,12 @@ export class DineInTableComponent implements OnInit {
         sessionId,
       );
       if (cart && cart.lines.length > 0) {
+        // A basket found after a reload was bound when it was opened -- or was
+        // opened before baskets were bound. Binding again is harmless and clears
+        // its quote, so it comes before the price this is about to ask for.
+        // Best effort: an unbound basket is still put on the bill by the queued
+        // attach after checkout, and the next change to it tries again.
+        await this.bindToTable(cart.cartId).catch(() => undefined);
         await this.reprice();
       }
     } catch {
@@ -234,11 +278,7 @@ export class DineInTableComponent implements OnInit {
       this.signIn();
       return;
     }
-    this.updating.set(true);
-    this.basketErrorKey.set(null);
-    this.checkoutErrorKey.set(null);
-    this.orderPlaced.set(false);
-    try {
+    await this.writeBasket(async () => {
       await this.carts.ensure(
         admission.locationId,
         'DINE_IN',
@@ -246,6 +286,12 @@ export class DineInTableComponent implements OnInit {
         admission.channelCode ?? undefined,
         sessionId,
       );
+      const cartId = this.carts.cart()?.cartId;
+      if (cartId) {
+        // Strict here, unlike a reload: a basket that cannot be bound gets no line,
+        // so what the guest orders is what checkout puts on the table's bill.
+        await this.bindToTable(cartId);
+      }
       if (change.quantity <= 0) {
         const held = this.carts.cart()?.lines.find((line) => line.lineKey === change.variantId);
         if (held) {
@@ -254,12 +300,69 @@ export class DineInTableComponent implements OnInit {
       } else {
         await this.carts.putLine({ variantId: change.variantId, quantity: change.quantity });
       }
+    });
+  }
+
+  /**
+   * Takes every line out of the basket.
+   *
+   * The way out of a basket the platform will not price. A line the menu no longer
+   * sells has a stepper on its card only while the card is on screen and the menu
+   * still knows the portion; a portion the menu has dropped altogether has no card
+   * at all. The platform refuses to price the whole basket while any one line is
+   * unavailable, so without this the guest could be left unable to order for the
+   * rest of the evening (the basket is remembered against the table's session).
+   * Offered only once pricing has been refused -- never beside a basket that
+   * prices, where one stray tap would throw an order away.
+   */
+  protected async clearOrder(): Promise<void> {
+    if (this.updating() || this.checkingOut()) {
+      return;
+    }
+    await this.writeBasket(async () => {
+      await this.carts.clear();
+    });
+  }
+
+  /**
+   * Runs one write to the basket, one at a time, and prices what is left.
+   * A failure is said on the screen and leaves the basket as the platform holds it.
+   */
+  private async writeBasket(write: () => Promise<void>): Promise<void> {
+    this.updating.set(true);
+    this.basketErrorKey.set(null);
+    this.checkoutErrorKey.set(null);
+    this.orderPlaced.set(false);
+    try {
+      await write();
       await this.reprice();
     } catch (failure) {
       this.basketErrorKey.set(failureKey(failure));
     } finally {
       this.updating.set(false);
     }
+  }
+
+  /**
+   * Binds the basket to this table (`PUT .../carts/{id}/table`), once per basket.
+   *
+   * A bound basket is put on the table's bill by checkout itself, in the
+   * transaction that creates the order: a response lost on the way back, or a
+   * page reloaded before the second call, cannot leave a cooking order on no
+   * table's bill; and checkout refuses the order before anything is written when
+   * nobody is seated any more (`TABLE_NOT_SEATED`) rather than creating an order
+   * the attach must then fail to place.
+   *
+   * The write clears any quote the basket holds, so callers bind before they
+   * price. The guest token is not seen here: {@link DineInService.bindCartToTable}
+   * hands the cart service the header.
+   */
+  private async bindToTable(cartId: string): Promise<void> {
+    if (this.boundCartId === cartId) {
+      return;
+    }
+    await this.dineIn.bindCartToTable(this.carts);
+    this.boundCartId = cartId;
   }
 
   /**
@@ -305,11 +408,13 @@ export class DineInTableComponent implements OnInit {
    * Checks the basket out and puts the resulting order on the table's bill in the
    * same gesture -- from the guest's point of view, "order".
    *
-   * Checkout is the customer's own and knows nothing of the table; what ties the
-   * order to it is {@link DineInService.attachRound}, a second call, which can
-   * fail on its own. The order exists and is in the kitchen whatever happens to
-   * that call, so the outcome is reported in two parts and the second is never
-   * folded into the first: "order sent" is said only when the bill has it too.
+   * Checkout is the customer's own. A basket bound to the table
+   * ({@link bindToTable}) is put on the table's bill by checkout itself; the
+   * {@link DineInService.attachRound} that follows is the net under a basket that
+   * was never bound, and it is a second call that can fail on its own. The order
+   * exists and is in the kitchen whatever happens to that call, so the outcome is
+   * reported in two parts and the second is never folded into the first: "order
+   * sent" is said only when the bill has it too.
    *
    * A customer session that has ended mid-checkout is a matter for the sign-in
    * prompt, not for the table visit: the guest token is not involved in the
@@ -333,8 +438,23 @@ export class DineInTableComponent implements OnInit {
     this.roundLost.set(false);
     this.orderPlaced.set(false);
     try {
+      let quote = priced;
+      if (this.quoteHasExpired(quote)) {
+        // The party sat over the menu past the quote's life. Price again first: a
+        // request the platform is certain to refuse tells the guest nothing.
+        const fresh = await this.requote();
+        if (!fresh) {
+          return; // Why it cannot be priced is on the screen (priceRefusalKey).
+        }
+        if (fresh.totalMinor !== quote.totalMinor || fresh.currency !== quote.currency) {
+          // The guest agreed to another total; it is theirs to accept again.
+          this.checkoutErrorKey.set('dineIn.priceRefreshed');
+          return;
+        }
+        quote = fresh;
+      }
       const result = await this.carts.checkout({
-        priced,
+        priced: quote,
         paymentMethodCode,
         idempotencyKey: this.checkoutKey(),
       });
@@ -358,6 +478,14 @@ export class DineInTableComponent implements OnInit {
         await this.openPaymentSession(result.orderId);
       }
     } catch (failure) {
+      if (isStaleQuote(failure)) {
+        // The platform no longer honours the price the guest was shown. Price the
+        // basket again so the screen holds the platform's number, and say so:
+        // pressing Order on the old quote would fail the same way every time.
+        const fresh = await this.requote();
+        this.checkoutErrorKey.set(fresh ? 'dineIn.priceRefreshed' : null);
+        return;
+      }
       this.checkoutErrorKey.set(failureKey(failure));
       // A retry after a dropped connection must reuse the key so the platform
       // replays the first attempt; after a real answer it is a new intent.
@@ -367,6 +495,23 @@ export class DineInTableComponent implements OnInit {
     } finally {
       this.checkingOut.set(false);
     }
+  }
+
+  private quoteHasExpired(priced: PricedCart): boolean {
+    const deadline = Date.parse(priced.expiresAt);
+    return Number.isFinite(deadline) && deadline - QUOTE_MARGIN_MS <= Date.now();
+  }
+
+  /**
+   * Prices the basket again after its quote went stale, and returns the new quote
+   * -- or null when the basket cannot be priced now, in which case the screen
+   * already says why. A new quote is a new request, so it never rides on the key
+   * of the attempt it replaces.
+   */
+  private async requote(): Promise<PricedCart | null> {
+    this.pendingCheckoutKey = null;
+    await this.reprice();
+    return this.priced();
   }
 
   /**
@@ -413,6 +558,7 @@ export class DineInTableComponent implements OnInit {
       return;
     }
     this.billBusy.set(true);
+    this.billErrorKey.set(null);
     try {
       // An order that never made it onto the bill goes first: its attach answers
       // with the bill, and a plain read would show the table without it.
@@ -426,11 +572,28 @@ export class DineInTableComponent implements OnInit {
         this.bill.set(await this.dineIn.bill(sessionId));
       }
     } catch (failure) {
-      if (this.dineIn.isGuestSessionEnded(failure)) {
-        this.dineIn.clear();
-      }
+      this.failBill(failure);
     } finally {
       this.billBusy.set(false);
+    }
+  }
+
+  /**
+   * What a failed bill call means for the guest, said on the screen.
+   *
+   * A guest token the platform no longer recognises ends the visit. A session it
+   * no longer knows (404: closed, or the table seated afresh) ends *ordering* --
+   * the menu stays -- because a round would be refused. Anything else (no
+   * connection, a fault) is a message and a way to try again; the button that was
+   * pressed is never left looking as if it did something.
+   */
+  private failBill(failure: unknown): void {
+    if (this.dineIn.isGuestSessionEnded(failure)) {
+      this.dineIn.clear();
+    } else if (isNotFound(failure)) {
+      this.sessionEnded.set(true);
+    } else {
+      this.billErrorKey.set(failureKey(failure));
     }
   }
 
@@ -449,12 +612,11 @@ export class DineInTableComponent implements OnInit {
       return;
     }
     this.billBusy.set(true);
+    this.billErrorKey.set(null);
     try {
       this.bill.set(await this.dineIn.requestBill(sessionId));
     } catch (failure) {
-      if (this.dineIn.isGuestSessionEnded(failure)) {
-        this.dineIn.clear();
-      }
+      this.failBill(failure);
     } finally {
       this.billBusy.set(false);
     }
@@ -505,6 +667,16 @@ export class DineInTableComponent implements OnInit {
   private redirectTo(url: string): void {
     window.location.href = url;
   }
+}
+
+/** True for a checkout refusal that is about the quote the guest holds, not about the order. */
+function isStaleQuote(failure: unknown): boolean {
+  return (
+    failure instanceof HorecaOSApiError &&
+    (failure.code === 'PRICE_CHANGED' ||
+      failure.code === 'STALE_VERSION' ||
+      STALE_QUOTE_REASONS.has(failure.problem?.reason ?? ''))
+  );
 }
 
 /** A platform answer resolves to its own sentence; anything else is the one generic one. */
