@@ -84,7 +84,7 @@ The spec is ahead of the decision.
 | The row's question | What answers it now | Operator can change it? |
 |---|---|---|
 | Which provider serves this order | `DeliverySourcingService.source` calls `ShipmentBookingPort.partners(tenant, brand, location)` → `installations.candidateBindings`, sorted by binding scope specificity then `integration.bindings.priority`. ADR 0014's "Provider selection" says to filter candidates by "service zone" among other things; the code filters by capability and binding status only | Only by editing binding rows; not by zone or source |
-| Fleet or partners, in what order | `SourcingMode` (`FLEET_FIRST`, `FLEET_ONLY`, `PARTNER_ONLY`, `MANUAL`) exists on `delivery_plans.sourcing_mode`; `DeliveryPlanningService.open` always writes `FLEET_FIRST` | No |
+| Fleet or partners, in what order | `SourcingMode` (`FLEET_FIRST`, `FLEET_ONLY`, `PARTNER_ONLY`, `MANUAL`) exists on `delivery_plans.sourcing_mode`; `DeliveryPlanningService.open` always writes `FLEET_FIRST`. **No mode puts partners first**: `usesFleet()` and `usesPartners()` are unordered flags, `SourcingPlanner.decide` runs the fleet lane before the partner lane in the one mode that has both, and `PARTNER_ONLY` never reaches the fleet, so it escalates to `MANUAL_ACTION_REQUIRED` when its partners are exhausted | No |
 | When auto-dispatch fires | `PickupPlan.forOrder`: `source_at = ready − preparationLeadSeconds − safetyBufferSeconds`, floored at confirmation, from the `fulfillment.sourcing` document | The document is scope-resolved to the branch but has no writer or screen |
 | The fallback order | Fleet lane bounded by the handover deadline and `offerRounds`, then partners ranked by `QuoteScoring` (eligibility, price, pickup ETA, configured binding order, id) when more than one is bound | No |
 | Grouping and merge radius | None. `SourcingPlanner`'s fleet ranking is *emptiest hands first, then nearest*; `max_concurrent_assignments` on the courier type is the only ceiling. Nothing prefers a courier already going the same way | No |
@@ -148,10 +148,10 @@ machinery, evaluated by one pure function at plan creation.**
    ids, from the order's fee-resolution evidence), branch (narrower than the
    document's own scope), preparation minutes, branch-to-door distance, the local
    day and time at confirmation, and whether the order is prepaid. Its `then` is:
-   sourcing mode, the partner set (installation ids, ordered, with an exclude
-   list) and how a partner is chosen (`LADDER` in the order given, or `CHEAPEST`
-   from non-binding quotes), the dispatch start (a basis and a bounded offset
-   from it), and a grouping policy. There is no expression language, no script,
+   sourcing mode (one of five, Decision 9), the partner set (installation ids,
+   ordered, with an exclude list) and how a partner is chosen (`LADDER` in the
+   order given, or `CHEAPEST` from non-binding quotes), the dispatch start (a basis
+   and a bounded offset from it), and a grouping policy. There is no expression language, no script,
    and no provider name: a rule names an ADR 0026 *installation*, and the
    evaluator can only order or remove candidates `ShipmentBookingPort` already
    returned, so a rule cannot book a partner the branch has no active binding
@@ -213,6 +213,41 @@ machinery, evaluated by one pure function at plan creation.**
    no time for a partner lane it enables is refused at publish, and the
    simulator says so for a draft.
 
+9. **Lane order is part of the mode: `PARTNER_FIRST` is a fifth `SourcingMode`, and
+   it is the one change to `SourcingPlanner` in this record.** The row asks for "the
+   fallback order", and its flagship case — a named partner first, the fleet second
+   — cannot be said with the four modes that exist: `FLEET_FIRST` asks the fleet
+   first, and `PARTNER_ONLY` never reaches the fleet, so a plan whose partners
+   refuse it escalates instead of falling back to couriers. `PARTNER_FIRST` runs the
+   partner lane first (a `LADDER` or `CHEAPEST` quotes, single winner, exactly as
+   ADR 0014 has it) and offers the in-house fleet only when that lane has ended
+   with a definite answer: every eligible partner refused, or none is bound. The
+   default stays `FLEET_FIRST`, the owner's 2026-08-23 decision. The planner
+   changes, and only these things change:
+   - the partner lane is tried first and the fleet lane second;
+   - an uncertain partner attempt still escalates to operations before either lane
+     runs (`AWAITING_RECONCILIATION`), so an unreconciled booking never falls
+     through to a courier — two couriers on one order is what ADR 0014's rule
+     exists to prevent;
+   - the fleet lane of `PARTNER_FIRST` has no partner behind it to protect, so
+     its deadline is `latest_assignment_at`, as in `FLEET_ONLY`, and not
+     `pickup_window_end − partnerLeadSeconds`. `SourcingPlanner.handoverDeadline`
+     today returns `latest_assignment_at` only `if (!mode.usesPartners())`; keyed
+     that way, a `PARTNER_FIRST` fleet lane would open already past its deadline and
+     refuse with `FLEET_BUDGET_SPENT`. The test is "does a partner lane *follow*
+     the fleet lane", not "does the mode use partners";
+   - offer rounds, offer TTL, capacity and ranking in the fleet lane are as built,
+     and so is the partner lane's booking-window logic (`bookWith`);
+   - reasons: the partner booking carries a new `PARTNER_FIRST_MODE`, and the
+     `OfferInternal` that follows carries the partner lane's end
+     (`PARTNERS_EXHAUSTED` or `NO_PARTNER_CONFIGURED`), so the attempt journal says
+     why a courier was asked.
+
+   This does not reopen ADR 0014: no second party is booked, the winner is single,
+   and nothing is cancelled. `delivery_plans.sourcing_mode` is the decision's mode,
+   and its `ck_plan_mode` CHECK (V0054) lists four values, so the build widens it in
+   a new migration (drop and re-add; V0054 is applied).
+
 ## Alternatives considered
 
 | Option | Why not chosen | Revisit when |
@@ -226,6 +261,7 @@ machinery, evaluated by one pure function at plan creation.**
 | Put the timing numbers into the rules document | One place to edit, but a lead time changed without the buffer that goes with it is "a mistake made by editing one of a pair" (`DeliverySourcingPolicy`'s own doc); mixing them makes every timing tweak a republish of routing | Operators find editing two documents confusing in practice |
 | Put the unpaid-order window in the dispatch document | Dispatch plans do not exist for an unpaid order. The window acts on an `ordering` state and would make `fulfillment` own a rule about `PAYMENT_AUTHORIZING`, inverting the dependency `DeliveryPlanTrigger` exists to keep | Never |
 | A first-class `Trip` aggregate with stop ordering for grouping | The courier app's accept and advance flow is unbuilt (row `3.9`'s four locked switches say so), ADR 0037's `ROAD` distance needs a routing binding that is unbuilt, and a trip without route ordering is a label. A `run_key` and a ranking bias deliver the behaviour the row asks for | A routing provider is bound and the courier app can accept a run |
+| An ordered `lanes` list on the action (`["PARTNERS","FLEET"]`) instead of a fifth mode | Admits sequences the planner cannot honour (an empty list, a repeated lane, `MANUAL` in the middle), and `delivery_plans.sourcing_mode`, its CHECK, `SourcingRequest` and the planner's tests all key on a closed enum. Two lanes and `MANUAL` give exactly five valid plans (fleet only, partners only, either order of both, manual), and a name per plan is what the existing enum already is | A third lane exists (a marketplace-native courier, customer pickup) and lane order stops being a two-element question |
 | Name providers in rules (`"YANDEX"`, `"NOOR"`) | `check_provider_branching` and ADR 0026 exist to stop exactly this; a renamed or second installation of one provider would need a release | Never |
 
 ## Consequences
@@ -261,6 +297,10 @@ machinery, evaluated by one pure function at plan creation.**
   a policy value, and a tenant can set it badly.
 - `DeliveryOrderPort.DeliveryOrder` must carry the order's channel and zone,
   which is a change on `ordering`'s side of a boundary ADR 0029 made deliberate.
+- `SourcingPlanner` is no longer untouched: `PARTNER_FIRST` is a behavioural change
+  to the ADR 0014 planner whose handover-deadline rule differs from `FLEET_FIRST`'s,
+  and a keying mistake there fails silently as an immediate `FLEET_BUDGET_SPENT`.
+  The regression fixture over the four existing modes must not move.
 - Two documents (`fulfillment.sourcing`, `fulfillment.dispatch_rules`) and a third
   in `ordering` on one screen.
 - New capabilities are code-owned registry entries: each is a release (ADR 0025).
@@ -298,7 +338,7 @@ machinery, evaluated by one pure function at plan creation.**
         "prepaid":     true
       },
       "then": {
-        "mode": "PARTNER_ONLY",
+        "mode": "PARTNER_FIRST",
         "partners": { "order": ["<installationId>", "<installationId>"], "exclude": [], "selection": "LADDER" },
         "dispatchAt": { "basis": "LEAD", "offsetSeconds": 0 },
         "grouping": null
@@ -317,7 +357,10 @@ machinery, evaluated by one pure function at plan creation.**
 An omitted condition matches anything; every present condition must match. A rule
 with `zoneIds` does not match an order with no zone evidence. `rules[].id` is
 stable, operator-visible and unique in the document; it is what a plan records.
-`partners.order` empty means the binding order ADR 0026 already returns. The
+`partners.order` empty means the binding order ADR 0026 already returns. `mode` is
+one of `FLEET_FIRST`, `FLEET_ONLY`, `PARTNER_ONLY`, `PARTNER_FIRST`, `MANUAL`
+(Decision 9); the example above sends far-zone evening orders to a named partner
+first and, if every listed partner refuses, to the fleet. The
 action `grouping` is `{ "mergeRadiusMeters", "maxOrdersPerRun", "maxWaitSeconds" }`
 or null. Every name in a condition is validated at publish: installations must be
 this tenant's, category `DELIVERY`, and not archived; zones must exist and be
@@ -359,6 +402,8 @@ fulfillment.delivery_plans   (columns added)
   dispatch_decision  jsonb null            -- the resolved action and the skips; no coordinates, no names
 fulfillment.shipments        (columns added)
   run_key uuid null, run_merge_distance_m integer null
+fulfillment.delivery_plans   ck_plan_mode replaced (drop and re-add; V0054 is applied) to
+                             admit PARTNER_FIRST; sourcing_mode is written from the decision
 ordering: policy key ordering.payment_window   -- ADR 0030; no new table
 ```
 
@@ -416,6 +461,20 @@ mode); per-rule volumes come from the `usage` read, not from metric labels.
   window while unanswered.
 - A plan records the rule and pinned version; editing the document afterwards
   changes nothing about that plan's later ticks.
+- `PARTNER_FIRST` (`SourcingPlannerTests`, then `DeliverySourcingServiceTests`
+  against the real journal): with a partner bound and couriers available, the first
+  decision books the partner with `PARTNER_FIRST_MODE` and offers no courier; a
+  refused partner moves to the next, and when all are refused the decision is
+  `OfferInternal` with reason `PARTNERS_EXHAUSTED`; with no partner bound it is
+  `OfferInternal` with `NO_PARTNER_CONFIGURED`; an uncertain partner attempt
+  escalates `AWAITING_RECONCILIATION` and offers no courier; at a `now` later than
+  `pickup_window_end − partnerLeadSeconds` the fleet lane still opens (the case a
+  `handoverDeadline` keyed on `usesPartners()` gets wrong, seen failing first), and it
+  ends at `latest_assignment_at` with `PROMISE_UNREACHABLE`; fleet and partners
+  both exhausted escalate. `PARTNER_ONLY` is pinned unchanged: exhausted partners
+  escalate and no courier is asked. The end-to-end case is the exit criterion: a
+  far-zone evening order matches the rule, the plan records `PARTNER_FIRST` and the
+  rule id, the partner refuses, a courier is offered.
 - `LADDER` asks no quote; `CHEAPEST` is `QuoteScoring` unchanged; an installation
   with no active binding at the branch is skipped and the skip is recorded.
 - Grouping: a courier with a nearby un-picked-up plan outranks an emptier one
@@ -433,7 +492,8 @@ Ship the writer and screen for `fulfillment.sourcing` first — it changes no
 behaviour until someone publishes, and it is the smallest useful step. Then the
 evaluator and simulator with only the built-in default in force, recording the
 decision on every plan so the default's behaviour is proven equal on real orders
-before any rule can differ. Then rule authoring for `LADDER` and `CHEAPEST`,
+before any rule can differ. The `PARTNER_FIRST` planner change (Decision 9) ships with the evaluator and is
+inert until a rule can select it. Then rule authoring for `LADDER` and `CHEAPEST`,
 partner selection by source, zone and branch, with one tenant. Then dispatch
 start bases. Grouping ships last and only after the pay treatment is decided.
 Rollback is unpublishing: with no rule document the default applies, plans already
@@ -450,6 +510,11 @@ single-winner indexes changes.
 - [ ] `DeliveryPlanningService.open` evaluates and stores the decision; bump
       `PickupPlan.CALCULATION_VERSION`.
 - [ ] `DeliverySourcingService` applies `exclude`/`order`/`selection`.
+- [ ] `SourcingMode.PARTNER_FIRST`; `SourcingPlanner` lane order and
+      `handoverDeadline` keyed on "a partner lane follows the fleet lane";
+      `SourcingDecision.PARTNER_FIRST_MODE`; the `ck_plan_mode` migration; the
+      comment in `DeliverySourcingService.source` that quotes are taken "once the
+      fleet lane has been conceded" made true of both orders.
 - [ ] Publish-time validation and lint; the simulator endpoint; the `usage` read.
 - [ ] `delivery.dispatch_rules.read` / `.write` and role bundles; the writer and
       screen for `fulfillment.sourcing`.
@@ -467,8 +532,8 @@ single-winner indexes changes.
 
 ## Exit criteria
 
-An operator can publish a rule that sends far-zone evening orders to a named
-partner first and the fleet second, run the simulator on a real recent order and
+An operator can publish a `PARTNER_FIRST` rule that sends far-zone evening orders
+to a named partner first and, when that partner refuses, the fleet second, run the simulator on a real recent order and
 see that rule match and why the earlier rules did not, publish it, and find on the
 next such order's plan the rule id and the document version it ran under. Timing
 numbers for a branch are editable in the console. With no rules published, every
