@@ -5278,6 +5278,19 @@ export interface UnlistedLocationsResponse {
   locationIds?: Array<string>;
 }
 
+export interface UnlistedOfferingResponse {
+  productName?: string;
+  sku?: string;
+  variantId?: string;
+  variantName?: string;
+}
+
+export interface UnlistedOfferingsResponse {
+  hasMore?: boolean;
+  items?: Array<UnlistedOfferingResponse>;
+  totalCount?: number;
+}
+
 export interface UpdateCloposSettingsRequest {
   requireClerkApproval: boolean;
 }
@@ -5778,6 +5791,7 @@ export interface Operations {
   "backfillLocationListing": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/inventory/listing-backfill"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } } }; responses: { "200": InventoryControllerBackfillResponse } };
   "listPositions": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/inventory/positions"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } } }; responses: { "200": Array<StockPositionResponse> } };
   "listVariant": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/inventory/stock-items"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } }; body: ListVariantRequest }; responses: { "200": StockItemResponse } };
+  "unlistedOfferings": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/inventory/unlisted-offerings"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string }; query: { limit?: number; locale?: string } } }; responses: { "200": UnlistedOfferingsResponse } };
   "bulkSetAvailability": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/inventory/variants/bulk-availability"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } }; body: BulkAvailabilityRequest }; responses: { "200": BulkAvailabilityResponse } };
   "setAvailability": { method: "PUT"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/inventory/variants/{variantId}/availability"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string; variantId: string } }; body: AvailabilityRequest }; responses: { "200": unknown } };
   "clearChannelStopThreshold": { method: "DELETE"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/inventory/variants/{variantId}/channel-stop-thresholds/{channelType}"; request: { parameters: { path: { brandId: string; channelType: string; locationId: string; tenantId: string; variantId: string }; query: { reasonCode: string } } }; responses: { "200": unknown } };
