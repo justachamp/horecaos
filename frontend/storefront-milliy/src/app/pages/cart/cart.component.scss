@@ -185,4 +185,6 @@
   letter-spacing: 0.02em;
   cursor: pointer;
   box-shadow: 0 16px 30px -14px rgba(149, 203, 56, 0.9);
+
+  &:disabled { background: var(--line-default); color: var(--text-muted); box-shadow: none; cursor: not-allowed; }
 }

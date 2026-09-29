@@ -10,6 +10,7 @@ import type {
   MenuItemModifierGroup,
   MenuItemVariant,
 } from '../types/home.types';
+import { preferredSellableVariant } from '../utils/item-availability';
 
 /**
  * The published menu, and every browse screen built on it.
@@ -192,9 +193,9 @@ export class MenuService {
     currency: string | null,
     modifierGroups: ReadonlyMap<string, PublishedModifierGroup>,
   ): MenuItem {
-    const preferred = preferredVariant(product);
     const variants: MenuItemVariant[] = product.variants.map((variant) => ({
       id: variant.variantId,
+      isDefault: variant.isDefault,
       // Not a name. See the class comment: the wire carries no customer-facing
       // text for a variant, and a SKU printed as a label is a database value.
       name: variant.unitCode ?? '',
@@ -207,6 +208,7 @@ export class MenuService {
       price_without_discount: variant.amountMinor ?? 0,
       remainingQuantity: variant.remainingQuantity,
     }));
+    const preferred = preferredVariant(variants);
 
     return {
       id: product.productId,
@@ -216,8 +218,8 @@ export class MenuService {
       // Promotions are not surfaced on the menu, so nothing claims a discount.
       has_discount: false,
       preparation_time: 0,
-      price: preferred?.amountMinor ?? 0,
-      price_without_discount: preferred?.amountMinor ?? 0,
+      price: preferred?.price ?? 0,
+      price_without_discount: preferred?.price_without_discount ?? 0,
       image: product.imageUrls[0] ?? null,
       start: null,
       finish: null,
@@ -258,14 +260,22 @@ function toMenuItemModifierGroup(group: PublishedModifierGroup): MenuItemModifie
 }
 
 /**
- * The variant a screen should preselect: the authored default when orderable,
- * otherwise the first orderable one, otherwise the default, otherwise the first.
+ * The variant a screen should price a dish card from and preselect: the one a
+ * customer can buy right now -- the authored default when that can be bought,
+ * otherwise the first that can (see {@link preferredSellableVariant}).
+ *
+ * Only when none can be bought does it fall back to the earlier reading, so a
+ * closed dish still shows a price: the authored default when orderable, then the
+ * first orderable (waiting for its window), then the default, then the first.
+ * "Orderable" alone is not enough to lead with: a default that is orderable but
+ * off its sale window would put a price on the card that the portion the
+ * customer is actually offered does not have.
  */
-function preferredVariant(product: PublishedProduct): PublishedVariant | null {
-  const { variants } = product;
+function preferredVariant(variants: readonly MenuItemVariant[]): MenuItemVariant | null {
   return (
-    variants.find((variant) => variant.isDefault && variant.orderable) ??
-    variants.find((variant) => variant.orderable) ??
+    preferredSellableVariant({ variants }) ??
+    variants.find((variant) => variant.isDefault && variant.active) ??
+    variants.find((variant) => variant.active) ??
     variants.find((variant) => variant.isDefault) ??
     variants[0] ??
     null

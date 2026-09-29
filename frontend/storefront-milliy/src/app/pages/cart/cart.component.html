@@ -82,6 +82,12 @@
         <p class="hint hint--error" role="alert" data-testid="cart-error">{{ errorKey | t }}</p>
       }
 
+      @if (cart.priceRefusalKey(); as pricingRefusal) {
+        <p class="hint hint--error" role="alert" data-testid="cart-pricing-error">
+          {{ pricingRefusal | t }}
+        </p>
+      }
+
       <div class="summary">
         <div class="summary__row">
           <span>{{ 'cart.subtotalLabel' | t }}</span>
@@ -112,7 +118,7 @@
 
 @if (state() === 'ready' && cart.items().length > 0) {
   <footer class="foot">
-    <button type="button" class="cta" (click)="goCheckout()">
+    <button type="button" class="cta" [disabled]="!canCheckout()" (click)="goCheckout()">
       {{ 'cart.checkoutCta' | t }} · {{ cart.totalAmount() }}
     </button>
   </footer>

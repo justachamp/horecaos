@@ -350,8 +350,9 @@
     "reason": {
       "deliveryFeeUnresolved": "Yetkazib berish narxini hisoblab bo'lmadi. Boshqa manzil tanlang yoki keyinroq urinib ko'ring.",
       "minimumBasketNotMet": "Yetkazib berish uchun buyurtma summasi yetarli emas.",
-      "minimumBasketAmount": "Yetkazib berish uchun eng kamida {{amount}}lik buyurtma bering.",
       "destinationRequired": "Avval yetkazib berish manzilini tanlang.",
+      "belowMinimumOrder": "Buyurtma summasi minimal summadan past. Davom etish uchun yana biror narsa qo'shing.",
+      "destinationNotLocated": "Bu manzil xaritada hali belgilanmagan, shuning uchun bu yerga yetkazib bera olmaymiz. Boshqa manzil tanlang yoki bu manzilni xaritada belgilang.",
       "outOfZone": "Bu manzil yetkazib berish zonasidan tashqarida.",
       "notServiceable": "Hozir bu filialdan xizmat ko'rsatib bo'lmaydi.",
       "signInRequired": "Buyurtma berish uchun tizimga kiring.",

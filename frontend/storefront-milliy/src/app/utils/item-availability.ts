@@ -60,3 +60,23 @@ export function firstSellableVariant<T extends AvailabilityVariant>(item: {
 }): T | null {
   return item.variants.find((variant) => variantAvailability(variant) === 'AVAILABLE') ?? null;
 }
+
+/**
+ * The portion a customer gets when they have not chosen one: the authored
+ * default when it can be bought right now, otherwise the first portion that can.
+ * Null when none can be bought right now.
+ *
+ * The menu grid prices its card from this and the product page preselects it,
+ * so the price on the card is the price of the portion that lands in the
+ * basket. An authored default that is off its sale window (a breakfast-only
+ * portion at 15:00) is skipped, exactly as a sold-out one is.
+ */
+export function preferredSellableVariant<T extends AvailabilityVariant & { readonly isDefault?: boolean }>(item: {
+  readonly variants: readonly T[];
+}): T | null {
+  return (
+    item.variants.find(
+      (variant) => variant.isDefault === true && variantAvailability(variant) === 'AVAILABLE',
+    ) ?? firstSellableVariant(item)
+  );
+}

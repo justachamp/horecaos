@@ -112,16 +112,37 @@ export class UiCartService {
     this.items().reduce((sum, item) => sum + item.quantity, 0),
   );
 
+  /**
+   * The platform's own total, or a dash while the cart holds no price -- never
+   * a zero. A basket with lines and a total of 0 reads as free, so a cart the
+   * platform refused to price (a dish gone out of its sale window, a variant
+   * off the menu, a dropped connection) shows "unknown" and, beside it,
+   * {@link priceRefusalKey} says why.
+   */
   readonly totalAmount = computed(() => {
     this.translate.current();
     const total = this.priced()?.totalMinor;
-    return total != null ? this.formatPrice(total) : this.getZeroPrice();
+    return total != null ? this.formatPrice(total) : UNRESOLVED;
   });
 
+  /** The platform's own subtotal, or a dash when the cart holds no price (see {@link totalAmount}). */
   readonly subtotalFormatted = computed(() => {
     this.translate.current();
-    return this.formatPrice(this.priced()?.subtotalMinor ?? 0);
+    const subtotal = this.priced()?.subtotalMinor;
+    return subtotal != null ? this.formatPrice(subtotal) : UNRESOLVED;
   });
+
+  /**
+   * The translation key of why the basket could not be priced, or null when it
+   * was priced (or has nothing to price).
+   *
+   * Deliberately not {@link errorKey}: a basket the platform will not price is
+   * still a basket the customer must see, and the screens read a non-null
+   * `errorKey` after `load()` as "the basket could not be read at all". The
+   * reason comes from the refusal itself, so a line that has left its sale
+   * window reads as that and not as "something went wrong".
+   */
+  readonly priceRefusalKey = signal<string | null>(null);
 
   readonly totalWithDelivery = computed(() => this.totalAmount());
 
@@ -157,15 +178,15 @@ export class UiCartService {
   });
 
   /**
-   * A preview of what delivery will cost, from `GET .../delivery-fee`
+   * A preview of what delivery will cost, from `POST .../delivery-fee`
    * (`DeliveryFeeController.quote`) -- unauthenticated, like the menu, and
    * priced against a point rather than against the cart, so it is available
    * before the cart's own destination is ever set.
    *
    * Two states, and neither is a zero:
    * - no price to show -- not a delivery cart, no destination chosen yet, or
-   *   the platform said no (outside every zone, below the zone's minimum
-   *   basket, ...): a dash, because a zero here would read as free delivery.
+   *   the platform said no (outside every zone, no tariff, past the tariff's
+   *   reach, ...): a dash, because a zero here would read as free delivery.
    *   *Why* there is no price is {@link deliveryUnresolvedMessage}, read
    *   separately so a template can show it as an explanation beside the line
    *   -- the platform's own reason, never re-homed to one generic "delivery
@@ -190,12 +211,21 @@ export class UiCartService {
    * (no destination chosen, an address with no marker, or the read failed), or
    * the fee is resolved.
    *
-   * The resolver's own `reasonCode` (`DeliveryFeeView.reasonCode`) is mapped
-   * through the same vocabulary a checkout refusal uses, so the sentence beside
-   * the delivery line and the one under the order button agree. A below-minimum
-   * refusal names the amount when the zone sent one. A code this build has no
-   * sentence for reads as the honest "we couldn't work out the fee", never as
-   * the raw code.
+   * Read from the preview's `outcome` (`DeliveryFeeOutcome`: `OUT_OF_ZONE`,
+   * `OUTSIDE_CATCHMENT`, `NO_TARIFF`, `BEYOND_MAX_DISTANCE`,
+   * `LOCATION_NOT_LOCATED`), which is the stable code the controller documents
+   * as the one a storefront branches on. Its `reasonCode` is the resolver's
+   * granular evidence string (`NO_ZONE_COVERS_ADDRESS`, `NO_TARIFF_CONFIGURED`,
+   * ...) and is not in the vocabulary a checkout refusal uses -- mapping it
+   * would read every real refusal as "we couldn't work out the fee".
+   *
+   * The outcome goes through the same map a checkout refusal uses, so the
+   * sentence beside the delivery line and the one under the order button agree.
+   * The preview never reports a below-minimum basket: the resolver does not
+   * compare the basket against the zone's floor, the pricing engine does, at
+   * checkout, and a refusal there arrives as `DELIVERY_MINIMUM_BASKET_NOT_MET`.
+   * An outcome this build has no sentence for reads as the honest "we couldn't
+   * work out the fee", never as the raw code.
    */
   readonly deliveryUnresolvedMessage = computed<string | null>(() => {
     this.translate.current();
@@ -206,13 +236,8 @@ export class UiCartService {
     if (!quote || quote.available) {
       return null;
     }
-    if (quote.reasonCode === 'BELOW_MINIMUM_BASKET' && quote.minBasketMinor != null) {
-      return this.translate.getWithParams('errors.reason.minimumBasketAmount', {
-        amount: this.formatPrice(quote.minBasketMinor),
-      });
-    }
     return this.translate.get(
-      reasonMessageKey(quote.reasonCode) ?? 'errors.reason.deliveryFeeUnresolved',
+      reasonMessageKey(quote.outcome) ?? 'errors.reason.deliveryFeeUnresolved',
     );
   });
 
@@ -419,6 +444,7 @@ export class UiCartService {
     try {
       const priced = await this.carts.price();
       this.priced.set(priced);
+      this.priceRefusalKey.set(null);
       return priced;
     } catch (failure) {
       this.fail(failure);
@@ -543,6 +569,7 @@ export class UiCartService {
     this.carts.discard(this.locationId());
     this.cartData.set(null);
     this.priced.set(null);
+    this.priceRefusalKey.set(null);
     this.deliveryFeeQuote.set(null);
   }
 
@@ -565,6 +592,7 @@ export class UiCartService {
     if (!cart || cart.lines.length === 0) {
       this.cartData.set(null);
       this.priced.set(null);
+      this.priceRefusalKey.set(null);
       this.deliveryFeeQuote.set(null);
       return;
     }
@@ -578,11 +606,14 @@ export class UiCartService {
     //
     // Best effort: an unpriced item or a withdrawn price book makes pricing
     // refuse, and that must not stop the customer seeing what is in their
-    // basket. The total then stays unknown, which is the honest reading.
+    // basket. The total then reads as unknown (a dash, see `totalAmount`) and
+    // the refusal's own reason is kept in `priceRefusalKey` for the screens.
+    this.priceRefusalKey.set(null);
     try {
       this.priced.set(await this.carts.price());
-    } catch {
+    } catch (failure) {
       this.priced.set(null);
+      this.priceRefusalKey.set(failureKey(failure));
     }
 
     const menu = await this.menu.menu(this.lang.langId(), cart.locationId);
@@ -728,16 +759,11 @@ export class UiCartService {
       this.deliveryFeeQuote.set({
         available: view.available,
         feeMinor: view.feeMinor,
-        reasonCode: view.reasonCode,
-        minBasketMinor: view.minBasketMinor,
+        outcome: view.outcome,
       });
     } catch {
       this.deliveryFeeQuote.set(null);
     }
-  }
-
-  private getZeroPrice(): string {
-    return this.formatPrice(0);
   }
 
   /** Public: also used by screens that render a line total or a discount amount. */
@@ -750,16 +776,16 @@ export class UiCartService {
 
 /**
  * What a screen needs from `DeliveryFeeController.DeliveryFeeView`: whether and
- * how much, and -- when not -- why. The reason is a machine code
- * (`OUT_OF_ZONE`, `BELOW_MINIMUM_BASKET`, ...) that is only ever mapped to a
- * sentence, never shown (see {@link UiCartService.deliveryUnresolvedMessage}).
+ * how much, and -- when not -- why. The why is the `outcome` (`OUT_OF_ZONE`,
+ * `NO_TARIFF`, ...), a machine code that is only ever mapped to a sentence,
+ * never shown (see {@link UiCartService.deliveryUnresolvedMessage}). The view's
+ * own `reasonCode` is deliberately not carried: it is the resolver's granular
+ * evidence string and no sentence is keyed on it.
  */
 export interface DeliveryFeeQuote {
   readonly available: boolean;
   readonly feeMinor: number | null;
-  readonly reasonCode: string | null;
-  /** The zone's minimum basket, present only when the zone sets one. */
-  readonly minBasketMinor: number | null;
+  readonly outcome: string;
 }
 
 /** `DeliveryFeeController.DeliveryFeeView`, transcribed from the controller. */

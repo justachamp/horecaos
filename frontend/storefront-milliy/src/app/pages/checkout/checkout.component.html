@@ -169,6 +169,12 @@
       </div>
     </div>
 
+    @if (pricingNoteKey(); as pricingRefusal) {
+      <p class="hint hint--error hint--footer" role="alert" data-testid="checkout-pricing-error">
+        {{ pricingRefusal | t }}
+      </p>
+    }
+
     @if (submitErrorKey(); as errorKey) {
       <p class="hint hint--error hint--footer" role="alert">{{ errorKey | t }}</p>
     }

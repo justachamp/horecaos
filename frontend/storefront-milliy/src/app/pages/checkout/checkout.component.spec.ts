@@ -80,6 +80,7 @@ class FakeUiCartService {
   readonly promoBusy = signal(false);
   readonly promoError = signal<string | null>(null);
   readonly errorKey = signal<string | null>(null);
+  readonly priceRefusalKey = signal<string | null>(null);
   orderComment = '';
 
   items = () => this.cartData()?.items ?? [];
@@ -383,6 +384,30 @@ describe('CheckoutComponent.confirm -- a failure names its reason instead of one
     expect(cart.discard).not.toHaveBeenCalled();
   });
 
+  it('a pickup order below the tenant minimum says the order is below the minimum', async () => {
+    const { fixture, cart } = await submit((cart) => {
+      cart.checkout = vi.fn(async () => {
+        throw refusal('BELOW_MINIMUM_ORDER');
+      });
+    });
+
+    expect(fixture.nativeElement.textContent).toContain('errors.reason.belowMinimumOrder');
+    expect(fixture.nativeElement.textContent).not.toContain('errors.generic');
+    expect(cart.discard).not.toHaveBeenCalled();
+  });
+
+  it('a saved address that was never located says the address is the problem', async () => {
+    const { fixture, cart } = await submit((cart) => {
+      cart.applyDestination = vi.fn(async () => {
+        throw refusal('DESTINATION_NOT_LOCATED');
+      });
+    });
+
+    expect(fixture.nativeElement.textContent).toContain('errors.reason.destinationNotLocated');
+    expect(fixture.nativeElement.textContent).not.toContain('errors.generic');
+    expect(cart.checkout).not.toHaveBeenCalled();
+  });
+
   it('a checkout rejected because an item just sold out says so', async () => {
     const { fixture } = await submit((cart) => {
       cart.checkout = vi.fn(async () => {
@@ -513,5 +538,22 @@ describe('CheckoutComponent -- the delivery-fee preview explains itself', () => 
     const { fixture } = await setUp();
 
     expect(fixture.nativeElement.querySelector('[data-testid="delivery-unresolved"]')).toBeNull();
+  });
+});
+
+describe('CheckoutComponent -- a basket the platform would not price on arrival', () => {
+  it('says why the totals are dashes, before the customer taps confirm', async () => {
+    const { fixture } = await setUp((cart) => {
+      cart.priceRefusalKey.set('errors.reason.itemOutOfSaleWindow');
+    });
+
+    const note = fixture.nativeElement.querySelector('[data-testid="checkout-pricing-error"]');
+    expect(note?.textContent).toContain('errors.reason.itemOutOfSaleWindow');
+  });
+
+  it('shows nothing for a basket that priced', async () => {
+    const { fixture } = await setUp();
+
+    expect(fixture.nativeElement.querySelector('[data-testid="checkout-pricing-error"]')).toBeNull();
   });
 });

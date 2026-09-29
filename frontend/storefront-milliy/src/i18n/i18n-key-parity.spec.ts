@@ -143,8 +143,10 @@ describe('i18n content: the keys the new cart / sale-window / table screens rend
     'cart.loadError',
     'errors.generic',
     'errors.offline',
-    'errors.reason.minimumBasketAmount',
     'errors.reason.minimumBasketNotMet',
+    'errors.reason.belowMinimumOrder',
+    'errors.reason.destinationNotLocated',
+    'errors.reason.modeUnavailable',
     'errors.reason.deliveryFeeUnresolved',
     'errors.reason.itemOutOfSaleWindow',
     'errors.reason.itemUnavailable',
@@ -160,7 +162,6 @@ describe('i18n content: the keys the new cart / sale-window / table screens rend
     for (const [id, dict] of Object.entries(LOCALES)) {
       expect(getNested(dict, 'dish.lowStock'), id).toContain('{{count}}');
       expect(getNested(dict, 'dineIn.tableLabel'), id).toContain('{{code}}');
-      expect(getNested(dict, 'errors.reason.minimumBasketAmount'), id).toContain('{{amount}}');
     }
   });
 });

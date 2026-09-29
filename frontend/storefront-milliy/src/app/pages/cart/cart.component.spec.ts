@@ -33,6 +33,7 @@ class FakeUiCartService {
   readonly items = signal<CartResponseItem[]>([]);
   readonly error = signal<string | null>(null);
   readonly errorKey = signal<string | null>(null);
+  readonly priceRefusalKey = signal<string | null>(null);
   deliveryUnresolvedMessage = (): string | null => null;
   totalItemsCount = () => this.items().reduce((sum, i) => sum + i.quantity, 0);
   subtotalFormatted = () => '25 000 so\'m';
@@ -216,5 +217,48 @@ describe('CartComponent -- failures and unavailable lines say why', () => {
 
     expect(fixture.nativeElement.querySelector('[data-testid="cart-line-unavailable"]')).toBeNull();
     expect(fixture.nativeElement.querySelector('.line')?.classList).not.toContain('is-unavailable');
+  });
+});
+
+describe('CartComponent -- a basket the platform would not price', () => {
+  it('says why the total is a dash, over the basket, without turning the page into a load error', async () => {
+    const fake = new FakeUiCartService();
+    fake.items.set([line({ active: false, unavailableReason: 'OUT_OF_SALE_WINDOW' })]);
+    fake.priceRefusalKey.set('errors.reason.itemOutOfSaleWindow');
+    const { fixture } = await setUp(fake);
+
+    const note = fixture.nativeElement.querySelector('[data-testid="cart-pricing-error"]') as HTMLElement;
+    expect(note.textContent).toContain('errors.reason.itemOutOfSaleWindow');
+    expect(note.getAttribute('role')).toBe('alert');
+    expect(fixture.nativeElement.textContent).not.toContain('cart.loadError');
+    expect(fixture.nativeElement.querySelector('.line')).not.toBeNull();
+  });
+
+  it('shows no pricing note for a basket that priced', async () => {
+    const fake = new FakeUiCartService();
+    fake.items.set([line()]);
+    const { fixture } = await setUp(fake);
+
+    expect(fixture.nativeElement.querySelector('[data-testid="cart-pricing-error"]')).toBeNull();
+  });
+
+  it('does not offer checkout while a line cannot be bought, and offers it again once that line is gone', async () => {
+    const fake = new FakeUiCartService();
+    fake.items.set([
+      line({ item_id: 'a' }),
+      line({ item_id: 'b', active: false, unavailableReason: 'OUT_OF_SALE_WINDOW' }),
+    ]);
+    const { fixture, router } = await setUp(fake);
+    const navigateSpy = vi.spyOn(router, 'navigate');
+    const cta = fixture.nativeElement.querySelector('.cta') as HTMLButtonElement;
+
+    expect(cta.disabled).toBe(true);
+    cta.click();
+    expect(navigateSpy).not.toHaveBeenCalled();
+
+    fake.items.set([line({ item_id: 'a' })]);
+    fixture.detectChanges();
+
+    expect((fixture.nativeElement.querySelector('.cta') as HTMLButtonElement).disabled).toBe(false);
   });
 });
