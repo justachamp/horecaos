@@ -43,7 +43,7 @@ these phases:
 |---|---|---|
 | 0 | Refuses a dirty working tree | The image tag is the git sha; a dirty tree makes the tag a lie and rollback meaningless |
 | 1 | Mounts a tmpfs at `/run/horecaos/secrets` | Not root |
-| 2 | Authenticates you to OpenBao | Sealed, or wrong token |
+| 2 | Authenticates you to OpenBao, then checks that a token which is about to mint the media or backup object-store keys can also store them | Sealed, or wrong token; or a read-only `horecaos-deploy` token on a deploy that has to mint (nothing has been minted — log in with a token that can create and update the four `object_storage/platform/{media,backup}-{access,secret}-key` paths and run again) |
 | 3 | Writes four startup passwords onto the tmpfs | A secret is missing from OpenBao |
 | 4 | Issues a fresh AppRole secret-id | The AppRole does not exist — the host was never bootstrapped |
 | 5 | Builds `horecaos/platform:<sha>` and `horecaos/platform-migrate:<sha>` | Compile failure, or the disk is full |

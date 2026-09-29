@@ -407,6 +407,122 @@ class DeployScriptTests {
         assertThat(refused.trace()).noneMatch(line -> line.startsWith("PUT"));
     }
 
+    @Test
+    @DisplayName("the operator token is proven able to store the keys before any service account is minted")
+    void theTokenIsCheckedBeforeAnythingIsMinted() throws IOException {
+        String script = readFile(SCRIPT);
+
+        int preflightCall = script.indexOf("\nrequire_write_access_before_minting\n");
+        int seedMinted = script.indexOf("say \"Provisioning a create-bucket-only service account");
+        int backupMinted = script.indexOf("say \"Provisioning the backup bucket's own service account");
+        int mediaMinted = script.indexOf("say \"Provisioning the media bucket's own service account");
+
+        assertThat(script)
+                .as("the check asks OpenBao what this very token may do -- a read-only deploy token "
+                        + "must be found out here, not after RustFS has minted an account nobody can record")
+                .contains("bao_run bao token capabilities");
+        assertThat(preflightCall)
+                .as("the preflight must be called by name on a line of its own")
+                .isNotEqualTo(-1);
+        assertThat(preflightCall)
+                .as("no add-service-account call may precede it, the seed account's included")
+                .isLessThan(seedMinted);
+        assertThat(seedMinted).isLessThan(backupMinted);
+        assertThat(backupMinted).isLessThan(mediaMinted);
+        assertThat(script.substring(0, preflightCall))
+                .as("the first mint is what the preflight guards against")
+                .doesNotContain("/rustfs/admin/v3/add-service-account\" \\");
+        assertThat(script)
+                .as("KV v2 authorises the data/ path, not the logical one bao kv put is given")
+                .contains("horecaos/data/${");
+    }
+
+    @Test
+    @DisplayName("a token that cannot store the keys stops the deploy before RustFS is asked for anything")
+    void aReadOnlyTokenIsRefusedBeforeAnAccountIsMinted(@TempDir Path dir) throws Exception {
+        Assumptions.assumeTrue(commandExists("jq") && commandExists("bash"), "jq and bash are required");
+        String response =
+                "{\"credentials\":{\"accessKey\":\"PREFLIGHTACCESSCANARY\",\"secretKey\":\"preflight-secret-canary\"}}";
+
+        // The horecaos-deploy policy as shipped: read and list, nothing more.
+        Fixture readOnly = new Fixture(dir.resolve("read-only"), response, false);
+        readOnly.capabilities("list, read");
+        Run refused = readOnly.runWithPreflight();
+        assertThat(refused.exitCode()).as(refused.output()).isNotZero();
+        assertThat(refused.output())
+                .contains("cannot store")
+                .contains("horecaos/production/object_storage/platform/media-access-key")
+                .contains("horecaos/production/object_storage/platform/backup-secret-key")
+                .doesNotContain("PREFLIGHTACCESSCANARY")
+                .doesNotContain(Fixture.ROOT_SECRET);
+        assertThat(readOnly.trace())
+                .as("nothing was minted and nothing was written")
+                .noneMatch(line -> line.startsWith("CURL") || line.startsWith("PUT"));
+        assertThat(readOnly.trace())
+                .as("the KV v2 data/ paths are the ones asked about")
+                .contains(
+                        "CAPS horecaos/data/production/object_storage/platform/media-access-key",
+                        "CAPS horecaos/data/production/object_storage/platform/backup-access-key");
+
+        // A token that can create but not update fails a remint, which overwrites.
+        Fixture createOnly = new Fixture(dir.resolve("create-only"), response, true);
+        createOnly.capabilities("create, read");
+        createOnly.store("media-access-key", "EXISTING");
+        createOnly.store("media-secret-key", "existing");
+        createOnly.store("backup-access-key", "EXISTING");
+        Run half = createOnly.runWithPreflight();
+        assertThat(half.exitCode()).as(half.output()).isNotZero();
+        assertThat(createOnly.trace()).noneMatch(line -> line.startsWith("CURL"));
+
+        // If OpenBao cannot even say what the token may do, the answer is no.
+        Fixture unknown = new Fixture(dir.resolve("unknown"), response, false);
+        unknown.capabilitiesCallFails();
+        Run unanswered = unknown.runWithPreflight();
+        assertThat(unanswered.exitCode()).as(unanswered.output()).isNotZero();
+        assertThat(unknown.trace()).noneMatch(line -> line.startsWith("CURL"));
+    }
+
+    @Test
+    @DisplayName("a token that can store the keys, or a deploy with nothing to mint, goes through")
+    void aTokenThatCanStoreTheKeysOrHasNothingToMintIsNotStopped(@TempDir Path dir) throws Exception {
+        Assumptions.assumeTrue(commandExists("jq") && commandExists("bash"), "jq and bash are required");
+        String response = "{\"credentials\":{\"accessKey\":\"OKACCESS\",\"secretKey\":\"ok-secret\"}}";
+
+        Fixture writer = new Fixture(dir.resolve("writer"), response, false);
+        writer.capabilities("create, read, update");
+        Run minted = writer.runWithPreflight();
+        assertThat(minted.exitCode()).as(minted.output()).isZero();
+        assertThat(writer.stored("media-access-key")).isEqualTo("OKACCESS");
+
+        Fixture root = new Fixture(dir.resolve("root"), response, false);
+        root.capabilities("root");
+        Run rooted = root.runWithPreflight();
+        assertThat(rooted.exitCode()).as(rooted.output()).isZero();
+
+        // Routine deploy with a read-only deploy token: both pairs are on file, so no write is needed,
+        // and the operator who carries only horecaos-deploy must not be locked out of deploying.
+        Fixture routine = new Fixture(dir.resolve("routine"), response, false);
+        routine.capabilities("list, read");
+        for (String name : List.of("media-access-key", "media-secret-key", "backup-access-key", "backup-secret-key")) {
+            routine.store(name, "existing-" + name);
+        }
+        Run kept = routine.runWithPreflight();
+        assertThat(kept.exitCode()).as(kept.output()).isZero();
+        assertThat(routine.trace()).noneMatch(line -> line.startsWith("CURL") || line.startsWith("PUT"));
+
+        // Only the media pair is missing: only the media paths are held to the rule.
+        Fixture mediaOnly = new Fixture(dir.resolve("media-only"), response, false);
+        mediaOnly.capabilities("list, read");
+        mediaOnly.store("backup-access-key", "existing");
+        mediaOnly.store("backup-secret-key", "existing");
+        Run refusedMedia = mediaOnly.runWithPreflight();
+        assertThat(refusedMedia.exitCode()).as(refusedMedia.output()).isNotZero();
+        assertThat(refusedMedia.output())
+                .contains("media-access-key")
+                .doesNotContain("backup-access-key")
+                .doesNotContain("backup-secret-key");
+    }
+
     /** Everything from the media step's own `say` up to the seed job's, the text this test class pins. */
     private static String mediaBlock(String script) {
         int start = script.indexOf("say \"Provisioning the media bucket's own service account\"");
@@ -493,13 +609,46 @@ class DeployScriptTests {
             return JSON.readTree(matcher.group(1));
         }
 
+        /** What {@code bao token capabilities} answers for every path, as OpenBao prints it. */
+        void capabilities(String listing) throws IOException {
+            Files.writeString(root.resolve("caps-default"), listing, StandardCharsets.UTF_8);
+        }
+
+        void capabilitiesCallFails() throws IOException {
+            Files.writeString(root.resolve("caps-fail"), "1", StandardCharsets.UTF_8);
+        }
+
         Run run() throws IOException, InterruptedException {
+            return execute(false);
+        }
+
+        /** The write-access preflight first, then the media block, as deploy.sh orders them. */
+        Run runWithPreflight() throws IOException, InterruptedException {
+            return execute(true);
+        }
+
+        private Run execute(boolean withPreflight) throws IOException, InterruptedException {
             String script = readFile(SCRIPT);
             StringBuilder definitions = new StringBuilder();
             for (String line : script.lines().toList()) {
-                if (line.startsWith("OBJECT_STORE_MEDIA_") || line.startsWith("REMINT_OBJECT_STORE_CREDENTIALS=")) {
+                if (line.startsWith("OBJECT_STORE_") || line.startsWith("REMINT_OBJECT_STORE_CREDENTIALS=")) {
                     definitions.append(line).append('\n');
                 }
+            }
+            String preflight = "";
+            if (withPreflight) {
+                int start = script.indexOf("token_can_store() {");
+                int end = script.indexOf("# end of the write-access preflight helpers");
+                assertThat(start).as("the preflight helpers must exist").isNotEqualTo(-1);
+                assertThat(end).as("and end at their marker").isGreaterThan(start);
+                preflight = """
+                        bao_run() {
+                            [ "$1 $2 $3" = "bao token capabilities" ] || { echo "unexpected bao_run: $*" >&2; return 99; }
+                            printf 'CAPS %s\\n' "$4" >> "${FAKE_ROOT}/trace"
+                            [ ! -f "${FAKE_ROOT}/caps-fail" ] || return 2
+                            if [ -f "${FAKE_ROOT}/caps-default" ]; then cat "${FAKE_ROOT}/caps-default"; else echo deny; fi
+                        }
+                        """ + script.substring(start, end) + "\nrequire_write_access_before_minting\n";
             }
             String harness = """
                     set -euo pipefail
@@ -515,7 +664,7 @@ class DeployScriptTests {
                         inner="${inner//\\/run\\/secrets\\/object-store-secret-key/${FAKE_ROOT}/root-secret}"
                         OBJECT_STORE_ROOT_ACCESS_KEY=root-user HORECAOS_MEDIA_BUCKET=horecaos-media bash -c "${inner}"
                     }
-                    """ + definitions + mediaBlock(script);
+                    """ + definitions + preflight + mediaBlock(script);
             Path harnessFile = root.resolve("harness.sh");
             Files.writeString(harnessFile, harness, StandardCharsets.UTF_8);
             ProcessBuilder builder = new ProcessBuilder("bash", harnessFile.toString()).redirectErrorStream(true);
