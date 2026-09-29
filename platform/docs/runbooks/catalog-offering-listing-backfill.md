@@ -9,11 +9,19 @@ before trusting this file on a real host.
   the one expected location with `unlisted_count = 3`.
 - Steps 2 to 4 were **not** run with `curl` against a running API. Signing
   in needs a staff access token, and standing up the app, Keycloak and a
-  grant for one runbook was out of proportion. Instead
-  `CatalogOfferingListingBackfillRunbookConformanceTests` parses this very
-  file and dispatches its own `curl` commands (method, path, headers) at the
-  real controllers over MockMvc, then asserts the response fields the checks
-  below read. A renamed path or field fails that test rather than an operator.
+  grant for one runbook was out of proportion. Instead these tests in
+  `platform/src/test/java/uz/horecaos/platform/inventory/web/` guard it:
+  - `InventoryUnlistedOfferingsReportTests#runbookCommandsAreRealAndItsChecksHold`
+    parses this very file and dispatches its own `curl` commands (method,
+    path, headers) at the real controllers over MockMvc, then asserts the
+    response fields the checks below read.
+  - `InventoryUnlistedOfferingsReportTests#runbookMintsAFreshIdempotencyKeyPerCall`
+    runs step 3's command twice and fails if it stops minting a new
+    `Idempotency-Key` per call.
+  - `InventoryUnlistedOfferingsReportTests#runbookNamesOnlyTestsThatExist`
+    fails if this note cites a test that is not there.
+
+  A renamed path or field fails one of those rather than an operator.
 - Not yet run against pre-prod or production. Do that once after the
   auto-listing fix ships, then update this line with the date and what it
   found.

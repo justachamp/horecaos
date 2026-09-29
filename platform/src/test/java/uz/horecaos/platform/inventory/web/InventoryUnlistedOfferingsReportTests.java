@@ -460,6 +460,35 @@ class InventoryUnlistedOfferingsReportTests {
                 .isEqualTo(1);
     }
 
+    @Test
+    @DisplayName("every test the runbook names as its own validation exists, and this class is among them")
+    void runbookNamesOnlyTestsThatExist() throws Exception {
+        Matcher named = Pattern.compile("`(\\w+Tests)(?:#(\\w+))?`").matcher(runbookText());
+        Map<String, Path> sources = new LinkedHashMap<>();
+        try (java.util.stream.Stream<Path> files = Files.walk(Path.of("src/test/java"))) {
+            files.filter(file -> file.getFileName().toString().endsWith("Tests.java"))
+                    .forEach(file -> sources.put(file.getFileName().toString().replace(".java", ""), file));
+        }
+
+        List<String> mentioned = new ArrayList<>();
+        while (named.find()) {
+            String testClass = named.group(1);
+            mentioned.add(testClass);
+            assertThat(sources)
+                    .as("the runbook cites %s, which must be a real test class", testClass)
+                    .containsKey(testClass);
+            String method = named.group(2);
+            if (method != null) {
+                assertThat(Files.readString(sources.get(testClass), UTF_8))
+                        .as("the runbook cites %s#%s, which must be a real test method", testClass, method)
+                        .contains("void " + method + "(");
+            }
+        }
+        assertThat(mentioned)
+                .as("the runbook's 'Last executed' note points at the test that keeps it honest")
+                .contains(getClass().getSimpleName());
+    }
+
     // ------------------------------------------------------------------ helpers
 
     // -------------------------------------------------------- runbook parsing
