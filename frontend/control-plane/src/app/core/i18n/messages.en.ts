@@ -614,6 +614,7 @@ export const en = {
   'onboarding.validate.allPassed': 'Every check passes. Resume the run to record it.',
   'onboarding.validate.passed': 'Passes',
   'onboarding.validate.failed': 'Fails',
+  'onboarding.validate.advisory': 'Advisory',
   'onboarding.cancel.title': 'Cancel this run',
   'onboarding.cancel.lead':
     'Stops the run for good; a new one can be started afterwards. Nothing already set up is undone.',
