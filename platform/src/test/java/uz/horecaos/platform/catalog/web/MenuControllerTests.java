@@ -54,6 +54,8 @@ class MenuControllerTests {
     private static final UUID BRAND = UUID.randomUUID();
     private static final UUID LOCATION = UUID.randomUUID();
     private static final String LOCALE = "uz";
+    private static final tools.jackson.databind.json.JsonMapper JSON =
+            tools.jackson.databind.json.JsonMapper.builder().build();
 
     /** Holds {@code catalog.read} only, at BRAND scope — the capability the sibling GET accepts. */
     private static final String READ_ONLY_STAFF = "menu-http-read-only";
@@ -279,6 +281,47 @@ class MenuControllerTests {
         assertThat(attempt.getResponse().getStatus()).isEqualTo(403);
     }
 
+    // ------------------------------------------------------- names follow the brand default
+
+    @Test
+    @DisplayName("GET .../items names a product in the brand's default language, then the server's, for a ru brand")
+    void itemNamesFollowTheBrandDefault() throws Exception {
+        brandDefault("ru");
+        UUID menuId = createMenuDirectly("Main menu");
+        UUID catalogId = jdbc.sql("SELECT id FROM catalog.catalogs WHERE tenant_id = :t")
+                .param("t", TENANT)
+                .query(UUID.class)
+                .single();
+        // Created under the brand default: its only translation is ru.
+        var plov = authoring.createProduct(
+                TENANT,
+                BRAND,
+                catalogId,
+                "PLOV",
+                "Плов",
+                null,
+                "ru",
+                "SKU-PLOV",
+                "PIECE",
+                FiscalClassification.unclassified(),
+                null);
+        addItemDirectly(menuId, plov.defaultVariantId(), "AVAILABLE");
+        // Imported under the server's locale before the brand chose ru: uz only.
+        addItemDirectly(menuId, burgerVariantId, "AVAILABLE");
+
+        MvcResult items = mvc.perform(get(path() + "/" + menuId + "/items").with(tokenFor(READ_ONLY_STAFF)))
+                .andReturn();
+
+        assertThat(items.getResponse().getStatus()).isEqualTo(200);
+        String body = items.getResponse().getContentAsString(UTF_8);
+        assertThat(productNameOf(body, plov.defaultVariantId()))
+                .as("named only in the brand default: not a blank next to the SKU")
+                .isEqualTo("Плов");
+        assertThat(productNameOf(body, burgerVariantId))
+                .as("named only in the server's locale: the fallback, not a blank")
+                .isEqualTo("Burger");
+    }
+
     // -------------------------------------------------------------------- bind
 
     @Test
@@ -389,6 +432,26 @@ class MenuControllerTests {
                 .param("variantId", variantId)
                 .param("availability", availability)
                 .update();
+    }
+
+    private void brandDefault(String locale) {
+        jdbc.sql("""
+                INSERT INTO tenant.brand_locales (tenant_id, brand_id, locale, is_default)
+                VALUES (:t, :b, :locale, true)
+                """)
+                .param("t", TENANT)
+                .param("b", BRAND)
+                .param("locale", locale)
+                .update();
+    }
+
+    private static String productNameOf(String itemsBody, UUID variantId) {
+        for (tools.jackson.databind.JsonNode item : JSON.readTree(itemsBody)) {
+            if (variantId.toString().equals(item.path("variantId").asString())) {
+                return item.path("productName").asString();
+            }
+        }
+        throw new AssertionError("variant " + variantId + " is not in " + itemsBody);
     }
 
     private long menuCount() {
