@@ -457,6 +457,7 @@
     "roundAttachFailed": "Buyurtma oshxonada, lekin uni stol hisobiga qo'shib bo'lmadi. Xodimga ayting.",
     "heldUnavailable": "Endi mavjud emas. Davom etish uchun uni buyurtmadan olib tashlang.",
     "clearOrder": "Buyurtmani tozalash",
-    "priceRefreshed": "Narx yangilandi, buyurtma yuborilmadi. Jamini tekshirib, «Buyurtma berish» tugmasini yana bosing."
+    "priceRefreshed": "Narx yangilandi, buyurtma yuborilmadi. Jamini tekshirib, «Buyurtma berish» tugmasini yana bosing.",
+    "sessionEnded": "Bu stoldagi tashrif tugadi. Buyurtmani davom ettirish uchun stolingizdagi kodni qayta skanerlang."
   }
 }

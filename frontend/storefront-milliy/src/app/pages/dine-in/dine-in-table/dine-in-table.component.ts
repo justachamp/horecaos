@@ -9,7 +9,7 @@ import {
 import { Router, RouterLink } from '@angular/router';
 
 import { newIdempotencyKey } from '../../../core/api/idempotency';
-import { HorecaOSApiError, messageKeyFor } from '../../../core/api/problem-details';
+import { HorecaOSApiError, isNotFound, messageKeyFor } from '../../../core/api/problem-details';
 import { ReturnDestination } from '../../../core/auth/return-destination';
 import { Session } from '../../../core/auth/session';
 import { formatMoney, money } from '../../../core/money/money';
@@ -131,8 +131,16 @@ export class DineInTableComponent implements OnInit {
   /** Only `ORDER_AND_PAY` orders; `VIEW_ONLY` -- and any mode this build does not know -- is a menu. */
   protected readonly canOrder = computed(() => this.admission()?.mode === 'ORDER_AND_PAY');
   protected readonly isSeated = computed(() => !!this.admission()?.openSessionId);
+  /**
+   * The platform answered that the session this screen was opened with is not the
+   * table's live one any more (closed, and perhaps the table seated afresh). A
+   * round put on it would be refused, so nothing is offered to put on it.
+   */
+  protected readonly sessionEnded = signal(false);
   /** The table takes orders and has a session to put them on. */
-  protected readonly ordering = computed(() => this.canOrder() && this.isSeated());
+  protected readonly ordering = computed(
+    () => this.canOrder() && this.isSeated() && !this.sessionEnded(),
+  );
 
   protected readonly loading = signal(true);
   protected readonly failed = signal(false);
@@ -146,6 +154,8 @@ export class DineInTableComponent implements OnInit {
 
   protected readonly bill = signal<DineInBill | null>(null);
   protected readonly billBusy = signal(false);
+  /** Why the bill could not be read or asked for; said on the screen, cleared by the next try. */
+  protected readonly billErrorKey = signal<string | null>(null);
   /** An order the platform refused to put on the bill for good -- the guest is told to ask staff. */
   protected readonly roundLost = signal(false);
   /**
@@ -548,6 +558,7 @@ export class DineInTableComponent implements OnInit {
       return;
     }
     this.billBusy.set(true);
+    this.billErrorKey.set(null);
     try {
       // An order that never made it onto the bill goes first: its attach answers
       // with the bill, and a plain read would show the table without it.
@@ -561,11 +572,28 @@ export class DineInTableComponent implements OnInit {
         this.bill.set(await this.dineIn.bill(sessionId));
       }
     } catch (failure) {
-      if (this.dineIn.isGuestSessionEnded(failure)) {
-        this.dineIn.clear();
-      }
+      this.failBill(failure);
     } finally {
       this.billBusy.set(false);
+    }
+  }
+
+  /**
+   * What a failed bill call means for the guest, said on the screen.
+   *
+   * A guest token the platform no longer recognises ends the visit. A session it
+   * no longer knows (404: closed, or the table seated afresh) ends *ordering* --
+   * the menu stays -- because a round would be refused. Anything else (no
+   * connection, a fault) is a message and a way to try again; the button that was
+   * pressed is never left looking as if it did something.
+   */
+  private failBill(failure: unknown): void {
+    if (this.dineIn.isGuestSessionEnded(failure)) {
+      this.dineIn.clear();
+    } else if (isNotFound(failure)) {
+      this.sessionEnded.set(true);
+    } else {
+      this.billErrorKey.set(failureKey(failure));
     }
   }
 
@@ -584,12 +612,11 @@ export class DineInTableComponent implements OnInit {
       return;
     }
     this.billBusy.set(true);
+    this.billErrorKey.set(null);
     try {
       this.bill.set(await this.dineIn.requestBill(sessionId));
     } catch (failure) {
-      if (this.dineIn.isGuestSessionEnded(failure)) {
-        this.dineIn.clear();
-      }
+      this.failBill(failure);
     } finally {
       this.billBusy.set(false);
     }

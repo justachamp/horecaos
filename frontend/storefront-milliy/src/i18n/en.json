@@ -457,6 +457,7 @@
     "roundAttachFailed": "Your order is with the kitchen, but it could not be added to the table bill. Please tell a member of staff.",
     "heldUnavailable": "No longer available. Take it out of your order to continue.",
     "clearOrder": "Clear the order",
-    "priceRefreshed": "The price was updated and your order has not been sent. Check the total and press Order again."
+    "priceRefreshed": "The price was updated and your order has not been sent. Check the total and press Order again.",
+    "sessionEnded": "This table visit has ended. Scan the code on your table again to keep ordering."
   }
 }

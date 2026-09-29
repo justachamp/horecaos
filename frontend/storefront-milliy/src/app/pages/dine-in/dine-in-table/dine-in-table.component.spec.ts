@@ -1284,6 +1284,98 @@ describe('DineInTableComponent', () => {
       expect(view.q('dine-in-request-bill')).toBeNull();
     });
 
+    describe('when the bill cannot be reached', () => {
+      const offlineFailure = () =>
+        new HorecaOSApiError({ status: 0, code: 'NETWORK_UNREACHABLE', detail: 'offline' });
+      const noSuchSession = () =>
+        new HorecaOSApiError({ status: 404, code: 'RESOURCE_NOT_FOUND', detail: 'no such session' });
+
+      it('asking for the bill that fails says so, keeps the button, and clears the message on the next try', async () => {
+        const view = setUp();
+        view.dineIn.seed(admission());
+        view.dineIn.bill.mockResolvedValue(bill({ totalMinor: 45_000, roundCount: 1 }));
+        await settle(view.fixture);
+        view.dineIn.requestBill.mockRejectedValueOnce(offlineFailure());
+
+        await view.click('dine-in-request-bill');
+
+        expect(view.q('dine-in-bill-error')?.textContent).toContain('errors.offline');
+        expect(view.q('dine-in-bill-requested')).toBeNull();
+        expect((view.q('dine-in-request-bill') as HTMLButtonElement).disabled).toBe(false);
+
+        view.dineIn.requestBill.mockResolvedValue(
+          bill({ status: 'BILL_REQUESTED', totalMinor: 45_000, roundCount: 1 }),
+        );
+        await view.click('dine-in-request-bill');
+
+        expect(view.q('dine-in-bill-error')).toBeNull();
+        expect(view.q('dine-in-bill-requested')).not.toBeNull();
+      });
+
+      it('a bill that cannot be read on arrival says so and offers to try again', async () => {
+        const view = setUp();
+        view.dineIn.seed(admission());
+        view.dineIn.bill.mockRejectedValueOnce(offlineFailure());
+
+        await settle(view.fixture);
+
+        expect(view.q('dine-in-bill')).toBeNull();
+        expect(view.q('dine-in-bill-error')?.textContent).toContain('errors.offline');
+        expect(view.q('dine-in-bill-retry')).not.toBeNull();
+
+        view.dineIn.bill.mockResolvedValue(bill({ totalMinor: 45_000, roundCount: 1 }));
+        await view.click('dine-in-bill-retry');
+
+        expect(view.q('dine-in-bill-error')).toBeNull();
+        expect(view.q('dine-in-bill-retry')).toBeNull();
+        expect(view.q('dine-in-bill-total')?.textContent).toContain('45\u00a0000');
+      });
+
+      it('keeps the last bill it read on screen when a refresh fails, and says so', async () => {
+        const view = setUp();
+        view.dineIn.seed(admission());
+        view.dineIn.bill.mockResolvedValue(bill({ totalMinor: 45_000, roundCount: 1 }));
+        await settle(view.fixture);
+        view.dineIn.requestBill.mockRejectedValue(offlineFailure());
+
+        await view.click('dine-in-request-bill');
+
+        expect(view.q('dine-in-bill-total')?.textContent).toContain('45\u00a0000');
+        expect(view.q('dine-in-bill-error')).not.toBeNull();
+        // The ask has its own button; a second "try again" beside it would be two answers to one question.
+        expect(view.q('dine-in-bill-retry')).toBeNull();
+      });
+
+      it('a session the platform no longer knows ends ordering and says why, leaving the menu', async () => {
+        const view = setUp();
+        view.dineIn.seed(admission());
+        view.dineIn.bill.mockRejectedValue(noSuchSession());
+
+        await settle(view.fixture);
+
+        expect(view.q('dine-in-session-ended')?.textContent).toContain('dineIn.sessionEnded');
+        expect(view.q('dine-in-add')).toBeNull();
+        expect(view.q('dine-in-order')).toBeNull();
+        expect(view.q('dine-in-signin')).toBeNull();
+        expect(view.q('dish-card')).not.toBeNull();
+        // Not a guest token problem: the visit is kept, so the menu stays readable.
+        expect(view.dineIn.clear).not.toHaveBeenCalled();
+      });
+
+      it('asking for the bill of a session the platform no longer knows ends ordering too', async () => {
+        const view = setUp();
+        view.dineIn.seed(admission());
+        view.dineIn.bill.mockResolvedValue(bill({ totalMinor: 45_000, roundCount: 1 }));
+        await settle(view.fixture);
+        view.dineIn.requestBill.mockRejectedValue(noSuchSession());
+
+        await view.click('dine-in-request-bill');
+
+        expect(view.q('dine-in-session-ended')).not.toBeNull();
+        expect(view.q('dine-in-add')).toBeNull();
+      });
+    });
+
     it('a guest token the platform no longer recognises clears the visit instead of leaving a broken screen up', async () => {
       const view = setUp();
       view.dineIn.seed(admission());
