@@ -63,7 +63,7 @@
   border-radius: 50%;
   background: var(--q-primary);
   color: var(--q-inverse-ink);
-  font-size: 10px;
+  font-size: var(--q-type-caption-sm);
   line-height: 16px;
   text-align: center;
 }
