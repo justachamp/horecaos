@@ -1050,6 +1050,7 @@ export interface CommentPresetChip {
   labelEn?: string;
   labelRu?: string;
   labelUz?: string;
+  labels?: { [key: string]: string };
 }
 
 export interface CommercialOperationsControllerEntitlementSnapshotResponse {
@@ -2413,6 +2414,7 @@ export interface LatenessPolicyResponse {
   delivery?: LatenessThresholdsResponse;
   dineIn?: LatenessThresholdsResponse;
   isPlatformDefault?: boolean;
+  lateColour?: string;
   pickup?: LatenessThresholdsResponse;
   policyId?: string;
   policyVersion?: number;
@@ -3582,6 +3584,12 @@ export interface PaymentIntentResponse {
   tender?: string;
 }
 
+export interface PaymentMethodControllerLocaleSetResponse {
+  configured?: boolean;
+  defaultLocale?: string;
+  locales?: Array<string>;
+}
+
 export interface PaymentMethodView {
   code?: string;
   contractReference?: string;
@@ -3649,6 +3657,7 @@ export interface PlaceOrderRequest {
   channelCode: string;
   customerAccountId: string;
   destination?: OperationsOrderControllerDestinationRequest;
+  dineInSessionId?: string;
   fulfillmentMode: "DELIVERY" | "PICKUP" | "DINE_IN";
   lines: Array<OrderLineRequest>;
   overrideNote?: string;
@@ -4629,7 +4638,14 @@ export interface SessionResponse {
   sessionId?: string;
   settledTotalMinor?: number;
   status?: string;
+  tables?: Array<SessionTableResponse>;
   version?: number;
+}
+
+export interface SessionTableResponse {
+  code?: string;
+  displayName?: string;
+  tableId?: string;
 }
 
 export interface SetLocationTagsRequest {
@@ -5732,6 +5748,7 @@ export interface Operations {
   "match": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/partner-delivery-invoices/{invoiceId}/match"; request: { parameters: { path: { invoiceId: string; tenantId: string } }; body: MatchRequest }; responses: { "200": MatchReport } };
   "list_9": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/payment-methods"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<PaymentMethodView> } };
   "create_5": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/payment-methods"; request: { parameters: { path: { tenantId: string } }; body: CreatePaymentMethodRequest }; responses: { "200": PaymentMethodView } };
+  "localeSet_1": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/payment-methods/locale-set"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": PaymentMethodControllerLocaleSetResponse } };
   "update_2": { method: "PUT"; path: "/api/v1/operations/tenants/{tenantId}/payment-methods/{methodId}"; request: { parameters: { path: { methodId: string; tenantId: string }; query: { expectedVersion: number } }; body: UpdatePaymentMethodRequest }; responses: { "200": PaymentMethodView } };
   "activate_2": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/payment-methods/{methodId}/activate"; request: { parameters: { path: { methodId: string; tenantId: string }; query: { expectedVersion: number } } }; responses: { "200": PaymentMethodView } };
   "disable": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/payment-methods/{methodId}/disable"; request: { parameters: { path: { methodId: string; tenantId: string }; query: { expectedVersion: number } } }; responses: { "200": PaymentMethodView } };
@@ -5857,6 +5874,7 @@ export interface Operations {
   "find": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/reservations/{reservationId}"; request: { parameters: { path: { brandId: string; locationId: string; reservationId: string; tenantId: string }; query: { purpose?: string } } }; responses: { "200": ReservationResponse } };
   "amend": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/reservations/{reservationId}/amendments"; request: { parameters: { path: { brandId: string; locationId: string; reservationId: string; tenantId: string } }; body: AmendmentRequest }; responses: { "200": ReservationResponse } };
   "stateAction": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/reservations/{reservationId}/state-actions"; request: { parameters: { path: { brandId: string; locationId: string; reservationId: string; tenantId: string } }; body: ReservationControllerStateActionRequest }; responses: { "200": ReservationResponse } };
+  "issueAtLocation": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/staff/telegram/link-codes"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } } }; responses: { "200": LinkCodeResponse } };
   "availability": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/table-availability"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string }; query: { from: string; to: string } } }; responses: { "200": Array<AvailabilityResponse> } };
   "list_4": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/attribution-links"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<AttributionLinkResponse> } };
   "mint": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/attribution-links"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: MintRequest }; responses: { "200": AttributionLinkResponse } };

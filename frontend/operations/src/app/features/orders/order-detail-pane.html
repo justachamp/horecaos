@@ -60,6 +60,7 @@
             class="q-caption pane__severity-caption"
             [class.pane__severity-caption--danger]="severity.tone === 'danger'"
             [class.pane__severity-caption--warning]="severity.tone === 'warning'"
+            [style.--q-sla-late-text]="lateColourFor(severity)"
           >
             {{ caption }}
           </p>

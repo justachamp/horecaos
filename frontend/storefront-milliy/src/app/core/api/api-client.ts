@@ -45,6 +45,21 @@ export interface ReadOptions {
   /** Sent as `If-None-Match`; a 304 is surfaced as a null body by the caller. */
   readonly etag?: string;
   readonly anonymous?: boolean;
+  /**
+   * Extra headers this one call needs beyond the platform's own conventions
+   * (`Accept`, `X-Correlation-Id`) and the bearer the interceptors already
+   * attach. The dine-in QR flow is the one caller today: the guest's
+   * table-scoped token (`X-Dine-In-Token`, ADR 0047) authorises those reads
+   * instead of -- and alongside -- `anonymous`, since there is no customer
+   * principal for the bearer interceptor to find.
+   *
+   * A header here never displaces one this client sets itself
+   * (`If-None-Match`, `Idempotency-Key`, `If-Match`): those are ADR 0031's, and
+   * a caller that could overwrite them would defeat the point of enforcing them
+   * here. Like the bearer, these travel only on {@link PLATFORM_API_REQUEST}
+   * calls -- `ApiClient` is the only place that marks one.
+   */
+  readonly headers?: Readonly<Record<string, string>>;
 }
 
 export interface MutateOptions<B> {
@@ -69,6 +84,8 @@ export interface MutateOptions<B> {
    * anonymous in the platform's audit trail.
    */
   readonly anonymous?: boolean;
+  /** See {@link ReadOptions.headers} -- the same one caller, the same reason. */
+  readonly headers?: Readonly<Record<string, string>>;
 }
 
 /**
@@ -86,6 +103,9 @@ export class ApiClient {
   /** @param path relative to `apiBaseUrl`, beginning with a slash. */
   get<T>(path: string, options: ReadOptions = {}): Promise<T> {
     let headers = new HttpHeaders();
+    for (const [name, value] of Object.entries(options.headers ?? {})) {
+      headers = headers.set(name, value);
+    }
     if (options.etag) {
       headers = headers.set('If-None-Match', options.etag);
     }
@@ -127,10 +147,13 @@ export class ApiClient {
     path: string,
     options: MutateOptions<B> = {},
   ): Promise<T> {
-    let headers = new HttpHeaders().set(
-      'Idempotency-Key',
-      options.idempotencyKey ?? newIdempotencyKey(),
-    );
+    // The caller's headers go first so this client's own ADR 0031 headers, set
+    // below, always win a name clash.
+    let headers = new HttpHeaders();
+    for (const [name, value] of Object.entries(options.headers ?? {})) {
+      headers = headers.set(name, value);
+    }
+    headers = headers.set('Idempotency-Key', options.idempotencyKey ?? newIdempotencyKey());
 
     if (options.expectedVersion !== undefined) {
       headers = headers.set('If-Match', weakETag(options.expectedVersion));

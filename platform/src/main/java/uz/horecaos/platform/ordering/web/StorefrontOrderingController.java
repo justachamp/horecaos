@@ -85,6 +85,14 @@ import uz.horecaos.platform.web.idempotency.Idempotent;
 @Tag(name = "Storefront ordering", description = "Carts, checkout, and a customer's own orders")
 public class StorefrontOrderingController {
 
+    /**
+     * The table-scoped guest token a scan minted (ADR 0047). The same header
+     * {@code QrEntryController} reads, and deliberately not {@code Authorization:
+     * Bearer}: this call carries both credentials -- the customer's session, for
+     * whose cart it is, and this token, for which table it is eaten at.
+     */
+    static final String DINE_IN_TOKEN_HEADER = "X-Dine-In-Token";
+
     private final CartService carts;
     private final CheckoutService checkout;
     private final CartPaymentOptions paymentOptions;
@@ -268,6 +276,37 @@ public class StorefrontOrderingController {
         }
     }
 
+    @PutMapping("/carts/{cartId}/table")
+    @CustomerOwned
+    @Idempotent
+    @Operation(
+            summary = "Bind a dine-in cart to the table the guest scanned",
+            description = "ADR 0047's cart-to-table binding. The table is read from the guest's "
+                    + "dine-in token (X-Dine-In-Token), never from the request: a body that named "
+                    + "its own table would be a claim a client could edit to reach the next "
+                    + "table's bill. Checkout then asks for the same token again (the binding "
+                    + "is remembered state, so the guest is re-proved), refuses the order if "
+                    + "nobody is seated and otherwise puts it on the table's bill in the same "
+                    + "transaction that creates it, so the round cannot be lost between two "
+                    + "requests. Clears any attached quote, because a bound cart is another "
+                    + "cart; re-price before checkout.")
+    public ResponseEntity<CartResponse> bindTable(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID cartId,
+            @RequestHeader(DINE_IN_TOKEN_HEADER) @NotBlank String guestToken,
+            jakarta.servlet.http.HttpServletRequest request) {
+        try {
+            long expected = AggregateVersion.requireIfMatch(request);
+            return ResponseEntity.ok(CartResponse.of(carts.bindTable(
+                    tenantId, brandId, accountId(tenantId, brandId), cartId, (int) expected, guestToken)));
+        } catch (CartService.StaleCartException stale) {
+            throw ApiException.staleVersion(stale.expected(), stale.actual());
+        } catch (CartService.CartRefusedException refused) {
+            throw refusal(refused);
+        }
+    }
+
     @GetMapping("/carts/{cartId}/destination")
     @CustomerOwned
     @Operation(
@@ -396,11 +435,17 @@ public class StorefrontOrderingController {
             summary = "Turn a priced cart into an order",
             description = "Idempotent under the tenant-scoped Idempotency-Key. Repeating the "
                     + "request returns the same order; a settled business rejection returns the "
-                    + "same rejection rather than running again against a changed cart.")
+                    + "same rejection rather than running again against a changed cart. A cart "
+                    + "bound to a table (ADR 0047) also needs the guest's live dine-in token "
+                    + "(X-Dine-In-Token) at the table it is bound to: the binding is remembered "
+                    + "state, and the order goes on the bill of whoever sits there now, so the "
+                    + "guest is re-proved at checkout. Without it the answer is a conflict "
+                    + "(reason TABLE_TOKEN_REQUIRED, TABLE_TOKEN_ENDED or TABLE_BINDING_STALE).")
     public ResponseEntity<CheckoutResponse> checkout(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @RequestHeader("Idempotency-Key") @NotBlank String idempotencyKey,
+            @RequestHeader(value = DINE_IN_TOKEN_HEADER, required = false) @Nullable String dineInGuestToken,
             @Valid @RequestBody CheckoutRequest body) {
 
         // Checkout takes the cart by id and scopes it to the tenant and the brand,
@@ -432,7 +477,8 @@ public class StorefrontOrderingController {
                 // Row 1.3d's requested-time picker is the operator order-intake
                 // screen's own (ADR 0039); a customer's own checkout never sends one.
                 null,
-                false));
+                false,
+                dineInGuestToken));
 
         if (result.outcome() == CheckoutService.CheckoutResult.Outcome.REJECTED) {
             // A settled business answer, and a conflict rather than a fault: the
@@ -637,6 +683,12 @@ public class StorefrontOrderingController {
                             "CUSTOMER_BLACKLISTED",
                             "DESTINATION_NOT_APPLICABLE",
                             "DESTINATION_NOT_LOCATED",
+                            // ADR 0047: a table binding asked of a cart that is not
+                            // eaten at one, or scanned at another branch -- a request
+                            // the cart's own identity refuses, the same class as the
+                            // destination pair above.
+                            "TABLE_NOT_APPLICABLE",
+                            "TABLE_NOT_AT_THIS_BRANCH",
                             // ADR 0072: a well-formed request against a code whose current
                             // state refuses it — nothing in the body is wrong, the coupon is
                             // just not usable right now, the same class of answer
@@ -677,6 +729,15 @@ public class StorefrontOrderingController {
             // order (its subtotal against the tenant's configured floor)
             // rather than anything wrong with the request body.
             case "BELOW_MINIMUM_ORDER" -> ErrorCode.RESOURCE_CONFLICT;
+            // ADR 0047: the cart is bound to a table nobody is sitting at now -- the
+            // party left or a host closed the session while the guest was choosing.
+            // Nothing in the body is wrong; a fact about the room moved.
+            case "TABLE_NOT_SEATED" -> ErrorCode.RESOURCE_CONFLICT;
+            // The same cart, no longer provably at its table: no token was presented, the
+            // token has ended (the party closed, the code was rotated) or it is for
+            // another table than the cart was bound to. A conflict and never a 401: the
+            // customer's own sign-in is fine, and a 401 here would sign them out.
+            case "TABLE_TOKEN_REQUIRED", "TABLE_TOKEN_ENDED", "TABLE_BINDING_STALE" -> ErrorCode.RESOURCE_CONFLICT;
             // A well-formed request against an account this checkout will never
             // accept. A conflict for the same reason GUEST_ORDERS_NOT_ALLOWED and
             // NOT_SERVICEABLE are (below, by way of the default): nothing in the

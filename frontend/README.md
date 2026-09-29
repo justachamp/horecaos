@@ -57,6 +57,25 @@ comments) and is wired into its `npm run verify`, but nothing calls that script 
 there is no CI configured for any of the three apps yet. `operations`'s vendored copy is
 verified by eye, not by a script.
 
+## Formatting and lint in CI
+
+Only `operations` has a lint script and a `format`/`format:check` pair today; the CI job
+`Frontend builds (operations)` runs two gates the other three apps do not:
+
+- **`npm run lint` and `npm run lint:rules`.** `eslint-plugin-horecaos` rejects a raw
+  `font-size: 10px` anywhere under `src/` (use a `--q-type-*` token or a `.q-*` class from
+  `tokens.css`). Both are clean; the job fails on the first regression.
+- **`npm run format:check`** on the whole `src/` tree (`ts`, `html`, `css`, `json`). The
+  tree is prettier-clean and CI keeps it so; fix a failure with `npm run format` in the
+  app. `tools/format_changed.py` is a local shortcut that checks (or, with `--list`, only
+  names) the files your change touched against a base branch; CI does not use it.
+
+  ```bash
+  python3 frontend/tools/format_changed.py --app operations --base main --list   # what would be checked
+  python3 frontend/tools/format_changed.py --app operations --base main          # check it (needs npm ci)
+  python3 frontend/tools/test_format_changed.py                                  # the tooling tests, also run in CI
+  ```
+
 ## Known debts
 
 - **Two OIDC libraries against one Keycloak realm.** `control-plane` uses

@@ -133,7 +133,10 @@
               <span>{{ plan.customerDeliveryFeeMinor }} {{ plan.currency }}</span>
             </div>
             @if (plan.destinationLabel) {
-              <p class="dispatch-card__destination q-caption" data-testid="dispatch-card-destination">
+              <p
+                class="dispatch-card__destination q-caption"
+                data-testid="dispatch-card-destination"
+              >
                 {{ plan.destinationLabel }}
               </p>
             }

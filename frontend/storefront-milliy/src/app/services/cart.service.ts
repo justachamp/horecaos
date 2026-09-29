@@ -55,15 +55,34 @@ export class CartService {
   }
 
   /**
+   * Where a cart's id is remembered, per scope -- the location, for a delivery
+   * or pickup basket. Overridden by {@link DineInCartService}, whose baskets
+   * must never be found by (or find) the delivery basket.
+   */
+  protected get storagePrefix(): string {
+    return STORAGE_PREFIX;
+  }
+
+  /**
    * The cart for this location, reloaded or created.
    *
    * @param create when false, a customer with no cart yet gets null rather than
    *        an empty cart. Browsing must not mint a cart per visit.
+   * @param channel overrides this deployment's own configured channel -- see
+   *        {@link create}.
+   * @param scope what the cart's id is remembered against, when that is not the
+   *        location: a table basket is remembered against its table session
+   *        (`DineInCartService`), so a later evening at the same location does
+   *        not reopen this one's basket.
    */
-  async ensure(locationId: string, fulfillmentMode: FulfillmentMode,
-      create = true): Promise<PlatformCart | null> {
-
-    const stored = readCartId(locationId);
+  async ensure(
+    locationId: string,
+    fulfillmentMode: FulfillmentMode,
+    create = true,
+    channel?: string,
+    scope: string = locationId,
+  ): Promise<PlatformCart | null> {
+    const stored = this.readCartId(scope);
     if (stored) {
       try {
         const cart = await this.api.get<PlatformCart>(`${this.brandPath}/carts/${stored}`);
@@ -73,29 +92,42 @@ export class CartService {
           this.cart.set(cart);
           return cart;
         }
-        forgetCartId(locationId);
+        this.forgetCartId(scope);
       } catch (failure) {
         // Not found covers "checked out", "expired" and "never existed". All
         // three mean the same thing here: start again.
         if (!isNotFound(failure)) {
           throw failure;
         }
-        forgetCartId(locationId);
+        this.forgetCartId(scope);
       }
     }
     if (!create) {
       this.cart.set(null);
       return null;
     }
-    return this.create(locationId, fulfillmentMode);
+    return this.create(locationId, fulfillmentMode, channel, scope);
   }
 
-  async create(locationId: string, fulfillmentMode: FulfillmentMode): Promise<PlatformCart> {
+  /**
+   * @param channel overrides this deployment's own configured channel -- the
+   *        dine-in QR flow's cart is opened on the table's `QR_TABLE` channel,
+   *        never this build's `config.channel` (ADR 0036: the channel supplies
+   *        the publication and the price plane, so a table basket priced on
+   *        another channel would change price at checkout).
+   * @param scope see {@link ensure}.
+   */
+  async create(
+    locationId: string,
+    fulfillmentMode: FulfillmentMode,
+    channel?: string,
+    scope: string = locationId,
+  ): Promise<PlatformCart> {
     const cart = await this.api.mutate<PlatformCart>('POST', `${this.brandPath}/carts`, {
-      body: { locationId, channel: this.config.channel, fulfillmentMode },
+      body: { locationId, channel: channel ?? this.config.channel, fulfillmentMode },
       idempotencyKey: newIdempotencyKey(),
     });
-    rememberCartId(locationId, cart.cartId);
+    this.rememberCartId(scope, cart.cartId);
     this.cart.set(cart);
     return cart;
   }
@@ -312,10 +344,66 @@ export class CartService {
     });
   }
 
-  /** Forgets this location's cart entirely. Called after a successful checkout. */
-  discard(locationId: string): void {
-    forgetCartId(locationId);
+  /**
+   * Binds a `DINE_IN` cart to the table the guest scanned (ADR 0047).
+   *
+   * The table is never sent: the platform reads it from the table-scoped guest
+   * token in `headers` (`X-Dine-In-Token`), so a request edited to name the next
+   * table's cart binding has nothing to edit. With the binding in place checkout
+   * puts the order on the table's bill in the transaction that creates it -- the
+   * round cannot be lost between two requests -- and refuses the order outright,
+   * before anything is written, if nobody is seated there (`TABLE_NOT_SEATED`).
+   *
+   * The caller supplies the headers because the token is not this class's to
+   * hold: `DineInService.bindCartToTable` builds them and is the only way a table
+   * screen gets a cart bound.
+   *
+   * A write to the cart like any other: the version moves and a price already
+   * attached is cleared, so call it before pricing.
+   */
+  async bindTable(headers: Readonly<Record<string, string>>): Promise<PlatformCart> {
+    return this.withVersion((cart, version) =>
+      this.api.mutate<PlatformCart>('PUT', `${this.brandPath}/carts/${cart.cartId}/table`, {
+        expectedVersion: version,
+        idempotencyKey: newIdempotencyKey(),
+        headers,
+      }),
+    );
+  }
+
+  /**
+   * Forgets this location's cart entirely. Called after a successful checkout.
+   *
+   * @param scope what the id was remembered against when that was not the
+   *        location -- see {@link ensure}.
+   */
+  discard(locationId: string, scope: string = locationId): void {
+    this.forgetCartId(scope);
     this.cart.set(null);
+  }
+
+  private readCartId(scope: string): string | null {
+    try {
+      return localStorage.getItem(this.storagePrefix + scope);
+    } catch {
+      return null;
+    }
+  }
+
+  private rememberCartId(scope: string, cartId: string): void {
+    try {
+      localStorage.setItem(this.storagePrefix + scope, cartId);
+    } catch {
+      // The basket lives for this page only. Better than refusing to sell.
+    }
+  }
+
+  private forgetCartId(scope: string): void {
+    try {
+      localStorage.removeItem(this.storagePrefix + scope);
+    } catch {
+      // Nothing stored.
+    }
   }
 
   /**
@@ -410,30 +498,6 @@ export function modifierOptionIdsFromLineKey(
 }
 
 const STORAGE_PREFIX = 'horecaos_cart_';
-
-function readCartId(locationId: string): string | null {
-  try {
-    return localStorage.getItem(STORAGE_PREFIX + locationId);
-  } catch {
-    return null;
-  }
-}
-
-function rememberCartId(locationId: string, cartId: string): void {
-  try {
-    localStorage.setItem(STORAGE_PREFIX + locationId, cartId);
-  } catch {
-    // The basket lives for this page only. Better than refusing to sell.
-  }
-}
-
-function forgetCartId(locationId: string): void {
-  try {
-    localStorage.removeItem(STORAGE_PREFIX + locationId);
-  } catch {
-    // Nothing stored.
-  }
-}
 
 export type FulfillmentMode = 'DELIVERY' | 'PICKUP' | 'DINE_IN';
 

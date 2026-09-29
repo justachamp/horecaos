@@ -40,6 +40,27 @@
   color: var(--q-error-text);
 }
 
+/* Advisory findings (settings.md §10.0): worth doing, not blocking trade. */
+.readiness__row--advisory a,
+.readiness__row--advisory span {
+  color: var(--q-warning-text);
+}
+
+.readiness__row .readiness__advisory {
+  margin-left: 8px;
+  padding: 1px 6px;
+  border-radius: var(--q-radius);
+  background: var(--q-warning-tint);
+  color: var(--q-warning-text);
+}
+
+/* Which brand, channel, connection or legal entity the row is about. */
+.readiness__row .readiness__scope {
+  display: block;
+  margin-top: 2px;
+  color: var(--q-ink-subtle);
+}
+
 .muted {
   color: var(--q-ink-subtle);
 }

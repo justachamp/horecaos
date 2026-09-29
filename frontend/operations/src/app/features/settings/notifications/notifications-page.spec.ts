@@ -88,13 +88,11 @@ describe('NotificationsPage', () => {
       version: vi.fn().mockResolvedValue([]),
       variableCatalogue: vi.fn().mockResolvedValue([]),
       activate: vi.fn().mockResolvedValue(undefined),
-      addVersion: vi
-        .fn()
-        .mockResolvedValue({
-          templateId: 'template-2',
-          versionNumber: 1,
-          awaitsProviderReview: false,
-        }),
+      addVersion: vi.fn().mockResolvedValue({
+        templateId: 'template-2',
+        versionNumber: 1,
+        awaitsProviderReview: false,
+      }),
       testSend: vi
         .fn()
         .mockResolvedValue({ status: 'ACCEPTED', providerStatus: null, errorCode: null }),

@@ -9,6 +9,7 @@ import { CursorState, Page } from '../../core/api/page';
 import { ApiError, ApiErrorCode } from '../../core/api/problem-details';
 import { CurrentBrand } from '../../core/auth/current-brand';
 import { I18n, Locale } from '../../core/i18n/i18n';
+import { LocaleSet } from '../../core/i18n/locale-set';
 import { CatalogApi } from './catalog-api';
 import { PriceBookMatrixRow, PriceBookSummary } from './catalog-domain';
 import { PriceBookMatrixPage } from './price-book-matrix-page';
@@ -49,6 +50,14 @@ async function flushMicrotasks(): Promise<void> {
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
 }
 
+/** Row 10.12: a brand's resolved locale set; unconfigured by default, the way `categories-page.spec.ts` fakes it. */
+class FakeLocaleSet {
+  readonly locales = signal<readonly Locale[]>(['ru', 'uz-Latn', 'en']);
+  readonly defaultLocale = signal<Locale>('ru');
+  readonly isConfigured = signal(false);
+  ensureLoaded = vi.fn().mockResolvedValue(undefined);
+}
+
 describe('PriceBookMatrixPage', () => {
   let fixture: ComponentFixture<PriceBookMatrixPage>;
 
@@ -60,6 +69,7 @@ describe('PriceBookMatrixPage', () => {
     },
     priceBookId: string | null = BOOK_ID,
     locale: Locale = 'en',
+    localeSet: FakeLocaleSet = new FakeLocaleSet(),
   ): Promise<void> {
     await TestBed.configureTestingModule({
       imports: [PriceBookMatrixPage],
@@ -79,6 +89,7 @@ describe('PriceBookMatrixPage', () => {
             snapshot: { paramMap: convertToParamMap(priceBookId ? { priceBookId } : {}) },
           },
         },
+        { provide: LocaleSet, useValue: localeSet },
         { provide: PricingApi, useValue: pricing },
         { provide: CatalogApi, useValue: catalog },
       ],
@@ -175,11 +186,16 @@ describe('PriceBookMatrixPage', () => {
     expect(matrixSpy).toHaveBeenCalledTimes(1);
     const [, , state, filters] = matrixSpy.mock.calls[0];
     expect(state.cursor).toBeNull();
-    expect(filters).toEqual({ categoryId: 'cat-1', locale: 'en' });
+    // The brand has configured no set here, so the matrix reads the locale the server
+    // resolves for it (`uz`), whatever the console (`en`) is set to.
+    expect(filters).toEqual({ categoryId: 'cat-1', locale: 'uz' });
   });
 
-  it("sends the operator's own UI locale, not the server's uz default", async () => {
-    const matrixPage: Page<PriceBookMatrixRow> = { items: [row()], nextCursor: null };
+  /** Renders the page and returns the filters the first matrix read carried. */
+  async function firstMatrixFilters(
+    consoleLocale: Locale,
+    localeSet: FakeLocaleSet,
+  ): Promise<{ readonly locale?: string } | undefined> {
     const matrixSpy = vi.fn(
       (
         _scope: BrandScope,
@@ -190,28 +206,41 @@ describe('PriceBookMatrixPage', () => {
           readonly differsFromBase?: boolean;
           readonly locale?: string;
         },
-      ) => of<Page<PriceBookMatrixRow>>(matrixPage),
+      ) => of<Page<PriceBookMatrixRow>>({ items: [row()], nextCursor: null }),
     );
     await render(
-      {
-        readPriceBook: () => of(BOOK),
-        matrix: matrixSpy,
-      },
-      {
-        listCatalogs: () => of([]),
-        listCategories: () => of([]),
-      },
+      { readPriceBook: () => of(BOOK), matrix: matrixSpy },
+      { listCatalogs: () => of([]), listCategories: () => of([]) },
       BOOK_ID,
-      'ru',
+      consoleLocale,
+      localeSet,
     );
-
-    // A console set to Russian must not silently fall back to
-    // PriceAuthoringController.matrix's own `uz` default: displayName and
-    // categoryName come from whichever locale is sent, and every other
-    // catalog screen's own locale-bearing call already sends the operator's.
     expect(matrixSpy).toHaveBeenCalledTimes(1);
-    const [, , , filters] = matrixSpy.mock.calls[0];
-    expect(filters).toMatchObject({ locale: 'ru' });
+    return matrixSpy.mock.calls[0][3];
+  }
+
+  it("reads names in the brand's own default language, not the operator's console language", async () => {
+    // The console is Russian; the brand's menu is in English. displayName and categoryName
+    // come from whichever locale is sent, so two operators of one brand must send the same one.
+    const localeSet = new FakeLocaleSet();
+    localeSet.locales.set(['en', 'ru']);
+    localeSet.defaultLocale.set('en');
+    localeSet.isConfigured.set(true);
+
+    expect(await firstMatrixFilters('ru', localeSet)).toMatchObject({ locale: 'en' });
+  });
+
+  it('maps a brand default of uz-Latn to the catalog’s uz, and an unconfigured brand to the server’s uz', async () => {
+    const uzbekBrand = new FakeLocaleSet();
+    uzbekBrand.locales.set(['uz-Latn']);
+    uzbekBrand.defaultLocale.set('uz-Latn');
+    uzbekBrand.isConfigured.set(true);
+    expect(await firstMatrixFilters('ru', uzbekBrand)).toMatchObject({ locale: 'uz' });
+
+    TestBed.resetTestingModule();
+    // LocaleSet's platform fallback is `ru`; PriceAuthoringController.matrix reads `uz` for a
+    // brand that has chosen nothing, and a console set to Russian must not change that.
+    expect(await firstMatrixFilters('ru', new FakeLocaleSet())).toMatchObject({ locale: 'uz' });
   });
 
   it('saves a row through the existing per-variant write, sending the row’s own version as If-Match', async () => {

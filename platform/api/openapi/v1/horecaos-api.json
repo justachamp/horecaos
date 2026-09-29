@@ -5002,6 +5002,12 @@
           },
           "labelUz" : {
             "type" : "string"
+          },
+          "labels" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "type" : "object"
           }
         },
         "type" : "object"
@@ -5028,6 +5034,9 @@
           "code" : {
             "type" : "string"
           },
+          "label" : {
+            "type" : "string"
+          },
           "labelEn" : {
             "type" : "string"
           },
@@ -5036,6 +5045,12 @@
           },
           "labelUz" : {
             "type" : "string"
+          },
+          "labels" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "type" : "object"
           }
         },
         "type" : "object"
@@ -11976,6 +11991,9 @@
           "isPlatformDefault" : {
             "type" : "boolean"
           },
+          "lateColour" : {
+            "type" : "string"
+          },
           "pickup" : {
             "$ref" : "#/components/schemas/LatenessThresholdsResponse"
           },
@@ -17479,6 +17497,23 @@
         },
         "type" : "object"
       },
+      "PaymentMethodControllerLocaleSetResponse" : {
+        "properties" : {
+          "configured" : {
+            "type" : "boolean"
+          },
+          "defaultLocale" : {
+            "type" : "string"
+          },
+          "locales" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
       "PaymentMethodView" : {
         "properties" : {
           "code" : {
@@ -17841,6 +17876,10 @@
           },
           "destination" : {
             "$ref" : "#/components/schemas/OperationsOrderControllerDestinationRequest"
+          },
+          "dineInSessionId" : {
+            "format" : "uuid",
+            "type" : "string"
           },
           "fulfillmentMode" : {
             "enum" : [ "DELIVERY", "PICKUP", "DINE_IN" ],
@@ -23177,9 +23216,30 @@
           "status" : {
             "type" : "string"
           },
+          "tables" : {
+            "items" : {
+              "$ref" : "#/components/schemas/SessionTableResponse"
+            },
+            "type" : "array"
+          },
           "version" : {
             "format" : "int32",
             "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "SessionTableResponse" : {
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "displayName" : {
+            "type" : "string"
+          },
+          "tableId" : {
+            "format" : "uuid",
+            "type" : "string"
           }
         },
         "type" : "object"
@@ -26899,6 +26959,9 @@
       },
       "ValidationResult" : {
         "properties" : {
+          "advisory" : {
+            "type" : "boolean"
+          },
           "detail" : {
             "type" : "string"
           },
@@ -36161,7 +36224,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/comment-presets/locale-set" : {
       "get" : {
         "description" : "Row 10.12. A preset is a tenant-level object shared by every brand, so it is edited in the union of the tenant's brands' supported languages, default first; the default is the tenant's first brand's. A brand that has chosen no set contributes the platform triple (ru, uz-Latn, en). The set is a menu, not a constraint: a language outside it that a preset already carries is kept, never deleted, by an edit.",
-        "operationId" : "localeSet_1",
+        "operationId" : "localeSet_2",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -37854,7 +37917,7 @@
     },
     "/api/v1/control-plane/tenants/{tenantId}/onboarding-runs/{runId}/validate" : {
       "post" : {
-        "description" : "Runs every read-only readiness check now, synchronously, against the tenant's current configuration rather than the run's persisted step status — so a tenant can see what activation would find before committing to a resume or an activate call. Nothing is written: a step's stored status only changes when the scheduler actually executes it. The activation smoke test is not included, because unlike every other check it is not a pure read. Use a fresh Idempotency-Key to see a fresh answer — replaying one returns the same recorded outcome, as ADR 0031 requires for every effectful request, even one with no state of its own to replay.",
+        "description" : "Runs every read-only readiness check now, synchronously, against the tenant's current configuration rather than the run's persisted step status — so a tenant can see what activation would find before committing to a resume or an activate call. Nothing is written: a step's stored status only changes when the scheduler actually executes it. The activation smoke test is not included, because unlike every other check it is not a pure read. Checks that are not onboarding steps ride along: SMS template moderation, fiscal classification coverage, channel payment-method coverage and secret-rotation age. Each offending item is its own row; a row from an advisory check carries advisory=true and is left out of allPassed. Use a fresh Idempotency-Key to see a fresh answer — replaying one returns the same recorded outcome, as ADR 0031 requires for every effectful request, even one with no state of its own to replay.",
         "operationId" : "validate",
         "parameters" : [ {
           "in" : "path",
@@ -51222,6 +51285,35 @@
         "tags" : [ "Payment methods" ]
       }
     },
+    "/api/v1/operations/tenants/{tenantId}/payment-methods/locale-set" : {
+      "get" : {
+        "description" : "Row 10.12. A payment method is a tenant-level row every brand's customers read, so its names are edited in the union of the tenant's brands' supported languages, default first; the default is the tenant's first brand's. A brand that has chosen no set contributes the platform triple (ru, uz-Latn, en). The set is a menu, not a constraint: a language outside it that a method already carries is kept, never deleted, by an edit. Needs only payment-method.read, so a manager pinned to one brand still sees every brand's languages.",
+        "operationId" : "localeSet_1",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PaymentMethodControllerLocaleSetResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The languages the payment-method name editor offers",
+        "tags" : [ "Payment methods" ]
+      }
+    },
     "/api/v1/operations/tenants/{tenantId}/payment-methods/{methodId}" : {
       "put" : {
         "description" : "The code and base type never change here.",
@@ -54522,7 +54614,7 @@
     },
     "/api/v1/storefront/dine-in/sessions/{sessionId}/rounds" : {
       "post" : {
-        "description" : "Checkout does not itself bind a cart to a table (ADR 0047's own 'what was not built' notes this: 'ordering's cart-to-table binding'). This closes that loop for a guest ordering from the table's own device: the order was already priced, reserved and confirmed by the ordinary checkout, and this only records that it belongs to this table's evening -- the exact write TableSessionController's operator endpoint makes, reached here through the guest's own token instead of a capability. Calling it twice with the same order is not an error: the second call finds the order already on this bill and answers with the bill unchanged. The guest token alone proves the caller is at this table, not that the order named in the body is theirs, so this also requires the ordinary signed-in session (Authorization: Bearer) the checkout that created the order was placed under -- see requireOwnOrder's own doc.",
+        "description" : "A cart bound to the table (PUT .../carts/{cartId}/table) is put on this bill by checkout itself, in the transaction that creates the order, and needs no call here. This is the attach for a cart that was never bound: the order was already priced, reserved and confirmed by the ordinary checkout, and this only records that it belongs to this table's evening -- the exact write TableSessionController's operator endpoint makes, reached here through the guest's own token instead of a capability. Calling it twice with the same order is not an error: the second call finds the order already on this bill and answers with the bill unchanged. The guest token alone proves the caller is at this table, not that the order named in the body is theirs, so this also requires the ordinary signed-in session (Authorization: Bearer) the checkout that created the order was placed under -- see requireOwnOrder's own doc.",
         "operationId" : "addRound_1",
         "parameters" : [ {
           "in" : "path",
@@ -55254,9 +55346,62 @@
         "tags" : [ "Storefront ordering" ]
       }
     },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts/{cartId}/table" : {
+      "put" : {
+        "description" : "ADR 0047's cart-to-table binding. The table is read from the guest's dine-in token (X-Dine-In-Token), never from the request: a body that named its own table would be a claim a client could edit to reach the next table's bill. Checkout then asks for the same token again (the binding is remembered state, so the guest is re-proved), refuses the order if nobody is seated and otherwise puts it on the table's bill in the same transaction that creates it, so the round cannot be lost between two requests. Clears any attached quote, because a bound cart is another cart; re-price before checkout.",
+        "operationId" : "bindTable",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "cartId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "X-Dine-In-Token",
+          "required" : true,
+          "schema" : {
+            "minLength" : 1,
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CartResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Bind a dine-in cart to the table the guest scanned",
+        "tags" : [ "Storefront ordering" ]
+      }
+    },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/checkouts" : {
       "post" : {
-        "description" : "Idempotent under the tenant-scoped Idempotency-Key. Repeating the request returns the same order; a settled business rejection returns the same rejection rather than running again against a changed cart.",
+        "description" : "Idempotent under the tenant-scoped Idempotency-Key. Repeating the request returns the same order; a settled business rejection returns the same rejection rather than running again against a changed cart. A cart bound to a table (ADR 0047) also needs the guest's live dine-in token (X-Dine-In-Token) at the table it is bound to: the binding is remembered state, and the order goes on the bill of whoever sits there now, so the guest is re-proved at checkout. Without it the answer is a conflict (reason TABLE_TOKEN_REQUIRED, TABLE_TOKEN_ENDED or TABLE_BINDING_STALE).",
         "operationId" : "checkout",
         "parameters" : [ {
           "in" : "path",
@@ -55280,6 +55425,13 @@
           "required" : true,
           "schema" : {
             "minLength" : 1,
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "X-Dine-In-Token",
+          "required" : false,
+          "schema" : {
             "type" : "string"
           }
         } ],
@@ -63125,6 +63277,51 @@
         "tags" : [ "Reservations" ]
       }
     },
+    "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/staff/telegram/link-codes" : {
+      "post" : {
+        "description" : "The same self-service code as the tenant-scope route, for a brand or branch member: name the branch you work at and the capability is checked there. A location grant covers only its own branch, so naming another branch is refused; a brand or tenant grant covers the branches beneath it. The code always binds the caller's own account, whatever branch is named.",
+        "operationId" : "issueAtLocation",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/LinkCodeResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Issue a staff Telegram identity-link code from a branch",
+        "tags" : [ "Telegram staff linking" ]
+      }
+    },
     "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/table-availability" : {
       "get" : {
         "description" : "Advisory, and honestly so. Two hosts reading this in the same second both see a free table; the database decides between them when they confirm. A screen that treated this as a hold would be the check-on-read ADR 0047 rejects.",
@@ -70428,7 +70625,7 @@
     },
     "/api/v1/tenants/{tenantId}/staff/telegram/link-codes" : {
       "post" : {
-        "description" : "Send \"/link <code>\" to the bot in a 1:1 chat. Binds the caller's own Telegram account to the caller's own principal in this tenant; a Telegram account may hold one such link per tenant, and many tenants at once.",
+        "description" : "Send \"/link <code>\" to the bot in a 1:1 chat. Binds the caller's own Telegram account to the caller's own principal in this tenant; a Telegram account may hold one such link per tenant, and many tenants at once. Tenant-scope: satisfied by a tenant-wide grant only. A brand or branch member uses the branch-scoped route instead.",
         "operationId" : "issue",
         "parameters" : [ {
           "in" : "path",

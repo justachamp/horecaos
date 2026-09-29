@@ -3372,6 +3372,12 @@
           },
           "labelUz" : {
             "type" : "string"
+          },
+          "labels" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "type" : "object"
           }
         },
         "type" : "object"
@@ -7688,6 +7694,9 @@
           "isPlatformDefault" : {
             "type" : "boolean"
           },
+          "lateColour" : {
+            "type" : "string"
+          },
           "pickup" : {
             "$ref" : "#/components/schemas/LatenessThresholdsResponse"
           },
@@ -11333,6 +11342,23 @@
         },
         "type" : "object"
       },
+      "PaymentMethodControllerLocaleSetResponse" : {
+        "properties" : {
+          "configured" : {
+            "type" : "boolean"
+          },
+          "defaultLocale" : {
+            "type" : "string"
+          },
+          "locales" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
       "PaymentMethodView" : {
         "properties" : {
           "code" : {
@@ -11538,6 +11564,10 @@
           },
           "destination" : {
             "$ref" : "#/components/schemas/OperationsOrderControllerDestinationRequest"
+          },
+          "dineInSessionId" : {
+            "format" : "uuid",
+            "type" : "string"
           },
           "fulfillmentMode" : {
             "enum" : [ "DELIVERY", "PICKUP", "DINE_IN" ],
@@ -14696,9 +14726,30 @@
           "status" : {
             "type" : "string"
           },
+          "tables" : {
+            "items" : {
+              "$ref" : "#/components/schemas/SessionTableResponse"
+            },
+            "type" : "array"
+          },
           "version" : {
             "format" : "int32",
             "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "SessionTableResponse" : {
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "displayName" : {
+            "type" : "string"
+          },
+          "tableId" : {
+            "format" : "uuid",
+            "type" : "string"
           }
         },
         "type" : "object"
@@ -27716,6 +27767,35 @@
         "tags" : [ "Payment methods" ]
       }
     },
+    "/api/v1/operations/tenants/{tenantId}/payment-methods/locale-set" : {
+      "get" : {
+        "description" : "Row 10.12. A payment method is a tenant-level row every brand's customers read, so its names are edited in the union of the tenant's brands' supported languages, default first; the default is the tenant's first brand's. A brand that has chosen no set contributes the platform triple (ru, uz-Latn, en). The set is a menu, not a constraint: a language outside it that a method already carries is kept, never deleted, by an edit. Needs only payment-method.read, so a manager pinned to one brand still sees every brand's languages.",
+        "operationId" : "localeSet_1",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PaymentMethodControllerLocaleSetResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The languages the payment-method name editor offers",
+        "tags" : [ "Payment methods" ]
+      }
+    },
     "/api/v1/operations/tenants/{tenantId}/payment-methods/{methodId}" : {
       "put" : {
         "description" : "The code and base type never change here.",
@@ -34522,6 +34602,51 @@
         },
         "summary" : "Confirm, reject, cancel, or mark a booking as a no-show",
         "tags" : [ "Reservations" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/staff/telegram/link-codes" : {
+      "post" : {
+        "description" : "The same self-service code as the tenant-scope route, for a brand or branch member: name the branch you work at and the capability is checked there. A location grant covers only its own branch, so naming another branch is refused; a brand or tenant grant covers the branches beneath it. The code always binds the caller's own account, whatever branch is named.",
+        "operationId" : "issueAtLocation",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/LinkCodeResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Issue a staff Telegram identity-link code from a branch",
+        "tags" : [ "Telegram staff linking" ]
       }
     },
     "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/table-availability" : {
@@ -41827,7 +41952,7 @@
     },
     "/api/v1/tenants/{tenantId}/staff/telegram/link-codes" : {
       "post" : {
-        "description" : "Send \"/link <code>\" to the bot in a 1:1 chat. Binds the caller's own Telegram account to the caller's own principal in this tenant; a Telegram account may hold one such link per tenant, and many tenants at once.",
+        "description" : "Send \"/link <code>\" to the bot in a 1:1 chat. Binds the caller's own Telegram account to the caller's own principal in this tenant; a Telegram account may hold one such link per tenant, and many tenants at once. Tenant-scope: satisfied by a tenant-wide grant only. A brand or branch member uses the branch-scoped route instead.",
         "operationId" : "issue",
         "parameters" : [ {
           "in" : "path",

@@ -79,7 +79,6 @@
         {{ message }}
       </p>
     }
-
     <div class="new-order__panes">
       <!-- ================================================== КЛИЕНТ / АГРЕГАТОР -->
       <section
@@ -163,15 +162,24 @@
             @if (selectedCustomer(); as customer) {
               @if (selectedAddress(); as address) {
                 <p class="q-caption new-order__hint" data-testid="new-order-aggregator-delivery-to">
-                  {{ 'orders.newOrder.aggregator.deliveryTo' | t: { customer: customer.label, address: address.label } }}
+                  {{
+                    'orders.newOrder.aggregator.deliveryTo'
+                      | t: { customer: customer.label, address: address.label }
+                  }}
                 </p>
               } @else {
-                <p class="q-caption new-order__notice" data-testid="new-order-aggregator-delivery-missing">
+                <p
+                  class="q-caption new-order__notice"
+                  data-testid="new-order-aggregator-delivery-missing"
+                >
                   {{ 'orders.newOrder.aggregator.deliveryMissing' | t }}
                 </p>
               }
             } @else {
-              <p class="q-caption new-order__notice" data-testid="new-order-aggregator-delivery-missing">
+              <p
+                class="q-caption new-order__notice"
+                data-testid="new-order-aggregator-delivery-missing"
+              >
                 {{ 'orders.newOrder.aggregator.deliveryMissing' | t }}
               </p>
             }
@@ -259,7 +267,22 @@
               >
                 {{ 'orders.fulfillmentMode.DELIVERY' | t }}
               </button>
+              <button
+                type="button"
+                class="q-caption new-order__mode-button"
+                [class.new-order__mode-button--active]="fulfillmentMode() === 'DINE_IN'"
+                (click)="setFulfillmentMode('DINE_IN')"
+                data-testid="new-order-mode-dine-in"
+              >
+                {{ 'orders.fulfillmentMode.DINE_IN' | t }}
+              </button>
             </div>
+
+            @if (fulfillmentMode() === 'DINE_IN') {
+              @if (locationScope(); as pickerScope) {
+                <q-dine-in-table-picker [scope]="pickerScope" (picked)="onTablePicked($event)" />
+              }
+            }
 
             @if (fulfillmentMode() === 'DELIVERY') {
               <div class="new-order__address" data-testid="new-order-address">
@@ -652,6 +675,18 @@
             <span>{{ fulfillmentModeLabel(fulfillmentMode()) }}</span>
           </p>
 
+          @if (fulfillmentMode() === 'DINE_IN') {
+            @if (tablePick(); as pick) {
+              <p class="q-caption new-order__order-row" data-testid="new-order-table-selected">
+                {{ 'orders.newOrder.table.selected' | t: { tables: pick.tables } }}
+              </p>
+            } @else {
+              <p class="q-caption new-order__hint" data-testid="new-order-table-required">
+                {{ 'orders.newOrder.table.required' | t }}
+              </p>
+            }
+          }
+
           <div class="new-order__field" data-testid="new-order-branch-row">
             <span class="q-caption">{{ 'orders.newOrder.order.branch' | t }}</span>
             @if (branchResolutionLoading()) {
@@ -701,7 +736,9 @@
                 (change)="setOverrideReasonCode($any($event.target).value)"
                 data-testid="new-order-branch-override-reason"
               >
-                <option value="">{{ 'orders.newOrder.order.branchOverrideReasonPlaceholder' | t }}</option>
+                <option value="">
+                  {{ 'orders.newOrder.order.branchOverrideReasonPlaceholder' | t }}
+                </option>
                 @for (reason of overrideReasons(); track reason.code) {
                   <option [value]="reason.code">{{ branchOverrideReasonLabel(reason) }}</option>
                 }
@@ -721,15 +758,17 @@
             }
           }
 
-          <label class="new-order__aggregator-toggle q-caption">
-            <input
-              type="checkbox"
-              [checked]="preOrderEnabled()"
-              (change)="togglePreOrder()"
-              data-testid="new-order-pre-order-toggle"
-            />
-            {{ 'orders.newOrder.order.preOrder.toggle' | t }}
-          </label>
+          @if (fulfillmentMode() !== 'DINE_IN') {
+            <label class="new-order__aggregator-toggle q-caption">
+              <input
+                type="checkbox"
+                [checked]="preOrderEnabled()"
+                (change)="togglePreOrder()"
+                data-testid="new-order-pre-order-toggle"
+              />
+              {{ 'orders.newOrder.order.preOrder.toggle' | t }}
+            </label>
+          }
           @if (preOrderEnabled()) {
             <label class="new-order__field">
               <span class="q-caption">{{ 'orders.newOrder.order.preOrder.time' | t }}</span>

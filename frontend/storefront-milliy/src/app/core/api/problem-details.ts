@@ -261,6 +261,16 @@ const REASON_MESSAGE_KEYS: Readonly<Record<string, string>> = {
   SOLD_OUT: 'errors.reason.itemUnavailable',
   NOT_STOCKED_AT_LOCATION: 'errors.reason.itemUnavailable',
   RESERVATION_NO_LONGER_HELD: 'errors.reason.holdExpired',
+  // CheckoutEligibilityGuard: the quote's fifteen minutes ran out (or it was already
+  // accepted). Pricing the cart again cures it.
+  QUOTE_EXPIRED: 'errors.reason.quoteExpired',
+  // ADR 0047: a table-bound cart. TABLE_NOT_SEATED is checkout's refusal when the
+  // party has left or a host closed the session while the guest was choosing;
+  // the other two are the bind's own, for a cart that is not eaten at a table or
+  // a table scanned at another branch.
+  TABLE_NOT_SEATED: 'dineIn.notSeated',
+  TABLE_NOT_AT_THIS_BRANCH: 'errors.reason.tableNotAtBranch',
+  TABLE_NOT_APPLICABLE: 'errors.reason.modeUnavailable',
   NOT_SERVICEABLE: 'errors.reason.notServiceable',
   CHANNEL_NOT_SELLABLE: 'errors.reason.notServiceable',
   GUEST_ORDERS_NOT_ALLOWED: 'errors.reason.signInRequired',

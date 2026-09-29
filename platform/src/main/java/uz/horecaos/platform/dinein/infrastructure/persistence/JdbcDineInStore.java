@@ -856,6 +856,62 @@ public class JdbcDineInStore {
     /** One (order, table) pair of {@link #tablesForOrders}. */
     public record OrderTableRow(UUID orderId, UUID sessionId, UUID tableId, String code, String displayName) {}
 
+    /**
+     * The tables behind each of a batch of sessions, in one round trip -- what the
+     * live list and the New Order screen's table picker name a party by.
+     *
+     * <p>Every table the session has sat at, in the order it was joined (the same
+     * order {@link #tablesForOrders} reads, so the picker and the ticket chip agree
+     * on {@code T7 + T8}), with the table code as the last tie-break. The tenant is
+     * on the session-table row and on the table row: a session id is a UUID a
+     * caller supplies, and matching it alone would let another tenant's session
+     * answer for it.
+     */
+    public List<SessionTableRow> tablesForSessions(UUID tenantId, Collection<UUID> sessionIds) {
+        if (sessionIds.isEmpty()) {
+            return List.of();
+        }
+        return jdbc.sql("""
+                SELECT st.session_id, t.id AS table_id, t.code, t.display_name
+                FROM dinein.session_tables st
+                JOIN dinein.tables t
+                  ON t.id = st.table_id AND t.tenant_id = st.tenant_id
+                WHERE st.tenant_id = :tenantId AND st.session_id IN (:sessionIds)
+                ORDER BY st.session_id, st.joined_at, t.code
+                """)
+                .param("tenantId", tenantId)
+                .param("sessionIds", sessionIds)
+                .query((row, number) -> new SessionTableRow(
+                        row.getObject("session_id", UUID.class),
+                        row.getObject("table_id", UUID.class),
+                        row.getString("code"),
+                        row.getString("display_name")))
+                .list();
+    }
+
+    /** One (session, table) pair of {@link #tablesForSessions}. */
+    public record SessionTableRow(UUID sessionId, UUID tableId, String code, String displayName) {}
+
+    /**
+     * The round an order already is, if it is one: which session's bill it is on and
+     * at what sequence. Read after a duplicate-key refusal from {@link #addOrder} to
+     * tell a retry of a write that landed (same session) from a second bill (another
+     * session).
+     */
+    public Optional<RoundRow> findRoundOfOrder(UUID tenantId, UUID orderId) {
+        return jdbc.sql("""
+                SELECT session_id, sequence FROM dinein.session_orders
+                WHERE tenant_id = :tenantId AND order_id = :orderId
+                """)
+                .param("tenantId", tenantId)
+                .param("orderId", orderId)
+                .query((row, number) -> new RoundRow(row.getObject("session_id", UUID.class), row.getInt("sequence")))
+                .optional();
+    }
+
+    /** A round's home: its session and its position on that bill. */
+    public record RoundRow(UUID sessionId, int sequence) {}
+
     // ---------------------------------------------------------------- rounds
 
     /**

@@ -3,6 +3,7 @@ import { firstValueFrom } from 'rxjs';
 
 import { ApiClient } from '../../core/api/api-client';
 import { command } from '../../core/api/idempotency';
+import { LocationScope } from '../../core/api/operations-paths';
 import { staffPaths } from '../../core/api/staff-paths';
 import { Scope } from './scope-coverage';
 
@@ -198,11 +199,20 @@ export class StaffApi {
    * `TelegramStaffLinkCodeController.issue` — the self-service `/link <code>`
    * card (staff-and-access.md §10, operations-gap-map.md `9/X.1`). Mints a
    * code for the caller's own principal; there is no "issue for someone else".
+   *
+   * With a `location` the capability is checked at that branch — the only
+   * route a brand or branch member's grant covers; without one it is checked
+   * at tenant scope, which only a tenant-wide grant satisfies.
    */
-  async issueTelegramLinkCode(tenantId: string): Promise<TelegramLinkCodeResponse> {
+  async issueTelegramLinkCode(
+    tenantId: string,
+    location: LocationScope | null = null,
+  ): Promise<TelegramLinkCodeResponse> {
     return firstValueFrom(
       this.api.post<Record<string, never>, TelegramLinkCodeResponse>(
-        staffPaths.telegramStaffLinkCodes(tenantId),
+        location
+          ? staffPaths.telegramStaffLinkCodesAtLocation(location)
+          : staffPaths.telegramStaffLinkCodes(tenantId),
         command({}),
       ),
     );

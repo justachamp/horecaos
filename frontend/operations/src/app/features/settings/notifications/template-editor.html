@@ -104,7 +104,11 @@
         (click)="submit()"
         [disabled]="!canSave()"
       >
-        {{ submitting() ? ('settings.notifications.editor.saving' | t) : ('settings.notifications.editor.save' | t) }}
+        {{
+          submitting()
+            ? ('settings.notifications.editor.saving' | t)
+            : ('settings.notifications.editor.save' | t)
+        }}
       </button>
     </div>
   </div>

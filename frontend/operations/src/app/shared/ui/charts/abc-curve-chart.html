@@ -2,7 +2,13 @@
   <svg chart-graphic [attr.viewBox]="'0 0 ' + width + ' ' + height" role="presentation">
     <g [attr.transform]="'translate(' + plotLeft + ',' + plotTop + ')'">
       @for (tick of yTicks; track tick.value) {
-        <line class="q-chart__gridline" x1="0" [attr.x2]="plotWidth" [attr.y1]="tick.y" [attr.y2]="tick.y" />
+        <line
+          class="q-chart__gridline"
+          x1="0"
+          [attr.x2]="plotWidth"
+          [attr.y1]="tick.y"
+          [attr.y2]="tick.y"
+        />
         <text
           class="q-chart__axis-label q-caption"
           x="-8"
@@ -22,8 +28,18 @@
           [attr.y1]="line.y"
           [attr.y2]="line.y"
         />
-        <text class="q-abc-curve__threshold-label q-caption" [attr.x]="plotWidth" [attr.y]="line.y - 4" text-anchor="end">
-          {{ (line.key === 'a' ? 'reports.products.abcCurve.boundary.ab' : 'reports.products.abcCurve.boundary.bc') | t }}
+        <text
+          class="q-abc-curve__threshold-label q-caption"
+          [attr.x]="plotWidth"
+          [attr.y]="line.y - 4"
+          text-anchor="end"
+        >
+          {{
+            (line.key === 'a'
+              ? 'reports.products.abcCurve.boundary.ab'
+              : 'reports.products.abcCurve.boundary.bc'
+            ) | t
+          }}
           {{ line.percent }}%
         </text>
       }
@@ -54,7 +70,12 @@
     </g>
 
     @for (tick of xTicks(); track tick.index) {
-      <text class="q-chart__axis-label q-caption" [attr.x]="plotLeft + tick.cx" [attr.y]="height - 8" text-anchor="middle">
+      <text
+        class="q-chart__axis-label q-caption"
+        [attr.x]="plotLeft + tick.cx"
+        [attr.y]="height - 8"
+        text-anchor="middle"
+      >
         {{ tick.label }}
       </text>
     }
@@ -77,7 +98,10 @@
   <ul chart-legend class="q-chart__legend-list" data-testid="q-abc-curve-legend">
     @for (cls of ['A', 'B', 'C']; track cls) {
       <li class="q-chart__legend-item q-caption">
-        <span class="q-chart__swatch" [style.background]="'var(--q-viz-cat-' + (cls === 'A' ? 1 : cls === 'B' ? 2 : 3) + ')'"></span>
+        <span
+          class="q-chart__swatch"
+          [style.background]="'var(--q-viz-cat-' + (cls === 'A' ? 1 : cls === 'B' ? 2 : 3) + ')'"
+        ></span>
         {{ cls }}
       </li>
     }

@@ -821,6 +821,15 @@ export const messagesRu: MessageCatalogue = {
   'settings.home.readiness.code.TEMPLATE_AWAITING_PROVIDER_REVIEW':
     'SMS-шаблон ожидает одобрения шлюза.',
   'settings.home.readiness.code.TEMPLATE_REJECTED_BY_PROVIDER': 'SMS-шаблон отклонён шлюзом.',
+  'settings.home.readiness.advisory': 'Рекомендация',
+  'settings.home.readiness.code.FISCAL_CLASSIFICATION_INCOMPLETE':
+    'У части позиций меню фискальная классификация заполнена не полностью (ИКПУ, код упаковки, единица или фискальное название).',
+  'settings.home.readiness.code.CHANNEL_NO_PAYMENT_METHOD':
+    'У канала продаж не включён ни один способ оплаты, поэтому заказ через него принять нельзя.',
+  'settings.home.readiness.code.INSTALLATION_SECRET_ROTATION_DUE':
+    'Учётные данные подключения к провайдеру не обновлялись дольше срока ротации.',
+  'settings.home.readiness.code.MERCHANT_SECRET_ROTATION_DUE':
+    'Учётные данные расчётного счёта не обновлялись дольше срока ротации.',
   'settings.home.search.label': 'Найти настройку',
   'settings.home.search.placeholder': 'Найти настройку (нажмите /)',
   'settings.home.search.empty': 'Ничего не найдено по запросу «{query}».',
@@ -1194,6 +1203,16 @@ export const messagesRu: MessageCatalogue = {
   'settings.orderPolicy.field.averageOrderMinutes': 'Среднее время заказа (минуты)',
   'settings.orderPolicy.field.maximumOrderMinutes': 'Максимальное время заказа (минуты)',
   'settings.orderPolicy.field.lateOrderThresholdMinutes': 'Заказ опаздывает с (минуты)',
+  'settings.orderPolicy.field.atRiskBeforeMinutes': 'Предупреждать до обещанного времени (минуты)',
+  'settings.orderPolicy.atRiskBeforeMinutes.hint':
+    'За сколько минут до обещанного времени заказ помечается как «под риском». Действует для всех типов заказов — на доске заказов и на кухонной доске.',
+  'settings.orderPolicy.field.lateColour': 'Цвет опаздывающего заказа',
+  'settings.orderPolicy.lateColour.hint':
+    'Так опаздывающие заказы выглядят на доске заказов и на кухонной доске. Оставьте стандартный цвет, если фирменный стиль не требует другого: плохо читаемый цвет прячет заказы, которым нужно внимание в первую очередь, — учитывайте предупреждение о контрасте.',
+  'settings.orderPolicy.lateColour.standard': 'Стандартный',
+  'settings.orderPolicy.lateColour.useStandard': 'Вернуть стандартный цвет',
+  'settings.orderPolicy.lateColour.standardHint':
+    'Стандартный красный цвет опоздания из дизайн-системы.',
   'settings.orderPolicy.field.minimumOrderAmount': 'Минимальная сумма заказа',
   'settings.orderPolicy.minimumOrderAmount.hint':
     'Только самовывоз и зал — у доставки свой минимум, задаётся в зоне обслуживания.',
@@ -1717,6 +1736,19 @@ export const messagesRu: MessageCatalogue = {
   'settings.locations.floorPlan.rotating': 'Перевыпуск…',
   'settings.locations.floorPlan.revokedGuestSessions':
     'Отключено гостевых сессий по старому коду: {count}.',
+  'settings.locations.floorPlan.seat.title': 'Посадить гостей без брони',
+  'settings.locations.floorPlan.seat.partySize': 'Гостей',
+  'settings.locations.floorPlan.seat.defaultReason': 'Гости без брони посажены с плана зала',
+  'settings.locations.floorPlan.seat.action': 'Посадить',
+  'settings.locations.floorPlan.seat.seating': 'Сажаем…',
+  'settings.locations.floorPlan.seat.occupied': 'За этим столом уже сидят гости.',
+  'settings.locations.floorPlan.seat.bookedSoon':
+    'Стол занят подтверждённой бронью в ближайшие {minutes} мин. Сажайте, только если гости уйдут раньше.',
+  'settings.locations.floorPlan.seat.overCapacity':
+    'За этим столом мест: {seats} — меньше, чем гостей.',
+  'settings.locations.floorPlan.seat.unavailable': 'Стол не в работе, посадить гостей нельзя.',
+  'settings.locations.floorPlan.seat.done': 'Гости посажены за стол {table}.',
+  'settings.locations.floorPlan.seat.errorOccupied': 'За этим столом только что посадили гостей.',
 
   'finance.scope.denied': 'Этому аккаунту не разрешён раздел «Финансы».',
 
@@ -2106,6 +2138,10 @@ export const messagesRu: MessageCatalogue = {
   'catalog.products.create.action': 'Создать товар',
   'catalog.products.create.title': 'Создать товар',
   'catalog.products.create.name': 'Название',
+  'catalog.products.create.language':
+    'Язык названия: {language} — язык бренда по умолчанию. Другие языки добавляются в редакторе товара.',
+  'catalog.products.create.languageFallback':
+    'Язык названия: {language} — язык каталога по умолчанию, так как бренд ещё не выбрал языки. Другие языки добавляются в редакторе товара.',
   'catalog.products.create.code': 'Код',
   'catalog.products.create.required': 'Обязательное поле',
   'catalog.products.create.confirm': 'Создать',
@@ -2265,7 +2301,8 @@ export const messagesRu: MessageCatalogue = {
   'catalog.editor.availability.quantityHintLink': 'Открыть Остатки',
   'catalog.editor.availability.notListedHeading':
     'Предлагается в некоторых филиалах, но там ещё не размещено в учёте — недоступно для заказа, пока не размещено.',
-  'catalog.editor.availability.notListedVariantRow': '{variant} — не размещено в {count} филиал(ах)',
+  'catalog.editor.availability.notListedVariantRow':
+    '{variant} — не размещено в {count} филиал(ах)',
   'catalog.editor.availability.listEverywhere': 'Разместить во всех филиалах',
   'catalog.editor.availability.listingInProgress': 'Размещение…',
   'catalog.editor.availability.listPartial':
@@ -5715,7 +5752,8 @@ export const messagesRu: MessageCatalogue = {
   'orders.newOrder.order.branchLoad': '{count} активных заказов',
   'orders.newOrder.order.branchClosed': 'закрыт',
   'orders.newOrder.order.branchProposedSuffix': '(предложено)',
-  'orders.newOrder.order.branchResolutionFailed': 'Не удалось подобрать филиал — оформляем в текущем',
+  'orders.newOrder.order.branchResolutionFailed':
+    'Не удалось подобрать филиал — оформляем в текущем',
   'orders.newOrder.order.branchNoCandidates': 'Ни один филиал не доставляет по этому адресу',
   'orders.newOrder.order.branchOverrideReason': 'Причина выбора другого филиала',
   'orders.newOrder.order.branchOverrideReasonPlaceholder': 'Выберите причину',
@@ -5747,6 +5785,32 @@ export const messagesRu: MessageCatalogue = {
   'orders.newOrder.address.recipientName': 'Получатель',
   'orders.newOrder.address.recipientPhone': 'Телефон получателя',
   'orders.newOrder.address.deliveryNote': 'Комментарий курьеру',
+
+  // wave 15: the DINE_IN table picker (ADR 0047, operator side)
+  'orders.newOrder.table.title': 'Стол',
+  'orders.newOrder.table.loading': 'Загрузка зала…',
+  'orders.newOrder.table.denied': 'Нет доступа к столам зала',
+  'orders.newOrder.table.error': 'Не удалось загрузить зал',
+  'orders.newOrder.table.seatedNow': 'Сейчас за столами',
+  'orders.newOrder.table.noSessions': 'Пока никто не сидит — посадите гостей ниже',
+  'orders.newOrder.table.sessionLabel': '{tables} · гостей: {count}',
+  'orders.newOrder.table.sessionLabelNoCount': '{tables}',
+  'orders.newOrder.table.seatTitle': 'Посадить гостей',
+  'orders.newOrder.table.pickTable': 'Выберите свободный стол',
+  'orders.newOrder.table.noFreeTables': 'Все столы заняты',
+  'orders.newOrder.table.tableOption': '{code} · мест: {seats}',
+  'orders.newOrder.table.tableOptionBooked': '{code} · мест: {seats} · скоро бронь',
+  'orders.newOrder.table.partySize': 'Гостей',
+  'orders.newOrder.table.seat': 'Посадить',
+  'orders.newOrder.table.seating': 'Сажаем…',
+  'orders.newOrder.table.seatReason': 'Гости без брони посажены с экрана нового заказа',
+  'orders.newOrder.table.seatOccupied': 'Этот стол только что заняли — выберите другой',
+  'orders.newOrder.table.selected': 'Заказ пойдёт на: {tables}',
+  'orders.newOrder.table.required': 'Выберите стол для этого заказа',
+  'orders.newOrder.table.sessionEnded':
+    'Эта компания уже ушла из-за стола, заказ не создан. Список обновлён — выберите стол снова.',
+  'orders.newOrder.table.notServiceable':
+    'Этот филиал сейчас не принимает заказы в зал через этот канал',
 
   // wave P14: §5.3 «Повторить» (строка 1.3f)
   'orders.newOrder.reorder.action': 'Повторить',

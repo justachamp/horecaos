@@ -266,12 +266,18 @@ describe('BrandProfilePage', () => {
   // -------------------------------------------------------- 10.1 / X.12 media
 
   it('shows the current logo and banner as thumbnails, not a raw asset id (row 10.1)', async () => {
-    const downloadUrl = vi.fn().mockImplementation((_tenantId: string, assetId: string) =>
-      of(`https://cdn.example/${assetId}.jpg`),
+    const downloadUrl = vi
+      .fn()
+      .mockImplementation((_tenantId: string, assetId: string) =>
+        of(`https://cdn.example/${assetId}.jpg`),
+      );
+    await render(
+      { getBrand: vi.fn().mockResolvedValue(BRAND_WITH_MEDIA) },
+      new FakeCurrentLocation(),
+      {
+        downloadUrl,
+      },
     );
-    await render({ getBrand: vi.fn().mockResolvedValue(BRAND_WITH_MEDIA) }, new FakeCurrentLocation(), {
-      downloadUrl,
-    });
 
     expect(downloadUrl).toHaveBeenCalledWith('tenant-1', 'asset-logo-1', 'THUMBNAIL');
     expect(downloadUrl).toHaveBeenCalledWith('tenant-1', 'asset-banner-1', 'THUMBNAIL');
@@ -316,8 +322,11 @@ describe('BrandProfilePage', () => {
     // The upload writes the draft immediately -- visible as a preview -- and
     // the draft is what saveProfile actually sends.
     expect(
-      (fixture.nativeElement.querySelector('[data-testid="brand-logo-preview"]') as HTMLImageElement)
-        .src,
+      (
+        fixture.nativeElement.querySelector(
+          '[data-testid="brand-logo-preview"]',
+        ) as HTMLImageElement
+      ).src,
     ).toMatch(/^blob:/);
 
     findButton(profileBlock, 'Save').click();
@@ -367,7 +376,8 @@ describe('BrandProfilePage', () => {
     const uploaders = fixture.debugElement.queryAll(By.directive(MediaUploader));
     const logoUploader = uploaders.find(
       (debugEl) =>
-        (debugEl.nativeElement as HTMLElement).getAttribute('data-testid') === 'brand-logo-uploader',
+        (debugEl.nativeElement as HTMLElement).getAttribute('data-testid') ===
+        'brand-logo-uploader',
     )!;
     (logoUploader.componentInstance as MediaUploader).rejected.emit('tooLarge');
     fixture.detectChanges();

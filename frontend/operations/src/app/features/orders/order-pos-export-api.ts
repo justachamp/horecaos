@@ -106,7 +106,10 @@ export class OrderPosExportApi {
     const intent = this.pushIntents.next(orderId, { reason });
     return firstValueFrom(
       this.api
-        .post<{ reason: string }, PosExportPushResult>(posPaths.orderPosExportPush(scope, orderId), intent)
+        .post<{ reason: string }, PosExportPushResult>(
+          posPaths.orderPosExportPush(scope, orderId),
+          intent,
+        )
         .pipe(tap(() => this.pushIntents.forget(orderId))),
     );
   }

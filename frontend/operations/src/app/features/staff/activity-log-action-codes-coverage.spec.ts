@@ -14,7 +14,10 @@ import { LOCALES } from '../../core/i18n/i18n';
 import { messagesEn } from '../../core/i18n/messages.en';
 import { messagesRu } from '../../core/i18n/messages.ru';
 import { messagesUzLatn } from '../../core/i18n/messages.uz-latn';
-import { activityLogActionLabelKey, bulkActivityLogActionSentence } from './activity-log-action-labels';
+import {
+  activityLogActionLabelKey,
+  bulkActivityLogActionSentence,
+} from './activity-log-action-labels';
 
 /**
  * Staff 9.3 — "extend the action-code dictionary to full coverage of the
@@ -56,7 +59,11 @@ describe('activity log action-code dictionary coverage', () => {
     '../../../../../../platform/src/main/java',
   );
 
-  const CONCATENATED_PREFIXES = new Set(['approval.', 'dinein.reservation.', 'fulfillment.dispatch.']);
+  const CONCATENATED_PREFIXES = new Set([
+    'approval.',
+    'dinein.reservation.',
+    'fulfillment.dispatch.',
+  ]);
 
   function literalActionCodesFromJavaSources(): readonly string[] {
     const codes = new Set<string>();
@@ -94,14 +101,18 @@ describe('activity log action-code dictionary coverage', () => {
   it('names a label key or a bulk sentence for every literal-coded AuditFact.of(...) call site', () => {
     const codes = literalActionCodesFromJavaSources();
     const uncovered = codes.filter(
-      (code) => activityLogActionLabelKey(code) === null && bulkActivityLogActionSentence(code, 'en') === null,
+      (code) =>
+        activityLogActionLabelKey(code) === null &&
+        bulkActivityLogActionSentence(code, 'en') === null,
     );
     expect(uncovered).toEqual([]);
   });
 
   it('has a non-blank sentence in all three locales for every mapped label key', () => {
     const codes = literalActionCodesFromJavaSources();
-    const keys = new Set(codes.map((code) => activityLogActionLabelKey(code)).filter((key) => key !== null));
+    const keys = new Set(
+      codes.map((code) => activityLogActionLabelKey(code)).filter((key) => key !== null),
+    );
 
     const catalogues: readonly [string, Readonly<Record<string, string>>][] = [
       ['en', messagesEn],

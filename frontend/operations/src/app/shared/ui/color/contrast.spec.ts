@@ -12,7 +12,10 @@ describe('contrastRatio', () => {
   });
 
   it('does not depend on argument order', () => {
-    expect(contrastRatio('#eb6834', '#ffffff')).toBeCloseTo(contrastRatio('#ffffff', '#eb6834'), 10);
+    expect(contrastRatio('#eb6834', '#ffffff')).toBeCloseTo(
+      contrastRatio('#ffffff', '#eb6834'),
+      10,
+    );
   });
 
   it('matches the platform brand blue’s known ratio against white (~5.0:1, just over the AA normal-text floor)', () => {

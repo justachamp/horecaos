@@ -268,6 +268,52 @@ class PriceBookMatrixEndpointTests {
         assertThat(result.getResponse().getStatus()).isEqualTo(404);
     }
 
+    // ------------------------------------------------------------------ names follow the brand default
+
+    @Test
+    void aNameOnlyInTheServersLocaleIsShownWhenTheBrandDefaultHasNone() throws Exception {
+        UUID category = category(BRAND, "MAINS");
+        translateCategory(category, "uz", "Asosiy");
+        product(BRAND, category, "PLOV-001", "Osh");
+
+        // The brand later set its default to ru, but this dish was named in the server's uz only.
+        JsonNode row = firstRow(matrixWithLocale(draftBook(BRAND), "ru"));
+
+        assertThat(row.path("displayName").asString())
+                .as("the fallback name, not the bare product code")
+                .isEqualTo("Osh");
+        assertThat(row.path("categoryName").asString())
+                .as("and the category's fallback name, not a blank")
+                .isEqualTo("Asosiy");
+    }
+
+    @Test
+    void theBrandDefaultNameWinsOverTheServersLocale() throws Exception {
+        UUID category = category(BRAND, "MAINS");
+        translateCategory(category, "uz", "Asosiy");
+        translateCategory(category, "ru", "Основное");
+        UUID variant = product(BRAND, category, "PLOV-001", "Osh");
+        translateProduct(variant, "ru", "Плов");
+
+        JsonNode row = firstRow(matrixWithLocale(draftBook(BRAND), "ru"));
+
+        assertThat(row.path("displayName").asString()).isEqualTo("Плов");
+        assertThat(row.path("categoryName").asString()).isEqualTo("Основное");
+    }
+
+    @Test
+    void aNameInNeitherLocaleStillFallsToTheCode() throws Exception {
+        UUID variant = product(BRAND, null, "PLOV-001", "Osh");
+        jdbc.sql("DELETE FROM catalog.translations WHERE tenant_id = :tenantId")
+                .param("tenantId", TENANT)
+                .update();
+        assertThat(variant).isNotNull();
+
+        JsonNode row = firstRow(matrixWithLocale(draftBook(BRAND), "ru"));
+
+        assertThat(row.path("displayName").asString()).isEqualTo("PLOV-001");
+    }
+
     // -------------------------------------------------------- inline edit / If-Match
 
     @Test
@@ -399,6 +445,19 @@ class PriceBookMatrixEndpointTests {
         return json(result).path("items");
     }
 
+    private MvcResult matrixWithLocale(UUID book, String locale) throws Exception {
+        MvcResult result = mvc.perform(get(PRICING + "/price-books/" + book + "/matrix")
+                        .param("locale", locale)
+                        .with(tokenFor(OWNER)))
+                .andReturn();
+        assertThat(result.getResponse().getStatus()).isEqualTo(200);
+        return result;
+    }
+
+    private static JsonNode firstRow(MvcResult result) throws Exception {
+        return items(result).get(0);
+    }
+
     private static List<String> variantIds(MvcResult result) throws Exception {
         return variantIds(json(result));
     }
@@ -526,6 +585,32 @@ class PriceBookMatrixEndpointTests {
                     .update();
         }
         return variantId;
+    }
+
+    private void translateCategory(UUID categoryId, String locale, String name) {
+        jdbc.sql("""
+                INSERT INTO catalog.translations (tenant_id, brand_id, entity_type, entity_id, locale, name)
+                VALUES (:tenantId, :brandId, 'CATEGORY', :categoryId, :locale, :name)
+                """)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("categoryId", categoryId)
+                .param("locale", locale)
+                .param("name", name)
+                .update();
+    }
+
+    /** Names the product behind {@code variantId} in one more locale. */
+    private void translateProduct(UUID variantId, String locale, String name) {
+        jdbc.sql("""
+                INSERT INTO catalog.translations (tenant_id, brand_id, entity_type, entity_id, locale, name)
+                SELECT v.tenant_id, v.brand_id, 'PRODUCT', v.product_id, :locale, :name
+                FROM catalog.variants v WHERE v.id = :variantId
+                """)
+                .param("variantId", variantId)
+                .param("locale", locale)
+                .param("name", name)
+                .update();
     }
 
     private void insertTenantAndBrands() {

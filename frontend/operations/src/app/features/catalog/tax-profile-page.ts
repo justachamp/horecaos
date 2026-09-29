@@ -133,9 +133,10 @@ export class TaxProfilePage implements OnInit {
       this.saved.set(profile);
       this.inForce.set(profile);
       this.existingProfiles.set(
-        [...this.existingProfiles().filter((p) => p.jurisdictionCode !== profile.jurisdictionCode), profile].sort(
-          (a, b) => a.jurisdictionCode.localeCompare(b.jurisdictionCode),
-        ),
+        [
+          ...this.existingProfiles().filter((p) => p.jurisdictionCode !== profile.jurisdictionCode),
+          profile,
+        ].sort((a, b) => a.jurisdictionCode.localeCompare(b.jurisdictionCode)),
       );
     } catch (error) {
       this.error.set(this.describe(error));

@@ -143,7 +143,8 @@ export interface NotEnforcedRowView {
 }
 
 const NOT_ENFORCED_SIMPLE_FIELDS: readonly {
-  readonly key: 'kitchenReadyOnly' | 'revealCustomerLocationTiming' | 'postDeliveryPaymentCheckRequired';
+  readonly key:
+    'kitchenReadyOnly' | 'revealCustomerLocationTiming' | 'postDeliveryPaymentCheckRequired';
   readonly labelKey: MessageKey;
   readonly reasonKey: MessageKey;
   readonly kind: PolicyFieldKind;

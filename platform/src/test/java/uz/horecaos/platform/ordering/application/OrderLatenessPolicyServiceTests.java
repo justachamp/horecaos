@@ -66,7 +66,8 @@ class OrderLatenessPolicyServiceTests {
         jdbc.sql("TRUNCATE TABLE tenant.policies CASCADE").update();
         jdbc.sql("TRUNCATE TABLE tenant.tenants CASCADE").update();
         service = new OrderLatenessPolicyService(
-                new JdbcPolicyResolver(jdbc, JsonMapper.builder().build()));
+                new JdbcPolicyResolver(jdbc, JsonMapper.builder().build()),
+                new uz.horecaos.platform.support.FakeConfigurationResolver());
         insertHierarchy();
     }
 
@@ -123,6 +124,94 @@ class OrderLatenessPolicyServiceTests {
 
         assertThat(atTenant.isPlatformDefault()).isFalse();
         assertThat(atTenant.policy().pickup().atRiskBeforeSeconds()).isEqualTo(300);
+    }
+
+    // -------------------------------------- X.39: the tenant's own scalars overlaid
+
+    private OrderLatenessPolicyService serviceWith(java.util.Map<String, Object> configured) {
+        return new OrderLatenessPolicyService(
+                new JdbcPolicyResolver(jdbc, JsonMapper.builder().build()),
+                new uz.horecaos.platform.support.FakeConfigurationResolver(configured));
+    }
+
+    @Test
+    void aSetAtRiskThresholdReplacesEveryModesAtRiskEdgeAndNothingElse() {
+        activate("TENANT", null, null, """
+                {"delivery":{"atRiskBeforeSeconds":300,"lateAfterSeconds":60,"noPromiseFallbackSeconds":2700},
+                 "pickup":{"atRiskBeforeSeconds":180,"lateAfterSeconds":10,"noPromiseFallbackSeconds":1800},
+                 "dineIn":{"atRiskBeforeSeconds":90,"lateAfterSeconds":0,"noPromiseFallbackSeconds":1200}}""");
+
+        OrderLatenessPolicy resolved = serviceWith(java.util.Map.of("ordering.at_risk_before_minutes", 10))
+                .resolve(TENANT, BRAND, LOCATION)
+                .policy();
+
+        assertThat(resolved.delivery().atRiskBeforeSeconds()).isEqualTo(600);
+        assertThat(resolved.pickup().atRiskBeforeSeconds()).isEqualTo(600);
+        assertThat(resolved.dineIn().atRiskBeforeSeconds()).isEqualTo(600);
+        assertThat(resolved.delivery().lateAfterSeconds())
+                .as("grace stays per mode")
+                .isEqualTo(60);
+        assertThat(resolved.pickup().lateAfterSeconds()).isEqualTo(10);
+        assertThat(resolved.dineIn().noPromiseFallbackSeconds()).isEqualTo(1200);
+    }
+
+    @Test
+    void theKeysOwnDefaultNeverOverwritesAnAuthoredDocument() {
+        activate("TENANT", null, null, thresholdsSet(180, 0, 2700));
+
+        OrderLatenessPolicy resolved = service.resolve(TENANT, BRAND, LOCATION).policy();
+
+        assertThat(resolved.delivery().atRiskBeforeSeconds())
+                .as("nothing was set, so the document's own 180s stands rather than the key's default 5 minutes")
+                .isEqualTo(180);
+    }
+
+    @Test
+    void theKeyDefaultIsThePlatformDefaultsOwnAtRiskWindow() {
+        assertThat(java.util.Objects.requireNonNull(
+                                uz.horecaos.platform.ordering.api.OrderingConfigurationKeys.AT_RISK_BEFORE_MINUTES
+                                        .defaultValue())
+                        * 60)
+                .isEqualTo(OrderLatenessPolicy.platformDefault().delivery().atRiskBeforeSeconds());
+    }
+
+    @Test
+    void zeroMinutesMeansWarnOnlyAtThePromise() {
+        OrderLatenessPolicy resolved = serviceWith(java.util.Map.of("ordering.at_risk_before_minutes", 0))
+                .resolve(TENANT, BRAND, LOCATION)
+                .policy();
+
+        assertThat(resolved.pickup().atRiskBeforeSeconds()).isZero();
+    }
+
+    @Test
+    void anUnusableStoredThresholdIsIgnoredRatherThanTakingTheBoardDown() {
+        // Refused at write time, so this can only be a row written around the rule; LatenessThresholds
+        // would throw on a negative number, and the board read would 500 for every user.
+        OrderLatenessPolicy resolved = serviceWith(java.util.Map.of("ordering.at_risk_before_minutes", -3))
+                .resolve(TENANT, BRAND, LOCATION)
+                .policy();
+
+        assertThat(resolved).isEqualTo(OrderLatenessPolicy.platformDefault());
+    }
+
+    @Test
+    void aLateColourIsServedOnlyWhenItIsExactlySixHexDigitsAndIsLowerCased() {
+        assertThat(serviceWith(java.util.Map.of("ordering.late_colour", "#8A3FFC"))
+                        .resolve(TENANT, BRAND, LOCATION)
+                        .lateColour())
+                .isEqualTo("#8a3ffc");
+
+        for (String unusable : java.util.List.of("", "red", "#fff", "#8a3ffc;", "url(x)", "#gggggg")) {
+            assertThat(serviceWith(java.util.Map.of("ordering.late_colour", unusable))
+                            .resolve(TENANT, BRAND, LOCATION)
+                            .lateColour())
+                    .as("'%s' must not reach a stylesheet", unusable)
+                    .isNull();
+        }
+        assertThat(service.resolve(TENANT, BRAND, LOCATION).lateColour())
+                .as("unset")
+                .isNull();
     }
 
     private String thresholdsSet(int atRiskBefore, int lateAfter, int noPromiseFallback) {

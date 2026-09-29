@@ -237,9 +237,7 @@ describe('OrderRowsTable', () => {
       [row()],
       ['orderId', 'customer'],
       undefined,
-      new Map([
-        [row().orderId, crmRow({ customerType: 'ACCOUNT', customerName: null })],
-      ]),
+      new Map([[row().orderId, crmRow({ customerType: 'ACCOUNT', customerName: null })]]),
     );
     const text = (fixture.nativeElement as HTMLElement).querySelector(
       '[data-testid="order-row-customer"]',

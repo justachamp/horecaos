@@ -1,0 +1,42 @@
+<main class="auth" data-testid="auth-login">
+  <div class="auth__brand">
+    @if (brand.logoUrl; as logoUrl) {
+      <img class="auth__logo" [src]="logoUrl" [alt]="brand.displayName" />
+    } @else {
+      <span class="auth__name">{{ brand.displayName }}</span>
+    }
+  </div>
+
+  <p class="auth__slogan">{{ 'auth.slogan' | t }}</p>
+
+  <div class="auth__form">
+    <label class="phone">
+      <span class="phone__prefix">+998</span>
+      <input
+        class="phone__input"
+        type="tel"
+        inputmode="numeric"
+        autocomplete="tel-national"
+        maxlength="14"
+        data-testid="auth-phone"
+        [value]="national()"
+        [placeholder]="'auth.phonePlaceholder' | t"
+        (input)="onPhoneInput($event)"
+      />
+    </label>
+
+    @if (errorKey(); as key) {
+      <p class="auth__error" role="alert" data-testid="auth-error">{{ key | t }}</p>
+    }
+
+    <button
+      type="button"
+      class="btn"
+      data-testid="auth-continue"
+      [disabled]="!canContinue()"
+      (click)="continue()"
+    >
+      {{ (loading() ? 'common.loading' : 'auth.continue') | t }}
+    </button>
+  </div>
+</main>

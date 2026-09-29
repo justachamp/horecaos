@@ -12,10 +12,12 @@ import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.catalog.api.CatalogImportPricingPort;
+import uz.horecaos.platform.catalog.api.CatalogNameLocales;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.Category;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.EntityType;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.Product;
@@ -25,6 +27,7 @@ import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogImport
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogImportStore.RunRow;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
 import uz.horecaos.platform.configuration.Ids;
+import uz.horecaos.platform.tenancy.api.BrandLocaleLookup;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
 
@@ -57,8 +60,16 @@ public class CatalogImportService {
     private final JdbcCatalogStore catalogStore;
     private final CatalogImportPricingPort pricing;
     private final Clock clock;
+    private final BrandLocaleLookup brandLocales;
     private final String defaultLocale;
 
+    /**
+     * @param brandLocales  the brand's own default language, which an export reads names in first
+     *                      because that is where {@link CatalogImportRowService} writes them (row 10.12)
+     * @param defaultLocale {@code horecaos.catalog.default-locale} -- the export's second choice, where
+     *                      a menu authored before the brand chose a language put its names
+     */
+    @Autowired
     public CatalogImportService(
             CatalogImportParser parser,
             CatalogImportRowService rowService,
@@ -66,6 +77,7 @@ public class CatalogImportService {
             JdbcCatalogStore catalogStore,
             CatalogImportPricingPort pricing,
             Clock clock,
+            BrandLocaleLookup brandLocales,
             @Value("${horecaos.catalog.default-locale:uz}") String defaultLocale) {
         this.parser = parser;
         this.rowService = rowService;
@@ -73,7 +85,28 @@ public class CatalogImportService {
         this.catalogStore = catalogStore;
         this.pricing = pricing;
         this.clock = clock;
+        this.brandLocales = brandLocales;
         this.defaultLocale = defaultLocale;
+    }
+
+    /** A service for callers with no tenancy to ask: every brand is read in the configured locale. */
+    public CatalogImportService(
+            CatalogImportParser parser,
+            CatalogImportRowService rowService,
+            JdbcCatalogImportStore store,
+            JdbcCatalogStore catalogStore,
+            CatalogImportPricingPort pricing,
+            Clock clock,
+            String defaultLocale) {
+        this(
+                parser,
+                rowService,
+                store,
+                catalogStore,
+                pricing,
+                clock,
+                BrandLocaleLookup.platformFallback(),
+                defaultLocale);
     }
 
     /** Parses and queues a run; throws if the document itself is not readable as CSV. */
@@ -192,8 +225,9 @@ public class CatalogImportService {
      * hands out.
      *
      * <p>Only what one row of this import can say about a product: its
-     * default variant's SKU and unit, its default-locale name and
-     * description, its first category, and its price in this import's own
+     * default variant's SKU and unit, its name and description in the
+     * brand's default language (the server's configured locale for one that
+     * has none of its own), its first category, and its price in this import's own
      * catalog-import price book — never a price from a book the tenant
      * authored separately through the Price List page, matching {@link
      * CatalogImportPricingPort}'s own documented scope limitation. A brand
@@ -219,20 +253,38 @@ public class CatalogImportService {
                 .forEach((categoryId, productIds) ->
                         productIds.forEach(productId -> categoryIdByProduct.putIfAbsent(productId, categoryId)));
 
+        // Names in the brand's own default language (the one the import writes), the server's
+        // configured locale only where an entity has none -- a menu authored before the brand
+        // chose a language, or by a sample, keeps exporting.
+        CatalogNameLocales nameLocales = CatalogNameLocales.of(brandLocales, tenantId, brandId, defaultLocale);
+        Map<UUID, JdbcCatalogStore.TranslationRow> preferredRows = new LinkedHashMap<>();
+        Map<UUID, JdbcCatalogStore.TranslationRow> fallbackRows = new LinkedHashMap<>();
+        for (JdbcCatalogStore.TranslationRow translation : catalogStore.translations(tenantId, brandId)) {
+            if (translation.entityType() != EntityType.PRODUCT && translation.entityType() != EntityType.CATEGORY) {
+                continue;
+            }
+            if (nameLocales.preferred().equals(translation.locale())) {
+                preferredRows.put(translation.entityId(), translation);
+            } else if (nameLocales.fallback().equals(translation.locale())) {
+                fallbackRows.put(translation.entityId(), translation);
+            }
+        }
+        // A description travels with the name it was written beside: one row per entity, the
+        // brand-default one when there is one, never a name from one locale and a description
+        // from the other.
+        Map<UUID, JdbcCatalogStore.TranslationRow> exported = new LinkedHashMap<>(fallbackRows);
+        exported.putAll(preferredRows);
         Map<UUID, String> productNames = new LinkedHashMap<>();
         Map<UUID, String> productDescriptions = new LinkedHashMap<>();
         Map<UUID, String> categoryNames = new LinkedHashMap<>();
-        for (JdbcCatalogStore.TranslationRow translation : catalogStore.translations(tenantId, brandId)) {
-            if (!defaultLocale.equals(translation.locale())) {
-                continue;
-            }
+        exported.forEach((entityId, translation) -> {
             if (translation.entityType() == EntityType.PRODUCT) {
-                productNames.put(translation.entityId(), translation.name());
-                productDescriptions.put(translation.entityId(), translation.description());
-            } else if (translation.entityType() == EntityType.CATEGORY) {
-                categoryNames.put(translation.entityId(), translation.name());
+                productNames.put(entityId, translation.name());
+                productDescriptions.put(entityId, translation.description());
+            } else {
+                categoryNames.put(entityId, translation.name());
             }
-        }
+        });
 
         List<CatalogImportParser.CatalogExportRow> rows = new ArrayList<>();
         for (Product product : products) {

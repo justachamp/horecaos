@@ -389,6 +389,13 @@ export class OrderQueue implements OnInit {
    */
   private latenessPolicy: LatenessPolicy = PLATFORM_DEFAULT_LATENESS_POLICY;
 
+  /**
+   * The tenant's own `#rrggbb` for a late order (row `X.39`), or null for the
+   * design-system `--q-sla-late` token. Applied to `LATE` rows only — see
+   * {@link lateColourFor}.
+   */
+  protected readonly lateColour = signal<string | null>(null);
+
   /** Guards the tab-change refetch below from also firing on the very first route resolution — {@link start} already fetches once. */
   private hasStarted = false;
 
@@ -473,9 +480,23 @@ export class OrderQueue implements OnInit {
     const scope = this.location.scope();
     if (scope) {
       this.latenessPolicy = await this.latenessPolicyApi.resolve(scope);
+      this.lateColour.set(this.latenessPolicy.lateColour ?? null);
     }
     await this.refresh();
     this.hasStarted = true;
+  }
+
+  /**
+   * The tenant's late colour for this row, or null. Only a row that is `LATE`
+   * takes it: `BLOCKED` and the approval deadline share the danger step but mean
+   * something else, and a tenant who picks green for late has not asked to
+   * repaint them. The row sets it inline as `--q-sla-late` (rail, caption text)
+   * and `order-row--late-custom` (global `styles.css`) derives the row tint from the same colour, so the
+   * rail, the caption and the background agree rather than leaving the design
+   * system's red tint behind another colour's rail.
+   */
+  protected lateColourFor(row: OrderRow): string | null {
+    return row.severity.level === 'LATE' ? this.lateColour() : null;
   }
 
   /** Also the manual refresh control (§1.6: "the legacy dashboard's `FaRepeat` button, which staff use"). */

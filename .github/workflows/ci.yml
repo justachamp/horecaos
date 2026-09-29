@@ -89,6 +89,11 @@ jobs:
           python3 tools/ci/test_shard_tests.py
           python3 tools/ci/shard_tests.py check
 
+      - name: Makefile reaches Maven under the build lock
+        # make test/arch/verify go through tools/mvn-serial; make run compiles
+        # under it and serves outside it, so a dev server never holds the tree.
+        run: python3 tools/checks/test_makefile.py
+
       - name: Applied migrations are append-only
         if: github.event_name == 'pull_request'
         run: |
@@ -372,10 +377,46 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - name: Install, test and build
+      - name: Install
+        working-directory: frontend/${{ matrix.app }}
+        run: npm ci
+
+      - name: Lint (operations)
+        # eslint-plugin-horecaos bans a raw `font-size: Npx` (the closed type
+        # scale in tokens.css owns every size). The tree was clean when this step
+        # was added; before it, three violations landed unnoticed because
+        # nothing ran `npm run lint`. `lint:rules` proves the rule itself still
+        # fails on a violation. The other apps have no lint script yet.
+        if: matrix.app == 'operations'
         working-directory: frontend/${{ matrix.app }}
         run: |
-          npm ci
+          npm run lint
+          npm run lint:rules
+
+      - name: Format check (operations)
+        # The whole tree, so a file cannot slip through unchecked. This step used
+        # to run prettier only on the files a change touched (measured against a
+        # merge base, or against the tip a push replaced); a push whose run was
+        # cancelled by a later one, or whose previous tip was missing from the
+        # clone, was never checked for the files it brought. The tree has been
+        # prettier-clean since it was reformatted in one commit, so the plain
+        # script the app already has does the job. To fix a failure:
+        # `npm run format` in the app. The other apps have no format script yet.
+        if: matrix.app == 'operations'
+        working-directory: frontend/${{ matrix.app }}
+        run: npm run format:check
+
+      - name: Tooling tests (operations)
+        # frontend/tools/test_format_changed.py tests the local changed-files
+        # helper AND reads this file to prove that the lint and format steps
+        # above are still wired in. It also runs prettier for real when the
+        # dependencies are installed, which is why it comes after Install.
+        if: matrix.app == 'operations'
+        run: python3 frontend/tools/test_format_changed.py
+
+      - name: Test and build
+        working-directory: frontend/${{ matrix.app }}
+        run: |
           npm test
           npm run build --if-present
 

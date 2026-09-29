@@ -52,6 +52,10 @@ export interface MenuItemCommentPreset {
   labelRu: string;
   labelUz: string;
   labelEn: string;
+  /** Every wording the preset has, by locale -- the triple plus any locale a brand offers beyond it. */
+  labels?: Readonly<Record<string, string>>;
+  /** The wording the platform resolved for the requested language, then the brand's default. */
+  label?: string;
 }
 
 /** One group of modifier options a product offers (e.g. "Toppings"). */

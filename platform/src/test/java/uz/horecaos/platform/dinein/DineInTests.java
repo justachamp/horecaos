@@ -34,9 +34,11 @@ import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.DockerClientFactory;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.dinein.api.TableBindingPort;
 import uz.horecaos.platform.dinein.application.FloorPlanService;
 import uz.horecaos.platform.dinein.application.QrEntryService;
 import uz.horecaos.platform.dinein.application.ReservationService;
+import uz.horecaos.platform.dinein.application.TableBindingPortAdapter;
 import uz.horecaos.platform.dinein.application.TableSessionService;
 import uz.horecaos.platform.dinein.domain.BearerToken;
 import uz.horecaos.platform.dinein.domain.QrMode;
@@ -96,6 +98,7 @@ class DineInTests {
     private ReservationService reservations;
     private TableSessionService sessions;
     private QrEntryService qr;
+    private TableBindingPort tableBinding;
     private RecordingAuditRecorder audit;
 
     private UUID branch;
@@ -148,6 +151,7 @@ class DineInTests {
         sessions = new TableSessionService(store, floorPlan, new JdbcSessionOrderSource(jdbc), audit, clock);
         qr = new QrEntryService(
                 store, floorPlan, tenantId -> Optional.of("QRTABLE"), new InProcessRateLimiter(clock), clock);
+        tableBinding = new TableBindingPortAdapter(qr, sessions, store);
 
         seedTenancy();
         seedFloorPlan();
@@ -946,7 +950,310 @@ class DineInTests {
         assertThat(catchThrowable(() -> addRound(session.id(), elsewhere))).isInstanceOf(ApiException.class);
     }
 
+    // ---------------------------------------------------- retrying a round (the console)
+
+    @Test
+    @DisplayName("attaching the same order to the same session again answers with the sequence it already has")
+    void attachingTheSameRoundTwiceIsOneRound() {
+        SessionRow session = openWalkIn(tableOne);
+        UUID order = seedDineInOrder("D-060", 15_000);
+
+        int first = addRound(session.id(), order);
+        long factsAfterFirst = audit.count("dinein.session.round-added");
+        int retry = addRound(session.id(), order);
+
+        assertThat(retry).as("the retry lands where the round already is").isEqualTo(first);
+        assertThat(sessions.rounds(TENANT, session.id())).containsExactly(order);
+        assertThat(audit.count("dinein.session.round-added"))
+                .as("a retry records nothing: the round was recorded once")
+                .isEqualTo(factsAfterFirst);
+    }
+
+    @Test
+    @DisplayName("a retry still cannot confirm to a guest that an order they do not own is on a bill")
+    void aRetryStillChecksWhoOwnsTheOrder() {
+        SessionRow session = openWalkIn(tableOne);
+        UUID order = seedDineInOrder("D-061", 15_000);
+        UUID owner = ownOrder(order);
+        addRound(session.id(), order);
+
+        Throwable stranger = catchThrowable(() -> transactions.execute(
+                status -> sessions.addRound(TENANT, session.id(), order, UUID.randomUUID(), "guest:table", "Retry")));
+
+        assertThat(stranger).isInstanceOf(ApiException.class);
+        assertThat(((ApiException) stranger).errorCode()).isEqualTo(ErrorCode.RESOURCE_NOT_FOUND);
+        Integer ownersRetry = transactions.execute(
+                status -> sessions.addRound(TENANT, session.id(), order, owner, "guest:table", "Retry"));
+        assertThat(ownersRetry).as("the owner's own retry is answered").isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("a booking of the tenant's other branch cannot be seated through this branch")
+    void aBookingOfAnotherBranchCannotBeSeatedHere() {
+        UUID sibling = transactions
+                .execute(status -> reservations.request(new ReservationService.NewReservation(
+                        TENANT,
+                        BRAND,
+                        siblingBranch,
+                        null,
+                        "Dilnoza",
+                        "998901234567",
+                        null,
+                        null,
+                        2,
+                        DINNER,
+                        DINNER.plus(Duration.ofHours(2)),
+                        List.of(siblingTable),
+                        channelId,
+                        "host")))
+                .id();
+        ReservationRow booked = store.findReservation(TENANT, sibling).orElseThrow();
+        transactions.executeWithoutResult(status -> reservations.move(
+                TENANT,
+                siblingBranch,
+                sibling,
+                ReservationStatus.CONFIRMED,
+                booked.version(),
+                "host",
+                "Table available"));
+
+        Throwable failure = catchThrowable(() -> transactions.execute(status -> sessions.open(
+                new TableSessionService.OpenSession(
+                        TENANT, BRAND, branch, sibling, List.of(tableOne), 2, "UZS", "waiter"),
+                "Seating a booking")));
+
+        assertThat(failure).isInstanceOf(ApiException.class);
+        assertThat(((ApiException) failure).errorCode()).isEqualTo(ErrorCode.RESOURCE_NOT_FOUND);
+        assertThat(store.findReservation(TENANT, sibling).orElseThrow().status())
+                .as("and the booking was not moved to SEATED by a branch that does not own it")
+                .isEqualTo(ReservationStatus.CONFIRMED);
+    }
+
+    @Test
+    @DisplayName("a session is found only at its own branch")
+    void aSessionIsFoundOnlyAtItsOwnBranch() {
+        SessionRow session = openWalkIn(tableOne);
+
+        assertThat(sessions.findAtLocation(TENANT, branch, session.id()).id()).isEqualTo(session.id());
+        Throwable elsewhere = catchThrowable(() -> sessions.findAtLocation(TENANT, siblingBranch, session.id()));
+        assertThat(elsewhere).isInstanceOf(ApiException.class);
+        assertThat(((ApiException) elsewhere).errorCode()).isEqualTo(ErrorCode.RESOURCE_NOT_FOUND);
+        assertThat(catchThrowable(() -> sessions.findAtLocation(OTHER_TENANT, branch, session.id())))
+                .as("and never across tenants")
+                .isInstanceOf(ApiException.class);
+    }
+
+    @Test
+    @DisplayName("the live list names each party's tables in join order in one read")
+    void tablesOfNamesEachPartyInJoinOrder() {
+        SessionRow pair = transactions.execute(status -> sessions.open(
+                new TableSessionService.OpenSession(
+                        TENANT, BRAND, branch, null, List.of(tableTwo, tableOne), 4, "UZS", "waiter"),
+                "Pushed together"));
+        SessionRow single = openWalkIn(tableThree);
+
+        Map<UUID, List<TableSessionService.SessionTable>> byParty =
+                sessions.tablesOf(TENANT, List.of(pair.id(), single.id()));
+
+        assertThat(byParty.get(pair.id()))
+                .extracting(TableSessionService.SessionTable::tableId)
+                .as("joined in the order the request named them, not sorted by code")
+                .containsExactly(tableTwo, tableOne);
+        assertThat(byParty.get(single.id())).hasSize(1);
+        assertThat(sessions.tablesOf(OTHER_TENANT, List.of(pair.id())))
+                .as("a session id of another tenant names no tables")
+                .isEmpty();
+    }
+
+    // ---------------------------------------------- a cart bound to a table (TableBindingPort)
+
+    @Test
+    @DisplayName("a bound table's order goes on the bill of the session sitting there, owner-checked")
+    void aBoundTablesOrderGoesOnTheLiveSessionsBill() {
+        SessionRow session = openWalkIn(tableOne);
+        UUID order = seedDineInOrder("D-070", 25_000);
+        UUID owner = ownOrder(order);
+
+        assertThat(tableBinding.isSeated(TENANT, tableOne)).isTrue();
+        assertThat(tableBinding.isSeated(TENANT, tableTwo))
+                .as("nobody at table two")
+                .isFalse();
+        assertThat(tableBinding.isSeated(OTHER_TENANT, tableOne))
+                .as("the tenant is a predicate of the read")
+                .isFalse();
+
+        transactions.executeWithoutResult(status -> tableBinding.attachRound(TENANT, tableOne, order, owner));
+
+        assertThat(sessions.rounds(TENANT, session.id())).containsExactly(order);
+        assertThat(sessions.bill(TENANT, session.id()).totalMinor()).isEqualTo(25_000L);
+    }
+
+    @Test
+    @DisplayName("nobody sitting at the bound table is a conflict, and nothing lands on any bill")
+    void anUnseatedBoundTableRefusesTheRound() {
+        UUID order = seedDineInOrder("D-071", 25_000);
+        UUID owner = ownOrder(order);
+
+        Throwable failure = catchThrowable(() ->
+                transactions.executeWithoutResult(status -> tableBinding.attachRound(TENANT, tableTwo, order, owner)));
+
+        assertThat(failure).isInstanceOf(ApiException.class);
+        assertThat(((ApiException) failure).errorCode()).isEqualTo(ErrorCode.RESOURCE_CONFLICT);
+        assertThat(((ApiException) failure).properties())
+                .containsEntry("conflict", "TABLE_NOT_SEATED")
+                .containsEntry("reason", "TABLE_NOT_SEATED");
+        assertThat(jdbc.sql("SELECT count(*) FROM dinein.session_orders")
+                        .query(Long.class)
+                        .single())
+                .isZero();
+    }
+
+    @Test
+    @DisplayName("an order that is not the binding customer's own never lands on the table's bill")
+    void aBoundTableRefusesAnotherCustomersOrder() {
+        openWalkIn(tableOne);
+        UUID order = seedDineInOrder("D-072", 25_000);
+        ownOrder(order);
+
+        Throwable failure = catchThrowable(() -> transactions.executeWithoutResult(
+                status -> tableBinding.attachRound(TENANT, tableOne, order, UUID.randomUUID())));
+
+        assertThat(failure).isInstanceOf(ApiException.class);
+        assertThat(((ApiException) failure).errorCode()).isEqualTo(ErrorCode.RESOURCE_NOT_FOUND);
+        assertThat(jdbc.sql("SELECT count(*) FROM dinein.session_orders")
+                        .query(Long.class)
+                        .single())
+                .isZero();
+    }
+
+    @Test
+    @DisplayName("a guest token resolves to its table only where the branch takes QR orders")
+    void aGuestTokenResolvesToItsTableOnlyWhereOrderingIsOn() {
+        String printed = issueToken(tableOne);
+        enableOrdering();
+        String guestToken = transactions.execute(status -> qr.exchange(printed)).guestToken();
+
+        TableBindingPort.GuestTable table = tableBinding.resolveGuestTable(guestToken);
+
+        assertThat(table.tableId()).isEqualTo(tableOne);
+        assertThat(table.tableCode()).isEqualTo("T1");
+        assertThat(table.locationId()).isEqualTo(branch);
+        assertThat(table.tenantId()).isEqualTo(TENANT);
+
+        // The branch goes back to a menu-only code: the token already in hand keeps
+        // the mode it was minted with (ADR 0047), so a fresh scan is what proves it.
+        transactions.executeWithoutResult(status -> floorPlan.configure(
+                new FloorPlanService.BranchSettings(TENANT, BRAND, branch, "VIEW_ONLY", null, null, null),
+                "manager",
+                "Menu only for now"));
+        String viewOnly = transactions.execute(status -> qr.exchange(printed)).guestToken();
+        Throwable refused = catchThrowable(() -> tableBinding.resolveGuestTable(viewOnly));
+        assertThat(refused).isInstanceOf(ApiException.class);
+        assertThat(((ApiException) refused).errorCode()).isEqualTo(ErrorCode.RESOURCE_NOT_FOUND);
+
+        Throwable unknown = catchThrowable(() -> tableBinding.resolveGuestTable("nobody-minted-this"));
+        assertThat(((ApiException) unknown).errorCode()).isEqualTo(ErrorCode.UNAUTHENTICATED);
+    }
+
+    @Test
+    @DisplayName("findGuestTable answers empty, and never throws, for every token that cannot act now")
+    void findGuestTableIsEmptyForATokenThatCannotActNow() {
+        String printed = issueToken(tableOne);
+        enableOrdering();
+        SessionRow party = openWalkIn(tableOne);
+        String guestToken = transactions.execute(status -> qr.exchange(printed)).guestToken();
+
+        assertThat(tableBinding.findGuestTable(guestToken))
+                .map(TableBindingPort.GuestTable::tableId)
+                .as("live while the party the token was minted for is seated")
+                .contains(tableOne);
+        assertThat(tableBinding.findGuestTable("nobody-minted-this"))
+                .as("an unknown token is not an error to a caller that has to keep going")
+                .isEmpty();
+        assertThat(tableBinding.findGuestTable(" ")).isEmpty();
+
+        // Closing the party revokes the tokens minted at its table: the next party's
+        // bill is not reachable with what the last one held.
+        move(party.id(), SessionStatus.CLOSED, party.version());
+        assertThat(tableBinding.findGuestTable(guestToken)).isEmpty();
+
+        // A branch that stops taking QR orders: a token minted for it is not one that
+        // can place an order, and reads like any other token that cannot act.
+        String fresh = transactions.execute(status -> qr.exchange(printed)).guestToken();
+        assertThat(tableBinding.findGuestTable(fresh)).isPresent();
+        transactions.executeWithoutResult(status -> floorPlan.configure(
+                new FloorPlanService.BranchSettings(TENANT, BRAND, branch, "VIEW_ONLY", null, null, null),
+                "manager",
+                "Menu only for now"));
+        String viewOnly = transactions.execute(status -> qr.exchange(printed)).guestToken();
+        assertThat(tableBinding.findGuestTable(viewOnly)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("an operator's order goes on the named party's bill, and only a live party at this branch takes it")
+    void anOperatorsOrderGoesOnTheNamedPartysBill() {
+        SessionRow party = openWalkIn(tableOne);
+        UUID order = seedDineInOrder("D-073", 31_000);
+
+        tableBinding.requireLiveSession(TENANT, branch, party.id());
+        transactions.executeWithoutResult(status -> tableBinding.attachRoundToSession(
+                TENANT, branch, party.id(), order, "waiter", "Placed with the order"));
+
+        assertThat(sessions.rounds(TENANT, party.id())).containsExactly(order);
+        assertThat(sessions.bill(TENANT, party.id()).totalMinor()).isEqualTo(31_000L);
+
+        Throwable elsewhere =
+                catchThrowable(() -> tableBinding.requireLiveSession(TENANT, UUID.randomUUID(), party.id()));
+        assertThat(elsewhere).isInstanceOf(ApiException.class);
+        assertThat(((ApiException) elsewhere).errorCode())
+                .as("a session of another branch answers like one that does not exist")
+                .isEqualTo(ErrorCode.RESOURCE_NOT_FOUND);
+        Throwable otherTenant = catchThrowable(() -> tableBinding.requireLiveSession(OTHER_TENANT, branch, party.id()));
+        assertThat(((ApiException) otherTenant).errorCode()).isEqualTo(ErrorCode.RESOURCE_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName(
+            "a party that has left refuses an operator's order with SESSION_NOT_LIVE, and nothing lands on any bill")
+    void aPartyThatLeftRefusesAnOperatorsOrder() {
+        SessionRow party = openWalkIn(tableOne);
+        move(party.id(), SessionStatus.CLOSED, party.version());
+        UUID order = seedDineInOrder("D-074", 31_000);
+
+        Throwable early = catchThrowable(() -> tableBinding.requireLiveSession(TENANT, branch, party.id()));
+        Throwable late =
+                catchThrowable(() -> transactions.executeWithoutResult(status -> tableBinding.attachRoundToSession(
+                        TENANT, branch, party.id(), order, "waiter", "Placed with the order")));
+
+        for (Throwable failure : List.of(early, late)) {
+            assertThat(failure).isInstanceOf(ApiException.class);
+            assertThat(((ApiException) failure).errorCode()).isEqualTo(ErrorCode.RESOURCE_CONFLICT);
+            assertThat(((ApiException) failure).properties())
+                    .containsEntry("conflict", "SESSION_NOT_LIVE")
+                    .containsEntry("reason", "SESSION_NOT_LIVE");
+        }
+        assertThat(jdbc.sql("SELECT count(*) FROM dinein.session_orders")
+                        .query(Long.class)
+                        .single())
+                .isZero();
+    }
+
     // ------------------------------------------------------------------ helpers
+
+    /** Gives an order a customer account of its own, as a signed-in guest's checkout does. */
+    private UUID ownOrder(UUID orderId) {
+        UUID account = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO customer.customer_accounts (id, tenant_id, status, created_at, updated_at)
+                VALUES (:id, :tenantId, 'ACTIVE', now(), now())
+                """).param("id", account).param("tenantId", TENANT).update();
+        jdbc.sql("""
+                UPDATE ordering.orders
+                SET customer_account_id = :account, guest_reference_hash = NULL
+                WHERE id = :id
+                """).param("account", account).param("id", orderId).update();
+        return account;
+    }
 
     private void enableOrdering() {
         transactions.executeWithoutResult(status -> floorPlan.configure(
@@ -1233,6 +1540,12 @@ class DineInTests {
         @Override
         public void record(AuditFact fact) {
             facts.add(fact);
+        }
+
+        long count(String actionCode) {
+            return facts.stream()
+                    .filter(fact -> actionCode.equals(fact.actionCode()))
+                    .count();
         }
     }
 }

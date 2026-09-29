@@ -2,7 +2,8 @@ import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@a
 
 import { ApiError } from '../../../core/api/problem-details';
 import { CurrentTenant } from '../../../core/auth/current-tenant';
-import { I18n } from '../../../core/i18n/i18n';
+import { I18n, LOCALES } from '../../../core/i18n/i18n';
+import { resolveLocaleSet } from '../../../core/i18n/locale-set';
 import { TPipe } from '../../../core/i18n/t.pipe';
 import { RichText, RichTextBlockKindLabels } from '../../../shared/ui/rich-text';
 import { sanitizeRichHtml } from '../../../shared/ui/rich-text-sanitizer';
@@ -36,6 +37,37 @@ type PageState = 'loading' | 'ready' | 'denied' | 'error';
  * pilot case) the picker auto-selects it with no visible friction; with more
  * than one, a plain `<select>` appears.
  *
+ * **Row 10.12 — the languages are the brand's own, not a fixed ru/uz/en
+ * triple.** Whatever brand the picker holds decides which editors appear,
+ * from that brand's own supported-language set (`BrandView.locales`, run
+ * through {@link resolveLocaleSet} — the rule `LocaleSet` applies to the
+ * operator's own brand, which this screen cannot use because the tenant owner
+ * it exists for has no brand scope of their own): default language first and
+ * marked, the platform triple for a brand that has chosen none. The server's
+ * only rule is at least one language ({@link TermsPublishingService}), so no
+ * language is required here beyond that.
+ *
+ * **A version is a whole new document, so a language the brand does not offer
+ * is carried forward, never dropped.** Publishing inserts the next version with
+ * exactly the languages in the request — the server does not copy the ones a
+ * caller leaves out — so a brand that narrowed its languages after publishing
+ * in a third would silently lose that text from the live terms the moment any
+ * unrelated edit republished. {@link submitPublish} therefore sends the
+ * current version's text for every language the editors do not show, unchanged
+ * (the same rule `channel-setup-page.ts` applies to a static page).
+ *
+ * **Switching brands empties the form until the new brand's text has
+ * arrived.** The picker changes {@link locales} at once (they derive from the
+ * picked brand), but the text in {@link current} and {@link drafts} belongs to
+ * the brand that was picked before, and a publish sends the current version's
+ * text for every language the editors do not show. Left in place through the
+ * two reads, that would publish the previous brand's hidden-language text — and
+ * its drafts — as the new brand's legal terms. {@link selectBrand} therefore
+ * clears them, shows the form as loading ({@link brandLoading}) and takes a
+ * ticket ({@link brandLoadSeq}); a reply for a brand that is no longer the
+ * picked one is dropped, and a publish that lands after the operator moved on
+ * does not write its result into the other brand's form.
+ *
  * **What "never published" means, concretely.** `TermsApi.current` returns
  * `published: false` with empty `contentsByLocale` for a brand that has
  * never published — not an error. The storefront is, right now, serving the
@@ -61,13 +93,40 @@ export class TermsPage {
   protected readonly brands = signal<readonly BrandView[]>([]);
   protected readonly selectedBrandId = signal<string | null>(null);
 
+  /** True from the moment a brand is picked until its terms and history have arrived. */
+  protected readonly brandLoading = signal(false);
+
+  /**
+   * A ticket for the latest brand load: a reply that arrives under an older one
+   * belongs to a brand the operator has since left, and must change nothing.
+   */
+  private brandLoadSeq = 0;
+
   protected readonly current = signal<TermsVersionView | null>(null);
   protected readonly history = signal<readonly TermsVersionSummaryView[]>([]);
 
-  protected readonly editRu = signal('');
-  protected readonly editUz = signal('');
-  protected readonly editEn = signal('');
+  /** The text typed per offered language, keyed by locale tag. */
+  protected readonly drafts = signal<Readonly<Record<string, string>>>({});
   protected readonly note = signal('');
+
+  /** The picked brand's own languages (row 10.12): default first, the platform triple when it has chosen none. */
+  private readonly localeSet = computed(() =>
+    resolveLocaleSet(this.brands().find((brand) => brand.id === this.selectedBrandId())?.locales),
+  );
+  protected readonly locales = computed(() => this.localeSet().locales);
+
+  /**
+   * Text the current version carries in a language the editors do not offer.
+   * Not shown, not editable here — and sent back unchanged on every publish.
+   */
+  private readonly hiddenContents = computed<Readonly<Record<string, string>>>(() => {
+    const offered = new Set<string>(this.locales());
+    return Object.fromEntries(
+      Object.entries(this.current()?.contentsByLocale ?? {}).filter(
+        ([locale, text]) => !offered.has(locale) && text.trim().length > 0,
+      ),
+    );
+  });
 
   /** `q-rich-text`'s own shape, row `X.31` — one set of labels for all three locale editors. */
   protected readonly richTextKindLabels = computed<RichTextBlockKindLabels>(() => ({
@@ -96,20 +155,77 @@ export class TermsPage {
     void this.load();
   }
 
+  /**
+   * At least one offered language must carry text — the server's "at least one
+   * language" rule, mirrored so the button disables rather than a submit bouncing
+   * off a 400. A language kept only because it is hidden does not count: an
+   * operator who cleared every language they can see is not publishing.
+   */
   protected canPublish(): boolean {
     return (
       !this.publishSubmitting() &&
-      (this.editRu().trim().length > 0 ||
-        this.editUz().trim().length > 0 ||
-        this.editEn().trim().length > 0)
+      !this.brandLoading() &&
+      this.locales().some((locale) => this.draftFor(locale).trim().length > 0)
     );
+  }
+
+  protected draftFor(locale: string): string {
+    return this.drafts()[locale] ?? '';
+  }
+
+  protected setDraft(locale: string, value: string): void {
+    this.drafts.update((current) => ({ ...current, [locale]: value }));
+  }
+
+  protected isDefaultLocale(locale: string): boolean {
+    return this.localeSet().defaultLocale === locale;
+  }
+
+  /** The language's name for the editor's label: "Russian (ru)". `MessageKey` refuses a key built by concatenation, on purpose. */
+  protected fieldLabel(locale: string): string {
+    switch (locale) {
+      case 'ru':
+        return this.i18n.t('settings.terms.field.ru');
+      case 'uz-Latn':
+        return this.i18n.t('settings.terms.field.uz');
+      case 'en':
+        return this.i18n.t('settings.terms.field.en');
+      default:
+        return locale;
+    }
+  }
+
+  /**
+   * The panels a past version's preview shows: every language the version
+   * carries — including one the brand no longer offers, which is exactly the
+   * text a hidden language would otherwise never let anyone read — plus each
+   * language the brand offers that this version lacks, named "not included".
+   * Canonical order, not the editors' default-first one: it is a document
+   * being read, not a form being filled.
+   */
+  protected previewLocales(preview: TermsVersionView): readonly string[] {
+    const present = Object.keys(preview.contentsByLocale);
+    const offered = new Set<string>(this.locales());
+    const known: readonly string[] = LOCALES;
+    return [
+      ...LOCALES.filter((locale) => offered.has(locale) || present.includes(locale)),
+      ...present.filter((locale) => !known.includes(locale)),
+    ];
   }
 
   protected async selectBrand(brandId: string): Promise<void> {
     if (brandId === this.selectedBrandId()) {
       return;
     }
+    const ticket = ++this.brandLoadSeq;
     this.selectedBrandId.set(brandId);
+    // The previous brand's document, drafts and history are not this brand's: out
+    // of the form now, not when the replacement arrives.
+    this.current.set(null);
+    this.history.set([]);
+    this.drafts.set({});
+    this.note.set('');
+    this.brandLoading.set(true);
     this.expandedVersion.set(null);
     this.previewContent.set(null);
     this.previewError.set(null);
@@ -117,9 +233,15 @@ export class TermsPage {
     this.publishError.set(null);
     this.loadErrorText.set(null);
     try {
-      await this.loadBrandData(brandId);
+      await this.loadBrandData(brandId, ticket);
     } catch (error) {
-      this.handleLoadFailure(error);
+      if (ticket === this.brandLoadSeq) {
+        this.handleLoadFailure(error);
+      }
+    } finally {
+      if (ticket === this.brandLoadSeq) {
+        this.brandLoading.set(false);
+      }
     }
   }
 
@@ -130,15 +252,12 @@ export class TermsPage {
       return;
     }
 
-    const contentsByLocale: Record<string, string> = {};
-    if (this.editRu().trim()) {
-      contentsByLocale['ru'] = this.editRu().trim();
-    }
-    if (this.editUz().trim()) {
-      contentsByLocale['uz-Latn'] = this.editUz().trim();
-    }
-    if (this.editEn().trim()) {
-      contentsByLocale['en'] = this.editEn().trim();
+    const contentsByLocale: Record<string, string> = { ...this.hiddenContents() };
+    for (const locale of this.locales()) {
+      const text = this.draftFor(locale).trim();
+      if (text) {
+        contentsByLocale[locale] = text;
+      }
     }
     const request: PublishTermsRequest = {
       contentsByLocale,
@@ -150,8 +269,14 @@ export class TermsPage {
     this.publishedNotice.set(null);
     try {
       const published = await this.api.publish(tenantId, brandId, request);
+      const history = await this.api.list(tenantId, brandId);
+      if (this.selectedBrandId() !== brandId) {
+        // The operator picked another brand while this one was publishing: its
+        // result is not that brand's form to fill.
+        return;
+      }
       this.current.set(published);
-      this.history.set(await this.api.list(tenantId, brandId));
+      this.history.set(history);
       this.note.set('');
       this.publishedNotice.set(
         this.i18n.t('settings.terms.publish.success', { version: published.version ?? 0 }),
@@ -197,6 +322,7 @@ export class TermsPage {
       return;
     }
     this.tenantId = tenantId;
+    const ticket = ++this.brandLoadSeq;
     try {
       const brands = await this.brandsApi.list(tenantId);
       this.brands.set(brands);
@@ -207,7 +333,10 @@ export class TermsPage {
         return;
       }
       this.selectedBrandId.set(firstBrand.id);
-      await this.loadBrandData(firstBrand.id);
+      await this.loadBrandData(firstBrand.id, ticket);
+      if (ticket !== this.brandLoadSeq) {
+        return;
+      }
       this.state.set('ready');
     } catch (error) {
       this.handleLoadFailure(error);
@@ -227,7 +356,7 @@ export class TermsPage {
     return content === undefined ? null : sanitizeRichHtml(content);
   }
 
-  private async loadBrandData(brandId: string): Promise<void> {
+  private async loadBrandData(brandId: string, ticket: number): Promise<void> {
     const tenantId = this.tenantId;
     if (!tenantId) {
       return;
@@ -236,11 +365,17 @@ export class TermsPage {
       this.api.current(tenantId, brandId),
       this.api.list(tenantId, brandId),
     ]);
+    if (ticket !== this.brandLoadSeq) {
+      // The operator picked another brand while these reads were in flight.
+      return;
+    }
     this.current.set(current);
     this.history.set(history);
-    this.editRu.set(current.contentsByLocale['ru'] ?? '');
-    this.editUz.set(current.contentsByLocale['uz-Latn'] ?? '');
-    this.editEn.set(current.contentsByLocale['en'] ?? '');
+    this.drafts.set(
+      Object.fromEntries(
+        this.locales().map((locale) => [locale, current.contentsByLocale[locale] ?? '']),
+      ),
+    );
   }
 
   private handleLoadFailure(error: unknown): void {

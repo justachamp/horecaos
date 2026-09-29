@@ -117,7 +117,9 @@ export class ApiClient {
       .pipe(
         map((response) => ({
           value: response.body as T,
-          headers: Object.fromEntries(headerNames.map((name) => [name, response.headers.get(name)])),
+          headers: Object.fromEntries(
+            headerNames.map((name) => [name, response.headers.get(name)]),
+          ),
         })),
         catchError(toApiError),
       );

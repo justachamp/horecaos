@@ -3,6 +3,7 @@ package uz.horecaos.platform.catalog;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Clock;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
@@ -17,9 +18,12 @@ import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.testcontainers.DockerClientFactory;
 import tools.jackson.databind.json.JsonMapper;
+import uz.horecaos.platform.catalog.api.SampleMenuPort;
 import uz.horecaos.platform.catalog.application.CatalogAuthoringService;
+import uz.horecaos.platform.catalog.application.CatalogPublicationService;
 import uz.horecaos.platform.catalog.application.CatalogSnapshotLoader;
 import uz.horecaos.platform.catalog.application.CatalogValidator;
+import uz.horecaos.platform.catalog.application.SampleMenuService;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.EntityType;
 import uz.horecaos.platform.catalog.domain.FiscalClassification;
 import uz.horecaos.platform.catalog.domain.ValidationFinding;
@@ -30,6 +34,7 @@ import uz.horecaos.platform.pricing.infrastructure.catalog.JdbcCatalogPricingCon
 import uz.horecaos.platform.support.CommercialDefaults;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcBrandLocaleLookup;
+import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcSalesChannelStore;
 
 /**
  * Every server-side reader of a catalog name that ends up in front of somebody
@@ -227,6 +232,49 @@ class BrandDefaultNameReadersTests {
                 .contains("MISSING_TRANSLATION");
     }
 
+    @Test
+    @DisplayName(
+            "the onboarding sample menu is authored in the brand's default language, the server's for a brand with none")
+    void sampleMenuIsAuthoredInTheBrandDefault() {
+        brandDefault("ru");
+
+        SampleMenuPort.SampleMenu menu =
+                sampleMenu(new JdbcBrandLocaleLookup(jdbc)).installSample(TENANT, BRAND, List.of());
+
+        assertThat(translationLocales(EntityType.CATALOG, menu.catalogId()))
+                .as("the catalog's own name is the one row written in the authoring locale alone")
+                .containsExactly("ru");
+        assertThat(sampleMenu(new JdbcBrandLocaleLookup(jdbc))
+                        .installSample(TENANT, BRAND, List.of())
+                        .created())
+                .as("a retry finds the same sample rather than authoring a second")
+                .isFalse();
+    }
+
+    @Test
+    @DisplayName("a sample menu for a brand with no default of its own keeps the server's locale")
+    void sampleMenuForABrandWithNoDefaultUsesTheServerLocale() {
+        SampleMenuPort.SampleMenu menu =
+                sampleMenu(new JdbcBrandLocaleLookup(jdbc)).installSample(TENANT, BRAND, List.of());
+
+        assertThat(translationLocales(EntityType.CATALOG, menu.catalogId())).containsExactly(SERVER_LOCALE);
+    }
+
+    @Test
+    @DisplayName(
+            "a brand default the sample has no wording in falls back to the server's locale, which publication accepts")
+    void sampleMenuFallsBackWhenTheBrandDefaultIsBeyondTheSample() {
+        // A locale beyond the platform triple: BrandProfile.KNOWN_LOCALES will not let the console
+        // choose one yet, but nothing below it stops the row, and the sample must not write its
+        // Uzbek text under a code that is not Uzbek.
+        brandDefault("kaa");
+
+        SampleMenuPort.SampleMenu menu =
+                sampleMenu(new JdbcBrandLocaleLookup(jdbc)).installSample(TENANT, BRAND, List.of());
+
+        assertThat(translationLocales(EntityType.CATALOG, menu.catalogId())).containsExactly(SERVER_LOCALE);
+    }
+
     private static UUID variantOf(CatalogAuthoringService.ProductCreated created) {
         return created.defaultVariantId();
     }
@@ -236,6 +284,27 @@ class BrandDefaultNameReadersTests {
                 .param("id", variantId)
                 .query(UUID.class)
                 .single();
+    }
+
+    private SampleMenuService sampleMenu(JdbcBrandLocaleLookup brandLocales) {
+        CatalogSnapshotLoader loader = new CatalogSnapshotLoader(
+                store, (tenantId, assets) -> true, (t, b, ids) -> ids, brandLocales, SERVER_LOCALE);
+        CatalogPublicationService publications = new CatalogPublicationService(
+                store, new CatalogValidator(), loader, new JdbcSalesChannelStore(jdbc), Clock.systemUTC());
+        return new SampleMenuService(store, authoring, publications, brandLocales, SERVER_LOCALE);
+    }
+
+    private List<String> translationLocales(EntityType type, UUID entityId) {
+        return jdbc.sql("""
+                SELECT locale FROM catalog.translations
+                WHERE tenant_id = :tenantId AND entity_type = :type AND entity_id = :entityId
+                ORDER BY locale
+                """)
+                .param("tenantId", TENANT)
+                .param("type", type.name())
+                .param("entityId", entityId)
+                .query(String.class)
+                .list();
     }
 
     private void brandDefault(String locale) {

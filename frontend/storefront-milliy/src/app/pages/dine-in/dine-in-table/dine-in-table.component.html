@@ -1,4 +1,4 @@
-<div class="table" data-testid="dine-in-table">
+<div class="table" [class.table--with-order]="ordering() && cartCount() > 0" data-testid="dine-in-table">
   @if (!admission()) {
     <div class="table__empty" data-testid="dine-in-no-admission">
       <p class="table__title">{{ 'dineIn.noAdmissionTitle' | t }}</p>
@@ -14,10 +14,101 @@
       </h1>
     </header>
 
-    @if (!viewOnly()) {
-      <div class="table__notice" role="status" data-testid="dine-in-ordering-unavailable">
-        {{ 'dineIn.orderingUnavailable' | t }}
+    @if (canOrder() && !isSeated()) {
+      <div class="table__notice" role="status" data-testid="dine-in-not-seated">
+        {{ 'dineIn.notSeated' | t }}
       </div>
+    }
+
+    @if (sessionEnded()) {
+      <p class="table__lost" role="alert" data-testid="dine-in-session-ended">
+        {{ 'dineIn.sessionEnded' | t }}
+      </p>
+    }
+
+    @if (ordering()) {
+      @if (!session.isAuthenticated()) {
+        <button type="button" class="table__signin" data-testid="dine-in-signin" (click)="signIn()">
+          {{ 'dineIn.signInToOrder' | t }}
+        </button>
+      }
+
+      @if (pendingRounds() > 0) {
+        <div class="table__pending" role="status" data-testid="dine-in-round-pending">
+          <p class="table__pending-text">{{ 'dineIn.roundPending' | t }}</p>
+          <button
+            type="button"
+            class="table__pending-retry"
+            data-testid="dine-in-round-retry"
+            [disabled]="billBusy()"
+            (click)="retryPendingRounds()"
+          >
+            {{ 'dineIn.roundRetry' | t }}
+          </button>
+        </div>
+      }
+
+      @if (roundLost()) {
+        <p class="table__lost" role="alert" data-testid="dine-in-round-lost">
+          {{ 'dineIn.roundAttachFailed' | t }}
+        </p>
+      }
+
+      @if (paymentErrorKey(); as key) {
+        <p class="table__lost" role="alert" data-testid="dine-in-payment-error">{{ key | t }}</p>
+      }
+
+      @if (billErrorKey(); as key) {
+        <div class="table__pending" role="alert">
+          <p class="table__pending-text" data-testid="dine-in-bill-error">{{ key | t }}</p>
+          @if (!bill()) {
+            <button
+              type="button"
+              class="table__pending-retry"
+              data-testid="dine-in-bill-retry"
+              [disabled]="billBusy()"
+              (click)="refreshBill()"
+            >
+              {{ 'dineIn.roundRetry' | t }}
+            </button>
+          }
+        </div>
+      }
+
+      @if (bill(); as currentBill) {
+        <section class="bill" data-testid="dine-in-bill">
+          <div class="bill__figures">
+            <p class="bill__title">{{ 'dineIn.tableBill' | t }}</p>
+            <p class="bill__total" data-testid="dine-in-bill-total">{{ billTotalLabel(currentBill) }}</p>
+            <p class="bill__rounds" data-testid="dine-in-bill-rounds">
+              {{ 'dineIn.roundCount' | t: { count: currentBill.roundCount } }}
+            </p>
+          </div>
+          @if (currentBill.status === 'BILL_REQUESTED') {
+            <p class="bill__requested" role="status" data-testid="dine-in-bill-requested">
+              {{ 'dineIn.billRequested' | t }}
+            </p>
+          } @else {
+            <button
+              type="button"
+              class="bill__ask"
+              data-testid="dine-in-request-bill"
+              [disabled]="billBusy() || currentBill.roundCount === 0"
+              (click)="requestBill()"
+            >
+              {{ 'dineIn.askForBill' | t }}
+            </button>
+          }
+        </section>
+      }
+
+      @if (orderPlaced()) {
+        <p class="table__ok" role="status" data-testid="dine-in-order-placed">{{ 'dineIn.orderPlaced' | t }}</p>
+      }
+
+      @if (basketErrorKey(); as key) {
+        <p class="table__error" role="alert" data-testid="dine-in-basket-error">{{ key | t }}</p>
+      }
     }
 
     @if (loading()) {
@@ -32,7 +123,63 @@
         [sections]="sections()"
         [currency]="currency()"
         [linked]="false"
+        [ordering]="ordering()"
+        [quantities]="quantities()"
+        [busy]="updating()"
+        (quantityChange)="changeQuantity($event)"
       />
+    }
+
+    @if (ordering() && session.isAuthenticated() && cartCount() > 0) {
+      <footer class="order" data-testid="dine-in-order">
+        <div class="order__summary">
+          <span data-testid="dine-in-cart-count">{{ 'dineIn.itemsInCart' | t: { count: cartCount() } }}</span>
+          <span class="order__total" data-testid="dine-in-cart-total">{{ totalLabel() }}</span>
+        </div>
+
+        @if (paymentOptions().length > 1) {
+          <div class="order__methods" data-testid="dine-in-payment-options">
+            @for (code of paymentOptions(); track code) {
+              <button
+                type="button"
+                class="order__method"
+                data-testid="dine-in-payment-option"
+                [class.is-active]="selectedPayment() === code"
+                [attr.aria-pressed]="selectedPayment() === code"
+                (click)="selectPayment(code)"
+              >
+                {{ paymentLabelKey(code) ? (paymentLabelKey(code)! | t) : code }}
+              </button>
+            }
+          </div>
+        }
+
+        @if (priceRefusalKey(); as key) {
+          <p class="table__error" role="alert" data-testid="dine-in-pricing-error">{{ key | t }}</p>
+          <button
+            type="button"
+            class="order__clear"
+            data-testid="dine-in-clear"
+            [disabled]="updating() || checkingOut()"
+            (click)="clearOrder()"
+          >
+            {{ 'dineIn.clearOrder' | t }}
+          </button>
+        }
+        @if (checkoutErrorKey(); as key) {
+          <p class="table__error" role="alert" data-testid="dine-in-checkout-error">{{ key | t }}</p>
+        }
+
+        <button
+          type="button"
+          class="order__cta"
+          data-testid="dine-in-checkout"
+          [disabled]="checkingOut() || updating() || !priced()"
+          (click)="checkout()"
+        >
+          {{ (checkingOut() ? 'common.saving' : 'dineIn.orderRound') | t }}
+        </button>
+      </footer>
     }
   }
 </div>

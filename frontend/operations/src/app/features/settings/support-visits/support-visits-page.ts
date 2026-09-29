@@ -68,7 +68,9 @@ export class SupportVisitsPage {
     }
     try {
       const result = await firstValueFrom(
-        this.api.get<{ items: SupportVisit[] }>(`/api/v1/operations/tenants/${tenantId}/support-sessions`),
+        this.api.get<{ items: SupportVisit[] }>(
+          `/api/v1/operations/tenants/${tenantId}/support-sessions`,
+        ),
       );
       this.visits.set(result.value?.items ?? []);
       this.state.set('ready');

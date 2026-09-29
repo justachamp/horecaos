@@ -158,7 +158,10 @@ describe('ActivityLogPage', () => {
       changeDocument: { minOrderSum: { before: 30000, after: 50000 } },
     });
     const api = {
-      search: vi.fn().mockResolvedValueOnce(page([oneEvent])).mockResolvedValueOnce(page([oneEvent])),
+      search: vi
+        .fn()
+        .mockResolvedValueOnce(page([oneEvent]))
+        .mockResolvedValueOnce(page([oneEvent])),
       detail: vi.fn().mockResolvedValueOnce(detail),
     };
     await TestBed.configureTestingModule({

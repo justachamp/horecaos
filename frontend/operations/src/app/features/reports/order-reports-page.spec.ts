@@ -353,7 +353,7 @@ describe('OrderReportsPage', () => {
 
   // ------------------------------------------ wave 10 w5-reports-exports (X.18/7.2a)
 
-  it('wires q-data-table\'s column chooser onto «Заказы», scoped and persisted per branch', async () => {
+  it("wires q-data-table's column chooser onto «Заказы», scoped and persisted per branch", async () => {
     localStorage.clear();
     await render({
       ordersMock: vi.fn().mockResolvedValue(ordersResponse([orderRow({ orderId: 'order-x18' })])),
@@ -382,7 +382,7 @@ describe('OrderReportsPage', () => {
     ).toBe('["channel"]');
   });
 
-  it('wires q-data-table\'s saved views onto «Заказы» — a named view persists with no PII in its payload', async () => {
+  it("wires q-data-table's saved views onto «Заказы» — a named view persists with no PII in its payload", async () => {
     localStorage.clear();
     await render({
       ordersMock: vi.fn().mockResolvedValue(ordersResponse([orderRow({ orderId: 'order-x18b' })])),

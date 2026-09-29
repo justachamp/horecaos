@@ -168,7 +168,12 @@ Adding a test class needs nothing: it is picked up by name and assigned. Two
 things do need a person. Refresh `tools/ci/test-durations.tsv` now and then
 (each CI run uploads a `test-durations` artifact; `shard_tests.py record`
 rebuilds the file) — stale numbers only make the shards uneven, never change
-what runs. And to change the shard count, edit `TEST_SHARDS` **and**
+what runs. The file was last rebuilt from the first sharded run (2026-09-29,
+613 classes): with two forks a shard's summed class time is about 1.77 times
+its `Test` step's wall time, so three shards at 50.9 recorded minutes each
+finish in about 29 minutes, and the single longest class
+(`CartCheckoutAndOrderTests`, about 8 minutes) is the floor for any shard
+count. And to change the shard count, edit `TEST_SHARDS` **and**
 `matrix.shard` in `ci.yml` together; `make shards-test` fails if they disagree.
 Do not run a shard with `-Dtest=`, and never with an empty include file:
 Surefire treats both as "run everything you would normally run".

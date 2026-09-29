@@ -220,3 +220,76 @@ describe('ApiClient.get', () => {
     await promise;
   });
 });
+
+/**
+ * The table-scoped guest token (`X-Dine-In-Token`, ADR 0047) is the one caller of
+ * per-call headers. It rides beside -- never instead of -- the conventions the
+ * client already stamps, and it must not become a way to override them.
+ */
+describe('ApiClient per-call headers', () => {
+  afterEach(() => {
+    TestBed.inject(HttpTestingController).verify();
+  });
+
+  it('sends the extra headers on a read, alongside the platform-request marker', async () => {
+    const { client, httpMock } = setUp();
+
+    const promise = client.get('/storefront/dine-in/sessions/s1', {
+      anonymous: true,
+      headers: { 'X-Dine-In-Token': 'guest-token-1' },
+    });
+    const req = httpMock.expectOne('/api/v1/storefront/dine-in/sessions/s1');
+
+    expect(req.request.headers.get('X-Dine-In-Token')).toBe('guest-token-1');
+    expect(req.request.context.get(PLATFORM_API_REQUEST)).toBe(true);
+    expect(req.request.context.get(ANONYMOUS)).toBe(true);
+    req.flush({});
+    await promise;
+  });
+
+  it('sends the extra headers on a mutation, beside the Idempotency-Key and If-Match', async () => {
+    const { client, httpMock } = setUp();
+
+    const promise = client.mutate('POST', '/storefront/dine-in/sessions/s1/rounds', {
+      body: { orderId: 'o1' },
+      expectedVersion: 3,
+      headers: { 'X-Dine-In-Token': 'guest-token-1' },
+    });
+    const req = httpMock.expectOne('/api/v1/storefront/dine-in/sessions/s1/rounds');
+
+    expect(req.request.headers.get('X-Dine-In-Token')).toBe('guest-token-1');
+    expect(req.request.headers.get('Idempotency-Key')).toMatch(UUID_PATTERN);
+    expect(req.request.headers.get('If-Match')).toBe('W/"3"');
+    req.flush({});
+    await promise;
+  });
+
+  it('sends no dine-in header at all unless a caller asks for one', async () => {
+    const { client, httpMock } = setUp();
+
+    const read = client.get('/anything');
+    httpMock.expectOne('/api/v1/anything').flush({});
+    await read;
+
+    const write = client.mutate('POST', '/anything', { body: {} });
+    const req = httpMock.expectOne('/api/v1/anything');
+    expect(req.request.headers.has('X-Dine-In-Token')).toBe(false);
+    req.flush({});
+    await write;
+  });
+
+  it('never lets a caller-supplied header displace the client\'s own Idempotency-Key', async () => {
+    const { client, httpMock } = setUp();
+
+    const promise = client.mutate('POST', '/carts', {
+      body: {},
+      idempotencyKey: 'the-real-key',
+      headers: { 'Idempotency-Key': 'smuggled' },
+    });
+    const req = httpMock.expectOne('/api/v1/carts');
+
+    expect(req.request.headers.get('Idempotency-Key')).toBe('the-real-key');
+    req.flush({});
+    await promise;
+  });
+});

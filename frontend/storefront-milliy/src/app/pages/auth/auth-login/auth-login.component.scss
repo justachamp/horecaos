@@ -1,0 +1,64 @@
+.auth {
+  min-height: 100dvh;
+  padding: 72px 24px 32px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 420px;
+  margin: 0 auto;
+}
+
+.auth__brand { display: flex; justify-content: center; width: 100%; }
+.auth__logo { max-width: 220px; max-height: 96px; object-fit: contain; }
+.auth__name { font: 800 32px/1.1 var(--font-display); letter-spacing: -0.02em; text-align: center; }
+
+.auth__slogan {
+  margin: 24px 0 0;
+  max-width: 280px;
+  text-align: center;
+  color: var(--text-secondary);
+  font: 600 16px/1.4 var(--font-display);
+}
+
+.auth__form { width: 100%; margin-top: 32px; display: flex; flex-direction: column; gap: 14px; }
+
+.phone {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 56px;
+  padding: 0 18px;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--line-default);
+  background: var(--surface-raised);
+
+  &:focus-within { border-color: var(--brand-accent-deep); }
+}
+
+.phone__prefix { font: 700 16px/1 var(--font-ui); color: var(--text-primary); }
+
+.phone__input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font: 600 16px/1 var(--font-ui);
+  color: var(--text-primary);
+
+  &::placeholder { color: var(--text-muted); font-weight: 400; }
+}
+
+.auth__error { margin: 0; text-align: center; color: var(--status-error); font: 500 13px/1.4 var(--font-ui); }
+
+.btn {
+  height: 54px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--brand-accent);
+  color: var(--text-on-accent);
+  font: 700 15px/1 var(--font-display);
+  cursor: pointer;
+
+  &:disabled { background: var(--line-default); color: var(--text-muted); cursor: not-allowed; }
+}

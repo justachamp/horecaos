@@ -346,6 +346,23 @@ public final class ConfigurationKeys {
             .describedAs("Minutes after acceptance at which an order is coloured late on the board.")
             .build();
 
+    public static final ConfigurationKey<Integer> ORDERING_AT_RISK_BEFORE_MINUTES = ConfigurationKey.of(
+                    "ordering.at_risk_before_minutes", Integer.class)
+            .defaultValue(5)
+            .ownedBy("ordering")
+            .tenantVisible()
+            .describedAs("Minutes before an order's promised time at which it shows as at risk on the boards.")
+            .build();
+
+    public static final ConfigurationKey<String> ORDERING_LATE_COLOUR = ConfigurationKey.of(
+                    "ordering.late_colour", String.class)
+            .defaultValue("")
+            .ownedBy("ordering")
+            .tenantVisible()
+            .describedAs("Hex colour (#rrggbb) the boards use for late orders instead of the design-system "
+                    + "token; blank keeps the token.")
+            .build();
+
     public static final ConfigurationKey<Long> ORDERING_MINIMUM_ORDER_AMOUNT_MINOR = ConfigurationKey.of(
                     "ordering.minimum_order_amount_minor", Long.class)
             .defaultValue(0L)
@@ -554,6 +571,8 @@ public final class ConfigurationKeys {
             ORDERING_AVERAGE_ORDER_MINUTES,
             ORDERING_MAXIMUM_ORDER_MINUTES,
             ORDERING_LATE_ORDER_THRESHOLD_MINUTES,
+            ORDERING_AT_RISK_BEFORE_MINUTES,
+            ORDERING_LATE_COLOUR,
             ORDERING_MINIMUM_ORDER_AMOUNT_MINOR,
             ORDERING_VAT_RATE_PERCENT,
             ORDERING_ROUTING_POLL_INTERVAL_MINUTES,

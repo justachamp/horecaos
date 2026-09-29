@@ -1,5 +1,6 @@
 package uz.horecaos.platform.catalog.web;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.comparesEqualTo;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -8,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.math.BigDecimal;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -20,6 +22,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.testcontainers.DockerClientFactory;
 import uz.horecaos.platform.inventory.api.TrackingMode;
@@ -257,6 +260,81 @@ class StorefrontCatalogControllerEndpointTests {
         assertThat(etagAfterStop).isNotNull().isNotEqualTo(etagBeforeStop);
     }
 
+    /**
+     * Row 10.12: which name a customer sees, and how a preset is worded, now depend on
+     * {@code tenant.brand_locales} and on the live preset rows -- neither of which the publication
+     * id nor the stock fingerprint moves. A conditional GET must not 304 a browser back to the
+     * previous wording after the owner changed the brand's default language.
+     */
+    @Test
+    void aChangedBrandDefaultChangesTheETagAndIsNotAnswered304() throws Exception {
+        publishProduct("PLOV", "{\"uz\": {\"name\": \"Osh\"}, \"ru\": {\"name\": \"Плов\"}}");
+
+        MvcResult before = mvc.perform(menuGet().queryParam("locale", "en"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.products[0].name").value("Osh"))
+                .andReturn();
+        String etagBefore = etagOf(before);
+
+        jdbc.sql("""
+                INSERT INTO tenant.brand_locales (tenant_id, brand_id, locale, is_default)
+                VALUES (:tenantId, :brandId, 'ru', true)
+                """).param("tenantId", tenant).param("brandId", brand).update();
+
+        MvcResult revalidated = mvc.perform(menuGet().queryParam("locale", "en").header("If-None-Match", etagBefore))
+                .andExpect(status().isOk())
+                .andReturn();
+        assertThat(revalidated.getResponse().getContentAsString(UTF_8)).contains("Плов");
+        assertThat(revalidated.getResponse().getHeader("ETag")).isNotNull().isNotEqualTo(etagBefore);
+    }
+
+    @Test
+    void anEditedPresetWordingChangesTheETag() throws Exception {
+        UUID productId = productIdOf(publishOneProduct("BURGER"));
+        UUID presetId = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO catalog.comment_presets (
+                    id, tenant_id, code, label_ru, label_uz, label_en, sort_order, status, version)
+                VALUES (:id, :tenantId, 'NO_ONION', 'Без лука', 'Piyozsiz', 'No onion', 0, 'ACTIVE', 1)
+                """).param("id", presetId).param("tenantId", tenant).update();
+        jdbc.sql("""
+                INSERT INTO catalog.product_comment_presets (
+                    id, tenant_id, brand_id, product_id, preset_id, sort_order, version)
+                VALUES (:id, :tenantId, :brandId, :productId, :presetId, 0, 1)
+                """)
+                .param("id", UUID.randomUUID())
+                .param("tenantId", tenant)
+                .param("brandId", brand)
+                .param("productId", productId)
+                .param("presetId", presetId)
+                .update();
+
+        MvcResult before = mvc.perform(menuGet().queryParam("locale", "en"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.products[0].commentPresets[0].label").value("No onion"))
+                .andReturn();
+
+        jdbc.sql("UPDATE catalog.comment_presets SET label_en = 'Hold the onion', version = version + 1 "
+                        + "WHERE id = :id")
+                .param("id", presetId)
+                .update();
+
+        MvcResult after = mvc.perform(menuGet().queryParam("locale", "en").header("If-None-Match", etagOf(before)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.products[0].commentPresets[0].label").value("Hold the onion"))
+                .andReturn();
+        assertThat(etagOf(after)).isNotEqualTo(etagOf(before));
+    }
+
+    @Test
+    void anUnchangedMenuIsStillAnswered304() throws Exception {
+        publishOneProduct("BURGER");
+
+        String etag = etagOf(mvc.perform(menuGet()).andReturn());
+
+        mvc.perform(menuGet().header("If-None-Match", etag)).andExpect(status().isNotModified());
+    }
+
     @Test
     void theMenuNeverAdvertisesAMaxAgeThatWouldLetAStopGoUnseen() throws Exception {
         publishOneProduct("BURGER");
@@ -303,6 +381,12 @@ class StorefrontCatalogControllerEndpointTests {
 
     // --------------------------------------------------------------- helpers
 
+    private static String etagOf(MvcResult result) {
+        String etag = result.getResponse().getHeader("ETag");
+        assertThat(etag).as("the menu carries an ETag").isNotNull();
+        return java.util.Objects.requireNonNull(etag);
+    }
+
     private MockHttpServletRequestBuilder menuGet() {
         return get("/api/v1/storefront/tenants/%s/brands/%s/locations/%s/menu".formatted(tenant, brand, location))
                 .queryParam("channel", "STOREFRONT");
@@ -310,6 +394,18 @@ class StorefrontCatalogControllerEndpointTests {
 
     /** One product, one variant, offered and published — the smallest real menu. */
     private UUID publishOneProduct(String code) {
+        return publishProduct(code, null);
+    }
+
+    private UUID productIdOf(UUID variantId) {
+        return jdbc.sql("SELECT product_id FROM catalog.variants WHERE id = :id")
+                .param("id", variantId)
+                .query(UUID.class)
+                .single();
+    }
+
+    /** @param namesJson the published {@code names} object (locale to name), or null for none */
+    private UUID publishProduct(String code, @Nullable String namesJson) {
         UUID productId = UUID.randomUUID();
         UUID variantId = UUID.randomUUID();
         jdbc.sql("""
@@ -356,8 +452,9 @@ class StorefrontCatalogControllerEndpointTests {
                 .param("brandId", brand)
                 .param("entityId", productId)
                 .param("content", """
-                        {"code": "%s", "variants": [{"variantId": "%s"}]}
-                        """.formatted(code, variantId))
+                        {"code": "%s", %s"variants": [{"variantId": "%s"}]}
+                        """.formatted(
+                                code, namesJson == null ? "" : "\"names\": " + namesJson + ", ", variantId))
                 .update();
         return variantId;
     }

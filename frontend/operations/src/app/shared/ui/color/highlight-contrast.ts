@@ -28,6 +28,14 @@ import { WCAG_AA_NORMAL_TEXT_MIN, contrastRatio, isValidHexColor } from './contr
  */
 export type HighlightContrastSurfaceId = 'canvas' | 'surface1' | 'slaLateTint' | 'slaAtRiskTint';
 
+/**
+ * The design system's own late-order red, `--q-sla-late` (= `--q-error`) — what
+ * a board draws a late order in until a tenant picks another colour (row
+ * `X.39`). Mirrored by hand with the four surface hexes below, for the same
+ * reason: this module's job is arithmetic over values `tokens.css` owns.
+ */
+export const SLA_LATE_TOKEN_HEX = '#da1e28';
+
 interface ReferenceSurface {
   readonly id: HighlightContrastSurfaceId;
   /** Mirrors `tokens.css`: `--q-canvas`, `--q-surface-1`, `--q-sla-late-tint` (= `--q-error-tint`), `--q-sla-at-risk-tint` (= `--q-warning-tint`). */

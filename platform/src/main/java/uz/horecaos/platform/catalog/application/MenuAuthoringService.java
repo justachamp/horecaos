@@ -8,6 +8,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,6 +18,7 @@ import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.audit.api.ChangeDocuments;
+import uz.horecaos.platform.catalog.api.CatalogNameLocales;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.EntityType;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcMenuStore;
@@ -25,6 +28,7 @@ import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcMenuStore.Men
 import uz.horecaos.platform.configuration.Ids;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.ResourceScope;
+import uz.horecaos.platform.tenancy.api.BrandLocaleLookup;
 import uz.horecaos.platform.tenancy.api.SalesChannelLookup;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
@@ -49,18 +53,41 @@ public class MenuAuthoringService {
     private final SalesChannelLookup channels;
     private final AuditRecorder audit;
     private final Clock clock;
+    private final BrandLocaleLookup brandLocales;
+    private final String defaultLocale;
 
+    /**
+     * @param brandLocales  the brand's own default language, which a membership list names its
+     *                      products in first (row 10.12)
+     * @param defaultLocale {@code horecaos.catalog.default-locale} -- where a name is looked for
+     *                      when the brand's own default language has none
+     */
+    @Autowired
+    public MenuAuthoringService(
+            JdbcMenuStore menus,
+            JdbcCatalogStore catalog,
+            SalesChannelLookup channels,
+            AuditRecorder audit,
+            Clock clock,
+            BrandLocaleLookup brandLocales,
+            @Value("${horecaos.catalog.default-locale:uz}") String defaultLocale) {
+        this.menus = menus;
+        this.catalog = catalog;
+        this.channels = channels;
+        this.audit = audit;
+        this.clock = clock;
+        this.brandLocales = brandLocales;
+        this.defaultLocale = defaultLocale;
+    }
+
+    /** A menu authoring service for callers with no tenancy to ask: no brand has a default of its own. */
     public MenuAuthoringService(
             JdbcMenuStore menus,
             JdbcCatalogStore catalog,
             SalesChannelLookup channels,
             AuditRecorder audit,
             Clock clock) {
-        this.menus = menus;
-        this.catalog = catalog;
-        this.channels = channels;
-        this.audit = audit;
-        this.clock = clock;
+        this(menus, catalog, channels, audit, clock, BrandLocaleLookup.platformFallback(), "uz");
     }
 
     // ------------------------------------------------------------------ menus
@@ -163,9 +190,19 @@ public class MenuAuthoringService {
 
     // ------------------------------------------------------------- membership
 
+    /**
+     * A menu's membership, each product named in the brand's own default language and, where it
+     * has no name there, in the server's configured one (row 10.12) -- the same order the
+     * console's list screens read a name in.
+     */
     public List<MenuItemRow> listItems(UUID tenantId, UUID brandId, UUID menuId) {
         requireMenu(tenantId, brandId, menuId);
-        return menus.listItems(tenantId, brandId, menuId);
+        return membership(tenantId, brandId, menuId);
+    }
+
+    private List<MenuItemRow> membership(UUID tenantId, UUID brandId, UUID menuId) {
+        CatalogNameLocales locales = CatalogNameLocales.of(brandLocales, tenantId, brandId, defaultLocale);
+        return menus.listItems(tenantId, brandId, menuId, locales.preferred(), locales.fallback());
     }
 
     @Transactional
@@ -184,7 +221,7 @@ public class MenuAuthoringService {
         // Staff 9.3a: read this variant's current membership row before the
         // upsert below overwrites it -- empty distinguishes a fresh add from
         // a re-default.
-        Optional<MenuItemRow> before = menus.listItems(tenantId, brandId, menuId).stream()
+        Optional<MenuItemRow> before = membership(tenantId, brandId, menuId).stream()
                 .filter(item -> item.variantId().equals(variantId))
                 .findFirst();
         menus.upsertItem(tenantId, brandId, menuId, variantId, sortOrder, availabilityDefault);
@@ -217,7 +254,7 @@ public class MenuAuthoringService {
     @Transactional
     public void removeItem(UUID tenantId, UUID brandId, UUID menuId, UUID variantId, String actorSubject) {
         // Staff 9.3a: read the row before deleteItem removes it.
-        Optional<MenuItemRow> before = menus.listItems(tenantId, brandId, menuId).stream()
+        Optional<MenuItemRow> before = membership(tenantId, brandId, menuId).stream()
                 .filter(item -> item.variantId().equals(variantId))
                 .findFirst();
         boolean removed = menus.deleteItem(tenantId, brandId, menuId, variantId);
@@ -254,6 +291,9 @@ public class MenuAuthoringService {
      * touch), so a caller asking to filter by tag has nothing to filter
      * against; category and search cover what the schema can actually answer.
      *
+     * @param locale the language the search matches names in first, or null for the brand's own
+     *               default; a product with no name there is matched by its name in the server's
+     *               configured locale (row 10.12)
      * @return how many variants were added or re-defaulted
      */
     @Transactional
@@ -264,13 +304,22 @@ public class MenuAuthoringService {
             @Nullable UUID categoryId,
             @Nullable String search,
             String availabilityDefault,
-            String locale,
+            @Nullable String locale,
             String actorSubject) {
         requireMenu(tenantId, brandId, menuId);
         if (categoryId != null && !catalog.entityExistsInBrand(tenantId, brandId, EntityType.CATEGORY, categoryId)) {
             throw new UnknownCategoryException(categoryId);
         }
-        int added = menus.addByFilter(tenantId, brandId, menuId, categoryId, search, availabilityDefault, locale);
+        // The search matches the name the operator is looking at: in the language the console asks
+        // for and, only where the product has none there, in the server's configured one -- the
+        // order every list screen reads a name in. A caller that names no language gets the brand's
+        // own default rather than an assumed uz.
+        String preferred = locale != null
+                ? locale
+                : CatalogNameLocales.of(brandLocales, tenantId, brandId, defaultLocale)
+                        .preferred();
+        int added = menus.addByFilter(
+                tenantId, brandId, menuId, categoryId, search, availabilityDefault, preferred, defaultLocale);
         audit.record(AuditFact.of("catalog.menu.items-added-by-filter", AuditClass.BUSINESS)
                 .by(ActorRef.user(actorSubject, null))
                 .at(ResourceScope.brand(tenantId, brandId))

@@ -6,7 +6,6 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
-import java.util.List;
 import java.util.UUID;
 import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
@@ -15,8 +14,9 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import tools.jackson.databind.SerializationFeature;
+import tools.jackson.databind.json.JsonMapper;
 import uz.horecaos.platform.catalog.application.StorefrontCatalogQuery;
-import uz.horecaos.platform.catalog.application.StorefrontCatalogQuery.MenuVariant;
 import uz.horecaos.platform.catalog.application.StorefrontCatalogQuery.StorefrontMenu;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
@@ -32,6 +32,11 @@ import uz.horecaos.platform.web.api.ErrorCode;
 @RequestMapping("/api/v1/storefront")
 @Tag(name = "Storefront catalog", description = "The published menu a customer sees")
 public class StorefrontCatalogController {
+
+    /** Serialises with map entries in key order, so two equal menus always digest alike. */
+    private static final JsonMapper DIGEST_MAPPER = JsonMapper.builder()
+            .enable(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS)
+            .build();
 
     private final StorefrontCatalogQuery storefront;
 
@@ -58,16 +63,17 @@ public class StorefrontCatalogController {
         return storefront
                 .menuFor(tenantId, brandId, locationId, locale, channel)
                 .map(menu -> ResponseEntity.ok()
-                        // Rows 4.4c/4.4d, ADR 0033: the publication id alone
+                        // Rows 4.4c/4.4d, ADR 0033, row 10.12: the publication id alone
                         // used to be a sound ETag, back when this response
                         // was a pure function of the immutable publication.
-                        // Now that inventory's live orderable/remainingQuantity
-                        // is folded in (menuFor -> withAvailability), a stop or
-                        // a restock changes the body without changing the
-                        // publication, so the ETag must change too or a
-                        // conditional revalidation would wrongly 304 a client
-                        // straight back to what it already has.
-                        .eTag("\"%s:%s\"".formatted(menu.publicationId(), availabilityFingerprint(menu)))
+                        // It no longer is. Inventory's live orderable/remainingQuantity,
+                        // the live prices, the brand's default language (which name a
+                        // customer whose own language has none is shown) and the live
+                        // preset wording are all folded in by menuFor, and none of them
+                        // moves the publication. The ETag therefore digests the body the
+                        // customer would receive: a conditional revalidation is answered
+                        // 304 only when there is nothing new to say.
+                        .eTag("\"%s:%s\"".formatted(menu.publicationId(), contentDigest(menu)))
                         // `noCache`, not `maxAge`: a shared/public cache may
                         // still store this response, but HTTP requires it to
                         // revalidate with the origin (conditional GET, the
@@ -82,24 +88,18 @@ public class StorefrontCatalogController {
     }
 
     /**
-     * A content digest of exactly the part of {@link StorefrontMenu} that can
-     * change between two reads of the same publication: every variant's
-     * {@code orderable}/{@code remainingQuantity}. Deterministic regardless of
-     * the order {@code menuFor} happens to enumerate products and variants in,
-     * so two reads with identical availability always produce the same
-     * fingerprint and two reads that differ in even one variant never do.
+     * A digest of the whole {@link StorefrontMenu} body, not of a hand-picked part of it.
+     *
+     * <p>This used to fingerprint only every variant's {@code orderable}/{@code remainingQuantity},
+     * on the premise that nothing else could change between two reads of one publication. Each
+     * later live input (a price, the brand's default language, a preset's wording) made that
+     * premise false without anyone touching the fingerprint, and the result was a browser
+     * revalidating to a 304 for a body that had changed. Digesting the body itself has no such
+     * list to forget to extend: the ETag moves exactly when what the customer is sent does.
+     * {@code menuFor} runs on every request either way, so this adds one serialisation, not a read.
      */
-    private static String availabilityFingerprint(StorefrontMenu menu) {
-        List<String> perVariant = menu.products().stream()
-                .flatMap(product -> product.variants().stream())
-                .map(StorefrontCatalogController::variantAvailabilityToken)
-                .sorted()
-                .toList();
-        return sha256Hex(String.join("|", perVariant));
-    }
-
-    private static String variantAvailabilityToken(MenuVariant variant) {
-        return "%s:%s:%s".formatted(variant.variantId(), variant.orderable(), variant.remainingQuantity());
+    private static String contentDigest(StorefrontMenu menu) {
+        return sha256Hex(DIGEST_MAPPER.writeValueAsString(menu));
     }
 
     private static String sha256Hex(String content) {

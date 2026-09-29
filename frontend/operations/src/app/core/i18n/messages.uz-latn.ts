@@ -830,6 +830,15 @@ export const messagesUzLatn: MessageCatalogue = {
     'SMS shabloni shlyuz tasdigʻini kutmoqda.',
   'settings.home.readiness.code.TEMPLATE_REJECTED_BY_PROVIDER':
     'SMS shabloni shlyuz tomonidan rad etildi.',
+  'settings.home.readiness.advisory': 'Tavsiya',
+  'settings.home.readiness.code.FISCAL_CLASSIFICATION_INCOMPLETE':
+    'Menyudagi ayrim pozitsiyalarda fiskal tasnif toʻliq emas (IKPU, qadoq kodi, birlik yoki fiskal nom).',
+  'settings.home.readiness.code.CHANNEL_NO_PAYMENT_METHOD':
+    'Savdo kanalida yoqilgan toʻlov usuli yoʻq, shuning uchun u orqali buyurtma qabul qilib boʻlmaydi.',
+  'settings.home.readiness.code.INSTALLATION_SECRET_ROTATION_DUE':
+    'Provayder ulanishining kirish maʻlumotlarini almashtirish muddati oʻtib ketgan.',
+  'settings.home.readiness.code.MERCHANT_SECRET_ROTATION_DUE':
+    'Hisob-kitob raqamining kirish maʻlumotlarini almashtirish muddati oʻtib ketgan.',
   'settings.home.search.label': 'Sozlamani topish',
   'settings.home.search.placeholder': 'Sozlamani topish (/ bosing)',
   'settings.home.search.empty': '«{query}» boʻyicha hech narsa topilmadi.',
@@ -1205,6 +1214,17 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.orderPolicy.field.averageOrderMinutes': 'Oʻrtacha buyurtma vaqti (daqiqa)',
   'settings.orderPolicy.field.maximumOrderMinutes': 'Maksimal buyurtma vaqti (daqiqa)',
   'settings.orderPolicy.field.lateOrderThresholdMinutes': 'Buyurtma kechikadi (daqiqa)',
+  'settings.orderPolicy.field.atRiskBeforeMinutes':
+    'Belgilangan vaqtdan oldin ogohlantirish (daqiqa)',
+  'settings.orderPolicy.atRiskBeforeMinutes.hint':
+    'Buyurtma belgilangan vaqtdan necha daqiqa oldin «xavf ostida» deb koʻrsatiladi. Buyurtmaning barcha turlariga, buyurtmalar taxtasida ham, oshxona taxtasida ham amal qiladi.',
+  'settings.orderPolicy.field.lateColour': 'Kechikkan buyurtma rangi',
+  'settings.orderPolicy.lateColour.hint':
+    'Kechikkan buyurtmalar buyurtmalar taxtasida va oshxona taxtasida shu rangda koʻrsatiladi. Brendingiz boshqasini talab qilmasa, standart rangni qoldiring: qatorda yomon koʻrinadigan rang eng koʻp diqqat talab qiladigan buyurtmalarni yashiradi — kontrast ogohlantirishiga eʻtibor bering.',
+  'settings.orderPolicy.lateColour.standard': 'Standart',
+  'settings.orderPolicy.lateColour.useStandard': 'Standart rangni qaytarish',
+  'settings.orderPolicy.lateColour.standardHint':
+    'Dizayn tizimidagi kechikish uchun standart qizil rang.',
   'settings.orderPolicy.field.minimumOrderAmount': 'Buyurtmaning eng kam summasi',
   'settings.orderPolicy.minimumOrderAmount.hint':
     'Faqat oʻzi olib ketish va zalda — yetkazib berishning oʻz minimal summasi xizmat zonasida belgilanadi.',
@@ -1732,6 +1752,20 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.locations.floorPlan.rotating': 'Yangilanmoqda…',
   'settings.locations.floorPlan.revokedGuestSessions':
     'Eski kod boʻyicha {count} mehmon sessiyasi uzildi.',
+  'settings.locations.floorPlan.seat.title': 'Bronsiz mehmonlarni oʻtqazish',
+  'settings.locations.floorPlan.seat.partySize': 'Mehmonlar soni',
+  'settings.locations.floorPlan.seat.defaultReason': 'Bronsiz mehmonlar zal rejasidan oʻtqazildi',
+  'settings.locations.floorPlan.seat.action': 'Oʻtqazish',
+  'settings.locations.floorPlan.seat.seating': 'Oʻtqazilmoqda…',
+  'settings.locations.floorPlan.seat.occupied': 'Bu stolda allaqachon mehmonlar oʻtirishibdi.',
+  'settings.locations.floorPlan.seat.bookedSoon':
+    'Bu stol keyingi {minutes} daqiqa ichida tasdiqlangan bron bilan band. Mehmonlar undan oldin ketsagina oʻtqazing.',
+  'settings.locations.floorPlan.seat.overCapacity':
+    'Bu stolda {seats} oʻrin bor — mehmonlardan kam.',
+  'settings.locations.floorPlan.seat.unavailable':
+    'Stol ishlamayapti, mehmonlarni oʻtqazib boʻlmaydi.',
+  'settings.locations.floorPlan.seat.done': 'Mehmonlar {table} stolga oʻtqazildi.',
+  'settings.locations.floorPlan.seat.errorOccupied': 'Bu stolga hozirgina mehmonlar oʻtqazildi.',
 
   'finance.scope.denied': 'Bu hisobga Moliya boʻlimiga ruxsat berilmagan.',
 
@@ -2124,6 +2158,10 @@ export const messagesUzLatn: MessageCatalogue = {
   'catalog.products.create.action': 'Mahsulot yaratish',
   'catalog.products.create.title': 'Mahsulot yaratish',
   'catalog.products.create.name': 'Nomi',
+  'catalog.products.create.language':
+    'Nomi quyidagi tilda yoziladi: {language} — brendning asosiy tili. Boshqa tillarni mahsulot tahrirlagichida qoʻshing.',
+  'catalog.products.create.languageFallback':
+    'Nomi quyidagi tilda yoziladi: {language} — katalogning asosiy tili, chunki brend hali tillarni tanlamagan. Boshqa tillarni mahsulot tahrirlagichida qoʻshing.',
   'catalog.products.create.code': 'Kodi',
   'catalog.products.create.required': 'Toʻldirilishi shart',
   'catalog.products.create.confirm': 'Yaratish',
@@ -2282,14 +2320,15 @@ export const messagesUzLatn: MessageCatalogue = {
     'QUANTITY rejimidagi variant uchun mavjud miqdor, kunlik standart qiymat va kanal boʻyicha toʻxtatish chegaralari «Qoldiqlar» sahifasida joylashgan.',
   'catalog.editor.availability.quantityHintLink': 'Qoldiqlarni ochish',
   'catalog.editor.availability.notListedHeading':
-    "Baʻzi filiallarda taklif qilingan, lekin u yerda hisobda hali joylashtirilmagan — joylashtirilguncha buyurtma qabul qilinmaydi.",
-  'catalog.editor.availability.notListedVariantRow': "{variant} — {count} ta filialda joylashtirilmagan",
-  'catalog.editor.availability.listEverywhere': "Barcha filiallarda joylashtirish",
+    'Baʻzi filiallarda taklif qilingan, lekin u yerda hisobda hali joylashtirilmagan — joylashtirilguncha buyurtma qabul qilinmaydi.',
+  'catalog.editor.availability.notListedVariantRow':
+    '{variant} — {count} ta filialda joylashtirilmagan',
+  'catalog.editor.availability.listEverywhere': 'Barcha filiallarda joylashtirish',
   'catalog.editor.availability.listingInProgress': 'Joylashtirilmoqda…',
   'catalog.editor.availability.listPartial':
-    "{candidate} ta filialdan {listed} tasida joylashtirildi. Qolganlarini joylashtirib boʻlmadi — qayta urinib koʻring, takrorlansa qoʻllab-quvvatlashga murojaat qiling.",
+    '{candidate} ta filialdan {listed} tasida joylashtirildi. Qolganlarini joylashtirib boʻlmadi — qayta urinib koʻring, takrorlansa qoʻllab-quvvatlashga murojaat qiling.',
   'catalog.editor.availability.listRecountFailed':
-    "Joylashtirish bajarildi, lekin qolgan sonni oʻqib boʻlmadi — yuqoridagi raqam eskirgan boʻlishi mumkin. Tekshirish uchun bu boʻlimni qayta oching.",
+    'Joylashtirish bajarildi, lekin qolgan sonni oʻqib boʻlmadi — yuqoridagi raqam eskirgan boʻlishi mumkin. Tekshirish uchun bu boʻlimni qayta oching.',
   'catalog.editor.schedule.hint':
     'Boʻsh boʻlsa — tovar doim sotuvda. Quyidagi oynalar sotuv vaqtini cheklaydi va filialning oʻz mahalliy vaqtida hisoblanadi.',
   'catalog.editor.schedule.loading': 'Jadval yuklanmoqda…',
@@ -2398,7 +2437,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'catalog.stock.loading': 'Qoldiqlar yuklanmoqda',
   'catalog.stock.noLocation': 'Bu hisob uchun hali filial aniqlanmagan',
   'catalog.stock.denied': 'Bu filial qoldiqlariga kirish huquqi yoʻq',
-  'catalog.stock.unlisted.title': 'Bu yerda taklif qilingan, lekin hisobda joylashtirilmagan: {count}',
+  'catalog.stock.unlisted.title':
+    'Bu yerda taklif qilingan, lekin hisobda joylashtirilmagan: {count}',
   'catalog.stock.unlisted.body':
     'Bu taomlar filial menyusida mavjud deb belgilangan, lekin ombor hisobida joylashtirilmagan, shu sababli joylashtirilguncha mijozlarga mavjud emas deb koʻrinadi.',
   'catalog.stock.unlisted.listAll': 'Hammasini joylashtirish ({count})',
@@ -5751,7 +5791,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'orders.newOrder.order.branchLoad': '{count} ta faol buyurtma',
   'orders.newOrder.order.branchClosed': 'yopiq',
   'orders.newOrder.order.branchProposedSuffix': '(taklif qilingan)',
-  'orders.newOrder.order.branchResolutionFailed': 'Filial tanlab boʻlmadi — joriy filialda rasmiylashtiramiz',
+  'orders.newOrder.order.branchResolutionFailed':
+    'Filial tanlab boʻlmadi — joriy filialda rasmiylashtiramiz',
   'orders.newOrder.order.branchNoCandidates': 'Bu manzilga hech qaysi filial yetkazib bermaydi',
   'orders.newOrder.order.branchOverrideReason': 'Boshqa filial tanlash sababi',
   'orders.newOrder.order.branchOverrideReasonPlaceholder': 'Sababni tanlang',
@@ -5784,6 +5825,32 @@ export const messagesUzLatn: MessageCatalogue = {
   'orders.newOrder.address.recipientName': 'Qabul qiluvchi',
   'orders.newOrder.address.recipientPhone': 'Qabul qiluvchi telefoni',
   'orders.newOrder.address.deliveryNote': 'Kuryer uchun izoh',
+
+  // wave 15: the DINE_IN table picker (ADR 0047, operator side)
+  'orders.newOrder.table.title': 'Stol',
+  'orders.newOrder.table.loading': 'Zal yuklanmoqda…',
+  'orders.newOrder.table.denied': 'Zal stollariga kirish huquqi yoʻq',
+  'orders.newOrder.table.error': 'Zalni yuklab boʻlmadi',
+  'orders.newOrder.table.seatedNow': 'Hozir stollarda',
+  'orders.newOrder.table.noSessions': 'Hozircha hech kim oʻtirmagan — mehmonlarni quyida oʻtqazing',
+  'orders.newOrder.table.sessionLabel': '{tables} · {count} mehmon',
+  'orders.newOrder.table.sessionLabelNoCount': '{tables}',
+  'orders.newOrder.table.seatTitle': 'Mehmonlarni oʻtqazish',
+  'orders.newOrder.table.pickTable': 'Boʻsh stolni tanlang',
+  'orders.newOrder.table.noFreeTables': 'Barcha stollar band',
+  'orders.newOrder.table.tableOption': '{code} · {seats} oʻrin',
+  'orders.newOrder.table.tableOptionBooked': '{code} · {seats} oʻrin · tez orada bron',
+  'orders.newOrder.table.partySize': 'Mehmonlar soni',
+  'orders.newOrder.table.seat': 'Oʻtqazish',
+  'orders.newOrder.table.seating': 'Oʻtqazilmoqda…',
+  'orders.newOrder.table.seatReason': 'Bronsiz mehmonlar yangi buyurtma ekranidan oʻtqazildi',
+  'orders.newOrder.table.seatOccupied': 'Bu stol hozirgina band boʻldi — boshqasini tanlang',
+  'orders.newOrder.table.selected': 'Buyurtma {tables} ga boradi',
+  'orders.newOrder.table.required': 'Buyurtma qaysi stol uchun ekanini tanlang',
+  'orders.newOrder.table.sessionEnded':
+    'Bu mehmonlar stoldan allaqachon ketgan, buyurtma yaratilmadi. Roʻyxat yangilandi — stolni qaytadan tanlang.',
+  'orders.newOrder.table.notServiceable':
+    'Bu filial hozir bu kanal orqali zaldagi buyurtmalarni qabul qilmayapti',
 
   // wave P14: §5.3 «Takrorlash» (1.3f qatori)
   'orders.newOrder.reorder.action': 'Takrorlash',

@@ -48,6 +48,8 @@ export interface CartResponseCommentPresetSelection {
   readonly labelRu: string;
   readonly labelUz: string;
   readonly labelEn: string;
+  readonly labels?: Readonly<Record<string, string>>;
+  readonly label?: string;
 }
 
 /** Cart item from GET /customers/carts/ response */

@@ -165,6 +165,15 @@ public class OperatorOrderingService {
      * @param overrideNote       required exactly when {@code overrideReasonCode}
      *                           is {@code OTHER}; free text, so redacted like
      *                           every other note in this platform's audit trail
+     * @param dineInSessionId    the live party (ADR 0047) whose bill a {@code
+     *                           DINE_IN} order goes on, or null. Meaningful only
+     *                           for {@code DINE_IN}; refused for any other mode.
+     *                           When set the order is put on that session's bill
+     *                           inside this transaction, after the order exists
+     *                           and before anything commits, so it is on the bill
+     *                           or it does not exist -- the operator no longer
+     *                           places an order and then attaches it in a second
+     *                           call that a closed party can fail
      */
     public record PlaceOrderCommand(
             UUID tenantId,
@@ -184,7 +193,52 @@ public class OperatorOrderingService {
             boolean overrideOutOfHours,
             @Nullable UUID proposedLocationId,
             @Nullable String overrideReasonCode,
-            @Nullable String overrideNote) {}
+            @Nullable String overrideNote,
+            @Nullable UUID dineInSessionId) {
+
+        /** An order that is not put on a table's bill: every mode but DINE_IN, and a DINE_IN one the caller attaches later. */
+        @SuppressWarnings("checkstyle:ParameterNumber")
+        public PlaceOrderCommand(
+                UUID tenantId,
+                UUID brandId,
+                UUID locationId,
+                UUID customerAccountId,
+                String channelCode,
+                FulfillmentMode fulfillmentMode,
+                List<OrderLine> lines,
+                @Nullable Destination destination,
+                String paymentMethodCode,
+                @Nullable String promoCode,
+                String idempotencyKey,
+                String operatorSubject,
+                @Nullable String correlationId,
+                @Nullable Instant requestedFor,
+                boolean overrideOutOfHours,
+                @Nullable UUID proposedLocationId,
+                @Nullable String overrideReasonCode,
+                @Nullable String overrideNote) {
+            this(
+                    tenantId,
+                    brandId,
+                    locationId,
+                    customerAccountId,
+                    channelCode,
+                    fulfillmentMode,
+                    lines,
+                    destination,
+                    paymentMethodCode,
+                    promoCode,
+                    idempotencyKey,
+                    operatorSubject,
+                    correlationId,
+                    requestedFor,
+                    overrideOutOfHours,
+                    proposedLocationId,
+                    overrideReasonCode,
+                    overrideNote,
+                    null);
+        }
+    }
 
     /**
      * Opens a cart for the resolved customer, fills it exactly as entered,
@@ -205,6 +259,19 @@ public class OperatorOrderingService {
         if (!delivery && command.destination() != null) {
             throw new ApiException(
                     ErrorCode.VALIDATION_FAILED, "A " + command.fulfillmentMode() + " order has nowhere to deliver to");
+        }
+        UUID dineInSessionId = command.dineInSessionId();
+        if (dineInSessionId != null) {
+            if (command.fulfillmentMode() != FulfillmentMode.DINE_IN) {
+                throw new ApiException(
+                        ErrorCode.VALIDATION_FAILED,
+                        "A " + command.fulfillmentMode()
+                                + " order is not eaten at a table, so it has no bill to go on");
+            }
+            // Before anything is created or priced. A party that left while the operator
+            // built the basket is the ordinary way for this to fail, and it must cost
+            // the operator a refusal and not a cooked order that is on no bill.
+            carts.requireLiveSession(command.tenantId(), command.locationId(), dineInSessionId);
         }
 
         // Row 1.3: re-resolved here rather than trusted from the request body
@@ -317,6 +384,21 @@ public class OperatorOrderingService {
                 command.correlationId(),
                 command.requestedFor(),
                 command.overrideOutOfHours()));
+
+        // The order is on the party's bill before this transaction commits, or it does
+        // not exist: a refusal here (the party closed in the seconds checkout took, a
+        // currency the bill cannot mix) rolls the cart, the order and the stock it held
+        // back with it. Not after a REJECTED outcome -- nothing was placed -- and safe on
+        // a REPLAYED one, where the round is already on the bill and the write answers
+        // with the sequence it has.
+        if (dineInSessionId != null && result.outcome() != CheckoutService.CheckoutResult.Outcome.REJECTED) {
+            carts.attachOrderToSession(
+                    command.tenantId(),
+                    command.locationId(),
+                    dineInSessionId,
+                    Objects.requireNonNull(result.orderId(), "a non-rejected checkout always names an order"),
+                    command.operatorSubject());
+        }
 
         // Audited only on the write that actually created the order — never on
         // a REJECTED outcome (nothing was placed to have a branch at all) and

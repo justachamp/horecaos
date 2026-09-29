@@ -148,7 +148,8 @@ describe('ProductAnalyticsPage', () => {
     variantSalesSpy =
       options?.variantSalesMock ?? vi.fn().mockResolvedValue(salesResponse([variantRow()]));
     latestClassificationSpy = options?.latestClassificationMock ?? vi.fn().mockResolvedValue(null);
-    abcCurveSpy = options?.abcCurveMock ?? vi.fn().mockResolvedValue(abcCurveResponse([abcCurveRow()]));
+    abcCurveSpy =
+      options?.abcCurveMock ?? vi.fn().mockResolvedValue(abcCurveResponse([abcCurveRow()]));
 
     await TestBed.configureTestingModule({
       imports: [ProductAnalyticsPage],
@@ -271,7 +272,9 @@ describe('ProductAnalyticsPage', () => {
     );
 
     const root = fixture.nativeElement as HTMLElement;
-    (root.querySelector('[data-testid="products-sort-QUANTITY_DESC"]') as HTMLButtonElement).click();
+    (
+      root.querySelector('[data-testid="products-sort-QUANTITY_DESC"]') as HTMLButtonElement
+    ).click();
     fixture.detectChanges();
     await flushMicrotasks();
 
@@ -387,14 +390,22 @@ describe('ProductAnalyticsPage', () => {
 
   it('renders the ABC tab’s cumulative-share curve, independent of any persisted classification run', async () => {
     await render({
-      abcCurveMock: vi
-        .fn()
-        .mockResolvedValue(
-          abcCurveResponse([
-            abcCurveRow({ variantId: 'a', productName: 'Пицца', cumulativeSharePercent: 80, abcClass: 'A' }),
-            abcCurveRow({ variantId: 'b', productName: 'Салат', cumulativeSharePercent: 95, abcClass: 'B' }),
-          ]),
-        ),
+      abcCurveMock: vi.fn().mockResolvedValue(
+        abcCurveResponse([
+          abcCurveRow({
+            variantId: 'a',
+            productName: 'Пицца',
+            cumulativeSharePercent: 80,
+            abcClass: 'A',
+          }),
+          abcCurveRow({
+            variantId: 'b',
+            productName: 'Салат',
+            cumulativeSharePercent: 95,
+            abcClass: 'B',
+          }),
+        ]),
+      ),
       // Under the 28-day floor: the persisted classification refuses, but
       // the curve has no such floor and still renders.
       configure: (filters) => filters.setCustomRange({ from: '2026-08-01', to: '2026-08-10' }),
@@ -409,7 +420,9 @@ describe('ProductAnalyticsPage', () => {
 
   it('discloses that the curve is a bounded read when the server reports more rows exist', async () => {
     await render({
-      abcCurveMock: vi.fn().mockResolvedValue({ ...abcCurveResponse([abcCurveRow()]), maybeMore: true }),
+      abcCurveMock: vi
+        .fn()
+        .mockResolvedValue({ ...abcCurveResponse([abcCurveRow()]), maybeMore: true }),
       initialTab: 'abc',
     });
 

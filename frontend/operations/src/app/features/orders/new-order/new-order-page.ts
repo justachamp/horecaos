@@ -10,6 +10,7 @@ import {
   viewChild,
 } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
+import { firstValueFrom } from 'rxjs';
 
 import { LocationScope } from '../../../core/api/operations-paths';
 import { firstPage } from '../../../core/api/page';
@@ -38,6 +39,7 @@ import {
 } from '../../customers/customers-api';
 import { ChannelView, SalesChannelsApi } from '../../settings/sales-channels/sales-channels-api';
 import { accessRefusal, describeApiError } from '../order-errors';
+import { DineInTablePicker, TablePick } from './dine-in-table-picker';
 import { ItemModifierDialog, ModifierDialogConfirmation } from './item-modifier-dialog';
 import {
   AggregatorOrderLine,
@@ -236,6 +238,19 @@ interface PendingModifierSelection {
  * 86'd one already was; a window that closes after the line was added is
  * caught server-side at `Создать` and shown through {@link
  * describeDeliveryRefusal} rather than silently dropping the line.
+ *
+ * **Wave 15 (ADR 0047, operator side): a third mode, `DINE_IN`.** The operator
+ * names the table the order is for -- a party already seated, or one seated from
+ * here -- through {@link DineInTablePicker}; `Создать` then places the order at the
+ * operator's own branch (a table is a room, and there is no cross-branch question
+ * to resolve for one) and names the party's session in the same request
+ * (`dineInSessionId`). The platform puts the order on that party's bill inside the
+ * transaction that creates it, so the order shows its table on the board, the
+ * detail and the kitchen ticket at once, and cannot exist without being on a bill:
+ * a party that left while the basket was being built refuses the placement
+ * (`SESSION_NOT_LIVE`) before anything is priced or cooked, the screen says so and
+ * re-reads the room, and the operator chooses again. There is no second call to
+ * lose and no half-placed order to recover.
  */
 @Component({
   selector: 'q-new-order-page',
@@ -247,6 +262,7 @@ interface PendingModifierSelection {
     ItemModifierDialog,
     DeniedState,
     MoneyInput,
+    DineInTablePicker,
   ],
   templateUrl: './new-order-page.html',
   styleUrl: './new-order-page.css',
@@ -263,6 +279,7 @@ export class NewOrderPage implements OnInit {
   protected readonly i18n = inject(I18n);
 
   private readonly phoneInput = viewChild<ElementRef<HTMLInputElement>>('phoneInput');
+  private readonly tablePicker = viewChild(DineInTablePicker);
 
   /**
    * ADR 0064: set only when this screen was opened from a claimed screen-pop
@@ -703,7 +720,7 @@ export class NewOrderPage implements OnInit {
 
   // ---------------------------------------------------------------- §5.4 address pane
 
-  protected readonly fulfillmentMode = signal<'PICKUP' | 'DELIVERY'>('PICKUP');
+  protected readonly fulfillmentMode = signal<'PICKUP' | 'DELIVERY' | 'DINE_IN'>('PICKUP');
 
   protected readonly addresses = signal<readonly RevealedCustomerAddress[]>([]);
   protected readonly addressesLoading = signal(false);
@@ -742,14 +759,26 @@ export class NewOrderPage implements OnInit {
   });
 
   /** Same two keys `order-queue.ts`'s own `fulfillmentModeLabel` already reads — a dynamically built key does not typecheck against `MessageKey`. */
-  protected fulfillmentModeLabel(mode: 'PICKUP' | 'DELIVERY'): string {
-    return mode === 'DELIVERY'
-      ? this.i18n.t('orders.fulfillmentMode.DELIVERY')
-      : this.i18n.t('orders.fulfillmentMode.PICKUP');
+  protected fulfillmentModeLabel(mode: 'PICKUP' | 'DELIVERY' | 'DINE_IN'): string {
+    switch (mode) {
+      case 'DELIVERY':
+        return this.i18n.t('orders.fulfillmentMode.DELIVERY');
+      case 'DINE_IN':
+        return this.i18n.t('orders.fulfillmentMode.DINE_IN');
+      case 'PICKUP':
+        return this.i18n.t('orders.fulfillmentMode.PICKUP');
+    }
   }
 
-  protected setFulfillmentMode(mode: 'PICKUP' | 'DELIVERY'): void {
+  protected setFulfillmentMode(mode: 'PICKUP' | 'DELIVERY' | 'DINE_IN'): void {
     this.fulfillmentMode.set(mode);
+    if (mode === 'DINE_IN' && this.preOrderEnabled()) {
+      // Food eaten at a table is eaten now: there is no promise time to ask for.
+      this.preOrderEnabled.set(false);
+      this.requestedForLocal.set('');
+      this.requestedForError.set(null);
+      this.outOfHoursConfirmReason.set(null);
+    }
     if (
       mode === 'DELIVERY' &&
       this.selectedCustomer() &&
@@ -1165,7 +1194,24 @@ export class NewOrderPage implements OnInit {
       this.overrideReasonCode.set(null);
       this.overrideNote.set('');
 
-      if (mode === 'DELIVERY' && (address === null || address.latitude === null || address.longitude === null)) {
+      if (mode === 'DINE_IN') {
+        // A table is a room in this branch: there is no cross-branch question to
+        // ask (the resolver refuses DINE_IN outright), and the order is placed
+        // here. selectedLocationId is set, not merely left alone, because the
+        // operator may arrive from a pickup order the resolver had sent elsewhere.
+        this.branchCandidates.set([]);
+        this.proposedLocationId.set(null);
+        const here = this.location.scope()?.locationId ?? null;
+        if (here !== null) {
+          this.selectedLocationId.set(here);
+        }
+        return;
+      }
+
+      if (
+        mode === 'DELIVERY' &&
+        (address === null || address.latitude === null || address.longitude === null)
+      ) {
         this.branchCandidates.set([]);
         this.proposedLocationId.set(null);
         // selectedLocationId is left alone: it stays at the operator's own
@@ -1174,7 +1220,9 @@ export class NewOrderPage implements OnInit {
         return;
       }
       const point =
-        mode === 'DELIVERY' && address ? { lat: address.latitude as number, lon: address.longitude as number } : null;
+        mode === 'DELIVERY' && address
+          ? { lat: address.latitude as number, lon: address.longitude as number }
+          : null;
       void this.refreshBranchResolution(mode, point, channelCode);
     });
   }
@@ -1270,13 +1318,17 @@ export class NewOrderPage implements OnInit {
   });
 
   protected readonly selectedBranchCandidate = computed(
-    () => this.branchCandidates().find((candidate) => candidate.locationId === this.selectedLocationId()) ?? null,
+    () =>
+      this.branchCandidates().find(
+        (candidate) => candidate.locationId === this.selectedLocationId(),
+      ) ?? null,
   );
 
   /** {@code requiresNote} of whichever override reason is currently picked, or false while none is. */
   protected readonly overrideReasonRequiresNote = computed(
     () =>
-      this.overrideReasons().find((reason) => reason.code === this.overrideReasonCode())?.requiresNote ?? false,
+      this.overrideReasons().find((reason) => reason.code === this.overrideReasonCode())
+        ?.requiresNote ?? false,
   );
 
   private async refreshBranchResolution(
@@ -1329,8 +1381,12 @@ export class NewOrderPage implements OnInit {
   }
 
   protected branchCandidateLabel(candidate: BranchCandidate): string {
-    const load = this.i18n.t('orders.newOrder.order.branchLoad', { count: candidate.activeOrderCount });
-    const closed = candidate.available ? '' : ` · ${this.i18n.t('orders.newOrder.order.branchClosed')}`;
+    const load = this.i18n.t('orders.newOrder.order.branchLoad', {
+      count: candidate.activeOrderCount,
+    });
+    const closed = candidate.available
+      ? ''
+      : ` · ${this.i18n.t('orders.newOrder.order.branchClosed')}`;
     return `${candidate.displayName} — ${load}${closed}`;
   }
 
@@ -1401,12 +1457,26 @@ export class NewOrderPage implements OnInit {
   protected readonly submitDenied = signal(false);
   protected readonly unavailableItemIds = signal<readonly string[]>([]);
 
+  // ------------------------------------------------------------- DINE_IN table (ADR 0047)
+
+  /** The party the DINE_IN order goes to, as {@link DineInTablePicker} last reported it. */
+  protected readonly tablePick = signal<TablePick | null>(null);
+
+  /** The operator's branch as the picker's scope: a table is looked for, and seated at, here. */
+  protected readonly locationScope = computed(() => this.location.scope());
+
+  protected onTablePicked(pick: TablePick | null): void {
+    this.tablePick.set(pick);
+  }
+
   protected readonly canSubmit = computed(
     () =>
       this.basket().length > 0 &&
       this.selectedCustomer() !== null &&
       this.total().allAvailable &&
-      (this.fulfillmentMode() === 'PICKUP' || this.selectedAddressId() !== null) &&
+      (this.fulfillmentMode() === 'PICKUP' ||
+        (this.fulfillmentMode() === 'DELIVERY' && this.selectedAddressId() !== null) ||
+        (this.fulfillmentMode() === 'DINE_IN' && this.tablePick() !== null)) &&
       (!this.preOrderEnabled() || this.requestedForLocal().trim() !== '') &&
       this.selectedLocationId() !== null &&
       (!this.isBranchOverride() ||
@@ -1426,7 +1496,12 @@ export class NewOrderPage implements OnInit {
     if (delivery && addressId === null) {
       return;
     }
-    const placeAtLocationId = this.selectedLocationId() ?? scope.locationId;
+    const dineIn = this.fulfillmentMode() === 'DINE_IN';
+    // A table is a room in the operator's own branch: a DINE_IN order is placed
+    // here, whatever a pickup order earlier in this session had resolved elsewhere.
+    const placeAtLocationId = dineIn
+      ? scope.locationId
+      : (this.selectedLocationId() ?? scope.locationId);
     // Row 1.3: POST .../orders at the resolved (or overridden) branch, not
     // always the operator's own logged-in one.
     const placeAtScope = { ...scope, locationId: placeAtLocationId };
@@ -1477,9 +1552,12 @@ export class NewOrderPage implements OnInit {
         proposedLocationId: this.proposedLocationId(),
         overrideReasonCode: override ? this.overrideReasonCode() : null,
         overrideNote: override ? this.overrideNote().trim() || null : null,
+        // The party's bill is part of the placement, not a call after it (ADR 0047).
+        dineInSessionId: dineIn ? (this.tablePick()?.sessionId ?? null) : null,
       };
       const result = await this.api.placeOrder(placeAtScope, request);
       this.outOfHoursConfirmReason.set(null);
+      // The order exists from here on, and everything below is about not losing it.
       if (this.callEventId) {
         try {
           // The order's own branch — placeAtScope, not the operator's own
@@ -1504,6 +1582,12 @@ export class NewOrderPage implements OnInit {
           this.submitDenied.set(true);
         } else if (reason === 'REQUESTED_TIME_IN_PAST') {
           this.requestedForError.set(this.i18n.t('orders.newOrder.order.preOrder.mustBeFuture'));
+        } else if (reason === 'SESSION_NOT_LIVE') {
+          // The party the operator picked has left (a host closed the table while the
+          // basket was being built). Nothing was placed. Re-read the room, which
+          // drops the closed party and clears the pick, so the operator chooses again.
+          this.submitError.set(this.i18n.t('orders.newOrder.table.sessionEnded'));
+          void this.tablePicker()?.reload();
         } else if (reason === 'BRANCH_CLOSED_AT_REQUESTED_TIME_CONFIRM') {
           // The warn half of "WARN ... while still allowing an explicit
           // override": not a submitError, a confirmation the operator can
@@ -1554,7 +1638,13 @@ export class NewOrderPage implements OnInit {
       return this.i18n.t('orders.newOrder.address.notLocated');
     }
     if (reason === 'NOT_SERVICEABLE') {
-      return this.i18n.t('orders.newOrder.address.notServiceable');
+      // For a table order this is not about a delivery zone: the branch or the
+      // channel does not take DINE_IN right now (a schedule or a channel mode
+      // nobody has switched on), and saying "outside every delivery zone" would
+      // send the operator looking for an address that does not exist.
+      return this.fulfillmentMode() === 'DINE_IN'
+        ? this.i18n.t('orders.newOrder.table.notServiceable')
+        : this.i18n.t('orders.newOrder.address.notServiceable');
     }
     if (reason === 'BRANCH_CLOSED_AT_REQUESTED_TIME') {
       return this.i18n.t('orders.newOrder.order.preOrder.closedNoOverride');
@@ -1591,6 +1681,11 @@ export class NewOrderPage implements OnInit {
 
   protected toggleAggregatorMode(): void {
     this.aggregatorMode.update((current) => !current);
+    if (this.aggregatorMode() && this.fulfillmentMode() === 'DINE_IN') {
+      // A marketplace order is collected or delivered, never eaten at one of our
+      // tables: the aggregator panel reads the page's mode and has no third case.
+      this.setFulfillmentMode('PICKUP');
+    }
     const first = this.aggregatorChannels()[0];
     if (this.aggregatorMode() && first && this.aggregatorChannelCode() === null) {
       this.aggregatorChannelCode.set(first.code);
@@ -1611,6 +1706,7 @@ export class NewOrderPage implements OnInit {
       this.aggregatorChannelCode() !== null &&
       this.aggregatorExternalOrderId().trim() !== '' &&
       this.aggregatorTotalMinor() > 0 &&
+      this.fulfillmentMode() !== 'DINE_IN' &&
       (this.fulfillmentMode() === 'PICKUP' ||
         (this.selectedCustomer() !== null && this.selectedAddressId() !== null)) &&
       !this.aggregatorSubmitting(),

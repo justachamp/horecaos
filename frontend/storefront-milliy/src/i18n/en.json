@@ -373,7 +373,9 @@
       "itemOutOfSaleWindow": "This item is not on sale right now.",
       "presetNotOffered": "That comment is no longer offered for this item.",
       "itemUnavailable": "This item just sold out.",
-      "holdExpired": "Your basket hold expired. Please review your order and try again."
+      "holdExpired": "Your basket hold expired. Please review your order and try again.",
+      "tableNotAtBranch": "This table is at another branch. Scan the code on your own table.",
+      "quoteExpired": "The price has expired. Please review your order and try again."
     }
   },
   "money": {
@@ -439,7 +441,23 @@
     "noAdmissionTitle": "Scan a table to see its menu",
     "noAdmissionBody": "Scan the QR code on your table to see the menu.",
     "tableLabel": "Table {{code}}",
-    "orderingUnavailable": "Ordering from the table is not available in this app yet. You can browse the menu here; please order with a member of staff.",
-    "menuUnavailable": "The menu is not available right now."
+    "menuUnavailable": "The menu is not available right now.",
+    "notSeated": "Ask a member of staff to seat you, then scan the code again.",
+    "signInToOrder": "Sign in to order",
+    "itemsInCart": "{{count}} items in cart",
+    "orderRound": "Order",
+    "needsStaff": "Ask a member of staff to order this dish.",
+    "tableBill": "Table bill",
+    "roundCount": "{{count}} rounds ordered",
+    "askForBill": "Ask for the bill",
+    "orderPlaced": "Order sent to the kitchen",
+    "billRequested": "The bill has been requested",
+    "roundPending": "Your last order is with the kitchen but is not on the table bill yet.",
+    "roundRetry": "Try again",
+    "roundAttachFailed": "Your order is with the kitchen, but it could not be added to the table bill. Please tell a member of staff.",
+    "heldUnavailable": "No longer available. Take it out of your order to continue.",
+    "clearOrder": "Clear the order",
+    "priceRefreshed": "The price was updated and your order has not been sent. Check the total and press Order again.",
+    "sessionEnded": "This table visit has ended. Scan the code on your table again to keep ordering."
   }
 }

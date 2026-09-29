@@ -7,7 +7,7 @@ import { environment } from '../../../environments/environment';
 import { ApiClient } from '../api/api-client';
 import { CurrentBrand } from '../auth/current-brand';
 import { SessionContext } from '../auth/session-context';
-import { LocaleSet } from './locale-set';
+import { LocaleSet, resolveLocaleSet } from './locale-set';
 
 function url(path: string): string {
   return `${environment.apiBaseUrl}${path}`;
@@ -159,5 +159,40 @@ describe('LocaleSet', () => {
     await Promise.all([first, second]);
 
     await localeSet.ensureLoaded();
+  });
+});
+
+describe('resolveLocaleSet', () => {
+  it('puts the default first and the rest in the platform order', () => {
+    const resolved = resolveLocaleSet([
+      { locale: 'en', isDefault: false },
+      { locale: 'ru', isDefault: false },
+      { locale: 'uz-Latn', isDefault: true },
+    ]);
+
+    expect(resolved.locales).toEqual(['uz-Latn', 'ru', 'en']);
+    expect(resolved.defaultLocale).toBe('uz-Latn');
+    expect(resolved.isConfigured).toBe(true);
+  });
+
+  it.each([[[]], [null], [undefined]])(
+    'is the platform triple, ru default, for an unconfigured brand (%j)',
+    (configured) => {
+      const resolved = resolveLocaleSet(configured);
+
+      expect(resolved.locales).toEqual(['ru', 'uz-Latn', 'en']);
+      expect(resolved.defaultLocale).toBe('ru');
+      expect(resolved.isConfigured).toBe(false);
+    },
+  );
+
+  it('does not mutate the list it is given', () => {
+    const configured = [
+      { locale: 'en' as const, isDefault: false },
+      { locale: 'ru' as const, isDefault: true },
+    ];
+    resolveLocaleSet(configured);
+
+    expect(configured.map((option) => option.locale)).toEqual(['en', 'ru']);
   });
 });

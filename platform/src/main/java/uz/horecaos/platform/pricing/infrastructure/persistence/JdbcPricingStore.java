@@ -914,6 +914,12 @@ public class JdbcPricingStore {
      *                            one, which is a difference worth flagging
      * @param cursorVariantId     the previous page's last variant id, or null
      *                            for the first page
+     * @param preferredLocale     the catalog locale the names (a variant's, its product's, its
+     *                            category's) are read in first
+     * @param fallbackLocale      where a name the preferred locale lacks is read next -- the
+     *                            server's configured locale, in which a menu imported or sampled
+     *                            before the brand chose its language has its names; only a name in
+     *                            neither falls to the product's code
      */
     public List<MatrixRow> priceBookMatrix(
             UUID tenantId,
@@ -923,14 +929,15 @@ public class JdbcPricingStore {
             @Nullable UUID categoryId,
             boolean differsFromBaseOnly,
             @Nullable UUID cursorVariantId,
-            String locale,
+            String preferredLocale,
+            String fallbackLocale,
             int limit,
             Instant at) {
         OffsetDateTime atOffset = OffsetDateTime.ofInstant(at, ZoneOffset.UTC);
         return jdbc.sql("""
                 SELECT v.id AS variant_id, v.product_id AS product_id,
-                       COALESCE(vt.name, pt.name, p.code) AS display_name,
-                       first_category.id AS category_id, ct.name AS category_name,
+                       COALESCE(vt.name, pt.name, vtf.name, ptf.name, p.code) AS display_name,
+                       first_category.id AS category_id, COALESCE(ct.name, ctf.name) AS category_name,
                        bp.amount_minor AS book_amount_minor, bp.version AS book_version,
                        base.amount_minor AS base_amount_minor
                 FROM catalog.variants v
@@ -938,10 +945,16 @@ public class JdbcPricingStore {
                     ON p.id = v.product_id AND p.tenant_id = v.tenant_id AND p.brand_id = v.brand_id
                 LEFT JOIN catalog.translations vt
                     ON vt.entity_type = 'VARIANT' AND vt.entity_id = v.id AND vt.tenant_id = v.tenant_id
-                       AND vt.brand_id = v.brand_id AND vt.locale = :locale
+                       AND vt.brand_id = v.brand_id AND vt.locale = :preferredLocale
                 LEFT JOIN catalog.translations pt
                     ON pt.entity_type = 'PRODUCT' AND pt.entity_id = p.id AND pt.tenant_id = p.tenant_id
-                       AND pt.brand_id = p.brand_id AND pt.locale = :locale
+                       AND pt.brand_id = p.brand_id AND pt.locale = :preferredLocale
+                LEFT JOIN catalog.translations vtf
+                    ON vtf.entity_type = 'VARIANT' AND vtf.entity_id = v.id AND vtf.tenant_id = v.tenant_id
+                       AND vtf.brand_id = v.brand_id AND vtf.locale = :fallbackLocale
+                LEFT JOIN catalog.translations ptf
+                    ON ptf.entity_type = 'PRODUCT' AND ptf.entity_id = p.id AND ptf.tenant_id = p.tenant_id
+                       AND ptf.brand_id = p.brand_id AND ptf.locale = :fallbackLocale
                 LEFT JOIN LATERAL (
                     SELECT c.id, c.tenant_id
                     FROM catalog.category_products cp
@@ -953,7 +966,10 @@ public class JdbcPricingStore {
                 ) first_category ON true
                 LEFT JOIN catalog.translations ct
                     ON ct.entity_type = 'CATEGORY' AND ct.entity_id = first_category.id
-                       AND ct.tenant_id = first_category.tenant_id AND ct.locale = :locale
+                       AND ct.tenant_id = first_category.tenant_id AND ct.locale = :preferredLocale
+                LEFT JOIN catalog.translations ctf
+                    ON ctf.entity_type = 'CATEGORY' AND ctf.entity_id = first_category.id
+                       AND ctf.tenant_id = first_category.tenant_id AND ctf.locale = :fallbackLocale
                 LEFT JOIN pricing.prices bp
                     ON bp.price_book_id = :priceBookId AND bp.priceable_type = 'VARIANT'
                        AND bp.priceable_id = v.id
@@ -980,7 +996,8 @@ public class JdbcPricingStore {
                 .param("categoryId", categoryId)
                 .param("differsFromBaseOnly", differsFromBaseOnly)
                 .param("cursor", cursorVariantId)
-                .param("locale", locale)
+                .param("preferredLocale", preferredLocale)
+                .param("fallbackLocale", fallbackLocale)
                 .param("at", atOffset)
                 .param("limit", limit)
                 .query((row, number) -> new MatrixRow(

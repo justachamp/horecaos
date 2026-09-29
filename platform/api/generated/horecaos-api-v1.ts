@@ -1587,6 +1587,7 @@ export interface CommentPresetChip {
   labelEn?: string;
   labelRu?: string;
   labelUz?: string;
+  labels?: { [key: string]: string };
 }
 
 export interface CommentPresetControllerLocaleSetResponse {
@@ -1597,9 +1598,11 @@ export interface CommentPresetControllerLocaleSetResponse {
 
 export interface CommentPresetOption {
   code?: string;
+  label?: string;
   labelEn?: string;
   labelRu?: string;
   labelUz?: string;
+  labels?: { [key: string]: string };
 }
 
 export interface CommercialAdminControllerAdjustmentRequest {
@@ -3792,6 +3795,7 @@ export interface LatenessPolicyResponse {
   delivery?: LatenessThresholdsResponse;
   dineIn?: LatenessThresholdsResponse;
   isPlatformDefault?: boolean;
+  lateColour?: string;
   pickup?: LatenessThresholdsResponse;
   policyId?: string;
   policyVersion?: number;
@@ -5564,6 +5568,12 @@ export interface PaymentIntentResponse {
   tender?: string;
 }
 
+export interface PaymentMethodControllerLocaleSetResponse {
+  configured?: boolean;
+  defaultLocale?: string;
+  locales?: Array<string>;
+}
+
 export interface PaymentMethodView {
   code?: string;
   contractReference?: string;
@@ -5681,6 +5691,7 @@ export interface PlaceOrderRequest {
   channelCode: string;
   customerAccountId: string;
   destination?: OperationsOrderControllerDestinationRequest;
+  dineInSessionId?: string;
   fulfillmentMode: "DELIVERY" | "PICKUP" | "DINE_IN";
   lines: Array<OrderLineRequest>;
   overrideNote?: string;
@@ -7360,7 +7371,14 @@ export interface SessionResponse {
   sessionId?: string;
   settledTotalMinor?: number;
   status?: string;
+  tables?: Array<SessionTableResponse>;
   version?: number;
+}
+
+export interface SessionTableResponse {
+  code?: string;
+  displayName?: string;
+  tableId?: string;
 }
 
 export interface SetChannelOfferingRequest {
@@ -8575,6 +8593,7 @@ export interface ValidationResponse {
 }
 
 export interface ValidationResult {
+  advisory?: boolean;
   detail?: string;
   errorCode?: string;
   locationId?: string;
@@ -9028,7 +9047,7 @@ export interface Operations {
   "setBusinessType": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/business-type"; request: { parameters: { path: { tenantId: string } }; body: BusinessTypeRequest }; responses: { "200": unknown } };
   "list_27": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/comment-presets"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<PresetResponse> } };
   "create_14": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/comment-presets"; request: { parameters: { path: { tenantId: string } }; body: NewPresetRequest }; responses: { "200": PresetResponse } };
-  "localeSet_1": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/comment-presets/locale-set"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": CommentPresetControllerLocaleSetResponse } };
+  "localeSet_2": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/comment-presets/locale-set"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": CommentPresetControllerLocaleSetResponse } };
   "update_8": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/comment-presets/{presetId}"; request: { parameters: { path: { presetId: string; tenantId: string } }; body: UpdatePresetRequest }; responses: { "200": PresetResponse } };
   "changeCountry": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/country-change"; request: { parameters: { path: { tenantId: string } }; body: CountryChangeRequest }; responses: { "200": CountryChangeView } };
   "due": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/credentials-due"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": CredentialsDue } };
@@ -9372,6 +9391,7 @@ export interface Operations {
   "match": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/partner-delivery-invoices/{invoiceId}/match"; request: { parameters: { path: { invoiceId: string; tenantId: string } }; body: MatchRequest }; responses: { "200": MatchReport } };
   "list_10": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/payment-methods"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<PaymentMethodView> } };
   "create_6": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/payment-methods"; request: { parameters: { path: { tenantId: string } }; body: CreatePaymentMethodRequest }; responses: { "200": PaymentMethodView } };
+  "localeSet_1": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/payment-methods/locale-set"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": PaymentMethodControllerLocaleSetResponse } };
   "update_2": { method: "PUT"; path: "/api/v1/operations/tenants/{tenantId}/payment-methods/{methodId}"; request: { parameters: { path: { methodId: string; tenantId: string }; query: { expectedVersion: number } }; body: UpdatePaymentMethodRequest }; responses: { "200": PaymentMethodView } };
   "activate_4": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/payment-methods/{methodId}/activate"; request: { parameters: { path: { methodId: string; tenantId: string }; query: { expectedVersion: number } } }; responses: { "200": PaymentMethodView } };
   "disable": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/payment-methods/{methodId}/disable"; request: { parameters: { path: { methodId: string; tenantId: string }; query: { expectedVersion: number } } }; responses: { "200": PaymentMethodView } };
@@ -9472,7 +9492,8 @@ export interface Operations {
   "price": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts/{cartId}/pricing"; request: { parameters: { path: { brandId: string; cartId: string; tenantId: string } } }; responses: { "200": PricedCartResponse } };
   "removePromoCode": { method: "DELETE"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts/{cartId}/promo-code"; request: { parameters: { path: { brandId: string; cartId: string; tenantId: string } } }; responses: { "200": CartResponse } };
   "applyPromoCode": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts/{cartId}/promo-code"; request: { parameters: { path: { brandId: string; cartId: string; tenantId: string } }; body: ApplyPromoCodeRequest }; responses: { "200": CartResponse } };
-  "checkout": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/checkouts"; request: { parameters: { header: { "Idempotency-Key": string }; path: { brandId: string; tenantId: string } }; body: CheckoutRequest }; responses: { "200": CheckoutResponse } };
+  "bindTable": { method: "PUT"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts/{cartId}/table"; request: { parameters: { header: { "X-Dine-In-Token": string }; path: { brandId: string; cartId: string; tenantId: string } } }; responses: { "200": CartResponse } };
+  "checkout": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/checkouts"; request: { parameters: { header: { "Idempotency-Key": string; "X-Dine-In-Token"?: string }; path: { brandId: string; tenantId: string } }; body: CheckoutRequest }; responses: { "200": CheckoutResponse } };
   "register": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/identity/registrations"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: RegisterRequest }; responses: { "200": RegistrationResponse } };
   "signIn": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/identity/sessions"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: SignInRequest }; responses: { "200": CustomerSessionResponse } };
   "signOut": { method: "DELETE"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/identity/sessions/current"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": unknown } };
@@ -9617,6 +9638,7 @@ export interface Operations {
   "find": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/reservations/{reservationId}"; request: { parameters: { path: { brandId: string; locationId: string; reservationId: string; tenantId: string }; query: { purpose?: string } } }; responses: { "200": ReservationResponse } };
   "amend": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/reservations/{reservationId}/amendments"; request: { parameters: { path: { brandId: string; locationId: string; reservationId: string; tenantId: string } }; body: AmendmentRequest }; responses: { "200": ReservationResponse } };
   "stateAction": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/reservations/{reservationId}/state-actions"; request: { parameters: { path: { brandId: string; locationId: string; reservationId: string; tenantId: string } }; body: ReservationControllerStateActionRequest }; responses: { "200": ReservationResponse } };
+  "issueAtLocation": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/staff/telegram/link-codes"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } } }; responses: { "200": LinkCodeResponse } };
   "availability": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/table-availability"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string }; query: { from: string; to: string } } }; responses: { "200": Array<AvailabilityResponse> } };
   "list_4": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/attribution-links"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<AttributionLinkResponse> } };
   "mint": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/attribution-links"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: MintRequest }; responses: { "200": AttributionLinkResponse } };

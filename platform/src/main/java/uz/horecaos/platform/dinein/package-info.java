@@ -18,13 +18,17 @@
  * reporting, which is the whole benefit ADR 0047 bought by refusing a parallel
  * aggregate.
  *
- * <p>The one thing that flows the other way is a label. A screen that shows an
+ * <p>Two things flow the other way. The first is a label. A screen that shows an
  * order -- the operations board and detail, the kitchen ticket -- has to say
  * which table it is for, and only this module knows. {@link
  * uz.horecaos.platform.dinein.api.OrderTablesPort} is that read: order ids in,
  * table codes and the session id out, tenant a predicate of the statement.
- * Ordering and the kitchen depend on it; this module imports nothing from
- * either at the Java level, so there is no cycle, and {@code
+ * The second is a cart bound to a table: {@link
+ * uz.horecaos.platform.dinein.api.TableBindingPort} resolves the table a guest's
+ * token names, says whether anybody is seated there, and puts an order on that
+ * party's bill inside checkout's own transaction, so the round cannot be lost
+ * between two requests. Ordering and the kitchen depend on these; this module
+ * imports nothing from either at the Java level, so there is no cycle, and {@code
  * ModularArchitectureTests} keeps it that way.
  */
 @org.springframework.modulith.ApplicationModule(displayName = "Dine-in")

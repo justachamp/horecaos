@@ -1,11 +1,23 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  OnInit,
+  computed,
+  inject,
+  signal,
+} from '@angular/core';
 
 import { ApiError } from '../../../core/api/problem-details';
 import { CurrentBrand } from '../../../core/auth/current-brand';
 import { I18n } from '../../../core/i18n/i18n';
 import { MessageKey } from '../../../core/i18n/messages.en';
 import { TPipe } from '../../../core/i18n/t.pipe';
-import { RuleEnabledChange, RuleList, RuleListItem, RuleReorder } from '../../../shared/ui/rule-list';
+import {
+  RuleEnabledChange,
+  RuleList,
+  RuleListItem,
+  RuleReorder,
+} from '../../../shared/ui/rule-list';
 import { MarketingChannel } from '../../customers/segments/segments-api';
 import { describeApiError } from '../../orders/order-errors';
 import {
@@ -73,7 +85,12 @@ export class AutomationsPage implements OnInit {
     'CART_ABANDONMENT',
     'CASHBACK_CHANGE',
   ];
-  protected readonly channels: readonly MarketingChannel[] = ['MESSAGING_APP', 'SMS', 'EMAIL', 'PUSH'];
+  protected readonly channels: readonly MarketingChannel[] = [
+    'MESSAGING_APP',
+    'SMS',
+    'EMAIL',
+    'PUSH',
+  ];
 
   // --------------------------------------------------------------- create form
 
@@ -132,14 +149,12 @@ export class AutomationsPage implements OnInit {
 
   /** `q-rule-list`'s own input shape — presentational, knows nothing about triggers. */
   protected readonly listItems = computed<readonly RuleListItem[]>(() =>
-    this.rules().map(
-      (rule): RuleListItem => ({
-        id: rule.id,
-        label: rule.name,
-        description: this.ruleDescription(rule),
-        enabled: rule.active,
-      }),
-    ),
+    this.rules().map((rule): RuleListItem => ({
+      id: rule.id,
+      label: rule.name,
+      description: this.ruleDescription(rule),
+      enabled: rule.active,
+    })),
   );
 
   protected ruleDescription(rule: AutomationRuleView): string {
@@ -204,7 +219,9 @@ export class AutomationsPage implements OnInit {
       const updated = change.enabled
         ? await this.api.activate(scope, rule.id, rule.version)
         : await this.api.deactivate(scope, rule.id, rule.version);
-      this.rules.set(this.rules().map((candidate) => (candidate.id === updated.id ? updated : candidate)));
+      this.rules.set(
+        this.rules().map((candidate) => (candidate.id === updated.id ? updated : candidate)),
+      );
     } catch (error) {
       this.actionError.set(this.describe(error));
       // The toggle's own optimistic DOM state must not survive a refusal —

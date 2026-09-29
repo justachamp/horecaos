@@ -22,6 +22,7 @@ import { NavigationHistoryService } from '../../services/navigation-history.serv
 import { FEATURES } from '../../core/config/features';
 import { Session } from '../../core/auth/session';
 import { EcommerceItem, pushEcommerceEvent } from '../../core/analytics/ecommerce-events';
+import { presetLabelFor } from '../../utils/preset-label';
 
 /** Matches `CartOrderStatusComponent`'s own fallback -- the storefront's launch scope is UZS-only. */
 const FALLBACK_CURRENCY = 'UZS';
@@ -202,14 +203,7 @@ export class ProductComponent {
 
   /** A preset's label in the customer's own language, matching `MenuService`'s own locale selection. */
   presetLabel(preset: MenuItemCommentPreset): string {
-    switch (this.langService.langId()) {
-      case 'ru':
-        return preset.labelRu;
-      case 'en':
-        return preset.labelEn;
-      default:
-        return preset.labelUz;
-    }
+    return presetLabelFor(preset, this.langService.langId());
   }
 
   /**

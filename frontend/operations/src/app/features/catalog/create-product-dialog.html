@@ -17,6 +17,14 @@
         [attr.aria-invalid]="nameMissing() ? 'true' : null"
         data-testid="create-product-dialog-name"
       />
+      @if (languageName(); as language) {
+        <span class="q-caption" data-testid="create-product-dialog-language">{{
+          (languageChosenByBrand()
+            ? 'catalog.products.create.language'
+            : 'catalog.products.create.languageFallback'
+          ) | t: { language: language }
+        }}</span>
+      }
       @if (nameMissing()) {
         <span class="q-caption dialog__error">{{ 'catalog.products.create.required' | t }}</span>
       }

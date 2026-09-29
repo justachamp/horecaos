@@ -11,6 +11,7 @@
           [class.vdu__card--ready]="ticket.status === 'READY'"
           [class.vdu__card--danger]="severityTone(ticket) === 'danger'"
           [class.vdu__card--warning]="severityTone(ticket) === 'warning'"
+          [style.--q-sla-late]="lateColourFor(ticket)"
           data-testid="vdu-card"
         >
           <span class="vdu__sequence" data-testid="vdu-sequence">{{ ticket.sequenceLabel }}</span>

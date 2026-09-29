@@ -108,6 +108,10 @@ describe('i18n content: every REASON_MESSAGE_KEYS target resolves in every local
     'AT_CAPACITY',
     'ITEM_OUT_OF_SALE_WINDOW',
     'COMMENT_PRESET_NOT_OFFERED',
+    'QUOTE_EXPIRED',
+    'TABLE_NOT_SEATED',
+    'TABLE_NOT_AT_THIS_BRANCH',
+    'TABLE_NOT_APPLICABLE',
   ] as const;
 
   it.each(REASON_CODES)('%s maps to a key every locale actually has', (reason) => {
@@ -136,8 +140,48 @@ describe('i18n content: the keys the new cart / sale-window / table screens rend
     'dineIn.noAdmissionTitle',
     'dineIn.noAdmissionBody',
     'dineIn.tableLabel',
-    'dineIn.orderingUnavailable',
     'dineIn.menuUnavailable',
+    'dineIn.notSeated',
+    'dineIn.signInToOrder',
+    'dineIn.itemsInCart',
+    'dineIn.orderRound',
+    'dineIn.needsStaff',
+    'dineIn.tableBill',
+    'dineIn.roundCount',
+    'dineIn.askForBill',
+    'dineIn.orderPlaced',
+    'dineIn.billRequested',
+    'dineIn.roundPending',
+    'dineIn.roundRetry',
+    'dineIn.roundAttachFailed',
+    'auth.slogan',
+    'auth.phonePlaceholder',
+    'auth.continue',
+    'auth.codeTitle',
+    'auth.codeSentTo',
+    'auth.noCodeReceived',
+    'auth.resendCode',
+    'auth.confirm',
+    'auth.errors.numberRejected',
+    'auth.errors.rateLimited',
+    'auth.errors.undeliverable',
+    'auth.errors.undeliverablePermanent',
+    'auth.errors.unavailable',
+    'auth.errors.codeRejected',
+    'auth.errors.codeRejectedWithTries',
+    'auth.errors.challengeOver',
+    'cart.cash',
+    'cart.click',
+    'cart.payme',
+    'cart.paymentMethod',
+    'cart.noPaymentMethodSelected',
+    'cart.noPaymentMethods',
+    'cart.orderRejected',
+    'cart.paymentSessionError',
+    'common.back',
+    'common.add',
+    'common.increase',
+    'common.decrease',
     'details.addFailed',
     'details.lowStock',
     'cart.loadError',
@@ -162,6 +206,9 @@ describe('i18n content: the keys the new cart / sale-window / table screens rend
     for (const [id, dict] of Object.entries(LOCALES)) {
       expect(getNested(dict, 'dish.lowStock'), id).toContain('{{count}}');
       expect(getNested(dict, 'dineIn.tableLabel'), id).toContain('{{code}}');
+      expect(getNested(dict, 'dineIn.itemsInCart'), id).toContain('{{count}}');
+      expect(getNested(dict, 'dineIn.roundCount'), id).toContain('{{count}}');
+      expect(getNested(dict, 'auth.errors.codeRejectedWithTries'), id).toContain('{{count}}');
     }
   });
 });

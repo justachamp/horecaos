@@ -291,7 +291,8 @@ export class LocationDetailPane {
       const clearAverageCheque =
         averageChequeAmount === '' &&
         averageChequeCurrency === '' &&
-        (this.profile()?.averageChequeAmount != null || this.profile()?.averageChequeCurrency != null);
+        (this.profile()?.averageChequeAmount != null ||
+          this.profile()?.averageChequeCurrency != null);
       const trimmedVirtualTourUrl = this.draftVirtualTourUrl().trim();
       const clearVirtualTourUrl = trimmedVirtualTourUrl === '' && !!this.profile()?.virtualTourUrl;
       // A whole-set write, always sent — the same reason brand-profile.ts's

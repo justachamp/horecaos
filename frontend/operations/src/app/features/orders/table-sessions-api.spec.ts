@@ -1,6 +1,7 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
+import { firstValueFrom } from 'rxjs';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { environment } from '../../../environments/environment';
@@ -30,6 +31,7 @@ function session(overrides: Partial<Record<string, unknown>> = {}) {
     closedAt: null,
     closeReasonCode: null,
     version: 1,
+    tables: [{ tableId: 't1', code: 'T1', displayName: 'Table 1' }],
     ...overrides,
   };
 }
@@ -39,7 +41,12 @@ describe('TableSessionsApi.open', () => {
     const { api, http } = setUp();
 
     api
-      .open(SCOPE, { reservationId: 'r1', tableIds: ['t1'], currency: 'UZS', reason: 'Seating a booking' })
+      .open(SCOPE, {
+        reservationId: 'r1',
+        tableIds: ['t1'],
+        currency: 'UZS',
+        reason: 'Seating a booking',
+      })
       .subscribe();
     const request = http.expectOne(URL);
 
@@ -53,7 +60,12 @@ describe('TableSessionsApi.open', () => {
   // this used to open two sessions for the same booking.
   it('reuses the same Idempotency-Key for two still-in-flight opens of the same reservation', () => {
     const { api, http } = setUp();
-    const body = { reservationId: 'r1', tableIds: ['t1'], currency: 'UZS', reason: 'Seating a booking' };
+    const body = {
+      reservationId: 'r1',
+      tableIds: ['t1'],
+      currency: 'UZS',
+      reason: 'Seating a booking',
+    };
 
     api.open(SCOPE, body).subscribe();
     const first = http.expectOne(URL);
@@ -87,18 +99,196 @@ describe('TableSessionsApi.open', () => {
     const { api, http } = setUp();
 
     api
-      .open(SCOPE, { reservationId: 'r1', tableIds: ['t1'], currency: 'UZS', reason: 'Seating a booking' })
+      .open(SCOPE, {
+        reservationId: 'r1',
+        tableIds: ['t1'],
+        currency: 'UZS',
+        reason: 'Seating a booking',
+      })
       .subscribe();
     const first = http.expectOne(URL);
     const firstKey = first.request.headers.get('Idempotency-Key');
     first.flush(session());
 
     api
-      .open(SCOPE, { reservationId: 'r2', tableIds: ['t2'], currency: 'UZS', reason: 'Seating a booking' })
+      .open(SCOPE, {
+        reservationId: 'r2',
+        tableIds: ['t2'],
+        currency: 'UZS',
+        reason: 'Seating a booking',
+      })
       .subscribe();
     const second = http.expectOne(URL);
 
     expect(second.request.headers.get('Idempotency-Key')).not.toBe(firstKey);
     second.flush(session({ sessionId: 's2', reservationId: 'r2' }));
+  });
+});
+
+describe('TableSessionsApi -- a settled rejection is not held against the next click', () => {
+  const conflict = { status: 409, statusText: 'Conflict' };
+  const walkIn = { tableIds: ['t1'], partySize: 3, currency: 'UZS', reason: 'Walk-in' };
+
+  it('mints a fresh key for a walk-in after the table was refused as occupied, so a table that has since freed can be seated', async () => {
+    const { api, http } = setUp();
+
+    const first = firstValueFrom(api.open(SCOPE, walkIn));
+    const firstRequest = http.expectOne(URL);
+    const firstKey = firstRequest.request.headers.get('Idempotency-Key');
+    firstRequest.flush(
+      { status: 409, code: 'RESOURCE_CONFLICT', conflict: 'TABLE_OCCUPIED' },
+      conflict,
+    );
+    await first.catch(() => undefined);
+
+    const second = firstValueFrom(api.open(SCOPE, walkIn));
+    const secondRequest = http.expectOne(URL);
+
+    expect(secondRequest.request.headers.get('Idempotency-Key')).not.toBe(firstKey);
+    secondRequest.flush(session({ reservationId: null }));
+    await second;
+  });
+
+  it('keeps the key when the outcome is unknown, so a request that landed is replayed rather than repeated', async () => {
+    const { api, http } = setUp();
+
+    const first = firstValueFrom(api.open(SCOPE, walkIn));
+    const firstRequest = http.expectOne(URL);
+    const firstKey = firstRequest.request.headers.get('Idempotency-Key');
+    firstRequest.flush({ title: 'down' }, { status: 503, statusText: 'Service Unavailable' });
+    await first.catch(() => undefined);
+
+    const second = firstValueFrom(api.open(SCOPE, walkIn));
+    const secondRequest = http.expectOne(URL);
+
+    expect(secondRequest.request.headers.get('Idempotency-Key')).toBe(firstKey);
+    secondRequest.flush(session({ reservationId: null }));
+    await second;
+  });
+
+  it('keeps the key while a first attempt under it is still in progress', async () => {
+    const { api, http } = setUp();
+
+    const first = firstValueFrom(api.open(SCOPE, walkIn));
+    const firstRequest = http.expectOne(URL);
+    const firstKey = firstRequest.request.headers.get('Idempotency-Key');
+    firstRequest.flush({ status: 409, code: 'IDEMPOTENCY_KEY_IN_PROGRESS' }, conflict);
+    await first.catch(() => undefined);
+
+    const second = firstValueFrom(api.open(SCOPE, walkIn));
+    const secondRequest = http.expectOne(URL);
+
+    expect(secondRequest.request.headers.get('Idempotency-Key')).toBe(firstKey);
+    secondRequest.flush(session({ reservationId: null }));
+    await second;
+  });
+
+  it('gives a round refused because its order is on another bill a fresh key next time', async () => {
+    const { api, http } = setUp();
+    const url = `${URL}/s1/rounds`;
+
+    const first = firstValueFrom(api.attachRound(SCOPE, 's1', 'o1', 'Round'));
+    const firstRequest = http.expectOne(url);
+    const firstKey = firstRequest.request.headers.get('Idempotency-Key');
+    firstRequest.flush(
+      { status: 409, code: 'RESOURCE_CONFLICT', conflict: 'ORDER_ALREADY_BILLED' },
+      conflict,
+    );
+    await first.catch(() => undefined);
+
+    const second = firstValueFrom(api.attachRound(SCOPE, 's1', 'o1', 'Round'));
+    const secondRequest = http.expectOne(url);
+
+    expect(secondRequest.request.headers.get('Idempotency-Key')).not.toBe(firstKey);
+    secondRequest.flush({ sessionId: 's1', orderId: 'o1', sequence: 1 });
+    await second;
+  });
+});
+
+describe('TableSessionsApi.live', () => {
+  it('reads the live list and answers with each party and the tables it sits at', async () => {
+    const { api, http } = setUp();
+
+    const pending = firstValueFrom(api.live(SCOPE));
+    const request = http.expectOne(URL);
+    expect(request.request.method).toBe('GET');
+    request.flush([
+      session({
+        sessionId: 's1',
+        tables: [
+          { tableId: 't2', code: 'T2', displayName: 'Table 2' },
+          { tableId: 't10', code: 'T10', displayName: 'Table 10' },
+        ],
+      }),
+      session({ sessionId: 's2', reservationId: null }),
+    ]);
+
+    const parties = await pending;
+    expect(parties.map((party) => party.sessionId)).toEqual(['s1', 's2']);
+    expect(parties[0].tables.map((table) => table.code)).toEqual(['T2', 'T10']);
+  });
+
+  it('answers an empty list rather than nothing when the room is empty', async () => {
+    const { api, http } = setUp();
+
+    const pending = firstValueFrom(api.live(SCOPE));
+    http.expectOne(URL).flush(null);
+
+    expect(await pending).toEqual([]);
+  });
+});
+
+describe('TableSessionsApi.attachRound', () => {
+  const ROUNDS_URL = `${URL}/s1/rounds`;
+
+  it('posts the order id and a reason to the session, with an Idempotency-Key', async () => {
+    const { api, http } = setUp();
+
+    const pending = firstValueFrom(api.attachRound(SCOPE, 's1', 'o1', 'Keyed in at the console'));
+    const request = http.expectOne(ROUNDS_URL);
+
+    expect(request.request.method).toBe('POST');
+    expect(request.request.headers.has('Idempotency-Key')).toBe(true);
+    expect(request.request.body).toEqual({ orderId: 'o1', reason: 'Keyed in at the console' });
+    request.flush({ sessionId: 's1', orderId: 'o1', sequence: 2 });
+
+    expect(await pending).toEqual({ sessionId: 's1', orderId: 'o1', sequence: 2 });
+  });
+
+  // A dropped response leaves the operator not knowing whether the round is on the
+  // bill; asking again must reuse the key so a first attempt that landed is replayed
+  // rather than repeated.
+  it('reuses the same Idempotency-Key when the same order is attached again after a failure', async () => {
+    const { api, http } = setUp();
+
+    const first = firstValueFrom(api.attachRound(SCOPE, 's1', 'o1', 'Keyed in at the console'));
+    const firstRequest = http.expectOne(ROUNDS_URL);
+    const firstKey = firstRequest.request.headers.get('Idempotency-Key');
+    firstRequest.flush({ title: 'down' }, { status: 503, statusText: 'Service Unavailable' });
+    await first.catch(() => undefined);
+
+    const retry = firstValueFrom(api.attachRound(SCOPE, 's1', 'o1', 'Keyed in at the console'));
+    const retryRequest = http.expectOne(ROUNDS_URL);
+
+    expect(retryRequest.request.headers.get('Idempotency-Key')).toBe(firstKey);
+    retryRequest.flush({ sessionId: 's1', orderId: 'o1', sequence: 1 });
+    await retry;
+  });
+
+  it('mints a fresh Idempotency-Key for a different order on the same session', async () => {
+    const { api, http } = setUp();
+
+    const first = firstValueFrom(api.attachRound(SCOPE, 's1', 'o1', 'Round'));
+    const firstRequest = http.expectOne(ROUNDS_URL);
+    const firstKey = firstRequest.request.headers.get('Idempotency-Key');
+    firstRequest.flush({ sessionId: 's1', orderId: 'o1', sequence: 1 });
+    await first;
+
+    const second = firstValueFrom(api.attachRound(SCOPE, 's1', 'o2', 'Round'));
+    const secondRequest = http.expectOne(ROUNDS_URL);
+
+    expect(secondRequest.request.headers.get('Idempotency-Key')).not.toBe(firstKey);
+    secondRequest.flush({ sessionId: 's1', orderId: 'o2', sequence: 2 });
+    await second;
   });
 });

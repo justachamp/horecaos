@@ -45,6 +45,7 @@ import uz.horecaos.platform.tenancy.api.TenantOnboardingStepCompleted;
 import uz.horecaos.platform.tenancy.api.TenantReady;
 import uz.horecaos.platform.tenancy.api.onboarding.OnboardingStep;
 import uz.horecaos.platform.tenancy.api.onboarding.OnboardingStepHandler;
+import uz.horecaos.platform.tenancy.api.onboarding.OnboardingStepHandler.StepResult;
 import uz.horecaos.platform.tenancy.api.onboarding.OnboardingStuckRunDirectory.StuckRun;
 import uz.horecaos.platform.tenancy.application.TenantAccessPolicy;
 import uz.horecaos.platform.tenancy.application.TenantControlPlaneService;
@@ -921,6 +922,122 @@ class OnboardingServiceTests {
                 .containsExactlyInAnyOrder("TEMPLATE_AWAITING_PROVIDER_REVIEW", "TEMPLATE_REJECTED_BY_PROVIDER");
     }
 
+    /**
+     * Row 10.0 (gap map): the checks that ride beside the steps without being
+     * one — fiscal classification coverage, channel payment-method coverage and
+     * secret-rotation age — folded into the same dry-run response. This one is
+     * the real channel check, end to end through {@code validate}: a channel
+     * the tenant has, with no payment method enabled.
+     */
+    @Test
+    void validatingNamesAnActiveChannelWithNoPaymentMethodThroughTheRealCheck() {
+        jdbc.sql("""
+                INSERT INTO tenant.sales_channels (id, tenant_id, code, system_type, display_name, status)
+                VALUES (:id, :tenantId, 'STOREFRONT', 'WEB', 'Storefront', 'ACTIVE')
+                """).param("id", UUID.randomUUID()).param("tenantId", TENANT).update();
+        OnboardingService checked =
+                serviceWithReadinessChecks(new OnboardingReadinessChecks.ChannelPaymentCoverage(jdbc));
+        UUID runId = startRunWithSampleMenu(checked, false);
+
+        var outcome = checked.validate(TENANT, runId);
+
+        assertThat(outcome.allPassed())
+                .as("a channel that cannot take payment is blocking, unlike an advisory finding")
+                .isFalse();
+        assertThat(outcome.checks())
+                .filteredOn(check -> "CHANNEL_PAYMENT_COVERAGE_VALIDATE".equals(check.stepKey()))
+                .singleElement()
+                .satisfies(check -> {
+                    assertThat(check.passed()).isFalse();
+                    assertThat(check.errorCode()).isEqualTo("CHANNEL_NO_PAYMENT_METHOD");
+                    assertThat(check.advisory()).isFalse();
+                    assertThat(check.locationId()).isNull();
+                });
+    }
+
+    @Test
+    void anAdvisoryFindingIsReportedButDoesNotTurnAnOtherwiseFineDryRunRed() {
+        OnboardingService checked = serviceWithReadinessChecks(fakeCheck(
+                "STALE_THING_VALIDATE",
+                true,
+                () -> StepResult.failedWithFindings(List.of(
+                        new StepResult.Finding("THING_STALE", "The first thing is stale", null),
+                        new StepResult.Finding("THING_STALE", "The second thing is stale", null)))));
+        UUID runId = startRunWithSampleMenu(checked, false);
+
+        var outcome = checked.validate(TENANT, runId);
+
+        assertThat(outcome.checks())
+                .filteredOn(check -> "STALE_THING_VALIDATE".equals(check.stepKey()))
+                .as("one countable row per offending item, each marked advisory")
+                .hasSize(2)
+                .allSatisfy(check -> {
+                    assertThat(check.passed()).isFalse();
+                    assertThat(check.advisory()).isTrue();
+                });
+        assertThat(outcome.allPassed())
+                .as("advisory: worth an operator's attention, but the tenant can trade")
+                .isTrue();
+    }
+
+    @Test
+    void aBlockingFindingStillTurnsTheDryRunRedBesideAnAdvisoryOne() {
+        OnboardingService checked = serviceWithReadinessChecks(
+                fakeCheck(
+                        "STALE_THING_VALIDATE",
+                        true,
+                        () -> StepResult.failedWithFindings(
+                                List.of(new StepResult.Finding("THING_STALE", "The thing is stale", null)))),
+                fakeCheck(
+                        "BROKEN_THING_VALIDATE",
+                        false,
+                        () -> StepResult.failedWithFindings(
+                                List.of(new StepResult.Finding("THING_BROKEN", "The thing is broken", null)))));
+        UUID runId = startRunWithSampleMenu(checked, false);
+
+        var outcome = checked.validate(TENANT, runId);
+
+        assertThat(outcome.allPassed()).isFalse();
+    }
+
+    @Test
+    void aPassingReadinessCheckAddsNoRowToTheReport() {
+        OnboardingService checked = serviceWithReadinessChecks(
+                fakeCheck("FINE_THING_VALIDATE", false, () -> StepResult.completed(Map.of(), null)));
+        UUID runId = startRunWithSampleMenu(checked, false);
+
+        var outcome = checked.validate(TENANT, runId);
+
+        assertThat(outcome.checks())
+                .as("like the SMS-template check, only failures are listed, so a clean tenant's report does not grow")
+                .noneMatch(check -> "FINE_THING_VALIDATE".equals(check.stepKey()));
+        assertThat(outcome.allPassed()).isTrue();
+    }
+
+    @Test
+    void aReadinessCheckThatThrowsIsReportedAsTransientWithoutAbortingTheDryRun() {
+        OnboardingService checked = serviceWithReadinessChecks(fakeCheck("FLAKY_THING_VALIDATE", true, () -> {
+            throw new IllegalStateException("boom");
+        }));
+        UUID runId = startRunWithSampleMenu(checked, false);
+
+        var outcome = checked.validate(TENANT, runId);
+
+        assertThat(outcome.checks())
+                .filteredOn(check -> "FLAKY_THING_VALIDATE".equals(check.stepKey()))
+                .singleElement()
+                .satisfies(check -> {
+                    assertThat(check.passed()).isFalse();
+                    assertThat(check.errorCode()).isEqualTo("TRANSIENT_INFRASTRUCTURE");
+                    assertThat(check.detail())
+                            .as("the exception's class, never its message: a message can carry a value")
+                            .isEqualTo("IllegalStateException");
+                });
+        assertThat(outcome.checks())
+                .as("every other check's answer is still in the report")
+                .anyMatch(check -> "BRANDS_AND_LOCATIONS_VALIDATE".equals(check.stepKey()));
+    }
+
     @Test
     void validatingDoesNotPersistAnything() {
         UUID runId = startRun();
@@ -1320,6 +1437,51 @@ class OnboardingServiceTests {
                 clock,
                 controlPlane,
                 store);
+    }
+
+    /**
+     * The service the fixture builds, with ad hoc readiness checks wired in —
+     * built through the constructor the application uses, because {@link
+     * #service} carries none and so exercises only the steps.
+     */
+    private OnboardingService serviceWithReadinessChecks(OnboardingReadinessCheck... checks) {
+        return new OnboardingService(
+                jdbc,
+                transactions,
+                allHandlers(provisioner, store, jdbc),
+                new JdbcAuditRecorder(jdbc, JsonMapper.builder().build()),
+                new JdbcApprovalService(
+                        jdbc,
+                        new JdbcAuditRecorder(jdbc, JsonMapper.builder().build()),
+                        clock,
+                        new SimpleMeterRegistry(),
+                        JsonMapper.builder().build()),
+                published,
+                JsonMapper.builder().build(),
+                clock,
+                controlPlane,
+                store,
+                List.of(checks));
+    }
+
+    private static OnboardingReadinessCheck fakeCheck(
+            String key, boolean advisory, java.util.function.Supplier<StepResult> body) {
+        return new OnboardingReadinessCheck() {
+            @Override
+            public String checkKey() {
+                return key;
+            }
+
+            @Override
+            public boolean advisory() {
+                return advisory;
+            }
+
+            @Override
+            public StepResult check(UUID tenantId) {
+                return body.get();
+            }
+        };
     }
 
     /** A stand-in for ADR 0099's step, doing whatever the test needs it to do. */

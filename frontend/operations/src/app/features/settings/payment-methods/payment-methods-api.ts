@@ -5,6 +5,7 @@ import { ApiClient } from '../../../core/api/api-client';
 import { command } from '../../../core/api/idempotency';
 import { LocationScope } from '../../../core/api/operations-paths';
 import { settingsPaths } from '../../../core/api/settings-paths';
+import { LocaleSetView } from '../../../core/i18n/locale-labels';
 
 /** {@code ck_payment_method_responsibility}'s own closed set — a method's "base type". */
 export type PaymentMethodResponsibility = 'PARTNER' | 'TERMINAL' | 'MARKETPLACE' | 'OPERATOR';
@@ -67,6 +68,20 @@ export class PaymentMethodsApi {
       this.api.get<readonly PaymentMethodView[]>(settingsPaths.paymentMethods(scope)),
     );
     return result.value ?? [];
+  }
+
+  /**
+   * The languages a method's name is authored in (row 10.12): the union of the
+   * tenant's brands' supported languages, the first brand's default leading —
+   * the same read comment presets and regions make, because a payment method is
+   * a tenant-level row every brand shares. Held by anyone who can read the
+   * registry, so it needs no capability the registry page does not already.
+   */
+  async localeSet(scope: LocationScope): Promise<LocaleSetView> {
+    const result = await firstValueFrom(
+      this.api.get<LocaleSetView>(`${settingsPaths.paymentMethods(scope)}/locale-set`),
+    );
+    return result.value;
   }
 
   async create(

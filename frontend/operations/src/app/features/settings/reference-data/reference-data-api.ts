@@ -131,11 +131,12 @@ export class ReferenceDataApi {
     expectedVersion: number,
   ): Promise<readonly ReasonResponse[]> {
     const response = await firstValueFrom(
-      this.api.put<{ kind: OutcomeReasonKind; orderedReasonIds: readonly string[] }, readonly ReasonResponse[]>(
-        settingsPaths.orderOutcomeReasonReorder(scope),
-        command({ kind, orderedReasonIds }),
-        { expectedVersion },
-      ),
+      this.api.put<
+        { kind: OutcomeReasonKind; orderedReasonIds: readonly string[] },
+        readonly ReasonResponse[]
+      >(settingsPaths.orderOutcomeReasonReorder(scope), command({ kind, orderedReasonIds }), {
+        expectedVersion,
+      }),
     );
     return response;
   }

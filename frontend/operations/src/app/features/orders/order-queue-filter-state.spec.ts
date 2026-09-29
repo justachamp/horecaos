@@ -151,9 +151,9 @@ describe('OrderQueueFilterState', () => {
   });
 
   it('boardQueryParams: passes origin («Источник», wave 9 row 1.1c) straight through', () => {
-    expect(
-      boardQueryParams({ ...EMPTY_ORDER_QUEUE_FILTERS, origin: 'MARKETPLACE' }, null),
-    ).toEqual({ origin: 'MARKETPLACE' });
+    expect(boardQueryParams({ ...EMPTY_ORDER_QUEUE_FILTERS, origin: 'MARKETPLACE' }, null)).toEqual(
+      { origin: 'MARKETPLACE' },
+    );
     expect(boardQueryParams({ ...EMPTY_ORDER_QUEUE_FILTERS, origin: 'HORECAOS' }, null)).toEqual({
       origin: 'HORECAOS',
     });
@@ -214,9 +214,9 @@ describe('OrderQueueFilterState', () => {
 
   it('hasFilterQueryParams is false for a plain tab-only URL, true once any filter parameter is present', () => {
     expect(hasFilterQueryParams(convertToParamMap({ tab: 'attention' }))).toBe(false);
-    expect(hasFilterQueryParams(convertToParamMap({ tab: 'attention', origin: 'MARKETPLACE' }))).toBe(
-      true,
-    );
+    expect(
+      hasFilterQueryParams(convertToParamMap({ tab: 'attention', origin: 'MARKETPLACE' })),
+    ).toBe(true);
     expect(hasFilterQueryParams(convertToParamMap({ mine: '1' }))).toBe(true);
   });
 
@@ -244,7 +244,9 @@ describe('OrderQueueFilterState', () => {
   });
 
   it('filtersToQueryParams sends mine as "1"/null, never the boolean itself, and trims the search text', () => {
-    expect(filtersToQueryParams({ ...EMPTY_ORDER_QUEUE_FILTERS, mineOnly: true })['mine']).toBe('1');
+    expect(filtersToQueryParams({ ...EMPTY_ORDER_QUEUE_FILTERS, mineOnly: true })['mine']).toBe(
+      '1',
+    );
     expect(
       filtersToQueryParams({ ...EMPTY_ORDER_QUEUE_FILTERS, mineOnly: false })['mine'],
     ).toBeNull();

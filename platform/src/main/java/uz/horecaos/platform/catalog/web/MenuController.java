@@ -201,7 +201,7 @@ public class MenuController {
                     body.categoryId(),
                     body.search(),
                     body.availabilityDefault() == null ? "AVAILABLE" : body.availabilityDefault(),
-                    body.locale() == null ? "uz" : body.locale(),
+                    body.locale(),
                     currentActor.get().subject());
             return ResponseEntity.ok(new BulkAddByFilterResponse(added));
         } catch (MenuAuthoringService.UnknownMenuException | MenuAuthoringService.UnknownCategoryException unknown) {

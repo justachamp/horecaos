@@ -57,3 +57,56 @@ a.dish:focus-visible { outline: 2px solid var(--brand-accent-deep); outline-offs
 .dish.is-unavailable .dish__name,
 .dish.is-unavailable .dish__desc,
 .dish.is-unavailable .dish__price { opacity: 0.55; }
+
+.dish__note {
+  margin-top: 4px;
+  color: var(--text-secondary);
+  font: 500 12px/1.4 var(--font-ui);
+}
+
+.dish__order { margin-top: 6px; display: flex; flex-direction: column; gap: 8px; }
+
+.portion { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+
+.portion__label { flex: 1; min-width: 0; font: 600 13px/1.3 var(--font-ui); color: var(--text-secondary); }
+
+/* Says why a held portion has only a way out; sits where the label does. */
+.portion__unavailable { flex: 1; min-width: 0; font: 600 12px/1.3 var(--font-ui); color: var(--status-error); }
+
+.portion__add {
+  margin-left: auto;
+  min-width: 84px;
+  height: 40px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--brand-accent);
+  color: var(--text-on-accent);
+  font: 700 14px/1 var(--font-display);
+  cursor: pointer;
+
+  &:disabled { background: var(--line-default); color: var(--text-muted); cursor: not-allowed; }
+}
+
+.stepper { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; }
+
+.stepper__btn {
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: var(--surface-accent-wash);
+  color: var(--brand-accent-deep);
+  font: 700 19px/1 var(--font-display);
+  cursor: pointer;
+
+  &--add { background: var(--brand-accent); color: var(--text-on-accent); }
+  &:disabled { opacity: 0.5; cursor: not-allowed; }
+}
+
+.stepper__value {
+  min-width: 22px;
+  text-align: center;
+  font: 800 16px/1 var(--font-display);
+  font-variant-numeric: tabular-nums;
+}

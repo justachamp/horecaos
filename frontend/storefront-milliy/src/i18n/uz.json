@@ -373,7 +373,9 @@
       "itemOutOfSaleWindow": "Bu taom hozir sotuvda emas.",
       "presetNotOffered": "Bu izoh endi ushbu taom uchun taklif etilmaydi.",
       "itemUnavailable": "Bu taom hozirgina tugab qoldi.",
-      "holdExpired": "Savatingiz uchun band qilingan vaqt tugadi. Buyurtmangizni qayta tekshirib, yana urinib ko'ring."
+      "holdExpired": "Savatingiz uchun band qilingan vaqt tugadi. Buyurtmangizni qayta tekshirib, yana urinib ko'ring.",
+      "tableNotAtBranch": "Bu stol boshqa filialda. O'z stolingizdagi kodni skanerlang.",
+      "quoteExpired": "Narx eskirdi. Buyurtmangizni tekshirib, yana urinib ko'ring."
     }
   },
   "money": {
@@ -439,7 +441,23 @@
     "noAdmissionTitle": "Menyuni ko'rish uchun stolni skanerlang",
     "noAdmissionBody": "Menyuni ko'rish uchun stolingizdagi QR-kodni skanerlang.",
     "tableLabel": "{{code}}-stol",
-    "orderingUnavailable": "Stoldan buyurtma berish bu ilovada hozircha mavjud emas. Menyuni shu yerda ko'rishingiz mumkin, buyurtma uchun xodimga murojaat qiling.",
-    "menuUnavailable": "Hozircha menyu mavjud emas."
+    "menuUnavailable": "Hozircha menyu mavjud emas.",
+    "notSeated": "Xodimdan sizni stolga o'tqazishini so'rang, so'ng kodni qayta skanerlang.",
+    "signInToOrder": "Buyurtma berish uchun kiring",
+    "itemsInCart": "Savatda: {{count}} ta",
+    "orderRound": "Buyurtma berish",
+    "needsStaff": "Bu taomni xodim orqali buyurtma qiling.",
+    "tableBill": "Stol hisobi",
+    "roundCount": "Buyurtma qilingan: {{count}} marta",
+    "askForBill": "Hisobni so'rash",
+    "orderPlaced": "Buyurtma oshxonaga yuborildi",
+    "billRequested": "Hisob so'raldi",
+    "roundPending": "Oxirgi buyurtmangiz oshxonada, lekin hali stol hisobiga qo'shilmadi.",
+    "roundRetry": "Qayta urinish",
+    "roundAttachFailed": "Buyurtma oshxonada, lekin uni stol hisobiga qo'shib bo'lmadi. Xodimga ayting.",
+    "heldUnavailable": "Endi mavjud emas. Davom etish uchun uni buyurtmadan olib tashlang.",
+    "clearOrder": "Buyurtmani tozalash",
+    "priceRefreshed": "Narx yangilandi, buyurtma yuborilmadi. Jamini tekshirib, «Buyurtma berish» tugmasini yana bosing.",
+    "sessionEnded": "Bu stoldagi tashrif tugadi. Buyurtmani davom ettirish uchun stolingizdagi kodni qayta skanerlang."
   }
 }

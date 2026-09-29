@@ -25,6 +25,11 @@ export function toCatalogLocale(locale: Locale): string {
   return locale === 'uz-Latn' ? 'uz' : locale;
 }
 
+/** The inverse of {@link toCatalogLocale}: the console {@link Locale} tag a catalog locale is (`uz` is `uz-Latn`), for naming it to an operator. */
+export function fromCatalogLocale(catalogLocale: string): string {
+  return catalogLocale === 'uz' ? 'uz-Latn' : catalogLocale;
+}
+
 /**
  * `horecaos.catalog.default-locale` — what `CatalogQueryService` resolves a
  * list screen's names in for a brand that has chosen no default language of

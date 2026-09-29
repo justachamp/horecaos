@@ -252,6 +252,23 @@
                 }
               </select>
             }
+            @case ('colour') {
+              <q-color-input
+                [value]="colourSwatchValue()"
+                [ariaLabel]="field.labelKey | t"
+                [warnings]="colourWarnings()"
+                (valueChange)="setDraftColour($event)"
+              />
+              @if (draftFieldText() === '') {
+                <p class="q-caption hint">
+                  {{ 'settings.orderPolicy.lateColour.standardHint' | t }}
+                </p>
+              } @else {
+                <button type="button" class="q-body secondary" (click)="useStandardColour()">
+                  {{ 'settings.orderPolicy.lateColour.useStandard' | t }}
+                </button>
+              }
+            }
             @default {
               <input
                 [id]="'field-' + field.code"

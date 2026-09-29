@@ -80,8 +80,15 @@
                   data-testid="geography-distance-histogram"
                 />
                 @if (distanceBucketDefinitions().length > 0) {
-                  <p class="q-caption geography__histogram-formula" data-testid="geography-distance-formula">
-                    @for (definition of distanceBucketDefinitions(); track definition.code; let last = $last) {
+                  <p
+                    class="q-caption geography__histogram-formula"
+                    data-testid="geography-distance-formula"
+                  >
+                    @for (
+                      definition of distanceBucketDefinitions();
+                      track definition.code;
+                      let last = $last
+                    ) {
                       {{ distanceBucketRangeLabel(definition) }}{{ last ? '' : ' · ' }}
                     }
                   </p>

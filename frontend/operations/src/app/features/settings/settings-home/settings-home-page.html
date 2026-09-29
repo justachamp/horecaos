@@ -21,15 +21,23 @@
         <p class="readiness__clear q-body-sm">{{ 'settings.home.readiness.allClear' | t }}</p>
       } @else {
         <ul class="readiness__list">
-          @for (
-            finding of findings();
-            track finding.stepKey + (finding.locationId ?? '') + (finding.errorCode ?? '')
-          ) {
-            <li class="readiness__row q-body-sm">
-              @if (readinessLink(finding); as link) {
-                <a [routerLink]="link">{{ readinessMessage(finding) }}</a>
+          @for (row of rows(); track row.key) {
+            <li
+              class="readiness__row q-body-sm"
+              [class.readiness__row--advisory]="isAdvisory(row.finding)"
+            >
+              @if (readinessLink(row.finding); as link) {
+                <a [routerLink]="link">{{ readinessMessage(row.finding) }}</a>
               } @else {
-                <span>{{ readinessMessage(finding) }}</span>
+                <span>{{ readinessMessage(row.finding) }}</span>
+              }
+              @if (isAdvisory(row.finding)) {
+                <span class="readiness__advisory q-caption">{{
+                  'settings.home.readiness.advisory' | t
+                }}</span>
+              }
+              @if (readinessScope(row.finding); as scope) {
+                <span class="readiness__scope q-caption">{{ scope }}</span>
               }
             </li>
           }

@@ -93,6 +93,7 @@ class CheckoutEligibilityGuard {
             SalesChannel channel,
             Serviceability decision,
             Optional<CartService.CapturedDestination> destination,
+            @Nullable UUID boundTableId,
             QuoteSnapshot quote) {}
 
     /**
@@ -288,6 +289,58 @@ class CheckoutEligibilityGuard {
             }
         }
 
+        // A dine-in cart bound to a table (ADR 0047) is refused here when nobody is
+        // sitting there -- a party that left, a session a host closed while the guest
+        // was choosing -- because the order is about to be put on that table's bill
+        // and there would be no bill. Read-only, like every check in this method, so
+        // the refusal is settled under the idempotency key rather than rolled back.
+        // A DINE_IN cart with no binding (an operator keying in an order, a client
+        // that attaches its round afterwards) is unchanged.
+        //
+        // The binding is stored state and proves nothing about who is at the table
+        // now, so the guest is re-proved from a live token first: the table the
+        // order is billed to is the table of a token the platform still honours,
+        // not the one a cart remembered when it was bound. Otherwise a party that
+        // left (tokens revoked) or a guest who moved leaves a cart that bills
+        // whoever sits at the old table -- the reach ADR 0047 forbids.
+        UUID boundTableId = null;
+        if (cart.fulfillmentMode() == FulfillmentMode.DINE_IN) {
+            Optional<UUID> bound = cartService.boundTable(command.tenantId(), cart.cartId());
+            if (bound.isPresent()) {
+                if (cart.customerAccountId() == null) {
+                    // Unreachable: binding needs the cart's owner, and an ownerless
+                    // cart has none. Refused rather than assumed.
+                    return Result.rejected("TABLE_BINDING_INVALID", "A table binding belongs to a signed-in customer");
+                }
+                switch (cartService.guestStandingAt(
+                        command.tenantId(), command.brandId(), bound.get(), command.dineInGuestToken())) {
+                    case NO_TOKEN -> {
+                        return Result.rejected(
+                                "TABLE_TOKEN_REQUIRED",
+                                "An order for a table is placed from the table's own code. Scan it again.");
+                    }
+                    case TOKEN_ENDED -> {
+                        return Result.rejected(
+                                "TABLE_TOKEN_ENDED", "This table session has ended. Scan the code again.");
+                    }
+                    case AT_ANOTHER_TABLE -> {
+                        return Result.rejected(
+                                "TABLE_BINDING_STALE",
+                                "This cart was started at another table. Confirm your table to continue.");
+                    }
+                    case AT_BOUND_TABLE -> {
+                        // Proceeds to the seating check below.
+                    }
+                }
+                if (!cartService.tableIsSeated(command.tenantId(), bound.get())) {
+                    return Result.rejected(
+                            "TABLE_NOT_SEATED",
+                            "Nobody is seated at this table, so there is no bill to put the order on");
+                }
+                boundTableId = bound.get();
+            }
+        }
+
         // Naming how the order will be paid is not optional (ADR 0046).
         //
         // It used to be, and the consequence was not an unpaid order — it was an
@@ -456,7 +509,8 @@ class CheckoutEligibilityGuard {
             return Result.rejected("PUBLICATION_CHANGED", "The menu was republished since this cart was priced");
         }
 
-        return Result.eligible(new Eligible(cart, cartLines, channel.get(), decision, destination, quote));
+        return Result.eligible(
+                new Eligible(cart, cartLines, channel.get(), decision, destination, boundTableId, quote));
     }
 
     /**

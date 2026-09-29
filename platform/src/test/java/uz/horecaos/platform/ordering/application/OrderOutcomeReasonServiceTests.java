@@ -37,7 +37,7 @@ class OrderOutcomeReasonServiceTests {
     void reorderIsRefusedWhenANonMaxVersionReasonChangedUnderneathTheCaller() {
         JdbcOutcomeReasonStore store = mock(JdbcOutcomeReasonStore.class);
         Clock clock = Clock.fixed(Instant.parse("2026-09-23T00:00:00Z"), ZoneOffset.UTC);
-        OrderOutcomeReasonService service = new OrderOutcomeReasonService(store, clock);
+        OrderOutcomeReasonService service = new OrderOutcomeReasonService(store, fact -> {}, clock);
 
         UUID a = UUID.randomUUID();
         UUID b = UUID.randomUUID();
@@ -54,7 +54,13 @@ class OrderOutcomeReasonServiceTests {
                         row(b, OutcomeReasonKind.CANCELLATION, 2),
                         row(c, OutcomeReasonKind.CANCELLATION, 5)));
 
-        assertThatThrownBy(() -> service.reorder(TENANT, OutcomeReasonKind.CANCELLATION, List.of(b, a, c), 5))
+        assertThatThrownBy(() -> service.reorder(
+                        TENANT,
+                        OrderOutcomeReasonService.Authorship.of(
+                                uz.horecaos.platform.audit.api.ActorRef.user("tester", null)),
+                        OutcomeReasonKind.CANCELLATION,
+                        List.of(b, a, c),
+                        5))
                 .as("the list changed underneath the caller (B moved from v1 to v2) even though the "
                         + "list-wide max stayed 5 -- the reorder's own doc promises this is refused")
                 .isInstanceOf(StaleReasonException.class);

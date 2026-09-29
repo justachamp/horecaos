@@ -80,7 +80,9 @@ class OrderAcceptancePolicyControllerTests {
     }
 
     private static OrderAcceptancePolicyController controller(PolicyResolver resolver, PolicyAuthor author) {
-        return new OrderAcceptancePolicyController(new OrderAcceptancePolicyService(resolver, author), fakeActor());
+        return new OrderAcceptancePolicyController(
+                new OrderAcceptancePolicyService(resolver, author, fact -> {}, java.time.Clock.systemUTC()),
+                fakeActor());
     }
 
     @Test

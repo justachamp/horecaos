@@ -1,5 +1,12 @@
 import { NgTemplateOutlet } from '@angular/common';
-import { ChangeDetectionStrategy, Component, effect, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  effect,
+  inject,
+  signal,
+} from '@angular/core';
 
 import {
   ConfigurationResolutionView,
@@ -11,6 +18,13 @@ import { CurrentTenant } from '../../../core/auth/current-tenant';
 import { I18n } from '../../../core/i18n/i18n';
 import { MessageKey } from '../../../core/i18n/messages.en';
 import { TPipe } from '../../../core/i18n/t.pipe';
+import { ColorInput } from '../../../shared/ui/color-input';
+import {
+  SLA_LATE_TOKEN_HEX,
+  evaluateHighlightColourContrast,
+} from '../../../shared/ui/color/highlight-contrast';
+import { CONTRAST_SURFACE_LABEL_KEYS } from '../../../shared/ui/color/highlight-contrast-labels';
+import { isValidHexColor } from '../../../shared/ui/color/contrast';
 import { InheritedField } from '../../../shared/ui/inherited-field/inherited-field';
 import { describeApiError } from '../../orders/order-errors';
 import { ConfigurationApi } from '../configuration-api';
@@ -23,7 +37,7 @@ import {
   OrderPolicyApi,
 } from './order-policy-api';
 
-type FieldKind = 'integer' | 'decimal' | 'boolean' | 'enumSelect' | 'text';
+type FieldKind = 'integer' | 'decimal' | 'boolean' | 'enumSelect' | 'text' | 'colour';
 
 interface OrderPolicyFieldDef {
   readonly code: string;
@@ -65,6 +79,20 @@ const CARD2_FIELDS: readonly OrderPolicyFieldDef[] = [
     kind: 'integer',
     min: 1,
     max: 600,
+  },
+  {
+    code: 'ordering.at_risk_before_minutes',
+    labelKey: 'settings.orderPolicy.field.atRiskBeforeMinutes',
+    kind: 'integer',
+    min: 0,
+    max: 1440,
+    hintKey: 'settings.orderPolicy.atRiskBeforeMinutes.hint',
+  },
+  {
+    code: 'ordering.late_colour',
+    labelKey: 'settings.orderPolicy.field.lateColour',
+    kind: 'colour',
+    hintKey: 'settings.orderPolicy.lateColour.hint',
   },
   {
     code: 'ordering.minimum_order_amount_minor',
@@ -155,10 +183,19 @@ const CARD5_FIELDS: readonly OrderPolicyFieldDef[] = [
  * are genuinely Card 1's own Delever-comparison gap (auto-accept restricted
  * to a channel set, gated by prior successful orders) rather than dispatch
  * configuration.
+ *
+ * **Row `X.39`** adds two more Card 2 fields, both read by the order board and
+ * the kitchen board through `GET .../orders/lateness-policy`: how many minutes
+ * before the promise an order shows as at risk (`ordering.at_risk_before_minutes`),
+ * and the tenant's own colour for a late order (`ordering.late_colour`). The
+ * colour is a `q-color-input` run through `evaluateHighlightColourContrast` —
+ * the same WCAG AA check the channel colours use — and a low ratio is a warning
+ * under the swatch, never a refusal: whether a colour is readable depends on
+ * the surface it lands on, which the operator can see and this screen cannot.
  */
 @Component({
   selector: 'q-order-policy-page',
-  imports: [TPipe, InheritedField, NgTemplateOutlet],
+  imports: [TPipe, InheritedField, NgTemplateOutlet, ColorInput],
   templateUrl: './order-policy-page.html',
   styleUrl: './order-policy-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -218,6 +255,25 @@ export class OrderPolicyPage {
   protected readonly draftFieldReason = signal('');
   protected readonly fieldSaving = signal(false);
   protected readonly fieldSaveError = signal<string | null>(null);
+
+  /** The swatch shows the design system's own late red while the draft is blank ("standard"). */
+  protected readonly colourSwatchValue = computed(
+    () => this.draftFieldText() || SLA_LATE_TOKEN_HEX,
+  );
+
+  /** Row `X.39`: every reference surface the draft colour fails WCAG AA against, as ready-to-render sentences. */
+  protected readonly colourWarnings = computed<readonly string[]>(() => {
+    const hex = this.draftFieldText();
+    if (!isValidHexColor(hex)) {
+      return [];
+    }
+    return evaluateHighlightColourContrast(hex).map((warning) =>
+      this.i18n.t('settings.salesChannels.field.color.contrastWarning', {
+        ratio: warning.ratio.toFixed(1),
+        surface: this.i18n.t(CONTRAST_SURFACE_LABEL_KEYS[warning.surfaceId]),
+      }),
+    );
+  });
 
   private readonly allFields = [...CARD2_FIELDS, ...CARD3_FIELDS, ...CARD4_FIELDS, ...CARD5_FIELDS];
 
@@ -379,6 +435,10 @@ export class OrderPolicyPage {
       const match = field.options?.find((option) => option.value === value);
       return match ? this.i18n.t(match.labelKey) : String(value);
     }
+    if (field.kind === 'colour') {
+      // Blank is a real, resolved value ("keep the design-system red"), not a missing one.
+      return value === '' ? this.i18n.t('settings.orderPolicy.lateColour.standard') : String(value);
+    }
     return String(value);
   }
 
@@ -403,7 +463,30 @@ export class OrderPolicyPage {
   }
 
   protected canSaveField(): boolean {
-    return !this.fieldSaving() && this.draftFieldReason().trim().length > 0;
+    return (
+      !this.fieldSaving() &&
+      this.draftFieldReason().trim().length > 0 &&
+      this.draftColourIsSavable()
+    );
+  }
+
+  /** A colour draft is blank ("standard") or exactly `#rrggbb` — the same shape the server accepts. */
+  private draftColourIsSavable(): boolean {
+    const code = this.editingFieldCode();
+    const field = this.allFields.find((candidate) => candidate.code === code);
+    if (field?.kind !== 'colour') {
+      return true;
+    }
+    const draft = this.draftFieldText().trim();
+    return draft === '' || isValidHexColor(draft);
+  }
+
+  protected setDraftColour(hex: string): void {
+    this.draftFieldText.set(hex);
+  }
+
+  protected useStandardColour(): void {
+    this.draftFieldText.set('');
   }
 
   protected async saveField(field: OrderPolicyFieldDef): Promise<void> {
@@ -465,9 +548,7 @@ export class OrderPolicyPage {
     }
   }
 
-  private fieldValueInput(
-    field: OrderPolicyFieldDef,
-  ): Partial<{
+  private fieldValueInput(field: OrderPolicyFieldDef): Partial<{
     booleanValue: boolean;
     integerValue: number;
     decimalValue: string;
@@ -482,6 +563,7 @@ export class OrderPolicyPage {
         return { decimalValue: this.draftFieldText().trim() };
       case 'enumSelect':
       case 'text':
+      case 'colour':
         return { stringValue: this.draftFieldText().trim() };
     }
   }

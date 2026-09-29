@@ -208,8 +208,10 @@ const FINDING_LABEL_KEYS: Readonly<Partial<Record<string, MessageKey>>> = {
  * operators working the same brand in different console languages opened
  * the editor on two different tabs with no relation to the brand's own
  * choice. {@link editingLocales} now reads `LocaleSet.locales()` — the
- * brand's own set, default first — and the editor opens on the brand's own
- * default locale instead. Batch 14: `CatalogQueryService` now resolves the
+ * brand's own set, default first — and the editor opens on the locale the
+ * list screens read ({@link listLocale}): the brand's own default, or the
+ * server's `uz` for a brand that has chosen none, which is also where a
+ * product created from the list was just written. Batch 14: `CatalogQueryService` now resolves the
  * list screens' names in that same brand default (falling back to the
  * server's configured `uz` only for a brand with no set), so the tab set no
  * longer needs a locale forced into it and the "default" marker follows
@@ -421,13 +423,17 @@ export class ProductEditorPage implements OnInit {
 
   async ngOnInit(): Promise<void> {
     // Row 10.12: resolved alongside the brand scope, not after it, and read
-    // for the tab the editor opens on — the brand's own default locale, not
-    // the operator's own console language (this file's own EDITING_LOCALES
-    // doc explains why the two must not be conflated). Without resolving
-    // this first, editingLocale() would open on whichever locale the
-    // platform fallback names first rather than the brand's actual choice.
+    // for the tab the editor opens on — the locale the list screens read
+    // ({@link listLocale}), not the operator's own console language (this
+    // file's own EDITING_LOCALES doc explains why the two must not be
+    // conflated). That is the brand's own default once it has chosen one, and
+    // the server's `uz` while it has not: `LocaleSet.defaultLocale()` would say
+    // `ru` there, but a product just created from the list was written in `uz`,
+    // so opening on `ru` would show a blank name right after the operator typed
+    // one. Without resolving this first, editingLocale() would open on whichever
+    // locale the platform fallback names first.
     await Promise.all([this.brand.ensureLoaded(), this.localeSet.ensureLoaded()]);
-    this.editingLocale.set(toCatalogLocale(this.localeSet.defaultLocale()));
+    this.editingLocale.set(this.listLocale());
     const productId = this.route.snapshot.paramMap.get('productId');
     const scope = this.brand.scope();
     if (!scope || !productId) {

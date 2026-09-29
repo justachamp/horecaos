@@ -164,12 +164,10 @@ describe('ReferenceDataPage', () => {
       create: vi.fn().mockResolvedValue('reason-3'),
       update: vi.fn().mockResolvedValue(2),
       archive: vi.fn().mockResolvedValue(undefined),
-      reorder: vi
-        .fn()
-        .mockResolvedValue([
-          { ...CANCELLATION_REASON_2, version: 4 },
-          { ...CANCELLATION_REASON, version: 2 },
-        ]),
+      reorder: vi.fn().mockResolvedValue([
+        { ...CANCELLATION_REASON_2, version: 4 },
+        { ...CANCELLATION_REASON, version: 2 },
+      ]),
       slaBucketSet: vi.fn().mockResolvedValue(SLA_BUCKET_SET),
     };
     calendarApi = {

@@ -1,4 +1,11 @@
-import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  OnInit,
+  computed,
+  inject,
+  signal,
+} from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 
@@ -7,10 +14,16 @@ import { ApiError } from '../../core/api/problem-details';
 import { CurrentBrand } from '../../core/auth/current-brand';
 import { formatMoney } from '../../core/format/money';
 import { I18n } from '../../core/i18n/i18n';
+import { LocaleSet } from '../../core/i18n/locale-set';
 import { TPipe } from '../../core/i18n/t.pipe';
 import { describeApiError } from '../orders/order-errors';
 import { CatalogApi } from './catalog-api';
-import { CategorySummary, PriceBookMatrixRow, PriceBookSummary, toCatalogLocale } from './catalog-domain';
+import {
+  CategorySummary,
+  PriceBookMatrixRow,
+  PriceBookSummary,
+  listResolutionLocale,
+} from './catalog-domain';
 import { PricingApi } from './pricing-api';
 
 /** The matrix loads and "load more"s this many rows a call, matching `variantsAtLocation`'s own default page. */
@@ -57,6 +70,18 @@ export class PriceBookMatrixPage implements OnInit {
   private readonly catalogApi = inject(CatalogApi);
   private readonly brand = inject(CurrentBrand);
   protected readonly i18n = inject(I18n);
+  private readonly localeSet = inject(LocaleSet);
+
+  /**
+   * Row 10.12: the catalog locale the matrix resolves product and category
+   * names in -- the brand's own default when it has configured a set, the
+   * server's configured locale otherwise (`listResolutionLocale`). It used to
+   * follow the operator's console language, so the same row read differently
+   * to two operators of one brand.
+   */
+  private readonly listLocale = computed<string>(() =>
+    listResolutionLocale(this.localeSet.isConfigured(), this.localeSet.defaultLocale()),
+  );
 
   protected readonly loading = signal(true);
   protected readonly denied = signal(false);
@@ -82,7 +107,7 @@ export class PriceBookMatrixPage implements OnInit {
   private priceBookId = '';
 
   async ngOnInit(): Promise<void> {
-    await this.brand.ensureLoaded();
+    await Promise.all([this.brand.ensureLoaded(), this.localeSet.ensureLoaded()]);
     const priceBookId = this.route.snapshot.paramMap.get('priceBookId');
     const scope = this.brand.scope();
     if (!scope || !priceBookId) {
@@ -183,7 +208,10 @@ export class PriceBookMatrixPage implements OnInit {
       return '—';
     }
     const sign = row.deltaMinor > 0 ? '+' : '';
-    return sign + formatMoney({ amountMinor: row.deltaMinor, currency: row.currency }, this.i18n.locale());
+    return (
+      sign +
+      formatMoney({ amountMinor: row.deltaMinor, currency: row.currency }, this.i18n.locale())
+    );
   }
 
   protected errorFor(variantId: string): string | null {
@@ -249,7 +277,7 @@ export class PriceBookMatrixPage implements OnInit {
     return {
       ...(categoryId ? { categoryId } : {}),
       ...(this.differsFromBaseOnly() ? { differsFromBase: true } : {}),
-      locale: toCatalogLocale(this.i18n.locale()),
+      locale: this.listLocale(),
     };
   }
 

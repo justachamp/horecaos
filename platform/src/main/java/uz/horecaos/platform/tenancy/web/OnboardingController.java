@@ -202,7 +202,11 @@ public class OnboardingController {
                     + "so a tenant can see what activation would find before committing to a resume "
                     + "or an activate call. Nothing is written: a step's stored status only changes "
                     + "when the scheduler actually executes it. The activation smoke test is not "
-                    + "included, because unlike every other check it is not a pure read. Use a fresh "
+                    + "included, because unlike every other check it is not a pure read. Checks that "
+                    + "are not onboarding steps ride along: SMS template moderation, fiscal "
+                    + "classification coverage, channel payment-method coverage and secret-rotation "
+                    + "age. Each offending item is its own row; a row from an advisory check carries "
+                    + "advisory=true and is left out of allPassed. Use a fresh "
                     + "Idempotency-Key to see a fresh answer — replaying one returns the same "
                     + "recorded outcome, as ADR 0031 requires for every effectful request, even one "
                     + "with no state of its own to replay.")

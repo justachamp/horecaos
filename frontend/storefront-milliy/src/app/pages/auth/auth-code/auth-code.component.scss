@@ -1,0 +1,76 @@
+.auth {
+  min-height: 100dvh;
+  padding: 18px 24px 32px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 420px;
+  margin: 0 auto;
+}
+
+.auth__back {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 4px;
+  border: 0;
+  background: transparent;
+  color: var(--brand-accent-deep);
+  font: 600 14px/1 var(--font-display);
+  cursor: pointer;
+}
+
+.auth__chevron { font: 700 22px/1 var(--font-display); margin-top: -2px; }
+
+.auth__title { margin: 32px 0 0; text-align: center; font: 800 26px/1.15 var(--font-display); letter-spacing: -0.02em; }
+.auth__phone { margin: 12px 0 0; font: 700 16px/1.2 var(--font-ui); }
+.auth__sent { margin: 2px 0 0; color: var(--text-secondary); font: 400 13px/1.4 var(--font-ui); text-align: center; }
+
+.boxes { margin-top: 28px; display: flex; gap: 8px; width: 100%; }
+
+.box {
+  flex: 1;
+  min-width: 0;
+  height: 52px;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--line-default);
+  background: var(--surface-raised);
+  text-align: center;
+  font: 800 20px/1 var(--font-display);
+  color: var(--text-primary);
+
+  &:focus { outline: 0; border-color: var(--brand-accent-deep); }
+  &--filled { border-color: var(--brand-accent); }
+}
+
+.auth__error { margin: 16px 0 0; text-align: center; color: var(--status-error); font: 500 13px/1.4 var(--font-ui); }
+
+.auth__countdown { margin: 22px 0 0; color: var(--brand-accent-deep); font: 700 18px/1 var(--font-display); }
+
+.auth__resend { margin-top: 22px; text-align: center; }
+
+.link {
+  margin-top: 4px;
+  padding: 6px;
+  border: 0;
+  background: transparent;
+  color: var(--brand-accent-deep);
+  font: 700 14px/1 var(--font-display);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.btn {
+  margin-top: 32px;
+  width: 100%;
+  height: 54px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--brand-accent);
+  color: var(--text-on-accent);
+  font: 700 15px/1 var(--font-display);
+  cursor: pointer;
+
+  &:disabled { background: var(--line-default); color: var(--text-muted); cursor: not-allowed; }
+}

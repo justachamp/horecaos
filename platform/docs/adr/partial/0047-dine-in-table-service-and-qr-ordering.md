@@ -26,12 +26,30 @@
   and no screen yet.
   `SETTLE_OPEN_TICKET` is declared and refused at both the service and
   `ck_dinein_qr_mode` until the fiscal open input closes and a POS adapter exists.
-  Not built: the two ADR 0011 ports and any adapter, ADR 0013's widened payable
-  subject, the ADR 0018 service charge, ordering's cart-to-table binding — a
-  round reaches a bill only through the operator's `POST
-  /sessions/{sessionId}/rounds`, since nothing in `ordering` attaches a checkout
-  to a session — and the external event contracts. See "What was not built, and
-  why".
+  Batch 15 (`w6-dine-in-operator-flows`) builds the operator half and the
+  cart-to-table binding. The console seats a walk-in from the floor plan
+  (`TableSessionController.open` with no booking), the New Order screen's DINE_IN
+  mode names its table and sends the party's session id with the placement
+  (`dineInSessionId` on `POST .../orders`, which also needs `dinein.session.manage`
+  at the branch): the order goes on that party's bill in the transaction that
+  creates it, and a party that has left refuses the placement before anything is
+  priced (`SESSION_NOT_LIVE`), so an operator's order is on a bill or does not
+  exist. `POST .../sessions/{sessionId}/rounds` stays for a manager attaching an
+  order afterwards and for the guest's own attach (a repeat of an attach the session
+  already holds answers with the sequence it has), and every session read and
+  write is scoped to the branch in its path. V0435 widens `ordering.cart_fulfillment`
+  to a second kind of row, a DINE_IN cart's `dinein_table_id`; `PUT
+  /carts/{cartId}/table` binds a guest's cart to the table its `X-Dine-In-Token`
+  was minted for (never a table id in the request); and checkout, through
+  `dinein.api.TableBindingPort`, re-proves the guest from a live token (the binding
+  is remembered state, so a checkout with no token, an ended one, or one for another
+  table is refused: `TABLE_TOKEN_REQUIRED`, `TABLE_TOKEN_ENDED`,
+  `TABLE_BINDING_STALE`), refuses a bound cart whose table nobody sits at, and puts
+  the order on the table's bill in the transaction that creates it. A cart with no
+  binding, and the guest's own `POST /sessions/{sessionId}/rounds` after checkout,
+  work as before. Not built: the two ADR 0011 ports and any adapter, ADR
+  0013's widened payable subject, the ADR 0018 service charge, and the external
+  event contracts. See "What was not built, and why".
 - Date proposed: 2026-08-21
 - Date decided: 2026-08-21
 - Deciders: Ayubkhon Abbosov (platform architecture), product, finance
@@ -376,6 +394,11 @@ drains the open ones; a session already carrying orders never moves mid-service.
       credential printed on card in a public room is the one value that must not
       land in all three. The `{tableToken}` path form in "APIs and events" above
       is superseded by that body form.
+- [x] Bind a cart to its table, and put the order on the table's bill in the
+      transaction that creates it: `ordering.cart_fulfillment.dinein_table_id`
+      (V0435), `PUT .../carts/{cartId}/table`, and `dinein.api.TableBindingPort`.
+      Built in batch 15 — "What was not built" below is the history of why it
+      waited, and V0056 has since created the table it was waiting for.
 - [ ] Add the two ADR 0011 ports and one adapter, or a stub declaring them
       unsupported; extend ADR 0013's payable subject to the session. **Not done,
       and both are correctly somebody else's schema** — see below.
@@ -401,12 +424,18 @@ session is nonetheless shaped so the widening is additive rather than a redesign
 money is attached to the set of orders the session names, not to a total baked
 into one column, which is also what keeps ADR 0046's split tender a feature.
 
-**`ordering.cart_fulfillment.dinein_table_id`.** ADR 0019's cart fulfilment table
+**`ordering.cart_fulfillment.dinein_table_id`.** *Shipped in batch 15 (`V0435`,
+`PUT .../carts/{cartId}/table`, `dinein.api.TableBindingPort`); the rest of this
+paragraph is what the record said while it was not built, kept as the history of
+why it waited.* ADR 0019's cart fulfilment table
 does not exist yet — V0022 says why — and it is ordering's to create. A dine-in
 order reaches its session through `dinein.session_orders`, which needs no change
 in ordering at all. The consequence is that `ORDER_AND_PAY` currently attaches an
 already-placed order to a session rather than binding a cart to a table at
-checkout, which is the same fact recorded one step later.
+checkout, which is the same fact recorded one step later. What still holds after
+batch 15: the binding is optional, so a DINE_IN cart that is never bound (an
+operator-keyed order, the milliy storefront, a caller that skips the `PUT`) still
+reaches its session by a separate `POST .../rounds`.
 
 **The service charge itself.** `dinein.location_settings.service_charge_rate_bp`
 is the rate's home and every session pins it, but nothing computes a charge from

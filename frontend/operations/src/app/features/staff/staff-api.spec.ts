@@ -150,6 +150,21 @@ describe('StaffApi', () => {
     expect(await promise).toEqual({ code: 'ABC123', command: '/link ABC123' });
   });
 
+  it('issues a staff Telegram link code at a branch, where a branch grant is checked', async () => {
+    const promise = api.issueTelegramLinkCode('t1', {
+      tenantId: 't1',
+      brandId: 'b1',
+      locationId: 'l1',
+    });
+    const req = http.expectOne(
+      url('/api/v1/tenants/t1/brands/b1/locations/l1/staff/telegram/link-codes'),
+    );
+    expect(req.request.method).toBe('POST');
+    req.flush({ code: 'ABC123', command: '/link ABC123' });
+
+    expect(await promise).toEqual({ code: 'ABC123', command: '/link ABC123' });
+  });
+
   it('revokes a staff Telegram link', async () => {
     const promise = api.revokeTelegramLink('t1', 'link-1', 'left the company');
     const req = http.expectOne(url('/api/v1/tenants/t1/staff/telegram/links/link-1'));

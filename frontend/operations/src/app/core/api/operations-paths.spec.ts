@@ -116,3 +116,27 @@ describe('operationsPaths.customerOrderReorder', () => {
     );
   });
 });
+
+/**
+ * `TableSessionController`'s real `@RequestMapping` is
+ * `/api/v1/tenants/{t}/brands/{b}/locations/{l}/dine-in/sessions` -- the legacy
+ * tenant prefix, with no `/operations` segment and no `/reservations` one. The
+ * floor plan's "Seat walk-in" and the New Order screen's table picker both call
+ * it, so the literal path is what these pin, not the builder against itself.
+ */
+describe('operationsPaths dine-in sessions (ADR 0047, TableSessionController)', () => {
+  it('dineInSessions builds on the legacy tenant prefix', () => {
+    expect(operationsPaths.dineInSessions(SCOPE)).toBe(
+      '/api/v1/tenants/t1/brands/b1/locations/l1/dine-in/sessions',
+    );
+  });
+
+  it('dineInSessionRounds names the session, encoded, under the same prefix', () => {
+    expect(operationsPaths.dineInSessionRounds(SCOPE, 's1')).toBe(
+      '/api/v1/tenants/t1/brands/b1/locations/l1/dine-in/sessions/s1/rounds',
+    );
+    expect(operationsPaths.dineInSessionRounds(SCOPE, 'a/b')).toBe(
+      '/api/v1/tenants/t1/brands/b1/locations/l1/dine-in/sessions/a%2Fb/rounds',
+    );
+  });
+});

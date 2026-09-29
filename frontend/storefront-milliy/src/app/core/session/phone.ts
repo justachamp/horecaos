@@ -46,7 +46,7 @@ export function isCompleteUzPhone(input: string): boolean {
  * what remains is a plausible national number — otherwise a nine-digit number
  * that happens to begin `998` would lose its own first three digits.
  */
-function nationalDigits(input: string): string {
+export function nationalDigits(input: string): string {
   // An explicit `+998` is a country code and never national digits, and stripping
   // it here is what makes formatting idempotent over its own output.
   //

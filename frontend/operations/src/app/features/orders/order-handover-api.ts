@@ -82,7 +82,10 @@ export class OrderHandoverApi {
   verify(scope: LocationScope, orderId: string, code: string): Observable<HandoverVerification> {
     const intent = this.verifyIntents.next(orderId, { code });
     return this.api
-      .post<{ code: string }, HandoverVerification>(marketplacePaths.handoverVerifications(scope, orderId), intent)
+      .post<{ code: string }, HandoverVerification>(
+        marketplacePaths.handoverVerifications(scope, orderId),
+        intent,
+      )
       .pipe(tap(() => this.verifyIntents.forget(orderId)));
   }
 

@@ -64,6 +64,37 @@ public record Promotion(
     }
 
     /**
+     * A copy that does not lapse on its own, for pricing one order against the
+     * redemption it already holds (ADR 0072).
+     *
+     * <p>The window decided whether the order could redeem the code, and it
+     * did; the window closing afterwards is not a reason for an amendment to
+     * take the discount off a basket the customer is still paying for. Only
+     * {@code validUntil} moves, and only in the copy handed to one price --
+     * nothing here is stored, and {@code definitionVersion} (an input to the
+     * context hash) is untouched.
+     */
+    public Promotion heldPastItsWindow() {
+        return new Promotion(
+                promotionId,
+                tenantId,
+                brandId,
+                code,
+                scope,
+                stackingGroup,
+                exclusive,
+                priority,
+                requiresCoupon,
+                maximumDiscountMinor,
+                currency,
+                validFrom,
+                null,
+                definitionVersion,
+                conditions,
+                actions);
+    }
+
+    /**
      * Which pipeline stage applies it.
      *
      * <p>{@code ITEM} is stage 3 and lands on matching lines; {@code ORDER} and

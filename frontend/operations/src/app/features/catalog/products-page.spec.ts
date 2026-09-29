@@ -9,7 +9,8 @@ import { BrandScope } from '../../core/api/catalog-paths';
 import { CursorState } from '../../core/api/page';
 import { CurrentBrand } from '../../core/auth/current-brand';
 import { ApiError, ApiErrorCode } from '../../core/api/problem-details';
-import { I18n } from '../../core/i18n/i18n';
+import { I18n, Locale } from '../../core/i18n/i18n';
+import { LocaleSet } from '../../core/i18n/locale-set';
 import { CatalogApi, ProductListFilters } from './catalog-api';
 import { CatalogSummary, CategorySummary, ProductSummary } from './catalog-domain';
 import { ProductsPage } from './products-page';
@@ -73,7 +74,18 @@ function serverFilteredListProducts(all: readonly ProductSummary[]) {
   );
 }
 
-function configure(catalogApi: Partial<CatalogApi>): void {
+/** Row 10.12: the brand's resolved locale set, the platform fallback (unconfigured, `ru` default) until a test narrows it. */
+class FakeLocaleSet {
+  readonly locales = signal<readonly Locale[]>(['ru', 'uz-Latn', 'en']);
+  readonly defaultLocale = signal<Locale>('ru');
+  readonly isConfigured = signal(false);
+  ensureLoaded = vi.fn().mockResolvedValue(undefined);
+}
+
+function configure(
+  catalogApi: Partial<CatalogApi>,
+  localeSet: FakeLocaleSet = new FakeLocaleSet(),
+): FakeLocaleSet {
   TestBed.configureTestingModule({
     providers: [
       provideRouter([
@@ -92,9 +104,37 @@ function configure(catalogApi: Partial<CatalogApi>): void {
         },
       },
       { provide: CatalogApi, useValue: catalogApi },
+      { provide: LocaleSet, useValue: localeSet },
     ],
   });
   TestBed.inject(I18n).setLocale('ru');
+  return localeSet;
+}
+
+/** Opens the create dialog, fills it in and confirms; resolves once the request has been made. */
+async function createProductNamed(
+  harness: RouterTestingHarness,
+  name: string,
+  code: string,
+): Promise<void> {
+  const host = harness.routeNativeElement!;
+  (host.querySelector('[data-testid="products-create"]') as HTMLButtonElement).click();
+  await flushMicrotasks();
+  const nameInput = host.querySelector(
+    '[data-testid="create-product-dialog-name"]',
+  ) as HTMLInputElement;
+  const codeInput = host.querySelector(
+    '[data-testid="create-product-dialog-code"]',
+  ) as HTMLInputElement;
+  nameInput.value = name;
+  nameInput.dispatchEvent(new Event('input'));
+  codeInput.value = code;
+  codeInput.dispatchEvent(new Event('input'));
+  await flushMicrotasks();
+  (
+    host.querySelector('[data-testid="create-product-dialog-confirm"]') as HTMLButtonElement
+  ).click();
+  await flushMicrotasks();
 }
 
 describe('ProductsPage', () => {
@@ -237,6 +277,145 @@ describe('ProductsPage', () => {
       'catalog-1',
       expect.objectContaining({ code: 'PLOV', name: 'Плов' }),
     );
+  });
+
+  it('creating a product authors it in the catalog’s default locale, not the operator’s own console language', async () => {
+    const createProduct = vi
+      .fn()
+      .mockReturnValue(of({ productId: 'new-product', defaultVariantId: 'variant-1' }));
+    configure({
+      listCatalogs: () => of(FAKE_CATALOGS),
+      listProducts: () => of({ items: [], nextCursor: null }),
+      createProduct,
+    });
+    TestBed.inject(I18n).setLocale('en');
+
+    const harness = await RouterTestingHarness.create('/catalog/products');
+    await flushMicrotasks();
+    await createProductNamed(harness, 'Plov', 'PLOV');
+
+    // An unconfigured brand's list reads resolve in the server's `uz`; a name
+    // authored in the operator's `en` would show its bare code in the list.
+    expect(createProduct).toHaveBeenCalledWith(
+      FAKE_SCOPE,
+      'catalog-1',
+      expect.objectContaining({ code: 'PLOV', name: 'Plov', locale: 'uz' }),
+    );
+  });
+
+  it('creating a product authors it in the brand’s own default locale once it has chosen one', async () => {
+    const createProduct = vi
+      .fn()
+      .mockReturnValue(of({ productId: 'new-product', defaultVariantId: 'variant-1' }));
+    const localeSet = new FakeLocaleSet();
+    localeSet.isConfigured.set(true);
+    localeSet.locales.set(['en', 'ru']);
+    localeSet.defaultLocale.set('en');
+    configure(
+      {
+        listCatalogs: () => of(FAKE_CATALOGS),
+        listProducts: () => of({ items: [], nextCursor: null }),
+        createProduct,
+      },
+      localeSet,
+    );
+    TestBed.inject(I18n).setLocale('ru');
+
+    const harness = await RouterTestingHarness.create('/catalog/products');
+    await flushMicrotasks();
+    await createProductNamed(harness, 'Plov', 'PLOV');
+
+    expect(createProduct).toHaveBeenCalledWith(
+      FAKE_SCOPE,
+      'catalog-1',
+      expect.objectContaining({ locale: 'en' }),
+    );
+  });
+
+  it('a brand whose default language is uz-Latn authors the product in the catalog’s uz', async () => {
+    const createProduct = vi
+      .fn()
+      .mockReturnValue(of({ productId: 'new-product', defaultVariantId: 'variant-1' }));
+    const localeSet = new FakeLocaleSet();
+    localeSet.isConfigured.set(true);
+    localeSet.locales.set(['uz-Latn', 'ru']);
+    localeSet.defaultLocale.set('uz-Latn');
+    configure(
+      {
+        listCatalogs: () => of(FAKE_CATALOGS),
+        listProducts: () => of({ items: [], nextCursor: null }),
+        createProduct,
+      },
+      localeSet,
+    );
+
+    const harness = await RouterTestingHarness.create('/catalog/products');
+    await flushMicrotasks();
+    await createProductNamed(harness, 'Osh', 'OSH');
+
+    expect(createProduct).toHaveBeenCalledWith(
+      FAKE_SCOPE,
+      'catalog-1',
+      expect.objectContaining({ locale: 'uz' }),
+    );
+  });
+
+  it('tells the operator which language the new product is written in', async () => {
+    const localeSet = new FakeLocaleSet();
+    localeSet.isConfigured.set(true);
+    localeSet.locales.set(['uz-Latn', 'ru']);
+    localeSet.defaultLocale.set('uz-Latn');
+    configure(
+      {
+        listCatalogs: () => of(FAKE_CATALOGS),
+        listProducts: () => of({ items: [], nextCursor: null }),
+      },
+      localeSet,
+    );
+    TestBed.inject(I18n).setLocale('en');
+
+    const harness = await RouterTestingHarness.create('/catalog/products');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+    (host.querySelector('[data-testid="products-create"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    const hint = host.querySelector('[data-testid="create-product-dialog-language"]');
+    expect(hint?.textContent).toContain('Uzbek (Latin)');
+    expect(hint?.textContent).toContain('the brand’s default language');
+  });
+
+  it('names the server’s uz for a brand that has chosen no languages yet', async () => {
+    configure({
+      listCatalogs: () => of(FAKE_CATALOGS),
+      listProducts: () => of({ items: [], nextCursor: null }),
+    });
+    TestBed.inject(I18n).setLocale('en');
+
+    const harness = await RouterTestingHarness.create('/catalog/products');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+    (host.querySelector('[data-testid="products-create"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    const hint = host.querySelector('[data-testid="create-product-dialog-language"]')?.textContent;
+    expect(hint).toContain('Uzbek (Latin)');
+    // Not "the brand's default language": this brand has none, and saying so would
+    // credit a choice nobody made.
+    expect(hint).not.toContain('the brand’s default language');
+    expect(hint).toContain('has not chosen its languages yet');
+  });
+
+  it('loads the brand’s language set before it lets a product be created', async () => {
+    const localeSet = configure({
+      listCatalogs: () => of(FAKE_CATALOGS),
+      listProducts: () => of({ items: [], nextCursor: null }),
+    });
+
+    await RouterTestingHarness.create('/catalog/products');
+    await flushMicrotasks();
+
+    expect(localeSet.ensureLoaded).toHaveBeenCalled();
   });
 
   it('does not submit the create dialog while a required field is still empty', async () => {

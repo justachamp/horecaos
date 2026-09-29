@@ -288,7 +288,13 @@ describe('ShiftsPage', () => {
     (host.querySelector('[data-testid="roster-publish"]') as HTMLButtonElement).click();
     await flushMicrotasks();
 
-    expect(publishRosterEntry).toHaveBeenCalledWith('t1', 'b1', 'l1', 'entry-1', expect.any(String));
+    expect(publishRosterEntry).toHaveBeenCalledWith(
+      't1',
+      'b1',
+      'l1',
+      'entry-1',
+      expect.any(String),
+    );
   });
 
   it('offers no publish action on an already-published entry', async () => {

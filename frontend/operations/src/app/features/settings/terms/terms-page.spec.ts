@@ -40,6 +40,21 @@ const BRAND_2: BrandView = {
   version: 0,
 };
 
+/** Offers uz-Latn (the default) and en; ru is a platform language this brand does not offer. */
+const UZ_EN_BRAND: BrandView = {
+  ...BRAND,
+  locales: [
+    { locale: 'en', description: null, isDefault: false },
+    { locale: 'uz-Latn', description: null, isDefault: true },
+  ],
+};
+
+/** Offers ru alone. */
+const RU_ONLY_BRAND: BrandView = {
+  ...BRAND_2,
+  locales: [{ locale: 'ru', description: null, isDefault: true }],
+};
+
 const NEVER_PUBLISHED: TermsVersionView = {
   published: false,
   id: null,
@@ -289,5 +304,359 @@ describe('TermsPage', () => {
     const fixture = await render({ list }, { current: vi.fn(), list: vi.fn() }, tenant);
     expect((fixture.nativeElement as HTMLElement).textContent).toContain('No location in scope');
     expect(list).not.toHaveBeenCalled();
+  });
+
+  // ------------------------------------------------------------------ 10.12
+
+  function editors(fixture: ComponentFixture<TermsPage>): HTMLElement[] {
+    return Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLElement>(
+        '[data-testid^="terms-editor-"]',
+      ),
+    );
+  }
+
+  function typeInto(fixture: ComponentFixture<TermsPage>, locale: string, text: string): void {
+    const textarea = (fixture.nativeElement as HTMLElement).querySelector(
+      `[data-testid="terms-editor-${locale}"] [data-testid="q-rich-text-textarea"]`,
+    ) as HTMLTextAreaElement;
+    textarea.value = text;
+    textarea.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+  }
+
+  it("offers the brand's own languages, default first and marked, instead of the fixed triple", async () => {
+    const fixture = await render(
+      { list: vi.fn().mockResolvedValue([UZ_EN_BRAND]) },
+      { current: vi.fn().mockResolvedValue(NEVER_PUBLISHED), list: vi.fn().mockResolvedValue([]) },
+    );
+
+    const blocks = editors(fixture);
+    expect(blocks.map((block) => block.dataset['testid'])).toEqual([
+      'terms-editor-uz-Latn',
+      'terms-editor-en',
+    ]);
+    expect(blocks[0].textContent).toContain('Uzbek');
+    expect(blocks[0].querySelector('[data-testid="terms-default-marker"]')).toBeTruthy();
+    expect(blocks[1].querySelector('[data-testid="terms-default-marker"]')).toBeFalsy();
+    expect((fixture.nativeElement as HTMLElement).textContent).not.toContain('Russian');
+  });
+
+  it('falls back to the platform triple for a brand that has chosen no languages', async () => {
+    const fixture = await render(
+      { list: vi.fn().mockResolvedValue([BRAND]) },
+      { current: vi.fn().mockResolvedValue(NEVER_PUBLISHED), list: vi.fn().mockResolvedValue([]) },
+    );
+
+    expect(editors(fixture).map((block) => block.dataset['testid'])).toEqual([
+      'terms-editor-ru',
+      'terms-editor-uz-Latn',
+      'terms-editor-en',
+    ]);
+  });
+
+  it('carries a language the brand does not offer into the new version unchanged', async () => {
+    const publish = vi.fn().mockResolvedValue(published({ version: 3 }));
+    const fixture = await render(
+      { list: vi.fn().mockResolvedValue([UZ_EN_BRAND]) },
+      {
+        current: vi.fn().mockResolvedValue(
+          published({
+            contentsByLocale: { ru: 'Правила', 'uz-Latn': 'Qoidalar', en: 'Terms' },
+          }),
+        ),
+        list: vi.fn().mockResolvedValue([]),
+        publish,
+      },
+    );
+
+    typeInto(fixture, 'en', 'New terms');
+    (fixture.nativeElement.querySelector('.form__actions button') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    // A version is a whole new document — leaving ru out would drop it from
+    // the live terms, though this editor never showed it.
+    expect(publish).toHaveBeenCalledWith('tenant-1', 'brand-1', {
+      contentsByLocale: { ru: 'Правила', 'uz-Latn': 'Qoidalar', en: '<p>New terms</p>' },
+      note: undefined,
+    });
+  });
+
+  it('lets an operator clear an offered language while the hidden one stays', async () => {
+    const publish = vi.fn().mockResolvedValue(published({ version: 3 }));
+    const fixture = await render(
+      { list: vi.fn().mockResolvedValue([UZ_EN_BRAND]) },
+      {
+        current: vi.fn().mockResolvedValue(
+          published({
+            contentsByLocale: { ru: 'Правила', 'uz-Latn': 'Qoidalar', en: 'Terms' },
+          }),
+        ),
+        list: vi.fn().mockResolvedValue([]),
+        publish,
+      },
+    );
+
+    typeInto(fixture, 'en', '');
+    (fixture.nativeElement.querySelector('.form__actions button') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    expect(publish).toHaveBeenCalledWith('tenant-1', 'brand-1', {
+      contentsByLocale: { ru: 'Правила', 'uz-Latn': 'Qoidalar' },
+      note: undefined,
+    });
+  });
+
+  it('keeps Publish off when every offered language is blank, even if a hidden one has text', async () => {
+    const fixture = await render(
+      { list: vi.fn().mockResolvedValue([RU_ONLY_BRAND]) },
+      {
+        current: vi
+          .fn()
+          .mockResolvedValue(
+            published({ contentsByLocale: { 'uz-Latn': 'Qoidalar', en: 'Terms' } }),
+          ),
+        list: vi.fn().mockResolvedValue([]),
+      },
+    );
+
+    const submit = fixture.nativeElement.querySelector(
+      '.form__actions button',
+    ) as HTMLButtonElement;
+    expect(submit.disabled).toBe(true);
+
+    typeInto(fixture, 'ru', 'Правила');
+    expect(submit.disabled).toBe(false);
+  });
+
+  it('re-offers the languages of the brand picked in the brand picker', async () => {
+    const current = vi
+      .fn()
+      .mockImplementation(async (_tenant: string, brandId: string) =>
+        brandId === 'brand-2'
+          ? published({ contentsByLocale: { ru: 'Правила Oshxona', en: 'Oshxona terms' } })
+          : NEVER_PUBLISHED,
+      );
+    const fixture = await render(
+      { list: vi.fn().mockResolvedValue([UZ_EN_BRAND, RU_ONLY_BRAND]) },
+      { current, list: vi.fn().mockResolvedValue([]) },
+    );
+    expect(editors(fixture).map((block) => block.dataset['testid'])).toEqual([
+      'terms-editor-uz-Latn',
+      'terms-editor-en',
+    ]);
+
+    const select = fixture.nativeElement.querySelector('#terms-brand') as HTMLSelectElement;
+    select.value = 'brand-2';
+    select.dispatchEvent(new Event('change'));
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(editors(fixture).map((block) => block.dataset['testid'])).toEqual(['terms-editor-ru']);
+    const textarea = fixture.nativeElement.querySelector(
+      '[data-testid="terms-editor-ru"] [data-testid="q-rich-text-textarea"]',
+    ) as HTMLTextAreaElement;
+    expect(textarea.value).toContain('Правила Oshxona');
+  });
+
+  // ------------------------------------------------------- switching brands
+
+  /** Offers all three platform languages, `ru` the default. */
+  const ALL_THREE_BRAND: BrandView = {
+    ...BRAND,
+    locales: [
+      { locale: 'ru', description: null, isDefault: true },
+      { locale: 'uz-Latn', description: null, isDefault: false },
+      { locale: 'en', description: null, isDefault: false },
+    ],
+  };
+
+  /** Offers `en` alone. */
+  const EN_ONLY_BRAND: BrandView = {
+    ...BRAND_2,
+    locales: [{ locale: 'en', description: null, isDefault: true }],
+  };
+
+  const ALL_THREE_TERMS = published({
+    contentsByLocale: { ru: 'A-ru', 'uz-Latn': 'A-uz', en: 'A-en' },
+  });
+
+  /** A promise the test settles by hand, so a brand's reads can be held "on a slow connection". */
+  function deferred<T>(): {
+    promise: Promise<T>;
+    resolve: (value: T) => void;
+  } {
+    let resolve!: (value: T) => void;
+    const promise = new Promise<T>((done) => {
+      resolve = done;
+    });
+    return { promise, resolve };
+  }
+
+  function pickBrand(fixture: ComponentFixture<TermsPage>, brandId: string): void {
+    const select = fixture.nativeElement.querySelector('#terms-brand') as HTMLSelectElement;
+    select.value = brandId;
+    select.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+  }
+
+  function publishButton(fixture: ComponentFixture<TermsPage>): HTMLButtonElement | null {
+    return (fixture.nativeElement as HTMLElement).querySelector('.form__actions button');
+  }
+
+  it("takes the previous brand's text out of the form until the picked brand's terms have loaded", async () => {
+    const brandB = deferred<TermsVersionView>();
+    const current = vi
+      .fn()
+      .mockImplementation((_tenant: string, brandId: string) =>
+        brandId === 'brand-2' ? brandB.promise : Promise.resolve(ALL_THREE_TERMS),
+      );
+    const publish = vi.fn().mockResolvedValue(published({ version: 3 }));
+    const fixture = await render(
+      { list: vi.fn().mockResolvedValue([ALL_THREE_BRAND, EN_ONLY_BRAND]) },
+      { current, list: vi.fn().mockResolvedValue([]), publish },
+    );
+    expect(editors(fixture)).toHaveLength(3);
+
+    pickBrand(fixture, 'brand-2');
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    // Brand B's reads are still in flight: brand A's text must not be live in the
+    // form, and Publish must not be reachable, or B's terms of service would be
+    // published as A's ru/uz-Latn/en text.
+    expect(editors(fixture)).toHaveLength(0);
+    expect(fixture.nativeElement.textContent).not.toContain('A-ru');
+    const button = publishButton(fixture);
+    expect(button === null || button.disabled).toBe(true);
+    expect(publish).not.toHaveBeenCalled();
+
+    brandB.resolve(published({ contentsByLocale: { en: 'B-en' }, version: 1 }));
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(editors(fixture).map((block) => block.dataset['testid'])).toEqual(['terms-editor-en']);
+    const textarea = fixture.nativeElement.querySelector(
+      '[data-testid="terms-editor-en"] [data-testid="q-rich-text-textarea"]',
+    ) as HTMLTextAreaElement;
+    expect(textarea.value).toContain('B-en');
+
+    typeInto(fixture, 'en', 'B terms');
+    (publishButton(fixture) as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    // Nothing of brand A's rides along: A's ru and uz-Latn are not B's hidden text.
+    expect(publish).toHaveBeenCalledWith('tenant-1', 'brand-2', {
+      contentsByLocale: { en: '<p>B terms</p>' },
+      note: undefined,
+    });
+  });
+
+  it("ignores a slow brand's reply once another brand has been picked since", async () => {
+    const brandB = deferred<TermsVersionView>();
+    const current = vi
+      .fn()
+      .mockImplementation((_tenant: string, brandId: string) =>
+        brandId === 'brand-2' ? brandB.promise : Promise.resolve(ALL_THREE_TERMS),
+      );
+    const fixture = await render(
+      { list: vi.fn().mockResolvedValue([ALL_THREE_BRAND, EN_ONLY_BRAND]) },
+      { current, list: vi.fn().mockResolvedValue([]) },
+    );
+
+    pickBrand(fixture, 'brand-2');
+    await flushMicrotasks();
+    pickBrand(fixture, 'brand-1');
+    await flushMicrotasks();
+    fixture.detectChanges();
+    expect(editors(fixture)).toHaveLength(3);
+
+    // B's reply lands last, after the operator is back on A.
+    brandB.resolve(published({ contentsByLocale: { en: 'B-en' }, version: 1 }));
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(editors(fixture)).toHaveLength(3);
+    const textarea = fixture.nativeElement.querySelector(
+      '[data-testid="terms-editor-ru"] [data-testid="q-rich-text-textarea"]',
+    ) as HTMLTextAreaElement;
+    expect(textarea.value).toContain('A-ru');
+    expect(fixture.nativeElement.textContent).not.toContain('B-en');
+  });
+
+  it('does not put a publish for one brand into the form of the brand picked meanwhile', async () => {
+    const publishA = deferred<TermsVersionView>();
+    const current = vi
+      .fn()
+      .mockImplementation((_tenant: string, brandId: string) =>
+        Promise.resolve(
+          brandId === 'brand-2' ? published({ contentsByLocale: { en: 'B-en' } }) : ALL_THREE_TERMS,
+        ),
+      );
+    const fixture = await render(
+      { list: vi.fn().mockResolvedValue([ALL_THREE_BRAND, EN_ONLY_BRAND]) },
+      {
+        current,
+        list: vi.fn().mockResolvedValue([]),
+        publish: vi.fn().mockReturnValue(publishA.promise),
+      },
+    );
+
+    typeInto(fixture, 'ru', 'A new');
+    (publishButton(fixture) as HTMLButtonElement).click();
+    await flushMicrotasks();
+    pickBrand(fixture, 'brand-2');
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    publishA.resolve(
+      published({
+        version: 9,
+        contentsByLocale: { ru: 'A-new-ru', 'uz-Latn': 'A-uz', en: 'A-en' },
+      }),
+    );
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(editors(fixture).map((block) => block.dataset['testid'])).toEqual(['terms-editor-en']);
+    const textarea = fixture.nativeElement.querySelector(
+      '[data-testid="terms-editor-en"] [data-testid="q-rich-text-textarea"]',
+    ) as HTMLTextAreaElement;
+    expect(textarea.value).toContain('B-en');
+    expect(fixture.nativeElement.textContent).not.toContain('Published as version 9');
+  });
+
+  it("previews a past version's hidden language and names only the brand's own gaps", async () => {
+    const versionFn = vi
+      .fn()
+      .mockResolvedValue(
+        published({ version: 1, contentsByLocale: { ru: 'Старый текст', en: 'Old text' } }),
+      );
+    const fixture = await render(
+      { list: vi.fn().mockResolvedValue([UZ_EN_BRAND]) },
+      {
+        current: vi.fn().mockResolvedValue(published()),
+        list: vi
+          .fn()
+          .mockResolvedValue([
+            summary({ version: 1, locales: ['ru', 'en'], publishedBy: 'owner-0' }),
+          ]),
+        version: versionFn,
+      },
+    );
+
+    (fixture.nativeElement.querySelector('.row--clickable') as HTMLElement).click();
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    const panels = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLElement>('.preview__locale'),
+    );
+    // ru (in the version, not offered) + uz-Latn (offered, missing) + en (offered, present).
+    expect(panels.map((panel) => panel.dataset['locale'])).toEqual(['ru', 'uz-Latn', 'en']);
+    expect(panels[0].textContent).toContain('Старый текст');
+    expect(panels[1].textContent).toContain('Not included');
+    expect(panels[2].textContent).toContain('Old text');
   });
 });

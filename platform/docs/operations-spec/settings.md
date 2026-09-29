@@ -479,7 +479,8 @@ and versioned, but is missing two things Delever has and this screen should carr
 | Среднее время заказа | minutes | **not built**, config key |
 | Максимальное время заказа | minutes | **not built**, config key |
 | Заказ опаздывает с | minutes | **not built**, config key. The single most-used value on the order board |
-| Цвет индикатора опоздания | colour | **not built**, config key. Must be validated against the SLA ramp for contrast (IA Part 4) |
+| Предупреждать до обещанного времени | minutes | **built** (batch 15, row `X.39`): `ordering.at_risk_before_minutes`, default 5 = the `ordering.lateness` platform default. Overlaid on `atRiskBeforeSeconds` of every fulfilment mode when set anywhere in the chain; both boards read the result |
+| Цвет индикатора опоздания | colour | **built** (batch 15, row `X.39`): `ordering.late_colour`, blank = the design-system red. `#rrggbb` validated at write and again where served; the card warns under the swatch below WCAG AA 4.5:1 against the page, a card and the late and at-risk row tints. Repaints only a `LATE` order (orders.md §2.7) |
 | Минимальная сумма заказа | money UZS | overlaps `fulfillment.service_zone_versions.min_basket_minor` — **decide once**: the zone value wins for delivery, this one applies to pickup and dine-in. Say so in the helper text |
 | Расчёт дистанции | `RADIUS` / `ROAD` | `fulfillment.delivery_tariffs.distance_mode` — **per tariff, not global.** Shown here read-only with a link to 3.7, because Delever's global toggle is the worse design and HorecaOS already decided against it (ADR 0037) |
 | Интервал опроса маршрутизации | minutes | **not built**, ADR 0037 routing port |

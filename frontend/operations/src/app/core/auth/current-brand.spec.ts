@@ -86,30 +86,26 @@ describe('CurrentBrand', () => {
   // tenant's own brand list, and this class now asks for it.
   it('resolves a brand via a TENANT grant that covers brands, when no BRAND or LOCATION grant exists', async () => {
     const promise = brand.ensureLoaded();
-    http
-      .expectOne(url('/api/v1/session/context'))
-      .flush(
-        context([
-          {
-            scope: { type: 'TENANT', tenantId: 't1', brandId: null, locationId: null },
-            roleCode: 'OWNER',
-          },
-        ]),
-      );
+    http.expectOne(url('/api/v1/session/context')).flush(
+      context([
+        {
+          scope: { type: 'TENANT', tenantId: 't1', brandId: null, locationId: null },
+          roleCode: 'OWNER',
+        },
+      ]),
+    );
     await tick();
 
-    http
-      .expectOne(url('/api/v1/operations/tenants/t1/brands'))
-      .flush([
-        {
-          id: 'b1',
-          tenantId: 't1',
-          code: 'MAIN',
-          slug: 'main',
-          displayName: 'Rayhon',
-          status: 'ACTIVE',
-        },
-      ]);
+    http.expectOne(url('/api/v1/operations/tenants/t1/brands')).flush([
+      {
+        id: 'b1',
+        tenantId: 't1',
+        code: 'MAIN',
+        slug: 'main',
+        displayName: 'Rayhon',
+        status: 'ACTIVE',
+      },
+    ]);
     await promise;
 
     expect(brand.scope()).toEqual({ tenantId: 't1', brandId: 'b1' });
@@ -118,16 +114,14 @@ describe('CurrentBrand', () => {
 
   it('is denied when a TENANT grant resolves to a tenant with zero brands', async () => {
     const promise = brand.ensureLoaded();
-    http
-      .expectOne(url('/api/v1/session/context'))
-      .flush(
-        context([
-          {
-            scope: { type: 'TENANT', tenantId: 't1', brandId: null, locationId: null },
-            roleCode: 'OWNER',
-          },
-        ]),
-      );
+    http.expectOne(url('/api/v1/session/context')).flush(
+      context([
+        {
+          scope: { type: 'TENANT', tenantId: 't1', brandId: null, locationId: null },
+          roleCode: 'OWNER',
+        },
+      ]),
+    );
     await tick();
 
     http.expectOne(url('/api/v1/operations/tenants/t1/brands')).flush([]);
@@ -139,16 +133,14 @@ describe('CurrentBrand', () => {
 
   it('is denied when the TENANT grant’s brand list call itself fails', async () => {
     const promise = brand.ensureLoaded();
-    http
-      .expectOne(url('/api/v1/session/context'))
-      .flush(
-        context([
-          {
-            scope: { type: 'TENANT', tenantId: 't1', brandId: null, locationId: null },
-            roleCode: 'OWNER',
-          },
-        ]),
-      );
+    http.expectOne(url('/api/v1/session/context')).flush(
+      context([
+        {
+          scope: { type: 'TENANT', tenantId: 't1', brandId: null, locationId: null },
+          roleCode: 'OWNER',
+        },
+      ]),
+    );
     await tick();
 
     http

@@ -243,6 +243,244 @@ describe('SettingsHomePage', () => {
     expect(link.getAttribute('href')).toBe('/settings/brand');
   });
 
+  describe('the three settings.md §10.0 conditions that had no read behind them (row 10.0)', () => {
+    const CHANNEL: ValidationOutcome['checks'][number] = {
+      stepKey: 'CHANNEL_PAYMENT_COVERAGE_VALIDATE',
+      passed: false,
+      errorCode: 'CHANNEL_NO_PAYMENT_METHOD',
+      detail: 'Sales channel STOREFRONT has no enabled payment method',
+      locationId: null,
+    };
+    const FISCAL: ValidationOutcome['checks'][number] = {
+      stepKey: 'FISCAL_CLASSIFICATION_COVERAGE_VALIDATE',
+      passed: false,
+      errorCode: 'FISCAL_CLASSIFICATION_INCOMPLETE',
+      detail: 'Brand MAIN has 2 of 3 menu items without a complete fiscal classification',
+      locationId: null,
+      advisory: true,
+    };
+    const INSTALLATION_SECRET: ValidationOutcome['checks'][number] = {
+      stepKey: 'SECRET_ROTATION_AGE_VALIDATE',
+      passed: false,
+      errorCode: 'INSTALLATION_SECRET_ROTATION_DUE',
+      detail: 'Provider connection Clopos main (CLOPOS) has a credential 200 days old',
+      locationId: null,
+      advisory: true,
+    };
+    const MERCHANT_SECRET: ValidationOutcome['checks'][number] = {
+      stepKey: 'SECRET_ROTATION_AGE_VALIDATE',
+      passed: false,
+      errorCode: 'MERCHANT_SECRET_ROTATION_DUE',
+      detail: 'The CLICK merchant account has a credential 300 days old',
+      locationId: null,
+      advisory: true,
+    };
+
+    function outcomeOf(...checks: ValidationOutcome['checks'][number][]): ValidationOutcome {
+      return { allPassed: false, checks };
+    }
+
+    function hrefs(fixture: ComponentFixture<SettingsHomePage>): (string | null)[] {
+      return [...fixture.nativeElement.querySelectorAll('.readiness__row a')].map(
+        (link: HTMLAnchorElement) => link.getAttribute('href'),
+      );
+    }
+
+    it('deep-links a channel with no payment method into the sales-channels screen', async () => {
+      const fixture = await render({ validate: () => Promise.resolve(outcomeOf(CHANNEL)) });
+
+      expect(hrefs(fixture)).toEqual(['/settings/sales-channels']);
+      expect(fixture.nativeElement.querySelector('.readiness__row')?.textContent).toContain(
+        'A sales channel has no payment method enabled',
+      );
+    });
+
+    it('deep-links incomplete fiscal classification into the fiscalization screen', async () => {
+      const fixture = await render({ validate: () => Promise.resolve(outcomeOf(FISCAL)) });
+
+      expect(hrefs(fixture)).toEqual(['/settings/fiscalization']);
+      expect(fixture.nativeElement.querySelector('.readiness__row')?.textContent).toContain(
+        'fiscal classification',
+      );
+    });
+
+    it('deep-links both rotation findings — a provider connection and a merchant account — into integrations', async () => {
+      const fixture = await render({
+        validate: () => Promise.resolve(outcomeOf(INSTALLATION_SECRET, MERCHANT_SECRET)),
+      });
+
+      expect(hrefs(fixture)).toEqual(['/settings/integrations', '/settings/integrations']);
+      const text = fixture.nativeElement.querySelector('.readiness__list')?.textContent ?? '';
+      expect(text).toContain('provider connection');
+      expect(text).toContain('merchant account');
+    });
+
+    it('lists blocking findings first and tags advisory ones, keeping the server order inside each group', async () => {
+      const fixture = await render({
+        // Server order: advisory, blocking, advisory, blocking.
+        validate: () =>
+          Promise.resolve(
+            outcomeOf(FISCAL, CHANNEL, INSTALLATION_SECRET, {
+              ...CHANNEL,
+              detail: 'Sales channel KIOSK has no enabled payment method',
+            }),
+          ),
+      });
+
+      const rows: HTMLElement[] = [...fixture.nativeElement.querySelectorAll('.readiness__row')];
+      expect(rows.map((row) => row.classList.contains('readiness__row--advisory'))).toEqual([
+        false,
+        false,
+        true,
+        true,
+      ]);
+      expect(rows.map((row) => row.querySelector('.readiness__advisory') !== null)).toEqual([
+        false,
+        false,
+        true,
+        true,
+      ]);
+      expect(rows[2].textContent).toContain('fiscal classification');
+      expect(rows[3].textContent).toContain('provider connection');
+    });
+
+    describe('several offending items of one kind', () => {
+      const KIOSK: ValidationOutcome['checks'][number] = {
+        ...CHANNEL,
+        detail: 'Sales channel KIOSK has no enabled payment method',
+      };
+
+      /**
+       * Angular reports a duplicated `@for` track key (NG0955) on the console in
+       * dev mode, but only when it reconciles a list that is already on screen —
+       * the first render creates every row without comparing keys.
+       */
+      function duplicateKeyWarnings(spies: readonly { mock: { calls: unknown[][] } }[]): string[] {
+        return spies
+          .flatMap((spy) => spy.mock.calls)
+          .map((call) => call.map((part) => String(part)).join(' '))
+          .filter((line) => line.includes('NG0955'));
+      }
+
+      it('tells two channels with no payment method apart instead of repeating one sentence', async () => {
+        const fixture = await render({
+          validate: () => Promise.resolve(outcomeOf(CHANNEL, KIOSK)),
+        });
+
+        const rows: HTMLElement[] = [...fixture.nativeElement.querySelectorAll('.readiness__row')];
+        expect(rows.length).toBe(2);
+        expect(rows[0].textContent).toContain('STOREFRONT');
+        expect(rows[0].textContent).not.toContain('KIOSK');
+        expect(rows[1].textContent).toContain('KIOSK');
+        expect(rows[1].textContent).not.toContain('STOREFRONT');
+      });
+
+      it('names each brand whose fiscal classification is incomplete', async () => {
+        const fixture = await render({
+          validate: () =>
+            Promise.resolve(
+              outcomeOf(FISCAL, {
+                ...FISCAL,
+                detail:
+                  'Brand SECOND has 1 of 4 menu items without a complete fiscal classification',
+              }),
+            ),
+        });
+
+        const rows: HTMLElement[] = [...fixture.nativeElement.querySelectorAll('.readiness__row')];
+        expect(rows.map((row) => /Brand (\w+) has/.exec(row.textContent ?? '')?.[1])).toEqual([
+          'MAIN',
+          'SECOND',
+        ]);
+      });
+
+      it('names the legal entity of each merchant account past its rotation period', async () => {
+        const fixture = await render({
+          validate: () =>
+            Promise.resolve(
+              outcomeOf(
+                {
+                  ...MERCHANT_SECRET,
+                  detail:
+                    'The CLICK merchant account of legal entity ACME has a credential 300 days old',
+                },
+                {
+                  ...MERCHANT_SECRET,
+                  detail:
+                    'The CLICK merchant account of legal entity BETA has a credential 250 days old',
+                },
+              ),
+            ),
+        });
+
+        const rows: HTMLElement[] = [...fixture.nativeElement.querySelectorAll('.readiness__row')];
+        expect(rows[0].textContent).toContain('ACME');
+        expect(rows[1].textContent).toContain('BETA');
+      });
+
+      it('keeps the fixed sentence and its link beside the detail', async () => {
+        const fixture = await render({ validate: () => Promise.resolve(outcomeOf(CHANNEL)) });
+
+        const link: HTMLAnchorElement = fixture.nativeElement.querySelector('.readiness__row a');
+        expect(link.textContent).toContain('A sales channel has no payment method enabled');
+        expect(link.textContent).not.toContain('STOREFRONT');
+        expect(fixture.nativeElement.querySelector('.readiness__scope')?.textContent).toContain(
+          'STOREFRONT',
+        );
+      });
+
+      it('does not repeat the detail of an unknown code, which is already its whole message', async () => {
+        const unknown = {
+          stepKey: 'SOMETHING_NEW_VALIDATE',
+          passed: false,
+          errorCode: 'SOMETHING_NEW',
+          detail: 'A condition this console has no sentence for',
+          locationId: null,
+        };
+        const fixture = await render({ validate: () => Promise.resolve(outcomeOf(unknown)) });
+
+        const text: string = fixture.nativeElement.querySelector('.readiness__row').textContent;
+        expect(text.split('A condition this console has no sentence for').length - 1).toBe(1);
+        expect(fixture.nativeElement.querySelector('.readiness__scope')).toBeNull();
+      });
+
+      it('gives every row its own track key, even when two findings read exactly alike', async () => {
+        const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        const warnings = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        try {
+          const same = [MERCHANT_SECRET, MERCHANT_SECRET, CHANNEL, KIOSK];
+          const fixture = await render({ validate: () => Promise.resolve(outcomeOf(...same)) });
+          expect(fixture.nativeElement.querySelectorAll('.readiness__row').length).toBe(4);
+
+          // The list is replaced while rows are on screen: this is what makes Angular compare keys.
+          fixture.componentInstance['findings'].set([...same]);
+          fixture.detectChanges();
+
+          expect(fixture.nativeElement.querySelectorAll('.readiness__row').length).toBe(4);
+          expect(duplicateKeyWarnings([errors, warnings])).toEqual([]);
+        } finally {
+          errors.mockRestore();
+          warnings.mockRestore();
+        }
+      });
+    });
+
+    it('treats a finding from an older server, which sends no advisory flag, as blocking', async () => {
+      const legacy = {
+        stepKey: 'PAYMENT_CONFIGURATION_VALIDATE',
+        passed: false,
+        errorCode: 'NO_LEGAL_ENTITY',
+        detail: 'Location CHI has no active legal entity assigned',
+        locationId: 'loc-1',
+      };
+      const fixture = await render({ validate: () => Promise.resolve(outcomeOf(legacy)) });
+
+      const row: HTMLElement = fixture.nativeElement.querySelector('.readiness__row');
+      expect(row.classList.contains('readiness__row--advisory')).toBe(false);
+      expect(row.querySelector('.readiness__advisory')).toBeNull();
+    });
+  });
+
   it('renders the denied state on a 403 from the readiness check', async () => {
     const fixture = await render({
       validate: () => Promise.reject(new ApiError('INSUFFICIENT_CAPABILITY', 403, null, null)),
@@ -301,7 +539,9 @@ describe('SettingsHomePage', () => {
     input.dispatchEvent(new Event('input'));
     fixture.detectChanges();
 
-    const options = [...fixture.nativeElement.querySelectorAll('[data-testid="q-combobox-option"]')];
+    const options = [
+      ...fixture.nativeElement.querySelectorAll('[data-testid="q-combobox-option"]'),
+    ];
     expect(options.map((option: Element) => option.textContent)).toEqual([
       expect.stringContaining('ordering.vat_rate_percent'),
     ]);
@@ -317,7 +557,9 @@ describe('SettingsHomePage', () => {
     input.dispatchEvent(new Event('input'));
     fixture.detectChanges();
 
-    (fixture.nativeElement.querySelector('[data-testid="q-combobox-option"]') as HTMLElement).click();
+    (
+      fixture.nativeElement.querySelector('[data-testid="q-combobox-option"]') as HTMLElement
+    ).click();
     fixture.detectChanges();
 
     expect(navigateSpy).toHaveBeenCalledWith(['/settings', 'order-policy']);

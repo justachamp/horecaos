@@ -263,11 +263,18 @@ export class CartService {
    * @param idempotencyKey formed when the customer pressed the button and reused
    *        on every retry of that one intent. A fresh key on a retry is how one
    *        press becomes two orders.
+   * @param guestToken the table-scoped guest token (ADR 0047), sent as
+   *        `X-Dine-In-Token` by a guest whose cart is bound to a table. The binding
+   *        is remembered state, so the platform re-proves at checkout that this
+   *        guest is still at that table before it puts the order on the table's
+   *        bill; a bound cart checked out without it is refused
+   *        (`TABLE_TOKEN_REQUIRED`). Left out for every other cart.
    */
   async checkout(input: {
     priced: PricedCart;
     paymentMethodCode: string;
     idempotencyKey: string;
+    guestToken?: string;
   }): Promise<CheckoutResult> {
     return this.api.mutate<CheckoutResult>('POST', `${this.brandPath}/checkouts`, {
       body: {
@@ -278,7 +285,31 @@ export class CartService {
         paymentMethodCode: input.paymentMethodCode,
       },
       idempotencyKey: input.idempotencyKey,
+      ...(input.guestToken ? { headers: { 'X-Dine-In-Token': input.guestToken } } : {}),
     });
+  }
+
+  /**
+   * Binds a `DINE_IN` cart to the table the guest scanned (ADR 0047).
+   *
+   * The table is never sent: the platform reads it from the table-scoped guest
+   * token, so a request edited to name the next table's cart binding has
+   * nothing to edit. With the binding in place checkout puts the order on the
+   * table's bill in the transaction that creates it -- the round cannot be
+   * lost between two requests -- and refuses the order outright, before
+   * anything is written, if nobody is seated there (`TABLE_NOT_SEATED`).
+   *
+   * A write to the cart like any other: the version moves and a price already
+   * attached is cleared, so call it before pricing.
+   */
+  async bindTable(guestToken: string): Promise<PlatformCart> {
+    return this.withVersion((cart, version) =>
+      this.api.mutate<PlatformCart>('PUT', `${this.brandPath}/carts/${cart.cartId}/table`, {
+        expectedVersion: version,
+        idempotencyKey: newIdempotencyKey(),
+        headers: { 'X-Dine-In-Token': guestToken },
+      }),
+    );
   }
 
   /** Forgets this location's cart entirely. Called after a successful checkout. */

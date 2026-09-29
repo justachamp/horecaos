@@ -5,8 +5,20 @@ import { I18n } from '../../../core/i18n/i18n';
 import { AbcCurveChart, AbcCurvePoint } from './abc-curve-chart';
 
 const POINTS: readonly AbcCurvePoint[] = [
-  { key: 'pizza', label: 'Пицца Маргарита', sharePercent: 80, cumulativeSharePercent: 80, abcClass: 'A' },
-  { key: 'salad', label: 'Салат Цезарь', sharePercent: 15, cumulativeSharePercent: 95, abcClass: 'B' },
+  {
+    key: 'pizza',
+    label: 'Пицца Маргарита',
+    sharePercent: 80,
+    cumulativeSharePercent: 80,
+    abcClass: 'A',
+  },
+  {
+    key: 'salad',
+    label: 'Салат Цезарь',
+    sharePercent: 15,
+    cumulativeSharePercent: 95,
+    abcClass: 'B',
+  },
   { key: 'tea', label: 'Чай', sharePercent: 5, cumulativeSharePercent: 100, abcClass: 'C' },
 ];
 

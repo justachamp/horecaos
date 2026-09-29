@@ -280,7 +280,7 @@ describe('OrderDetailPane: rendering the loaded order', () => {
     expect(host.textContent).toContain('Version 3');
   });
 
-  it('row 2.1b: renders a line\'s comment presets as chips ahead of the note', async () => {
+  it("row 2.1b: renders a line's comment presets as chips ahead of the note", async () => {
     configure({
       get: apiGet({
         value: detail({
@@ -292,8 +292,18 @@ describe('OrderDetailPane: rendering the loaded order', () => {
               finalAmountMinor: 146_000,
               modifiers: [],
               commentPresets: [
-                { code: 'NO_ONIONS', labelRu: 'Без лука', labelUz: 'Piyozsiz', labelEn: 'No onions' },
-                { code: 'EXTRA_SPICY', labelRu: 'Поострее', labelUz: 'Achchiqroq', labelEn: 'Extra spicy' },
+                {
+                  code: 'NO_ONIONS',
+                  labelRu: 'Без лука',
+                  labelUz: 'Piyozsiz',
+                  labelEn: 'No onions',
+                },
+                {
+                  code: 'EXTRA_SPICY',
+                  labelRu: 'Поострее',
+                  labelUz: 'Achchiqroq',
+                  labelEn: 'Extra spicy',
+                },
               ],
               lineId: 'line-1',
               hasNote: false,
@@ -1961,9 +1971,11 @@ describe('OrderDetailPane: §3.6 Комментарии — the amendment client
   });
 
   it('the header RESOLVE action does nothing if the history no longer names an amendment still carrying RESOLVE', async () => {
-    const history = vi.fn().mockResolvedValue([
-      amendmentResult({ amendmentId: 'amendment-9', status: 'APPLIED', actions: [] }),
-    ]);
+    const history = vi
+      .fn()
+      .mockResolvedValue([
+        amendmentResult({ amendmentId: 'amendment-9', status: 'APPLIED', actions: [] }),
+      ]);
     configure({
       get: apiGet({
         value: detail({
@@ -2794,7 +2806,9 @@ describe('OrderDetailPane: POS export and its §3.11 amendment interlock (wave P
     fixture.detectChanges();
     const host: HTMLElement = fixture.nativeElement;
 
-    (host.querySelector('[data-testid="order-detail-pos-export-fix-mapping"]') as HTMLButtonElement).click();
+    (
+      host.querySelector('[data-testid="order-detail-pos-export-fix-mapping"]') as HTMLButtonElement
+    ).click();
 
     expect(navigate).toHaveBeenCalledWith(['/catalog/import'], {
       queryParams: { entityType: 'VARIANT', focusHorecaosId: 'variant-42', bindingId: 'binding-7' },

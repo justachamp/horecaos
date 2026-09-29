@@ -32,6 +32,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.testcontainers.DockerClientFactory;
+import tools.jackson.databind.json.JsonMapper;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.PlatformRole;
 import uz.horecaos.platform.iam.infrastructure.authorization.RoleRegistrySynchronizer;
@@ -55,8 +56,13 @@ class PaymentMethodControllerEndpointTests {
 
     private static final UUID TENANT = UUID.fromString("018f9b20-5000-7000-8000-0000000000a1");
 
+    private static final UUID OTHER_TENANT = UUID.fromString("018f9b20-5000-7000-8000-0000000000a2");
+
     private static final String OWNER = "payment-method-owner";
     private static final String FINANCE = "payment-method-finance";
+    private static final String OTHER_TENANT_OWNER = "payment-method-other-owner";
+
+    private static final JsonMapper JSON = JsonMapper.builder().build();
 
     private static final String METHODS = "/api/v1/operations/tenants/" + TENANT + "/payment-methods";
 
@@ -96,7 +102,9 @@ class PaymentMethodControllerEndpointTests {
         jdbc.sql("TRUNCATE TABLE tenant.tenants CASCADE").update();
         roleRegistry.synchronize();
         insertTenant();
+        insertOtherTenant();
         grant(OWNER, PlatformRole.TENANT_OWNER);
+        grantOn(OTHER_TENANT_OWNER, PlatformRole.TENANT_OWNER, OTHER_TENANT);
         // TENANT_FINANCE carries PAYMENT_METHOD_READ only -- "registering or
         // disabling a method stays with the owner and the administrator" per
         // that role's own doc.
@@ -177,6 +185,52 @@ class PaymentMethodControllerEndpointTests {
         assertThat(disabled.getResponse().getContentAsString()).contains("\"status\":\"DISABLED\"");
     }
 
+    @Test
+    @SuppressWarnings("unchecked")
+    void theNameEditorsLocaleSetIsTheUnionOfTheTenantsBrandsAndNeedsOnlyPaymentMethodRead() throws Exception {
+        // A payment method is a tenant-level row shared by every brand, so a manager pinned to
+        // one brand must still be able to author the names another brand's customers read.
+        // Alpha (first in display-name order) offers ru only; Bravo offers uz-Latn and en. The
+        // union, with Alpha's default leading, is the whole triple.
+        insertBrand("ALPHA", "Alpha", Map.of("ru", true));
+        insertBrand("BRAVO", "Bravo", Map.of("uz-Latn", true, "en", false));
+
+        MvcResult owner =
+                mvc.perform(get(METHODS + "/locale-set").with(tokenFor(OWNER))).andReturn();
+        assertThat(owner.getResponse().getStatus()).isEqualTo(200);
+        Map<String, Object> set = JSON.readValue(owner.getResponse().getContentAsString(), Map.class);
+        assertThat(set)
+                .containsEntry("locales", List.of("ru", "uz-Latn", "en"))
+                .containsEntry("defaultLocale", "ru")
+                .containsEntry("configured", true);
+
+        MvcResult finance = mvc.perform(get(METHODS + "/locale-set").with(tokenFor(FINANCE)))
+                .andReturn();
+        assertThat(finance.getResponse().getStatus())
+                .as("payment-method.read is all the editor's language read needs")
+                .isEqualTo(200);
+
+        MvcResult foreign = mvc.perform(get(METHODS + "/locale-set").with(tokenFor(OTHER_TENANT_OWNER)))
+                .andReturn();
+        assertThat(foreign.getResponse().getStatus())
+                .as("another tenant's owner has no authority over this tenant's registry")
+                .isEqualTo(403);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void aTenantWithNoBrandLanguagesOffersThePlatformTriple() throws Exception {
+        MvcResult result =
+                mvc.perform(get(METHODS + "/locale-set").with(tokenFor(OWNER))).andReturn();
+
+        assertThat(result.getResponse().getStatus()).isEqualTo(200);
+        Map<String, Object> set = JSON.readValue(result.getResponse().getContentAsString(), Map.class);
+        assertThat(set)
+                .containsEntry("locales", List.of("ru", "uz-Latn", "en"))
+                .containsEntry("defaultLocale", "ru")
+                .containsEntry("configured", false);
+    }
+
     // ------------------------------------------------------------------ fixtures
 
     private UUID createMethod(String code) throws Exception {
@@ -219,7 +273,43 @@ class PaymentMethodControllerEndpointTests {
                 """).param("id", TENANT).update();
     }
 
+    private void insertBrand(String code, String displayName, Map<String, Boolean> localesWithDefault) {
+        UUID brandId = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO tenant.brands (id, tenant_id, code, slug, display_name, status, version)
+                VALUES (:id, :tenantId, :code, :slug, :displayName, 'ACTIVE', 0)
+                """)
+                .param("id", brandId)
+                .param("tenantId", TENANT)
+                .param("code", code)
+                .param("slug", code.toLowerCase(java.util.Locale.ROOT))
+                .param("displayName", displayName)
+                .update();
+        localesWithDefault.forEach((locale, isDefault) -> jdbc.sql("""
+                        INSERT INTO tenant.brand_locales (tenant_id, brand_id, locale, is_default)
+                        VALUES (:tenantId, :brandId, :locale, :isDefault)
+                        """)
+                .param("tenantId", TENANT)
+                .param("brandId", brandId)
+                .param("locale", locale)
+                .param("isDefault", isDefault)
+                .update());
+    }
+
+    private void insertOtherTenant() {
+        jdbc.sql("""
+                INSERT INTO tenant.tenants
+                    (id, slug, legal_name, display_name, default_currency, default_timezone, status, version)
+                VALUES (:id, 'payment-method-endpoint-other', 'Payment Method Other', 'Payment Method Other',
+                    'UZS', 'Asia/Tashkent', 'ACTIVE', 0)
+                """).param("id", OTHER_TENANT).update();
+    }
+
     private void grant(String subject, PlatformRole role) {
+        grantOn(subject, role, TENANT);
+    }
+
+    private void grantOn(String subject, PlatformRole role, UUID tenantId) {
         jdbc.sql("""
                 INSERT INTO iam.grants
                     (id, tenant_id, principal_subject, role_id, role_is_platform, scope_type, scope_id,
@@ -229,7 +319,7 @@ class PaymentMethodControllerEndpointTests {
                 ON CONFLICT DO NOTHING
                 """)
                 .param("id", UUID.nameUUIDFromBytes((subject + role.code()).getBytes(UTF_8)))
-                .param("tenantId", TENANT)
+                .param("tenantId", tenantId)
                 .param("subject", subject)
                 .param("roleId", RoleRegistrySynchronizer.platformRoleId(role))
                 .param("validFrom", Instant.now().minus(Duration.ofHours(1)).atOffset(ZoneOffset.UTC))

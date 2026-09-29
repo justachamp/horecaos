@@ -3,7 +3,12 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { TestBed } from '@angular/core/testing';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { captureSupportTenant, leaveSupportTenant, supportTenant, supportTenantInterceptor } from './support-tenant';
+import {
+  captureSupportTenant,
+  leaveSupportTenant,
+  supportTenant,
+  supportTenantInterceptor,
+} from './support-tenant';
 
 const TENANT = '018f6f4e-899d-7b1c-a8cf-0242ac1281a1';
 
@@ -14,7 +19,10 @@ describe('support tenant (ADR 0081)', () => {
   beforeEach(() => {
     sessionStorage.clear();
     TestBed.configureTestingModule({
-      providers: [provideHttpClient(withInterceptors([supportTenantInterceptor])), provideHttpClientTesting()],
+      providers: [
+        provideHttpClient(withInterceptors([supportTenantInterceptor])),
+        provideHttpClientTesting(),
+      ],
     });
     http = TestBed.inject(HttpClient);
     controller = TestBed.inject(HttpTestingController);
@@ -36,19 +44,27 @@ describe('support tenant (ADR 0081)', () => {
     http.get('/api/v1/session/context').subscribe();
     http.get('/api/v1/operations/tenants/x/orders').subscribe();
 
-    expect(controller.expectOne((request) => request.url === '/api/v1/session/context').request.params.get('tenantId')).toBe(
-      TENANT,
-    );
-    expect(controller.expectOne('/api/v1/operations/tenants/x/orders').request.params.has('tenantId')).toBe(false);
+    expect(
+      controller
+        .expectOne((request) => request.url === '/api/v1/session/context')
+        .request.params.get('tenantId'),
+    ).toBe(TENANT);
+    expect(
+      controller.expectOne('/api/v1/operations/tenants/x/orders').request.params.has('tenantId'),
+    ).toBe(false);
   });
 
   it('leaves ordinary staff untouched, and stops once the person leaves', () => {
     http.get('/api/v1/session/context').subscribe();
-    expect(controller.expectOne('/api/v1/session/context').request.params.has('tenantId')).toBe(false);
+    expect(controller.expectOne('/api/v1/session/context').request.params.has('tenantId')).toBe(
+      false,
+    );
 
     captureSupportTenant(`?supportTenant=${TENANT}`);
     leaveSupportTenant();
     http.get('/api/v1/session/context').subscribe();
-    expect(controller.expectOne('/api/v1/session/context').request.params.has('tenantId')).toBe(false);
+    expect(controller.expectOne('/api/v1/session/context').request.params.has('tenantId')).toBe(
+      false,
+    );
   });
 });

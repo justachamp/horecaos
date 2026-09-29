@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, input, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, input, output, signal } from '@angular/core';
 
 import type { CategoryItem, MenuCategory } from '../../types/home.types';
 import { DishCardComponent } from '../dish-card/dish-card.component';
@@ -27,6 +27,14 @@ export class MenuGridComponent {
   readonly currency = input<string | null>(null);
   /** False on the table screen, where a dish is not a link into the delivery basket. */
   readonly linked = input(true);
+  /** True at a table that takes orders: each dish carries the controls for the table's basket. */
+  readonly ordering = input(false);
+  /** What the table's basket holds, by variant id. */
+  readonly quantities = input<Readonly<Record<string, number>>>({});
+  /** A write to the basket is in flight. */
+  readonly busy = input(false);
+  /** A dish's portion was asked for in a new quantity. */
+  readonly quantityChange = output<{ variantId: string; quantity: number }>();
 
   protected readonly activeCategoryId = signal<string | null>(null);
 

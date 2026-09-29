@@ -80,6 +80,52 @@ class OnboardingServiceValidationResultsTests {
     }
 
     @Test
+    void everyStepResultIsBlockingBecauseOnlyAdHocChecksCanBeAdvisory() {
+        List<OnboardingService.ValidationResult> results = OnboardingService.validationResultsFor(
+                OnboardingStep.PAYMENT_CONFIGURATION_VALIDATE,
+                StepResult.failedWithFindings(List.of(
+                        new StepResult.Finding("NO_LEGAL_ENTITY", "Location A has no legal entity", LOCATION_A))));
+
+        assertThat(results)
+                .singleElement()
+                .satisfies(result -> assertThat(result.advisory())
+                        .as("a VALIDATING-phase step gates READY; it is never merely advisory")
+                        .isFalse());
+    }
+
+    @Test
+    void anAdHocCheckKeepsItsOwnKeyAndStampsItsSeverityOnEveryRowItExpandsInto() {
+        StepResult outcome = StepResult.failedWithFindings(List.of(
+                new StepResult.Finding("INSTALLATION_SECRET_ROTATION_DUE", "Clopos main is 200 days old", null),
+                new StepResult.Finding("MERCHANT_SECRET_ROTATION_DUE", "The CLICK account is 300 days old", null)));
+
+        List<OnboardingService.ValidationResult> results =
+                OnboardingService.validationResultsFor("SECRET_ROTATION_AGE_VALIDATE", outcome, true);
+
+        assertThat(results)
+                .hasSize(2)
+                .allSatisfy(result -> {
+                    assertThat(result.stepKey()).isEqualTo("SECRET_ROTATION_AGE_VALIDATE");
+                    assertThat(result.passed()).isFalse();
+                    assertThat(result.advisory()).isTrue();
+                })
+                .extracting(OnboardingService.ValidationResult::errorCode)
+                .containsExactly("INSTALLATION_SECRET_ROTATION_DUE", "MERCHANT_SECRET_ROTATION_DUE");
+    }
+
+    @Test
+    void aRetryFromAnAdHocCheckIsOneRowAtThatChecksSeverity() {
+        List<OnboardingService.ValidationResult> results = OnboardingService.validationResultsFor(
+                "SECRET_ROTATION_AGE_VALIDATE", StepResult.retry("TRANSIENT_INFRASTRUCTURE", "SQLException"), true);
+
+        assertThat(results).singleElement().satisfies(result -> {
+            assertThat(result.passed()).isFalse();
+            assertThat(result.advisory()).isTrue();
+            assertThat(result.errorCode()).isEqualTo("TRANSIENT_INFRASTRUCTURE");
+        });
+    }
+
+    @Test
     void aRetryOutcomeIsStillExactlyOneRowEvenThoughItIsNotPassed() {
         StepResult outcome = StepResult.retry("TRANSIENT_INFRASTRUCTURE", "SQLException");
 

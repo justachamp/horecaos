@@ -97,7 +97,10 @@ describe('OrderActionsApi', () => {
     api.override(SCOPE, 'o1', 'PREPARING', 4, 'reason-override-1').subscribe();
     const request = http.expectOne(`${BASE}/state-overrides`);
 
-    expect(request.request.body).toEqual({ targetStatus: 'PREPARING', reasonId: 'reason-override-1' });
+    expect(request.request.body).toEqual({
+      targetStatus: 'PREPARING',
+      reasonId: 'reason-override-1',
+    });
     expect(request.request.headers.get('If-Match')).toBe('W/"4"');
     request.flush({});
   });

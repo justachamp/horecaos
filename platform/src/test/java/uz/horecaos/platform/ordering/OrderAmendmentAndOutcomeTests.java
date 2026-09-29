@@ -125,6 +125,8 @@ class OrderAmendmentAndOutcomeTests {
     private static final UUID BRAND = UUID.randomUUID();
     private static final UUID LOCATION = UUID.randomUUID();
     private static final UUID CUSTOMER = UUID.randomUUID();
+    private static final OrderOutcomeReasonService.Authorship REASON_AUTHOR =
+            OrderOutcomeReasonService.Authorship.of(uz.horecaos.platform.audit.api.ActorRef.user("sharif", null));
 
     /** A Friday at noon Tashkent time, comfortably inside every seeded schedule. */
     private static final Instant NOW = Instant.parse("2026-08-21T07:00:00Z");
@@ -197,7 +199,9 @@ class OrderAmendmentAndOutcomeTests {
                     ordering.cart_lines, ordering.carts CASCADE
                 """).update();
         jdbc.sql("""
-                TRUNCATE TABLE pricing.quote_adjustments, pricing.quote_lines, pricing.quotes,
+                TRUNCATE TABLE pricing.coupon_redemptions, pricing.coupon_customer_usage,
+                    pricing.coupon_codes, pricing.promotion_actions, pricing.promotion_conditions,
+                    pricing.promotions, pricing.quote_adjustments, pricing.quote_lines, pricing.quotes,
                     pricing.prices, pricing.price_book_assignments, pricing.price_books,
                     pricing.tax_profiles CASCADE
                 """).update();
@@ -266,11 +270,13 @@ class OrderAmendmentAndOutcomeTests {
 
         var tenantContext = new JdbcOrderingTenantContext(jdbc);
         var catalogSnapshot = new JdbcOrderCatalogSnapshot(jdbc, "uz");
+        var auditRecorder = new JdbcAuditRecorder(jdbc, objectMapper);
         var policies = new OrderAcceptancePolicyService(
                 new JdbcPolicyResolver(jdbc, objectMapper),
                 new uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcPolicyAuthor(
-                        jdbc, objectMapper, new JdbcAuditRecorder(jdbc, objectMapper), clock, (keyCode, scope) -> {}));
-        var auditRecorder = new JdbcAuditRecorder(jdbc, objectMapper);
+                        jdbc, objectMapper, auditRecorder, clock, (keyCode, scope) -> {}),
+                auditRecorder,
+                clock);
 
         // ADR 0046's real planner. No checkout in this suite names a payment
         // method, so none of them plans a settlement — which is precisely why the
@@ -307,7 +313,8 @@ class OrderAmendmentAndOutcomeTests {
                 new FakeConfigurationResolver(),
                 saleWindowRules,
                 commentPresetLookup,
-                inventory);
+                inventory,
+                new UnusedTableBinding());
         inventoryProcess = new OrderInventoryProcess(processStore, inventory, objectMapper, clock);
         paymentProcess = new OrderPaymentProcess(processStore, objectMapper);
         orderStateWith = store -> new OrderStateService(
@@ -333,7 +340,7 @@ class OrderAmendmentAndOutcomeTests {
                 objectMapper,
                 auditRecorder,
                 clock);
-        reasons = new OrderOutcomeReasonService(reasonStore, clock);
+        reasons = new OrderOutcomeReasonService(reasonStore, auditRecorder, clock);
         rejectReasons = new RejectReasonQueryService(new JdbcRejectReasonStore(jdbc));
         outcomes = new OrderOutcomeService(orderState, reasons, rejectReasons, orderStore, protection, objectMapper);
         // The real adapter, against the same database: the export guard is only
@@ -355,7 +362,8 @@ class OrderAmendmentAndOutcomeTests {
                         jdbc, auditRecorder, clock, new SimpleMeterRegistry(), objectMapper),
                 UNWIRED_PAYMENTS,
                 protection,
-                new FakeConfigurationResolver());
+                new FakeConfigurationResolver(),
+                new PromoCodeRedemptionService(promoCodeStore, clock));
         bulkActions = new OrderBulkActionService(
                 orderStore, new JdbcBulkOperationStore(jdbc), orderState, outcomes, auditRecorder, clock);
 
@@ -1663,6 +1671,244 @@ class OrderAmendmentAndOutcomeTests {
                 .hasSize(1);
     }
 
+    // ----------------------- ADR 0072: an amendment keeps the order's promo-code discount
+
+    /**
+     * The money bug batch 14 found: {@code repriceFor} handed pricing a hard
+     * null coupon and nothing in the amendment path read the order's own
+     * redemption, so every financial amendment repriced a discounted order at
+     * full price and asked the customer to confirm an "increase" that included
+     * the promo they had already earned.
+     *
+     * <p>The coupon here is deliberately capped at one redemption and one per
+     * customer, so that the order's own checkout leaves it exactly full -- the
+     * ordinary state of a limited code, and the one in which simply presenting
+     * the code again would read "limit reached" and drop the discount.
+     */
+    @Test
+    @DisplayName("ADR 0072: amending a promo-coded order keeps its discount, reconciles, takes no second "
+            + "redemption, and cancelling afterwards still gives the one redemption back")
+    void anAmendmentKeepsThePromoCodeDiscountOfTheOrder() {
+        var coupon = authorPromoCode("AMEND10", 1_000, 1, 1);
+        UUID orderId = orderIdOf(placePromoOrder("idem-promo-amend-1", "amend10"));
+        var placed = orderStore.find(TENANT, orderId).orElseThrow();
+
+        // Before: 2 burgers at 50,000, 10% off the order.
+        assertThat(placed.discountMinor()).isEqualTo(10_000L);
+        assertThat(placed.totalMinor()).isEqualTo(90_000L);
+        assertThat(reconciles(placed.subtotalMinor(), placed.taxMinor(), placed.feeMinor(), placed.discountMinor()))
+                .isEqualTo(placed.totalMinor());
+        assertThat(couponConsumedCount(coupon.couponId()))
+                .as("the checkout filled the code's only slot -- presenting it again would read LIMIT_REACHED")
+                .isEqualTo(1);
+        UUID checkoutQuote = placed.pricingQuoteId();
+
+        // The cart is the mutable pre-checkout state; the amendment must not
+        // depend on it. Clearing its applied code changes nothing below.
+        jdbc.sql("UPDATE ordering.carts SET applied_coupon_code = NULL WHERE id = :id")
+                .param("id", cartIdOf(orderId))
+                .update();
+
+        var proposed = proposeOnly(
+                orderId,
+                "k-promo-amend-1",
+                OrderAmendmentService.AmendmentCommand.addLines(
+                        List.of(new OrderAmendmentService.AmendmentCommand.LineRequest(burgerVariant, 1, List.of()))));
+        assertThat(proposed.amendment().deltaTotalMinor())
+                .as("one more 50,000 burger, less its 10%%: +45,000. Dropping the promo would have asked "
+                        + "the customer to confirm +60,000")
+                .isEqualTo(45_000L);
+        assertThat(promotionAdjustmentSum(proposed.amendment().quoteId()))
+                .as("the amendment's own quote carries the promo-code discount line for the three-burger basket")
+                .isEqualTo(-15_000L);
+        assertThat(promotionAdjustmentSource(proposed.amendment().quoteId())).isEqualTo(coupon.promotionId());
+
+        var applied = confirmAndApply(orderId, proposed.amendment().id());
+        assertThat(applied.amendment().status()).isEqualTo(AmendmentStatus.APPLIED);
+
+        var amended = orderStore.find(TENANT, orderId).orElseThrow();
+        assertThat(amended.discountMinor()).isEqualTo(15_000L);
+        assertThat(amended.totalMinor()).isEqualTo(135_000L);
+        assertThat(reconciles(amended.subtotalMinor(), amended.taxMinor(), amended.feeMinor(), amended.discountMinor()))
+                .as("ck_order_total_reconciles: total = subtotal + tax + fee - discount, gross subtotal")
+                .isEqualTo(amended.totalMinor());
+        assertThat(amended.pricingQuoteId())
+                .as("the order row keeps its checkout quote, which is what cancellation releases by")
+                .isEqualTo(checkoutQuote);
+
+        var revisions = orderStore.revisions(TENANT, orderId);
+        assertThat(revisions).hasSize(2);
+        var first =
+                revisions.stream().filter(r -> r.revision() == 1).findFirst().orElseThrow();
+        var second =
+                revisions.stream().filter(r -> r.revision() == 2).findFirst().orElseThrow();
+        assertThat(first.discountMinor())
+                .as("revision 1 is left exactly as checkout wrote it")
+                .isEqualTo(10_000L);
+        assertThat(first.totalMinor()).isEqualTo(90_000L);
+        assertThat(second.discountMinor()).isEqualTo(15_000L);
+        assertThat(second.totalMinor()).isEqualTo(135_000L);
+        assertThat(second.deltaTotalMinor()).isEqualTo(45_000L);
+        assertThat(reconciles(second.subtotalMinor(), second.taxMinor(), second.feeMinor(), second.discountMinor()))
+                .isEqualTo(second.totalMinor());
+
+        // Bookkeeping: still one redemption, still one slot, restated to what the
+        // order now carries, still keyed by the checkout quote.
+        assertThat(couponConsumedCount(coupon.couponId())).isEqualTo(1);
+        assertThat(customerCouponUsage(coupon.couponId())).isEqualTo(1);
+        assertThat(jdbc.sql("""
+                        SELECT count(*) FROM pricing.coupon_redemptions
+                        WHERE order_id = :id AND status = 'REDEEMED'
+                        """).param("id", orderId).query(Long.class).single())
+                .as("no double redemption")
+                .isEqualTo(1L);
+        assertThat(jdbc.sql("SELECT amount_minor, quote_id FROM pricing.coupon_redemptions WHERE order_id = :id")
+                        .param("id", orderId)
+                        .query()
+                        .singleRow())
+                .containsEntry("amount_minor", 15_000L)
+                .containsEntry("quote_id", checkoutQuote);
+
+        // A second amendment on the already-amended order carries it again.
+        var again = proposeOnly(
+                orderId,
+                "k-promo-amend-2",
+                OrderAmendmentService.AmendmentCommand.addLines(
+                        List.of(new OrderAmendmentService.AmendmentCommand.LineRequest(burgerVariant, 1, List.of()))));
+        assertThat(again.amendment().deltaTotalMinor()).isEqualTo(45_000L);
+        confirmAndApply(orderId, again.amendment().id());
+        var amendedTwice = orderStore.find(TENANT, orderId).orElseThrow();
+        assertThat(amendedTwice.discountMinor()).isEqualTo(20_000L);
+        assertThat(amendedTwice.totalMinor()).isEqualTo(180_000L);
+        assertThat(couponConsumedCount(coupon.couponId())).isEqualTo(1);
+
+        // Cancelling the amended order gives the one redemption back.
+        UUID writeOff = writeOffReason();
+        int version = amendedTwice.version();
+        tx(() -> outcomes.cancel(
+                TENANT,
+                orderId,
+                version,
+                new OrderOutcomeService.CancelCommand(writeOff, null, "USER", "sharif", null)));
+        assertThat(couponConsumedCount(coupon.couponId()))
+                .as("released by the checkout quote, exactly as if the order had never been amended")
+                .isZero();
+    }
+
+    @Test
+    @DisplayName("ADR 0072: a code retired after the order was placed still discounts that order's amendment")
+    void anAmendmentKeepsTheDiscountOfACodeRetiredSincePlacement() {
+        var coupon = authorPromoCode("RETIRED10", 1_000, null, 100);
+        UUID orderId = orderIdOf(placePromoOrder("idem-promo-retired-1", "retired10"));
+
+        var authoring = new uz.horecaos.platform.pricing.application.PromoCodeAuthoringService(
+                new JdbcPromoCodeStore(jdbc, JsonMapper.builder().build()), clock);
+        authoring.retire(TENANT, BRAND, coupon.couponId());
+
+        var proposed = proposeOnly(
+                orderId,
+                "k-promo-retired-1",
+                OrderAmendmentService.AmendmentCommand.addLines(
+                        List.of(new OrderAmendmentService.AmendmentCommand.LineRequest(burgerVariant, 1, List.of()))));
+        assertThat(proposed.amendment().deltaTotalMinor())
+                .as("the redemption was taken while the code was live and is final (ADR 0072)")
+                .isEqualTo(45_000L);
+        confirmAndApply(orderId, proposed.amendment().id());
+        assertThat(orderStore.find(TENANT, orderId).orElseThrow().discountMinor())
+                .isEqualTo(15_000L);
+    }
+
+    private uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPromoCodeStore.PromoCodeAuthoringRow
+            authorPromoCode(String code, long basisPoints, @Nullable Integer totalLimit, int perCustomerLimit) {
+        var authoring = new uz.horecaos.platform.pricing.application.PromoCodeAuthoringService(
+                new JdbcPromoCodeStore(jdbc, JsonMapper.builder().build()), clock);
+        var drafted = authoring.draft(
+                TENANT,
+                BRAND,
+                new uz.horecaos.platform.pricing.application.PromoCodeAuthoringService.PromoCodeDraft(
+                        "Promo " + code,
+                        code,
+                        uz.horecaos.platform.pricing.application.PromoCodeAuthoringService.DiscountShape
+                                .PERCENTAGE_OFF_ORDER,
+                        basisPoints,
+                        null,
+                        "UZS",
+                        0,
+                        List.of(),
+                        List.of(),
+                        totalLimit,
+                        perCustomerLimit,
+                        null,
+                        null));
+        authoring.activate(TENANT, BRAND, drafted.couponId());
+        return drafted;
+    }
+
+    /** The fixture's two-burger order, checked out through the customer's own path with a promo code applied. */
+    private CheckoutService.CheckoutResult placePromoOrder(String idempotencyKey, String promoCode) {
+        UUID cart = openCart();
+        tx(() -> carts.putLine(
+                TENANT, BRAND, CUSTOMER, cart, cartVersion(cart), "a", burgerVariant, 2, List.of(), null));
+        tx(() -> carts.applyPromoCode(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart), promoCode));
+        tx(() -> carts.price(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart)));
+
+        var row = cartStore.find(TENANT, BRAND, cart).orElseThrow();
+        return tx(() -> checkout.checkout(new CheckoutService.CheckoutCommand(
+                TENANT,
+                BRAND,
+                cart,
+                row.version(),
+                Objects.requireNonNull(row.pricingQuoteId(), "the fixture cart is always priced first"),
+                Objects.requireNonNull(row.pricingContextHash(), "the fixture cart is always priced first"),
+                idempotencyKey,
+                "CASH",
+                0L,
+                "CUSTOMER",
+                CUSTOMER.toString(),
+                null,
+                null,
+                false)));
+    }
+
+    private UUID cartIdOf(UUID orderId) {
+        return jdbc.sql("SELECT cart_id FROM ordering.orders WHERE id = :id")
+                .param("id", orderId)
+                .query(UUID.class)
+                .single();
+    }
+
+    private static long reconciles(long subtotalMinor, long taxMinor, long feeMinor, long discountMinor) {
+        return subtotalMinor + taxMinor + feeMinor - discountMinor;
+    }
+
+    private int couponConsumedCount(UUID couponId) {
+        return jdbc.sql("SELECT consumed_count FROM pricing.coupon_codes WHERE id = :id")
+                .param("id", couponId)
+                .query(Integer.class)
+                .single();
+    }
+
+    private int customerCouponUsage(UUID couponId) {
+        return jdbc.sql("SELECT consumed_count FROM pricing.coupon_customer_usage WHERE coupon_id = :id")
+                .param("id", couponId)
+                .query(Integer.class)
+                .single();
+    }
+
+    private long promotionAdjustmentSum(UUID quoteId) {
+        return jdbc.sql("""
+                        SELECT COALESCE(SUM(amount_minor), 0) FROM pricing.quote_adjustments
+                        WHERE quote_id = :id AND source_type = 'PROMOTION'
+                        """).param("id", quoteId).query(Long.class).single();
+    }
+
+    private UUID promotionAdjustmentSource(UUID quoteId) {
+        return jdbc.sql("""
+                        SELECT DISTINCT source_id FROM pricing.quote_adjustments
+                        WHERE quote_id = :id AND source_type = 'PROMOTION'
+                        """).param("id", quoteId).query(UUID.class).single();
+    }
+
     /** Proposes without applying — a financial amendment that raises the total needs this. */
     private OrderAmendmentService.AmendmentResult proposeOnly(
             UUID orderId, String key, OrderAmendmentService.AmendmentCommand command) {
@@ -2158,6 +2404,7 @@ class OrderAmendmentAndOutcomeTests {
     void aCompletionReasonIsValidatedAgainstTheMode() {
         UUID reasonId = tx(() -> reasons.create(
                 TENANT,
+                REASON_AUTHOR,
                 new OrderOutcomeReasonService.CreateReason(
                         OutcomeReasonKind.COMPLETION,
                         OutcomeSystemCategory.DELIVERED_PARTNER_COURIER,
@@ -2253,6 +2500,7 @@ class OrderAmendmentAndOutcomeTests {
     private UUID operatorErrorReason() {
         return tx(() -> reasons.create(
                 TENANT,
+                REASON_AUTHOR,
                 new OrderOutcomeReasonService.CreateReason(
                         OutcomeReasonKind.CANCELLATION,
                         OutcomeSystemCategory.OTHER,
@@ -2334,6 +2582,7 @@ class OrderAmendmentAndOutcomeTests {
 
         UUID completionReason = tx(() -> reasons.create(
                 TENANT,
+                REASON_AUTHOR,
                 new OrderOutcomeReasonService.CreateReason(
                         OutcomeReasonKind.COMPLETION,
                         OutcomeSystemCategory.COLLECTED_BY_CUSTOMER,
@@ -2354,7 +2603,7 @@ class OrderAmendmentAndOutcomeTests {
                 .hasMessageContaining("completion reason");
 
         UUID archived = operatorErrorReason();
-        tx(() -> reasons.archive(TENANT, archived, 1));
+        tx(() -> reasons.archive(TENANT, REASON_AUTHOR, archived, 1));
         assertThatThrownBy(() -> tx(() -> outcomes.override(
                         TENANT,
                         orderId,
@@ -2972,6 +3221,7 @@ class OrderAmendmentAndOutcomeTests {
     void aReasonNeedsEveryLocale() {
         assertThatThrownBy(() -> tx(() -> reasons.create(
                         TENANT,
+                        REASON_AUTHOR,
                         new OrderOutcomeReasonService.CreateReason(
                                 OutcomeReasonKind.CANCELLATION,
                                 OutcomeSystemCategory.CUSTOMER_UNREACHABLE,
@@ -2990,6 +3240,7 @@ class OrderAmendmentAndOutcomeTests {
     void aCancellationReasonCarriesItsConsequences() {
         assertThatThrownBy(() -> tx(() -> reasons.create(
                         TENANT,
+                        REASON_AUTHOR,
                         new OrderOutcomeReasonService.CreateReason(
                                 OutcomeReasonKind.CANCELLATION,
                                 OutcomeSystemCategory.CUSTOMER_UNREACHABLE,
@@ -3008,6 +3259,7 @@ class OrderAmendmentAndOutcomeTests {
     void theTwoTextsAreSeparate() {
         UUID reasonId = tx(() -> reasons.create(
                 TENANT,
+                REASON_AUTHOR,
                 new OrderOutcomeReasonService.CreateReason(
                         OutcomeReasonKind.CANCELLATION,
                         OutcomeSystemCategory.CUSTOMER_UNREACHABLE,
@@ -3025,7 +3277,7 @@ class OrderAmendmentAndOutcomeTests {
     @DisplayName("an archived reason cannot be cited by a new cancellation")
     void anArchivedReasonIsRefused() {
         UUID reasonId = writeOffReason();
-        tx(() -> reasons.archive(TENANT, reasonId, 1));
+        tx(() -> reasons.archive(TENANT, REASON_AUTHOR, reasonId, 1));
 
         UUID orderId = orderIdOf(placeOrder("idem-1"));
         int version = orderStore.find(TENANT, orderId).orElseThrow().version();
@@ -3053,6 +3305,7 @@ class OrderAmendmentAndOutcomeTests {
 
         tx(() -> reasons.update(
                 TENANT,
+                REASON_AUTHOR,
                 reasonId,
                 1,
                 new OrderOutcomeReasonService.CreateReason(
@@ -3257,6 +3510,7 @@ class OrderAmendmentAndOutcomeTests {
     private UUID writeOffReason() {
         return tx(() -> reasons.create(
                 TENANT,
+                REASON_AUTHOR,
                 new OrderOutcomeReasonService.CreateReason(
                         OutcomeReasonKind.CANCELLATION,
                         OutcomeSystemCategory.ITEM_UNAVAILABLE,

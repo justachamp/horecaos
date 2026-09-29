@@ -2,6 +2,7 @@ package uz.horecaos.platform.ordering.application;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -12,6 +13,12 @@ import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import uz.horecaos.platform.audit.api.ActorRef;
+import uz.horecaos.platform.audit.api.AuditClass;
+import uz.horecaos.platform.audit.api.AuditFact;
+import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
+import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.ordering.domain.CustomerRefund;
 import uz.horecaos.platform.ordering.domain.LiabilityParty;
 import uz.horecaos.platform.ordering.domain.OutcomeReasonKind;
@@ -35,23 +42,49 @@ import uz.horecaos.platform.tenancy.api.FulfillmentMode;
  * 0039 refuses an operator checkbox by name: under pressure an operator picks
  * whatever closes the dialog fastest, and the write-off rate becomes noise
  * instead of a number the kitchen can act on.
+ *
+ * <p><b>Every mutation leaves an audit fact</b> (ADR 0027, staff 9.3a), in the
+ * transaction that made it. The consequence fields are exactly the ones a
+ * finance reviewer asks about later -- who changed «Не дозвонились» from
+ * RELEASE to WRITE_OFF, and when -- and before this the answer was nothing at
+ * all: only the reason's own {@code version} moved, and it says a change
+ * happened, not what or by whom.
  */
 @Service
 public class OrderOutcomeReasonService {
 
     private final JdbcOutcomeReasonStore reasons;
+    private final AuditRecorder audit;
     private final Clock clock;
 
-    public OrderOutcomeReasonService(JdbcOutcomeReasonStore reasons, Clock clock) {
+    public OrderOutcomeReasonService(JdbcOutcomeReasonStore reasons, AuditRecorder audit, Clock clock) {
         this.reasons = reasons;
+        this.audit = audit;
         this.clock = clock;
+    }
+
+    /**
+     * Who is authoring, and why -- ADR 0027 requires a reason on every
+     * user-initiated fact. The reason is optional on the wire (the console form
+     * has no field for it yet), so a blank one is replaced by a plain statement
+     * of the action rather than refusing an edit the endpoint has always accepted.
+     */
+    public record Authorship(ActorRef actor, @Nullable String reason) {
+
+        public static Authorship of(ActorRef actor) {
+            return new Authorship(actor, null);
+        }
+
+        String reasonOr(String fallback) {
+            return reason == null || reason.isBlank() ? fallback : reason.strip();
+        }
     }
 
     /** The locales every reason must be written in before it can be used. */
     public static final Set<String> REQUIRED_LOCALES = Set.of("ru", "uz-Latn", "en");
 
     @Transactional
-    public UUID create(UUID tenantId, CreateReason command) {
+    public UUID create(UUID tenantId, Authorship by, CreateReason command) {
         validate(command);
 
         UUID reasonId = UUID.randomUUID();
@@ -83,12 +116,27 @@ public class OrderOutcomeReasonService {
                 now));
 
         reasons.replaceTexts(reasonId, command.customerTexts());
+
+        // A creation has no prior state: every field's "before" is null.
+        recordAudit(
+                "ordering.outcome-reason.created",
+                tenantId,
+                reasonId,
+                1,
+                by,
+                by.reasonOr("Order outcome reason created"),
+                Map.of(),
+                snapshotOfCommand(command, "ACTIVE"),
+                now);
         return reasonId;
     }
 
     @Transactional
-    public int update(UUID tenantId, UUID reasonId, int expectedVersion, CreateReason command) {
+    public int update(UUID tenantId, Authorship by, UUID reasonId, int expectedVersion, CreateReason command) {
         ReasonRow existing = reasons.find(tenantId, reasonId).orElseThrow(() -> new ReasonNotFoundException(reasonId));
+        // Read before replaceTexts below rewrites them: the customer wording is
+        // part of what an edit changes.
+        Map<String, Object> before = snapshotOfRow(existing, reasons.texts(reasonId));
         if (existing.kind() != command.kind()) {
             // A cancellation reason cannot become a completion reason. Every
             // outcome already recorded under it cited a kind, and changing it
@@ -104,6 +152,7 @@ public class OrderOutcomeReasonService {
                         tenantId,
                         reasonId,
                         expectedVersion,
+                        command.systemCategory().name(),
                         command.internalName().strip(),
                         command.kind() == OutcomeReasonKind.CANCELLATION
                                 ? requireCancellationField(command.stockDisposition())
@@ -126,16 +175,50 @@ public class OrderOutcomeReasonService {
                 .orElseThrow(() -> new StaleReasonException(expectedVersion, existing.version()));
 
         reasons.replaceTexts(reasonId, command.customerTexts());
+
+        // The "after" is what the row holds now, read back -- not what the
+        // request asked for. The two were the same only for as long as every
+        // field of the request reached the UPDATE; a fact built from the request
+        // states a change the store may never have made.
+        ReasonRow stored = reasons.find(tenantId, reasonId).orElseThrow(() -> new ReasonNotFoundException(reasonId));
+        recordAudit(
+                "ordering.outcome-reason.updated",
+                tenantId,
+                reasonId,
+                version,
+                by,
+                by.reasonOr("Order outcome reason updated"),
+                before,
+                snapshotOfRow(stored, reasons.texts(reasonId)),
+                clock.instant());
         return version;
     }
 
     @Transactional
-    public void archive(UUID tenantId, UUID reasonId, int expectedVersion) {
-        if (!reasons.archive(tenantId, reasonId, expectedVersion, clock.instant())) {
+    public void archive(UUID tenantId, Authorship by, UUID reasonId, int expectedVersion) {
+        Instant now = clock.instant();
+        if (!reasons.archive(tenantId, reasonId, expectedVersion, now)) {
             ReasonRow existing =
                     reasons.find(tenantId, reasonId).orElseThrow(() -> new ReasonNotFoundException(reasonId));
             throw new StaleReasonException(expectedVersion, existing.version());
         }
+        ReasonRow archived = reasons.find(tenantId, reasonId).orElseThrow(() -> new ReasonNotFoundException(reasonId));
+        Map<String, Object> before = new LinkedHashMap<>();
+        before.put("internalName", archived.internalName());
+        before.put("status", "ACTIVE");
+        Map<String, Object> after = new LinkedHashMap<>();
+        after.put("internalName", archived.internalName());
+        after.put("status", archived.status());
+        recordAudit(
+                "ordering.outcome-reason.archived",
+                tenantId,
+                reasonId,
+                archived.version(),
+                by,
+                by.reasonOr("Order outcome reason retired"),
+                before,
+                after,
+                now);
     }
 
     public List<ReasonRow> list(UUID tenantId, OutcomeReasonKind kind, boolean activeOnly) {
@@ -175,7 +258,8 @@ public class OrderOutcomeReasonService {
      * is refused rather than partially applied over stale data.
      */
     @Transactional
-    public void reorder(UUID tenantId, OutcomeReasonKind kind, List<UUID> orderedReasonIds, int expectedVersion) {
+    public void reorder(
+            UUID tenantId, Authorship by, OutcomeReasonKind kind, List<UUID> orderedReasonIds, int expectedVersion) {
         List<ReasonRow> active = reasons.list(tenantId, kind, true);
 
         Set<UUID> activeIds = active.stream().map(ReasonRow::id).collect(Collectors.toUnmodifiableSet());
@@ -193,11 +277,34 @@ public class OrderOutcomeReasonService {
             throw new StaleReasonException(expectedVersion, currentFingerprint);
         }
 
+        if (orderedReasonIds.isEmpty()) {
+            // Nothing is active, so there is no ranking to change and no fact to record.
+            return;
+        }
         Instant now = clock.instant();
         int position = 0;
         for (UUID reasonId : orderedReasonIds) {
             reasons.setDisplayOrder(tenantId, reasonId, position++, now);
         }
+
+        // One fact for the whole ranking -- a list has no single target row --
+        // carrying the ranking before and after as ordered id lists.
+        Map<String, Object> before = new LinkedHashMap<>();
+        before.put("kind", kind.name());
+        before.put("order", active.stream().map(row -> row.id().toString()).toList());
+        Map<String, Object> after = new LinkedHashMap<>();
+        after.put("kind", kind.name());
+        after.put("order", orderedReasonIds.stream().map(UUID::toString).toList());
+        recordAudit(
+                "ordering.outcome-reason.reordered",
+                tenantId,
+                orderedReasonIds.getFirst(),
+                null,
+                by,
+                by.reasonOr("Order outcome reasons re-ranked"),
+                before,
+                after,
+                now);
     }
 
     public Optional<ReasonRow> find(UUID tenantId, UUID reasonId) {
@@ -227,6 +334,75 @@ public class OrderOutcomeReasonService {
                 "customerRefund", String.valueOf(reason.customerRefund()),
                 "allowedFulfillmentModes",
                         reason.allowedFulfillmentModes() == null ? List.of() : reason.allowedFulfillmentModes());
+    }
+
+    private void recordAudit(
+            String actionCode,
+            UUID tenantId,
+            UUID reasonId,
+            @Nullable Integer version,
+            Authorship by,
+            String reason,
+            Map<String, Object> before,
+            Map<String, Object> after,
+            Instant now) {
+        AuditFact.Builder fact = AuditFact.of(actionCode, AuditClass.BUSINESS)
+                .by(by.actor())
+                .at(ResourceScope.tenant(tenantId))
+                .target("ordering.outcome-reason", reasonId)
+                .because(reason)
+                .changed(ChangeDocuments.diff(before, after))
+                .correlatedBy(reasonId.toString())
+                .occurredAt(now);
+        if (version != null) {
+            fact.targetVersion((long) version);
+        }
+        audit.record(fact.build());
+    }
+
+    /** The fields an author sets, as they will read once the write lands. */
+    private static Map<String, Object> snapshotOfCommand(CreateReason command, String status) {
+        Map<String, Object> snapshot = new LinkedHashMap<>();
+        snapshot.put("kind", command.kind().name());
+        snapshot.put("systemCategory", command.systemCategory().name());
+        snapshot.put("internalName", command.internalName().strip());
+        snapshot.put("stockDisposition", enumName(command.stockDisposition()));
+        snapshot.put("liabilityParty", enumName(command.liabilityParty()));
+        snapshot.put("customerRefund", enumName(command.customerRefund()));
+        snapshot.put(
+                "allowedFulfillmentModes",
+                command.allowedFulfillmentModes() == null
+                        ? null
+                        : command.allowedFulfillmentModes().stream()
+                                .map(Enum::name)
+                                .sorted()
+                                .toList());
+        snapshot.put("customerTexts", new java.util.TreeMap<>(command.customerTexts()));
+        snapshot.put("status", status);
+        return snapshot;
+    }
+
+    /** The same fields as {@link #snapshotOfCommand}, read back from the stored row. */
+    private static Map<String, Object> snapshotOfRow(ReasonRow row, Map<String, String> texts) {
+        Map<String, Object> snapshot = new LinkedHashMap<>();
+        snapshot.put("kind", row.kind().name());
+        snapshot.put("systemCategory", row.systemCategory());
+        snapshot.put("internalName", row.internalName());
+        snapshot.put("stockDisposition", row.stockDisposition());
+        snapshot.put("liabilityParty", row.liabilityParty());
+        snapshot.put("customerRefund", row.customerRefund());
+        snapshot.put(
+                "allowedFulfillmentModes",
+                row.allowedFulfillmentModes() == null
+                        ? null
+                        : row.allowedFulfillmentModes().stream().sorted().toList());
+        snapshot.put("customerTexts", new java.util.TreeMap<>(texts));
+        snapshot.put("status", row.status());
+        return snapshot;
+    }
+
+    private static @Nullable String enumName(@Nullable Enum<?> value) {
+        return value == null ? null : value.name();
     }
 
     private void validate(CreateReason command) {

@@ -127,7 +127,9 @@ describe('ReportsShell filter bar visibility (wave W02)', () => {
     fixture.detectChanges();
 
     const root = fixture.nativeElement as HTMLElement;
-    const periodButtons = Array.from(root.querySelectorAll('[data-testid^="reports-filter-period-"]'));
+    const periodButtons = Array.from(
+      root.querySelectorAll('[data-testid^="reports-filter-period-"]'),
+    );
     const customButton = periodButtons.find(
       (button) => button.getAttribute('data-testid') === 'reports-filter-period-custom',
     ) as HTMLButtonElement | undefined;

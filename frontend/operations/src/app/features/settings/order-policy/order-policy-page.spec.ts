@@ -31,6 +31,8 @@ const CARD2_5_DEFAULTS: Readonly<Record<string, unknown>> = {
   'ordering.average_order_minutes': 30,
   'ordering.maximum_order_minutes': 60,
   'ordering.late_order_threshold_minutes': 45,
+  'ordering.at_risk_before_minutes': 5,
+  'ordering.late_colour': '',
   'ordering.minimum_order_amount_minor': 0,
   'ordering.vat_rate_percent': '12',
   'ordering.routing_poll_interval_minutes': 2,
@@ -254,6 +256,213 @@ describe('OrderPolicyPage', () => {
         locationId: null,
         explicitNull: true,
       }),
+    );
+  });
+
+  // Row X.39: the at-risk threshold and the tenant's late colour, both read by
+  // the order board and the kitchen board.
+
+  const AT_RISK_ROW = 4; // business day, average, maximum, late, at-risk
+  const LATE_COLOUR_ROW = 5;
+
+  function rowAt(index: number): HTMLElement {
+    return fixture.nativeElement.querySelectorAll('.field-row')[index] as HTMLElement;
+  }
+
+  function publishButton(): HTMLButtonElement {
+    return Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('.form__actions button'),
+    ).find((button) => button.textContent?.includes('Publish')) as HTMLButtonElement;
+  }
+
+  function type(selector: string, value: string): void {
+    const input = fixture.nativeElement.querySelector(selector) as HTMLInputElement;
+    input.value = value;
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+  }
+
+  it('offers the at-risk threshold and the late colour on the timing card, colour reading Standard while blank', () => {
+    expect(rowAt(AT_RISK_ROW).textContent).toContain('Warn before the promised time');
+    expect(rowAt(AT_RISK_ROW).textContent).toContain('5');
+    expect(rowAt(LATE_COLOUR_ROW).textContent).toContain('Late-order colour');
+    expect(rowAt(LATE_COLOUR_ROW).textContent).toContain('Standard');
+    expect(configApi.resolution).toHaveBeenCalledWith(
+      TENANT_ID,
+      'ordering.at_risk_before_minutes',
+      'BRAND',
+      BRAND_ID,
+      null,
+    );
+    expect(configApi.resolution).toHaveBeenCalledWith(
+      TENANT_ID,
+      'ordering.late_colour',
+      'BRAND',
+      BRAND_ID,
+      null,
+    );
+  });
+
+  it('sets the at-risk threshold at the scope bar’s scope, sending the version it read as the concurrency check', async () => {
+    configApi.resolution.mockImplementation((_tenantId: string, code: string) =>
+      Promise.resolve(
+        code === 'ordering.at_risk_before_minutes'
+          ? {
+              ...defaultResolution(code),
+              value: 8,
+              cameFromDefault: false,
+              source: 'SCOPED_VALUE',
+              winningScope: 'BRAND',
+              inspectedLevels: [{ scopeType: 'BRAND', outcome: 'VALUE' }],
+              currentVersionAtScope: 4,
+            }
+          : defaultResolution(code),
+      ),
+    );
+    fixture = TestBed.createComponent(OrderPolicyPage);
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    (rowAt(AT_RISK_ROW).querySelector('.field__action') as HTMLButtonElement).click(); // Edit
+    fixture.detectChanges();
+    type('[id="field-ordering.at_risk_before_minutes"]', '10');
+    type('[id="field-reason-ordering.at_risk_before_minutes"]', 'Warn the kitchen earlier');
+    publishButton().click();
+    await flushMicrotasks();
+
+    expect(configApi.setValue).toHaveBeenCalledWith(
+      TENANT_ID,
+      'ordering.at_risk_before_minutes',
+      expect.objectContaining({
+        scopeType: 'BRAND',
+        brandId: BRAND_ID,
+        locationId: null,
+        explicitNull: false,
+        integerValue: 10,
+        expectedVersion: 4,
+        reason: 'Warn the kitchen earlier',
+      }),
+    );
+  });
+
+  it('bounds the at-risk input to a day, mirroring the server’s rule', () => {
+    (rowAt(AT_RISK_ROW).querySelector('.field__action') as HTMLButtonElement).click(); // Override
+    fixture.detectChanges();
+
+    const input = fixture.nativeElement.querySelector(
+      '[id="field-ordering.at_risk_before_minutes"]',
+    ) as HTMLInputElement;
+    expect(input.min).toBe('0');
+    expect(input.max).toBe('1440');
+  });
+
+  it('warns under the swatch when the chosen late colour fails WCAG AA against a board surface — and still lets the operator save it', async () => {
+    (rowAt(LATE_COLOUR_ROW).querySelector('.field__action') as HTMLButtonElement).click(); // Override
+    fixture.detectChanges();
+
+    // Light yellow: about 1.2:1 against white.
+    type('[data-testid="q-color-input-text"]', '#ffee58');
+    const warnings = fixture.nativeElement.querySelector(
+      '[data-testid="q-color-input-warnings"]',
+    ) as HTMLElement;
+    expect(warnings).not.toBeNull();
+    expect(warnings.textContent).toContain('Low contrast');
+    expect(warnings.textContent).toContain('4.5:1');
+    expect(warnings.textContent).toContain('the page background');
+    expect(warnings.textContent).toContain('a late-order row');
+
+    type('[id="field-reason-ordering.late_colour"]', 'Matches our brand guideline');
+    expect(publishButton().disabled).toBe(false); // a warning, never a refusal
+    publishButton().click();
+    await flushMicrotasks();
+
+    expect(configApi.setValue).toHaveBeenCalledWith(
+      TENANT_ID,
+      'ordering.late_colour',
+      expect.objectContaining({
+        scopeType: 'BRAND',
+        explicitNull: false,
+        stringValue: '#ffee58',
+        expectedVersion: null,
+        reason: 'Matches our brand guideline',
+      }),
+    );
+  });
+
+  it('shows no contrast warning for a colour that clears 4.5:1 on every reference surface', () => {
+    (rowAt(LATE_COLOUR_ROW).querySelector('.field__action') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    type('[data-testid="q-color-input-text"]', '#000000');
+
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="q-color-input-warnings"]'),
+    ).toBeNull();
+  });
+
+  it('shows no warning, and saves a blank value, when the operator goes back to the standard colour', async () => {
+    (rowAt(LATE_COLOUR_ROW).querySelector('.field__action') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    type('[data-testid="q-color-input-text"]', '#ffee58');
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="q-color-input-warnings"]'),
+    ).not.toBeNull();
+
+    const useStandard = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('.form button'),
+    ).find((button) =>
+      button.textContent?.includes('Use the standard colour'),
+    ) as HTMLButtonElement;
+    useStandard.click();
+    fixture.detectChanges();
+
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="q-color-input-warnings"]'),
+    ).toBeNull();
+    type('[id="field-reason-ordering.late_colour"]', 'Back to the design-system red');
+    publishButton().click();
+    await flushMicrotasks();
+
+    expect(configApi.setValue).toHaveBeenCalledWith(
+      TENANT_ID,
+      'ordering.late_colour',
+      expect.objectContaining({ stringValue: '', explicitNull: false }),
+    );
+  });
+
+  it('reads a chosen colour back as its hex, and reverts it to the inherited value in one click', async () => {
+    configApi.resolution.mockImplementation((_tenantId: string, code: string) =>
+      Promise.resolve(
+        code === 'ordering.late_colour'
+          ? {
+              ...defaultResolution(code),
+              value: '#8a3ffc',
+              cameFromDefault: false,
+              source: 'SCOPED_VALUE',
+              winningScope: 'BRAND',
+              inspectedLevels: [{ scopeType: 'BRAND', outcome: 'VALUE' }],
+              currentVersionAtScope: 2,
+            }
+          : defaultResolution(code),
+      ),
+    );
+    fixture = TestBed.createComponent(OrderPolicyPage);
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(rowAt(LATE_COLOUR_ROW).textContent).toContain('#8a3ffc');
+    const revert = Array.from(rowAt(LATE_COLOUR_ROW).querySelectorAll('.field__action')).find(
+      (button) => button.textContent?.includes('Revert'),
+    ) as HTMLButtonElement;
+    revert.click();
+    await flushMicrotasks();
+
+    expect(configApi.setValue).toHaveBeenCalledWith(
+      TENANT_ID,
+      'ordering.late_colour',
+      expect.objectContaining({ explicitNull: true, expectedVersion: 2 }),
     );
   });
 

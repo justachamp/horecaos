@@ -53,6 +53,8 @@ import uz.horecaos.platform.tenancy.api.FulfillmentMode;
 class OperationsOrderCompletionHttpTests {
 
     private static final UUID TENANT = UUID.fromString("018fb300-4000-7000-8000-0000000000a1");
+    private static final OrderOutcomeReasonService.Authorship REASON_AUTHOR =
+            OrderOutcomeReasonService.Authorship.of(uz.horecaos.platform.audit.api.ActorRef.user("test-admin", null));
     private static final UUID BRAND = UUID.fromString("018fb300-4000-7000-8000-0000000000b1");
     private static final UUID LOCATION = UUID.fromString("018fb300-4000-7000-8000-0000000000c1");
 
@@ -156,6 +158,7 @@ class OperationsOrderCompletionHttpTests {
     void completingWithAValidReasonRecordsIt() throws Exception {
         UUID reasonId = reasons.create(
                 TENANT,
+                REASON_AUTHOR,
                 new OrderOutcomeReasonService.CreateReason(
                         OutcomeReasonKind.COMPLETION,
                         OutcomeSystemCategory.DELIVERED_PARTNER_COURIER,
@@ -189,6 +192,7 @@ class OperationsOrderCompletionHttpTests {
     void aReasonInvalidForTheModeIsRefused() throws Exception {
         UUID reasonId = reasons.create(
                 TENANT,
+                REASON_AUTHOR,
                 new OrderOutcomeReasonService.CreateReason(
                         OutcomeReasonKind.COMPLETION,
                         OutcomeSystemCategory.DELIVERED_PARTNER_COURIER,

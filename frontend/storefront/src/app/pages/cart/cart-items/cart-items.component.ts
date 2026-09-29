@@ -7,6 +7,7 @@ import { TranslateService } from '../../../services/translate.service';
 import { LangService } from '../../../services/lang.service';
 import { TranslatePipe } from '../../../shared/translate/translate.pipe';
 import type { CartResponseItem } from '../../../types/cart.types';
+import { presetLabelFor } from '../../../utils/preset-label';
 
 @Component({
   selector: 'app-cart-items',
@@ -41,14 +42,7 @@ export class CartItemsComponent implements OnInit {
   }
 
   private presetLabel(preset: CartResponseItem['commentPresets'][number]): string {
-    switch (this.lang.langId()) {
-      case 'ru':
-        return preset.labelRu;
-      case 'en':
-        return preset.labelEn;
-      default:
-        return preset.labelUz;
-    }
+    return presetLabelFor(preset, this.lang.langId());
   }
 
   constructor(

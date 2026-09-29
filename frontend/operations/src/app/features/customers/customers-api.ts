@@ -454,7 +454,9 @@ export class CustomersApi {
       // sent (a stale server, or a test double) — the same "assume the export
       // proceeds exactly as it always has" default `ApprovalAction`'s own
       // ALLOW_WITHOUT_APPROVAL mode uses server-side.
-      approvalStatus: (result.headers['X-Export-Approval-Status'] as CustomerExportApprovalStatus | null) ?? 'NOT_REQUIRED',
+      approvalStatus:
+        (result.headers['X-Export-Approval-Status'] as CustomerExportApprovalStatus | null) ??
+        'NOT_REQUIRED',
       approvalRequestId: result.headers['X-Export-Approval-Request-Id'],
     };
   }

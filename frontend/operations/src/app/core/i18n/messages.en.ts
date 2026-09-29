@@ -854,6 +854,15 @@ export const messagesEn = {
     'An SMS template is awaiting the gateway’s approval.',
   'settings.home.readiness.code.TEMPLATE_REJECTED_BY_PROVIDER':
     'An SMS template was rejected by the gateway.',
+  'settings.home.readiness.advisory': 'Advisory',
+  'settings.home.readiness.code.FISCAL_CLASSIFICATION_INCOMPLETE':
+    'Some menu items still lack a complete fiscal classification (ИКПУ, package code, unit or fiscal name).',
+  'settings.home.readiness.code.CHANNEL_NO_PAYMENT_METHOD':
+    'A sales channel has no payment method enabled, so no order can be taken through it.',
+  'settings.home.readiness.code.INSTALLATION_SECRET_ROTATION_DUE':
+    'A provider connection’s credential is overdue for rotation.',
+  'settings.home.readiness.code.MERCHANT_SECRET_ROTATION_DUE':
+    'A merchant account’s credential is overdue for rotation.',
   'settings.home.search.label': 'Find a setting',
   'settings.home.search.placeholder': 'Find a setting (press /)',
   'settings.home.search.empty': 'No setting matches "{query}".',
@@ -1228,6 +1237,16 @@ export const messagesEn = {
   'settings.orderPolicy.field.averageOrderMinutes': 'Average order time (minutes)',
   'settings.orderPolicy.field.maximumOrderMinutes': 'Maximum order time (minutes)',
   'settings.orderPolicy.field.lateOrderThresholdMinutes': 'Order is late after (minutes)',
+  'settings.orderPolicy.field.atRiskBeforeMinutes': 'Warn before the promised time (minutes)',
+  'settings.orderPolicy.atRiskBeforeMinutes.hint':
+    'How far ahead of the promised time an order shows as at risk. Applies to every kind of order, on the order board and the kitchen board.',
+  'settings.orderPolicy.field.lateColour': 'Late-order colour',
+  'settings.orderPolicy.lateColour.hint':
+    'Drawn on late orders on the order board and the kitchen board. Keep the standard unless your brand needs another: a colour that is hard to read against a row hides the orders that most need attention, so heed the contrast warning.',
+  'settings.orderPolicy.lateColour.standard': 'Standard',
+  'settings.orderPolicy.lateColour.useStandard': 'Use the standard colour',
+  'settings.orderPolicy.lateColour.standardHint':
+    'The standard late-order red from the design system.',
   'settings.orderPolicy.field.minimumOrderAmount': 'Minimum order sum',
   'settings.orderPolicy.minimumOrderAmount.hint':
     'Pickup and dine-in only — delivery keeps its own minimum, set on the service zone.',
@@ -1292,7 +1311,8 @@ export const messagesEn = {
   'settings.commentPresets.create.sortOrder': 'Order',
   'settings.commentPresets.create.submit': 'Register',
   'settings.commentPresets.create.submitting': 'Registering…',
-  'settings.commentPresets.create.incomplete': 'A code and the label in the default language are required.',
+  'settings.commentPresets.create.incomplete':
+    'A code and the label in the default language are required.',
 
   // 10.7 Fiscalization
   'settings.fiscalization.title': 'Fiscalization',
@@ -1747,6 +1767,21 @@ export const messagesEn = {
   'settings.locations.floorPlan.rotating': 'Rotating…',
   'settings.locations.floorPlan.revokedGuestSessions':
     '{count} guest session(s) on the old code were cut off.',
+  'settings.locations.floorPlan.seat.title': 'Seat a walk-in',
+  'settings.locations.floorPlan.seat.partySize': 'Guests',
+  'settings.locations.floorPlan.seat.defaultReason': 'Walk-in seated from the floor plan',
+  'settings.locations.floorPlan.seat.action': 'Seat',
+  'settings.locations.floorPlan.seat.seating': 'Seating…',
+  'settings.locations.floorPlan.seat.occupied': 'A party is already seated at this table.',
+  'settings.locations.floorPlan.seat.bookedSoon':
+    'A confirmed booking holds this table within the next {minutes} minutes. Seat only if the party will be gone by then.',
+  'settings.locations.floorPlan.seat.overCapacity':
+    'This table seats {seats}, fewer than the party.',
+  'settings.locations.floorPlan.seat.unavailable':
+    'This table is out of service and cannot be seated.',
+  'settings.locations.floorPlan.seat.done': 'Seated at {table}.',
+  'settings.locations.floorPlan.seat.errorOccupied':
+    'A party was seated at this table a moment ago.',
 
   'finance.scope.denied': 'This account is not permitted to see Finance.',
 
@@ -2137,6 +2172,10 @@ export const messagesEn = {
   'catalog.products.create.action': 'Create product',
   'catalog.products.create.title': 'Create product',
   'catalog.products.create.name': 'Name',
+  'catalog.products.create.language':
+    'Written in: {language} — the brand’s default language. Add other languages in the product editor.',
+  'catalog.products.create.languageFallback':
+    'Written in: {language} — the catalog’s default language, because this brand has not chosen its languages yet. Add other languages in the product editor.',
   'catalog.products.create.code': 'Code',
   'catalog.products.create.required': 'Required',
   'catalog.products.create.confirm': 'Create',
@@ -5741,7 +5780,8 @@ export const messagesEn = {
   'orders.newOrder.order.branchLoad': '{count} active orders',
   'orders.newOrder.order.branchClosed': 'closed',
   'orders.newOrder.order.branchProposedSuffix': '(proposed)',
-  'orders.newOrder.order.branchResolutionFailed': 'Could not resolve a branch — placing at the current one',
+  'orders.newOrder.order.branchResolutionFailed':
+    'Could not resolve a branch — placing at the current one',
   'orders.newOrder.order.branchNoCandidates': 'No branch delivers to this address',
   'orders.newOrder.order.branchOverrideReason': 'Reason for choosing a different branch',
   'orders.newOrder.order.branchOverrideReasonPlaceholder': 'Pick a reason',
@@ -5774,6 +5814,32 @@ export const messagesEn = {
   'orders.newOrder.address.recipientName': 'Recipient',
   'orders.newOrder.address.recipientPhone': 'Recipient phone',
   'orders.newOrder.address.deliveryNote': 'Note for the courier',
+
+  // wave 15: the DINE_IN table picker (ADR 0047, operator side)
+  'orders.newOrder.table.title': 'Table',
+  'orders.newOrder.table.loading': 'Loading the dining room…',
+  'orders.newOrder.table.denied': 'No access to the dining room’s tables',
+  'orders.newOrder.table.error': 'The dining room could not be loaded',
+  'orders.newOrder.table.seatedNow': 'Seated now',
+  'orders.newOrder.table.noSessions': 'Nobody is seated yet — seat a party below',
+  'orders.newOrder.table.sessionLabel': '{tables} · {count} guests',
+  'orders.newOrder.table.sessionLabelNoCount': '{tables}',
+  'orders.newOrder.table.seatTitle': 'Seat a party',
+  'orders.newOrder.table.pickTable': 'Choose a free table',
+  'orders.newOrder.table.noFreeTables': 'Every table is taken',
+  'orders.newOrder.table.tableOption': '{code} · seats {seats}',
+  'orders.newOrder.table.tableOptionBooked': '{code} · seats {seats} · booking soon',
+  'orders.newOrder.table.partySize': 'Guests',
+  'orders.newOrder.table.seat': 'Seat',
+  'orders.newOrder.table.seating': 'Seating…',
+  'orders.newOrder.table.seatReason': 'Walk-in seated from the New order screen',
+  'orders.newOrder.table.seatOccupied': 'That table was taken a moment ago — pick another',
+  'orders.newOrder.table.selected': 'This order goes to {tables}',
+  'orders.newOrder.table.required': 'Choose the table this order is for',
+  'orders.newOrder.table.sessionEnded':
+    'That party has already left the table, so no order was placed. The list is refreshed — choose the table again.',
+  'orders.newOrder.table.notServiceable':
+    'This branch is not taking dine-in orders through this channel right now',
 
   // wave P14: §5.3 «Повторить» (row 1.3f)
   'orders.newOrder.reorder.action': 'Repeat',
