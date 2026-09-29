@@ -2295,8 +2295,9 @@ export const messagesEn = {
   'catalog.editor.availability.quantityHint':
     'On-hand count, the daily default, and channel stop thresholds for a QUANTITY-tracked variant live on the Stock page.',
   'catalog.editor.availability.quantityHintLink': 'Open Stock',
-  'catalog.editor.availability.notListedAtBranches':
-    'Not listed at {count} branch(es) yet — offered there, but not orderable until it is listed.',
+  'catalog.editor.availability.notListedHeading':
+    'Offered at some branches but not listed in inventory there yet — not orderable until it is listed.',
+  'catalog.editor.availability.notListedVariantRow': '{variant} — not listed at {count} branch(es)',
   'catalog.editor.availability.listEverywhere': 'List at every branch',
   'catalog.editor.availability.listingInProgress': 'Listing…',
   'catalog.editor.schedule.hint':
@@ -2408,6 +2409,17 @@ export const messagesEn = {
   'catalog.stock.loading': 'Loading stock',
   'catalog.stock.noLocation': 'No location resolved for this account yet',
   'catalog.stock.denied': 'No access to this location’s stock',
+  'catalog.stock.unlisted.title': 'Offered here but not listed in inventory: {count}',
+  'catalog.stock.unlisted.body':
+    'These dishes are set available on this branch’s menu but have no inventory listing, so customers see them as unavailable until they are listed.',
+  'catalog.stock.unlisted.listAll': 'List all {count}',
+  'catalog.stock.unlisted.listing': 'Listing…',
+  'catalog.stock.unlisted.more': '…and {count} more',
+  'catalog.stock.unlisted.outcome': 'Listed {listed} of {candidate} dishes.',
+  'catalog.stock.unlisted.outcomePartial':
+    'Listed {listed} of {candidate} dishes. Reload to see what is left.',
+  'catalog.stock.unlisted.moreRemain': 'More remain — list again to continue.',
+  'catalog.stock.unlisted.loadFailed': 'Could not load the unlisted dishes report.',
   'catalog.stock.empty': 'No QUANTITY-tracked items at this location yet',
   'catalog.stock.column.variant': 'Variant',
   'catalog.stock.column.onHand': 'On hand',

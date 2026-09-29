@@ -2264,8 +2264,9 @@ export const messagesRu: MessageCatalogue = {
   'catalog.editor.availability.quantityHint':
     'Остаток, суточное значение по умолчанию и пороги остановки по каналам для варианта с учётом QUANTITY находятся на странице «Остатки».',
   'catalog.editor.availability.quantityHintLink': 'Открыть Остатки',
-  'catalog.editor.availability.notListedAtBranches':
-    'Не размещено в {count} филиал(ах) — предлагается там, но недоступно для заказа, пока не размещено.',
+  'catalog.editor.availability.notListedHeading':
+    'Предлагается в некоторых филиалах, но там ещё не размещено в учёте — недоступно для заказа, пока не размещено.',
+  'catalog.editor.availability.notListedVariantRow': '{variant} — не размещено в {count} филиал(ах)',
   'catalog.editor.availability.listEverywhere': 'Разместить во всех филиалах',
   'catalog.editor.availability.listingInProgress': 'Размещение…',
   'catalog.editor.schedule.hint':
@@ -2376,6 +2377,17 @@ export const messagesRu: MessageCatalogue = {
   'catalog.stock.loading': 'Загрузка остатков',
   'catalog.stock.noLocation': 'Для этого аккаунта ещё не определён филиал',
   'catalog.stock.denied': 'Нет доступа к остаткам этого филиала',
+  'catalog.stock.unlisted.title': 'Предлагается здесь, но не размещено в учёте: {count}',
+  'catalog.stock.unlisted.body':
+    'Эти блюда отмечены доступными в меню филиала, но не размещены в складском учёте, поэтому гости видят их недоступными, пока они не размещены.',
+  'catalog.stock.unlisted.listAll': 'Разместить все ({count})',
+  'catalog.stock.unlisted.listing': 'Размещение…',
+  'catalog.stock.unlisted.more': '…и ещё {count}',
+  'catalog.stock.unlisted.outcome': 'Размещено {listed} из {candidate} блюд.',
+  'catalog.stock.unlisted.outcomePartial':
+    'Размещено {listed} из {candidate} блюд. Обновите страницу, чтобы увидеть остаток.',
+  'catalog.stock.unlisted.moreRemain': 'Остались ещё — разместите снова, чтобы продолжить.',
+  'catalog.stock.unlisted.loadFailed': 'Не удалось загрузить отчёт о неразмещённых блюдах.',
   'catalog.stock.empty': 'В этом филиале пока нет позиций с учётом QUANTITY',
   'catalog.stock.column.variant': 'Вариант',
   'catalog.stock.column.onHand': 'В наличии',

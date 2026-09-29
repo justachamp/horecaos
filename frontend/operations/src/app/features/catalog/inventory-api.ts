@@ -1,8 +1,8 @@
 import { Injectable, inject } from '@angular/core';
-import { Observable, map } from 'rxjs';
+import { Observable, map, tap } from 'rxjs';
 
 import { ApiClient } from '../../core/api/api-client';
-import { command } from '../../core/api/idempotency';
+import { IntentCommandRegistry, command } from '../../core/api/idempotency';
 import { LocationScope, operationsPaths } from '../../core/api/operations-paths';
 
 /**
@@ -53,6 +53,43 @@ export interface StockPosition {
   readonly channelStopThresholds: readonly ChannelStopThreshold[];
 }
 
+/**
+ * `InventoryController.UnlistedOfferingResponse` — one dish a location offers
+ * `AVAILABLE` that inventory has never listed, so it reads as unavailable
+ * (`NOT_STOCKED_AT_LOCATION`) whatever the tenant's stock-logic setting.
+ */
+export interface UnlistedOffering {
+  readonly variantId: string;
+  readonly productName: string;
+  readonly variantName?: string | null;
+  readonly sku?: string | null;
+}
+
+/**
+ * `InventoryController.UnlistedOfferingsResponse` — the stock page's report
+ * (gap map row 4.4c). `totalCount` is the whole backlog; `items` may be a
+ * page of it (`hasMore`).
+ */
+export interface UnlistedOfferingsReport {
+  readonly totalCount: number;
+  readonly hasMore: boolean;
+  readonly items: readonly UnlistedOffering[];
+}
+
+/** `InventoryController.BackfillResponse` — what one location-wide list-all call did. */
+export interface LocationBackfillResult {
+  readonly candidateCount: number;
+  readonly listedCount: number;
+  /** The call hit its per-call cap; the location may still have more — call again. */
+  readonly mayHaveMore: boolean;
+}
+
+/** `InventoryVariantListingController.BackfillResponse` — what one per-variant list-everywhere call did. */
+export interface VariantBackfillResult {
+  readonly candidateCount: number;
+  readonly listedCount: number;
+}
+
 /** `inventory.api.AvailabilityDecision.Unavailable` — one item keeping a cart from being fully available. */
 export interface UnavailableItem {
   readonly variantId: string;
@@ -77,6 +114,18 @@ export interface AvailabilityDecision {
 @Injectable({ providedIn: 'root' })
 export class InventoryApi {
   private readonly api = inject(ApiClient);
+
+  /**
+   * One `Idempotency-Key` per operator intent (ADR 0031) for the two
+   * list-everything actions. Both are the "click the button again" shape: a
+   * lost response leaves the operator unsure whether it landed, and a fresh
+   * key on the retry would re-run the whole backfill instead of replaying the
+   * stored answer. So a retry of the same action reuses its key, and a
+   * success forgets it — whatever is clicked next is a new intent (and for a
+   * location with more than one call's worth of backlog, the next call must
+   * run, not replay page one).
+   */
+  private readonly listAllIntents = new IntentCommandRegistry<undefined>();
 
   registerStockItem(
     scope: LocationScope,
@@ -178,13 +227,41 @@ export class InventoryApi {
   }
 
   /**
+   * The stock page's "unlisted offered dishes" report (gap map row 4.4c):
+   * which offered variants at this location have no inventory listing, with
+   * the exact backlog size. Also the runbook's dry run.
+   */
+  unlistedOfferings(scope: LocationScope): Observable<UnlistedOfferingsReport> {
+    return this.api
+      .get<UnlistedOfferingsReport>(operationsPaths.inventoryUnlistedOfferings(scope))
+      .pipe(map((result) => result.value));
+  }
+
+  /**
+   * The stock page's bulk "list all" — `POST .../inventory/listing-backfill`,
+   * the idempotent backfill endpoint. Lists up to one call's cap; check
+   * `mayHaveMore` and call again for a bigger backlog.
+   */
+  backfillLocationListing(scope: LocationScope): Observable<LocationBackfillResult> {
+    const id = `location:${scope.tenantId}:${scope.brandId}:${scope.locationId}`;
+    return this.api
+      .post<undefined, LocationBackfillResult>(
+        operationsPaths.inventoryListingBackfill(scope),
+        this.listAllIntents.next(id, undefined),
+      )
+      .pipe(tap(() => this.listAllIntents.forget(id)));
+  }
+
+  /**
    * The product editor's own "not listed at N branches" read (gap map row
    * 4.1) — `InventoryVariantListingController`, brand-scoped: every branch
    * offering this variant AVAILABLE that has never listed it.
    */
   unlistedLocations(scope: LocationScope, variantId: string): Observable<readonly string[]> {
     return this.api
-      .get<{ locationIds: readonly string[] }>(operationsPaths.inventoryVariantListing(scope, variantId))
+      .get<{ locationIds: readonly string[] }>(
+        operationsPaths.inventoryVariantListing(scope, variantId),
+      )
       .pipe(map((result) => result.value.locationIds));
   }
 
@@ -197,8 +274,14 @@ export class InventoryApi {
   backfillVariantListing(
     scope: LocationScope,
     variantId: string,
-  ): Observable<{ candidateCount: number; listedCount: number }> {
-    return this.api.post(operationsPaths.inventoryVariantListingBackfill(scope, variantId), command(undefined));
+  ): Observable<VariantBackfillResult> {
+    const id = `variant:${scope.tenantId}:${scope.brandId}:${variantId}`;
+    return this.api
+      .post<undefined, VariantBackfillResult>(
+        operationsPaths.inventoryVariantListingBackfill(scope, variantId),
+        this.listAllIntents.next(id, undefined),
+      )
+      .pipe(tap(() => this.listAllIntents.forget(id)));
   }
 
   /** Removes a channel type's stop threshold — that channel goes back to selling to zero. */

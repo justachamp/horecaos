@@ -69,6 +69,12 @@ describe('operationsPaths inventory* group (row 4.4c/4.4d InventoryController pa
     );
   });
 
+  it('inventoryUnlistedOfferings builds on the legacy tenant prefix, next to the backfill it feeds', () => {
+    expect(operationsPaths.inventoryUnlistedOfferings(SCOPE)).toBe(
+      '/api/v1/tenants/t1/brands/b1/locations/l1/inventory/unlisted-offerings',
+    );
+  });
+
   it('inventoryVariantListing is brand-scoped, with no location segment', () => {
     expect(operationsPaths.inventoryVariantListing(SCOPE, 'v1')).toBe(
       '/api/v1/tenants/t1/brands/b1/variants/v1/inventory-listing',
@@ -105,6 +111,8 @@ describe('operationsPaths.customerOrderReorder', () => {
         'acct 1',
         'order-1',
       ),
-    ).toBe('/api/v1/tenants/t%2F1/brands/b1/locations/l1/customers/acct%201/orders/order-1/reorder');
+    ).toBe(
+      '/api/v1/tenants/t%2F1/brands/b1/locations/l1/customers/acct%201/orders/order-1/reorder',
+    );
   });
 });

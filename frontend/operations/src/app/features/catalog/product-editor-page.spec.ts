@@ -3,7 +3,7 @@ import { TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { provideRouter } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
-import { of, throwError } from 'rxjs';
+import { Subject, of, throwError } from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
 
 import { CurrentBrand } from '../../core/auth/current-brand';
@@ -599,7 +599,9 @@ describe('ProductEditorPage', () => {
 
   it('shows "not listed at N branches" and lists everywhere on click (gap map row 4.1)', async () => {
     const unlistedLocations = vi.fn().mockReturnValue(of(['l2', 'l3']));
-    const backfillVariantListing = vi.fn().mockReturnValue(of({ candidateCount: 2, listedCount: 2 }));
+    const backfillVariantListing = vi
+      .fn()
+      .mockReturnValue(of({ candidateCount: 2, listedCount: 2 }));
     configure(
       { productDetail: () => of(productDetail()) },
       {},
@@ -625,12 +627,146 @@ describe('ProductEditorPage', () => {
 
     // A second call, with none left unlisted, hides the banner.
     unlistedLocations.mockReturnValue(of([]));
-    (host.querySelector('[data-testid="editor-list-missing-branches"]') as HTMLButtonElement).click();
+    (
+      host.querySelector(
+        '[data-testid="editor-list-missing-branches-variant-1"]',
+      ) as HTMLButtonElement
+    ).click();
     await flushMicrotasks();
     harness.detectChanges();
 
     expect(backfillVariantListing).toHaveBeenCalledWith(LOCATION_SCOPE, 'variant-1');
     expect(host.querySelector('[data-testid="editor-unlisted-branches-banner"]')).toBeFalsy();
+  });
+
+  // Batch 13 follow-up: the banner read only the product's default variant, so
+  // a second variant offered at branches that never listed it stayed silent.
+  describe('every variant, not only the default one', () => {
+    function twoVariants(): ProductDetail {
+      const base = productDetail();
+      return productDetail({
+        variants: [
+          ...base.variants,
+          {
+            variantId: 'variant-2',
+            sku: 'PLOV-2',
+            unitCode: 'PIECE',
+            isDefault: false,
+            sortOrder: 1,
+            status: 'ACTIVE',
+            version: 1,
+            translations: { ru: { name: 'Плов, двойная порция' } },
+            fiscal: null,
+          },
+        ],
+      });
+    }
+
+    async function openAvailability(
+      inventoryApi: Partial<InventoryApi>,
+      detail: ProductDetail = twoVariants(),
+    ) {
+      configure({ productDetail: () => of(detail) }, {}, {}, {}, {}, {}, {}, inventoryApi);
+      const harness = await RouterTestingHarness.create('/catalog/products/product-1');
+      await flushMicrotasks();
+      const host = harness.routeNativeElement!;
+      (host.querySelector('[data-testid="editor-tab-AVAILABILITY"]') as HTMLButtonElement).click();
+      await flushMicrotasks();
+      harness.detectChanges();
+      return { harness, host };
+    }
+
+    it('shows the banner for a non-default variant even when the default one is fully listed', async () => {
+      const unlistedLocations = vi.fn((_scope: unknown, variantId: string) =>
+        of(variantId === 'variant-2' ? ['l2', 'l3', 'l4'] : []),
+      );
+      const { host } = await openAvailability({ unlistedLocations });
+
+      expect(unlistedLocations).toHaveBeenCalledWith(LOCATION_SCOPE, 'variant-1');
+      expect(unlistedLocations).toHaveBeenCalledWith(LOCATION_SCOPE, 'variant-2');
+      expect(host.querySelector('[data-testid="editor-unlisted-branches-banner"]')).toBeTruthy();
+      expect(host.querySelector('[data-testid="editor-unlisted-variant-variant-1"]')).toBeFalsy();
+      const row = host.querySelector('[data-testid="editor-unlisted-variant-variant-2"]');
+      expect(row?.textContent).toContain('Плов, двойная порция');
+      expect(row?.textContent).toContain('3');
+    });
+
+    it('lists one variant only, and leaves the other variant’s row in place', async () => {
+      const remaining: Record<string, string[]> = {
+        'variant-1': ['l2', 'l3'],
+        'variant-2': ['l2'],
+      };
+      const unlistedLocations = vi.fn((_scope: unknown, variantId: string) =>
+        of(remaining[variantId] ?? []),
+      );
+      const backfillVariantListing = vi.fn((_scope: unknown, variantId: string) => {
+        remaining[variantId] = [];
+        return of({ candidateCount: 1, listedCount: 1 });
+      });
+      const { harness, host } = await openAvailability({
+        unlistedLocations,
+        backfillVariantListing,
+      });
+
+      expect(host.querySelector('[data-testid="editor-unlisted-variant-variant-1"]')).toBeTruthy();
+      expect(host.querySelector('[data-testid="editor-unlisted-variant-variant-2"]')).toBeTruthy();
+
+      (
+        host.querySelector(
+          '[data-testid="editor-list-missing-branches-variant-2"]',
+        ) as HTMLButtonElement
+      ).click();
+      await flushMicrotasks();
+      harness.detectChanges();
+
+      expect(backfillVariantListing).toHaveBeenCalledTimes(1);
+      expect(backfillVariantListing).toHaveBeenCalledWith(LOCATION_SCOPE, 'variant-2');
+      expect(host.querySelector('[data-testid="editor-unlisted-variant-variant-2"]')).toBeFalsy();
+      expect(host.querySelector('[data-testid="editor-unlisted-variant-variant-1"]')).toBeTruthy();
+      expect(host.querySelector('[data-testid="editor-unlisted-branches-banner"]')).toBeTruthy();
+    });
+
+    it('keeps the other variants’ rows when one variant’s read fails', async () => {
+      const unlistedLocations = vi.fn((_scope: unknown, variantId: string) =>
+        variantId === 'variant-1' ? throwError(() => new Error('boom')) : of(['l2']),
+      );
+      const { host } = await openAvailability({ unlistedLocations });
+
+      expect(host.querySelector('[data-testid="editor-unlisted-variant-variant-1"]')).toBeFalsy();
+      expect(host.querySelector('[data-testid="editor-unlisted-variant-variant-2"]')).toBeTruthy();
+    });
+
+    it('disables only the variant being listed while its request is in flight', async () => {
+      const pending = new Subject<{ candidateCount: number; listedCount: number }>();
+      const unlistedLocations = vi.fn().mockReturnValue(of(['l2']));
+      const backfillVariantListing = vi.fn().mockReturnValue(pending);
+      const { harness, host } = await openAvailability({
+        unlistedLocations,
+        backfillVariantListing,
+      });
+
+      const first = host.querySelector(
+        '[data-testid="editor-list-missing-branches-variant-1"]',
+      ) as HTMLButtonElement;
+      const second = host.querySelector(
+        '[data-testid="editor-list-missing-branches-variant-2"]',
+      ) as HTMLButtonElement;
+      first.click();
+      await flushMicrotasks();
+      harness.detectChanges();
+
+      expect(first.disabled).toBe(true);
+      expect(second.disabled).toBe(false);
+
+      // A second click on the in-flight variant is swallowed, not a second request.
+      first.click();
+      expect(backfillVariantListing).toHaveBeenCalledTimes(1);
+
+      unlistedLocations.mockReturnValue(of([]));
+      pending.next({ candidateCount: 1, listedCount: 1 });
+      pending.complete();
+      await flushMicrotasks();
+    });
   });
 
   it('never shows the "not listed" banner once every branch is already listed', async () => {
