@@ -6,7 +6,8 @@ import { authGuard } from './guards/auth.guard';
  * The six screens the Milliy design defines, plus `referral` (ADR 0067):
  * a customer's own code, sharing it, and redeeming a friend's, reached from
  * a real row on the profile screen rather than promised and left unbuilt --
- * and the table-QR scan landing and table menu (ADR 0047, `dine-in/...`).
+ * the table-QR scan landing and table (ADR 0047, `dine-in/...`), and the
+ * sign-in that `authGuard` sends an anonymous visitor to (ADR 0051, `auth/...`).
  *
  * The gating mirrors the first storefront's, because it mirrors the platform:
  * the published menu is browsable without an account (ADR 0016, and
@@ -47,6 +48,28 @@ export const routes: Routes = [
       import('./pages/dine-in/dine-in-scan/dine-in-scan.component').then(
         (m) => m.DineInScanComponent,
       ),
+  },
+  // Sign-in: phone, then the SMS code (ADR 0051). `authGuard` has always
+  // redirected here; until this route existed the redirect hit the catch-all
+  // below and an anonymous visitor to /cart or /checkout simply landed on /home.
+  // Public by nature -- nobody signing in has a session yet -- and it is where a
+  // guest at a table is sent from «sign in to order», returning through
+  // ReturnDestination to `dine-in/table`.
+  {
+    path: 'auth',
+    children: [
+      { path: '', pathMatch: 'full', redirectTo: 'login' },
+      {
+        path: 'login',
+        loadComponent: () =>
+          import('./pages/auth/auth-login/auth-login.component').then((m) => m.AuthLoginComponent),
+      },
+      {
+        path: 'code',
+        loadComponent: () =>
+          import('./pages/auth/auth-code/auth-code.component').then((m) => m.AuthCodeComponent),
+      },
+    ],
   },
   {
     path: 'cart',

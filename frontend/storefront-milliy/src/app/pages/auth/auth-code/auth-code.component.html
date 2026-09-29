@@ -1,0 +1,53 @@
+<main class="auth" data-testid="auth-code">
+  <button type="button" class="auth__back" data-testid="auth-back" (click)="back()">
+    <span class="auth__chevron" aria-hidden="true">‹</span>
+    {{ 'common.back' | t }}
+  </button>
+
+  <h1 class="auth__title">{{ 'auth.codeTitle' | t }}</h1>
+  <p class="auth__phone" data-testid="auth-phone-display">{{ phoneDisplay() }}</p>
+  <p class="auth__sent">{{ 'auth.codeSentTo' | t }}</p>
+
+  <div class="boxes">
+    @for (index of digits; track index) {
+      <input
+        class="box"
+        type="tel"
+        inputmode="numeric"
+        [attr.data-code-input]="index"
+        [attr.maxlength]="index === 0 ? 6 : 1"
+        [attr.autocomplete]="index === 0 ? 'one-time-code' : 'off'"
+        [class.box--filled]="!!digitAt(index)"
+        [value]="digitAt(index)"
+        (input)="onDigitInput(index, $event)"
+        (keydown)="onDigitKeydown(index, $event)"
+        (paste)="onPaste($event)"
+      />
+    }
+  </div>
+
+  @if (failure(); as problem) {
+    <p class="auth__error" role="alert" data-testid="auth-error">{{ problem.key | t: problem.params }}</p>
+  }
+
+  @if (showResend()) {
+    <div class="auth__resend">
+      <p class="auth__sent">{{ 'auth.noCodeReceived' | t }}</p>
+      <button type="button" class="link" data-testid="auth-resend" (click)="resend()">
+        {{ 'auth.resendCode' | t }}
+      </button>
+    </div>
+  } @else {
+    <p class="auth__countdown" data-testid="auth-countdown">{{ clock() }}</p>
+  }
+
+  <button
+    type="button"
+    class="btn"
+    data-testid="auth-submit"
+    [disabled]="!canSubmit()"
+    (click)="submit()"
+  >
+    {{ (loading() ? 'common.loading' : 'auth.confirm') | t }}
+  </button>
+</main>
