@@ -573,6 +573,56 @@ class OperationsServiceZoneControllerEndpointTests {
     }
 
     @Test
+    void aRenameThatRestatesANameItAlreadyHasWritesAndAuditsOnlyWhatChanged() throws Exception {
+        UUID zoneId = registerZoneNamed(
+                "CENTRE", "{\"ru\":\"Центр\",\"uz-Latn\":\"Markaz\",\"en\":\"Centre\",\"kaa\":\"Orayı\"}");
+
+        // An editor that resends every name it loaded: only ru is actually new.
+        MvcResult renamed = mvc.perform(put(zonesPath(TENANT) + "/" + zoneId + "/names")
+                        .with(tokenFor(OWNER))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "rename-restate")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"displayNames":{"ru":"Центр города","uz-Latn":"Markaz","en":"Centre","kaa":"Orayı"}}
+                                """))
+                .andReturn();
+
+        assertThat(renamed.getResponse().getStatus()).isEqualTo(200);
+        assertThat(listedNamesOf("CENTRE"))
+                .containsExactly(
+                        Map.entry("ru", "Центр города"),
+                        Map.entry("uz-Latn", "Markaz"),
+                        Map.entry("en", "Centre"),
+                        Map.entry("kaa", "Orayı"));
+        String change = jdbc.sql("SELECT change_document::text FROM audit.audit_events "
+                        + "WHERE action_code = 'delivery.zone.renamed'")
+                .query(String.class)
+                .single();
+        assertThat(change)
+                .as("the audit entry attributes only the changed language to the caller")
+                .contains("displayName.ru")
+                .doesNotContain("displayName.uz-Latn")
+                .doesNotContain("displayName.en")
+                .doesNotContain("displayName.kaa");
+    }
+
+    @Test
+    void aRenameThatOnlyRestatesCurrentNamesChangesAndAuditsNothing() throws Exception {
+        UUID zoneId = registerZoneNamed("CENTRE", "{\"ru\":\"Центр\",\"kaa\":\"Orayı\"}");
+
+        MvcResult renamed = mvc.perform(put(zonesPath(TENANT) + "/" + zoneId + "/names")
+                        .with(tokenFor(OWNER))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "rename-noop")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"displayNames\":{\"ru\":\"Центр\",\"kaa\":\"Orayı\"}}"))
+                .andReturn();
+
+        assertThat(renamed.getResponse().getStatus()).isEqualTo(200);
+        assertThat(renamed.getResponse().getContentAsString()).contains("Центр").contains("Orayı");
+        assertThat(auditActionCounts()).doesNotContainKey("delivery.zone.renamed");
+    }
+
+    @Test
     void aRenameThatNamesNothingIsRefused() throws Exception {
         UUID zoneId = registerZoneNamed("CENTRE", "{\"ru\":\"Центр\"}");
 
