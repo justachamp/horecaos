@@ -56,6 +56,18 @@ type PageState = 'loading' | 'ready' | 'denied' | 'error';
  * current version's text for every language the editors do not show, unchanged
  * (the same rule `channel-setup-page.ts` applies to a static page).
  *
+ * **Switching brands empties the form until the new brand's text has
+ * arrived.** The picker changes {@link locales} at once (they derive from the
+ * picked brand), but the text in {@link current} and {@link drafts} belongs to
+ * the brand that was picked before, and a publish sends the current version's
+ * text for every language the editors do not show. Left in place through the
+ * two reads, that would publish the previous brand's hidden-language text — and
+ * its drafts — as the new brand's legal terms. {@link selectBrand} therefore
+ * clears them, shows the form as loading ({@link brandLoading}) and takes a
+ * ticket ({@link brandLoadSeq}); a reply for a brand that is no longer the
+ * picked one is dropped, and a publish that lands after the operator moved on
+ * does not write its result into the other brand's form.
+ *
  * **What "never published" means, concretely.** `TermsApi.current` returns
  * `published: false` with empty `contentsByLocale` for a brand that has
  * never published — not an error. The storefront is, right now, serving the
@@ -80,6 +92,15 @@ export class TermsPage {
 
   protected readonly brands = signal<readonly BrandView[]>([]);
   protected readonly selectedBrandId = signal<string | null>(null);
+
+  /** True from the moment a brand is picked until its terms and history have arrived. */
+  protected readonly brandLoading = signal(false);
+
+  /**
+   * A ticket for the latest brand load: a reply that arrives under an older one
+   * belongs to a brand the operator has since left, and must change nothing.
+   */
+  private brandLoadSeq = 0;
 
   protected readonly current = signal<TermsVersionView | null>(null);
   protected readonly history = signal<readonly TermsVersionSummaryView[]>([]);
@@ -143,6 +164,7 @@ export class TermsPage {
   protected canPublish(): boolean {
     return (
       !this.publishSubmitting() &&
+      !this.brandLoading() &&
       this.locales().some((locale) => this.draftFor(locale).trim().length > 0)
     );
   }
@@ -195,7 +217,15 @@ export class TermsPage {
     if (brandId === this.selectedBrandId()) {
       return;
     }
+    const ticket = ++this.brandLoadSeq;
     this.selectedBrandId.set(brandId);
+    // The previous brand's document, drafts and history are not this brand's: out
+    // of the form now, not when the replacement arrives.
+    this.current.set(null);
+    this.history.set([]);
+    this.drafts.set({});
+    this.note.set('');
+    this.brandLoading.set(true);
     this.expandedVersion.set(null);
     this.previewContent.set(null);
     this.previewError.set(null);
@@ -203,9 +233,15 @@ export class TermsPage {
     this.publishError.set(null);
     this.loadErrorText.set(null);
     try {
-      await this.loadBrandData(brandId);
+      await this.loadBrandData(brandId, ticket);
     } catch (error) {
-      this.handleLoadFailure(error);
+      if (ticket === this.brandLoadSeq) {
+        this.handleLoadFailure(error);
+      }
+    } finally {
+      if (ticket === this.brandLoadSeq) {
+        this.brandLoading.set(false);
+      }
     }
   }
 
@@ -233,8 +269,14 @@ export class TermsPage {
     this.publishedNotice.set(null);
     try {
       const published = await this.api.publish(tenantId, brandId, request);
+      const history = await this.api.list(tenantId, brandId);
+      if (this.selectedBrandId() !== brandId) {
+        // The operator picked another brand while this one was publishing: its
+        // result is not that brand's form to fill.
+        return;
+      }
       this.current.set(published);
-      this.history.set(await this.api.list(tenantId, brandId));
+      this.history.set(history);
       this.note.set('');
       this.publishedNotice.set(
         this.i18n.t('settings.terms.publish.success', { version: published.version ?? 0 }),
@@ -280,6 +322,7 @@ export class TermsPage {
       return;
     }
     this.tenantId = tenantId;
+    const ticket = ++this.brandLoadSeq;
     try {
       const brands = await this.brandsApi.list(tenantId);
       this.brands.set(brands);
@@ -290,7 +333,10 @@ export class TermsPage {
         return;
       }
       this.selectedBrandId.set(firstBrand.id);
-      await this.loadBrandData(firstBrand.id);
+      await this.loadBrandData(firstBrand.id, ticket);
+      if (ticket !== this.brandLoadSeq) {
+        return;
+      }
       this.state.set('ready');
     } catch (error) {
       this.handleLoadFailure(error);
@@ -310,7 +356,7 @@ export class TermsPage {
     return content === undefined ? null : sanitizeRichHtml(content);
   }
 
-  private async loadBrandData(brandId: string): Promise<void> {
+  private async loadBrandData(brandId: string, ticket: number): Promise<void> {
     const tenantId = this.tenantId;
     if (!tenantId) {
       return;
@@ -319,6 +365,10 @@ export class TermsPage {
       this.api.current(tenantId, brandId),
       this.api.list(tenantId, brandId),
     ]);
+    if (ticket !== this.brandLoadSeq) {
+      // The operator picked another brand while these reads were in flight.
+      return;
+    }
     this.current.set(current);
     this.history.set(history);
     this.drafts.set(

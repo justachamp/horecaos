@@ -25,6 +25,7 @@
         id="terms-brand"
         class="q-body field brand-select"
         [value]="selectedBrandId()"
+        [disabled]="brandLoading() || publishSubmitting()"
         (change)="selectBrand($any($event.target).value)"
       >
         @for (brand of brands(); track brand.id) {
@@ -33,7 +34,9 @@
       </select>
     }
 
-    @if (current(); as value) {
+    @if (brandLoading()) {
+      <p class="q-body-sm" data-testid="terms-brand-loading">{{ 'settings.terms.loading' | t }}</p>
+    } @else if (current(); as value) {
       @if (!value.published) {
         <p class="q-body-sm banner banner--info">{{ 'settings.terms.neverPublished' | t }}</p>
       } @else {
@@ -104,58 +107,62 @@
       </section>
     }
 
-    <section class="card">
-      <h2 class="q-subhead">{{ 'settings.terms.history.title' | t }}</h2>
-      <table class="table">
-        <thead>
-          <tr>
-            <th class="q-caption">{{ 'settings.terms.history.column.version' | t }}</th>
-            <th class="q-caption">{{ 'settings.terms.history.column.locales' | t }}</th>
-            <th class="q-caption">{{ 'settings.terms.history.column.publishedBy' | t }}</th>
-            <th class="q-caption">{{ 'settings.terms.history.column.publishedAt' | t }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (entry of history(); track entry.id) {
-            <tr class="row row--clickable" (click)="togglePreview(entry)">
-              <td class="q-body-sm q-tnum">{{ entry.version }}</td>
-              <td class="q-body-sm">{{ entry.locales.join(', ') }}</td>
-              <td class="q-body-sm">{{ entry.publishedBy }}</td>
-              <td class="q-body-sm q-mono">{{ entry.publishedAt }}</td>
+    @if (!brandLoading()) {
+      <section class="card">
+        <h2 class="q-subhead">{{ 'settings.terms.history.title' | t }}</h2>
+        <table class="table">
+          <thead>
+            <tr>
+              <th class="q-caption">{{ 'settings.terms.history.column.version' | t }}</th>
+              <th class="q-caption">{{ 'settings.terms.history.column.locales' | t }}</th>
+              <th class="q-caption">{{ 'settings.terms.history.column.publishedBy' | t }}</th>
+              <th class="q-caption">{{ 'settings.terms.history.column.publishedAt' | t }}</th>
             </tr>
-            @if (expandedVersion() === entry.version) {
-              <tr class="preview-row">
-                <td colspan="4">
-                  @if (previewLoading()) {
-                    <p class="q-body-sm">{{ 'settings.terms.preview.loading' | t }}</p>
-                  } @else if (previewError(); as message) {
-                    <p class="q-body-sm error" role="alert">{{ message }}</p>
-                  } @else if (previewContent(); as preview) {
-                    <div class="preview">
-                      @for (locale of previewLocales(preview); track locale) {
-                        <div class="preview__locale" [attr.data-locale]="locale">
-                          <h3 class="q-caption">{{ fieldLabel(locale) }}</h3>
-                          @if (previewHtml(preview, locale); as html) {
-                            <div class="q-body-sm preview__text" [innerHTML]="html"></div>
-                          } @else {
-                            <p class="q-body-sm preview__text">
-                              {{ 'settings.terms.preview.notIncluded' | t }}
-                            </p>
-                          }
-                        </div>
-                      }
-                    </div>
-                  }
+          </thead>
+          <tbody>
+            @for (entry of history(); track entry.id) {
+              <tr class="row row--clickable" (click)="togglePreview(entry)">
+                <td class="q-body-sm q-tnum">{{ entry.version }}</td>
+                <td class="q-body-sm">{{ entry.locales.join(', ') }}</td>
+                <td class="q-body-sm">{{ entry.publishedBy }}</td>
+                <td class="q-body-sm q-mono">{{ entry.publishedAt }}</td>
+              </tr>
+              @if (expandedVersion() === entry.version) {
+                <tr class="preview-row">
+                  <td colspan="4">
+                    @if (previewLoading()) {
+                      <p class="q-body-sm">{{ 'settings.terms.preview.loading' | t }}</p>
+                    } @else if (previewError(); as message) {
+                      <p class="q-body-sm error" role="alert">{{ message }}</p>
+                    } @else if (previewContent(); as preview) {
+                      <div class="preview">
+                        @for (locale of previewLocales(preview); track locale) {
+                          <div class="preview__locale" [attr.data-locale]="locale">
+                            <h3 class="q-caption">{{ fieldLabel(locale) }}</h3>
+                            @if (previewHtml(preview, locale); as html) {
+                              <div class="q-body-sm preview__text" [innerHTML]="html"></div>
+                            } @else {
+                              <p class="q-body-sm preview__text">
+                                {{ 'settings.terms.preview.notIncluded' | t }}
+                              </p>
+                            }
+                          </div>
+                        }
+                      </div>
+                    }
+                  </td>
+                </tr>
+              }
+            } @empty {
+              <tr>
+                <td class="q-body-sm empty" colspan="4">
+                  {{ 'settings.terms.history.empty' | t }}
                 </td>
               </tr>
             }
-          } @empty {
-            <tr>
-              <td class="q-body-sm empty" colspan="4">{{ 'settings.terms.history.empty' | t }}</td>
-            </tr>
-          }
-        </tbody>
-      </table>
-    </section>
+          </tbody>
+        </table>
+      </section>
+    }
   }
 }
