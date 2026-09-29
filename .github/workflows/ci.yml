@@ -89,6 +89,11 @@ jobs:
           python3 tools/ci/test_shard_tests.py
           python3 tools/ci/shard_tests.py check
 
+      - name: Makefile reaches Maven under the build lock
+        # make test/arch/verify go through tools/mvn-serial; make run compiles
+        # under it and serves outside it, so a dev server never holds the tree.
+        run: python3 tools/checks/test_makefile.py
+
       - name: Applied migrations are append-only
         if: github.event_name == 'pull_request'
         run: |

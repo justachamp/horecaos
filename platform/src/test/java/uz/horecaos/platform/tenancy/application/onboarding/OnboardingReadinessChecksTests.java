@@ -391,10 +391,32 @@ class OnboardingReadinessChecksTests {
             assertThat(finding.errorCode()).isEqualTo("MERCHANT_SECRET_ROTATION_DUE");
             assertThat(finding.detail()).contains("CLICK", "300 days");
             assertThat(finding.detail())
+                    .as("names the legal entity that owns the account: the panel shows one row per account")
+                    .contains("ACME");
+            assertThat(finding.detail())
                     .as("ADR 0028: a reference to a secret is not for a readiness list either, "
                             + "nor is the merchant's own account reference")
-                    .doesNotContain("horecaos:test", "acct-1");
+                    .doesNotContain("horecaos:test", "acct-");
         });
+    }
+
+    @Test
+    void rotationAgeTellsTwoMerchantAccountsOfTheSameProviderApartByTheirLegalEntity() {
+        // One live account per legal entity per provider (ux_merchant_binding_live_per_entity),
+        // so two CLICK accounts belong to two entities: the entity's code is the only thing that
+        // separates their rows, and the account reference is deliberately kept out of the text.
+        insertMerchantBinding(insertLegalEntity("ACME"), "CLICK", "ACTIVE", daysAgo(300), null);
+        insertMerchantBinding(insertLegalEntity("BETA"), "CLICK", "ACTIVE", daysAgo(250), null);
+
+        List<StepResult.Finding> findings = findings(rotation(ROTATION_PERIOD).check(tenantId));
+
+        assertThat(findings)
+                .extracting(StepResult.Finding::detail)
+                .as("two accounts, two different sentences")
+                .doesNotHaveDuplicates()
+                .satisfiesExactly(
+                        first -> assertThat(first).contains("ACME", "300 days"),
+                        second -> assertThat(second).contains("BETA", "250 days"));
     }
 
     @Test
@@ -686,12 +708,14 @@ class OnboardingReadinessChecksTests {
         UUID id = UUID.randomUUID();
         jdbc.sql("""
                 INSERT INTO tenant.legal_entities (id, tenant_id, code, legal_name, tin, vat_registered, status)
-                VALUES (:id, :tenantId, :code, :legalName, '123456789', false, 'ACTIVE')
+                VALUES (:id, :tenantId, :code, :legalName, :tin, false, 'ACTIVE')
                 """)
                 .param("id", id)
                 .param("tenantId", tenantId)
                 .param("code", code)
                 .param("legalName", code + " LLC")
+                // Nine digits, and different for each code: a tenant's entities have distinct TINs.
+                .param("tin", "%09d".formatted(Math.abs((long) code.hashCode()) % 1_000_000_000L))
                 .update();
         return id;
     }
@@ -737,12 +761,15 @@ class OnboardingReadinessChecksTests {
                      supports_reversal, supports_partner_fiscalization, status, effective_from,
                      created_at, last_secret_rotated_at)
                 VALUES (:id, :tenantId, :legalEntityId, :providerType, :installationId, :bindingId,
-                        'acct-1', :secretRef, :segment, true, true, :status, :from, :createdAt, :lastRotatedAt)
+                        :accountReference, :secretRef, :segment, true, true, :status, :from, :createdAt,
+                        :lastRotatedAt)
                 """)
                 .param("id", UUID.randomUUID())
                 .param("tenantId", tenantId)
                 .param("legalEntityId", legalEntityId)
                 .param("providerType", providerType)
+                // A merchant account belongs to exactly one legal entity (ux_merchant_account_belongs_to_one_entity).
+                .param("accountReference", "acct-" + legalEntityId)
                 .param("installationId", installationId)
                 .param("bindingId", bindingId)
                 .param("secretRef", "horecaos:test:provider_payment:tenant:" + providerType.toLowerCase(Locale.ROOT))

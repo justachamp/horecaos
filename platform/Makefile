@@ -9,7 +9,8 @@
 # from elsewhere still finds it. Override with `make MVN=./mvnw verify` (or an
 # MVN environment variable) when the lock is unwanted, e.g. inside a container
 # that only ever runs one build.
-MVN ?= $(dir $(abspath $(lastword $(MAKEFILE_LIST))))tools/mvn-serial
+PLATFORM_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
+MVN ?= $(PLATFORM_DIR)tools/mvn-serial
 
 # The OpenApiSurface groups (ADR 0031). Keep in sync with
 # src/main/java/uz/horecaos/platform/configuration/OpenApiSurface.java — the
@@ -19,7 +20,7 @@ OPENAPI_GROUPS := storefront control-plane operations providers
 
 .DEFAULT_GOAL := help
 
-.PHONY: help verify test arch build lint format run up down logs eval fmt-check hooks-test bands-test shards-test doc-links openapi-client-check openapi-baseline seed-payments pay-fake-click ci
+.PHONY: help verify test arch build lint format run up down logs eval fmt-check hooks-test bands-test shards-test makefile-test doc-links openapi-client-check openapi-baseline seed-payments pay-fake-click ci
 
 help: ## List targets
 	@grep -hE '^[a-z][a-zA-Z0-9_-]*:.*?## ' $(MAKEFILE_LIST) \
@@ -40,7 +41,7 @@ build: ## Compile and package without running tests
 format: ## Reformat Java sources (ADR 0054)
 	$(MVN) spotless:apply
 
-lint: fmt-check doc-links hooks-test bands-test shards-test ## Static checks an agent must pass before review
+lint: fmt-check doc-links hooks-test bands-test shards-test makefile-test ## Static checks an agent must pass before review
 
 fmt-check: ## Repository hygiene checks that need no JVM
 	@python3 tools/checks/repo_hygiene.py
@@ -54,6 +55,9 @@ bands-test: ## Prove control-band detection escalates at the right thresholds
 shards-test: ## Prove CI's Java test shards cover every test class exactly once, and ci.yml agrees
 	@python3 tools/ci/test_shard_tests.py
 	@python3 tools/ci/shard_tests.py check
+
+makefile-test: ## Prove Maven targets run under the build lock and `make run` does not hold it while serving
+	@python3 tools/checks/test_makefile.py
 
 doc-links: ## Every relative link in the repository's markdown resolves
 	@python3 tools/checks/doc_links.py
@@ -81,8 +85,16 @@ openapi-baseline: ## Reviewably refresh the OpenAPI baselines and generated type
 			--output "api/generated/horecaos-api-v1.$$group.ts"; \
 	done
 
+# `run` is the one target that must not sit inside the lock for its whole life:
+# mvn-serial would hold this tree for as long as the server is up, so every
+# other target here (`make test`, `make arch`) would queue behind it, and after
+# mvn-serial's stale limit (30 minutes) it would stop protecting anything
+# anyway. So the compile, which is what the lock exists for, runs under it, and
+# the server starts after it is released. The second Maven has nothing left to
+# compile.
 run: ## Start the API on :8080 with local-only fixture data
-	$(MVN) spring-boot:run -Dspring-boot.run.profiles=local
+	$(MVN) -q test-compile
+	cd $(PLATFORM_DIR) && ./mvnw spring-boot:run -Dspring-boot.run.profiles=local
 
 up: ## Start local PostgreSQL, Kafka, and Keycloak
 	docker compose up -d
