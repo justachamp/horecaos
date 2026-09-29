@@ -424,12 +424,18 @@ session is nonetheless shaped so the widening is additive rather than a redesign
 money is attached to the set of orders the session names, not to a total baked
 into one column, which is also what keeps ADR 0046's split tender a feature.
 
-**`ordering.cart_fulfillment.dinein_table_id`.** ADR 0019's cart fulfilment table
+**`ordering.cart_fulfillment.dinein_table_id`.** *Shipped in batch 15 (`V0435`,
+`PUT .../carts/{cartId}/table`, `dinein.api.TableBindingPort`); the rest of this
+paragraph is what the record said while it was not built, kept as the history of
+why it waited.* ADR 0019's cart fulfilment table
 does not exist yet — V0022 says why — and it is ordering's to create. A dine-in
 order reaches its session through `dinein.session_orders`, which needs no change
 in ordering at all. The consequence is that `ORDER_AND_PAY` currently attaches an
 already-placed order to a session rather than binding a cart to a table at
-checkout, which is the same fact recorded one step later.
+checkout, which is the same fact recorded one step later. What still holds after
+batch 15: the binding is optional, so a DINE_IN cart that is never bound (an
+operator-keyed order, the milliy storefront, a caller that skips the `PUT`) still
+reaches its session by a separate `POST .../rounds`.
 
 **The service charge itself.** `dinein.location_settings.service_charge_rate_bp`
 is the rate's home and every session pins it, but nothing computes a charge from
