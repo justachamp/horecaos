@@ -95,6 +95,15 @@ export class CheckoutComponent implements OnInit {
     return key && key !== 'errors.generic' ? key : null;
   });
 
+  /**
+   * Why the basket could not be priced when this screen opened, or null. The
+   * totals above read as a dash in that case; this says why. Left out once a
+   * confirm attempt has its own error to show, which names the same refusal.
+   */
+  protected readonly pricingNoteKey = computed(() =>
+    this.submitErrorKey() ? null : this.cart.priceRefusalKey(),
+  );
+
   protected readonly isDelivery = computed(() => this.cart.fulfillmentMode() === 'DELIVERY');
 
   protected readonly canConfirm = computed(() => {

@@ -112,16 +112,37 @@ export class UiCartService {
     this.items().reduce((sum, item) => sum + item.quantity, 0),
   );
 
+  /**
+   * The platform's own total, or a dash while the cart holds no price -- never
+   * a zero. A basket with lines and a total of 0 reads as free, so a cart the
+   * platform refused to price (a dish gone out of its sale window, a variant
+   * off the menu, a dropped connection) shows "unknown" and, beside it,
+   * {@link priceRefusalKey} says why.
+   */
   readonly totalAmount = computed(() => {
     this.translate.current();
     const total = this.priced()?.totalMinor;
-    return total != null ? this.formatPrice(total) : this.getZeroPrice();
+    return total != null ? this.formatPrice(total) : UNRESOLVED;
   });
 
+  /** The platform's own subtotal, or a dash when the cart holds no price (see {@link totalAmount}). */
   readonly subtotalFormatted = computed(() => {
     this.translate.current();
-    return this.formatPrice(this.priced()?.subtotalMinor ?? 0);
+    const subtotal = this.priced()?.subtotalMinor;
+    return subtotal != null ? this.formatPrice(subtotal) : UNRESOLVED;
   });
+
+  /**
+   * The translation key of why the basket could not be priced, or null when it
+   * was priced (or has nothing to price).
+   *
+   * Deliberately not {@link errorKey}: a basket the platform will not price is
+   * still a basket the customer must see, and the screens read a non-null
+   * `errorKey` after `load()` as "the basket could not be read at all". The
+   * reason comes from the refusal itself, so a line that has left its sale
+   * window reads as that and not as "something went wrong".
+   */
+  readonly priceRefusalKey = signal<string | null>(null);
 
   readonly totalWithDelivery = computed(() => this.totalAmount());
 
@@ -423,6 +444,7 @@ export class UiCartService {
     try {
       const priced = await this.carts.price();
       this.priced.set(priced);
+      this.priceRefusalKey.set(null);
       return priced;
     } catch (failure) {
       this.fail(failure);
@@ -547,6 +569,7 @@ export class UiCartService {
     this.carts.discard(this.locationId());
     this.cartData.set(null);
     this.priced.set(null);
+    this.priceRefusalKey.set(null);
     this.deliveryFeeQuote.set(null);
   }
 
@@ -569,6 +592,7 @@ export class UiCartService {
     if (!cart || cart.lines.length === 0) {
       this.cartData.set(null);
       this.priced.set(null);
+      this.priceRefusalKey.set(null);
       this.deliveryFeeQuote.set(null);
       return;
     }
@@ -582,11 +606,14 @@ export class UiCartService {
     //
     // Best effort: an unpriced item or a withdrawn price book makes pricing
     // refuse, and that must not stop the customer seeing what is in their
-    // basket. The total then stays unknown, which is the honest reading.
+    // basket. The total then reads as unknown (a dash, see `totalAmount`) and
+    // the refusal's own reason is kept in `priceRefusalKey` for the screens.
+    this.priceRefusalKey.set(null);
     try {
       this.priced.set(await this.carts.price());
-    } catch {
+    } catch (failure) {
       this.priced.set(null);
+      this.priceRefusalKey.set(failureKey(failure));
     }
 
     const menu = await this.menu.menu(this.lang.langId(), cart.locationId);
@@ -737,10 +764,6 @@ export class UiCartService {
     } catch {
       this.deliveryFeeQuote.set(null);
     }
-  }
-
-  private getZeroPrice(): string {
-    return this.formatPrice(0);
   }
 
   /** Public: also used by screens that render a line total or a discount amount. */

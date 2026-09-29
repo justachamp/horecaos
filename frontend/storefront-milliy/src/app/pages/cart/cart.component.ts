@@ -56,6 +56,14 @@ export class CartComponent implements OnInit {
     return key && key !== 'errors.generic' ? key : null;
   });
 
+  /**
+   * Checkout is offered only while every line can still be bought. A line the
+   * menu has marked unavailable (sold out, or outside its sale window) makes
+   * the platform refuse to price the whole basket, so the way forward is to
+   * remove it -- not to tap through to a checkout that cannot succeed.
+   */
+  protected readonly canCheckout = computed(() => this.cart.items().every((item) => item.active));
+
   ngOnInit(): void {
     void this.refresh();
   }

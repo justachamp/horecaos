@@ -816,3 +816,100 @@ describe('UiCartService project(): a line the menu no longer lets the customer b
     expect(item?.unavailableReason).toBe('OUT_OF_SALE_WINDOW');
   });
 });
+
+describe('UiCartService project(): a refused pricing never renders as a zero total', () => {
+  function offWindowMenu() {
+    return emptyMenu({
+      products: [
+        {
+          productId: 'p1',
+          code: null,
+          name: 'Breakfast osh',
+          description: null,
+          mediaAssetIds: [],
+          imageUrls: [],
+          variants: [
+            {
+              variantId: 'v1',
+              sku: null,
+              unitCode: null,
+              isDefault: true,
+              orderable: true,
+              onSaleNow: false,
+              amountMinor: 45_000,
+              remainingQuantity: null,
+            },
+          ],
+          modifierGroupIds: [],
+        },
+      ],
+    });
+  }
+
+  function heldCart(): PlatformCart {
+    return baseCart({
+      lines: [{ lineKey: 'v1', variantId: 'v1', quantity: 1, hasCustomerNote: false }],
+    });
+  }
+
+  it('reads the subtotal and total as unknown, not free, when POST /pricing refuses during load()', async () => {
+    const { service, carts, menu } = setUp();
+    carts.ensure.mockResolvedValue(heldCart());
+    carts.price.mockRejectedValue(refusal('ITEM_OUT_OF_SALE_WINDOW'));
+    menu.menu.mockResolvedValue(offWindowMenu());
+
+    await service.load();
+
+    expect(service.priced()).toBeNull();
+    expect(service.totalAmount()).toBe('—');
+    expect(service.subtotalFormatted()).toBe('—');
+    // The refusal's own sentence is kept -- and it is not a load failure: the
+    // basket stays on screen, so errorKey (which turns the page into "could
+    // not be loaded") stays clear.
+    expect(service.priceRefusalKey()).toBe('errors.reason.itemOutOfSaleWindow');
+    expect(service.errorKey()).toBeNull();
+    expect(service.items()).toHaveLength(1);
+  });
+
+  it('names a dropped connection as such, not as a sale-window problem', async () => {
+    const { service, carts, menu } = setUp();
+    carts.ensure.mockResolvedValue(heldCart());
+    carts.price.mockRejectedValue(offline());
+    menu.menu.mockResolvedValue(offWindowMenu());
+
+    await service.load();
+
+    expect(service.priceRefusalKey()).toBe('errors.offline');
+    expect(service.totalAmount()).toBe('—');
+  });
+
+  it('forgets the refusal once the cart prices again', async () => {
+    const { service, carts, menu } = setUp();
+    const cart = heldCart();
+    carts.ensure.mockResolvedValue(cart);
+    carts.price.mockRejectedValueOnce(refusal('ITEM_OUT_OF_SALE_WINDOW'));
+    menu.menu.mockResolvedValue(offWindowMenu());
+    await service.load();
+    expect(service.priceRefusalKey()).not.toBeNull();
+
+    carts.price.mockResolvedValue(pricedFor(cart));
+    await service.load();
+
+    expect(service.priceRefusalKey()).toBeNull();
+    expect(service.totalAmount()).toBe(service.formatPrice(1000));
+  });
+
+  it('still reads the platform\'s own numbers once a price is held', async () => {
+    const { service, carts, menu } = setUp();
+    const cart = heldCart();
+    carts.ensure.mockResolvedValue(cart);
+    carts.price.mockResolvedValue(pricedFor(cart));
+    menu.menu.mockResolvedValue(emptyMenu());
+
+    await service.load();
+
+    expect(service.totalAmount()).toBe(service.formatPrice(1000));
+    expect(service.subtotalFormatted()).toBe(service.formatPrice(1000));
+    expect(service.priceRefusalKey()).toBeNull();
+  });
+});

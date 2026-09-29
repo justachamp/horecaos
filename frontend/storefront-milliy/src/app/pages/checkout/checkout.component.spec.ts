@@ -80,6 +80,7 @@ class FakeUiCartService {
   readonly promoBusy = signal(false);
   readonly promoError = signal<string | null>(null);
   readonly errorKey = signal<string | null>(null);
+  readonly priceRefusalKey = signal<string | null>(null);
   orderComment = '';
 
   items = () => this.cartData()?.items ?? [];
@@ -513,5 +514,22 @@ describe('CheckoutComponent -- the delivery-fee preview explains itself', () => 
     const { fixture } = await setUp();
 
     expect(fixture.nativeElement.querySelector('[data-testid="delivery-unresolved"]')).toBeNull();
+  });
+});
+
+describe('CheckoutComponent -- a basket the platform would not price on arrival', () => {
+  it('says why the totals are dashes, before the customer taps confirm', async () => {
+    const { fixture } = await setUp((cart) => {
+      cart.priceRefusalKey.set('errors.reason.itemOutOfSaleWindow');
+    });
+
+    const note = fixture.nativeElement.querySelector('[data-testid="checkout-pricing-error"]');
+    expect(note?.textContent).toContain('errors.reason.itemOutOfSaleWindow');
+  });
+
+  it('shows nothing for a basket that priced', async () => {
+    const { fixture } = await setUp();
+
+    expect(fixture.nativeElement.querySelector('[data-testid="checkout-pricing-error"]')).toBeNull();
   });
 });
