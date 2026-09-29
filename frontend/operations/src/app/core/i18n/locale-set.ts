@@ -17,6 +17,41 @@ interface BrandLocalesView {
   readonly locales: readonly { readonly locale: Locale; readonly isDefault: boolean }[];
 }
 
+/** A brand's supported-language set as an editor consumes it, with the platform fallback already applied. */
+export interface ResolvedLocaleSet {
+  /** Default first; the platform's `ru`/`uz-Latn`/`en` triple when the brand has chosen none. */
+  readonly locales: readonly Locale[];
+  /** The brand's own default, or the platform default when it has chosen none. */
+  readonly defaultLocale: Locale;
+  /** Whether the brand has chosen its own set, as opposed to sitting on the platform fallback. */
+  readonly isConfigured: boolean;
+}
+
+/**
+ * Applies the "empty means not configured yet" fallback and the "default
+ * first" ordering to a brand's `locales` list — the one rule every localized
+ * field editor in this console shares.
+ *
+ * {@link LocaleSet} runs it over the operator's own brand. A screen that edits
+ * <em>another</em> brand's content behind its own brand picker (the terms of
+ * service, which the tenant owner authors per brand and who has no brand scope
+ * of their own) runs it over the picked brand's `BrandView.locales` instead,
+ * so it offers the same languages, in the same order, with the same default,
+ * as every screen that reads {@link LocaleSet}.
+ */
+export function resolveLocaleSet(
+  configured:
+    readonly { readonly locale: Locale; readonly isDefault: boolean }[] | null | undefined,
+): ResolvedLocaleSet {
+  const options = orderDefaultFirst(configured ?? []);
+  const own = options.find((option) => option.isDefault);
+  return {
+    locales: options.length > 0 ? options.map((option) => option.locale) : LOCALES,
+    defaultLocale: own ? own.locale : DEFAULT_LOCALE,
+    isConfigured: options.length > 0,
+  };
+}
+
 /**
  * Row 10.12: a brand's own supported-language set and default language
  * (`tenant.brand_locales`, batch 9's `10.1` brand-profile screen), read once
@@ -49,25 +84,20 @@ export class LocaleSet {
   /** `null` before load settles; `[]` once settled but the brand has configured nothing (or resolution failed). */
   private readonly configured = signal<readonly LocaleOption[] | null>(null);
 
+  private readonly resolved = computed(() => resolveLocaleSet(this.configured()));
+
   /**
    * The brand's own supported locales, default first — or, unconfigured (or
    * before load settles), the platform's full `ru`/`uz-Latn`/`en` triple,
    * `ru` first.
    */
-  readonly locales: Signal<readonly Locale[]> = computed(() => {
-    const options = this.configured();
-    return options && options.length > 0 ? options.map((option) => option.locale) : LOCALES;
-  });
+  readonly locales: Signal<readonly Locale[]> = computed(() => this.resolved().locales);
 
   /** The brand's own chosen default, or the platform default when unconfigured. */
-  readonly defaultLocale: Signal<Locale> = computed(() => {
-    const options = this.configured();
-    const own = options?.find((option) => option.isDefault);
-    return own ? own.locale : DEFAULT_LOCALE;
-  });
+  readonly defaultLocale: Signal<Locale> = computed(() => this.resolved().defaultLocale);
 
   /** Whether the brand has chosen its own set, as opposed to still sitting on the platform fallback. */
-  readonly isConfigured: Signal<boolean> = computed(() => (this.configured()?.length ?? 0) > 0);
+  readonly isConfigured: Signal<boolean> = computed(() => this.resolved().isConfigured);
 
   private loadPromise: Promise<void> | null = null;
 
