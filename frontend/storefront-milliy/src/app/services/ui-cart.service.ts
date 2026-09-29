@@ -3,7 +3,7 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 import { ApiClient } from '../core/api/api-client';
 import { APP_CONFIG } from '../core/config/app-config';
 import { CustomerApi } from '../core/api/customer-api';
-import { HorecaOSApiError, messageKeyFor } from '../core/api/problem-details';
+import { HorecaOSApiError, messageKeyFor, reasonMessageKey } from '../core/api/problem-details';
 import type { CartResponse, CartResponseItem, CartResponseModifierSelection } from '../types/cart.types';
 import {
   CartService,
@@ -17,6 +17,7 @@ import { MenuService, type PublishedModifierGroup } from './menu.service';
 import { LangService } from './lang.service';
 import { DeliverySelectionService } from './delivery-selection.service';
 import { TranslateService } from './translate.service';
+import { variantAvailability } from '../utils/item-availability';
 
 const FALLBACK_IMAGE = '/assets/logo/Logo-sq.png';
 
@@ -74,7 +75,20 @@ export class UiCartService {
   readonly cartData = signal<CartResponse | null>(null);
 
   readonly loading = signal(false);
-  readonly error = signal<string | null>(null);
+  /**
+   * The translation key of the last cart failure, or null. Set from the platform's
+   * own answer -- a refusal's business `reason` first, then its ADR 0031 code
+   * (see {@link failureKey}) -- so a screen can name the specific problem and a
+   * caller that only has a boolean can ask "why" afterwards.
+   */
+  readonly errorKey = signal<string | null>(null);
+
+  /** {@link errorKey}, in the customer's language; recomputed when the language changes. */
+  readonly error = computed<string | null>(() => {
+    this.translate.current();
+    const key = this.errorKey();
+    return key ? this.translate.get(key) : null;
+  });
   readonly updating = signal(false);
 
   /** The last pricing answer, or null when the cart has not been priced. */
@@ -148,13 +162,14 @@ export class UiCartService {
    * priced against a point rather than against the cart, so it is available
    * before the cart's own destination is ever set.
    *
-   * Three states, and each is shown as itself rather than folded into the
-   * others:
-   * - no delivery destination chosen yet, or this is not a delivery cart: a
-   *   dash, because a zero here would read as free delivery;
-   * - chosen but outside every zone this branch delivers to: the platform's
-   *   own refusal, honestly, and never re-homed to "delivery unavailable"
-   *   generically -- the reason is what the customer needs to act on;
+   * Two states, and neither is a zero:
+   * - no price to show -- not a delivery cart, no destination chosen yet, or
+   *   the platform said no (outside every zone, below the zone's minimum
+   *   basket, ...): a dash, because a zero here would read as free delivery.
+   *   *Why* there is no price is {@link deliveryUnresolvedMessage}, read
+   *   separately so a template can show it as an explanation beside the line
+   *   -- the platform's own reason, never re-homed to one generic "delivery
+   *   unavailable";
    * - resolved: the fee itself.
    */
   readonly deliveryFee = computed(() => {
@@ -163,13 +178,42 @@ export class UiCartService {
       return UNRESOLVED;
     }
     const quote = this.deliveryFeeQuote();
-    if (!quote) {
+    if (!quote || !quote.available) {
       return UNRESOLVED;
     }
-    if (!quote.available) {
-      return this.translate.get('cart.deliveryNotServiceable');
-    }
     return this.formatPrice(quote.feeMinor ?? 0);
+  });
+
+  /**
+   * Why the delivery fee is not a price, in the customer's language, or `null`
+   * when there is nothing to explain -- not a delivery cart, no preview to read
+   * (no destination chosen, an address with no marker, or the read failed), or
+   * the fee is resolved.
+   *
+   * The resolver's own `reasonCode` (`DeliveryFeeView.reasonCode`) is mapped
+   * through the same vocabulary a checkout refusal uses, so the sentence beside
+   * the delivery line and the one under the order button agree. A below-minimum
+   * refusal names the amount when the zone sent one. A code this build has no
+   * sentence for reads as the honest "we couldn't work out the fee", never as
+   * the raw code.
+   */
+  readonly deliveryUnresolvedMessage = computed<string | null>(() => {
+    this.translate.current();
+    if (this.fulfillmentMode() !== 'DELIVERY') {
+      return null;
+    }
+    const quote = this.deliveryFeeQuote();
+    if (!quote || quote.available) {
+      return null;
+    }
+    if (quote.reasonCode === 'BELOW_MINIMUM_BASKET' && quote.minBasketMinor != null) {
+      return this.translate.getWithParams('errors.reason.minimumBasketAmount', {
+        amount: this.formatPrice(quote.minBasketMinor),
+      });
+    }
+    return this.translate.get(
+      reasonMessageKey(quote.reasonCode) ?? 'errors.reason.deliveryFeeUnresolved',
+    );
   });
 
   /** No packaging charge exists on the platform, so there is nothing to state. */
@@ -229,7 +273,7 @@ export class UiCartService {
     }
 
     this.updating.set(true);
-    this.error.set(null);
+    this.errorKey.set(null);
     try {
       const location = this.locationId();
       this.carts.discard(location);
@@ -242,8 +286,8 @@ export class UiCartService {
         });
       }
       await this.project(this.carts.cart());
-    } catch {
-      this.error.set(this.translate.get('errors.generic'));
+    } catch (failure) {
+      this.fail(failure);
     } finally {
       this.updating.set(false);
     }
@@ -257,12 +301,12 @@ export class UiCartService {
    */
   async load(): Promise<void> {
     this.loading.set(true);
-    this.error.set(null);
+    this.errorKey.set(null);
     try {
       const cart = await this.carts.ensure(this.locationId(), this.fulfillmentMode(), false);
       await this.project(cart);
-    } catch {
-      this.error.set(this.translate.get('errors.generic'));
+    } catch (failure) {
+      this.fail(failure);
     } finally {
       this.loading.set(false);
     }
@@ -277,15 +321,19 @@ export class UiCartService {
    *        (`CartService.lineKeyFor`), so "osh" and "osh with extra meat" are
    *        two lines and never one whose modifiers depend on which request
    *        landed last.
+   * @returns whether the platform took the line. On false, {@link errorKey}
+   *          names why -- a sale-window or sold-out refusal, an expired basket,
+   *          a dropped connection -- so the caller can say so instead of
+   *          carrying on as if the dish were in the basket.
    */
   async add(
     variantId: string,
     quantity = 1,
     note?: string,
     modifierOptionIds?: readonly string[],
-  ): Promise<void> {
+  ): Promise<boolean> {
     this.updating.set(true);
-    this.error.set(null);
+    this.errorKey.set(null);
     try {
       await this.carts.ensure(this.locationId(), this.fulfillmentMode(), true);
       const cart = await this.carts.putLine({
@@ -295,8 +343,10 @@ export class UiCartService {
         modifierOptionIds,
       });
       await this.project(cart);
-    } catch {
-      this.error.set(this.translate.get('errors.generic'));
+      return true;
+    } catch (failure) {
+      this.fail(failure);
+      return false;
     } finally {
       this.updating.set(false);
     }
@@ -317,7 +367,7 @@ export class UiCartService {
    */
   async setQuantity(item: CartResponseItem, quantity: number): Promise<void> {
     this.updating.set(true);
-    this.error.set(null);
+    this.errorKey.set(null);
     try {
       const cart =
         quantity <= 0
@@ -328,8 +378,8 @@ export class UiCartService {
               modifierOptionIds: item.modifierOptionIds,
             });
       await this.project(cart);
-    } catch {
-      this.error.set(this.translate.get('errors.generic'));
+    } catch (failure) {
+      this.fail(failure);
     } finally {
       this.updating.set(false);
     }
@@ -350,11 +400,12 @@ export class UiCartService {
   /** Empties the basket, one line at a time; the platform has no clear call. */
   async clearCart(): Promise<void> {
     this.updating.set(true);
+    this.errorKey.set(null);
     try {
       const cart = await this.carts.clear();
       await this.project(cart);
-    } catch {
-      this.error.set(this.translate.get('errors.generic'));
+    } catch (failure) {
+      this.fail(failure);
     } finally {
       this.updating.set(false);
     }
@@ -369,8 +420,8 @@ export class UiCartService {
       const priced = await this.carts.price();
       this.priced.set(priced);
       return priced;
-    } catch {
-      this.error.set(this.translate.get('errors.generic'));
+    } catch (failure) {
+      this.fail(failure);
       return null;
     }
   }
@@ -413,8 +464,8 @@ export class UiCartService {
     try {
       const cart = await this.carts.removePromoCode();
       await this.project(cart);
-    } catch {
-      this.promoError.set(this.translate.get('errors.generic'));
+    } catch (failure) {
+      this.promoError.set(this.promoErrorMessage(failure));
     } finally {
       this.promoBusy.set(false);
     }
@@ -428,9 +479,13 @@ export class UiCartService {
       if (key) {
         return this.translate.get(key);
       }
-      return this.translate.get(messageKeyFor(failure));
     }
-    return this.translate.get('errors.generic');
+    return this.translate.get(failureKey(failure));
+  }
+
+  /** Records a failure as the specific sentence the customer should read. */
+  private fail(failure: unknown): void {
+    this.errorKey.set(failureKey(failure));
   }
 
   /**
@@ -531,13 +586,19 @@ export class UiCartService {
     }
 
     const menu = await this.menu.menu(this.lang.langId(), cart.locationId);
-    const byVariant = new Map<string, { name: string; image: string | null; price: number }>();
+    const byVariant = new Map<
+      string,
+      { name: string; image: string | null; price: number; orderable: boolean; onSaleNow: boolean }
+    >();
     for (const product of menu.products) {
       for (const variant of product.variants) {
         byVariant.set(variant.variantId, {
           name: product.name,
           image: product.imageUrls[0] ?? null,
           price: variant.amountMinor ?? 0,
+          orderable: variant.orderable,
+          // See MenuService.toMenuItem: absent means on sale.
+          onSaleNow: variant.onSaleNow !== false,
         });
       }
     }
@@ -571,6 +632,14 @@ export class UiCartService {
               : null;
           })
           .filter((selection): selection is CartResponseModifierSelection => selection !== null);
+        // Row 4.2g / rows 4.4c-d: the menu was just read, so this is the
+        // platform's current word on whether this line can still be sold.
+        // A line the customer added earlier can have gone out of its window or
+        // sold out since; it stays visible, marked, rather than vanishing.
+        const availability = variantAvailability({
+          active: known.orderable,
+          onSaleNow: known.onSaleNow,
+        });
         const projected: CartResponseItem = {
           variant_id: line.variantId,
           // The line key, which is what an update or a removal addresses. The
@@ -580,7 +649,8 @@ export class UiCartService {
           name: known.name,
           image: known.image ?? FALLBACK_IMAGE,
           price: known.price,
-          active: true,
+          active: availability === 'AVAILABLE',
+          ...(availability === 'AVAILABLE' ? {} : { unavailableReason: availability }),
           quantity: line.quantity,
           // Write-only on the platform; only its existence is reported.
           note: null,
@@ -655,7 +725,12 @@ export class UiCartService {
           anonymous: true,
         },
       );
-      this.deliveryFeeQuote.set({ available: view.available, feeMinor: view.feeMinor });
+      this.deliveryFeeQuote.set({
+        available: view.available,
+        feeMinor: view.feeMinor,
+        reasonCode: view.reasonCode,
+        minBasketMinor: view.minBasketMinor,
+      });
     } catch {
       this.deliveryFeeQuote.set(null);
     }
@@ -673,10 +748,18 @@ export class UiCartService {
   }
 }
 
-/** The two facts a screen needs from `DeliveryFeeController.DeliveryFeeView`. */
+/**
+ * What a screen needs from `DeliveryFeeController.DeliveryFeeView`: whether and
+ * how much, and -- when not -- why. The reason is a machine code
+ * (`OUT_OF_ZONE`, `BELOW_MINIMUM_BASKET`, ...) that is only ever mapped to a
+ * sentence, never shown (see {@link UiCartService.deliveryUnresolvedMessage}).
+ */
 export interface DeliveryFeeQuote {
   readonly available: boolean;
   readonly feeMinor: number | null;
+  readonly reasonCode: string | null;
+  /** The zone's minimum basket, present only when the zone sets one. */
+  readonly minBasketMinor: number | null;
 }
 
 /** `DeliveryFeeController.DeliveryFeeView`, transcribed from the controller. */
@@ -690,6 +773,19 @@ interface DeliveryFeeView {
   readonly freeDeliveryFromMinor: number | null;
   readonly distanceMeters: number | null;
   readonly distanceSource: string | null;
+}
+
+/**
+ * The translation key for a cart failure.
+ *
+ * A platform answer resolves through {@link messageKeyFor} -- its business
+ * `reason` first (`ITEM_OUT_OF_SALE_WINDOW`, `SOLD_OUT`, `CART_EXPIRED`, ...),
+ * then its ADR 0031 code -- so the customer reads what actually went wrong.
+ * Anything that is not a platform answer (a thrown `Error`, a programming
+ * slip) is the one generic sentence: there is nothing more honest to say.
+ */
+function failureKey(failure: unknown): string {
+  return failure instanceof HorecaOSApiError ? messageKeyFor(failure) : 'errors.generic';
 }
 
 /**

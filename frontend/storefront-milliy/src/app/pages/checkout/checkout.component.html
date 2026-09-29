@@ -18,6 +18,9 @@
   @case ('error') {
     <div class="state">
       <p>{{ 'checkout.loadError' | t }}</p>
+      @if (loadErrorDetail(); as detail) {
+        <p class="state__detail" data-testid="checkout-error-detail">{{ detail | t }}</p>
+      }
       <button type="button" class="btn" (click)="back()">{{ 'common.back' | t }}</button>
     </div>
   }
@@ -150,6 +153,9 @@
         <span>{{ 'cart.delivery' | t }}</span>
         <span class="summary__value">{{ cart.deliveryFee() }}</span>
       </div>
+      @if (cart.deliveryUnresolvedMessage(); as unresolved) {
+        <p class="summary__note" data-testid="delivery-unresolved">{{ unresolved }}</p>
+      }
       @if (cart.hasDiscount()) {
         <div class="summary__row summary__row--discount">
           <span>{{ 'cart.promoCode' | t }}</span>

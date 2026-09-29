@@ -26,6 +26,7 @@
 .head__sub { margin: 2px 0 0; color: var(--text-secondary); font: 400 12px/1.4 var(--font-ui); }
 
 .state { padding: 32px 24px; color: var(--text-muted); font: 400 14px/1.5 var(--font-ui); }
+.state__detail { margin: 6px 0 0; color: var(--status-error); }
 
 .btn {
   margin-top: 12px;
@@ -87,6 +88,21 @@
 .line__addons { font: 500 13px/1.35 var(--font-ui); color: var(--brand-accent-deep); }
 .line__price { margin-top: 2px; font: 800 15px/1.2 var(--font-display); color: var(--text-primary); }
 
+/* A line the menu no longer lets the customer buy: kept, dimmed, and explained. */
+.line.is-unavailable { border-color: var(--status-error); }
+.line.is-unavailable .line__img,
+.line.is-unavailable .line__name,
+.line.is-unavailable .line__price { opacity: 0.55; }
+.line__unavailable { font: 600 12px/1.35 var(--font-ui); color: var(--status-error); }
+
+.hint {
+  margin: 14px 24px 0;
+  font: 400 13px/1.5 var(--font-ui);
+  color: var(--text-muted);
+
+  &--error { color: var(--status-error); }
+}
+
 .qty {
   display: flex;
   align-items: center;
@@ -135,6 +151,9 @@
 .summary__value { font: 600 13px/1.4 var(--font-ui); color: var(--text-primary); }
 
 .summary__row--discount { color: var(--brand-accent-deep); }
+
+/* Why the delivery line above is a dash rather than a price. */
+.summary__note { margin: -4px 0 0; font: 500 12px/1.45 var(--font-ui); color: var(--status-error); }
 
 .summary__divider { height: 1px; background: var(--line-subtle); }
 

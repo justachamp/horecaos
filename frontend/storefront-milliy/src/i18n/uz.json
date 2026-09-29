@@ -127,7 +127,6 @@
     "noPaymentMethods": "Hozircha bu buyurtma uchun to'lov usuli mavjud emas.",
     "paymentSessionError": "Buyurtma qabul qilindi, lekin to'lov sahifasi ochilmadi. \"Buyurtmalar\" bo'limini tekshiring.",
     "paymentReturnChecking": "To'lov tekshirilmoqda...",
-    "deliveryNotServiceable": "Bu manzilga yetkazib berish mavjud emas.",
     "recipient": "Qabul qiluvchi",
     "recipientName": "Qabul qiluvchi ismi",
     "recipientPhone": "Qabul qiluvchi telefoni",
@@ -425,5 +424,21 @@
     "notEligible": "Bu kodni ushbu hisobda ishlatib bo'lmaydi.",
     "noFriendCountNotice": "Hozircha kodingizdan nechta do'stingiz foydalanganini ko'rsatmaymiz — keyinroq qayta tekshiring.",
     "shareMessage": "Ro'yxatdan o'tayotganda mening {{code}} referal kodimdan foydalaning."
+  },
+  "dish": {
+    "soldOut": "Tugagan",
+    "outOfSaleWindow": "Hozir sotuvda emas",
+    "lowStock": "Faqat {{count}} ta qoldi"
+  },
+  "dineIn": {
+    "scanFailedTitle": "Bu kod endi ishlamaydi",
+    "scanFailedBody": "Yordam uchun xodimga murojaat qiling.",
+    "backHome": "Menyuga",
+    "scanLoading": "Stol kodi o'qilmoqda...",
+    "noAdmissionTitle": "Menyuni ko'rish uchun stolni skanerlang",
+    "noAdmissionBody": "Menyuni ko'rish uchun stolingizdagi QR-kodni skanerlang.",
+    "tableLabel": "{{code}}-stol",
+    "orderingUnavailable": "Stoldan buyurtma berish bu ilovada hozircha mavjud emas. Menyuni shu yerda ko'rishingiz mumkin, buyurtma uchun xodimga murojaat qiling.",
+    "menuUnavailable": "Hozircha menyu mavjud emas."
   }
 }

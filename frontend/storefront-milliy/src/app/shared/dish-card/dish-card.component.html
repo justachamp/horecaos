@@ -1,0 +1,46 @@
+<ng-template #body>
+  <span class="dish__media">
+    @if (item().image) {
+      <img class="dish__img" [src]="item().image" [alt]="item().name" loading="lazy" decoding="async" />
+    }
+  </span>
+  <span class="dish__body">
+    <span class="dish__name">{{ item().name }}</span>
+    @if (item().description) {
+      <span class="dish__desc">{{ item().description }}</span>
+    }
+    <span class="dish__price">{{ priceLabel() }}</span>
+    @switch (availability()) {
+      @case ('SOLD_OUT') {
+        <span class="dish__badge dish__badge--sold-out" data-testid="dish-sold-out">
+          {{ 'dish.soldOut' | t }}
+        </span>
+      }
+      @case ('OUT_OF_SALE_WINDOW') {
+        <span class="dish__badge dish__badge--window" data-testid="dish-out-of-window">
+          {{ 'dish.outOfSaleWindow' | t }}
+        </span>
+      }
+    }
+    @if (lowStock(); as left) {
+      <span class="dish__badge dish__badge--low" data-testid="dish-low-stock">
+        {{ 'dish.lowStock' | t: { count: left } }}
+      </span>
+    }
+  </span>
+</ng-template>
+
+@if (linked()) {
+  <a
+    class="dish"
+    data-testid="dish-card"
+    [class.is-unavailable]="unavailable()"
+    [routerLink]="['/product', item().id]"
+  >
+    <ng-container *ngTemplateOutlet="body" />
+  </a>
+} @else {
+  <div class="dish" data-testid="dish-card" [class.is-unavailable]="unavailable()">
+    <ng-container *ngTemplateOutlet="body" />
+  </div>
+}

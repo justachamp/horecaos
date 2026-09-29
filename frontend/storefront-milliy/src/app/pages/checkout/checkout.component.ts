@@ -8,6 +8,7 @@ import { PaymentSessionService } from '../../services/payment-session.service';
 import { TranslatePipe } from '../../shared/translate/translate.pipe';
 import { UiCartService } from '../../services/ui-cart.service';
 import { newIdempotencyKey } from '../../core/api/idempotency';
+import { HorecaOSApiError, messageKeyFor } from '../../core/api/problem-details';
 import type { CustomerAddress } from '../../core/api/customer-api';
 
 type LoadState = 'loading' | 'ready' | 'empty' | 'error';
@@ -84,6 +85,16 @@ export class CheckoutComponent implements OnInit {
   protected readonly recipientName = signal('');
   protected readonly recipientPhone = signal('');
 
+  /**
+   * The specific reason the basket could not be loaded, or null when there is
+   * nothing more to say than "it could not be loaded" -- the generic sentence
+   * is left out rather than printed under a headline that already says it.
+   */
+  protected readonly loadErrorDetail = computed(() => {
+    const key = this.cart.errorKey();
+    return key && key !== 'errors.generic' ? key : null;
+  });
+
   protected readonly isDelivery = computed(() => this.cart.fulfillmentMode() === 'DELIVERY');
 
   protected readonly canConfirm = computed(() => {
@@ -103,6 +114,14 @@ export class CheckoutComponent implements OnInit {
   async ngOnInit(): Promise<void> {
     this.state.set('loading');
     await this.cart.load();
+    if (this.cart.errorKey()) {
+      // The basket could not be read at all. That is not "your cart is empty":
+      // telling somebody with a full basket that it is empty invites them to
+      // rebuild it, and the reason (offline, an expired session) is what they
+      // can act on.
+      this.state.set('error');
+      return;
+    }
     if (!this.cart.cartData() || this.cart.items().length === 0) {
       this.state.set('empty');
       return;
@@ -201,7 +220,10 @@ export class CheckoutComponent implements OnInit {
       }
       const priced = await this.cart.priceCart();
       if (!priced) {
-        this.submitErrorKey.set('errors.generic');
+        // Pricing refused (a branch that closed, a dish that went out of its
+        // sale window, ...): `UiCartService` kept the platform's own reason,
+        // so say that rather than one sentence for every way pricing can fail.
+        this.submitErrorKey.set(this.cart.errorKey() ?? 'errors.generic');
         return;
       }
       const paymentMethodCode = this.selectedPayment();
@@ -231,8 +253,16 @@ export class CheckoutComponent implements OnInit {
         this.submitErrorKey.set('cart.paymentSessionError');
       }
       await this.router.navigate(['/orders']);
-    } catch {
-      this.submitErrorKey.set('errors.generic');
+    } catch (failure) {
+      // A platform refusal (DELIVERY_FEE_UNRESOLVED, NOT_SERVICEABLE, a dish
+      // that just sold out or left its sale window, a moved price, ...) is
+      // named specifically -- the same vocabulary `messageKeyFor` gives every
+      // other screen -- instead of one generic sentence for every reason
+      // checkout could have said no. Anything that is not a platform answer
+      // stays the generic sentence: there is nothing more honest to say.
+      this.submitErrorKey.set(
+        failure instanceof HorecaOSApiError ? messageKeyFor(failure) : 'errors.generic',
+      );
     } finally {
       this.submitting.set(false);
     }
