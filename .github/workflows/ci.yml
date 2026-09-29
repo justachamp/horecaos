@@ -307,13 +307,18 @@ jobs:
         run: python3 tools/ci/shard_tests.py verify-reports --reports target/ci-reports
 
       - name: Rebuild the recorded test durations
+        # Feeds only a future rebalance of the shards (it never changes what
+        # runs), so a failure here must not turn the required check red.
+        continue-on-error: true
         run: python3 tools/ci/shard_tests.py record --reports target/ci-reports/test-results-* --out target/ci/test-durations.tsv
 
       - name: Publish refreshed durations
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: test-durations
           path: platform/target/ci/test-durations.tsv
+          if-no-files-found: ignore
 
       - name: Download every job's coverage data
         uses: actions/download-artifact@v4

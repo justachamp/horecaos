@@ -400,6 +400,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             existing = {c.fqcn for c in discover(args.tests)}
             recorded = {n: s for n, s in record_durations(args.reports).items() if n in existing}
             body = "".join(f"{name}\t{seconds}\n" for name, seconds in sorted(recorded.items()))
+            args.out.parent.mkdir(parents=True, exist_ok=True)
             args.out.write_text(
                 "# Recorded Surefire seconds per test class; weights for tools/ci/shard_tests.py.\n"
                 f"# Recorded {datetime.date.today().isoformat()} from {len(recorded)} classes.\n"
