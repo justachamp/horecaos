@@ -1,0 +1,22 @@
+.scan {
+  min-height: 60vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.scan__message { text-align: center; max-width: 320px; }
+
+.scan__title { margin: 0 0 8px; font: 800 20px/1.2 var(--font-display); }
+
+.scan__body { margin: 0 0 16px; color: var(--text-secondary); font: 400 14px/1.5 var(--font-ui); }
+
+.scan__home {
+  display: inline-block;
+  padding: 12px 22px;
+  border-radius: var(--radius-pill);
+  background: var(--brand-accent);
+  color: var(--text-on-accent);
+  font: 700 14px/1 var(--font-display);
+}

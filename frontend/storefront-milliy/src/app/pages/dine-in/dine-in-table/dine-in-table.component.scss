@@ -1,0 +1,29 @@
+.table__empty { text-align: center; padding: 64px 24px; }
+
+.table__title { margin: 0 0 8px; font: 800 20px/1.2 var(--font-display); }
+
+.table__body { margin: 0 0 16px; color: var(--text-secondary); font: 400 14px/1.5 var(--font-ui); }
+
+.table__home {
+  display: inline-block;
+  padding: 12px 22px;
+  border-radius: var(--radius-pill);
+  background: var(--brand-accent);
+  color: var(--text-on-accent);
+  font: 700 14px/1 var(--font-display);
+}
+
+.table__header { padding: 18px 24px 0; }
+
+.table__code { margin: 0; font: 800 26px/1.1 var(--font-display); letter-spacing: -0.02em; }
+
+.table__notice {
+  margin: 14px 24px 0;
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  background: var(--surface-accent-wash);
+  color: var(--text-secondary);
+  font: 400 13px/1.5 var(--font-ui);
+}
+
+.table__state { padding: 32px 24px; color: var(--text-muted); font: 400 14px/1.5 var(--font-ui); }

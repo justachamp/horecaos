@@ -1,0 +1,15 @@
+<div class="scan" data-testid="dine-in-scan">
+  @if (failed()) {
+    <div class="scan__message" data-testid="dine-in-scan-failed">
+      <p class="scan__title">{{ 'dineIn.scanFailedTitle' | t }}</p>
+      <p class="scan__body">{{ 'dineIn.scanFailedBody' | t }}</p>
+      <a class="scan__home" routerLink="/home" data-testid="dine-in-scan-home-link">
+        {{ 'dineIn.backHome' | t }}
+      </a>
+    </div>
+  } @else {
+    <div class="scan__message" data-testid="dine-in-scan-loading">
+      <p class="scan__body">{{ 'dineIn.scanLoading' | t }}</p>
+    </div>
+  }
+</div>

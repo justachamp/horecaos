@@ -5,7 +5,8 @@ import { authGuard } from './guards/auth.guard';
 /**
  * The six screens the Milliy design defines, plus `referral` (ADR 0067):
  * a customer's own code, sharing it, and redeeming a friend's, reached from
- * a real row on the profile screen rather than promised and left unbuilt.
+ * a real row on the profile screen rather than promised and left unbuilt --
+ * and the table-QR scan landing and table menu (ADR 0047, `dine-in/...`).
  *
  * The gating mirrors the first storefront's, because it mirrors the platform:
  * the published menu is browsable without an account (ADR 0016, and
@@ -25,6 +26,27 @@ export const routes: Routes = [
     // `withComponentInputBinding` feeds the route param straight into the
     // component's required input, so the screen never reads the router itself.
     loadComponent: () => import('./pages/details/details.component').then((m) => m.DetailsComponent),
+  },
+  // ADR 0047's table-QR flow. `:tableToken` is the one-time value a table's
+  // printed code encodes -- DineInScanComponent spends it once, against
+  // QrEntryController.exchange, and replaces the URL with the token-free
+  // `dine-in/table` so the printed token never sits in history past that single
+  // request. `dine-in/table` is declared FIRST: otherwise the token route would
+  // swallow it as a table token called "table". Public: a guest at a table holds
+  // no account yet, the same pre-account standing as the menu above.
+  {
+    path: 'dine-in/table',
+    loadComponent: () =>
+      import('./pages/dine-in/dine-in-table/dine-in-table.component').then(
+        (m) => m.DineInTableComponent,
+      ),
+  },
+  {
+    path: 'dine-in/:tableToken',
+    loadComponent: () =>
+      import('./pages/dine-in/dine-in-scan/dine-in-scan.component').then(
+        (m) => m.DineInScanComponent,
+      ),
   },
   {
     path: 'cart',
