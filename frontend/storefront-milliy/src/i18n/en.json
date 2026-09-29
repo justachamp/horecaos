@@ -452,6 +452,8 @@
     "billRequested": "The bill has been requested",
     "roundPending": "Your last order is with the kitchen but is not on the table bill yet.",
     "roundRetry": "Try again",
-    "roundAttachFailed": "Your order is with the kitchen, but it could not be added to the table bill. Please tell a member of staff."
+    "roundAttachFailed": "Your order is with the kitchen, but it could not be added to the table bill. Please tell a member of staff.",
+    "heldUnavailable": "No longer available. Take it out of your order to continue.",
+    "clearOrder": "Clear the order"
   }
 }

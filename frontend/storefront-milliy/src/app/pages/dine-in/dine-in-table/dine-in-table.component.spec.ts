@@ -140,6 +140,11 @@ class FakeCartService {
     warnings: [],
   }));
 
+  clear = vi.fn(async () => {
+    this.version++;
+    return this.open([]);
+  });
+
   discard = vi.fn((_location: string, _scope?: string) => {
     this.cart.set(null);
     this.preloaded = null;
@@ -651,6 +656,94 @@ describe('DineInTableComponent', () => {
       expect((view.q('dine-in-checkout') as HTMLButtonElement).disabled).toBe(true);
       // The total reads as unknown, never as free.
       expect(view.q('dine-in-cart-total')?.textContent).toContain('—');
+    });
+
+    describe('a basket line the menu can no longer sell', () => {
+      it('keeps the dish\'s stepper when it has sold out since, so the line can be taken out', async () => {
+        const view = setUp();
+        view.dineIn.seed(admission());
+        view.menuService.home.mockResolvedValue(
+          menu([dish('p1', 'Osh', [variant({ active: false })])]),
+        );
+        view.carts.preload([line('variant-1', 1)]);
+
+        await settle(view.fixture);
+
+        expect(view.q('dish-sold-out')).not.toBeNull();
+        expect(view.q('dine-in-decrease')).not.toBeNull();
+        await view.click('dine-in-decrease');
+
+        expect(view.carts.removeLine).toHaveBeenCalledWith('variant-1');
+        expect(view.q('dine-in-order')).toBeNull();
+      });
+
+      it('offers to clear the order when the platform will not price it, and ordering works again afterwards', async () => {
+        const view = setUp();
+        view.dineIn.seed(admission());
+        // A line for a portion that is not on the menu at all: no card carries it.
+        view.carts.preload([line('variant-1', 1), line('gone-variant', 1)]);
+        const priceable = view.carts.price.getMockImplementation()!;
+        view.carts.price.mockImplementation(async () => {
+          if (view.carts.cart()?.lines.some((entry) => entry.variantId === 'gone-variant')) {
+            throw new HorecaOSApiError({
+              status: 422,
+              code: 'VALIDATION_FAILED',
+              detail: 'unpriced',
+              problem: { status: 422, code: 'VALIDATION_FAILED', reason: 'SOLD_OUT' },
+            });
+          }
+          return priceable();
+        });
+
+        await settle(view.fixture);
+
+        expect(view.q('dine-in-pricing-error')).not.toBeNull();
+        expect((view.q('dine-in-checkout') as HTMLButtonElement).disabled).toBe(true);
+        expect(view.q('dine-in-clear')).not.toBeNull();
+
+        await view.click('dine-in-clear');
+
+        expect(view.carts.clear).toHaveBeenCalledTimes(1);
+        expect(view.q('dine-in-order')).toBeNull();
+        expect(view.q('dine-in-pricing-error')).toBeNull();
+
+        await view.click('dine-in-add');
+        expect((view.q('dine-in-checkout') as HTMLButtonElement).disabled).toBe(false);
+      });
+
+      it('offers no clear button while the basket prices fine: an order is never one tap from being thrown away', async () => {
+        const view = setUp();
+        view.dineIn.seed(admission());
+        view.carts.preload([line('variant-1', 1)]);
+
+        await settle(view.fixture);
+
+        expect(view.q('dine-in-order')).not.toBeNull();
+        expect(view.q('dine-in-clear')).toBeNull();
+      });
+
+      it('says why when the basket could not be cleared, and keeps the order panel', async () => {
+        const view = setUp();
+        view.dineIn.seed(admission());
+        view.carts.preload([line('variant-1', 1)]);
+        view.carts.price.mockRejectedValue(
+          new HorecaOSApiError({
+            status: 422,
+            code: 'VALIDATION_FAILED',
+            detail: 'unpriced',
+            problem: { status: 422, code: 'VALIDATION_FAILED', reason: 'SOLD_OUT' },
+          }),
+        );
+        view.carts.clear.mockRejectedValue(
+          new HorecaOSApiError({ status: 503, code: 'INTERNAL_ERROR', detail: 'down' }),
+        );
+        await settle(view.fixture);
+
+        await view.click('dine-in-clear');
+
+        expect(view.q('dine-in-basket-error')).not.toBeNull();
+        expect(view.q('dine-in-order')).not.toBeNull();
+      });
     });
 
     it('offers a choice of payment when the cart has several, and orders with the one chosen', async () => {

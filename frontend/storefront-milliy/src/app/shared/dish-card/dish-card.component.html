@@ -42,6 +42,11 @@
                 {{ portionPrice(variant) }}
               </span>
             }
+            @if (quantityOf(variant.id) > 0 && !canAdd(variant)) {
+              <span class="portion__unavailable" data-testid="dine-in-held-unavailable">
+                {{ 'dineIn.heldUnavailable' | t }}
+              </span>
+            }
             @if (quantityOf(variant.id) === 0) {
               <button
                 type="button"
@@ -69,7 +74,7 @@
                   type="button"
                   class="stepper__btn stepper__btn--add"
                   data-testid="dine-in-increase"
-                  [disabled]="busy()"
+                  [disabled]="busy() || !canAdd(variant)"
                   [attr.aria-label]="'common.increase' | t"
                   (click)="request(variant.id, quantityOf(variant.id) + 1)"
                 >

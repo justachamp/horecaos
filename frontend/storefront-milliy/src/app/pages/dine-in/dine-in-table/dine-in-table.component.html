@@ -133,6 +133,15 @@
 
         @if (priceRefusalKey(); as key) {
           <p class="table__error" role="alert" data-testid="dine-in-pricing-error">{{ key | t }}</p>
+          <button
+            type="button"
+            class="order__clear"
+            data-testid="dine-in-clear"
+            [disabled]="updating() || checkingOut()"
+            (click)="clearOrder()"
+          >
+            {{ 'dineIn.clearOrder' | t }}
+          </button>
         }
         @if (checkoutErrorKey(); as key) {
           <p class="table__error" role="alert" data-testid="dine-in-checkout-error">{{ key | t }}</p>

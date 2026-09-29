@@ -234,11 +234,7 @@ export class DineInTableComponent implements OnInit {
       this.signIn();
       return;
     }
-    this.updating.set(true);
-    this.basketErrorKey.set(null);
-    this.checkoutErrorKey.set(null);
-    this.orderPlaced.set(false);
-    try {
+    await this.writeBasket(async () => {
       await this.carts.ensure(
         admission.locationId,
         'DINE_IN',
@@ -254,6 +250,41 @@ export class DineInTableComponent implements OnInit {
       } else {
         await this.carts.putLine({ variantId: change.variantId, quantity: change.quantity });
       }
+    });
+  }
+
+  /**
+   * Takes every line out of the basket.
+   *
+   * The way out of a basket the platform will not price. A line the menu no longer
+   * sells has a stepper on its card only while the card is on screen and the menu
+   * still knows the portion; a portion the menu has dropped altogether has no card
+   * at all. The platform refuses to price the whole basket while any one line is
+   * unavailable, so without this the guest could be left unable to order for the
+   * rest of the evening (the basket is remembered against the table's session).
+   * Offered only once pricing has been refused -- never beside a basket that
+   * prices, where one stray tap would throw an order away.
+   */
+  protected async clearOrder(): Promise<void> {
+    if (this.updating() || this.checkingOut()) {
+      return;
+    }
+    await this.writeBasket(async () => {
+      await this.carts.clear();
+    });
+  }
+
+  /**
+   * Runs one write to the basket, one at a time, and prices what is left.
+   * A failure is said on the screen and leaves the basket as the platform holds it.
+   */
+  private async writeBasket(write: () => Promise<void>): Promise<void> {
+    this.updating.set(true);
+    this.basketErrorKey.set(null);
+    this.checkoutErrorKey.set(null);
+    this.orderPlaced.set(false);
+    try {
+      await write();
       await this.reprice();
     } catch (failure) {
       this.basketErrorKey.set(failureKey(failure));

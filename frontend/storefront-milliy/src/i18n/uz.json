@@ -452,6 +452,8 @@
     "billRequested": "Hisob so'raldi",
     "roundPending": "Oxirgi buyurtmangiz oshxonada, lekin hali stol hisobiga qo'shilmadi.",
     "roundRetry": "Qayta urinish",
-    "roundAttachFailed": "Buyurtma oshxonada, lekin uni stol hisobiga qo'shib bo'lmadi. Xodimga ayting."
+    "roundAttachFailed": "Buyurtma oshxonada, lekin uni stol hisobiga qo'shib bo'lmadi. Xodimga ayting.",
+    "heldUnavailable": "Endi mavjud emas. Davom etish uchun uni buyurtmadan olib tashlang.",
+    "clearOrder": "Buyurtmani tozalash"
   }
 }

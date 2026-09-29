@@ -220,6 +220,55 @@ describe('DishCardComponent -- ordering at a table (ADR 0047)', () => {
     });
   });
 
+  describe('a portion the basket holds that can no longer be bought (it sold out, or its window closed)', () => {
+    it('keeps a stepper that takes it out: the guest cannot order again while a dead line is held', () => {
+      const view = render({
+        item: dish([variant({ active: false })]),
+        quantities: { v1: 2 },
+      });
+
+      expect(view.q('dish-sold-out')).not.toBeNull();
+      expect(view.q('dine-in-quantity')?.textContent).toContain('2');
+      expect(view.q('dine-in-held-unavailable')).not.toBeNull();
+
+      view.q('dine-in-decrease')!.click();
+      expect(view.changes).toEqual([{ variantId: 'v1', quantity: 1 }]);
+    });
+
+    it('asks for zero when the last one is taken out, and cannot be raised past what it holds', () => {
+      const view = render({
+        item: dish([variant({ onSaleNow: false })]),
+        quantities: { v1: 1 },
+      });
+
+      expect(view.q('dine-in-increase')!.disabled).toBe(true);
+      view.q('dine-in-decrease')!.click();
+      expect(view.changes).toEqual([{ variantId: 'v1', quantity: 0 }]);
+    });
+
+    it('offers nothing for a portion that is unavailable and not held', () => {
+      const view = render({
+        item: dish([variant({ id: 'small', name: 'S' }), variant({ id: 'large', name: 'L', active: false })]),
+        quantities: { small: 1 },
+      });
+
+      expect(view.all('dine-in-quantity').length).toBe(1);
+      expect(view.q('dine-in-held-unavailable')).toBeNull();
+    });
+
+    it('keeps the way out of a held line on a dish whose modifier group has since become mandatory', () => {
+      const view = render({
+        item: dish([variant()], [group({ required: true, minimumSelections: 1 })]),
+        quantities: { v1: 1 },
+      });
+
+      expect(view.q('dine-in-add')).toBeNull();
+      expect(view.q('dine-in-increase')!.disabled).toBe(true);
+      view.q('dine-in-decrease')!.click();
+      expect(view.changes).toEqual([{ variantId: 'v1', quantity: 0 }]);
+    });
+  });
+
   describe('a dish that asks the guest to choose something', () => {
     it('with a required group is not orderable from the table here, and says a member of staff will help', () => {
       const view = render({
