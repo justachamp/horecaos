@@ -700,6 +700,15 @@ public class JdbcDineInStore {
                 """).params(params).update();
     }
 
+    /**
+     * Records that a session sits at a table.
+     *
+     * @param joinedAt when the table was joined. It is also the only thing that
+     *                 orders a party's tables ({@link #tablesForSession}, {@link
+     *                 #tablesForOrders}), so a caller joining several at once
+     *                 stamps each a distinct instant, in join order -- see {@code
+     *                 TableSessionService.open}
+     */
     public void occupyTable(UUID sessionId, UUID tableId, UUID tenantId, UUID locationId, Instant joinedAt) {
 
         jdbc.sql("""
@@ -815,7 +824,9 @@ public class JdbcDineInStore {
      * carries the tenant -- the order id is a UUID a caller supplies, and matching
      * it alone would let a session of another tenant answer for it. Ordered by the
      * moment each table was joined, so a party pushed together reads in the order
-     * the room was arranged, with the table code as a stable tie-break.
+     * the room was arranged ({@code TableSessionService.open} gives each table of
+     * one request its own instant). The table code is only the last tie-break, so
+     * two rows can never come back in a different order from one read to the next.
      */
     public List<OrderTableRow> tablesForOrders(UUID tenantId, Collection<UUID> orderIds) {
         if (orderIds.isEmpty()) {

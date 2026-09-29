@@ -219,6 +219,40 @@ class OrderTableVisibilityHttpTests {
         assertThat(codesOf(boardRow(a, MANAGER_A, atThree).path("table"))).containsExactly("T3");
     }
 
+    @Test
+    @DisplayName("joined tables read in the order they were joined, not in the order their codes sort")
+    void joinedTablesReadInJoinOrder() throws Exception {
+        // Joined T2 then T10: a lexical code sort would put T10 first.
+        TableRow t2 = createTable(a, "T2", "Table 2");
+        TableRow t10 = createTable(a, "T10", "Table 10");
+        SessionRow smallFirst = openSession(a, t2.id(), t10.id());
+        UUID smallFirstOrder = seedOrder(a, "A-1006", "DINE_IN", 10_000);
+        attach(a, smallFirst.id(), smallFirstOrder);
+
+        // Joined T20 then T3: a natural sort would put T3 first, so this pair keeps
+        // the fix honest against "just sort the codes properly".
+        TableRow t20 = createTable(a, "T20", "Table 20");
+        TableRow t3 = createTable(a, "T3", "Table 3");
+        SessionRow largeFirst = openSession(a, t20.id(), t3.id());
+        UUID largeFirstOrder = seedOrder(a, "A-1007", "DINE_IN", 12_000);
+        attach(a, largeFirst.id(), largeFirstOrder);
+
+        assertThat(codesOf(boardRow(a, MANAGER_A, smallFirstOrder).path("table")))
+                .as("the chip on the order board follows the join order")
+                .containsExactly("T2", "T10");
+        assertThat(codesOf(boardRow(a, MANAGER_A, largeFirstOrder).path("table")))
+                .containsExactly("T20", "T3");
+        OrderTablesPort.OrderTable throughThePort = java.util.Objects.requireNonNull(
+                orderTables
+                        .tablesByOrders(TENANT_A, List.of(smallFirstOrder, largeFirstOrder))
+                        .get(smallFirstOrder),
+                "the port answers for a seated order");
+        assertThat(throughThePort.tables())
+                .extracting(OrderTablesPort.TableRef::code)
+                .as("the port every screen reads through says the same")
+                .containsExactly("T2", "T10");
+    }
+
     // ------------------------------------------------------------------------- the kitchen ticket
 
     @Test
