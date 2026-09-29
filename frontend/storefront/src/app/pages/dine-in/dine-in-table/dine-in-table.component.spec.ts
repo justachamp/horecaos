@@ -186,10 +186,14 @@ function setUp() {
   return { fixture, dineIn, cartService, menuService, session, notification, router };
 }
 
+/**
+ * Lets every promise chain the component started run to its end. A macrotask, not a
+ * fixed count of microtask ticks: the chains here (bind, then line, then reprice) grow
+ * by a tick whenever a step gains an `await`, and a count of three was the reason
+ * unrelated changes kept breaking these specs.
+ */
 async function flush(): Promise<void> {
-  await Promise.resolve();
-  await Promise.resolve();
-  await Promise.resolve();
+  await new Promise((resolve) => setTimeout(resolve, 0));
 }
 
 describe('DineInTableComponent', () => {
@@ -715,14 +719,21 @@ describe('DineInTableComponent -- a cart bound to the table it is eaten at (ADR 
     lines: [{ lineKey: 'variant-1', variantId: 'variant-1', quantity: 1, commentPresetCodes: [], hasCustomerNote: false }],
   };
 
-  /** A signed-in guest at a seated table whose menu offers one dish; `ensure` opens the cart. */
-  async function seatedGuest() {
+  /**
+   * A signed-in guest at a seated table whose menu offers one dish; `ensure` opens
+   * the cart. With `existingCart` the guest already had a basket when the screen
+   * loaded, which is what `ensure(..., create = false)` finds.
+   */
+  async function seatedGuest(options: { existingCart?: boolean } = {}) {
     const parts = setUp();
     parts.dineIn.seed(admission());
     parts.dineIn.bill.mockResolvedValue(bill());
     parts.menuService.menu.mockResolvedValue(menu());
-    parts.cartService.ensure.mockImplementation(async () => {
-      parts.cartService.cart.set({ ...CART, lines: [] });
+    parts.cartService.ensure.mockImplementation(async (_location: string, _mode: string, create = true) => {
+      if (!create && !options.existingCart) {
+        return null;
+      }
+      parts.cartService.cart.set(create ? { ...CART, lines: [] } : CART);
       return CART;
     });
     parts.cartService.putLine.mockImplementation(async () => {
@@ -834,6 +845,127 @@ describe('DineInTableComponent -- a cart bound to the table it is eaten at (ADR 
     fixture.detectChanges();
 
     expect(fixture.componentInstance.checkoutError()).toBe('dineIn.notSeated');
+    expect(dineIn.queueRound).not.toHaveBeenCalled();
+    expect(cartService.discard).not.toHaveBeenCalled();
+  });
+
+  /** Prices a one-dish basket so the checkout button is live, as the effect does on a real cart. */
+  function priceOneDish(cartService: FakeCartService): void {
+    cartService.price.mockResolvedValue({
+      cartId: 'cart-1',
+      cartVersion: 3,
+      quoteId: 'quote-1',
+      contextHash: 'hash',
+      currency: 'UZS',
+      subtotalMinor: 45000,
+      taxMinor: 0,
+      discountMinor: 0,
+      feeMinor: 0,
+      totalMinor: 45000,
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+      delivery: null,
+    });
+    cartService.paymentMethods.mockResolvedValue({
+      cartId: 'cart-1',
+      currency: 'UZS',
+      methodCodes: ['CASH'],
+      warnings: [],
+    });
+  }
+
+  async function pressCheckout(fixture: { detectChanges(): void; nativeElement: unknown }): Promise<void> {
+    (fixture.nativeElement as HTMLElement)
+      .querySelector<HTMLButtonElement>('[data-testid="dine-in-checkout"]')
+      ?.click();
+    await flush();
+    fixture.detectChanges();
+  }
+
+  it('binds a basket the guest already had as soon as the table screen loads, without a line being touched', async () => {
+    const { cartService } = await seatedGuest({ existingCart: true });
+
+    expect(cartService.bindTable).toHaveBeenCalledTimes(1);
+    expect(cartService.bindTable).toHaveBeenCalledWith('guest-token-1');
+  });
+
+  it('does not bind on load when the guest has no basket yet: the first line does', async () => {
+    const { cartService } = await seatedGuest();
+
+    expect(cartService.bindTable).not.toHaveBeenCalled();
+  });
+
+  it('a guest token the platform no longer recognises, met while rebinding on load, clears the visit', async () => {
+    const parts = setUp();
+    parts.dineIn.seed(admission());
+    parts.dineIn.bill.mockResolvedValue(bill());
+    parts.menuService.menu.mockResolvedValue(menu());
+    parts.cartService.ensure.mockImplementation(async () => {
+      parts.cartService.cart.set(CART);
+      return CART;
+    });
+    parts.cartService.bindTable.mockRejectedValue(
+      new HorecaOSApiError({ status: 401, code: 'UNAUTHENTICATED', detail: 'ended' }),
+    );
+    parts.dineIn.isGuestSessionEnded.mockReturnValue(true);
+
+    parts.fixture.detectChanges();
+    await flush();
+    parts.fixture.detectChanges();
+
+    expect(parts.dineIn.clear).toHaveBeenCalled();
+  });
+
+  it('sends the guest token with the checkout, so the platform can re-prove the table the cart is bound to', async () => {
+    const { fixture, cartService } = await seatedGuest();
+    priceOneDish(cartService);
+    cartService.checkout.mockResolvedValue({ orderId: 'order-1', outcome: 'CREATED' });
+    await tapAdd(fixture);
+
+    await pressCheckout(fixture);
+
+    expect(cartService.checkout).toHaveBeenCalledWith(
+      expect.objectContaining({ guestToken: 'guest-token-1', paymentMethodCode: 'CASH' }),
+    );
+  });
+
+  it('a checkout refused because the party this device scanned for is over clears the visit: scan again', async () => {
+    const { fixture, cartService, dineIn } = await seatedGuest();
+    priceOneDish(cartService);
+    cartService.checkout.mockRejectedValue(
+      new HorecaOSApiError({
+        status: 409,
+        code: 'RESOURCE_CONFLICT',
+        detail: 'This table session has ended. Scan the code again.',
+        problem: { reason: 'TABLE_TOKEN_ENDED' },
+      }),
+    );
+    await tapAdd(fixture);
+
+    await pressCheckout(fixture);
+
+    expect(dineIn.clear).toHaveBeenCalled();
+    expect(dineIn.queueRound).not.toHaveBeenCalled();
+    expect(cartService.discard).not.toHaveBeenCalled();
+  });
+
+  it('a checkout refused because the cart is bound to another table rebinds it and asks the guest to look again', async () => {
+    const { fixture, cartService, dineIn } = await seatedGuest();
+    priceOneDish(cartService);
+    cartService.checkout.mockRejectedValue(
+      new HorecaOSApiError({
+        status: 409,
+        code: 'RESOURCE_CONFLICT',
+        detail: 'This cart was started at another table.',
+        problem: { reason: 'TABLE_BINDING_STALE' },
+      }),
+    );
+    await tapAdd(fixture);
+    expect(cartService.bindTable).toHaveBeenCalledTimes(1);
+
+    await pressCheckout(fixture);
+
+    expect(cartService.bindTable).toHaveBeenCalledTimes(2);
+    expect(fixture.componentInstance.checkoutError()).toBe('dineIn.tableChanged');
     expect(dineIn.queueRound).not.toHaveBeenCalled();
     expect(cartService.discard).not.toHaveBeenCalled();
   });

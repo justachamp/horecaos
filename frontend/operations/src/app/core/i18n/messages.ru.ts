@@ -5807,12 +5807,8 @@ export const messagesRu: MessageCatalogue = {
   'orders.newOrder.table.seatOccupied': 'Этот стол только что заняли — выберите другой',
   'orders.newOrder.table.selected': 'Заказ пойдёт на: {tables}',
   'orders.newOrder.table.required': 'Выберите стол для этого заказа',
-  'orders.newOrder.table.attachReason': 'Принят в консоли',
-  'orders.newOrder.table.attachFailed':
-    'Заказ {number} создан, но в счёт стола он ещё не добавлен.',
-  'orders.newOrder.table.attachRetry': 'Добавить в счёт',
-  'orders.newOrder.table.attachRetrying': 'Добавляем…',
-  'orders.newOrder.table.attachOpenOrder': 'Открыть заказ',
+  'orders.newOrder.table.sessionEnded':
+    'Эта компания уже ушла из-за стола, заказ не создан. Список обновлён — выберите стол снова.',
   'orders.newOrder.table.notServiceable':
     'Этот филиал сейчас не принимает заказы в зал через этот канал',
 

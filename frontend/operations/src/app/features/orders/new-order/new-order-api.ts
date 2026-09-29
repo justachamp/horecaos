@@ -191,6 +191,14 @@ export interface PlaceOrderRequest {
   readonly proposedLocationId?: string | null;
   readonly overrideReasonCode?: string | null;
   readonly overrideNote?: string | null;
+  /**
+   * DINE_IN only (ADR 0047): the live party whose bill the order goes on. The
+   * platform puts the order on it inside the transaction that creates the order,
+   * so the order exists on that bill or does not exist at all -- a party that left
+   * while the operator was building the basket refuses the placement
+   * (`SESSION_NOT_LIVE`) instead of leaving a cooked order that is on no bill.
+   */
+  readonly dineInSessionId?: string | null;
 }
 
 // -------------------------------------------------------- §5.4 branch resolution (row 1.3)

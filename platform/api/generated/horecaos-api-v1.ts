@@ -5691,6 +5691,7 @@ export interface PlaceOrderRequest {
   channelCode: string;
   customerAccountId: string;
   destination?: OperationsOrderControllerDestinationRequest;
+  dineInSessionId?: string;
   fulfillmentMode: "DELIVERY" | "PICKUP" | "DINE_IN";
   lines: Array<OrderLineRequest>;
   overrideNote?: string;
@@ -9492,7 +9493,7 @@ export interface Operations {
   "removePromoCode": { method: "DELETE"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts/{cartId}/promo-code"; request: { parameters: { path: { brandId: string; cartId: string; tenantId: string } } }; responses: { "200": CartResponse } };
   "applyPromoCode": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts/{cartId}/promo-code"; request: { parameters: { path: { brandId: string; cartId: string; tenantId: string } }; body: ApplyPromoCodeRequest }; responses: { "200": CartResponse } };
   "bindTable": { method: "PUT"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts/{cartId}/table"; request: { parameters: { header: { "X-Dine-In-Token": string }; path: { brandId: string; cartId: string; tenantId: string } } }; responses: { "200": CartResponse } };
-  "checkout": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/checkouts"; request: { parameters: { header: { "Idempotency-Key": string }; path: { brandId: string; tenantId: string } }; body: CheckoutRequest }; responses: { "200": CheckoutResponse } };
+  "checkout": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/checkouts"; request: { parameters: { header: { "Idempotency-Key": string; "X-Dine-In-Token"?: string }; path: { brandId: string; tenantId: string } }; body: CheckoutRequest }; responses: { "200": CheckoutResponse } };
   "register": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/identity/registrations"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: RegisterRequest }; responses: { "200": RegistrationResponse } };
   "signIn": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/identity/sessions"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: SignInRequest }; responses: { "200": CustomerSessionResponse } };
   "signOut": { method: "DELETE"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/identity/sessions/current"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": unknown } };

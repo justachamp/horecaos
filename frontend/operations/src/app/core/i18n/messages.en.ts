@@ -5836,12 +5836,8 @@ export const messagesEn = {
   'orders.newOrder.table.seatOccupied': 'That table was taken a moment ago — pick another',
   'orders.newOrder.table.selected': 'This order goes to {tables}',
   'orders.newOrder.table.required': 'Choose the table this order is for',
-  'orders.newOrder.table.attachReason': 'Keyed in at the console',
-  'orders.newOrder.table.attachFailed':
-    'Order {number} was placed, but it is not on the table’s bill yet.',
-  'orders.newOrder.table.attachRetry': 'Put on the bill',
-  'orders.newOrder.table.attachRetrying': 'Adding…',
-  'orders.newOrder.table.attachOpenOrder': 'Open the order',
+  'orders.newOrder.table.sessionEnded':
+    'That party has already left the table, so no order was placed. The list is refreshed — choose the table again.',
   'orders.newOrder.table.notServiceable':
     'This branch is not taking dine-in orders through this channel right now',
 

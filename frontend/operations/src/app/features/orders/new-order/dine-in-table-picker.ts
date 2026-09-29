@@ -87,6 +87,17 @@ export class DineInTablePicker {
     });
   }
 
+  /**
+   * Reads the room again. The New Order screen calls it when the platform refuses a
+   * placement because the chosen party has left: the list was read when the branch
+   * was set, and a basket can take minutes to build, so the party the operator
+   * picked may be gone. The read drops a party that is no longer live and reports no
+   * pick, which is what stops the screen offering the same closed party again.
+   */
+  async reload(): Promise<void> {
+    await this.load(this.scope());
+  }
+
   protected tablesLabel(session: SessionView): string {
     return session.tables.map((table) => table.code).join(' + ');
   }

@@ -1155,6 +1155,89 @@ class DineInTests {
         assertThat(((ApiException) unknown).errorCode()).isEqualTo(ErrorCode.UNAUTHENTICATED);
     }
 
+    @Test
+    @DisplayName("findGuestTable answers empty, and never throws, for every token that cannot act now")
+    void findGuestTableIsEmptyForATokenThatCannotActNow() {
+        String printed = issueToken(tableOne);
+        enableOrdering();
+        SessionRow party = openWalkIn(tableOne);
+        String guestToken = transactions.execute(status -> qr.exchange(printed)).guestToken();
+
+        assertThat(tableBinding.findGuestTable(guestToken))
+                .map(TableBindingPort.GuestTable::tableId)
+                .as("live while the party the token was minted for is seated")
+                .contains(tableOne);
+        assertThat(tableBinding.findGuestTable("nobody-minted-this"))
+                .as("an unknown token is not an error to a caller that has to keep going")
+                .isEmpty();
+        assertThat(tableBinding.findGuestTable(" ")).isEmpty();
+
+        // Closing the party revokes the tokens minted at its table: the next party's
+        // bill is not reachable with what the last one held.
+        move(party.id(), SessionStatus.CLOSED, party.version());
+        assertThat(tableBinding.findGuestTable(guestToken)).isEmpty();
+
+        // A branch that stops taking QR orders: a token minted for it is not one that
+        // can place an order, and reads like any other token that cannot act.
+        String fresh = transactions.execute(status -> qr.exchange(printed)).guestToken();
+        assertThat(tableBinding.findGuestTable(fresh)).isPresent();
+        transactions.executeWithoutResult(status -> floorPlan.configure(
+                new FloorPlanService.BranchSettings(TENANT, BRAND, branch, "VIEW_ONLY", null, null, null),
+                "manager",
+                "Menu only for now"));
+        String viewOnly = transactions.execute(status -> qr.exchange(printed)).guestToken();
+        assertThat(tableBinding.findGuestTable(viewOnly)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("an operator's order goes on the named party's bill, and only a live party at this branch takes it")
+    void anOperatorsOrderGoesOnTheNamedPartysBill() {
+        SessionRow party = openWalkIn(tableOne);
+        UUID order = seedDineInOrder("D-073", 31_000);
+
+        tableBinding.requireLiveSession(TENANT, branch, party.id());
+        transactions.executeWithoutResult(status -> tableBinding.attachRoundToSession(
+                TENANT, branch, party.id(), order, "waiter", "Placed with the order"));
+
+        assertThat(sessions.rounds(TENANT, party.id())).containsExactly(order);
+        assertThat(sessions.bill(TENANT, party.id()).totalMinor()).isEqualTo(31_000L);
+
+        Throwable elsewhere =
+                catchThrowable(() -> tableBinding.requireLiveSession(TENANT, UUID.randomUUID(), party.id()));
+        assertThat(elsewhere).isInstanceOf(ApiException.class);
+        assertThat(((ApiException) elsewhere).errorCode())
+                .as("a session of another branch answers like one that does not exist")
+                .isEqualTo(ErrorCode.RESOURCE_NOT_FOUND);
+        Throwable otherTenant = catchThrowable(() -> tableBinding.requireLiveSession(OTHER_TENANT, branch, party.id()));
+        assertThat(((ApiException) otherTenant).errorCode()).isEqualTo(ErrorCode.RESOURCE_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName(
+            "a party that has left refuses an operator's order with SESSION_NOT_LIVE, and nothing lands on any bill")
+    void aPartyThatLeftRefusesAnOperatorsOrder() {
+        SessionRow party = openWalkIn(tableOne);
+        move(party.id(), SessionStatus.CLOSED, party.version());
+        UUID order = seedDineInOrder("D-074", 31_000);
+
+        Throwable early = catchThrowable(() -> tableBinding.requireLiveSession(TENANT, branch, party.id()));
+        Throwable late =
+                catchThrowable(() -> transactions.executeWithoutResult(status -> tableBinding.attachRoundToSession(
+                        TENANT, branch, party.id(), order, "waiter", "Placed with the order")));
+
+        for (Throwable failure : List.of(early, late)) {
+            assertThat(failure).isInstanceOf(ApiException.class);
+            assertThat(((ApiException) failure).errorCode()).isEqualTo(ErrorCode.RESOURCE_CONFLICT);
+            assertThat(((ApiException) failure).properties())
+                    .containsEntry("conflict", "SESSION_NOT_LIVE")
+                    .containsEntry("reason", "SESSION_NOT_LIVE");
+        }
+        assertThat(jdbc.sql("SELECT count(*) FROM dinein.session_orders")
+                        .query(Long.class)
+                        .single())
+                .isZero();
+    }
+
     // ------------------------------------------------------------------ helpers
 
     /** Gives an order a customer account of its own, as a signed-in guest's checkout does. */

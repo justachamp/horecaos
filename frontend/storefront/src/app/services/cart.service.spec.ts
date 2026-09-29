@@ -267,6 +267,30 @@ describe('CartService.checkout', () => {
     );
   });
 
+  it("sends a table guest's token as X-Dine-In-Token, so the platform can re-prove the table the cart is bound to", async () => {
+    const { service, api } = setUp();
+    api.mutate.mockResolvedValue({ orderId: 'o1', outcome: 'CREATED' });
+
+    await service.checkout({
+      priced,
+      paymentMethodCode: 'CASH',
+      idempotencyKey: 'k-3',
+      guestToken: 'guest-token-9',
+    });
+
+    expect(api.mutate.mock.calls[0][2].headers).toEqual({ 'X-Dine-In-Token': 'guest-token-9' });
+    expect(api.mutate.mock.calls[0][2].body).not.toHaveProperty('guestToken');
+  });
+
+  it('sends no dine-in header when there is no table token', async () => {
+    const { service, api } = setUp();
+    api.mutate.mockResolvedValue({ orderId: 'o1', outcome: 'CREATED' });
+
+    await service.checkout({ priced, paymentMethodCode: 'CASH', idempotencyKey: 'k-4' });
+
+    expect(api.mutate.mock.calls[0][2].headers).toBeUndefined();
+  });
+
   it('is a required, pass-through field: nothing here defaults it when missing', async () => {
     const { service, api } = setUp();
     api.mutate.mockResolvedValue({ orderId: 'o1', outcome: 'CREATED' });

@@ -301,6 +301,7 @@
     "thisBranch": "This branch",
     "tableLabel": "Table {{code}}",
     "notSeated": "Ask a member of staff to seat you, then scan the code again.",
+    "tableChanged": "You are at a different table now. We moved your order to it: check it and place it again.",
     "menuUnavailable": "The menu is not available right now.",
     "signInToOrder": "Sign in to order",
     "itemsInCart": "{{count}} items in cart",

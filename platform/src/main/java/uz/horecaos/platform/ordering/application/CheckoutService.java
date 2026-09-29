@@ -237,6 +237,16 @@ public class CheckoutService {
      *                            all, because that is a tenant configuration fact
      *                            no single order-taker's override should reach
      *                            past
+     * @param dineInGuestToken    the table-scoped guest token (ADR 0047) the guest
+     *                            presented with this checkout, or null. Read only
+     *                            when the cart is bound to a table: the binding is
+     *                            stored state, made once, and what it stands for --
+     *                            that this customer is still at that table -- is
+     *                            re-proved here from a live token, so a cart bound
+     *                            before a table move or before a party left cannot
+     *                            put its order on whoever sits at the table now.
+     *                            Not part of {@link #fingerprint()}: it is a
+     *                            credential, not a fact about the order
      */
     public record CheckoutCommand(
             UUID tenantId,
@@ -252,7 +262,57 @@ public class CheckoutService {
             @Nullable String actorId,
             @Nullable String correlationId,
             @Nullable Instant requestedFor,
-            boolean overrideOutOfHours) {
+            boolean overrideOutOfHours,
+            @Nullable String dineInGuestToken) {
+
+        /**
+         * A checkout that presents no table token: every caller but a guest at a
+         * table, and every guest whose cart is not bound to one.
+         */
+        @SuppressWarnings("checkstyle:ParameterNumber")
+        public CheckoutCommand(
+                UUID tenantId,
+                UUID brandId,
+                UUID cartId,
+                int expectedCartVersion,
+                UUID quoteId,
+                String contextHash,
+                String idempotencyKey,
+                @Nullable String paymentMethodCode,
+                long redeemFromBalanceMinor,
+                String actorType,
+                @Nullable String actorId,
+                @Nullable String correlationId,
+                @Nullable Instant requestedFor,
+                boolean overrideOutOfHours) {
+            this(
+                    tenantId,
+                    brandId,
+                    cartId,
+                    expectedCartVersion,
+                    quoteId,
+                    contextHash,
+                    idempotencyKey,
+                    paymentMethodCode,
+                    redeemFromBalanceMinor,
+                    actorType,
+                    actorId,
+                    correlationId,
+                    requestedFor,
+                    overrideOutOfHours,
+                    null);
+        }
+
+        /**
+         * Names the cart and the actor and nothing else: {@code dineInGuestToken} is a
+         * bearer credential (ADR 0028), and the generated form would print it into
+         * any log line or assertion message that interpolates a command.
+         */
+        @Override
+        public String toString() {
+            return "CheckoutCommand[tenantId=%s, brandId=%s, cartId=%s, actorType=%s]"
+                    .formatted(tenantId, brandId, cartId, actorType);
+        }
 
         /**
          * Everything that makes this request the request it is.

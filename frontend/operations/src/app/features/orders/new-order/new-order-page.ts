@@ -39,7 +39,6 @@ import {
 } from '../../customers/customers-api';
 import { ChannelView, SalesChannelsApi } from '../../settings/sales-channels/sales-channels-api';
 import { accessRefusal, describeApiError } from '../order-errors';
-import { TableSessionsApi } from '../table-sessions-api';
 import { DineInTablePicker, TablePick } from './dine-in-table-picker';
 import { ItemModifierDialog, ModifierDialogConfirmation } from './item-modifier-dialog';
 import {
@@ -244,14 +243,14 @@ interface PendingModifierSelection {
  * names the table the order is for -- a party already seated, or one seated from
  * here -- through {@link DineInTablePicker}; `Создать` then places the order at the
  * operator's own branch (a table is a room, and there is no cross-branch question
- * to resolve for one) and attaches it as a round of that party's session through
- * `TableSessionController`'s staff-side rounds endpoint in the same flow, so the
- * order shows its table on the board, the detail and the kitchen ticket at once.
- * Those are two calls, and the second can fail after the first landed: the order
- * exists and the screen says so, keeps the basket out of reach of a second
- * `Создать` (which would place a duplicate), and offers to put the order on the
- * bill again -- the attach is safe to repeat, the server answers a repeat with the
- * sequence it already has.
+ * to resolve for one) and names the party's session in the same request
+ * (`dineInSessionId`). The platform puts the order on that party's bill inside the
+ * transaction that creates it, so the order shows its table on the board, the
+ * detail and the kitchen ticket at once, and cannot exist without being on a bill:
+ * a party that left while the basket was being built refuses the placement
+ * (`SESSION_NOT_LIVE`) before anything is priced or cooked, the screen says so and
+ * re-reads the room, and the operator chooses again. There is no second call to
+ * lose and no half-placed order to recover.
  */
 @Component({
   selector: 'q-new-order-page',
@@ -273,7 +272,6 @@ export class NewOrderPage implements OnInit {
   private readonly api = inject(NewOrderApi);
   private readonly customersApi = inject(CustomersApi);
   private readonly channelsApi = inject(SalesChannelsApi);
-  private readonly sessionsApi = inject(TableSessionsApi);
   private readonly location = inject(CurrentLocation);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
@@ -281,6 +279,7 @@ export class NewOrderPage implements OnInit {
   protected readonly i18n = inject(I18n);
 
   private readonly phoneInput = viewChild<ElementRef<HTMLInputElement>>('phoneInput');
+  private readonly tablePicker = viewChild(DineInTablePicker);
 
   /**
    * ADR 0064: set only when this screen was opened from a claimed screen-pop
@@ -1463,20 +1462,6 @@ export class NewOrderPage implements OnInit {
   /** The party the DINE_IN order goes to, as {@link DineInTablePicker} last reported it. */
   protected readonly tablePick = signal<TablePick | null>(null);
 
-  /**
-   * An order that was placed but is not yet on its table's bill: the attach that
-   * follows a DINE_IN placement failed. While this is set the screen cannot place
-   * another order -- pressing `Создать` again would be a second order for the same
-   * table -- and offers only to put this one on the bill again or to open it.
-   */
-  protected readonly placedAwaitingBill = signal<{
-    readonly orderId: string;
-    readonly publicOrderNumber: string;
-    readonly sessionId: string;
-  } | null>(null);
-  protected readonly attaching = signal(false);
-  protected readonly attachError = signal<string | null>(null);
-
   /** The operator's branch as the picker's scope: a table is looked for, and seated at, here. */
   protected readonly locationScope = computed(() => this.location.scope());
 
@@ -1492,7 +1477,6 @@ export class NewOrderPage implements OnInit {
       (this.fulfillmentMode() === 'PICKUP' ||
         (this.fulfillmentMode() === 'DELIVERY' && this.selectedAddressId() !== null) ||
         (this.fulfillmentMode() === 'DINE_IN' && this.tablePick() !== null)) &&
-      this.placedAwaitingBill() === null &&
       (!this.preOrderEnabled() || this.requestedForLocal().trim() !== '') &&
       this.selectedLocationId() !== null &&
       (!this.isBranchOverride() ||
@@ -1568,6 +1552,8 @@ export class NewOrderPage implements OnInit {
         proposedLocationId: this.proposedLocationId(),
         overrideReasonCode: override ? this.overrideReasonCode() : null,
         overrideNote: override ? this.overrideNote().trim() || null : null,
+        // The party's bill is part of the placement, not a call after it (ADR 0047).
+        dineInSessionId: dineIn ? (this.tablePick()?.sessionId ?? null) : null,
       };
       const result = await this.api.placeOrder(placeAtScope, request);
       this.outOfHoursConfirmReason.set(null);
@@ -1583,20 +1569,6 @@ export class NewOrderPage implements OnInit {
           // treat an order that already succeeded as a failure.
         }
       }
-      const pick = this.tablePick();
-      if (dineIn && pick !== null) {
-        // The second call of the flow: the order is placed and priced, and this
-        // records that it belongs to the party's evening, which is what puts the
-        // table beside it on the board, the detail and the kitchen ticket.
-        const landed = await this.putOnTheBill(scope, {
-          orderId: result.orderId,
-          publicOrderNumber: result.publicOrderNumber,
-          sessionId: pick.sessionId,
-        });
-        if (!landed) {
-          return;
-        }
-      }
       this.toasts.show({
         message: this.i18n.t('orders.newOrder.order.created', { number: result.publicOrderNumber }),
         tone: 'success',
@@ -1610,6 +1582,12 @@ export class NewOrderPage implements OnInit {
           this.submitDenied.set(true);
         } else if (reason === 'REQUESTED_TIME_IN_PAST') {
           this.requestedForError.set(this.i18n.t('orders.newOrder.order.preOrder.mustBeFuture'));
+        } else if (reason === 'SESSION_NOT_LIVE') {
+          // The party the operator picked has left (a host closed the table while the
+          // basket was being built). Nothing was placed. Re-read the room, which
+          // drops the closed party and clears the pick, so the operator chooses again.
+          this.submitError.set(this.i18n.t('orders.newOrder.table.sessionEnded'));
+          void this.tablePicker()?.reload();
         } else if (reason === 'BRANCH_CLOSED_AT_REQUESTED_TIME_CONFIRM') {
           // The warn half of "WARN ... while still allowing an explicit
           // override": not a submitError, a confirmation the operator can
@@ -1633,67 +1611,6 @@ export class NewOrderPage implements OnInit {
       }
     } finally {
       this.submitting.set(false);
-    }
-  }
-
-  /**
-   * Attaches a just-placed DINE_IN order to its party's bill. Never throws: a
-   * failure leaves {@link placedAwaitingBill} set, which is what stops the screen
-   * placing the same order twice while it is unresolved.
-   *
-   * @return whether the order is on the bill
-   */
-  private async putOnTheBill(
-    scope: LocationScope,
-    placed: { orderId: string; publicOrderNumber: string; sessionId: string },
-  ): Promise<boolean> {
-    this.attaching.set(true);
-    this.attachError.set(null);
-    try {
-      await firstValueFrom(
-        this.sessionsApi.attachRound(
-          scope,
-          placed.sessionId,
-          placed.orderId,
-          this.i18n.t('orders.newOrder.table.attachReason'),
-        ),
-      );
-      this.placedAwaitingBill.set(null);
-      return true;
-    } catch (error) {
-      this.placedAwaitingBill.set(placed);
-      this.attachError.set(
-        error instanceof ApiError
-          ? describeApiError(error, (key, values) => this.i18n.t(key, values))
-          : this.i18n.t('error.unknown.noReference'),
-      );
-      return false;
-    } finally {
-      this.attaching.set(false);
-    }
-  }
-
-  /** «Добавить в счёт» after a failed attach: safe to repeat -- the server answers a repeat with the sequence it already has. */
-  protected async retryPutOnTheBill(): Promise<void> {
-    const scope = this.location.scope();
-    const placed = this.placedAwaitingBill();
-    if (!scope || placed === null || this.attaching()) {
-      return;
-    }
-    if (await this.putOnTheBill(scope, placed)) {
-      this.toasts.show({
-        message: this.i18n.t('orders.newOrder.order.created', { number: placed.publicOrderNumber }),
-        tone: 'success',
-      });
-      void this.router.navigate(['/orders', placed.orderId]);
-    }
-  }
-
-  /** Leaves for the placed order without attaching it; the round can still be attached later. */
-  protected openPlacedOrder(): void {
-    const placed = this.placedAwaitingBill();
-    if (placed !== null) {
-      void this.router.navigate(['/orders', placed.orderId]);
     }
   }
 

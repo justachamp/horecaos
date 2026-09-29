@@ -100,6 +100,9 @@ public class CartService {
     /** The ADR 0027 purpose recorded when a customer chooses where their order goes. */
     private static final String CAPTURE_PURPOSE = "CART_DESTINATION_CAPTURE";
 
+    /** The reason recorded against the round an operator's placement puts on a party's bill. */
+    private static final String OPERATOR_ROUND_REASON = "Placed with the order from the New Order screen";
+
     private final JdbcCartStore carts;
     private final SalesChannelLookup channels;
     private final CartMenuRules menu;
@@ -549,9 +552,11 @@ public class CartService {
      * at Yunusobod.
      *
      * <p>What the binding is for is checkout, not this call. Checkout re-reads the
-     * binding, refuses an order whose table nobody is sitting at, and puts the order
-     * on the table's bill in the same transaction that creates it, so the round
-     * cannot be lost between two requests the way a client-held retry queue can.
+     * binding, re-proves the guest from a live token ({@link #guestStandingAt}: the
+     * binding is stored state and a party may have left or a guest moved since),
+     * refuses an order whose table nobody is sitting at, and puts the order on the
+     * table's bill in the same transaction that creates it, so the round cannot be
+     * lost between two requests the way a client-held retry queue can.
      *
      * <p>The version precondition and the quote invalidation are a destination's
      * own, for consistency and one more reason: a binding is a change to what the
@@ -601,6 +606,47 @@ public class CartService {
         return carts.findTableBinding(tenantId, cartId);
     }
 
+    /** Where a guest stands against the table their cart is bound to, read from a live token. */
+    public enum GuestStanding {
+        /** The presented token is live and was minted for the bound table. */
+        AT_BOUND_TABLE,
+        /** No token was presented at all. */
+        NO_TOKEN,
+        /** A token was presented and cannot act now: ended, revoked, never minted, or the branch stopped taking QR orders. */
+        TOKEN_ENDED,
+        /** The token is live, for another table (or another brand) than the one the cart is bound to. */
+        AT_ANOTHER_TABLE
+    }
+
+    /**
+     * Re-proves, at checkout, that the guest is still at the table their cart was
+     * bound to (ADR 0047).
+     *
+     * <p>{@link #bindTable} validates a token once and stores only the table. Stored
+     * state outlives what proved it: a party closes and its tokens are revoked while
+     * the cart, good for the cart TTL, still names the table; a guest is moved to
+     * another table and scans it while the basket they reload still names the old
+     * one. Checkout then puts the order on the bill of whoever sits at the bound
+     * table now. The customer JWT proves who is ordering, never where they are, so
+     * the table is proved again here from a token the platform still honours.
+     *
+     * <p>Read-only and non-throwing for a token that cannot act, so checkout can
+     * refuse and settle the refusal under its idempotency key rather than roll back.
+     */
+    @Transactional(readOnly = true)
+    public GuestStanding guestStandingAt(UUID tenantId, UUID brandId, UUID boundTableId, @Nullable String guestToken) {
+        if (guestToken == null || guestToken.isBlank()) {
+            return GuestStanding.NO_TOKEN;
+        }
+        return tables.findGuestTable(guestToken)
+                .map(table -> table.tenantId().equals(tenantId)
+                                && table.brandId().equals(brandId)
+                                && table.tableId().equals(boundTableId)
+                        ? GuestStanding.AT_BOUND_TABLE
+                        : GuestStanding.AT_ANOTHER_TABLE)
+                .orElse(GuestStanding.TOKEN_ENDED);
+    }
+
     /** Whether a party is sitting at the table now: checkout's read-only refusal. */
     @Transactional(readOnly = true)
     public boolean tableIsSeated(UUID tenantId, UUID tableId) {
@@ -615,6 +661,27 @@ public class CartService {
     @Transactional
     public void attachOrderToTable(UUID tenantId, UUID tableId, UUID orderId, UUID ownerAccountId) {
         tables.attachRound(tenantId, tableId, orderId, ownerAccountId);
+    }
+
+    /**
+     * Refuses unless the session is a live one at this branch: the operator
+     * placement's read-only check, made before it creates a cart, so a party that
+     * left costs the operator a refusal and not an order that is on no bill.
+     */
+    @Transactional(readOnly = true)
+    public void requireLiveSession(UUID tenantId, UUID locationId, UUID sessionId) {
+        tables.requireLiveSession(tenantId, locationId, sessionId);
+    }
+
+    /**
+     * Puts a just-written operator order on the named party's bill, inside the
+     * caller's transaction. Any refusal propagates and rolls the placement back
+     * with it: an order that cannot be on the bill does not exist.
+     */
+    @Transactional
+    public void attachOrderToSession(
+            UUID tenantId, UUID locationId, UUID sessionId, UUID orderId, String operatorSubject) {
+        tables.attachRoundToSession(tenantId, locationId, sessionId, orderId, operatorSubject, OPERATOR_ROUND_REASON);
     }
 
     /**

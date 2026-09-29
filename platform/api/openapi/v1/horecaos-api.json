@@ -17877,6 +17877,10 @@
           "destination" : {
             "$ref" : "#/components/schemas/OperationsOrderControllerDestinationRequest"
           },
+          "dineInSessionId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
           "fulfillmentMode" : {
             "enum" : [ "DELIVERY", "PICKUP", "DINE_IN" ],
             "type" : "string"
@@ -55344,7 +55348,7 @@
     },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts/{cartId}/table" : {
       "put" : {
-        "description" : "ADR 0047's cart-to-table binding. The table is read from the guest's dine-in token (X-Dine-In-Token), never from the request: a body that named its own table would be a claim a client could edit to reach the next table's bill. Checkout then refuses the order if nobody is seated and otherwise puts it on the table's bill in the same transaction that creates it, so the round cannot be lost between two requests. Clears any attached quote, because a bound cart is another cart; re-price before checkout.",
+        "description" : "ADR 0047's cart-to-table binding. The table is read from the guest's dine-in token (X-Dine-In-Token), never from the request: a body that named its own table would be a claim a client could edit to reach the next table's bill. Checkout then asks for the same token again (the binding is remembered state, so the guest is re-proved), refuses the order if nobody is seated and otherwise puts it on the table's bill in the same transaction that creates it, so the round cannot be lost between two requests. Clears any attached quote, because a bound cart is another cart; re-price before checkout.",
         "operationId" : "bindTable",
         "parameters" : [ {
           "in" : "path",
@@ -55397,7 +55401,7 @@
     },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/checkouts" : {
       "post" : {
-        "description" : "Idempotent under the tenant-scoped Idempotency-Key. Repeating the request returns the same order; a settled business rejection returns the same rejection rather than running again against a changed cart.",
+        "description" : "Idempotent under the tenant-scoped Idempotency-Key. Repeating the request returns the same order; a settled business rejection returns the same rejection rather than running again against a changed cart. A cart bound to a table (ADR 0047) also needs the guest's live dine-in token (X-Dine-In-Token) at the table it is bound to: the binding is remembered state, and the order goes on the bill of whoever sits there now, so the guest is re-proved at checkout. Without it the answer is a conflict (reason TABLE_TOKEN_REQUIRED, TABLE_TOKEN_ENDED or TABLE_BINDING_STALE).",
         "operationId" : "checkout",
         "parameters" : [ {
           "in" : "path",
@@ -55421,6 +55425,13 @@
           "required" : true,
           "schema" : {
             "minLength" : 1,
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "X-Dine-In-Token",
+          "required" : false,
+          "schema" : {
             "type" : "string"
           }
         } ],

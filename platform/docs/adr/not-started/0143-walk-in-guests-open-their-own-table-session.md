@@ -45,12 +45,17 @@
   - The walk-in horizon: how long before a confirmed booking's hold a walk-in may
     no longer take the table. This record proposes 90 minutes; the right number is
     the venue's typical dwell (operations).
-  - Whether a self-seated table may place a cash round. There is no table binding
-    at cart or checkout today (see Context), so nothing in this design can
-    prevent a cash `DINE_IN` order for a table nobody sat at — the same exposure
-    any signed-in customer already has through `POST .../carts`. Whether to require
-    that a self-seating venue's `QR_TABLE` channel offer only payment-first methods
-    is a configuration policy to be decided, not built here (finance, owner).
+  - Whether a self-seated table may place a cash round. Since batch 15 a cart can
+    be bound to a table (`PUT .../carts/{cartId}/table`, see Context) and checkout
+    refuses a bound cart whose table nobody sits at (`TABLE_NOT_SEATED`), but the
+    binding is optional: an unbound `DINE_IN` cart -- a client that never makes the
+    `PUT`, or a direct API caller -- still checks out with no bill and no seating
+    check. So nothing in this design prevents a cash `DINE_IN` order for a table
+    nobody sat at from a caller that skips the binding, the same exposure any
+    signed-in customer has through `POST .../carts`. Whether to require the binding
+    for the `QR_TABLE` channel, and whether to require that a self-seating venue's
+    `QR_TABLE` channel offer only payment-first methods, are policies to be
+    decided, not built here (finance, owner).
   - Presence proof stronger than possession of a printed code — a rotating code
     on the table, a device-side location check — which cost hardware or personal
     data. Not proposed; a trigger is named below (security, product).
@@ -120,17 +125,28 @@ it adds the guest's path beside it.
   (`dinein.qr.rotate`), which revokes every guest token minted from it.
 
 **What checkout does and does not know about a table.** `POST .../carts` with
-`DINE_IN` needs a location and a signed-in customer and nothing about a table:
-nothing under `ordering` refers to one, `CheckoutEligibilityGuard` applies the
-minimum-order floor to a `DINE_IN` cart exactly as it does to a `PICKUP` one, and
-ADR 0047 records "ordering's cart-to-table binding" (`cart_fulfillment.dinein_table_id`,
-named in `V0034`'s header) as not built. An order reaches a table's bill only by
-`addRound` afterwards. So the phantom-order risk —
-food cooked for a table nobody is at, paid in cash — exists today for any
-signed-in customer who calls the API directly; the storefront's `isSeated` guard is
-a UI courtesy, not a control. Self-seating does not create that risk. It makes the
-UI guard satisfiable by anyone holding a token, which is why this record does not
-claim to solve it.
+`DINE_IN` needs a location and a signed-in customer and nothing about a table, and
+a cart that never names one checks out exactly as before: `CheckoutEligibilityGuard`
+applies the minimum-order floor to it as it does to a `PICKUP` cart and asks nothing
+about seating. Since batch 15 a cart *may* be bound to a table (ADR 0047's
+"ordering's cart-to-table binding", built): `PUT .../carts/{cartId}/table`
+(`StorefrontOrderingController#bindTable`, `CartService#bindTable`) stores the table
+of the guest's `X-Dine-In-Token` in `ordering.cart_fulfillment.dinein_table_id`
+(`V0435`) -- never a table id from the request -- and only the storefront
+(`frontend/storefront`) makes the call; the milliy storefront and every
+operator-keyed order do not. For a bound cart the guard re-proves the guest at
+checkout from a live token (`TABLE_TOKEN_REQUIRED`, `TABLE_TOKEN_ENDED`,
+`TABLE_BINDING_STALE`), refuses when nobody is seated at the table
+(`TABLE_NOT_SEATED`, `TableBindingPort#isSeated`), and puts the order on the
+seated party's bill in the transaction that creates it
+(`TableBindingPortAdapter#attachRound`). So the phantom-order risk -- food cooked
+for a table nobody is at, paid in cash -- is closed for a client that binds and
+open for one that does not: an unbound `DINE_IN` cart still reaches checkout with
+no bill to put the order on, for any signed-in customer who calls the API directly
+without the `PUT`. The storefront's `isSeated` guard remains a UI courtesy for
+that caller. Self-seating does not create that risk. It makes the UI guard and the
+seating check satisfiable by anyone holding a token, which is why this record does
+not claim to solve it.
 
 **The threat this design is mostly about is table denial**, not food fraud: a person
 with a photograph of a printed code, opening sessions on empty tables so real
@@ -258,7 +274,7 @@ location.**
 | Keep sessions staff-only and build the operations "seat a walk-in" screen | Necessary anyway, and not rejected — it stays. As the *only* way in, it makes every QR-ordered table wait for a waiter to start, which is the dependency ADR 0047's channel model exists to measure and remove ("how much hall revenue now arrives without a waiter"), and it leaves each QR table waiting on whichever waiter is free | The pilot shows claim abuse or reservation conflict costing more than the waiter tap saves |
 | Open a full session the instant a token is exchanged | A scan is the one action with no identity and no intent: a link preview, a prefetcher or a curious neighbour would occupy the table. Unbounded table denial with no per-account handle | Never |
 | Guest requests, staff approves (a `REQUESTED` session that orders cannot use until approved) | Safe, and puts a human tap back in the loop for every table, defeating the reason to build this. The same safety is bought more cheaply by a lapsing claim plus a branch cap | A venue's abuse is bad enough that an approval step is worth its cost — offer it as a per-branch mode then |
-| No explicit open: create the session lazily when the first round attaches | Removes the empty-claim problem entirely, but the order is already placed, priced, and possibly cooking before anything checks that the table is free or held. It needs ADR 0047's cart-to-table binding first, so the table can be checked at cart creation | The cart-to-table binding exists; the claim step can then move to cart creation and this endpoint can shrink |
+| No explicit open: create the session lazily when the first round attaches | Removes the empty-claim problem entirely, but the order is already placed, priced, and possibly cooking before anything checks that the table is free or held. It needs ADR 0047's cart-to-table binding first, so the table can be checked at cart creation | The binding exists since batch 15, but it is optional, is made by a separate `PUT` after the cart is created rather than at creation, and checks only that somebody is seated, not that the table is free or held; the claim step can move to cart creation once the binding is required for `QR_TABLE` carts and this endpoint can shrink |
 | Model the claim as a new `CLAIMED` session status | Cleaner to read, but every place that means "live" — `SessionStatus.live()`, `findLiveSessionAtTable`, `ix_sessions_live`, the occupancy predicates, the guest routes' status checks — must learn a fifth value, and a missed one leaves a claim that occupies nothing or blocks nothing. Columns leave the state machine untouched | The claim grows behaviour the status columns cannot carry cleanly |
 | Make the claim a real hold in the reservation exclusion constraint (a synthetic booking of `[now, now + horizon)`) | The only design in which the database, not application code, refuses a walk-in over a booking and a booking over a walk-in. A booking row carries an encrypted guest, phone and note and would pollute the day plan, the no-show rate and every reservation report with rows nobody made | Race conditions between guest-open and host-confirm are observed in practice; then a dedicated occupancy range with its own exclusion constraint |
 | Presence proof: a rotating code on the table, NFC, or a location check in the browser | Real cost — hardware to maintain, or precise location, which ADR 0029 treats as personal data and which a browser can be made to spoof. Possession of the printed code plus a verified phone plus caps is the proportionate first step | Measured phantom or denial abuse at a venue |
@@ -577,14 +593,15 @@ disable it. With the setting off, behaviour is unchanged.
 
 - ADR 0047 (dine-in; the API sketch this record replaces, the accepted
   possession-of-a-printed-code model, what was not built), ADR 0015 (customer
-  identity and erasure), ADR 0019 (checkout; no table binding), ADR 0025, ADR
+  identity and erasure), ADR 0019 (checkout; its cart-to-table binding was built in batch 15 under ADR 0047), ADR 0025, ADR
   0029 (no address or fingerprint on `qr_guest_sessions`), ADR 0031, ADR 0033
   (rate limits), ADR 0036 (`QR_TABLE` channel), ADR 0043 (business day), ADR 0045
   (closed channel catalogue), ADR 0051 (customer sessions)
 - `platform/docs/operations-gap-map.md` rows `1.5a`, `10.5b`
 - `TableSessionController#open`, `TableSessionService#open`, `QrEntryController`,
   `QrEntryService`, `ReservationService`, `JdbcDineInStore#tableAvailability`,
-  `JdbcSessionOrderSource`, `CheckoutEligibilityGuard`,
-  `V0034__create_dinein_floorplan_reservations_and_sessions.sql`
+  `JdbcSessionOrderSource`, `CheckoutEligibilityGuard`, `TableBindingPortAdapter`,
+  `V0034__create_dinein_floorplan_reservations_and_sessions.sql`,
+  `V0435__cart_fulfillment_table_binding.sql`
 - `frontend/storefront/src/app/pages/dine-in/dine-in-table/dine-in-table.component.ts`
   and `services/dine-in.service.ts`; `frontend/operations/src/app/features/orders/reservations-page.ts`

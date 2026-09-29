@@ -263,11 +263,18 @@ export class CartService {
    * @param idempotencyKey formed when the customer pressed the button and reused
    *        on every retry of that one intent. A fresh key on a retry is how one
    *        press becomes two orders.
+   * @param guestToken the table-scoped guest token (ADR 0047), sent as
+   *        `X-Dine-In-Token` by a guest whose cart is bound to a table. The binding
+   *        is remembered state, so the platform re-proves at checkout that this
+   *        guest is still at that table before it puts the order on the table's
+   *        bill; a bound cart checked out without it is refused
+   *        (`TABLE_TOKEN_REQUIRED`). Left out for every other cart.
    */
   async checkout(input: {
     priced: PricedCart;
     paymentMethodCode: string;
     idempotencyKey: string;
+    guestToken?: string;
   }): Promise<CheckoutResult> {
     return this.api.mutate<CheckoutResult>('POST', `${this.brandPath}/checkouts`, {
       body: {
@@ -278,6 +285,7 @@ export class CartService {
         paymentMethodCode: input.paymentMethodCode,
       },
       idempotencyKey: input.idempotencyKey,
+      ...(input.guestToken ? { headers: { 'X-Dine-In-Token': input.guestToken } } : {}),
     });
   }
 
