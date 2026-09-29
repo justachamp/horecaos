@@ -237,10 +237,7 @@ describe('KitchenQueuePage', () => {
 
   it('batch 14: a delivery ticket, and a dine-in ticket nobody seated, show no table chip', async () => {
     await render(
-      board([
-        DELIVERY_TICKET,
-        { ...AGGREGATOR_TICKET, fulfilmentMode: 'DINE_IN', table: null },
-      ]),
+      board([DELIVERY_TICKET, { ...AGGREGATOR_TICKET, fulfilmentMode: 'DINE_IN', table: null }]),
     );
     const host = fixture.nativeElement as HTMLElement;
 

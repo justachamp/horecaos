@@ -76,9 +76,7 @@ export class TablePrintCard {
    */
   readonly storefrontHostname = input<string | null>(null);
 
-  private readonly builtUrl = computed(() =>
-    tableQrUrl(this.storefrontHostname(), this.qrToken()),
-  );
+  private readonly builtUrl = computed(() => tableQrUrl(this.storefrontHostname(), this.qrToken()));
 
   /**
    * `https://<hostname>/dine-in/<token>`, or null when the address cannot

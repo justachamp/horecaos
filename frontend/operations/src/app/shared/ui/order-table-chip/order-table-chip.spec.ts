@@ -44,14 +44,10 @@ describe('orderTableCodes', () => {
 describe('OrderTableChip', () => {
   it('renders the table code in the operator language', () => {
     expect(
-      render(SEATED)
-        .querySelector('[data-testid="order-table-chip"]')
-        ?.textContent?.trim(),
+      render(SEATED).querySelector('[data-testid="order-table-chip"]')?.textContent?.trim(),
     ).toBe('Table T7');
     expect(
-      render(SEATED, 'ru')
-        .querySelector('[data-testid="order-table-chip"]')
-        ?.textContent?.trim(),
+      render(SEATED, 'ru').querySelector('[data-testid="order-table-chip"]')?.textContent?.trim(),
     ).toBe('Стол T7');
     expect(
       render(SEATED, 'uz-Latn')

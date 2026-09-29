@@ -160,9 +160,9 @@ describe('TablePrintCard', () => {
       TestBed.inject(I18n).setLocale('ru');
       fixture.detectChanges();
 
-      expect(
-        host.querySelector('[data-testid="table-print-card-no-host"]')?.textContent,
-      ).toContain('Подтверждённый адрес витрины не настроен');
+      expect(host.querySelector('[data-testid="table-print-card-no-host"]')?.textContent).toContain(
+        'Подтверждённый адрес витрины не настроен',
+      );
     });
   });
 });
