@@ -213,7 +213,9 @@ make the last tenant to edit a name the name the other tenant's token shows.
 here.** Names, phone and employee number are `PERSONAL`, stored through
 `FieldProtection` with associated data binding the ciphertext to the tenant,
 table, column and row. A keyed lookup hash beside the phone and the employee
-number gives exact-match search and uniqueness without a decrypt.
+number gives exact-match search without a decrypt, and for the employee number
+uniqueness too. It does not give the contact phone uniqueness, on purpose: see the
+next paragraph.
 Employment status, the two date columns, the language columns and a
 non-personal `display_reference` (`S-0142`, tenant-unique, never reused, the
 same idea as a courier's) stay in clear so the screens can sort, filter and
@@ -231,6 +233,45 @@ person typed. Device principals (ADR 0079), partner clients (ADR 0049), couriers
 (a different record) and HorecaOS support sessions (ADR 0081) get no row, and the
 directory answers "no such member" for them so callers keep their existing
 labelled rendering.
+
+**The member row is written last, and a failure there undoes the invitation.**
+`StaffInvitationService#invite` does its irreversible work first: the Keycloak
+account (`accounts.create`), the organization membership (`ensureMembership`) and
+the grant (`grants.grant`, which commits in its own transaction). Only then does it
+open the one local transaction that writes the invitation row and its audit fact.
+That last transaction has no cleanup today: an exception in it leaves a live grant
+and a Keycloak account with no invitation, and `rejectIfPhoneTaken` then refuses
+every later invitation for the phone as "already has an account". Putting the member
+insert in that transaction adds ways for it to fail, so this record does three
+things. It removes the avoidable ones. `(tenant_id, principal_subject)` cannot
+collide, because the subject was created a moment earlier and an existing in-tenant
+account is refused by `rejectIfPhoneTaken` before anything is written.
+`display_reference` is allocated from a per-tenant counter row that the allocating
+statement locks, so two concurrent invitations queue and never collide. And the
+contact-phone index is not unique (next paragraph). It writes the member row, the
+invitation row and the audit fact in that one transaction, so they commit or roll
+back together. And a failure of that transaction, whatever its cause, runs the same
+orphan cleanup the grant step already has: `abandonOrphanedAccount` is extended to
+revoke the grant it is handed (`GrantAuthority#revoke`, audited) before it deletes the
+account, because at this step a grant exists and a deleted account would otherwise
+leave authority resting on nothing. The original exception is rethrown, and a
+cleanup that itself fails leaves the existing `tenant.staff_invitation.orphan_left`
+fact for an operator. The same cleanup closes the hole the invitation row alone has
+today. Invitation acceptance promotes the row `PENDING` to `ACTIVE` and stores the
+typed name in the transaction that records `tenant.staff_invitation.accepted`, which
+runs after Keycloak has taken the password, so a rejected password leaves the row
+`PENDING` with nothing to undo.
+
+**A contact phone is a way to reach someone, not an identity.** Sign-in identity is
+the Keycloak username, which is unique realm-wide and already guarded by
+`rejectIfPhoneTaken`. The contact phone starts as that same number and then belongs
+to the person: a cook may set it to the kitchen's shared mobile, and a new hire's
+personal sign-in number may equal a number a colleague has already made their contact
+phone. Making the contact phone unique per tenant would turn either into a failure
+of the invitation after its irreversible steps, and would refuse a shared kitchen
+line. So `phone_lookup_hash` is a plain index for exact-match search and never a
+constraint, a phone edit checks format only and can never conflict with a colleague,
+and no response ever reveals that another member holds the same number.
 
 **Replace `StaffDisplayNames` with one tenant-scoped read port.**
 `iam.api.staff.StaffDirectory` answers three questions and no others: the display
@@ -375,7 +416,9 @@ a stable key to attribute to and nothing more.
   tenant. The platform gives up the convenience of one profile to keep isolation.
 - **A contact phone and a sign-in phone can now differ.** They are the same value
   at invitation and diverge as soon as the person edits the contact phone. The
-  card has to say which is which, and support will get the question.
+  card has to say which is which, and support will get the question. Two members
+  can also hold the same contact phone, so a phone search may return more than one
+  person and the list never treats a shared number as an error.
 - **Emergency contacts store a third party's data with no relationship to the
   platform.** The lawful basis and notice are open (legal). If they cannot be
   answered, that table is the first thing to remove.
@@ -412,7 +455,7 @@ iam.staff_members
   id uuid primary key                                  -- Ids.newId()
   tenant_id uuid not null references tenant.tenants
   principal_subject varchar(255) not null              -- the same string iam.grants carries
-  display_reference varchar(32) not null               -- 'S-0142', tenant-unique, never reused
+  display_reference varchar(32) not null               -- 'S-0142', tenant-unique, never reused; from iam.staff_member_counters
   protected_first_name text null                       -- ADR 0029 PERSONAL, AAD-bound
   protected_last_name text null
   protected_phone text null
@@ -432,10 +475,14 @@ iam.staff_members
   unique (id, tenant_id)
   foreign key (photo_asset_id, tenant_id)
     references media.assets (asset_id, tenant_id)      -- uq_media_assets_tenant_scoped (V0058); a null photo is not checked
-  unique (tenant_id, phone_lookup_hash) where phone_lookup_hash is not null
+  index  (tenant_id, phone_lookup_hash) where phone_lookup_hash is not null   -- NOT unique: a contact phone may be shared
   unique (tenant_id, employee_number_hash) where employee_number_hash is not null
   check (employment_status <> 'ENDED' or employed_until is not null)
   check (employed_until is null or employed_from is null or employed_until >= employed_from)
+
+iam.staff_member_counters                            -- allocates display_reference; locked by the allocating statement
+  tenant_id uuid primary key references tenant.tenants
+  last_reference integer not null default 0             -- INSERT ... ON CONFLICT DO UPDATE SET last_reference = last_reference + 1 RETURNING
 
 tenant.location_contact_persons
   id, tenant_id, location_id                           -- (tenant_id, location_id) -> tenant.locations
@@ -589,8 +636,8 @@ transition on demand.
 - No name, phone or employee number reaches a log, metric, trace, event, error
   message or dead-letter summary (ADR 0029); log lines carry `display_reference`.
 - Self-service `PUT` is rate-limited per subject (ADR 0033). A phone change
-  re-validates uniqueness through the lookup hash and answers a conflict without
-  naming the colleague who holds it.
+  validates the format and refreshes the lookup hash; it never conflicts with a
+  colleague, because a contact phone is not unique (Decision).
 - Metrics: `horecaos.iam.staff.members{status}`, `horecaos.iam.staff.unbacked_active`
   (active subjects with no row, the backfill's completion gauge),
   `horecaos.iam.staff.ended_with_access` (the drift count).
@@ -622,6 +669,14 @@ transition on demand.
 - The People list, the audit log and the order detail resolve the same name for
   one subject; a self-edit is visible on all three after the write with no wait
   for a TTL (the cache eviction).
+- The invitation is all or nothing: with the member insert made to fail (the
+  transaction throws), no grant remains active for the invited subject, the Keycloak
+  account is deleted so the phone can be invited again, the original error reaches
+  the caller, and a cleanup that also fails writes `orphan_left`. A cook who sets her
+  contact phone to the kitchen mobile does not stop a manager inviting a new hire
+  whose sign-in phone is that number; two members may then share a contact phone and
+  both are found by an exact-match search. Two concurrent invitations in one tenant
+  get different `display_reference` values and both succeed.
 - Ending employment revokes every active grant, survives a mid-way failure with
   the drift flag raised, and a retry completes it.
 - `OPERATOR` mapping round trip: a row written from the pane resolves through
@@ -630,7 +685,7 @@ transition on demand.
 
 ## Rollout and rollback
 
-Additive only. The migration creates three tables and grants; nothing existing is
+Additive only. The migration creates four tables and grants; nothing existing is
 altered. Ship the tables and the invitation-time insert first, with reads still
 on the Keycloak path; run the backfill per environment and watch
 `unbacked_active` fall to zero; then move the two name callers, the People
@@ -642,7 +697,7 @@ table, not an edit to an applied one, and the rows stay.
 
 ## Implementation checklist
 
-- [ ] Flyway migration for the three tables, indexes, checks and `GRANT`s (numbers
+- [ ] Flyway migration for the four tables, indexes, checks and `GRANT`s (numbers
       reserved by the wave that picks this up; check every active worktree).
 - [ ] Four capabilities in `Capability`, bundles in `PlatformRole`, and the
       registry snapshot, with `EndpointCapabilityDeclarationTests` green.
@@ -653,8 +708,9 @@ table, not an edit to an applied one, and the rows stay.
       and `memberIdOf`, a JDBC implementation over `FieldProtection`, a
       `(tenant, subject)` cache evicted on write, and the Keycloak fallback.
 - [ ] Row creation in `StaffInvitationService#invite` (inside the invitation's
-      transaction), promotion to `ACTIVE` in `accept`, and in the owner's
-      `completeSetup`.
+      transaction, after the grant), `abandonOrphanedAccount` extended to revoke the
+      grant when that transaction fails, promotion to `ACTIVE` in `accept` (in the
+      transaction that records the acceptance), and in the owner's `completeSetup`.
 - [ ] Backfill runner, runbook and the `unbacked_active` gauge.
 - [ ] Member list, single member, update, `me`, photo, end-employment and
       emergency-contact endpoints; ending employment revokes through
