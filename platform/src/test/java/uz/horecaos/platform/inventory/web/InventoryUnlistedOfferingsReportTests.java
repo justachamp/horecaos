@@ -250,6 +250,42 @@ class InventoryUnlistedOfferingsReportTests {
     }
 
     @Test
+    @DisplayName("variants named only in ru are named in the report, whatever locale is asked for")
+    void variantNamesFallBackLikeProductNames() throws Exception {
+        // 'Plov' authored in Russian alone: a product name, two sized variants, no SKUs.
+        UUID big = offer(TENANT, BRAND, LOCATION, "PILAF", "Плов", "AVAILABLE", "ru");
+        jdbc.sql("UPDATE catalog.variants SET sku = NULL WHERE id = :id")
+                .param("id", big)
+                .update();
+        nameVariant(big, "ru", "Большая");
+        UUID small = addVariant(big, null, "AVAILABLE", LOCATION);
+        nameVariant(small, "ru", "Малая");
+        // A variant named in both: each operator sees their own language.
+        UUID both = addVariant(big, "PILAF-BOTH", "AVAILABLE", LOCATION);
+        nameVariant(both, "ru", "Семейная");
+        nameVariant(both, "uz", "Oilaviy");
+
+        for (String asked : List.of("?locale=uz", "?locale=ru", "?locale=en", "")) {
+            JsonNode report = read(TENANT, BRAND, LOCATION, OWNER, asked);
+            assertThat(variantNameOf(report, big))
+                    .as("the ru-only variant, asked %s", asked)
+                    .isEqualTo("Большая");
+            assertThat(variantNameOf(report, small))
+                    .as("the ru-only variant, asked %s", asked)
+                    .isEqualTo("Малая");
+        }
+        assertThat(variantNameOf(read(TENANT, BRAND, LOCATION, OWNER, "?locale=uz"), both))
+                .isEqualTo("Oilaviy");
+        assertThat(variantNameOf(read(TENANT, BRAND, LOCATION, OWNER, "?locale=ru"), both))
+                .isEqualTo("Семейная");
+        assertThat(read(TENANT, BRAND, LOCATION, OWNER, "?locale=en")
+                        .get("totalCount")
+                        .asInt())
+                .as("a fallback join must not multiply rows")
+                .isEqualTo(3);
+    }
+
+    @Test
     @DisplayName("the report count equals what the bulk list-all lists, and the second run is a no-op")
     void reportCountEqualsWhatTheBackfillLists() throws Exception {
         offer(TENANT, BRAND, LOCATION, "A-ITEM", "Alpha", "AVAILABLE");
@@ -539,6 +575,54 @@ class InventoryUnlistedOfferingsReportTests {
                                 """.formatted(variant)))
                 .andReturn();
         assertThat(result.getResponse().getStatus()).isEqualTo(200);
+    }
+
+    private static @Nullable String variantNameOf(JsonNode report, UUID variant) {
+        for (JsonNode item : report.get("items")) {
+            if (variant.toString().equals(item.get("variantId").asString())) {
+                JsonNode name = item.get("variantName");
+                return name == null || name.isNull() ? null : name.asString();
+            }
+        }
+        throw new AssertionError("variant " + variant + " is not in the report: " + report);
+    }
+
+    /** A further, non-default variant of the same product as {@code sibling}, offered at {@code location}. */
+    private UUID addVariant(UUID sibling, @Nullable String sku, String status, UUID location) {
+        UUID variant = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO catalog.variants (id, tenant_id, brand_id, product_id, sku, is_default, status)
+                SELECT :id, tenant_id, brand_id, product_id, :sku, false, 'ACTIVE'
+                FROM catalog.variants WHERE id = :sibling
+                """)
+                .param("id", variant)
+                .param("sku", sku)
+                .param("sibling", sibling)
+                .update();
+        jdbc.sql("""
+                INSERT INTO catalog.location_offerings (id, tenant_id, brand_id, location_id, variant_id, status)
+                SELECT :id, tenant_id, brand_id, :locationId, :id2, :status
+                FROM catalog.variants WHERE id = :sibling
+                """)
+                .param("id", UUID.randomUUID())
+                .param("locationId", location)
+                .param("id2", variant)
+                .param("status", status)
+                .param("sibling", sibling)
+                .update();
+        return variant;
+    }
+
+    private void nameVariant(UUID variant, String locale, String name) {
+        jdbc.sql("""
+                INSERT INTO catalog.translations (tenant_id, brand_id, entity_type, entity_id, locale, name)
+                SELECT tenant_id, brand_id, 'VARIANT', id, :locale, :name
+                FROM catalog.variants WHERE id = :variant
+                """)
+                .param("locale", locale)
+                .param("name", name)
+                .param("variant", variant)
+                .update();
     }
 
     private static String nameOf(JsonNode report, UUID variant) {

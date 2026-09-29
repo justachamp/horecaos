@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { environment } from '../../../environments/environment';
 import { LocationScope } from '../../core/api/operations-paths';
+import { I18n } from '../../core/i18n/i18n';
 import { InventoryApi } from './inventory-api';
 
 function url(path: string): string {
@@ -168,7 +169,8 @@ describe('InventoryApi', () => {
   it('reads the location’s unlisted-offerings report on the legacy inventory path', async () => {
     const promise = firstValue(api.unlistedOfferings(SCOPE));
     const request = http.expectOne(
-      url('/api/v1/tenants/t1/brands/b1/locations/l1/inventory/unlisted-offerings'),
+      (r) =>
+        r.url === url('/api/v1/tenants/t1/brands/b1/locations/l1/inventory/unlisted-offerings'),
     );
     expect(request.request.method).toBe('GET');
     const report = {
@@ -178,6 +180,29 @@ describe('InventoryApi', () => {
     };
     request.flush(report);
     await expect(promise).resolves.toEqual(report);
+  });
+
+  describe('the unlisted-offerings report is named in the operator’s own language', () => {
+    const REPORT_URL = url(
+      '/api/v1/tenants/t1/brands/b1/locations/l1/inventory/unlisted-offerings',
+    );
+
+    afterEach(() => TestBed.inject(I18n).setLocale('ru'));
+
+    it('asks for the console language, in the catalog vocabulary (uz-Latn is uz on the wire)', async () => {
+      const i18n = TestBed.inject(I18n);
+      const asked: (string | null)[] = [];
+      for (const locale of ['ru', 'uz-Latn', 'en'] as const) {
+        i18n.setLocale(locale);
+        const promise = firstValue(api.unlistedOfferings(SCOPE));
+        const request = http.expectOne((r) => r.url === REPORT_URL);
+        asked.push(request.request.params.get('locale'));
+        request.flush({ totalCount: 0, hasMore: false, items: [] });
+        await promise;
+      }
+      // Without this the backend default (`uz`) resolves every name, whatever the console shows.
+      expect(asked).toEqual(['ru', 'uz', 'en']);
+    });
   });
 
   it('lists the whole location backlog with a POST to listing-backfill and an Idempotency-Key', async () => {

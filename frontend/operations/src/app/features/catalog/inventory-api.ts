@@ -4,6 +4,8 @@ import { Observable, map, tap } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client';
 import { IntentCommandRegistry, command } from '../../core/api/idempotency';
 import { LocationScope, operationsPaths } from '../../core/api/operations-paths';
+import { I18n } from '../../core/i18n/i18n';
+import { toCatalogLocale } from './catalog-domain';
 
 /**
  * `TrackingMode` — `inventory.stock_items.tracking_mode`. `QUANTITY` is
@@ -114,6 +116,7 @@ export interface AvailabilityDecision {
 @Injectable({ providedIn: 'root' })
 export class InventoryApi {
   private readonly api = inject(ApiClient);
+  private readonly i18n = inject(I18n);
 
   /**
    * One `Idempotency-Key` per operator intent (ADR 0031) for the two
@@ -230,10 +233,16 @@ export class InventoryApi {
    * The stock page's "unlisted offered dishes" report (gap map row 4.4c):
    * which offered variants at this location have no inventory listing, with
    * the exact backlog size. Also the runbook's dry run.
+   *
+   * Names come back in the operator's own console language: the endpoint
+   * resolves them in `locale` and defaults to `uz` when it is omitted, so
+   * without it a Russian-console operator would be shown Uzbek names.
    */
   unlistedOfferings(scope: LocationScope): Observable<UnlistedOfferingsReport> {
     return this.api
-      .get<UnlistedOfferingsReport>(operationsPaths.inventoryUnlistedOfferings(scope))
+      .get<UnlistedOfferingsReport>(operationsPaths.inventoryUnlistedOfferings(scope), {
+        params: { locale: toCatalogLocale(this.i18n.locale()) },
+      })
       .pipe(map((result) => result.value));
   }
 
