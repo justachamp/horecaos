@@ -98,6 +98,35 @@ describe('ExpoPage', () => {
     expect(host.textContent).toContain('station-1');
   });
 
+  it('batch 14: the pass names the table a dine-in ticket is going to, and no table on a delivery one', async () => {
+    const board: BoardResponse = {
+      tickets: [
+        ready({
+          ticketId: 'ticket-hall',
+          orderId: 'order-hall',
+          sequenceLabel: 'H-007',
+          fulfilmentMode: 'DINE_IN',
+          table: {
+            sessionId: 'session-1',
+            tables: [{ tableId: 'table-7', code: 'T7', displayName: 'Table 7' }],
+          },
+        }),
+        ready({ ticketId: 'ticket-delivery', orderId: 'order-delivery', sequenceLabel: 'D-001' }),
+      ],
+      warnings: [],
+    };
+    await render({ board: () => Promise.resolve(board), stations: () => Promise.resolve([]) });
+
+    const tickets = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('[data-testid="expo-ticket"]'),
+    );
+    expect(tickets).toHaveLength(2);
+    const chipOf = (ticket: Element): string | null =>
+      ticket.querySelector('[data-testid="order-table-chip"]')?.textContent?.trim() ?? null;
+    expect(chipOf(tickets[0])).toBe('Table T7');
+    expect(chipOf(tickets[1])).toBeNull();
+  });
+
   it('hands a ticket over and removes it from the pass, once packed and proven', async () => {
     const board: BoardResponse = { tickets: [ready({})], warnings: [] };
     const handOver = vi.fn().mockReturnValue(of({ ...ready({}), status: 'HANDED_OVER' }));

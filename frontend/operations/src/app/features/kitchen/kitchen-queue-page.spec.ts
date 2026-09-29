@@ -213,6 +213,38 @@ describe('KitchenQueuePage', () => {
     expect(host.querySelector('[data-testid="kitchen-ticket-courier-eta"]')).toBeNull();
   });
 
+  it('batch 14: shows the table a dine-in ticket was seated at, beside its number', async () => {
+    await render(
+      board([
+        {
+          ...DELIVERY_TICKET,
+          fulfilmentMode: 'DINE_IN',
+          channelCode: 'qr-table',
+          table: {
+            sessionId: 'session-1',
+            tables: [{ tableId: 'table-7', code: 'T7', displayName: 'Table 7' }],
+          },
+        },
+      ]),
+    );
+    const host = fixture.nativeElement as HTMLElement;
+
+    const chip = host.querySelector(
+      '[data-testid="kitchen-ticket"] .ticket__number [data-testid="order-table-chip"]',
+    );
+    expect(chip?.textContent?.trim()).toBe('Table T7');
+  });
+
+  it('batch 14: a delivery ticket, and a dine-in ticket nobody seated, show no table chip', async () => {
+    await render(
+      board([DELIVERY_TICKET, { ...AGGREGATOR_TICKET, fulfilmentMode: 'DINE_IN', table: null }]),
+    );
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(host.querySelectorAll('[data-testid="kitchen-ticket"]')).toHaveLength(2);
+    expect(host.querySelector('[data-testid="order-table-chip"]')).toBeNull();
+  });
+
   it('expands to show the item row once the ticket header is clicked', async () => {
     await render();
     const host = fixture.nativeElement as HTMLElement;

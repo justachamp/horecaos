@@ -323,6 +323,7 @@ export const messagesEn = {
   'orders.detail.loading': 'Loading order',
   'orders.detail.denied': 'No access to this order',
   'orders.detail.version': 'Version {version}',
+  'orders.table.chip': 'Table {tables}',
 
   'orders.detail.section.lines': 'Lines',
   'orders.detail.section.money': 'Money',
@@ -6061,6 +6062,11 @@ export const messagesEn = {
   'shared.tablePrintCard.qrLabel': "This table's QR code",
   'shared.tablePrintCard.tokenLabel': 'Code (type this in if the scan fails)',
   'shared.tablePrintCard.none': 'No code issued for this table yet.',
+  'shared.tablePrintCard.hostLabel': 'Scanning opens {host}',
+  'shared.tablePrintCard.noHostWarning':
+    'No verified storefront address is set up, so this code holds only the raw table code and a phone camera cannot open it. Verify a hostname in Channel setup, then issue the code again.',
+  'shared.tablePrintCard.hostTooLongWarning':
+    'The storefront address {host} is too long to fit in the QR code, so this code holds only the raw table code and a phone camera cannot open it. Claim a shorter address in Channel setup, then issue the code again.',
   // --- shared/ui q-secret-input (ADR 0106, gap-map row X.14) --------------
   // Reveal-once **at entry** only — never a value the server returned, since
   // no surface this platform exposes ever returns one (ADR 0028).

@@ -309,6 +309,7 @@ export const messagesRu: MessageCatalogue = {
   'orders.detail.loading': 'Загрузка заказа',
   'orders.detail.denied': 'Нет доступа к этому заказу',
   'orders.detail.version': 'Версия {version}',
+  'orders.table.chip': 'Стол {tables}',
 
   'orders.detail.section.lines': 'Состав',
   'orders.detail.section.money': 'Деньги',
@@ -6014,6 +6015,11 @@ export const messagesRu: MessageCatalogue = {
   'shared.tablePrintCard.qrLabel': 'QR-код этого стола',
   'shared.tablePrintCard.tokenLabel': 'Код (введите вручную, если скан не сработал)',
   'shared.tablePrintCard.none': 'Для этого стола код ещё не выпущен.',
+  'shared.tablePrintCard.hostLabel': 'Сканирование откроет {host}',
+  'shared.tablePrintCard.noHostWarning':
+    'Подтверждённый адрес витрины не настроен, поэтому в этом коде только сам код стола, и камера телефона не сможет его открыть. Подтвердите хостнейм в настройке канала и выпустите код заново.',
+  'shared.tablePrintCard.hostTooLongWarning':
+    'Адрес витрины {host} слишком длинный для QR-кода, поэтому в этом коде только сам код стола, и камера телефона не сможет его открыть. Займите более короткий адрес в настройке канала и выпустите код заново.',
   // --- shared/ui q-secret-input (ADR 0106, gap-map row X.14) --------------
   'secretInput.reveal': 'Показать',
   'secretInput.hide': 'Скрыть',

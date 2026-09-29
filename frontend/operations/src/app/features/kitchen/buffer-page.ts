@@ -19,6 +19,7 @@ import {
 } from '../../core/format/datetime';
 import { I18n } from '../../core/i18n/i18n';
 import { TPipe } from '../../core/i18n/t.pipe';
+import { OrderTableChip } from '../../shared/ui/order-table-chip/order-table-chip';
 import { LocationsApi } from '../settings/locations/locations-api';
 import { describeApiError } from '../orders/order-errors';
 import { KitchenApi, TicketResponse } from './kitchen-api';
@@ -59,7 +60,7 @@ const PLACEHOLDER_TIME_ZONE: TimeZone = 'Asia/Tashkent';
  */
 @Component({
   selector: 'q-buffer-page',
-  imports: [TPipe],
+  imports: [TPipe, OrderTableChip],
   templateUrl: './buffer-page.html',
   styleUrl: './buffer-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,

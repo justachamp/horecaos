@@ -89,6 +89,7 @@
             <div class="ticket__number">
               <span class="q-emphasis">{{ ticket.sequenceLabel }}</span>
               <span class="chip">{{ fulfilmentModeLabel(ticket.fulfilmentMode) }}</span>
+              <q-order-table-chip [table]="ticket.table" />
               @if (ticket.channelSystemType === 'AGGREGATOR') {
                 <span class="chip chip--aggregator">{{ 'kitchen.tab.aggregator' | t }}</span>
               } @else if (ticket.channelCode) {

@@ -2,6 +2,7 @@ import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
 
+import { ReturnDestination } from '../../../core/auth/return-destination';
 import { Session } from '../../../core/auth/session';
 import { CartService, type PlatformCart } from '../../../services/cart.service';
 import { DineInAdmission, DineInBill, DineInService } from '../../../services/dine-in.service';
@@ -245,6 +246,81 @@ describe('DineInTableComponent', () => {
 
       expect(navigate).toHaveBeenCalledWith(['/auth', 'login']);
       expect(cartService.ensure).not.toHaveBeenCalled();
+    });
+
+    // Batch 14: signing in from the table used to land the guest on /locations,
+    // nowhere near their table. The screen now remembers the token-free
+    // /dine-in/table so the auth flow can send them back.
+    describe('returning to the table after sign-in', () => {
+      beforeEach(() => {
+        sessionStorage.clear();
+      });
+
+      it('remembers /dine-in/table when the sign-in button is tapped', async () => {
+        const { fixture, dineIn, menuService, session, router } = setUp();
+        dineIn.seed(admission());
+        dineIn.bill.mockResolvedValue(bill());
+        menuService.menu.mockResolvedValue(menu());
+        session.setAuthenticated(false);
+        const navigate = vi.spyOn(router, 'navigate').mockResolvedValue(true);
+
+        fixture.detectChanges();
+        await flush();
+        fixture.detectChanges();
+        (fixture.nativeElement as HTMLElement)
+          .querySelector<HTMLButtonElement>('[data-testid="dine-in-signin"]')
+          ?.click();
+        await flush();
+
+        expect(navigate).toHaveBeenCalledWith(['/auth', 'login']);
+        expect(TestBed.inject(ReturnDestination).consume()).toBe('/dine-in/table');
+      });
+
+      it('remembers it when the guest taps add-to-cart while signed out, too', async () => {
+        const { fixture, dineIn, menuService, session, router } = setUp();
+        dineIn.seed(admission());
+        dineIn.bill.mockResolvedValue(bill());
+        menuService.menu.mockResolvedValue(menu());
+        session.setAuthenticated(false);
+        vi.spyOn(router, 'navigate').mockResolvedValue(true);
+
+        fixture.detectChanges();
+        await flush();
+        fixture.detectChanges();
+        (fixture.nativeElement as HTMLElement)
+          .querySelector<HTMLButtonElement>('[data-testid="dine-in-add"]')
+          ?.click();
+        await flush();
+
+        expect(TestBed.inject(ReturnDestination).consume()).toBe('/dine-in/table');
+      });
+
+      it('never puts a table token anywhere the auth flow can read it', async () => {
+        const { fixture, dineIn, menuService, session, router } = setUp();
+        dineIn.seed(admission({ guestToken: 'guest-token-secret' }));
+        dineIn.bill.mockResolvedValue(bill());
+        menuService.menu.mockResolvedValue(menu());
+        session.setAuthenticated(false);
+        const navigate = vi.spyOn(router, 'navigate').mockResolvedValue(true);
+
+        fixture.detectChanges();
+        await flush();
+        fixture.detectChanges();
+        (fixture.nativeElement as HTMLElement)
+          .querySelector<HTMLButtonElement>('[data-testid="dine-in-signin"]')
+          ?.click();
+        await flush();
+
+        // The navigation to the login screen carries no query, no state and no token...
+        expect(navigate).toHaveBeenCalledTimes(1);
+        expect(navigate).toHaveBeenCalledWith(['/auth', 'login']);
+        // ...and nothing this flow stored in sessionStorage mentions the guest token either.
+        const stored = Array.from({ length: sessionStorage.length }, (_, i) =>
+          sessionStorage.getItem(sessionStorage.key(i) ?? ''),
+        ).join('|');
+        expect(stored).not.toContain('guest-token-secret');
+        expect(stored).toContain('/dine-in/table');
+      });
     });
   });
 

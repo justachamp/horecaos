@@ -38,6 +38,7 @@ import {
 import { OrderChangePaymentMethodDialog } from '../orders/order-change-payment-method-dialog';
 import { describeApiError } from '../orders/order-errors';
 import { OrderAmendmentsApi } from '../orders/order-amendments-api';
+import { OrderTableChip } from '../../shared/ui/order-table-chip/order-table-chip';
 import { OrderDeliveryApi } from '../orders/order-delivery-api';
 import { OrderDetailResponse, OrderLine, OrderLineCommentPreset } from '../orders/order-detail';
 import { OrderRevealApi } from '../orders/order-reveal-api';
@@ -143,7 +144,7 @@ const PLACEHOLDER_TIME_ZONE: TimeZone = 'Asia/Tashkent';
  */
 @Component({
   selector: 'q-kitchen-queue-page',
-  imports: [TPipe, ExternalCourierDialog, OrderChangePaymentMethodDialog],
+  imports: [TPipe, ExternalCourierDialog, OrderChangePaymentMethodDialog, OrderTableChip],
   templateUrl: './kitchen-queue-page.html',
   styleUrl: './kitchen-queue-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,

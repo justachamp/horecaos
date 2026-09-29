@@ -23,6 +23,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import uz.horecaos.platform.dinein.application.FloorPlanService;
+import uz.horecaos.platform.dinein.application.port.QrChannelSource;
 import uz.horecaos.platform.dinein.infrastructure.persistence.JdbcDineInStore.SectionRow;
 import uz.horecaos.platform.dinein.infrastructure.persistence.JdbcDineInStore.SettingsRow;
 import uz.horecaos.platform.dinein.infrastructure.persistence.JdbcDineInStore.TableRow;
@@ -53,10 +54,12 @@ public class FloorPlanController {
 
     private final FloorPlanService floorPlan;
     private final CurrentActor currentActor;
+    private final QrChannelSource channels;
 
-    public FloorPlanController(FloorPlanService floorPlan, CurrentActor currentActor) {
+    public FloorPlanController(FloorPlanService floorPlan, CurrentActor currentActor, QrChannelSource channels) {
         this.floorPlan = floorPlan;
         this.currentActor = currentActor;
+        this.channels = channels;
     }
 
     @GetMapping("/settings")
@@ -65,7 +68,9 @@ public class FloorPlanController {
     public ResponseEntity<SettingsResponse> settings(
             @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID locationId) {
 
-        return ResponseEntity.ok(SettingsResponse.of(floorPlan.settings(tenantId, brandId, locationId)));
+        return ResponseEntity.ok(SettingsResponse.of(
+                floorPlan.settings(tenantId, brandId, locationId),
+                channels.storefrontHostname(tenantId).orElse(null)));
     }
 
     @PutMapping("/settings")
@@ -94,7 +99,8 @@ public class FloorPlanController {
                 currentActor.get().subject(),
                 body.reason());
 
-        return ResponseEntity.ok(SettingsResponse.of(saved));
+        return ResponseEntity.ok(
+                SettingsResponse.of(saved, channels.storefrontHostname(tenantId).orElse(null)));
     }
 
     @GetMapping("/sections")
@@ -255,22 +261,33 @@ public class FloorPlanController {
             @Min(0) @Max(10000) Integer serviceChargeRateBp,
             @NotBlank @Size(max = 500) String reason) {}
 
+    /**
+     * @param storefrontHostname the verified hostname the storefront answers on
+     *                           ({@link QrChannelSource#storefrontHostname}), so a
+     *                           printed table card can encode {@code
+     *                           https://<hostname>/dine-in/<token>} -- null when
+     *                           the tenant has no verified hostname, in which case
+     *                           the console prints the bare token and says so.
+     *                           A public DNS name, not a secret
+     */
     record SettingsResponse(
             UUID locationId,
             String qrMode,
             int turnaroundMinutes,
             int guestSessionTtlMinutes,
             int serviceChargeRateBp,
-            int version) {
+            int version,
+            @Nullable String storefrontHostname) {
 
-        static SettingsResponse of(SettingsRow row) {
+        static SettingsResponse of(SettingsRow row, @Nullable String storefrontHostname) {
             return new SettingsResponse(
                     row.locationId(),
                     row.qrMode().name(),
                     row.turnaroundMinutes(),
                     row.guestSessionTtlMinutes(),
                     row.serviceChargeRateBp(),
-                    row.version());
+                    row.version(),
+                    storefrontHostname);
         }
     }
 

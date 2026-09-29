@@ -11,6 +11,7 @@ import {
   TelegramSignInUnavailableError,
 } from '../../../core/session/telegram-signin';
 import type { TelegramSignInCode } from '../../../core/api/telegram-signin-api';
+import { ReturnDestination } from '../../../core/auth/return-destination';
 import { toE164 } from '../../../core/session/phone';
 import { TranslatePipe } from '../../../shared/translate/translate.pipe';
 import { LangService } from '../../../services/lang.service';
@@ -54,6 +55,7 @@ export class AuthLoginComponent implements OnInit, OnDestroy {
   private readonly ordersService = inject(OrdersService);
   private readonly lang = inject(LangService);
   private readonly translate = inject(TranslateService);
+  private readonly returnDestination = inject(ReturnDestination);
 
   /** This deployment's own name and mark, for the screen a customer sees before
    * they have ever signed in -- see `AppConfig.brand`. */
@@ -217,7 +219,9 @@ export class AuthLoginComponent implements OnInit, OnDestroy {
       const signedIn = await this.telegramSignIn.pollOnce(code);
       if (signedIn) {
         this.telegramPollSub?.unsubscribe();
-        this.router.navigate(['/locations']).catch(() => {});
+        // Back to the table a guest signed in from, else `/locations` -- the
+        // same rule `AuthCodeComponent.continuePastTerms` applies to the SMS path.
+        this.router.navigate([this.returnDestination.consume() ?? '/locations']).catch(() => {});
       }
     } catch (failure) {
       if (failure instanceof TelegramSignInExpiredError) {

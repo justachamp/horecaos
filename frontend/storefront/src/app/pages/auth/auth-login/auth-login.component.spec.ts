@@ -3,6 +3,7 @@ import { Router, provideRouter } from '@angular/router';
 import { Observable } from 'rxjs';
 
 import { AuthLoginComponent } from './auth-login.component';
+import { ReturnDestination } from '../../../core/auth/return-destination';
 import {
   CustomerOtp,
   CustomerSignInUnavailableError,
@@ -269,6 +270,21 @@ describe('AuthLoginComponent Continue with Telegram', () => {
     await Promise.resolve();
 
     expect(navigateSpy).toHaveBeenCalledWith(['/locations']);
+  });
+
+  it('batch 14: a guest signed in through Telegram from a table QR returns to their table, not /locations', async () => {
+    sessionStorage.clear();
+    const { comp, telegram, navigateSpy } = setUp();
+    TestBed.inject(ReturnDestination).remember('/dine-in/table');
+    telegram.mintCode.mockResolvedValue({ code: 'abc123', deepLink: 'https://t.me/bot?start=auth_abc123' });
+    telegram.pollOnce.mockResolvedValue(true);
+
+    await comp.continueWithTelegram();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(navigateSpy).toHaveBeenCalledWith(['/dine-in/table']);
+    expect(navigateSpy).not.toHaveBeenCalledWith(['/locations']);
   });
 
   it('an expired code clears the pending state and shows the message', async () => {
