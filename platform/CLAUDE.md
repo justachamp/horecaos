@@ -13,7 +13,7 @@ make test             # tests only
 make arch             # Spring Modulith boundary + architecture tests
 make format           # reformat Java sources (ADR 0054); verify enforces this
 make up / make down   # local Postgres, Kafka, Keycloak
-make run              # start the API on :8080
+make run              # start the API on :8080 (compiles under the Maven lock, serves outside it)
 make eval             # agent-configuration regression suite (evals/README.md)
 make seed-payments    # seed a local CLICK payment setup on the fixture tenant
 
