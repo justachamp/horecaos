@@ -1,9 +1,10 @@
 import { Injectable, inject } from '@angular/core';
-import { Observable, map, tap } from 'rxjs';
+import { Observable, catchError, map, tap, throwError } from 'rxjs';
 
 import { ApiClient } from '../../core/api/api-client';
 import { IntentCommandRegistry } from '../../core/api/idempotency';
 import { LocationScope, operationsPaths } from '../../core/api/operations-paths';
+import { ApiError, ApiErrorCode } from '../../core/api/problem-details';
 
 /**
  * A table session names a currency (`TableSessionController.OpenRequest`) that
@@ -106,7 +107,15 @@ export class TableSessionsApi {
     const intent = this.openIntents.next(id, body);
     return this.api
       .post<OpenSessionRequest, SessionView>(operationsPaths.dineInSessions(scope), intent)
-      .pipe(tap(() => this.openIntents.forget(id)));
+      .pipe(
+        tap(() => this.openIntents.forget(id)),
+        catchError((error: unknown) => {
+          if (isSettledRejection(error)) {
+            this.openIntents.forget(id);
+          }
+          return throwError(() => error);
+        }),
+      );
   }
 
   /** What is live in this room right now (`DINEIN_SESSION_READ`): every party not yet closed, oldest first. */
@@ -135,6 +144,36 @@ export class TableSessionsApi {
         operationsPaths.dineInSessionRounds(scope, sessionId),
         intent,
       )
-      .pipe(tap(() => this.roundIntents.forget(id)));
+      .pipe(
+        tap(() => this.roundIntents.forget(id)),
+        catchError((error: unknown) => {
+          if (isSettledRejection(error)) {
+            this.roundIntents.forget(id);
+          }
+          return throwError(() => error);
+        }),
+      );
   }
+}
+
+/**
+ * The platform stores a business rejection under the idempotency key like any
+ * other settled outcome (`IdempotencyInterceptor`), so asking again under the same
+ * key gets the same rejection back -- even after the world has changed. That is
+ * exactly wrong here: a table that was occupied a minute ago and is free now must
+ * be seatable by the next click, and the next click is a new intent.
+ *
+ * Only an outcome the client does not know keeps its key: a network failure or a
+ * 5xx (the request may have landed), a 408 or 429, and "still in progress" (a
+ * first attempt is running under that very key).
+ */
+function isSettledRejection(error: unknown): boolean {
+  return (
+    error instanceof ApiError &&
+    error.status >= 400 &&
+    error.status < 500 &&
+    error.status !== 408 &&
+    error.status !== 429 &&
+    error.code !== ApiErrorCode.IDEMPOTENCY_KEY_IN_PROGRESS
+  );
 }
