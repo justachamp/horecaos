@@ -230,10 +230,10 @@
                     {{ 'settings.paymentMethods.field.localizedNames' | t }}
                   </h3>
                   <q-localized-field-group
-                    [locales]="locales"
+                    [locales]="locales()"
                     [activeLocale]="editLocale()"
                     (activeLocaleChange)="editLocale.set($event)"
-                    [defaultLocale]="i18n.locale()"
+                    [defaultLocale]="defaultLocale()"
                     [completeness]="translationCompleteness()"
                     data-testid="translations-locale-group"
                   />
@@ -245,6 +245,11 @@
                     (input)="setTranslation(editLocale(), $any($event.target).value)"
                     [placeholder]="method.displayName"
                   />
+                  @if (hiddenLocales().length > 0) {
+                    <p class="q-caption" data-testid="payment-method-hidden-kept">
+                      {{ 'locales.hiddenKept' | t }}
+                    </p>
+                  }
                 </div>
 
                 @if (rowError(); as message) {
