@@ -197,7 +197,7 @@ public class StorefrontCatalogQuery {
                     item.entityId(),
                     code(item.content()),
                     name(item.content(), namePreference),
-                    description(item.content(), locale),
+                    description(item.content(), namePreference),
                     mediaIds,
                     imageUrls(tenantId, mediaIds),
                     variants,
@@ -463,22 +463,11 @@ public class StorefrontCatalogQuery {
      * rather than throwing if it somehow does, because a menu with one odd label
      * beats a menu that fails to load.
      */
-    @SuppressWarnings("unchecked")
     private static String name(Map<String, Object> content, List<String> preference) {
-        Object raw = content.get("names");
-        if (raw instanceof Map<?, ?> names && !names.isEmpty()) {
-            Map<String, Map<String, String>> byLocale = (Map<String, Map<String, String>>) names;
-            for (String wanted : preference) {
-                Map<String, String> entry = byLocale.get(wanted);
-                String wantedName = entry == null ? null : entry.get("name");
-                if (wantedName != null) {
-                    return wantedName;
-                }
-            }
-            String fallback = byLocale.values().iterator().next().get("name");
-            if (fallback != null) {
-                return fallback;
-            }
+        Map<String, String> wording = wording(content, preference);
+        String name = wording == null ? null : wording.get("name");
+        if (name != null) {
+            return name;
         }
         // The loader writes a code on every item, so this is reached with a real
         // value; the empty string is the same "odd label over failed menu" choice
@@ -487,17 +476,38 @@ public class StorefrontCatalogQuery {
         return code != null ? code : "";
     }
 
+    /**
+     * The description that was published with the name {@link #name} shows, or null when that
+     * wording has none.
+     *
+     * <p>A description travels with its name: a dish shown under the brand default's name (the
+     * customer's language has none) is described in the brand default too, and a dish shown under
+     * the customer's own name is never described in another language -- a Russian sentence under an
+     * Uzbek title is worse than no sentence.
+     */
+    private static @Nullable String description(Map<String, Object> content, List<String> preference) {
+        Map<String, String> wording = wording(content, preference);
+        return wording == null ? null : wording.get("description");
+    }
+
+    /**
+     * The published wording (name and description) of the first locale in {@code preference} that
+     * has a name, else the first one the entity carries; null when it carries none.
+     */
     @SuppressWarnings("unchecked")
-    private static @Nullable String description(Map<String, Object> content, String locale) {
+    private static @Nullable Map<String, String> wording(Map<String, Object> content, List<String> preference) {
         Object raw = content.get("names");
-        if (raw instanceof Map<?, ?> names) {
-            Map<String, Map<String, String>> byLocale = (Map<String, Map<String, String>>) names;
-            Map<String, String> requested = byLocale.get(locale);
-            if (requested != null) {
-                return requested.get("description");
+        if (!(raw instanceof Map<?, ?> names) || names.isEmpty()) {
+            return null;
+        }
+        Map<String, Map<String, String>> byLocale = (Map<String, Map<String, String>>) names;
+        for (String wanted : preference) {
+            Map<String, String> entry = byLocale.get(wanted);
+            if (entry != null && entry.get("name") != null) {
+                return entry;
             }
         }
-        return null;
+        return byLocale.values().iterator().next();
     }
 
     @SuppressWarnings("unchecked")
