@@ -73,11 +73,18 @@ public class JdbcOutcomeReasonStore {
      * <p>The version is what an outcome cites, so bumping it on every edit is what
      * makes "this order was cancelled under the reason as it read then" a
      * checkable statement rather than an assumption.
+     *
+     * <p>The category is written with the rest: the console offers it for editing,
+     * and an UPDATE that skipped it answered 200 while the row kept the old
+     * category -- which is also what the audit fact then described wrongly. The
+     * {@code kind} is the one column an edit never touches (the service refuses a
+     * change), and the table's own check constraint ties the category to it.
      */
     public Optional<Integer> update(
             UUID tenantId,
             UUID reasonId,
             int expectedVersion,
+            String systemCategory,
             String internalName,
             @Nullable String stockDisposition,
             @Nullable String liabilityParty,
@@ -89,6 +96,7 @@ public class JdbcOutcomeReasonStore {
         params.put("tenantId", tenantId);
         params.put("id", reasonId);
         params.put("expectedVersion", expectedVersion);
+        params.put("category", systemCategory);
         params.put("internalName", internalName);
         params.put("disposition", stockDisposition);
         params.put("liability", liabilityParty);
@@ -98,7 +106,8 @@ public class JdbcOutcomeReasonStore {
 
         return jdbc.sql("""
                 UPDATE ordering.order_outcome_reasons
-                SET internal_name = :internalName,
+                SET system_category = :category,
+                    internal_name = :internalName,
                     stock_disposition = :disposition::varchar,
                     liability_party = :liability::varchar,
                     customer_refund = :refund::varchar,

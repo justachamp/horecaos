@@ -1,0 +1,31 @@
+-- The lookup an order amendment makes on every propose and apply, and the
+-- invariant that lookup already assumes.
+--
+-- pricing.coupon_redemptions was indexed for the three ways it was first read:
+-- by quote (ux_redemption_quote), by customer (ix_redemptions_customer) and by
+-- the sweep of unaccepted reservations (ix_redemptions_reserved). Nothing was
+-- indexed for "which redemption does this order hold?". Two statements ask it:
+--
+--   JdbcPromoCodeStore.findRedemptionHeldByOrder    -- repricing an amendment
+--   JdbcPromoCodeStore.restateHeldRedemptionAmount  -- applying it
+--
+-- both filtering on (tenant_id, order_id, status = 'REDEEMED'). Every operator
+-- amendment of a coupon-redeemed order therefore scanned a table that only
+-- grows: it is the coupon audit trail, so it is never trimmed.
+--
+-- The index is unique because the code around it is already written for one
+-- live redemption per order, and this makes the database say so. Checkout mints
+-- the order id fresh (CheckoutReservationStep) and reserves at most one coupon
+-- per quote (findCouponAppliedToQuote is LIMIT 1), so a second REDEEMED row for
+-- one order cannot arise from a correct run; findRedemptionHeldByOrder is
+-- LIMIT 1, so before this a stray second row would have been silently ignored
+-- rather than refused. RELEASED rows are outside the predicate: an order that
+-- lost its redemption and took another keeps the history of the first.
+--
+-- ck_redemption_redeemed already requires order_id on every REDEEMED row, so the
+-- column is never NULL inside the predicate and NULLs cannot slip past the
+-- uniqueness. The table is already granted to horecaos_application (V0093), and
+-- an index needs no grant of its own.
+CREATE UNIQUE INDEX ux_redemption_order_live
+    ON pricing.coupon_redemptions (tenant_id, order_id)
+    WHERE status = 'REDEEMED';

@@ -196,6 +196,40 @@ class OrderPolicyAuditHttpTests {
     }
 
     @Test
+    @DisplayName("changing the system category is stored, and the fact describes the stored row, not the request")
+    void aCategoryChangeIsStoredAndTheFactMatchesTheRow() throws Exception {
+        UUID reasonId = createReason("Нет товара", "RELEASE", "ITEM_UNAVAILABLE");
+        jdbc.sql("TRUNCATE TABLE audit.audit_events").update();
+
+        MvcResult updated = mvc.perform(put(REASONS + "/" + reasonId)
+                        .with(tokenFor(OWNER))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "reason-update-category")
+                        .header("If-Match", "W/\"1\"")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(reasonJson("Нет товара", "RELEASE", "Kechirasiz, taom tugadi", "CUSTOMER_CANCELLED")))
+                .andReturn();
+        assertThat(updated.getResponse().getStatus())
+                .as(updated.getResponse().getContentAsString())
+                .isEqualTo(200);
+
+        String stored = jdbc.sql("SELECT system_category FROM ordering.order_outcome_reasons WHERE id = :id")
+                .param("id", reasonId)
+                .query(String.class)
+                .single();
+        assertThat(stored)
+                .as("the console offers the category for editing and answered 200, so it must have been written")
+                .isEqualTo("CUSTOMER_CANCELLED");
+
+        JsonNode change = JSON.readTree(onlyFact("ordering.outcome-reason.updated")
+                .get("change_document")
+                .asText());
+        assertThat(change.get("systemCategory").get("before").asText()).isEqualTo("ITEM_UNAVAILABLE");
+        assertThat(change.get("systemCategory").get("after").asText())
+                .as("the fact must say what the row now holds, whatever the request asked for")
+                .isEqualTo(stored);
+    }
+
+    @Test
     @DisplayName("a stale If-Match is refused and leaves no audit fact -- the write and its fact roll back together")
     void aRefusedWriteLeavesNoFact() throws Exception {
         UUID reasonId = createReason("Нет товара", "RELEASE");
@@ -311,11 +345,15 @@ class OrderPolicyAuditHttpTests {
     // ---------------------------------------------------------------- helpers
 
     private UUID createReason(String internalName, String stockDisposition) throws Exception {
+        return createReason(internalName, stockDisposition, "CUSTOMER_CANCELLED");
+    }
+
+    private UUID createReason(String internalName, String stockDisposition, String systemCategory) throws Exception {
         MvcResult created = mvc.perform(post(REASONS)
                         .with(tokenFor(OWNER))
                         .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "reason-create-" + UUID.randomUUID())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(reasonJson(internalName, stockDisposition, "Kechirasiz, taom tugadi")))
+                        .content(reasonJson(internalName, stockDisposition, "Kechirasiz, taom tugadi", systemCategory)))
                 .andReturn();
         assertThat(created.getResponse().getStatus())
                 .as(created.getResponse().getContentAsString())
@@ -326,11 +364,16 @@ class OrderPolicyAuditHttpTests {
     }
 
     private static String reasonJson(String internalName, String stockDisposition, String uzText) {
+        return reasonJson(internalName, stockDisposition, uzText, "CUSTOMER_CANCELLED");
+    }
+
+    private static String reasonJson(
+            String internalName, String stockDisposition, String uzText, String systemCategory) {
         return """
-                {"kind":"CANCELLATION","systemCategory":"CUSTOMER_CANCELLED","internalName":"%s",
+                {"kind":"CANCELLATION","systemCategory":"%s","internalName":"%s",
                  "stockDisposition":"%s","liabilityParty":"TENANT","customerRefund":"FULL",
                  "customerTexts":{"ru":"Извините","uz-Latn":"%s","en":"Sorry"}}
-                """.formatted(internalName, stockDisposition, uzText);
+                """.formatted(systemCategory, internalName, stockDisposition, uzText);
     }
 
     private void publishAcceptance(String mode, int timeoutSeconds, String reason) throws Exception {
