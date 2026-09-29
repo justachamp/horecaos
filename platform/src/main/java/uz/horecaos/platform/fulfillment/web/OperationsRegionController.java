@@ -24,6 +24,7 @@ import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcRegionSto
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcRegionStore.RegionRow;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
+import uz.horecaos.platform.tenancy.api.TenantLocaleSet;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
 import uz.horecaos.platform.web.authorization.RequiresCapability;
@@ -71,7 +72,21 @@ public class OperationsRegionController {
                     + "read-only to a tenant.")
     public ResponseEntity<List<RegionResponse>> list(@PathVariable UUID tenantId) {
         return ResponseEntity.ok(
-                regions.list(tenantId).stream().map(RegionResponse::of).toList());
+                regions.listWithNames(tenantId).stream().map(RegionResponse::of).toList());
+    }
+
+    @GetMapping("/locale-set")
+    @RequiresCapability(value = Capability.DELIVERY_ZONE_READ, scope = ScopeType.TENANT)
+    @Operation(
+            summary = "The languages the region editor offers",
+            description = "Row 10.12. A region belongs to the tenant, not to a brand, so it is "
+                    + "edited in the union of the tenant's brands' supported languages, default "
+                    + "first; the default is the tenant's first brand's. A brand that has chosen "
+                    + "no set contributes the platform triple. The set is a menu, not a "
+                    + "constraint: a language outside it that a region already carries is kept, "
+                    + "never deleted, by an edit.")
+    public ResponseEntity<LocaleSetResponse> localeSet(@PathVariable UUID tenantId) {
+        return ResponseEntity.ok(LocaleSetResponse.of(regions.localeSet(tenantId)));
     }
 
     @PostMapping
@@ -80,7 +95,11 @@ public class OperationsRegionController {
             summary = "Register a region",
             description = "The SW/NE box is what constrains the geocoder and what a zone "
                     + "activation is checked against, so a box that is inverted, has no area, or "
-                    + "does not contain its own centre is refused with every reason at once.")
+                    + "does not contain its own centre is refused with every reason at once. The "
+                    + "name is given per locale in `displayNames` (row 10.12); the tenant's "
+                    + "default language is required, every other locale optional. "
+                    + "displayNameRu/displayNameUz/displayNameEn remain accepted for callers that "
+                    + "predate `displayNames`, and `displayNames` wins where both name a locale.")
     public ResponseEntity<RegionRegisteredView> create(
             @PathVariable UUID tenantId, @Valid @RequestBody RegionGeographyRequest body) {
 
@@ -102,7 +121,9 @@ public class OperationsRegionController {
                     + "be used to discover which platform regions exist. expectedVersion is "
                     + "required and is the version RegionResponse last reported for this row; a "
                     + "stale one is refused with STALE_VERSION, the optimistic-locking convention "
-                    + "every other mutable aggregate on this surface already carries.")
+                    + "every other mutable aggregate on this surface already carries. Names are "
+                    + "written only for the locales the request names; one left out keeps its "
+                    + "name, so an editor that shows only some languages never deletes the others.")
     public ResponseEntity<Void> update(
             @PathVariable UUID tenantId, @PathVariable UUID regionId, @Valid @RequestBody RegionGeographyRequest body) {
 
@@ -161,16 +182,17 @@ public class OperationsRegionController {
             @NotBlank @Size(max = 32) @Pattern(regexp = "^[A-Z0-9][A-Z0-9_-]{0,31}$")
             String code,
 
-            @NotBlank @Size(max = 200) String displayNameRu,
-            @NotBlank @Size(max = 200) String displayNameUz,
-            @NotBlank @Size(max = 200) String displayNameEn,
+            @Nullable @Size(max = 200) String displayNameRu,
+            @Nullable @Size(max = 200) String displayNameUz,
+            @Nullable @Size(max = 200) String displayNameEn,
             double centreLat,
             double centreLon,
             double bboxSwLat,
             double bboxSwLon,
             double bboxNeLat,
             double bboxNeLon,
-            @Nullable Integer expectedVersion) {
+            @Nullable Integer expectedVersion,
+            @Nullable @Size(max = 32) Map<String, @Size(max = 200) String> displayNames) {
 
         RegionGeography toGeography() {
             return new RegionGeography(
@@ -183,14 +205,20 @@ public class OperationsRegionController {
                     bboxSwLat,
                     bboxSwLon,
                     bboxNeLat,
-                    bboxNeLon);
+                    bboxNeLon,
+                    displayNames == null ? Map.of() : displayNames);
         }
     }
 
     /** What a create answers: the id and the code the caller chose, nothing else. */
     public record RegionRegisteredView(UUID regionId, String code) {}
 
-    /** One row of {@link #list}. */
+    /**
+     * One row of {@link #list}.
+     *
+     * @param displayNames every locale the region has a name in, the platform triple
+     *                     first then any other by code, each once (row 10.12)
+     */
     public record RegionResponse(
             UUID regionId,
             boolean platform,
@@ -205,9 +233,11 @@ public class OperationsRegionController {
             double bboxNeLat,
             double bboxNeLon,
             String status,
-            int version) {
+            int version,
+            Map<String, String> displayNames) {
 
-        static RegionResponse of(RegionRow row) {
+        static RegionResponse of(RegionService.RegionView view) {
+            RegionRow row = view.row();
             return new RegionResponse(
                     row.regionId(),
                     row.platform(),
@@ -222,7 +252,16 @@ public class OperationsRegionController {
                     row.bboxNeLat(),
                     row.bboxNeLon(),
                     row.status(),
-                    row.version());
+                    row.version(),
+                    view.names());
+        }
+    }
+
+    /** @param locales default first; see {@link TenantLocaleSet} */
+    public record LocaleSetResponse(List<String> locales, String defaultLocale, boolean configured) {
+
+        static LocaleSetResponse of(TenantLocaleSet set) {
+            return new LocaleSetResponse(set.locales(), set.defaultLocale(), set.configured());
         }
     }
 }

@@ -95,14 +95,19 @@ public class JdbcCommentPresetStore {
      * Corrects a preset's labels, POS mapping, sort order or status,
      * conditional on the version the caller last saw.
      *
+     * <p>A null label leaves that column exactly as it was (row 10.12): an editor
+     * that shows only the locales a tenant supports sends no wording for the others,
+     * and a write that blanked or replaced them would delete a translation nobody
+     * chose to delete.
+     *
      * @return the new version, or empty when the row moved since it was read
      */
     public Optional<Integer> update(
             UUID tenantId,
             UUID presetId,
-            String labelRu,
-            String labelUz,
-            String labelEn,
+            @Nullable String labelRu,
+            @Nullable String labelUz,
+            @Nullable String labelEn,
             @Nullable String posModifierCode,
             int sortOrder,
             String status,
@@ -110,7 +115,8 @@ public class JdbcCommentPresetStore {
             Instant now) {
         return jdbc.sql("""
                 UPDATE catalog.comment_presets
-                SET label_ru = :labelRu, label_uz = :labelUz, label_en = :labelEn,
+                SET label_ru = COALESCE(:labelRu, label_ru), label_uz = COALESCE(:labelUz, label_uz),
+                    label_en = COALESCE(:labelEn, label_en),
                     pos_modifier_code = :posModifierCode, sort_order = :sortOrder, status = :status,
                     version = version + 1, updated_at = :now
                 WHERE tenant_id = :tenantId AND id = :id AND version = :expectedVersion
@@ -128,6 +134,77 @@ public class JdbcCommentPresetStore {
                 .param("now", utc(now))
                 .query(Integer.class)
                 .optional();
+    }
+
+    // ------------------------------------------------------------ translations
+
+    /**
+     * Every per-locale label row the tenant's presets carry, grouped by preset --
+     * one query for a whole list read rather than one per preset.
+     *
+     * <p>Filtered on the tenant in the query, never after loading: a preset id is
+     * a UUID a caller may have received from anywhere.
+     */
+    public Map<UUID, Map<String, String>> translationsForTenant(UUID tenantId) {
+        Map<UUID, Map<String, String>> byPreset = new java.util.LinkedHashMap<>();
+        jdbc.sql("""
+                SELECT preset_id, locale, label FROM catalog.comment_preset_translations
+                WHERE tenant_id = :tenantId ORDER BY preset_id, locale
+                """)
+                .param("tenantId", tenantId)
+                .query((row, number) -> {
+                    byPreset.computeIfAbsent(
+                                    row.getObject("preset_id", UUID.class), id -> new java.util.LinkedHashMap<>())
+                            .put(row.getString("locale"), row.getString("label"));
+                    return row.getString("locale");
+                })
+                .list();
+        return byPreset;
+    }
+
+    /** One preset's translation rows, tenant-scoped in the query. */
+    public Map<String, String> translationsFor(UUID tenantId, UUID presetId) {
+        Map<String, String> labels = new java.util.LinkedHashMap<>();
+        jdbc.sql("""
+                SELECT locale, label FROM catalog.comment_preset_translations
+                WHERE tenant_id = :tenantId AND preset_id = :presetId ORDER BY locale
+                """)
+                .param("tenantId", tenantId)
+                .param("presetId", presetId)
+                .query((row, number) -> labels.put(row.getString("locale"), row.getString("label")))
+                .list();
+        return labels;
+    }
+
+    /**
+     * Writes the given locales' labels and touches no other -- never a whole-set
+     * replace, so a locale the caller did not name (one the editor hides) keeps its
+     * wording.
+     *
+     * <p>The {@code DO UPDATE} is conditioned on the row's own tenant. The conflict
+     * target is {@code (preset_id, locale)}, which names no tenant, so without the
+     * condition a caller passing another tenant's preset id would take the update
+     * branch and rewrite that tenant's wording -- the exact shape {@code
+     * CatalogTranslationTenantScopeTests} documents for {@code catalog.translations}.
+     * The service also checks the preset is the caller's before it gets here; this
+     * is the second lock, not the first.
+     */
+    public void upsertTranslations(UUID tenantId, UUID presetId, Map<String, String> labels, Instant now) {
+        for (Map.Entry<String, String> entry : labels.entrySet()) {
+            jdbc.sql("""
+                    INSERT INTO catalog.comment_preset_translations (tenant_id, preset_id, locale, label, created_at, updated_at)
+                    VALUES (:tenantId, :presetId, :locale, :label, :now, :now)
+                    ON CONFLICT (preset_id, locale) DO UPDATE
+                    SET label = EXCLUDED.label, updated_at = EXCLUDED.updated_at
+                    WHERE catalog.comment_preset_translations.tenant_id = EXCLUDED.tenant_id
+                    """)
+                    .param("tenantId", tenantId)
+                    .param("presetId", presetId)
+                    .param("locale", entry.getKey())
+                    .param("label", entry.getValue())
+                    .param("now", utc(now))
+                    .update();
+        }
     }
 
     // ---------------------------------------------------- product attachment

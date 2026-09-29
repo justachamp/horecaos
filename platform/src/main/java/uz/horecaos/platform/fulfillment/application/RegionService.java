@@ -7,6 +7,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.audit.api.ActorRef;
@@ -20,6 +22,9 @@ import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcRegionSto
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcRegionStore.RegionRow;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope;
+import uz.horecaos.platform.tenancy.api.BrandLocaleLookup;
+import uz.horecaos.platform.tenancy.api.LocalizedLabels;
+import uz.horecaos.platform.tenancy.api.TenantLocaleSet;
 import uz.horecaos.platform.web.api.ApiException;
 
 /**
@@ -46,16 +51,32 @@ import uz.horecaos.platform.web.api.ApiException;
 @Service
 public class RegionService {
 
+    /** {@code display_name_*} and a translation row all fit this. */
+    static final int MAX_NAME_LENGTH = 200;
+
     private final JdbcRegionStore store;
     private final Clock clock;
     private final AuditRecorder audit;
     private final CurrentActor currentActor;
+    private final BrandLocaleLookup brandLocales;
 
-    public RegionService(JdbcRegionStore store, Clock clock, AuditRecorder audit, CurrentActor currentActor) {
+    @Autowired
+    public RegionService(
+            JdbcRegionStore store,
+            Clock clock,
+            AuditRecorder audit,
+            CurrentActor currentActor,
+            BrandLocaleLookup brandLocales) {
         this.store = store;
         this.clock = clock;
         this.audit = audit;
         this.currentActor = currentActor;
+        this.brandLocales = brandLocales;
+    }
+
+    /** A service that treats every tenant as sitting on the platform locale fallback (row 10.12). */
+    public RegionService(JdbcRegionStore store, Clock clock, AuditRecorder audit, CurrentActor currentActor) {
+        this(store, clock, audit, currentActor, BrandLocaleLookup.platformFallback());
     }
 
     /** This tenant's regions and the platform's, the platform's first. */
@@ -64,12 +85,52 @@ public class RegionService {
         return store.list(tenantId);
     }
 
+    /**
+     * {@link #list} with each region's name merged from the platform columns and
+     * the per-locale table, each locale once (row 10.12). A platform region has no
+     * translation rows, so it answers its columns alone.
+     */
+    @Transactional(readOnly = true)
+    public List<RegionView> listWithNames(UUID tenantId) {
+        Map<UUID, Map<String, String>> translations = store.translationsForTenant(tenantId);
+        return store.list(tenantId).stream()
+                .map(row -> new RegionView(row, mergedNames(row, translations.getOrDefault(row.regionId(), Map.of()))))
+                .toList();
+    }
+
+    /**
+     * The locale set the region editor offers. A region belongs to the tenant, not
+     * to a brand, so it is edited in the union of the tenant's brands' locales --
+     * see {@link TenantLocaleSet}.
+     */
+    public TenantLocaleSet localeSet(UUID tenantId) {
+        return brandLocales.tenantLocaleSet(tenantId);
+    }
+
+    /** A region and its merged names. */
+    public record RegionView(RegionRow row, Map<String, String> names) {}
+
     @Transactional
-    public UUID create(UUID tenantId, RegionGeography geography) {
-        refuseBadGeography(geography);
+    public UUID create(UUID tenantId, RegionGeography requested) {
+        refuseBadGeography(requested);
+        // Row 10.12: the tenant's default language is the one name a region must have;
+        // the three platform columns are NOT NULL, so a triple locale not supplied is
+        // filled with it.
+        Map<String, String> names = suppliedNames(requested);
+        String defaultLocale = brandLocales.tenantLocaleSet(tenantId).defaultLocale();
+        String defaultName = names.get(defaultLocale);
+        if (defaultName == null) {
+            throw new RegionRefusedException(
+                    List.of("A region needs its name in the tenant's default language (%s)".formatted(defaultLocale)));
+        }
+        RegionGeography geography = requested.withTriple(
+                names.getOrDefault(LocalizedLabels.RU, defaultName),
+                names.getOrDefault(LocalizedLabels.UZ_LATN, defaultName),
+                names.getOrDefault(LocalizedLabels.EN, defaultName));
         UUID id = Ids.newId();
         Instant now = clock.instant();
         store.insert(id, tenantId, geography, now);
+        store.upsertTranslations(tenantId, id, names, now);
 
         audit.record(AuditFact.of("delivery.region.created", AuditClass.BUSINESS)
                 .by(actor())
@@ -77,7 +138,7 @@ public class RegionService {
                 .target("Region", id)
                 .because("Registered region '%s'".formatted(geography.code()))
                 // Staff 9.3a: a freshly inserted region has no prior state.
-                .changed(ChangeDocuments.created(boxOf(geography)))
+                .changed(ChangeDocuments.created(withNames(boxOf(geography), geography, names)))
                 .correlatedBy(correlationId())
                 .occurredAt(now)
                 .build());
@@ -113,11 +174,31 @@ public class RegionService {
             throw new ServiceZoneService.DeliveryResourceNotFoundException("No active region " + regionId
                     + " this tenant may edit. A tenant may edit its " + "own regions and not the platform's");
         }
+        // Row 10.12: only the locales the request names are written; a name it leaves
+        // out is kept, so an editor that shows only some languages never deletes the rest.
+        Map<String, String> names = suppliedNames(geography);
+        Map<String, String> existingTranslations = store.translationsFor(tenantId, regionId);
         Instant now = clock.instant();
-        if (store.update(tenantId, regionId, geography, expectedVersion, now) != 1) {
+        if (store.update(
+                        tenantId,
+                        regionId,
+                        geography.withTriple(
+                                names.get(LocalizedLabels.RU),
+                                names.get(LocalizedLabels.UZ_LATN),
+                                names.get(LocalizedLabels.EN)),
+                        expectedVersion,
+                        now)
+                != 1) {
             throw ApiException.staleVersion(expectedVersion, current.version());
         }
+        store.upsertTranslations(tenantId, regionId, names, now);
 
+        Map<String, Object> before = boxOf(current);
+        Map<String, Object> after = boxOf(geography);
+        names.forEach((locale, name) -> {
+            before.put("displayName." + locale, currentName(current, existingTranslations, locale));
+            after.put("displayName." + locale, name);
+        });
         audit.record(AuditFact.of("delivery.region.updated", AuditClass.BUSINESS)
                 .by(actor())
                 .at(ResourceScope.tenant(tenantId))
@@ -125,10 +206,51 @@ public class RegionService {
                 .because("Rewrote region '%s'".formatted(geography.code()))
                 // Staff 9.3a: every field genuinely moves from the region's
                 // prior geography (read above, before the write) to the new one.
-                .changed(ChangeDocuments.diff(boxOf(current), boxOf(geography)))
+                .changed(ChangeDocuments.diff(before, after))
                 .correlatedBy(correlationId())
                 .occurredAt(now)
                 .build());
+    }
+
+    /** What the region was called in this locale before the write: the column for the triple, else its translation row. */
+    private static @Nullable String currentName(RegionRow region, Map<String, String> translationRows, String locale) {
+        return switch (locale) {
+            case LocalizedLabels.RU -> region.displayNameRu();
+            case LocalizedLabels.UZ_LATN -> region.displayNameUz();
+            case LocalizedLabels.EN -> region.displayNameEn();
+            default -> translationRows.get(locale);
+        };
+    }
+
+    private static Map<String, String> suppliedNames(RegionGeography geography) {
+        try {
+            return LocalizedLabels.supplied(
+                    geography.displayNameRu(),
+                    geography.displayNameUz(),
+                    geography.displayNameEn(),
+                    geography.names(),
+                    MAX_NAME_LENGTH);
+        } catch (IllegalArgumentException invalid) {
+            throw new RegionRefusedException(List.of(invalid.getMessage()));
+        }
+    }
+
+    private static Map<String, String> mergedNames(RegionRow row, Map<String, String> translationRows) {
+        return LocalizedLabels.merge(row.displayNameRu(), row.displayNameUz(), row.displayNameEn(), translationRows);
+    }
+
+    private static Map<String, Object> withNames(
+            Map<String, Object> box, RegionGeography geography, Map<String, String> names) {
+        Map<String, Object> changed = new LinkedHashMap<>(box);
+        changed.put("displayNameRu", geography.displayNameRu());
+        changed.put("displayNameUz", geography.displayNameUz());
+        changed.put("displayNameEn", geography.displayNameEn());
+        names.forEach((locale, name) -> {
+            if (!LocalizedLabels.PLATFORM_TRIPLE.contains(locale)) {
+                changed.put("displayName." + locale, name);
+            }
+        });
+        return changed;
     }
 
     /**
