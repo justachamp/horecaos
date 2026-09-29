@@ -130,6 +130,39 @@ describe('BufferPage', () => {
     expect(rows[1].textContent).toContain('A-020');
   });
 
+  it('batch 14: a held dine-in ticket names its table, a delivery one does not', async () => {
+    const board: BoardResponse = {
+      tickets: [
+        held({
+          ticketId: 't-hall',
+          sequenceLabel: 'H-007',
+          fulfilmentMode: 'DINE_IN',
+          releaseAt: new Date(Date.now() + 5 * 60_000).toISOString(),
+          table: {
+            sessionId: 'session-1',
+            tables: [{ tableId: 'table-7', code: 'T7', displayName: 'Table 7' }],
+          },
+        }),
+        held({
+          ticketId: 't-delivery',
+          sequenceLabel: 'D-001',
+          releaseAt: new Date(Date.now() + 30 * 60_000).toISOString(),
+        }),
+      ],
+      warnings: [],
+    };
+    await render({ board: () => Promise.resolve(board) });
+
+    const rows = (fixture.nativeElement as HTMLElement).querySelectorAll(
+      '[data-testid="buffer-row"]',
+    );
+    expect(rows).toHaveLength(2);
+    expect(rows[0].querySelector('[data-testid="order-table-chip"]')?.textContent?.trim()).toBe(
+      'Table T7',
+    );
+    expect(rows[1].querySelector('[data-testid="order-table-chip"]')).toBeNull();
+  });
+
   it('releases a ticket and removes it from the buffer', async () => {
     const board: BoardResponse = { tickets: [held({})], warnings: [] };
     const release = vi.fn().mockReturnValue(of({ ...held({}), status: 'FIRED' }));
