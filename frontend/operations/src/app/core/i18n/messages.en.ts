@@ -1264,6 +1264,8 @@ export const messagesEn = {
 
   // Row 2.1b: preset product comments
   'settings.commentPresets.title': 'Preset product comments',
+  'locales.defaultMarker': 'default',
+  'locales.hiddenKept': 'Wording in other languages is kept as it is.',
   'settings.commentPresets.lead':
     'A coded kitchen instruction ("no onions", "well done") a kitchen line can carry instead of free text.',
   'settings.commentPresets.tenantWideNote': 'Shared by every brand this tenant runs.',
@@ -1271,9 +1273,7 @@ export const messagesEn = {
   'settings.commentPresets.status.active': 'Active',
   'settings.commentPresets.status.archived': 'Archived',
   'settings.commentPresets.table.code': 'Code',
-  'settings.commentPresets.table.labelRu': 'Label (ru)',
-  'settings.commentPresets.table.labelUz': 'Label (uz)',
-  'settings.commentPresets.table.labelEn': 'Label (en)',
+  'settings.commentPresets.table.labelIn': 'Label ({locale})',
   'settings.commentPresets.table.posModifierCode': 'POS modifier',
   'settings.commentPresets.table.sortOrder': 'Order',
   'settings.commentPresets.table.status': 'Status',
@@ -1285,16 +1285,14 @@ export const messagesEn = {
   'settings.commentPresets.create.code': 'Code',
   'settings.commentPresets.create.codeHint':
     'Uppercase letters, digits, "_" and "-" only. Never shown to a customer.',
-  'settings.commentPresets.create.labelRu': 'Label (ru)',
-  'settings.commentPresets.create.labelUz': 'Label (uz)',
-  'settings.commentPresets.create.labelEn': 'Label (en)',
+  'settings.commentPresets.create.labelIn': 'Label ({locale})',
   'settings.commentPresets.create.posModifierCode': 'POS modifier code',
   'settings.commentPresets.create.posModifierCodeHint':
     'Optional. The coded value a POS export maps this preset to where it expects a modifier.',
   'settings.commentPresets.create.sortOrder': 'Order',
   'settings.commentPresets.create.submit': 'Register',
   'settings.commentPresets.create.submitting': 'Registering…',
-  'settings.commentPresets.create.incomplete': 'A code and all three labels are required.',
+  'settings.commentPresets.create.incomplete': 'A code and the label in the default language are required.',
 
   // 10.7 Fiscalization
   'settings.fiscalization.title': 'Fiscalization',
@@ -3089,9 +3087,10 @@ export const messagesEn = {
   'delivery.zones.create.role': 'Role',
   'delivery.zones.create.roleHint':
     'A delivery zone decides whether an address can be served and at what price. A catchment zone decides which branch may take the order and carries no tariff at all.',
-  'delivery.zones.create.nameRu': 'Name (Russian)',
-  'delivery.zones.create.nameUz': 'Name (Uzbek)',
-  'delivery.zones.create.nameEn': 'Name (English)',
+  'delivery.zones.create.nameIn': 'Name ({locale})',
+  'delivery.zones.rename.action': 'Rename',
+  'delivery.zones.rename.title': 'Rename zone {code}',
+  'delivery.zones.rename.submit': 'Save names',
   'delivery.zones.draft.origin': 'Centre on branch',
   'delivery.zones.draft.region': 'Region',
   'delivery.zones.draft.regionNone': 'No region',
@@ -3251,9 +3250,7 @@ export const messagesEn = {
   'delivery.regions.status.ACTIVE': 'Active',
   'delivery.regions.status.ARCHIVED': 'Archived',
   'delivery.regions.field.code': 'Code',
-  'delivery.regions.field.nameRu': 'Name (Russian)',
-  'delivery.regions.field.nameUz': 'Name (Uzbek)',
-  'delivery.regions.field.nameEn': 'Name (English)',
+  'delivery.regions.field.nameIn': 'Name ({locale})',
   'delivery.regions.field.boxHint':
     'The north-east corner must be north and east of the south-west one, and the centre must sit inside the box.',
   'delivery.regions.field.swLat': 'SW latitude',

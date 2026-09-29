@@ -1244,6 +1244,8 @@ export const messagesUzLatn: MessageCatalogue = {
 
   // Qator 2.1b: taomga izoh presetlari
   'settings.commentPresets.title': 'Taomga izoh presetlari',
+  'locales.defaultMarker': 'standart',
+  'locales.hiddenKept': 'Boshqa tillardagi matnlar oʻzgarishsiz saqlanadi.',
   'settings.commentPresets.lead':
     'Erkin matn oʻrniga qator olib yuradigan, oshxona uchun kodlangan koʻrsatma ("piyozsiz", "yaxshi qovurish").',
   'settings.commentPresets.tenantWideNote': 'Ushbu tenantning barcha brendlari uchun umumiy.',
@@ -1251,9 +1253,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.commentPresets.status.active': 'Faol',
   'settings.commentPresets.status.archived': 'Arxivlangan',
   'settings.commentPresets.table.code': 'Kod',
-  'settings.commentPresets.table.labelRu': 'Yorliq (ru)',
-  'settings.commentPresets.table.labelUz': 'Yorliq (uz)',
-  'settings.commentPresets.table.labelEn': 'Yorliq (en)',
+  'settings.commentPresets.table.labelIn': 'Yorliq ({locale})',
   'settings.commentPresets.table.posModifierCode': 'Kassa modifikatori',
   'settings.commentPresets.table.sortOrder': 'Tartib',
   'settings.commentPresets.table.status': 'Holat',
@@ -1265,16 +1265,14 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.commentPresets.create.code': 'Kod',
   'settings.commentPresets.create.codeHint':
     'Faqat bosh harflar, raqamlar, "_" va "-". Mijozga hech qachon koʻrsatilmaydi.',
-  'settings.commentPresets.create.labelRu': 'Yorliq (ru)',
-  'settings.commentPresets.create.labelUz': 'Yorliq (uz)',
-  'settings.commentPresets.create.labelEn': 'Yorliq (en)',
+  'settings.commentPresets.create.labelIn': 'Yorliq ({locale})',
   'settings.commentPresets.create.posModifierCode': 'Kassa modifikatori kodi',
   'settings.commentPresets.create.posModifierCodeHint':
     'Ixtiyoriy. Kassaga eksport modifikator kutgan joyda bu presetni aylantiradigan kodlangan qiymat.',
   'settings.commentPresets.create.sortOrder': 'Tartib',
   'settings.commentPresets.create.submit': 'Roʻyxatdan oʻtkazish',
   'settings.commentPresets.create.submitting': 'Roʻyxatdan oʻtkazilmoqda…',
-  'settings.commentPresets.create.incomplete': 'Kod va barcha uchta yorliq talab qilinadi.',
+  'settings.commentPresets.create.incomplete': 'Kod va standart tildagi yorliq talab qilinadi.',
 
   // 10.7 Fiskalizatsiya
   'settings.fiscalization.title': 'Fiskalizatsiya',
@@ -3077,9 +3075,10 @@ export const messagesUzLatn: MessageCatalogue = {
   'delivery.zones.create.role': 'Rol',
   'delivery.zones.create.roleHint':
     'Yetkazib berish zonasi manzilga yetkazish mumkinmi va qaysi narxda ekanini hal qiladi. Filial zonasi esa buyurtmani qaysi filial olishini hal qiladi va hech qanday tarif olib yurmaydi.',
-  'delivery.zones.create.nameRu': 'Nomi (rus tilida)',
-  'delivery.zones.create.nameUz': 'Nomi (oʻzbek tilida)',
-  'delivery.zones.create.nameEn': 'Nomi (ingliz tilida)',
+  'delivery.zones.create.nameIn': 'Nomi ({locale})',
+  'delivery.zones.rename.action': 'Nomini oʻzgartirish',
+  'delivery.zones.rename.title': '{code} zonasi nomini oʻzgartirish',
+  'delivery.zones.rename.submit': 'Nomlarni saqlash',
   'delivery.zones.draft.origin': 'Markaz — filial',
   'delivery.zones.draft.region': 'Hudud',
   'delivery.zones.draft.regionNone': 'Hududsiz',
@@ -3240,9 +3239,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'delivery.regions.status.ACTIVE': 'Faol',
   'delivery.regions.status.ARCHIVED': 'Arxivda',
   'delivery.regions.field.code': 'Kod',
-  'delivery.regions.field.nameRu': 'Nomi (rus tilida)',
-  'delivery.regions.field.nameUz': 'Nomi (oʻzbek tilida)',
-  'delivery.regions.field.nameEn': 'Nomi (ingliz tilida)',
+  'delivery.regions.field.nameIn': 'Nomi ({locale})',
   'delivery.regions.field.boxHint':
     'Shimoli-sharqiy burchak janubi-gʻarbiydan shimolroq va sharqroq boʻlishi, markaz esa toʻrtburchak ichida turishi shart.',
   'delivery.regions.field.swLat': 'JGʻ kenglik',

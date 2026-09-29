@@ -4,6 +4,14 @@ import { firstValueFrom } from 'rxjs';
 import { ApiError } from '../../../core/api/problem-details';
 import { CurrentTenant } from '../../../core/auth/current-tenant';
 import { I18n } from '../../../core/i18n/i18n';
+import {
+  LabelsByLocale,
+  PLATFORM_LOCALE_SET,
+  labelDrafts,
+  labelsToSend,
+  localeDisplayName,
+  platformColumns,
+} from '../../../core/i18n/locale-labels';
 import { TPipe } from '../../../core/i18n/t.pipe';
 import { describeApiError } from '../../orders/order-errors';
 import { CommentPresetsApi, NewPreset, PresetEdit, PresetResponse } from './comment-presets-api';
@@ -19,6 +27,20 @@ const STATUSES = ['ACTIVE', 'ARCHIVED'] as const;
  * `TENANT`-only, like `CatalogSettingsPage`'s own switches: a preset is
  * shared by every brand a tenant runs, so this page reads and writes at
  * `CurrentTenant`, ignoring the shell's brand/location scope bar entirely.
+ *
+ * **Row 10.12 — the wording is per locale, not a fixed ru/uz/en triple.** A
+ * preset belongs to the tenant, not to a brand, so it is edited in the
+ * *union of the tenant's brands' supported languages*, default first — the
+ * default being the tenant's first brand's (`TenantLocaleSet`, read from
+ * `GET .../comment-presets/locale-set`). One field per offered language; the
+ * default language is the one wording a preset must have. **A language the
+ * tenant does not offer is never touched by an edit**: `labels` carries only
+ * the offered, filled-in languages ({@link labelsToSend}) so the server keeps
+ * every other one beyond the platform triple, and the three platform fields —
+ * which the OpenAPI contract keeps required — go back for a language the
+ * tenant does not offer with the wording the preset already has, unchanged
+ * ({@link platformColumns}). Narrowing the brands' languages later therefore
+ * cannot silently delete a translation.
  *
  * **Not built here, honestly**: no screen yet selects a preset on an order
  * line, no KDS renders one, and no POS export maps `posModifierCode` to a
@@ -49,29 +71,29 @@ export class CommentPresetsPage {
     [...this.presets()].sort((a, b) => a.sortOrder - b.sortOrder || a.code.localeCompare(b.code)),
   );
 
+  /** The languages this editor offers (row 10.12): the platform triple until the tenant's set loads. */
+  protected readonly localeSet = signal(PLATFORM_LOCALE_SET);
+  protected readonly locales = computed(() => this.localeSet().locales);
+  protected readonly defaultLocale = computed(() => this.localeSet().defaultLocale);
+
   protected readonly formCode = signal('');
-  protected readonly formLabelRu = signal('');
-  protected readonly formLabelUz = signal('');
-  protected readonly formLabelEn = signal('');
+  protected readonly formLabels = signal<LabelsByLocale>({});
   protected readonly formPosModifierCode = signal('');
   protected readonly formSortOrder = signal(0);
   protected readonly formTouched = signal(false);
   protected readonly formSubmitting = signal(false);
   protected readonly formError = signal<string | null>(null);
 
+  /** A code and the wording in the tenant's default language — every other language is optional. */
   protected readonly formValid = computed(
     () =>
       /^[A-Z0-9][A-Z0-9_-]{0,31}$/.test(this.formCode()) &&
-      this.formLabelRu().trim().length > 0 &&
-      this.formLabelUz().trim().length > 0 &&
-      this.formLabelEn().trim().length > 0,
+      (this.formLabels()[this.defaultLocale()] ?? '').trim().length > 0,
   );
 
   /** The one preset, if any, being corrected in place. */
   protected readonly editingPresetId = signal<string | null>(null);
-  protected readonly editLabelRu = signal('');
-  protected readonly editLabelUz = signal('');
-  protected readonly editLabelEn = signal('');
+  protected readonly editLabels = signal<LabelsByLocale>({});
   protected readonly editPosModifierCode = signal('');
   protected readonly editSortOrder = signal(0);
   protected readonly editStatus = signal<string>('ACTIVE');
@@ -79,10 +101,7 @@ export class CommentPresetsPage {
   protected readonly editError = signal<string | null>(null);
 
   protected readonly editValid = computed(
-    () =>
-      this.editLabelRu().trim().length > 0 &&
-      this.editLabelUz().trim().length > 0 &&
-      this.editLabelEn().trim().length > 0,
+    () => (this.editLabels()[this.defaultLocale()] ?? '').trim().length > 0,
   );
 
   private tenantId: string | null = null;
@@ -102,7 +121,14 @@ export class CommentPresetsPage {
     }
     this.tenantId = tenantId;
     try {
-      this.presets.set(await this.api.list(tenantId));
+      const [presets, localeSet] = await Promise.all([
+        this.api.list(tenantId),
+        // The set only decides which languages the form offers; a tenant whose
+        // set cannot be read still gets a working editor on the platform triple.
+        this.api.localeSet(tenantId).catch(() => PLATFORM_LOCALE_SET),
+      ]);
+      this.presets.set(presets);
+      this.localeSet.set(localeSet);
       this.denied.set(false);
       this.lastError.set(null);
     } catch (error) {
@@ -114,6 +140,28 @@ export class CommentPresetsPage {
     } finally {
       this.loading.set(false);
     }
+  }
+
+  protected localeName(locale: string): string {
+    return localeDisplayName(this.i18n, locale);
+  }
+
+  protected isDefault(locale: string): boolean {
+    return locale === this.defaultLocale();
+  }
+
+  protected setFormLabel(locale: string, value: string): void {
+    this.formLabels.update((labels) => ({ ...labels, [locale]: value }));
+  }
+
+  protected setEditLabel(locale: string, value: string): void {
+    this.editLabels.update((labels) => ({ ...labels, [locale]: value }));
+  }
+
+  /** Languages this preset has wording in that the editor does not offer — kept, not shown. */
+  protected hiddenLocales(preset: PresetResponse): readonly string[] {
+    const offered = new Set(this.locales());
+    return Object.keys(preset.labels ?? {}).filter((locale) => !offered.has(locale));
   }
 
   protected statusLabel(status: string): string {
@@ -128,11 +176,13 @@ export class CommentPresetsPage {
     if (!tenantId || !this.formValid()) {
       return;
     }
+    const columns = platformColumns(this.locales(), this.formLabels(), this.defaultLocale());
     const body: NewPreset = {
       code: this.formCode(),
-      labelRu: this.formLabelRu().trim(),
-      labelUz: this.formLabelUz().trim(),
-      labelEn: this.formLabelEn().trim(),
+      labelRu: columns.ru,
+      labelUz: columns['uz-Latn'],
+      labelEn: columns.en,
+      labels: labelsToSend(this.locales(), this.formLabels()),
       posModifierCode: this.formPosModifierCode().trim() || null,
       sortOrder: this.formSortOrder(),
     };
@@ -142,9 +192,7 @@ export class CommentPresetsPage {
       const created = await firstValueFrom(this.api.create(tenantId, body));
       this.presets.update((current) => [...current, created]);
       this.formCode.set('');
-      this.formLabelRu.set('');
-      this.formLabelUz.set('');
-      this.formLabelEn.set('');
+      this.formLabels.set({});
       this.formPosModifierCode.set('');
       this.formSortOrder.set(0);
       this.formTouched.set(false);
@@ -161,9 +209,7 @@ export class CommentPresetsPage {
 
   protected startEdit(preset: PresetResponse): void {
     this.editingPresetId.set(preset.presetId);
-    this.editLabelRu.set(preset.labelRu);
-    this.editLabelUz.set(preset.labelUz);
-    this.editLabelEn.set(preset.labelEn);
+    this.editLabels.set(labelDrafts(this.locales(), preset.labels));
     this.editPosModifierCode.set(preset.posModifierCode ?? '');
     this.editSortOrder.set(preset.sortOrder);
     this.editStatus.set(preset.status);
@@ -183,10 +229,19 @@ export class CommentPresetsPage {
     if (!tenantId) {
       return;
     }
+    // The contract keeps the platform triple required, so a platform language the
+    // tenant does not offer goes back exactly as the preset has it; a language
+    // beyond the triple that is not offered is simply not in `labels`.
+    const columns = platformColumns(this.locales(), this.editLabels(), this.defaultLocale(), {
+      ru: preset.labelRu,
+      'uz-Latn': preset.labelUz,
+      en: preset.labelEn,
+    });
     const body: PresetEdit = {
-      labelRu: this.editLabelRu().trim(),
-      labelUz: this.editLabelUz().trim(),
-      labelEn: this.editLabelEn().trim(),
+      labelRu: columns.ru,
+      labelUz: columns['uz-Latn'],
+      labelEn: columns.en,
+      labels: labelsToSend(this.locales(), this.editLabels()),
       posModifierCode: this.editPosModifierCode().trim() || null,
       sortOrder: this.editSortOrder(),
       status: this.editStatus(),

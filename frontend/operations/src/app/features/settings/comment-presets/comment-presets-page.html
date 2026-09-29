@@ -21,9 +21,14 @@
           <thead>
             <tr>
               <th>{{ 'settings.commentPresets.table.code' | t }}</th>
-              <th>{{ 'settings.commentPresets.table.labelRu' | t }}</th>
-              <th>{{ 'settings.commentPresets.table.labelUz' | t }}</th>
-              <th>{{ 'settings.commentPresets.table.labelEn' | t }}</th>
+              @for (locale of locales(); track locale) {
+                <th [attr.data-testid]="'comment-presets-col-' + locale">
+                  {{ 'settings.commentPresets.table.labelIn' | t: { locale: localeName(locale) } }}
+                  @if (isDefault(locale)) {
+                    <span class="q-caption">({{ 'locales.defaultMarker' | t }})</span>
+                  }
+                </th>
+              }
               <th>{{ 'settings.commentPresets.table.posModifierCode' | t }}</th>
               <th>{{ 'settings.commentPresets.table.sortOrder' | t }}</th>
               <th>{{ 'settings.commentPresets.table.status' | t }}</th>
@@ -35,30 +40,16 @@
               @if (isEditing(preset)) {
                 <tr data-testid="comment-preset-edit-row">
                   <td class="q-mono">{{ preset.code }}</td>
-                  <td>
-                    <input
-                      type="text"
-                      [value]="editLabelRu()"
-                      (input)="editLabelRu.set($any($event.target).value)"
-                      data-testid="comment-preset-edit-labelRu"
-                    />
-                  </td>
-                  <td>
-                    <input
-                      type="text"
-                      [value]="editLabelUz()"
-                      (input)="editLabelUz.set($any($event.target).value)"
-                      data-testid="comment-preset-edit-labelUz"
-                    />
-                  </td>
-                  <td>
-                    <input
-                      type="text"
-                      [value]="editLabelEn()"
-                      (input)="editLabelEn.set($any($event.target).value)"
-                      data-testid="comment-preset-edit-labelEn"
-                    />
-                  </td>
+                  @for (locale of locales(); track locale) {
+                    <td>
+                      <input
+                        type="text"
+                        [value]="editLabels()[locale] ?? ''"
+                        (input)="setEditLabel(locale, $any($event.target).value)"
+                        [attr.data-testid]="'comment-preset-edit-label-' + locale"
+                      />
+                    </td>
+                  }
                   <td>
                     <input
                       type="text"
@@ -109,10 +100,21 @@
                     </button>
                   </td>
                 </tr>
+                @if (hiddenLocales(preset).length > 0) {
+                  <tr>
+                    <td
+                      [attr.colspan]="locales().length + 5"
+                      class="q-caption"
+                      data-testid="comment-preset-hidden-kept"
+                    >
+                      {{ 'locales.hiddenKept' | t }}
+                    </td>
+                  </tr>
+                }
                 @if (editError(); as message) {
                   <tr>
                     <td
-                      colspan="8"
+                      [attr.colspan]="locales().length + 5"
                       class="comment-presets__error"
                       data-testid="comment-preset-edit-error"
                     >
@@ -123,9 +125,11 @@
               } @else {
                 <tr [class.comment-presets__row--archived]="preset.status === 'ARCHIVED'">
                   <td class="q-mono">{{ preset.code }}</td>
-                  <td>{{ preset.labelRu }}</td>
-                  <td>{{ preset.labelUz }}</td>
-                  <td>{{ preset.labelEn }}</td>
+                  @for (locale of locales(); track locale) {
+                    <td [attr.data-testid]="'comment-preset-label-' + locale">
+                      {{ preset.labels[locale] || '—' }}
+                    </td>
+                  }
                   <td class="q-mono">{{ preset.posModifierCode || '—' }}</td>
                   <td class="q-tnum">{{ preset.sortOrder }}</td>
                   <td>{{ statusLabel(preset.status) }}</td>
@@ -160,35 +164,22 @@
         </label>
         <p class="q-caption">{{ 'settings.commentPresets.create.codeHint' | t }}</p>
 
-        <label class="comment-presets__field">
-          <span class="q-caption">{{ 'settings.commentPresets.create.labelRu' | t }}</span>
-          <input
-            type="text"
-            [value]="formLabelRu()"
-            (input)="formLabelRu.set($any($event.target).value)"
-            data-testid="comment-preset-form-labelRu"
-          />
-        </label>
-
-        <label class="comment-presets__field">
-          <span class="q-caption">{{ 'settings.commentPresets.create.labelUz' | t }}</span>
-          <input
-            type="text"
-            [value]="formLabelUz()"
-            (input)="formLabelUz.set($any($event.target).value)"
-            data-testid="comment-preset-form-labelUz"
-          />
-        </label>
-
-        <label class="comment-presets__field">
-          <span class="q-caption">{{ 'settings.commentPresets.create.labelEn' | t }}</span>
-          <input
-            type="text"
-            [value]="formLabelEn()"
-            (input)="formLabelEn.set($any($event.target).value)"
-            data-testid="comment-preset-form-labelEn"
-          />
-        </label>
+        @for (locale of locales(); track locale) {
+          <label class="comment-presets__field">
+            <span class="q-caption">
+              {{ 'settings.commentPresets.create.labelIn' | t: { locale: localeName(locale) } }}
+              @if (isDefault(locale)) {
+                ({{ 'locales.defaultMarker' | t }})
+              }
+            </span>
+            <input
+              type="text"
+              [value]="formLabels()[locale] ?? ''"
+              (input)="setFormLabel(locale, $any($event.target).value)"
+              [attr.data-testid]="'comment-preset-form-label-' + locale"
+            />
+          </label>
+        }
 
         <label class="comment-presets__field">
           <span class="q-caption">{{ 'settings.commentPresets.create.posModifierCode' | t }}</span>

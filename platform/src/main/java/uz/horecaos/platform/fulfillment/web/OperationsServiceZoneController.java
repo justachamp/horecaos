@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -82,7 +83,7 @@ public class OperationsServiceZoneController {
     @Operation(summary = "Every zone this brand has registered")
     public ResponseEntity<List<ServiceZoneController.ZoneSummaryResponse>> list(
             @PathVariable UUID tenantId, @PathVariable UUID brandId) {
-        return ResponseEntity.ok(zones.listZones(tenantId, brandId).stream()
+        return ResponseEntity.ok(zones.listZonesWithNames(tenantId, brandId).stream()
                 .map(ServiceZoneController.ZoneSummaryResponse::of)
                 .toList());
     }
@@ -94,7 +95,7 @@ public class OperationsServiceZoneController {
             @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID zoneId) {
         try {
             return ResponseEntity.ok(
-                    ServiceZoneController.ZoneDetailResponse.of(zones.zoneDetail(tenantId, brandId, zoneId)));
+                    ServiceZoneController.ZoneDetailResponse.of(zones.zoneDetailWithNames(tenantId, brandId, zoneId)));
         } catch (ServiceZoneService.DeliveryResourceNotFoundException missing) {
             throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, missing.getMessage());
         }
@@ -118,9 +119,39 @@ public class OperationsServiceZoneController {
                 body.code(),
                 body.displayNameRu(),
                 body.displayNameUz(),
-                body.displayNameEn());
+                body.displayNameEn(),
+                body.displayNames() == null ? Map.of() : body.displayNames());
         return ResponseEntity.ok(new ServiceZoneController.ZoneView(
                 zoneId, body.code(), body.role().name()));
+    }
+
+    @PutMapping("/{zoneId}/names")
+    @RequiresCapability(value = Capability.DELIVERY_ZONE_MANAGE, scope = ScopeType.BRAND, mutating = true)
+    @Operation(
+            summary = "Rename a zone in the languages named",
+            description = "Row 10.12. Writes the name for each locale in `displayNames` and no "
+                    + "other: a locale left out keeps its name, so an editor that shows only the "
+                    + "brand's supported languages never deletes the rest. A rename touches no "
+                    + "geometry and creates no version. Answers not-found for a zone this brand "
+                    + "does not have -- another tenant's or another brand's zone id included.")
+    public ResponseEntity<ZoneNamesResponse> rename(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID zoneId,
+            @Valid @RequestBody RenameZoneRequest body) {
+        try {
+            ServiceZoneService.ZoneNames renamed = zones.renameZone(
+                    tenantId,
+                    brandId,
+                    zoneId,
+                    body.displayNameRu(),
+                    body.displayNameUz(),
+                    body.displayNameEn(),
+                    body.displayNames() == null ? Map.of() : body.displayNames());
+            return ResponseEntity.ok(new ZoneNamesResponse(renamed.zoneId(), renamed.names()));
+        } catch (ServiceZoneService.DeliveryResourceNotFoundException missing) {
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, missing.getMessage());
+        }
     }
 
     @PostMapping("/{zoneId}/versions")
@@ -349,6 +380,19 @@ public class OperationsServiceZoneController {
             }
         }
     }
+
+    /**
+     * A rename: the name per locale, and (for callers that predate `displayNames`) the
+     * platform triple. Only the locales named are written.
+     */
+    public record RenameZoneRequest(
+            @Nullable @Size(max = 200) String displayNameRu,
+            @Nullable @Size(max = 200) String displayNameUz,
+            @Nullable @Size(max = 200) String displayNameEn,
+            @Nullable @Size(max = 32) Map<String, @Size(max = 200) String> displayNames) {}
+
+    /** @param displayNames every locale the zone now has a name in, each once */
+    public record ZoneNamesResponse(UUID zoneId, Map<String, String> displayNames) {}
 
     /**
      * One row of {@link #versions}.
