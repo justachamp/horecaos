@@ -307,7 +307,8 @@ class OrderAmendmentAndOutcomeTests {
                 new FakeConfigurationResolver(),
                 saleWindowRules,
                 commentPresetLookup,
-                inventory);
+                inventory,
+                new UnusedTableBinding());
         inventoryProcess = new OrderInventoryProcess(processStore, inventory, objectMapper, clock);
         paymentProcess = new OrderPaymentProcess(processStore, objectMapper);
         orderStateWith = store -> new OrderStateService(

@@ -197,6 +197,20 @@ class CheckoutOrderWriter {
 
         writeSnapshots(command, eligible, orderId);
 
+        // ADR 0047: a cart bound to a table puts its order on that table's bill in
+        // this very transaction, so the attach cannot be lost between two requests.
+        // A refusal (a currency the session does not bill in, a session closed by
+        // another host in the instants since the guard looked) propagates and rolls
+        // the whole checkout back: an order that cannot be on the bill is not placed.
+        UUID boundTableId = eligible.boundTableId();
+        if (boundTableId != null) {
+            cartService.attachOrderToTable(
+                    command.tenantId(),
+                    boundTableId,
+                    orderId,
+                    Objects.requireNonNull(cart.customerAccountId(), "a table binding has an owner"));
+        }
+
         orders.recordTransition(
                 command.tenantId(),
                 orderId,

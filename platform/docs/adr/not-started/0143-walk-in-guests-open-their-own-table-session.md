@@ -7,9 +7,13 @@
   declares `dinein.session.manage` at `LOCATION` scope, and
   `TableSessionService.open` — which the controller calls — takes an
   `openedBy` string and authorizes nothing itself, so the gate is the
-  controller's declaration. The one console caller, `ReservationsPage.submitSeat`,
-  always sends a `reservationId`: no screen anywhere seats a walk-in, even though
-  `OpenSessionRequest` documents `reservationId = null` as one. ADR 0047's API
+  controller's declaration. `ReservationsPage.submitSeat` always sends a
+  `reservationId`; since batch 15 (`w6-dine-in-operator-flows`) two more console
+  callers send none and seat a walk-in, as this record says the staff path must
+  (the floor plan's "Seat walk-in", and the New Order screen's table picker for a
+  DINE_IN order), and none of them consults a booking's hold or a table's `seats`
+  -- the host's judgement, with an advisory warning, exactly as the context
+  below describes. ADR 0047's API
   sketch names `POST /api/v1/storefront/qr/{tableToken}/sessions` for the guest's
   own open; it was never built, and ADR 0047's own checklist has already moved the
   token exchange from a path segment into a request body

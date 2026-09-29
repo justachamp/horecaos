@@ -5,10 +5,14 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -28,7 +32,9 @@ import uz.horecaos.platform.dinein.domain.ReservationStatus;
 import uz.horecaos.platform.dinein.domain.SessionStatus;
 import uz.horecaos.platform.dinein.infrastructure.persistence.JdbcDineInStore;
 import uz.horecaos.platform.dinein.infrastructure.persistence.JdbcDineInStore.ReservationRow;
+import uz.horecaos.platform.dinein.infrastructure.persistence.JdbcDineInStore.RoundRow;
 import uz.horecaos.platform.dinein.infrastructure.persistence.JdbcDineInStore.SessionRow;
+import uz.horecaos.platform.dinein.infrastructure.persistence.JdbcDineInStore.SessionTableRow;
 import uz.horecaos.platform.dinein.infrastructure.persistence.JdbcDineInStore.SettingsRow;
 import uz.horecaos.platform.dinein.infrastructure.persistence.JdbcDineInStore.TableRow;
 import uz.horecaos.platform.iam.api.ResourceScope;
@@ -131,7 +137,10 @@ public class TableSessionService {
                 1);
 
         if (request.reservationId() != null) {
-            ReservationRow reservation = store.findReservation(request.tenantId(), request.reservationId())
+            // At this branch, not merely in this tenant: seating moves the booking to
+            // SEATED, and a booking of another branch is not this branch's to seat.
+            ReservationRow reservation = store.findReservationAtLocation(
+                            request.tenantId(), request.locationId(), request.reservationId())
                     .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such booking"));
             if (reservation.status() != ReservationStatus.CONFIRMED) {
                 throw new ApiException(
@@ -233,11 +242,13 @@ public class TableSessionService {
      *                              token and no ADR 0025 capability at all -- the
      *                              token alone proves "this device is at this
      *                              table", never "this order is this device's own".
-     *                              Checkout does not bind a cart to a table (ADR
-     *                              0047's own "what was not built"), so the only
-     *                              fact this method can still check is the one
-     *                              checkout always records: which signed-in
-     *                              customer placed the order. A mismatch answers
+     *                              A cart bound to a table reaches this method
+     *                              from checkout itself ({@code
+     *                              TableBindingPortAdapter}); an unbound one from
+     *                              the guest's own call afterwards. Either way the
+     *                              fact this method can check is the one checkout
+     *                              always records: which signed-in customer placed
+     *                              the order. A mismatch answers
      *                              exactly like a non-existent order -- the same
      *                              {@link ErrorCode#RESOURCE_NOT_FOUND} the lookup
      *                              two lines below throws -- so a guest fishing for
@@ -256,6 +267,28 @@ public class TableSessionService {
             String reason) {
 
         SessionRow session = require(tenantId, sessionId);
+
+        // A retry of a write that already landed is not a second attach. The New
+        // Order screen places the order and then calls this; a dropped response
+        // leaves the operator not knowing whether the round is on the bill, and
+        // the only safe answer to "attach it again" is the sequence it already
+        // has. Read before the insert rather than recovered from the duplicate-key
+        // refusal below, because that refusal aborts the transaction and nothing
+        // after it may query. The ownership check still runs first: a guest's
+        // token names a table, never an order, and this branch must not confirm
+        // that an order id sits on a bill to somebody who does not own the order.
+        Optional<RoundRow> existing = store.findRoundOfOrder(tenantId, orderId);
+        if (existing.isPresent() && existing.get().sessionId().equals(sessionId)) {
+            if (requireOwnerAccountId != null) {
+                OrderForSession own = orders.find(tenantId, orderId)
+                        .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such order"));
+                if (!requireOwnerAccountId.equals(own.customerAccountId())) {
+                    throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such order");
+                }
+            }
+            return existing.get().sequence();
+        }
+
         if (!session.status().live()) {
             throw new ApiException(
                     ErrorCode.INVALID_REQUEST, "A %s session takes no more rounds".formatted(session.status()));
@@ -291,6 +324,13 @@ public class TableSessionService {
         }
 
         Instant now = clock.instant();
+        if (existing.isPresent()) {
+            // On another session's bill: one meal never appears on two.
+            throw new ApiException(
+                    ErrorCode.RESOURCE_CONFLICT,
+                    "That order is already on a bill",
+                    Map.of("conflict", "ORDER_ALREADY_BILLED"));
+        }
         int sequence;
         try {
             sequence = store.addOrder(sessionId, orderId, tenantId, now);
@@ -327,12 +367,47 @@ public class TableSessionService {
         return require(tenantId, sessionId);
     }
 
+    /**
+     * One session, only if it sits at this branch.
+     *
+     * <p>The operations endpoints carry a {@code locationId} in the path and a
+     * {@code LOCATION}-scoped capability check against it, so a manager of branch A
+     * holds the grant for A and nothing else. A session id is a UUID in the same
+     * tenant as branch B's; matching it on the tenant alone would let A's grant read
+     * B's bill, attach A's caller's choice of order to B's table, or close B's
+     * party. It answers exactly like a session that does not exist, so the id
+     * cannot be probed across branches.
+     */
+    public SessionRow findAtLocation(UUID tenantId, UUID locationId, UUID sessionId) {
+        return store.findSession(tenantId, sessionId)
+                .filter(session -> session.locationId().equals(locationId))
+                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such session"));
+    }
+
     public List<SessionRow> live(UUID tenantId, UUID locationId) {
         return store.listLiveSessions(tenantId, locationId);
     }
 
     public List<UUID> rounds(UUID tenantId, UUID sessionId) {
         return store.ordersInSession(tenantId, sessionId);
+    }
+
+    /** One physical table a session sits at: its stable code and display name. */
+    public record SessionTable(UUID tableId, String code, String displayName) {}
+
+    /**
+     * The tables behind each of a batch of sessions, in join order -- one round
+     * trip for the whole live list. A session with no table row (there is none:
+     * {@link #open} refuses an empty list) is simply absent from the map.
+     */
+    public Map<UUID, List<SessionTable>> tablesOf(UUID tenantId, Collection<UUID> sessionIds) {
+        Map<UUID, List<SessionTable>> bySession = new LinkedHashMap<>();
+        for (SessionTableRow row : store.tablesForSessions(tenantId, sessionIds)) {
+            bySession
+                    .computeIfAbsent(row.sessionId(), ignored -> new ArrayList<>())
+                    .add(new SessionTable(row.tableId(), row.code(), row.displayName()));
+        }
+        return bySession;
     }
 
     /**

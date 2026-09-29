@@ -99,7 +99,8 @@ make the diagram harder to read rather than easier.
 
 | Logical entity | Physical table | Notes |
 |---|---|---|
-| — | `ordering.carts`, `ordering.cart_lines` | Mutable, bound to one location and channel, rebuilt rather than moved. The ADR's `cart_fulfillment` is not created: nothing captures a delivery address yet |
+| — | `ordering.carts`, `ordering.cart_lines` | Mutable, bound to one location and channel, rebuilt rather than moved |
+| — | `ordering.cart_fulfillment` | One row per cart at most, of exactly one kind (`ck_cart_fulfillment_one_kind`): a DELIVERY cart's captured destination (V0056), or a DINE_IN cart's `dinein_table_id` (V0435, ADR 0047). The mode travels in the foreign key, so a pickup cart can hold neither |
 | — | `ordering.checkout_attempts` | The transactional checkout idempotency record |
 | `CUSTOMER_ORDER` | `ordering.orders` | One order per accepted quote and per cart, both enforced by unique constraints |
 | `ORDER_ITEM` | `ordering.order_lines` | Snapshotted names and amounts; `SELECT`/`INSERT` only |

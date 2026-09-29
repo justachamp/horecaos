@@ -427,6 +427,46 @@ public class JdbcCartStore {
     }
 
     /**
+     * Binds a DINE_IN cart to a table (ADR 0047).
+     *
+     * <p>An upsert keyed on the cart, like {@link #upsertFulfillment}: a cart has one
+     * table, and scanning another replaces it. The row carries no destination
+     * column at all -- {@code ck_cart_fulfillment_one_kind} refuses a table beside a
+     * doorstep -- and the composite foreign key to {@code ordering.carts} refuses
+     * one on any cart that is not DINE_IN. The version is bumped by the caller
+     * through {@link #touchAndInvalidatePricing} in the same transaction.
+     */
+    public void upsertTableBinding(UUID tenantId, UUID cartId, UUID tableId, Instant now) {
+        jdbc.sql("""
+                INSERT INTO ordering.cart_fulfillment (
+                    cart_id, tenant_id, fulfillment_mode, dinein_table_id, created_at, updated_at)
+                VALUES (:cartId, :tenantId, 'DINE_IN', :tableId, :now, :now)
+                ON CONFLICT (cart_id) DO UPDATE
+                SET dinein_table_id = EXCLUDED.dinein_table_id,
+                    updated_at = EXCLUDED.updated_at
+                """)
+                .param("cartId", cartId)
+                .param("tenantId", tenantId)
+                .param("tableId", tableId)
+                .param("now", utc(now))
+                .update();
+    }
+
+    /** The table a cart is bound to, if it is. The tenant is in the statement. */
+    public Optional<UUID> findTableBinding(UUID tenantId, UUID cartId) {
+        return jdbc.sql("""
+                SELECT dinein_table_id
+                FROM ordering.cart_fulfillment
+                WHERE tenant_id = :tenantId AND cart_id = :cartId
+                  AND fulfillment_mode = 'DINE_IN'
+                """)
+                .param("tenantId", tenantId)
+                .param("cartId", cartId)
+                .query((row, number) -> row.getObject("dinein_table_id", UUID.class))
+                .optional();
+    }
+
+    /**
      * The destination attached to a cart, as ciphertext.
      *
      * <p>The tenant is in the statement rather than inherited from the cart the
@@ -440,6 +480,7 @@ public class JdbcCartStore {
                        recipient_phone_encrypted, latitude, longitude
                 FROM ordering.cart_fulfillment
                 WHERE tenant_id = :tenantId AND cart_id = :cartId
+                  AND fulfillment_mode = 'DELIVERY'
                 """)
                 .param("tenantId", tenantId)
                 .param("cartId", cartId)

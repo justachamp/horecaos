@@ -26,12 +26,22 @@
   and no screen yet.
   `SETTLE_OPEN_TICKET` is declared and refused at both the service and
   `ck_dinein_qr_mode` until the fiscal open input closes and a POS adapter exists.
-  Not built: the two ADR 0011 ports and any adapter, ADR 0013's widened payable
-  subject, the ADR 0018 service charge, ordering's cart-to-table binding — a
-  round reaches a bill only through the operator's `POST
-  /sessions/{sessionId}/rounds`, since nothing in `ordering` attaches a checkout
-  to a session — and the external event contracts. See "What was not built, and
-  why".
+  Batch 15 (`w6-dine-in-operator-flows`) builds the operator half and the
+  cart-to-table binding. The console seats a walk-in from the floor plan
+  (`TableSessionController.open` with no booking), the New Order screen's DINE_IN
+  mode names its table, places the order and attaches it as a round through
+  `POST .../sessions/{sessionId}/rounds` (a repeat of an attach the session
+  already holds answers with the sequence it has), and every session read and
+  write is scoped to the branch in its path. V0435 widens `ordering.cart_fulfillment`
+  to a second kind of row, a DINE_IN cart's `dinein_table_id`; `PUT
+  /carts/{cartId}/table` binds a guest's cart to the table its `X-Dine-In-Token`
+  was minted for (never a table id in the request); and checkout, through
+  `dinein.api.TableBindingPort`, refuses a bound cart whose table nobody sits at
+  and puts the order on the table's bill in the transaction that creates it. A cart
+  with no binding, and the guest's own `POST /sessions/{sessionId}/rounds` after
+  checkout, work as before. Not built: the two ADR 0011 ports and any adapter, ADR
+  0013's widened payable subject, the ADR 0018 service charge, and the external
+  event contracts. See "What was not built, and why".
 - Date proposed: 2026-08-21
 - Date decided: 2026-08-21
 - Deciders: Ayubkhon Abbosov (platform architecture), product, finance
@@ -376,6 +386,11 @@ drains the open ones; a session already carrying orders never moves mid-service.
       credential printed on card in a public room is the one value that must not
       land in all three. The `{tableToken}` path form in "APIs and events" above
       is superseded by that body form.
+- [x] Bind a cart to its table, and put the order on the table's bill in the
+      transaction that creates it: `ordering.cart_fulfillment.dinein_table_id`
+      (V0435), `PUT .../carts/{cartId}/table`, and `dinein.api.TableBindingPort`.
+      Built in batch 15 — "What was not built" below is the history of why it
+      waited, and V0056 has since created the table it was waiting for.
 - [ ] Add the two ADR 0011 ports and one adapter, or a stub declaring them
       unsupported; extend ADR 0013's payable subject to the session. **Not done,
       and both are correctly somebody else's schema** — see below.
