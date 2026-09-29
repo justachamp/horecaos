@@ -7,7 +7,7 @@ import { Session } from '../../../core/auth/session';
 import { newIdempotencyKey } from '../../../core/api/idempotency';
 import { HorecaOSApiError } from '../../../core/api/problem-details';
 import { CartService, type PricedCart } from '../../../services/cart.service';
-import { DineInBill, DineInService } from '../../../services/dine-in.service';
+import { DineInBill, DineInService, type RoundFlush } from '../../../services/dine-in.service';
 import { LangService } from '../../../services/lang.service';
 import { LocationProfileService } from '../../../services/location-profile.service';
 import { MenuService, type PublishedMenu, type PublishedProduct } from '../../../services/menu.service';
@@ -32,7 +32,9 @@ interface MenuRow {
  * endpoint to a `VIEW_ONLY` token. `ORDER_AND_PAY` adds a cart bound to the
  * table's own `DINE_IN` fulfilment mode and location, and a checkout that
  * attaches the resulting order to the table's session
- * (`DineInService.attachRound`) so it shows up on the running bill.
+ * (`DineInService.attachRound`) so it shows up on the running bill -- and
+ * keeps the order queued on the device until the platform has confirmed that
+ * attach, since nothing else binds a guest's order to its table.
  * `SETTLE_OPEN_TICKET` is declared by the platform and never selectable
  * (`QrMode`'s own doc) -- this screen never receives it and does not brace
  * for it.
@@ -82,11 +84,19 @@ export class DineInTableComponent implements OnInit {
   readonly checkingOut = signal(false);
   readonly checkoutError = signal<string | null>(null);
   readonly billBusy = signal(false);
+  /** An order the platform refused to put on the bill for good -- the guest is told to ask staff. */
+  readonly roundLost = signal(false);
 
   readonly admission = computed(() => this.dineIn.admission());
 
   readonly canOrder = computed(() => this.admission()?.mode === 'ORDER_AND_PAY');
   readonly isSeated = computed(() => !!this.admission()?.openSessionId);
+
+  /** Orders placed from this device that the table's bill has not confirmed yet. */
+  readonly pendingRounds = computed(() => {
+    const sessionId = this.admission()?.openSessionId;
+    return sessionId ? this.dineIn.pendingRoundCount(sessionId) : 0;
+  });
 
   private pendingCheckoutKey: string | null = null;
   private pricedCartId: string | null = null;
@@ -254,6 +264,7 @@ export class DineInTableComponent implements OnInit {
     }
     this.checkingOut.set(true);
     this.checkoutError.set(null);
+    this.roundLost.set(false);
     try {
       const result = await this.carts.checkout({
         priced,
@@ -269,16 +280,15 @@ export class DineInTableComponent implements OnInit {
       this.carts.discard(admission.locationId);
       this.priced.set(null);
 
-      try {
-        const bill = await this.dineIn.attachRound(sessionId, result.orderId);
-        this.bill.set(bill);
-      } catch {
-        // The order exists and is fired regardless -- a lost response here
-        // is a bill this device could not confirm was updated, not a lost
-        // order. A manual refresh (below) retries the same, idempotent call.
-        this.notification.show(this.translate.get('dineIn.roundAttachRetry'));
+      // The order id is the only thing tying this order to the table: the
+      // kitchen ticket's table chip, the order board and the bill all read
+      // the row attaching it writes. Queue it on the device before the call,
+      // so a lost response or a reload cannot lose it (see DineInService).
+      this.dineIn.queueRound(sessionId, result.orderId);
+      const flush = await this.attachPendingRounds(sessionId);
+      if (flush.pending === 0 && flush.abandoned === 0) {
+        this.notification.show(this.translate.get('dineIn.orderPlaced'));
       }
-      this.notification.show(this.translate.get('dineIn.orderPlaced'));
     } catch (failure) {
       if (this.dineIn.isGuestSessionEnded(failure)) {
         this.dineIn.clear();
@@ -297,6 +307,31 @@ export class DineInTableComponent implements OnInit {
     }
   }
 
+  /**
+   * Puts every order this device placed at the table onto the table's bill
+   * and reports what is left. Says so when something is still not on it;
+   * says nothing on success, because the bill changing is the answer.
+   *
+   * The order exists and is in the kitchen whatever happens here. What is at
+   * stake is the bill and the table chip, so a round that could not be
+   * confirmed stays queued -- the notice below the bill offers a retry and
+   * the next visit to this screen tries again -- and a round the platform
+   * refused for good is said out loud rather than dropped silently.
+   */
+  private async attachPendingRounds(sessionId: string): Promise<RoundFlush> {
+    const flush = await this.dineIn.flushPendingRounds(sessionId);
+    if (flush.bill) {
+      this.bill.set(flush.bill);
+    }
+    if (flush.abandoned > 0) {
+      this.roundLost.set(true);
+      this.notification.show(this.translate.get('dineIn.roundAttachFailed'));
+    } else if (flush.pending > 0) {
+      this.notification.show(this.translate.get('dineIn.roundAttachRetry'));
+    }
+    return flush;
+  }
+
   async refreshBill(sessionId?: string): Promise<void> {
     const id = sessionId ?? this.admission()?.openSessionId;
     if (!id) {
@@ -304,7 +339,18 @@ export class DineInTableComponent implements OnInit {
     }
     this.billBusy.set(true);
     try {
-      this.bill.set(await this.dineIn.bill(id));
+      // An order that never made it onto the bill goes first: its attach
+      // answers with the bill, and a plain read would show the table
+      // without it.
+      // Attaching needs the signed-in session the order was placed under (see
+      // DineInService.attachRound), so a signed-out device leaves the queue
+      // alone rather than spend a request on a certain 401; signing in brings
+      // the guest back to this screen, which tries again.
+      const canAttach = this.session.isAuthenticated() && this.dineIn.pendingRoundCount(id) > 0;
+      const flush = canAttach ? await this.attachPendingRounds(id) : null;
+      if (!flush?.bill) {
+        this.bill.set(await this.dineIn.bill(id));
+      }
     } catch (failure) {
       if (this.dineIn.isGuestSessionEnded(failure)) {
         this.dineIn.clear();
@@ -312,6 +358,15 @@ export class DineInTableComponent implements OnInit {
     } finally {
       this.billBusy.set(false);
     }
+  }
+
+  /** The notice's button: renew the sign-in the attach needs, or try the attach again. */
+  async retryPendingRounds(): Promise<void> {
+    if (!this.session.isAuthenticated()) {
+      this.signIn();
+      return;
+    }
+    await this.refreshBill();
   }
 
   async requestBill(): Promise<void> {

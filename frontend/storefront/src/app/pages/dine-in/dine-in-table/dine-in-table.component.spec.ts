@@ -2,10 +2,12 @@ import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
 
+import { ApiClient } from '../../../core/api/api-client';
+import { HorecaOSApiError } from '../../../core/api/problem-details';
 import { ReturnDestination } from '../../../core/auth/return-destination';
 import { Session } from '../../../core/auth/session';
 import { CartService, type PlatformCart } from '../../../services/cart.service';
-import { DineInAdmission, DineInBill, DineInService } from '../../../services/dine-in.service';
+import { DineInAdmission, DineInBill, DineInService, type RoundFlush } from '../../../services/dine-in.service';
 import { LangService } from '../../../services/lang.service';
 import { LocationProfileService } from '../../../services/location-profile.service';
 import { MenuService, type PublishedMenu } from '../../../services/menu.service';
@@ -38,6 +40,20 @@ class FakeDineInService {
   bill = vi.fn<(sessionId: string) => Promise<DineInBill>>();
   requestBill = vi.fn<(sessionId: string) => Promise<DineInBill>>();
   attachRound = vi.fn<(sessionId: string, orderId: string) => Promise<DineInBill>>();
+  private readonly queued: { sessionId: string; orderId: string }[] = [];
+  queueRound = vi.fn((sessionId: string, orderId: string) => {
+    this.queued.push({ sessionId, orderId });
+  });
+  pendingRoundCount = (sessionId: string) => this.queued.filter((round) => round.sessionId === sessionId).length;
+  /** The real service's queue-then-attach, minus its storage and failure classification. */
+  flushPendingRounds = vi.fn(async (sessionId: string): Promise<RoundFlush> => {
+    let latest: DineInBill | null = null;
+    for (const round of this.queued.filter((entry) => entry.sessionId === sessionId)) {
+      latest = await this.attachRound(round.sessionId, round.orderId);
+      this.queued.splice(this.queued.indexOf(round), 1);
+    }
+    return { bill: latest, pending: this.pendingRoundCount(sessionId), abandoned: 0 };
+  });
   isGuestSessionEnded = vi.fn().mockReturnValue(false);
   clear = vi.fn(() => this.admissionSig.set(null));
 
@@ -420,6 +436,7 @@ describe('DineInTableComponent', () => {
       expect(cartService.checkout).toHaveBeenCalledWith(
         expect.objectContaining({ paymentMethodCode: 'CASH' }),
       );
+      expect(dineIn.queueRound).toHaveBeenCalledWith('session-1', 'order-1');
       expect(dineIn.attachRound).toHaveBeenCalledWith('session-1', 'order-1');
       expect(cartService.discard).toHaveBeenCalledWith('location-1');
     });
@@ -439,5 +456,246 @@ describe('DineInTableComponent', () => {
 
       expect(dineIn.clear).toHaveBeenCalled();
     });
+  });
+});
+
+/**
+ * The bill is the only thing that ties a guest's order to their table: the
+ * kitchen ticket's table chip, the order board's row and the running total
+ * all read `dinein.session_orders`, and the only writer for a guest order is
+ * the second call `checkout()` makes after the order exists. These specs run
+ * the real {@link DineInService} against a fake HTTP client, because what
+ * they prove is what goes over the wire when that second call is lost.
+ */
+describe('DineInTableComponent -- a round the platform never confirmed onto the bill', () => {
+  const ADMISSION_KEY = 'horecaos_dinein_admission';
+  const ROUNDS_PATH = '/storefront/dine-in/sessions/session-1/rounds';
+
+  interface FakeApi {
+    get: ReturnType<typeof vi.fn>;
+    mutate: ReturnType<typeof vi.fn>;
+  }
+
+  function newApi(): FakeApi {
+    const api: FakeApi = { get: vi.fn(), mutate: vi.fn() };
+    api.get.mockResolvedValue(bill());
+    return api;
+  }
+
+  function setUpReal(api: FakeApi) {
+    localStorage.setItem(ADMISSION_KEY, JSON.stringify(admission()));
+    const cartService = new FakeCartService();
+    const menuService = new FakeMenuService();
+    const notification = new FakeNotificationService();
+    const session = new FakeSession();
+    menuService.menu.mockResolvedValue(menu());
+
+    TestBed.configureTestingModule({
+      imports: [DineInTableComponent],
+      providers: [
+        provideRouter([]),
+        { provide: ApiClient, useValue: api },
+        { provide: CartService, useValue: cartService },
+        { provide: MenuService, useValue: menuService },
+        { provide: Session, useValue: session },
+        { provide: LangService, useValue: { langId: () => 'en' } },
+        { provide: LocationProfileService, useClass: FakeLocationProfileService },
+        { provide: NotificationService, useValue: notification },
+        { provide: TranslateService, useClass: FakeTranslateService },
+      ],
+    });
+    return { fixture: TestBed.createComponent(DineInTableComponent), cartService, notification, session };
+  }
+
+  async function settle(): Promise<void> {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+
+  function primeCheckout(cartService: FakeCartService): void {
+    const cart: PlatformCart = {
+      cartId: 'cart-1',
+      locationId: 'location-1',
+      status: 'OPEN',
+      currency: 'UZS',
+      fulfillmentMode: 'DINE_IN',
+      version: 2,
+      quoteId: null,
+      contextHash: null,
+      expiresAt: null,
+      lines: [{ lineKey: 'variant-1', variantId: 'variant-1', quantity: 1, commentPresetCodes: [], hasCustomerNote: false }],
+    };
+    cartService.ensure.mockResolvedValue(cart);
+    cartService.putLine.mockImplementation(async () => {
+      cartService.cart.set(cart);
+      return cart;
+    });
+    cartService.price.mockResolvedValue({
+      cartId: 'cart-1',
+      cartVersion: 2,
+      quoteId: 'quote-1',
+      contextHash: 'hash',
+      currency: 'UZS',
+      subtotalMinor: 45000,
+      taxMinor: 0,
+      discountMinor: 0,
+      feeMinor: 0,
+      totalMinor: 45000,
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+      delivery: null,
+    });
+    cartService.paymentMethods.mockResolvedValue({
+      cartId: 'cart-1',
+      currency: 'UZS',
+      methodCodes: ['CASH'],
+      warnings: [],
+    });
+    cartService.checkout.mockResolvedValue({
+      orderId: 'order-1',
+      publicOrderNumber: '0001',
+      status: 'CONFIRMED',
+      version: 1,
+      outcome: 'CREATED',
+      warnings: [],
+    });
+  }
+
+  async function placeOrder(
+    fixture: ReturnType<typeof setUpReal>['fixture'],
+    cartService: FakeCartService,
+  ): Promise<void> {
+    primeCheckout(cartService);
+    const host = fixture.nativeElement as HTMLElement;
+    fixture.detectChanges();
+    await settle();
+    fixture.detectChanges();
+    host.querySelector<HTMLButtonElement>('[data-testid="dine-in-add"]')?.click();
+    await settle();
+    fixture.detectChanges();
+    await settle();
+    fixture.detectChanges();
+    host.querySelector<HTMLButtonElement>('[data-testid="dine-in-checkout"]')?.click();
+    await settle();
+    fixture.detectChanges();
+  }
+
+  function roundCalls(api: FakeApi): unknown[][] {
+    return api.mutate.mock.calls.filter((call) => call[1] === ROUNDS_PATH);
+  }
+
+  const offline = () =>
+    new HorecaOSApiError({ status: 0, code: 'NETWORK_UNREACHABLE', detail: 'The request did not reach the platform.' });
+
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it('keeps the placed order and attaches it when the guest comes back to the table', async () => {
+    const api = newApi();
+    api.mutate.mockRejectedValue(offline());
+    const first = setUpReal(api);
+    await placeOrder(first.fixture, first.cartService);
+    expect(roundCalls(api)).toHaveLength(1);
+
+    // The phone reloads the page with signal back: the order id is not in
+    // component state any more, only in what the device remembered.
+    first.fixture.destroy();
+    TestBed.resetTestingModule();
+    api.mutate.mockResolvedValue(bill({ totalMinor: 45000, roundCount: 1, orderIds: ['order-1'] }));
+    const reloaded = setUpReal(api);
+    reloaded.fixture.detectChanges();
+    await settle();
+    reloaded.fixture.detectChanges();
+
+    expect(roundCalls(api)).toHaveLength(2);
+    expect(roundCalls(api)[1]).toEqual([
+      'POST',
+      ROUNDS_PATH,
+      expect.objectContaining({ body: { orderId: 'order-1' } }),
+    ]);
+    const host = reloaded.fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('[data-testid="dine-in-bill-total"]')?.textContent).toContain('45');
+    expect(host.querySelector('[data-testid="dine-in-round-pending"]')).toBeNull();
+  });
+
+  it('shows the unattached order and a retry that lands it on the bill without a reload', async () => {
+    const api = newApi();
+    api.mutate.mockRejectedValue(offline());
+    const { fixture, cartService, notification } = setUpReal(api);
+    await placeOrder(fixture, cartService);
+
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('[data-testid="dine-in-round-pending"]')).not.toBeNull();
+    expect(notification.show).toHaveBeenCalledWith('dineIn.roundAttachRetry');
+    expect(notification.show).not.toHaveBeenCalledWith('dineIn.orderPlaced');
+
+    api.mutate.mockResolvedValue(bill({ totalMinor: 45000, roundCount: 1, orderIds: ['order-1'] }));
+    host.querySelector<HTMLButtonElement>('[data-testid="dine-in-round-retry"]')?.click();
+    await settle();
+    fixture.detectChanges();
+
+    expect(roundCalls(api)).toHaveLength(2);
+    expect(host.querySelector('[data-testid="dine-in-round-pending"]')).toBeNull();
+    expect(host.querySelector('[data-testid="dine-in-bill-total"]')?.textContent).toContain('45');
+    // Success is the notice going away and the bill moving; only the failure spoke.
+    expect(notification.show).toHaveBeenCalledTimes(1);
+  });
+
+  it('stops retrying an order the platform refuses for good, and tells the guest to ask staff', async () => {
+    const api = newApi();
+    api.mutate.mockRejectedValue(
+      new HorecaOSApiError({ status: 409, code: 'RESOURCE_CONFLICT', detail: 'The session is closed.' }),
+    );
+    const first = setUpReal(api);
+    await placeOrder(first.fixture, first.cartService);
+
+    expect(first.notification.show).toHaveBeenCalledWith('dineIn.roundAttachFailed');
+    expect((first.fixture.nativeElement as HTMLElement).querySelector('[data-testid="dine-in-round-lost"]')).not.toBeNull();
+    expect((first.fixture.nativeElement as HTMLElement).querySelector('[data-testid="dine-in-round-pending"]')).toBeNull();
+
+    first.fixture.destroy();
+    TestBed.resetTestingModule();
+    const reloaded = setUpReal(api);
+    reloaded.fixture.detectChanges();
+    await settle();
+
+    expect(roundCalls(api)).toHaveLength(1);
+  });
+
+  it('leaves the queue alone while the guest is signed out, and sends the notice button to sign-in', async () => {
+    const api = newApi();
+    api.mutate.mockRejectedValue(offline());
+    const first = setUpReal(api);
+    await placeOrder(first.fixture, first.cartService);
+    first.fixture.destroy();
+    TestBed.resetTestingModule();
+
+    const reloaded = setUpReal(api);
+    reloaded.session.setAuthenticated(false);
+    const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+    reloaded.fixture.detectChanges();
+    await settle();
+    reloaded.fixture.detectChanges();
+
+    const host = reloaded.fixture.nativeElement as HTMLElement;
+    expect(roundCalls(api)).toHaveLength(1);
+    expect(host.querySelector('[data-testid="dine-in-round-pending"]')).not.toBeNull();
+
+    host.querySelector<HTMLButtonElement>('[data-testid="dine-in-round-retry"]')?.click();
+    await settle();
+
+    expect(navigate).toHaveBeenCalledWith(['/auth', 'login']);
+    expect(roundCalls(api)).toHaveLength(1);
+  });
+
+  it('does not treat a lost signal or a refused sign-in as a refusal: the order stays queued', async () => {
+    const api = newApi();
+    api.mutate.mockRejectedValue(
+      new HorecaOSApiError({ status: 401, code: 'UNAUTHENTICATED', detail: 'Sign in again.' }),
+    );
+    const first = setUpReal(api);
+    await placeOrder(first.fixture, first.cartService);
+
+    expect((first.fixture.nativeElement as HTMLElement).querySelector('[data-testid="dine-in-round-pending"]')).not.toBeNull();
+    expect(first.notification.show).not.toHaveBeenCalledWith('dineIn.roundAttachFailed');
   });
 });

@@ -81,7 +81,9 @@ export interface TicketResponse {
    * read for DINE_IN tickets only; null for every other ticket and for a
    * DINE_IN order an operator keyed in without seating anyone. A mutation
    * response carries `null` (see `courierEtaAt`'s own rule), so
-   * `kitchen-queue-page.ts` keeps whichever value the last board read gave.
+   * `kitchen-queue-page.ts` (which patches only the fields a mutation
+   * changes) and `buffer-page.ts` (`mergeMutation`) keep whichever value the
+   * last board read gave.
    */
   readonly table?: OrderTableView | null;
   readonly items: readonly TicketItemView[];

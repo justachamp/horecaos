@@ -4,6 +4,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -158,7 +159,21 @@ public class TableSessionService {
             throw new ApiException(ErrorCode.RESOURCE_CONFLICT, "This booking has already been seated");
         }
 
+        // A party seated at several tables reads them in the order they were
+        // joined (OrderTablesPort's contract; the chip on the ticket, the order
+        // board and the order detail all follow it). session_tables carries one
+        // timestamp per table and nothing else that orders them, and every table
+        // of one request shares one clock reading -- so the readers' ORDER BY
+        // joined_at ties and falls to the code string, which sorts T10 before T2.
+        // Each table is therefore stamped a microsecond (the resolution timestamptz
+        // keeps) after the one before it, counting back from the request's own
+        // reading: the last table keeps that reading (to the microsecond), so no
+        // table is ever stamped after a close at the same instant
+        // (ck_session_table_window).
+        Instant lastJoinedAt = now.truncatedTo(ChronoUnit.MICROS);
+        int joinedAfterThisOne = request.tableIds().size();
         for (UUID tableId : request.tableIds()) {
+            joinedAfterThisOne--;
             TableRow table = store.findTable(request.tenantId(), tableId)
                     .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such table"));
             if (!table.locationId().equals(request.locationId())) {
@@ -166,7 +181,12 @@ public class TableSessionService {
                         ErrorCode.INVALID_REQUEST, "Table %s is at another branch".formatted(table.code()));
             }
             try {
-                store.occupyTable(sessionId, tableId, request.tenantId(), request.locationId(), now);
+                store.occupyTable(
+                        sessionId,
+                        tableId,
+                        request.tenantId(),
+                        request.locationId(),
+                        lastJoinedAt.minus(joinedAfterThisOne, ChronoUnit.MICROS));
             } catch (DataIntegrityViolationException occupied) {
                 if (isTableOccupied(occupied)) {
                     throw new ApiException(

@@ -135,6 +135,25 @@
           }
         }
 
+        @if (pendingRounds() > 0) {
+          <div class="table__pending" data-testid="dine-in-round-pending">
+            <p class="table__pending-text">{{ 'dineIn.roundPending' | t }}</p>
+            <button
+              type="button"
+              class="table__pending-retry"
+              data-testid="dine-in-round-retry"
+              [disabled]="billBusy()"
+              (click)="retryPendingRounds()"
+            >
+              {{ 'dineIn.roundRetry' | t }}
+            </button>
+          </div>
+        }
+
+        @if (roundLost()) {
+          <p class="table__lost" data-testid="dine-in-round-lost">{{ 'dineIn.roundAttachFailed' | t }}</p>
+        }
+
         @if (bill(); as currentBill) {
           <div class="table__bill" data-testid="dine-in-bill">
             <p class="table__bill-title">{{ 'dineIn.tableBill' | t }}</p>
