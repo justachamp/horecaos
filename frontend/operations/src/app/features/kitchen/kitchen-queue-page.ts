@@ -240,6 +240,9 @@ export class KitchenQueuePage implements OnInit {
   /** The resolved `ordering.lateness` policy (wave P06) — fetched once in {@link start}. */
   private latenessPolicy: LatenessPolicy = PLATFORM_DEFAULT_LATENESS_POLICY;
 
+  /** The tenant's `#rrggbb` for a late order (row `X.39`), or null for the design-system `--q-sla-late` token. */
+  protected readonly lateColour = signal<string | null>(null);
+
   ngOnInit(): void {
     this.pollHandle = setInterval(() => {
       if (document.visibilityState === 'visible') {
@@ -279,6 +282,7 @@ export class KitchenQueuePage implements OnInit {
       return;
     }
     this.latenessPolicy = await this.latenessPolicyApi.resolve(scope);
+    this.lateColour.set(this.latenessPolicy.lateColour ?? null);
     try {
       const stations = await this.kitchen.stations(scope);
       this.stationsById.set(new Map(stations.map((station) => [station.stationId, station])));
@@ -365,6 +369,11 @@ export class KitchenQueuePage implements OnInit {
       .filter((ticket) => isKitchenTabMember(tab, ticket.fulfilmentMode, ticket.channelSystemType))
       .slice()
       .sort(compareBySeverityThenTime(this.latenessPolicy));
+  }
+
+  /** A breached ticket takes the tenant's late colour; an at-risk one keeps the platform's amber. */
+  protected lateColourFor(ticket: TicketResponse): string | null {
+    return this.severityTone(ticket) === 'danger' ? this.lateColour() : null;
   }
 
   protected severityTone(ticket: TicketResponse): 'danger' | 'warning' | 'none' {

@@ -1194,6 +1194,16 @@ export const messagesRu: MessageCatalogue = {
   'settings.orderPolicy.field.averageOrderMinutes': 'Среднее время заказа (минуты)',
   'settings.orderPolicy.field.maximumOrderMinutes': 'Максимальное время заказа (минуты)',
   'settings.orderPolicy.field.lateOrderThresholdMinutes': 'Заказ опаздывает с (минуты)',
+  'settings.orderPolicy.field.atRiskBeforeMinutes': 'Предупреждать до обещанного времени (минуты)',
+  'settings.orderPolicy.atRiskBeforeMinutes.hint':
+    'За сколько минут до обещанного времени заказ помечается как «под риском». Действует для всех типов заказов — на доске заказов и на кухонной доске.',
+  'settings.orderPolicy.field.lateColour': 'Цвет опаздывающего заказа',
+  'settings.orderPolicy.lateColour.hint':
+    'Так опаздывающие заказы выглядят на доске заказов и на кухонной доске. Оставьте стандартный цвет, если фирменный стиль не требует другого: плохо читаемый цвет прячет заказы, которым нужно внимание в первую очередь, — учитывайте предупреждение о контрасте.',
+  'settings.orderPolicy.lateColour.standard': 'Стандартный',
+  'settings.orderPolicy.lateColour.useStandard': 'Вернуть стандартный цвет',
+  'settings.orderPolicy.lateColour.standardHint':
+    'Стандартный красный цвет опоздания из дизайн-системы.',
   'settings.orderPolicy.field.minimumOrderAmount': 'Минимальная сумма заказа',
   'settings.orderPolicy.minimumOrderAmount.hint':
     'Только самовывоз и зал — у доставки свой минимум, задаётся в зоне обслуживания.',
@@ -2265,7 +2275,8 @@ export const messagesRu: MessageCatalogue = {
   'catalog.editor.availability.quantityHintLink': 'Открыть Остатки',
   'catalog.editor.availability.notListedHeading':
     'Предлагается в некоторых филиалах, но там ещё не размещено в учёте — недоступно для заказа, пока не размещено.',
-  'catalog.editor.availability.notListedVariantRow': '{variant} — не размещено в {count} филиал(ах)',
+  'catalog.editor.availability.notListedVariantRow':
+    '{variant} — не размещено в {count} филиал(ах)',
   'catalog.editor.availability.listEverywhere': 'Разместить во всех филиалах',
   'catalog.editor.availability.listingInProgress': 'Размещение…',
   'catalog.editor.availability.listPartial':
@@ -5715,7 +5726,8 @@ export const messagesRu: MessageCatalogue = {
   'orders.newOrder.order.branchLoad': '{count} активных заказов',
   'orders.newOrder.order.branchClosed': 'закрыт',
   'orders.newOrder.order.branchProposedSuffix': '(предложено)',
-  'orders.newOrder.order.branchResolutionFailed': 'Не удалось подобрать филиал — оформляем в текущем',
+  'orders.newOrder.order.branchResolutionFailed':
+    'Не удалось подобрать филиал — оформляем в текущем',
   'orders.newOrder.order.branchNoCandidates': 'Ни один филиал не доставляет по этому адресу',
   'orders.newOrder.order.branchOverrideReason': 'Причина выбора другого филиала',
   'orders.newOrder.order.branchOverrideReasonPlaceholder': 'Выберите причину',

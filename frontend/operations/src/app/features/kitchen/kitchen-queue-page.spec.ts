@@ -9,6 +9,8 @@ import { LocationScope } from '../../core/api/operations-paths';
 import { ApiError, ApiErrorCode } from '../../core/api/problem-details';
 import { CurrentLocation } from '../../core/auth/current-location';
 import { I18n } from '../../core/i18n/i18n';
+import { LatenessPolicy, PLATFORM_DEFAULT_LATENESS_POLICY } from '../../core/lateness-policy';
+import { LatenessPolicyApi } from '../../core/lateness-policy-api';
 import { RealtimeClient, RealtimeFrame } from '../../core/realtime/realtime-client';
 import { RosterEntryResponse, CouriersApi } from '../couriers/couriers-api';
 import { DispatchApi, PlanQueueResponse } from '../delivery/dispatch-api';
@@ -1163,5 +1165,120 @@ describe('KitchenQueuePage: wave 10 «Изменить оплату» (row 2.1d)
     expect(host.querySelector('.kitchen__notice-band')?.textContent).toContain(
       'PAYMENT_METHOD_CHANGE_REQUIRES_VOID_REFUND',
     );
+  });
+});
+
+/**
+ * Row `X.39`: the tenant's late colour on the kitchen board. Only a breached
+ * ticket takes it — an at-risk ticket keeps the platform's amber — and a
+ * tenant that has set nothing sees the design-system token exactly as before.
+ */
+describe('KitchenQueuePage: the tenant late colour (row X.39)', () => {
+  const MINUTE = 60 * 1000;
+  const LATE_TICKET: TicketResponse = {
+    ...DELIVERY_TICKET,
+    ticketId: 'late',
+    sequenceLabel: 'A-001',
+    targetReadyAt: new Date(Date.now() - 30 * MINUTE).toISOString(),
+  };
+  const AT_RISK_TICKET: TicketResponse = {
+    ...DELIVERY_TICKET,
+    ticketId: 'at-risk',
+    sequenceLabel: 'A-002',
+    targetReadyAt: new Date(Date.now() + 2 * MINUTE).toISOString(),
+  };
+  const ON_TIME_TICKET: TicketResponse = {
+    ...DELIVERY_TICKET,
+    ticketId: 'on-time',
+    sequenceLabel: 'A-003',
+    targetReadyAt: new Date(Date.now() + 40 * MINUTE).toISOString(),
+  };
+
+  async function render(policy: LatenessPolicy): Promise<HTMLElement> {
+    await TestBed.configureTestingModule({
+      imports: [KitchenQueuePage],
+      providers: [
+        {
+          provide: CurrentLocation,
+          useValue: {
+            scope: signal<LocationScope | null>(SCOPE),
+            denied: signal(false),
+            ensureLoaded: () => Promise.resolve(),
+          },
+        },
+        {
+          provide: KitchenApi,
+          useValue: {
+            board: () => Promise.resolve(board([ON_TIME_TICKET, AT_RISK_TICKET, LATE_TICKET])),
+            stations: () => Promise.resolve([]),
+          },
+        },
+        {
+          provide: LocationsApi,
+          useValue: { serviceSummary: () => Promise.reject(new Error('no summary in this test')) },
+        },
+        {
+          provide: ApiClient,
+          useValue: { get: () => of({ value: { lines: [], kitchenNote: null }, version: null }) },
+        },
+        { provide: LatenessPolicyApi, useValue: { resolve: () => Promise.resolve(policy) } },
+        { provide: OrderRevealApi, useValue: { revealLineNote: vi.fn() } },
+        {
+          provide: DispatchApi,
+          useValue: { queue: () => Promise.resolve([]), assign: vi.fn() },
+        },
+        { provide: CouriersApi, useValue: { roster: () => Promise.resolve([]) } },
+        { provide: Router, useValue: { navigateByUrl: vi.fn() } },
+        {
+          provide: RealtimeClient,
+          useValue: { state: signal('open'), onFrame: () => () => undefined },
+        },
+      ],
+    }).compileComponents();
+    TestBed.inject(I18n).setLocale('en');
+    const fixture = TestBed.createComponent(KitchenQueuePage);
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+    return fixture.nativeElement as HTMLElement;
+  }
+
+  function ticketFor(host: HTMLElement, label: string): HTMLElement {
+    return Array.from(host.querySelectorAll<HTMLElement>('[data-testid="kitchen-ticket"]')).find(
+      (ticket) => ticket.textContent?.includes(label),
+    ) as HTMLElement;
+  }
+
+  it('paints only the breached ticket in the tenant colour', async () => {
+    const host = await render({ ...PLATFORM_DEFAULT_LATENESS_POLICY, lateColour: '#8a3ffc' });
+
+    expect(ticketFor(host, 'A-001').classList).toContain('ticket--danger');
+    expect(ticketFor(host, 'A-001').style.getPropertyValue('--q-sla-late')).toBe('#8a3ffc');
+    expect(ticketFor(host, 'A-002').classList).toContain('ticket--warning');
+    expect(ticketFor(host, 'A-002').style.getPropertyValue('--q-sla-late')).toBe('');
+    expect(ticketFor(host, 'A-003').style.getPropertyValue('--q-sla-late')).toBe('');
+  });
+
+  it('keeps the design-system token when the tenant has set no colour', async () => {
+    const host = await render(PLATFORM_DEFAULT_LATENESS_POLICY);
+
+    expect(ticketFor(host, 'A-001').classList).toContain('ticket--danger');
+    expect(ticketFor(host, 'A-001').style.getPropertyValue('--q-sla-late')).toBe('');
+  });
+
+  it('applies the tenant AT-RISK window it was given: a longer warning turns a distant ticket amber', async () => {
+    const thresholds = {
+      atRiskBeforeSeconds: 60 * 60,
+      lateAfterSeconds: 0,
+      noPromiseFallbackSeconds: 2700,
+    };
+    const host = await render({
+      delivery: thresholds,
+      pickup: thresholds,
+      dineIn: thresholds,
+      lateColour: null,
+    });
+
+    expect(ticketFor(host, 'A-003').classList).toContain('ticket--warning');
   });
 });

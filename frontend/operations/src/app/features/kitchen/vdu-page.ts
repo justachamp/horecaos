@@ -67,6 +67,9 @@ export class VduPage implements OnInit {
   /** The resolved `ordering.lateness` policy (wave P06) — fetched once in {@link start}. */
   private latenessPolicy: LatenessPolicy = PLATFORM_DEFAULT_LATENESS_POLICY;
 
+  /** The tenant's `#rrggbb` for a late order (row `X.39`), or null for the design-system `--q-sla-late` token. */
+  protected readonly lateColour = signal<string | null>(null);
+
   ngOnInit(): void {
     this.pollHandle = setInterval(() => void this.refresh(), POLL_INTERVAL_MS);
     this.destroyRef.onDestroy(() => {
@@ -82,6 +85,7 @@ export class VduPage implements OnInit {
     const scope = this.location.scope();
     if (scope) {
       this.latenessPolicy = await this.latenessPolicyApi.resolve(scope);
+      this.lateColour.set(this.latenessPolicy.lateColour ?? null);
     }
     await this.refresh();
   }
@@ -108,6 +112,11 @@ export class VduPage implements OnInit {
     } finally {
       this.firstLoadComplete.set(true);
     }
+  }
+
+  /** A breached ticket takes the tenant's late colour; an at-risk one keeps the platform's amber. */
+  protected lateColourFor(ticket: TicketResponse): string | null {
+    return this.severityTone(ticket) === 'danger' ? this.lateColour() : null;
   }
 
   protected severityTone(ticket: TicketResponse): 'danger' | 'warning' | 'none' {

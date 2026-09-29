@@ -31,6 +31,15 @@ export interface LatenessPolicy {
   readonly delivery: LatenessThresholds;
   readonly pickup: LatenessThresholds;
   readonly dineIn: LatenessThresholds;
+  /**
+   * The tenant's own `#rrggbb` for a late order (gap map row `X.39`), already
+   * validated by {@link LatenessPolicyApi}; absent or null keeps the
+   * design-system `--q-sla-late` token. Only the colour a *late* order is drawn
+   * in — the at-risk step, `BLOCKED` and the approval deadline keep the
+   * platform's ramp, so a tenant who picks green for late has not repainted the
+   * screens that mean something else.
+   */
+  readonly lateColour?: string | null;
 }
 
 /**

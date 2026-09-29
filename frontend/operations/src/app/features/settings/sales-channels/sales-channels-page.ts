@@ -4,13 +4,10 @@ import { RouterLink } from '@angular/router';
 import { ApiError } from '../../../core/api/problem-details';
 import { CurrentLocation } from '../../../core/auth/current-location';
 import { I18n } from '../../../core/i18n/i18n';
-import { MessageKey } from '../../../core/i18n/messages.en';
 import { TPipe } from '../../../core/i18n/t.pipe';
 import { ColorInput } from '../../../shared/ui/color-input';
-import {
-  HighlightContrastSurfaceId,
-  evaluateHighlightColourContrast,
-} from '../../../shared/ui/color/highlight-contrast';
+import { evaluateHighlightColourContrast } from '../../../shared/ui/color/highlight-contrast';
+import { CONTRAST_SURFACE_LABEL_KEYS } from '../../../shared/ui/color/highlight-contrast-labels';
 import { MatrixGrid } from '../../../shared/ui/matrix-grid/matrix-grid';
 import {
   MatrixBulkToggleEvent,
@@ -35,14 +32,6 @@ interface SocialLinkDraft {
   readonly platform: string;
   url: string;
 }
-
-/** {@link HighlightContrastSurfaceId} → its own translated label, for the contrast warning sentence below a `10.4a` colour field (gap map row `X.39`). */
-const CONTRAST_SURFACE_LABEL_KEYS: Readonly<Record<HighlightContrastSurfaceId, MessageKey>> = {
-  canvas: 'settings.salesChannels.field.color.surface.canvas',
-  surface1: 'settings.salesChannels.field.color.surface.surface1',
-  slaLateTint: 'settings.salesChannels.field.color.surface.slaLateTint',
-  slaAtRiskTint: 'settings.salesChannels.field.color.surface.slaAtRiskTint',
-};
 
 /** ADR 0036's closed system-type set. */
 export const CHANNEL_SYSTEM_TYPES: readonly string[] = [

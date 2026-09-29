@@ -22,6 +22,8 @@ interface LatenessPolicyResponse {
   readonly pickup: LatenessThresholdsResponse;
   readonly dineIn: LatenessThresholdsResponse;
   readonly isPlatformDefault: boolean;
+  /** The tenant's `#rrggbb` for a late order (row `X.39`), or absent/null for the design-system token. */
+  readonly lateColour?: string | null;
 }
 
 /**
@@ -85,10 +87,22 @@ function toThresholds(response: LatenessThresholdsResponse): LatenessThresholds 
   };
 }
 
+const HEX_COLOUR = /^#[0-9a-fA-F]{6}$/;
+
+/**
+ * The server only ever serves an exact `#rrggbb`, and this checks again: the
+ * value ends up in a style binding on the board, so a string of any other
+ * shape is dropped here rather than trusted because the endpoint is ours.
+ */
+function toLateColour(value: unknown): string | null {
+  return typeof value === 'string' && HEX_COLOUR.test(value) ? value.toLowerCase() : null;
+}
+
 function toPolicy(response: LatenessPolicyResponse): LatenessPolicy {
   return {
     delivery: toThresholds(response.delivery),
     pickup: toThresholds(response.pickup),
     dineIn: toThresholds(response.dineIn),
+    lateColour: toLateColour(response.lateColour),
   };
 }

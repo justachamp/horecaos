@@ -1228,6 +1228,16 @@ export const messagesEn = {
   'settings.orderPolicy.field.averageOrderMinutes': 'Average order time (minutes)',
   'settings.orderPolicy.field.maximumOrderMinutes': 'Maximum order time (minutes)',
   'settings.orderPolicy.field.lateOrderThresholdMinutes': 'Order is late after (minutes)',
+  'settings.orderPolicy.field.atRiskBeforeMinutes': 'Warn before the promised time (minutes)',
+  'settings.orderPolicy.atRiskBeforeMinutes.hint':
+    'How far ahead of the promised time an order shows as at risk. Applies to every kind of order, on the order board and the kitchen board.',
+  'settings.orderPolicy.field.lateColour': 'Late-order colour',
+  'settings.orderPolicy.lateColour.hint':
+    'Drawn on late orders on the order board and the kitchen board. Keep the standard unless your brand needs another: a colour that is hard to read against a row hides the orders that most need attention, so heed the contrast warning.',
+  'settings.orderPolicy.lateColour.standard': 'Standard',
+  'settings.orderPolicy.lateColour.useStandard': 'Use the standard colour',
+  'settings.orderPolicy.lateColour.standardHint':
+    'The standard late-order red from the design system.',
   'settings.orderPolicy.field.minimumOrderAmount': 'Minimum order sum',
   'settings.orderPolicy.minimumOrderAmount.hint':
     'Pickup and dine-in only — delivery keeps its own minimum, set on the service zone.',
@@ -1292,7 +1302,8 @@ export const messagesEn = {
   'settings.commentPresets.create.sortOrder': 'Order',
   'settings.commentPresets.create.submit': 'Register',
   'settings.commentPresets.create.submitting': 'Registering…',
-  'settings.commentPresets.create.incomplete': 'A code and the label in the default language are required.',
+  'settings.commentPresets.create.incomplete':
+    'A code and the label in the default language are required.',
 
   // 10.7 Fiscalization
   'settings.fiscalization.title': 'Fiscalization',
@@ -5741,7 +5752,8 @@ export const messagesEn = {
   'orders.newOrder.order.branchLoad': '{count} active orders',
   'orders.newOrder.order.branchClosed': 'closed',
   'orders.newOrder.order.branchProposedSuffix': '(proposed)',
-  'orders.newOrder.order.branchResolutionFailed': 'Could not resolve a branch — placing at the current one',
+  'orders.newOrder.order.branchResolutionFailed':
+    'Could not resolve a branch — placing at the current one',
   'orders.newOrder.order.branchNoCandidates': 'No branch delivers to this address',
   'orders.newOrder.order.branchOverrideReason': 'Reason for choosing a different branch',
   'orders.newOrder.order.branchOverrideReasonPlaceholder': 'Pick a reason',

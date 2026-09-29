@@ -13,7 +13,7 @@ import { CurrentTenant } from '../../core/auth/current-tenant';
 import { SessionCapabilities } from '../../core/auth/session-capabilities';
 import { ApiError, ApiErrorCode } from '../../core/api/problem-details';
 import { I18n } from '../../core/i18n/i18n';
-import { PLATFORM_DEFAULT_LATENESS_POLICY } from '../../core/lateness-policy';
+import { LatenessPolicy, PLATFORM_DEFAULT_LATENESS_POLICY } from '../../core/lateness-policy';
 import { LatenessPolicyApi } from '../../core/lateness-policy-api';
 import { CustomerLabelResponse, OrderCrmLogApi } from '../reports/order-crm-log-api';
 import { ReasonResponse, ReferenceDataApi } from '../settings/reference-data/reference-data-api';
@@ -2859,5 +2859,127 @@ describe('OrderQueue: the table chip beside a dine-in order (batch 14)', () => {
     await flushMicrotasks();
 
     expect(chipsByOrder(harness.routeNativeElement!)['0101']).toBe('Стол T7');
+  });
+});
+
+/**
+ * Gap map row `X.39`: the tenant's own colour for a late order on the order
+ * board. It reaches a `LATE` row only — `BLOCKED` shares the danger step but
+ * means something else, the at-risk tier keeps its amber — and a tenant that
+ * has set nothing gets the design-system token untouched.
+ */
+describe('OrderQueue: the tenant late colour (row X.39)', () => {
+  const MINUTE = 60 * 1000;
+
+  function configureWithPolicy(orders: readonly OrderSummaryResponse[], policy: LatenessPolicy) {
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter([{ path: 'orders', component: OrderQueue }]),
+        {
+          provide: CurrentLocation,
+          useValue: {
+            scope: signal(FAKE_SCOPE),
+            denied: signal(false),
+            ensureLoaded: () => Promise.resolve(),
+          },
+        },
+        { provide: ApiClient, useValue: { get: ordersResponse(orders) } },
+        { provide: OrderCounts, useValue: { forOrders: () => Promise.resolve(zeroTabCounts()) } },
+        { provide: RejectReasonsApi, useValue: stubRejectReasons() },
+        { provide: LatenessPolicyApi, useValue: { resolve: () => Promise.resolve(policy) } },
+      ],
+    });
+    TestBed.inject(I18n).setLocale('en');
+  }
+
+  const ORDERS: readonly OrderSummaryResponse[] = [
+    order({
+      orderId: 'late',
+      publicOrderNumber: '0201',
+      status: 'PREPARING',
+      fulfillmentMode: 'PICKUP',
+      promisedAt: new Date(Date.now() - 30 * MINUTE).toISOString(),
+    }),
+    order({
+      orderId: 'at-risk',
+      publicOrderNumber: '0202',
+      status: 'PREPARING',
+      fulfillmentMode: 'PICKUP',
+      promisedAt: new Date(Date.now() + 2 * MINUTE).toISOString(),
+    }),
+    order({
+      orderId: 'on-time',
+      publicOrderNumber: '0203',
+      status: 'PREPARING',
+      fulfillmentMode: 'PICKUP',
+      promisedAt: new Date(Date.now() + 60 * MINUTE).toISOString(),
+    }),
+    order({
+      orderId: 'blocked',
+      publicOrderNumber: '0204',
+      status: 'PREPARING',
+      fulfillmentMode: 'PICKUP',
+      promisedAt: new Date(Date.now() + 60 * MINUTE).toISOString(),
+      processAttention: 'MANUAL_ACTION_REQUIRED',
+    }),
+  ];
+
+  function rowFor(host: HTMLElement, publicNumber: string): HTMLElement {
+    return [...host.querySelectorAll<HTMLElement>('[data-testid="order-row"]')].find(
+      (row) => row.querySelector('.q-mono')?.textContent?.trim() === publicNumber,
+    ) as HTMLElement;
+  }
+
+  it('paints the late row — and only the late row — in the tenant colour', async () => {
+    configureWithPolicy(ORDERS, { ...PLATFORM_DEFAULT_LATENESS_POLICY, lateColour: '#8a3ffc' });
+    const harness = await RouterTestingHarness.create('/orders?tab=all');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+
+    const late = rowFor(host, '0201');
+    expect(late.classList).toContain('order-row--danger');
+    expect(late.classList).toContain('order-row--late-custom');
+    expect(late.style.getPropertyValue('--q-sla-late')).toBe('#8a3ffc');
+    expect(late.style.getPropertyValue('--q-sla-late-text')).toBe('#8a3ffc');
+
+    for (const untouched of ['0202', '0203', '0204']) {
+      const row = rowFor(host, untouched);
+      expect(row.style.getPropertyValue('--q-sla-late'), untouched).toBe('');
+      expect(row.classList, untouched).not.toContain('order-row--late-custom');
+    }
+    // BLOCKED shares the danger step with LATE and keeps the platform's colour.
+    expect(rowFor(host, '0204').classList).toContain('order-row--danger');
+    expect(rowFor(host, '0202').classList).toContain('order-row--warning');
+  });
+
+  it('keeps the design-system token for every row when the tenant has set no colour', async () => {
+    configureWithPolicy(ORDERS, PLATFORM_DEFAULT_LATENESS_POLICY);
+    const harness = await RouterTestingHarness.create('/orders?tab=all');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+
+    expect(rowFor(host, '0201').classList).toContain('order-row--danger');
+    for (const number of ['0201', '0202', '0203', '0204']) {
+      expect(rowFor(host, number).style.getPropertyValue('--q-sla-late'), number).toBe('');
+      expect(rowFor(host, number).classList, number).not.toContain('order-row--late-custom');
+    }
+  });
+
+  it('turns a distant order at-risk when the tenant widens the warning window', async () => {
+    const thresholds = {
+      atRiskBeforeSeconds: 90 * 60,
+      lateAfterSeconds: 0,
+      noPromiseFallbackSeconds: 2700,
+    };
+    configureWithPolicy(ORDERS, {
+      delivery: thresholds,
+      pickup: thresholds,
+      dineIn: thresholds,
+      lateColour: null,
+    });
+    const harness = await RouterTestingHarness.create('/orders?tab=all');
+    await flushMicrotasks();
+
+    expect(rowFor(harness.routeNativeElement!, '0203').classList).toContain('order-row--warning');
   });
 });
