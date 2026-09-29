@@ -1,0 +1,9 @@
+# Test classes that run in the "Static gates" job (verify-static in ci.yml) and in
+# no shard. That job owns every non-test verify step -- spotless:check, the enforcer,
+# packaging, and the OpenAPI compatibility/client diff -- and the OpenAPI diff reads
+# target/openapi/*.json, which OpenApiContractTests writes. Running it there keeps the
+# document and the diff that consumes it in one workspace.
+#
+# One fully-qualified class name per line. A name that no longer exists fails
+# `make shards-test`, so a rename cannot quietly turn this into a no-op.
+uz.horecaos.platform.configuration.OpenApiContractTests

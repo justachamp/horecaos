@@ -532,6 +532,32 @@
                         </goals>
                     </execution>
                     <execution>
+                        <!-- CI runs the suite as parallel shards (tools/ci/shard_tests.py),
+                             each with its own jacoco.exec, so no single job sees the
+                             coverage the floor below is measured against. The aggregator
+                             job downloads every job's execution data into
+                             target/jacoco-shards and calls this execution by id
+                             (`jacoco:merge@jacoco-merge-shards`), then report and check as
+                             usual. Bound to no phase on purpose: an ordinary `verify`
+                             already has the one jacoco.exec it needs. -->
+                        <id>jacoco-merge-shards</id>
+                        <phase>none</phase>
+                        <goals>
+                            <goal>merge</goal>
+                        </goals>
+                        <configuration>
+                            <fileSets>
+                                <fileSet>
+                                    <directory>${project.build.directory}/jacoco-shards</directory>
+                                    <includes>
+                                        <include>*.exec</include>
+                                    </includes>
+                                </fileSet>
+                            </fileSets>
+                            <destFile>${project.build.directory}/jacoco.exec</destFile>
+                        </configuration>
+                    </execution>
+                    <execution>
                         <id>jacoco-report</id>
                         <phase>verify</phase>
                         <goals>

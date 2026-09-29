@@ -141,6 +141,44 @@ Idempotent — safe to run again.
 The build enforces JDK 25. The first invocation downloads the pinned Maven
 distribution and project dependencies.
 
+### How CI runs the suite
+
+CI does not run `./mvnw verify` on one runner; that took about eighty minutes.
+`.github/workflows/ci.yml` splits it, and every piece is reproducible locally:
+
+| Job | What it owns |
+| --- | --- |
+| `verify-static` ("Static gates and OpenAPI") | `verify` with only the gate test classes: `spotless:check`, the enforcer, packaging, and the OpenAPI compatibility/client diff. The gate classes are listed in `tools/ci/gate-tests.txt` (today `OpenApiContractTests`, which writes the documents the diff reads). |
+| `test-shard` (matrix, `TEST_SHARDS` = 3) | `./mvnw test` on a deterministic slice of every other test class, each shard with the same JVM flags as the old single job. |
+| `verify` ("Build and test") | Waits for both, proves from the uploaded Surefire reports that every test class ran in exactly the job it was assigned to, then applies the JaCoCo coverage floor to the merged execution data of all jobs. This is the job `publish-images` depends on. |
+
+`tools/ci/shard_tests.py` makes the partition: longest-recorded-time first
+(`tools/ci/test-durations.tsv`), ties by class name, a class with no recorded
+time weighted as the median. It is a pure function of the test sources, that
+file and the shard count, so the same tree always splits the same way.
+
+```bash
+make shards-test                                   # the partition is exact, ci.yml agrees with it
+python3 tools/ci/shard_tests.py plan               # classes and estimated minutes per shard
+python3 tools/ci/shard_tests.py includes --index 2 --out /tmp/shard-2.txt
+./mvnw test -Dsurefire.includesFile=/tmp/shard-2.txt   # run exactly what CI's shard 2 runs
+```
+
+Adding a test class needs nothing: it is picked up by name and assigned. Two
+things do need a person. Refresh `tools/ci/test-durations.tsv` now and then
+(each CI run uploads a `test-durations` artifact; `shard_tests.py record`
+rebuilds the file) — stale numbers only make the shards uneven, never change
+what runs. And to change the shard count, edit `TEST_SHARDS` **and**
+`matrix.shard` in `ci.yml` together; `make shards-test` fails if they disagree.
+Do not run a shard with `-Dtest=`, and never with an empty include file:
+Surefire treats both as "run everything you would normally run".
+
+Coverage is measured per job and merged by the `jacoco-merge-shards`
+execution in `pom.xml` (bound to no phase; the aggregator calls it by id), so
+the floor in `horecaos.coverage.floor` still gates the whole suite. The shards
+stop at `test`, so they never reach the check; the static-gate job runs
+`verify` with the floor overridden to zero, because it executes one class.
+
 ## Quality gates
 
 ADR 0054 puts four gates inside `./mvnw verify` itself, alongside the
