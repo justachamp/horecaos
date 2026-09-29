@@ -309,6 +309,10 @@ with what the platform currently believes. The position boolean is not replaced.
 - Union-only precedence means a branch cannot override a brand stop.
 - Threshold granularity (channel type) and stop granularity (channel instance)
   differ, and an operator will notice.
+- Rollback is asymmetric. Freezing and suspending are safe and instant; ceasing to
+  consult embargoes is not, and needs a materialisation run and an acknowledged
+  report because some stops (`UNTRACKED`, `QUANTITY`, `CHANNEL`) have no position to
+  land on. A build that offers one switch labelled "disable" hides that.
 - New capability `inventory.stop.manage` and a new event `InventoryStopChanged`
   are code-owned registry entries (ADR 0025, ADR 0032): each is a release.
 
@@ -586,24 +590,91 @@ classification, breaker state, resolver cache-free read latency.
   listener disabled, converges on the fake partner within one `resync_interval`
   (the clock is advanced). Seen failing first with the resync sweep removed.
 - A resumed reconciler resends every row of the binding once.
+- Freeze: with creation frozen, a `BRAND` embargo made earlier still hides the dish
+  and refuses it at cart and checkout on its channels, a new `OPERATOR` create
+  answers `STOPS_FROZEN`, a lift succeeds, and the POS poll still writes and ends
+  its own `POS` rows. Seen failing first against a switch that turns the resolver's
+  embargo read off.
+- Decommission: `inventory.stops.read_enabled` refuses to turn without an
+  acknowledged materialisation report and again after any embargo is created
+  since. The run writes `binary_available = false` for a `LOCATION` embargo and for
+  a `BRAND` and a `MENU` embargo over their locations' `BINARY` items, and lists
+  every `UNTRACKED`, `QUANTITY` and `CHANNEL` stop. After the switch, a recalled
+  `BINARY` dish is still refused at checkout while the same recall on an `UNTRACKED`
+  dish is on sale and is on the report (both asserted, so the report is the only
+  place a stop can vanish), and a POS "back in stock" lifts a materialised POS stop.
 - Cross-tenant and cross-brand reads and writes fail; capability declaration test.
 
 ## Rollout and rollback
 
 **Phase 0, no schema.** Write the true `source_type` on availability movements and
 change `stopSourceOf` to read it, so the stop list stops parsing a reason string.
-**Phase 1.** The embargo table, the resolver and the `LOCATION` path behind an
-ADR 0030 switch; an empty table changes nothing (the `V0389`/`V0390` posture).
+**Phase 1.** The embargo table, the resolver and the `LOCATION` path behind the
+ADR 0030 switches named under "Rollback"; an empty table changes nothing (the
+`V0389`/`V0390` posture).
 Move the stop-list SQL, the storefront lookup and the cart/checkout ports onto the
 resolver. **Phase 2.** `BRAND`, `MENU` and `CHANNEL` scopes; the POS poll moves to
 its own embargo. **Phase 3.** The reconciler for one aggregator at one branch in a
 dry-run that computes and logs desired-versus-confirmed without calling the
 partner, compared against that partner's portal for a week, then live — after
 ADR 0040's inbound step has proven the binding. **Phase 4.** The partner pull
-endpoint over the same resolver. Rollback disables the switch: embargoes stop
-being consulted, the position toggle and threshold behave exactly as today, the
-reconciler is suspended and every affected channel shows `MANUAL`; no stock data
-is touched.
+endpoint over the same resolver.
+
+### Rollback: freeze, do not disable
+
+After Phase 1 an embargo row is, for many stops, the only record that a dish is
+stopped: an `UNTRACKED` or `QUANTITY` item has no position boolean to fall back to; a
+`BRAND`, `MENU` or `CHANNEL` stop has no position at all; and after Phase 2 a POS stop
+is an embargo row and no longer a boolean. Ceasing to consult embargoes therefore does
+not return the system to "exactly as today". It sells every one of those dishes again
+at the storefront, cart and checkout in the same instant, the POS poll no longer
+writes a boolean that would bring a POS stop back, and the reconciler, suspended
+alongside, leaves each aggregator holding whatever it last had. So rollback is three
+independent ADR 0030 switches, and the ordinary rollback uses only the first two:
+
+1. **Freeze new stops** (`inventory.stops.creation_enabled = false`). The create
+   routes for `OPERATOR` and `BOT` stops answer `409 RESOURCE_CONFLICT { conflict:
+   "STOPS_FROZEN" }` and the console says scope stops are paused. Lifts, expiry and
+   the resolver's reads continue, so every stop already made stays in force on
+   every channel and nothing is sold again. A `BINARY` item is still stoppable
+   through the position toggle exactly as in Phase 0; an `UNTRACKED` or `QUANTITY`
+   item is not, as today, and the console says so. The POS poll keeps writing and
+   ending its own `POS` embargoes: after Phase 2 they are the only record of a POS
+   stop, and the poll acts on the diff (`newlyOutOfStock`, `newlyBackInStock`) and
+   will not repeat an "out of stock" it has already reported.
+2. **Suspend the reconciler** (`marketplace.availability.reconcile_enabled =
+   false`). No call reaches any partner, every affected channel shows `MANUAL` with
+   "not propagated automatically", and the resolver is unaffected. On resume every
+   row of the binding has `confirmed_available` nulled first (see Marketplace
+   propagation), so the resumption resends everything once.
+3. **Stop consulting embargoes** (`inventory.stops.read_enabled = false`). This is
+   the only switch that can sell a stopped dish again, so it is a decommission and
+   not a rollback, and it refuses to turn (`409 MATERIALISATION_REQUIRED`) until a
+   *materialisation run* has completed and its report has been acknowledged by a
+   holder of `inventory.stop.manage` at `BRAND` scope; an embargo created after the
+   run re-blocks it. The run:
+   - writes each `ACTIVE` embargo onto positions wherever that is exact: a
+     `LOCATION` embargo on a `BINARY` item sets `binary_available = false` through
+     `InventoryService.setAvailability` with the embargo's true source and reason
+     code and a movement reason `EMBARGO_MATERIALISED`; a `BRAND` or `MENU` embargo
+     expands the same way over every location it covers at that moment;
+   - reports, by variant, scope, source and location, everything it cannot carry:
+     `UNTRACKED` and `QUANTITY` items (no boolean to set) and `CHANNEL` embargoes (a
+     position is location-wide, so writing it would stop the dish on channels the
+     embargo never covered, an over-stop the operator chooses in the report and the
+     run never makes on its own). The report is the acknowledgement: these dishes
+     will be on sale again;
+   - names the POS poll's writer: with reads off, the poll goes back to writing the
+     position boolean through the stock-availability port, as in Phase 0 and 1, and
+     the run has already turned its `ACTIVE` `POS` embargoes on `BINARY` items into
+     `binary_available = false`, so the next `newlyBackInStock` transition lifts
+     them as it always did. A POS stop on a non-`BINARY` item is in the report.
+
+   Rows are not deleted: `ACTIVE` embargoes stay, ignored and marked so, and turning
+   reads back on resumes them.
+
+Rollback therefore is not free of stock writes: step 3 writes positions, and the
+report is the one place where the loss of a stop can be seen.
 
 ## Implementation checklist
 
@@ -629,6 +700,9 @@ is touched.
       under Marketplace propagation, watermark writes, stale alert (ADR 0007,
       ADR 0040).
 - [ ] ADR 0040's partner `GET .../availability`.
+- [ ] The three rollback switches, `STOPS_FROZEN` and `MATERIALISATION_REQUIRED`, the
+      materialisation run and its acknowledged report, and the POS poll's two
+      writers (embargo with reads on, boolean with reads off).
 - [ ] Tests listed under Testing, each seen failing first.
 - [ ] Update ADR 0017's status line to record the extension, and ADR 0040's to
       record the producer for `marketplace.availability.push`.
