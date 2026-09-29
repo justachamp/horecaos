@@ -126,11 +126,11 @@ feature set that both rows are graded against, including two HorecaOS additions
   quote path presents it: `BenefitGrantService#redeem` has no caller in
   `src/main`.
 
-**Reading the evaluator's inputs and its callers found six things that are wrong or
-inert today.** Items 1 to 5 are not live defects, because no automatic promotion can
-be authored; each becomes one the day this record's authoring surface exists, so each
-is a test to write before the surface ships. Item 6 is a live defect for promo
-codes already.
+**Reading the evaluator's inputs and its callers found seven things that are wrong or
+inert today.** Items 1 to 5 and 7 are not live defects, because no automatic
+promotion can be authored; each becomes one the day this record's authoring surface
+exists, so each is a test to write before the surface ships. Item 6 is a live defect
+for promo codes already.
 
 1. *Product and category conditions can never match.* `QuoteService` builds
    `PromotionInputs` with an empty membership map (`Map.of()`), so
@@ -193,6 +193,19 @@ codes already.
    amendment that reprices gives the order a new quote at every revision
    (`order_revisions.pricing_quote_id`), so a per-quote key admits a second row for
    the same order and promotion and 7.9 double-counts the redemption.
+7. *A gift is bounded per cart line, not per promotion.* The `FREE_ITEM` case of
+   `PromotionEvaluator#benefitOf` reads `quantity` as a bound, then loops over every
+   basket line whose variant is in `variantIds` and gives each one
+   `Math.min(bound, line.quantity())` units free, so the bound is applied afresh to
+   each matching line. A "free Cola with any Pizza" promotion with `quantity` 1 gives
+   two free Colas to a cart that holds the Cola on two lines (one with lemon, one
+   without, which the cart keeps as separate lines), and N split lines give N times the
+   gift. The `PER_MULTIPLE` mode this record adds would repeat the mistake, because
+   `floor(matched / triggerQuantity)` written the same way is also per line. The
+   validator's `FREE_ITEM_UNBOUNDED` does not catch it: it only checks that a
+   `quantity` is present. No test in `src/test` mentions `FREE_ITEM` at all, and the
+   simulator-parity test cannot catch it, because the simulator and a real quote run
+   the same evaluator and agree on the same wrong number.
 
 **What the vocabulary lacks** (parity matrix line 77, IA §6.1): markup; payment
 method, sales-channel type and order-sequence conditions; a geozone condition;
@@ -225,7 +238,7 @@ test together).**
 |---|---|
 | Type: discount, markup, promo code | New `kind` (`DISCOUNT` or `MARKUP`); promo code is `requires_coupon` |
 | Scope: order or product | Existing `scope`: `ITEM` (product), `ORDER`, `DELIVERY`; markup is `ITEM` or `ORDER` only |
-| Fixed, percentage, delivery, gift | Existing eight discount actions. Gift triggers and multiplicity: `QUANTITY_AT_LEAST` gains an `exact` operand ("equal" as well as "at least"), and `FREE_ITEM` gains `triggerQuantity` and `mode` (`ONCE` or `PER_MULTIPLE`), still bounded |
+| Fixed, percentage, delivery, gift | Existing eight discount actions. Gift triggers and multiplicity: `QUANTITY_AT_LEAST` gains an `exact` operand ("equal" as well as "at least"), and `FREE_ITEM` gains `triggerQuantity` and `mode` (`ONCE` or `PER_MULTIPLE`); the bound and the trigger count are per promotion across all lines, allocated deterministically (see Composition) |
 | Free-form aggregator discount | Not a promotion. An order with `pricing_authority = EXTERNAL` bypasses the quote engine entirely (ADR 0040: no quote, no promotion evaluation) and carries the aggregator's figure in `order_external_pricing`; 7.9 counts those apart, never in the reproducible fact |
 | Manual vs automatic activation | Automatic (engine selects), coupon-gated (customer presents a code). Operator-applied discretionary discounts have no ADR and are not decided here |
 | Order type | Existing `FULFILLMENT_MODE`, with the context finally carrying `DELIVERY`, `PICKUP` or `DINE_IN` from the cart |
@@ -288,6 +301,27 @@ treatment of a service line is answered (Open inputs).
 8. Every step records an adjustment naming the promotion id and definition
    version. `CALCULATION_VERSION` becomes 3 with steps 3, 4 and 6; a quote priced
    under 2 is never re-derived.
+
+**A gift is bounded per promotion and allocated in a fixed order.** A `FREE_ITEM`
+action computes one number for the whole cart, then spreads it over the lines. The
+gift lines are the basket lines whose variant is in `variantIds`; `M` is the summed
+quantity of the lines the promotion's item conditions match, counted once for the
+promotion (the helper `QUANTITY_AT_LEAST` already uses), and it counts every matched
+unit, including a unit that ends up free, so "3 for 2" on one item is `triggerQuantity`
+3 with `quantity` 1 and no fixed point is needed. The free units are
+`F = min(quantity, total gift-line quantity)` for `ONCE`, and
+`F = min(quantity, total gift-line quantity, floor(M / triggerQuantity))` for
+`PER_MULTIPLE`. Pricing never invents a line, so `F` can never exceed the units the
+cart holds. `F` is then allocated over the gift lines in a fixed order: highest unit
+amount first (the unit amount as priced, modifiers included, which is what the code
+uses today), then lowest `lineId`, each line taking `min(remaining, line.quantity)`.
+The order matters twice: it makes the result independent of the order lines arrive in,
+and it follows the rule stated above that the customer receives the larger benefit.
+Each line that receives units carries one item adjustment for `units x unit amount`,
+so the adjustments still sum to the promotion's benefit, and the promotion's
+`maximum_discount_minor` and the per-line clamp apply afterwards as for any other
+item benefit. A cart that splits a gift variant over any number of lines therefore
+receives exactly the units one line would.
 
 Promotions never touch a price book. `ITEM_FIXED_PRICE` only ever reduces a price
 (the new unit price is a ceiling, not a replacement), so a price book still owns
@@ -515,7 +549,7 @@ the first hundred orders it would not, because the amendment cannot claim a slot
 - One rule model, one engine, one evidence trail. The marketer's screen, the
   simulator and the checkout all run the same pure function over the same
   inputs, so a simulation cannot disagree with a quote.
-- The six problems in Context become named tests before any automatic promotion
+- The seven problems in Context become named tests before any automatic promotion
   can reach a customer, instead of surprises after (item 6 already costs a
   promo-code order its discount at amendment, so that one is a fix, not only a guard).
 - Every condition input entering the hash, enforced by a test that enumerates the
@@ -658,7 +692,9 @@ ORDER_SEQUENCE  {mode: FIRST|NTH|EVERY_NTH, n: int >= 2 for NTH/EVERY_NTH, basis
 DELIVERY_ZONE   {zoneIds: [..]}                  -- zones of this brand's tenant, checked at validation
 PRODUCT|CATEGORY|VARIANT  {..Ids: [..], exclude: false}
 FREE_ITEM       {variantIds, quantity (bound), triggerQuantity: int >= 1 (default 1),
-                 mode: ONCE|PER_MULTIPLE}         -- PER_MULTIPLE = floor(matched / triggerQuantity), still bounded
+                 mode: ONCE|PER_MULTIPLE}         -- per promotion, not per line: ONCE = min(quantity, gift units in cart);
+                                                  -- PER_MULTIPLE = min(quantity, gift units, floor(M / triggerQuantity)),
+                                                  -- M = matched quantity summed across lines; allocated highest unit amount, then lowest lineId
 ITEM_*_MARKUP   {basisPoints|amountMinor}        -- per unit, HALF_UP to whole som
 ORDER_*_MARKUP  {basisPoints|amountMinor}
 ```
@@ -741,13 +777,21 @@ summary.
 
 ### Testing
 
-- Each of items 1 to 5 in Context is written as a failing test first: product and category
+- Each of items 1 to 5 and 7 in Context is written as a failing test first: product and category
   conditions match through `QuoteService` (they cannot today), a Tashkent lunch
   window fires at local lunchtime and not at UTC lunchtime, a dine-in order is not
   priced as pickup, `FIRST_ORDER` becomes true for a new account, two item
   discounts in different groups clamp at the line's gross, an exclusive code
-  smaller than the automatic set steps aside, and a currency mismatch skips the
-  promotion.
+  smaller than the automatic set steps aside, a currency mismatch skips the
+  promotion, and **a gift split across lines is still one gift**: the first
+  `PromotionEvaluator` unit test that names `FREE_ITEM` (there is none today) builds
+  "free Cola x1 with any Pizza" over a cart with the Cola on two lines and asserts one
+  free unit in total, then the same with three lines, with `PER_MULTIPLE` (five
+  Pizzas on one line or on five lines, `triggerQuantity` 2 and `quantity` 3, gives two
+  free in both cases),
+  with a bound larger than the Colas in the cart (the gift stops at the cart), and
+  with the lines supplied in every order. It goes on the evaluator directly, because
+  the simulator-parity test shares the code under test and cannot see the leak.
 - Amendment, each written failing first against today's `repriceFor`: **amend after
   the window closes** (the worked example above: place at 12:30, add a line at 15:05,
   the promotion still applies to the whole order and the total is 91 800, not
@@ -768,7 +812,8 @@ summary.
 - Property tests over generated baskets and promotion sets: the result is
   independent of the order promotions are supplied in; no line, subtotal or fee is
   negative; adjustments sum to `discount_minor` and `fee_minor` exactly; the
-  comparator is a total order.
+  comparator is a total order; the free units a `FREE_ITEM` promotion gives never
+  exceed its `quantity` however the cart splits the gift variant over lines.
 - Golden fixtures for `CALCULATION_VERSION` 3, with the worked example above as one,
   and a fixture proving a version 2 quote still renders.
 - The context-hash enumeration test, and the simulator-parity test.
@@ -796,7 +841,8 @@ immutable snapshot and their adjustments.
 
 ## Implementation checklist
 
-- [ ] Slice 0 tests-first for the six Context items, then the fixes; bump
+- [ ] Slice 0 tests-first for the seven Context items, then the fixes (item 7 is the
+      `FREE_ITEM` bound, a per-promotion allocation in `benefitOf`); bump
       `CALCULATION_VERSION` to 3; keep a version 2 golden fixture.
 - [ ] Amendment: `PromotionFrame` on `CartPricingPort.PricingCommand`, the recorded
       `promotionInputs` on the quote, `OrderAmendmentService#repriceFor` filling the
