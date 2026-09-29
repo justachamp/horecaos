@@ -691,7 +691,11 @@
                 {{ nodeTypeLabel(node.nodeType) }}
               </td>
               <td class="q-body-sm">
-                {{ node.name ?? ('settings.fiscalization.classification.deliveryFee.name' | t) }}
+                {{
+                  node.nodeType === 'FEE'
+                    ? ('settings.fiscalization.classification.deliveryFee.name' | t)
+                    : (node.name ?? '—')
+                }}
               </td>
               <td class="q-body-sm">{{ node.categoryName ?? '—' }}</td>
               <td class="q-body-sm">{{ node.locationCount }}</td>

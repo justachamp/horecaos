@@ -160,7 +160,8 @@ public class ServiceZoneService {
     /**
      * Renames a zone in the locales the request names and no others (row 10.12) --
      * a name left out keeps its wording, so an editor that shows only the brand's
-     * supported languages never deletes the rest. Renaming touches no geometry and
+     * supported languages never deletes the rest, and a name restated as the zone
+     * already has it is neither written nor audited. Renaming touches no geometry and
      * no version: a zone's name is not part of what a fee resolution pins.
      *
      * @throws DeliveryResourceNotFoundException the brand has no such zone -- also
@@ -177,11 +178,20 @@ public class ServiceZoneService {
             Map<String, String> names) {
         JdbcServiceZoneStore.ZoneSummaryRow current = store.findZone(tenantId, brandId, zoneId)
                 .orElseThrow(() -> new DeliveryResourceNotFoundException("No zone " + zoneId + " for this brand"));
-        Map<String, String> supplied = suppliedNames(nameRu, nameUz, nameEn, names);
-        if (supplied.isEmpty()) {
+        Map<String, String> requested = suppliedNames(nameRu, nameUz, nameEn, names);
+        if (requested.isEmpty()) {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, "Name at least one language to rename a zone");
         }
         Map<String, String> existing = store.translationsFor(tenantId, brandId, zoneId);
+        // A name restated exactly as the zone already has it is not a change. An editor
+        // resends what it loaded, so writing it back is at best a no-op audited as a
+        // change nobody made, and at worst (the rename carries no version) a stale copy
+        // laid over what another operator saved since.
+        Map<String, String> supplied = new LinkedHashMap<>(requested);
+        supplied.entrySet().removeIf(entry -> entry.getValue().equals(currentName(current, existing, entry.getKey())));
+        if (supplied.isEmpty()) {
+            return new ZoneNames(zoneId, mergedNames(current, existing));
+        }
         Instant now = clock.instant();
         store.updateNames(
                 tenantId,

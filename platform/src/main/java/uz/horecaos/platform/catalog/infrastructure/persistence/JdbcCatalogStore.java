@@ -2590,12 +2590,19 @@ public class JdbcCatalogStore {
      * {@code locationCount} is the count of {@code AVAILABLE} location
      * offerings for a {@code VARIANT}, zero for the other two kinds, which
      * carry no per-location offering row at all.
+     *
+     * <p>Names (a node's and its category's) are read in {@code preferredLocale}
+     * -- the brand's own default -- and, only where that has none, in {@code
+     * fallbackLocale}, the server's configured locale: a menu imported or sampled
+     * in that locale writes only there, and a node with no name at all is what the
+     * console cannot tell apart from the delivery fee.
      */
-    public List<FiscalCoverageNodeRow> fiscalCoverageNodes(UUID tenantId, UUID brandId, String locale) {
+    public List<FiscalCoverageNodeRow> fiscalCoverageNodes(
+            UUID tenantId, UUID brandId, String preferredLocale, String fallbackLocale) {
         return jdbc.sql("""
                 WITH variant_nodes AS (
-                    SELECT 'VARIANT' AS node_type, v.id AS node_id, t.name AS name,
-                           ct.name AS category_name,
+                    SELECT 'VARIANT' AS node_type, v.id AS node_id, COALESCE(t.name, tf.name) AS name,
+                           COALESCE(ct.name, ctf.name) AS category_name,
                            (SELECT count(*) FROM catalog.location_offerings lo
                              WHERE lo.tenant_id = v.tenant_id AND lo.variant_id = v.id
                                AND lo.status = 'AVAILABLE') AS location_count,
@@ -2606,7 +2613,10 @@ public class JdbcCatalogStore {
                         ON p.id = v.product_id AND p.tenant_id = v.tenant_id AND p.brand_id = v.brand_id
                     LEFT JOIN catalog.translations t
                         ON t.entity_type = 'PRODUCT' AND t.entity_id = p.id AND t.tenant_id = p.tenant_id
-                           AND t.brand_id = p.brand_id AND t.locale = :locale
+                           AND t.brand_id = p.brand_id AND t.locale = :preferredLocale
+                    LEFT JOIN catalog.translations tf
+                        ON tf.entity_type = 'PRODUCT' AND tf.entity_id = p.id AND tf.tenant_id = p.tenant_id
+                           AND tf.brand_id = p.brand_id AND tf.locale = :fallbackLocale
                     LEFT JOIN LATERAL (
                         SELECT c.id, c.tenant_id
                         FROM catalog.category_products cp
@@ -2618,14 +2628,17 @@ public class JdbcCatalogStore {
                     ) first_category ON true
                     LEFT JOIN catalog.translations ct
                         ON ct.entity_type = 'CATEGORY' AND ct.entity_id = first_category.id
-                           AND ct.tenant_id = first_category.tenant_id AND ct.locale = :locale
+                           AND ct.tenant_id = first_category.tenant_id AND ct.locale = :preferredLocale
+                    LEFT JOIN catalog.translations ctf
+                        ON ctf.entity_type = 'CATEGORY' AND ctf.entity_id = first_category.id
+                           AND ctf.tenant_id = first_category.tenant_id AND ctf.locale = :fallbackLocale
                     LEFT JOIN catalog.fiscal_classifications fc
                         ON fc.priceable_type = 'VARIANT' AND fc.priceable_id = v.id AND fc.tenant_id = v.tenant_id
                     WHERE v.tenant_id = :tenantId AND v.brand_id = :brandId
                       AND v.status = 'ACTIVE' AND p.status = 'ACTIVE'
                 ),
                 modifier_nodes AS (
-                    SELECT 'MODIFIER_OPTION' AS node_type, o.id AS node_id, t.name AS name,
+                    SELECT 'MODIFIER_OPTION' AS node_type, o.id AS node_id, COALESCE(t.name, tf.name) AS name,
                            CAST(NULL AS varchar) AS category_name,
                            0 AS location_count,
                            (fc.id IS NULL OR fc.mxik_code IS NULL OR fc.package_code IS NULL
@@ -2633,7 +2646,10 @@ public class JdbcCatalogStore {
                     FROM catalog.modifier_options o
                     LEFT JOIN catalog.translations t
                         ON t.entity_type = 'MODIFIER_OPTION' AND t.entity_id = o.id AND t.tenant_id = o.tenant_id
-                           AND t.brand_id = o.brand_id AND t.locale = :locale
+                           AND t.brand_id = o.brand_id AND t.locale = :preferredLocale
+                    LEFT JOIN catalog.translations tf
+                        ON tf.entity_type = 'MODIFIER_OPTION' AND tf.entity_id = o.id AND tf.tenant_id = o.tenant_id
+                           AND tf.brand_id = o.brand_id AND tf.locale = :fallbackLocale
                     LEFT JOIN catalog.fiscal_classifications fc
                         ON fc.priceable_type = 'MODIFIER_OPTION' AND fc.priceable_id = o.id AND fc.tenant_id = o.tenant_id
                     WHERE o.tenant_id = :tenantId AND o.brand_id = :brandId AND o.status = 'ACTIVE'
@@ -2656,7 +2672,8 @@ public class JdbcCatalogStore {
                 """)
                 .param("tenantId", tenantId)
                 .param("brandId", brandId)
-                .param("locale", locale)
+                .param("preferredLocale", preferredLocale)
+                .param("fallbackLocale", fallbackLocale)
                 .query((row, number) -> new FiscalCoverageNodeRow(
                         PriceableType.valueOf(row.getString("node_type")),
                         row.getObject("node_id", UUID.class),

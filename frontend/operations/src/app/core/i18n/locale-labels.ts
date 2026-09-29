@@ -64,6 +64,27 @@ export function labelsToSend(
   return sent;
 }
 
+/**
+ * The wording an edit of an <em>unversioned</em> row sends: {@link labelsToSend}'s
+ * locales, minus every one whose text is what the editor loaded.
+ *
+ * A dialog prefills every offered locale from a list response it may have held
+ * for a while; sending them all back writes each untouched one over whatever
+ * another operator saved since, with no conflict to say so (the zone rename has
+ * no version to check). Naming only what the operator actually changed means a
+ * concurrent edit of a different language survives.
+ */
+export function changedLabels(
+  locales: readonly string[],
+  drafts: LabelsByLocale,
+  loaded: LabelsByLocale | null | undefined,
+): Record<string, string> {
+  const sent = labelsToSend(locales, drafts);
+  return Object.fromEntries(
+    Object.entries(sent).filter(([locale, value]) => value !== (loaded?.[locale] ?? '').trim()),
+  );
+}
+
 /** The platform triple's wording, as the three columns a request must still carry. */
 export interface PlatformColumns {
   readonly ru: string;

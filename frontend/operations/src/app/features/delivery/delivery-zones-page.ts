@@ -15,6 +15,7 @@ import { I18n } from '../../core/i18n/i18n';
 import {
   LabelsByLocale,
   labelDrafts,
+  changedLabels,
   labelsToSend,
   localeDisplayName,
   platformColumns,
@@ -85,8 +86,10 @@ interface TariffOption {
  *    languages (`LocaleSet`, default first) instead of a fixed ru/uz/en
  *    triple; the brand's default language is the one name a zone must have.
  *    **A language the brand does not offer is never touched by a rename**: the
- *    body carries only the offered, filled-in names ({@link labelsToSend}),
- *    the server writes exactly the languages named
+ *    body carries only the offered, filled-in names ({@link labelsToSend}) —
+ *    and, on a rename, only those the operator changed ({@link changedLabels};
+ *    the rename is unversioned, so an untouched name would overwrite another
+ *    operator's newer one) — the server writes exactly the languages named
  *    (`PUT .../service-zones/{zoneId}/names`), and the zone keeps the rest.
  * 5. **Draft, activate and bind are three acts.** They used to run inside one
  *    `submitDraft`, so a mis-typed radius went live and stayed live. There is
@@ -407,18 +410,26 @@ export class DeliveryZonesPage implements OnInit {
     this.renamingZone.set(null);
   }
 
+  /** The names the dialog changed: an offered language, filled in, whose text differs from what it opened with. */
+  private renameChanges(): Record<string, string> {
+    const zone = this.renamingZone();
+    return zone
+      ? changedLabels(this.locales(), this.renameNames(), zone.displayNames ?? triple(zone))
+      : {};
+  }
+
   protected canRename(): boolean {
-    return (
-      !this.renameSubmitting() &&
-      Object.keys(labelsToSend(this.locales(), this.renameNames())).length > 0
-    );
+    return !this.renameSubmitting() && Object.keys(this.renameChanges()).length > 0;
   }
 
   /**
-   * Writes the names of the offered languages the operator filled in and no
+   * Writes the names the operator changed in the offered languages and no
    * other — a language the brand does not offer is not in the body and keeps
-   * its name, and a blank field is left out rather than sent as an empty
-   * string (row 10.12's never-delete guarantee, client half).
+   * its name, a blank field is left out rather than sent as an empty string
+   * (row 10.12's never-delete guarantee, client half), and a language left as
+   * the dialog loaded it is left out too: the rename is unversioned, so
+   * resending an untouched name would overwrite what another operator saved
+   * since the list was read.
    */
   protected async submitRename(): Promise<void> {
     const scope = this.brand.scope();
@@ -429,7 +440,7 @@ export class DeliveryZonesPage implements OnInit {
     this.renameSubmitting.set(true);
     this.renameError.set(null);
     try {
-      await this.api.rename(scope, zone.zoneId, labelsToSend(this.locales(), this.renameNames()));
+      await this.api.rename(scope, zone.zoneId, this.renameChanges());
       this.renamingZone.set(null);
       this.zones.set(await this.api.list(scope));
     } catch (error) {

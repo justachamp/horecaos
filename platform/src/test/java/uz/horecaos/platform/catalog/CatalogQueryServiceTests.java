@@ -948,6 +948,67 @@ class CatalogQueryServiceTests {
     }
 
     @Test
+    @DisplayName("the fiscal coverage list names an entity only in the server's locale when the brand default is ru")
+    void fiscalCoverageFallsBackToTheServersLocaleForNames() {
+        // A menu imported or sampled in the server's locale writes only 'uz'; its brand
+        // then picks ru. The unclassified list must still name every node -- with no name
+        // the console shows the delivery-fee label for a dish and the operator cannot
+        // tell which one needs an IKPU/MXIK code.
+        UUID catalogId = authoring.createCatalog(TENANT, BRAND, "MAIN", "Asosiy menyu", LOCALE);
+        UUID hot = authoring.createCategory(TENANT, BRAND, catalogId, null, "HOT", "Issiq", LOCALE, 1);
+        var imported = authoring.createProduct(
+                TENANT, BRAND, catalogId, "PLOV", "Osh", null, LOCALE, "SKU-PLOV", "PIECE", UNCLASSIFIED, ACTOR);
+        var named = authoring.createProduct(
+                TENANT,
+                BRAND,
+                catalogId,
+                "LAGMAN",
+                "Lag'mon",
+                null,
+                LOCALE,
+                "SKU-LAGMAN",
+                "PIECE",
+                UNCLASSIFIED,
+                ACTOR);
+        authoring.translate(TENANT, BRAND, EntityType.PRODUCT, named.productId(), "ru", "Лагман", null);
+        authoring.placeProductInCategory(TENANT, BRAND, hot, imported.productId(), 1);
+        UUID groupId =
+                authoring.createModifierGroup(TENANT, BRAND, "EXTRAS", "Qo'shimchalar", LOCALE, false, 0, 3, false);
+        UUID cheese = authoring.addModifierOption(
+                TENANT, BRAND, groupId, "CHEESE", "Pishloq", LOCALE, null, 1, 1, UNCLASSIFIED, ACTOR);
+        brandSupports(TENANT, BRAND, "ru");
+
+        List<CatalogQueryService.FiscalCoverageNode> nodes =
+                brandAwareQuery().fiscalCoverage(TENANT, BRAND).nodes();
+
+        UUID importedVariant = store.variantsForProduct(TENANT, BRAND, imported.productId())
+                .getFirst()
+                .id();
+        UUID namedVariant = store.variantsForProduct(TENANT, BRAND, named.productId())
+                .getFirst()
+                .id();
+        assertThat(nodes)
+                .filteredOn(node -> node.nodeId().equals(importedVariant))
+                .singleElement()
+                .satisfies(node -> {
+                    assertThat(node.name()).as("named only in uz").isEqualTo("Osh");
+                    assertThat(node.categoryName())
+                            .as("category named only in uz")
+                            .isEqualTo("Issiq");
+                });
+        assertThat(nodes)
+                .filteredOn(node -> node.nodeId().equals(namedVariant))
+                .singleElement()
+                .satisfies(node -> assertThat(node.name())
+                        .as("the brand's own default still wins where it has a name")
+                        .isEqualTo("Лагман"));
+        assertThat(nodes)
+                .filteredOn(node -> node.nodeId().equals(cheese))
+                .singleElement()
+                .satisfies(node -> assertThat(node.name()).isEqualTo("Pishloq"));
+    }
+
+    @Test
     @DisplayName("another tenant's brand default never leaks in: a brand id under the wrong tenant answers empty")
     void aBrandDefaultIsTenantScoped() {
         brandSupports(OTHER_TENANT, OTHER_BRAND, "en");

@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { labelDrafts, labelsToSend, pickLabel, platformColumns } from './locale-labels';
+import {
+  changedLabels,
+  labelDrafts,
+  labelsToSend,
+  pickLabel,
+  platformColumns,
+} from './locale-labels';
 
 describe('labelDrafts', () => {
   it('makes one field per offered locale, prefilled from the wording the row has and blank otherwise', () => {
@@ -34,6 +40,37 @@ describe('labelsToSend', () => {
     expect(
       Object.values(labelsToSend(['ru', 'uz-Latn', 'en'], { ru: 'x', 'uz-Latn': '  ' })),
     ).toEqual(['x']);
+  });
+});
+
+describe('changedLabels', () => {
+  const loaded = { ru: 'Центр', 'uz-Latn': 'Markaz', en: 'Centre' };
+
+  it('sends only the offered locales whose text differs from what the editor loaded', () => {
+    expect(
+      changedLabels(
+        ['ru', 'uz-Latn', 'en'],
+        { ru: 'Центр города', 'uz-Latn': 'Markaz', en: 'Centre' },
+        loaded,
+      ),
+    ).toEqual({ ru: 'Центр города' });
+  });
+
+  it('ignores surrounding whitespace on either side of the comparison', () => {
+    expect(
+      changedLabels(
+        ['ru', 'en'],
+        { ru: '  Центр ', en: 'City centre' },
+        { ru: 'Центр  ', en: 'Centre' },
+      ),
+    ).toEqual({ en: 'City centre' });
+  });
+
+  it('treats a locale the row did not have as changed once filled in, and a blank as not sent', () => {
+    expect(
+      changedLabels(['ru', 'kaa', 'en'], { ru: 'Центр', kaa: 'Orayı', en: '' }, loaded),
+    ).toEqual({ kaa: 'Orayı' });
+    expect(changedLabels(['ru'], { ru: 'Центр' }, undefined)).toEqual({ ru: 'Центр' });
   });
 });
 

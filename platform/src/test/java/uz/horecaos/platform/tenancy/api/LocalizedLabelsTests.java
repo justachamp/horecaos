@@ -65,6 +65,37 @@ class LocalizedLabelsTests {
     }
 
     @Test
+    @DisplayName("a case variant of uz-Latn lands on the platform's Uzbek, never on a second, never-read one")
+    void aCaseVariantOfUzLatnIsCanonicalised() {
+        // 'uz-latn' passes the well-formedness pattern (and the CHECK constraints) but is
+        // neither the column's 'uz-Latn' nor a bare 'uz': stored as-is it would be listed
+        // as another language beside the label_uz column the storefront and checkout read.
+        assertThat(LocalizedLabels.supplied(null, null, null, Map.of("uz-latn", "Piyozsiz"), 120))
+                .containsExactly(Map.entry("uz-Latn", "Piyozsiz"));
+        assertThat(LocalizedLabels.supplied(null, null, null, Map.of("uz-LATN", "Piyozsiz"), 120))
+                .containsExactly(Map.entry("uz-Latn", "Piyozsiz"));
+    }
+
+    @Test
+    @DisplayName("a case variant overlays the legacy field it is the same language as")
+    void aCaseVariantOverlaysTheLegacyField() {
+        assertThat(LocalizedLabels.supplied(null, "eski", null, Map.of("uz-latn", "yangi"), 120))
+                .containsExactly(Map.entry("uz-Latn", "yangi"));
+    }
+
+    @Test
+    @DisplayName("a stored case variant of a triple locale is a stale mirror, ignored like the others")
+    void mergeIgnoresACaseVariantOfATripleLocale() {
+        Map<String, String> rows = new LinkedHashMap<>();
+        rows.put("uz-latn", "STALE mirror");
+        rows.put("kaa", "Piyazsiz");
+
+        assertThat(LocalizedLabels.merge("Без лука", "Piyozsiz", "No onion", rows))
+                .containsOnlyKeys("ru", "uz-Latn", "en", "kaa")
+                .containsEntry("uz-Latn", "Piyozsiz");
+    }
+
+    @Test
     @DisplayName("a malformed locale tag is refused before it reaches the CHECK constraint")
     void aMalformedLocaleIsRefused() {
         assertThatThrownBy(() -> LocalizedLabels.supplied(null, null, null, Map.of("RU_ru", "x"), 120))

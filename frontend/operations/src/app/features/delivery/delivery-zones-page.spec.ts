@@ -244,12 +244,35 @@ describe('DeliveryZonesPage', () => {
     host().querySelector<HTMLButtonElement>('[data-testid="zone-rename-submit"]')!.click();
     await flushMicrotasks();
 
-    expect(rename).toHaveBeenCalledWith(BRAND_SCOPE, 'zone-1', {
-      ru: 'Город',
-      'uz-Latn': 'Shahar',
-      en: 'City centre',
-    });
+    // Only the language the operator changed: the prefilled ru and uz-Latn are the
+    // values the list held when the dialog opened, and resending them would write a
+    // stale copy over whatever another operator saved since (the rename is not
+    // versioned).
+    expect(rename).toHaveBeenCalledWith(BRAND_SCOPE, 'zone-1', { en: 'City centre' });
     expect(host().querySelector('[data-testid="zone-rename-dialog"]')).toBeNull();
+  });
+
+  it('does not resend a name the operator left as it was loaded, so a concurrent rename is not reverted', async () => {
+    const rename = vi.fn().mockResolvedValue({ zoneId: 'zone-1', displayNames: {} });
+    await render({ list: vi.fn().mockResolvedValue([ZONE]), rename });
+
+    host().querySelector<HTMLButtonElement>('[data-testid="zone-rename"]')!.click();
+    fixture.detectChanges();
+    const submit = host().querySelector<HTMLButtonElement>('[data-testid="zone-rename-submit"]')!;
+    expect(submit.disabled, 'nothing was changed').toBe(true);
+
+    const ru = host().querySelector<HTMLInputElement>('[data-testid="zone-rename-name-ru"]')!;
+    ru.value = '  Центр  ';
+    ru.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    expect(submit.disabled).toBe(false);
+    submit.click();
+    await flushMicrotasks();
+
+    const sent = rename.mock.calls[0][2];
+    expect(sent).toEqual({ ru: 'Центр' });
+    expect(Object.keys(sent)).not.toContain('en');
+    expect(Object.keys(sent)).not.toContain('uz-Latn');
   });
 
   it('never sends, blanks or deletes a language the brand does not offer when it renames a zone', async () => {
