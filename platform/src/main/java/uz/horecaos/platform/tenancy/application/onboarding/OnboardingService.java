@@ -15,6 +15,7 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
@@ -79,11 +80,18 @@ public class OnboardingService implements OnboardingHealthQuery {
     private final Clock clock;
     private final TenantControlPlaneService controlPlane;
     private final TenantControlPlaneStore controlPlaneStore;
+    private final List<OnboardingReadinessCheck> readinessChecks;
 
     // A template rather than @Transactional on the pieces of runNextStep, for the
     // reason the scheduler used to get wrong: a bean calling its own annotated
     // method skips the proxy, so the annotation would be decoration and the
     // claim would commit or not commit by accident.
+    /**
+     * A service with no ad hoc readiness checks: {@link #validate} then reports
+     * only the {@code VALIDATING}-phase steps and the SMS-template check. What
+     * a test that is not about readiness wants; the application uses the
+     * constructor below.
+     */
     public OnboardingService(
             JdbcClient jdbc,
             TransactionTemplate transactions,
@@ -95,6 +103,33 @@ public class OnboardingService implements OnboardingHealthQuery {
             Clock clock,
             TenantControlPlaneService controlPlane,
             TenantControlPlaneStore controlPlaneStore) {
+        this(
+                jdbc,
+                transactions,
+                handlers,
+                audit,
+                approvals,
+                events,
+                objectMapper,
+                clock,
+                controlPlane,
+                controlPlaneStore,
+                List.of());
+    }
+
+    @Autowired
+    public OnboardingService(
+            JdbcClient jdbc,
+            TransactionTemplate transactions,
+            List<OnboardingStepHandler> handlers,
+            AuditRecorder audit,
+            ApprovalService approvals,
+            ApplicationEventPublisher events,
+            ObjectMapper objectMapper,
+            Clock clock,
+            TenantControlPlaneService controlPlane,
+            TenantControlPlaneStore controlPlaneStore,
+            List<OnboardingReadinessCheck> readinessChecks) {
         this.jdbc = jdbc;
         this.transactions = transactions;
         this.handlers = handlers.stream()
@@ -106,6 +141,7 @@ public class OnboardingService implements OnboardingHealthQuery {
         this.clock = clock;
         this.controlPlane = controlPlane;
         this.controlPlaneStore = controlPlaneStore;
+        this.readinessChecks = List.copyOf(readinessChecks);
     }
 
     /** Creates a run with every step materialised, blocked ones included. */
@@ -697,7 +733,40 @@ public class OnboardingService implements OnboardingHealthQuery {
         // method's own doc for why it is folded in here rather than given a
         // formal, persisted step.
         results.addAll(notificationTemplateModerationFindings(tenantId));
-        return new ValidationOutcome(results.stream().allMatch(ValidationResult::passed), results);
+        // Row 10.0, the same idea for the checks settings.md §10.0 lists that
+        // are not steps either: fiscal classification coverage, channel
+        // payment-method coverage and secret-rotation age. See
+        // OnboardingReadinessCheck.
+        for (OnboardingReadinessCheck check : readinessChecks) {
+            results.addAll(readinessFindings(check, tenantId));
+        }
+        // An advisory finding still fails its own row, and still reaches the
+        // panel, but it must not turn "every check passes" false for a tenant
+        // that can trade (settings.md §10.0: advisory).
+        return new ValidationOutcome(
+                results.stream().filter(result -> !result.advisory()).allMatch(ValidationResult::passed), results);
+    }
+
+    /**
+     * One ad hoc check's findings, or nothing when it passes — the same "only
+     * failures" shape {@link #notificationTemplateModerationFindings} has, so a
+     * clean tenant's dry run does not grow a row per check it ran. A check that
+     * throws is reported as a transient failure of that check alone rather than
+     * thrown out of a dry run that names every other check's answer, the way
+     * {@link #validate} treats a step handler.
+     */
+    private List<ValidationResult> readinessFindings(OnboardingReadinessCheck check, UUID tenantId) {
+        OnboardingStepHandler.StepResult outcome;
+        try {
+            outcome = check.check(tenantId);
+        } catch (RuntimeException failure) {
+            outcome = OnboardingStepHandler.StepResult.retry(
+                    "TRANSIENT_INFRASTRUCTURE", failure.getClass().getSimpleName());
+        }
+        if (outcome.outcome() == OnboardingStepHandler.StepResult.Outcome.COMPLETED) {
+            return List.of();
+        }
+        return validationResultsFor(check.checkKey(), outcome, check.advisory());
     }
 
     /**
@@ -764,8 +833,17 @@ public class OnboardingService implements OnboardingHealthQuery {
      * — COMPLETED, RETRY, BLOCKED, or a plain FAILED with no findings list —
      * is still exactly one row, unchanged from before this reshape.
      */
-    @SuppressWarnings("unchecked")
     static List<ValidationResult> validationResultsFor(OnboardingStep step, OnboardingStepHandler.StepResult outcome) {
+        return validationResultsFor(step.name(), outcome, false);
+    }
+
+    /**
+     * {@link #validationResultsFor(OnboardingStep, OnboardingStepHandler.StepResult)}
+     * for a check that is not an {@link OnboardingStep} and so has only a key.
+     */
+    @SuppressWarnings("unchecked")
+    static List<ValidationResult> validationResultsFor(
+            String stepKey, OnboardingStepHandler.StepResult outcome, boolean advisory) {
         Object rawFindings = outcome.result().get(OnboardingStepHandler.StepResult.FINDINGS_KEY);
         if (outcome.outcome() == OnboardingStepHandler.StepResult.Outcome.FAILED
                 && rawFindings instanceof List<?> findings
@@ -774,15 +852,16 @@ public class OnboardingService implements OnboardingHealthQuery {
                     (List<OnboardingStepHandler.StepResult.Finding>) findings;
             return typed.stream()
                     .map(finding -> new ValidationResult(
-                            step.name(), false, finding.errorCode(), finding.detail(), finding.locationId()))
+                            stepKey, false, finding.errorCode(), finding.detail(), finding.locationId(), advisory))
                     .toList();
         }
         return List.of(new ValidationResult(
-                step.name(),
+                stepKey,
                 outcome.outcome() == OnboardingStepHandler.StepResult.Outcome.COMPLETED,
                 outcome.errorCode(),
                 outcome.detail(),
-                null));
+                null,
+                advisory));
     }
 
     /**
@@ -1222,13 +1301,29 @@ public class OnboardingService implements OnboardingHealthQuery {
      *                   (wave P31: {@link OnboardingStepHandler.StepResult#failedWithFindings});
      *                   {@code null} for a step reported as a single row, the
      *                   same as before that reshape
+     * @param advisory   true for a finding from a check whose severity is
+     *                   advisory (settings.md §10.0): shown, but not counted
+     *                   against {@link ValidationOutcome#allPassed()}; false for
+     *                   every {@code VALIDATING}-phase step
      */
     public record ValidationResult(
             String stepKey,
             boolean passed,
             @Nullable String errorCode,
             @Nullable String detail,
-            @Nullable UUID locationId) {}
+            @Nullable UUID locationId,
+            boolean advisory) {
+
+        /** A blocking finding — what every result was before {@code advisory} existed. */
+        public ValidationResult(
+                String stepKey,
+                boolean passed,
+                @Nullable String errorCode,
+                @Nullable String detail,
+                @Nullable UUID locationId) {
+            this(stepKey, passed, errorCode, detail, locationId, false);
+        }
+    }
 
     /** What {@link #validate} found. Nothing here was written to any table. */
     public record ValidationOutcome(boolean allPassed, List<ValidationResult> checks) {}
