@@ -11,8 +11,9 @@
   `coupon_redemptions`), `PromotionEvaluator` (twelve condition types and eight
   action types) inside `PricingEngine` stages 3 and 4, the promo-code authoring
   surface of ADR 0072, and a per-code redemption list. Reading the code found that
-  several evaluator inputs are inert today (see Context), so a promotion authored
-  by any route other than a promo code would not behave as written.
+  several evaluator inputs are inert today, and that an amended order is repriced
+  with none of the inputs it was placed under (see Context), so a promotion
+  authored by any route other than a promo code would not behave as written.
 - Date proposed: 2026-09-29
 - Date decided: —
 - Deciders: proposed by Claude (wave batch 14); Ayubkhon Abbosov (platform owner)
@@ -20,8 +21,8 @@
   both `deferred` since batch 3 on the grounds that no promotions ADR owns the rule
   vocabulary or the redemption fact.
 - Depends on: ADR 0018, ADR 0019, ADR 0025, ADR 0027, ADR 0029, ADR 0030,
-  ADR 0031, ADR 0032, ADR 0036, ADR 0037, ADR 0038, ADR 0043, ADR 0044, ADR 0046,
-  ADR 0072
+  ADR 0031, ADR 0032, ADR 0036, ADR 0037, ADR 0038, ADR 0039, ADR 0043, ADR 0044,
+  ADR 0046, ADR 0072
 - Supersedes / Superseded by: —
 - Open inputs:
   - Whether "exclusive" means instead-of or over-everything. `PromotionEvaluator`
@@ -62,6 +63,17 @@
     pre-promotion or post-promotion goods subtotal. The engine compares thresholds
     on the post-discount subtotal while the fee resolver is handed the
     pre-discount one (see Context), and the two should agree (finance, product).
+  - What an amended order keeps of a promotion. This record freezes every input an
+    amendment does not itself change, so an order placed inside a "lunch 12:00 to
+    15:00" window keeps that promotion, on the whole order including a line added at
+    15:05, and an order that holds a promotion keeps it at the definition version it
+    was priced under even if the marketer has since suspended, archived or edited it
+    (see Amendment). The alternative, pricing only the added line at the edit's own
+    instant, gives one order two prices and has no meaning for an order-scope
+    promotion. How long the customer can stretch a window this way is bounded only by
+    ADR 0039's amendment cut point (`ordering.amendment_cut_point_status`, default
+    `READY`); finance and product confirm that bound is short enough (finance,
+    product).
   - Retention of promotion definition versions and of the redemption ledger.
     Both are evidence for orders that stay reconcilable for the financial
     retention period, so this record proposes they follow the order snapshot
@@ -114,10 +126,11 @@ feature set that both rows are graded against, including two HorecaOS additions
   quote path presents it: `BenefitGrantService#redeem` has no caller in
   `src/main`.
 
-**Reading the evaluator's inputs found five things that are wrong or inert
-today.** None is a live defect, because no automatic promotion can be authored;
-each becomes one the day this record's authoring surface exists, so each is a
-test to write before the surface ships.
+**Reading the evaluator's inputs and its callers found six things that are wrong or
+inert today.** Items 1 to 5 are not live defects, because no automatic promotion can
+be authored; each becomes one the day this record's authoring surface exists, so each
+is a test to write before the surface ships. Item 6 is a live defect for promo
+codes already.
 
 1. *Product and category conditions can never match.* `QuoteService` builds
    `PromotionInputs` with an empty membership map (`Map.of()`), so
@@ -155,6 +168,31 @@ test to write before the surface ships.
    as post-discount and the engine's threshold check uses the post-discount one.
    Whether any resolver decision reads it beyond passing it through needs a failing
    test before it is called a defect.
+6. *An amended order is repriced with the edit's inputs, not the order's.*
+   `OrderAmendmentService#repriceFor` reprices the whole basket through
+   `CartPricingPort.priceCart`, and `PricingCommand` has no field for a service
+   instant, a payment method or a fulfilment mode, so `QuoteService#quote` resolves
+   every one of them from the clock at the moment of the edit (`clock.instant()`)
+   and from neutral defaults. Four consequences follow by reading, none covered by a
+   test. A time-window condition is judged at the edit's instant, so a "lunch 12:00
+   to 15:00" promotion that priced an order at 12:30 is gone from the whole order
+   when a line is added at 15:05. A payment-method condition finds no method. A
+   `FIRST_ORDER` or `ORDER_SEQUENCE` condition, resolved by counting the account's
+   orders, would count the order being amended, because that order already exists.
+   And `repriceFor` passes `null` as `presentedCouponCode`; a promo code lives only
+   on `ordering.carts.applied_coupon_code` (`V0171`), which nothing in the amendment
+   path reads, so an order that was placed with a code loses the code's discount the
+   moment a line is added (no amendment test presents a code, and this is the live
+   defect). Two more gaps sit beside these: `FinancialIntent#needsReprice` is true
+   only for added lines, changed quantities and a new address, so a
+   `CHANGE_PAYMENT_METHOD` on its own never reprices and a payment-method promotion
+   would outlive the method that earned it; and `ordering.orders` records no payment
+   method and no service instant (the method lives on the payment intent), so the
+   order cannot supply what the reprice needs. Last, the ledger this record draws
+   is keyed on the quote (`unique (tenant_id, promotion_id, quote_id)`), while an
+   amendment that reprices gives the order a new quote at every revision
+   (`order_revisions.pricing_quote_id`), so a per-quote key admits a second row for
+   the same order and promotion and 7.9 double-counts the redemption.
 
 **What the vocabulary lacks** (parity matrix line 77, IA §6.1): markup; payment
 method, sales-channel type and order-sequence conditions; a geozone condition;
@@ -192,7 +230,7 @@ test together).**
 | Manual vs automatic activation | Automatic (engine selects), coupon-gated (customer presents a code). Operator-applied discretionary discounts have no ADR and are not decided here |
 | Order type | Existing `FULFILLMENT_MODE`, with the context finally carrying `DELIVERY`, `PICKUP` or `DINE_IN` from the cart |
 | Source | Existing `CHANNEL` (codes) and new `CHANNEL_TYPE` (`tenant.sales_channels.system_type`: WEB, IOS, ANDROID, TELEGRAM, KIOSK, QR_TABLE, CALL_CENTRE, POS), so "all app orders" needs no code list |
-| Payment method | New `PAYMENT_METHOD` (codes from `tenant.channel_payment_methods`), matching the cart's selected money method; loyalty points are not a method for this purpose; an unselected method never matches |
+| Payment method | New `PAYMENT_METHOD` (codes from `tenant.channel_payment_methods`), matching the cart's selected money method, or on an amended order the method recorded on its quote (see Amendment); loyalty points are not a method for this purpose; an unselected method never matches |
 | First order, Nth order, first order by source | `FIRST_ORDER` (kept, now resolved from real data) and new `ORDER_SEQUENCE {mode: FIRST\|NTH\|EVERY_NTH, n, basis: BRAND\|CHANNEL}`; a guest never matches |
 | Date range, intra-day window, weekdays, 24/7 | Existing `valid_from`/`valid_until`, `TIME_OF_DAY`, `DAY_OF_WEEK`; no time condition is 24/7. Evaluated in the location's IANA timezone at the service instant |
 | Geozone polygon | New `DELIVERY_ZONE {zoneIds}`, matching `ResolvedDeliveryCharge.zoneId` (ADR 0037 owns geometry; a promotion never carries a polygon) |
@@ -203,7 +241,7 @@ test together).**
 | Priority with a defined tie-break | Benefit, then `priority`, then promotion id (existing total order, stated once) |
 | Stackable and cashback-compatible | `stacking_group` and `exclusive` (below) plus two loyalty flags: `loyalty_accrual` (`ACCRUE`, `SUPPRESS`) and `loyalty_redemption` (`ALLOW`, `BLOCK`) |
 | Usage limits | New per-promotion total and per-customer limits with an atomic ledger, for automatic promotions |
-| Pre-order re-validation | Window conditions read the service instant; a scheduled order is re-quoted at each ADR 0019 checkpoint (scheduled orders themselves are still open in ADR 0019) |
+| Pre-order re-validation | Window conditions read the service instant; a scheduled order is re-quoted at each ADR 0019 checkpoint (scheduled orders themselves are still open in ADR 0019). An amended order keeps the instant it was placed under (see Amendment) |
 | Quote simulator over a versioned policy snapshot | `POST .../promotions/simulate` over the real engine, plus immutable definition versions |
 
 **Markup is a price-plane step before any discount, and an order-level markup is
@@ -283,10 +321,88 @@ Both are claimed at checkout with the two conditional writes ADR 0072 uses for
 coupons (a conditional `UPDATE` of `consumed_count`, and an upsert into
 `pricing.promotion_customer_usage`), inside `CheckoutReservationStep`'s
 transaction, and written to a new ledger `pricing.promotion_redemptions`, one row
-per (order, promotion), compensated to `RELEASED` if a later step fails. A guest
-cart's per-customer cap is not enforced, as decided for coupons. A coupon-gated
-promotion carries its limits on the coupon; the validator refuses limits on both.
-A cancelled order does not return its slot (Open input).
+per (order, promotion), compensated to `RELEASED` if a later step fails. The row is
+written for every automatic promotion an order carries, limited or not, because it
+is also the source of the 7.9 fact; the two counters are touched only for a limited
+one. A guest cart's per-customer cap is not enforced, as decided for coupons. A
+coupon-gated promotion carries its limits on the coupon; the validator refuses
+limits on both. A cancelled order does not return its slot (Open input).
+
+**An amendment reprices the order as it was placed, plus what the amendment itself
+changes.** ADR 0039 lets an operator add lines, change a quantity, change the
+delivery address and change the payment method on a live order, and reprices the
+basket each time (Context, item 6). Left as it is, that reprice reads the clock, the
+payment method and the order count of the moment of the edit, which is the wrong
+question: the customer bought one order, at one instant, by one method. Five rules
+settle it, and they are the only ones.
+
+1. *Placement inputs are recorded and inherited.* Every quote records the
+   promotion inputs it was priced with in its `calculation_document` under
+   `promotionInputs` (the "line in the evidence" the paragraph above requires): the
+   service instant, fulfilment mode, channel type, payment method code, delivery
+   zone, the resolved order-sequence position and `firstOrder`, the customer
+   segments, and the promotions applied with their definition versions. An
+   amendment's reprice starts from the `promotionInputs` of the quote behind the
+   order's current revision (`order_revisions.pricing_quote_id`) and overrides
+   exactly the inputs the amendment's own commands change: the basket (`ADD_LINES`,
+   `CHANGE_LINE_QUANTITY`), the delivery point (`CHANGE_DELIVERY_ADDRESS`, whose zone
+   is re-resolved under ADR 0037) and the payment method (`CHANGE_PAYMENT_METHOD`, the
+   new code). The clock is never an override: the service instant stays the one the
+   order was placed under, so the local day and minute, and every window condition,
+   read the same value they read at checkout. `CartPricingPort.PricingCommand` gains
+   a `PromotionFrame` (service instant, payment method code, fulfilment mode). On
+   the cart path the method and mode come from the cart and the instant is null, which
+   means the clock, as today; the amendment path always fills all three from the
+   inherited inputs and the overrides. `FinancialIntent#needsReprice` becomes
+   true for a `CHANGE_PAYMENT_METHOD` whenever the brand has an active promotion
+   with a `PAYMENT_METHOD` condition or the order holds a promotion that has one, so
+   switching to cash drops a "5% off with Click" promotion and switching back
+   restores it, the way checkout behaves. The frame enters the context hash like any
+   other input.
+2. *Which promotions are candidates.* The candidates for an amendment are (a)
+   every promotion the order already holds, evaluated at the definition version
+   recorded on it (`pricing.promotion_definition_versions`), even if the marketer
+   has since suspended, archived, edited or filled it, and (b) any other `ACTIVE`
+   automatic promotion without limits whose conditions hold on the inherited
+   inputs and the amended basket. Basket-driven conditions
+   (`SUBTOTAL_AT_LEAST`, `QUANTITY_AT_LEAST`, the item predicates) are judged on the
+   amended basket, so a line that carries an order past a free-delivery threshold
+   earns it. A limited promotion the order does not already hold is not a
+   candidate: the claim happens in checkout and an amendment adds none. The
+   decision trace names it `NOT_CLAIMED_AT_PLACEMENT`. Whether a suspended
+   promotion should keep applying to an order that already holds it is a money
+   judgement recorded as an Open input.
+3. *Limits are not tested again for a promotion the order holds.* Its own slot
+   is already inside `consumed_count` and `promotion_customer_usage`, so testing
+   them would refuse order 100 of 100 against itself, and claiming again would
+   consume a second slot. An amendment never increments either counter.
+4. *Sequence conditions never count the order itself.* The recorded
+   order-sequence position and `firstOrder` are authoritative, so an amended `FIRST`
+   order stays first however many orders the customer placed after it. Where no
+   record exists, the `CustomerOrderHistoryPort` count takes the order id to exclude
+   and the placement instant to count before
+   (`countPriorOrders(tenantId, brandId, accountId, basis, placedBefore,
+   excludingOrderId)`), so the order being amended is not its own predecessor.
+5. *The ledger row moves in place.* The row is keyed by (order, promotion), not by
+   quote: `claimed_quote_id` is the checkout quote and never changes (it keeps the
+   claim idempotent), and `current_quote_id`, `discount_minor`, `markup_minor` and
+   `last_revision` are rewritten when an amendment applies, in the same transaction
+   that inserts the order revision and accepts the amendment's quote (a
+   `pricing.api` call beside `QuoteAcceptancePort#acceptQuote` in
+   `OrderAmendmentService#apply`). A promotion that newly applies inserts a row with
+   both quote ids set to the amendment's. A promotion that stops applying has its
+   row set to `RELEASED` and its counter left consumed, the same rule as a
+   cancelled order (Open input); the 7.9 fact counts only `REDEEMED` rows. For every
+   order and promotion the row's amounts equal the sum of that promotion's
+   adjustments on the order's current revision, and a test asserts it. Amendments
+   stop at the cut point, before an order completes, so the fact built at day close
+   sees the amended row; anything that changes it afterwards is a divergence for
+   `DayCloseService#recut` to report, not a silent rewrite.
+
+The promo code follows the same rule. The redeemed coupon of an order is presented
+again on every amendment reprice, read from that order's `REDEEMED` row in
+`coupon_redemptions`, with no new eligibility or limit test; today's `null`
+(Context, item 6) is a Slice 0 fix, not a wait for the authoring surface.
 
 **Loyalty compatibility is two booleans, not arithmetic.** `loyalty_accrual =
 SUPPRESS` means an order carrying this promotion earns no points; `loyalty_redemption
@@ -354,6 +470,24 @@ worth 10 000 + 4 600 + 15 000 = 29 600. SAVE10 alone is worth 10 200, less than
 `LOST_TO` the combination. Under today's evaluator SAVE10 would have won alone and
 the customer would have lost 19 400 by typing a code.
 
+### Worked example: adding a line after the window closes
+
+A pickup order placed on the WEB channel at 12:30 in Tashkent, paid in cash: 2 ×
+Margherita (45 000 som each), goods subtotal 90 000. L is an `ORDER` promotion, 10%
+off, with `TIME_OF_DAY` 12:00 to 15:00; it gave 9 000, so the total is 81 000
+(tax and fees left out). At 15:05 the operator adds 1 × Cola (12 000).
+
+Under today's reprice the clock says 15:05, L fails, the discount is 0 and the
+order total becomes 102 000: 21 000 more for a 12 000 drink. Under this record the
+reprice inherits the service instant 12:30 from the order's quote, L still holds,
+and it is 10% of the amended subtotal of 102 000, so 10 200; the total is 91 800
+and the delta the customer agrees to is 10 800. The ledger row for (order, L) keeps
+its `claimed_quote_id`, takes the amendment's quote as `current_quote_id`, and its
+`discount_minor` moves from 9 000 to 10 200; report 7.9 still counts one redemption.
+If the customer then switches from cash to Click, a "5% off with Click" promotion P
+newly applies (it is unlimited and its condition now holds); had P been limited to
+the first hundred orders it would not, because the amendment cannot claim a slot.
+
 ## Alternatives considered
 
 | Option | Why not chosen | Revisit when |
@@ -367,6 +501,9 @@ the customer would have lost 19 400 by typing a code.
 | An account-id list inside a rule for named customers | It stores a per-customer entitlement list in a definition table with no consent, suppression or erasure hook (ADR 0029). Audience snapshots already have those | Static audiences are never built and the need is pressing, in which case the id list ships with an erasure hook |
 | Birthday as a promotion condition | It puts a decrypted date of birth on the pricing hot path for every quote. A campaign minting a single-use grant does the job with a consent gate | Product insists on a self-serve birthday discount without a campaign, then a boolean computed by `customers` is passed in as a value |
 | Let a stacking group mix item and order scope (the evaluator's comment allows it) | The contest between an item offer and an order offer in one group has no well-defined benefit comparison, because the order offer's value depends on which item offer wins. The validator refuses it; no authoring surface exists that needs it | A real "item offer or order offer, not both" need appears, and a defined fixed-point rule is written for it |
+| Reprice an amendment with the edit's own clock, payment method and order count (what the code does today), so an amended order is priced as if placed now | A promotion vanishes from the whole order when a line is added after its window, a `FIRST` promotion stops matching because the order counts itself, and the total jumps by more than the added line is worth. It also makes the answer depend on when the operator clicked | Never for the instant and the sequence; the payment method is the one input an amendment legitimately changes and is handled as an override |
+| Price only the added line at the edit's instant and keep the original lines' benefits | An `ORDER` or `DELIVERY` promotion has no per-line meaning, a threshold promotion would be judged on two baskets, and one order would carry two prices for the same window | Finance shows customers stretching a window by adding a token line at the end; the cut point is the lever first |
+| A new ledger row per quote (the draft's `unique (tenant_id, promotion_id, quote_id)`) | An amended order carries a new quote per revision, so one redemption becomes several rows and 7.9 double-counts discount given; the sum of an order's rows would not equal its adjustments | Never; the checkout quote stays as the idempotent claim key |
 | Return the slot when an order is cancelled | Consistent with ADR 0072 not to, simple to report around, and no evidence yet that it matters | The first limited promotion visibly loses slots to cancellations |
 | Let reports read `pricing` tables live, as the per-code list does | ADR 0023 forbids a report reading a module schema; the per-code list is a bounded operator drill-down, not a report. The fact is built once at close and reused | Never for a report |
 | Activate without a second person, as promo codes do today | ADR 0018 requires four-eyes above thresholds, and a markup or a large discount is a decision to change what customers pay. Low-value promotions still activate directly | Finance sets thresholds that make approval a bottleneck |
@@ -378,8 +515,9 @@ the customer would have lost 19 400 by typing a code.
 - One rule model, one engine, one evidence trail. The marketer's screen, the
   simulator and the checkout all run the same pure function over the same
   inputs, so a simulation cannot disagree with a quote.
-- The five latent problems in Context become named tests before any automatic
-  promotion can reach a customer, instead of surprises after.
+- The six problems in Context become named tests before any automatic promotion
+  can reach a customer, instead of surprises after (item 6 already costs a
+  promo-code order its discount at amendment, so that one is a fix, not only a guard).
 - Every condition input entering the hash, enforced by a test that enumerates the
   context, closes the class of bug that item 3 in Context describes for good.
 - A promo code and an automatic offer can coexist without a money leak and
@@ -421,6 +559,14 @@ the customer would have lost 19 400 by typing a code.
   uplift.
 - **Markup carries legal and fiscal risk** the engine cannot decide, and an
   order-level markup depends on an answer that may be no.
+- **An amended order keeps a promotion its window has since closed.** That is the
+  intended price of one order at one instant, and it can be stretched until the
+  amendment cut point; a suspended promotion also keeps applying to the orders that
+  already hold it, so suspending stops new orders and not amendments to old ones.
+- **Every quote now records its promotion inputs**, which grows
+  `calculation_document`, and an order priced before calculation version 3 has none
+  to inherit (its amendment resolves them from the order's own fields and the
+  history port).
 - **Membership is authoring state.** Until `publication_items` carry product and
   category membership, moving a dish between categories changes which promotions
   match it before the menu is republished, as the lookup's own Javadoc says.
@@ -472,12 +618,20 @@ pricing.promotion_customer_usage
   promotion_id, tenant_id, customer_account_id, consumed_count, maximum_per_customer
   -- mirrors coupon_customer_usage, same conditional upsert
 
-pricing.promotion_redemptions
+pricing.promotion_redemptions               -- one row per (order, promotion), moved in place by an amendment
   id, tenant_id, brand_id, promotion_id, definition_version
-  quote_id, order_id, customer_account_id null
-  discount_minor, markup_minor, currency
+  claimed_quote_id uuid not null                -- the checkout quote; never rewritten; idempotent claim key
+  current_quote_id uuid not null                -- the quote behind the order's current revision
+  last_revision integer not null                -- the order revision that last wrote the amounts
+  order_id uuid not null, customer_account_id null
+  discount_minor, markup_minor, currency        -- equal to the promotion's adjustments on the current revision
   status (REDEEMED | RELEASED), redeemed_at, released_at
-  unique (tenant_id, promotion_id, quote_id)
+  unique (tenant_id, promotion_id, claimed_quote_id)
+  unique (tenant_id, order_id, promotion_id)
+
+pricing.quotes.calculation_document  + promotionInputs
+  -- service instant, fulfilment mode, channel type, payment method code, delivery zone id,
+  -- order-sequence position, firstOrder, segments, applied promotions with definition versions
 
 reporting.fact_promotion_redemption
   tenant_id, redemption_id, business_date, boundary_version, metric_calculation_version
@@ -587,13 +741,30 @@ summary.
 
 ### Testing
 
-- Each item in Context is written as a failing test first: product and category
+- Each of items 1 to 5 in Context is written as a failing test first: product and category
   conditions match through `QuoteService` (they cannot today), a Tashkent lunch
   window fires at local lunchtime and not at UTC lunchtime, a dine-in order is not
   priced as pickup, `FIRST_ORDER` becomes true for a new account, two item
   discounts in different groups clamp at the line's gross, an exclusive code
   smaller than the automatic set steps aside, and a currency mismatch skips the
   promotion.
+- Amendment, each written failing first against today's `repriceFor`: **amend after
+  the window closes** (the worked example above: place at 12:30, add a line at 15:05,
+  the promotion still applies to the whole order and the total is 91 800, not
+  102 000); **amend a `FIRST` order** (add a line and the first-order promotion
+  stays, including when the customer placed a second order in between); amend a
+  Click-paid order with an added line (the payment-method promotion stays),
+  `CHANGE_PAYMENT_METHOD` to cash on its own reprices and drops it, and back to Click
+  restores it; **order 100 of 100 amended** (the promotion holds, `consumed_count`
+  stays 100, order 101 is still refused); a limited promotion the order does not hold
+  is not applied by an amendment and the trace says `NOT_CLAIMED_AT_PLACEMENT`; an
+  order holding a since-suspended or since-edited promotion keeps it at its recorded
+  definition version while a new order does not; a promo-code order amended with an
+  added line keeps the code's discount (the live defect in Context, item 6); and the
+  ledger after an amendment has exactly one row per (order, promotion), an unchanged
+  `claimed_quote_id`, the amendment's quote as `current_quote_id`, amounts equal to the
+  sum of that promotion's adjustments on the current revision, and one redemption in
+  the 7.9 fact.
 - Property tests over generated baskets and promotion sets: the result is
   independent of the order promotions are supplied in; no line, subtotal or fee is
   negative; adjustments sum to `discount_minor` and `fee_minor` exactly; the
@@ -611,7 +782,8 @@ summary.
 No promotion exists outside promo codes, so there is no data to migrate. Slice in
 this order, each releasable alone. **Slice 0:** the Context fixes with no new
 authoring (membership wired, timezone-correct clock, fulfilment mode, hash terms,
-per-line clamp, currency guard, comparative exclusivity), shipped behind the
+per-line clamp, currency guard, comparative exclusivity, and the amendment frame with
+the redeemed coupon carried across a reprice), shipped behind the
 `CALCULATION_VERSION` 3 bump. **Slice 1:** validator, lifecycle, approval,
 definition versions, authoring endpoints, events. **Slice 2:** simulator and the
 trace. **Slice 3:** ledger, limits, `fact_promotion_redemption` and report 7.9.
@@ -624,8 +796,12 @@ immutable snapshot and their adjustments.
 
 ## Implementation checklist
 
-- [ ] Slice 0 tests-first for the five Context items, then the fixes; bump
+- [ ] Slice 0 tests-first for the six Context items, then the fixes; bump
       `CALCULATION_VERSION` to 3; keep a version 2 golden fixture.
+- [ ] Amendment: `PromotionFrame` on `CartPricingPort.PricingCommand`, the recorded
+      `promotionInputs` on the quote, `OrderAmendmentService#repriceFor` filling the
+      frame and presenting the order's redeemed coupon, `FinancialIntent#needsReprice`
+      for a payment-method change, and the amendment tests above.
 - [ ] Context hash enumeration test.
 - [ ] Flyway: `pricing.promotions` columns, replaced checks, three new tables,
       cart payment method, quote and order loyalty flags, `GRANT`s (numbers reserved
@@ -664,7 +840,8 @@ promotion limited to the first hundred customers stops at one hundred under
 concurrent checkouts. The 7.9 report shows redemptions, unique customers, discount
 given and the average check with and without the promotion for the same period.
 Typing a smaller promo code does not remove a better automatic offer, and the
-storefront says why.
+storefront says why. Adding a line to a live order keeps every promotion the order
+was placed with, even after its window has closed, without a second ledger row.
 
 ## References
 
@@ -680,7 +857,10 @@ storefront says why.
   tender), ADR 0044 and ADR 0112 (benefit grants, audiences, offers referencing
   promotions), ADR 0036 and ADR 0037 (channels, zones, resolved charge), ADR 0038
   (fiscal treatment of fee lines), ADR 0043 (metric layer, facts), ADR 0040
-  (externally priced orders), ADR 0019 (scheduled orders)
+  (externally priced orders), ADR 0019 (scheduled orders), ADR 0039 (order
+  amendment and its cut point)
 - `V0093` (promotions, coupons, redemptions), `V0019` and `V0022` (quote and order
   adjustments), `V0025` (`DELIVERY_FEE` line type), `V0265` (benefit grants),
-  `PromotionEvaluator`, `PricingEngine`, `QuoteService`, `MenuMembershipLookup`
+  `PromotionEvaluator`, `PricingEngine`, `QuoteService`, `MenuMembershipLookup`,
+  `OrderAmendmentService#repriceFor` and `#apply`, `CartPricingPort`,
+  `QuoteAcceptancePort`, `V0171` (the cart's applied code)
