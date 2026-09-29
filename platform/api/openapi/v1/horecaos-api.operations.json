@@ -11548,6 +11548,10 @@
           "destination" : {
             "$ref" : "#/components/schemas/OperationsOrderControllerDestinationRequest"
           },
+          "dineInSessionId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
           "fulfillmentMode" : {
             "enum" : [ "DELIVERY", "PICKUP", "DINE_IN" ],
             "type" : "string"

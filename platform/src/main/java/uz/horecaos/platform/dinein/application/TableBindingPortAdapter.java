@@ -96,4 +96,28 @@ public class TableBindingPortAdapter implements TableBindingPort {
                 ACTOR_PREFIX + tableId,
                 "Placed from the table via QR checkout");
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public void requireLiveSession(UUID tenantId, UUID locationId, UUID sessionId) {
+        SessionRow session = sessions.findAtLocation(tenantId, locationId, sessionId);
+        if (!session.status().live()) {
+            throw new ApiException(
+                    ErrorCode.RESOURCE_CONFLICT,
+                    "That party has left, so there is no bill to put the order on",
+                    // Both keys, for the reason attachRound gives: `conflict` is the dine-in
+                    // vocabulary and `reason` is the one a placement refusal carries.
+                    Map.of("conflict", "SESSION_NOT_LIVE", "reason", "SESSION_NOT_LIVE"));
+        }
+    }
+
+    @Override
+    @Transactional
+    public void attachRoundToSession(
+            UUID tenantId, UUID locationId, UUID sessionId, UUID orderId, String actorSubject, String reason) {
+        // Checked again here, not only before the order was created: the party may have
+        // closed in the seconds checkout took, and the refusal has to be the same one.
+        requireLiveSession(tenantId, locationId, sessionId);
+        sessions.addRound(tenantId, sessionId, orderId, null, actorSubject, reason);
+    }
 }

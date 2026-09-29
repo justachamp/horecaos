@@ -100,6 +100,9 @@ public class CartService {
     /** The ADR 0027 purpose recorded when a customer chooses where their order goes. */
     private static final String CAPTURE_PURPOSE = "CART_DESTINATION_CAPTURE";
 
+    /** The reason recorded against the round an operator's placement puts on a party's bill. */
+    private static final String OPERATOR_ROUND_REASON = "Placed with the order from the New Order screen";
+
     private final JdbcCartStore carts;
     private final SalesChannelLookup channels;
     private final CartMenuRules menu;
@@ -656,6 +659,27 @@ public class CartService {
     @Transactional
     public void attachOrderToTable(UUID tenantId, UUID tableId, UUID orderId, UUID ownerAccountId) {
         tables.attachRound(tenantId, tableId, orderId, ownerAccountId);
+    }
+
+    /**
+     * Refuses unless the session is a live one at this branch: the operator
+     * placement's read-only check, made before it creates a cart, so a party that
+     * left costs the operator a refusal and not an order that is on no bill.
+     */
+    @Transactional(readOnly = true)
+    public void requireLiveSession(UUID tenantId, UUID locationId, UUID sessionId) {
+        tables.requireLiveSession(tenantId, locationId, sessionId);
+    }
+
+    /**
+     * Puts a just-written operator order on the named party's bill, inside the
+     * caller's transaction. Any refusal propagates and rolls the placement back
+     * with it: an order that cannot be on the bill does not exist.
+     */
+    @Transactional
+    public void attachOrderToSession(
+            UUID tenantId, UUID locationId, UUID sessionId, UUID orderId, String operatorSubject) {
+        tables.attachRoundToSession(tenantId, locationId, sessionId, orderId, operatorSubject, OPERATOR_ROUND_REASON);
     }
 
     /**

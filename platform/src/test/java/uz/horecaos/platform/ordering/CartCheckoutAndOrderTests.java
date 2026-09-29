@@ -1448,6 +1448,184 @@ class CartCheckoutAndOrderTests {
                 .isEmpty();
     }
 
+    /** An operator-keyed DINE_IN order that names the party whose bill it goes on. */
+    private uz.horecaos.platform.ordering.application.OperatorOrderingService.PlaceOrderCommand operatorTableCommand(
+            FulfillmentMode mode, UUID locationId, @Nullable UUID sessionId, String idempotencyKey) {
+        return new uz.horecaos.platform.ordering.application.OperatorOrderingService.PlaceOrderCommand(
+                TENANT,
+                BRAND,
+                locationId,
+                CUSTOMER,
+                "STOREFRONT",
+                mode,
+                List.of(new uz.horecaos.platform.ordering.application.OperatorOrderingService.OrderLine(
+                        burgerVariant, 1, List.of(), List.of(), null)),
+                null,
+                "CASH",
+                null,
+                idempotencyKey,
+                "operator-subject-9",
+                null,
+                null,
+                false,
+                null,
+                null,
+                null,
+                sessionId);
+    }
+
+    @Test
+    @DisplayName("an operator order that names a party is put on that party's bill in the transaction that creates it")
+    void anOperatorOrderNamingAPartyIsOnItsBillInTheSameTransaction() {
+        enableDineIn();
+        UUID party = UUID.randomUUID();
+        tableBinding.liveSessions.add(party);
+
+        var result = tx(() -> operatorOrdering.place(
+                operatorTableCommand(FulfillmentMode.DINE_IN, LOCATION, party, "idem-op-bill-1")));
+
+        assertThat(result.created()).isTrue();
+        assertThat(tableBinding.sessionAttaches).hasSize(1);
+        RecordingTableBinding.SessionAttach attach = tableBinding.sessionAttaches.get(0);
+        assertThat(attach.orderId()).isEqualTo(orderIdOf(result));
+        assertThat(attach.sessionId()).isEqualTo(party);
+        assertThat(attach.locationId()).isEqualTo(LOCATION);
+        assertThat(attach.actorSubject()).isEqualTo("operator-subject-9");
+        assertThat(attach.orderRowVisible())
+                .as("asked to attach on the placement's own connection, after the order row was written")
+                .isTrue();
+    }
+
+    @Test
+    @DisplayName("a party that has left refuses the operator's order before anything is created or attached")
+    void aPartyThatLeftRefusesTheOperatorsOrder() {
+        enableDineIn();
+        UUID gone = UUID.randomUUID();
+        long reservationsBefore = reservationCount();
+
+        assertThatThrownBy(() -> tx(() -> operatorOrdering.place(
+                        operatorTableCommand(FulfillmentMode.DINE_IN, LOCATION, gone, "idem-op-bill-2"))))
+                .isInstanceOf(ApiException.class)
+                .satisfies(thrown -> {
+                    assertThat(((ApiException) thrown).errorCode()).isEqualTo(ErrorCode.RESOURCE_CONFLICT);
+                    assertThat(((ApiException) thrown).properties()).containsEntry("reason", "SESSION_NOT_LIVE");
+                });
+
+        assertThat(countOrders()).as("no order for a party that is not there").isZero();
+        assertThat(reservationCount()).isEqualTo(reservationsBefore);
+        assertThat(tableBinding.sessionAttaches)
+                .as("refused up front: the attach after checkout was never reached")
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("a bill that refuses the operator's order after checkout rolls the whole placement back, key reusable")
+    void aBillThatRefusesTheOperatorsOrderRollsThePlacementBack() {
+        enableDineIn();
+        UUID party = UUID.randomUUID();
+        tableBinding.liveSessions.add(party);
+        tableBinding.refuseAttach =
+                new ApiException(ErrorCode.RESOURCE_CONFLICT, "The session closed in the instant since we looked");
+        long reservationsBefore = reservationCount();
+
+        assertThatThrownBy(() -> tx(() -> operatorOrdering.place(
+                        operatorTableCommand(FulfillmentMode.DINE_IN, LOCATION, party, "idem-op-bill-3"))))
+                .isInstanceOf(ApiException.class);
+
+        assertThat(tableBinding.sessionAttaches).as("the attach was attempted").hasSize(1);
+        assertThat(countOrders())
+                .as("and the order it was attempted for does not exist")
+                .isZero();
+        assertThat(reservationCount()).isEqualTo(reservationsBefore);
+
+        tableBinding.refuseAttach = null;
+        var retried = tx(() -> operatorOrdering.place(
+                operatorTableCommand(FulfillmentMode.DINE_IN, LOCATION, party, "idem-op-bill-3")));
+        assertThat(retried.outcome()).isEqualTo(CheckoutService.CheckoutResult.Outcome.CREATED);
+        assertThat(countOrders()).isEqualTo(1L);
+    }
+
+    @Test
+    @DisplayName("a session is only meaningful for a DINE_IN order: any other mode naming one is refused")
+    void aSessionOnAnOrderThatIsNotEatenAtATableIsRefused() {
+        enableDineIn();
+        UUID party = UUID.randomUUID();
+        tableBinding.liveSessions.add(party);
+
+        assertThatThrownBy(() -> tx(() -> operatorOrdering.place(
+                        operatorTableCommand(FulfillmentMode.PICKUP, LOCATION, party, "idem-op-bill-4"))))
+                .isInstanceOf(ApiException.class)
+                .satisfies(thrown ->
+                        assertThat(((ApiException) thrown).errorCode()).isEqualTo(ErrorCode.VALIDATION_FAILED));
+
+        assertThat(countOrders()).isZero();
+        assertThat(tableBinding.sessionAttaches).isEmpty();
+    }
+
+    @Test
+    @DisplayName(
+            "against the real dine-in stack, the operator's order lands on the chosen party's bill and names its table")
+    void anOperatorOrderLandsOnTheRealPartysBill() {
+        enableDineIn();
+        RealDineIn room = realDineIn("UZS");
+        tableBinding.delegate = room.adapter();
+
+        var result = tx(() -> operatorOrdering.place(
+                operatorTableCommand(FulfillmentMode.DINE_IN, LOCATION, room.sessionId(), "idem-op-real-1")));
+
+        UUID orderId = orderIdOf(result);
+        assertThat(room.sessions().rounds(TENANT, room.sessionId())).containsExactly(orderId);
+        OrderTablesPort.OrderTable named = Objects.requireNonNull(
+                room.orderTables().tablesByOrders(TENANT, List.of(orderId)).get(orderId),
+                "the order is on a bill, so its table is named");
+        assertThat(named.tables()).extracting(OrderTablesPort.TableRef::code).containsExactly("T7");
+    }
+
+    @Test
+    @DisplayName("against the real dine-in stack, a party closed while the operator built the basket leaves no order")
+    void aClosedRealPartyLeavesNoOperatorOrder() {
+        enableDineIn();
+        RealDineIn room = realDineIn("UZS");
+        tableBinding.delegate = room.adapter();
+        tx(() -> room.sessions()
+                .move(
+                        TENANT,
+                        room.sessionId(),
+                        uz.horecaos.platform.dinein.domain.SessionStatus.CLOSED,
+                        room.sessions().find(TENANT, room.sessionId()).version(),
+                        null,
+                        "waiter",
+                        "Party left"));
+
+        assertThatThrownBy(() -> tx(() -> operatorOrdering.place(
+                        operatorTableCommand(FulfillmentMode.DINE_IN, LOCATION, room.sessionId(), "idem-op-real-2"))))
+                .isInstanceOf(ApiException.class)
+                .satisfies(thrown -> {
+                    assertThat(((ApiException) thrown).errorCode()).isEqualTo(ErrorCode.RESOURCE_CONFLICT);
+                    assertThat(((ApiException) thrown).properties()).containsEntry("reason", "SESSION_NOT_LIVE");
+                });
+
+        assertThat(countOrders()).as("no cooked order that is on no bill").isZero();
+        assertThat(room.sessions().rounds(TENANT, room.sessionId())).isEmpty();
+    }
+
+    @Test
+    @DisplayName("against the real dine-in stack, a session of another branch answers like one that does not exist")
+    void aSessionOfAnotherBranchIsNotFoundToTheOperator() {
+        enableDineIn();
+        RealDineIn room = realDineIn("UZS");
+        tableBinding.delegate = room.adapter();
+
+        assertThatThrownBy(() -> tx(() -> operatorOrdering.place(operatorTableCommand(
+                        FulfillmentMode.DINE_IN, OTHER_LOCATION, room.sessionId(), "idem-op-real-3"))))
+                .isInstanceOf(ApiException.class)
+                .satisfies(thrown ->
+                        assertThat(((ApiException) thrown).errorCode()).isEqualTo(ErrorCode.RESOURCE_NOT_FOUND));
+
+        assertThat(countOrders()).isZero();
+        assertThat(room.sessions().rounds(TENANT, room.sessionId())).isEmpty();
+    }
+
     @Test
     @DisplayName("rebuilding the cart at another branch drops the table binding: that table is not there")
     void rebuildingAtAnotherBranchDropsTheBinding() {

@@ -551,6 +551,16 @@ public class OperationsOrderController {
             @PathVariable UUID locationId,
             @RequestHeader("Idempotency-Key") @NotBlank String idempotencyKey,
             @Valid @RequestBody PlaceOrderRequest body) {
+        if (body.dineInSessionId() != null) {
+            // Putting the order on a table's bill is a write to that bill, which ORDER_PLACE
+            // does not cover: the second capability is asked for here, before anything is
+            // created, at the branch the request names (the same scope the session
+            // endpoints check it at). One annotation declares one capability.
+            authorization.require(
+                    currentActor.get().subject(),
+                    Capability.DINEIN_SESSION_MANAGE,
+                    ResourceScope.location(tenantId, brandId, locationId));
+        }
         try {
             var result = operatorOrdering.place(new OperatorOrderingService.PlaceOrderCommand(
                     tenantId,
@@ -570,7 +580,8 @@ public class OperationsOrderController {
                     Boolean.TRUE.equals(body.overrideOutOfHours()),
                     body.proposedLocationId(),
                     body.overrideReasonCode(),
-                    body.overrideNote()));
+                    body.overrideNote(),
+                    body.dineInSessionId()));
 
             if (result.outcome() == CheckoutService.CheckoutResult.Outcome.REJECTED) {
                 String rejectionCode =
@@ -1771,6 +1782,16 @@ public class OperationsOrderController {
      *                          GET .../branch-override-reasons}' curated codes
      * @param overrideNote      required exactly when {@code overrideReasonCode}
      *                          is {@code OTHER}
+     * @param dineInSessionId   ADR 0047: for a {@code DINE_IN} order, the live
+     *                          party whose bill the order goes on. The order is
+     *                          put on that bill in the transaction that creates
+     *                          it, so it is on the bill or it does not exist; a
+     *                          party that has left refuses the placement ({@code
+     *                          409}, reason {@code SESSION_NOT_LIVE}) before
+     *                          anything is priced. Also requires {@code
+     *                          dinein.session.manage} at the branch, because it
+     *                          writes to the table's bill. Refused for any other
+     *                          fulfilment mode
      */
     public record PlaceOrderRequest(
             @NotNull UUID customerAccountId,
@@ -1784,7 +1805,8 @@ public class OperationsOrderController {
             Boolean overrideOutOfHours,
             @Nullable UUID proposedLocationId,
             @Nullable @Size(max = 48) String overrideReasonCode,
-            @Nullable @Size(max = 500) String overrideNote) {}
+            @Nullable @Size(max = 500) String overrideNote,
+            @Nullable UUID dineInSessionId) {}
 
     /** One line the operator entered into the basket, same shape as a storefront cart line. */
     public record OrderLineRequest(

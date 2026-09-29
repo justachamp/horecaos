@@ -79,43 +79,6 @@
         {{ message }}
       </p>
     }
-    @if (placedAwaitingBill(); as placed) {
-      <!-- ADR 0047: the order exists, and the table's bill does not have it yet. -->
-      <div class="new-order__notice" role="alert" data-testid="new-order-attach-failed">
-        <p class="q-caption">
-          {{ 'orders.newOrder.table.attachFailed' | t: { number: placed.publicOrderNumber } }}
-        </p>
-        @if (attachError(); as message) {
-          <p class="q-caption new-order__error-inline" data-testid="new-order-attach-error">
-            {{ message }}
-          </p>
-        }
-        <div class="new-order__notice-actions">
-          <button
-            type="button"
-            class="new-order__create-button q-caption"
-            [disabled]="attaching()"
-            (click)="retryPutOnTheBill()"
-            data-testid="new-order-attach-retry"
-          >
-            {{
-              attaching()
-                ? ('orders.newOrder.table.attachRetrying' | t)
-                : ('orders.newOrder.table.attachRetry' | t)
-            }}
-          </button>
-          <button
-            type="button"
-            class="new-order__link q-caption"
-            (click)="openPlacedOrder()"
-            data-testid="new-order-attach-open"
-          >
-            {{ 'orders.newOrder.table.attachOpenOrder' | t }}
-          </button>
-        </div>
-      </div>
-    }
-
     <div class="new-order__panes">
       <!-- ================================================== КЛИЕНТ / АГРЕГАТОР -->
       <section

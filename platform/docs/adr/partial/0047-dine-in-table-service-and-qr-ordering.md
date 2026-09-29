@@ -29,17 +29,25 @@
   Batch 15 (`w6-dine-in-operator-flows`) builds the operator half and the
   cart-to-table binding. The console seats a walk-in from the floor plan
   (`TableSessionController.open` with no booking), the New Order screen's DINE_IN
-  mode names its table, places the order and attaches it as a round through
-  `POST .../sessions/{sessionId}/rounds` (a repeat of an attach the session
+  mode names its table and sends the party's session id with the placement
+  (`dineInSessionId` on `POST .../orders`, which also needs `dinein.session.manage`
+  at the branch): the order goes on that party's bill in the transaction that
+  creates it, and a party that has left refuses the placement before anything is
+  priced (`SESSION_NOT_LIVE`), so an operator's order is on a bill or does not
+  exist. `POST .../sessions/{sessionId}/rounds` stays for a manager attaching an
+  order afterwards and for the guest's own attach (a repeat of an attach the session
   already holds answers with the sequence it has), and every session read and
   write is scoped to the branch in its path. V0435 widens `ordering.cart_fulfillment`
   to a second kind of row, a DINE_IN cart's `dinein_table_id`; `PUT
   /carts/{cartId}/table` binds a guest's cart to the table its `X-Dine-In-Token`
   was minted for (never a table id in the request); and checkout, through
-  `dinein.api.TableBindingPort`, refuses a bound cart whose table nobody sits at
-  and puts the order on the table's bill in the transaction that creates it. A cart
-  with no binding, and the guest's own `POST /sessions/{sessionId}/rounds` after
-  checkout, work as before. Not built: the two ADR 0011 ports and any adapter, ADR
+  `dinein.api.TableBindingPort`, re-proves the guest from a live token (the binding
+  is remembered state, so a checkout with no token, an ended one, or one for another
+  table is refused: `TABLE_TOKEN_REQUIRED`, `TABLE_TOKEN_ENDED`,
+  `TABLE_BINDING_STALE`), refuses a bound cart whose table nobody sits at, and puts
+  the order on the table's bill in the transaction that creates it. A cart with no
+  binding, and the guest's own `POST /sessions/{sessionId}/rounds` after checkout,
+  work as before. Not built: the two ADR 0011 ports and any adapter, ADR
   0013's widened payable subject, the ADR 0018 service charge, and the external
   event contracts. See "What was not built, and why".
 - Date proposed: 2026-08-21

@@ -34,7 +34,21 @@ final class RecordingTableBinding implements TableBindingPort {
     /** One write ordering asked for. */
     record Attach(UUID tenantId, UUID tableId, UUID orderId, UUID ownerAccountId, boolean orderRowVisible) {}
 
+    /** One write an operator's placement asked for: an order onto a named session's bill. */
+    record SessionAttach(
+            UUID tenantId,
+            UUID locationId,
+            UUID sessionId,
+            UUID orderId,
+            String actorSubject,
+            boolean orderRowVisible) {}
+
     private final JdbcClient jdbc;
+
+    /** The sessions {@link #requireLiveSession} accepts when no {@link #delegate} answers instead. */
+    final Set<UUID> liveSessions = new HashSet<>();
+
+    final List<SessionAttach> sessionAttaches = new ArrayList<>();
 
     final Map<String, GuestTable> guests = new HashMap<>();
     final Set<UUID> seated = new HashSet<>();
@@ -66,6 +80,8 @@ final class RecordingTableBinding implements TableBindingPort {
         guests.clear();
         seated.clear();
         attaches.clear();
+        liveSessions.clear();
+        sessionAttaches.clear();
         refuseAttach = null;
         delegate = null;
         delegateGuestLookups = false;
@@ -87,6 +103,41 @@ final class RecordingTableBinding implements TableBindingPort {
             return real.findGuestTable(guestToken);
         }
         return Optional.ofNullable(guests.get(guestToken));
+    }
+
+    @Override
+    public void requireLiveSession(UUID tenantId, UUID locationId, UUID sessionId) {
+        TableBindingPort real = delegate;
+        if (real != null) {
+            real.requireLiveSession(tenantId, locationId, sessionId);
+            return;
+        }
+        if (!liveSessions.contains(sessionId)) {
+            throw new ApiException(
+                    ErrorCode.RESOURCE_CONFLICT,
+                    "That party has left, so there is no bill to put the order on",
+                    Map.of("conflict", "SESSION_NOT_LIVE", "reason", "SESSION_NOT_LIVE"));
+        }
+    }
+
+    @Override
+    public void attachRoundToSession(
+            UUID tenantId, UUID locationId, UUID sessionId, UUID orderId, String actorSubject, String reason) {
+        Long visible = jdbc.sql("SELECT count(*) FROM ordering.orders WHERE tenant_id = :t AND id = :id")
+                .param("t", tenantId)
+                .param("id", orderId)
+                .query(Long.class)
+                .single();
+        sessionAttaches.add(new SessionAttach(
+                tenantId, locationId, sessionId, orderId, actorSubject, visible != null && visible == 1L));
+        RuntimeException refusal = refuseAttach;
+        if (refusal != null) {
+            throw refusal;
+        }
+        TableBindingPort real = delegate;
+        if (real != null) {
+            real.attachRoundToSession(tenantId, locationId, sessionId, orderId, actorSubject, reason);
+        }
     }
 
     @Override

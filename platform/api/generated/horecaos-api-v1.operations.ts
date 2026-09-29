@@ -3651,6 +3651,7 @@ export interface PlaceOrderRequest {
   channelCode: string;
   customerAccountId: string;
   destination?: OperationsOrderControllerDestinationRequest;
+  dineInSessionId?: string;
   fulfillmentMode: "DELIVERY" | "PICKUP" | "DINE_IN";
   lines: Array<OrderLineRequest>;
   overrideNote?: string;

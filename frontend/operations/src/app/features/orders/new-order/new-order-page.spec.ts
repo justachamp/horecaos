@@ -1,7 +1,7 @@
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ActivatedRoute, Router, convertToParamMap, provideRouter } from '@angular/router';
-import { of, throwError } from 'rxjs';
+import { of } from 'rxjs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { LocationScope } from '../../../core/api/operations-paths';
@@ -184,11 +184,10 @@ describe('NewOrderPage', () => {
     /** Row 5.2d: the reorder deep link's own bootstrap read — no default resolution, only the tests that set query params call it. */
     profile: ReturnType<typeof vi.fn>;
   };
-  /** ADR 0047: the staff-side session reads and the round attach the DINE_IN mode makes. */
+  /** ADR 0047: the staff-side session reads and the seating the DINE_IN mode makes. The order goes on the bill inside the placement, not through here. */
   let sessionsApi: {
     live: ReturnType<typeof vi.fn>;
     open: ReturnType<typeof vi.fn>;
-    attachRound: ReturnType<typeof vi.fn>;
   };
   let reservationsApi: { availability: ReturnType<typeof vi.fn> };
   let router: Router;
@@ -246,9 +245,6 @@ describe('NewOrderPage', () => {
     sessionsApi = {
       live: vi.fn().mockReturnValue(of([])),
       open: vi.fn(),
-      attachRound: vi
-        .fn()
-        .mockReturnValue(of({ sessionId: 'ses-1', orderId: 'order-1', sequence: 1 })),
     };
     reservationsApi = { availability: vi.fn().mockResolvedValue([]) };
     await TestBed.configureTestingModule({
@@ -1602,7 +1598,7 @@ describe('NewOrderPage', () => {
     );
   });
 
-  it('places a DINE_IN order at the operator’s own branch, then attaches it as a round of the chosen party', async () => {
+  it('places a DINE_IN order at the operator’s own branch, naming the chosen party so the platform puts it on that bill', async () => {
     const host = await renderDineIn();
     const navigateSpy = vi.spyOn(router, 'navigate').mockResolvedValue(true);
     pickParty(host);
@@ -1616,17 +1612,10 @@ describe('NewOrderPage', () => {
     expect(request.destination).toBeNull();
     expect(request.proposedLocationId).toBeNull();
     expect(request.requestedFor).toBeNull();
-
-    expect(sessionsApi.attachRound).toHaveBeenCalledTimes(1);
-    expect(sessionsApi.attachRound).toHaveBeenCalledWith(
-      SCOPE,
-      'ses-1',
-      'order-1',
-      'Keyed in at the console',
-    );
-    expect(newOrderApi.placeOrder.mock.invocationCallOrder[0]).toBeLessThan(
-      sessionsApi.attachRound.mock.invocationCallOrder[0],
-    );
+    expect(
+      request.dineInSessionId,
+      'the party rides in the placement: one request, so the order is on the bill or does not exist',
+    ).toBe('ses-1');
     expect(navigateSpy).toHaveBeenCalledWith(['/orders', 'order-1']);
   });
 
@@ -1650,54 +1639,50 @@ describe('NewOrderPage', () => {
     expect(newOrderApi.placeOrder.mock.calls[0][1].overrideReasonCode).toBeNull();
   });
 
-  it('an attach that fails leaves the order placed, blocks a second placement, and retrying puts it on the bill', async () => {
-    const host = await renderDineIn();
+  it('a party that left while the basket was built refuses the placement, says so, and lets the operator pick another', async () => {
+    const gone = new ApiError(
+      ApiErrorCode.RESOURCE_CONFLICT,
+      409,
+      { status: 409, reason: 'SESSION_NOT_LIVE', conflict: 'SESSION_NOT_LIVE' },
+      null,
+    );
+    const placeOrder = vi.fn().mockRejectedValueOnce(gone).mockResolvedValue(PLACED);
+    const host = await renderDineIn({ placeOrder });
     const navigateSpy = vi.spyOn(router, 'navigate').mockResolvedValue(true);
-    sessionsApi.attachRound
-      .mockReturnValueOnce(
-        throwError(() => new ApiError(ApiErrorCode.NETWORK_UNREACHABLE, 0, null, null)),
-      )
-      .mockReturnValue(of({ sessionId: 'ses-1', orderId: 'order-1', sequence: 1 }));
     pickParty(host);
+    // The room as it is by the time the platform refuses: T7's party is gone, another sits at T9.
+    sessionsApi.live.mockReturnValue(
+      of([
+        partySession({
+          sessionId: 'ses-2',
+          tables: [{ tableId: 'tb-9', code: 'T9', displayName: 'Table 9' }],
+        }),
+      ]),
+    );
 
     await fixture.componentInstance['submit']();
-    fixture.detectChanges();
-
-    expect(newOrderApi.placeOrder).toHaveBeenCalledTimes(1);
-    expect(navigateSpy).not.toHaveBeenCalled();
-    const banner = host.querySelector('[data-testid="new-order-attach-failed"]');
-    expect(banner?.textContent).toContain('#0001');
-    expect(fixture.componentInstance['canSubmit']()).toBe(false);
-
-    // A second «Создать» here would be a second order for the same table.
-    await fixture.componentInstance['submit']();
-    expect(newOrderApi.placeOrder).toHaveBeenCalledTimes(1);
-
-    host.querySelector<HTMLButtonElement>('[data-testid="new-order-attach-retry"]')!.click();
     await flushMicrotasks();
     fixture.detectChanges();
 
-    expect(sessionsApi.attachRound).toHaveBeenCalledTimes(2);
-    expect(sessionsApi.attachRound.mock.calls[1]).toEqual(sessionsApi.attachRound.mock.calls[0]);
-    expect(newOrderApi.placeOrder).toHaveBeenCalledTimes(1);
-    expect(navigateSpy).toHaveBeenCalledWith(['/orders', 'order-1']);
-    expect(host.querySelector('[data-testid="new-order-attach-failed"]')).toBeNull();
-  });
-
-  it('“Open the order” after a failed attach leaves for the placed order without placing another', async () => {
-    const host = await renderDineIn();
-    const navigateSpy = vi.spyOn(router, 'navigate').mockResolvedValue(true);
-    sessionsApi.attachRound.mockReturnValue(
-      throwError(() => new ApiError(ApiErrorCode.NETWORK_UNREACHABLE, 0, null, null)),
+    expect(navigateSpy, 'nothing was placed, so there is no order to open').not.toHaveBeenCalled();
+    expect(fixture.componentInstance['submitError']()).toBe(
+      TestBed.inject(I18n).t('orders.newOrder.table.sessionEnded'),
     );
-    pickParty(host);
-    await fixture.componentInstance['submit']();
+    expect(sessionsApi.live, 'the room was read again').toHaveBeenCalledTimes(2);
+    expect(
+      fixture.componentInstance['tablePick'](),
+      'the closed party is no longer chosen, so the same one cannot be sent again',
+    ).toBeNull();
+    expect(fixture.componentInstance['canSubmit']()).toBe(false);
+
+    // Picking the party that is still there places the order, on that bill.
+    host.querySelector<HTMLButtonElement>('[data-testid="new-order-table-session"]')!.click();
     fixture.detectChanges();
+    await fixture.componentInstance['submit']();
 
-    host.querySelector<HTMLButtonElement>('[data-testid="new-order-attach-open"]')!.click();
-
+    expect(newOrderApi.placeOrder).toHaveBeenCalledTimes(2);
+    expect(newOrderApi.placeOrder.mock.calls[1][1].dineInSessionId).toBe('ses-2');
     expect(navigateSpy).toHaveBeenCalledWith(['/orders', 'order-1']);
-    expect(newOrderApi.placeOrder).toHaveBeenCalledTimes(1);
   });
 
   it('a NOT_SERVICEABLE refusal on a table order says the branch is not taking dine-in, not that an address is out of zone', async () => {
@@ -1715,14 +1700,9 @@ describe('NewOrderPage', () => {
     expect(fixture.componentInstance['submitError']()).toBe(
       TestBed.inject(I18n).t('orders.newOrder.table.notServiceable'),
     );
-    expect(
-      sessionsApi.attachRound,
-      'nothing was placed, so nothing is attached',
-    ).not.toHaveBeenCalled();
-    expect(fixture.componentInstance['placedAwaitingBill']()).toBeNull();
   });
 
-  it('a pickup order attaches nothing, and switching to DINE_IN discards a pre-order time', async () => {
+  it('a pickup order names no party, and switching to DINE_IN discards a pre-order time', async () => {
     await render({ placeOrder: vi.fn().mockResolvedValue(PLACED) });
     vi.spyOn(router, 'navigate').mockResolvedValue(true);
     fixture.componentInstance['selectCandidate'](candidate());
@@ -1739,7 +1719,7 @@ describe('NewOrderPage', () => {
     await fixture.componentInstance['submit']();
 
     expect(newOrderApi.placeOrder.mock.calls[0][1].fulfillmentMode).toBe('PICKUP');
-    expect(sessionsApi.attachRound).not.toHaveBeenCalled();
+    expect(newOrderApi.placeOrder.mock.calls[0][1].dineInSessionId).toBeNull();
   });
 
   it('switching the aggregator entry on leaves DINE_IN: a marketplace order is never eaten at our table', async () => {

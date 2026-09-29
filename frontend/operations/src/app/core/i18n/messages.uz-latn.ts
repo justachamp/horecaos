@@ -5845,12 +5845,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'orders.newOrder.table.seatOccupied': 'Bu stol hozirgina band boʻldi — boshqasini tanlang',
   'orders.newOrder.table.selected': 'Buyurtma {tables} ga boradi',
   'orders.newOrder.table.required': 'Buyurtma qaysi stol uchun ekanini tanlang',
-  'orders.newOrder.table.attachReason': 'Konsolda kiritildi',
-  'orders.newOrder.table.attachFailed':
-    '{number} buyurtma yaratildi, lekin u hali stol hisobiga qoʻshilmadi.',
-  'orders.newOrder.table.attachRetry': 'Hisobga qoʻshish',
-  'orders.newOrder.table.attachRetrying': 'Qoʻshilmoqda…',
-  'orders.newOrder.table.attachOpenOrder': 'Buyurtmani ochish',
+  'orders.newOrder.table.sessionEnded':
+    'Bu mehmonlar stoldan allaqachon ketgan, buyurtma yaratilmadi. Roʻyxat yangilandi — stolni qaytadan tanlang.',
   'orders.newOrder.table.notServiceable':
     'Bu filial hozir bu kanal orqali zaldagi buyurtmalarni qabul qilmayapti',
 

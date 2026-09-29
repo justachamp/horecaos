@@ -27,6 +27,17 @@ final class UnusedTableBinding implements TableBindingPort {
     }
 
     @Override
+    public void requireLiveSession(UUID tenantId, UUID locationId, UUID sessionId) {
+        throw new UnsupportedOperationException("This suite does not put orders on a party's bill");
+    }
+
+    @Override
+    public void attachRoundToSession(
+            UUID tenantId, UUID locationId, UUID sessionId, UUID orderId, String actorSubject, String reason) {
+        throw new UnsupportedOperationException("This suite does not put orders on a party's bill");
+    }
+
+    @Override
     public boolean isSeated(UUID tenantId, UUID tableId) {
         throw new UnsupportedOperationException("This suite does not bind carts to tables");
     }

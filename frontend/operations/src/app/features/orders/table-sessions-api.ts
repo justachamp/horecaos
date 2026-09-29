@@ -130,6 +130,10 @@ export class TableSessionsApi {
    * The order is not created or changed here -- the server records that it
    * belongs to this evening, which is what puts the table on the order board,
    * the order detail and the kitchen ticket.
+   *
+   * Not how the New Order screen puts its own order on a bill: that names the
+   * party in the placement (`dineInSessionId`), so the order is on the bill or does
+   * not exist. This is for an order that already exists and is on no bill.
    */
   attachRound(
     scope: LocationScope,
