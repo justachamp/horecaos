@@ -5,7 +5,8 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { BrandScope } from '../../core/api/catalog-paths';
 import { CurrentBrand } from '../../core/auth/current-brand';
-import { I18n } from '../../core/i18n/i18n';
+import { I18n, Locale } from '../../core/i18n/i18n';
+import { LocaleSet } from '../../core/i18n/locale-set';
 import { LocationsApi } from '../settings/locations/locations-api';
 import { SalesChannelsApi } from '../settings/sales-channels/sales-channels-api';
 import { CatalogApi } from './catalog-api';
@@ -64,12 +65,21 @@ async function flushMicrotasks(): Promise<void> {
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
 }
 
+/** Row 10.12: a brand's resolved locale set; unconfigured by default, the way `categories-page.spec.ts` fakes it. */
+class FakeLocaleSet {
+  readonly locales = signal<readonly Locale[]>(['ru', 'uz-Latn', 'en']);
+  readonly defaultLocale = signal<Locale>('ru');
+  readonly isConfigured = signal(false);
+  ensureLoaded = vi.fn().mockResolvedValue(undefined);
+}
+
 describe('MenuSetsPage', () => {
   let fixture: ComponentFixture<MenuSetsPage>;
 
   async function render(
     scope: BrandScope | null,
     apis: ReturnType<typeof stubApis>,
+    localeSet: FakeLocaleSet = new FakeLocaleSet(),
   ): Promise<void> {
     await TestBed.configureTestingModule({
       imports: [MenuSetsPage],
@@ -82,6 +92,7 @@ describe('MenuSetsPage', () => {
             ensureLoaded: () => Promise.resolve(),
           },
         },
+        { provide: LocaleSet, useValue: localeSet },
         { provide: MenuSetsApi, useValue: apis.menus },
         { provide: CatalogApi, useValue: apis.catalog },
         { provide: LocationsApi, useValue: apis.locations },
@@ -179,6 +190,42 @@ describe('MenuSetsPage', () => {
     expect(host.querySelector('[data-testid="menu-sets-filter-result"]')?.textContent).toContain(
       '3',
     );
+  });
+
+  /** Selects the menu, submits add-by-filter, and returns the request body it sent. */
+  async function addByFilterBody(localeSet: FakeLocaleSet): Promise<{ locale?: string }> {
+    const apis = stubApis({});
+    await render(SCOPE, apis, localeSet);
+    const host = fixture.nativeElement as HTMLElement;
+    (host.querySelector('[data-testid="menu-sets-select-menu-1"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+    (host.querySelector('[data-testid="menu-sets-filter-submit"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    const addByFilter = apis.menus.addByFilter as unknown as ReturnType<typeof vi.fn>;
+    return addByFilter.mock.calls[0][2] as { locale?: string };
+  }
+
+  it('searches product names in the brand’s own default language, not the operator’s console language', async () => {
+    // The console is English (render sets it); the brand's menu is in Russian.
+    const localeSet = new FakeLocaleSet();
+    localeSet.locales.set(['ru', 'en']);
+    localeSet.defaultLocale.set('ru');
+    localeSet.isConfigured.set(true);
+
+    expect(await addByFilterBody(localeSet)).toMatchObject({ locale: 'ru' });
+  });
+
+  it('maps a brand default of uz-Latn to the catalog’s uz, and an unconfigured brand to the server’s uz', async () => {
+    const uzbekBrand = new FakeLocaleSet();
+    uzbekBrand.locales.set(['uz-Latn']);
+    uzbekBrand.defaultLocale.set('uz-Latn');
+    uzbekBrand.isConfigured.set(true);
+    expect(await addByFilterBody(uzbekBrand)).toMatchObject({ locale: 'uz' });
+
+    TestBed.resetTestingModule();
+    // LocaleSet's platform fallback is `ru`; the server reads `uz` for a brand that chose nothing.
+    expect(await addByFilterBody(new FakeLocaleSet())).toMatchObject({ locale: 'uz' });
   });
 
   it('binds the selected menu to a chosen branch', async () => {

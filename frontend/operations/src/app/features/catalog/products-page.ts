@@ -14,6 +14,7 @@ import { CursorState, firstPage, nextPage } from '../../core/api/page';
 import { ApiError } from '../../core/api/problem-details';
 import { CurrentBrand } from '../../core/auth/current-brand';
 import { I18n } from '../../core/i18n/i18n';
+import { LocaleSet } from '../../core/i18n/locale-set';
 import { MessageKey } from '../../core/i18n/messages.en';
 import { TPipe } from '../../core/i18n/t.pipe';
 import { InlineAlert } from '../../shared/ui/inline-alert';
@@ -27,7 +28,13 @@ import {
 } from '../../shared/ui/data-table/data-table-types';
 import { AddToCategoryDialog, AddToCategorySubmission } from './add-to-category-dialog';
 import { CatalogApi, ProductListFilters } from './catalog-api';
-import { CatalogStatus, CatalogSummary, CategorySummary, ProductSummary } from './catalog-domain';
+import {
+  CatalogStatus,
+  CatalogSummary,
+  CategorySummary,
+  ProductSummary,
+  listResolutionLocale,
+} from './catalog-domain';
 import { CreateProductDialog, CreateProductSubmission } from './create-product-dialog';
 import { FiscalWorkbenchPanel } from './fiscal-workbench-panel';
 import { describeApiError } from '../orders/order-errors';
@@ -101,6 +108,17 @@ export class ProductsPage implements OnInit {
   private readonly brand = inject(CurrentBrand);
   private readonly router = inject(Router);
   protected readonly i18n = inject(I18n);
+  private readonly localeSet = inject(LocaleSet);
+
+  /**
+   * Row 10.12: the catalog locale the brand's list screens resolve names in --
+   * the brand's own default when it has configured a set, the server's
+   * configured locale otherwise (`listResolutionLocale`). The create dialog
+   * writes the new product's name under it.
+   */
+  protected readonly listLocale = computed<string>(() =>
+    listResolutionLocale(this.localeSet.isConfigured(), this.localeSet.defaultLocale()),
+  );
 
   protected readonly columns = computed<readonly DataTableColumn[]>(() => {
     this.i18n.locale();
@@ -237,7 +255,7 @@ export class ProductsPage implements OnInit {
   private searchDebounceHandle: ReturnType<typeof setTimeout> | null = null;
 
   async ngOnInit(): Promise<void> {
-    await this.brand.ensureLoaded();
+    await Promise.all([this.brand.ensureLoaded(), this.localeSet.ensureLoaded()]);
     await this.loadCatalogsAndProducts();
   }
 

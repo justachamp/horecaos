@@ -12,13 +12,14 @@ import { BrandScope } from '../../core/api/catalog-paths';
 import { ApiError } from '../../core/api/problem-details';
 import { CurrentBrand } from '../../core/auth/current-brand';
 import { I18n } from '../../core/i18n/i18n';
+import { LocaleSet } from '../../core/i18n/locale-set';
 import { TPipe } from '../../core/i18n/t.pipe';
 import { LocationScope } from '../../core/api/operations-paths';
 import { LocationView, LocationsApi } from '../settings/locations/locations-api';
 import { ChannelView, SalesChannelsApi } from '../settings/sales-channels/sales-channels-api';
 import { describeApiError } from '../orders/order-errors';
 import { CatalogApi } from './catalog-api';
-import { CategorySummary, toCatalogLocale } from './catalog-domain';
+import { CategorySummary, listResolutionLocale } from './catalog-domain';
 import { MenuSetBinding, MenuSetItem, MenuSetSummary, MenuSetsApi } from './menu-sets-api';
 
 /**
@@ -44,6 +45,18 @@ export class MenuSetsPage implements OnInit {
   private readonly channelsApi = inject(SalesChannelsApi);
   private readonly brand = inject(CurrentBrand);
   private readonly i18n = inject(I18n);
+  private readonly localeSet = inject(LocaleSet);
+
+  /**
+   * Row 10.12: the catalog locale the add-by-filter search matches product
+   * names in -- the brand's own default when it has configured a set, the
+   * server's configured locale otherwise (`listResolutionLocale`). It used to
+   * be the operator's console language, so a Russian-speaking operator's
+   * search never matched the names of a brand whose menu is in Uzbek.
+   */
+  private readonly listLocale = computed<string>(() =>
+    listResolutionLocale(this.localeSet.isConfigured(), this.localeSet.defaultLocale()),
+  );
 
   protected readonly firstLoadComplete = signal(false);
   protected readonly denied = signal(false);
@@ -99,7 +112,7 @@ export class MenuSetsPage implements OnInit {
   protected readonly bindError = signal<string | null>(null);
 
   async ngOnInit(): Promise<void> {
-    await this.brand.ensureLoaded();
+    await Promise.all([this.brand.ensureLoaded(), this.localeSet.ensureLoaded()]);
     const scope = this.brand.scope();
     if (!scope) {
       this.denied.set(this.brand.denied());
@@ -276,7 +289,7 @@ export class MenuSetsPage implements OnInit {
         categoryId: this.filterCategoryId() || null,
         search: this.filterSearch().trim() || null,
         availabilityDefault: this.filterAvailability(),
-        locale: toCatalogLocale(this.i18n.locale()),
+        locale: this.listLocale(),
       });
       this.addByFilterResult.set(result.added);
       await this.loadItems();

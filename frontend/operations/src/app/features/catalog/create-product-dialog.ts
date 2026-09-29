@@ -2,15 +2,12 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
-  inject,
   input,
   output,
   signal,
 } from '@angular/core';
 
-import { I18n } from '../../core/i18n/i18n';
 import { TPipe } from '../../core/i18n/t.pipe';
-import { toCatalogLocale } from './catalog-domain';
 
 export interface CreateProductSubmission {
   readonly code: string;
@@ -24,6 +21,13 @@ export interface CreateProductSubmission {
  * fiscal — is filled in afterwards on the full editor), so this dialog asks
  * for exactly those three and hands off to `ProductEditorPage` once the
  * product exists.
+ *
+ * **Row 10.12.** The `locale` is not the operator's own console language: the
+ * name a person types here is the brand's, so it is written in the locale the
+ * catalog lists resolve names in (`listResolutionLocale`), which the page
+ * passes in. A create authored in whatever the operator's UI was set to would
+ * leave a brand-new product showing its bare code in every list that reads the
+ * brand's default.
  */
 @Component({
   selector: 'q-create-product-dialog',
@@ -33,8 +37,8 @@ export interface CreateProductSubmission {
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class CreateProductDialog {
-  private readonly i18n = inject(I18n);
-
+  /** The catalog locale the brand's list screens resolve names in; the name typed here is written under it. */
+  readonly locale = input.required<string>();
   readonly busy = input(false);
   readonly error = input<string | null>(null);
 
@@ -63,12 +67,9 @@ export class CreateProductDialog {
     if (!code || !name) {
       return;
     }
-    // `locale` is the brand's default locale in the general case; until a
-    // brand-configuration read exists on this console (`current-brand.ts`'s
-    // own scope note), the operator's own console locale is the
-    // least-wrong choice available — an author can add the other locales
-    // immediately afterwards on Tab 1's locale switcher.
-    this.confirm.emit({ code, name, locale: toCatalogLocale(this.i18n.locale()) });
+    // The brand's list locale, never the operator's console language; the other
+    // locales are added afterwards on the editor's locale switcher.
+    this.confirm.emit({ code, name, locale: this.locale() });
   }
 
   protected close(): void {
