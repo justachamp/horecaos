@@ -41,7 +41,6 @@ import uz.horecaos.platform.iam.api.PlatformRole;
 import uz.horecaos.platform.iam.infrastructure.authorization.RoleRegistrySynchronizer;
 import uz.horecaos.platform.integration.camel.notification.telegram.FakeTelegramBotApi;
 import uz.horecaos.platform.support.TestDatabase;
-import uz.horecaos.platform.support.ThreadSafeListAppender;
 import uz.horecaos.platform.web.idempotency.IdempotencyInterceptor;
 
 /**
@@ -591,7 +590,7 @@ class OperationsProviderIntegrationsEndpointTests {
     }
 
     private static ListAppender<ILoggingEvent> captureAllLogs() {
-        ListAppender<ILoggingEvent> appender = new ThreadSafeListAppender();
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
         appender.start();
         rootLogger().addAppender(appender);
         return appender;
