@@ -4,20 +4,26 @@
 Run: python3 frontend/tools/test_format_changed.py
 
 The selection logic is exercised against throwaway git repositories, so no Node.js is
-needed; the prettier invocation itself is proved by a local dry run (see the README's
-"Formatting" section) and, in CI, by the step that runs the script.
+needed. The prettier invocation is exercised twice: against a stub `npx` and `prettier`
+that record how they were called (so the exit status of a failing check, a passing one, a
+missing install and a chunked run are all pinned without Node.js), and, when the app's
+node_modules is installed, against the real prettier and the app's real config.
 """
 from __future__ import annotations
 
 import contextlib
 import io
 import json
+import os
 import re
+import shutil
+import stat
 import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
@@ -237,12 +243,17 @@ class ChangedFilesTests(unittest.TestCase):
         self.assertEqual(["src/pr.ts"], self.files(main_tip))
 
 
+def run_cli(*argv: str) -> tuple[int, str, str]:
+    """format_changed.main(argv) with stdout and stderr captured: (exit status, stdout, stderr)."""
+    out, err = io.StringIO(), io.StringIO()
+    with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+        code = fc.main(list(argv))
+    return code, out.getvalue(), err.getvalue()
+
+
 class CommandLineTests(unittest.TestCase):
     def run_main(self, *argv: str) -> tuple[int, str, str]:
-        out, err = io.StringIO(), io.StringIO()
-        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-            code = fc.main(list(argv))
-        return code, out.getvalue(), err.getvalue()
+        return run_cli(*argv)
 
     def test_list_prints_the_files_and_runs_nothing(self) -> None:
         repo = TempRepo()
@@ -280,6 +291,157 @@ class CommandLineTests(unittest.TestCase):
         self.assertIsNotNone(glob, scripts["format:check"])
         assert glob is not None
         self.assertEqual({"." + ext for ext in glob.group(1).split(",")}, set(fc.EXTENSIONS))
+
+
+STUB_PRETTIER = """#!/bin/sh
+# Stands in for prettier: records each call, fails on a file that contains UNFORMATTED.
+[ "$1" = "--check" ] || { echo "stub prettier: expected --check first, got: $*" >&2; exit 64; }
+shift
+echo "$*" >> "$(dirname "$0")/calls.log"
+status=0
+for file in "$@"; do
+  if grep -q UNFORMATTED "$file"; then echo "[warn] $file" >&2; status=1; fi
+done
+exit $status
+"""
+
+STUB_NPX = """#!/bin/sh
+# Stands in for npx: the script must run the LOCAL prettier and never download one.
+[ "$1" = "--no-install" ] || { echo "stub npx: expected --no-install first, got: $*" >&2; exit 64; }
+shift
+tool="$1"
+shift
+exec "$PWD/node_modules/.bin/$tool" "$@"
+"""
+
+
+def write_executable(path: Path, text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+    path.chmod(path.stat().st_mode | stat.S_IXUSR)
+
+
+class PrettierGateTests(unittest.TestCase):
+    """What the script does with prettier's verdict: the part that makes it a gate.
+
+    A stub prettier fails on any file whose text contains UNFORMATTED and records every
+    call in node_modules/.bin/calls.log. If run_prettier or main() stopped propagating a
+    non-zero status, every "fails" test below would go red.
+    """
+
+    def setUp(self) -> None:
+        self.repo = TempRepo()
+        self.addCleanup(self.repo.close)
+        self.repo.write(".gitignore", "node_modules/\nbin/\n")
+        self.repo.write(f"{APP}/package.json", "{}\n")
+        write_executable(self.repo.path / APP / "node_modules" / ".bin" / "prettier", STUB_PRETTIER)
+        write_executable(self.repo.path / "bin" / "npx", STUB_NPX)
+        self.base = self.repo.commit("base")
+        path = f"{self.repo.path / 'bin'}{os.pathsep}{os.environ.get('PATH', '')}"
+        patcher = mock.patch.dict(os.environ, {"PATH": path})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def check(self) -> tuple[int, str, str]:
+        return run_cli("--app", "operations", "--base", self.base, "--repo", str(self.repo.path))
+
+    def calls(self) -> list[str]:
+        log = self.repo.path / APP / "node_modules" / ".bin" / "calls.log"
+        return log.read_text(encoding="utf-8").splitlines() if log.exists() else []
+
+    def test_an_unformatted_changed_file_fails_the_gate_and_says_how_to_fix_it(self) -> None:
+        self.repo.write(f"{APP}/src/bad.ts", "UNFORMATTED\n")
+        self.repo.commit("bad")
+        code, out, err = self.check()
+        self.assertEqual(1, code)
+        self.assertIn("checking 1 changed file", out)
+        self.assertIn("not prettier-formatted", err)
+        self.assertIn("npx prettier --write", err)
+
+    def test_a_formatted_changed_file_passes(self) -> None:
+        self.repo.write(f"{APP}/src/good.ts", "formatted\n")
+        self.repo.commit("good")
+        code, _, err = self.check()
+        self.assertEqual(0, code, err)
+        self.assertEqual(["src/good.ts"], self.calls()[0].split())
+
+    def test_only_the_changed_files_reach_prettier(self) -> None:
+        # An unformatted file this change did not touch is not this change's problem here.
+        self.repo.write(f"{APP}/src/backlog.ts", "UNFORMATTED\n")
+        self.repo.commit("backlog")
+        touched_base = self.repo.git("rev-parse", "HEAD")
+        self.repo.write(f"{APP}/src/touched.ts", "formatted\n")
+        self.repo.commit("touch")
+        code, _, err = run_cli("--app", "operations", "--base", touched_base, "--repo", str(self.repo.path))
+        self.assertEqual(0, code, err)
+        self.assertEqual(["src/touched.ts"], self.calls()[0].split())
+
+    def test_a_failure_in_any_chunk_fails_the_gate_and_every_chunk_still_runs(self) -> None:
+        for index in range(5):
+            self.repo.write(f"{APP}/src/f{index}.ts", "UNFORMATTED\n" if index == 0 else "formatted\n")
+        self.repo.commit("five files")
+        with mock.patch.object(fc, "CHUNK", 2):
+            code, _, _ = self.check()
+        self.assertEqual(1, code, "the failing file is in the first chunk; later chunks must not overwrite its status")
+        self.assertEqual(3, len(self.calls()), "5 files in chunks of 2 is 3 prettier runs")
+
+    def test_a_late_failing_chunk_fails_the_gate(self) -> None:
+        for index in range(5):
+            self.repo.write(f"{APP}/src/f{index}.ts", "UNFORMATTED\n" if index == 4 else "formatted\n")
+        self.repo.commit("five files")
+        with mock.patch.object(fc, "CHUNK", 2):
+            code, _, _ = self.check()
+        self.assertEqual(1, code)
+
+    def test_a_missing_install_is_an_error_not_a_pass(self) -> None:
+        shutil.rmtree(self.repo.path / APP / "node_modules")
+        self.repo.write(f"{APP}/src/any.ts", "formatted\n")
+        self.repo.commit("change")
+        code, _, err = self.check()
+        self.assertEqual(2, code)
+        self.assertIn("npm ci", err)
+
+    def test_a_missing_npx_is_an_error_not_a_pass(self) -> None:
+        self.repo.write(f"{APP}/src/any.ts", "formatted\n")
+        self.repo.commit("change")
+        with mock.patch.object(fc.shutil, "which", return_value=None):
+            code, _, err = self.check()
+        self.assertEqual(2, code)
+        self.assertIn("npx is not on PATH", err)
+
+
+REAL_PRETTIER = REPO / APP / "node_modules" / ".bin" / "prettier"
+
+
+@unittest.skipUnless(REAL_PRETTIER.exists() and shutil.which("npx"), "needs `npm ci` in frontend/operations")
+class RealPrettierTests(unittest.TestCase):
+    """The same gate against the real prettier and the app's real .prettierrc.
+
+    CI installs the app before it runs this file, so this is where the exact invocation
+    (`npx --no-install prettier --check <files>`) is proved rather than assumed.
+    """
+
+    def setUp(self) -> None:
+        self.repo = TempRepo()
+        self.addCleanup(self.repo.close)
+        app = self.repo.path / APP
+        app.mkdir(parents=True)
+        (app / "package.json").write_text("{}\n", encoding="utf-8")
+        shutil.copy(REPO / APP / ".prettierrc", app / ".prettierrc")
+        (app / "node_modules").symlink_to(REPO / APP / "node_modules", target_is_directory=True)
+        self.repo.write(".gitignore", "node_modules\n")
+        self.base = self.repo.commit("base")
+
+    def check(self) -> int:
+        return run_cli("--app", "operations", "--base", self.base, "--repo", str(self.repo.path))[0]
+
+    def test_an_unformatted_file_fails_and_the_formatted_one_passes(self) -> None:
+        self.repo.write(f"{APP}/src/ok.ts", "export const answer = 'x';\n")
+        self.repo.commit("formatted")
+        self.assertEqual(0, self.check())
+        self.repo.write(f"{APP}/src/bad.ts", "export   const answer=\"x\"\n")
+        self.repo.commit("unformatted")
+        self.assertNotEqual(0, self.check())
 
 
 class WorkflowWiringTests(unittest.TestCase):

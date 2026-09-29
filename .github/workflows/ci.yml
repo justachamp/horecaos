@@ -404,7 +404,8 @@ jobs:
       - name: Tooling tests (operations)
         # frontend/tools/test_format_changed.py tests the local changed-files
         # helper AND reads this file to prove that the lint and format steps
-        # above are still wired in.
+        # above are still wired in. It also runs prettier for real when the
+        # dependencies are installed, which is why it comes after Install.
         if: matrix.app == 'operations'
         run: python3 frontend/tools/test_format_changed.py
 
