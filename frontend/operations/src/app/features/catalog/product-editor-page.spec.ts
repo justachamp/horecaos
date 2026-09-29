@@ -62,15 +62,28 @@ async function flushMicrotasks(): Promise<void> {
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
 }
 
-/** Row 10.12: a brand's resolved locale set, defaulting to the platform's own fallback triple — same fake `location-detail-pane.spec.ts`/`categories-page.spec.ts` use. */
+/**
+ * Row 10.12: a brand's resolved locale set — by default a brand that has chosen
+ * the platform triple with `ru` as its default, so the editor opens on `ru` and
+ * the ru-only product fixture reads back. A brand that has chosen *nothing* is
+ * {@link unconfiguredLocaleSet}: its list reads, and a new product, resolve in
+ * the server's `uz`.
+ */
 class FakeLocaleSet {
   readonly locales = signal<readonly Locale[]>(['ru', 'uz-Latn', 'en']);
   readonly defaultLocale = signal<Locale>('ru');
-  readonly isConfigured = signal(false);
+  readonly isConfigured = signal(true);
   ensureLoaded = vi.fn().mockResolvedValue(undefined);
   supports(locale: Locale): boolean {
     return this.locales().includes(locale);
   }
+}
+
+/** A brand that has not configured its languages: `LocaleSet` reports the platform fallback, the server reads `uz`. */
+function unconfiguredLocaleSet(): FakeLocaleSet {
+  const localeSet = new FakeLocaleSet();
+  localeSet.isConfigured.set(false);
+  return localeSet;
 }
 
 function configure(
@@ -177,8 +190,55 @@ describe('ProductEditorPage', () => {
     );
   });
 
+  it('opens on the locale the list reads for a brand with no language set — where a product was just created', async () => {
+    // A brand that has chosen no languages has its names read, and a new product
+    // written, in the server's `uz` (listResolutionLocale) — not the platform
+    // default `ru` that LocaleSet reports. Landing on `ru` would show a blank
+    // name right after the operator typed one.
+    configure(
+      {
+        productDetail: () =>
+          of(productDetail({ translations: { uz: { name: 'Plov', description: null } } })),
+      },
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      unconfiguredLocaleSet(),
+    );
+
+    const harness = await RouterTestingHarness.create('/catalog/products/product-1');
+    await flushMicrotasks();
+
+    const host = harness.routeNativeElement!;
+    expect(host.querySelector('.editor__name')?.textContent).toContain('Plov');
+    expect(
+      host
+        .querySelector('[data-testid="q-localized-field-group-tab-uz"]')
+        ?.getAttribute('aria-selected'),
+    ).toBe('true');
+    expect(
+      host
+        .querySelector('[data-testid="q-localized-field-group-tab-ru"]')
+        ?.getAttribute('aria-selected'),
+    ).toBe('false');
+  });
+
   it('marks uz — the server’s own default — for a brand with no locale set, even while the UI runs in ru', async () => {
-    configure({ productDetail: () => of(productDetail()) });
+    configure(
+      { productDetail: () => of(productDetail()) },
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      unconfiguredLocaleSet(),
+    );
 
     const harness = await RouterTestingHarness.create('/catalog/products/product-1');
     await flushMicrotasks();
@@ -202,7 +262,6 @@ describe('ProductEditorPage', () => {
     // Batch 14: CatalogQueryService resolves the products list in the brand's
     // default language, so the marker follows it (it used to stay on `uz`).
     const localeSet = new FakeLocaleSet();
-    localeSet.isConfigured.set(true);
     localeSet.locales.set(['ru', 'uz-Latn', 'en']);
     localeSet.defaultLocale.set('ru');
     configure({ productDetail: () => of(productDetail()) }, {}, {}, {}, {}, {}, {}, {}, localeSet);
@@ -315,7 +374,6 @@ describe('ProductEditorPage', () => {
 
   it('narrows the locale strip to the brand’s own supported set — nothing is forced in any more, the list screens read the brand’s default', async () => {
     const localeSet = new FakeLocaleSet();
-    localeSet.isConfigured.set(true);
     localeSet.locales.set(['ru']);
     localeSet.defaultLocale.set('ru');
     configure(

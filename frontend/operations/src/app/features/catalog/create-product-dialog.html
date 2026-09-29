@@ -19,7 +19,10 @@
       />
       @if (languageName(); as language) {
         <span class="q-caption" data-testid="create-product-dialog-language">{{
-          'catalog.products.create.language' | t: { language: language }
+          (languageChosenByBrand()
+            ? 'catalog.products.create.language'
+            : 'catalog.products.create.languageFallback'
+          ) | t: { language: language }
         }}</span>
       }
       @if (nameMissing()) {

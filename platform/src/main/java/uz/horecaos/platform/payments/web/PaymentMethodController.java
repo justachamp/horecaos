@@ -26,6 +26,7 @@ import uz.horecaos.platform.payments.application.PaymentMethodRegistryService;
 import uz.horecaos.platform.payments.application.PaymentMethodRegistryService.CreateMethodCommand;
 import uz.horecaos.platform.payments.application.PaymentMethodRegistryService.PaymentMethodDetail;
 import uz.horecaos.platform.payments.application.PaymentMethodRegistryService.UpdateMethodCommand;
+import uz.horecaos.platform.tenancy.api.TenantLocaleSet;
 import uz.horecaos.platform.web.authorization.RequiresCapability;
 
 /**
@@ -86,6 +87,21 @@ public class PaymentMethodController {
                     + "This is where row 10.4b's channel matrix gets its columns from.")
     public List<PaymentMethodView> list(@PathVariable UUID tenantId) {
         return methods.list(tenantId).stream().map(PaymentMethodView::of).toList();
+    }
+
+    @GetMapping("/locale-set")
+    @RequiresCapability(Capability.PAYMENT_METHOD_READ)
+    @Operation(
+            summary = "The languages the payment-method name editor offers",
+            description = "Row 10.12. A payment method is a tenant-level row every brand's customers "
+                    + "read, so its names are edited in the union of the tenant's brands' supported "
+                    + "languages, default first; the default is the tenant's first brand's. A brand "
+                    + "that has chosen no set contributes the platform triple (ru, uz-Latn, en). The "
+                    + "set is a menu, not a constraint: a language outside it that a method already "
+                    + "carries is kept, never deleted, by an edit. Needs only payment-method.read, so "
+                    + "a manager pinned to one brand still sees every brand's languages.")
+    public LocaleSetResponse localeSet(@PathVariable UUID tenantId) {
+        return LocaleSetResponse.of(methods.localeSet(tenantId));
     }
 
     @PutMapping("/{methodId}")
@@ -158,6 +174,14 @@ public class PaymentMethodController {
             @Size(max = 120) @Nullable String contractReference) {}
 
     record LocalizedNamesRequest(@NotNull Map<String, String> byLocale) {}
+
+    /** @param locales default first; see {@link TenantLocaleSet} */
+    public record LocaleSetResponse(List<String> locales, String defaultLocale, boolean configured) {
+
+        static LocaleSetResponse of(TenantLocaleSet set) {
+            return new LocaleSetResponse(set.locales(), set.defaultLocale(), set.configured());
+        }
+    }
 
     /** What a settings screen shows. */
     public record PaymentMethodView(

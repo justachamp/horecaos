@@ -382,6 +382,7 @@ describe('ProductsPage', () => {
 
     const hint = host.querySelector('[data-testid="create-product-dialog-language"]');
     expect(hint?.textContent).toContain('Uzbek (Latin)');
+    expect(hint?.textContent).toContain('the brand’s default language');
   });
 
   it('names the server’s uz for a brand that has chosen no languages yet', async () => {
@@ -397,9 +398,12 @@ describe('ProductsPage', () => {
     (host.querySelector('[data-testid="products-create"]') as HTMLButtonElement).click();
     await flushMicrotasks();
 
-    expect(
-      host.querySelector('[data-testid="create-product-dialog-language"]')?.textContent,
-    ).toContain('Uzbek (Latin)');
+    const hint = host.querySelector('[data-testid="create-product-dialog-language"]')?.textContent;
+    expect(hint).toContain('Uzbek (Latin)');
+    // Not "the brand's default language": this brand has none, and saying so would
+    // credit a choice nobody made.
+    expect(hint).not.toContain('the brand’s default language');
+    expect(hint).toContain('has not chosen its languages yet');
   });
 
   it('loads the brand’s language set before it lets a product be created', async () => {

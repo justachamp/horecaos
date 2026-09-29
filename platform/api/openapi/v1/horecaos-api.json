@@ -17497,6 +17497,23 @@
         },
         "type" : "object"
       },
+      "PaymentMethodControllerLocaleSetResponse" : {
+        "properties" : {
+          "configured" : {
+            "type" : "boolean"
+          },
+          "defaultLocale" : {
+            "type" : "string"
+          },
+          "locales" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
       "PaymentMethodView" : {
         "properties" : {
           "code" : {
@@ -36203,7 +36220,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/comment-presets/locale-set" : {
       "get" : {
         "description" : "Row 10.12. A preset is a tenant-level object shared by every brand, so it is edited in the union of the tenant's brands' supported languages, default first; the default is the tenant's first brand's. A brand that has chosen no set contributes the platform triple (ru, uz-Latn, en). The set is a menu, not a constraint: a language outside it that a preset already carries is kept, never deleted, by an edit.",
-        "operationId" : "localeSet_1",
+        "operationId" : "localeSet_2",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -51261,6 +51278,35 @@
           }
         },
         "summary" : "Register a payment method",
+        "tags" : [ "Payment methods" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/payment-methods/locale-set" : {
+      "get" : {
+        "description" : "Row 10.12. A payment method is a tenant-level row every brand's customers read, so its names are edited in the union of the tenant's brands' supported languages, default first; the default is the tenant's first brand's. A brand that has chosen no set contributes the platform triple (ru, uz-Latn, en). The set is a menu, not a constraint: a language outside it that a method already carries is kept, never deleted, by an edit. Needs only payment-method.read, so a manager pinned to one brand still sees every brand's languages.",
+        "operationId" : "localeSet_1",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PaymentMethodControllerLocaleSetResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The languages the payment-method name editor offers",
         "tags" : [ "Payment methods" ]
       }
     },

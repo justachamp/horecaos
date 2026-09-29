@@ -190,6 +190,7 @@
     <q-create-product-dialog
       [busy]="creating()"
       [languageName]="listLocaleName()"
+      [languageChosenByBrand]="listLocaleChosenByBrand()"
       [error]="createError()"
       (confirm)="submitCreate($event)"
       (dismiss)="closeCreateDialog()"
