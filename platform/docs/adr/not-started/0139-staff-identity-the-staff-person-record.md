@@ -419,7 +419,7 @@ iam.staff_members
   phone_lookup_hash varchar(64) null                   -- keyed per tenant; exact match only
   protected_employee_number text null
   employee_number_hash varchar(64) null
-  photo_asset_id uuid null references media.assets     -- PRIVATE visibility, TENANT owner
+  photo_asset_id uuid null                             -- PRIVATE visibility, TENANT owner
   ui_locale varchar(8) null                            -- 'ru' | 'uz' | 'en'
   spoken_languages varchar(8)[] not null default '{}'
   employment_status varchar(16) not null               -- PENDING | ACTIVE | ON_LEAVE | ENDED
@@ -430,6 +430,8 @@ iam.staff_members
   unique (tenant_id, principal_subject)
   unique (tenant_id, display_reference)
   unique (id, tenant_id)
+  foreign key (photo_asset_id, tenant_id)
+    references media.assets (asset_id, tenant_id)      -- uq_media_assets_tenant_scoped (V0058); a null photo is not checked
   unique (tenant_id, phone_lookup_hash) where phone_lookup_hash is not null
   unique (tenant_id, employee_number_hash) where employee_number_hash is not null
   check (employment_status <> 'ENDED' or employed_until is not null)
@@ -449,6 +451,21 @@ iam.staff_emergency_contacts
   sort_order smallint not null                         -- check 1..3, unique per member: at most three
   version, created_at, updated_at
 ```
+
+The photo reference is written as the two-column key on purpose. `media.assets` is
+keyed on `asset_id` alone, and a single-column reference into it lets one tenant's row
+point at another tenant's private object, which `V0069` had to repair for a courier's
+registration certificate (and which turned the endpoint that wrote it into an
+existence oracle for asset ids). A staff photo is personal data (ADR 0029), so the
+same failure here would store a durable pointer to another tenant's private image.
+`tools/checks/tenant_scoped_references.py` and `TenantScopedReferenceCatalogTests`
+refuse the single-column form, and this record adds nothing to their allowlist. The
+constraint is the backstop, not the check: the service resolves the asset in the
+caller's own tenant through `MediaAvailability` before it stores the id, requires
+`PRIVATE` visibility and `TENANT` owner scope on it (`MediaAvailability` answers only
+"displayable in this tenant", so this needs a narrow sibling method on the port that
+ADR 0010 owns), and answers one not-found for an asset of another tenant and for one
+that does not exist, as `CourierEngagementService` does for evidence media.
 
 Every table is granted to `horecaos_application` in its own migration
 (`SELECT, INSERT, UPDATE`, plus `DELETE` on the two contact tables where a row
@@ -597,6 +614,11 @@ transition on demand.
   decrypt. The directory refuses a cross-tenant lookup.
 - A protected field is not readable through the reporting role, and a captured
   log of the whole flow contains no name or phone.
+- Photo isolation: tenant B setting `photo_asset_id` to tenant A's private asset id is
+  refused by PostgreSQL (foreign key violation) when the service is bypassed, and by
+  the service with the same not-found a random uuid gets, so the two answers cannot be
+  told apart; an asset of the caller's tenant that is `PUBLIC` or not `TENANT`-owned is
+  refused too.
 - The People list, the audit log and the order detail resolve the same name for
   one subject; a self-edit is visible on all three after the write with no wait
   for a TTL (the cache eviction).
