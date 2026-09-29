@@ -26,6 +26,13 @@ export interface ValidationResult {
   readonly errorCode: string | null;
   readonly detail: string | null;
   readonly locationId: string | null;
+  /**
+   * True for a finding that is worth an operator's attention but must not read
+   * as blocking trade (settings.md §10.0: «Advisory»). Absent on an older
+   * server, which never sends it, and then treated as blocking — the
+   * conservative reading.
+   */
+  readonly advisory?: boolean;
 }
 
 /** Mirrors uz.horecaos.platform.tenancy.application.onboarding.OnboardingService.ValidationOutcome. */

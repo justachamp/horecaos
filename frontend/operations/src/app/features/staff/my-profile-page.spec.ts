@@ -2,7 +2,9 @@ import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { describe, expect, it, vi } from 'vitest';
 
+import { LocationScope } from '../../core/api/operations-paths';
 import { Auth } from '../../core/auth/auth';
+import { CurrentLocation } from '../../core/auth/current-location';
 import { CurrentTenant } from '../../core/auth/current-tenant';
 import { ScopeGrant } from '../../core/auth/session-context';
 import { I18n } from '../../core/i18n/i18n';
@@ -16,6 +18,11 @@ class FakeCurrentTenant {
   ensureLoaded = vi.fn().mockResolvedValue(undefined);
 }
 
+class FakeCurrentLocation {
+  readonly scope = signal<LocationScope | null>(null);
+  ensureLoaded = vi.fn().mockResolvedValue(undefined);
+}
+
 function scope(overrides: Partial<ScopeGrant> = {}): ScopeGrant {
   return {
     scope: { type: 'LOCATION', tenantId: 't1', brandId: 'b1', locationId: 'l1' },
@@ -25,17 +32,20 @@ function scope(overrides: Partial<ScopeGrant> = {}): ScopeGrant {
   };
 }
 
-async function setUp(scopes: readonly ScopeGrant[]) {
+async function setUp(scopes: readonly ScopeGrant[], location: LocationScope | null = null) {
   const api = {
     issueTelegramLinkCode: vi.fn().mockResolvedValue({ code: 'ABC123', command: '/link ABC123' }),
   };
   const tenant = new FakeCurrentTenant();
   tenant.scopes.set(scopes);
+  const currentLocation = new FakeCurrentLocation();
+  currentLocation.scope.set(location);
   await TestBed.configureTestingModule({
     imports: [MyProfilePage],
     providers: [
       { provide: StaffApi, useValue: api },
       { provide: CurrentTenant, useValue: tenant },
+      { provide: CurrentLocation, useValue: currentLocation },
       { provide: Auth, useValue: { displayName: signal('Aziza') } },
     ],
   }).compileComponents();
@@ -85,13 +95,28 @@ describe('MyProfilePage', () => {
         '[data-testid="my-profile-telegram-issue"]',
       ) as HTMLButtonElement
     ).click();
-    await Promise.resolve();
+    await fixture.whenStable();
     fixture.detectChanges();
 
-    expect(api.issueTelegramLinkCode).toHaveBeenCalledWith('t1');
+    expect(api.issueTelegramLinkCode).toHaveBeenCalledWith('t1', null);
     const command = fixture.nativeElement.querySelector(
       '[data-testid="telegram-link-command"]',
     ) as HTMLElement;
     expect(command.textContent).toContain('/link ABC123');
+  });
+
+  it("issues the code at the operator's own branch, the only route a branch grant covers", async () => {
+    const branch: LocationScope = { tenantId: 't1', brandId: 'b1', locationId: 'l1' };
+    const { fixture, api } = await setUp([scope()], branch);
+
+    (
+      fixture.nativeElement.querySelector(
+        '[data-testid="my-profile-telegram-issue"]',
+      ) as HTMLButtonElement
+    ).click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(api.issueTelegramLinkCode).toHaveBeenCalledWith('t1', branch);
   });
 });

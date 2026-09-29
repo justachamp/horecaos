@@ -58,6 +58,14 @@ const READINESS_CODE_KEYS: Readonly<Record<string, MessageKey>> = {
   // `OnboardingStep` — see that method's own doc.
   TEMPLATE_AWAITING_PROVIDER_REVIEW: 'settings.home.readiness.code.TEMPLATE_AWAITING_PROVIDER_REVIEW',
   TEMPLATE_REJECTED_BY_PROVIDER: 'settings.home.readiness.code.TEMPLATE_REJECTED_BY_PROVIDER',
+  // Row 10.0, the three remaining settings.md §10.0 conditions: fiscal
+  // classification coverage, channel-payment coverage and secret-rotation age.
+  // All three are ad hoc checks like the template one above, with no
+  // `OnboardingStep` of their own — see `OnboardingReadinessChecks`.
+  FISCAL_CLASSIFICATION_INCOMPLETE: 'settings.home.readiness.code.FISCAL_CLASSIFICATION_INCOMPLETE',
+  CHANNEL_NO_PAYMENT_METHOD: 'settings.home.readiness.code.CHANNEL_NO_PAYMENT_METHOD',
+  INSTALLATION_SECRET_ROTATION_DUE: 'settings.home.readiness.code.INSTALLATION_SECRET_ROTATION_DUE',
+  MERCHANT_SECRET_ROTATION_DUE: 'settings.home.readiness.code.MERCHANT_SECRET_ROTATION_DUE',
 };
 
 /**
@@ -89,20 +97,45 @@ function readinessLink(finding: ValidationResult): readonly string[] | null {
   ) {
     return ['/settings/notifications'];
   }
+  if (finding.errorCode === 'FISCAL_CLASSIFICATION_INCOMPLETE') {
+    return ['/settings/fiscalization'];
+  }
+  if (finding.errorCode === 'CHANNEL_NO_PAYMENT_METHOD') {
+    return ['/settings/sales-channels'];
+  }
+  if (
+    finding.errorCode === 'INSTALLATION_SECRET_ROTATION_DUE' ||
+    finding.errorCode === 'MERCHANT_SECRET_ROTATION_DUE'
+  ) {
+    return ['/settings/integrations'];
+  }
   return null;
+}
+
+/**
+ * Blocking findings first, advisory ones after, each group keeping the order
+ * the server named them in (settings.md §10.0: blocking → expiring → advisory).
+ * `Array.prototype.sort` is stable, so equal severities never reshuffle.
+ */
+function bySeverity(a: ValidationResult, b: ValidationResult): number {
+  return Number(a.advisory === true) - Number(b.advisory === true);
 }
 
 /**
  * 10.0 Settings home — `docs/operations-spec/settings.md` §10.0.
  *
  * **The readiness panel**, added in wave P31: not the spec's full
- * multi-source table (fiscal assignment, channel-payment-method,
- * channel-fulfilment-mode and service-binding coverage — none of those has a
- * read endpoint anywhere yet, control-plane or operations), but
- * `OnboardingController.validate` reshaped into exactly what it can honestly
- * answer today — every `VALIDATING`-phase check, every offending item named
- * rather than only the first (see `OnboardingService.validationResultsFor`).
- * The empty state ("Всё настроено") is the same one settings.md asks for.
+ * multi-source table (channel-fulfilment-mode and service-binding coverage
+ * still have no read behind them), but `OnboardingController.validate`
+ * reshaped into exactly what it can honestly answer today — every
+ * `VALIDATING`-phase check, every offending item named rather than only the
+ * first (see `OnboardingService.validationResultsFor`), plus the ad hoc checks
+ * that ride along without an `OnboardingStep`: SMS-template moderation, and —
+ * batch 15 — fiscal classification coverage, channel payment-method coverage
+ * and secret-rotation age. A finding the server marks `advisory` sorts after
+ * the blocking ones and carries a muted tag rather than reading as a
+ * stop-the-line error. The empty state ("Всё настроено") is the same one
+ * settings.md asks for.
  *
  * **Find a setting**, added in wave P31 and widened this wave into a real
  * `q-combobox`: `/` still filters the six-group nav grid by label and
@@ -277,6 +310,10 @@ export class SettingsHomePage {
     return readinessLink(finding);
   }
 
+  protected isAdvisory(finding: ValidationResult): boolean {
+    return finding.advisory === true;
+  }
+
   private async loadReadiness(): Promise<void> {
     await this.tenant.ensureLoaded();
     const tenantId = this.tenant.tenantId();
@@ -286,7 +323,7 @@ export class SettingsHomePage {
     }
     try {
       const outcome = await this.readinessApi.validate(tenantId);
-      this.findings.set(outcome.checks.filter((check) => !check.passed));
+      this.findings.set(outcome.checks.filter((check) => !check.passed).sort(bySeverity));
       this.readinessState.set('ready');
     } catch (error) {
       if (error instanceof ApiError && error.status === 403) {
