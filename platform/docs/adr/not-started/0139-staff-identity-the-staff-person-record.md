@@ -47,6 +47,16 @@
     `LOCATION` scope for people whose every active grant is inside that location.
     ADR 0103 (Proposed) is about who may manage grants and is not decided here;
     the two must not be confused (product, platform owner).
+  - A staff analogue of ADR 0049's self strategy. `staff.self.manage` cannot be
+    enforced by ADR 0025's scope-coverage rule, because a grant at `LOCATION` scope
+    never covers a `TENANT` route and most staff hold only a location grant (see
+    Context). This record proposes `@StaffSelfAuthorized`, modelled on
+    `@CourierSelfAuthorized`: the capability must be held at any scope in the tenant
+    and the handler touches only the caller's own row. That is a new authorization
+    strategy beside the four `EndpointCapabilityDeclarationTests` knows, and the
+    Alternatives table records the fallback that adds none. It needs the platform
+    owner's and security's sign-off before anything is built (platform owner,
+    security).
   - Whether a staff member may ever change their own sign-in identifier (the
     phone that is their Keycloak username) or their reset email from the console.
     This record says no in v1: both are identity facts that need a verified
@@ -132,6 +142,25 @@ gap map.**
   non-personal `display_reference` and an envelope-encrypted
   `protected_full_name` under ADR 0029, with a self-employed engagement file
   beside it. It is the model to copy for shape and the wrong table to reuse.
+- **A grant serves only the routes whose path names its level.** ADR 0025 says a
+  scope "covers downward, never upward or sideways". In code,
+  `JdbcAuthorizationService#hasGrant` asks whether a grant's scope
+  `covers` the scope the endpoint declares (`ResourceScope#covers`), and
+  `CapabilityEnforcementInterceptor#scopeOf` builds that scope from `tenantId`,
+  `brandId` and `locationId` taken from the path (or a required request parameter
+  of the same name). So a `TENANT` declaration is satisfied by a tenant grant only;
+  a `LOCATION` declaration needs `brandId` and `locationId` in the route or the
+  interceptor throws `IllegalStateException` on the first request; and
+  `EndpointCapabilityDeclarationTests` refuses a `TENANT` declaration under a path
+  that names a brand or a location. `LOCATION_MANAGER` and `LOCATION_STAFF` are
+  `LOCATION`-scope bundles in `PlatformRole`, so nearly every person this record
+  describes holds a location grant. The existing self-service precedent has the
+  problem this implies: `TelegramStaffLinkCodeController#issue` declares
+  `INTEGRATION_TELEGRAM_STAFF_LINK_ISSUE` at `TENANT` scope, and the capability is
+  carried by the `LOCATION` bundles, so a line cook's grant does not cover the
+  route (by reading; no test drives that endpoint with a location grant). A table
+  that places a capability at a scope without giving the route that scope's path
+  cannot serve the holder it names.
 - **Staff are effectively one-tenant today, but the model does not say so.**
   `StaffInvitationService#rejectIfPhoneTaken` refuses an invitation whose phone
   already has a Keycloak account outside the inviting tenant's organization,
@@ -184,7 +213,9 @@ make the last tenant to edit a name the name the other tenant's token shows.
 here.** Names, phone and employee number are `PERSONAL`, stored through
 `FieldProtection` with associated data binding the ciphertext to the tenant,
 table, column and row. A keyed lookup hash beside the phone and the employee
-number gives exact-match search and uniqueness without a decrypt.
+number gives exact-match search without a decrypt, and for the employee number
+uniqueness too. It does not give the contact phone uniqueness, on purpose: see the
+next paragraph.
 Employment status, the two date columns, the language columns and a
 non-personal `display_reference` (`S-0142`, tenant-unique, never reused, the
 same idea as a courier's) stay in clear so the screens can sort, filter and
@@ -203,6 +234,45 @@ person typed. Device principals (ADR 0079), partner clients (ADR 0049), couriers
 directory answers "no such member" for them so callers keep their existing
 labelled rendering.
 
+**The member row is written last, and a failure there undoes the invitation.**
+`StaffInvitationService#invite` does its irreversible work first: the Keycloak
+account (`accounts.create`), the organization membership (`ensureMembership`) and
+the grant (`grants.grant`, which commits in its own transaction). Only then does it
+open the one local transaction that writes the invitation row and its audit fact.
+That last transaction has no cleanup today: an exception in it leaves a live grant
+and a Keycloak account with no invitation, and `rejectIfPhoneTaken` then refuses
+every later invitation for the phone as "already has an account". Putting the member
+insert in that transaction adds ways for it to fail, so this record does three
+things. It removes the avoidable ones. `(tenant_id, principal_subject)` cannot
+collide, because the subject was created a moment earlier and an existing in-tenant
+account is refused by `rejectIfPhoneTaken` before anything is written.
+`display_reference` is allocated from a per-tenant counter row that the allocating
+statement locks, so two concurrent invitations queue and never collide. And the
+contact-phone index is not unique (next paragraph). It writes the member row, the
+invitation row and the audit fact in that one transaction, so they commit or roll
+back together. And a failure of that transaction, whatever its cause, runs the same
+orphan cleanup the grant step already has: `abandonOrphanedAccount` is extended to
+revoke the grant it is handed (`GrantAuthority#revoke`, audited) before it deletes the
+account, because at this step a grant exists and a deleted account would otherwise
+leave authority resting on nothing. The original exception is rethrown, and a
+cleanup that itself fails leaves the existing `tenant.staff_invitation.orphan_left`
+fact for an operator. The same cleanup closes the hole the invitation row alone has
+today. Invitation acceptance promotes the row `PENDING` to `ACTIVE` and stores the
+typed name in the transaction that records `tenant.staff_invitation.accepted`, which
+runs after Keycloak has taken the password, so a rejected password leaves the row
+`PENDING` with nothing to undo.
+
+**A contact phone is a way to reach someone, not an identity.** Sign-in identity is
+the Keycloak username, which is unique realm-wide and already guarded by
+`rejectIfPhoneTaken`. The contact phone starts as that same number and then belongs
+to the person: a cook may set it to the kitchen's shared mobile, and a new hire's
+personal sign-in number may equal a number a colleague has already made their contact
+phone. Making the contact phone unique per tenant would turn either into a failure
+of the invitation after its irreversible steps, and would refuse a shared kitchen
+line. So `phone_lookup_hash` is a plain index for exact-match search and never a
+constraint, a phone edit checks format only and can never conflict with a colleague,
+and no response ever reveals that another member holds the same number.
+
 **Replace `StaffDisplayNames` with one tenant-scoped read port.**
 `iam.api.staff.StaffDirectory` answers three questions and no others: the display
 name for a subject in a tenant, the same for a batch of subjects in one call,
@@ -213,13 +283,20 @@ re-keyed to `(tenant, subject)` and evicted on every profile write, which retire
 the "TTL only" caveat. The Keycloak name lookup is kept only as the fallback for
 a subject with no row, and is removed once the backfill has run everywhere.
 
-**Add four capabilities and no more.** The read, the manage, the audited
-emergency-contact read, and a self-service capability granted the way ADR 0060
-granted `INTEGRATION_TELEGRAM_STAFF_LINK_ISSUE`: at `TENANT` scope to every
-tenant-visible job, because it authorises acting on your own row only (see
-Specification).
+**Add four capabilities and no more, and give each holder a route at its own
+level.** The read, the manage, the audited emergency-contact read, and a
+self-service capability carried by every tenant-visible job. A capability held at
+`LOCATION` or `BRAND` scope is only useful if a route exists whose declared scope
+that grant covers, so the branch-scoped operations are specified under
+`.../brands/{brandId}/locations/{locationId}/...` (and `.../brands/{brandId}/...`
+for the read), beside the tenant-wide ones for `TENANT` holders. Self-service cannot
+use scope coverage at all, because a person's own profile belongs to no location:
+it is authorised by holding the capability at any scope in the tenant, and by the
+handler touching only the caller's own row (Specification, Open inputs).
 
-**Let a person edit their own profile, and only their own.** Self-service covers
+**Let a person edit their own profile, and only their own.** Self-service is
+authorised by `@StaffSelfAuthorized(staff.self.manage)`, a session-derived check
+and not a scope-coverage one, so a cook with a location grant reaches it. It covers
 first and last name, contact phone, photo, spoken languages and interface
 language. It does not cover employment, the sign-in identifier, the reset
 email, the password or MFA. The password hands off to Keycloak's own flow.
@@ -286,6 +363,8 @@ a stable key to attribute to and nothing more.
 | One polymorphic `contact_persons` table (`subject_kind` plus `subject_id`) | A polymorphic id cannot carry a foreign key, so a contact could name another tenant's location and only application code would notice; `V0053`'s `tax_profile_id`, which its own comment calls a gap, shows the cost of a reference the database cannot check. Two tables cost one small helper for the shared protected pair | A third kind of owner (a supplier, a courier) needs contacts too, at which point a shared table with a real per-kind key set is worth revisiting |
 | Fold terminals, PINs and staff shifts into this record (the §11.1 recommendation) | Their open inputs are unrelated to the person record's: a PIN policy ADR 0079 argued against with a stated revisit trigger, and ADR 0042's amend-or-fold question for shifts. Bundling them keeps six ready rows waiting on two unready ones | The owner prefers a single record and is prepared to close both inputs first |
 | Key the POS operator mapping by Keycloak subject (today's `resolveOperatorExternalId`) | Nothing writes those rows, so no data has to move, but the subject is an authentication artefact and every other mapping (`VARIANT`, `COURIER`) keys on the HorecaOS entity. The pane needs a list of named people to map, which is the member row | A POS adapter needs the mapping before the member row exists for an account, which the backfill is meant to prevent |
+| Declare the branch reads and `staff.self.manage` at `TENANT` scope and let the service accept a location grant (the first draft, and the shape `TelegramStaffLinkCodeController` has) | The interceptor refuses the location grant before the service runs, so the widening cannot live in the service; it has to be an interceptor rule, which is a new strategy that does not say so, and the declared scope would no longer describe what the route enforces | Never |
+| Self-service through `LOCATION`-scope routes that take `brandId` and `locationId` as required request parameters (the `OperationsCourierController#rosterEntries` shape), plus a `TENANT` twin | Adds no authorization strategy, so it is the fallback if the owner declines `@StaffSelfAuthorized`. The cost is that a profile belongs to no location: the client passes a location only to satisfy the check, a tenant-level holder with no brand yet needs the twin, and the audit records an own-row edit at a branch scope | The owner declines a new strategy |
 | Let each surface fetch its own names from Keycloak (status quo, per surface) | N Admin API calls per list, the cache keyed without a tenant, and no way to sort by name. The two current callers already show the shape of the problem | Never |
 
 ## Consequences
@@ -329,11 +408,17 @@ a stable key to attribute to and nothing more.
   tenant's members, decrypts in the application and sorts and filters there, with
   RU collation. That is acceptable for the hundreds of people a tenant has and is
   the wrong design for a tenant with tens of thousands.
+- **Every read and branch write exists at up to three levels.** A tenant route, a
+  brand route and a location route call one service method each, which triples the
+  route table and the authorization tests in exchange for a grant level that can
+  actually reach its own data. The brand level exists for the read only.
 - **A person in two tenants is edited twice.** Language and photo are entered per
   tenant. The platform gives up the convenience of one profile to keep isolation.
 - **A contact phone and a sign-in phone can now differ.** They are the same value
   at invitation and diverge as soon as the person edits the contact phone. The
-  card has to say which is which, and support will get the question.
+  card has to say which is which, and support will get the question. Two members
+  can also hold the same contact phone, so a phone search may return more than one
+  person and the list never treats a shared number as an error.
 - **Emergency contacts store a third party's data with no relationship to the
   platform.** The lawful basis and notice are open (legal). If they cannot be
   answered, that table is the first thing to remove.
@@ -370,14 +455,14 @@ iam.staff_members
   id uuid primary key                                  -- Ids.newId()
   tenant_id uuid not null references tenant.tenants
   principal_subject varchar(255) not null              -- the same string iam.grants carries
-  display_reference varchar(32) not null               -- 'S-0142', tenant-unique, never reused
+  display_reference varchar(32) not null               -- 'S-0142', tenant-unique, never reused; from iam.staff_member_counters
   protected_first_name text null                       -- ADR 0029 PERSONAL, AAD-bound
   protected_last_name text null
   protected_phone text null
   phone_lookup_hash varchar(64) null                   -- keyed per tenant; exact match only
   protected_employee_number text null
   employee_number_hash varchar(64) null
-  photo_asset_id uuid null references media.assets     -- PRIVATE visibility, TENANT owner
+  photo_asset_id uuid null                             -- PRIVATE visibility, TENANT owner
   ui_locale varchar(8) null                            -- 'ru' | 'uz' | 'en'
   spoken_languages varchar(8)[] not null default '{}'
   employment_status varchar(16) not null               -- PENDING | ACTIVE | ON_LEAVE | ENDED
@@ -388,10 +473,16 @@ iam.staff_members
   unique (tenant_id, principal_subject)
   unique (tenant_id, display_reference)
   unique (id, tenant_id)
-  unique (tenant_id, phone_lookup_hash) where phone_lookup_hash is not null
+  foreign key (photo_asset_id, tenant_id)
+    references media.assets (asset_id, tenant_id)      -- uq_media_assets_tenant_scoped (V0058); a null photo is not checked
+  index  (tenant_id, phone_lookup_hash) where phone_lookup_hash is not null   -- NOT unique: a contact phone may be shared
   unique (tenant_id, employee_number_hash) where employee_number_hash is not null
   check (employment_status <> 'ENDED' or employed_until is not null)
   check (employed_until is null or employed_from is null or employed_until >= employed_from)
+
+iam.staff_member_counters                            -- allocates display_reference; locked by the allocating statement
+  tenant_id uuid primary key references tenant.tenants
+  last_reference integer not null default 0             -- INSERT ... ON CONFLICT DO UPDATE SET last_reference = last_reference + 1 RETURNING
 
 tenant.location_contact_persons
   id, tenant_id, location_id                           -- (tenant_id, location_id) -> tenant.locations
@@ -408,6 +499,21 @@ iam.staff_emergency_contacts
   version, created_at, updated_at
 ```
 
+The photo reference is written as the two-column key on purpose. `media.assets` is
+keyed on `asset_id` alone, and a single-column reference into it lets one tenant's row
+point at another tenant's private object, which `V0069` had to repair for a courier's
+registration certificate (and which turned the endpoint that wrote it into an
+existence oracle for asset ids). A staff photo is personal data (ADR 0029), so the
+same failure here would store a durable pointer to another tenant's private image.
+`tools/checks/tenant_scoped_references.py` and `TenantScopedReferenceCatalogTests`
+refuse the single-column form, and this record adds nothing to their allowlist. The
+constraint is the backstop, not the check: the service resolves the asset in the
+caller's own tenant through `MediaAvailability` before it stores the id, requires
+`PRIVATE` visibility and `TENANT` owner scope on it (`MediaAvailability` answers only
+"displayable in this tenant", so this needs a narrow sibling method on the port that
+ADR 0010 owns), and answers one not-found for an asset of another tenant and for one
+that does not exist, as `CourierEngagementService` does for evidence media.
+
 Every table is granted to `horecaos_application` in its own migration
 (`SELECT, INSERT, UPDATE`, plus `DELETE` on the two contact tables where a row
 is genuinely removable; never `DELETE` on `staff_members`). A staff member row is
@@ -420,32 +526,62 @@ tenant predicate and `TenantScopedReferenceCatalogTests` until that schema moves
 
 ### Capability placement (ADR 0025)
 
-| Capability | Holds | Scope | Notes |
-|---|---|---|---|
-| `staff.profile.read` | `TENANT_OWNER`, `TENANT_ADMIN`, `BRAND_MANAGER`, `LOCATION_MANAGER` | `TENANT`, `BRAND`, `LOCATION` | A caller covers a member when their scope covers at least one of the member's active grants; a member with no active grant is visible at `TENANT` scope only. Returns name, masked phone (list) or full phone (single member), photo, employment, languages |
-| `staff.profile.manage` | `TENANT_OWNER`, `TENANT_ADMIN`; `LOCATION_MANAGER` at `LOCATION` only for members whose every active grant is inside that location (Open input) | as above | Edits another person's profile, employment and employee number; ends employment (which additionally requires `iam.grant.manage` at the scopes being revoked) |
-| `staff.emergency-contact.read` | `TENANT_OWNER`, `TENANT_ADMIN`, `LOCATION_MANAGER` (covering the member) | as above | Every read writes an ADR 0027 fact; there is no bulk read |
-| `staff.self.manage` | every tenant-visible job (the eight of `TenantRoleCatalog`), not only the bundles that hold `integration.telegram-staff-link.issue`, because a finance clerk edits her own phone too | `TENANT` | Authorises only the caller's own row; the service compares the caller's subject with the row's `principal_subject`, and the endpoint declares the capability so `EndpointCapabilityDeclarationTests` passes |
+A capability's scope is the scope the route declares, and a grant serves the route
+only if its own scope is that scope or a broader one (Context). So each operation a
+branch or brand holder needs exists at that level, with `brandId` and `locationId` in
+the path (the shape `LocationServiceOperationsController` already uses), and a
+tenant-wide twin for `TENANT` holders. A member is visible at a scope when at least
+one of their active grants sits at that scope or below it; a member with no active
+grant is visible at `TENANT` scope only. A location route answers "no such member" for
+a member without an active grant at that location, the same answer an unknown id
+gets, so it is no existence oracle.
 
-Branch contact persons reuse `location.read` and `location.write`. The T20 note
-in the gap map names `LOCATION_MANAGE`; the registry has `LOCATION_WRITE`, and
-this record follows the registry.
+| Capability | Holds | Declared at | Notes |
+|---|---|---|---|
+| `staff.profile.read` | `TENANT_OWNER`, `TENANT_ADMIN`, `BRAND_MANAGER`, `LOCATION_MANAGER` | `TENANT`, `BRAND` and `LOCATION` routes (below) | Returns name, masked phone (list) or full phone (single member), photo, employment, languages. A `LOCATION_MANAGER` reaches the `LOCATION` routes for their own branch and no other |
+| `staff.profile.manage` | `TENANT_OWNER`, `TENANT_ADMIN`; `LOCATION_MANAGER` (Open input) | `TENANT` and `LOCATION` routes | Edits another person's profile, employment and employee number and their emergency contacts. On a `LOCATION` route the service refuses unless every one of the member's active grants is inside that location. Ending employment is a `TENANT` route only in v1, because it also needs `iam.grant.manage` at the scopes being revoked and no branch job holds that until ADR 0103 decides; the service checks the second capability with `AuthorizationService#require`, as `GrantManagementService` does, since a method carries one `@RequiresCapability` |
+| `staff.emergency-contact.read` | `TENANT_OWNER`, `TENANT_ADMIN`, `LOCATION_MANAGER` | `TENANT` and `LOCATION` routes | Every read writes an ADR 0027 fact; there is no bulk read; the same location-membership rule as above |
+| `staff.self.manage` | every tenant-visible job (the eight of `TenantRoleCatalog`), because a finance clerk edits her own phone too | none: `@StaffSelfAuthorized` | Held at any scope in the tenant is enough; there is no coverage comparison. The handler resolves the member from the token subject and tenant, never from a supplied id, so it can act on the caller's own row only. `EndpointCapabilityDeclarationTests` gains the strategy and rejects it combined with `@RequiresCapability` |
+
+Branch contact persons reuse `location.read` and `location.write` at `LOCATION`
+scope on a route that names the brand. The T20 note in the gap map names
+`LOCATION_MANAGE`; the registry has `LOCATION_WRITE`, and this record follows the
+registry.
 
 ### APIs (ADR 0031: `If-Match` version on updates, `Idempotency-Key` on creates)
 
 ```text
-GET  /api/v1/operations/tenants/{tenantId}/staff/members?locationId=&status=&q=
-GET  /api/v1/operations/tenants/{tenantId}/staff/members/{memberId}
-PUT  /api/v1/operations/tenants/{tenantId}/staff/members/{memberId}
-POST /api/v1/operations/tenants/{tenantId}/staff/members/{memberId}/end-employment
-GET  /api/v1/operations/tenants/{tenantId}/staff/members/{memberId}/emergency-contacts
-PUT  /api/v1/operations/tenants/{tenantId}/staff/members/{memberId}/emergency-contacts
+# tenant-wide, declared at TENANT scope: TENANT_OWNER, TENANT_ADMIN
+GET  /api/v1/operations/tenants/{tenantId}/staff/members?brandId=&locationId=&status=&q=   staff.profile.read
+GET  /api/v1/operations/tenants/{tenantId}/staff/members/{memberId}                        staff.profile.read
+PUT  /api/v1/operations/tenants/{tenantId}/staff/members/{memberId}                        staff.profile.manage
+POST /api/v1/operations/tenants/{tenantId}/staff/members/{memberId}/end-employment        staff.profile.manage (+ iam.grant.manage in the service)
+GET  /api/v1/operations/tenants/{tenantId}/staff/members/{memberId}/emergency-contacts     staff.emergency-contact.read
+PUT  /api/v1/operations/tenants/{tenantId}/staff/members/{memberId}/emergency-contacts     staff.profile.manage
+
+# brand-wide, declared at BRAND scope: BRAND_MANAGER and every broader holder
+GET  /api/v1/operations/tenants/{tenantId}/brands/{brandId}/staff/members?locationId=&status=&q=   staff.profile.read
+GET  /api/v1/operations/tenants/{tenantId}/brands/{brandId}/staff/members/{memberId}               staff.profile.read
+
+# one branch, declared at LOCATION scope: LOCATION_MANAGER of that branch and every broader holder
+GET  .../brands/{brandId}/locations/{locationId}/staff/members?status=&q=                  staff.profile.read
+GET  .../brands/{brandId}/locations/{locationId}/staff/members/{memberId}                  staff.profile.read
+PUT  .../brands/{brandId}/locations/{locationId}/staff/members/{memberId}                  staff.profile.manage
+GET  .../brands/{brandId}/locations/{locationId}/staff/members/{memberId}/emergency-contacts   staff.emergency-contact.read
+PUT  .../brands/{brandId}/locations/{locationId}/staff/members/{memberId}/emergency-contacts   staff.profile.manage
+GET  .../brands/{brandId}/locations/{locationId}/contact-persons                           location.read
+PUT  .../brands/{brandId}/locations/{locationId}/contact-persons                           location.write
+
+# the caller's own row, @StaffSelfAuthorized(staff.self.manage): any active grant in the tenant
 GET  /api/v1/operations/tenants/{tenantId}/staff/me
 PUT  /api/v1/operations/tenants/{tenantId}/staff/me
 POST /api/v1/operations/tenants/{tenantId}/staff/me/photo
-GET  /api/v1/operations/tenants/{tenantId}/locations/{locationId}/contact-persons
-PUT  /api/v1/operations/tenants/{tenantId}/locations/{locationId}/contact-persons
 ```
+
+The `brandId`, `locationId` filters on the tenant and brand lists narrow a result and
+never widen a scope; the scope of a route is only what its path names, which is what
+`CapabilityEnforcementInterceptor` reads. Each tenant-wide and branch route pair calls
+one service method, so the coverage rule lives in one place.
 
 `q` matches a decrypted name substring in the application and nothing else. A
 phone search, if the product wants one, is a `POST` with the number in the body
@@ -500,22 +636,47 @@ transition on demand.
 - No name, phone or employee number reaches a log, metric, trace, event, error
   message or dead-letter summary (ADR 0029); log lines carry `display_reference`.
 - Self-service `PUT` is rate-limited per subject (ADR 0033). A phone change
-  re-validates uniqueness through the lookup hash and answers a conflict without
-  naming the colleague who holds it.
+  validates the format and refreshes the lookup hash; it never conflicts with a
+  colleague, because a contact phone is not unique (Decision).
 - Metrics: `horecaos.iam.staff.members{status}`, `horecaos.iam.staff.unbacked_active`
   (active subjects with no row, the backfill's completion gauge),
   `horecaos.iam.staff.ended_with_access` (the drift count).
 
 ### Testing
 
+- Authorization by level, each written to fail first: a `location-manager` grant at
+  branch A reads and edits branch A's members through the `LOCATION` routes, gets 403
+  from the `TENANT` routes and from branch B's routes, and gets "no such member" for
+  a member of branch A's sibling; a `brand-manager` grant reads through the `BRAND`
+  routes; a `location-staff` cook (a `LOCATION` grant only) reads and edits their own
+  profile through `staff/me` and cannot address another member through it;
+  `EndpointCapabilityDeclarationTests` accepts every route above and rejects
+  `@StaffSelfAuthorized` combined with `@RequiresCapability`. A separate test drives
+  `POST /api/v1/tenants/{tenantId}/staff/telegram/link-codes` with a `location-staff`
+  grant, which no test does today; it is expected to fail, which turns the finding in
+  Context into a failing test before it is a fix (the fix itself is ADR 0060's to
+  own, not this record's).
 - Tenant isolation: a subject in two tenants gets two rows; a read in tenant A
   never returns tenant B's row, and a ciphertext moved between rows fails to
   decrypt. The directory refuses a cross-tenant lookup.
 - A protected field is not readable through the reporting role, and a captured
   log of the whole flow contains no name or phone.
+- Photo isolation: tenant B setting `photo_asset_id` to tenant A's private asset id is
+  refused by PostgreSQL (foreign key violation) when the service is bypassed, and by
+  the service with the same not-found a random uuid gets, so the two answers cannot be
+  told apart; an asset of the caller's tenant that is `PUBLIC` or not `TENANT`-owned is
+  refused too.
 - The People list, the audit log and the order detail resolve the same name for
   one subject; a self-edit is visible on all three after the write with no wait
   for a TTL (the cache eviction).
+- The invitation is all or nothing: with the member insert made to fail (the
+  transaction throws), no grant remains active for the invited subject, the Keycloak
+  account is deleted so the phone can be invited again, the original error reaches
+  the caller, and a cleanup that also fails writes `orphan_left`. A cook who sets her
+  contact phone to the kitchen mobile does not stop a manager inviting a new hire
+  whose sign-in phone is that number; two members may then share a contact phone and
+  both are found by an exact-match search. Two concurrent invitations in one tenant
+  get different `display_reference` values and both succeed.
 - Ending employment revokes every active grant, survives a mid-way failure with
   the drift flag raised, and a retry completes it.
 - `OPERATOR` mapping round trip: a row written from the pane resolves through
@@ -524,7 +685,7 @@ transition on demand.
 
 ## Rollout and rollback
 
-Additive only. The migration creates three tables and grants; nothing existing is
+Additive only. The migration creates four tables and grants; nothing existing is
 altered. Ship the tables and the invitation-time insert first, with reads still
 on the Keycloak path; run the backfill per environment and watch
 `unbacked_active` fall to zero; then move the two name callers, the People
@@ -536,16 +697,20 @@ table, not an edit to an applied one, and the rows stay.
 
 ## Implementation checklist
 
-- [ ] Flyway migration for the three tables, indexes, checks and `GRANT`s (numbers
+- [ ] Flyway migration for the four tables, indexes, checks and `GRANT`s (numbers
       reserved by the wave that picks this up; check every active worktree).
 - [ ] Four capabilities in `Capability`, bundles in `PlatformRole`, and the
       registry snapshot, with `EndpointCapabilityDeclarationTests` green.
+- [ ] `@StaffSelfAuthorized` and its interceptor branch (capability held at any
+      scope in the tenant, own row only), only after the Open input is signed off;
+      the tenant, brand and location route pairs over one service method each.
 - [ ] `iam.api.staff.StaffDirectory` (named interface) with `nameOf`, `namesOf`
       and `memberIdOf`, a JDBC implementation over `FieldProtection`, a
       `(tenant, subject)` cache evicted on write, and the Keycloak fallback.
 - [ ] Row creation in `StaffInvitationService#invite` (inside the invitation's
-      transaction), promotion to `ACTIVE` in `accept`, and in the owner's
-      `completeSetup`.
+      transaction, after the grant), `abandonOrphanedAccount` extended to revoke the
+      grant when that transaction fails, promotion to `ACTIVE` in `accept` (in the
+      transaction that records the acceptance), and in the owner's `completeSetup`.
 - [ ] Backfill runner, runbook and the `unbacked_active` gauge.
 - [ ] Member list, single member, update, `me`, photo, end-employment and
       emergency-contact endpoints; ending employment revokes through
@@ -571,14 +736,18 @@ table, not an edit to an applied one, and the rows stay.
 
 ## Exit criteria
 
-Open the People screen as a branch manager and see the names, masked phones and
-employment status of the people who work at your branch, and no one else. Open
+As a branch manager, call the branch's members route and see the names, masked
+phones and employment status of the people who work at your branch, and no one else;
+the same call for another branch, and the tenant-wide route, are refused. (The People
+screen stays out of a branch manager's reach until ADR 0103 or a successor lets that
+job see Staff at all, so this half is verified at the API until then.) As a line cook
+holding only a location grant, edit your own name and phone from «Мой профиль». Open
 the audit log, an order's «принял» line and the operator leaderboard and see the
-same names. Edit your own name and phone from «Мой профиль» and see the change on
-all of them without waiting. Map a POS operator id to a named colleague and see
-it on the next order that colleague accepts. End someone's employment and find
-that they hold no job in the tenant and the console shows them no access, that
-their history still names them, and that no other tenant could read any of it.
+same names, with the edit visible on all of them without waiting. Map a POS operator
+id to a named colleague and see it on the next order that colleague accepts. End
+someone's employment and find that they hold no job in the tenant and the console
+shows them no access, that their history still names them, and that no other tenant
+could read any of it.
 
 ## References
 
@@ -589,8 +758,13 @@ their history still names them, and that no other tenant could read any of it.
 - `platform/docs/delever-parity-matrix.md` (personal account and operator
   mapping rows and the open questions under them)
 - ADR 0009 (`iam.principals` and `iam.tenant_membership_links`, identifiers only)
-- ADR 0025 (capabilities; no tenant-defined roles in v1) and ADR 0103 (grant
-  management scope, Proposed)
+- ADR 0025 (capabilities and downward-only scope coverage; no tenant-defined roles
+  in v1), ADR 0049 (`@CourierSelfAuthorized`, the self-authorization precedent) and
+  ADR 0103 (grant management scope, Proposed)
+- `ResourceScope#covers`, `JdbcAuthorizationService#hasGrant`,
+  `CapabilityEnforcementInterceptor#scopeOf`, `EndpointCapabilityDeclarationTests`,
+  `LocationServiceOperationsController`, `OperationsCourierController#rosterEntries`,
+  `TelegramStaffLinkCodeController`
 - ADR 0026 (`provider_entity_mappings`) and ADR 0060 (staff Telegram link and the
   self-service capability precedent)
 - ADR 0029 (envelope encryption, data classes, provisional retention)
