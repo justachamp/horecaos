@@ -46,6 +46,12 @@ export interface OrderLineCommentPreset {
   readonly labelRu: string;
   readonly labelUz: string;
   readonly labelEn: string;
+  /**
+   * Every wording the line's snapshot holds, by locale: the triple plus any locale a tenant's
+   * brands support beyond it (row 10.12). Optional so a fixture, or an older platform, still reads;
+   * the console renders the operator's own language from the three fields above.
+   */
+  readonly labels?: Readonly<Record<string, string>>;
 }
 
 /** `CustomerResponse` — orders.md §3.7-§3.8, exactly as far as `ORDER_READ` may see. */
