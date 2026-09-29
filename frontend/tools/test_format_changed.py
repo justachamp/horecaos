@@ -29,6 +29,31 @@ WORKFLOW = REPO / ".github" / "workflows" / "ci.yml"
 APP = "frontend/operations"
 
 
+def run_lines(step: str) -> list[str]:
+    """The commands of a workflow step's `run:`, one per line, without the step's comments.
+
+    Handles `run: cmd` and a `run: |` block; blank lines and `#` lines inside the block are
+    dropped. A substring test over the whole step also matches its comments, so the tests
+    below look only at what would actually be executed.
+    """
+    lines = step.split("\n")
+    for index, line in enumerate(lines):
+        match = re.match(r"^        run:\s*(.*)$", line)
+        if match is None:
+            continue
+        inline = match.group(1).strip()
+        if inline not in ("|", "|-", ">", ">-"):
+            return [inline]
+        body: list[str] = []
+        for following in lines[index + 1 :]:
+            if following.strip() and not following.startswith("          "):
+                break
+            if following.strip() and not following.strip().startswith("#"):
+                body.append(following.strip())
+        return body
+    return []
+
+
 class TempRepo:
     """A git repository in a temp directory, driven through plain git commands."""
 
@@ -258,7 +283,7 @@ class CommandLineTests(unittest.TestCase):
 
 
 class WorkflowWiringTests(unittest.TestCase):
-    """The steps that make lint and the format ratchet real must stay in ci.yml."""
+    """The steps that make lint and the whole-tree format check real must stay in ci.yml."""
 
     @classmethod
     def setUpClass(cls) -> None:
@@ -273,9 +298,6 @@ class WorkflowWiringTests(unittest.TestCase):
         assert found is not None
         return found.group(1)
 
-    def test_the_checkout_has_history_so_the_merge_base_exists(self) -> None:
-        self.assertRegex(self.block, r"fetch-depth:\s*0\b")
-
     def test_operations_lint_runs_in_ci_and_only_for_operations(self) -> None:
         step = self.step("Lint (operations)")
         self.assertIn("if: matrix.app == 'operations'", step)
@@ -285,26 +307,29 @@ class WorkflowWiringTests(unittest.TestCase):
         self.assertIn("lint", scripts)
         self.assertIn("lint:rules", scripts)
 
-    def test_the_format_check_looks_only_at_changed_files(self) -> None:
-        step = self.step("Format check on changed files (operations)")
+    def test_the_format_check_covers_the_whole_tree(self) -> None:
+        # A changed-files-only check misses a file whose push was cancelled by a later one and
+        # a `before` commit missing from the clone; the whole-tree check cannot.
+        step = self.step("Format check (operations)")
         self.assertIn("if: matrix.app == 'operations'", step)
-        commands = step.split("run: |", 1)[1]  # the comments may name format:check; the commands must not run it
-        self.assertIn("frontend/tools/format_changed.py --app operations", commands)
-        self.assertIn('--base "$FORMAT_BASE"', commands)
-        self.assertNotIn("format:check", commands, "the whole-tree check would fail on the unformatted backlog")
-        self.assertIn("github.event.before", step)
-        self.assertIn("github.base_ref", step)
+        self.assertEqual(["npm run format:check"], run_lines(step))
+        self.assertRegex(step, r"(?m)^        working-directory: frontend/\$\{\{ matrix\.app \}\}$")
+        self.assertNotIn("format_changed", "\n".join(run_lines(step)))
+        self.assertNotIn("github.event.before", step)
+        self.assertNotIn("github.base_ref", step)
 
     def test_lint_and_format_run_after_install_and_before_the_slow_tests(self) -> None:
         names = re.findall(r"^      - name: (.+)$", self.block, re.MULTILINE)
         order = {name: index for index, name in enumerate(names)}
         install = order["Install"]
-        for gate in ("Lint (operations)", "Format check on changed files (operations)"):
+        for gate in ("Lint (operations)", "Format check (operations)"):
             self.assertGreater(order[gate], install)
             self.assertLess(order[gate], order["Test and build"])
 
-    def test_the_selection_tests_run_in_ci(self) -> None:
-        self.assertIn("frontend/tools/test_format_changed.py", self.block)
+    def test_this_file_runs_in_ci_because_it_also_guards_the_wiring(self) -> None:
+        step = self.step("Tooling tests (operations)")
+        self.assertIn("if: matrix.app == 'operations'", step)
+        self.assertEqual(["python3 frontend/tools/test_format_changed.py"], run_lines(step))
 
 
 if __name__ == "__main__":

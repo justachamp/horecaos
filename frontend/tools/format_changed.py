@@ -1,15 +1,14 @@
 #!/usr/bin/env python3
 """Run `prettier --check` on the frontend files a change touched -- not on the tree.
 
-Why this exists
----------------
-`npm run format:check` in an app checks every file under src/, and frontend/operations
-has about a hundred files that were never formatted, so CI cannot run it whole without
-turning red on code nobody changed. Reformatting the tree is a single sweeping commit
-that conflicts with every open branch, so it is scheduled for the end of a batch, not
-done piecemeal. Until then this script is the ratchet: a file a change adds or edits must
-already be formatted, and nothing else is looked at. The unformatted backlog can shrink
-but cannot grow.
+What it is for
+--------------
+A local shortcut, not the CI gate. CI runs the plain `npm run format:check`, which checks
+every file under src/ and is what keeps the tree prettier-clean (it used to run this
+script instead, while about a hundred files predated the prettier config; the tree was
+reformatted in one commit and that reason is gone). Use this script when you want to check,
+or list, only what your change touched -- for instance before pushing, or from a hook --
+without waiting on the whole tree.
 
 What "touched" means
 --------------------
@@ -20,10 +19,9 @@ On a CI checkout the working tree equals HEAD, so this is exactly the change und
 test. Deleted files are skipped; files matched by the app's .prettierignore are skipped
 by prettier itself.
 
-<base> is the pull request's base branch (`origin/main`) or, on a push, the commit the
-push replaced (`github.event.before`). A base that is empty, all zeros (a new branch) or
-not in the clone (a force push) falls back to the parent of HEAD, so the check still
-covers the tip commit instead of silently passing on nothing.
+<base> is the branch the change will be merged into (`origin/main`). A base that is empty,
+all zeros (a new branch) or not in the clone falls back to the parent of HEAD, so the
+check still covers the tip commit instead of silently passing on nothing.
 
 Usage
 -----
@@ -148,7 +146,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(
             "\nformat_changed: the [warn] files above are not prettier-formatted. Fix them with\n"
             f"  cd frontend/{args.app} && npx prettier --write <those files>\n"
-            "(only files this change touched are checked; the rest of the tree is reformatted once, in a dedicated commit).",
+            "(only files this change touched are checked here; CI checks the whole tree with `npm run format:check`).",
             file=sys.stderr,
         )
     return status
