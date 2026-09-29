@@ -193,12 +193,16 @@ with what the platform currently believes. The position boolean is not replaced.
    for that, the column has no `CHECK`.
 
 5. **An embargo has an optional end, evaluated at read.** `ends_at` in the past
-   means the row covers nothing, with no sweeper on the correctness path; a
-   sweeper only marks the row `EXPIRED`, writes the audit fact and emits the
-   event so the reconciler and the digest hear about it. An operator stop keeps
-   today's default (indefinite); a bulk or single stop may name "until the end of
-   the trading day", computed from the tenant's business-day boundary
-   (`BusinessDayWindows`, already used by the daily quantity reset).
+   means the row covers nothing, with no sweeper on the correctness path of any
+   read; a sweeper only marks the row `EXPIRED`, writes the audit fact and emits
+   the event so the digest hears about it and the reconciler hears about it sooner.
+   The reconciler's correctness does not rest on that sweeper: the resync sweep of
+   Decision 7 evaluates `ends_at` at its own `now`, so an embargo that expired while
+   the sweeper was down or lagging still restores the dish on the partner within
+   one resync interval. An operator stop keeps today's default (indefinite); a bulk
+   or single stop may name "until the end of the trading day", computed from the
+   tenant's business-day boundary (`BusinessDayWindows`, already used by the daily
+   quantity reset).
 
 6. **An embargo refuses at cart and checkout for the channels it covers; a
    threshold still only hides.** This keeps batch 11's decision intact for
@@ -212,15 +216,27 @@ with what the platform currently believes. The position boolean is not replaced.
    rather than refusing a paid order over a menu-sync lag.
 
 7. **Propagation to a marketplace is a level-triggered reconciler, not a replay
-   of events.** Committing an embargo (or any availability change) marks the
-   affected `(binding, mapped item)` rows dirty in the same transaction. A
-   worker, at-least-once and claimed under a lease, recomputes the *desired*
-   availability for each dirty row from the resolver, compares it with the last
-   state the partner confirmed, and sends the difference through a Camel route
-   (ADR 0007) that implements `marketplace.availability.push`. What the partner
-   is told is always the current truth, never an old event; a stop and a lift
-   that both happen while the partner is unreachable collapse into nothing to
-   send. A stop is pushed before a restore (fail toward under-selling).
+   of events, and its guarantee is a periodic full recompute — not the dirty
+   markers.** Each `(binding, mapped item)` row keeps the *desired* availability,
+   recomputed from the resolver, and `confirmed_available`, what the partner is
+   *known* to hold (null when that is not known). A worker, at-least-once and
+   claimed under a lease, sends whenever the two differ or the partner's state is
+   unknown, through a Camel route (ADR 0007) that implements
+   `marketplace.availability.push`. Two mechanisms recompute desired, and only one
+   is load-bearing. **Markers** — a row marked dirty in the same transaction as any
+   change to a resolver input (the list is under "Marketplace propagation") — are an
+   accelerator: they get a change to the partner in seconds. **The resync sweep**
+   — every mapped item of every active binding, recomputed through the resolver at
+   least every `resync_interval` — is the guarantee: it catches an input change that
+   carries no marker (a branch rebound to a menu that carries a `MENU` stop, an
+   offering switched off, an `ends_at` passing) and any input the resolver gains
+   after this record, so a missing marker delays a correction and never prevents
+   it. And a push whose outcome is unknown does not leave the platform believing the
+   partner holds the old value: it sets `confirmed_available` to null, and the next
+   tick sends the current desired value whatever it is. What the partner is told is
+   always the current truth, never an old event; a stop and a lift that both happen
+   while no push could have reached the partner collapse into nothing to send. A stop
+   is pushed before a restore (fail toward under-selling).
 
 8. **Availability pushed to a marketplace is binary.** ADR 0040 already decided
    that "availability is binary"; thresholds and counts are translated to a
@@ -234,6 +250,7 @@ with what the platform currently believes. The position boolean is not replaced.
 | Replace `binary_available` with a stops table as the only authority (the gap map's "superseding ADR 0017's binary model") | Rewrites every writer (console single and bulk, Telegram, POS poll), the movement ledger's meaning, the digest, the stop-list SQL and the reservation path in one release, to change a boolean that works into a set that must be migrated. ADR 0017's supply-state semantics are correct and are not what is missing; the embargo overlay adds what is | The overlay-plus-boolean composition causes a correctness incident a single authority would have prevented, or a fourth supply-state source cannot be expressed as either supply or embargo |
 | Fan a brand or menu stop out to per-location toggles at write time | Needs no new model, but a brand stop becomes N writes, N audit facts and N events; lifting it can miss a branch bound in between; a branch bound later starts with the dish on sale; and `source` has nowhere to live | Never for `BRAND` and `MENU`; acceptable only for a tenant with two or three branches, which needs no ADR |
 | Model an embargo as a `catalog.channel_offering_exclusions` row with an end and a source added | Cheapest: the table already has channel and optional location scope, a reader and a writer. Rejected because an exclusion is *authored assortment* that lives until someone re-includes it; the sources that matter here (the POS poll, Telegram, the threshold) act on stock and are inventory's, and putting their writes in `catalog` inverts the dependency (`inventory` implements catalog's lookup, not the reverse). It also has no `BRAND` or `MENU` scope | Product decides that "temporarily off Uzum" and "not on Uzum" are one thing to operators — then add `ends_at` and `source` to exclusions and drop the `CHANNEL` scope here rather than keep two tables |
+| Reconcile only the rows a fixed list of triggers marked dirty | The trigger list becomes the correctness argument, so every resolver input that no trigger names (a menu rebinding, an offering status, an `ends_at` with a stalled sweeper, an input added next year) is a silent divergence with nothing to detect it, and the partner keeps selling a dish the kitchen stopped | Never as the only mechanism; markers stay as the accelerator, the periodic full recompute is the guarantee |
 | Push each availability event to the partner as it happens (edge-triggered consumer of `inventory.events`) | An outage replays a backlog in order, so a partner recovering from an hour of downtime receives an hour of intermediate states, and an event lost or reordered leaves the partner wrong until the next change to that dish with nothing to detect it. A reconciler over desired state has neither failure | A partner API only accepts sequenced deltas and rejects state-set calls — then the reconciler emits deltas from the same desired-versus-confirmed diff |
 | Pull only: the partner polls ADR 0040's `GET .../availability` | Zero outbound state and cannot go stale differently per partner. Rejected as the *only* mechanism because a poll interval is the partner's to choose (minutes), which is how a 14:32 stop is still on sale at 14:40, and some partners have no poll contract at all. Kept as a second consumer of the same resolver | A partner commits in writing to poll at or under 60 seconds |
 | A fifth scope, `TERMINAL`, now | There is no terminal entity to point at: kiosk pairing is gap-map row `10.5` (not built), the POS binding is a venue, `fiscal.fiscal_terminals` is unrelated. A scope with no referent is a column nothing can fill | A device registry with a per-device principal exists and a tenant runs two identical devices in one channel at one location |
@@ -274,15 +291,28 @@ with what the platform currently believes. The position boolean is not replaced.
   not control. A brand-wide stop of a hundred dishes across forty bound venues is four
   thousand pushes; at a partner's rate limit that is minutes during which the
   partner keeps selling.
-- A stop and a lift inside one partner outage never reach the partner. Correct,
-  and confusing to whoever asks why the partner never saw the 14:32 stop; the
-  propagation ledger has to answer.
+- A stop and a lift inside one partner outage never reach the partner, provided no
+  push in between could have been applied. Correct, and confusing to whoever asks why
+  the partner never saw the 14:32 stop; the propagation ledger has to answer. If a
+  push in between timed out its outcome is unknown, so the platform resends rather
+  than assume, and the partner may receive a state-set it did not strictly need —
+  the safe error.
+- The resync sweep reads every mapped item of every active binding every few
+  minutes. It is one batched indexed read per binding through the resolver, the
+  cost of one storefront menu render, and it sends nothing when nothing differs;
+  forty bindings at a five-minute interval is a read about every seven seconds. A
+  resolver too slow for that is a finding about the resolver, not a reason to drop
+  the sweep.
 - A `BRAND` embargo covers a branch bound after it was made. Right for a recall,
   surprising to a new branch manager who asks why plov is off; the explainer has
   to name the brand stop.
 - Union-only precedence means a branch cannot override a brand stop.
 - Threshold granularity (channel type) and stop granularity (channel instance)
   differ, and an operator will notice.
+- Rollback is asymmetric. Freezing and suspending are safe and instant; ceasing to
+  consult embargoes is not, and needs a materialisation run and an acknowledged
+  report because some stops (`UNTRACKED`, `QUANTITY`, `CHANNEL`) have no position to
+  land on. A build that offers one switch labelled "disable" hides that.
 - New capability `inventory.stop.manage` and a new event `InventoryStopChanged`
   are code-owned registry entries (ADR 0025, ADR 0032): each is a release.
 
@@ -334,12 +364,25 @@ integration.marketplace_item_availability
   tenant_id, binding_id, external_entity_id       -- the MENU_ITEM mapping ADR 0040 already uses
   variant_id
   desired_available boolean not null, desired_seq bigint not null
-  confirmed_available boolean null, confirmed_at timestamptz null
-  state          IN_SYNC | PENDING | REJECTED_UNMAPPED | SUSPENDED
+  confirmed_available boolean null, confirmed_at timestamptz null   -- what the partner is KNOWN to hold; null = unknown
+  last_attempt_available boolean null, last_attempt_at timestamptz null
+  last_attempt_outcome  CONFIRMED | NOT_APPLIED | UNKNOWN | null      -- what the gateway route concluded, not a FailureCategory
+  state          IN_SYNC | PENDING | UNCERTAIN | REJECTED_UNMAPPED | SUSPENDED
   attempt_count integer, next_attempt_at timestamptz null, last_failure_code varchar(48) null
   lease_owner null, lease_expires_at null          -- the JdbcSourcingJobStore pattern
   primary key (binding_id, external_entity_id)
+  ck: state <> 'IN_SYNC' OR (confirmed_available IS NOT NULL AND confirmed_available = desired_available)
+        -- IS NOT NULL written out: a CHECK passes on NULL, and "in sync with an unknown" is the bug
+  ck: state <> 'UNCERTAIN' OR confirmed_available IS NULL
 ```
+
+`state` is derived, never authoritative: a row is `IN_SYNC` only when
+`confirmed_available` is known and equals `desired_available`; `UNCERTAIN` is a row
+whose `confirmed_available` an `UNKNOWN` attempt nulled and that has had no
+`CONFIRMED` since (a later `NOT_APPLIED` attempt does not clear it); the diff the
+worker sends on is `confirmed_available IS DISTINCT FROM desired_available`, so a null
+always sends. A row created for a new mapping starts with `confirmed_available` null,
+which makes the first push of any item unconditional.
 
 ### Resolution
 
@@ -408,27 +451,69 @@ two routes declared.
 
 ### Marketplace propagation
 
-**What marks a row dirty.** Every embargo create, lift and expiry, every position
-toggle, and every `QUANTITY` movement that can cross a channel threshold, in the
-same transaction (a `BEFORE_COMMIT` listener, the pattern
-`InventoryOutboxEventListener` uses). Threshold crossings are also swept
-periodically per binding until `InventoryPositionChanged` has a producer.
+**What recomputes a row.** Two paths, and only the second is a guarantee.
+
+*Markers, an accelerator.* In the same transaction as the change (a
+`BEFORE_COMMIT` listener, the pattern `InventoryOutboxEventListener` uses), the
+affected `(binding, mapped item)` rows are marked dirty and recomputed at the next
+tick instead of the next resync, for: every embargo create, lift and expiry; every
+position toggle; every `QUANTITY` movement that can cross a channel threshold; and
+every change to the other inputs the resolver reads — a
+`catalog.location_offerings` status change, a `catalog.channel_offering_exclusions`
+add or remove, a `catalog.branch_menu_bindings` bind, rebind or unbind (a branch
+rebound to a menu that carries a `MENU` stop changes desired for every item without
+touching an embargo row), a `tenant.sales_channels` change to
+`provider_installation_id` or status, and a new, changed or removed `MENU_ITEM` row
+in `integration.provider_entity_mappings`. The list exists so that a missed entry
+costs a delay. It is not the correctness argument and cannot be: an input the
+resolver gains next year has no marker on the day it ships.
+
+*The resync sweep, the guarantee.* Every active `MARKETPLACE` binding is recomputed
+in full — every mapped item, one batched resolver read, the call the storefront menu
+render already makes — at least every `resync_interval` (an ADR 0030 setting, default
+5 minutes, jittered per binding so forty venues do not tick together), and at once
+when a binding becomes active, when an adapter starts declaring
+`marketplace.availability.push`, and when a suspended reconciler is resumed. It sends
+only differences, so its cost is database reads and not partner calls. Every
+time-dependent input is evaluated at the sweep's own `now` — an embargo's `ends_at`
+above all, and any sale window or trading-day boundary the resolver consults — which
+is why an expiry the `EXPIRED` sweeper never marked still restores the dish.
+Threshold crossings ride the same sweep, which replaces the interim per-binding
+threshold sweep for as long as `InventoryPositionChanged` has no producer. Because
+expiry is re-evaluated here and not when a row happens to be marked dirty, the
+`EXPIRED` sweeper is not on the propagation correctness path.
 
 **What is pushed.** For each `MARKETPLACE` binding `B` (installation `I`, location
 `L`) the channel is the `tenant.sales_channels` row whose
 `provider_installation_id = I` (ADR 0036). For each mapped item the desired value
-is `sellable(variant, L, channel)`. A `BRAND` embargo therefore expands to one
+is `sellable(variant, L, channel)` evaluated at the reconciler's own `now`. A `BRAND` embargo therefore expands to one
 row per binding of that brand's aggregators at the moment the reconciler runs,
 not at write time.
 
 **How.** Claimed rows are sent through a `MarketplaceGateway` route mirroring
 `DeliveryGateway` and `PosGateway`: capability `marketplace.availability.push`
 declared by the adapter, circuit breaker per binding, `RetryBackoff` (equal
-jitter) between attempts, result classified by `FailureClassifier`. The call is a
-state-set (`available = true|false`) keyed by `(binding, item, desired_seq)`,
-which makes a retry naturally idempotent. A partner refusal that is a business
-answer (unknown item id) is not retried: the row becomes `REJECTED_UNMAPPED` and
-appears in the mapping pane (ADR 0012).
+jitter) between attempts, failure category (retry, backoff, alert) from
+`FailureClassifier`. The call is a state-set (`available = true|false`) keyed by
+`(binding, item, desired_seq)`, which makes a retry naturally idempotent. A partner
+refusal that is a business answer (unknown item id) is not retried: the row becomes
+`REJECTED_UNMAPPED` and appears in the mapping pane (ADR 0012).
+
+**What the platform believes the partner holds after an attempt.** The gateway route,
+not `FailureClassifier`, concludes one of three outcomes. `CONFIRMED`: a success
+answer. `NOT_APPLIED`: no request was written (connection refused, breaker open, a
+rate-limit rejection before the send) or the partner answered with a refusal that
+changed nothing (a 4xx business answer, a 429). `UNKNOWN`: everything else — above
+all a timeout or a reset after the request was written, and any 5xx whose contract
+does not promise atomicity. `FailureClassifier` cannot make this call: it files
+`SocketTimeoutException` and `ConnectException` under the same
+`TRANSIENT_INFRASTRUCTURE`, and only one of them leaves the partner's state as it
+was. On `CONFIRMED` the row records the value sent as `confirmed_available`; on
+`NOT_APPLIED` it changes nothing; on `UNKNOWN` it sets `confirmed_available` to null
+and `state` to `UNCERTAIN`, and only a later `CONFIRMED` clears that. Without this,
+a timed-out restore the partner did apply, followed by a stop, would diff
+`false` against a stale confirmed `false`, mark the row `IN_SYNC` and send nothing
+while the partner sells the stopped dish.
 
 **When the partner is down.**
 
@@ -446,7 +531,12 @@ appears in the mapping pane (ADR 0012).
   configurable bound (ADR 0030) raises an ADR 0058 alert.
 - An inbound order for a stopped dish during the gap is accepted and flagged on
   the order for the pass; it is never silently dropped.
-- On recovery the reconciler sends the current state of every `PENDING` row once.
+- On recovery the reconciler sends the current state of every `PENDING` and
+  `UNCERTAIN` row once, whatever `confirmed_available` last said.
+- When a suspended reconciler is resumed, or a binding's watermark went stale, every
+  row of that binding has `confirmed_available` set to null first: the partner
+  portal may have been edited by hand in the meantime (the stop-list banner tells the
+  operator to do exactly that), so resumption resends everything once.
 
 **When there is no push API.** A binding whose adapter does not declare
 `marketplace.availability.push` shows `MANUAL` on the propagation read and the
@@ -487,24 +577,104 @@ classification, breaker state, resolver cache-free read latency.
   recovery, stop-then-lift collapsing to no call, duplicate and out-of-order dirty
   markers, breaker open and half-open, partner 4xx unknown item, and a stop pushed
   before a restore.
+- Unknown outcome: the fake partner confirmed `false`; the stop is lifted; the push
+  of `true` times out after the fake partner applied it; the dish is stopped again.
+  The reconciler sends `false` and the partner ends `false`, and the row is never
+  `IN_SYNC` on a diff against the stale confirmation. Seen failing first against a
+  reconciler that diffs desired against the last confirmed value alone. A
+  connection-refused attempt in the same position leaves `confirmed_available`
+  untouched and the stop-lift pair still collapses to nothing.
+- No marker: each of a branch rebound to a menu carrying a `MENU` stop, an offering
+  set `UNAVAILABLE`, a channel exclusion added, a new `MENU_ITEM` mapping, and an
+  embargo whose `ends_at` passes with the `EXPIRED` sweeper disabled, with the marker
+  listener disabled, converges on the fake partner within one `resync_interval`
+  (the clock is advanced). Seen failing first with the resync sweep removed.
+- A resumed reconciler resends every row of the binding once.
+- Freeze: with creation frozen, a `BRAND` embargo made earlier still hides the dish
+  and refuses it at cart and checkout on its channels, a new `OPERATOR` create
+  answers `STOPS_FROZEN`, a lift succeeds, and the POS poll still writes and ends
+  its own `POS` rows. Seen failing first against a switch that turns the resolver's
+  embargo read off.
+- Decommission: `inventory.stops.read_enabled` refuses to turn without an
+  acknowledged materialisation report and again after any embargo is created
+  since. The run writes `binary_available = false` for a `LOCATION` embargo and for
+  a `BRAND` and a `MENU` embargo over their locations' `BINARY` items, and lists
+  every `UNTRACKED`, `QUANTITY` and `CHANNEL` stop. After the switch, a recalled
+  `BINARY` dish is still refused at checkout while the same recall on an `UNTRACKED`
+  dish is on sale and is on the report (both asserted, so the report is the only
+  place a stop can vanish), and a POS "back in stock" lifts a materialised POS stop.
 - Cross-tenant and cross-brand reads and writes fail; capability declaration test.
 
 ## Rollout and rollback
 
 **Phase 0, no schema.** Write the true `source_type` on availability movements and
 change `stopSourceOf` to read it, so the stop list stops parsing a reason string.
-**Phase 1.** The embargo table, the resolver and the `LOCATION` path behind an
-ADR 0030 switch; an empty table changes nothing (the `V0389`/`V0390` posture).
+**Phase 1.** The embargo table, the resolver and the `LOCATION` path behind the
+ADR 0030 switches named under "Rollback"; an empty table changes nothing (the
+`V0389`/`V0390` posture).
 Move the stop-list SQL, the storefront lookup and the cart/checkout ports onto the
 resolver. **Phase 2.** `BRAND`, `MENU` and `CHANNEL` scopes; the POS poll moves to
 its own embargo. **Phase 3.** The reconciler for one aggregator at one branch in a
 dry-run that computes and logs desired-versus-confirmed without calling the
 partner, compared against that partner's portal for a week, then live — after
 ADR 0040's inbound step has proven the binding. **Phase 4.** The partner pull
-endpoint over the same resolver. Rollback disables the switch: embargoes stop
-being consulted, the position toggle and threshold behave exactly as today, the
-reconciler is suspended and every affected channel shows `MANUAL`; no stock data
-is touched.
+endpoint over the same resolver.
+
+### Rollback: freeze, do not disable
+
+After Phase 1 an embargo row is, for many stops, the only record that a dish is
+stopped: an `UNTRACKED` or `QUANTITY` item has no position boolean to fall back to; a
+`BRAND`, `MENU` or `CHANNEL` stop has no position at all; and after Phase 2 a POS stop
+is an embargo row and no longer a boolean. Ceasing to consult embargoes therefore does
+not return the system to "exactly as today". It sells every one of those dishes again
+at the storefront, cart and checkout in the same instant, the POS poll no longer
+writes a boolean that would bring a POS stop back, and the reconciler, suspended
+alongside, leaves each aggregator holding whatever it last had. So rollback is three
+independent ADR 0030 switches, and the ordinary rollback uses only the first two:
+
+1. **Freeze new stops** (`inventory.stops.creation_enabled = false`). The create
+   routes for `OPERATOR` and `BOT` stops answer `409 RESOURCE_CONFLICT { conflict:
+   "STOPS_FROZEN" }` and the console says scope stops are paused. Lifts, expiry and
+   the resolver's reads continue, so every stop already made stays in force on
+   every channel and nothing is sold again. A `BINARY` item is still stoppable
+   through the position toggle exactly as in Phase 0; an `UNTRACKED` or `QUANTITY`
+   item is not, as today, and the console says so. The POS poll keeps writing and
+   ending its own `POS` embargoes: after Phase 2 they are the only record of a POS
+   stop, and the poll acts on the diff (`newlyOutOfStock`, `newlyBackInStock`) and
+   will not repeat an "out of stock" it has already reported.
+2. **Suspend the reconciler** (`marketplace.availability.reconcile_enabled =
+   false`). No call reaches any partner, every affected channel shows `MANUAL` with
+   "not propagated automatically", and the resolver is unaffected. On resume every
+   row of the binding has `confirmed_available` nulled first (see Marketplace
+   propagation), so the resumption resends everything once.
+3. **Stop consulting embargoes** (`inventory.stops.read_enabled = false`). This is
+   the only switch that can sell a stopped dish again, so it is a decommission and
+   not a rollback, and it refuses to turn (`409 MATERIALISATION_REQUIRED`) until a
+   *materialisation run* has completed and its report has been acknowledged by a
+   holder of `inventory.stop.manage` at `BRAND` scope; an embargo created after the
+   run re-blocks it. The run:
+   - writes each `ACTIVE` embargo onto positions wherever that is exact: a
+     `LOCATION` embargo on a `BINARY` item sets `binary_available = false` through
+     `InventoryService.setAvailability` with the embargo's true source and reason
+     code and a movement reason `EMBARGO_MATERIALISED`; a `BRAND` or `MENU` embargo
+     expands the same way over every location it covers at that moment;
+   - reports, by variant, scope, source and location, everything it cannot carry:
+     `UNTRACKED` and `QUANTITY` items (no boolean to set) and `CHANNEL` embargoes (a
+     position is location-wide, so writing it would stop the dish on channels the
+     embargo never covered, an over-stop the operator chooses in the report and the
+     run never makes on its own). The report is the acknowledgement: these dishes
+     will be on sale again;
+   - names the POS poll's writer: with reads off, the poll goes back to writing the
+     position boolean through the stock-availability port, as in Phase 0 and 1, and
+     the run has already turned its `ACTIVE` `POS` embargoes on `BINARY` items into
+     `binary_available = false`, so the next `newlyBackInStock` transition lifts
+     them as it always did. A POS stop on a non-`BINARY` item is in the report.
+
+   Rows are not deleted: `ACTIVE` embargoes stay, ignored and marked so, and turning
+   reads back on resumes them.
+
+Rollback therefore is not free of stock writes: step 3 writes positions, and the
+report is the one place where the loss of a stop can be seen.
 
 ## Implementation checklist
 
@@ -525,8 +695,14 @@ is touched.
 - [ ] `InventoryStopChanged` schema, catalogue entry, `docs/domains/events.md`
       row; first producer for the `STOP_LIST` channel.
 - [ ] `MarketplaceGateway` route, fake-partner contract suite, reconciler worker,
-      watermark writes, stale alert (ADR 0007, ADR 0040).
+      the `CONFIRMED`/`NOT_APPLIED`/`UNKNOWN` outcome and the `UNCERTAIN` state, the
+      resync sweep and `resync_interval`, the marker listener for the inputs listed
+      under Marketplace propagation, watermark writes, stale alert (ADR 0007,
+      ADR 0040).
 - [ ] ADR 0040's partner `GET .../availability`.
+- [ ] The three rollback switches, `STOPS_FROZEN` and `MATERIALISATION_REQUIRED`, the
+      materialisation run and its acknowledged report, and the POS poll's two
+      writers (embargo with reads on, boolean with reads off).
 - [ ] Tests listed under Testing, each seen failing first.
 - [ ] Update ADR 0017's status line to record the extension, and ADR 0040's to
       record the producer for `marketplace.availability.push`.
@@ -538,8 +714,12 @@ who stopped it, from which source, until when, and lift it in one action. That
 stop is refused at the storefront, the cart and checkout of every channel it
 covers within one request, and reaches a connected marketplace within the
 partner's rate limit — or the operator is told, per binding and per item, that it
-has not and since when. A POS "back in stock" no longer un-stops a dish an
-operator stopped. Gap-map row `2.5a` can be marked `BUILT`.
+has not and since when. Whichever input changed the answer — a stop, a menu
+rebinding, an offering switch, an expiry — a connected marketplace converges on the
+platform's current answer within one resync interval even if nothing marked the
+change, and a push whose outcome was unknown is resent, not assumed. A POS "back
+in stock" no longer un-stops a dish an operator stopped. Gap-map row `2.5a` can be
+marked `BUILT`.
 
 ## References
 
