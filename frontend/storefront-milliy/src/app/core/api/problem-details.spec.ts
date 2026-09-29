@@ -276,6 +276,7 @@ describe('reasonMessageKey', () => {
     ['AT_CAPACITY', 'errors.reason.atCapacity'],
     ['ITEM_OUT_OF_SALE_WINDOW', 'errors.reason.itemOutOfSaleWindow'],
     ['COMMENT_PRESET_NOT_OFFERED', 'errors.reason.presetNotOffered'],
+    ['QUOTE_EXPIRED', 'errors.reason.quoteExpired'],
     ['TABLE_NOT_SEATED', 'dineIn.notSeated'],
     ['TABLE_NOT_AT_THIS_BRANCH', 'errors.reason.tableNotAtBranch'],
     ['TABLE_NOT_APPLICABLE', 'errors.reason.modeUnavailable'],

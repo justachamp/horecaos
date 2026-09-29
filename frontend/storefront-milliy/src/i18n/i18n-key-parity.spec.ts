@@ -108,6 +108,7 @@ describe('i18n content: every REASON_MESSAGE_KEYS target resolves in every local
     'AT_CAPACITY',
     'ITEM_OUT_OF_SALE_WINDOW',
     'COMMENT_PRESET_NOT_OFFERED',
+    'QUOTE_EXPIRED',
     'TABLE_NOT_SEATED',
     'TABLE_NOT_AT_THIS_BRANCH',
     'TABLE_NOT_APPLICABLE',

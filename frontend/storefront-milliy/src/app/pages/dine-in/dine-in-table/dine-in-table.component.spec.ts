@@ -1035,6 +1035,113 @@ describe('DineInTableComponent', () => {
       expect(view.q('dine-in-order')).not.toBeNull();
     });
 
+    describe('a price that has gone stale before the guest presses Order', () => {
+      const PAST = () => new Date(Date.now() - 60_000).toISOString();
+
+      /** The first price of the basket is already expired; later ones are fresh, at `laterTotalMinor`. */
+      async function withExpiredQuote(laterTotalMinor = 45_000): Promise<View> {
+        return withBasket((v) => {
+          const fresh = v.carts.price.getMockImplementation()!;
+          v.carts.price
+            .mockImplementationOnce(async () => ({ ...(await fresh()), expiresAt: PAST() }))
+            .mockImplementation(async () => ({ ...(await fresh()), totalMinor: laterTotalMinor }));
+        });
+      }
+
+      it('reprices an expired quote instead of sending it, and orders when the total has not moved', async () => {
+        const view = await withExpiredQuote(45_000);
+        expect(view.carts.price).toHaveBeenCalledTimes(1);
+
+        await view.click('dine-in-checkout');
+
+        expect(view.carts.price).toHaveBeenCalledTimes(2);
+        expect(view.carts.checkout).toHaveBeenCalledTimes(1);
+        const sent = view.carts.checkout.mock.calls[0][0]!.priced;
+        expect(Date.parse(sent.expiresAt)).toBeGreaterThan(Date.now());
+        expect(view.dineIn.queueRound).toHaveBeenCalledWith(SESSION, 'order-1');
+      });
+
+      it('shows the new total instead of ordering when the repriced basket costs something else', async () => {
+        const view = await withExpiredQuote(50_000);
+
+        await view.click('dine-in-checkout');
+
+        expect(view.carts.checkout).not.toHaveBeenCalled();
+        expect(view.q('dine-in-checkout-error')?.textContent).toContain('dineIn.priceRefreshed');
+        expect(view.q('dine-in-cart-total')?.textContent).toContain('50\u00a0000');
+        expect((view.q('dine-in-checkout') as HTMLButtonElement).disabled).toBe(false);
+
+        await view.click('dine-in-checkout');
+
+        expect(view.carts.checkout).toHaveBeenCalledTimes(1);
+        expect(view.carts.checkout.mock.calls[0][0]!.priced.totalMinor).toBe(50_000);
+        expect(view.q('dine-in-checkout-error')).toBeNull();
+      });
+
+      it('says why and orders nothing when the expired basket can no longer be priced', async () => {
+        const view = await withExpiredQuote();
+        view.carts.price.mockRejectedValue(
+          new HorecaOSApiError({
+            status: 422,
+            code: 'VALIDATION_FAILED',
+            detail: 'unpriced',
+            problem: { status: 422, code: 'VALIDATION_FAILED', reason: 'SOLD_OUT' },
+          }),
+        );
+
+        await view.click('dine-in-checkout');
+
+        expect(view.carts.checkout).not.toHaveBeenCalled();
+        expect(view.q('dine-in-pricing-error')?.textContent).toContain('errors.reason.itemUnavailable');
+        expect(view.q('dine-in-checkout-error')).toBeNull();
+        expect((view.q('dine-in-checkout') as HTMLButtonElement).disabled).toBe(true);
+      });
+
+      it.each([
+        ['the quote expired on the platform\'s clock', 409, 'RESOURCE_CONFLICT', 'QUOTE_EXPIRED'],
+        ['the price changed', 409, 'PRICE_CHANGED', 'PRICE_CHANGED'],
+        ['the basket moved under the quote', 409, 'STALE_VERSION', 'CART_VERSION_STALE'],
+        ['the quote is gone', 404, 'RESOURCE_NOT_FOUND', 'QUOTE_NOT_FOUND'],
+      ])(
+        'when %s, prices the basket again, says so, and the next press uses the new quote',
+        async (_name, status, code, reason) => {
+          const view = await withBasket();
+          view.carts.checkout.mockRejectedValueOnce(
+            new HorecaOSApiError({ status, code, detail: 'stale', problem: { status, code, reason } }),
+          );
+          const pricedBefore = view.carts.price.mock.calls.length;
+
+          await view.click('dine-in-checkout');
+
+          expect(view.carts.price.mock.calls.length).toBe(pricedBefore + 1);
+          expect(view.q('dine-in-checkout-error')?.textContent).toContain('dineIn.priceRefreshed');
+          expect(view.dineIn.queueRound).not.toHaveBeenCalled();
+          expect((view.q('dine-in-checkout') as HTMLButtonElement).disabled).toBe(false);
+
+          await view.click('dine-in-checkout');
+
+          expect(view.carts.checkout).toHaveBeenCalledTimes(2);
+          expect(view.dineIn.queueRound).toHaveBeenCalledWith(SESSION, 'order-1');
+          // A new quote is a new request: it never reuses the refused attempt's key.
+          const keys = view.carts.checkout.mock.calls.map((call) => call[0]?.idempotencyKey);
+          expect(keys[0]).not.toBe(keys[1]);
+        },
+      );
+
+      it('does not reprice for a failure that is not about the quote', async () => {
+        const view = await withBasket();
+        view.carts.checkout.mockRejectedValueOnce(
+          new HorecaOSApiError({ status: 503, code: 'INTERNAL_ERROR', detail: 'down' }),
+        );
+        const pricedBefore = view.carts.price.mock.calls.length;
+
+        await view.click('dine-in-checkout');
+
+        expect(view.carts.price.mock.calls.length).toBe(pricedBefore);
+        expect(view.q('dine-in-checkout-error')?.textContent).not.toContain('dineIn.priceRefreshed');
+      });
+    });
+
     it('an order the platform REJECTED is not an order: nothing is queued, nothing is discarded', async () => {
       const view = await withBasket();
       view.carts.checkout.mockResolvedValue({

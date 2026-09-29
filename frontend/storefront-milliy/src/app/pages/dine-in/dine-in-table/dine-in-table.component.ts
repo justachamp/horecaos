@@ -35,6 +35,25 @@ const UNRESOLVED = '—';
 /** The path a sign-in from this screen returns to: token-free, and the only one `ReturnDestination` allows. */
 const THIS_SCREEN = '/dine-in/table';
 
+/**
+ * A quote is good for about fifteen minutes. One that ends within this margin is
+ * repriced rather than sent: a request in flight when the deadline passes is
+ * answered `QUOTE_EXPIRED`, and the guest would have nothing to act on.
+ */
+const QUOTE_MARGIN_MS = 5_000;
+
+/**
+ * The checkout refusals that mean "the price you are holding is no longer the
+ * platform's": the quote lapsed or was cleared, the price moved, or the basket
+ * changed under it. All are cured by pricing again, none by pressing Order again.
+ */
+const STALE_QUOTE_REASONS: ReadonlySet<string> = new Set([
+  'QUOTE_EXPIRED',
+  'QUOTE_NOT_FOUND',
+  'PRICE_CHANGED',
+  'CART_VERSION_STALE',
+]);
+
 /** The payment codes this deployment has a label for; any other shows its own code. */
 const PAYMENT_LABEL_KEYS: Readonly<Record<string, string>> = {
   CASH: 'cart.cash',
@@ -409,8 +428,23 @@ export class DineInTableComponent implements OnInit {
     this.roundLost.set(false);
     this.orderPlaced.set(false);
     try {
+      let quote = priced;
+      if (this.quoteHasExpired(quote)) {
+        // The party sat over the menu past the quote's life. Price again first: a
+        // request the platform is certain to refuse tells the guest nothing.
+        const fresh = await this.requote();
+        if (!fresh) {
+          return; // Why it cannot be priced is on the screen (priceRefusalKey).
+        }
+        if (fresh.totalMinor !== quote.totalMinor || fresh.currency !== quote.currency) {
+          // The guest agreed to another total; it is theirs to accept again.
+          this.checkoutErrorKey.set('dineIn.priceRefreshed');
+          return;
+        }
+        quote = fresh;
+      }
       const result = await this.carts.checkout({
-        priced,
+        priced: quote,
         paymentMethodCode,
         idempotencyKey: this.checkoutKey(),
       });
@@ -434,6 +468,14 @@ export class DineInTableComponent implements OnInit {
         await this.openPaymentSession(result.orderId);
       }
     } catch (failure) {
+      if (isStaleQuote(failure)) {
+        // The platform no longer honours the price the guest was shown. Price the
+        // basket again so the screen holds the platform's number, and say so:
+        // pressing Order on the old quote would fail the same way every time.
+        const fresh = await this.requote();
+        this.checkoutErrorKey.set(fresh ? 'dineIn.priceRefreshed' : null);
+        return;
+      }
       this.checkoutErrorKey.set(failureKey(failure));
       // A retry after a dropped connection must reuse the key so the platform
       // replays the first attempt; after a real answer it is a new intent.
@@ -443,6 +485,23 @@ export class DineInTableComponent implements OnInit {
     } finally {
       this.checkingOut.set(false);
     }
+  }
+
+  private quoteHasExpired(priced: PricedCart): boolean {
+    const deadline = Date.parse(priced.expiresAt);
+    return Number.isFinite(deadline) && deadline - QUOTE_MARGIN_MS <= Date.now();
+  }
+
+  /**
+   * Prices the basket again after its quote went stale, and returns the new quote
+   * -- or null when the basket cannot be priced now, in which case the screen
+   * already says why. A new quote is a new request, so it never rides on the key
+   * of the attempt it replaces.
+   */
+  private async requote(): Promise<PricedCart | null> {
+    this.pendingCheckoutKey = null;
+    await this.reprice();
+    return this.priced();
   }
 
   /**
@@ -581,6 +640,16 @@ export class DineInTableComponent implements OnInit {
   private redirectTo(url: string): void {
     window.location.href = url;
   }
+}
+
+/** True for a checkout refusal that is about the quote the guest holds, not about the order. */
+function isStaleQuote(failure: unknown): boolean {
+  return (
+    failure instanceof HorecaOSApiError &&
+    (failure.code === 'PRICE_CHANGED' ||
+      failure.code === 'STALE_VERSION' ||
+      STALE_QUOTE_REASONS.has(failure.problem?.reason ?? ''))
+  );
 }
 
 /** A platform answer resolves to its own sentence; anything else is the one generic one. */
