@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -416,11 +417,57 @@ class InventoryUnlistedOfferingsReportTests {
         assertThat(remaining).extracting(row -> row.get(2)).containsExactly("2");
     }
 
+    @Test
+    @DisplayName("the runbook's list-all mints a new Idempotency-Key per call, so page two is not a replay of page one")
+    void runbookMintsAFreshIdempotencyKeyPerCall() throws Exception {
+        List<RunbookCurl> curls = curlCommands(runbookText());
+        RunbookCurl listAll = curls.get(1);
+        assertThat(listAll.method()).isEqualTo("POST");
+        List<String> row = List.of(TENANT.toString(), BRAND.toString(), LOCATION.toString(), "1");
+
+        // The runbook as written: one call lists what is there, a dish added
+        // afterwards is listed by the NEXT call -- the loop's next page.
+        offer(TENANT, BRAND, LOCATION, "PAGE-1", "Page one", "AVAILABLE");
+        JsonNode first = dispatch(listAll, row);
+        assertThat(first.get("listedCount").asInt()).isEqualTo(1);
+        offer(TENANT, BRAND, LOCATION, "PAGE-2", "Page two", "AVAILABLE");
+        MvcResult next = dispatchRaw(listAll, row);
+        assertThat(next.getResponse().getHeader(IdempotencyInterceptor.REPLAYED_HEADER))
+                .as("a key minted per call is a new intent, never a replay")
+                .isNull();
+        assertThat(JSON.readTree(next.getResponse().getContentAsString())
+                        .get("listedCount")
+                        .asInt())
+                .as("the second call really listed the second dish")
+                .isEqualTo(1);
+        assertThat(headerValue(listAll, "Idempotency-Key"))
+                .as("the runbook must keep minting the key inside the loop; a fixed key loops forever")
+                .isEqualTo(UUIDGEN);
+
+        // The edit this guards against: a pasted fixed key. The same two calls
+        // now replay page one's stored answer and the new dish stays unlisted,
+        // which is what would make the loop's mayHaveMore never turn false.
+        RunbookCurl fixed = withHeader(listAll, "Idempotency-Key", "listing-backfill-1");
+        offer(TENANT, BRAND, LOCATION, "PAGE-3", "Page three", "AVAILABLE");
+        assertThat(dispatch(fixed, row).get("listedCount").asInt()).isEqualTo(1);
+        offer(TENANT, BRAND, LOCATION, "PAGE-4", "Page four", "AVAILABLE");
+        MvcResult replay = dispatchRaw(fixed, row);
+        assertThat(replay.getResponse().getHeader(IdempotencyInterceptor.REPLAYED_HEADER))
+                .as("a fixed key replays -- so a fixed-key runbook would fail the check above")
+                .isEqualTo("true");
+        assertThat(read(TENANT, BRAND, LOCATION, OWNER, "").get("totalCount").asInt())
+                .as("the dish added after the fixed key's first call was never listed")
+                .isEqualTo(1);
+    }
+
     // ------------------------------------------------------------------ helpers
 
     // -------------------------------------------------------- runbook parsing
 
     private static final Path RUNBOOK = Path.of("docs/runbooks/catalog-offering-listing-backfill.md");
+
+    /** The runbook's per-call key: a command substitution, so the shell mints a new one each time it runs. */
+    private static final String UUIDGEN = "$(uuidgen)";
 
     /** One {@code curl} the runbook tells an operator to run, as far as the API can tell. */
     private record RunbookCurl(String method, String urlTemplate, Map<String, String> headers) {}
@@ -501,6 +548,17 @@ class InventoryUnlistedOfferingsReportTests {
      * {@code Idempotency-Key} each time, as {@code $(uuidgen)} would mint.
      */
     private JsonNode dispatch(RunbookCurl curl, List<String> row) throws Exception {
+        MvcResult result = dispatchRaw(curl, row);
+        assertThat(result.getResponse().getStatus())
+                .as(
+                        "%s %s -> %s",
+                        curl.method(), curl.urlTemplate(), result.getResponse().getContentAsString())
+                .isEqualTo(200);
+        return JSON.readTree(result.getResponse().getContentAsString());
+    }
+
+    /** {@link #dispatch}, without judging the answer. */
+    private MvcResult dispatchRaw(RunbookCurl curl, List<String> row) throws Exception {
         Map<String, String> vars = new LinkedHashMap<>();
         Matcher assignment =
                 Pattern.compile("(?m)^\\s*(\\w+)=\"([^\"]*)\"\\s*$").matcher(runbookText());
@@ -530,16 +588,26 @@ class InventoryUnlistedOfferingsReportTests {
                     .as("a header the API understands")
                     .isIn("Authorization", "Accept", "Idempotency-Key", "Content-Type");
             if (header.getKey().equals("Idempotency-Key")) {
-                request.header("Idempotency-Key", UUID.randomUUID().toString());
+                // Exactly what the shell would send: $(uuidgen) mints a key per
+                // call, any other value is the same string every time.
+                request.header(
+                        "Idempotency-Key",
+                        header.getValue().equals(UUIDGEN) ? UUID.randomUUID().toString() : header.getValue());
             } else if (!header.getKey().equals("Authorization")) {
                 request.header(header.getKey(), header.getValue());
             }
         }
-        MvcResult result = mvc.perform(request).andReturn();
-        assertThat(result.getResponse().getStatus())
-                .as("%s %s -> %s", curl.method(), path, result.getResponse().getContentAsString())
-                .isEqualTo(200);
-        return JSON.readTree(result.getResponse().getContentAsString());
+        return mvc.perform(request).andReturn();
+    }
+
+    private static String headerValue(RunbookCurl curl, String name) {
+        return Objects.requireNonNull(curl.headers().get(name), name);
+    }
+
+    private static RunbookCurl withHeader(RunbookCurl curl, String name, String value) {
+        Map<String, String> headers = new LinkedHashMap<>(curl.headers());
+        headers.put(name, value);
+        return new RunbookCurl(curl.method(), curl.urlTemplate(), headers);
     }
 
     private static String runbookText() throws IOException {
