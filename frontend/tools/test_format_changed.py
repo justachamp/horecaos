@@ -35,6 +35,11 @@ WORKFLOW = REPO / ".github" / "workflows" / "ci.yml"
 APP = "frontend/operations"
 
 
+def code(step: str) -> str:
+    """A workflow step without its comment lines: what the runner reads, not what a reader is told."""
+    return "\n".join(line for line in step.split("\n") if not line.strip().startswith("#"))
+
+
 def run_lines(step: str) -> list[str]:
     """The commands of a workflow step's `run:`, one per line, without the step's comments.
 
@@ -460,11 +465,23 @@ class WorkflowWiringTests(unittest.TestCase):
         assert found is not None
         return found.group(1)
 
+    def assert_only_for_operations(self, step: str) -> None:
+        self.assertRegex(code(step), r"(?m)^        if: matrix\.app == 'operations'$")
+
+    def assert_runs_in_the_app_directory(self, step: str) -> None:
+        self.assertRegex(code(step), r"(?m)^        working-directory: frontend/\$\{\{ matrix\.app \}\}$")
+
     def test_operations_lint_runs_in_ci_and_only_for_operations(self) -> None:
+        # Each command must be a line of the step's `run:` block. The step's comments name
+        # `npm run lint`, and `npm run lint:rules` contains it as a substring, so a substring
+        # test over the step passes after the real `npm run lint` has been deleted -- which
+        # leaves only the rule's own fixture run and lets a raw px font-size back in.
         step = self.step("Lint (operations)")
-        self.assertIn("if: matrix.app == 'operations'", step)
-        self.assertIn("npm run lint", step)
-        self.assertIn("npm run lint:rules", step)
+        self.assert_only_for_operations(step)
+        self.assert_runs_in_the_app_directory(step)
+        commands = run_lines(step)
+        self.assertIn("npm run lint", commands)
+        self.assertIn("npm run lint:rules", commands)
         scripts = json.loads((REPO / APP / "package.json").read_text(encoding="utf-8"))["scripts"]
         self.assertIn("lint", scripts)
         self.assertIn("lint:rules", scripts)
@@ -473,12 +490,12 @@ class WorkflowWiringTests(unittest.TestCase):
         # A changed-files-only check misses a file whose push was cancelled by a later one and
         # a `before` commit missing from the clone; the whole-tree check cannot.
         step = self.step("Format check (operations)")
-        self.assertIn("if: matrix.app == 'operations'", step)
+        self.assert_only_for_operations(step)
+        self.assert_runs_in_the_app_directory(step)
         self.assertEqual(["npm run format:check"], run_lines(step))
-        self.assertRegex(step, r"(?m)^        working-directory: frontend/\$\{\{ matrix\.app \}\}$")
-        self.assertNotIn("format_changed", "\n".join(run_lines(step)))
-        self.assertNotIn("github.event.before", step)
-        self.assertNotIn("github.base_ref", step)
+        self.assertNotIn("format_changed", code(step))
+        self.assertNotIn("github.event.before", code(step))
+        self.assertNotIn("github.base_ref", code(step))
 
     def test_lint_and_format_run_after_install_and_before_the_slow_tests(self) -> None:
         names = re.findall(r"^      - name: (.+)$", self.block, re.MULTILINE)
@@ -490,7 +507,7 @@ class WorkflowWiringTests(unittest.TestCase):
 
     def test_this_file_runs_in_ci_because_it_also_guards_the_wiring(self) -> None:
         step = self.step("Tooling tests (operations)")
-        self.assertIn("if: matrix.app == 'operations'", step)
+        self.assert_only_for_operations(step)
         self.assertEqual(["python3 frontend/tools/test_format_changed.py"], run_lines(step))
 
 
