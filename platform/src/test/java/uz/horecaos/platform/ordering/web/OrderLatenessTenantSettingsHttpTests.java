@@ -223,6 +223,25 @@ class OrderLatenessTenantSettingsHttpTests {
 
         assertThat(latenessPolicy(LOCATION).get("lateColour").asText()).isEqualTo("#8a3ffc");
         assertThat(latenessPolicy(SIBLING_LOCATION).get("lateColour").asText()).isEqualTo("#8a3ffc");
+
+        // The write is audited by the value author with a before/after (ADR 0027), attributed to the
+        // owner and carrying the reason typed into the card -- OrderLatenessPolicyService itself makes
+        // no write, so this is the audit trail for row X.39's two settings.
+        List<String> facts = jdbc.sql("""
+                        SELECT row_to_json(e)::text FROM (
+                            SELECT actor_subject, reason, change_document::text AS change_document
+                            FROM audit.audit_events
+                            WHERE action_code = 'tenant.configuration_value.set'
+                              AND change_document -> 'keyCode' ->> 'after' = 'ordering.late_colour'
+                        ) e
+                        """).query(String.class).list();
+        assertThat(facts).hasSize(1);
+        JsonNode fact = JSON.readTree(facts.getFirst());
+        assertThat(fact.get("actor_subject").asText()).isEqualTo(OWNER);
+        assertThat(fact.get("reason").asText()).isEqualTo("our brand's alarm colour");
+        JsonNode change = JSON.readTree(fact.get("change_document").asText());
+        assertThat(change.get("value").get("before").isNull()).isTrue();
+        assertThat(change.get("value").get("after").asText()).isEqualTo("#8A3FFC");
     }
 
     @Test
