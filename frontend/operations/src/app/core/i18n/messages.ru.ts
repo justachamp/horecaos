@@ -4769,6 +4769,17 @@ export const messagesRu: MessageCatalogue = {
   'marketing.automations.preview.loading': 'Загрузка совпадений…',
   'marketing.automations.preview.empty': 'Сегодня ни один клиент не подходит под это правило.',
   'marketing.automations.preview.unnamed': 'Клиент без имени',
+  'marketing.automations.preview.simulateTitle': 'Проверить клиента',
+  'marketing.automations.preview.simulateIntro':
+    'Введите данные клиента, чтобы увидеть, сработает ли это правило после активации. Реальные клиенты не читаются, ничего не отправляется.',
+  'marketing.automations.preview.sampleTitle': 'Кто подходит сегодня',
+  'marketing.automations.preview.outcome':
+    'Отправит «{template}» через {channel}, не чаще раза в {cooldownDays} дн.',
+  'marketing.automations.condition.BIRTHDAY': 'Дней до или после дня рождения',
+  'marketing.automations.condition.INACTIVITY': 'Дней с последнего заказа',
+  'marketing.automations.condition.CART_ABANDONMENT': 'Часов с момента, когда корзину оставили',
+  'marketing.automations.condition.CASHBACK_CHANGE':
+    'Размер изменения кэшбэка, минимальные единицы',
 
   // ---------------------------------------------------------------- customers 5.3/5.4 (wave 39)
   'customers.nav.label': 'Раздел «Клиенты»',

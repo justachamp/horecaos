@@ -18,8 +18,10 @@ import {
   RuleListItem,
   RuleReorder,
 } from '../../../shared/ui/rule-list';
+import { RuleSimulator, SimulatedRule } from '../../../shared/ui/rule-simulator';
 import { MarketingChannel } from '../../customers/segments/segments-api';
 import { describeApiError } from '../../orders/order-errors';
+import { AUTOMATION_CONDITION_CATALOGUE, simulatedAutomationRule } from './automation-conditions';
 import {
   AUTOMATION_TRIGGER_CONFIG_KEY,
   AutomationPreviewCandidate,
@@ -53,15 +55,19 @@ import {
  * one whole-set `PUT .../automations/reorder` call — the same contract
  * `OrderOutcomeReasonController.reorder` already gives its sibling screen.
  *
- * **Preview is row X.25's own answer to "which customers would this match
- * today"**, not a reuse of `q-rule-simulator` — see
- * `AutomationRulePreviewService`'s own doc for why that component's
- * client-side, candidate-typed dry run does not fit a rule with no
- * `ConditionGroup` and this row's own ask for real, PII-masked customers.
+ * **Preview has two halves, both row X.25's answer to "what would this rule do"**,
+ * and neither arms the rule or sends anything. `q-rule-simulator` is the
+ * client-side half: the operator types the figures of a hypothetical customer
+ * (days since the last order, say) and it says whether this rule would fire and
+ * what it would do. The rule's trigger becomes a typed condition through
+ * `automation-conditions.ts`, which mirrors `AutomationTriggerType` — there is no
+ * second candidate query and the component reads nothing. The server half,
+ * `AutomationRulePreviewService`, answers the other question — which *real*
+ * customers match today, name masked — and is unchanged.
  */
 @Component({
   selector: 'q-automations-page',
-  imports: [TPipe, RuleList],
+  imports: [TPipe, RuleList, RuleSimulator],
   templateUrl: './automations-page.html',
   styleUrl: './automations-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -119,6 +125,23 @@ export class AutomationsPage implements OnInit {
   protected readonly previewError = signal<string | null>(null);
   protected readonly previewCandidates = signal<readonly AutomationPreviewCandidate[]>([]);
 
+  /** `q-rule-simulator`'s catalogue: the four trigger kinds this build offers. */
+  protected readonly conditionCatalogue = AUTOMATION_CONDITION_CATALOGUE;
+
+  /**
+   * The previewed rule as the simulator takes it: empty when nothing is being
+   * previewed or the rule's trigger cannot be expressed as a condition, in which
+   * case the dialog shows the server's sample alone.
+   */
+  protected readonly simulatedRules = computed<readonly SimulatedRule[]>(() => {
+    const rule = this.previewForRule();
+    if (!rule) {
+      return [];
+    }
+    const simulated = simulatedAutomationRule(rule, this.ruleOutcome(rule));
+    return simulated ? [simulated] : [];
+  });
+
   async ngOnInit(): Promise<void> {
     await this.load();
   }
@@ -164,6 +187,15 @@ export class AutomationsPage implements OnInit {
       trigger,
       channel,
       configValue: this.configValueOf(rule),
+      cooldownDays: rule.cooldownDays,
+    });
+  }
+
+  /** What the simulator shows a matching rule doing — already translated, as it requires. */
+  private ruleOutcome(rule: AutomationRuleView): string {
+    return this.i18n.t('marketing.automations.preview.outcome', {
+      template: rule.templateKey,
+      channel: this.i18n.t(`marketing.channel.${rule.channel}` as MessageKey),
       cooldownDays: rule.cooldownDays,
     });
   }

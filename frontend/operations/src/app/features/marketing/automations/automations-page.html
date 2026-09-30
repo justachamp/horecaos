@@ -226,6 +226,14 @@
           <h2 class="q-subhead">
             {{ 'marketing.automations.preview.title' | t: { name: rule.name } }}
           </h2>
+          @if (simulatedRules().length > 0) {
+            <section class="automations__simulator" data-testid="automation-simulator">
+              <h3 class="q-emphasis">{{ 'marketing.automations.preview.simulateTitle' | t }}</h3>
+              <p class="q-body-sm">{{ 'marketing.automations.preview.simulateIntro' | t }}</p>
+              <q-rule-simulator [catalogue]="conditionCatalogue" [rules]="simulatedRules()" />
+            </section>
+          }
+          <h3 class="q-emphasis">{{ 'marketing.automations.preview.sampleTitle' | t }}</h3>
           <p class="q-body-sm">{{ 'marketing.automations.preview.intro' | t }}</p>
           @if (previewLoading()) {
             <p class="q-body-sm">{{ 'marketing.automations.preview.loading' | t }}</p>
