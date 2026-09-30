@@ -157,15 +157,17 @@ export class LatenessPolicyCard {
     if (!isModeView(value)) {
       return '—';
     }
+    const minutes = (seconds: number): string =>
+      this.i18n.t('settings.latenessPolicy.unit.minutes', { n: formatMinutes(seconds) });
     const atRisk =
-      formatMinutes(value.effectiveAtRiskBeforeSeconds) +
+      minutes(value.effectiveAtRiskBeforeSeconds) +
       (value.atRiskBeforeSeconds === null
         ? ` ${this.i18n.t('settings.latenessPolicy.summary.default')}`
         : '');
     return this.i18n.t('settings.latenessPolicy.summary', {
       atRisk,
       lateAfter: value.lateAfterSeconds,
-      fallback: formatMinutes(value.noPromiseFallbackSeconds),
+      fallback: minutes(value.noPromiseFallbackSeconds),
     });
   };
 

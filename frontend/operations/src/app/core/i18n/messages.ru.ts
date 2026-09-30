@@ -1237,7 +1237,8 @@ export const messagesRu: MessageCatalogue = {
   'settings.latenessPolicy.mode.pickup': 'Самовывоз',
   'settings.latenessPolicy.mode.dineIn': 'В зале',
   'settings.latenessPolicy.summary':
-    'Под риском за {atRisk} мин до обещанного времени · опоздание через {lateAfter} с после него · без обещания: опоздание через {fallback} мин',
+    'Под риском за {atRisk} до обещанного времени · опоздание через {lateAfter} с после него · без обещания: опоздание через {fallback}',
+  'settings.latenessPolicy.unit.minutes': '{n} мин',
   'settings.latenessPolicy.summary.default': '(по умолчанию)',
   'settings.latenessPolicy.oneDocument':
     'Сохраняется одним версионным документом для всех трёх типов заказов, поэтому правка любого открывает все три.',

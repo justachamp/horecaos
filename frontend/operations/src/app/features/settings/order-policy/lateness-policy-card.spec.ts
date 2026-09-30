@@ -161,7 +161,7 @@ describe('LatenessPolicyCard', () => {
     await render(INHERITED_FROM_TENANT);
 
     // Dine-in: no window of its own, so the scalar's 12 minutes (720 s) with the default marker.
-    expect(el().textContent).toContain('At risk 12 (default) min before the promise');
+    expect(el().textContent).toContain('At risk 12 min (default) before the promise');
   });
 
   it('shows the document as inherited, naming where from, and offers to override rather than edit', async () => {
@@ -192,7 +192,7 @@ describe('LatenessPolicyCard', () => {
     await render(PLATFORM_DEFAULT);
 
     expect(el().textContent).not.toContain('Version');
-    expect(el().textContent).toContain('At risk 5 (default) min before the promise');
+    expect(el().textContent).toContain('At risk 5 min (default) before the promise');
   });
 
   it('says so when the read fails, rather than showing a blank editor', async () => {

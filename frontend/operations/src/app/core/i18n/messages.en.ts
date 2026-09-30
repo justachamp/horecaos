@@ -1271,7 +1271,8 @@ export const messagesEn = {
   'settings.latenessPolicy.mode.pickup': 'Pickup',
   'settings.latenessPolicy.mode.dineIn': 'Dine-in',
   'settings.latenessPolicy.summary':
-    'At risk {atRisk} min before the promise · late {lateAfter} s after it · no promise: late after {fallback} min',
+    'At risk {atRisk} before the promise · late {lateAfter} s after it · no promise: late after {fallback}',
+  'settings.latenessPolicy.unit.minutes': '{n} min',
   'settings.latenessPolicy.summary.default': '(default)',
   'settings.latenessPolicy.oneDocument':
     'Saved as one versioned document for all three kinds of order, so editing any of them opens all of them.',

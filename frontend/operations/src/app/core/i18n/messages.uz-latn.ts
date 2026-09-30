@@ -1251,7 +1251,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.latenessPolicy.mode.pickup': 'Olib ketish',
   'settings.latenessPolicy.mode.dineIn': 'Zalda',
   'settings.latenessPolicy.summary':
-    'Belgilangan vaqtdan {atRisk} daqiqa oldin xavf ostida · undan {lateAfter} soniya keyin kechikkan · vaʻdasiz: {fallback} daqiqadan keyin kechikkan',
+    'Belgilangan vaqtdan oldin ogohlantirish: {atRisk} · kechikish: {lateAfter} soniya · vaʻdasiz kechikish chegarasi: {fallback}',
+  'settings.latenessPolicy.unit.minutes': '{n} daqiqa',
   'settings.latenessPolicy.summary.default': '(standart)',
   'settings.latenessPolicy.oneDocument':
     'Buyurtmaning uch turi uchun bitta versiyalangan hujjat sifatida saqlanadi, shuning uchun istalganini tahrirlash uchalasini ochadi.',
