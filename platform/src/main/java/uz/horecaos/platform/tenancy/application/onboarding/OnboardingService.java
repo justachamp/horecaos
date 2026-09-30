@@ -1324,7 +1324,7 @@ public class OnboardingService implements OnboardingHealthQuery {
             @Nullable String detail,
             @Nullable UUID locationId,
             boolean advisory,
-            OnboardingStepHandler.StepResult.@Nullable Subject subject) {
+            OnboardingStepHandler.StepResult.@Nullable FindingSubject subject) {
 
         /** A finding that names no per-item object — what every result was before {@code subject} existed. */
         public ValidationResult(
