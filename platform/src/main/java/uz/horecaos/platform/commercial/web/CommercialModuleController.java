@@ -196,7 +196,12 @@ public class CommercialModuleController {
         }
     }
 
-    /** One module one tenant has had. */
+    /**
+     * One module one tenant has had. {@code acquiredVia} is {@code PLATFORM}
+     * (HorecaOS gave it) or {@code SELF_SERVICE} (the tenant bought it), and
+     * {@code endableByTenant} is whether the tenant itself may end it now: it
+     * bought it and it is still live (ADR 0127).
+     */
     public record TenantModuleView(
             UUID tenantModuleId,
             UUID moduleId,
@@ -208,6 +213,8 @@ public class CommercialModuleController {
             String startedAt,
             String startedBy,
             String startReason,
+            String acquiredVia,
+            boolean endableByTenant,
             @Nullable String endedAt,
             @Nullable String endedBy,
             @Nullable String endReason) {
@@ -227,6 +234,8 @@ public class CommercialModuleController {
                     held.startedAt().toString(),
                     held.startedBy(),
                     held.startReason(),
+                    held.acquiredVia().name(),
+                    held.endableByTenant(),
                     text(held.endedAt()),
                     held.endedBy(),
                     held.endReason());
