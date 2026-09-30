@@ -27,9 +27,10 @@ import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcPolicyResolve
  * own reasoning: the point of ADR 0030 is one precedence implementation, so a
  * stub resolver would test the thing ADR 0030 replaced.
  *
- * <p>No authoring here: {@code OrderLatenessPolicyService} carries no {@code
- * author} method (wave P31's job), so an override is inserted directly, the
- * same way this suite's sibling inserts one for {@code ordering.acceptance}.
+ * <p>No authoring here: {@code OrderLatenessPolicyService} only reads --
+ * publishing is {@code OrderLatenessPolicyAuthoringService}, tested in its own
+ * class -- so an override is inserted directly, the same way this suite's
+ * sibling inserts one for {@code ordering.acceptance}.
  */
 class OrderLatenessPolicyServiceTests {
 

@@ -116,6 +116,9 @@ public class JdbcPolicyAuthor implements PolicyAuthor {
         String json = objectMapper.writeValueAsString(document);
         String hash = sha256Hex(json);
         Instant now = clock.instant();
+
+        // Serialise publications of one (key, scope) -- see lockPublication.
+        lockPublication(key.code(), scope);
         int latest = latestVersion(key.code(), scope);
         if (expectedVersion != null && expectedVersion != latest) {
             // Read in this transaction, from the table: a cached or earlier answer
@@ -147,8 +150,9 @@ public class JdbcPolicyAuthor implements PolicyAuthor {
                     .param("approvedBy", authoredBy.subject())
                     .update();
         } catch (DuplicateKeyException concurrentAuthor) {
-            // uq_policy_scope_version, wherever it can fire (its nullable brand and
-            // location columns make it inert at TENANT and BRAND scope -- see below).
+            // uq_policy_scope_version, where it can fire (see lockPublication for why it
+            // cannot at TENANT and BRAND scope). Publications are serialised, so this is
+            // defence in depth rather than the mechanism.
             throw concurrentPublication(expectedVersion, version);
         } catch (DataIntegrityViolationException violation) {
             throw explain(violation);
@@ -190,13 +194,10 @@ public class JdbcPolicyAuthor implements PolicyAuthor {
                     .param("activatedBy", authoredBy.subject())
                     .update();
         } catch (DuplicateKeyException concurrentAuthor) {
-            // uq_policy_current_{tenant,brand,location,platform}: the index that really
-            // arbitrates two publications of the same scope. uq_policy_scope_version cannot,
-            // because its brand_id and location_id are NULL for a TENANT scope (and
-            // location_id for a BRAND scope) and PostgreSQL treats NULLs as distinct, so two
-            // writers that both read the same latest version each insert a "version N + 1"
-            // without complaint and only meet here, on the pointer. The loser's transaction
-            // rolls back with its policy row; it must not surface as a server error.
+            // uq_policy_current_{tenant,brand,location,platform}. Publications of one scope are
+            // serialised by lockPublication, so this is defence in depth: were two ever to
+            // interleave, the loser's transaction rolls back with its policy row and must not
+            // surface as a server error.
             throw concurrentPublication(expectedVersion, version);
         }
 
@@ -228,6 +229,33 @@ public class JdbcPolicyAuthor implements PolicyAuthor {
                 .build());
 
         return new ResolvedPolicy<>(key.code(), policyId, version, scope.type(), hash, document);
+    }
+
+    /**
+     * Makes two publications of the same key and scope run one after the other, for the length of
+     * the surrounding transaction ({@code pg_advisory_xact_lock}: released at commit or rollback,
+     * and a harmless statement-long lock when the writer is used outside a transaction).
+     *
+     * <p>Nothing else does. {@code uq_policy_scope_version} includes {@code brand_id} and
+     * {@code location_id}, which are NULL for a TENANT scope (and {@code location_id} for a BRAND
+     * one), and PostgreSQL treats NULLs as distinct, so it never refuses a duplicate there. The
+     * pointer's partial unique indexes would, but only while the first writer has not yet
+     * committed: the pointer is moved by a DELETE followed by an INSERT, and a second writer whose
+     * DELETE runs after the first has committed deletes the first's pointer and inserts its own.
+     * Two operators who both read version N and both published "N + 1" then both succeed, leaving
+     * two policies rows with one version number and the pointer on whichever committed last --
+     * the lost update the version check exists to prevent. Under this lock the second writer
+     * re-reads the latest version only after the first has committed, so it sees N + 1 and is
+     * refused (with an expectation) or takes N + 2 (without one).
+     */
+    private void lockPublication(String keyCode, ResourceScope scope) {
+        String lockKey = "policy|%s|%s|%s|%s|%s"
+                .formatted(keyCode, scope.type(), scope.tenantId(), scope.brandId(), scope.locationId());
+        // The row mapper never reads the void column; consuming the one row is what waits for the lock.
+        jdbc.sql("SELECT pg_advisory_xact_lock(hashtextextended(:lockKey, 0))")
+                .param("lockKey", lockKey)
+                .query((row, number) -> Boolean.TRUE)
+                .list();
     }
 
     /**

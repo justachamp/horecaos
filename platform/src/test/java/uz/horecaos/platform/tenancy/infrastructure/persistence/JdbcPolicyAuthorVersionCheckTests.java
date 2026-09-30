@@ -22,6 +22,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
@@ -227,7 +228,7 @@ class JdbcPolicyAuthorVersionCheckTests {
      * unique index refuses the second -- exactly one wins and every loser is told it is stale, never
      * a bare conflict or a server error.
      */
-    @Test
+    @RepeatedTest(10)
     void ofManyWritersHoldingTheSameVersionExactlyOneWinsAndTheRestAreStale() throws Exception {
         ResourceScope tenant = ResourceScope.tenant(TENANT);
         int writers = 8;
@@ -264,6 +265,47 @@ class JdbcPolicyAuthorVersionCheckTests {
                             .query(Integer.class)
                             .single())
                     .isEqualTo(1);
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
+    /**
+     * The same race without an expectation: concurrent publishers of one scope each get a version of their
+     * own. Before publications were serialised, two of them could both take "N + 1" -- two rows, one version
+     * number -- and the pointer landed on whichever committed last.
+     */
+    @RepeatedTest(10)
+    void concurrentUnconditionalPublicationsOfOneScopeGetDistinctVersions() throws Exception {
+        ResourceScope tenant = ResourceScope.tenant(TENANT);
+        int writers = 6;
+        ExecutorService pool = Executors.newFixedThreadPool(writers);
+        CountDownLatch start = new CountDownLatch(1);
+        List<Future<Integer>> results = new ArrayList<>();
+        try {
+            for (int i = 0; i < writers; i++) {
+                int seconds = 200 + i;
+                results.add(pool.submit(() -> {
+                    start.await();
+                    return Objects.requireNonNull(transactions.execute(
+                            status -> author.author(PROBE, tenant, new Probe(seconds), OPERATOR, "unchecked " + seconds)
+                                    .policyVersion()));
+                }));
+            }
+            start.countDown();
+            List<Integer> versions = new ArrayList<>();
+            for (Future<Integer> result : results) {
+                versions.add(result.get(30, TimeUnit.SECONDS));
+            }
+
+            assertThat(versions).doesNotHaveDuplicates().containsExactlyInAnyOrder(1, 2, 3, 4, 5, 6);
+            assertThat(author.currentVersion(PROBE, tenant)).isEqualTo(6);
+            assertThat(jdbc.sql(
+                                    "SELECT policy_version FROM tenant.policy_current WHERE key_code = 'testing.author_probe'")
+                            .query(Integer.class)
+                            .single())
+                    .as("the pointer names the newest version, whichever thread committed last")
+                    .isEqualTo(6);
         } finally {
             pool.shutdownNow();
         }
