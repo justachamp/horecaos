@@ -1,4 +1,11 @@
-import { ChangeDetectionStrategy, Component, type OnInit, computed, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  type OnInit,
+  computed,
+  inject,
+  signal,
+} from '@angular/core';
 import { Router } from '@angular/router';
 
 import { AddressBookService, addressLine } from '../../services/address-book.service';

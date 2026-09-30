@@ -14,7 +14,9 @@
 </header>
 
 @switch (state()) {
-  @case ('loading') { <p class="state">{{ 'common.loading' | t }}</p> }
+  @case ('loading') {
+    <p class="state">{{ 'common.loading' | t }}</p>
+  }
   @case ('error') {
     <div class="state">
       <p>{{ 'checkout.loadError' | t }}</p>
@@ -91,12 +93,19 @@
         <div class="promo-applied">
           <span class="promo-applied__check">✓</span>
           <div class="promo-applied__body">
-            <span class="promo-applied__code">{{ 'checkout.promoApplied' | t: { code: applied } }}</span>
+            <span class="promo-applied__code">{{
+              'checkout.promoApplied' | t: { code: applied }
+            }}</span>
             @if (cart.hasDiscount()) {
               <span class="promo-applied__sub">−{{ cart.discountFormatted() }}</span>
             }
           </div>
-          <button type="button" class="pill-btn" (click)="removePromo()" [disabled]="cart.promoBusy()">
+          <button
+            type="button"
+            class="pill-btn"
+            (click)="removePromo()"
+            [disabled]="cart.promoBusy()"
+          >
             {{ 'common.delete' | t }}
           </button>
         </div>
@@ -157,7 +166,8 @@
 @if (state() === 'ready') {
   <footer class="foot">
     <button type="button" class="cta" [disabled]="!canConfirm()" (click)="confirm()">
-      {{ (submitting() ? 'checkout.placingOrder' : 'checkout.confirmOrder') | t }} · {{ cart.totalAmount() }}
+      {{ (submitting() ? 'checkout.placingOrder' : 'checkout.confirmOrder') | t }} ·
+      {{ cart.totalAmount() }}
     </button>
   </footer>
 }
