@@ -5420,8 +5420,24 @@ export const messagesRu: MessageCatalogue = {
   'finance.subscription.modules.confirm.activatesFallback': 'функции модуля',
   'finance.subscription.modules.confirm.confirm': 'Купить',
   'finance.subscription.modules.confirm.cancel': 'Отмена',
+  'finance.subscription.modules.held.title': 'Ваши модули',
+  'finance.subscription.modules.held.source': 'Источник',
+  'finance.subscription.modules.held.source.SELF_SERVICE': 'Куплен вами',
+  'finance.subscription.modules.held.source.PLATFORM': 'Назначен HorecaOS',
+  'finance.subscription.modules.held.contactHorecaos': 'Чтобы удалить, обратитесь в HorecaOS',
+  'finance.subscription.modules.held.empty': 'У вас пока нет модулей.',
+  'finance.subscription.modules.end': 'Отключить',
+  'finance.subscription.modules.end.confirm.title': 'Отключить модуль?',
+  'finance.subscription.modules.end.confirm.body':
+    '{name} отключится сразу. Пересчёта за неполный месяц нет: модуль всё равно оплачивается полностью в выписке за текущий месяц, а дальше — нет.',
+  'finance.subscription.modules.end.confirm.bodyOneOff':
+    '{name} отключится сразу. Он был оплачен один раз при добавлении, и отключение эту сумму не возвращает.',
+  'finance.subscription.modules.end.confirm.confirm': 'Отключить модуль',
+  'finance.subscription.modules.end.confirm.cancel': 'Оставить',
+  'finance.subscription.modules.end.done':
+    '{name} отключён. Он оплачивается по выписку за {period} включительно, дальше — нет.',
   'finance.subscription.notBuiltNote':
-    'Закрытие периода — задача сотрудников HorecaOS (месяц закрывается выставлением выписки, ADR 0088); предоплаченный баланс пока не реализован (ADR 0095); отключение купленного модуля пока не самообслуживание — обратитесь в HorecaOS, чтобы удалить его.',
+    'Закрытие периода — задача сотрудников HorecaOS (месяц закрывается выставлением выписки, ADR 0088); предоплаченный баланс пока не реализован (ADR 0095); модуль, назначенный HorecaOS, отключают сотрудники HorecaOS — обратитесь в HorecaOS, чтобы удалить его.',
 
   // ---------------------------------------------------------------- staff 9.3 (wave 39)
   'staff.shell.activity': 'Активность',

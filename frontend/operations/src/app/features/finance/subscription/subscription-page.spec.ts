@@ -137,9 +137,37 @@ const ALREADY_HELD_MODULE: TenantModuleView = {
   startedAt: '2026-07-01T00:00:00Z',
   startedBy: 'finance',
   startReason: 'sold with the pilot',
+  acquiredVia: 'PLATFORM',
+  endableByTenant: false,
   endedAt: null,
   endedBy: null,
   endReason: null,
+};
+
+/** A module this tenant bought itself from the catalogue: the only kind it may end. */
+const SELF_BOUGHT_MODULE: TenantModuleView = {
+  ...ALREADY_HELD_MODULE,
+  tenantModuleId: 'tm-9',
+  moduleId: 'module-kiosk',
+  moduleCode: 'kiosk',
+  moduleName: 'Self-service kiosk',
+  unitPrice: { amountMinor: 150_000, currency: 'UZS' },
+  startReason: 'Purchased from the operations console',
+  acquiredVia: 'SELF_SERVICE',
+  endableByTenant: true,
+};
+
+/** A module the tenant bought and has since ended: history, not a row to act on. */
+const ENDED_SELF_BOUGHT_MODULE: TenantModuleView = {
+  ...SELF_BOUGHT_MODULE,
+  tenantModuleId: 'tm-8',
+  moduleId: 'module-old',
+  moduleCode: 'old-addon',
+  moduleName: 'Old add-on',
+  endableByTenant: false,
+  endedAt: '2026-08-20T00:00:00Z',
+  endedBy: 'finance',
+  endReason: 'Ended from the operations console',
 };
 
 const ARREARS_HEALTHY: TenantArrearsView = {
@@ -193,6 +221,7 @@ describe('SubscriptionPage', () => {
     modulesOnSale: ReturnType<typeof vi.fn>;
     modulesHeld: ReturnType<typeof vi.fn>;
     purchaseModule: ReturnType<typeof vi.fn>;
+    endModule: ReturnType<typeof vi.fn>;
     arrears: ReturnType<typeof vi.fn>;
   };
 
@@ -209,6 +238,11 @@ describe('SubscriptionPage', () => {
       modulesOnSale: vi.fn().mockResolvedValue([ON_SALE_MODULE, ON_SALE_AND_ALREADY_HELD_MODULE]),
       modulesHeld: vi.fn().mockResolvedValue([ALREADY_HELD_MODULE]),
       purchaseModule: vi.fn().mockResolvedValue({ tenantModuleId: 'tm-2' }),
+      endModule: vi.fn().mockResolvedValue({
+        tenantModuleId: 'tm-9',
+        endedAt: '2026-09-30T10:00:00Z',
+        lastBilledPeriod: '2026-09',
+      }),
       arrears: vi.fn().mockResolvedValue(ARREARS_HEALTHY),
     };
 
@@ -423,6 +457,188 @@ describe('SubscriptionPage', () => {
 
     expect(host.querySelector('[role="alert"]')).not.toBeNull();
     expect(host.querySelector('[data-testid="q-confirm-dialog"]')).toBeNull();
+  });
+
+  // -------------------------------------------------- ADR 0127 status note: ending one's own purchase
+
+  /** Reloads the page with a held list that has one module of each kind the End button distinguishes. */
+  async function loadWithHeld(held: readonly TenantModuleView[]): Promise<HTMLElement> {
+    api.modulesHeld.mockResolvedValue(held);
+    fixture = TestBed.createComponent(SubscriptionPage);
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+    return fixture.nativeElement as HTMLElement;
+  }
+
+  function heldRows(host: HTMLElement): HTMLElement[] {
+    return [...host.querySelectorAll('[data-testid="subscription-held-modules"] tbody tr')].map(
+      (row) => row as HTMLElement,
+    );
+  }
+
+  function clickEnd(host: HTMLElement): void {
+    const endButton = host.querySelector('[data-testid="subscription-module-end"]');
+    expect(endButton).not.toBeNull();
+    (endButton as HTMLButtonElement).click();
+  }
+
+  it('offers End only on a module the tenant bought itself, and says who assigned the rest', async () => {
+    const host = await loadWithHeld([SELF_BOUGHT_MODULE, ALREADY_HELD_MODULE]);
+
+    const rows = heldRows(host);
+    expect(rows).toHaveLength(2);
+    const bought = rows.find((row) => row.textContent?.includes('Self-service kiosk'));
+    expect(bought?.textContent).toContain('Bought by you');
+    expect(
+      bought?.querySelector('[data-testid="subscription-module-end"]')?.textContent?.trim(),
+    ).toBe('End');
+
+    const assigned = rows.find((row) => row.textContent?.includes('Analytics'));
+    expect(assigned?.textContent).toContain('Assigned by HorecaOS');
+    expect(assigned?.querySelector('button')).toBeNull();
+    expect(assigned?.textContent).toContain('Contact HorecaOS to remove');
+  });
+
+  it('lists only the modules the tenant holds now, not the ones it has ended', async () => {
+    const host = await loadWithHeld([SELF_BOUGHT_MODULE, ENDED_SELF_BOUGHT_MODULE]);
+
+    const text = heldRows(host)
+      .map((row) => row.textContent)
+      .join(' ');
+    expect(text).toContain('Self-service kiosk');
+    expect(text).not.toContain('Old add-on');
+  });
+
+  it('says plainly that the tenant holds no modules yet', async () => {
+    const host = await loadWithHeld([]);
+
+    expect(heldRows(host)[0]?.textContent).toContain('You have no modules yet.');
+  });
+
+  it('clicking End opens a confirm step that says nothing is prorated, without ending yet', async () => {
+    const host = await loadWithHeld([SELF_BOUGHT_MODULE]);
+
+    clickEnd(host);
+    fixture.detectChanges();
+
+    expect(api.endModule).not.toHaveBeenCalled();
+    const dialog = host.querySelector('[data-testid="q-confirm-dialog"]');
+    expect(dialog).not.toBeNull();
+    expect(dialog?.textContent).toContain('Self-service kiosk');
+    expect(dialog?.textContent).toContain('Nothing is prorated');
+    expect(dialog?.textContent).toContain('billed in full');
+  });
+
+  it('a one-off module’s confirm step says ending it refunds nothing', async () => {
+    const host = await loadWithHeld([{ ...SELF_BOUGHT_MODULE, billingUnit: 'ONE_OFF' }]);
+
+    clickEnd(host);
+    fixture.detectChanges();
+
+    const dialog = host.querySelector('[data-testid="q-confirm-dialog"]');
+    expect(dialog?.textContent).toContain('billed once');
+    expect(dialog?.textContent).toContain('does not refund');
+  });
+
+  it('Cancel on the End step closes it and sends nothing', async () => {
+    const host = await loadWithHeld([SELF_BOUGHT_MODULE]);
+    clickEnd(host);
+    fixture.detectChanges();
+
+    (host.querySelector('[data-testid="q-confirm-cancel"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(api.endModule).not.toHaveBeenCalled();
+    expect(host.querySelector('[data-testid="q-confirm-dialog"]')).toBeNull();
+  });
+
+  it('confirming ends the module, re-reads what the tenant holds, and says the last month that bills it', async () => {
+    const host = await loadWithHeld([SELF_BOUGHT_MODULE, ALREADY_HELD_MODULE]);
+    clickEnd(host);
+    fixture.detectChanges();
+
+    api.modulesHeld.mockResolvedValue([
+      { ...SELF_BOUGHT_MODULE, endableByTenant: false, endedAt: '2026-09-30T10:00:00Z' },
+      ALREADY_HELD_MODULE,
+    ]);
+    api.modulesHeld.mockClear();
+    api.entitlements.mockClear();
+    (host.querySelector('[data-testid="q-confirm-confirm"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(api.endModule).toHaveBeenCalledWith(TENANT_ID, 'tm-9');
+    // The held list and the entitlements are read again, once: the module's features are off.
+    expect(api.modulesHeld).toHaveBeenCalledTimes(1);
+    expect(api.entitlements).toHaveBeenCalledTimes(1);
+    expect(host.querySelector('[data-testid="q-confirm-dialog"]')).toBeNull();
+    // The row is gone; the server's answer, not this screen's guess, names the last billed month.
+    expect(
+      heldRows(host)
+        .map((row) => row.textContent)
+        .join(' '),
+    ).not.toContain('Self-service kiosk');
+    const notice = host.querySelector('[data-testid="subscription-module-ended"]');
+    expect(notice?.textContent).toContain('Self-service kiosk');
+    expect(notice?.textContent).toContain('2026-09');
+    expect(host.querySelector('[role="alert"]')).toBeNull();
+  });
+
+  it('a refused End shows an alert, closes the step, and reads the list again so the stale button goes', async () => {
+    api.endModule.mockRejectedValueOnce(
+      new ApiError(ApiErrorCode.RESOURCE_CONFLICT, 409, null, 'corr-9'),
+    );
+    const host = await loadWithHeld([SELF_BOUGHT_MODULE]);
+    clickEnd(host);
+    fixture.detectChanges();
+
+    api.modulesHeld.mockResolvedValue([
+      { ...SELF_BOUGHT_MODULE, endableByTenant: false, endedAt: '2026-09-30T09:59:00Z' },
+    ]);
+    api.modulesHeld.mockClear();
+    (host.querySelector('[data-testid="q-confirm-confirm"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(host.querySelector('[role="alert"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="q-confirm-dialog"]')).toBeNull();
+    expect(host.querySelector('[data-testid="subscription-module-ended"]')).toBeNull();
+    expect(api.modulesHeld).toHaveBeenCalledTimes(1);
+    expect(host.querySelector('[data-testid="subscription-module-end"]')).toBeNull();
+  });
+
+  it('a successful End stays a success when the re-read afterwards fails', async () => {
+    const host = await loadWithHeld([SELF_BOUGHT_MODULE]);
+    clickEnd(host);
+    fixture.detectChanges();
+
+    api.modulesHeld.mockRejectedValue(
+      new ApiError(ApiErrorCode.INTERNAL_ERROR, 500, null, 'corr-3'),
+    );
+    (host.querySelector('[data-testid="q-confirm-confirm"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(api.endModule).toHaveBeenCalledTimes(1);
+    expect(host.querySelector('[data-testid="subscription-module-ended"]')).not.toBeNull();
+    expect(host.querySelector('[role="alert"]')).toBeNull();
+  });
+
+  it('will not open the End step for a module the server says the tenant cannot end', async () => {
+    const host = await loadWithHeld([ALREADY_HELD_MODULE]);
+    const page = fixture.componentInstance as unknown as {
+      requestEnd(held: TenantModuleView): void;
+      endTarget(): TenantModuleView | null;
+    };
+
+    page.requestEnd(ALREADY_HELD_MODULE);
+    fixture.detectChanges();
+
+    expect(page.endTarget()).toBeNull();
+    expect(host.querySelector('[data-testid="q-confirm-dialog"]')).toBeNull();
+    expect(api.endModule).not.toHaveBeenCalled();
   });
 
   it('renders no restriction banner while the subscription is in good standing', () => {

@@ -5455,8 +5455,25 @@ export const messagesUzLatn: MessageCatalogue = {
   'finance.subscription.modules.confirm.activatesFallback': 'modul funksiyalari',
   'finance.subscription.modules.confirm.confirm': 'Sotib olish',
   'finance.subscription.modules.confirm.cancel': 'Bekor qilish',
+  'finance.subscription.modules.held.title': 'Sizning modullaringiz',
+  'finance.subscription.modules.held.source': 'Manba',
+  'finance.subscription.modules.held.source.SELF_SERVICE': 'Siz sotib olgansiz',
+  'finance.subscription.modules.held.source.PLATFORM': 'HorecaOS tayinlagan',
+  'finance.subscription.modules.held.contactHorecaos':
+    'Olib tashlash uchun HorecaOS bilan bogʻlaning',
+  'finance.subscription.modules.held.empty': 'Sizda hali modullar yoʻq.',
+  'finance.subscription.modules.end': 'Oʻchirish',
+  'finance.subscription.modules.end.confirm.title': 'Modul oʻchirilsinmi?',
+  'finance.subscription.modules.end.confirm.body':
+    '{name} darhol oʻchadi. Qisman oy uchun qayta hisob-kitob yoʻq: modul joriy oy hisobotida baribir toʻliq hisoblanadi, undan keyin esa yoʻq.',
+  'finance.subscription.modules.end.confirm.bodyOneOff':
+    '{name} darhol oʻchadi. U qoʻshilganda bir marta hisoblangan, oʻchirish bu summani qaytarmaydi.',
+  'finance.subscription.modules.end.confirm.confirm': 'Modulni oʻchirish',
+  'finance.subscription.modules.end.confirm.cancel': 'Qoldirish',
+  'finance.subscription.modules.end.done':
+    '{name} oʻchirildi. U {period} hisobotigacha (shu jumladan) hisoblanadi, undan keyin esa yoʻq.',
   'finance.subscription.notBuiltNote':
-    'Davrni yopish HorecaOS xodimlari ishi (oy hisobotini chiqarish orqali yopiladi, ADR 0088); oldindan toʻlangan balans hali yaratilmagan (ADR 0095); sotib olingan modulni oʻchirish hali oʻz-oʻziga xizmat emas — uni olib tashlash uchun HorecaOS bilan bogʻlaning.',
+    'Davrni yopish HorecaOS xodimlari ishi (oy hisobotini chiqarish orqali yopiladi, ADR 0088); oldindan toʻlangan balans hali yaratilmagan (ADR 0095); HorecaOS tayinlagan modulni HorecaOS xodimlari oʻchiradi — uni olib tashlash uchun HorecaOS bilan bogʻlaning.',
 
   // ---------------------------------------------------------------- staff 9.3 (wave 39)
   'staff.shell.activity': 'Faollik',
