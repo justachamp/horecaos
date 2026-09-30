@@ -57,6 +57,14 @@ export type OrderSeverityLevel =
 export type OrderSeverityTone = 'danger' | 'warning' | 'none';
 
 export interface OrderSeverityInput {
+  /**
+   * The branch the order belongs to. Only the brand-scoped board («Все
+   * филиалы», wave 16) needs it: each branch may resolve its own
+   * `ordering.lateness` policy, and a caller mixing branches picks the policy
+   * per order by this id. Absent on the branch board and the detail header,
+   * where the one policy in hand is the branch's.
+   */
+  readonly locationId?: string | null;
   readonly status: string;
   readonly createdAt: Date;
   /** Null when the order never entered `AWAITING_APPROVAL`. */

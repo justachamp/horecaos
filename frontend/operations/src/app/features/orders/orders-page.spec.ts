@@ -45,6 +45,8 @@ describe('OrdersPage', () => {
             scope: signal(null),
             denied: signal(false),
             ensureLoaded: () => Promise.resolve(),
+            options: signal([]),
+            selectLocation: () => undefined,
           },
         },
         { provide: ApiClient, useValue: { get: () => of({ value: [], version: null }) } },

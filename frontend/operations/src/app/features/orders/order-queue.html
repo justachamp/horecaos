@@ -83,6 +83,35 @@
           (rangeChange)="onDateRangeChange($event)"
         />
 
+        <!-- «Все филиалы» (wave 16, gap map row 1.1): offered only to a principal who
+             reads the whole brand — a branch-scoped operator never sees it. -->
+        @if (canViewAllBranches()) {
+          <select
+            class="order-queue__select"
+            [value]="filters().allBranches ? 'ALL' : 'ONE'"
+            (change)="onBranchModeChange($any($event.target).value)"
+            [attr.aria-label]="'orders.queue.filter.branchMode.label' | t"
+            data-testid="order-queue-filter-branchMode"
+          >
+            <option value="ONE">{{ 'orders.queue.filter.branchMode.one' | t }}</option>
+            <option value="ALL">{{ 'orders.queue.filter.branchMode.all' | t }}</option>
+          </select>
+        }
+        @if (allBranchesActive()) {
+          <select
+            class="order-queue__select"
+            [value]="filters().locationId ?? ''"
+            (change)="onBranchChange($any($event.target).value)"
+            [attr.aria-label]="'orders.queue.filter.branch.label' | t"
+            data-testid="order-queue-filter-branch"
+          >
+            <option value="">{{ 'orders.queue.filter.branch.all' | t }}</option>
+            @for (branch of branchOptions(); track branch.id) {
+              <option [value]="branch.id">{{ branch.displayName }}</option>
+            }
+          </select>
+        }
+
         <select
           class="order-queue__select"
           [value]="filters().channelCode ?? ''"
@@ -174,8 +203,80 @@
           <option value="HORECAOS">{{ 'orders.queue.filter.origin.HORECAOS' | t }}</option>
           <option value="MARKETPLACE">{{ 'orders.queue.filter.origin.MARKETPLACE' | t }}</option>
         </select>
+
+        <!-- «Агрегатор» (wave 16, gap map row 1.1c): one provider binding, finer than the
+             «Источник» toggle above. Options are the bindings the orders in scope arrived
+             through, read on first focus. -->
+        <select
+          class="order-queue__select"
+          [value]="filters().marketplaceBindingId ?? ''"
+          (focus)="ensureBindingOptionsLoaded()"
+          (change)="onBindingChange($any($event.target).value)"
+          [attr.aria-label]="'orders.queue.filter.binding.label' | t"
+          data-testid="order-queue-filter-binding"
+        >
+          <option value="">{{ 'orders.queue.filter.binding.all' | t }}</option>
+          @if (filters().marketplaceBindingId; as selectedBinding) {
+            @if (!bindingKnown(selectedBinding)) {
+              <option [value]="selectedBinding">{{ bindingLabel(selectedBinding) }}</option>
+            }
+          }
+          @for (binding of bindingOptions(); track binding.bindingId) {
+            <option [value]="binding.bindingId">{{ bindingOptionLabel(binding) }}</option>
+          }
+        </select>
+
+        <!-- «Фискализация» (wave 16, gap map row 1.1c): fiscal.fiscal_documents.status. -->
+        <select
+          class="order-queue__select"
+          [value]="filters().fiscalStatus ?? ''"
+          (change)="onFiscalStatusChange($any($event.target).value)"
+          [attr.aria-label]="'orders.queue.filter.fiscal.label' | t"
+          data-testid="order-queue-filter-fiscal"
+        >
+          <option value="">{{ 'orders.queue.filter.fiscal.all' | t }}</option>
+          @for (status of fiscalStatusOptions; track status) {
+            <option [value]="status">{{ fiscalStatusLabel(status) }}</option>
+          }
+        </select>
+
+        <!-- The three secondary toggles orders.md §2.4 lists beside «Мои заказы» (wave 16). -->
+        <label class="order-queue__toggle">
+          <input
+            type="checkbox"
+            [checked]="filters().lateOnly"
+            (change)="onLateOnlyToggle()"
+            data-testid="order-queue-filter-late"
+          />
+          {{ 'orders.queue.filter.late.label' | t }}
+        </label>
+        <label class="order-queue__toggle">
+          <input
+            type="checkbox"
+            [checked]="filters().problemOnly"
+            (change)="onProblemOnlyToggle()"
+            data-testid="order-queue-filter-problem"
+          />
+          {{ 'orders.queue.filter.problem.label' | t }}
+        </label>
+        <label class="order-queue__toggle">
+          <input
+            type="checkbox"
+            [checked]="filters().callbackRequested"
+            (change)="onCallbackRequestedToggle()"
+            data-testid="order-queue-filter-callback"
+          />
+          {{ 'orders.queue.filter.callback.label' | t }}
+        </label>
       </ng-container>
     </q-filter-bar>
+  }
+
+  @if (bulkUnavailableOnAllBranches()) {
+    <!-- The selection column is withheld on «Все филиалы»: bulk actions are one branch's endpoint. -->
+    <p class="q-caption order-queue__bulk-unavailable" data-testid="order-queue-bulk-branch-note">
+      {{ 'orders.queue.allBranches.bulkNote' | t }}
+    </p>
   }
 
   <div class="order-queue__toolbar">
@@ -283,6 +384,9 @@
             }
             <th class="order-queue__rail-col" aria-hidden="true"></th>
             <th>{{ 'orders.column.number' | t }}</th>
+            @if (allBranchesActive()) {
+              <th data-testid="order-queue-branch-column">{{ 'orders.column.branch' | t }}</th>
+            }
             <th>{{ 'orders.column.time' | t }}</th>
             <th>{{ 'orders.column.type' | t }}</th>
             <th class="order-queue__num-col">{{ 'orders.column.total' | t }}</th>
@@ -307,8 +411,8 @@
               [style.--q-sla-late-text]="lateColourFor(row)"
               tabindex="0"
               data-testid="order-row"
-              (click)="openOrder(row.order.orderId)"
-              (keydown.enter)="openOrder(row.order.orderId)"
+              (click)="openOrder(row.order.orderId, row.order.locationId)"
+              (keydown.enter)="openOrder(row.order.orderId, row.order.locationId)"
             >
               @if (canSelectOrders()) {
                 <td class="order-queue__select-col" (click)="$event.stopPropagation()">
@@ -341,6 +445,9 @@
                   </div>
                 }
               </td>
+              @if (allBranchesActive()) {
+                <td data-testid="order-row-branch">{{ branchLabel(row.order) }}</td>
+              }
               <td class="q-tnum">{{ formatCreated(row.createdAt) }}</td>
               <td>
                 {{ typeLabel(row.order) }}
@@ -438,7 +545,7 @@
             </tr>
           } @empty {
             <tr class="order-queue__empty-row">
-              <td [attr.colspan]="canSelectOrders() ? 10 : 9">
+              <td [attr.colspan]="columnCount()">
                 <p class="q-body-sm" data-testid="order-queue-empty">{{ emptyMessage() }}</p>
               </td>
             </tr>

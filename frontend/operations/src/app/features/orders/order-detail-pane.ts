@@ -6,6 +6,7 @@ import {
   inject,
   input,
   signal,
+  viewChild,
 } from '@angular/core';
 import { Router } from '@angular/router';
 import { Observable, firstValueFrom } from 'rxjs';
@@ -433,6 +434,9 @@ export class OrderDetailPane {
    */
   protected readonly amendmentHistory = signal<readonly AmendmentResponse[] | null>(null);
   protected readonly amendmentHistoryOpen = signal(false);
+
+  /** The payment section's panel, for «Выставить счёт» to open its re-issue form (gap map row 1.1e). */
+  private readonly paymentPanel = viewChild(OrderPaymentPanel);
   protected readonly amendmentHistoryLoading = signal(false);
   protected readonly amendmentHistoryError = signal(false);
 
@@ -966,6 +970,14 @@ export class OrderDetailPane {
           return;
         }
         this.dialog.set('amendMenu');
+        return;
+      case 'ISSUE_INVOICE':
+        // Gap map row 1.1e, «Выставить счёт» (orders.md §4.9): the re-issue form
+        // is the payment panel's own — link or invoice push, then the payable
+        // link back — over the same idempotent `POST .../payment/re-presentations`
+        // it already calls. This opens that form and brings it into view rather
+        // than carrying a second one in the header.
+        this.paymentPanel()?.openReissue();
         return;
       case 'RESOLVE':
         // Gap map row 1.1e: the order-level action does not carry the

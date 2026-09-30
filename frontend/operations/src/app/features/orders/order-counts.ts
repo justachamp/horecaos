@@ -4,7 +4,7 @@ import { firstValueFrom } from 'rxjs';
 import { ApiClient } from '../../core/api/api-client';
 import { LocationScope, operationsPaths } from '../../core/api/operations-paths';
 import { LatenessPolicy } from '../../core/lateness-policy';
-import { OrderCountsResponse } from './order-detail';
+import { OrderBrandCountsResponse, OrderCountsResponse } from './order-detail';
 import { OrderSeverityInput, computeOrderSeverity } from './order-severity';
 import { ORDER_TABS, OrderTabId, isOrderTabMember } from './order-tabs';
 
@@ -12,6 +12,17 @@ export type TabCounts = Readonly<Record<OrderTabId, number>>;
 
 /** What {@link OrderCounts.forOrders} needs from an order: severity's inputs, nothing more. */
 export type CountableOrder = OrderSeverityInput;
+
+/**
+ * The lateness policy in force for each order: one policy for a branch board,
+ * or a function of the order for the brand-scoped board, where branches may
+ * each resolve their own (wave 16).
+ */
+export type PolicyFor = LatenessPolicy | ((order: CountableOrder) => LatenessPolicy);
+
+function policyOf(policy: PolicyFor, order: CountableOrder): LatenessPolicy {
+  return typeof policy === 'function' ? policy(order) : policy;
+}
 
 export function zeroTabCounts(): TabCounts {
   return {
@@ -52,26 +63,40 @@ export function zeroTabCounts(): TabCounts {
 export class OrderCounts {
   private readonly api = inject(ApiClient);
 
+  /**
+   * @param brandWide read `GET .../brands/{b}/orders/counts` (whose `totals`
+   *   are the brand's) instead of one branch's — the «Все филиалы» board with no
+   *   branch narrowed (wave 16). Falls back to deriving every tab from `orders`
+   *   exactly as the branch read does.
+   */
   async forOrders(
     scope: LocationScope,
     orders: readonly CountableOrder[],
     now: Date,
-    policy: LatenessPolicy,
+    policy: PolicyFor,
+    brandWide = false,
   ): Promise<TabCounts> {
     const attention = countMembers('attention', orders, now, policy);
 
     try {
-      const result = await firstValueFrom(
-        this.api.get<OrderCountsResponse>(operationsPaths.orderCounts(scope)),
-      );
-      if (!isOrderCountsResponse(result.value)) {
+      const result = brandWide
+        ? await firstValueFrom(
+            this.api.get<OrderBrandCountsResponse>(operationsPaths.brandOrderCounts(scope)),
+          )
+        : await firstValueFrom(
+            this.api.get<OrderCountsResponse>(operationsPaths.orderCounts(scope)),
+          );
+      const counts = brandWide
+        ? (result.value as Partial<OrderBrandCountsResponse> | null)?.totals
+        : result.value;
+      if (!isOrderCountsResponse(counts)) {
         // Not a shape the current server sends. Safer to fall back than to
         // render `NaN`/`undefined` badges from a response this client
         // misread — the same "throw on the unexpected" instinct as
         // `money.ts`'s unknown-currency guard.
         return this.deriveAll(orders, now, policy);
       }
-      return fromEndpoint(result.value, attention);
+      return fromEndpoint(counts, attention);
     } catch {
       // Network failure, a capability the operator does not hold, or a server
       // that has not deployed the endpoint yet — the documented fallback,
@@ -80,11 +105,7 @@ export class OrderCounts {
     }
   }
 
-  private deriveAll(
-    orders: readonly CountableOrder[],
-    now: Date,
-    policy: LatenessPolicy,
-  ): TabCounts {
+  private deriveAll(orders: readonly CountableOrder[], now: Date, policy: PolicyFor): TabCounts {
     const counts = { ...zeroTabCounts() } as Record<OrderTabId, number>;
     for (const tab of ORDER_TABS) {
       counts[tab] = countMembers(tab, orders, now, policy);
@@ -113,12 +134,12 @@ function countMembers(
   tab: OrderTabId,
   orders: readonly CountableOrder[],
   now: Date,
-  policy: LatenessPolicy,
+  policy: PolicyFor,
 ): number {
   return orders.filter((order) =>
     isOrderTabMember(tab, {
       status: order.status,
-      severityLevel: computeOrderSeverity(order, now, policy).level,
+      severityLevel: computeOrderSeverity(order, now, policyOf(policy, order)).level,
     }),
   ).length;
 }

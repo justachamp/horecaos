@@ -920,6 +920,11 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       ru: 'Платёж способ обновлено',
       'uz-Latn': 'Toʻlov usul yangilandi',
     },
+    'payment.checkout_reissued': {
+      en: 'Payment checkout re-issued',
+      ru: 'Платёжная ссылка выставлена повторно',
+      'uz-Latn': 'Toʻlov havolasi qayta chiqarildi',
+    },
     'payment.merchant_binding_secret_rotated': {
       en: 'Payment merchant binding secret rotated',
       ru: 'Платёж продавец привязка секрет обновлено',

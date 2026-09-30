@@ -10,8 +10,10 @@ import { OrderActionResponse } from './order-actions';
  * mirrors either response, not just the board's.
  *
  * Still short of `docs/operations-spec/orders.md` §2.5's default column set —
- * **no branch name** (`/board` is already scoped to one location; §2.5's own
- * rule auto-hides that column for a single-location tenant), **no decrypted
+ * **no branch name** (the row carries `locationId`; the name is tenancy's and
+ * the queue resolves it against the branch roster `CurrentLocation` already
+ * holds — §2.5's own rule auto-hides the column for a single-location
+ * tenant), **no decrypted
  * customer name or phone** (§2.5 column 7 reads `order_customer_snapshots`,
  * a table this response deliberately does not join — ADR 0029 PERSONAL data
  * belongs behind an audited reveal, not a list row every `ORDER_READ` holder
@@ -24,6 +26,14 @@ import { OrderActionResponse } from './order-actions';
  */
 export interface OrderSummaryResponse {
   readonly orderId: string;
+  /**
+   * The branch the order belongs to (wave 16, gap map row `1.1`). Always sent;
+   * optional here only so a fixture that predates it still types. On the
+   * branch board it is the branch being looked at; on the brand-scoped board
+   * («Все филиалы») it is the key of the Филиал column, and what a row's own
+   * actions and «open» must target instead of the shell's current branch.
+   */
+  readonly locationId?: string | null;
   readonly publicOrderNumber: string;
   /** One of the twelve in `order-status.ts`, or something newer this client does not know yet. */
   readonly status: string;

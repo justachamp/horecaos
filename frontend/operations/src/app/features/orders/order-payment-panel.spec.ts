@@ -276,3 +276,88 @@ describe('OrderPaymentPanel: re-presentation (ADR 0013)', () => {
     ).toContain('already paid');
   });
 });
+
+describe('OrderPaymentPanel: opened from the order header (gap map row 1.1e, «Выставить счёт»)', () => {
+  it('openReissue shows the re-issue form and scrolls the panel into view', async () => {
+    configure({ paymentsApi: { orderPayment: vi.fn().mockResolvedValue(payment()) } });
+    const fixture = await render();
+    const host: HTMLElement = fixture.nativeElement;
+    const scrollIntoView = vi.fn();
+    host.scrollIntoView = scrollIntoView;
+    expect(host.querySelector('[data-testid="order-payment-reissue-form"]')).toBeNull();
+
+    fixture.componentInstance.openReissue();
+    fixture.detectChanges();
+
+    expect(host.querySelector('[data-testid="order-payment-reissue-form"]')).not.toBeNull();
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+  });
+
+  it('asked again it stays open and does not wipe the link the operator is reading out', async () => {
+    const reissuePayment = vi.fn().mockResolvedValue({
+      attemptId: 'attempt-2',
+      merchantTransId: 'mt-1',
+      provider: 'CLICK',
+      presentation: 'PAYMENT_LINK',
+      checkoutUrl: 'https://pay.click.uz/checkout/abc',
+      qrPayload: null,
+      expiresAt: null,
+      amountMinor: 50000,
+      currency: 'UZS',
+      rePresented: false,
+      presentationCount: 1,
+    } satisfies PaymentSessionView);
+    configure({
+      paymentsApi: { orderPayment: vi.fn().mockResolvedValue(payment()), reissuePayment },
+    });
+    const fixture = await render();
+    const host: HTMLElement = fixture.nativeElement;
+
+    fixture.componentInstance.openReissue();
+    fixture.detectChanges();
+    (
+      host.querySelector('[data-testid="order-payment-reissue-submit"]') as HTMLButtonElement
+    ).click();
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    fixture.detectChanges();
+    expect(host.querySelector('[data-testid="order-payment-reissue-result"]')).not.toBeNull();
+
+    fixture.componentInstance.openReissue();
+    fixture.detectChanges();
+
+    expect(reissuePayment).toHaveBeenCalledTimes(1);
+    expect(
+      host.querySelector('[data-testid="order-payment-reissue-result"]'),
+      'the result survives a second click on the header action',
+    ).not.toBeNull();
+  });
+
+  it('for a cash order there is no form to open — the panel offers re-issue only where the endpoint can succeed', async () => {
+    configure({
+      paymentsApi: {
+        orderPayment: vi.fn().mockResolvedValue(
+          payment({
+            intent: {
+              intentId: 'intent-2',
+              tender: 'CASH',
+              method: 'CASH',
+              providerType: null,
+              amount: { amountMinor: 50000, currency: 'UZS' },
+              status: 'PENDING',
+              createdAt: '2026-09-15T09:00:00Z',
+              settledAt: null,
+            },
+          }),
+        ),
+      },
+    });
+    const fixture = await render();
+
+    fixture.componentInstance.openReissue();
+    fixture.detectChanges();
+
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="order-payment-reissue-form"]'),
+    ).toBeNull();
+  });
+});

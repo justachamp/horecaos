@@ -13,16 +13,17 @@ export interface OrderQueueDateRange {
  * The board's own toolbar filters (orders.md §2.4, wave P07), narrowed to
  * what `GET .../orders/board` (wave P04, ADR 0102) actually reads:
  *
- * - **Филиал** is still not a field here, and for a structural reason wave 9
- *   did not remove: `/board`'s path already names one `locationId`, so there
- *   is no second branch to filter *among* inside one call to it — a "branch"
- *   parameter on an endpoint that only ever answers for the branch its own
- *   URL names would either be ignored or duplicate `CurrentLocation`'s own
- *   shell picker. Answering it for real needs a brand-scoped, paginated
- *   board — a new endpoint at a wider `ORDER_READ` scope, the same reason
- *   `OperationsBrandOrderController` exists beside `OperationsOrderController`
- *   for the live board's counters — which is a decision this wave's own gap
- *   map row does not make for us; see wave 9's `notDone`.
+ * - **Филиал** (wave 16, gap map `1.1`/`1.1c`) exists in one mode only. The
+ *   branch board's path names one `locationId`, so there is no second branch to
+ *   filter *among* inside a call to it. The brand-scoped board
+ *   (`OperationsBrandOrderController.board`) is the same statement over a set of
+ *   branches: {@link OrderQueueFilters.allBranches} switches the queue onto it
+ *   («Все филиалы»), and {@link OrderQueueFilters.locationId} then narrows that
+ *   set to one branch. Both are meaningless — and never sent — on the branch
+ *   board, where `CurrentLocation`'s shell picker remains the way to change
+ *   branch. {@link OrderQueueFilters.allBranches} is a *mode*, not a filter: it
+ *   does not count as an active filter and survives «Сбросить фильтры» the way
+ *   the period does.
  * - **Канал** is `channelCode`, and **Источник** (wave 9, gap map `1.1c`) is
  *   the new, coarser `origin` predicate beside it: `HORECAOS` for the
  *   tenant's own channels, `MARKETPLACE` for anything an aggregator pushed
@@ -32,17 +33,29 @@ export interface OrderQueueDateRange {
  *   tells apart, and `origin` is what "aggregator orders, whichever one"
  *   answers in one click instead of one per channel. Picking a single
  *   aggregator *binding* when a tenant runs two installations of the same
- *   provider is narrower than `origin` reaches and is not offered here.
+ *   provider is narrower than `origin` reaches — that is `marketplaceBindingId`
+ *   below.
  * - **Оплата** (payment *status*, wave 10 gap map `1.1c`) is
  *   `paymentStatus` — `ordering.orders.payment_status_projection` — beside
  *   **Способ оплаты** (payment *method*, `paymentMethodCode`), which reads
  *   the payment module's own intent instead. The two answer different
  *   questions the same way `channelCode`/`origin` do above.
+ * - **Агрегатор** (wave 16, gap map `1.1c`) is `marketplaceBindingId`: one
+ *   provider binding rather than `origin`'s coarse toggle. Its options are the
+ *   bindings the orders in scope arrived through
+ *   (`GET .../orders/marketplace-bindings`), not every binding the tenant owns.
  * - **Только опаздывающие / С проблемой / Требуется звонок / Фискализация**
- *   have no board predicate either (orders.md §2.4's own status line on
- *   each) and are not offered.
+ *   (wave 16, gap map `1.1c`) are the four secondary toggles orders.md §2.4
+ *   marks as not read by ordering, and the board now reads all four: `late`
+ *   (the resolved `ordering.lateness` policy applied in the statement),
+ *   `problem` (a process needing an operator or failing), `callbackRequested`
+ *   and `fiscalStatus` (a fiscal document of the order in that status).
  */
 export interface OrderQueueFilters {
+  /** «Все филиалы» (wave 16, gap map `1.1`): read the brand-scoped board. A mode, not a filter — see the class doc above. */
+  readonly allBranches: boolean;
+  /** «Филиал» — one branch of the brand, meaningful only while {@link allBranches} is on. */
+  readonly locationId: string | null;
   readonly dateRange: OrderQueueDateRange | null;
   readonly channelCode: string | null;
   /** «Источник» (wave 9, gap map `1.1c`) — `ordering.orders.origin` (V0038, ADR 0040). */
@@ -52,12 +65,24 @@ export interface OrderQueueFilters {
   readonly paymentMethodCode: string | null;
   /** «Оплата» (wave 10, gap map `1.1c`) — `ordering.orders.payment_status_projection`. */
   readonly paymentStatus: string | null;
+  /** «Агрегатор» (wave 16, gap map `1.1c`) — `ordering.orders.marketplace_binding_id` (V0038). */
+  readonly marketplaceBindingId: string | null;
+  /** «Только опаздывающие» — orders.md §2.4/§2.7, resolved server-side against the branch's `ordering.lateness` policy. */
+  readonly lateOnly: boolean;
+  /** «С проблемой» — a process of the order needs an operator or is failing. */
+  readonly problemOnly: boolean;
+  /** «Требуется звонок» — the callback amendment's flag, still raised. */
+  readonly callbackRequested: boolean;
+  /** «Фискализация» — a fiscal document of the order in this `fiscal.fiscal_documents.status`, or `ATTENTION` for FAILED + BLOCKED. */
+  readonly fiscalStatus: string | null;
   readonly mineOnly: boolean;
   /** The exact-match search box (§2.8's built half) — order number or external reference. */
   readonly reference: string;
 }
 
 export const EMPTY_ORDER_QUEUE_FILTERS: OrderQueueFilters = {
+  allBranches: false,
+  locationId: null,
   dateRange: null,
   channelCode: null,
   origin: null,
@@ -65,9 +90,31 @@ export const EMPTY_ORDER_QUEUE_FILTERS: OrderQueueFilters = {
   courierId: null,
   paymentMethodCode: null,
   paymentStatus: null,
+  marketplaceBindingId: null,
+  lateOnly: false,
+  problemOnly: false,
+  callbackRequested: false,
+  fiscalStatus: null,
   mineOnly: false,
   reference: '',
 };
+
+/**
+ * «Фискализация»'s "needs attention" pseudo-value: the two statuses an
+ * operator actually asks for (a document that failed, or one blocked past its
+ * reporting deadline), sent as two `fiscalStatus` parameters.
+ */
+export const FISCAL_STATUS_ATTENTION = 'ATTENTION';
+
+/** The single statuses «Фискализация» offers beside {@link FISCAL_STATUS_ATTENTION} — `fiscal.fiscal_documents`' own values. */
+export const FISCAL_STATUS_OPTIONS = [
+  'PENDING',
+  'SUBMITTED',
+  'ISSUED',
+  'FAILED',
+  'BLOCKED',
+  'NOT_APPLICABLE',
+] as const;
 
 const STORAGE_PREFIX = 'horecaos.operations.orderQueue.filters.';
 
@@ -81,6 +128,12 @@ export function hasActiveFilters(filters: OrderQueueFilters): boolean {
     filters.courierId !== null ||
     filters.paymentMethodCode !== null ||
     filters.paymentStatus !== null ||
+    filters.locationId !== null ||
+    filters.marketplaceBindingId !== null ||
+    filters.lateOnly ||
+    filters.problemOnly ||
+    filters.callbackRequested ||
+    filters.fiscalStatus !== null ||
     filters.mineOnly ||
     filters.reference.trim().length > 0
   );
@@ -89,10 +142,17 @@ export function hasActiveFilters(filters: OrderQueueFilters): boolean {
 /**
  * §2.4: "Сбросить фильтры clears everything except the tab and the period" —
  * so the date range survives a reset and every other field returns to its
- * default.
+ * default. The «Все филиалы» mode survives too: it says *which board* is being
+ * read, not how it is narrowed, and a reset that silently dropped a
+ * supervisor back onto one branch would read as their other branches
+ * vanishing.
  */
 export function resetFilters(filters: OrderQueueFilters): OrderQueueFilters {
-  return { ...EMPTY_ORDER_QUEUE_FILTERS, dateRange: filters.dateRange };
+  return {
+    ...EMPTY_ORDER_QUEUE_FILTERS,
+    dateRange: filters.dateRange,
+    allBranches: filters.allBranches,
+  };
 }
 
 /**
@@ -111,8 +171,8 @@ export function resetFilters(filters: OrderQueueFilters): OrderQueueFilters {
 export function boardQueryParams(
   filters: OrderQueueFilters,
   actorId: string | null,
-): Record<string, string> {
-  const params: Record<string, string> = {};
+): Record<string, string | readonly string[]> {
+  const params: Record<string, string | readonly string[]> = {};
   if (filters.dateRange) {
     params['from'] = `${filters.dateRange.start}T00:00:00+05:00`;
     params['to'] = `${filters.dateRange.end}T23:59:59+05:00`;
@@ -134,6 +194,29 @@ export function boardQueryParams(
   }
   if (filters.paymentStatus) {
     params['paymentStatus'] = filters.paymentStatus;
+  }
+  // The branch is a parameter of the brand-scoped board only — the branch
+  // board's path already names its one location, so it is never sent there.
+  if (filters.allBranches && filters.locationId) {
+    params['locationId'] = filters.locationId;
+  }
+  if (filters.marketplaceBindingId) {
+    params['marketplaceBindingId'] = filters.marketplaceBindingId;
+  }
+  if (filters.lateOnly) {
+    params['late'] = 'true';
+  }
+  if (filters.problemOnly) {
+    params['problem'] = 'true';
+  }
+  if (filters.callbackRequested) {
+    params['callbackRequested'] = 'true';
+  }
+  if (filters.fiscalStatus) {
+    params['fiscalStatus'] =
+      filters.fiscalStatus === FISCAL_STATUS_ATTENTION
+        ? ['FAILED', 'BLOCKED']
+        : filters.fiscalStatus;
   }
   if (filters.mineOnly && actorId) {
     params['createdByActorId'] = actorId;
@@ -162,8 +245,15 @@ export function boardQueryParams(
  * as a query parameter to the board endpoint itself.
  */
 const FILTER_PARAM_NAMES = [
+  'branches',
+  'branch',
   'channelCode',
   'origin',
+  'binding',
+  'late',
+  'problem',
+  'callback',
+  'fiscal',
   'fulfillmentMode',
   'courierId',
   'paymentMethodCode',
@@ -184,9 +274,16 @@ export function filtersFromQueryParams(params: ParamMap): OrderQueueFilters {
   const dateStart = params.get('dateStart');
   const dateEnd = params.get('dateEnd');
   return {
+    allBranches: params.get('branches') === 'all',
+    locationId: params.get('branch'),
     dateRange: dateStart && dateEnd ? { start: dateStart, end: dateEnd } : null,
     channelCode: params.get('channelCode'),
     origin: params.get('origin') as OrderQueueFilters['origin'],
+    marketplaceBindingId: params.get('binding'),
+    lateOnly: params.get('late') === '1',
+    problemOnly: params.get('problem') === '1',
+    callbackRequested: params.get('callback') === '1',
+    fiscalStatus: params.get('fiscal'),
     fulfillmentMode: params.get('fulfillmentMode') as OrderQueueFilters['fulfillmentMode'],
     courierId: params.get('courierId'),
     paymentMethodCode: params.get('paymentMethodCode'),
@@ -206,8 +303,15 @@ export function filtersFromQueryParams(params: ParamMap): OrderQueueFilters {
 export function filtersToQueryParams(filters: OrderQueueFilters): Record<string, string | null> {
   const reference = filters.reference.trim();
   return {
+    branches: filters.allBranches ? 'all' : null,
+    branch: filters.locationId,
     channelCode: filters.channelCode,
     origin: filters.origin,
+    binding: filters.marketplaceBindingId,
+    late: filters.lateOnly ? '1' : null,
+    problem: filters.problemOnly ? '1' : null,
+    callback: filters.callbackRequested ? '1' : null,
+    fiscal: filters.fiscalStatus,
     fulfillmentMode: filters.fulfillmentMode,
     courierId: filters.courierId,
     paymentMethodCode: filters.paymentMethodCode,

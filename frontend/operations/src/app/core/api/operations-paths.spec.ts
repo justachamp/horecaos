@@ -140,3 +140,38 @@ describe('operationsPaths dine-in sessions (ADR 0047, TableSessionController)', 
     );
   });
 });
+
+/**
+ * Wave 16, gap map rows `1.1`/`1.1c`: the brand-scoped board lives on the
+ * ADR 0031 `/operations` prefix (a new endpoint, born there), while the branch
+ * board it widens still sits on the legacy tenant prefix. Getting the two
+ * backwards 404s with no clue why, so the literal paths are pinned.
+ */
+describe('operationsPaths order board scopes (OperationsBrandOrderController)', () => {
+  it('orderBoard is the branch board on the legacy tenant prefix', () => {
+    expect(operationsPaths.orderBoard(SCOPE)).toBe(
+      '/api/v1/tenants/t1/brands/b1/locations/l1/orders/board',
+    );
+  });
+
+  it('brandOrderBoard is brand-scoped, on the /operations prefix, with no location segment', () => {
+    expect(operationsPaths.brandOrderBoard(SCOPE)).toBe(
+      '/api/v1/operations/tenants/t1/brands/b1/orders/board',
+    );
+  });
+
+  it('the binding options follow the same split', () => {
+    expect(operationsPaths.orderMarketplaceBindings(SCOPE)).toBe(
+      '/api/v1/tenants/t1/brands/b1/locations/l1/orders/marketplace-bindings',
+    );
+    expect(operationsPaths.brandOrderMarketplaceBindings(SCOPE)).toBe(
+      '/api/v1/operations/tenants/t1/brands/b1/orders/marketplace-bindings',
+    );
+  });
+
+  it('encodes every identifier, including a slash smuggled into one', () => {
+    expect(
+      operationsPaths.brandOrderBoard({ tenantId: 'a/b', brandId: 'c/d', locationId: 'l1' }),
+    ).toBe('/api/v1/operations/tenants/a%2Fb/brands/c%2Fd/orders/board');
+  });
+});

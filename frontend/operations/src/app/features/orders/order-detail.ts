@@ -224,6 +224,16 @@ export interface OrderCountsResponse {
 }
 
 /**
+ * `BrandOrderCountsResponse` — `GET .../brands/{b}/orders/counts`, the brand's
+ * nine counters under `totals` (the same fields, without the period and the
+ * mixes the per-branch shape also carries). What the «Все филиалы» board's tab
+ * badges read (wave 16); only `totals` is used here.
+ */
+export interface OrderBrandCountsResponse {
+  readonly totals: OrderCountsResponse;
+}
+
+/**
  * `OrderDeliveryController.ShipmentResponse` — the shipment carrying one
  * order's plan, with the three V0054 custody timestamps `DispatchController`'s
  * own queue never serialises (gap map row 1.2n).

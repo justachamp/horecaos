@@ -4,6 +4,7 @@ import {
   DestroyRef,
   OnInit,
   Signal,
+  computed,
   inject,
   signal,
 } from '@angular/core';
@@ -52,7 +53,7 @@ import {
   BulkOrderRef,
   OrderBulkActionsApi,
 } from './order-bulk-actions-api';
-import { CountableOrder, OrderCounts, TabCounts, zeroTabCounts } from './order-counts';
+import { CountableOrder, OrderCounts, PolicyFor, TabCounts, zeroTabCounts } from './order-counts';
 import { describeApiError, errorReference, mutationErrorNotice } from './order-errors';
 import { OrderOutcomeReasonDialog, OutcomeReasonSubmission } from './order-outcome-reason-dialog';
 import {
@@ -61,6 +62,8 @@ import {
 } from './order-payment-status';
 import {
   EMPTY_ORDER_QUEUE_FILTERS,
+  FISCAL_STATUS_ATTENTION,
+  FISCAL_STATUS_OPTIONS,
   OrderQueueFilters,
   OrderQueueFilterState,
   boardQueryParams,
@@ -145,6 +148,19 @@ const PLACEHOLDER_TIME_ZONE: TimeZone = 'Asia/Tashkent';
 /** §2.4's fixed, platform-wide set — ADR 0055 scopes the pilot to one payment provider, so a tenant-configurable registry is not this toolbar's to read (see `order-queue-filter-state.ts`'s own doc). */
 const PAYMENT_METHOD_CODES = ['CASH', 'CLICK', 'PAYME'] as const;
 
+/**
+ * `GET .../orders/marketplace-bindings` (and its brand-wide twin) — one
+ * aggregator binding the orders in scope arrived through (gap map row `1.1c`,
+ * wave 16). The provider and installation name are integration's to give and
+ * are null when it no longer resolves the binding.
+ */
+interface MarketplaceBindingOption {
+  readonly bindingId: string;
+  readonly providerType?: string | null;
+  readonly displayName?: string | null;
+  readonly orderCount: number;
+}
+
 /** One row, decorated with what the table and the sort actually need. */
 interface OrderRow {
   readonly order: OrderSummaryResponse;
@@ -169,6 +185,12 @@ interface RowDialogState {
   readonly kind: 'reject' | 'cancel' | 'cancel-reason' | 'complete' | 'override';
   readonly version: number;
   readonly targetStatus?: string;
+  /**
+   * The branch this row's order belongs to, captured when the dialog opened
+   * (wave 16). On the «Все филиалы» board a row's branch is not the shell's
+   * current one, and the mutation the dialog ends in must go to the row's own.
+   */
+  readonly scope: LocationScope;
 }
 
 /**
@@ -212,9 +234,19 @@ interface RowDialogState {
  * severity rail, order number + severity caption, time, type/channel, total,
  * delivery fee, payment status, courier (gap map row 1.1: resolved against
  * the same roster the toolbar's own Курьер filter fetches), and status.
- * `Филиал` is additionally out of place for a different reason: this
- * endpoint is already scoped to one location, which is the spec's own
- * condition for auto-hiding that column.
+ *
+ * **«Все филиалы» (wave 16, gap map `1.1`).** For a principal who reads the
+ * whole brand (the shell's branch picker has two or more options, and
+ * `GET .../brands/{b}/orders/board` answers rather than refusing), a mode
+ * select puts the queue on the brand-scoped board — the branch board's own
+ * statement over every branch, or over the one the Филиал filter names. The
+ * Филиал column then appears (§2.5 hides it for a single branch), and every
+ * row's actions, dialogs and «open» act on the **row's own branch**, not the
+ * shell's current one. Bulk selection stays a single-branch feature: its
+ * endpoint is per branch, and a mixed selection would need one request per
+ * branch with its own partial-failure panel. A location-scoped principal never
+ * sees the mode; a 403 from the brand board switches it off for the session
+ * rather than breaking the board.
  */
 @Component({
   selector: 'q-order-queue',
@@ -301,7 +333,38 @@ export class OrderQueue implements OnInit {
 
   /** §2.4: the toolbar's own filters for the active tab. */
   protected readonly filters: Signal<OrderQueueFilters> = this.filterState.current;
+
+  /**
+   * Set once the brand-scoped board answers 403 for this session: the principal's
+   * grant stops at a branch (ADR 0025 — scopes cover downwards, never up), so
+   * «Все филиалы» is withdrawn and the queue keeps the branch board. Not
+   * remembered across reloads — a grant can be widened while a wallboard is
+   * open, and the next visit simply asks again.
+   */
+  private readonly brandBoardRefused = signal(false);
+
+  /**
+   * Every branch the operator may switch to — `CurrentLocation`'s own picker
+   * options, populated only along its brand-resolution path (an operator whose
+   * scope is one `LOCATION` grant gets none).
+   */
+  protected readonly branchOptions = computed(() => this.location.options());
+
+  /** «Все филиалы» is offered to a multi-branch principal the brand board has not refused. */
+  protected readonly canViewAllBranches = computed(
+    () => this.branchOptions().length > 1 && !this.brandBoardRefused(),
+  );
+
+  /** The queue is reading the brand-scoped board right now. */
+  protected readonly allBranchesActive = computed(
+    () => this.canViewAllBranches() && this.filters().allBranches,
+  );
   protected readonly paymentMethodCodes = PAYMENT_METHOD_CODES;
+  /** «Фискализация» (wave 16, gap map `1.1c`): `ATTENTION` first, then `fiscal.fiscal_documents`' own statuses. */
+  protected readonly fiscalStatusOptions: readonly string[] = [
+    FISCAL_STATUS_ATTENTION,
+    ...FISCAL_STATUS_OPTIONS,
+  ];
   /** «Оплата» (wave 10, gap map row `1.1c`): the board's own seven projections — the same fixed set the Оплата column renders. */
   protected readonly paymentStatusOptions = ORDER_PAYMENT_STATUS_PROJECTIONS;
 
@@ -319,6 +382,25 @@ export class OrderQueue implements OnInit {
    */
   protected readonly courierRoster = signal<readonly RosterEntryResponse[]>([]);
   private courierRosterRequested = false;
+
+  /**
+   * §2.4's «Агрегатор» options (gap map `1.1c`, wave 16): the provider bindings
+   * the orders in scope arrived through, fetched lazily on first focus of the
+   * control — or as soon as a binding filter is already set (a pasted link), so
+   * its chip can be named — and again whenever the scope they were read for
+   * changes (the branch, or «Все филиалы» and its branch filter).
+   */
+  protected readonly bindingOptions = signal<readonly MarketplaceBindingOption[]>([]);
+  private bindingOptionsScopeKey: string | null = null;
+
+  /**
+   * The lateness policy of every branch this board has shown a row of, beyond
+   * the shell's own (wave 16): on «Все филиалы» a row is judged late by **its
+   * branch's** policy, the same one the «Только опаздывающие» filter applied
+   * server-side, so a row's tint and the filter cannot disagree. Filled lazily
+   * from {@link ensureBranchPolicies}; only ever grows.
+   */
+  private readonly branchPolicies = new Map<string, LatenessPolicy>();
 
   /**
    * Gap map row 1.1's Клиент column: name in full and masked phone for the
@@ -480,6 +562,7 @@ export class OrderQueue implements OnInit {
     const scope = this.location.scope();
     if (scope) {
       this.latenessPolicy = await this.latenessPolicyApi.resolve(scope);
+      this.branchPolicies.set(scope.locationId, this.latenessPolicy);
       this.lateColour.set(this.latenessPolicy.lateColour ?? null);
     }
     await this.refresh();
@@ -504,18 +587,84 @@ export class OrderQueue implements OnInit {
     void this.refresh();
   }
 
-  /** One page of `GET .../orders/board` under the toolbar's current filters, cursor-`state`'s own window. */
+  /**
+   * The lateness policy for an order (wave 16): its own branch's on «Все
+   * филиалы» — the one the «Только опаздывающие» filter applied server-side —
+   * otherwise the branch's, resolved at start-up. An arrow property rather than
+   * a method so it can be handed to {@link decorate} and {@link OrderCounts}
+   * as-is.
+   */
+  private readonly policyFor = (order: { readonly locationId?: string | null }): LatenessPolicy =>
+    (order.locationId ? this.branchPolicies.get(order.locationId) : undefined) ??
+    this.latenessPolicy;
+
+  /**
+   * Fetches the policy of every branch on this page that the board has not yet
+   * shown a row of. One request per branch per session; `LatenessPolicyApi`
+   * falls back to the platform default on any failure, so this never throws.
+   */
+  private async ensureBranchPolicies(
+    scope: LocationScope,
+    orders: readonly OrderSummaryResponse[],
+  ): Promise<void> {
+    const missing = [
+      ...new Set(
+        orders
+          .map((order) => order.locationId)
+          .filter((id): id is string => !!id && !this.branchPolicies.has(id)),
+      ),
+    ];
+    if (missing.length === 0) {
+      return;
+    }
+    const resolved = await Promise.all(
+      missing.map(
+        async (locationId) =>
+          [locationId, await this.latenessPolicyApi.resolve({ ...scope, locationId })] as const,
+      ),
+    );
+    for (const [locationId, policy] of resolved) {
+      this.branchPolicies.set(locationId, policy);
+    }
+  }
+
+  /**
+   * One page of the board under the toolbar's current filters, cursor-`state`'s
+   * own window — the branch board, or (on «Все филиалы») the brand-scoped one.
+   *
+   * A 403 on the brand board's **first** page means the principal's grant stops
+   * at a branch: «Все филиалы» is withdrawn for the session and the same page
+   * is read from the branch board instead. Only the first page, because a
+   * cursor minted by one board is meaningless to the other.
+   */
   private async fetchBoardPage(
     scope: LocationScope,
     state: CursorState,
   ): Promise<Page<OrderSummaryResponse>> {
-    const params = boardQueryParams(this.filters(), this.tenant.subject());
-    const result = await firstValueFrom(
-      this.api.get<Page<OrderSummaryResponse>>(operationsPaths.orderBoard(scope), {
-        params: { ...params, ...pageParams(state) },
-      }),
-    );
-    return result.value ?? { items: [], nextCursor: null };
+    const allBranches = this.allBranchesActive();
+    const params = boardQueryParams({ ...this.filters(), allBranches }, this.tenant.subject());
+    const path = allBranches
+      ? operationsPaths.brandOrderBoard(scope)
+      : operationsPaths.orderBoard(scope);
+    try {
+      const result = await firstValueFrom(
+        this.api.get<Page<OrderSummaryResponse>>(path, {
+          params: { ...params, ...pageParams(state) },
+        }),
+      );
+      return result.value ?? { items: [], nextCursor: null };
+    } catch (error) {
+      if (
+        allBranches &&
+        state.cursor === null &&
+        error instanceof ApiError &&
+        error.status === 403
+      ) {
+        this.brandBoardRefused.set(true);
+        return this.fetchBoardPage(scope, state);
+      }
+      throw error;
+    }
   }
 
   /** The full reload path: tab switch, filter change, manual refresh, the 10s poll and every realtime frame. Always starts from the board's own first page. */
@@ -540,16 +689,27 @@ export class OrderQueue implements OnInit {
         return;
       }
       const orders = page.items;
+      const allBranches = this.allBranchesActive();
+      if (allBranches) {
+        await this.ensureBranchPolicies(scope, orders);
+        if (generation !== this.pageGeneration) {
+          return;
+        }
+      }
       const now = new Date();
 
-      this.rows.set(orders.map((order) => decorate(order, now, this.latenessPolicy)));
+      this.rows.set(orders.map((order) => decorate(order, now, this.policyFor)));
       this.pageState.set(nextPage(startState, page) ?? startState);
       this.hasMore.set(page.nextCursor !== null);
+      // «Все филиалы» with one branch narrowed counts that branch; with none it
+      // reads the brand's totals. The branch board is unchanged.
+      const narrowedTo = allBranches ? this.filters().locationId : null;
       const tabCounts = await this.counts.forOrders(
-        scope,
+        narrowedTo ? { ...scope, locationId: narrowedTo } : scope,
         orders.map(toCountable),
         now,
-        this.latenessPolicy,
+        this.policyFor,
+        allBranches && !narrowedTo,
       );
       if (generation !== this.pageGeneration) {
         return;
@@ -558,8 +718,17 @@ export class OrderQueue implements OnInit {
       this.lastUpdatedAt.set(now);
       this.lastError.set(null);
       this.denied.set(false);
-      this.serviceStatus.set(deriveServiceStatus(orders, now, this.latenessPolicy), now);
+      // The shell's service indicator is one branch's ("open / late now"); a
+      // page of every branch's orders is not that, so it is left alone.
+      if (!allBranches) {
+        this.serviceStatus.set(deriveServiceStatus(orders, now, this.policyFor), now);
+      }
       this.observeChannelCodes(orders);
+      // A binding filter that arrived in a link needs its options to be
+      // named in the chip; nothing else reads them until the control is focused.
+      if (this.filters().marketplaceBindingId) {
+        this.ensureBindingOptionsLoaded();
+      }
       // Gap map row 1.1: the Курьер column needs the roster to resolve a
       // courierId this page actually carries — fetched here rather than
       // unconditionally at start-up, so a location whose board never shows
@@ -640,8 +809,14 @@ export class OrderQueue implements OnInit {
         // "Load more" again under the fresh board if they still want more.
         return;
       }
+      if (this.allBranchesActive()) {
+        await this.ensureBranchPolicies(scope, page.items);
+        if (generation !== this.pageGeneration) {
+          return;
+        }
+      }
       const now = new Date();
-      const appended = page.items.map((order) => decorate(order, now, this.latenessPolicy));
+      const appended = page.items.map((order) => decorate(order, now, this.policyFor));
       this.rows.set([...this.rows(), ...appended]);
       this.pageState.set(nextPage(state, page) ?? state);
       this.hasMore.set(page.nextCursor !== null);
@@ -693,11 +868,48 @@ export class OrderQueue implements OnInit {
     });
   }
 
-  protected openOrder(orderId: string): void {
+  /**
+   * Opens the order detail. The detail pane reads its order through the
+   * shell's current branch, so an order of another branch — reachable only on
+   * «Все филиалы» — first switches the console to that branch (the same switch
+   * the shell's picker makes), and only then navigates. Without it the pane
+   * would ask the wrong branch for the order and answer "not found".
+   */
+  protected openOrder(orderId: string, locationId?: string | null): void {
+    const current = this.location.scope();
+    if (locationId && current && locationId !== current.locationId) {
+      this.location.selectLocation(locationId);
+    }
     void this.router.navigate([orderId], {
       relativeTo: this.route,
       queryParamsHandling: 'preserve',
     });
+  }
+
+  /**
+   * The scope a row's own mutation must go to: the row's branch, which on the
+   * branch board is the shell's and on «Все филиалы» may be any other. Null
+   * only when the console has no scope at all.
+   */
+  private rowScope(order: OrderSummaryResponse): LocationScope | null {
+    const scope = this.location.scope();
+    if (!scope) {
+      return null;
+    }
+    return order.locationId && order.locationId !== scope.locationId
+      ? { ...scope, locationId: order.locationId }
+      : scope;
+  }
+
+  /** The Филиал column's text: the branch's display name from the shell's roster, else the id's head, never blank. */
+  protected branchLabel(order: OrderSummaryResponse): string {
+    if (!order.locationId) {
+      return '—';
+    }
+    return (
+      this.branchOptions().find((option) => option.id === order.locationId)?.displayName ??
+      order.locationId.slice(0, 8)
+    );
   }
 
   protected visibleRows(): readonly OrderRow[] {
@@ -946,6 +1158,54 @@ export class OrderQueue implements OnInit {
     void this.refresh();
   }
 
+  /**
+   * «Все филиалы» vs this branch (wave 16, gap map `1.1`). Switching board
+   * drops the branch filter (it only means something on the brand board), the
+   * selection (its endpoint is per branch) and the binding options (they were
+   * read for the other scope), then re-reads from the first page — a cursor
+   * minted by one board is meaningless to the other.
+   */
+  protected onBranchModeChange(mode: string): void {
+    this.applyFilterPatch({ allBranches: mode === 'ALL', locationId: null });
+    this.clearSelection();
+    this.bindingOptionsScopeKey = null;
+    void this.refresh();
+  }
+
+  /** «Филиал» (wave 16): narrows the brand board to one branch. */
+  protected onBranchChange(locationId: string): void {
+    this.applyFilterPatch({ locationId: locationId || null });
+    this.bindingOptionsScopeKey = null;
+    void this.refresh();
+  }
+
+  /** «Агрегатор» (wave 16, gap map `1.1c`): one provider binding, finer than {@link onOriginChange}. */
+  protected onBindingChange(bindingId: string): void {
+    this.applyFilterPatch({ marketplaceBindingId: bindingId || null });
+    void this.refresh();
+  }
+
+  protected onLateOnlyToggle(): void {
+    this.applyFilterPatch({ lateOnly: !this.filters().lateOnly });
+    void this.refresh();
+  }
+
+  protected onProblemOnlyToggle(): void {
+    this.applyFilterPatch({ problemOnly: !this.filters().problemOnly });
+    void this.refresh();
+  }
+
+  protected onCallbackRequestedToggle(): void {
+    this.applyFilterPatch({ callbackRequested: !this.filters().callbackRequested });
+    void this.refresh();
+  }
+
+  /** «Фискализация» (wave 16): a fiscal document of the order in this status, or `ATTENTION` for failed + blocked. */
+  protected onFiscalStatusChange(status: string): void {
+    this.applyFilterPatch({ fiscalStatus: status || null });
+    void this.refresh();
+  }
+
   protected onMineOnlyToggle(): void {
     const next = !this.filters().mineOnly;
     this.applyFilterPatch({ mineOnly: next });
@@ -964,6 +1224,19 @@ export class OrderQueue implements OnInit {
   protected onChipRemoved(chipId: string): void {
     if (chipId === 'mine') {
       this.applyFilterPatch({ mineOnly: false });
+    } else if (chipId === 'branch') {
+      this.applyFilterPatch({ locationId: null });
+      this.bindingOptionsScopeKey = null;
+    } else if (chipId === 'binding') {
+      this.applyFilterPatch({ marketplaceBindingId: null });
+    } else if (chipId === 'late') {
+      this.applyFilterPatch({ lateOnly: false });
+    } else if (chipId === 'problem') {
+      this.applyFilterPatch({ problemOnly: false });
+    } else if (chipId === 'callback') {
+      this.applyFilterPatch({ callbackRequested: false });
+    } else if (chipId === 'fiscal') {
+      this.applyFilterPatch({ fiscalStatus: null });
     } else if (chipId === 'paymentMethod') {
       this.applyFilterPatch({ paymentMethodCode: null });
     } else if (chipId === 'paymentStatus') {
@@ -995,7 +1268,115 @@ export class OrderQueue implements OnInit {
     if (filters.origin) {
       chips.push({ id: 'origin', label: this.originLabel(filters.origin) });
     }
+    if (this.allBranchesActive() && filters.locationId) {
+      chips.push({ id: 'branch', label: this.branchName(filters.locationId) });
+    }
+    if (filters.marketplaceBindingId) {
+      chips.push({ id: 'binding', label: this.bindingLabel(filters.marketplaceBindingId) });
+    }
+    if (filters.lateOnly) {
+      chips.push({ id: 'late', label: this.i18n.t('orders.queue.filter.late.label') });
+    }
+    if (filters.problemOnly) {
+      chips.push({ id: 'problem', label: this.i18n.t('orders.queue.filter.problem.label') });
+    }
+    if (filters.callbackRequested) {
+      chips.push({ id: 'callback', label: this.i18n.t('orders.queue.filter.callback.label') });
+    }
+    if (filters.fiscalStatus) {
+      chips.push({ id: 'fiscal', label: this.fiscalStatusLabel(filters.fiscalStatus) });
+    }
     return chips;
+  }
+
+  /** A branch's display name from the shell's roster, or the id's head when the roster does not list it. */
+  protected branchName(locationId: string): string {
+    return (
+      this.branchOptions().find((option) => option.id === locationId)?.displayName ??
+      locationId.slice(0, 8)
+    );
+  }
+
+  /** «Фискализация»'s option label — `fiscal.fiscal_documents`' own status words, plus the failed + blocked shortcut. */
+  protected fiscalStatusLabel(status: string): string {
+    switch (status) {
+      case FISCAL_STATUS_ATTENTION:
+        return this.i18n.t('orders.queue.filter.fiscal.ATTENTION');
+      case 'PENDING':
+        return this.i18n.t('orders.queue.filter.fiscal.PENDING');
+      case 'SUBMITTED':
+        return this.i18n.t('orders.queue.filter.fiscal.SUBMITTED');
+      case 'ISSUED':
+        return this.i18n.t('orders.queue.filter.fiscal.ISSUED');
+      case 'FAILED':
+        return this.i18n.t('orders.queue.filter.fiscal.FAILED');
+      case 'BLOCKED':
+        return this.i18n.t('orders.queue.filter.fiscal.BLOCKED');
+      case 'NOT_APPLICABLE':
+        return this.i18n.t('orders.queue.filter.fiscal.NOT_APPLICABLE');
+      default:
+        return status;
+    }
+  }
+
+  /**
+   * An aggregator binding by the name integration gave it — installation name
+   * and provider — falling back to the id's head for a binding the options do
+   * not (or no longer) name, never a blank chip.
+   */
+  protected bindingLabel(bindingId: string): string {
+    const option = this.bindingOptions().find((candidate) => candidate.bindingId === bindingId);
+    return option ? bindingOptionLabel(option) : bindingId.slice(0, 8);
+  }
+
+  protected bindingOptionLabel(option: MarketplaceBindingOption): string {
+    return bindingOptionLabel(option);
+  }
+
+  /** Whether the loaded options already name this binding — so a filter set from a link still shows as selected before they load. */
+  protected bindingKnown(bindingId: string): boolean {
+    return this.bindingOptions().some((candidate) => candidate.bindingId === bindingId);
+  }
+
+  /**
+   * §2.4's «Агрегатор» options: read lazily — on first focus of the control, or
+   * as soon as a binding filter is already set so its chip can be named — for
+   * the scope currently on screen (this branch, or the brand and optionally the
+   * one branch narrowed). A refusal or failure leaves the list empty rather
+   * than breaking the toolbar, the stance {@link ensureCourierRosterLoaded}
+   * takes too.
+   */
+  protected ensureBindingOptionsLoaded(): void {
+    const scope = this.location.scope();
+    if (!scope) {
+      return;
+    }
+    const allBranches = this.allBranchesActive();
+    const narrowedTo = allBranches ? this.filters().locationId : null;
+    const key = allBranches ? `brand:${narrowedTo ?? '*'}` : `branch:${scope.locationId}`;
+    if (this.bindingOptionsScopeKey === key) {
+      return;
+    }
+    this.bindingOptionsScopeKey = key;
+    const path = allBranches
+      ? operationsPaths.brandOrderMarketplaceBindings(scope)
+      : operationsPaths.orderMarketplaceBindings(scope);
+    void firstValueFrom(
+      this.api.get<{ readonly items: readonly MarketplaceBindingOption[] }>(path, {
+        params: narrowedTo ? { locationId: narrowedTo } : {},
+      }),
+    )
+      .then((result) => {
+        if (this.bindingOptionsScopeKey === key) {
+          this.bindingOptions.set(result.value?.items ?? []);
+        }
+      })
+      .catch(() => {
+        // Forget the key so the next focus tries again; an empty list is the degrade.
+        if (this.bindingOptionsScopeKey === key) {
+          this.bindingOptionsScopeKey = null;
+        }
+      });
   }
 
   protected originLabel(origin: 'HORECAOS' | 'MARKETPLACE'): string {
@@ -1154,7 +1535,23 @@ export class OrderQueue implements OnInit {
    * is a bulk bar with nothing enabled in it.
    */
   protected canSelectOrders(): boolean {
-    return this.capabilities.has('ORDER_BULK_ACTION');
+    return this.capabilities.has('ORDER_BULK_ACTION') && !this.allBranchesActive();
+  }
+
+  /**
+   * «Все филиалы» shows no selection column: `POST .../orders/bulk-actions` is
+   * one branch's endpoint, and a selection mixing branches would need a request
+   * per branch and a merged partial-failure panel. Said in a line under the
+   * toolbar — for an operator who could bulk-act on one branch — rather than
+   * leaving the missing checkboxes unexplained.
+   */
+  protected bulkUnavailableOnAllBranches(): boolean {
+    return this.capabilities.has('ORDER_BULK_ACTION') && this.allBranchesActive();
+  }
+
+  /** The table's column count, for the empty row's `colspan`. */
+  protected columnCount(): number {
+    return 11 + (this.canSelectOrders() ? 1 : 0) + (this.allBranchesActive() ? 1 : 0);
   }
 
   protected canBulkCancel(): boolean {
@@ -1405,7 +1802,7 @@ export class OrderQueue implements OnInit {
   protected openFromOverflow(order: OrderSummaryResponse, event: Event): void {
     event.stopPropagation();
     this.openOverflowFor.set(null);
-    this.openOrder(order.orderId);
+    this.openOrder(order.orderId, order.locationId);
   }
 
   /**
@@ -1440,7 +1837,7 @@ export class OrderQueue implements OnInit {
   ): void {
     event.stopPropagation();
     this.openOverflowFor.set(null);
-    const scope = this.location.scope();
+    const scope = this.rowScope(order);
     if (!scope) {
       return;
     }
@@ -1466,7 +1863,7 @@ export class OrderQueue implements OnInit {
           // in-flight openRejectDialog/openCancelReasonDialog fetch for a
           // different row must yield to (H2) — see dialogRequestId's doc.
           this.dialogRequestId += 1;
-          this.dialog.set({ orderId: order.orderId, kind: 'cancel', version });
+          this.dialog.set({ orderId: order.orderId, kind: 'cancel', version, scope });
         }
         return;
       case 'ADVANCE':
@@ -1502,7 +1899,7 @@ export class OrderQueue implements OnInit {
         // using the simpler entry. Opening the order is a real, working
         // action rather than the silent no-op the `default` case below would
         // otherwise give a code `ORDER_AMEND` already reaches five roles for.
-        this.openOrder(order.orderId);
+        this.openOrder(order.orderId, order.locationId);
         return;
       case 'ASSIGN_COURIER':
         // Gap map row 1.1e: the same treatment AMEND already gets, for the
@@ -1515,7 +1912,7 @@ export class OrderQueue implements OnInit {
         // order wires this row action to that existing control rather than
         // leaving `ASSIGN_COURIER` a declared-but-inert code the way it was
         // before this wave.
-        this.openOrder(order.orderId);
+        this.openOrder(order.orderId, order.locationId);
         return;
       case 'RESOLVE':
         // Gap map row 1.1e: the same treatment AMEND/ASSIGN_COURIER already
@@ -1524,7 +1921,17 @@ export class OrderQueue implements OnInit {
         // only `order-detail-pane.ts`'s `onActionClick` fetches the
         // amendment history and opens it, so this row action's job is
         // exactly the same as those two: get the operator to the order.
-        this.openOrder(order.orderId);
+        this.openOrder(order.orderId, order.locationId);
+        return;
+      case 'ISSUE_INVOICE':
+        // Gap map row 1.1e, «Выставить счёт» (orders.md §4.9): the re-issue
+        // form — link or invoice push, and the result with the payable link —
+        // lives in the order detail's payment panel (`q-order-payment-panel`,
+        // wave P12), over the existing `POST .../payment/re-presentations`.
+        // A second form here would be a second implementation of the same
+        // idempotent call, so this row action takes the operator to the order
+        // and `order-detail-pane.ts`'s own handler opens that form.
+        this.openOrder(order.orderId, order.locationId);
         return;
       default:
       // An action code this client does not recognise yet — §4.2 says render
@@ -1551,7 +1958,7 @@ export class OrderQueue implements OnInit {
         return; // superseded by a newer dialog-open click (H2)
       }
       this.rejectReasons.set(reasons);
-      this.dialog.set({ orderId, kind: 'reject', version });
+      this.dialog.set({ orderId, kind: 'reject', version, scope });
     } catch (error) {
       if (requestId !== this.dialogRequestId) {
         return;
@@ -1592,7 +1999,7 @@ export class OrderQueue implements OnInit {
         return; // superseded by a newer dialog-open click (H2)
       }
       this.cancelReasons.set(reasons);
-      this.dialog.set({ orderId, kind: 'cancel-reason', version });
+      this.dialog.set({ orderId, kind: 'cancel-reason', version, scope });
     } catch (error) {
       if (requestId !== this.dialogRequestId) {
         return;
@@ -1626,7 +2033,7 @@ export class OrderQueue implements OnInit {
         return; // superseded by a newer dialog-open click (H2)
       }
       this.cancelReasons.set(reasons);
-      this.dialog.set({ orderId, kind: 'override', version, targetStatus });
+      this.dialog.set({ orderId, kind: 'override', version, targetStatus, scope });
     } catch (error) {
       if (requestId !== this.dialogRequestId) {
         return;
@@ -1674,12 +2081,12 @@ export class OrderQueue implements OnInit {
           reason.allowedFulfillmentModes.includes(fulfillmentMode ?? ''),
       );
       if (eligible.length === 0) {
-        void this.submitCompletion(orderId, version);
+        void this.submitCompletion(orderId, version, scope);
       } else if (eligible.length === 1) {
-        void this.submitCompletion(orderId, version, eligible[0].id);
+        void this.submitCompletion(orderId, version, scope, eligible[0].id);
       } else {
         this.completionReasons.set(eligible);
-        this.dialog.set({ orderId, kind: 'complete', version });
+        this.dialog.set({ orderId, kind: 'complete', version, scope });
       }
     } catch (error) {
       if (requestId !== this.dialogRequestId) {
@@ -1696,12 +2103,9 @@ export class OrderQueue implements OnInit {
   private async submitCompletion(
     orderId: string,
     version: number,
+    scope: LocationScope,
     reasonId?: string,
   ): Promise<void> {
-    const scope = this.location.scope();
-    if (!scope) {
-      return;
-    }
     await this.submitStateMutation(
       orderId,
       this.actionsApi.complete(scope, orderId, version, reasonId),
@@ -1713,18 +2117,21 @@ export class OrderQueue implements OnInit {
     if (!state) {
       return;
     }
-    void this.submitCompletion(state.orderId, state.version, submission.reasonId).finally(() =>
-      this.dialog.set(null),
-    );
+    void this.submitCompletion(
+      state.orderId,
+      state.version,
+      state.scope,
+      submission.reasonId,
+    ).finally(() => this.dialog.set(null));
   }
 
   /** §0.2/§11.3, wave 9 row `1.1h`: `POST .../state-overrides`, with the target {@link openOverrideDialog} captured and the operator's chosen registry reason. */
   protected onOverrideDialogConfirm(submission: OutcomeReasonSubmission): void {
     const state = this.dialog();
-    const scope = this.location.scope();
-    if (!state || !scope || state.kind !== 'override' || !state.targetStatus) {
+    if (!state || state.kind !== 'override' || !state.targetStatus) {
       return;
     }
+    const scope = state.scope;
 
     void this.submitStateMutation(
       state.orderId,
@@ -1754,10 +2161,10 @@ export class OrderQueue implements OnInit {
 
   protected onCancelDialogConfirm(submission: OrderReasonSubmission): void {
     const state = this.dialog();
-    const scope = this.location.scope();
-    if (!state || !scope) {
+    if (!state) {
       return;
     }
+    const scope = state.scope;
 
     void this.submitStateMutation(
       state.orderId,
@@ -1774,10 +2181,10 @@ export class OrderQueue implements OnInit {
   /** H2: `CONFIRMED` onward — the registry-reasoned counterpart of {@link onCancelDialogConfirm}. */
   protected onCancelReasonDialogConfirm(submission: OutcomeReasonSubmission): void {
     const state = this.dialog();
-    const scope = this.location.scope();
-    if (!state || !scope) {
+    if (!state) {
       return;
     }
+    const scope = state.scope;
 
     void this.submitStateMutation(
       state.orderId,
@@ -1794,10 +2201,10 @@ export class OrderQueue implements OnInit {
 
   protected onRejectDialogConfirm(submission: OrderRejectSubmission): void {
     const state = this.dialog();
-    const scope = this.location.scope();
-    if (!state || !scope) {
+    if (!state) {
       return;
     }
+    const scope = state.scope;
 
     void this.submitDecision(
       state.orderId,
@@ -1925,12 +2332,26 @@ export class OrderQueue implements OnInit {
   }
 }
 
-function decorate(order: OrderSummaryResponse, now: Date, policy: LatenessPolicy): OrderRow {
+/** "Wolt Chilonzor · WOLT" — the installation's name and the provider, whichever integration gave. */
+function bindingOptionLabel(option: MarketplaceBindingOption): string {
+  const name = option.displayName ?? '';
+  const provider = option.providerType ?? '';
+  if (name && provider && name.toUpperCase() !== provider.toUpperCase()) {
+    return `${name} · ${provider}`;
+  }
+  return name || provider || option.bindingId.slice(0, 8);
+}
+
+function decorate(
+  order: OrderSummaryResponse,
+  now: Date,
+  policyFor: (order: OrderSummaryResponse) => LatenessPolicy,
+): OrderRow {
   const createdAt = new Date(order.createdAt);
   return {
     order,
     createdAt,
-    severity: computeOrderSeverity(toSeverityFields(order, createdAt), now, policy),
+    severity: computeOrderSeverity(toSeverityFields(order, createdAt), now, policyFor(order)),
   };
 }
 
@@ -1940,6 +2361,7 @@ function toCountable(order: OrderSummaryResponse): CountableOrder {
 
 function toSeverityFields(order: OrderSummaryResponse, createdAt: Date): CountableOrder {
   return {
+    locationId: order.locationId ?? null,
     status: order.status,
     createdAt,
     approvalDeadlineAt: order.approvalDeadlineAt ? new Date(order.approvalDeadlineAt) : null,
@@ -1959,7 +2381,7 @@ function toSeverityFields(order: OrderSummaryResponse, createdAt: Date): Countab
 function deriveServiceStatus(
   orders: readonly OrderSummaryResponse[],
   now: Date,
-  policy: LatenessPolicy,
+  policyFor: (order: OrderSummaryResponse) => LatenessPolicy,
 ): { open: number; late: number } {
   let open = 0;
   let late = 0;
@@ -1967,7 +2389,7 @@ function deriveServiceStatus(
     if (order.status !== 'COMPLETED' && order.status !== 'CANCELLED') {
       open += 1;
     }
-    if (computeOrderSeverity(toCountable(order), now, policy).level !== 'NORMAL') {
+    if (computeOrderSeverity(toCountable(order), now, policyFor(order)).level !== 'NORMAL') {
       late += 1;
     }
   }
