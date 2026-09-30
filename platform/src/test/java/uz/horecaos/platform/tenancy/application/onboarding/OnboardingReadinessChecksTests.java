@@ -324,8 +324,10 @@ class OnboardingReadinessChecksTests {
         List<StepResult.Finding> findings = findings(channels().check(tenantId));
 
         assertThat(findings).singleElement().satisfies(finding -> {
-            assertThat(finding.subject()).isEqualTo(StepResult.Subject.salesChannel(storefront));
-            assertThat(finding.subject()).extracting(StepResult.Subject::type).isEqualTo("SALES_CHANNEL");
+            assertThat(finding.subject()).isEqualTo(StepResult.FindingSubject.salesChannel(storefront));
+            assertThat(finding.subject())
+                    .extracting(StepResult.FindingSubject::type)
+                    .isEqualTo("SALES_CHANNEL");
         });
     }
 
@@ -345,7 +347,7 @@ class OnboardingReadinessChecksTests {
                     .isNull();
             assertThat(finding.subject())
                     .as("the channel itself, so the console can open its setup")
-                    .isEqualTo(StepResult.Subject.salesChannel(storefront));
+                    .isEqualTo(StepResult.FindingSubject.salesChannel(storefront));
         });
     }
 
@@ -387,7 +389,7 @@ class OnboardingReadinessChecksTests {
         assertThat(findings).singleElement().satisfies(finding -> {
             assertThat(finding.errorCode()).isEqualTo("CHANNEL_NO_SERVICEABLE_MODE");
             assertThat(finding.detail()).contains("STOREFRONT", "none has a schedule bound");
-            assertThat(finding.subject()).isEqualTo(StepResult.Subject.salesChannel(storefront));
+            assertThat(finding.subject()).isEqualTo(StepResult.FindingSubject.salesChannel(storefront));
         });
     }
 

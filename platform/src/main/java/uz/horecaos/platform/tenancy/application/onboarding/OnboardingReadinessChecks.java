@@ -170,7 +170,7 @@ public final class OnboardingReadinessChecks {
      *
      * <p>Tenant-scoped, not location-scoped: a channel is a route to market for
      * the whole tenant, so the finding carries no {@code locationId}. It names
-     * the channel as its {@link StepResult.Subject subject}, so the console
+     * the channel as its {@link StepResult.FindingSubject subject}, so the console
      * links to that channel's own setup rather than to the list; an older
      * console that ignores the subject still links to the sales-channels list.
      */
@@ -212,7 +212,7 @@ public final class OnboardingReadinessChecks {
                     .query((row, number) -> StepResult.Finding.about(
                             NO_PAYMENT_METHOD,
                             "Sales channel %s has no enabled payment method".formatted(row.getString("code")),
-                            StepResult.Subject.salesChannel(row.getObject("id", UUID.class))))
+                            StepResult.FindingSubject.salesChannel(row.getObject("id", UUID.class))))
                     .list();
             return findings.isEmpty() ? StepResult.completed(Map.of(), null) : StepResult.failedWithFindings(findings);
         }
@@ -345,7 +345,7 @@ public final class OnboardingReadinessChecks {
      * </ul>
      *
      * <p>Tenant-scoped, not location-scoped, like every channel finding: each
-     * names its channel as a {@link StepResult.Subject subject} so the console
+     * names its channel as a {@link StepResult.FindingSubject subject} so the console
      * can open that channel's setup.
      */
     @Component
@@ -406,7 +406,7 @@ public final class OnboardingReadinessChecks {
                     .list();
             List<StepResult.Finding> findings = new ArrayList<>();
             for (ChannelRow channel : channels) {
-                StepResult.Subject subject = StepResult.Subject.salesChannel(channel.id());
+                StepResult.FindingSubject subject = StepResult.FindingSubject.salesChannel(channel.id());
                 if (!channel.hasMode()) {
                     findings.add(StepResult.Finding.about(
                             NO_MODE,

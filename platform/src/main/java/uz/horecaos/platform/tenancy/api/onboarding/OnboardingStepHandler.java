@@ -138,7 +138,7 @@ public interface OnboardingStepHandler {
                 String errorCode,
                 String detail,
                 @Nullable UUID locationId,
-                @Nullable Subject subject) {
+                @Nullable FindingSubject subject) {
 
             /** A finding with no per-item object — what every finding was before {@code subject} existed. */
             public Finding(String errorCode, String detail, @Nullable UUID locationId) {
@@ -146,7 +146,7 @@ public interface OnboardingStepHandler {
             }
 
             /** A tenant-level finding about one non-location object. */
-            public static Finding about(String errorCode, String detail, Subject subject) {
+            public static Finding about(String errorCode, String detail, FindingSubject subject) {
                 return new Finding(errorCode, detail, null, subject);
             }
         }
@@ -161,19 +161,19 @@ public interface OnboardingStepHandler {
          * this list does not name has nowhere to go and is rendered without a
          * per-item link rather than guessed at.
          */
-        public record Subject(String type, UUID id) {
+        public record FindingSubject(String type, UUID id) {
 
             /** A row of {@code tenant.sales_channels}. */
             public static final String SALES_CHANNEL = "SALES_CHANNEL";
 
-            public Subject {
+            public FindingSubject {
                 if (type.isBlank()) {
                     throw new IllegalArgumentException("A finding subject needs a type");
                 }
             }
 
-            public static Subject salesChannel(UUID channelId) {
-                return new Subject(SALES_CHANNEL, channelId);
+            public static FindingSubject salesChannel(UUID channelId) {
+                return new FindingSubject(SALES_CHANNEL, channelId);
             }
         }
     }
