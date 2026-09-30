@@ -84,7 +84,7 @@ public class OrderLatenessPolicyEditorController {
                     + "actually use. currentVersionAtScope is the version to send back as "
                     + "expectedVersion: 0 when this exact scope has authored nothing and merely "
                     + "inherits.")
-    EditorResponse editor(
+    EditorResponse readLatenessPolicyEditor(
             @PathVariable UUID tenantId,
             @RequestParam ScopeType scopeType,
             @RequestParam(required = false) @Nullable UUID brandId,
@@ -103,7 +103,7 @@ public class OrderLatenessPolicyEditorController {
                     + "same scope (null or 0 when it had authored nothing), or the write is refused "
                     + "with STALE_VERSION naming both versions. At-risk and no-promise windows are "
                     + "whole minutes; every window is at most a day.")
-    ResponseEntity<EditorResponse> author(
+    ResponseEntity<EditorResponse> authorLatenessPolicy(
             @PathVariable UUID tenantId, @Valid @RequestBody AuthorLatenessPolicyRequest request) {
         ResourceScope scope = scopeOf(tenantId, request.scopeType(), request.brandId(), request.locationId());
         Editor published = authoring.author(

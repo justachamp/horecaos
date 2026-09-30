@@ -453,6 +453,11 @@ export interface AssignmentResponse {
   tagId?: string;
 }
 
+export interface AtRiskDefaultResponse {
+  seconds?: number;
+  source?: string;
+}
+
 export interface AttachMediaRequest {
   channel?: string;
   role: string;
@@ -602,6 +607,17 @@ export interface AuthorFlowDocumentRequest {
   description?: string;
   documentYaml: string;
   reason: string;
+}
+
+export interface AuthorLatenessPolicyRequest {
+  brandId?: string;
+  delivery: ModeRequest;
+  dineIn: ModeRequest;
+  expectedVersion?: number;
+  locationId?: string;
+  pickup: ModeRequest;
+  reason: string;
+  scopeType: "PLATFORM" | "TENANT" | "BRAND" | "LOCATION";
 }
 
 export interface AuthorPolicyRequest {
@@ -3035,6 +3051,19 @@ export interface DutySessionResponse {
   status?: string;
 }
 
+export interface EditorResponse {
+  atRiskDefault?: AtRiskDefaultResponse;
+  currentVersionAtScope?: number;
+  delivery?: ModeResponse;
+  dineIn?: ModeResponse;
+  inspectedLevels?: Array<LevelResponse>;
+  isPlatformDefault?: boolean;
+  pickup?: ModeResponse;
+  policyId?: string;
+  policyVersion?: number;
+  winningScope?: "PLATFORM" | "TENANT" | "BRAND" | "LOCATION";
+}
+
 export interface EffectiveBindingView {
   bindingId?: string;
   capabilityCode?: string;
@@ -3862,6 +3891,11 @@ export interface LegalEntityView {
   version?: number;
 }
 
+export interface LevelResponse {
+  outcome?: string;
+  scopeType?: "PLATFORM" | "TENANT" | "BRAND" | "LOCATION";
+}
+
 export interface LiabilityResponse {
   accountCount?: number;
   brandId?: string;
@@ -4358,6 +4392,19 @@ export interface ModeBindingResponse {
   scheduleName?: string;
   scheduleVersion?: number;
   sharedWithLocationCount?: number;
+}
+
+export interface ModeRequest {
+  atRiskBeforeSeconds?: number;
+  lateAfterSeconds: number;
+  noPromiseFallbackSeconds: number;
+}
+
+export interface ModeResponse {
+  atRiskBeforeSeconds?: number;
+  effectiveAtRiskBeforeSeconds?: number;
+  lateAfterSeconds?: number;
+  noPromiseFallbackSeconds?: number;
 }
 
 export interface ModifierGroupDetailResponse {
@@ -9369,6 +9416,8 @@ export interface Operations {
   "archive_4": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/merchant-bindings/{bindingId}/archive"; request: { parameters: { path: { bindingId: string; tenantId: string }; query: { expectedVersion: number } } }; responses: { "200": MerchantBindingView } };
   "rotateSecret": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/merchant-bindings/{bindingId}/secret-rotations"; request: { parameters: { path: { bindingId: string; tenantId: string }; query: { expectedVersion: number } }; body: RotateMerchantBindingSecretRequest }; responses: { "200": MerchantBindingView } };
   "suspend_2": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/merchant-bindings/{bindingId}/suspend"; request: { parameters: { path: { bindingId: string; tenantId: string }; query: { expectedVersion: number } } }; responses: { "200": MerchantBindingView } };
+  "readLatenessPolicyEditor": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/order-lateness-policy"; request: { parameters: { path: { tenantId: string }; query: { brandId?: string; locationId?: string; scopeType: "PLATFORM" | "TENANT" | "BRAND" | "LOCATION" } } }; responses: { "200": EditorResponse } };
+  "authorLatenessPolicy": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/order-lateness-policy"; request: { parameters: { path: { tenantId: string } }; body: AuthorLatenessPolicyRequest }; responses: { "200": EditorResponse } };
   "list_11": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/order-outcome-reasons"; request: { parameters: { path: { tenantId: string }; query: { activeOnly?: boolean; kind: "CANCELLATION" | "COMPLETION" } } }; responses: { "200": Array<ReasonResponse> } };
   "create_7": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/order-outcome-reasons"; request: { parameters: { path: { tenantId: string } }; body: OrderOutcomeReasonControllerReasonRequest }; responses: { "200": OrderOutcomeReasonControllerIdResponse } };
   "categories_1": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/order-outcome-reasons/categories"; request: { parameters: { path: { tenantId: string }; query: { kind: "CANCELLATION" | "COMPLETION" } } }; responses: { "200": Array<string> } };
