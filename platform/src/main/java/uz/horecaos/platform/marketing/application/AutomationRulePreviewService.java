@@ -23,19 +23,17 @@ import uz.horecaos.platform.ordering.api.AbandonedCartDirectory;
  * own complaint, restated for automations rather than for a promotion or
  * dispatch rule.
  *
- * <p><strong>Why not {@code q-rule-simulator}.</strong> That component (row
- * {@code X.25}'s own {@code RuleSimulator}) is a client-side dry run against a
- * {@code ConditionGroup} the operator types a hypothetical candidate's values
- * into — no backend call, "must not read live orders" by its own doc. An
- * automation rule's threshold ({@code birthdayWindowDays},
- * {@code inactivityDays}, {@code abandonmentDelayHours},
- * {@code minimumChangeMinor}) is not a {@code ConditionGroup} and cannot
- * become one without inventing a predicate catalogue this row never asked
- * for, and this row's own instructions ask for a bounded sample of today's
- * <em>real</em> customers, PII-masked — a server-backed read, the opposite of
- * what that component is built not to do. This class is that read; the
- * automations page's own preview panel is its consumer, not a reuse of
- * {@code q-rule-simulator}.
+ * <p><strong>Two previews, one dialog.</strong> {@code q-rule-simulator} (row
+ * {@code X.25}'s own {@code RuleSimulator}) is a client-side dry run: the
+ * operator types a hypothetical customer's figures into a typed condition and
+ * it says whether the rule would fire. It makes no backend call and reads no
+ * live order, and the automations page uses it that way — each trigger kind
+ * ({@code birthdayWindowDays}, {@code inactivityDays}, {@code
+ * abandonmentDelayHours}, {@code minimumChangeMinor}) is exactly one typed
+ * condition, mirrored in the console's {@code automation-conditions.ts}. It
+ * cannot say who <em>actually</em> matches today. This class is that other
+ * half: a bounded sample of today's <em>real</em> customers, PII-masked — a
+ * server-backed read, which is what the simulator is built not to do.
  *
  * <p><strong>No side effect.</strong> Every branch below reuses the exact
  * candidate query {@link AutomationSweepService} (or, for {@code
