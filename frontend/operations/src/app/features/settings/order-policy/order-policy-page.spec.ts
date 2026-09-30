@@ -7,6 +7,7 @@ import { CurrentTenant } from '../../../core/auth/current-tenant';
 import { I18n } from '../../../core/i18n/i18n';
 import { ConfigurationApi } from '../configuration-api';
 import { SettingsScope } from '../settings-scope';
+import { LatenessEditorView, LatenessPolicyEditorApi } from './lateness-policy-editor-api';
 import { AcceptancePolicyResponse, OrderPolicyApi } from './order-policy-api';
 import { OrderPolicyPage } from './order-policy-page';
 
@@ -40,6 +41,35 @@ const CARD2_5_DEFAULTS: Readonly<Record<string, unknown>> = {
   'ordering.auto_accept_min_prior_orders': 0,
   'ordering.preorder_branch_resolution': 'BY_DISTANCE',
   'ordering.operator_promo_code_allowed': false,
+};
+
+/** Nothing authored anywhere: the lateness card renders the platform default. */
+const LATENESS_DEFAULT: LatenessEditorView = {
+  delivery: {
+    atRiskBeforeSeconds: null,
+    effectiveAtRiskBeforeSeconds: 300,
+    lateAfterSeconds: 0,
+    noPromiseFallbackSeconds: 2700,
+  },
+  pickup: {
+    atRiskBeforeSeconds: null,
+    effectiveAtRiskBeforeSeconds: 300,
+    lateAfterSeconds: 0,
+    noPromiseFallbackSeconds: 2700,
+  },
+  dineIn: {
+    atRiskBeforeSeconds: null,
+    effectiveAtRiskBeforeSeconds: 300,
+    lateAfterSeconds: 0,
+    noPromiseFallbackSeconds: 2700,
+  },
+  atRiskDefault: { seconds: 300, source: 'PLATFORM_DEFAULT' },
+  isPlatformDefault: true,
+  winningScope: null,
+  policyId: null,
+  policyVersion: 0,
+  currentVersionAtScope: 0,
+  inspectedLevels: [{ scopeType: 'BRAND', outcome: 'NOT_SET' }],
 };
 
 function defaultResolution(code: string): ConfigurationResolutionView {
@@ -77,6 +107,7 @@ describe('OrderPolicyPage', () => {
   let fixture: ComponentFixture<OrderPolicyPage>;
   let policyApi: { getEffective: ReturnType<typeof vi.fn>; publish: ReturnType<typeof vi.fn> };
   let configApi: { resolution: ReturnType<typeof vi.fn>; setValue: ReturnType<typeof vi.fn> };
+  let latenessApi: { get: ReturnType<typeof vi.fn>; publish: ReturnType<typeof vi.fn> };
   let settingsScope: FakeSettingsScope;
 
   beforeEach(async () => {
@@ -100,12 +131,15 @@ describe('OrderPolicyPage', () => {
       }),
     };
 
+    latenessApi = { get: vi.fn().mockResolvedValue(LATENESS_DEFAULT), publish: vi.fn() };
+
     settingsScope = new FakeSettingsScope();
     await TestBed.configureTestingModule({
       imports: [OrderPolicyPage],
       providers: [
         { provide: OrderPolicyApi, useValue: policyApi },
         { provide: ConfigurationApi, useValue: configApi },
+        { provide: LatenessPolicyEditorApi, useValue: latenessApi },
         { provide: CurrentTenant, useValue: new FakeCurrentTenant() },
         { provide: SettingsScope, useValue: settingsScope },
       ],
@@ -485,6 +519,57 @@ describe('OrderPolicyPage', () => {
       BRAND_ID,
       null,
     );
+  });
+
+  // Rows X.39 / 10.3b: the ordering.lateness document's editor, embedded under the timing card.
+
+  it('embeds the lateness editor under the timing card, reading the document at the scope bar’s own scope', () => {
+    expect(latenessApi.get).toHaveBeenCalledWith(TENANT_ID, 'BRAND', BRAND_ID, null);
+    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(text).toContain('When an order counts as late');
+    expect(text).toContain('Delivery');
+    expect(text).toContain('Pickup');
+    expect(text).toContain('Dine-in');
+  });
+
+  it('re-reads the lateness document at TENANT level when the scope bar switches to it', async () => {
+    latenessApi.get.mockClear();
+    settingsScope.level.set('TENANT');
+    fixture.detectChanges();
+    await flushMicrotasks();
+
+    expect(latenessApi.get).toHaveBeenCalledWith(TENANT_ID, 'TENANT', BRAND_ID, null);
+  });
+
+  it('re-reads the lateness document when the at-risk scalar it defaults to is saved', async () => {
+    latenessApi.get.mockClear();
+    (rowAt(AT_RISK_ROW).querySelector('.field__action') as HTMLButtonElement).click(); // Override
+    fixture.detectChanges();
+    type('[id="field-ordering.at_risk_before_minutes"]', '12');
+    type('[id="field-reason-ordering.at_risk_before_minutes"]', 'Warn everyone earlier');
+    publishButton().click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(configApi.setValue).toHaveBeenCalledWith(
+      TENANT_ID,
+      'ordering.at_risk_before_minutes',
+      expect.objectContaining({ integerValue: 12 }),
+    );
+    expect(latenessApi.get).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not re-read the lateness document for an unrelated field', async () => {
+    latenessApi.get.mockClear();
+    (rowAt(3).querySelector('.field__action') as HTMLButtonElement).click(); // late threshold
+    fixture.detectChanges();
+    type('[id="field-ordering.late_order_threshold_minutes"]', '20');
+    type('[id="field-reason-ordering.late_order_threshold_minutes"]', 'unrelated');
+    publishButton().click();
+    await flushMicrotasks();
+
+    expect(configApi.setValue).toHaveBeenCalled();
+    expect(latenessApi.get).not.toHaveBeenCalled();
   });
 
   it('overrides a Card 2 field at TENANT scope, authoring the company-wide default', async () => {

@@ -1239,7 +1239,7 @@ export const messagesEn = {
   'settings.orderPolicy.field.lateOrderThresholdMinutes': 'Order is late after (minutes)',
   'settings.orderPolicy.field.atRiskBeforeMinutes': 'Warn before the promised time (minutes)',
   'settings.orderPolicy.atRiskBeforeMinutes.hint':
-    'How far ahead of the promised time an order shows as at risk. Applies to every kind of order, on the order board and the kitchen board.',
+    'How far ahead of the promised time an order shows as at risk. The default for any kind of order with no value of its own in the lateness boundaries below. Shown on the order board and the kitchen board.',
   'settings.orderPolicy.field.lateColour': 'Late-order colour',
   'settings.orderPolicy.lateColour.hint':
     'Drawn on late orders on the order board and the kitchen board. Keep the standard unless your brand needs another: a colour that is hard to read against a row hides the orders that most need attention, so heed the contrast warning.',
@@ -1261,6 +1261,28 @@ export const messagesEn = {
   'settings.orderPolicy.preorderBranchResolution.BY_OPENING_TIME': 'Soonest to open',
   'settings.orderPolicy.field.operatorPromoCodeAllowed': 'Operator may apply a promo code',
   'settings.orderPolicy.revertReason': 'Reverted to the inherited value',
+
+  // Rows X.39 / 10.3b — the ordering.lateness document's editor
+  'settings.latenessPolicy.title': 'When an order counts as late',
+  'settings.latenessPolicy.lead':
+    'Set separately for delivery, pickup and dine-in. The order board, the kitchen queue and the kitchen screens all read these numbers.',
+  'settings.latenessPolicy.version': 'Version {version}',
+  'settings.latenessPolicy.mode.delivery': 'Delivery',
+  'settings.latenessPolicy.mode.pickup': 'Pickup',
+  'settings.latenessPolicy.mode.dineIn': 'Dine-in',
+  'settings.latenessPolicy.summary':
+    'At risk {atRisk} min before the promise · late {lateAfter} s after it · no promise: late after {fallback} min',
+  'settings.latenessPolicy.summary.default': '(default)',
+  'settings.latenessPolicy.oneDocument':
+    'Saved as one versioned document for all three kinds of order, so editing any of them opens all of them.',
+  'settings.latenessPolicy.field.atRisk': 'Warn before the promise (min)',
+  'settings.latenessPolicy.field.lateAfter': 'Late after the promise (sec)',
+  'settings.latenessPolicy.field.fallback': 'No promise: late after (min)',
+  'settings.latenessPolicy.blankMeansDefault':
+    'Leave “Warn before the promise” empty to use the default: {minutes} min ({source}).',
+  'settings.latenessPolicy.default.scalar': 'the “Warn before the promised time” value above',
+  'settings.latenessPolicy.default.platform': 'the platform default',
+  'settings.latenessPolicy.reload': 'Reload and discard my changes',
 
   // 4.4d Catalog base settings
   'settings.catalog.title': 'Catalog base settings',

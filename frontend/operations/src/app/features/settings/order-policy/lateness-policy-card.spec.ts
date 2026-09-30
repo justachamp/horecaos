@@ -1,0 +1,451 @@
+import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { ApiError, ApiErrorCode } from '../../../core/api/problem-details';
+import { I18n } from '../../../core/i18n/i18n';
+import { LatenessEditorView, LatenessPolicyEditorApi } from './lateness-policy-editor-api';
+import { LatenessPolicyCard } from './lateness-policy-card';
+
+const TENANT_ID = 'tenant-1';
+const BRAND_ID = 'brand-1';
+const LOCATION_ID = 'location-1';
+
+/** Nothing authored anywhere: no mode owns a window, the platform's five minutes is the default. */
+const PLATFORM_DEFAULT: LatenessEditorView = {
+  delivery: mode(null, 300, 0, 2700),
+  pickup: mode(null, 300, 0, 2700),
+  dineIn: mode(null, 300, 0, 2700),
+  atRiskDefault: { seconds: 300, source: 'PLATFORM_DEFAULT' },
+  isPlatformDefault: true,
+  winningScope: null,
+  policyId: null,
+  policyVersion: 0,
+  currentVersionAtScope: 0,
+  inspectedLevels: [
+    { scopeType: 'BRAND', outcome: 'NOT_SET' },
+    { scopeType: 'TENANT', outcome: 'NOT_SET' },
+    { scopeType: 'PLATFORM', outcome: 'NOT_SET' },
+  ],
+};
+
+/** The tenant's document, inherited by the brand: delivery 10 min, pickup 2 min, dine-in unset. */
+const INHERITED_FROM_TENANT: LatenessEditorView = {
+  delivery: mode(600, 600, 60, 3600),
+  pickup: mode(120, 120, 0, 1800),
+  dineIn: mode(null, 720, 30, 1200),
+  atRiskDefault: { seconds: 720, source: 'SCALAR' },
+  isPlatformDefault: false,
+  winningScope: 'TENANT',
+  policyId: 'policy-tenant',
+  policyVersion: 3,
+  currentVersionAtScope: 0,
+  inspectedLevels: [
+    { scopeType: 'BRAND', outcome: 'NOT_SET' },
+    { scopeType: 'TENANT', outcome: 'VALUE' },
+    { scopeType: 'PLATFORM', outcome: 'NOT_SET' },
+  ],
+};
+
+/** The brand's own document, version 2. */
+const SET_AT_BRAND: LatenessEditorView = {
+  ...INHERITED_FROM_TENANT,
+  winningScope: 'BRAND',
+  policyId: 'policy-brand',
+  policyVersion: 2,
+  currentVersionAtScope: 2,
+  inspectedLevels: [
+    { scopeType: 'BRAND', outcome: 'VALUE' },
+    { scopeType: 'TENANT', outcome: 'VALUE' },
+    { scopeType: 'PLATFORM', outcome: 'NOT_SET' },
+  ],
+};
+
+function mode(
+  atRiskBeforeSeconds: number | null,
+  effectiveAtRiskBeforeSeconds: number,
+  lateAfterSeconds: number,
+  noPromiseFallbackSeconds: number,
+) {
+  return {
+    atRiskBeforeSeconds,
+    effectiveAtRiskBeforeSeconds,
+    lateAfterSeconds,
+    noPromiseFallbackSeconds,
+  };
+}
+
+async function flush(): Promise<void> {
+  await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  await new Promise<void>((resolve) => setTimeout(resolve, 0));
+}
+
+describe('LatenessPolicyCard', () => {
+  let api: { get: ReturnType<typeof vi.fn>; publish: ReturnType<typeof vi.fn> };
+  let fixture: ComponentFixture<LatenessPolicyCard>;
+
+  async function render(
+    view: LatenessEditorView,
+    scopeType: 'TENANT' | 'BRAND' | 'LOCATION' = 'BRAND',
+  ): Promise<void> {
+    api.get.mockResolvedValue(view);
+    fixture = TestBed.createComponent(LatenessPolicyCard);
+    fixture.componentRef.setInput('tenantId', TENANT_ID);
+    fixture.componentRef.setInput('scopeType', scopeType);
+    fixture.componentRef.setInput('brandId', BRAND_ID);
+    fixture.componentRef.setInput('locationId', scopeType === 'LOCATION' ? LOCATION_ID : null);
+    fixture.detectChanges();
+    await flush();
+    fixture.detectChanges();
+  }
+
+  function el(): HTMLElement {
+    return fixture.nativeElement as HTMLElement;
+  }
+
+  function input(id: string): HTMLInputElement {
+    const found = el().querySelector<HTMLInputElement>(`#${id}`);
+    if (!found) {
+      throw new Error(`no input #${id}`);
+    }
+    return found;
+  }
+
+  function type(id: string, value: string): void {
+    const box = input(id);
+    box.value = value;
+    box.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+  }
+
+  function button(label: string): HTMLButtonElement {
+    const found = [...el().querySelectorAll<HTMLButtonElement>('button')].find((candidate) =>
+      candidate.textContent?.includes(label),
+    );
+    if (!found) {
+      throw new Error(`no button "${label}"`);
+    }
+    return found;
+  }
+
+  async function openForm(): Promise<void> {
+    button('Override here').click();
+    fixture.detectChanges();
+  }
+
+  beforeEach(async () => {
+    api = { get: vi.fn(), publish: vi.fn() };
+    await TestBed.configureTestingModule({
+      imports: [LatenessPolicyCard],
+      providers: [{ provide: LatenessPolicyEditorApi, useValue: api }],
+    }).compileComponents();
+    TestBed.inject(I18n).setLocale('en');
+  });
+
+  // ---------------------------------------------------------------- reading
+
+  it('reads the document at the scope bar’s own level and shows one row per fulfilment mode', async () => {
+    await render(INHERITED_FROM_TENANT);
+
+    expect(api.get).toHaveBeenCalledWith(TENANT_ID, 'BRAND', BRAND_ID, null);
+    const text = el().textContent ?? '';
+    expect(text).toContain('Delivery');
+    expect(text).toContain('Pickup');
+    expect(text).toContain('Dine-in');
+    expect(text).toContain('At risk 10 min before the promise');
+    expect(text).toContain('At risk 2 min before the promise');
+    expect(text).toContain('late 60 s after it');
+    expect(text).toContain('late after 60 min');
+  });
+
+  it('marks a mode that owns no window as taking the default, showing the number it actually uses', async () => {
+    await render(INHERITED_FROM_TENANT);
+
+    // Dine-in: no window of its own, so the scalar's 12 minutes (720 s) with the default marker.
+    expect(el().textContent).toContain('At risk 12 (default) min before the promise');
+  });
+
+  it('shows the document as inherited, naming where from, and offers to override rather than edit', async () => {
+    await render(INHERITED_FROM_TENANT);
+
+    expect(el().textContent).toContain('Version 3');
+    expect(el().querySelectorAll('button.field__chip').length).toBe(3);
+    expect(el().textContent).toContain('Override here');
+    expect(el().textContent).not.toContain('Set at this level');
+  });
+
+  it('shows a document set at this level as set here with an edit action', async () => {
+    await render(SET_AT_BRAND);
+
+    expect(el().textContent).toContain('Set at this level');
+    expect(button('Edit')).toBeTruthy();
+  });
+
+  it('never offers "revert to inherited": a published version is not withdrawn', async () => {
+    await render(SET_AT_BRAND);
+    expect(el().textContent).not.toContain('Revert to inherited');
+
+    await render(INHERITED_FROM_TENANT);
+    expect(el().textContent).not.toContain('Revert to inherited');
+  });
+
+  it('shows the platform default without a version line when nothing was ever authored', async () => {
+    await render(PLATFORM_DEFAULT);
+
+    expect(el().textContent).not.toContain('Version');
+    expect(el().textContent).toContain('At risk 5 (default) min before the promise');
+  });
+
+  it('says so when the read fails, rather than showing a blank editor', async () => {
+    api.get.mockRejectedValue(new ApiError(ApiErrorCode.INSUFFICIENT_CAPABILITY, 403, null, null));
+    fixture = TestBed.createComponent(LatenessPolicyCard);
+    fixture.componentRef.setInput('tenantId', TENANT_ID);
+    fixture.componentRef.setInput('scopeType', 'BRAND');
+    fixture.componentRef.setInput('brandId', BRAND_ID);
+    fixture.componentRef.setInput('locationId', null);
+    fixture.detectChanges();
+    await flush();
+    fixture.detectChanges();
+
+    expect(el().querySelector('[role="alert"]')).toBeTruthy();
+    expect(el().querySelectorAll('q-inherited-field').length).toBe(0);
+  });
+
+  it('re-reads when the scope bar moves to another level, and when the scalar it defaults to changes', async () => {
+    await render(INHERITED_FROM_TENANT);
+    expect(api.get).toHaveBeenCalledTimes(1);
+
+    fixture.componentRef.setInput('scopeType', 'LOCATION');
+    fixture.componentRef.setInput('locationId', LOCATION_ID);
+    fixture.detectChanges();
+    await flush();
+    expect(api.get).toHaveBeenLastCalledWith(TENANT_ID, 'LOCATION', BRAND_ID, LOCATION_ID);
+
+    fixture.componentRef.setInput('reloadToken', 1);
+    fixture.detectChanges();
+    await flush();
+    expect(api.get).toHaveBeenCalledTimes(3);
+  });
+
+  it('drops a read that lost the race with a newer one, so a slow answer cannot show the wrong scope', async () => {
+    let releaseSlow: (view: LatenessEditorView) => void = () => undefined;
+    api.get.mockImplementationOnce(
+      () => new Promise<LatenessEditorView>((resolve) => (releaseSlow = resolve)),
+    );
+    api.get.mockResolvedValueOnce(SET_AT_BRAND);
+    fixture = TestBed.createComponent(LatenessPolicyCard);
+    fixture.componentRef.setInput('tenantId', TENANT_ID);
+    fixture.componentRef.setInput('scopeType', 'TENANT');
+    fixture.componentRef.setInput('brandId', BRAND_ID);
+    fixture.componentRef.setInput('locationId', null);
+    fixture.detectChanges();
+    await flush();
+
+    fixture.componentRef.setInput('scopeType', 'BRAND');
+    fixture.detectChanges();
+    await flush();
+    releaseSlow(PLATFORM_DEFAULT);
+    await flush();
+    fixture.detectChanges();
+
+    expect(el().textContent).toContain('Set at this level');
+  });
+
+  // ---------------------------------------------------------------- editing
+
+  it('opens one form for all three modes, blank windows standing for the default it names', async () => {
+    await render(INHERITED_FROM_TENANT);
+    await openForm();
+
+    expect(el().querySelectorAll('fieldset').length).toBe(3);
+    expect(input('lateness-delivery-atRiskMinutes').value).toBe('10');
+    expect(input('lateness-pickup-atRiskMinutes').value).toBe('2');
+    expect(input('lateness-dineIn-atRiskMinutes').value).toBe('');
+    expect(input('lateness-dineIn-atRiskMinutes').placeholder).toBe('12');
+    expect(input('lateness-delivery-lateAfterSeconds').value).toBe('60');
+    expect(input('lateness-delivery-fallbackMinutes').value).toBe('60');
+    expect(el().textContent).toContain('Leave “Warn before the promise” empty');
+    expect(el().textContent).toContain('the “Warn before the promised time” value above');
+  });
+
+  it('names the platform default as the fallback when no scalar was set', async () => {
+    await render(PLATFORM_DEFAULT);
+    button('Override here').click();
+    fixture.detectChanges();
+
+    expect(input('lateness-delivery-atRiskMinutes').placeholder).toBe('5');
+    expect(el().textContent).toContain('the platform default');
+  });
+
+  it('publishes seconds: minutes times sixty, a blank window as null, the reason trimmed', async () => {
+    await render(INHERITED_FROM_TENANT);
+    await openForm();
+    api.publish.mockResolvedValue({ ...SET_AT_BRAND, currentVersionAtScope: 1, policyVersion: 1 });
+
+    type('lateness-delivery-atRiskMinutes', '15');
+    type('lateness-pickup-atRiskMinutes', '');
+    type('lateness-pickup-lateAfterSeconds', '90');
+    type('lateness-dineIn-fallbackMinutes', '20');
+    type('lateness-reason', '  the counter is slow on Fridays  ');
+    button('Publish').click();
+    await flush();
+
+    expect(api.publish).toHaveBeenCalledTimes(1);
+    expect(api.publish).toHaveBeenCalledWith(TENANT_ID, {
+      scopeType: 'BRAND',
+      brandId: BRAND_ID,
+      locationId: null,
+      delivery: { atRiskBeforeSeconds: 900, lateAfterSeconds: 60, noPromiseFallbackSeconds: 3600 },
+      pickup: { atRiskBeforeSeconds: null, lateAfterSeconds: 90, noPromiseFallbackSeconds: 1800 },
+      dineIn: { atRiskBeforeSeconds: null, lateAfterSeconds: 30, noPromiseFallbackSeconds: 1200 },
+      expectedVersion: null,
+      reason: 'the counter is slow on Fridays',
+    });
+  });
+
+  it('sends the version the form was opened at, so a second operator’s save is caught server-side', async () => {
+    await render(SET_AT_BRAND);
+    button('Edit').click();
+    fixture.detectChanges();
+    api.publish.mockResolvedValue({ ...SET_AT_BRAND, currentVersionAtScope: 3, policyVersion: 3 });
+
+    type('lateness-reason', 'tighten');
+    button('Publish').click();
+    await flush();
+
+    expect(api.publish.mock.calls[0][1].expectedVersion).toBe(2);
+  });
+
+  it('shows the saved document and closes the form on success', async () => {
+    await render(INHERITED_FROM_TENANT);
+    await openForm();
+    api.publish.mockResolvedValue({ ...SET_AT_BRAND, currentVersionAtScope: 1, policyVersion: 1 });
+
+    type('lateness-reason', 'override');
+    button('Publish').click();
+    await flush();
+    fixture.detectChanges();
+
+    expect(el().querySelectorAll('fieldset').length).toBe(0);
+    expect(el().textContent).toContain('Set at this level');
+  });
+
+  it('keeps Publish disabled until every box is valid and a reason is given', async () => {
+    await render(INHERITED_FROM_TENANT);
+    await openForm();
+    const publish = () => button('Publish');
+
+    expect(publish().disabled).toBe(true); // no reason yet
+    type('lateness-reason', 'because');
+    expect(publish().disabled).toBe(false);
+
+    for (const [id, bad] of [
+      ['lateness-delivery-atRiskMinutes', '1.5'],
+      ['lateness-delivery-atRiskMinutes', '1441'],
+      ['lateness-delivery-atRiskMinutes', '-1'],
+      ['lateness-pickup-lateAfterSeconds', '86401'],
+      ['lateness-pickup-lateAfterSeconds', ''],
+      ['lateness-dineIn-fallbackMinutes', '0'],
+      ['lateness-dineIn-fallbackMinutes', '20.5'],
+    ] as const) {
+      const before = input(id).value;
+      type(id, bad);
+      expect(publish().disabled, `${id} = "${bad}"`).toBe(true);
+      expect(input(id).getAttribute('aria-invalid')).toBe('true');
+      type(id, before);
+      expect(publish().disabled, `${id} restored`).toBe(false);
+    }
+  });
+
+  it('accepts zero minutes as a window and zero seconds of grace', async () => {
+    await render(INHERITED_FROM_TENANT);
+    await openForm();
+    api.publish.mockResolvedValue(SET_AT_BRAND);
+
+    type('lateness-dineIn-atRiskMinutes', '0');
+    type('lateness-dineIn-lateAfterSeconds', '0');
+    type('lateness-reason', 'why not');
+    button('Publish').click();
+    await flush();
+
+    expect(api.publish.mock.calls[0][1].dineIn).toEqual({
+      atRiskBeforeSeconds: 0,
+      lateAfterSeconds: 0,
+      noPromiseFallbackSeconds: 1200,
+    });
+  });
+
+  it('cancelling drops the draft and leaves the document as it was', async () => {
+    await render(INHERITED_FROM_TENANT);
+    await openForm();
+    type('lateness-delivery-atRiskMinutes', '99');
+
+    button('Cancel').click();
+    fixture.detectChanges();
+
+    expect(api.publish).not.toHaveBeenCalled();
+    expect(el().querySelectorAll('fieldset').length).toBe(0);
+    await openForm();
+    expect(input('lateness-delivery-atRiskMinutes').value).toBe('10');
+  });
+
+  // ------------------------------------------------------------ concurrency
+
+  it('on a stale version says so and offers a reload that discards the edit, never a blind retry', async () => {
+    await render(SET_AT_BRAND);
+    button('Edit').click();
+    fixture.detectChanges();
+    api.publish.mockRejectedValue(
+      new ApiError(ApiErrorCode.STALE_VERSION, 409, { status: 409, code: 'STALE_VERSION' }, null),
+    );
+    type('lateness-delivery-atRiskMinutes', '30');
+    type('lateness-reason', 'slow one');
+    button('Publish').click();
+    await flush();
+    fixture.detectChanges();
+
+    expect(el().querySelector('[role="alert"]')).toBeTruthy();
+    expect(el().querySelectorAll('fieldset').length).toBe(3); // the edit is still on screen
+    expect(api.publish).toHaveBeenCalledTimes(1);
+
+    const newer: LatenessEditorView = {
+      ...SET_AT_BRAND,
+      currentVersionAtScope: 3,
+      policyVersion: 3,
+    };
+    api.get.mockResolvedValue(newer);
+    button('Reload and discard my changes').click();
+    await flush();
+    fixture.detectChanges();
+
+    expect(api.get).toHaveBeenCalledTimes(2);
+    expect(el().querySelectorAll('fieldset').length).toBe(0);
+    expect(el().textContent).toContain('Version 3');
+    expect(api.publish).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows another refusal without the reload offer, keeping the form open to correct', async () => {
+    await render(INHERITED_FROM_TENANT);
+    await openForm();
+    api.publish.mockRejectedValue(
+      new ApiError(
+        ApiErrorCode.VALIDATION_FAILED,
+        400,
+        {
+          status: 400,
+          code: 'VALIDATION_FAILED',
+          detail: 'PICKUP lateAfterSeconds must be between 0 and 86400',
+        },
+        null,
+      ),
+    );
+
+    type('lateness-reason', 'x');
+    button('Publish').click();
+    await flush();
+    fixture.detectChanges();
+
+    expect(el().textContent).toContain('PICKUP lateAfterSeconds must be between 0 and 86400');
+    expect(el().textContent).not.toContain('Reload and discard my changes');
+    expect(el().querySelectorAll('fieldset').length).toBe(3);
+  });
+});

@@ -215,6 +215,16 @@ export const settingsPaths = {
     return `${CONTROL_PLANE}/tenants/${enc(scope.tenantId)}/order-acceptance-policy`;
   },
 
+  /**
+   * `OrderLatenessPolicyEditorController` (operations-native, rows `X.39`/`10.3b`) — the
+   * `ordering.lateness` document as authored per scope: `GET` with `scopeType`/`brandId`/
+   * `locationId` query parameters, `POST` to publish the next version. The boards read the
+   * *resolved* thresholds from `operationsPaths.orderLatenessPolicy` instead.
+   */
+  orderLatenessPolicy(scope: LocationScope): string {
+    return `${OPERATIONS}/tenants/${enc(scope.tenantId)}/order-lateness-policy`;
+  },
+
   // ---------------------------------------------------------- 10.4 Sales channels
 
   /** `SalesChannelController` (control-plane surface). */

@@ -845,6 +845,11 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       ru: 'Опубликована политика приёма заказов',
       'uz-Latn': 'Buyurtmalarni qabul qilish siyosati eʻlon qilindi',
     },
+    'ordering.lateness-policy.authored': {
+      en: 'Order lateness boundaries published',
+      ru: 'Опубликованы границы опоздания заказов',
+      'uz-Latn': 'Buyurtma kechikish chegaralari eʻlon qilindi',
+    },
     'ordering.order.branch_overridden': {
       en: 'Ordering order branch overridden',
       ru: 'Заказы заказ филиал переопределено',

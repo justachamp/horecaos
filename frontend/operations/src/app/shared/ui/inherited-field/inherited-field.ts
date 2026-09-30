@@ -49,6 +49,13 @@ export class InheritedField {
   readonly settableScopes = input<readonly ConfigurationScopeType[]>([]);
   /** Renders the resolved value; defaults to a plain string coercion. */
   readonly formatValue = input<(value: unknown) => string>(defaultFormat);
+  /**
+   * Whether "revert to inherit" is offered. A scalar can be un-set with an explicit null; a
+   * versioned policy document (the `ordering.lateness` editor, rows `X.39`/`10.3b`) cannot — a
+   * published version is never withdrawn — so its rows turn the action off rather than render a
+   * button that does nothing.
+   */
+  readonly revertable = input(true);
 
   readonly override = output<void>();
   readonly revertToInherit = output<void>();

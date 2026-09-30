@@ -191,6 +191,14 @@
     </div>
   </section>
 
+  <q-lateness-policy-card
+    [tenantId]="tenantId()"
+    [scopeType]="scope.level()"
+    [brandId]="scope.brandId()"
+    [locationId]="scope.locationId()"
+    [reloadToken]="latenessReloadToken()"
+  />
+
   <section class="card">
     <h2 class="q-subhead">{{ 'settings.orderPolicy.card3.title' | t }}</h2>
     <p class="q-body-sm">{{ 'settings.orderPolicy.card3.body' | t }}</p>
