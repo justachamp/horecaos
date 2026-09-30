@@ -50,6 +50,19 @@
   work as before. Not built: the two ADR 0011 ports and any adapter, ADR
   0013's widened payable subject, the ADR 0018 service charge, and the external
   event contracts. See "What was not built, and why".
+  Status note, 2026-09-30 (documentation pass, no code; the status above is
+  unchanged): ordering has a table binding, and has had since batch 15. The
+  Context's "not yet built — `ordering` currently holds only the acceptance policy"
+  and the «What was not built» entry on `ordering.cart_fulfillment.dinein_table_id`
+  describe 2026-08-21 and are kept as history; they are not the current state
+  (`V0435`, `PUT .../carts/{cartId}/table` and `dinein.api.TableBindingPort` are).
+  Read against the tree at `acd96539`, the two customer storefronts differ:
+  `frontend/storefront` binds the cart and sends the guest's `X-Dine-In-Token` at
+  checkout, while `frontend/storefront-milliy` binds the cart (`CartService.bindTable`)
+  but its `checkout` sends no token, so a table-bound milliy checkout should be
+  refused with `TABLE_TOKEN_REQUIRED` (read from the two codebases and
+  `CartCheckoutAndOrderTests#aBoundCartWithoutATokenIsRefused`; not reproduced
+  against a running stack, and not fixed by this note).
 - Date proposed: 2026-08-21
 - Date decided: 2026-08-21
 - Deciders: Ayubkhon Abbosov (platform architecture), product, finance
