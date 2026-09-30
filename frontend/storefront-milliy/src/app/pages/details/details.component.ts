@@ -21,7 +21,12 @@ import {
   variantAvailability,
   type ItemAvailability,
 } from '../../utils/item-availability';
-import { toggleOption, unsatisfiedGroups } from '../../utils/modifier-selection';
+import {
+  isMandatory,
+  selectionRule,
+  toggleOption,
+  unsatisfiedGroups,
+} from '../../utils/modifier-selection';
 
 type LoadState = 'loading' | 'ready' | 'missing' | 'error';
 
@@ -106,6 +111,28 @@ export class DetailsComponent implements OnInit {
   protected readonly unsatisfied = computed(() =>
     unsatisfiedGroups(this.item()?.modifierGroups ?? [], this.chosen()),
   );
+
+  /** The names of the groups still short, for the hint that says which ones. */
+  protected readonly unsatisfiedNames = computed(() =>
+    this.unsatisfied()
+      .map((group) => group.name)
+      .join(', '),
+  );
+
+  protected isMandatory(group: MenuItemModifierGroup): boolean {
+    return isMandatory(group);
+  }
+
+  protected isMissing(group: MenuItemModifierGroup): boolean {
+    return this.unsatisfied().includes(group);
+  }
+
+  /** What the group asks of the guest, as the table's picker says it; see {@link selectionRule}. */
+  protected rule(
+    group: MenuItemModifierGroup,
+  ): { key: string; params: Record<string, number> } | null {
+    return selectionRule(group);
+  }
 
   /** Rows 4.4c/4.4d: the chosen variant's own row, for its low-stock count. */
   protected readonly selectedVariant = computed(

@@ -93,7 +93,8 @@ class FakeLangService {
 }
 class FakeTranslateService {
   get = (key: string) => key;
-  getWithParams = (key: string) => key;
+  getWithParams = (key: string, params?: Record<string, string | number>) =>
+    params ? `${key}(${JSON.stringify(params)})` : key;
   current = () => ({});
 }
 
@@ -209,6 +210,60 @@ describe('DetailsComponent', () => {
     expect(comp.canAdd()).toBe(false);
     comp.toggleOption(pair, 'o2');
     expect(comp.canAdd()).toBe(true);
+  });
+
+  describe('a group that must be chosen from, however it is authored', () => {
+    const text = (host: HTMLElement, id: string): string | null =>
+      host.querySelector(`[data-testid="${id}"]`)?.textContent?.trim() ?? null;
+
+    it('is marked and its rule is said, for a non-required group with a minimum too', async () => {
+      const pair = group({
+        name: 'Sides',
+        required: false,
+        minimumSelections: 2,
+        maximumSelections: 3,
+      });
+      const { fixture } = await setUp(product({ modifierGroups: [pair] }));
+      const host = fixture.nativeElement as HTMLElement;
+
+      expect(host.querySelector('[data-testid="details-group-required"]')).not.toBeNull();
+      expect(text(host, 'details-group-rule')).toContain('dineIn.pickerBetween');
+      expect(text(host, 'details-group-rule')).toContain('"min":2,"max":3');
+    });
+
+    it('is named in the hint beside the disabled add, and the hint goes once it is satisfied', async () => {
+      const pair = group({
+        name: 'Sides',
+        required: false,
+        minimumSelections: 2,
+        maximumSelections: 3,
+      });
+      const bread = group({ id: 'g2', name: 'Bread', required: true, maximumSelections: 1 });
+      const { fixture, comp } = await setUp(product({ modifierGroups: [pair, bread] }));
+      const host = fixture.nativeElement as HTMLElement;
+
+      expect(text(host, 'details-missing')).toContain('Sides, Bread');
+      expect(host.querySelectorAll('.rule.is-missing').length).toBe(2);
+
+      comp.toggleOption(pair, 'o1');
+      comp.toggleOption(pair, 'o2');
+      fixture.detectChanges();
+      expect(text(host, 'details-missing')).toContain('"groups":"Bread"');
+      expect(host.querySelectorAll('.rule.is-missing').length).toBe(1);
+
+      comp.toggleOption(bread, 'o1');
+      fixture.detectChanges();
+      expect(host.querySelector('[data-testid="details-missing"]')).toBeNull();
+    });
+
+    it('leaves an optional group unmarked, with only its ceiling said', async () => {
+      const { fixture } = await setUp(product({ modifierGroups: [group()] }));
+      const host = fixture.nativeElement as HTMLElement;
+
+      expect(host.querySelector('[data-testid="details-group-required"]')).toBeNull();
+      expect(text(host, 'details-group-rule')).toContain('dineIn.pickerUpTo');
+      expect(host.querySelector('[data-testid="details-missing"]')).toBeNull();
+    });
   });
 
   it('never lets quantity fall below one', async () => {

@@ -34,6 +34,28 @@ export function isMandatory(group: MenuItemModifierGroup): boolean {
 }
 
 /**
+ * What the group asks of the guest, as a translation key and its parameters, or
+ * null when it asks nothing worth saying (optional, no ceiling). Read from the
+ * effective bounds, so a group authored `required=false` with a minimum says what
+ * a required one would.
+ */
+export function selectionRule(
+  group: MenuItemModifierGroup,
+): { key: string; params: Record<string, number> } | null {
+  const min = minimumSelections(group);
+  const max = maximumSelections(group);
+  if (Number.isFinite(max)) {
+    if (min === max) {
+      return { key: 'dineIn.pickerExactly', params: { count: min } };
+    }
+    return min > 0
+      ? { key: 'dineIn.pickerBetween', params: { min, max } }
+      : { key: 'dineIn.pickerUpTo', params: { count: max } };
+  }
+  return min > 0 ? { key: 'dineIn.pickerAtLeast', params: { count: min } } : null;
+}
+
+/**
  * Whether a guest could satisfy the group at all: it offers at least as many
  * options as it demands. A mandatory group that does not (a menu published with
  * an empty group) can never be ordered from a screen, only helped along by staff.
