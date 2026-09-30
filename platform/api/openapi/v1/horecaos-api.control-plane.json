@@ -14843,7 +14843,7 @@
     },
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/locations/{locationId}/variants" : {
       "get" : {
-        "description" : "catalog.md §4.6, the 86 screen's read side, and catalog.md §4.5's Layer A menu matrix. Gated on inventory.read rather than catalog.read, matching the screen's own denial rule — an actor who can adjust stock but never touches draft authoring still needs this list. Also the New order screen's item search (orders.md §5.5, wave P13): `query` narrows by product name, case-insensitively, exactly like `search` below but without also matching on SKU. `search` matches the product name (in locale) or the variant SKU; when both are given, `search` wins. `status` is one of AVAILABLE/UNAVAILABLE/HIDDEN/NOT_ADDED — NOT_ADDED is how the matrix asks \"what is missing from this branch's menu\", which the offering-status-blind read this endpoint used to run could never answer. Omitting every filter is the unfiltered 86-screen page it always was.",
+        "description" : "catalog.md §4.6, the 86 screen's read side, and catalog.md §4.5's Layer A menu matrix. Gated on inventory.read rather than catalog.read, matching the screen's own denial rule — an actor who can adjust stock but never touches draft authoring still needs this list. Also the New order screen's item search (orders.md §5.5, wave P13): `query` narrows by product name, case-insensitively, exactly like `search` below but without also matching on SKU. `search` matches the product name (in locale, else in the brand's default language, else in the server's, so a menu named in another language still has a name and is still found; a caller that sends no locale gets the brand's default) or the variant SKU; when both are given, `search` wins. `status` is one of AVAILABLE/UNAVAILABLE/HIDDEN/NOT_ADDED — NOT_ADDED is how the matrix asks \"what is missing from this branch's menu\", which the offering-status-blind read this endpoint used to run could never answer. Omitting every filter is the unfiltered 86-screen page it always was.",
         "operationId" : "variantsAtLocation",
         "parameters" : [ {
           "in" : "path",
@@ -14874,7 +14874,6 @@
           "name" : "locale",
           "required" : false,
           "schema" : {
-            "default" : "uz",
             "type" : "string"
           }
         }, {
@@ -14964,7 +14963,6 @@
           "name" : "locale",
           "required" : false,
           "schema" : {
-            "default" : "uz",
             "type" : "string"
           }
         }, {

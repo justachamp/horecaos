@@ -16,8 +16,11 @@ import java.time.Instant;
 import java.time.LocalTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
+import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -28,6 +31,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import uz.horecaos.platform.catalog.api.CatalogNameLocales;
 import uz.horecaos.platform.catalog.application.CatalogAuthoringService;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.EntityType;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.OfferingStatus;
@@ -41,6 +45,7 @@ import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.media.api.MediaAssetId;
+import uz.horecaos.platform.tenancy.api.BrandLocaleLookup;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
 import uz.horecaos.platform.web.api.Page;
@@ -75,10 +80,38 @@ public class CatalogAuthoringController {
 
     private final CatalogAuthoringService authoring;
     private final CurrentActor currentActor;
+    private final BrandLocaleLookup brandLocales;
+    private final String defaultLocale;
 
-    public CatalogAuthoringController(CatalogAuthoringService authoring, CurrentActor currentActor) {
+    /**
+     * @param brandLocales  the brand's own default language, where the variant availability reads (the
+     *                      stop list, New order's item search, the bulk price change) look for a name
+     *                      the caller's locale lacks (row 10.12)
+     * @param defaultLocale {@code horecaos.catalog.default-locale} -- the last place they look
+     */
+    public CatalogAuthoringController(
+            CatalogAuthoringService authoring,
+            CurrentActor currentActor,
+            BrandLocaleLookup brandLocales,
+            @Value("${horecaos.catalog.default-locale:uz}") String defaultLocale) {
         this.authoring = authoring;
         this.currentActor = currentActor;
+        this.brandLocales = brandLocales;
+        this.defaultLocale = defaultLocale;
+    }
+
+    /**
+     * The languages a variant's product and category names are read in, in the order to try them:
+     * the one the caller asked for (none for a caller that sends none, such as the bulk price change),
+     * the brand's own default, then the server's configured one (row 10.12). A menu named before the
+     * brand chose its language, or in a language the operator's console is not in, still shows names.
+     */
+    private List<String> nameLocales(UUID tenantId, UUID brandId, @Nullable String requested) {
+        CatalogNameLocales resolved = CatalogNameLocales.of(brandLocales, tenantId, brandId, defaultLocale);
+        return Stream.of(requested, resolved.preferred(), resolved.fallback())
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
     }
 
     @PostMapping("/catalogs")
@@ -595,8 +628,10 @@ public class CatalogAuthoringController {
                     + "never touches draft authoring still needs this list. Also the New order "
                     + "screen's item search (orders.md §5.5, wave P13): `query` narrows by product "
                     + "name, case-insensitively, exactly like `search` below but without also "
-                    + "matching on SKU. `search` matches the product name (in locale) or the "
-                    + "variant SKU; when both are given, `search` wins. `status` is one of "
+                    + "matching on SKU. `search` matches the product name (in locale, else in the "
+                    + "brand's default language, else in the server's, so a menu named in another "
+                    + "language still has a name and is still found; a caller that sends no locale "
+                    + "gets the brand's default) or the variant SKU; when both are given, `search` wins. `status` is one of "
                     + "AVAILABLE/UNAVAILABLE/HIDDEN/NOT_ADDED — NOT_ADDED is how the matrix asks "
                     + "\"what is missing from this branch's menu\", which the offering-status-blind "
                     + "read this endpoint used to run could never answer. Omitting every filter is "
@@ -605,7 +640,7 @@ public class CatalogAuthoringController {
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @PathVariable UUID locationId,
-            @RequestParam(defaultValue = "uz") String locale,
+            @RequestParam(required = false) @Nullable String locale,
             @RequestParam(required = false) @Nullable String query,
             @RequestParam(required = false) @Nullable UUID cursor,
             @RequestParam(required = false) @Nullable Integer limit,
@@ -614,7 +649,14 @@ public class CatalogAuthoringController {
 
         int pageSize = Page.limitOrDefault(limit);
         List<JdbcCatalogStore.VariantAvailabilityRow> rows = authoring.variantsAtLocation(
-                tenantId, brandId, locationId, locale, cursor, pageSize, search != null ? search : query, status);
+                tenantId,
+                brandId,
+                locationId,
+                nameLocales(tenantId, brandId, locale),
+                cursor,
+                pageSize,
+                search != null ? search : query,
+                status);
         List<VariantAvailabilityResponse> items =
                 rows.stream().map(VariantAvailabilityResponse::of).toList();
 
@@ -639,10 +681,10 @@ public class CatalogAuthoringController {
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @PathVariable UUID locationId,
-            @RequestParam(defaultValue = "uz") String locale,
+            @RequestParam(required = false) @Nullable String locale,
             @RequestParam(required = false) @Nullable String search) {
-        return ResponseEntity.ok(VariantAvailabilityCountsResponse.of(
-                authoring.variantAvailabilityCounts(tenantId, brandId, locationId, locale, search)));
+        return ResponseEntity.ok(VariantAvailabilityCountsResponse.of(authoring.variantAvailabilityCounts(
+                tenantId, brandId, locationId, nameLocales(tenantId, brandId, locale), search)));
     }
 
     @PostMapping("/locations/{locationId}/variants/bulk-offering-status")

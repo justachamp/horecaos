@@ -1468,11 +1468,38 @@ public class JdbcCatalogStore {
             int limit,
             @Nullable String search,
             @Nullable String offeringStatusFilter) {
+        return variantsAtLocation(
+                tenantId, brandId, locationId, List.of(locale), cursorVariantId, limit, search, offeringStatusFilter);
+    }
+
+    /**
+     * {@link #variantsAtLocation(UUID, UUID, UUID, String, UUID, int, String, String)}, reading a
+     * name in the first of {@code nameLocales} the product (or its category) has one in (row
+     * 10.12).
+     *
+     * <p>The stop list and the New order item search send the console's language, so a product
+     * written only in the brand's own default -- or in the server's, before the brand chose one --
+     * had no name for an operator whose console language differed, and New order labelled the
+     * result with its variant id. The caller lists the languages in the order to try them: the one
+     * asked for, the brand's default, then {@code horecaos.catalog.default-locale}, the language a
+     * menu imported or sampled without a brand-specific one put its names in. A single locale
+     * reads exactly as this always did. The search matches the name that is shown, fallback
+     * included, as add-by-filter's does.
+     */
+    public List<VariantAvailabilityRow> variantsAtLocation(
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            List<String> nameLocales,
+            @Nullable UUID cursorVariantId,
+            int limit,
+            @Nullable String search,
+            @Nullable String offeringStatusFilter) {
         String searchPattern = search == null || search.isBlank() ? null : "%" + search.trim() + "%";
         return jdbc.sql("""
                 SELECT v.id AS variant_id,
-                       t.name AS product_name,
-                       ct.name AS category_name,
+                       pn.name AS product_name,
+                       cn.name AS category_name,
                        si.tracking_mode AS tracking_mode,
                        pos.binary_available AS binary_available,
                        lo.status AS offering_status,
@@ -1485,9 +1512,14 @@ public class JdbcCatalogStore {
                 LEFT JOIN catalog.location_offerings lo
                     ON lo.variant_id = v.id AND lo.tenant_id = v.tenant_id AND lo.brand_id = v.brand_id
                        AND lo.location_id = :locationId
-                LEFT JOIN catalog.translations t
-                    ON t.entity_type = 'PRODUCT' AND t.entity_id = p.id AND t.tenant_id = p.tenant_id
-                       AND t.brand_id = p.brand_id AND t.locale = :locale
+                LEFT JOIN LATERAL (
+                    SELECT t.name
+                    FROM catalog.translations t
+                    WHERE t.entity_type = 'PRODUCT' AND t.entity_id = p.id AND t.tenant_id = p.tenant_id
+                      AND t.brand_id = p.brand_id AND t.locale = ANY (CAST(:nameLocales AS text[]))
+                    ORDER BY array_position(CAST(:nameLocales AS text[]), t.locale)
+                    LIMIT 1
+                ) pn ON true
                 LEFT JOIN LATERAL (
                     SELECT c.id, c.tenant_id
                     FROM catalog.category_products cp
@@ -1497,9 +1529,15 @@ public class JdbcCatalogStore {
                     ORDER BY cp.sort_order, c.id
                     LIMIT 1
                 ) first_category ON true
-                LEFT JOIN catalog.translations ct
-                    ON ct.entity_type = 'CATEGORY' AND ct.entity_id = first_category.id
-                       AND ct.tenant_id = first_category.tenant_id AND ct.locale = :locale
+                LEFT JOIN LATERAL (
+                    SELECT ct.name
+                    FROM catalog.translations ct
+                    WHERE ct.entity_type = 'CATEGORY' AND ct.entity_id = first_category.id
+                      AND ct.tenant_id = first_category.tenant_id
+                      AND ct.locale = ANY (CAST(:nameLocales AS text[]))
+                    ORDER BY array_position(CAST(:nameLocales AS text[]), ct.locale)
+                    LIMIT 1
+                ) cn ON true
                 LEFT JOIN inventory.stock_items si
                     ON si.variant_id = v.id AND si.tenant_id = v.tenant_id AND si.location_id = :locationId
                 LEFT JOIN inventory.positions pos
@@ -1520,7 +1558,7 @@ public class JdbcCatalogStore {
                   AND v.status = 'ACTIVE' AND p.status = 'ACTIVE'
                   AND (CAST(:cursor AS uuid) IS NULL OR v.id > CAST(:cursor AS uuid))
                   AND (CAST(:search AS varchar) IS NULL
-                       OR t.name ILIKE :search OR v.sku ILIKE :search)
+                       OR pn.name ILIKE :search OR v.sku ILIKE :search)
                   AND (CAST(:statusFilter AS varchar) IS NULL
                        OR (:statusFilter = 'NOT_ADDED' AND lo.id IS NULL)
                        OR lo.status = :statusFilter)
@@ -1530,7 +1568,7 @@ public class JdbcCatalogStore {
                 .param("tenantId", tenantId)
                 .param("brandId", brandId)
                 .param("locationId", locationId)
-                .param("locale", locale)
+                .param("nameLocales", nameLocales.toArray(String[]::new))
                 .param("cursor", cursorVariantId)
                 .param("search", searchPattern)
                 .param("statusFilter", offeringStatusFilter)
@@ -1604,6 +1642,17 @@ public class JdbcCatalogStore {
      */
     public VariantAvailabilityCountsRow variantAvailabilityCounts(
             UUID tenantId, UUID brandId, UUID locationId, String locale, @Nullable String search) {
+        return variantAvailabilityCounts(tenantId, brandId, locationId, List.of(locale), search);
+    }
+
+    /**
+     * {@link #variantAvailabilityCounts(UUID, UUID, UUID, String, String)}, matching the search on
+     * the name that {@link #variantsAtLocation(UUID, UUID, UUID, List, UUID, int, String, String)}
+     * shows -- the first of {@code nameLocales} the product has one in (row 10.12) -- so a badge
+     * and its tab's own page agree on what a search finds.
+     */
+    public VariantAvailabilityCountsRow variantAvailabilityCounts(
+            UUID tenantId, UUID brandId, UUID locationId, List<String> nameLocales, @Nullable String search) {
         String searchPattern = search == null || search.isBlank() ? null : "%" + search.trim() + "%";
         return jdbc.sql("""
                 SELECT
@@ -1615,9 +1664,14 @@ public class JdbcCatalogStore {
                 FROM catalog.variants v
                 JOIN catalog.products p
                     ON p.id = v.product_id AND p.tenant_id = v.tenant_id AND p.brand_id = v.brand_id
-                LEFT JOIN catalog.translations t
-                    ON t.entity_type = 'PRODUCT' AND t.entity_id = p.id AND t.tenant_id = p.tenant_id
-                       AND t.brand_id = p.brand_id AND t.locale = :locale
+                LEFT JOIN LATERAL (
+                    SELECT t.name
+                    FROM catalog.translations t
+                    WHERE t.entity_type = 'PRODUCT' AND t.entity_id = p.id AND t.tenant_id = p.tenant_id
+                      AND t.brand_id = p.brand_id AND t.locale = ANY (CAST(:nameLocales AS text[]))
+                    ORDER BY array_position(CAST(:nameLocales AS text[]), t.locale)
+                    LIMIT 1
+                ) pn ON true
                 LEFT JOIN inventory.stock_items si
                     ON si.variant_id = v.id AND si.tenant_id = v.tenant_id AND si.location_id = :locationId
                 LEFT JOIN inventory.positions pos
@@ -1625,12 +1679,12 @@ public class JdbcCatalogStore {
                 WHERE v.tenant_id = :tenantId AND v.brand_id = :brandId
                   AND v.status = 'ACTIVE' AND p.status = 'ACTIVE'
                   AND (CAST(:search AS varchar) IS NULL
-                       OR t.name ILIKE :search OR v.sku ILIKE :search)
+                       OR pn.name ILIKE :search OR v.sku ILIKE :search)
                 """)
                 .param("tenantId", tenantId)
                 .param("brandId", brandId)
                 .param("locationId", locationId)
-                .param("locale", locale)
+                .param("nameLocales", nameLocales.toArray(String[]::new))
                 .param("search", searchPattern)
                 .query((row, number) -> {
                     long total = row.getLong("total");
