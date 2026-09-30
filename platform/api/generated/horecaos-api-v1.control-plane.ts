@@ -3110,8 +3110,10 @@ export interface TenantModuleAdded {
 }
 
 export interface TenantModuleView {
+  acquiredVia?: string;
   billingUnit?: string;
   endReason?: string;
+  endableByTenant?: boolean;
   endedAt?: string;
   endedBy?: string;
   moduleCode?: string;

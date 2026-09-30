@@ -21,9 +21,10 @@
 -- Backfill: the tenant door has recorded the one fixed, non-PII reason
 -- 'Purchased from the operations console' since ADR 0127 (a merchant never types
 -- it), so the rows it wrote are exactly the ones carrying that reason. The
--- platform-admin door takes a typed reason; a staff member typing this exact
--- sentence is the only way to misfile a row, and it errs toward letting the
--- tenant end a module that was in effect sold to it through the same words.
+-- platform-admin door takes a typed reason, so a staff member who typed this
+-- exact sentence would be misfiled as a tenant purchase; that is the one way the
+-- inference can be wrong, and it is accepted for the historical rows only. Rows
+-- written from now on never rely on it: the application sets the column.
 -- Idempotent: re-running changes nothing.
 ALTER TABLE commercial.tenant_modules
     ADD COLUMN acquired_via varchar(16) NOT NULL DEFAULT 'PLATFORM';

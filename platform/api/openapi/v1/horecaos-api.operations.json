@@ -8814,6 +8814,21 @@
         },
         "type" : "object"
       },
+      "ModuleEnded" : {
+        "properties" : {
+          "endedAt" : {
+            "type" : "string"
+          },
+          "lastBilledPeriod" : {
+            "type" : "string"
+          },
+          "tenantModuleId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "ModuleView" : {
         "properties" : {
           "activatedAt" : {
@@ -16337,11 +16352,17 @@
       },
       "TenantModuleView" : {
         "properties" : {
+          "acquiredVia" : {
+            "type" : "string"
+          },
           "billingUnit" : {
             "type" : "string"
           },
           "endReason" : {
             "type" : "string"
+          },
+          "endableByTenant" : {
+            "type" : "boolean"
           },
           "endedAt" : {
             "type" : "string"
@@ -37514,6 +37535,43 @@
           }
         },
         "summary" : "Every module this tenant has had",
+        "tags" : [ "Commercial" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/commercial/modules/{tenantModuleId}/end" : {
+      "post" : {
+        "description" : "The undo for the inline purchase (ADR 0127). Only a module the tenant bought from its own console: one HorecaOS assigned is refused with 422 and reason MODULE_ASSIGNED_BY_PLATFORM, and another tenant's module is not found. Its features switch off now. Nothing is prorated (ADR 0087, ADR 0088): the month it ends in still bills it in full, named by lastBilledPeriod, and no later month does. This does not move money by itself.",
+        "operationId" : "endPurchasedModule",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "tenantModuleId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ModuleEnded"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "End a module this tenant bought itself",
         "tags" : [ "Commercial" ]
       }
     },
