@@ -1,0 +1,42 @@
+<div class="order-queue__bulk-result" role="status" data-testid="order-queue-bulk-result">
+  @if (result().failedCount === 0) {
+    <p class="q-body-sm">
+      {{ 'orders.queue.bulk.result.allApplied' | t: { count: result().appliedCount } }}
+    </p>
+  } @else {
+    <p class="q-body-sm">
+      {{
+        'orders.queue.bulk.result.summary'
+          | t: { applied: result().appliedCount, failed: result().failedCount }
+      }}
+    </p>
+    <ul class="order-queue__bulk-result-items">
+      @for (item of result().items; track item.orderId) {
+        @if (item.itemStatus === 'FAILED') {
+          <li data-testid="order-queue-bulk-result-item">
+            <span class="q-mono">{{ bulkResultItemLabel(item.orderId) }}</span>
+            — {{ bulkProblemLabel(item.itemProblemCode) }}
+          </li>
+        }
+      }
+    </ul>
+    <button
+      type="button"
+      class="order-queue__bulk-retry"
+      [disabled]="bulkBusy()"
+      (click)="retryFailedBulkItems()"
+      data-testid="order-queue-bulk-retry"
+    >
+      {{ 'orders.queue.bulk.result.retry' | t }}
+    </button>
+  }
+  <button
+    type="button"
+    class="order-queue__bulk-result-dismiss"
+    (click)="dismissBulkResult()"
+    [attr.aria-label]="'orders.queue.bulk.result.dismiss' | t"
+    data-testid="order-queue-bulk-result-dismiss"
+  >
+    ×
+  </button>
+</div>

@@ -1,0 +1,101 @@
+@if (resultLabel(); as resultLabel) {
+  <p
+    class="q-body-sm pane__pos-export-result"
+    role="status"
+    data-testid="order-detail-pos-export-result"
+  >
+    {{ resultLabel }}
+  </p>
+}
+
+@if (posExport()?.export; as exportView) {
+  <p class="q-body-sm" data-testid="order-detail-pos-export-state">
+    {{ stateLabel() }}
+  </p>
+
+  @if (showsReassurance()) {
+    <p
+      class="q-caption pane__pos-export-reassurance"
+      data-testid="order-detail-pos-export-reassurance"
+    >
+      {{ 'orders.detail.posExport.reassurance' | t }}
+    </p>
+  }
+
+  @if (exportView.lastError) {
+    <p class="q-body-sm pane__pos-export-error" data-testid="order-detail-pos-export-last-error">
+      {{ 'orders.detail.posExport.lastError' | t: { detail: exportView.lastError } }}
+    </p>
+  }
+
+  @if (hasMappingDeepLink()) {
+    <button
+      type="button"
+      class="pane__reveal-link"
+      (click)="mappingRequested.emit()"
+      data-testid="order-detail-pos-export-fix-mapping"
+    >
+      {{ 'orders.detail.posExport.action.fixMapping' | t }}
+    </button>
+  }
+
+  @if (!pushOpen()) {
+    <button
+      type="button"
+      class="pane__reveal-link"
+      (click)="pushOpened.emit()"
+      data-testid="order-detail-pos-export-push-toggle"
+    >
+      {{ 'orders.detail.posExport.action.push' | t }}
+    </button>
+  } @else {
+    <div class="pane__pos-export-form" data-testid="order-detail-pos-export-push-form">
+      <label class="pane__pos-export-field">
+        <span class="q-body-sm">{{ 'orders.detail.posExport.action.push.reason' | t }}</span>
+        <input
+          type="text"
+          class="pane__pos-export-input"
+          [value]="pushReason()"
+          (input)="reasonChanged.emit($any($event.target).value)"
+          data-testid="order-detail-pos-export-push-reason"
+        />
+      </label>
+      @if (pushError(); as message) {
+        <p
+          class="q-body-sm pane__pos-export-error"
+          role="alert"
+          data-testid="order-detail-pos-export-push-error"
+        >
+          {{ message }}
+        </p>
+      }
+      <div class="pane__pos-export-form-actions">
+        <button
+          type="button"
+          class="pane__pos-export-button pane__pos-export-button--secondary"
+          [disabled]="pushSubmitting()"
+          (click)="pushCancelled.emit()"
+        >
+          {{ 'orders.action.cancel' | t }}
+        </button>
+        <button
+          type="button"
+          class="pane__pos-export-button"
+          [disabled]="!canSubmitPush()"
+          (click)="pushSubmitted.emit()"
+          data-testid="order-detail-pos-export-push-submit"
+        >
+          {{
+            pushSubmitting()
+              ? ('orders.detail.posExport.action.push.submitting' | t)
+              : ('orders.detail.posExport.action.push.submit' | t)
+          }}
+        </button>
+      </div>
+    </div>
+  }
+} @else {
+  <p class="q-body-sm pane__state-inline" data-testid="order-detail-pos-export-not-yet">
+    {{ 'orders.detail.posExport.notExportedYet' | t }}
+  </p>
+}

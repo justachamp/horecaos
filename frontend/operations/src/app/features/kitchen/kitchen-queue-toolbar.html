@@ -1,0 +1,39 @@
+<div class="kitchen__toolbar">
+  <div class="kitchen__tabs" role="tablist">
+    @for (tab of tabs(); track tab.id) {
+      <button
+        type="button"
+        class="tab"
+        [class.tab--active]="activeTab() === tab.id"
+        (click)="selectTab(tab.id)"
+      >
+        {{ tab.labelKey | t }}
+        <span class="tab__count q-tnum">{{ tabCount(tab.id) ?? '…' }}</span>
+      </button>
+    }
+  </div>
+
+  <div class="kitchen__toolbar-actions">
+    <button
+      type="button"
+      class="kitchen__counter-sale"
+      (click)="counterSaleRequested.emit()"
+      data-testid="kitchen-counter-sale"
+    >
+      {{ 'kitchen.action.counterSale' | t }}
+    </button>
+
+    @if (canToggleService()) {
+      <button
+        type="button"
+        class="kitchen__service-toggle"
+        [class.kitchen__service-toggle--closed]="serviceClosed()"
+        [disabled]="togglingService()"
+        (click)="serviceToggleRequested.emit()"
+        data-testid="kitchen-service-toggle"
+      >
+        {{ serviceModeLabel() }}
+      </button>
+    }
+  </div>
+</div>

@@ -3,7 +3,7 @@ import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
-import { from, of, throwError } from 'rxjs';
+import { NEVER, from, of, throwError } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ApiClient } from '../../core/api/api-client';
@@ -19,7 +19,7 @@ import { CustomerLabelResponse, OrderCrmLogApi } from '../reports/order-crm-log-
 import { ReasonResponse, ReferenceDataApi } from '../settings/reference-data/reference-data-api';
 import { OrderActionsApi } from './order-actions-api';
 import { OrderBulkActionsApi } from './order-bulk-actions-api';
-import { OrderCounts, zeroTabCounts } from './order-counts';
+import { OrderCounts, TabCounts, zeroTabCounts } from './order-counts';
 import { OrderQueue } from './order-queue';
 import { EMPTY_ORDER_QUEUE_FILTERS } from './order-queue-filter-state';
 import { RejectReasonOption } from './order-reject-reason-dialog';
@@ -56,6 +56,7 @@ function configureForBulk(
   overrides: {
     readonly bulkSubmit?: ReturnType<typeof vi.fn>;
     readonly cancelReasons?: readonly ReasonResponse[];
+    readonly tabCounts?: TabCounts;
   } = {},
 ): void {
   TestBed.configureTestingModule({
@@ -72,7 +73,12 @@ function configureForBulk(
         },
       },
       { provide: ApiClient, useValue: { get: getOrders } },
-      { provide: OrderCounts, useValue: { forOrders: () => Promise.resolve(zeroTabCounts()) } },
+      {
+        provide: OrderCounts,
+        useValue: {
+          forOrders: () => Promise.resolve(overrides.tabCounts ?? zeroTabCounts()),
+        },
+      },
       { provide: RejectReasonsApi, useValue: stubRejectReasons() },
       {
         provide: LatenessPolicyApi,
@@ -3010,5 +3016,193 @@ describe('OrderQueue: the tenant late colour (row X.39)', () => {
     await flushMicrotasks();
 
     expect(rowFor(harness.routeNativeElement!, '0203').classList).toContain('order-row--warning');
+  });
+});
+
+/**
+ * The tab strip, the selection bar, the bulk-result panel and the row actions cell are
+ * their own components (their stylesheets outgrew the queue's component-style budget).
+ * Each is presentation only: the queue binds their values and reacts to what they raise.
+ * These specs pin that wiring from the queue's side, through the DOM an operator sees.
+ */
+describe('OrderQueue: its extracted parts stay wired to it', () => {
+  function selectRows(host: HTMLElement, count: number): void {
+    const boxes = [
+      ...host.querySelectorAll('[data-testid="order-row-select"]'),
+    ] as HTMLInputElement[];
+    for (const box of boxes.slice(0, count)) {
+      box.click();
+    }
+  }
+
+  const advanceable = (orderId: string, publicOrderNumber: string) =>
+    order({
+      orderId,
+      publicOrderNumber,
+      status: 'CONFIRMED',
+      actions: [{ action: 'ADVANCE', targetStatus: 'PREPARING' }],
+    });
+
+  it('shows each tab its count from the counts read', async () => {
+    configureForBulk(ordersResponse([]), {
+      tabCounts: { ...zeroTabCounts(), attention: 3, preparing: 12 },
+    });
+    const harness = await RouterTestingHarness.create('/orders?tab=attention');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+
+    const badges = [...host.querySelectorAll('[role="tab"]')].map(
+      (tab) => tab.querySelector('.tab__count')?.textContent?.trim() ?? null,
+    );
+    expect(badges).toEqual(['3', null, '12', null, null, null, null]);
+  });
+
+  it('disables a row’s buttons while one of its actions is in flight', async () => {
+    const approve = vi.fn().mockReturnValue(NEVER);
+    configureWithActions(
+      [order({ status: 'AWAITING_APPROVAL', actions: [{ action: 'APPROVE' }] })],
+      { approve },
+    );
+    const harness = await RouterTestingHarness.create('/orders?tab=attention');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+    const button = (id: string) => host.querySelector(`[data-testid="${id}"]`) as HTMLButtonElement;
+    expect(button('order-row-action-APPROVE').disabled).toBe(false);
+
+    button('order-row-action-APPROVE').click();
+    await flushMicrotasks();
+
+    expect(approve).toHaveBeenCalledTimes(1);
+    expect(button('order-row-action-APPROVE').disabled).toBe(true);
+    expect(button('order-row-overflow-trigger').disabled).toBe(true);
+  });
+
+  it('opens the menu of the row whose trigger was pressed, and no other', async () => {
+    configureWithActions(
+      [
+        order({ orderId: 'a', publicOrderNumber: '0001', status: 'COMPLETED', actions: [] }),
+        order({ orderId: 'b', publicOrderNumber: '0002', status: 'COMPLETED', actions: [] }),
+      ],
+      {},
+    );
+    const harness = await RouterTestingHarness.create('/orders?tab=completed');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+
+    (host.querySelectorAll('[data-testid="order-row-overflow-trigger"]')[1] as HTMLElement).click();
+    await flushMicrotasks();
+
+    const expanded = [...host.querySelectorAll('[data-testid="order-row-overflow-trigger"]')].map(
+      (trigger) => trigger.getAttribute('aria-expanded'),
+    );
+    expect(expanded).toEqual(['false', 'true']);
+    expect(host.querySelectorAll('[data-testid="order-row-overflow-menu"]')).toHaveLength(1);
+  });
+
+  it('opens the order from the overflow menu, and copies its number without opening it', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    configureWithActions(
+      [order({ orderId: 'order-9', publicOrderNumber: '0009', status: 'COMPLETED', actions: [] })],
+      {},
+    );
+    const harness = await RouterTestingHarness.create('/orders?tab=completed');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+    const click = (id: string) =>
+      (host.querySelector(`[data-testid="${id}"]`) as HTMLElement).click();
+
+    click('order-row-overflow-trigger');
+    await flushMicrotasks();
+    click('order-row-action-COPY_NUMBER');
+    await flushMicrotasks();
+
+    expect(writeText).toHaveBeenCalledWith('0009');
+    expect(TestBed.inject(Location).path()).toBe('/orders?tab=completed');
+    expect(host.querySelector('[data-testid="order-row-overflow-menu"]')).toBeNull();
+
+    click('order-row-overflow-trigger');
+    await flushMicrotasks();
+    click('order-row-action-OPEN');
+    await flushMicrotasks();
+
+    expect(TestBed.inject(Location).path()).toContain('order-9');
+  });
+
+  it('advances the whole selection from the bar, then closes the result panel', async () => {
+    const bulkSubmit = vi.fn().mockReturnValue(
+      of({
+        bulkOperationId: 'bulk-9',
+        actionType: 'ADVANCE',
+        requestedCount: 2,
+        appliedCount: 2,
+        failedCount: 0,
+        replayed: false,
+        items: [
+          { orderId: 'a', itemStatus: 'APPLIED', resultingOrderVersion: 1 },
+          { orderId: 'b', itemStatus: 'APPLIED', resultingOrderVersion: 1 },
+        ],
+      }),
+    );
+    configureForBulk(ordersResponse([advanceable('a', '0001'), advanceable('b', '0002')]), {
+      bulkSubmit,
+    });
+    const harness = await RouterTestingHarness.create('/orders?tab=preparing');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+
+    selectRows(host, 2);
+    await flushMicrotasks();
+    (host.querySelector('[data-testid="order-queue-bulk-advance"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    expect(bulkSubmit).toHaveBeenCalledTimes(1);
+    expect(bulkSubmit.mock.calls[0][1]).toEqual(
+      expect.objectContaining({ actionType: 'ADVANCE', targetStatus: 'PREPARING' }),
+    );
+    expect(host.querySelector('[data-testid="order-queue-bulk-result"]')).not.toBeNull();
+
+    (
+      host.querySelector('[data-testid="order-queue-bulk-result-dismiss"]') as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+
+    expect(host.querySelector('[data-testid="order-queue-bulk-result"]')).toBeNull();
+  });
+
+  it('clears the selection from the bar and brings the filters back', async () => {
+    configureForBulk(ordersResponse([advanceable('a', '0001')]));
+    const harness = await RouterTestingHarness.create('/orders?tab=preparing');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+
+    selectRows(host, 1);
+    await flushMicrotasks();
+    expect(host.querySelector('[data-testid="order-queue-bulk-bar"]')).not.toBeNull();
+
+    (host.querySelector('[data-testid="order-queue-bulk-clear"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    expect(host.querySelector('[data-testid="order-queue-bulk-bar"]')).toBeNull();
+    expect(host.querySelector('[data-testid="order-queue-filter-bar"]')).not.toBeNull();
+  });
+
+  it('disables the bar’s buttons while a bulk request is in flight', async () => {
+    const bulkSubmit = vi.fn().mockReturnValue(NEVER);
+    configureForBulk(ordersResponse([advanceable('a', '0001')]), { bulkSubmit });
+    const harness = await RouterTestingHarness.create('/orders?tab=preparing');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+
+    selectRows(host, 1);
+    await flushMicrotasks();
+    const button = (id: string) => host.querySelector(`[data-testid="${id}"]`) as HTMLButtonElement;
+    expect(button('order-queue-bulk-advance').disabled).toBe(false);
+
+    button('order-queue-bulk-advance').click();
+    await flushMicrotasks();
+
+    expect(bulkSubmit).toHaveBeenCalledTimes(1);
+    expect(button('order-queue-bulk-advance').disabled).toBe(true);
   });
 });

@@ -77,22 +77,11 @@
       @if (paymentMethods().length === 0) {
         <p class="hint">{{ 'cart.noPaymentMethods' | t }}</p>
       } @else {
-        <div class="pay-list">
-          @for (code of paymentMethods(); track code) {
-            <button
-              type="button"
-              class="pay-row"
-              [class.is-active]="selectedPayment() === code"
-              (click)="selectPayment(code)"
-            >
-              <span class="pay-row__dot"></span>
-              <span class="pay-row__badge">{{ code.charAt(0) }}</span>
-              <span class="pay-row__label">
-                {{ paymentOption(code).labelKey ? (paymentOption(code).labelKey | t) : code }}
-              </span>
-            </button>
-          }
-        </div>
+        <app-payment-list
+          [choices]="paymentChoices()"
+          [selected]="selectedPayment()"
+          (choose)="selectPayment($event)"
+        />
       }
     </section>
 
@@ -144,30 +133,14 @@
       ></textarea>
     </section>
 
-    <div class="summary">
-      <div class="summary__row">
-        <span>{{ 'cart.subtotalLabel' | t }}</span>
-        <span class="summary__value">{{ cart.subtotalFormatted() }}</span>
-      </div>
-      <div class="summary__row">
-        <span>{{ 'cart.delivery' | t }}</span>
-        <span class="summary__value">{{ cart.deliveryFee() }}</span>
-      </div>
-      @if (cart.deliveryUnresolvedMessage(); as unresolved) {
-        <p class="summary__note" data-testid="delivery-unresolved">{{ unresolved }}</p>
-      }
-      @if (cart.hasDiscount()) {
-        <div class="summary__row summary__row--discount">
-          <span>{{ 'cart.promoCode' | t }}</span>
-          <span>−{{ cart.discountFormatted() }}</span>
-        </div>
-      }
-      <div class="summary__divider"></div>
-      <div class="summary__row summary__row--total">
-        <span>{{ 'cart.total' | t }}</span>
-        <span>{{ cart.totalAmount() }}</span>
-      </div>
-    </div>
+    <app-order-summary
+      [subtotal]="cart.subtotalFormatted()"
+      [deliveryFee]="cart.deliveryFee()"
+      [unresolvedMessage]="cart.deliveryUnresolvedMessage()"
+      [hasDiscount]="cart.hasDiscount()"
+      [discount]="cart.discountFormatted()"
+      [total]="cart.totalAmount()"
+    />
 
     @if (pricingNoteKey(); as pricingRefusal) {
       <p class="hint hint--error hint--footer" role="alert" data-testid="checkout-pricing-error">

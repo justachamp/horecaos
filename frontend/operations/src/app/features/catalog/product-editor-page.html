@@ -11,29 +11,13 @@
   </p>
 } @else if (product(); as product) {
   <div class="editor">
-    <header class="editor__header">
-      <div>
-        <a routerLink="/catalog/products" class="editor__back">{{
-          'catalog.editor.backToList' | t
-        }}</a>
-        <h1 class="q-title editor__name">{{ nameFor(editingLocale()) || product.code }}</h1>
-        <span class="q-mono q-caption">{{ product.code }}</span>
-        <span class="status-badge">{{ statusLabel(product.status) }}</span>
-      </div>
-      <div class="editor__header-actions">
-        @if (saveNotice(); as notice) {
-          <span class="q-caption editor__notice">{{ notice }}</span>
-        }
-        <button
-          type="button"
-          class="editor__publish"
-          (click)="openPublishDialog()"
-          data-testid="editor-publish"
-        >
-          {{ 'catalog.publish.action' | t }}
-        </button>
-      </div>
-    </header>
+    <q-product-editor-header
+      [name]="nameFor(editingLocale()) || product.code"
+      [code]="product.code"
+      [statusLabel]="statusLabel(product.status)"
+      [saveNotice]="saveNotice()"
+      (publishRequested)="openPublishDialog()"
+    />
 
     <div class="editor__locale-strip">
       <span class="q-caption">{{ 'catalog.editor.locale.label' | t }}</span>
@@ -440,97 +424,19 @@
             }
             @case ('PHOTOS') {
               <div class="editor__section">
-                <label class="editor__photo-channel-picker">
-                  <span class="q-body-sm">{{ 'catalog.editor.photos.channel.label' | t }}</span>
-                  <select
-                    [value]="selectedPhotoChannel()"
-                    (change)="setPhotoChannel($any($event.target).value)"
-                    data-testid="editor-photo-channel-select"
-                  >
-                    <option [value]="allChannelsCode">
-                      {{ 'catalog.editor.photos.channel.all' | t }}
-                    </option>
-                    @for (channel of photoChannels(); track channel.id) {
-                      <option [value]="channel.code">{{ channel.displayName }}</option>
-                    }
-                  </select>
-                </label>
-                @if (selectedChannelPhotos().length === 0) {
-                  <p class="q-caption">
-                    {{
-                      (selectedPhotoChannel() === allChannelsCode
-                        ? 'catalog.editor.photos.empty'
-                        : 'catalog.editor.photos.channel.empty'
-                      ) | t
-                    }}
-                  </p>
-                } @else {
-                  <div class="editor__photo-grid">
-                    @for (
-                      item of selectedChannelPhotos();
-                      track item.mediaAssetId + item.role + item.channelCode;
-                      let i = $index, count = $count
-                    ) {
-                      <div class="editor__photo-tile" data-testid="editor-photo-tile">
-                        @if (photoUrls()[item.mediaAssetId]; as url) {
-                          <img [src]="url" alt="" class="editor__photo-image" />
-                        } @else {
-                          <div class="editor__photo-placeholder q-caption">
-                            {{ photoRoleLabel(item.role) }}
-                          </div>
-                        }
-                        <div class="editor__photo-meta">
-                          <span class="q-caption">{{ photoRoleLabel(item.role) }}</span>
-                          @if (item.channelCode !== 'ALL') {
-                            <span class="q-caption q-mono">{{ item.channelCode }}</span>
-                          }
-                        </div>
-                        <div class="editor__photo-actions">
-                          <button
-                            type="button"
-                            [disabled]="
-                              i === 0 || savingField() === 'photo-reorder:' + item.mediaAssetId
-                            "
-                            (click)="reorderPhoto(item, -1)"
-                            [attr.aria-label]="'catalog.editor.photos.moveUp' | t"
-                            data-testid="editor-photo-move-up"
-                          >
-                            ↑
-                          </button>
-                          <button
-                            type="button"
-                            [disabled]="
-                              i === count - 1 ||
-                              savingField() === 'photo-reorder:' + item.mediaAssetId
-                            "
-                            (click)="reorderPhoto(item, 1)"
-                            [attr.aria-label]="'catalog.editor.photos.moveDown' | t"
-                            data-testid="editor-photo-move-down"
-                          >
-                            ↓
-                          </button>
-                          <button
-                            type="button"
-                            [disabled]="savingField() === 'photo-detach:' + item.mediaAssetId"
-                            (click)="detachPhoto(item)"
-                            data-testid="editor-photo-detach"
-                          >
-                            {{ 'catalog.editor.photos.detach' | t }}
-                          </button>
-                        </div>
-                      </div>
-                    }
-                  </div>
-                }
-                <p class="q-caption" data-testid="editor-photo-channel-hint">
-                  {{ 'catalog.editor.photos.channel.hint' | t }}
-                </p>
-                <q-media-uploader
-                  [uploading]="uploadingPhoto()"
-                  (cropped)="uploadPhoto($event)"
-                  (selected)="uploadPhoto($event)"
+                <q-product-photos-panel
+                  [photoChannels]="photoChannels()"
+                  [selectedPhotoChannel]="selectedPhotoChannel()"
+                  [allChannelsCode]="allChannelsCode"
+                  [selectedChannelPhotos]="selectedChannelPhotos()"
+                  [photoUrls]="photoUrls()"
+                  [savingField]="savingField()"
+                  [uploadingPhoto]="uploadingPhoto()"
+                  (channelChanged)="setPhotoChannel($event)"
+                  (reorderRequested)="reorderPhoto($event.item, $event.direction)"
+                  (detachRequested)="detachPhoto($event)"
+                  (uploadRequested)="uploadPhoto($event)"
                   (rejected)="onPhotoRejected($event)"
-                  data-testid="editor-photo-uploader"
                 />
               </div>
             }
@@ -678,50 +584,12 @@
             @case ('AVAILABILITY') {
               <div class="editor__section">
                 @if (unlistedVariantRows().length > 0) {
-                  <div
-                    class="editor__unlisted-banner"
-                    data-testid="editor-unlisted-branches-banner"
-                  >
-                    <p>{{ 'catalog.editor.availability.notListedHeading' | t }}</p>
-                    <ul class="editor__unlisted-list">
-                      @for (row of unlistedVariantRows(); track row.variantId) {
-                        <li [attr.data-testid]="'editor-unlisted-variant-' + row.variantId">
-                          <span>
-                            {{
-                              'catalog.editor.availability.notListedVariantRow'
-                                | t: { variant: variantLabel(row.variantId), count: row.count }
-                            }}
-                          </span>
-                          <button
-                            type="button"
-                            (click)="listAtMissingBranches(row.variantId)"
-                            [disabled]="listingPendingVariantIds().has(row.variantId)"
-                            [attr.data-testid]="'editor-list-missing-branches-' + row.variantId"
-                          >
-                            {{
-                              listingPendingVariantIds().has(row.variantId)
-                                ? ('catalog.editor.availability.listingInProgress' | t)
-                                : ('catalog.editor.availability.listEverywhere' | t)
-                            }}
-                          </button>
-                          @if (listingNoticeByVariant()[row.variantId]; as notice) {
-                            <p
-                              class="q-caption editor__unlisted-note"
-                              role="status"
-                              [attr.data-testid]="'editor-listing-notice-' + row.variantId"
-                            >
-                              {{
-                                notice.kind === 'partial'
-                                  ? ('catalog.editor.availability.listPartial'
-                                    | t: { listed: notice.listed, candidate: notice.candidate })
-                                  : ('catalog.editor.availability.listRecountFailed' | t)
-                              }}
-                            </p>
-                          }
-                        </li>
-                      }
-                    </ul>
-                  </div>
+                  <q-product-unlisted-banner
+                    [rows]="unlistedBannerRows()"
+                    [pendingVariantIds]="listingPendingVariantIds()"
+                    [notices]="listingNoticeByVariant()"
+                    (listRequested)="listAtMissingBranches($event)"
+                  />
                 }
                 @if (availabilityRows().length === 0) {
                   <p class="q-caption">{{ 'catalog.editor.availability.empty' | t }}</p>
@@ -1039,8 +907,8 @@
   </div>
 
   @if (publishDialogOpen()) {
-    <div class="dialog__backdrop" data-testid="publish-dialog">
-      <div class="dialog" role="dialog" aria-modal="true">
+    <div class="q-dialog-backdrop" data-testid="publish-dialog">
+      <div class="q-dialog" role="dialog" aria-modal="true">
         <h2 class="q-emphasis dialog__title">{{ 'catalog.publish.title' | t }}</h2>
 
         @if (publishResult(); as result) {
@@ -1063,7 +931,7 @@
             </ul>
           }
         } @else {
-          <label class="dialog__field">
+          <label class="q-dialog__field">
             <span class="q-body-sm">{{ 'catalog.publish.channel' | t }}</span>
             <input
               type="text"
@@ -1073,18 +941,18 @@
             />
           </label>
           @if (publishError(); as message) {
-            <div class="dialog__banner" role="alert">{{ message }}</div>
+            <div class="q-dialog__banner" role="alert">{{ message }}</div>
           }
         }
 
-        <div class="dialog__actions">
-          <button type="button" class="dialog__dismiss" (click)="closePublishDialog()">
+        <div class="q-dialog__actions">
+          <button type="button" class="q-dialog__dismiss" (click)="closePublishDialog()">
             {{ 'catalog.publish.close' | t }}
           </button>
           @if (!publishResult()) {
             <button
               type="button"
-              class="dialog__confirm"
+              class="q-dialog__confirm"
               [disabled]="publishing()"
               (click)="publish()"
               data-testid="publish-confirm"

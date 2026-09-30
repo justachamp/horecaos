@@ -59,10 +59,12 @@ npm run test:ci    # Vitest, once
 npm run format     # Prettier (writes the whole tree)
 npm run lint       # eslint: no raw px font-size (the closed type scale owns sizes)
 npm run lint:rules # the lint rule's own fixtures
+npm run i18n:dead  # message keys no template or TypeScript file references (--write removes them)
+npm run i18n:dead:test # the tool's own tests
 ```
 
-CI runs `lint`, `lint:rules` and `format:check` (Prettier over the whole tree) on every
-change; `npm run format` fixes a failure. To check only the files you touched, see
+CI runs `lint`, `lint:rules`, `i18n:dead:test` and `format:check` (Prettier over the whole tree)
+on every change; `npm run format` fixes a failure. To check only the files you touched, see
 `python3 ../tools/format_changed.py` and
 [`../README.md`](../README.md#formatting-and-lint-in-ci).
 
@@ -291,6 +293,9 @@ src/
       auth/                  the sign-in exchange, the guard, token storage
       i18n/                  catalogues, runtime switching, the `t` pipe
       format/                money and time
+    shared/
+      styles/                q- rules pages opt into, loaded by styles.css (see below)
+      ui/                    the shared components
     shell/                   rail, top bar, the counters shown everywhere
     features/
       today/                 the landing route

@@ -9,99 +9,6 @@
   height: 100%;
 }
 
-.editor__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16px;
-  border-bottom: 1px solid var(--q-hairline);
-}
-
-.editor__back {
-  display: block;
-  color: var(--q-ink-muted);
-  font-size: var(--q-type-body-xs);
-  text-decoration: none;
-  margin-bottom: 4px;
-}
-
-.editor__name {
-  display: inline-block;
-  margin: 0 8px 0 0;
-}
-
-.editor__header-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.editor__notice {
-  color: var(--q-success-text);
-}
-
-.editor__unlisted-banner {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 10px 14px;
-  margin-bottom: 12px;
-  background: var(--q-warning-tint);
-  color: var(--q-warning-text);
-  border: 1px solid var(--q-warning);
-  border-radius: var(--q-radius);
-}
-
-.editor__unlisted-banner p {
-  margin: 0;
-}
-
-.editor__unlisted-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.editor__unlisted-list li {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-/* The outcome note sits under its row, not beside the button. */
-.editor__unlisted-note {
-  flex-basis: 100%;
-}
-
-.editor__unlisted-banner button {
-  flex-shrink: 0;
-  padding: 6px 12px;
-  border: 1px solid var(--q-warning-text);
-  background: transparent;
-  color: var(--q-warning-text);
-  border-radius: var(--q-radius);
-  cursor: pointer;
-}
-
-.editor__unlisted-banner button:disabled {
-  cursor: default;
-  opacity: 0.6;
-}
-
-.editor__publish {
-  padding: 6px 16px;
-  border: 1px solid var(--q-primary);
-  background: var(--q-primary);
-  color: #fff;
-  border-radius: var(--q-radius);
-  cursor: pointer;
-}
-
 .editor__locale-strip {
   display: flex;
   align-items: center;
@@ -242,64 +149,6 @@
   margin-top: 8px;
 }
 
-.editor__photo-channel-picker {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin-bottom: 12px;
-  max-width: 280px;
-}
-
-.editor__photo-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin-bottom: 16px;
-}
-
-.editor__photo-tile {
-  width: 160px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  border: 1px solid var(--q-hairline);
-  border-radius: var(--q-radius);
-  overflow: hidden;
-}
-
-.editor__photo-image {
-  width: 160px;
-  height: 120px;
-  object-fit: cover;
-  display: block;
-}
-
-.editor__photo-placeholder {
-  width: 160px;
-  height: 120px;
-  background: var(--q-surface-1);
-  display: flex;
-  align-items: flex-end;
-  padding: 6px;
-  border-bottom: 1px dashed var(--q-hairline);
-}
-
-.editor__photo-meta {
-  display: flex;
-  justify-content: space-between;
-  padding: 0 6px;
-}
-
-.editor__photo-actions {
-  display: flex;
-  gap: 4px;
-  padding: 0 6px 6px;
-}
-
-.editor__photo-actions button {
-  flex: 1;
-}
-
 .editor__status-row {
   display: flex;
   align-items: center;
@@ -401,47 +250,10 @@
   font-size: var(--q-type-caption);
 }
 
-.status-badge {
-  padding: 2px 8px;
-  background: var(--q-surface-1);
-  border-radius: var(--q-radius);
-  font-size: var(--q-type-caption);
-  margin-left: 8px;
-}
-
-/* Dialog — duplicated per-component, matching `create-product-dialog.css`'s
-   own convention rather than a shared stylesheet (Angular view encapsulation,
-   and the existing orders dialogs already repeat this same block). */
-.dialog__backdrop {
-  position: fixed;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(22, 22, 22, 0.5);
-  z-index: 50;
-}
-
-.dialog {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  width: 420px;
-  max-width: calc(100vw - 32px);
-  padding: 20px;
-  background: var(--q-canvas);
-  border: 1px solid var(--q-hairline);
-  border-radius: var(--q-radius);
-}
-
+/* Publish dialog: the card, backdrop and buttons come from shared/styles/dialog.css (q-dialog*);
+   only the title and the input are this page's own. */
 .dialog__title {
   margin: 0;
-}
-
-.dialog__field {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
 }
 
 .dialog__input {
@@ -449,40 +261,4 @@
   border: 1px solid var(--q-hairline);
   border-radius: var(--q-radius);
   font-size: var(--q-type-body-sm);
-}
-
-.dialog__banner {
-  padding: 8px 10px;
-  background: var(--q-error-tint);
-  color: var(--q-error-text);
-  font-size: var(--q-type-body-sm);
-}
-
-.dialog__actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-top: 4px;
-}
-
-.dialog__dismiss,
-.dialog__confirm {
-  padding: 6px 14px;
-  border: 1px solid var(--q-hairline);
-  border-radius: var(--q-radius);
-  background: var(--q-canvas);
-  cursor: pointer;
-  font-size: var(--q-type-body-sm);
-}
-
-.dialog__confirm {
-  border-color: var(--q-primary);
-  background: var(--q-primary);
-  color: #fff;
-}
-
-.dialog__confirm:disabled,
-.dialog__dismiss:disabled {
-  opacity: 0.6;
-  cursor: default;
 }

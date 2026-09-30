@@ -1,0 +1,20 @@
+@if (wiringWarning()) {
+  <div class="kitchen__warning-band" role="status">
+    <span class="q-body-sm">{{ 'kitchen.warning.notWired' | t }}</span>
+  </div>
+}
+
+@if (actionNotice(); as notice) {
+  <div class="kitchen__notice-band" role="alert">
+    <span class="q-body-sm">{{ notice }}</span>
+    <button type="button" class="kitchen__notice-dismiss" (click)="noticeDismissed.emit()">
+      ×
+    </button>
+  </div>
+}
+
+@if (lastError(); as error) {
+  <div class="kitchen__error-band" role="alert">
+    <span class="q-body-sm">{{ error.code }}</span>
+  </div>
+}

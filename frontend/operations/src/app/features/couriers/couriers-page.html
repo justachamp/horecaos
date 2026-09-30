@@ -94,11 +94,11 @@
   }
 
   @if (showRegisterForm()) {
-    <div class="dialog-backdrop" (click)="closeRegisterForm()">
-      <div class="dialog" (click)="$event.stopPropagation()">
+    <div class="q-modal-backdrop" (click)="closeRegisterForm()">
+      <div class="q-modal" (click)="$event.stopPropagation()">
         <h2 class="q-subhead">{{ 'couriers.register.title' | t }}</h2>
 
-        <label class="field">
+        <label class="q-field">
           <span class="q-caption">{{ 'couriers.register.type' | t }}</span>
           <select
             [value]="newCourierTypeId()"
@@ -110,7 +110,7 @@
           </select>
         </label>
 
-        <label class="field">
+        <label class="q-field">
           <span class="q-caption">{{ 'couriers.register.firstName' | t }}</span>
           <input
             type="text"
@@ -120,7 +120,7 @@
           />
         </label>
 
-        <label class="field">
+        <label class="q-field">
           <span class="q-caption">{{ 'couriers.register.lastName' | t }}</span>
           <input
             type="text"
@@ -130,7 +130,7 @@
           />
         </label>
 
-        <label class="field">
+        <label class="q-field">
           <span class="q-caption">{{ 'couriers.register.phone' | t }}</span>
           <input
             type="tel"
@@ -141,7 +141,7 @@
           />
         </label>
 
-        <label class="field">
+        <label class="q-field">
           <span class="q-caption">{{ 'couriers.register.email' | t }}</span>
           <input
             type="email"
@@ -155,7 +155,7 @@
           {{ 'couriers.register.accountNote' | t }}
         </p>
 
-        <label class="field">
+        <label class="q-field">
           <span class="q-caption">{{ 'couriers.register.displayReference' | t }}</span>
           <input
             type="text"
@@ -164,7 +164,7 @@
           />
         </label>
 
-        <label class="field">
+        <label class="q-field">
           <span class="q-caption">{{ 'couriers.register.engagedFrom' | t }}</span>
           <input
             type="date"
@@ -173,7 +173,7 @@
           />
         </label>
 
-        <label class="field">
+        <label class="q-field">
           <span class="q-caption">{{ 'couriers.register.reason' | t }}</span>
           <input
             type="text"
@@ -186,7 +186,7 @@
         <p class="q-caption couriers__hint">{{ 'couriers.compliance.optional' | t }}</p>
 
         @for (field of complianceFields; track field) {
-          <label class="field">
+          <label class="q-field">
             <span class="q-caption">{{ complianceLabel(field) }}</span>
             <input
               type="text"
@@ -197,7 +197,7 @@
           </label>
         }
 
-        <label class="field">
+        <label class="q-field">
           <span class="q-caption">{{ 'couriers.compliance.fuelType' | t }}</span>
           <select
             data-testid="register-fuel-type"
@@ -212,10 +212,10 @@
         </label>
 
         @if (registerError(); as error) {
-          <p class="dialog__error q-body-sm">{{ error }}</p>
+          <p class="q-modal__error q-body-sm">{{ error }}</p>
         }
 
-        <div class="dialog__actions">
+        <div class="q-modal__actions">
           <button type="button" (click)="closeRegisterForm()">
             {{ 'couriers.dialog.cancel' | t }}
           </button>
@@ -305,7 +305,7 @@
         </button>
       } @else {
         <div class="couriers__reveal">
-          <label class="field">
+          <label class="q-field">
             <span class="q-caption">{{ 'couriers.compliance.purpose' | t }}</span>
             <input
               type="text"
@@ -348,7 +348,7 @@
 
       @if (leavingGroupId(); as groupId) {
         <div class="couriers__inline-form">
-          <label class="field">
+          <label class="q-field">
             <span class="q-caption">{{ 'couriers.groups.leaveReason' | t }}</span>
             <input
               type="text"
@@ -358,9 +358,9 @@
             />
           </label>
           @if (leaveError(); as error) {
-            <p class="dialog__error q-body-sm">{{ error }}</p>
+            <p class="q-modal__error q-body-sm">{{ error }}</p>
           }
-          <div class="dialog__actions">
+          <div class="q-modal__actions">
             <button type="button" (click)="cancelLeaveGroup()">
               {{ 'couriers.dialog.cancel' | t }}
             </button>
@@ -378,7 +378,7 @@
 
       @if (showJoinGroupForm()) {
         <div class="couriers__inline-form">
-          <label class="field">
+          <label class="q-field">
             <span class="q-caption">{{ 'couriers.groups.join.pick' | t }}</span>
             <select
               data-testid="join-group-select"
@@ -390,7 +390,7 @@
               }
             </select>
           </label>
-          <label class="field">
+          <label class="q-field">
             <span class="q-caption">{{ 'couriers.groups.join.reason' | t }}</span>
             <input
               type="text"
@@ -400,9 +400,9 @@
             />
           </label>
           @if (joinError(); as error) {
-            <p class="dialog__error q-body-sm">{{ error }}</p>
+            <p class="q-modal__error q-body-sm">{{ error }}</p>
           }
-          <div class="dialog__actions">
+          <div class="q-modal__actions">
             <button type="button" (click)="closeJoinGroupForm()">
               {{ 'couriers.dialog.cancel' | t }}
             </button>
@@ -424,7 +424,7 @@
 
       @if (showGroupForm()) {
         <div class="couriers__inline-form">
-          <label class="field">
+          <label class="q-field">
             <span class="q-caption">{{ 'couriers.groups.create.code' | t }}</span>
             <input
               type="text"
@@ -433,7 +433,7 @@
               (input)="newGroupCode.set($any($event.target).value)"
             />
           </label>
-          <label class="field">
+          <label class="q-field">
             <span class="q-caption">{{ 'couriers.groups.create.displayName' | t }}</span>
             <input
               type="text"
@@ -442,7 +442,7 @@
               (input)="newGroupDisplayName.set($any($event.target).value)"
             />
           </label>
-          <label class="field">
+          <label class="q-field">
             <span class="q-caption">{{ 'couriers.groups.create.reason' | t }}</span>
             <input
               type="text"
@@ -452,9 +452,9 @@
             />
           </label>
           @if (groupFormError(); as error) {
-            <p class="dialog__error q-body-sm">{{ error }}</p>
+            <p class="q-modal__error q-body-sm">{{ error }}</p>
           }
-          <div class="dialog__actions">
+          <div class="q-modal__actions">
             <button type="button" (click)="closeGroupForm()">
               {{ 'couriers.dialog.cancel' | t }}
             </button>
@@ -503,7 +503,7 @@
 
       @if (unbindingLocationId()) {
         <div class="couriers__inline-form">
-          <label class="field">
+          <label class="q-field">
             <span class="q-caption">{{ 'couriers.branches.unbindReason' | t }}</span>
             <input
               type="text"
@@ -513,9 +513,9 @@
             />
           </label>
           @if (unbindError(); as error) {
-            <p class="dialog__error q-body-sm">{{ error }}</p>
+            <p class="q-modal__error q-body-sm">{{ error }}</p>
           }
-          <div class="dialog__actions">
+          <div class="q-modal__actions">
             <button type="button" (click)="cancelUnbindBranch()">
               {{ 'couriers.dialog.cancel' | t }}
             </button>
@@ -533,7 +533,7 @@
 
       @if (showBindBranchForm()) {
         <div class="couriers__inline-form">
-          <label class="field">
+          <label class="q-field">
             <span class="q-caption">{{ 'couriers.branches.bind.pick' | t }}</span>
             <select
               data-testid="bind-branch-select"
@@ -545,7 +545,7 @@
               }
             </select>
           </label>
-          <label class="field field--checkbox">
+          <label class="q-field q-field--checkbox">
             <input
               type="checkbox"
               data-testid="bind-branch-primary"
@@ -554,7 +554,7 @@
             />
             <span class="q-caption">{{ 'couriers.branches.bind.primary' | t }}</span>
           </label>
-          <label class="field">
+          <label class="q-field">
             <span class="q-caption">{{ 'couriers.branches.bind.reason' | t }}</span>
             <input
               type="text"
@@ -564,9 +564,9 @@
             />
           </label>
           @if (bindError(); as error) {
-            <p class="dialog__error q-body-sm">{{ error }}</p>
+            <p class="q-modal__error q-body-sm">{{ error }}</p>
           }
-          <div class="dialog__actions">
+          <div class="q-modal__actions">
             <button type="button" (click)="closeBindBranchForm()">
               {{ 'couriers.dialog.cancel' | t }}
             </button>
@@ -590,7 +590,7 @@
         <h3 class="q-caption couriers__section">{{ 'couriers.compliance.editHeading' | t }}</h3>
         <p class="q-caption couriers__hint">{{ 'couriers.compliance.editHint' | t }}</p>
         @for (field of complianceFields; track field) {
-          <label class="field">
+          <label class="q-field">
             <span class="q-caption">{{ complianceLabel(field) }}</span>
             <input
               type="text"
@@ -600,7 +600,7 @@
             />
           </label>
         }
-        <label class="field">
+        <label class="q-field">
           <span class="q-caption">{{ 'couriers.compliance.fuelType' | t }}</span>
           <select
             data-testid="edit-fuel-type"
@@ -613,7 +613,7 @@
             }
           </select>
         </label>
-        <label class="field">
+        <label class="q-field">
           <span class="q-caption">{{ 'couriers.compliance.reason' | t }}</span>
           <input
             type="text"
@@ -622,7 +622,7 @@
             (input)="editReason.set($any($event.target).value)"
           />
         </label>
-        <div class="dialog__actions">
+        <div class="q-modal__actions">
           <button type="button" (click)="cancelEditing()">
             {{ 'couriers.dialog.cancel' | t }}
           </button>
@@ -644,13 +644,13 @@
   }
 
   @if (dialog(); as state) {
-    <div class="dialog-backdrop" (click)="closeDialog()">
-      <div class="dialog" (click)="$event.stopPropagation()">
+    <div class="q-modal-backdrop" (click)="closeDialog()">
+      <div class="q-modal" (click)="$event.stopPropagation()">
         @if (state.kind === 'verify') {
           <h2 class="q-subhead">
             {{ 'couriers.verify.title' | t: { reference: state.courier.displayReference } }}
           </h2>
-          <label class="field">
+          <label class="q-field">
             <span class="q-caption">{{ 'couriers.verify.registrationIdentifier' | t }}</span>
             <input
               type="text"
@@ -658,7 +658,7 @@
               (input)="verifyRegistrationId.set($any($event.target).value)"
             />
           </label>
-          <label class="field">
+          <label class="q-field">
             <span class="q-caption">{{ 'couriers.verify.validUntil' | t }}</span>
             <input
               type="date"
@@ -666,7 +666,7 @@
               (input)="verifyValidUntil.set($any($event.target).value)"
             />
           </label>
-          <label class="field">
+          <label class="q-field">
             <span class="q-caption">{{ 'couriers.verify.reason' | t }}</span>
             <input
               type="text"
@@ -675,9 +675,9 @@
             />
           </label>
           @if (dialogError(); as error) {
-            <p class="dialog__error q-body-sm">{{ error }}</p>
+            <p class="q-modal__error q-body-sm">{{ error }}</p>
           }
-          <div class="dialog__actions">
+          <div class="q-modal__actions">
             <button type="button" (click)="closeDialog()">
               {{ 'couriers.dialog.cancel' | t }}
             </button>
@@ -689,7 +689,7 @@
           <h2 class="q-subhead">
             {{ 'couriers.suspend.title' | t: { reference: state.courier.displayReference } }}
           </h2>
-          <label class="field">
+          <label class="q-field">
             <span class="q-caption">{{ 'couriers.suspend.reasonCode' | t }}</span>
             <input
               type="text"
@@ -697,7 +697,7 @@
               (input)="suspendReasonCode.set($any($event.target).value)"
             />
           </label>
-          <label class="field">
+          <label class="q-field">
             <span class="q-caption">{{ 'couriers.suspend.reason' | t }}</span>
             <input
               type="text"
@@ -706,9 +706,9 @@
             />
           </label>
           @if (dialogError(); as error) {
-            <p class="dialog__error q-body-sm">{{ error }}</p>
+            <p class="q-modal__error q-body-sm">{{ error }}</p>
           }
-          <div class="dialog__actions">
+          <div class="q-modal__actions">
             <button type="button" (click)="closeDialog()">
               {{ 'couriers.dialog.cancel' | t }}
             </button>
@@ -720,7 +720,7 @@
           <h2 class="q-subhead">
             {{ 'couriers.adjust.title' | t: { reference: state.courier.displayReference } }}
           </h2>
-          <label class="field">
+          <label class="q-field">
             <span class="q-caption">{{ 'couriers.adjust.reasonCode' | t }}</span>
             <select
               [value]="adjustmentReasonCode()"
@@ -739,7 +739,7 @@
               {{ reasonKindLabel(selected.kind) }}
             </p>
           }
-          <label class="field">
+          <label class="q-field">
             <span class="q-caption">{{ 'couriers.adjust.amount' | t }}</span>
             <input
               type="number"
@@ -749,7 +749,7 @@
               data-testid="adjust-amount"
             />
           </label>
-          <label class="field">
+          <label class="q-field">
             <span class="q-caption">{{ 'couriers.adjust.currency' | t }}</span>
             <input
               type="text"
@@ -757,7 +757,7 @@
               (input)="adjustmentCurrency.set($any($event.target).value)"
             />
           </label>
-          <label class="field">
+          <label class="q-field">
             <span class="q-caption">{{ 'couriers.adjust.reason' | t }}</span>
             <input
               type="text"
@@ -766,9 +766,9 @@
             />
           </label>
           @if (dialogError(); as error) {
-            <p class="dialog__error q-body-sm">{{ error }}</p>
+            <p class="q-modal__error q-body-sm">{{ error }}</p>
           }
-          <div class="dialog__actions">
+          <div class="q-modal__actions">
             <button type="button" (click)="closeDialog()">
               {{ 'couriers.dialog.cancel' | t }}
             </button>

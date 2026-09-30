@@ -1,0 +1,55 @@
+@if (lines().length === 0) {
+  <p class="q-caption">{{ 'orders.newOrder.basket.empty' | t }}</p>
+} @else {
+  <ul class="new-order__basket" data-testid="new-order-basket">
+    @for (line of lines(); track line.lineKey) {
+      <li
+        class="new-order__basket-line"
+        [class.new-order__basket-line--unavailable]="!line.orderable || !line.onSaleNow"
+      >
+        <div class="new-order__basket-line-head">
+          <span class="q-body-sm">{{ line.productName }}</span>
+          <q-number-stepper
+            [value]="line.quantity"
+            [min]="1"
+            [max]="99"
+            (valueChange)="quantityChanged.emit({ lineKey: line.lineKey, quantity: $event })"
+          />
+          <button
+            type="button"
+            class="new-order__remove q-caption"
+            (click)="removeRequested.emit(line.lineKey)"
+            data-testid="new-order-remove-line"
+          >
+            {{ 'orders.newOrder.basket.remove' | t }}
+          </button>
+        </div>
+        @if (line.modifiers.length > 0) {
+          <p class="q-caption new-order__modifiers">{{ line.modifierText }}</p>
+        }
+        @if (line.commentPresetCodes.length > 0) {
+          <p class="q-caption new-order__modifiers" data-testid="new-order-line-presets">
+            {{ line.presetText }}
+          </p>
+        }
+        @if (!line.orderable) {
+          <p class="q-caption new-order__error">
+            {{ 'orders.newOrder.basket.unavailable' | t }}
+          </p>
+        }
+        @if (line.orderable && !line.onSaleNow) {
+          <p class="q-caption new-order__error" data-testid="new-order-line-out-of-window">
+            {{ 'orders.newOrder.menu.itemOutOfSaleWindow' | t }}
+          </p>
+        }
+        <input
+          type="text"
+          class="new-order__note q-caption"
+          [value]="line.customerNote ?? ''"
+          (input)="noteChanged.emit({ lineKey: line.lineKey, note: $any($event.target).value })"
+          [placeholder]="'orders.newOrder.basket.notePlaceholder' | t"
+        />
+      </li>
+    }
+  </ul>
+}

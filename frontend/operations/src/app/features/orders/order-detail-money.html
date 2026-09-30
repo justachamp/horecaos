@@ -1,0 +1,103 @@
+@if (moneyReconciliation(); as money) {
+  @if (money.reconciles) {
+    <dl class="pane__money">
+      <div class="pane__money-row">
+        <dt class="q-body-sm">{{ 'orders.detail.money.subtotal' | t }}</dt>
+        <dd class="q-mono q-tnum">
+          {{ formatMoneyMinor(money.subtotalMinor, summary().currency) }}
+        </dd>
+      </div>
+      <!-- H4, orders.md §3.5 row order: Сумма позиций, Скидка, Сборы, Доставка (below), НДС, Итого. -->
+      <div class="pane__money-row" data-testid="order-detail-money-discount">
+        <dt class="q-body-sm">{{ 'orders.detail.money.discount' | t }}</dt>
+        <dd class="q-mono q-tnum">
+          {{ formatMoneyMinor(-summary().discountMinor, summary().currency) }}
+        </dd>
+      </div>
+      <div class="pane__money-row" data-testid="order-detail-money-fee">
+        <dt class="q-body-sm">{{ 'orders.detail.money.fee' | t }}</dt>
+        <dd class="q-mono q-tnum">
+          {{ formatMoneyMinor(summary().feeMinor, summary().currency) }}
+        </dd>
+      </div>
+      <div class="pane__money-row">
+        <dt class="q-body-sm">{{ 'orders.detail.money.tax' | t }}</dt>
+        <dd class="q-mono q-tnum">
+          {{ formatMoneyMinor(taxMinor(), summary().currency) }}
+        </dd>
+      </div>
+      <div class="pane__money-row pane__money-row--total">
+        <dt class="q-body-sm">{{ 'orders.detail.money.total' | t }}</dt>
+        <dd class="q-mono q-tnum">
+          {{ formatMoneyMinor(money.totalMinor, summary().currency) }}
+        </dd>
+      </div>
+    </dl>
+
+    <!-- Доставка (row 1.2n, wave P11) — both delivery money figures, and the margin between them. -->
+    @if (delivery(); as plan) {
+      <dl class="pane__money" data-testid="order-detail-delivery-money">
+        <div class="pane__money-row">
+          <dt class="q-body-sm">{{ 'orders.detail.money.deliveryCustomer' | t }}</dt>
+          <dd class="q-mono q-tnum">
+            {{ formatMoneyMinor(plan.customerDeliveryFeeMinor, plan.currency) }}
+          </dd>
+        </div>
+        @if (plan.shipment?.sourceType === 'PARTNER') {
+          <div class="pane__money-row">
+            <dt class="q-body-sm">{{ 'orders.detail.money.deliveryProvider' | t }}</dt>
+            <dd class="q-mono q-tnum">
+              @if (plan.providerCostMinor != null) {
+                {{ formatMoneyMinor(plan.providerCostMinor, plan.currency) }}
+              } @else {
+                <span class="q-caption">{{
+                  'orders.detail.money.deliveryProviderUnknown' | t
+                }}</span>
+              }
+            </dd>
+          </div>
+          @if (plan.providerCostMinor != null) {
+            <div class="pane__money-row">
+              <dt class="q-body-sm">{{ 'orders.detail.money.deliveryMargin' | t }}</dt>
+              <dd class="q-mono q-tnum">
+                {{ formatMoneyMinor(deliveryMarginMinor(plan) ?? 0, plan.currency) }}
+              </dd>
+            </div>
+          }
+        }
+      </dl>
+
+      <!-- Delivery-exception band (gap map rows 1.2f/1.2g): every open ADR 0014
+           sourcing or cancellation exception, most recent last. Empty for the
+           ordinary case -- sourcing settled cleanly and nothing needs an operator. -->
+      @if (plan.exceptions.length > 0) {
+        <ul class="pane__delivery-exceptions" data-testid="order-detail-delivery-exceptions">
+          @for (exception of plan.exceptions; track exception.exceptionId) {
+            <li class="pane__delivery-exception" role="alert">
+              <span class="q-body-sm">{{
+                deliveryExceptionReasonLabel(exception.reasonCode)
+              }}</span>
+              @if (exception.detail) {
+                <span class="q-caption">{{ exception.detail }}</span>
+              }
+            </li>
+          }
+        </ul>
+      }
+    }
+  } @else {
+    <div class="pane__money-error" role="alert" data-testid="order-detail-money-error">
+      <p class="q-body-sm">{{ 'orders.detail.money.error' | t }}</p>
+      <p class="q-caption q-mono">
+        {{
+          'orders.detail.money.errorDetail'
+            | t
+              : {
+                  lineSum: formatMoneyMinor(money.lineSumMinor, summary().currency),
+                  subtotal: formatMoneyMinor(money.subtotalMinor, summary().currency),
+                }
+        }}
+      </p>
+    </div>
+  }
+}

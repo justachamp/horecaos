@@ -273,9 +273,6 @@ export const en = {
   'state.denied.body':
     'Access is granted per capability. Ask a platform administrator for the capability this section needs.',
 
-  'state.notBuilt.title': 'Not built yet',
-  'state.notBuilt.body': 'This section has no screen yet.',
-
   'overview.title': 'Platform health',
   'overview.lead':
     'Tenants, orders, fiscal receipts and queues across every tenant, counted at the moment you open it.',
@@ -691,7 +688,6 @@ export const en = {
   'ownerInvitations.column.acceptedAt': 'Account set up',
   'ownerInvitations.column.attempts': 'Attempts',
   'ownerInvitations.column.lastError': 'Last failure',
-  'onboarding.invitation.recipient': 'Sent to',
   'onboarding.invitation.timeline': 'History',
   'onboarding.invitation.timelineEmpty':
     'This invitation predates the history, so nothing was recorded for it.',
@@ -832,7 +828,6 @@ export const en = {
   'deadLetters.title': 'Dead letters & replay',
   'deadLetters.lead':
     'Messages that failed after every retry: events the platform could not publish, and events a consumer could not process. Retry or resolve each one, with a reason.',
-  'deadLetters.empty': 'No dead-lettered events.',
   'deadLetters.column.event': 'Event',
   'deadLetters.column.type': 'Type',
   'deadLetters.column.attempts': 'Attempts',
@@ -1110,9 +1105,7 @@ export const en = {
   'staff.revokeTenant.confirm': 'Revoke',
   'staff.revokeTenant.done': 'Revoked.',
   'staff.grant.roleChoose': 'Choose a role',
-  'staff.grant.brand': 'Brand',
   'staff.grant.chooseBrand': 'Choose a brand',
-  'staff.grant.location': 'Location',
   'staff.grant.chooseLocation': 'Choose a location',
   'staff.approvals.title': 'Pending approvals',
   'staff.approvals.lead':
@@ -1152,7 +1145,6 @@ export const en = {
   'auditLog.column.outcome': 'Outcome',
   'auditLog.actor.system': 'System',
   'auditLog.filter.action': 'Action code',
-  'auditLog.filter.outcome': 'Outcome',
   'auditLog.filter.anyOutcome': 'Any outcome',
   'auditLog.filter.apply': 'Filter',
   'auditLog.outcome.SUCCEEDED': 'Succeeded',
@@ -1530,9 +1522,6 @@ export const en = {
   'statements.void.open': 'Void',
   'statements.void.submit': 'Void the statement',
   'statements.void.done': 'Statement {number} voided.',
-  'statements.wallet.title': 'Prepaid wallet',
-  'statements.wallet.body':
-    'Not built. How tenants pay HorecaOS, and how money paid in advance is taxed, are not decided yet, so there is no balance, top-up or credit expiry to show.',
   'dunning.lead':
     'Every tenant that is late paying or suspended, how long it has been there, and what each stage restricts. Nothing moves a tenant by itself: after two weeks late an incident asks a person to decide.',
   'statements.column.paid': 'Paid',

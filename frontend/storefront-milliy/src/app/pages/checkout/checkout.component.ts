@@ -4,6 +4,8 @@ import { Router } from '@angular/router';
 import { AddressBookService, addressLine } from '../../services/address-book.service';
 import { DeliverySelectionService } from '../../services/delivery-selection.service';
 import { IconComponent } from '../../shared/icon/icon.component';
+import { OrderSummaryComponent } from './order-summary/order-summary.component';
+import { PaymentListComponent, type PaymentChoice } from './payment-list/payment-list.component';
 import { PaymentSessionService } from '../../services/payment-session.service';
 import { TranslatePipe } from '../../shared/translate/translate.pipe';
 import { UiCartService } from '../../services/ui-cart.service';
@@ -61,7 +63,7 @@ const KNOWN_METHODS: Readonly<Record<string, PaymentOption>> = {
 @Component({
   selector: 'app-checkout',
   standalone: true,
-  imports: [IconComponent, TranslatePipe],
+  imports: [IconComponent, OrderSummaryComponent, PaymentListComponent, TranslatePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './checkout.component.html',
   styleUrl: './checkout.component.scss',
@@ -102,6 +104,11 @@ export class CheckoutComponent implements OnInit {
    */
   protected readonly pricingNoteKey = computed(() =>
     this.submitErrorKey() ? null : this.cart.priceRefusalKey(),
+  );
+
+  /** What the payment picker draws: each offered method with the label this deployment knows for it. */
+  protected readonly paymentChoices = computed<readonly PaymentChoice[]>(() =>
+    this.paymentMethods().map((code) => ({ code, labelKey: this.paymentOption(code).labelKey })),
   );
 
   protected readonly isDelivery = computed(() => this.cart.fulfillmentMode() === 'DELIVERY');

@@ -1,26 +1,6 @@
 import { Routes } from '@angular/router';
 import { authGuard } from './guards/auth.guard';
 import { HomeComponent } from './pages/home/home.component';
-import { ProductComponent } from './pages/product/product.component';
-import { ActiveOrderComponent } from './pages/orders/active-order/active-order.component';
-import { FinishedOrderComponent } from './pages/orders/finished-order/finished-order.component';
-import { CancelledOrderComponent } from './pages/orders/cancelled-order/cancelled-order.component';
-import { OrdersComponent } from './pages/orders/orders.component';
-import { OrderDetailComponent } from './shared/order-detail/order-detail.component';
-import { LocationsComponent } from './pages/locations/locations.component';
-import { LocationsAddComponent } from './pages/locations/locations-add/locations-add.component';
-import { LocationsListComponent } from './pages/locations/locations-list/locations-list.component';
-import { LocationsPermissionComponent } from './pages/locations/locations-permission/locations-permission.component';
-import { LocationsSaveComponent } from './pages/locations/locations-save/locations-save.component';
-import { AuthComponent } from './pages/auth/auth.component';
-import { AuthLoginComponent } from './pages/auth/auth-login/auth-login.component';
-import { AuthCodeComponent } from './pages/auth/auth-code/auth-code.component';
-import { CategoryItemsComponent } from './pages/category-items/category-items.component';
-import { TermsOfConditionsComponent } from './pages/terms/terms-of-conditions.component';
-import { ChannelPageComponent } from './pages/channel-page/channel-page.component';
-import { SearchComponent } from './pages/search/search.component';
-import { DineInScanComponent } from './pages/dine-in/dine-in-scan/dine-in-scan.component';
-import { DineInTableComponent } from './pages/dine-in/dine-in-table/dine-in-table.component';
 
 export const routes: Routes = [
   { path: '', pathMatch: 'full', redirectTo: 'home' },
@@ -43,11 +23,19 @@ export const routes: Routes = [
   },
   {
     path: 'auth',
-    component: AuthComponent,
+    loadComponent: () => import('./pages/auth/auth.component').then((m) => m.AuthComponent),
     children: [
       { path: '', pathMatch: 'full', redirectTo: 'login' },
-      { path: 'login', component: AuthLoginComponent },
-      { path: 'code', component: AuthCodeComponent },
+      {
+        path: 'login',
+        loadComponent: () =>
+          import('./pages/auth/auth-login/auth-login.component').then((m) => m.AuthLoginComponent),
+      },
+      {
+        path: 'code',
+        loadComponent: () =>
+          import('./pages/auth/auth-code/auth-code.component').then((m) => m.AuthCodeComponent),
+      },
     ],
   },
   // Gated: this is the customer's own saved-address book (/me/addresses),
@@ -55,28 +43,77 @@ export const routes: Routes = [
   // pickup-locations endpoint and personal data either way.
   {
     path: 'locations',
-    component: LocationsComponent,
+    loadComponent: () =>
+      import('./pages/locations/locations.component').then((m) => m.LocationsComponent),
     canActivate: [authGuard],
     children: [
       { path: '', pathMatch: 'full', redirectTo: 'list' },
-      { path: 'list', component: LocationsListComponent },
-      { path: 'add', component: LocationsAddComponent },
-      { path: 'save', component: LocationsSaveComponent },
-      { path: 'permission', component: LocationsPermissionComponent },
+      {
+        path: 'list',
+        loadComponent: () =>
+          import('./pages/locations/locations-list/locations-list.component').then(
+            (m) => m.LocationsListComponent,
+          ),
+      },
+      {
+        path: 'add',
+        loadComponent: () =>
+          import('./pages/locations/locations-add/locations-add.component').then(
+            (m) => m.LocationsAddComponent,
+          ),
+      },
+      {
+        path: 'save',
+        loadComponent: () =>
+          import('./pages/locations/locations-save/locations-save.component').then(
+            (m) => m.LocationsSaveComponent,
+          ),
+      },
+      {
+        path: 'permission',
+        loadComponent: () =>
+          import('./pages/locations/locations-permission/locations-permission.component').then(
+            (m) => m.LocationsPermissionComponent,
+          ),
+      },
     ],
   },
   // Gated: a customer's own order history, ownership-authorised the same
   // way /me is.
   {
     path: 'orders',
-    component: OrdersComponent,
+    loadComponent: () => import('./pages/orders/orders.component').then((m) => m.OrdersComponent),
     canActivate: [authGuard],
     children: [
       { path: '', pathMatch: 'full', redirectTo: 'active' },
-      { path: 'active', component: ActiveOrderComponent },
-      { path: 'finished', component: FinishedOrderComponent },
-      { path: 'cancelled', component: CancelledOrderComponent },
-      { path: 'detail/:id', component: OrderDetailComponent },
+      {
+        path: 'active',
+        loadComponent: () =>
+          import('./pages/orders/active-order/active-order.component').then(
+            (m) => m.ActiveOrderComponent,
+          ),
+      },
+      {
+        path: 'finished',
+        loadComponent: () =>
+          import('./pages/orders/finished-order/finished-order.component').then(
+            (m) => m.FinishedOrderComponent,
+          ),
+      },
+      {
+        path: 'cancelled',
+        loadComponent: () =>
+          import('./pages/orders/cancelled-order/cancelled-order.component').then(
+            (m) => m.CancelledOrderComponent,
+          ),
+      },
+      {
+        path: 'detail/:id',
+        loadComponent: () =>
+          import('./shared/order-detail/order-detail.component').then(
+            (m) => m.OrderDetailComponent,
+          ),
+      },
     ],
   },
   // Public at the top level: ProfileComponent already renders a signed-out
@@ -91,17 +128,40 @@ export const routes: Routes = [
     path: 'profile',
     loadChildren: () => import('./pages/profile/profile.module').then((m) => m.ProfileModule),
   },
-  { path: 'category', component: CategoryItemsComponent },
+  {
+    path: 'category',
+    loadComponent: () =>
+      import('./pages/category-items/category-items.component').then(
+        (m) => m.CategoryItemsComponent,
+      ),
+  },
   // Client-side search over the already-loaded menu (MenuService.search) --
   // no platform endpoint of its own, so nothing here needs a session either.
-  { path: 'search', component: SearchComponent },
-  { path: 'product/:id', component: ProductComponent },
-  { path: 'terms', component: TermsOfConditionsComponent },
+  {
+    path: 'search',
+    loadComponent: () => import('./pages/search/search.component').then((m) => m.SearchComponent),
+  },
+  {
+    path: 'product/:id',
+    loadComponent: () =>
+      import('./pages/product/product.component').then((m) => m.ProductComponent),
+  },
+  {
+    path: 'terms',
+    loadComponent: () =>
+      import('./pages/terms/terms-of-conditions.component').then(
+        (m) => m.TermsOfConditionsComponent,
+      ),
+  },
   // Row 10.5: a channel's own static pages (about/contacts/delivery-terms/
   // privacy-offer), published from the operations console's channel setup
   // hub. An unrecognised slug renders the same not-found state as one the
   // channel has never published -- see ChannelPageComponent's own doc.
-  { path: 'pages/:slug', component: ChannelPageComponent },
+  {
+    path: 'pages/:slug',
+    loadComponent: () =>
+      import('./pages/channel-page/channel-page.component').then((m) => m.ChannelPageComponent),
+  },
   // Row 10.5's dine-in facet (ADR 0047): the table-QR flow. `:tableToken` is
   // the one-time value a table's printed code encodes -- DineInScanComponent
   // spends it once, against QrEntryController.exchange, and replaces the URL
@@ -109,7 +169,19 @@ export const routes: Routes = [
   // printed token never sits in history past that single request (see that
   // component's own doc). Public: a guest holds no session at all yet, the
   // same pre-account standing as the menu routes above.
-  { path: 'dine-in/table', component: DineInTableComponent },
-  { path: 'dine-in/:tableToken', component: DineInScanComponent },
+  {
+    path: 'dine-in/table',
+    loadComponent: () =>
+      import('./pages/dine-in/dine-in-table/dine-in-table.component').then(
+        (m) => m.DineInTableComponent,
+      ),
+  },
+  {
+    path: 'dine-in/:tableToken',
+    loadComponent: () =>
+      import('./pages/dine-in/dine-in-scan/dine-in-scan.component').then(
+        (m) => m.DineInScanComponent,
+      ),
+  },
   { path: '**', redirectTo: 'home' },
 ];

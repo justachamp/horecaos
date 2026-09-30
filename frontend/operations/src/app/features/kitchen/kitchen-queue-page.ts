@@ -40,6 +40,8 @@ import { OrderChangePaymentMethodDialog } from '../orders/order-change-payment-m
 import { describeApiError } from '../orders/order-errors';
 import { OrderAmendmentsApi } from '../orders/order-amendments-api';
 import { OrderTableChip } from '../../shared/ui/order-table-chip/order-table-chip';
+import { KitchenQueueNotices } from './kitchen-queue-notices';
+import { KitchenQueueToolbar } from './kitchen-queue-toolbar';
 import { OrderDeliveryApi } from '../orders/order-delivery-api';
 import { OrderDetailResponse, OrderLine, OrderLineCommentPreset } from '../orders/order-detail';
 import { OrderRevealApi } from '../orders/order-reveal-api';
@@ -145,7 +147,14 @@ const PLACEHOLDER_TIME_ZONE: TimeZone = 'Asia/Tashkent';
  */
 @Component({
   selector: 'q-kitchen-queue-page',
-  imports: [TPipe, ExternalCourierDialog, OrderChangePaymentMethodDialog, OrderTableChip],
+  imports: [
+    TPipe,
+    ExternalCourierDialog,
+    KitchenQueueNotices,
+    KitchenQueueToolbar,
+    OrderChangePaymentMethodDialog,
+    OrderTableChip,
+  ],
   templateUrl: './kitchen-queue-page.html',
   styleUrl: './kitchen-queue-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -362,6 +371,14 @@ export class KitchenQueuePage implements OnInit {
       case 'aggregator':
         return counts.aggregator;
     }
+  }
+
+  /** Every tab's count, for the toolbar. */
+  protected tabCountMap(): Readonly<Record<KitchenTabId, number | null>> {
+    return Object.fromEntries(KITCHEN_TABS.map((tab) => [tab, this.tabCount(tab)])) as Record<
+      KitchenTabId,
+      number | null
+    >;
   }
 
   protected visibleTickets(): readonly TicketResponse[] {

@@ -1,0 +1,50 @@
+/* Form buttons and the outlined status badge, shared by the settings, finance and customer pages.
+ *
+ * Nineteen page stylesheets carried the same .primary button, fifteen the same .secondary and
+ * fifteen the same outlined .status-badge, byte for byte. The bare names cannot be global (other
+ * pages mean something else by them), so these are q- names a page opts into by using them in its
+ * template; a page whose button differs keeps its own rule. See modal.css.
+ *
+ * The 36 px height is this family's; the 32 px secondary button some report pages use is a
+ * different control and stays in their stylesheets.
+ */
+
+.q-btn-primary {
+  height: 36px;
+  padding: 0 16px;
+  border: none;
+  border-radius: var(--q-radius);
+  background: var(--q-primary);
+  color: var(--q-inverse-ink);
+  cursor: pointer;
+}
+
+.q-btn-primary:disabled {
+  background: var(--q-surface-2);
+  color: var(--q-ink-subtle);
+  cursor: default;
+}
+
+.q-btn-secondary {
+  height: 36px;
+  padding: 0 16px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  cursor: pointer;
+}
+
+.q-btn-secondary:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.q-status-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  color: var(--q-ink-muted);
+  font-size: var(--q-type-caption);
+}

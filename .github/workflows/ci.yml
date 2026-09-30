@@ -397,6 +397,7 @@ jobs:
         run: |
           npm run lint
           npm run lint:rules
+          npm run i18n:dead:test
 
       - name: Lint (control-plane, storefront, storefront-milliy)
         # ESLint 8.57 with the typescript-eslint recommended rules, plus (control-plane

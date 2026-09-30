@@ -24,7 +24,6 @@ import { TPipe } from '../../../core/i18n/t.pipe';
 import { Combobox, ComboboxOption } from '../../../shared/ui/combobox';
 import { DeniedState } from '../../../shared/ui/denied-state';
 import { MoneyInput } from '../../../shared/ui/money-input';
-import { NumberStepper } from '../../../shared/ui/number-stepper';
 import { Toasts } from '../../../shared/ui/toast';
 import {
   CreateCustomerDialog,
@@ -49,7 +48,6 @@ import {
   CommentPresetOption,
   CustomerLookupCandidate,
   DeliveryFeeQuote,
-  MenuCategory,
   MenuModifierGroup,
   MenuProduct,
   MenuVariant,
@@ -58,6 +56,9 @@ import {
   PlaceOrderRequest,
   StorefrontMenu,
 } from './new-order-api';
+import { BasketLineView, NewOrderBasket } from './new-order-basket';
+import { NewOrderHeader } from './new-order-header';
+import { NewOrderMenuGrid } from './new-order-menu-grid';
 import { BasketLine, computeBasketTotal } from './new-order-total';
 
 /**
@@ -258,12 +259,14 @@ interface PendingModifierSelection {
   imports: [
     TPipe,
     Combobox,
-    NumberStepper,
     CreateCustomerDialog,
     ItemModifierDialog,
     DeniedState,
     MoneyInput,
     DineInTablePicker,
+    NewOrderBasket,
+    NewOrderHeader,
+    NewOrderMenuGrid,
   ],
   templateUrl: './new-order-page.html',
   styleUrl: './new-order-page.css',
@@ -431,19 +434,6 @@ export class NewOrderPage implements OnInit {
       .filter((group): group is MenuModifierGroup => group !== undefined);
   }
 
-  /** The category grid's own row — orders.md §5.5's fallback for a caller browsing aloud. */
-  protected productsIn(category: MenuCategory, menu: StorefrontMenu): readonly MenuProduct[] {
-    const byId = new Map(menu.products.map((product) => [product.productId, product]));
-    return category.productIds
-      .map((id) => byId.get(id))
-      .filter((product): product is MenuProduct => product !== undefined);
-  }
-
-  /** A struck-through стоп chip, orders.md §5.5: visible and not addable, never hidden. */
-  protected isAnyVariantOrderable(product: MenuProduct): boolean {
-    return product.variants.some((variant) => variant.orderable);
-  }
-
   /** `LARGE, EXTRA_SHOT×3` — a compact summary of one basket line's chosen modifiers. */
   protected modifierSummary(line: BasketLine): string {
     return line.modifiers
@@ -479,6 +469,15 @@ export class NewOrderPage implements OnInit {
       })
       .join(', ');
   }
+
+  /** The basket with each line's summaries worded, for the basket component. */
+  protected readonly basketView = computed<readonly BasketLineView[]>(() =>
+    this.basket().map((line) => ({
+      ...line,
+      modifierText: this.modifierSummary(line),
+      presetText: this.presetSummary(line),
+    })),
+  );
 
   // -------------------------------------------------------------- §5.3 customer
 

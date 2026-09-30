@@ -6,7 +6,6 @@ import { Money } from '../../core/api/money';
 import { ApiError } from '../../core/api/problem';
 import { SessionContextService } from '../../core/auth/session-context.service';
 import { I18nService } from '../../core/i18n/i18n.service';
-import { MessageKey, en } from '../../core/i18n/messages.en';
 import { TenantDirectory } from '../../shared/tenant-directory';
 import { AccessApi } from '../access/access-api';
 import { PlatformPendingApproval, ResidencyApi } from './residency-api';
@@ -94,7 +93,7 @@ export class PlatformApprovals {
    */
   protected actionLabel(code: string): string {
     const key = `platformApprovals.action.${code.replace(/\./g, '_')}`;
-    return key in en ? this.i18n.t(key as MessageKey) : code;
+    return this.i18n.hasMessage(key) ? this.i18n.t(key) : code;
   }
 
   /**
@@ -203,7 +202,7 @@ export class PlatformApprovals {
 
   /** A catalogued label, or the raw string when no catalogue has one — never the empty string. */
   private labelled(key: string, raw: string): string {
-    return key in en ? this.i18n.t(key as MessageKey) : raw;
+    return this.i18n.hasMessage(key) ? this.i18n.t(key) : raw;
   }
 
   /** The tenant a platform row concerns, for the link back to its wallet. */

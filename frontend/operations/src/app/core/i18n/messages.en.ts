@@ -78,7 +78,6 @@ export const messagesEn = {
   'shell.locationPicker.status.SUSPENDED': 'suspended',
 
   'orders.title': 'Orders',
-  'orders.detail.empty': 'Select an order to see it here.',
   'orders.detail.close': 'Close',
 
   'orders.drafts.link': 'Drafts',
@@ -411,7 +410,6 @@ export const messagesEn = {
   'orders.detail.timeline.lane.commercial': 'Commercial',
   'orders.detail.timeline.lane.production': 'Kitchen',
   'orders.detail.timeline.lane.delivery': 'Delivery',
-  'orders.detail.timeline.lane.notBuilt': 'not built yet',
   'orders.detail.timeline.trigger.CHECKOUT': 'Checkout',
   'orders.detail.timeline.trigger.APPROVAL_DECISION': 'Approval decision',
   'orders.detail.timeline.trigger.APPROVAL_TIMEOUT': 'Approval timed out',
@@ -603,7 +601,6 @@ export const messagesEn = {
 
   'orders.severity.blocked': 'needs attention',
   'orders.severity.approvalDeadline': 'confirm within {mmss}',
-  'orders.severity.noPromiseFallback': 'waiting {duration}',
   'orders.severity.late': 'late by {duration}',
   'orders.severity.atRisk': 'at risk of running late',
 
@@ -621,7 +618,6 @@ export const messagesEn = {
   // --- orders.queue toolbar filters (orders.md §2.4, wave P07) -------------
   'orders.queue.filter.search.placeholder': 'Order #, aggregator ID…',
   'orders.queue.filter.search.ariaLabel': 'Search orders',
-  'orders.queue.filter.period.label': 'Period',
   'orders.queue.filter.channel.label': 'Channel',
   'orders.queue.filter.channel.all': 'All channels',
   'orders.queue.filter.fulfillmentMode.label': 'Type',
@@ -664,7 +660,6 @@ export const messagesEn = {
     'Bulk actions work on one branch at a time — switch to “This branch” to select orders.',
 
   // --- orders.queue selection and bulk actions (orders.md §2.10, wave P07) -
-  'orders.queue.column.select': 'Select',
   'orders.queue.selection.selectPage': 'Select {count} on this page',
   'orders.queue.selection.selected': 'Selected {count}',
   'orders.queue.selection.clear': 'Clear selection',
@@ -820,7 +815,6 @@ export const messagesEn = {
 
   // ---------------------------------------------------------------- settings (wave 26)
   'settings.nav.title': 'Settings',
-  'settings.scope.editing': 'Editing',
   'settings.scope.denied': 'No location in scope',
   'settings.nav.group.business': 'The business',
   'settings.nav.group.selling': 'Selling',
@@ -845,8 +839,6 @@ export const messagesEn = {
   'settings.home.title': 'Settings',
   'settings.home.lead':
     'The registries and policies every other screen reads: your brand, your branches, how orders are accepted, and how you get paid.',
-  'settings.home.readinessNotBuilt':
-    "The readiness panel (what's blocking orders right now) needs a cross-module read this wave did not add. Open a group below instead.",
   'settings.home.notBuiltBadge': 'Not built yet',
   'settings.home.readiness.title': 'Is this restaurant ready to trade?',
   'settings.home.readiness.loading': 'Checking readiness…',
@@ -992,9 +984,6 @@ export const messagesEn = {
   'settings.integrations.connect.environmentCode.test': 'test',
   'settings.integrations.connect.environmentCode.none':
     'No environment is approved for this provider yet. Contact platform support before connecting it.',
-  'settings.integrations.connect.reference': 'Reference (optional)',
-  'settings.integrations.connect.reference.hint':
-    'A non-secret label such as a merchant or service id, for your own records.',
   'settings.integrations.connect.submit': 'Connect',
   'settings.integrations.connect.submitting': 'Connecting…',
   'settings.integrations.connect.success':
@@ -1024,7 +1013,6 @@ export const messagesEn = {
   'settings.integrations.rotate.reason': 'Reason',
   'settings.integrations.rotate.submit': 'Rotate',
   'settings.integrations.rotate.submitting': 'Rotating…',
-  'settings.integrations.rotate.success': 'Credential rotated.',
   'settings.integrations.rotate.cancel': 'Cancel',
   'settings.integrations.rotate.unverifiedNotice':
     'This provider has no way to verify a credential before it is used. It will be written and swapped in, and marked unverified until it is proven by a real payment.',
@@ -1055,8 +1043,6 @@ export const messagesEn = {
   'settings.integrations.registerBinding.value': 'Merchant secret key',
   'settings.integrations.registerBinding.submit': 'Register',
   'settings.integrations.registerBinding.submitting': 'Registering…',
-  'settings.integrations.registerBinding.success':
-    'Merchant binding registered as draft. Activate it once it is correct.',
   'settings.integrations.registerBinding.cancel': 'Cancel',
 
   // 10.1 Brand profile, 10.12 languages and regional formats
@@ -1422,7 +1408,6 @@ export const messagesEn = {
   'settings.fiscalization.field.status': 'Status',
   'settings.fiscalization.cancel': 'Cancel',
   'settings.fiscalization.assignment.title': 'This location’s fiscal seller',
-  'settings.fiscalization.assignment.active': '{name}, since {date}',
   'settings.fiscalization.assignment.current': 'Current',
   'settings.fiscalization.assignment.none':
     'No active fiscal assignment — this location cannot be activated for a channel that can produce a receipt.',
@@ -1534,10 +1519,6 @@ export const messagesEn = {
   'settings.notifications.field.channel': 'Delivery channel',
   'settings.notifications.field.status': 'Active',
   'settings.notifications.field.activeVersion': 'Version',
-  'settings.notifications.field.bodyRu': 'Text (Russian)',
-  'settings.notifications.field.bodyUz': 'Text (Uzbek)',
-  'settings.notifications.field.bodyEn': 'Text (English)',
-  'settings.notifications.field.activateImmediately': 'Activate this version immediately',
   'settings.notifications.field.channel.hint':
     'Only SMS and Telegram actually send today. Email and Push are declared so the schema and template key carry a channel, but no adapter delivers them yet.',
   'settings.notifications.field.variant': 'Variant',
@@ -1550,13 +1531,11 @@ export const messagesEn = {
   'settings.notifications.action.rowMenu': 'Actions',
   'settings.notifications.action.versions': 'Versions',
   'settings.notifications.action.newVersion': 'New version',
-  'settings.notifications.action.view': 'View',
   'settings.notifications.action.activate': 'Activate',
   'settings.notifications.action.testSend': 'Test send',
   'settings.notifications.action.close': 'Close',
   'settings.notifications.drawer.versionsTitle': 'Versions — {key}',
   'settings.notifications.drawer.editorTitleNew': 'New version — {key}',
-  'settings.notifications.drawer.editorTitleView': 'Version {version} — {key}',
   'settings.notifications.versions.empty': 'No versions yet — this template has no wording at all.',
   'settings.notifications.versions.column.version': 'Version',
   'settings.notifications.versions.column.status': 'Status',
@@ -1567,10 +1546,6 @@ export const messagesEn = {
   'settings.notifications.moderation.PENDING': 'Awaiting gateway',
   'settings.notifications.moderation.APPROVED': 'Approved',
   'settings.notifications.moderation.REJECTED': 'Refused by gateway',
-  'settings.notifications.moderation.warning.PENDING':
-    'This wording is still awaiting its SMS gateway’s approval. Every message using it is withheld until the gateway answers — activating it now will not make it send.',
-  'settings.notifications.moderation.warning.REJECTED':
-    'This wording was refused by its SMS gateway. Every message using it is withheld from sending — a new version is needed.',
   'settings.notifications.editor.subject': 'Subject',
   'settings.notifications.editor.body': 'Text',
   'settings.notifications.editor.variables': 'Insert a variable',
@@ -1616,7 +1591,6 @@ export const messagesEn = {
   'settings.notifications.routing.scope.brand': 'Whole brand',
   'settings.notifications.routing.topic.flat': 'Flat chat',
   'settings.notifications.routing.topic.numbered': 'Topic {topic}',
-  'settings.notifications.routing.action.editTopic': 'Change topic',
   'settings.notifications.routing.action.unbind': 'Unbind',
   'settings.notifications.routing.unbind.confirm.title': 'Unbind this chat?',
   'settings.notifications.routing.unbind.confirm.body':
@@ -2298,7 +2272,6 @@ export const messagesEn = {
   'catalog.products.denied': 'No access to this brand’s catalog',
   'catalog.products.empty.default': 'No products match this filter',
   'catalog.products.empty.noCatalog': 'This brand has no catalog yet',
-  'catalog.products.loadMore': 'Load more',
 
   // P21 — row actions, bulk actions and the fiscal workbench
   'catalog.products.action.duplicate': 'Duplicate',
@@ -2345,8 +2318,6 @@ export const messagesEn = {
   'catalog.editor.notFound': 'This product no longer exists',
   'catalog.editor.backToList': 'Back to Products',
   'catalog.editor.denied': 'No access to edit this product',
-  'catalog.editor.publishedBanner':
-    'This product is published. Changes reach customers only after the catalog is published again.',
   'catalog.editor.tab.basic': 'Basic',
   'catalog.editor.tab.variants': 'Variants',
   'catalog.editor.tab.modifiers': 'Modifiers',
@@ -2366,10 +2337,8 @@ export const messagesEn = {
   'catalog.editor.basic.code': 'Code',
   'catalog.editor.basic.codeNote': 'Immutable after the first publication',
   'catalog.editor.basic.status': 'Status',
-  'catalog.editor.basic.statusNote': 'Draft, Active or Archived',
   'catalog.editor.basic.catalogs': 'Catalogs',
   'catalog.editor.basic.categories': 'Categories',
-  'catalog.editor.basic.addCategory': 'Add to category…',
   'catalog.editor.basic.remove': 'Remove',
   'catalog.editor.basic.kitchenDept': 'Kitchen department',
   'catalog.editor.kitchen.role.none': '— Not routed —',
@@ -2385,8 +2354,6 @@ export const messagesEn = {
   'catalog.editor.variants.column.unit': 'Unit',
   'catalog.editor.variants.column.default': 'Default',
   'catalog.editor.variants.column.price': 'Base price',
-  'catalog.editor.variants.column.mxik': 'ИКПУ',
-  'catalog.editor.variants.column.packageCode': 'Package code',
   'catalog.editor.variants.column.status': 'Status',
   'catalog.editor.variants.add': 'Add variant',
   'catalog.editor.variants.noPrice': 'No price',
@@ -2395,14 +2362,10 @@ export const messagesEn = {
   'catalog.editor.modifiers.library': 'Modifier group library',
   'catalog.editor.modifiers.attached': 'Attached to this product',
   'catalog.editor.modifiers.attach': 'Attach',
-  'catalog.editor.modifiers.required': 'Required, {min}',
-  'catalog.editor.modifiers.optional': 'Optional, up to {max}',
   'catalog.editor.modifiers.empty': 'No modifier groups attached',
   'catalog.editor.modifiers.libraryEmpty': 'The brand has no modifier groups yet',
   'catalog.editor.modifiers.create': 'Create group',
   'catalog.editor.photos.empty': 'No photos yet',
-  'catalog.editor.photos.upload': 'Upload photo',
-  'catalog.editor.photos.uploading': 'Uploading…',
   'catalog.editor.photos.moveUp': 'Move earlier',
   'catalog.editor.photos.moveDown': 'Move later',
   'catalog.editor.photos.detach': 'Remove photo',
@@ -2423,15 +2386,11 @@ export const messagesEn = {
   'catalog.editor.fiscal.alcohol': 'Alcohol by volume, %',
   'catalog.editor.fiscal.age': 'Age restriction, years',
   'catalog.editor.fiscal.save': 'Save classification',
-  'catalog.editor.fiscal.inherited': 'Inherited from the product',
   'catalog.editor.fiscal.notBuilt':
     'Marking scheme, excise, alcohol % and age gate are stored but not yet enforced by publication — ADR 0038',
   'catalog.editor.fiscal.mxikReferenceNote':
     'Empty results mean the official ИКПУ/MXIK list has never been imported for this platform — not that nothing matched.',
   'catalog.editor.availability.location': 'Location',
-  'catalog.editor.availability.inMenu': 'In menu',
-  'catalog.editor.availability.fulfillment': 'Order types',
-  'catalog.editor.availability.tracking': 'Tracking',
   'catalog.editor.availability.state': 'State',
   'catalog.editor.availability.empty': 'This product is not offered at any location yet',
   'catalog.editor.availability.stop': 'Stop',
@@ -2527,12 +2486,10 @@ export const messagesEn = {
   'catalog.categories.form.code': 'Code',
   'catalog.categories.form.parent': 'Parent category',
   'catalog.categories.form.parentNone': 'No parent — top level',
-  'catalog.categories.form.sortOrder': 'Sort order',
   'catalog.categories.form.status': 'Status',
   'catalog.categories.form.save': 'Save',
   'catalog.categories.products.title': 'Products in this category',
   'catalog.categories.products.empty': 'No products in this category',
-  'catalog.categories.products.add': 'Add products…',
   'catalog.categories.denied': 'No access to this brand’s categories',
   'catalog.categories.loading': 'Loading categories',
   'catalog.categories.selectPrompt': 'Select a category to edit it',
@@ -2591,13 +2548,9 @@ export const messagesEn = {
   'catalog.stock.thresholds.remove': 'Remove',
 
   'catalog.menus.title': 'Menus',
-  'catalog.menus.location.label': 'Location',
-  'catalog.menus.location.none': 'No location assigned to this account yet',
   'catalog.menus.column.product': 'Product',
-  'catalog.menus.column.sku': 'SKU',
   'catalog.menus.column.price': 'Price',
   'catalog.menus.column.status': 'In menu',
-  'catalog.menus.column.prep': 'Prep time',
   'catalog.menus.status.AVAILABLE': 'In menu',
   'catalog.menus.status.UNAVAILABLE': 'Stopped',
   'catalog.menus.status.HIDDEN': 'Hidden',
@@ -2669,7 +2622,6 @@ export const messagesEn = {
   'catalog.priceList.column.status': 'Status',
   'catalog.priceList.column.priority': 'Priority',
   'catalog.priceList.matrix': 'Matrix',
-  'catalog.priceList.assignBrand': 'Apply to brand',
   'catalog.priceList.activate': 'Activate',
   'catalog.priceList.relatedLinks': 'Related screens',
   'catalog.priceList.assign': 'Assign',
@@ -2688,7 +2640,6 @@ export const messagesEn = {
   'catalog.priceMatrix.loading': 'Loading the matrix',
   'catalog.priceMatrix.denied': 'No access to this brand’s pricing',
   'catalog.priceMatrix.notFound': 'This price book no longer exists',
-  'catalog.priceMatrix.loadError': 'Could not load the matrix',
   'catalog.priceMatrix.empty': 'No variants match this filter',
   'catalog.priceMatrix.category': 'Category',
   'catalog.priceMatrix.allCategories': 'All categories',
@@ -2704,7 +2655,6 @@ export const messagesEn = {
   'catalog.priceMatrix.loadingMore': 'Loading…',
   'catalog.priceMatrix.conflict':
     'Someone else changed this price — reloaded with the current value. Try again.',
-  'catalog.priceMatrix.noBasePrice': 'No brand-wide base book is live yet',
 
   'catalog.taxProfile.title': 'VAT / tax profiles',
   'catalog.taxProfile.intro': 'Sets the brand’s VAT rate.',
@@ -2845,7 +2795,6 @@ export const messagesEn = {
   'kitchen.item.column.station': 'Station',
   'kitchen.item.column.quantity': 'Qty',
   'kitchen.item.column.status': 'Status',
-  'kitchen.item.hasNote': 'Customer left a note',
   'kitchen.item.lineUnresolved': 'Line —',
   'kitchen.item.status.QUEUED': 'Queued',
   'kitchen.item.status.STARTED': 'Started',
@@ -2863,7 +2812,6 @@ export const messagesEn = {
 
   // Assign an in-house courier from the pass (2.1c) — wave P16
   'kitchen.assign.button': 'Assign courier',
-  'kitchen.assign.title': 'Assign a courier',
   'kitchen.assign.loading': 'Finding the delivery plan…',
   'kitchen.assign.noPlan': 'No delivery plan found for this order',
   'kitchen.assign.empty': 'No couriers on the roster',
@@ -2896,8 +2844,6 @@ export const messagesEn = {
 
   'kitchen.expo.handOver': 'Hand over',
   'kitchen.expo.empty': 'Nothing ready for handover',
-  'kitchen.expo.noCodeVerification':
-    'No provider handover-code check yet — this button only records custody transfer.',
   'kitchen.expo.packedConfirm': 'Packed and ready to hand over',
   'kitchen.expo.packedWaiting': 'Waiting for every line to be ready before it can be packed',
 
@@ -2910,9 +2856,6 @@ export const messagesEn = {
   'kitchen.stopList.bulk.reason.noProduct': 'No product',
   'kitchen.stopList.bulk.reason.equipment': 'Equipment issue',
   'kitchen.stopList.bulk.reason.other': 'Other',
-  'kitchen.stopList.bulk.stopAction': 'Stop selected',
-  'kitchen.stopList.bulk.unstopAction': 'Restore selected',
-  'kitchen.stopList.bulk.clear': 'Clear',
   'kitchen.stopList.bulk.done': '{count} items updated',
   'kitchen.stopList.bulk.partial': '{failed} items failed to update',
   'kitchen.stopList.bulk.tooMany': 'Select at most {max} items for a bulk change',
@@ -2932,7 +2875,6 @@ export const messagesEn = {
   'kitchen.stopList.action.stop': 'Stop',
   'kitchen.stopList.action.unstop': 'Restore',
   'kitchen.stopList.empty': 'No products at this location yet',
-  'kitchen.stopList.loadMore': 'Load more',
 
   // Capacity & buffer settings (2.6) — wave 43
   'kitchen.capacity.title': 'Capacity & buffer settings',
@@ -3201,7 +3143,6 @@ export const messagesEn = {
   'delivery.zones.column.version': 'Version',
   'delivery.zones.column.priority': 'Priority',
   'delivery.zones.column.tariff': 'Tariff',
-  'delivery.zones.detail.boundLocations': '{count} branch(es) bound',
   'delivery.zones.detail.freeFrom': 'Free delivery from {amount}',
   'delivery.zones.detail.minBasket': 'Minimum basket {amount}',
   'delivery.zones.detail.loading': 'Loading zone detail',
@@ -3230,7 +3171,6 @@ export const messagesEn = {
   'delivery.zoneImport.committed': 'Imported {count} zone(s) as DRAFT',
   'delivery.zones.create.title': 'Register a zone',
   'delivery.zones.create.code': 'Code',
-  'delivery.zones.create.name': 'Name',
   'delivery.zones.create.submit': 'Register',
   'delivery.zones.draft.action': 'Draw circle',
   'delivery.zones.draft.title': 'New version of {code}',
@@ -3296,7 +3236,6 @@ export const messagesEn = {
   'delivery.tariffs.column.default': 'Default',
   'delivery.tariffs.default.yes': 'Brand default',
   'delivery.tariffs.detail.loading': 'Loading tariff detail',
-  'delivery.tariffs.detail.timeRules': '{count} peak-hour rule(s)',
   'delivery.tariffs.band.from': 'From (m)',
   'delivery.tariffs.band.to': 'To (m)',
   'delivery.tariffs.band.base': 'Base',
@@ -3314,8 +3253,6 @@ export const messagesEn = {
   'delivery.tariffs.draft.currency': 'Currency',
   'delivery.tariffs.draft.maxDistance': 'Reach (metres)',
   'delivery.tariffs.draft.minFee': 'Minimum fee (minor units)',
-  'delivery.tariffs.draft.base': 'Base fee (minor units)',
-  'delivery.tariffs.draft.perKm': 'Per-km fee (minor units)',
   'delivery.tariffs.draft.submit': 'Save draft',
   'delivery.tariffs.column.distanceMode': 'Distance',
   'delivery.tariffs.column.reach': 'Reach (m)',
@@ -3501,8 +3438,6 @@ export const messagesEn = {
   'delivery.rates.cards.column.bandTo': 'To (m)',
   'delivery.rates.cards.column.minimumSeconds': 'Min. paid seconds',
   'delivery.rates.cards.activate': 'Activate',
-  'delivery.rates.cards.perOrder': 'Per-order fee (minor units)',
-  'delivery.rates.cards.perShift': 'Per-shift fixed fee (minor units)',
   'delivery.rates.cards.narrowerLocation': 'Branch id (optional, narrower than the whole brand)',
   'delivery.rates.cards.narrowerLocationPlaceholder': 'Leave empty for the whole brand',
   'delivery.rates.cards.narrowerCourierType': 'Vehicle class (optional)',
@@ -3655,22 +3590,11 @@ export const messagesEn = {
     'Delivery confirmation photos and signatures are kept for this many days, then purged.',
   'delivery.policy.card.courier': 'What the courier sees and may do',
   'delivery.policy.kitchenReadyOnly': 'Show only kitchen-ready orders',
-  'delivery.policy.consequence.kitchenReadyOnly':
-    'A courier sees and may take only orders the kitchen has already marked ready.',
   'delivery.policy.revealCustomerLocationTiming': 'Reveal customer location',
   'delivery.policy.revealCustomerLocationTiming.BEFORE_ACCEPT': 'Before accept',
   'delivery.policy.revealCustomerLocationTiming.AFTER_ACCEPT': 'After accept',
-  'delivery.policy.consequence.revealCustomerLocationTiming':
-    'Before accept shows the exact address to every courier who sees the offer; after accept shows it only once one commits.',
   'delivery.policy.postDeliveryPaymentCheckRequired': 'Check payment status after delivery',
-  'delivery.policy.consequence.postDeliveryPaymentCheckRequired':
-    'An order may not close until payment is confirmed.',
   'delivery.policy.gpsVerificationEnabled': 'Check courier actions by GPS radius',
-  'delivery.policy.consequence.gpsVerificationEnabled':
-    'Off by default. Turning this on starts checking the courier’s reported position against both radii below.',
-  'delivery.policy.gpsAcceptRadiusKm': 'Accept radius (km, from the pickup point)',
-  'delivery.policy.gpsStatusChangeRadiusMeters':
-    'Status-change radius (m, from the customer point)',
   'delivery.policy.gpsSummary':
     'On — accept within {acceptKm} km, status change within {statusChangeM} m',
   'delivery.policy.billingMode': 'Courier billing (personal balance)',
@@ -3765,7 +3689,6 @@ export const messagesEn = {
   'customers.import.reject.AMBIGUOUS_PHONE_MATCH':
     'This phone number matches more than one customer',
   'customers.import.reject.OTHER': 'Could not be imported',
-  'customers.export.dismiss': 'Dismiss',
 
   'customers.detail.unnamed': 'Unnamed customer',
   'customers.detail.registered': 'Registered',
@@ -4011,7 +3934,6 @@ export const messagesEn = {
   'staff.outcome.partial': 'Done {succeeded} of {total}',
 
   'staff.dialog.cancel': 'Cancel',
-  'staff.dialog.close': 'Close',
 
   'staff.jobDialog.title': 'Job',
   'staff.jobDialog.role.label': 'Job',
@@ -4049,10 +3971,6 @@ export const messagesEn = {
   'staff.accessDialog.revokeInvite.confirm': 'Revoke',
 
   'staff.inviteDialog.title': 'Invite',
-  'staff.inviteDialog.body':
-    'Self-service invitation by phone is not built yet: the platform can only create an account for the tenant owner during onboarding, not for an ordinary staff member.',
-  'staff.inviteDialog.workaround':
-    'To give access to someone who already has an account, open their record and add a job.',
   'staff.inviteDialog.rule':
     'A person has one or more jobs, and each job is given somewhere — the whole company, one brand, or one branch. A job given at one branch works only at that branch.',
   'staff.inviteDialog.name.label': 'Full name',
@@ -4154,8 +4072,6 @@ export const messagesEn = {
   'reports.error.retry': 'Retry',
   'reports.empty.period': 'No data for the selected period',
   'reports.export.button': 'Export',
-  'reports.export.notBuilt':
-    'Export is not built yet — ADR 0043 puts it last, behind capabilities and an audited job queue',
   'reports.export.hint': 'Open the export centre',
   'reports.unit.minutes': 'min',
 
@@ -4232,16 +4148,12 @@ export const messagesEn = {
   'reports.filter.period.7d': '7 days',
   'reports.filter.period.month': 'Month',
   'reports.filter.period.custom': 'Custom',
-  'reports.filter.period.customFrom': 'From',
-  'reports.filter.period.customTo': 'To',
-  'reports.filter.slice.label': 'Slice',
   'reports.filter.fulfilment.label': 'Fulfilment type',
   'reports.filter.fulfilment.all': 'All',
   'reports.filter.fulfilment.delivery': 'Delivery',
   'reports.filter.fulfilment.pickup': 'Pickup',
   'reports.filter.fulfilment.dineIn': 'Dine-in',
   'reports.filter.paymentType.label': 'Payment type',
-  'reports.filter.paymentType.locked': 'Arrives with payments (ADR 0013/0046)',
   'reports.filter.paymentType.placeholder': 'Any payment method',
   'reports.filter.branch.label': 'Branch',
   'reports.filter.branch.placeholder': 'Any branch',
@@ -4294,8 +4206,6 @@ export const messagesEn = {
   'reports.overview.mix.byRevenue': 'By revenue',
   'reports.overview.mix.fulfilment': 'Fulfilment type',
   'reports.overview.mix.payment': 'Payment',
-  'reports.overview.mix.payment.locked':
-    'Arrives with payments (ADR 0013/0046) — fact_order_tender is not built',
   'reports.overview.funnel.title': 'Outcome',
   'reports.overview.funnel.completed': 'Completed',
   'reports.overview.funnel.notCompleted': 'Not completed',
@@ -4317,8 +4227,6 @@ export const messagesEn = {
   'reports.overview.funnel.liability.CUSTOMER': 'Customer',
   'reports.overview.funnel.liability.COURIER_PARTNER': 'Courier partner',
   'reports.overview.funnel.liability.PLATFORM': 'Platform',
-  'reports.overview.funnel.costNotBuilt':
-    'What a cancellation cost is not shown — ADR 0039’s order_outcomes does not exist yet, so every row would read null.',
   'reports.overview.branches.title': 'Branches',
   'reports.overview.branches.name': 'Branch',
   'reports.overview.branches.revenue': 'Revenue',
@@ -4335,8 +4243,6 @@ export const messagesEn = {
     'Showing the worst rows up to this view’s limit — not a complete list for a very wide range.',
   'reports.orders.commercial.piiNote':
     'Customer, operator and courier come from a separate, audited read (order.read) — reporting itself keeps no personal data at all (ADR 0029). The phone is masked; exporting this data is an audited PII egress.',
-  'reports.orders.loadMore': 'Load more',
-  'reports.orders.loadMore.loading': 'Loading…',
   'reports.orders.late.empty': 'No late orders in the selected period',
   'reports.orders.late.summary': '{count} late orders · median {median} · worst {worst}',
 
@@ -4384,8 +4290,6 @@ export const messagesEn = {
   'reports.orders.summary.measure.averageCheck': 'Average check',
   'reports.orders.summary.split': 'Split',
   'reports.orders.summary.branch': 'Branch',
-  'reports.orders.summary.channel': 'Channel',
-  'reports.orders.summary.value': 'Value',
   'reports.orders.summary.report1.title': 'Summary 1',
   'reports.orders.summary.report2.title': 'Summary 2',
   'reports.orders.summary.orderType': 'Order type',
@@ -4608,7 +4512,6 @@ export const messagesEn = {
   'marketing.courierBroadcasts.intro':
     'A dispatcher’s own operational SMS blast to couriers — a shift change, a weather closure, a route closure. Never a customer campaign.',
   'marketing.courierBroadcasts.loading': 'Loading',
-  'marketing.courierBroadcasts.denied': 'No access to this brand’s courier broadcasts',
   'marketing.courierBroadcasts.empty': 'No broadcast sent yet',
   'marketing.courierBroadcasts.create.action': 'New broadcast',
   'marketing.courierBroadcasts.create.title': 'Draft a courier broadcast',
@@ -4632,8 +4535,6 @@ export const messagesEn = {
   'marketing.attributionLinks.title': 'Acquisition links',
   'marketing.attributionLinks.intro':
     'A trackable website ?ref= link or Telegram deep link, for a campaign or an influencer.',
-  'marketing.attributionLinks.loading': 'Loading',
-  'marketing.attributionLinks.denied': 'No access to this brand’s acquisition links',
   'marketing.attributionLinks.empty': 'No link minted yet',
   'marketing.attributionLinks.create.action': 'Mint a link',
   'marketing.attributionLinks.create.title': 'Mint an acquisition link',
@@ -4859,10 +4760,6 @@ export const messagesEn = {
   'marketing.referrals.redemptions.column.refereeReward': 'New customer paid',
   'marketing.referrals.redemptions.empty': 'No referral has been redeemed yet.',
 
-  'marketing.referrals.links.title': 'Website and Telegram acquisition links',
-  'marketing.referrals.links.body':
-    'Not built, and not a gap this screen hides: website "?ref=" links, Telegram "startapp" deep links, and a guided Mini-App/BotFather setup flow belong to ADR 0044’s marketing.attribution_links, which remains on that ADR’s own checklist. A customer can still get a code and a friend can still redeem it from the storefront — nothing here renders a shareable link, because no link table exists yet to render one from.',
-
   // -------------------------------------------------------- automations (row 6.5, ADR 0044)
   'marketing.automations.loading': 'Loading automations…',
   'marketing.automations.denied': 'You do not have access to this brand’s automations.',
@@ -4960,8 +4857,6 @@ export const messagesEn = {
   'customers.segments.builder.name': 'Name',
   'customers.segments.builder.description': 'Description',
   'customers.segments.builder.predicates': 'Conditions',
-  'customers.segments.builder.addPredicate': 'Add condition',
-  'customers.segments.builder.textValuesPlaceholder': 'Values, comma-separated',
   'customers.segments.builder.saving': 'Saving…',
   'customers.segments.builder.save': 'Save',
   'customers.segments.predicate.type.RECENCY_DAYS': 'Days since last order',
@@ -4973,12 +4868,6 @@ export const messagesEn = {
   'customers.segments.predicate.type.REGISTERED_BETWEEN': 'Registered between',
   'customers.segments.predicate.type.BIRTHDAY_WITHIN_DAYS': 'Birthday within (days)',
   'customers.segments.predicate.type.PREFERRED_LOCALE': 'Preferred language',
-  'customers.segments.predicate.type.AUDIENCE_MEMBERSHIP': 'Member of another segment',
-  'customers.segments.operator.AT_LEAST': 'at least',
-  'customers.segments.operator.AT_MOST': 'at most',
-  'customers.segments.operator.BETWEEN': 'between',
-  'customers.segments.operator.IN': 'is one of',
-  'customers.segments.operator.NOT_IN': 'is not one of',
 
   // ---------------------------------------------------------------- 5.4 Reviews (ADR 0071, wave 59)
   'customers.reviews.title': 'Reviews',
@@ -5157,7 +5046,6 @@ export const messagesEn = {
   'reports.customers.newVsReturning.title': 'New vs. returning revenue',
   'reports.customers.newVsReturning.new': 'New customers',
   'reports.customers.newVsReturning.returning': 'Returning customers',
-  'reports.customers.newVsReturning.share': 'Share of revenue',
   'reports.customers.newVsReturning.empty':
     'No completed order with a known customer in this period.',
   'reports.customers.cohorts.title': 'Cohorts & retention',
@@ -5620,7 +5508,6 @@ export const messagesEn = {
   'staff.activity.action.tenantSuspended': 'Company suspended',
   'staff.activity.action.tenantReactivated': 'Company reactivated',
   'staff.activity.action.tenantActivated': 'Company activated',
-  'staff.activity.action.tenantActivate': 'Company activated',
   'staff.activity.action.orderCancel': 'Order cancelled',
   'staff.activity.filter.outcomeAll': 'Any outcome',
   'staff.activity.filter.outcomeSucceeded': 'Succeeded',
@@ -5705,19 +5592,11 @@ export const messagesEn = {
     'How long this restaurant keeps personal data, what consent means here, and who has looked at a customer’s own words.',
   'settings.dataPrivacy.retention.title': 'Retention',
   'settings.dataPrivacy.retention.column.category': 'Data',
-  'settings.dataPrivacy.retention.column.status': 'Status',
-  'settings.dataPrivacy.retention.column.note': 'Note',
   'settings.dataPrivacy.retention.abandonedCarts.category': 'Abandoned carts',
-  'settings.dataPrivacy.retention.abandonedCarts.note':
-    'A stale cart is marked expired, but nothing deletes or anonymises it yet — not enforced (ADR 0029).',
   'settings.dataPrivacy.retention.courierLocation.category': 'Courier location history',
-  'settings.dataPrivacy.retention.courierLocation.note':
-    'Deleted automatically on a schedule, in a configurable number of days per tenant (ADR 0045). This screen cannot show your tenant’s configured number yet — no tenant-facing setting exists for it (ADR 0030).',
   'settings.dataPrivacy.retention.candidateRecords.category': 'Candidate records',
   'settings.dataPrivacy.retention.candidateRecords.note':
     'HorecaOS has no recruitment or candidate data model — there is nothing here to retain.',
-  'settings.dataPrivacy.retention.status.notEnforced': 'Not enforced',
-  'settings.dataPrivacy.retention.status.enforced': 'Enforced',
   'settings.dataPrivacy.retention.status.notApplicable': 'Not applicable',
   'settings.dataPrivacy.retention.lead':
     'Set how long each kind of data is kept. Every value below can only ever be raised for the whole platform by a shorter one you set — the sweep never deletes another tenant’s data early.',
@@ -5739,14 +5618,6 @@ export const messagesEn = {
   'settings.dataPrivacy.consent.title': 'Consent',
   'settings.dataPrivacy.consent.lead':
     'What a consent decision can record today, on a customer’s own account.',
-  'settings.dataPrivacy.consent.states.label': 'Decision',
-  'settings.dataPrivacy.consent.states.value':
-    'Granted or withdrawn — never inferred from silence.',
-  'settings.dataPrivacy.consent.sources.label': 'Recorded from',
-  'settings.dataPrivacy.consent.sources.value':
-    'Storefront, a support agent, an import, migration, or the API.',
-  'settings.dataPrivacy.consent.gap':
-    'There is no tenant-wide catalogue of consent types to configure here — purpose and channel are free text set per touchpoint (a notification template, for example). A customer’s own consent history is on their own record, not on this screen.',
   'settings.dataPrivacy.consent.column.code': 'Code',
   'settings.dataPrivacy.consent.column.label': 'Label',
   'settings.dataPrivacy.consent.column.channelSpecific': 'Per channel',
@@ -5831,7 +5702,6 @@ export const messagesEn = {
   'orders.callCentre.presence.reasonLabel': 'Reason',
   'orders.callCentre.presence.reasonPlaceholder': 'e.g. Lunch break',
   'orders.callCentre.presence.reasonRequired': 'A reason is required to pause',
-  'orders.callCentre.presence.save': 'Update status',
   'orders.callCentre.presence.error': 'Could not update your status',
   'orders.callCentre.roster.title': 'Team',
   'orders.callCentre.screenPop.title': 'Incoming call',
@@ -5907,7 +5777,6 @@ export const messagesEn = {
   'orders.newOrder.order.created': 'Order {number} created',
   'orders.newOrder.order.unavailableCount': '{count} item(s) in the basket are no longer available',
   'orders.newOrder.order.branch': 'Branch',
-  'orders.newOrder.order.byZone': '(by zone)',
   'orders.newOrder.order.branchLoading': 'Finding a branch…',
   'orders.newOrder.order.branchLoad': '{count} active orders',
   'orders.newOrder.order.branchClosed': 'closed',
@@ -6150,12 +6019,10 @@ export const messagesEn = {
   'ui.charts.table.show': 'Show as table',
   'ui.charts.table.hide': 'Hide table',
   'ui.charts.tooltip.noData': 'Not enough history',
-  'ui.charts.sparkline.trend': '{label} trend: from {first} to {last}',
   'ui.charts.sequential.low': 'Fewer',
   'ui.charts.sequential.high': 'More',
   'ui.charts.table.count': 'Count',
   'ui.charts.table.share': 'Share',
-  'ui.charts.table.value': 'Value',
 
   // q-import-wizard (row X.13): FileDropzone + row-level preview + dry-run
   // diff + JobProgress + ResultSummary, shared by the customer CSV import

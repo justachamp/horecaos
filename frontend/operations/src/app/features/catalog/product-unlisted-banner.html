@@ -1,0 +1,41 @@
+<div class="editor__unlisted-banner" data-testid="editor-unlisted-branches-banner">
+  <p>{{ 'catalog.editor.availability.notListedHeading' | t }}</p>
+  <ul class="editor__unlisted-list">
+    @for (row of rows(); track row.variantId) {
+      <li [attr.data-testid]="'editor-unlisted-variant-' + row.variantId">
+        <span>
+          {{
+            'catalog.editor.availability.notListedVariantRow'
+              | t: { variant: row.label, count: row.count }
+          }}
+        </span>
+        <button
+          type="button"
+          (click)="listRequested.emit(row.variantId)"
+          [disabled]="pendingVariantIds().has(row.variantId)"
+          [attr.data-testid]="'editor-list-missing-branches-' + row.variantId"
+        >
+          {{
+            pendingVariantIds().has(row.variantId)
+              ? ('catalog.editor.availability.listingInProgress' | t)
+              : ('catalog.editor.availability.listEverywhere' | t)
+          }}
+        </button>
+        @if (notices()[row.variantId]; as notice) {
+          <p
+            class="q-caption editor__unlisted-note"
+            role="status"
+            [attr.data-testid]="'editor-listing-notice-' + row.variantId"
+          >
+            {{
+              notice.kind === 'partial'
+                ? ('catalog.editor.availability.listPartial'
+                  | t: { listed: notice.listed, candidate: notice.candidate })
+                : ('catalog.editor.availability.listRecountFailed' | t)
+            }}
+          </p>
+        }
+      </li>
+    }
+  </ul>
+</div>

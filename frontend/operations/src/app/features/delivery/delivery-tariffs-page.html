@@ -258,18 +258,18 @@
   }
 
   @if (showCreateForm()) {
-    <div class="dialog-backdrop" (click)="closeCreateForm()">
-      <div class="dialog" (click)="$event.stopPropagation()">
+    <div class="q-modal-backdrop" (click)="closeCreateForm()">
+      <div class="q-modal" (click)="$event.stopPropagation()">
         <h2 class="q-subhead">{{ 'delivery.tariffs.create.title' | t }}</h2>
-        <label class="field">
+        <label class="q-field">
           <span class="q-caption">{{ 'delivery.tariffs.create.code' | t }}</span>
           <input type="text" [value]="newCode()" (input)="newCode.set($any($event.target).value)" />
         </label>
-        <label class="field">
+        <label class="q-field">
           <span class="q-caption">{{ 'delivery.tariffs.create.name' | t }}</span>
           <input type="text" [value]="newName()" (input)="newName.set($any($event.target).value)" />
         </label>
-        <label class="field field--checkbox">
+        <label class="q-field q-field--checkbox">
           <input
             type="checkbox"
             [checked]="newBrandDefault()"
@@ -278,9 +278,9 @@
           <span class="q-caption">{{ 'delivery.tariffs.create.brandDefault' | t }}</span>
         </label>
         @if (createError(); as error) {
-          <p class="dialog__error q-body-sm">{{ error }}</p>
+          <p class="q-modal__error q-body-sm">{{ error }}</p>
         }
-        <div class="dialog__actions">
+        <div class="q-modal__actions">
           <button type="button" (click)="closeCreateForm()">
             {{ 'delivery.dialog.cancel' | t }}
           </button>
@@ -293,13 +293,13 @@
   }
 
   @if (draftingTariff(); as tariff) {
-    <div class="dialog-backdrop" (click)="closeDraftForm()">
-      <div class="dialog dialog--wide" (click)="$event.stopPropagation()">
+    <div class="q-modal-backdrop" (click)="closeDraftForm()">
+      <div class="q-modal q-modal--wide" (click)="$event.stopPropagation()">
         <h2 class="q-subhead">{{ 'delivery.tariffs.draft.title' | t: { code: tariff.code } }}</h2>
         <p class="q-caption">{{ 'delivery.tariffs.draft.hint' | t }}</p>
 
         <div class="field-row">
-          <label class="field">
+          <label class="q-field">
             <span class="q-caption">{{ 'delivery.tariffs.draft.currency' | t }}</span>
             <input
               type="text"
@@ -307,7 +307,7 @@
               (input)="draftCurrency.set($any($event.target).value)"
             />
           </label>
-          <label class="field">
+          <label class="q-field">
             <span class="q-caption">{{ 'delivery.tariffs.draft.maxDistance' | t }}</span>
             <input
               type="number"
@@ -318,7 +318,7 @@
         </div>
 
         <div class="field-row">
-          <label class="field">
+          <label class="q-field">
             <span class="q-caption">{{ 'delivery.tariffs.draft.feeSource' | t }}</span>
             <select
               data-testid="tariff-fee-source"
@@ -331,7 +331,7 @@
               </option>
             </select>
           </label>
-          <label class="field">
+          <label class="q-field">
             <span class="q-caption">{{ 'delivery.tariffs.draft.distanceMode' | t }}</span>
             <select
               data-testid="tariff-distance-mode"
@@ -345,7 +345,7 @@
         </div>
 
         @if (draftDistanceMode() === 'ROAD') {
-          <label class="field">
+          <label class="q-field">
             <span class="q-caption">{{ 'delivery.tariffs.draft.routingInstallation' | t }}</span>
             <input
               type="text"
@@ -354,7 +354,7 @@
               (input)="draftRoutingInstallationId.set($any($event.target).value)"
             />
           </label>
-          <label class="field">
+          <label class="q-field">
             <span class="q-caption">{{ 'delivery.tariffs.draft.roadFactor' | t }}</span>
             <input
               type="number"
@@ -374,7 +374,7 @@
         }
 
         <div class="field-row">
-          <label class="field">
+          <label class="q-field">
             <span class="q-caption">{{ 'delivery.tariffs.draft.minFee' | t }}</span>
             <q-money-input
               [valueMinor]="draftMinFeeMinor()"
@@ -382,7 +382,7 @@
               data-testid="tariff-min-fee"
             />
           </label>
-          <label class="field">
+          <label class="q-field">
             <span class="q-caption">{{ 'delivery.tariffs.draft.maxFee' | t }}</span>
             <input
               type="number"
@@ -395,7 +395,7 @@
         </div>
 
         <div class="field-row">
-          <label class="field">
+          <label class="q-field">
             <span class="q-caption">{{ 'delivery.tariffs.draft.roundingStep' | t }}</span>
             <input
               type="number"
@@ -408,7 +408,7 @@
               "
             />
           </label>
-          <label class="field">
+          <label class="q-field">
             <span class="q-caption">{{ 'delivery.tariffs.draft.accrual' | t }}</span>
             <select
               data-testid="tariff-accrual"
@@ -423,7 +423,7 @@
               </option>
             </select>
           </label>
-          <label class="field">
+          <label class="q-field">
             <span class="q-caption">{{ 'delivery.tariffs.draft.roundingRule' | t }}</span>
             <select
               [value]="draftRoundingRule()"
@@ -598,7 +598,7 @@
         </section>
 
         @if (draftError(); as error) {
-          <p class="dialog__error q-body-sm">{{ error }}</p>
+          <p class="q-modal__error q-body-sm">{{ error }}</p>
         }
         @if (draftProblems().length > 0) {
           <ul class="dialog__problems">
@@ -607,7 +607,7 @@
             }
           </ul>
         }
-        <div class="dialog__actions">
+        <div class="q-modal__actions">
           <button type="button" (click)="closeDraftForm()">
             {{ 'delivery.dialog.cancel' | t }}
           </button>
@@ -625,11 +625,11 @@
   }
 
   @if (bindingTariffId()) {
-    <div class="dialog-backdrop" (click)="closeBindForm()">
-      <div class="dialog" (click)="$event.stopPropagation()">
+    <div class="q-modal-backdrop" (click)="closeBindForm()">
+      <div class="q-modal" (click)="$event.stopPropagation()">
         <h2 class="q-subhead">{{ 'delivery.tariffs.bind.title' | t }}</h2>
         <p class="q-caption">{{ 'delivery.tariffs.bind.hint' | t }}</p>
-        <label class="field">
+        <label class="q-field">
           <span class="q-caption">{{ 'delivery.tariffs.bind.branch' | t }}</span>
           <select
             data-testid="tariff-bind-select"
@@ -641,7 +641,7 @@
             }
           </select>
         </label>
-        <div class="dialog__actions">
+        <div class="q-modal__actions">
           <button type="button" (click)="closeBindForm()">
             {{ 'delivery.dialog.cancel' | t }}
           </button>

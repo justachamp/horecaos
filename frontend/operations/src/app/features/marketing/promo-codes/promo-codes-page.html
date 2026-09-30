@@ -129,11 +129,11 @@
   }
 
   @if (showForm()) {
-    <div class="dialog-backdrop" (click)="closeForm()">
-      <div class="dialog" (click)="$event.stopPropagation()">
+    <div class="q-modal-backdrop" (click)="closeForm()">
+      <div class="q-modal promo-codes__dialog" (click)="$event.stopPropagation()">
         <h2 class="q-subhead">{{ 'marketing.promoCodes.create.title' | t }}</h2>
 
-        <label class="field">
+        <label class="q-field">
           <span class="q-caption">{{ 'marketing.promoCodes.form.name' | t }}</span>
           <input
             type="text"
@@ -142,7 +142,7 @@
           />
         </label>
 
-        <label class="field">
+        <label class="q-field">
           <span class="q-caption">{{ 'marketing.promoCodes.form.code' | t }}</span>
           <input
             type="text"
@@ -154,7 +154,7 @@
           }}</span>
         </label>
 
-        <label class="field">
+        <label class="q-field">
           <span class="q-caption">{{ 'marketing.promoCodes.form.shape' | t }}</span>
           <select [value]="formShape()" (change)="formShape.set($any($event.target).value)">
             @for (choice of shapeChoices; track choice) {
@@ -164,7 +164,7 @@
         </label>
 
         @if (formShape() !== 'FREE_DELIVERY') {
-          <label class="field">
+          <label class="q-field">
             <span class="q-caption">{{
               (moneyOrPercentKind() === 'PERCENT'
                 ? 'marketing.promoCodes.form.percent'
@@ -183,7 +183,7 @@
           </label>
         }
 
-        <label class="field field--checkbox">
+        <label class="q-field q-field--checkbox">
           <input
             type="checkbox"
             [checked]="formHasCap()"
@@ -192,7 +192,7 @@
           <span class="q-caption">{{ 'marketing.promoCodes.form.hasCap' | t }}</span>
         </label>
         @if (formHasCap()) {
-          <label class="field">
+          <label class="q-field">
             <span class="q-caption">{{ 'marketing.promoCodes.form.cap' | t }}</span>
             <input
               type="number"
@@ -203,7 +203,7 @@
           </label>
         }
 
-        <label class="field">
+        <label class="q-field">
           <span class="q-caption">{{ 'marketing.promoCodes.form.minBasket' | t }}</span>
           <input
             type="number"
@@ -213,7 +213,7 @@
           />
         </label>
 
-        <label class="field field--checkbox">
+        <label class="q-field q-field--checkbox">
           <input
             type="checkbox"
             [checked]="formHasTotalLimit()"
@@ -222,7 +222,7 @@
           <span class="q-caption">{{ 'marketing.promoCodes.form.hasTotalLimit' | t }}</span>
         </label>
         @if (formHasTotalLimit()) {
-          <label class="field">
+          <label class="q-field">
             <span class="q-caption">{{ 'marketing.promoCodes.form.totalLimit' | t }}</span>
             <input
               type="number"
@@ -233,7 +233,7 @@
           </label>
         }
 
-        <label class="field">
+        <label class="q-field">
           <span class="q-caption">{{ 'marketing.promoCodes.form.perCustomerLimit' | t }}</span>
           <input
             type="number"
@@ -246,7 +246,7 @@
           }}</span>
         </label>
 
-        <label class="field">
+        <label class="q-field">
           <span class="q-caption">{{ 'marketing.promoCodes.form.validFrom' | t }}</span>
           <input
             type="date"
@@ -259,7 +259,7 @@
           }}</span>
         </label>
 
-        <label class="field field--checkbox">
+        <label class="q-field q-field--checkbox">
           <input
             type="checkbox"
             [checked]="formHasValidUntil()"
@@ -268,7 +268,7 @@
           <span class="q-caption">{{ 'marketing.promoCodes.form.hasValidUntil' | t }}</span>
         </label>
         @if (formHasValidUntil()) {
-          <label class="field">
+          <label class="q-field">
             <span class="q-caption">{{ 'marketing.promoCodes.form.validUntil' | t }}</span>
             <input
               type="date"
@@ -280,14 +280,14 @@
         }
 
         @if (channels().length > 0) {
-          <fieldset class="field field--group">
+          <fieldset class="q-field q-field--group">
             <legend class="q-caption">{{ 'marketing.promoCodes.form.channels' | t }}</legend>
             <span class="q-caption promo-codes__field-hint">{{
               'marketing.promoCodes.form.channels.hint' | t
             }}</span>
             <div class="promo-codes__checkbox-list">
               @for (channel of channels(); track channel.id) {
-                <label class="field--checkbox">
+                <label class="q-field--checkbox">
                   <input
                     type="checkbox"
                     [checked]="isChannelSelected(channel.code)"
@@ -301,14 +301,14 @@
         }
 
         @if (locations().length > 0) {
-          <fieldset class="field field--group">
+          <fieldset class="q-field q-field--group">
             <legend class="q-caption">{{ 'marketing.promoCodes.form.locations' | t }}</legend>
             <span class="q-caption promo-codes__field-hint">{{
               'marketing.promoCodes.form.locations.hint' | t
             }}</span>
             <div class="promo-codes__checkbox-list">
               @for (location of locations(); track location.id) {
-                <label class="field--checkbox">
+                <label class="q-field--checkbox">
                   <input
                     type="checkbox"
                     [checked]="isLocationSelected(location.id)"
@@ -322,9 +322,9 @@
         }
 
         @if (formError(); as error) {
-          <p class="dialog__error q-body-sm">{{ error }}</p>
+          <p class="q-modal__error q-body-sm">{{ error }}</p>
         }
-        <div class="dialog__actions">
+        <div class="q-modal__actions">
           <button type="button" (click)="closeForm()">
             {{ 'marketing.promoCodes.dialog.cancel' | t }}
           </button>
@@ -337,9 +337,9 @@
   }
 
   @if (redemptionsForCode(); as code) {
-    <div class="dialog-backdrop" (click)="closeRedemptions()">
+    <div class="q-modal-backdrop" (click)="closeRedemptions()">
       <div
-        class="dialog dialog--wide"
+        class="q-modal promo-codes__dialog q-modal--wide"
         (click)="$event.stopPropagation()"
         data-testid="promo-codes-redemptions"
       >
@@ -350,7 +350,7 @@
         @if (redemptionsLoading()) {
           <p class="q-body-sm">{{ 'marketing.promoCodes.redemptions.loading' | t }}</p>
         } @else if (redemptionsError(); as message) {
-          <p class="dialog__error q-body-sm" role="alert">{{ message }}</p>
+          <p class="q-modal__error q-body-sm" role="alert">{{ message }}</p>
         } @else if (redemptions().length === 0) {
           <p class="q-body-sm" data-testid="promo-codes-redemptions-empty">
             {{ 'marketing.promoCodes.redemptions.empty' | t }}
@@ -382,7 +382,7 @@
           </table>
         }
 
-        <div class="dialog__actions">
+        <div class="q-modal__actions">
           <button type="button" (click)="closeRedemptions()">
             {{ 'marketing.promoCodes.redemptions.close' | t }}
           </button>

@@ -1,0 +1,48 @@
+:host {
+  display: contents;
+}
+
+/* ---- bulk result panel (§2.10) ----------------------------------------- */
+
+.order-queue__bulk-result {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 40px 12px 16px;
+  background: var(--q-surface-1);
+  border-top: 1px solid var(--q-hairline);
+  flex-shrink: 0;
+}
+
+.order-queue__bulk-result-items {
+  margin: 0;
+  padding-left: 18px;
+  font-size: var(--q-type-body-sm);
+  color: var(--q-ink-muted);
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.order-queue__bulk-retry {
+  align-self: flex-start;
+  padding: 6px 12px;
+  border: 1px solid var(--q-ink);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  font-size: var(--q-type-body-sm);
+  cursor: pointer;
+}
+
+.order-queue__bulk-result-dismiss {
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  border: none;
+  background: none;
+  color: var(--q-ink-muted);
+  font-size: var(--q-type-body);
+  line-height: 1;
+  cursor: pointer;
+}
