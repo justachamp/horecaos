@@ -519,27 +519,31 @@ describe('SettingsHomePage', () => {
       );
     }
 
-    it('links a channel with no fulfilment mode to that channel’s own setup, not to the list', async () => {
+    // The per-channel setup hub configures a Telegram bot, a web hostname or a
+    // kiosk stub; it has no control that enables a fulfilment mode, binds a
+    // location or sets a payment method, so a channel finding must not open it.
+    // The sales-channels screen holds the matrices and the location list.
+    it('links a channel with no fulfilment mode to the sales-channels screen where the modes are enabled', async () => {
       const fixture = await render({ validate: () => Promise.resolve(outcomeOf(NO_MODE)) });
 
-      expect(hrefs(fixture)).toEqual(['/settings/channel-setup/channel-storefront']);
+      expect(hrefs(fixture)).toEqual(['/settings/sales-channels']);
       const row = fixture.nativeElement.querySelector('.readiness__row')?.textContent ?? '';
       expect(row).toContain('no fulfilment mode enabled');
       expect(row).toContain('STOREFRONT');
     });
 
-    it('links a channel whose modes have no hours at any location to its own setup as well', async () => {
+    it('links a channel whose modes have no hours at any location to the sales-channels screen as well', async () => {
       const fixture = await render({
         validate: () => Promise.resolve(outcomeOf(NO_SERVICEABLE)),
       });
 
-      expect(hrefs(fixture)).toEqual(['/settings/channel-setup/channel-kiosk']);
+      expect(hrefs(fixture)).toEqual(['/settings/sales-channels']);
       expect(fixture.nativeElement.querySelector('.readiness__row')?.textContent).toContain(
         'none has opening hours bound',
       );
     });
 
-    it('sends each of two channels with the same sentence to its own setup', async () => {
+    it('keeps two channels with the same sentence as two rows, both linking to the sales-channels screen', async () => {
       const kiosk: Check = {
         ...NO_MODE,
         detail: 'Sales channel KIOSK has no enabled fulfilment mode',
@@ -549,13 +553,15 @@ describe('SettingsHomePage', () => {
         validate: () => Promise.resolve(outcomeOf(NO_MODE, kiosk)),
       });
 
-      expect(hrefs(fixture)).toEqual([
-        '/settings/channel-setup/channel-storefront',
-        '/settings/channel-setup/channel-kiosk',
-      ]);
+      expect(hrefs(fixture)).toEqual(['/settings/sales-channels', '/settings/sales-channels']);
+      const rows = [...fixture.nativeElement.querySelectorAll('.readiness__row')].map(
+        (row: HTMLElement) => row.textContent ?? '',
+      );
+      expect(rows[0]).toContain('STOREFRONT');
+      expect(rows[1]).toContain('KIOSK');
     });
 
-    it('also opens the channel of a no-payment-method finding when the server names it', async () => {
+    it('keeps a no-payment-method finding that names its channel on the sales-channels screen', async () => {
       const fixture = await render({
         validate: () =>
           Promise.resolve(
@@ -570,7 +576,7 @@ describe('SettingsHomePage', () => {
           ),
       });
 
-      expect(hrefs(fixture)).toEqual(['/settings/channel-setup/channel-storefront']);
+      expect(hrefs(fixture)).toEqual(['/settings/sales-channels']);
     });
 
     it('keeps linking by error code when the server sends no subject (an older server)', async () => {
