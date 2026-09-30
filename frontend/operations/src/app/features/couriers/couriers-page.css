@@ -173,8 +173,11 @@
   margin: 8px 0 16px;
 }
 
-.field--checkbox {
-  flex-direction: row;
+/* This modifier used to declare flex-direction: row as well. It never applied: .field (declared
+   later at the same specificity) set column, so the checkbox has always stacked above its label.
+   The declaration is dropped rather than fixed so that moving .field to the shared stylesheet
+   changes no pixels; making the row real is a separate, visible change. */
+.q-field--checkbox {
   align-items: center;
 }
 
@@ -209,73 +212,4 @@
   margin-bottom: 8px;
   background: var(--q-error-tint);
   color: var(--q-error-text);
-}
-
-.dialog-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgb(0 0 0 / 40%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 50;
-}
-
-.dialog {
-  background: var(--q-canvas);
-  padding: 20px;
-  width: 400px;
-  max-width: 90vw;
-  max-height: 90vh;
-  overflow: auto;
-  border-radius: var(--q-radius);
-}
-
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin-bottom: 12px;
-}
-
-.field input,
-.field select {
-  padding: 6px 10px;
-  border: 1px solid var(--q-hairline);
-  border-radius: var(--q-radius);
-  font-size: var(--q-type-body-sm);
-}
-
-.dialog__error {
-  color: var(--q-error-text);
-  margin: 0 0 8px;
-}
-
-.dialog__actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-}
-
-.dialog__actions button {
-  padding: 6px 14px;
-  border: 1px solid var(--q-hairline);
-  background: var(--q-canvas);
-  border-radius: var(--q-radius);
-  cursor: pointer;
-  font-size: var(--q-type-body-sm);
-}
-
-.dialog__actions button:last-child {
-  border-color: var(--q-primary);
-  background: var(--q-primary);
-  color: #fff;
-}
-
-.dialog__actions button:disabled {
-  opacity: 0.5;
-  cursor: default;
-  background: var(--q-surface-1);
-  border-color: var(--q-hairline);
-  color: var(--q-ink-muted);
 }

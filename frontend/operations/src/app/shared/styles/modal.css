@@ -1,0 +1,82 @@
+/* Form dialogs on the list pages (couriers, delivery tariffs and zones, promo codes).
+ *
+ * Several page stylesheets each carried their own copy of these rules, byte for byte, under the
+ * bare names .dialog, .field and .dialog__actions. The bare names cannot be made global: other
+ * pages use the same words for different boxes and would pick these rules up. So the shared rules
+ * live under q- names, and a page opts in by using them in its template. Anything that varies
+ * from page to page — the dialog's width, a wide variant, a checkbox field — stays in the page's
+ * own stylesheet as a modifier of the class below (a component rule is more specific than a
+ * global one, so the modifier wins).
+ *
+ * Loaded from styles.css, which is why it is not a component stylesheet and is not counted by the
+ * anyComponentStyle budget: the point of the budget is that a page's own rules stay its own.
+ */
+
+.q-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgb(0 0 0 / 40%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+}
+
+.q-modal {
+  background: var(--q-canvas);
+  padding: 20px;
+  width: 400px;
+  max-width: 90vw;
+  max-height: 90vh;
+  overflow: auto;
+  border-radius: var(--q-radius);
+}
+
+.q-modal__error {
+  color: var(--q-error-text);
+  margin: 0 0 8px;
+}
+
+.q-modal__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.q-modal__actions button {
+  padding: 6px 14px;
+  border: 1px solid var(--q-hairline);
+  background: var(--q-canvas);
+  border-radius: var(--q-radius);
+  cursor: pointer;
+  font-size: var(--q-type-body-sm);
+}
+
+.q-modal__actions button:last-child {
+  border-color: var(--q-primary);
+  background: var(--q-primary);
+  color: #fff;
+}
+
+.q-modal__actions button:disabled {
+  opacity: 0.5;
+  cursor: default;
+  background: var(--q-surface-1);
+  border-color: var(--q-hairline);
+  color: var(--q-ink-muted);
+}
+
+.q-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.q-field input,
+.q-field select {
+  padding: 6px 10px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  font-size: var(--q-type-body-sm);
+}

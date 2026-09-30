@@ -204,10 +204,10 @@ describe('DeliveryZonesPage', () => {
       el.dispatchEvent(new Event('input'));
       fixture.detectChanges();
     };
-    const dialogInputs = host().querySelectorAll<HTMLInputElement>('.dialog input[type="text"]');
+    const dialogInputs = host().querySelectorAll<HTMLInputElement>('.q-modal input[type="text"]');
     type(dialogInputs[0], 'ring'); // code
     type(host().querySelector<HTMLInputElement>('[data-testid="zone-name-en"]')!, 'Ring road');
-    const submit = [...host().querySelectorAll<HTMLButtonElement>('.dialog__actions button')].at(
+    const submit = [...host().querySelectorAll<HTMLButtonElement>('.q-modal__actions button')].at(
       -1,
     )!;
     expect(submit.disabled).toBe(true); // English alone is not the default language
