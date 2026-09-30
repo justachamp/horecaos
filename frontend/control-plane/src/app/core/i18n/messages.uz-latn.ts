@@ -261,9 +261,6 @@ export const uzLatn: Messages = {
   'state.denied.body':
     'Ruxsat huquqlar bo‘yicha beriladi. Bu bo‘lim uchun kerakli huquqni platforma administratoridan so‘rang.',
 
-  'state.notBuilt.title': 'Hali tayyor emas',
-  'state.notBuilt.body': 'Bu bo‘limning hozircha ekrani yo‘q.',
-
   'overview.title': 'Platforma salomatligi',
   'overview.lead':
     'Barcha mijozlar bo‘yicha mijozlar, buyurtmalar, fiskal cheklar va navbatlar — ochilgan paytda hisoblangan.',
@@ -689,7 +686,6 @@ export const uzLatn: Messages = {
   'ownerInvitations.column.acceptedAt': 'Hisob yaratilgan',
   'ownerInvitations.column.attempts': 'Urinishlar',
   'ownerInvitations.column.lastError': "So'nggi xato",
-  'onboarding.invitation.recipient': 'Kimga yuborilgan',
   'onboarding.invitation.timeline': 'Tarix',
   'onboarding.invitation.timelineEmpty':
     "Bu taklifnoma tarixdan oldinroq, shuning uchun unga oid yozuv yo'q.",
@@ -834,7 +830,6 @@ export const uzLatn: Messages = {
   'deadLetters.title': 'Yetkazilmagan xabarlar',
   'deadLetters.lead':
     'Barcha qayta urinishlardan keyin ham muvaffaqiyatsiz bo‘lgan xabarlar: platforma e’lon qila olmagan va qayta ishlovchi qayta ishlay olmagan hodisalar. Har birini sabab ko‘rsatib qayta yuboring yoki yoping.',
-  'deadLetters.empty': 'Yetkazilmagan hodisalar yo‘q.',
   'deadLetters.column.event': 'Hodisa',
   'deadLetters.column.type': 'Turi',
   'deadLetters.column.attempts': 'Urinishlar',
@@ -1115,9 +1110,7 @@ export const uzLatn: Messages = {
   'staff.revokeTenant.confirm': 'Bekor qilish',
   'staff.revokeTenant.done': 'Bekor qilindi.',
   'staff.grant.roleChoose': 'Rolni tanlang',
-  'staff.grant.brand': 'Brend',
   'staff.grant.chooseBrand': 'Brendni tanlang',
-  'staff.grant.location': 'Joy',
   'staff.grant.chooseLocation': 'Joyni tanlang',
   'staff.approvals.title': 'Kutilayotgan qarorlar',
   'staff.approvals.lead':
@@ -1159,7 +1152,6 @@ export const uzLatn: Messages = {
   'auditLog.column.outcome': 'Natija',
   'auditLog.actor.system': 'Tizim',
   'auditLog.filter.action': 'Harakat kodi',
-  'auditLog.filter.outcome': 'Natija',
   'auditLog.filter.anyOutcome': 'Istalgan natija',
   'auditLog.filter.apply': 'Saralash',
   'auditLog.outcome.SUCCEEDED': 'Muvaffaqiyatli',
@@ -1540,9 +1532,6 @@ export const uzLatn: Messages = {
   'statements.void.open': 'Bekor qilish',
   'statements.void.submit': 'Hisobni bekor qilish',
   'statements.void.done': '{number} hisobi bekor qilindi.',
-  'statements.wallet.title': 'Oldindan to‘langan hamyon',
-  'statements.wallet.body':
-    'Qilinmagan. Mijozlar HorecaOS’ga qanday to‘lashi va oldindan to‘lov qanday soliqqa tortilishi hali hal qilinmagan, shuning uchun balans, to‘ldirish va kredit muddati yo‘q.',
   'dunning.lead':
     'To‘lovni kechiktirayotgan yoki to‘xtatilgan barcha mijozlar, qancha vaqtdan beri va har bir bosqich nimani cheklaydi. Mijoz o‘z-o‘zidan hech qayerga o‘tmaydi: ikki hafta kechikishdan so‘ng hodisa odamdan qaror qabul qilishni so‘raydi.',
   'statements.column.paid': 'To‘langan',

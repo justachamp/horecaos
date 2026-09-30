@@ -66,7 +66,6 @@ export const messagesRu: MessageCatalogue = {
   'shell.locationPicker.status.SUSPENDED': 'приостановлен',
 
   'orders.title': 'Заказы',
-  'orders.detail.empty': 'Выберите заказ, чтобы увидеть его здесь.',
   'orders.detail.close': 'Закрыть',
 
   'orders.drafts.link': 'Черновики',
@@ -391,7 +390,6 @@ export const messagesRu: MessageCatalogue = {
   'orders.detail.timeline.lane.commercial': 'Коммерческий',
   'orders.detail.timeline.lane.production': 'Кухня',
   'orders.detail.timeline.lane.delivery': 'Доставка',
-  'orders.detail.timeline.lane.notBuilt': 'не построено',
   'orders.detail.timeline.trigger.CHECKOUT': 'Оформление',
   'orders.detail.timeline.trigger.APPROVAL_DECISION': 'Решение по подтверждению',
   'orders.detail.timeline.trigger.APPROVAL_TIMEOUT': 'Истёк срок подтверждения',
@@ -582,7 +580,6 @@ export const messagesRu: MessageCatalogue = {
 
   'orders.severity.blocked': 'требуется вмешательство',
   'orders.severity.approvalDeadline': 'подтвердить за {mmss}',
-  'orders.severity.noPromiseFallback': 'в очереди {duration}',
   'orders.severity.late': 'опаздывает на {duration}',
   'orders.severity.atRisk': 'риск опоздания',
 
@@ -600,7 +597,6 @@ export const messagesRu: MessageCatalogue = {
   // --- orders.queue toolbar filters (orders.md §2.4, wave P07) -------------
   'orders.queue.filter.search.placeholder': '№ заказа, ID агрегатора…',
   'orders.queue.filter.search.ariaLabel': 'Поиск заказов',
-  'orders.queue.filter.period.label': 'Период',
   'orders.queue.filter.channel.label': 'Канал',
   'orders.queue.filter.channel.all': 'Все каналы',
   'orders.queue.filter.fulfillmentMode.label': 'Тип',
@@ -622,7 +618,6 @@ export const messagesRu: MessageCatalogue = {
   'orders.queue.filter.origin.MARKETPLACE': 'Агрегатор',
 
   // --- orders.queue selection and bulk actions (orders.md §2.10, wave P07) -
-  'orders.queue.column.select': 'Выбор',
   'orders.queue.selection.selectPage': 'Выбрать {count} на странице',
   'orders.queue.selection.selected': 'Выбрано {count}',
   'orders.queue.selection.clear': 'Снять выбор',
@@ -766,7 +761,6 @@ export const messagesRu: MessageCatalogue = {
 
   // ---------------------------------------------------------------- settings (wave 26)
   'settings.nav.title': 'Настройки',
-  'settings.scope.editing': 'Редактируется',
   'settings.scope.denied': 'Нет доступного филиала',
   'settings.nav.group.business': 'Заведение',
   'settings.nav.group.selling': 'Продажи',
@@ -791,8 +785,6 @@ export const messagesRu: MessageCatalogue = {
   'settings.home.title': 'Настройки',
   'settings.home.lead':
     'Справочники и правила, которые читают остальные экраны: ваш бренд, ваши филиалы, как принимаются заказы и как вам платят.',
-  'settings.home.readinessNotBuilt':
-    'Панель готовности (что сейчас мешает принимать заказы) требует сквозного чтения нескольких модулей, которое не добавлено в этой волне. Откройте нужную группу ниже.',
   'settings.home.notBuiltBadge': 'Пока не реализовано',
   'settings.home.readiness.title': 'Готов ли ресторан к приёму заказов?',
   'settings.home.readiness.loading': 'Проверяем готовность…',
@@ -929,9 +921,6 @@ export const messagesRu: MessageCatalogue = {
   'settings.integrations.connect.environmentCode.test': 'тестовое',
   'settings.integrations.connect.environmentCode.none':
     'Для этого провайдера пока не разрешено ни одно окружение. Обратитесь в поддержку платформы, прежде чем подключать его.',
-  'settings.integrations.connect.reference': 'Ссылка (необязательно)',
-  'settings.integrations.connect.reference.hint':
-    'Несекретная метка, например id мерчанта или сервиса, для ваших собственных записей.',
   'settings.integrations.connect.submit': 'Подключить',
   'settings.integrations.connect.submitting': 'Подключение…',
   'settings.integrations.connect.success':
@@ -961,7 +950,6 @@ export const messagesRu: MessageCatalogue = {
   'settings.integrations.rotate.reason': 'Причина',
   'settings.integrations.rotate.submit': 'Обновить',
   'settings.integrations.rotate.submitting': 'Обновление…',
-  'settings.integrations.rotate.success': 'Учётные данные обновлены.',
   'settings.integrations.rotate.cancel': 'Отмена',
   'settings.integrations.rotate.unverifiedNotice':
     'У этого провайдера нет способа проверить учётные данные до использования. Значение будет записано и подставлено, и помечено как непроверенное, пока не подтвердится реальным платежом.',
@@ -992,8 +980,6 @@ export const messagesRu: MessageCatalogue = {
   'settings.integrations.registerBinding.value': 'Секретный ключ мерчанта',
   'settings.integrations.registerBinding.submit': 'Зарегистрировать',
   'settings.integrations.registerBinding.submitting': 'Регистрация…',
-  'settings.integrations.registerBinding.success':
-    'Привязка продавца зарегистрирована как черновик. Активируйте её, когда всё верно.',
   'settings.integrations.registerBinding.cancel': 'Отмена',
 
   // 10.1 Профиль бренда, 10.12 языки и региональные форматы
@@ -1310,7 +1296,6 @@ export const messagesRu: MessageCatalogue = {
   'settings.fiscalization.field.status': 'Статус',
   'settings.fiscalization.cancel': 'Отмена',
   'settings.fiscalization.assignment.title': 'Фискальный продавец этого филиала',
-  'settings.fiscalization.assignment.active': '{name}, с {date}',
   'settings.fiscalization.assignment.current': 'Текущее',
   'settings.fiscalization.assignment.none':
     'Нет действующего фискального назначения — этот филиал нельзя активировать для канала, который может выдавать чек.',
@@ -1394,10 +1379,6 @@ export const messagesRu: MessageCatalogue = {
   'settings.notifications.field.channel': 'Канал доставки',
   'settings.notifications.field.status': 'Активен',
   'settings.notifications.field.activeVersion': 'Версия',
-  'settings.notifications.field.bodyRu': 'Текст (русский)',
-  'settings.notifications.field.bodyUz': 'Текст (узбекский)',
-  'settings.notifications.field.bodyEn': 'Текст (английский)',
-  'settings.notifications.field.activateImmediately': 'Активировать эту версию сразу',
   'settings.notifications.field.channel.hint':
     'Сегодня реально отправляют только SMS и Telegram. Email и Push объявлены в схеме и ключе шаблона, но ни один адаптер их не доставляет.',
   'settings.notifications.field.variant': 'Вариант',
@@ -1410,13 +1391,11 @@ export const messagesRu: MessageCatalogue = {
   'settings.notifications.action.rowMenu': 'Действия',
   'settings.notifications.action.versions': 'Версии',
   'settings.notifications.action.newVersion': 'Новая версия',
-  'settings.notifications.action.view': 'Просмотр',
   'settings.notifications.action.activate': 'Активировать',
   'settings.notifications.action.testSend': 'Тестовая отправка',
   'settings.notifications.action.close': 'Закрыть',
   'settings.notifications.drawer.versionsTitle': 'Версии — {key}',
   'settings.notifications.drawer.editorTitleNew': 'Новая версия — {key}',
-  'settings.notifications.drawer.editorTitleView': 'Версия {version} — {key}',
   'settings.notifications.versions.empty': 'Версий пока нет — у этого шаблона совсем нет текста.',
   'settings.notifications.versions.column.version': 'Версия',
   'settings.notifications.versions.column.status': 'Статус',
@@ -1427,10 +1406,6 @@ export const messagesRu: MessageCatalogue = {
   'settings.notifications.moderation.PENDING': 'Ожидает шлюз',
   'settings.notifications.moderation.APPROVED': 'Одобрено',
   'settings.notifications.moderation.REJECTED': 'Отклонено шлюзом',
-  'settings.notifications.moderation.warning.PENDING':
-    'Этот текст ещё ожидает одобрения SMS-шлюза. Каждое сообщение с ним удерживается до ответа шлюза — активация сейчас не заставит его отправляться.',
-  'settings.notifications.moderation.warning.REJECTED':
-    'Этот текст отклонён SMS-шлюзом. Каждое сообщение с ним удерживается от отправки — нужна новая версия.',
   'settings.notifications.editor.subject': 'Тема',
   'settings.notifications.editor.body': 'Текст',
   'settings.notifications.editor.variables': 'Вставить переменную',
@@ -1476,7 +1451,6 @@ export const messagesRu: MessageCatalogue = {
   'settings.notifications.routing.scope.brand': 'Весь бренд',
   'settings.notifications.routing.topic.flat': 'Обычный чат',
   'settings.notifications.routing.topic.numbered': 'Тема {topic}',
-  'settings.notifications.routing.action.editTopic': 'Сменить тему',
   'settings.notifications.routing.action.unbind': 'Отвязать',
   'settings.notifications.routing.unbind.confirm.title': 'Отвязать этот чат?',
   'settings.notifications.routing.unbind.confirm.body':
@@ -2158,7 +2132,6 @@ export const messagesRu: MessageCatalogue = {
   'catalog.products.denied': 'Нет доступа к каталогу этого бренда',
   'catalog.products.empty.default': 'Нет товаров по фильтру',
   'catalog.products.empty.noCatalog': 'У этого бренда пока нет каталога',
-  'catalog.products.loadMore': 'Показать ещё',
 
   // P21 — действия строки, массовые действия и фискальный кабинет
   'catalog.products.action.duplicate': 'Дублировать',
@@ -2205,8 +2178,6 @@ export const messagesRu: MessageCatalogue = {
   'catalog.editor.notFound': 'Этого товара больше нет',
   'catalog.editor.backToList': 'К списку товаров',
   'catalog.editor.denied': 'Нет доступа к редактированию этого товара',
-  'catalog.editor.publishedBanner':
-    'Этот товар опубликован. Изменения увидят клиенты только после повторной публикации меню.',
   'catalog.editor.tab.basic': 'Основное',
   'catalog.editor.tab.variants': 'Варианты',
   'catalog.editor.tab.modifiers': 'Модификаторы',
@@ -2226,10 +2197,8 @@ export const messagesRu: MessageCatalogue = {
   'catalog.editor.basic.code': 'Код',
   'catalog.editor.basic.codeNote': 'Неизменяем после первой публикации',
   'catalog.editor.basic.status': 'Статус',
-  'catalog.editor.basic.statusNote': 'Черновик, Активен или Архив',
   'catalog.editor.basic.catalogs': 'Каталоги',
   'catalog.editor.basic.categories': 'Категории',
-  'catalog.editor.basic.addCategory': 'Добавить в категорию…',
   'catalog.editor.basic.remove': 'Убрать',
   'catalog.editor.basic.kitchenDept': 'Отдел кухни',
   'catalog.editor.kitchen.role.none': '— Не назначено —',
@@ -2245,8 +2214,6 @@ export const messagesRu: MessageCatalogue = {
   'catalog.editor.variants.column.unit': 'Ед. изм.',
   'catalog.editor.variants.column.default': 'По умолчанию',
   'catalog.editor.variants.column.price': 'Базовая цена',
-  'catalog.editor.variants.column.mxik': 'ИКПУ',
-  'catalog.editor.variants.column.packageCode': 'Код упаковки',
   'catalog.editor.variants.column.status': 'Статус',
   'catalog.editor.variants.add': 'Добавить вариант',
   'catalog.editor.variants.noPrice': 'Нет цены',
@@ -2255,14 +2222,10 @@ export const messagesRu: MessageCatalogue = {
   'catalog.editor.modifiers.library': 'Библиотека групп модификаторов',
   'catalog.editor.modifiers.attached': 'Прикреплены к товару',
   'catalog.editor.modifiers.attach': 'Прикрепить',
-  'catalog.editor.modifiers.required': 'Обязательно, {min}',
-  'catalog.editor.modifiers.optional': 'Необязательно, до {max}',
   'catalog.editor.modifiers.empty': 'Группы модификаторов не прикреплены',
   'catalog.editor.modifiers.libraryEmpty': 'У бренда пока нет групп модификаторов',
   'catalog.editor.modifiers.create': 'Создать группу',
   'catalog.editor.photos.empty': 'Фото ещё нет',
-  'catalog.editor.photos.upload': 'Загрузить фото',
-  'catalog.editor.photos.uploading': 'Загрузка…',
   'catalog.editor.photos.moveUp': 'Переместить раньше',
   'catalog.editor.photos.moveDown': 'Переместить позже',
   'catalog.editor.photos.detach': 'Удалить фото',
@@ -2283,15 +2246,11 @@ export const messagesRu: MessageCatalogue = {
   'catalog.editor.fiscal.alcohol': 'Крепость, %',
   'catalog.editor.fiscal.age': 'Возрастное ограничение, лет',
   'catalog.editor.fiscal.save': 'Сохранить классификацию',
-  'catalog.editor.fiscal.inherited': 'Унаследовано от товара',
   'catalog.editor.fiscal.notBuilt':
     'Схема маркировки, акциз, крепость и возрастной ценз хранятся, но пока не проверяются при публикации — ADR 0038',
   'catalog.editor.fiscal.mxikReferenceNote':
     'Пустой результат означает, что официальный справочник ИКПУ/MXIK ещё не загружен на платформу — а не что ничего не найдено.',
   'catalog.editor.availability.location': 'Филиал',
-  'catalog.editor.availability.inMenu': 'В меню',
-  'catalog.editor.availability.fulfillment': 'Типы заказов',
-  'catalog.editor.availability.tracking': 'Учёт',
   'catalog.editor.availability.state': 'Состояние',
   'catalog.editor.availability.empty': 'Товар пока не предложен ни в одном филиале',
   'catalog.editor.availability.stop': 'В стоп',
@@ -2388,12 +2347,10 @@ export const messagesRu: MessageCatalogue = {
   'catalog.categories.form.code': 'Код',
   'catalog.categories.form.parent': 'Родительская категория',
   'catalog.categories.form.parentNone': 'Без родителя — верхний уровень',
-  'catalog.categories.form.sortOrder': 'Порядок',
   'catalog.categories.form.status': 'Статус',
   'catalog.categories.form.save': 'Сохранить',
   'catalog.categories.products.title': 'Товары в этой категории',
   'catalog.categories.products.empty': 'В этой категории нет товаров',
-  'catalog.categories.products.add': 'Добавить товары…',
   'catalog.categories.denied': 'Нет доступа к категориям этого бренда',
   'catalog.categories.loading': 'Загрузка категорий',
   'catalog.categories.selectPrompt': 'Выберите категорию для редактирования',
@@ -2451,13 +2408,9 @@ export const messagesRu: MessageCatalogue = {
   'catalog.stock.thresholds.remove': 'Удалить',
 
   'catalog.menus.title': 'Меню',
-  'catalog.menus.location.label': 'Филиал',
-  'catalog.menus.location.none': 'Этой учётной записи пока не назначен филиал',
   'catalog.menus.column.product': 'Товар',
-  'catalog.menus.column.sku': 'SKU',
   'catalog.menus.column.price': 'Цена',
   'catalog.menus.column.status': 'В меню',
-  'catalog.menus.column.prep': 'Время приготовления',
   'catalog.menus.status.AVAILABLE': 'В меню',
   'catalog.menus.status.UNAVAILABLE': 'Стоп',
   'catalog.menus.status.HIDDEN': 'Скрыт',
@@ -2528,7 +2481,6 @@ export const messagesRu: MessageCatalogue = {
   'catalog.priceList.column.status': 'Статус',
   'catalog.priceList.column.priority': 'Приоритет',
   'catalog.priceList.matrix': 'Матрица',
-  'catalog.priceList.assignBrand': 'Применить к бренду',
   'catalog.priceList.activate': 'Активировать',
   'catalog.priceList.relatedLinks': 'Связанные экраны',
   'catalog.priceList.assign': 'Назначить',
@@ -2547,7 +2499,6 @@ export const messagesRu: MessageCatalogue = {
   'catalog.priceMatrix.loading': 'Загрузка матрицы',
   'catalog.priceMatrix.denied': 'Нет доступа к ценам этого бренда',
   'catalog.priceMatrix.notFound': 'Этот прайс-лист больше не существует',
-  'catalog.priceMatrix.loadError': 'Не удалось загрузить матрицу',
   'catalog.priceMatrix.empty': 'Нет вариантов по этому фильтру',
   'catalog.priceMatrix.category': 'Категория',
   'catalog.priceMatrix.allCategories': 'Все категории',
@@ -2563,7 +2514,6 @@ export const messagesRu: MessageCatalogue = {
   'catalog.priceMatrix.loadingMore': 'Загрузка…',
   'catalog.priceMatrix.conflict':
     'Кто-то другой уже изменил эту цену — обновлено текущим значением. Попробуйте снова.',
-  'catalog.priceMatrix.noBasePrice': 'Нет действующего базового прайс-листа бренда',
 
   'catalog.taxProfile.title': 'НДС / налоговые профили',
   'catalog.taxProfile.intro': 'Задаёт ставку НДС бренда.',
@@ -2704,7 +2654,6 @@ export const messagesRu: MessageCatalogue = {
   'kitchen.item.column.station': 'Станция',
   'kitchen.item.column.quantity': 'Кол-во',
   'kitchen.item.column.status': 'Статус',
-  'kitchen.item.hasNote': 'Клиент оставил комментарий',
   'kitchen.item.lineUnresolved': 'Позиция —',
   'kitchen.item.status.QUEUED': 'В очереди',
   'kitchen.item.status.STARTED': 'В работе',
@@ -2722,7 +2671,6 @@ export const messagesRu: MessageCatalogue = {
 
   // Назначить своего курьера с раздачи (2.1c) — волна P16
   'kitchen.assign.button': 'Назначить курьера',
-  'kitchen.assign.title': 'Назначить курьера',
   'kitchen.assign.loading': 'Ищем план доставки…',
   'kitchen.assign.noPlan': 'План доставки для этого заказа не найден',
   'kitchen.assign.empty': 'В штате нет курьеров',
@@ -2755,8 +2703,6 @@ export const messagesRu: MessageCatalogue = {
 
   'kitchen.expo.handOver': 'Передать',
   'kitchen.expo.empty': 'Нечего передавать',
-  'kitchen.expo.noCodeVerification':
-    'Проверка кода передачи от службы доставки не реализована — кнопка только фиксирует передачу.',
   'kitchen.expo.packedConfirm': 'Упаковано и готово к передаче',
   'kitchen.expo.packedWaiting': 'Ожидание готовности всех позиций перед упаковкой',
 
@@ -2769,9 +2715,6 @@ export const messagesRu: MessageCatalogue = {
   'kitchen.stopList.bulk.reason.noProduct': 'Нет продукта',
   'kitchen.stopList.bulk.reason.equipment': 'Оборудование',
   'kitchen.stopList.bulk.reason.other': 'Другое',
-  'kitchen.stopList.bulk.stopAction': 'Поставить на стоп',
-  'kitchen.stopList.bulk.unstopAction': 'Снять со стопа',
-  'kitchen.stopList.bulk.clear': 'Очистить',
   'kitchen.stopList.bulk.done': 'Обновлено позиций: {count}',
   'kitchen.stopList.bulk.partial': 'Не удалось обновить: {failed}',
   'kitchen.stopList.bulk.tooMany': 'Выберите не более {max} позиций для массового изменения',
@@ -2791,7 +2734,6 @@ export const messagesRu: MessageCatalogue = {
   'kitchen.stopList.action.stop': 'Стоп',
   'kitchen.stopList.action.unstop': 'Снять со стопа',
   'kitchen.stopList.empty': 'В этом филиале пока нет товаров',
-  'kitchen.stopList.loadMore': 'Показать ещё',
 
   // Мощность и настройки буфера (2.6) — волна 43
   'kitchen.capacity.title': 'Мощность и настройки буфера',
@@ -3057,7 +2999,6 @@ export const messagesRu: MessageCatalogue = {
   'delivery.zones.column.version': 'Версия',
   'delivery.zones.column.priority': 'Приоритет',
   'delivery.zones.column.tariff': 'Тариф',
-  'delivery.zones.detail.boundLocations': 'Привязано филиалов: {count}',
   'delivery.zones.detail.freeFrom': 'Бесплатно от {amount}',
   'delivery.zones.detail.minBasket': 'Минимальный заказ {amount}',
   'delivery.zones.detail.loading': 'Загрузка данных зоны',
@@ -3087,7 +3028,6 @@ export const messagesRu: MessageCatalogue = {
   'delivery.zoneImport.committed': 'Импортировано {count} зон(ы) в статусе «черновик»',
   'delivery.zones.create.title': 'Регистрация зоны',
   'delivery.zones.create.code': 'Код',
-  'delivery.zones.create.name': 'Название',
   'delivery.zones.create.submit': 'Зарегистрировать',
   'delivery.zones.draft.action': 'Нарисовать круг',
   'delivery.zones.draft.title': 'Новая версия зоны {code}',
@@ -3152,7 +3092,6 @@ export const messagesRu: MessageCatalogue = {
   'delivery.tariffs.column.default': 'По умолчанию',
   'delivery.tariffs.default.yes': 'Тариф бренда по умолчанию',
   'delivery.tariffs.detail.loading': 'Загрузка данных тарифа',
-  'delivery.tariffs.detail.timeRules': 'Правил для часов пик: {count}',
   'delivery.tariffs.band.from': 'От (м)',
   'delivery.tariffs.band.to': 'До (м)',
   'delivery.tariffs.band.base': 'База',
@@ -3170,8 +3109,6 @@ export const messagesRu: MessageCatalogue = {
   'delivery.tariffs.draft.currency': 'Валюта',
   'delivery.tariffs.draft.maxDistance': 'Дальность (метры)',
   'delivery.tariffs.draft.minFee': 'Минимальная стоимость (в минимальных единицах)',
-  'delivery.tariffs.draft.base': 'Базовая стоимость (в минимальных единицах)',
-  'delivery.tariffs.draft.perKm': 'Стоимость за км (в минимальных единицах)',
   'delivery.tariffs.draft.submit': 'Сохранить черновик',
   'delivery.tariffs.column.distanceMode': 'Расстояние',
   'delivery.tariffs.column.reach': 'Дальность (м)',
@@ -3357,8 +3294,6 @@ export const messagesRu: MessageCatalogue = {
   'delivery.rates.cards.column.bandTo': 'До (м)',
   'delivery.rates.cards.column.minimumSeconds': 'Мин. оплачиваемые секунды',
   'delivery.rates.cards.activate': 'Активировать',
-  'delivery.rates.cards.perOrder': 'За заказ (мин. единицы)',
-  'delivery.rates.cards.perShift': 'Фикс. за смену (мин. единицы)',
   'delivery.rates.cards.narrowerLocation': 'ID филиала (необязательно, ýже всего бренда)',
   'delivery.rates.cards.narrowerLocationPlaceholder': 'Оставьте пустым для всего бренда',
   'delivery.rates.cards.narrowerCourierType': 'Класс транспорта (необязательно)',
@@ -3510,21 +3445,11 @@ export const messagesRu: MessageCatalogue = {
     'Фото и подписи подтверждения доставки хранятся это число дней, затем удаляются.',
   'delivery.policy.card.courier': 'Что видит и может курьер',
   'delivery.policy.kitchenReadyOnly': 'Показывать только готовые заказы',
-  'delivery.policy.consequence.kitchenReadyOnly':
-    'Курьер видит и может взять только заказы, которые кухня уже отметила готовыми.',
   'delivery.policy.revealCustomerLocationTiming': 'Раскрытие адреса клиента',
   'delivery.policy.revealCustomerLocationTiming.BEFORE_ACCEPT': 'До принятия',
   'delivery.policy.revealCustomerLocationTiming.AFTER_ACCEPT': 'После принятия',
-  'delivery.policy.consequence.revealCustomerLocationTiming':
-    '«До принятия» показывает точный адрес каждому курьеру, видящему предложение; «после принятия» — только тому, кто его принял.',
   'delivery.policy.postDeliveryPaymentCheckRequired': 'Проверять статус оплаты после доставки',
-  'delivery.policy.consequence.postDeliveryPaymentCheckRequired':
-    'Заказ не может закрыться, пока оплата не подтверждена.',
   'delivery.policy.gpsVerificationEnabled': 'Проверять действия курьера по радиусу GPS',
-  'delivery.policy.consequence.gpsVerificationEnabled':
-    'По умолчанию отключено. Включение начинает проверять положение курьера по обоим радиусам ниже.',
-  'delivery.policy.gpsAcceptRadiusKm': 'Радиус принятия (км, от точки выдачи)',
-  'delivery.policy.gpsStatusChangeRadiusMeters': 'Радиус смены статуса (м, от точки клиента)',
   'delivery.policy.gpsSummary':
     'Включено — приём в пределах {acceptKm} км, смена статуса в пределах {statusChangeM} м',
   'delivery.policy.billingMode': 'Биллинг курьеров (личный баланс)',
@@ -3619,7 +3544,6 @@ export const messagesRu: MessageCatalogue = {
   'customers.import.reject.AMBIGUOUS_PHONE_MATCH':
     'Этот номер телефона совпадает с несколькими клиентами',
   'customers.import.reject.OTHER': 'Не удалось импортировать',
-  'customers.export.dismiss': 'Скрыть',
 
   'customers.detail.unnamed': 'Клиент без имени',
   'customers.detail.registered': 'Зарегистрирован',
@@ -3866,7 +3790,6 @@ export const messagesRu: MessageCatalogue = {
   'staff.outcome.partial': 'Выполнено {succeeded} из {total}',
 
   'staff.dialog.cancel': 'Отмена',
-  'staff.dialog.close': 'Закрыть',
 
   'staff.jobDialog.title': 'Должность',
   'staff.jobDialog.role.label': 'Должность',
@@ -3904,10 +3827,6 @@ export const messagesRu: MessageCatalogue = {
   'staff.accessDialog.revokeInvite.confirm': 'Отозвать',
 
   'staff.inviteDialog.title': 'Пригласить',
-  'staff.inviteDialog.body':
-    'Самостоятельное приглашение по телефону пока не построено: платформа умеет создавать учётную запись только для владельца компании при подключении, а не для рядового сотрудника.',
-  'staff.inviteDialog.workaround':
-    'Чтобы дать доступ человеку, у которого уже есть учётная запись, откройте его карточку и добавьте должность.',
   'staff.inviteDialog.rule':
     'У человека одна или несколько должностей, и каждая должность даётся где-то — на всю компанию, один бренд или один филиал. Должность, данная в одном филиале, работает только там.',
   'staff.inviteDialog.name.label': 'Имя и фамилия',
@@ -4011,8 +3930,6 @@ export const messagesRu: MessageCatalogue = {
   'reports.error.retry': 'Повторить',
   'reports.empty.period': 'Нет данных за выбранный период',
   'reports.export.button': 'Экспорт',
-  'reports.export.notBuilt':
-    'Экспорт ещё не построен — ADR 0043 ставит его последним, после капабилити и аудируемой очереди задач',
   'reports.export.hint': 'Открыть центр экспорта',
   'reports.unit.minutes': 'мин',
 
@@ -4089,16 +4006,12 @@ export const messagesRu: MessageCatalogue = {
   'reports.filter.period.7d': '7 дней',
   'reports.filter.period.month': 'Месяц',
   'reports.filter.period.custom': 'Свой период',
-  'reports.filter.period.customFrom': 'С',
-  'reports.filter.period.customTo': 'По',
-  'reports.filter.slice.label': 'Срез',
   'reports.filter.fulfilment.label': 'Тип получения',
   'reports.filter.fulfilment.all': 'Все',
   'reports.filter.fulfilment.delivery': 'Доставка',
   'reports.filter.fulfilment.pickup': 'Самовывоз',
   'reports.filter.fulfilment.dineIn': 'В зале',
   'reports.filter.paymentType.label': 'Тип оплаты',
-  'reports.filter.paymentType.locked': 'Появится вместе с платежами (ADR 0013/0046)',
   'reports.filter.paymentType.placeholder': 'Любой способ оплаты',
   'reports.filter.branch.label': 'Филиал',
   'reports.filter.branch.placeholder': 'Любой филиал',
@@ -4151,8 +4064,6 @@ export const messagesRu: MessageCatalogue = {
   'reports.overview.mix.byRevenue': 'По выручке',
   'reports.overview.mix.fulfilment': 'Тип получения',
   'reports.overview.mix.payment': 'Оплата',
-  'reports.overview.mix.payment.locked':
-    'Появится вместе с платежами (ADR 0013/0046) — fact_order_tender не построен',
   'reports.overview.funnel.title': 'Итоги по заказам',
   'reports.overview.funnel.completed': 'Завершено',
   'reports.overview.funnel.notCompleted': 'Не завершено',
@@ -4174,8 +4085,6 @@ export const messagesRu: MessageCatalogue = {
   'reports.overview.funnel.liability.CUSTOMER': 'Клиент',
   'reports.overview.funnel.liability.COURIER_PARTNER': 'Курьерский партнёр',
   'reports.overview.funnel.liability.PLATFORM': 'Платформа',
-  'reports.overview.funnel.costNotBuilt':
-    'Что стоила отмена — не показано: order_outcomes из ADR 0039 ещё не существует, поэтому это поле было бы пустым в каждой строке.',
   'reports.overview.branches.title': 'Филиалы',
   'reports.overview.branches.name': 'Филиал',
   'reports.overview.branches.revenue': 'Выручка',
@@ -4192,8 +4101,6 @@ export const messagesRu: MessageCatalogue = {
     'Показаны наихудшие строки в пределах лимита — не полный список для очень широкого периода.',
   'reports.orders.commercial.piiNote':
     'Клиент, оператор и курьер получены из отдельного аудируемого источника (order.read) — сама отчётность не хранит персональных данных (ADR 0029). Телефон замаскирован; выгрузка этих данных — аудируемый вывоз ПДн.',
-  'reports.orders.loadMore': 'Показать ещё',
-  'reports.orders.loadMore.loading': 'Загрузка…',
   'reports.orders.late.empty': 'Нет опозданий за выбранный период',
   'reports.orders.late.summary': 'За период: {count} опозданий · медиана {median} · худший {worst}',
 
@@ -4241,8 +4148,6 @@ export const messagesRu: MessageCatalogue = {
   'reports.orders.summary.measure.averageCheck': 'Средний чек',
   'reports.orders.summary.split': 'Тип получения',
   'reports.orders.summary.branch': 'Филиал',
-  'reports.orders.summary.channel': 'Канал',
-  'reports.orders.summary.value': 'Значение',
   'reports.orders.summary.report1.title': 'Сводка 1',
   'reports.orders.summary.report2.title': 'Сводка 2',
   'reports.orders.summary.orderType': 'Тип заказа',
@@ -4465,7 +4370,6 @@ export const messagesRu: MessageCatalogue = {
   'marketing.courierBroadcasts.intro':
     'Собственная оперативная SMS-рассылка диспетчера курьерам — смена смены, погодные условия, перекрытие маршрута. Никогда не клиентская кампания.',
   'marketing.courierBroadcasts.loading': 'Загрузка',
-  'marketing.courierBroadcasts.denied': 'Нет доступа к рассылкам курьерам этого бренда',
   'marketing.courierBroadcasts.empty': 'Рассылок пока нет',
   'marketing.courierBroadcasts.create.action': 'Новая рассылка',
   'marketing.courierBroadcasts.create.title': 'Черновик рассылки курьерам',
@@ -4489,8 +4393,6 @@ export const messagesRu: MessageCatalogue = {
   'marketing.attributionLinks.title': 'Ссылки привлечения',
   'marketing.attributionLinks.intro':
     'Отслеживаемая ссылка сайта ?ref= или диплинк Telegram — для кампании или блогера.',
-  'marketing.attributionLinks.loading': 'Загрузка',
-  'marketing.attributionLinks.denied': 'Нет доступа к ссылкам привлечения этого бренда',
   'marketing.attributionLinks.empty': 'Ссылок пока нет',
   'marketing.attributionLinks.create.action': 'Создать ссылку',
   'marketing.attributionLinks.create.title': 'Создать ссылку привлечения',
@@ -4720,10 +4622,6 @@ export const messagesRu: MessageCatalogue = {
   'marketing.referrals.redemptions.column.refereeReward': 'Начислено новому клиенту',
   'marketing.referrals.redemptions.empty': 'Ни один реферальный код ещё не использован.',
 
-  'marketing.referrals.links.title': 'Ссылки для привлечения на сайте и в Telegram',
-  'marketing.referrals.links.body':
-    'Не реализовано, и это не скрытый пробел: ссылки "?ref=" на сайте, deep-link "startapp" в Telegram и пошаговая настройка Mini-App/BotFather относятся к marketing.attribution_links из ADR 0044 и остаются пунктом чек-листа этого ADR. Клиент всё ещё может получить код, а друг — использовать его в витрине; здесь не отображается ссылка для отправки, потому что таблицы ссылок пока не существует.',
-
   // -------------------------------------------------------- automations (row 6.5, ADR 0044)
   'marketing.automations.loading': 'Загрузка автоматизаций…',
   'marketing.automations.denied': 'У вас нет доступа к автоматизациям этого бренда.',
@@ -4812,8 +4710,6 @@ export const messagesRu: MessageCatalogue = {
   'customers.segments.builder.name': 'Название',
   'customers.segments.builder.description': 'Описание',
   'customers.segments.builder.predicates': 'Условия',
-  'customers.segments.builder.addPredicate': 'Добавить условие',
-  'customers.segments.builder.textValuesPlaceholder': 'Значения через запятую',
   'customers.segments.builder.saving': 'Сохранение…',
   'customers.segments.builder.save': 'Сохранить',
   'customers.segments.predicate.type.RECENCY_DAYS': 'Дней с последнего заказа',
@@ -4825,12 +4721,6 @@ export const messagesRu: MessageCatalogue = {
   'customers.segments.predicate.type.REGISTERED_BETWEEN': 'Зарегистрирован в период',
   'customers.segments.predicate.type.BIRTHDAY_WITHIN_DAYS': 'День рождения в пределах (дней)',
   'customers.segments.predicate.type.PREFERRED_LOCALE': 'Предпочитаемый язык',
-  'customers.segments.predicate.type.AUDIENCE_MEMBERSHIP': 'Входит в другой сегмент',
-  'customers.segments.operator.AT_LEAST': 'не менее',
-  'customers.segments.operator.AT_MOST': 'не более',
-  'customers.segments.operator.BETWEEN': 'между',
-  'customers.segments.operator.IN': 'входит в',
-  'customers.segments.operator.NOT_IN': 'не входит в',
 
   // ---------------------------------------------------------------- 5.4 Reviews (ADR 0071, wave 59)
   'customers.reviews.title': 'Отзывы',
@@ -5010,7 +4900,6 @@ export const messagesRu: MessageCatalogue = {
   'reports.customers.newVsReturning.title': 'Выручка: новые и вернувшиеся',
   'reports.customers.newVsReturning.new': 'Новые клиенты',
   'reports.customers.newVsReturning.returning': 'Вернувшиеся клиенты',
-  'reports.customers.newVsReturning.share': 'Доля выручки',
   'reports.customers.newVsReturning.empty':
     'В этом периоде нет завершённого заказа с известным клиентом.',
   'reports.customers.cohorts.title': 'Когорты и удержание',
@@ -5461,7 +5350,6 @@ export const messagesRu: MessageCatalogue = {
   'staff.activity.action.tenantSuspended': 'Компания приостановлена',
   'staff.activity.action.tenantReactivated': 'Компания восстановлена',
   'staff.activity.action.tenantActivated': 'Компания активирована',
-  'staff.activity.action.tenantActivate': 'Компания активирована',
   'staff.activity.action.orderCancel': 'Заказ отменён',
   'staff.activity.filter.outcomeAll': 'Любой итог',
   'staff.activity.filter.outcomeSucceeded': 'Успешно',
@@ -5546,19 +5434,11 @@ export const messagesRu: MessageCatalogue = {
     'Как долго ресторан хранит персональные данные, что здесь значит согласие, и кто смотрел собственные слова клиента.',
   'settings.dataPrivacy.retention.title': 'Сроки хранения',
   'settings.dataPrivacy.retention.column.category': 'Данные',
-  'settings.dataPrivacy.retention.column.status': 'Статус',
-  'settings.dataPrivacy.retention.column.note': 'Примечание',
   'settings.dataPrivacy.retention.abandonedCarts.category': 'Брошенные корзины',
-  'settings.dataPrivacy.retention.abandonedCarts.note':
-    'Устаревшая корзина помечается истёкшей, но пока ничего не удаляет и не обезличивает её — не реализовано (ADR 0029).',
   'settings.dataPrivacy.retention.courierLocation.category': 'История локации курьера',
-  'settings.dataPrivacy.retention.courierLocation.note':
-    'Удаляется автоматически по расписанию, число дней настраивается на компанию (ADR 0045). Этот экран пока не может показать настроенное для вашей компании число — нет обращённой к компании настройки для этого (ADR 0030).',
   'settings.dataPrivacy.retention.candidateRecords.category': 'Записи кандидатов',
   'settings.dataPrivacy.retention.candidateRecords.note':
     'В HorecaOS нет модели данных для найма или кандидатов — здесь нечего хранить.',
-  'settings.dataPrivacy.retention.status.notEnforced': 'Не реализовано',
-  'settings.dataPrivacy.retention.status.enforced': 'Реализовано',
   'settings.dataPrivacy.retention.status.notApplicable': 'Не применимо',
   'settings.dataPrivacy.retention.lead':
     'Задайте, как долго хранится каждый вид данных. Любое значение ниже можно только увеличить для всей платформы — более коротким значением очистка никогда не удалит данные другой компании раньше срока.',
@@ -5580,14 +5460,6 @@ export const messagesRu: MessageCatalogue = {
   'settings.dataPrivacy.consent.title': 'Согласие',
   'settings.dataPrivacy.consent.lead':
     'Что решение о согласии может фиксировать сегодня, на аккаунте клиента.',
-  'settings.dataPrivacy.consent.states.label': 'Решение',
-  'settings.dataPrivacy.consent.states.value':
-    'Дано или отозвано — никогда не выводится из молчания.',
-  'settings.dataPrivacy.consent.sources.label': 'Зафиксировано из',
-  'settings.dataPrivacy.consent.sources.value':
-    'Витрины, агента поддержки, импорта, миграции или API.',
-  'settings.dataPrivacy.consent.gap':
-    'Здесь нет общего для компании справочника типов согласия — цель и канал задаются свободным текстом на каждой точке (например, в шаблоне уведомления). История согласий конкретного клиента — на его собственной карточке, не на этом экране.',
   'settings.dataPrivacy.consent.column.code': 'Код',
   'settings.dataPrivacy.consent.column.label': 'Название',
   'settings.dataPrivacy.consent.column.channelSpecific': 'По каналу',
@@ -5674,7 +5546,6 @@ export const messagesRu: MessageCatalogue = {
   'orders.callCentre.presence.reasonLabel': 'Причина',
   'orders.callCentre.presence.reasonPlaceholder': 'например, обеденный перерыв',
   'orders.callCentre.presence.reasonRequired': 'Для паузы нужна причина',
-  'orders.callCentre.presence.save': 'Обновить статус',
   'orders.callCentre.presence.error': 'Не удалось обновить статус',
   'orders.callCentre.roster.title': 'Команда',
   'orders.callCentre.screenPop.title': 'Входящий звонок',
@@ -5747,7 +5618,6 @@ export const messagesRu: MessageCatalogue = {
   'orders.newOrder.order.created': 'Заказ {number} создан',
   'orders.newOrder.order.unavailableCount': 'Позиций в корзине больше не доступно: {count}',
   'orders.newOrder.order.branch': 'Филиал',
-  'orders.newOrder.order.byZone': '(по зоне)',
   'orders.newOrder.order.branchLoading': 'Подбираем филиал…',
   'orders.newOrder.order.branchLoad': '{count} активных заказов',
   'orders.newOrder.order.branchClosed': 'закрыт',
@@ -5979,12 +5849,10 @@ export const messagesRu: MessageCatalogue = {
   'ui.charts.table.show': 'Показать как таблицу',
   'ui.charts.table.hide': 'Скрыть таблицу',
   'ui.charts.tooltip.noData': 'Недостаточно истории',
-  'ui.charts.sparkline.trend': '{label}: динамика с {first} до {last}',
   'ui.charts.sequential.low': 'Меньше',
   'ui.charts.sequential.high': 'Больше',
   'ui.charts.table.count': 'Количество',
   'ui.charts.table.share': 'Доля',
-  'ui.charts.table.value': 'Значение',
 
   'ui.importWizard.dropzone.instructions': 'Перетащите файл сюда или',
   'ui.importWizard.dropzone.browse': 'выберите файл',

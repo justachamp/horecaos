@@ -392,6 +392,7 @@ jobs:
         run: |
           npm run lint
           npm run lint:rules
+          npm run i18n:dead:test
 
       - name: Format check (operations)
         # The whole tree, so a file cannot slip through unchecked. This step used

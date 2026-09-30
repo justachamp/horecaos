@@ -259,9 +259,6 @@ export const ru: Messages = {
   'state.denied.body':
     'Доступ выдаётся по правам. Запросите у администратора платформы право, которое нужно этому разделу.',
 
-  'state.notBuilt.title': 'Ещё не реализовано',
-  'state.notBuilt.body': 'У этого раздела пока нет экрана.',
-
   'overview.title': 'Здоровье платформы',
   'overview.lead':
     'Клиенты, заказы, фискальные чеки и очереди по всем клиентам — подсчитано в момент открытия.',
@@ -684,7 +681,6 @@ export const ru: Messages = {
   'ownerInvitations.column.acceptedAt': 'Учётная запись создана',
   'ownerInvitations.column.attempts': 'Попыток',
   'ownerInvitations.column.lastError': 'Последний сбой',
-  'onboarding.invitation.recipient': 'Кому отправлено',
   'onboarding.invitation.timeline': 'История',
   'onboarding.invitation.timelineEmpty':
     'Это приглашение старше истории, поэтому по нему ничего не записано.',
@@ -826,7 +822,6 @@ export const ru: Messages = {
   'deadLetters.title': 'Недоставленные и повтор',
   'deadLetters.lead':
     'Сообщения, не прошедшие после всех повторов: события, которые платформа не смогла опубликовать, и события, которые не смог обработать обработчик. Повторите или закройте каждое, указав причину.',
-  'deadLetters.empty': 'Недоставленных событий нет.',
   'deadLetters.column.event': 'Событие',
   'deadLetters.column.type': 'Тип',
   'deadLetters.column.attempts': 'Попытки',
@@ -1104,9 +1099,7 @@ export const ru: Messages = {
   'staff.revokeTenant.confirm': 'Отозвать',
   'staff.revokeTenant.done': 'Отозвано.',
   'staff.grant.roleChoose': 'Выберите роль',
-  'staff.grant.brand': 'Бренд',
   'staff.grant.chooseBrand': 'Выберите бренд',
-  'staff.grant.location': 'Точка',
   'staff.grant.chooseLocation': 'Выберите точку',
   'staff.approvals.title': 'Ожидающие решения',
   'staff.approvals.lead':
@@ -1146,7 +1139,6 @@ export const ru: Messages = {
   'auditLog.column.outcome': 'Результат',
   'auditLog.actor.system': 'Система',
   'auditLog.filter.action': 'Код действия',
-  'auditLog.filter.outcome': 'Результат',
   'auditLog.filter.anyOutcome': 'Любой результат',
   'auditLog.filter.apply': 'Отфильтровать',
   'auditLog.outcome.SUCCEEDED': 'Успешно',
@@ -1527,9 +1519,6 @@ export const ru: Messages = {
   'statements.void.open': 'Аннулировать',
   'statements.void.submit': 'Аннулировать выписку',
   'statements.void.done': 'Выписка {number} аннулирована.',
-  'statements.wallet.title': 'Предоплаченный кошелёк',
-  'statements.wallet.body':
-    'Не сделан. Как клиенты платят HorecaOS и как облагается налогом предоплата, ещё не решено, поэтому баланса, пополнений и сгорания кредита нет.',
   'dunning.lead':
     'Все клиенты, которые опаздывают с оплатой или приостановлены, сколько времени они в этом состоянии и что ограничивает каждый этап. Сам по себе клиент никуда не переходит: через две недели просрочки инцидент просит человека принять решение.',
   'statements.column.paid': 'Оплачено',
