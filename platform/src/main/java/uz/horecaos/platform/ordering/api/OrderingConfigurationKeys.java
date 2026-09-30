@@ -3,7 +3,7 @@ package uz.horecaos.platform.ordering.api;
 import java.math.BigDecimal;
 import java.util.Set;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
-import uz.horecaos.platform.ordering.domain.OrderLatenessPolicy;
+import uz.horecaos.platform.ordering.domain.OrderLatenessDocument;
 import uz.horecaos.platform.tenancy.api.ConfigurationKey;
 import uz.horecaos.platform.tenancy.api.PolicyKey;
 
@@ -142,11 +142,13 @@ public final class OrderingConfigurationKeys {
      * Minutes before an order's promised time at which the boards show it as at
      * risk. 5: exactly the {@code ordering.lateness} platform default's 300
      * seconds, so registering the key changes nothing for a tenant that has not
-     * set it. {@code OrderLatenessPolicyService} overlays a value that was set
-     * somewhere in the chain onto {@code atRiskBeforeSeconds} of every
-     * fulfilment mode -- a scalar the settings screen edits with the same
-     * inherit/override control as every other card-2 field, where the policy
-     * document itself has no editor.
+     * set it. {@code OrderLatenessPolicyService} takes a value that was set
+     * somewhere in the chain as the at-risk window of every fulfilment mode
+     * whose {@code ordering.lateness} document does not carry a window of its
+     * own (wave 16: the document's per-mode at-risk minutes replace this single
+     * scalar, and this stays as the default for the modes not set) -- a scalar
+     * the settings screen edits with the same inherit/override control as every
+     * other card-2 field.
      */
     public static final ConfigurationKey<Integer> AT_RISK_BEFORE_MINUTES = ConfigurationKey.of(
                     AT_RISK_BEFORE_MINUTES_CODE, Integer.class)
@@ -193,15 +195,20 @@ public final class OrderingConfigurationKeys {
      * (at-risk-before/late-after/no-promise-fallback), and ADR 0030 draws the
      * line at exactly this shape: "a setting is a scalar value... a policy is a
      * versioned document". Authoring this key is {@code
-     * Capability.TENANT_CONFIGURATION_WRITE} and lands with wave P31; this wave
-     * ships the key, its resolver, and its platform default only.
+     * Capability.TENANT_CONFIGURATION_WRITE}: wave 16 (rows {@code X.39}/{@code
+     * 10.3b}) ships the editor on the order-policy card, over {@code
+     * OrderLatenessPolicyAuthoringService}. The document type is {@link
+     * OrderLatenessDocument} — the authored form, whose per-mode at-risk window
+     * is optional and falls back to {@link #AT_RISK_BEFORE_MINUTES} — while what
+     * the boards read is the concrete {@code OrderLatenessPolicy} that service
+     * resolves from it.
      */
     public static final String LATENESS_POLICY_CODE = "ordering.lateness";
 
     /** See {@link #LATENESS_POLICY_CODE}. Consumed by {@code OrderLatenessPolicyService}. */
-    public static final PolicyKey<OrderLatenessPolicy> LATENESS_POLICY = new PolicyKey<>(
+    public static final PolicyKey<OrderLatenessDocument> LATENESS_POLICY = new PolicyKey<>(
             LATENESS_POLICY_CODE,
-            OrderLatenessPolicy.class,
+            OrderLatenessDocument.class,
             Set.of(ScopeType.PLATFORM, ScopeType.TENANT, ScopeType.BRAND, ScopeType.LOCATION),
             "ordering",
             false,
