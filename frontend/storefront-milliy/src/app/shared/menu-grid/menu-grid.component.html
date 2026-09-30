@@ -32,6 +32,7 @@
           [quantities]="quantities()"
           [busy]="busy()"
           (quantityChange)="quantityChange.emit($event)"
+          (choose)="choose.emit($event)"
         />
       }
     </div>

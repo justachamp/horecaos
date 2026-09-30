@@ -1,7 +1,13 @@
 <ng-template #body>
   <span class="dish__media">
     @if (item().image) {
-      <img class="dish__img" [src]="item().image" [alt]="item().name" loading="lazy" decoding="async" />
+      <img
+        class="dish__img"
+        [src]="item().image"
+        [alt]="item().name"
+        loading="lazy"
+        decoding="async"
+      />
     }
   </span>
   <span class="dish__body">
@@ -28,7 +34,33 @@
       </span>
     }
     @if (showStaffNote()) {
-      <span class="dish__note" data-testid="dine-in-needs-staff">{{ 'dineIn.needsStaff' | t }}</span>
+      <span class="dish__note" data-testid="dine-in-needs-staff">{{
+        'dineIn.needsStaff' | t
+      }}</span>
+    }
+    @if (showChoose()) {
+      <span class="dish__order">
+        @for (variant of choosePortions(); track variant.id) {
+          <span class="portion">
+            @if (item().variants.length > 1) {
+              <span class="portion__label">
+                @if (variant.name) {
+                  {{ variant.name }} ·
+                }
+                {{ portionPrice(variant) }}
+              </span>
+            }
+            <button
+              type="button"
+              class="portion__add"
+              data-testid="dine-in-choose"
+              (click)="choose.emit({ item: item(), variantId: variant.id })"
+            >
+              {{ 'dineIn.choose' | t }}
+            </button>
+          </span>
+        }
+      </span>
     }
     @if (showControls()) {
       <span class="dish__order">
@@ -69,7 +101,9 @@
                 >
                   −
                 </button>
-                <span class="stepper__value" data-testid="dine-in-quantity">{{ quantityOf(variant.id) }}</span>
+                <span class="stepper__value" data-testid="dine-in-quantity">{{
+                  quantityOf(variant.id)
+                }}</span>
                 <button
                   type="button"
                   class="stepper__btn stepper__btn--add"

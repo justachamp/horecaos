@@ -4,10 +4,16 @@ import { Router, provideRouter } from '@angular/router';
 
 import { DineInTableComponent } from './dine-in-table.component';
 import { ApiClient } from '../../../core/api/api-client';
+import { APP_CONFIG, type AppConfig } from '../../../core/config/app-config';
 import { ReturnDestination } from '../../../core/auth/return-destination';
 import { Session } from '../../../core/auth/session';
 import { HorecaOSApiError } from '../../../core/api/problem-details';
-import type { PlatformCart, PlatformCartLine, PricedCart } from '../../../services/cart.service';
+import {
+  lineKeyFor,
+  type PlatformCart,
+  type PlatformCartLine,
+  type PricedCart,
+} from '../../../services/cart.service';
 import { DineInCartService } from '../../../services/dine-in-cart.service';
 import {
   DineInService,
@@ -19,7 +25,12 @@ import { LangService } from '../../../services/lang.service';
 import { MenuService } from '../../../services/menu.service';
 import { PaymentSessionService } from '../../../services/payment-session.service';
 import { TranslateService } from '../../../services/translate.service';
-import type { CustomerUiResponse, MenuItem, MenuItemVariant } from '../../../types/home.types';
+import type {
+  CustomerUiResponse,
+  MenuItem,
+  MenuItemModifierGroup,
+  MenuItemVariant,
+} from '../../../types/home.types';
 
 const LOCATION = 'location-1';
 const SESSION = 'session-1';
@@ -49,7 +60,8 @@ class FakeDineInService {
   queueRound = vi.fn((sessionId: string, orderId: string) => {
     this.queued.push({ sessionId, orderId });
   });
-  pendingRoundCount = (sessionId: string) => this.queued.filter((round) => round.sessionId === sessionId).length;
+  pendingRoundCount = (sessionId: string) =>
+    this.queued.filter((round) => round.sessionId === sessionId).length;
   /** The real service's queue-then-attach, minus its storage and failure classification. */
   flushPendingRounds = vi.fn(async (sessionId: string): Promise<RoundFlush> => {
     let latest: DineInBill | null = null;
@@ -61,8 +73,9 @@ class FakeDineInService {
   });
   /** The real service hands the cart the guest token as a header; the fake hands it a stand-in. */
   bindCartToTable = vi.fn(
-    async (carts: { bindTable(headers: Readonly<Record<string, string>>): Promise<PlatformCart> }) =>
-      carts.bindTable({ 'X-Dine-In-Token': 'guest-token' }),
+    async (carts: {
+      bindTable(headers: Readonly<Record<string, string>>): Promise<PlatformCart>;
+    }) => carts.bindTable({ 'X-Dine-In-Token': 'guest-token' }),
   );
   isGuestSessionEnded = vi.fn().mockReturnValue(false);
   clear = vi.fn(() => this.admissionSig.set(null));
@@ -98,14 +111,29 @@ class FakeCartService {
     return create ? this.open([]) : null;
   });
 
-  putLine = vi.fn(async (input: { variantId: string; quantity: number }) => {
-    const others = (this.cart()?.lines ?? []).filter((line) => line.lineKey !== input.variantId);
-    this.version++;
-    return this.open([
-      ...others,
-      { lineKey: input.variantId, variantId: input.variantId, quantity: input.quantity, hasCustomerNote: false },
-    ]);
-  });
+  putLine = vi.fn(
+    async (input: {
+      variantId: string;
+      quantity: number;
+      modifierOptionIds?: readonly string[];
+    }) => {
+      // Keyed as the real service keys it: the variant and its exact selection.
+      const lineKey = lineKeyFor(input.variantId, input.modifierOptionIds ?? []);
+      const held = this.cart()?.lines ?? [];
+      const line: PlatformCartLine = {
+        lineKey,
+        variantId: input.variantId,
+        quantity: input.quantity,
+        hasCustomerNote: false,
+      };
+      this.version++;
+      return this.open(
+        held.some((entry) => entry.lineKey === lineKey)
+          ? held.map((entry) => (entry.lineKey === lineKey ? line : entry))
+          : [...held, line],
+      );
+    },
+  );
 
   removeLine = vi.fn(async (lineKey: string) => {
     this.version++;
@@ -136,14 +164,16 @@ class FakeCartService {
     warnings: [],
   }));
 
-  checkout = vi.fn(async (_input?: { priced: PricedCart; paymentMethodCode: string; idempotencyKey: string }) => ({
-    orderId: 'order-1',
-    publicOrderNumber: '0001',
-    status: 'CONFIRMED',
-    version: 1,
-    outcome: 'CREATED',
-    warnings: [],
-  }));
+  checkout = vi.fn(
+    async (_input?: { priced: PricedCart; paymentMethodCode: string; idempotencyKey: string }) => ({
+      orderId: 'order-1',
+      publicOrderNumber: '0001',
+      status: 'CONFIRMED',
+      version: 1,
+      outcome: 'CREATED',
+      warnings: [],
+    }),
+  );
 
   bindTable = vi.fn(async (_headers: Readonly<Record<string, string>>) => {
     this.version++;
@@ -180,6 +210,15 @@ function line(variantId: string, quantity: number): PlatformCartLine {
   return { lineKey: variantId, variantId, quantity, hasCustomerNote: false };
 }
 
+/** A line ordered with options: the platform keys it by the variant and the exact selection. */
+function chosenLine(
+  variantId: string,
+  optionIds: readonly string[],
+  quantity: number,
+): PlatformCartLine {
+  return { lineKey: lineKeyFor(variantId, optionIds), variantId, quantity, hasCustomerNote: false };
+}
+
 class FakeMenuService {
   readonly currency = signal<string | null>('UZS');
   home = vi.fn<(...args: unknown[]) => Promise<CustomerUiResponse>>();
@@ -203,7 +242,12 @@ function variant(overrides: Partial<MenuItemVariant> = {}): MenuItemVariant {
   };
 }
 
-function dish(id: string, name: string, variants: MenuItemVariant[] = [variant()]): MenuItem {
+function dish(
+  id: string,
+  name: string,
+  variants: MenuItemVariant[] = [variant()],
+  modifierGroups: MenuItemModifierGroup[] = [],
+): MenuItem {
   return {
     id,
     name,
@@ -220,8 +264,36 @@ function dish(id: string, name: string, variants: MenuItemVariant[] = [variant()
     is_favourite: false,
     delivery_duration: 0,
     variants,
-    modifierGroups: [],
+    modifierGroups,
   };
+}
+
+function modifierGroup(overrides: Partial<MenuItemModifierGroup> = {}): MenuItemModifierGroup {
+  return {
+    id: 'size',
+    name: 'Size',
+    required: true,
+    minimumSelections: 1,
+    maximumSelections: 1,
+    allowSameOptionMultipleTimes: false,
+    options: [
+      { id: 'opt-small', label: 'Small', amountMinor: null, maximumQuantity: 1 },
+      { id: 'opt-large', label: 'Large', amountMinor: 8_000, maximumQuantity: 1 },
+    ],
+    ...overrides,
+  };
+}
+
+/** A menu whose one dish must be chosen from: Osh, whose Size is required. */
+function menuWithRequiredSize(extra: Partial<MenuItemModifierGroup>[] = []): CustomerUiResponse {
+  return menu([
+    dish(
+      'p1',
+      'Osh',
+      [variant()],
+      [modifierGroup(), ...extra.map((entry) => modifierGroup(entry))],
+    ),
+  ]);
 }
 
 function menu(items: MenuItem[] = [dish('p1', 'Osh')]): CustomerUiResponse {
@@ -299,7 +371,8 @@ function setUp() {
     payments,
     router,
     q: (testId: string) => host.querySelector<HTMLElement>(`[data-testid="${testId}"]`),
-    all: (testId: string) => Array.from(host.querySelectorAll<HTMLElement>(`[data-testid="${testId}"]`)),
+    all: (testId: string) =>
+      Array.from(host.querySelectorAll<HTMLElement>(`[data-testid="${testId}"]`)),
     click: async (testId: string) => {
       host.querySelector<HTMLElement>(`[data-testid="${testId}"]`)?.click();
       await settle(fixture);
@@ -317,6 +390,27 @@ async function settle(fixture: View['fixture']): Promise<void> {
   await fixture.whenStable();
   await new Promise((resolve) => setTimeout(resolve, 0));
   fixture.detectChanges();
+}
+
+function optionButton(view: View, label: string): HTMLElement {
+  const found = view.all('modifier-option').find((entry) => entry.textContent?.includes(label));
+  expect(found, `no option labelled ${label} in the picker`).toBeDefined();
+  return found!;
+}
+
+/** Taps an option in the open picker. */
+function pick(view: View, label: string): void {
+  optionButton(view, label).click();
+  view.fixture.detectChanges();
+}
+
+function refusal(reason: string): HorecaOSApiError {
+  return new HorecaOSApiError({
+    status: 422,
+    code: 'VALIDATION_FAILED',
+    detail: 'refused',
+    problem: { status: 422, code: 'VALIDATION_FAILED', reason },
+  });
 }
 
 describe('DineInTableComponent', () => {
@@ -337,7 +431,7 @@ describe('DineInTableComponent', () => {
   });
 
   describe('VIEW_ONLY -- the menu-only mode', () => {
-    it('shows the table and its menu, read on the table\'s own location and QR channel', async () => {
+    it("shows the table and its menu, read on the table's own location and QR channel", async () => {
       const view = setUp();
       view.dineIn.seed(admission({ mode: 'VIEW_ONLY', openSessionId: null }));
       view.menuService.home.mockResolvedValue(menu([dish('p1', 'Osh'), dish('p2', 'Norin')]));
@@ -369,7 +463,7 @@ describe('DineInTableComponent', () => {
       expect(view.q('dine-in-not-seated')).toBeNull();
     });
 
-    it('touches neither the basket, the bill, nor the platform\'s ordering calls', async () => {
+    it("touches neither the basket, the bill, nor the platform's ordering calls", async () => {
       const view = setUp();
       view.dineIn.seed(admission({ mode: 'VIEW_ONLY', openSessionId: null }));
 
@@ -408,7 +502,7 @@ describe('DineInTableComponent', () => {
       expect(view.all('dish-out-of-window').length).toBe(1);
     });
 
-    it('omits the channel when the tenant registered none, so the build\'s own channel applies', async () => {
+    it("omits the channel when the tenant registered none, so the build's own channel applies", async () => {
       const view = setUp();
       view.dineIn.seed(admission({ mode: 'VIEW_ONLY', openSessionId: null, channelCode: null }));
 
@@ -483,6 +577,21 @@ describe('DineInTableComponent', () => {
       expect(view.carts.putLine).not.toHaveBeenCalled();
     });
 
+    it('sends a tap on Choose to sign-in as well, and opens no picker', async () => {
+      const view = setUp();
+      view.dineIn.seed(admission());
+      view.menuService.home.mockResolvedValue(menuWithRequiredSize());
+      view.session.setAuthenticated(false);
+      const navigate = vi.spyOn(view.router, 'navigate').mockResolvedValue(true);
+
+      await settle(view.fixture);
+      await view.click('dine-in-choose');
+
+      expect(navigate).toHaveBeenCalledWith(['/auth', 'login']);
+      expect(view.q('modifier-picker')).toBeNull();
+      expect(view.carts.ensure).not.toHaveBeenCalled();
+    });
+
     describe('returning to the table after sign-in', () => {
       it('remembers /dine-in/table when the sign-in button is tapped', async () => {
         const view = setUp();
@@ -528,7 +637,7 @@ describe('DineInTableComponent', () => {
       });
     });
 
-    it('still shows the running bill: it is the table\'s, read with the guest token alone', async () => {
+    it("still shows the running bill: it is the table's, read with the guest token alone", async () => {
       const view = setUp();
       view.dineIn.seed(admission());
       view.session.setAuthenticated(false);
@@ -542,7 +651,7 @@ describe('DineInTableComponent', () => {
   });
 
   describe('ORDER_AND_PAY, seated, signed in', () => {
-    it('resumes the table: the menu, the running bill, and the table\'s own basket -- opened only if it exists', async () => {
+    it("resumes the table: the menu, the running bill, and the table's own basket -- opened only if it exists", async () => {
       const view = setUp();
       view.dineIn.seed(admission());
       view.dineIn.bill.mockResolvedValue(bill({ totalMinor: 45_000, roundCount: 1 }));
@@ -554,7 +663,13 @@ describe('DineInTableComponent', () => {
       expect(view.q('dine-in-bill-rounds')?.textContent).toContain('"count":1');
       // A browse mints no cart: create=false. The cart is the table's own --
       // DINE_IN, on the table's QR channel, remembered against its session.
-      expect(view.carts.ensure).toHaveBeenCalledWith(LOCATION, 'DINE_IN', false, 'QRTABLE', SESSION);
+      expect(view.carts.ensure).toHaveBeenCalledWith(
+        LOCATION,
+        'DINE_IN',
+        false,
+        'QRTABLE',
+        SESSION,
+      );
       expect(view.q('dine-in-order')).toBeNull();
     });
 
@@ -578,7 +693,13 @@ describe('DineInTableComponent', () => {
       await settle(view.fixture);
       await view.click('dine-in-add');
 
-      expect(view.carts.ensure).toHaveBeenLastCalledWith(LOCATION, 'DINE_IN', true, 'QRTABLE', SESSION);
+      expect(view.carts.ensure).toHaveBeenLastCalledWith(
+        LOCATION,
+        'DINE_IN',
+        true,
+        'QRTABLE',
+        SESSION,
+      );
       expect(view.carts.putLine).toHaveBeenCalledWith({ variantId: 'variant-1', quantity: 1 });
       expect(view.carts.price).toHaveBeenCalled();
       expect(view.q('dine-in-cart-count')?.textContent).toContain('"count":1');
@@ -642,7 +763,9 @@ describe('DineInTableComponent', () => {
 
       await view.click('dine-in-add');
 
-      expect(view.q('dine-in-basket-error')?.textContent).toContain('errors.reason.itemOutOfSaleWindow');
+      expect(view.q('dine-in-basket-error')?.textContent).toContain(
+        'errors.reason.itemOutOfSaleWindow',
+      );
       expect(view.q('dine-in-order')).toBeNull();
       expect(view.q('dine-in-add')).not.toBeNull();
     });
@@ -662,10 +785,366 @@ describe('DineInTableComponent', () => {
 
       await view.click('dine-in-add');
 
-      expect(view.q('dine-in-pricing-error')?.textContent).toContain('errors.reason.itemOutOfSaleWindow');
+      expect(view.q('dine-in-pricing-error')?.textContent).toContain(
+        'errors.reason.itemOutOfSaleWindow',
+      );
       expect((view.q('dine-in-checkout') as HTMLButtonElement).disabled).toBe(true);
       // The total reads as unknown, never as free.
       expect(view.q('dine-in-cart-total')?.textContent).toContain('—');
+    });
+
+    describe('a dish with a required group of options', () => {
+      async function seated(menuResponse: CustomerUiResponse = menuWithRequiredSize()) {
+        const view = setUp();
+        view.dineIn.seed(admission());
+        view.menuService.home.mockResolvedValue(menuResponse);
+        await settle(view.fixture);
+        return view;
+      }
+
+      it('offers to choose its options in place of a plain add, and opens no basket until a choice is confirmed', async () => {
+        const view = await seated();
+
+        expect(view.q('dine-in-add')).toBeNull();
+        expect(view.q('dine-in-needs-staff')).toBeNull();
+        expect(view.q('dine-in-choose')).not.toBeNull();
+        expect(view.q('modifier-picker')).toBeNull();
+
+        await view.click('dine-in-choose');
+
+        expect(view.q('modifier-picker-title')?.textContent).toContain('Osh');
+        // Reading the basket on arrival never creates one; opening the picker does not either.
+        expect(view.carts.ensure.mock.calls.every((call) => call[2] === false)).toBe(true);
+        expect(view.carts.putLine).not.toHaveBeenCalled();
+      });
+
+      it('refuses to add until the required group is chosen, says which group is missing, and writes nothing', async () => {
+        const view = await seated();
+        await view.click('dine-in-choose');
+
+        expect((view.q('modifier-picker-add') as HTMLButtonElement).disabled).toBe(true);
+        expect(view.q('modifier-picker-missing')?.textContent).toContain('Size');
+
+        await view.click('modifier-picker-add');
+
+        expect(view.carts.putLine).not.toHaveBeenCalled();
+        expect(view.q('modifier-picker')).not.toBeNull();
+      });
+
+      it('adds the dish with the options chosen: binds the basket, writes the line keyed by dish and selection, prices it', async () => {
+        const view = await seated();
+        await view.click('dine-in-choose');
+
+        pick(view, 'Large');
+        await view.click('modifier-picker-add');
+
+        expect(view.carts.ensure).toHaveBeenLastCalledWith(
+          LOCATION,
+          'DINE_IN',
+          true,
+          'QRTABLE',
+          SESSION,
+        );
+        expect(view.dineIn.bindCartToTable).toHaveBeenCalledTimes(1);
+        expect(view.carts.putLine).toHaveBeenCalledWith({
+          variantId: 'variant-1',
+          quantity: 1,
+          modifierOptionIds: ['opt-large'],
+        });
+        expect(view.carts.cart()?.lines.map((entry) => entry.lineKey)).toEqual([
+          'variant-1+opt-large',
+        ]);
+        expect(view.carts.price).toHaveBeenCalled();
+        // The picker is done; the order is offered; the dish is listed with what was chosen.
+        expect(view.q('modifier-picker')).toBeNull();
+        expect(view.q('dine-in-cart-count')?.textContent).toContain('"count":1');
+        expect(view.q('dine-in-cart-total')?.textContent).toContain('45 000');
+        expect((view.q('dine-in-checkout') as HTMLButtonElement).disabled).toBe(false);
+        expect(view.q('dine-in-custom-line')?.textContent).toContain('Osh');
+        expect(view.q('dine-in-custom-line-options')?.textContent).toContain('Large');
+      });
+
+      it('sends the quantity the guest set in the picker', async () => {
+        const view = await seated();
+        await view.click('dine-in-choose');
+
+        pick(view, 'Small');
+        await view.click('modifier-picker-increase');
+        await view.click('modifier-picker-increase');
+        await view.click('modifier-picker-add');
+
+        expect(view.carts.putLine).toHaveBeenCalledWith({
+          variantId: 'variant-1',
+          quantity: 3,
+          modifierOptionIds: ['opt-small'],
+        });
+      });
+
+      it('choosing the same options again raises that one line: a replace writes what is held plus what was asked for', async () => {
+        const view = await seated();
+        for (let round = 0; round < 2; round++) {
+          await view.click('dine-in-choose');
+          pick(view, 'Large');
+          await view.click('modifier-picker-add');
+        }
+
+        expect(view.carts.putLine).toHaveBeenLastCalledWith({
+          variantId: 'variant-1',
+          quantity: 2,
+          modifierOptionIds: ['opt-large'],
+        });
+        expect(view.all('dine-in-custom-line').length).toBe(1);
+        expect(view.q('dine-in-custom-quantity')?.textContent).toContain('2');
+      });
+
+      it('choosing other options is another line of the same dish', async () => {
+        const view = await seated();
+        await view.click('dine-in-choose');
+        pick(view, 'Large');
+        await view.click('modifier-picker-add');
+        await view.click('dine-in-choose');
+        pick(view, 'Small');
+        await view.click('modifier-picker-add');
+
+        expect(view.all('dine-in-custom-line').length).toBe(2);
+        expect(view.q('dine-in-cart-count')?.textContent).toContain('"count":2');
+        expect(
+          view.all('dine-in-custom-line-options').map((entry) => entry.textContent?.trim()),
+        ).toEqual(['Large', 'Small']);
+      });
+
+      it('leaves an optional group out of the line when the guest does not touch it', async () => {
+        const view = await seated(
+          menuWithRequiredSize([
+            {
+              id: 'extras',
+              name: 'Extras',
+              required: false,
+              minimumSelections: 0,
+              maximumSelections: 2,
+              options: [{ id: 'opt-meat', label: 'Meat', amountMinor: null, maximumQuantity: 1 }],
+            },
+          ]),
+        );
+        await view.click('dine-in-choose');
+
+        pick(view, 'Small');
+        await view.click('modifier-picker-add');
+
+        expect(view.carts.putLine).toHaveBeenCalledWith({
+          variantId: 'variant-1',
+          quantity: 1,
+          modifierOptionIds: ['opt-small'],
+        });
+      });
+
+      it("when the platform refuses the selection, says why inside the picker, keeps it open and keeps the guest's choice", async () => {
+        const view = await seated();
+        await view.click('dine-in-choose');
+        pick(view, 'Large');
+        view.carts.putLine.mockRejectedValueOnce(refusal('MODIFIER_GROUP_MINIMUM_NOT_MET'));
+
+        await view.click('modifier-picker-add');
+
+        expect(view.q('modifier-picker')).not.toBeNull();
+        expect(view.q('modifier-picker-error')?.textContent).toContain(
+          'errors.reason.modifierMinimum',
+        );
+        expect(
+          view.all('modifier-option').map((entry) => entry.classList.contains('is-active')),
+        ).toEqual([false, true]);
+        expect(view.q('dine-in-order')).toBeNull();
+
+        // The guest tries again and it goes through.
+        await view.click('modifier-picker-add');
+
+        expect(view.q('modifier-picker')).toBeNull();
+        expect(view.q('dine-in-cart-count')?.textContent).toContain('"count":1');
+      });
+
+      it('checks the selection again where the line is written, and sends nothing that is short of a minimum', async () => {
+        const view = await seated();
+        await view.click('dine-in-choose');
+
+        await (
+          view.fixture.componentInstance as unknown as {
+            addChosen(selection: {
+              variantId: string;
+              quantity: number;
+              modifierOptionIds: string[];
+            }): Promise<void>;
+          }
+        ).addChosen({ variantId: 'variant-1', quantity: 1, modifierOptionIds: [] });
+        await settle(view.fixture);
+
+        expect(view.carts.putLine).not.toHaveBeenCalled();
+        expect(view.q('modifier-picker-error')?.textContent).toContain('dineIn.chooseRequired');
+      });
+
+      it('closing the picker adds nothing and takes its message with it', async () => {
+        const view = await seated();
+        await view.click('dine-in-choose');
+        pick(view, 'Large');
+        view.carts.putLine.mockRejectedValueOnce(refusal('MODIFIER_NOT_OFFERED'));
+        await view.click('modifier-picker-add');
+        expect(view.q('modifier-picker-error')).not.toBeNull();
+
+        await view.click('modifier-picker-close');
+
+        expect(view.q('modifier-picker')).toBeNull();
+        expect(view.q('dine-in-basket-error')).toBeNull();
+        expect(view.carts.cart()?.lines ?? []).toEqual([]);
+      });
+
+      it('takes one write at a time: a second confirm while the first is in flight is not sent', async () => {
+        const view = await seated();
+        await view.click('dine-in-choose');
+        pick(view, 'Large');
+        let release!: () => void;
+        const gate = new Promise<void>((resolve) => (release = resolve));
+        const original = view.carts.putLine.getMockImplementation()!;
+        view.carts.putLine.mockImplementation(async (input) => {
+          await gate;
+          return original(input);
+        });
+
+        view.q('modifier-picker-add')!.click();
+        await Promise.resolve();
+        view.fixture.detectChanges();
+        expect((view.q('modifier-picker-add') as HTMLButtonElement).disabled).toBe(true);
+        view.q('modifier-picker-add')?.click();
+        release();
+        await settle(view.fixture);
+
+        expect(view.carts.putLine).toHaveBeenCalledTimes(1);
+      });
+
+      it('orders a basket that holds a dish with options like any other', async () => {
+        const view = await seated();
+        await view.click('dine-in-choose');
+        pick(view, 'Large');
+        await view.click('modifier-picker-add');
+
+        await view.click('dine-in-checkout');
+
+        expect(view.carts.checkout).toHaveBeenCalledTimes(1);
+        expect(view.carts.checkout.mock.calls[0][0]?.paymentMethodCode).toBe('CASH');
+        expect(view.dineIn.queueRound).toHaveBeenCalledWith(SESSION, 'order-1');
+      });
+
+      describe('the dishes already in the basket with options', () => {
+        it('are listed, by name, with what was chosen -- read back from the menu, since the line carries only ids', async () => {
+          const view = setUp();
+          view.dineIn.seed(admission());
+          view.menuService.home.mockResolvedValue(menuWithRequiredSize());
+          view.carts.preload([chosenLine('variant-1', ['opt-large'], 2)]);
+
+          await settle(view.fixture);
+
+          expect(view.all('dine-in-custom-line').length).toBe(1);
+          expect(view.q('dine-in-custom-line')?.textContent).toContain('Osh');
+          expect(view.q('dine-in-custom-line-options')?.textContent).toContain('Large');
+          expect(view.q('dine-in-custom-quantity')?.textContent).toContain('2');
+          expect(view.q('dine-in-cart-count')?.textContent).toContain('"count":2');
+        });
+
+        it('can be raised, lowered and taken out, each keeping the options they were ordered with', async () => {
+          const view = setUp();
+          view.dineIn.seed(admission());
+          view.menuService.home.mockResolvedValue(menuWithRequiredSize());
+          view.carts.preload([chosenLine('variant-1', ['opt-large'], 2)]);
+          await settle(view.fixture);
+
+          await view.click('dine-in-custom-increase');
+          expect(view.carts.putLine).toHaveBeenLastCalledWith({
+            variantId: 'variant-1',
+            quantity: 3,
+            modifierOptionIds: ['opt-large'],
+          });
+
+          await view.click('dine-in-custom-decrease');
+          await view.click('dine-in-custom-decrease');
+          expect(view.carts.putLine).toHaveBeenLastCalledWith({
+            variantId: 'variant-1',
+            quantity: 1,
+            modifierOptionIds: ['opt-large'],
+          });
+
+          await view.click('dine-in-custom-decrease');
+          expect(view.carts.removeLine).toHaveBeenCalledWith('variant-1+opt-large');
+          expect(view.q('dine-in-custom-lines')).toBeNull();
+          expect(view.q('dine-in-order')).toBeNull();
+        });
+
+        it("are not counted by the dish's own stepper, which counts its plain portion only", async () => {
+          const view = setUp();
+          view.dineIn.seed(admission());
+          view.menuService.home.mockResolvedValue(
+            menu([
+              dish(
+                'p1',
+                'Osh',
+                [variant()],
+                [modifierGroup({ required: false, minimumSelections: 0 })],
+              ),
+            ]),
+          );
+          view.carts.preload([chosenLine('variant-1', ['opt-large'], 2)]);
+
+          await settle(view.fixture);
+
+          expect(view.q('dine-in-quantity')).toBeNull();
+          expect(view.q('dine-in-add')).not.toBeNull();
+          expect(view.all('dine-in-custom-line').length).toBe(1);
+        });
+
+        it('keep only a way out once the dish has sold out: it cannot be raised, and the platform will not price it', async () => {
+          const view = setUp();
+          view.dineIn.seed(admission());
+          view.menuService.home.mockResolvedValue(
+            menu([dish('p1', 'Osh', [variant({ active: false })], [modifierGroup()])]),
+          );
+          view.carts.preload([chosenLine('variant-1', ['opt-large'], 1)]);
+          await settle(view.fixture);
+
+          expect(view.q('dine-in-custom-line-unavailable')).not.toBeNull();
+          expect((view.q('dine-in-custom-increase') as HTMLButtonElement).disabled).toBe(true);
+
+          await view.click('dine-in-custom-decrease');
+
+          expect(view.carts.removeLine).toHaveBeenCalledWith('variant-1+opt-large');
+        });
+
+        it('for a dish the menu no longer has are still listed, so they can be taken out', async () => {
+          const view = setUp();
+          view.dineIn.seed(admission());
+          view.carts.preload([chosenLine('gone-variant', ['x'], 1)]);
+          await settle(view.fixture);
+
+          expect(view.q('dine-in-custom-line')?.textContent).toContain('dineIn.lineGone');
+          expect((view.q('dine-in-custom-increase') as HTMLButtonElement).disabled).toBe(true);
+
+          await view.click('dine-in-custom-decrease');
+
+          expect(view.carts.removeLine).toHaveBeenCalledWith('gone-variant+x');
+        });
+
+        it('say why when a change could not be made, and keep the list', async () => {
+          const view = setUp();
+          view.dineIn.seed(admission());
+          view.menuService.home.mockResolvedValue(menuWithRequiredSize());
+          view.carts.preload([chosenLine('variant-1', ['opt-large'], 1)]);
+          await settle(view.fixture);
+          view.carts.putLine.mockRejectedValueOnce(refusal('SOLD_OUT'));
+
+          await view.click('dine-in-custom-increase');
+
+          expect(view.q('dine-in-basket-error')?.textContent).toContain(
+            'errors.reason.itemUnavailable',
+          );
+          expect(view.all('dine-in-custom-line').length).toBe(1);
+        });
+      });
     });
 
     describe('binding the basket to the table (PUT .../carts/{id}/table)', () => {
@@ -724,7 +1203,9 @@ describe('DineInTableComponent', () => {
         await view.click('dine-in-add');
 
         expect(view.carts.putLine).not.toHaveBeenCalled();
-        expect(view.q('dine-in-basket-error')?.textContent).toContain('errors.reason.tableNotAtBranch');
+        expect(view.q('dine-in-basket-error')?.textContent).toContain(
+          'errors.reason.tableNotAtBranch',
+        );
 
         await view.click('dine-in-add');
 
@@ -748,7 +1229,7 @@ describe('DineInTableComponent', () => {
     });
 
     describe('a basket line the menu can no longer sell', () => {
-      it('keeps the dish\'s stepper when it has sold out since, so the line can be taken out', async () => {
+      it("keeps the dish's stepper when it has sold out since, so the line can be taken out", async () => {
         const view = setUp();
         view.dineIn.seed(admission());
         view.menuService.home.mockResolvedValue(
@@ -853,10 +1334,9 @@ describe('DineInTableComponent', () => {
       await settle(view.fixture);
       await view.click('dine-in-add');
 
-      expect(view.all('dine-in-payment-option').map((option) => option.textContent?.trim())).toEqual([
-        'cart.cash',
-        'cart.click',
-      ]);
+      expect(
+        view.all('dine-in-payment-option').map((option) => option.textContent?.trim()),
+      ).toEqual(['cart.cash', 'cart.click']);
       view.all('dine-in-payment-option')[1].click();
       await settle(view.fixture);
       await view.click('dine-in-checkout');
@@ -876,28 +1356,39 @@ describe('DineInTableComponent', () => {
       expect(view.q('dine-in-payment-options')).toBeNull();
       await view.click('dine-in-checkout');
 
-      expect(view.carts.checkout).toHaveBeenCalledWith(expect.objectContaining({ paymentMethodCode: 'CASH' }));
+      expect(view.carts.checkout).toHaveBeenCalledWith(
+        expect.objectContaining({ paymentMethodCode: 'CASH' }),
+      );
     });
 
     it('says so when no way to pay is offered, and does not send an order without one', async () => {
       const view = setUp();
       view.dineIn.seed(admission());
-      view.carts.paymentMethods.mockResolvedValue({ cartId: 'cart-1', currency: 'UZS', methodCodes: [], warnings: [] });
+      view.carts.paymentMethods.mockResolvedValue({
+        cartId: 'cart-1',
+        currency: 'UZS',
+        methodCodes: [],
+        warnings: [],
+      });
       await settle(view.fixture);
       await view.click('dine-in-add');
 
       await view.click('dine-in-checkout');
 
       expect(view.carts.checkout).not.toHaveBeenCalled();
-      expect(view.q('dine-in-checkout-error')?.textContent).toContain('cart.noPaymentMethodSelected');
+      expect(view.q('dine-in-checkout-error')?.textContent).toContain(
+        'cart.noPaymentMethodSelected',
+      );
     });
   });
 
-  describe('placing the order -- checkout, then the round on the table\'s bill', () => {
+  describe("placing the order -- checkout, then the round on the table's bill", () => {
     async function withBasket(configure: (view: View) => void = () => {}): Promise<View> {
       const view = setUp();
       view.dineIn.seed(admission());
-      view.dineIn.attachRound.mockResolvedValue(bill({ totalMinor: 45_000, roundCount: 1, orderIds: ['order-1'] }));
+      view.dineIn.attachRound.mockResolvedValue(
+        bill({ totalMinor: 45_000, roundCount: 1, orderIds: ['order-1'] }),
+      );
       configure(view);
       await settle(view.fixture);
       await view.click('dine-in-add');
@@ -1092,13 +1583,15 @@ describe('DineInTableComponent', () => {
         await view.click('dine-in-checkout');
 
         expect(view.carts.checkout).not.toHaveBeenCalled();
-        expect(view.q('dine-in-pricing-error')?.textContent).toContain('errors.reason.itemUnavailable');
+        expect(view.q('dine-in-pricing-error')?.textContent).toContain(
+          'errors.reason.itemUnavailable',
+        );
         expect(view.q('dine-in-checkout-error')).toBeNull();
         expect((view.q('dine-in-checkout') as HTMLButtonElement).disabled).toBe(true);
       });
 
       it.each([
-        ['the quote expired on the platform\'s clock', 409, 'RESOURCE_CONFLICT', 'QUOTE_EXPIRED'],
+        ["the quote expired on the platform's clock", 409, 'RESOURCE_CONFLICT', 'QUOTE_EXPIRED'],
         ['the price changed', 409, 'PRICE_CHANGED', 'PRICE_CHANGED'],
         ['the basket moved under the quote', 409, 'STALE_VERSION', 'CART_VERSION_STALE'],
         ['the quote is gone', 404, 'RESOURCE_NOT_FOUND', 'QUOTE_NOT_FOUND'],
@@ -1107,7 +1600,12 @@ describe('DineInTableComponent', () => {
         async (_name, status, code, reason) => {
           const view = await withBasket();
           view.carts.checkout.mockRejectedValueOnce(
-            new HorecaOSApiError({ status, code, detail: 'stale', problem: { status, code, reason } }),
+            new HorecaOSApiError({
+              status,
+              code,
+              detail: 'stale',
+              problem: { status, code, reason },
+            }),
           );
           const pricedBefore = view.carts.price.mock.calls.length;
 
@@ -1138,7 +1636,9 @@ describe('DineInTableComponent', () => {
         await view.click('dine-in-checkout');
 
         expect(view.carts.price.mock.calls.length).toBe(pricedBefore);
-        expect(view.q('dine-in-checkout-error')?.textContent).not.toContain('dineIn.priceRefreshed');
+        expect(view.q('dine-in-checkout-error')?.textContent).not.toContain(
+          'dineIn.priceRefreshed',
+        );
       });
     });
 
@@ -1176,7 +1676,7 @@ describe('DineInTableComponent', () => {
       expect(view.q('dine-in-checkout-error')).not.toBeNull();
     });
 
-    it('sends the guest to the provider\'s checkout for an online method -- after the round is on the bill', async () => {
+    it("sends the guest to the provider's checkout for an online method -- after the round is on the bill", async () => {
       const order: string[] = [];
       const view = await withBasket((v) => {
         v.carts.paymentMethods.mockResolvedValue({
@@ -1195,7 +1695,10 @@ describe('DineInTableComponent', () => {
         });
       });
       const redirect = vi
-        .spyOn(view.fixture.componentInstance as unknown as { redirectTo(url: string): void }, 'redirectTo')
+        .spyOn(
+          view.fixture.componentInstance as unknown as { redirectTo(url: string): void },
+          'redirectTo',
+        )
         .mockImplementation(() => {});
 
       await view.click('dine-in-checkout');
@@ -1216,7 +1719,10 @@ describe('DineInTableComponent', () => {
         v.payments.open.mockRejectedValue(new Error('offline'));
       });
       const redirect = vi
-        .spyOn(view.fixture.componentInstance as unknown as { redirectTo(url: string): void }, 'redirectTo')
+        .spyOn(
+          view.fixture.componentInstance as unknown as { redirectTo(url: string): void },
+          'redirectTo',
+        )
         .mockImplementation(() => {});
 
       await view.click('dine-in-checkout');
@@ -1241,7 +1747,9 @@ describe('DineInTableComponent', () => {
       const view = setUp();
       view.dineIn.seed(admission());
       view.dineIn.bill.mockResolvedValue(bill({ totalMinor: 45_000, roundCount: 1 }));
-      view.dineIn.requestBill.mockResolvedValue(bill({ status: 'BILL_REQUESTED', totalMinor: 45_000, roundCount: 1 }));
+      view.dineIn.requestBill.mockResolvedValue(
+        bill({ status: 'BILL_REQUESTED', totalMinor: 45_000, roundCount: 1 }),
+      );
       await settle(view.fixture);
       expect(view.q('dine-in-bill-requested')).toBeNull();
 
@@ -1256,7 +1764,9 @@ describe('DineInTableComponent', () => {
     it('shows a bill already asked for as asked for, on arrival', async () => {
       const view = setUp();
       view.dineIn.seed(admission());
-      view.dineIn.bill.mockResolvedValue(bill({ status: 'BILL_REQUESTED', totalMinor: 45_000, roundCount: 1 }));
+      view.dineIn.bill.mockResolvedValue(
+        bill({ status: 'BILL_REQUESTED', totalMinor: 45_000, roundCount: 1 }),
+      );
 
       await settle(view.fixture);
 
@@ -1288,7 +1798,11 @@ describe('DineInTableComponent', () => {
       const offlineFailure = () =>
         new HorecaOSApiError({ status: 0, code: 'NETWORK_UNREACHABLE', detail: 'offline' });
       const noSuchSession = () =>
-        new HorecaOSApiError({ status: 404, code: 'RESOURCE_NOT_FOUND', detail: 'no such session' });
+        new HorecaOSApiError({
+          status: 404,
+          code: 'RESOURCE_NOT_FOUND',
+          detail: 'no such session',
+        });
 
       it('asking for the bill that fails says so, keeps the button, and clears the message on the next try', async () => {
         const view = setUp();
@@ -1431,7 +1945,7 @@ describe('DineInTableComponent -- against the real DineInService', () => {
     localStorage.setItem(ADMISSION_KEY, JSON.stringify({ ...admission(), guestToken }));
     const carts = new FakeCartService();
     const menuService = new FakeMenuService();
-      const session = new FakeSession();
+    const session = new FakeSession();
     menuService.home.mockResolvedValue(menu());
 
     TestBed.configureTestingModule({
@@ -1442,7 +1956,7 @@ describe('DineInTableComponent -- against the real DineInService', () => {
         { provide: DineInCartService, useValue: carts },
         { provide: MenuService, useValue: menuService },
         { provide: Session, useValue: session },
-          { provide: PaymentSessionService, useValue: new FakePaymentSessionService() },
+        { provide: PaymentSessionService, useValue: new FakePaymentSessionService() },
         { provide: LangService, useValue: { langId: () => 'uz' } },
         { provide: TranslateService, useClass: FakeTranslateService },
       ],
@@ -1472,16 +1986,22 @@ describe('DineInTableComponent -- against the real DineInService', () => {
   }
 
   const offline = () =>
-    new HorecaOSApiError({ status: 0, code: 'NETWORK_UNREACHABLE', detail: 'The request did not reach the platform.' });
+    new HorecaOSApiError({
+      status: 0,
+      code: 'NETWORK_UNREACHABLE',
+      detail: 'The request did not reach the platform.',
+    });
 
   beforeEach(() => {
     localStorage.clear();
     sessionStorage.clear();
   });
 
-  it('attaches the round with the guest token in the header only, beside the customer\'s own session', async () => {
+  it("attaches the round with the guest token in the header only, beside the customer's own session", async () => {
     const api = newApi();
-    api.mutate.mockResolvedValue(bill({ totalMinor: 45_000, roundCount: 1, orderIds: ['order-1'] }));
+    api.mutate.mockResolvedValue(
+      bill({ totalMinor: 45_000, roundCount: 1, orderIds: ['order-1'] }),
+    );
     const view = setUpReal(api, 'guest-token-secret');
 
     await placeOrder(view);
@@ -1498,7 +2018,9 @@ describe('DineInTableComponent -- against the real DineInService', () => {
 
   it('binds the basket to the table with the guest token in a header only, and never on the screen', async () => {
     const api = newApi();
-    api.mutate.mockResolvedValue(bill({ totalMinor: 45_000, roundCount: 1, orderIds: ['order-1'] }));
+    api.mutate.mockResolvedValue(
+      bill({ totalMinor: 45_000, roundCount: 1, orderIds: ['order-1'] }),
+    );
     const view = setUpReal(api, 'guest-token-secret');
 
     await placeOrder(view);
@@ -1508,17 +2030,17 @@ describe('DineInTableComponent -- against the real DineInService', () => {
     expect(view.host.textContent).not.toContain('guest-token-secret');
   });
 
-  it('reads the bill anonymously: the table\'s own token, never the customer\'s bearer', async () => {
+  it("reads the bill anonymously: the table's own token, never the customer's bearer", async () => {
     const api = newApi();
     const view = setUpReal(api);
 
     view.fixture.detectChanges();
     await tick(view.fixture);
 
-    expect(api.get).toHaveBeenCalledWith(
-      `/storefront/dine-in/sessions/${SESSION}`,
-      { anonymous: true, headers: { 'X-Dine-In-Token': 'guest-token-1' } },
-    );
+    expect(api.get).toHaveBeenCalledWith(`/storefront/dine-in/sessions/${SESSION}`, {
+      anonymous: true,
+      headers: { 'X-Dine-In-Token': 'guest-token-1' },
+    });
   });
 
   it('never lets the guest token reach the sign-in flow or its storage', async () => {
@@ -1551,14 +2073,22 @@ describe('DineInTableComponent -- against the real DineInService', () => {
     // component state any more, only in what the device remembered.
     first.fixture.destroy();
     TestBed.resetTestingModule();
-    api.mutate.mockResolvedValue(bill({ totalMinor: 45_000, roundCount: 1, orderIds: ['order-1'] }));
+    api.mutate.mockResolvedValue(
+      bill({ totalMinor: 45_000, roundCount: 1, orderIds: ['order-1'] }),
+    );
     const reloaded = setUpReal(api);
     reloaded.fixture.detectChanges();
     await tick(reloaded.fixture);
 
     expect(roundCalls(api)).toHaveLength(2);
-    expect(roundCalls(api)[1]).toEqual(['POST', ROUNDS_PATH, expect.objectContaining({ body: { orderId: 'order-1' } })]);
-    expect(reloaded.host.querySelector('[data-testid="dine-in-bill-total"]')?.textContent).toContain('45 000');
+    expect(roundCalls(api)[1]).toEqual([
+      'POST',
+      ROUNDS_PATH,
+      expect.objectContaining({ body: { orderId: 'order-1' } }),
+    ]);
+    expect(
+      reloaded.host.querySelector('[data-testid="dine-in-bill-total"]')?.textContent,
+    ).toContain('45 000');
     expect(reloaded.host.querySelector('[data-testid="dine-in-round-pending"]')).toBeNull();
   });
 
@@ -1571,13 +2101,17 @@ describe('DineInTableComponent -- against the real DineInService', () => {
     expect(view.host.querySelector('[data-testid="dine-in-round-pending"]')).not.toBeNull();
     expect(view.host.querySelector('[data-testid="dine-in-order-placed"]')).toBeNull();
 
-    api.mutate.mockResolvedValue(bill({ totalMinor: 45_000, roundCount: 1, orderIds: ['order-1'] }));
+    api.mutate.mockResolvedValue(
+      bill({ totalMinor: 45_000, roundCount: 1, orderIds: ['order-1'] }),
+    );
     view.host.querySelector<HTMLButtonElement>('[data-testid="dine-in-round-retry"]')?.click();
     await tick(view.fixture);
 
     expect(roundCalls(api)).toHaveLength(2);
     expect(view.host.querySelector('[data-testid="dine-in-round-pending"]')).toBeNull();
-    expect(view.host.querySelector('[data-testid="dine-in-bill-total"]')?.textContent).toContain('45 000');
+    expect(view.host.querySelector('[data-testid="dine-in-bill-total"]')?.textContent).toContain(
+      '45 000',
+    );
     // Success is the notice going away and the bill moving; only the failure spoke.
     expect(view.host.querySelector('[data-testid="dine-in-round-lost"]')).toBeNull();
     expect(view.host.querySelector('[data-testid="dine-in-order-placed"]')).toBeNull();
@@ -1586,7 +2120,11 @@ describe('DineInTableComponent -- against the real DineInService', () => {
   it('stops retrying an order the platform refuses for good, and tells the guest to ask staff', async () => {
     const api = newApi();
     api.mutate.mockRejectedValue(
-      new HorecaOSApiError({ status: 409, code: 'RESOURCE_CONFLICT', detail: 'The session is closed.' }),
+      new HorecaOSApiError({
+        status: 409,
+        code: 'RESOURCE_CONFLICT',
+        detail: 'The session is closed.',
+      }),
     );
     const first = setUpReal(api);
     await placeOrder(first);
@@ -1631,7 +2169,9 @@ describe('DineInTableComponent -- against the real DineInService', () => {
 
   it('does not treat a lost signal or a refused sign-in as a refusal: the order stays queued', async () => {
     const api = newApi();
-    api.mutate.mockRejectedValue(new HorecaOSApiError({ status: 401, code: 'UNAUTHENTICATED', detail: 'Sign in again.' }));
+    api.mutate.mockRejectedValue(
+      new HorecaOSApiError({ status: 401, code: 'UNAUTHENTICATED', detail: 'Sign in again.' }),
+    );
     api.get.mockResolvedValue(bill());
     const view = setUpReal(api);
 
@@ -1643,18 +2183,151 @@ describe('DineInTableComponent -- against the real DineInService', () => {
 
   it('a guest token the platform refuses ends the visit, and the unattached order waits for a re-scan', async () => {
     const api = newApi();
-    api.mutate.mockRejectedValue(new HorecaOSApiError({ status: 401, code: 'UNAUTHENTICATED', detail: 'ended' }));
+    api.mutate.mockRejectedValue(
+      new HorecaOSApiError({ status: 401, code: 'UNAUTHENTICATED', detail: 'ended' }),
+    );
     const view = setUpReal(api);
     await placeOrder(view);
     expect(view.host.querySelector('[data-testid="dine-in-round-pending"]')).not.toBeNull();
 
     // The retry reads the bill with the guest token, and is told it has ended.
-    api.get.mockRejectedValue(new HorecaOSApiError({ status: 401, code: 'UNAUTHENTICATED', detail: 'ended' }));
+    api.get.mockRejectedValue(
+      new HorecaOSApiError({ status: 401, code: 'UNAUTHENTICATED', detail: 'ended' }),
+    );
     view.host.querySelector<HTMLButtonElement>('[data-testid="dine-in-round-retry"]')?.click();
     await tick(view.fixture);
 
     expect(view.host.querySelector('[data-testid="dine-in-no-admission"]')).not.toBeNull();
     expect(localStorage.getItem(ADMISSION_KEY)).toBeNull();
     expect(localStorage.getItem('horecaos_dinein_pending_rounds')).toContain('order-1');
+  });
+});
+
+describe('DineInTableComponent -- a dish with options against the real DineInCartService', () => {
+  const TENANT = '10000000-0000-0000-0000-000000000001';
+  const BRAND = '10000000-0000-0000-0000-000000000002';
+  const BRAND_PATH = `/storefront/tenants/${TENANT}/brands/${BRAND}`;
+  const CONFIG: AppConfig = {
+    apiBaseUrl: '/api/v1',
+    tenantId: TENANT,
+    brandId: BRAND,
+    defaultLocationId: LOCATION,
+    channel: 'STOREFRONT',
+    yandexMapsApiKey: '',
+    brand: { displayName: 'Test Brand', theme: { accent: '#000000', accentDeep: '#000000' } },
+  };
+
+  /** The platform's side of a table basket, scripted by path: what the real service would be answered. */
+  function scriptedPlatform() {
+    let version = 1;
+    let lines: PlatformCartLine[] = [];
+    const cart = () => cartOf(lines, version);
+    return {
+      get: vi.fn(async (path: string) => {
+        if (path.endsWith('/payment-methods')) {
+          return { cartId: 'cart-1', currency: 'UZS', methodCodes: ['CASH'], warnings: [] };
+        }
+        if (path.startsWith(`${BRAND_PATH}/carts/`)) {
+          return cart();
+        }
+        return bill();
+      }),
+      mutate: vi.fn(
+        async (method: string, path: string, options?: { body?: Record<string, unknown> }) => {
+          if (method === 'POST' && path === `${BRAND_PATH}/carts`) {
+            return cart();
+          }
+          if (method === 'PUT' && path.endsWith('/table')) {
+            version++;
+            return cart();
+          }
+          if (method === 'PUT' && path.includes('/lines/')) {
+            version++;
+            lines = [
+              {
+                lineKey: decodeURIComponent(path.split('/lines/')[1]),
+                variantId: String(options?.body?.['variantId']),
+                quantity: Number(options?.body?.['quantity']),
+                hasCustomerNote: false,
+              },
+            ];
+            return cart();
+          }
+          if (method === 'POST' && path.endsWith('/pricing')) {
+            return {
+              cartId: 'cart-1',
+              cartVersion: version,
+              quoteId: 'quote-1',
+              contextHash: 'hash-1',
+              currency: 'UZS',
+              subtotalMinor: 53_000,
+              taxMinor: 0,
+              totalMinor: 53_000,
+              expiresAt: new Date(Date.now() + 60_000).toISOString(),
+              discountMinor: 0,
+            };
+          }
+          throw new Error(`unscripted ${method} ${path}`);
+        },
+      ),
+    };
+  }
+
+  beforeEach(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+  });
+
+  it('sends the platform the line it keys by the dish and its exact options, with the options in the body', async () => {
+    const api = scriptedPlatform();
+    localStorage.setItem(
+      'horecaos_dinein_admission',
+      JSON.stringify({ ...admission(), guestToken: 'guest-token-1' }),
+    );
+    const menuService = new FakeMenuService();
+    menuService.home.mockResolvedValue(menuWithRequiredSize());
+    TestBed.configureTestingModule({
+      imports: [DineInTableComponent],
+      providers: [
+        provideRouter([]),
+        { provide: ApiClient, useValue: api },
+        { provide: APP_CONFIG, useValue: CONFIG },
+        { provide: MenuService, useValue: menuService },
+        { provide: Session, useValue: new FakeSession() },
+        { provide: PaymentSessionService, useValue: new FakePaymentSessionService() },
+        { provide: LangService, useValue: { langId: () => 'uz' } },
+        { provide: TranslateService, useClass: FakeTranslateService },
+      ],
+    });
+    const fixture = TestBed.createComponent(DineInTableComponent);
+    const host = fixture.nativeElement as HTMLElement;
+    const q = (testId: string) => host.querySelector<HTMLElement>(`[data-testid="${testId}"]`);
+
+    await settle(fixture);
+    q('dine-in-choose')!.click();
+    await settle(fixture);
+    [...host.querySelectorAll<HTMLElement>('[data-testid="modifier-option"]')]
+      .find((entry) => entry.textContent?.includes('Large'))!
+      .click();
+    fixture.detectChanges();
+    q('modifier-picker-add')!.click();
+    await settle(fixture);
+
+    const [, path, options] = api.mutate.mock.calls.find(
+      (call) => call[0] === 'PUT' && String(call[1]).includes('/lines/'),
+    ) as [string, string, { body: Record<string, unknown>; expectedVersion: number }];
+    expect(path).toBe(
+      `${BRAND_PATH}/carts/cart-1/lines/${encodeURIComponent('variant-1+opt-large')}`,
+    );
+    expect(options.body).toMatchObject({
+      variantId: 'variant-1',
+      quantity: 1,
+      modifierOptionIds: ['opt-large'],
+    });
+    expect(typeof options.expectedVersion).toBe('number');
+    // The order can be placed and shows what was priced.
+    expect(q('modifier-picker')).toBeNull();
+    expect(q('dine-in-cart-total')?.textContent).toContain('53\u00a0000');
+    expect(q('dine-in-custom-line-options')?.textContent).toContain('Large');
   });
 });

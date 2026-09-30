@@ -1,0 +1,118 @@
+<div
+  class="picker__backdrop"
+  data-testid="modifier-picker-backdrop"
+  (click)="dismissed.emit()"
+></div>
+<div
+  #panel
+  class="picker"
+  role="dialog"
+  aria-modal="true"
+  tabindex="-1"
+  data-testid="modifier-picker"
+  [attr.aria-label]="item().name"
+  (keydown.escape)="dismissed.emit()"
+>
+  <header class="picker__header">
+    <div class="picker__heading">
+      <h2 class="picker__title" data-testid="modifier-picker-title">{{ item().name }}</h2>
+      @if (portionLabel(); as label) {
+        <p class="picker__portion" data-testid="modifier-picker-portion">{{ label }}</p>
+      }
+    </div>
+    <button
+      type="button"
+      class="picker__close"
+      data-testid="modifier-picker-close"
+      [attr.aria-label]="'common.close' | t"
+      (click)="dismissed.emit()"
+    >
+      ×
+    </button>
+  </header>
+
+  <div class="picker__body">
+    @for (group of item().modifierGroups; track group.id) {
+      <section class="group" data-testid="modifier-group" [class.is-missing]="isMissing(group)">
+        <h3 class="group__name">
+          {{ group.name }}
+          @if (isMandatory(group)) {
+            <span class="group__req" data-testid="modifier-group-required">{{
+              'details.required' | t
+            }}</span>
+          }
+        </h3>
+        @if (rule(group); as hint) {
+          <p class="group__rule" data-testid="modifier-group-rule">
+            {{ hint.key | t: hint.params }}
+          </p>
+        }
+        <div class="group__options">
+          @for (option of group.options; track option.id) {
+            <button
+              type="button"
+              class="option"
+              data-testid="modifier-option"
+              [class.is-active]="isChosen(group, option.id)"
+              [attr.aria-pressed]="isChosen(group, option.id)"
+              (click)="toggle(group, option.id)"
+            >
+              <span class="option__name">{{
+                option.label || ('dineIn.pickerOptionUnnamed' | t)
+              }}</span>
+              @if (surcharge(option.amountMinor); as extra) {
+                <span class="option__extra">{{ extra }}</span>
+              }
+            </button>
+          }
+        </div>
+      </section>
+    }
+
+    <div class="qty">
+      <span class="qty__label">{{ 'details.quantity' | t }}</span>
+      <span class="qty__controls">
+        <button
+          type="button"
+          class="qty__btn"
+          data-testid="modifier-picker-decrease"
+          [disabled]="quantity() <= 1"
+          [attr.aria-label]="'common.decrease' | t"
+          (click)="step(-1)"
+        >
+          −
+        </button>
+        <span class="qty__value" data-testid="modifier-picker-quantity">{{ quantity() }}</span>
+        <button
+          type="button"
+          class="qty__btn"
+          data-testid="modifier-picker-increase"
+          [attr.aria-label]="'common.increase' | t"
+          (click)="step(1)"
+        >
+          +
+        </button>
+      </span>
+    </div>
+  </div>
+
+  <footer class="picker__foot">
+    @if (missing().length > 0) {
+      <p class="picker__hint" role="status" data-testid="modifier-picker-missing">
+        {{ 'dineIn.pickerMissing' | t: { groups: missingNames() } }}
+      </p>
+    }
+    @if (errorKey(); as key) {
+      <p class="picker__error" role="alert" data-testid="modifier-picker-error">{{ key | t }}</p>
+    }
+    <button
+      type="button"
+      class="picker__cta"
+      data-testid="modifier-picker-add"
+      [disabled]="!canConfirm()"
+      (click)="confirm()"
+    >
+      {{ (busy() ? 'common.saving' : 'dineIn.pickerAdd') | t }}
+    </button>
+  </footer>
+</div>

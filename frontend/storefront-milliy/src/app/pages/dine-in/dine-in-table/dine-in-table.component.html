@@ -1,4 +1,8 @@
-<div class="table" [class.table--with-order]="ordering() && cartCount() > 0" data-testid="dine-in-table">
+<div
+  class="table"
+  [class.table--with-order]="ordering() && cartCount() > 0"
+  data-testid="dine-in-table"
+>
   @if (!admission()) {
     <div class="table__empty" data-testid="dine-in-no-admission">
       <p class="table__title">{{ 'dineIn.noAdmissionTitle' | t }}</p>
@@ -79,7 +83,9 @@
         <section class="bill" data-testid="dine-in-bill">
           <div class="bill__figures">
             <p class="bill__title">{{ 'dineIn.tableBill' | t }}</p>
-            <p class="bill__total" data-testid="dine-in-bill-total">{{ billTotalLabel(currentBill) }}</p>
+            <p class="bill__total" data-testid="dine-in-bill-total">
+              {{ billTotalLabel(currentBill) }}
+            </p>
             <p class="bill__rounds" data-testid="dine-in-bill-rounds">
               {{ 'dineIn.roundCount' | t: { count: currentBill.roundCount } }}
             </p>
@@ -103,12 +109,22 @@
       }
 
       @if (orderPlaced()) {
-        <p class="table__ok" role="status" data-testid="dine-in-order-placed">{{ 'dineIn.orderPlaced' | t }}</p>
+        <p class="table__ok" role="status" data-testid="dine-in-order-placed">
+          {{ 'dineIn.orderPlaced' | t }}
+        </p>
       }
 
       @if (basketErrorKey(); as key) {
         <p class="table__error" role="alert" data-testid="dine-in-basket-error">{{ key | t }}</p>
       }
+    }
+
+    @if (ordering() && session.isAuthenticated() && chosenLines().length > 0) {
+      <app-chosen-lines
+        [lines]="chosenLines()"
+        [busy]="updating()"
+        (quantityChange)="changeChosenLine($event)"
+      />
     }
 
     @if (loading()) {
@@ -127,13 +143,28 @@
         [quantities]="quantities()"
         [busy]="updating()"
         (quantityChange)="changeQuantity($event)"
+        (choose)="openPicker($event)"
+      />
+    }
+
+    @if (picking(); as request) {
+      <app-modifier-picker
+        [item]="request.item"
+        [variantId]="request.variantId"
+        [currency]="currency()"
+        [busy]="updating()"
+        [errorKey]="basketErrorKey()"
+        (confirmed)="addChosen($event)"
+        (dismissed)="closePicker()"
       />
     }
 
     @if (ordering() && session.isAuthenticated() && cartCount() > 0) {
       <footer class="order" data-testid="dine-in-order">
         <div class="order__summary">
-          <span data-testid="dine-in-cart-count">{{ 'dineIn.itemsInCart' | t: { count: cartCount() } }}</span>
+          <span data-testid="dine-in-cart-count">{{
+            'dineIn.itemsInCart' | t: { count: cartCount() }
+          }}</span>
           <span class="order__total" data-testid="dine-in-cart-total">{{ totalLabel() }}</span>
         </div>
 
@@ -167,7 +198,9 @@
           </button>
         }
         @if (checkoutErrorKey(); as key) {
-          <p class="table__error" role="alert" data-testid="dine-in-checkout-error">{{ key | t }}</p>
+          <p class="table__error" role="alert" data-testid="dine-in-checkout-error">
+            {{ key | t }}
+          </p>
         }
 
         <button

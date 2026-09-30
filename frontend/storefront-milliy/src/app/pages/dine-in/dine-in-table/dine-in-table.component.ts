@@ -13,7 +13,11 @@ import { HorecaOSApiError, isNotFound, messageKeyFor } from '../../../core/api/p
 import { ReturnDestination } from '../../../core/auth/return-destination';
 import { Session } from '../../../core/auth/session';
 import { formatMoney, money } from '../../../core/money/money';
-import type { PricedCart } from '../../../services/cart.service';
+import {
+  lineKeyFor,
+  modifierOptionIdsFromLineKey,
+  type PricedCart,
+} from '../../../services/cart.service';
 import { DineInCartService } from '../../../services/dine-in-cart.service';
 import {
   DineInService,
@@ -25,9 +29,24 @@ import { LangService } from '../../../services/lang.service';
 import { MenuService } from '../../../services/menu.service';
 import { PaymentSessionService } from '../../../services/payment-session.service';
 import { TranslateService } from '../../../services/translate.service';
+import {
+  ChosenLinesComponent,
+  type ChosenLine,
+} from '../../../shared/chosen-lines/chosen-lines.component';
 import { MenuGridComponent } from '../../../shared/menu-grid/menu-grid.component';
+import {
+  ModifierPickerComponent,
+  type ModifierSelection,
+} from '../../../shared/modifier-picker/modifier-picker.component';
 import { TranslatePipe } from '../../../shared/translate/translate.pipe';
-import type { CategoryItem, MenuCategory } from '../../../types/home.types';
+import type {
+  CategoryItem,
+  MenuCategory,
+  MenuItem,
+  MenuItemVariant,
+} from '../../../types/home.types';
+import { variantAvailability } from '../../../utils/item-availability';
+import { unsatisfiedGroupsFor } from '../../../utils/modifier-selection';
 
 /** U+2014. Shown where the platform has not priced the basket, so a zero is never read as free. */
 const UNRESOLVED = '—';
@@ -102,16 +121,32 @@ const PAYMENT_LABEL_KEYS: Readonly<Record<string, string>> = {
  * seats the table, `admission.openSessionId` is null, and this renders the menu
  * with an explanation rather than a basket with nothing to bind to.
  *
- * <h2>What is not offered</h2>
+ * <h2>Dishes with options to choose</h2>
  *
- * A dish whose modifier group must be chosen from (`DishCardComponent`) says a
- * member of staff will help; choosing needs the product page's picker, which adds
- * to the delivery basket.
+ * A dish whose modifier group must be chosen from (`DishCardComponent`) carries a
+ * Choose button instead of Add. It opens the option picker
+ * (`ModifierPickerComponent`) for that portion, which holds back a selection short
+ * of any group's minimum and says which group is missing; a confirmed selection is
+ * written to the table's basket as a line with its options (`CartService.putLine`
+ * keys it by variant and selection, so "Osh, extra meat" and plain "Osh" are two
+ * lines). Those lines have no card stepper -- a card counts only its plain
+ * portion -- so they are listed above the menu (`ChosenLinesComponent`), where they
+ * can be raised, lowered or taken out. A platform refusal (`MODIFIER_*`, a dish
+ * that just sold out) is said inside the picker, which stays open.
+ *
+ * Only a mandatory group that offers fewer options than it demands (a menu
+ * published with an empty group) still says a member of staff will help.
  */
 @Component({
   selector: 'app-dine-in-table',
   standalone: true,
-  imports: [MenuGridComponent, RouterLink, TranslatePipe],
+  imports: [
+    ChosenLinesComponent,
+    MenuGridComponent,
+    ModifierPickerComponent,
+    RouterLink,
+    TranslatePipe,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './dine-in-table.component.html',
   styleUrl: './dine-in-table.component.scss',
@@ -152,6 +187,9 @@ export class DineInTableComponent implements OnInit {
     this.sections().some((section) => section.items.length > 0),
   );
 
+  /** The dish and portion whose options the guest is choosing in the picker, or null when it is closed. */
+  protected readonly picking = signal<{ item: MenuItem; variantId: string } | null>(null);
+
   protected readonly bill = signal<DineInBill | null>(null);
   protected readonly billBusy = signal(false);
   /** Why the bill could not be read or asked for; said on the screen, cleared by the next try. */
@@ -188,6 +226,59 @@ export class DineInTableComponent implements OnInit {
       }
     }
     return held;
+  });
+
+  /** Every portion the menu offers, by variant id, with the dish it belongs to. */
+  private readonly portions = computed(() => {
+    const index = new Map<string, { item: MenuItem; variant: MenuItemVariant }>();
+    for (const section of this.sections()) {
+      for (const item of section.items) {
+        for (const variant of item.variants) {
+          index.set(variant.id, { item, variant });
+        }
+      }
+    }
+    return index;
+  });
+
+  /**
+   * The basket's lines that carry options, shown by name: what the guest chose is
+   * read back from the menu the screen already holds, because the platform's line
+   * carries the option ids and never their names. A dish the menu has dropped is
+   * still listed, so it can be taken out.
+   */
+  protected readonly chosenLines = computed<readonly ChosenLine[]>(() => {
+    this.translate.current();
+    const index = this.portions();
+    const lines = (this.carts.cart()?.lines ?? []).filter(
+      (line) => line.lineKey !== line.variantId,
+    );
+    return lines.map((line): ChosenLine => {
+      const found = index.get(line.variantId);
+      if (!found) {
+        return {
+          lineKey: line.lineKey,
+          name: this.translate.get('dineIn.lineGone'),
+          portion: null,
+          options: [],
+          quantity: line.quantity,
+          available: false,
+        };
+      }
+      const chosen = new Set(modifierOptionIdsFromLineKey(line.lineKey, line.variantId));
+      const options = found.item.modifierGroups
+        .flatMap((group) => group.options)
+        .filter((option) => chosen.has(option.id))
+        .map((option) => option.label || this.translate.get('dineIn.pickerOptionUnnamed'));
+      return {
+        lineKey: line.lineKey,
+        name: found.item.name,
+        portion: found.item.variants.length > 1 ? found.variant.name || null : null,
+        options,
+        quantity: line.quantity,
+        available: variantAvailability(found.variant) === 'AVAILABLE',
+      };
+    });
   });
 
   protected readonly cartCount = computed(
@@ -303,6 +394,97 @@ export class DineInTableComponent implements OnInit {
     });
   }
 
+  /** The guest wants to choose the options for a portion: open the picker on it. */
+  protected openPicker(request: { item: MenuItem; variantId: string }): void {
+    if (!this.session.isAuthenticated()) {
+      this.signIn();
+      return;
+    }
+    this.basketErrorKey.set(null);
+    this.picking.set(request);
+  }
+
+  protected closePicker(): void {
+    this.picking.set(null);
+    this.basketErrorKey.set(null);
+  }
+
+  /**
+   * The guest confirmed a selection in the picker: it becomes one line of the
+   * basket, keyed by the portion and its exact options.
+   *
+   * The picker already holds back a selection short of a group's minimum; the same
+   * rule is applied again here, before any request, because this is where the line
+   * is written and the platform's refusal is the last line, not the first. Choosing
+   * the same options twice raises that line's quantity (a PUT replaces, so the
+   * quantity written is what is held plus what was asked for). The picker closes
+   * only when the write succeeded -- on a refusal it stays open, showing why.
+   */
+  protected async addChosen(selection: ModifierSelection): Promise<void> {
+    const admission = this.admission();
+    const sessionId = admission?.openSessionId;
+    const request = this.picking();
+    if (!admission || !sessionId || !request || this.updating()) {
+      return;
+    }
+    if (!this.session.isAuthenticated()) {
+      this.closePicker();
+      this.signIn();
+      return;
+    }
+    if (unsatisfiedGroupsFor(request.item.modifierGroups, selection.modifierOptionIds).length > 0) {
+      this.basketErrorKey.set('dineIn.chooseRequired');
+      return;
+    }
+    const lineKey = lineKeyFor(selection.variantId, selection.modifierOptionIds);
+    const written = await this.writeBasket(async () => {
+      await this.carts.ensure(
+        admission.locationId,
+        'DINE_IN',
+        true,
+        admission.channelCode ?? undefined,
+        sessionId,
+      );
+      const cartId = this.carts.cart()?.cartId;
+      if (cartId) {
+        // Strict, as for a plain add: a basket that cannot be bound gets no line.
+        await this.bindToTable(cartId);
+      }
+      const held = this.carts.cart()?.lines.find((line) => line.lineKey === lineKey);
+      await this.carts.putLine({
+        variantId: selection.variantId,
+        quantity: (held?.quantity ?? 0) + selection.quantity,
+        modifierOptionIds: selection.modifierOptionIds,
+      });
+    });
+    if (written) {
+      this.picking.set(null);
+    }
+  }
+
+  /** The guest raised, lowered or removed a dish that was ordered with options. */
+  protected async changeChosenLine(change: { lineKey: string; quantity: number }): Promise<void> {
+    const held = this.carts.cart()?.lines.find((line) => line.lineKey === change.lineKey);
+    if (!held || this.updating()) {
+      return;
+    }
+    if (!this.session.isAuthenticated()) {
+      this.signIn();
+      return;
+    }
+    await this.writeBasket(async () => {
+      if (change.quantity <= 0) {
+        await this.carts.removeLine(held.lineKey);
+      } else {
+        await this.carts.putLine({
+          variantId: held.variantId,
+          quantity: change.quantity,
+          modifierOptionIds: modifierOptionIdsFromLineKey(held.lineKey, held.variantId),
+        });
+      }
+    });
+  }
+
   /**
    * Takes every line out of the basket.
    *
@@ -327,8 +509,9 @@ export class DineInTableComponent implements OnInit {
   /**
    * Runs one write to the basket, one at a time, and prices what is left.
    * A failure is said on the screen and leaves the basket as the platform holds it.
+   * Returns whether the write went through.
    */
-  private async writeBasket(write: () => Promise<void>): Promise<void> {
+  private async writeBasket(write: () => Promise<void>): Promise<boolean> {
     this.updating.set(true);
     this.basketErrorKey.set(null);
     this.checkoutErrorKey.set(null);
@@ -336,8 +519,10 @@ export class DineInTableComponent implements OnInit {
     try {
       await write();
       await this.reprice();
+      return true;
     } catch (failure) {
       this.basketErrorKey.set(failureKey(failure));
+      return false;
     } finally {
       this.updating.set(false);
     }
@@ -553,7 +738,9 @@ export class DineInTableComponent implements OnInit {
     this.paymentErrorKey.set('cart.paymentSessionError');
   }
 
-  protected async refreshBill(sessionId: string | null | undefined = this.admission()?.openSessionId): Promise<void> {
+  protected async refreshBill(
+    sessionId: string | null | undefined = this.admission()?.openSessionId,
+  ): Promise<void> {
     if (!sessionId) {
       return;
     }
@@ -566,7 +753,8 @@ export class DineInTableComponent implements OnInit {
       // DineInService.attachRound), so a signed-out device leaves the queue alone
       // rather than spend a request on a certain 401; signing in brings the guest
       // back to this screen, which tries again.
-      const canAttach = this.session.isAuthenticated() && this.dineIn.pendingRoundCount(sessionId) > 0;
+      const canAttach =
+        this.session.isAuthenticated() && this.dineIn.pendingRoundCount(sessionId) > 0;
       const flush = canAttach ? await this.attachPendingRounds(sessionId) : null;
       if (!flush?.bill) {
         this.bill.set(await this.dineIn.bill(sessionId));
