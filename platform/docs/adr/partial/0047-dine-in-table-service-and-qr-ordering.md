@@ -447,8 +447,11 @@ in ordering at all. The consequence is that `ORDER_AND_PAY` currently attaches a
 already-placed order to a session rather than binding a cart to a table at
 checkout, which is the same fact recorded one step later. What still holds after
 batch 15: the binding is optional, so a DINE_IN cart that is never bound (an
-operator-keyed order, the milliy storefront, a caller that skips the `PUT`) still
-reaches its session by a separate `POST .../rounds`.
+operator-keyed order, a caller that skips the `PUT`) still reaches its session by a
+separate `POST .../rounds`. (Corrected 2026-09-30: this list also named the milliy
+storefront, which does bind its cart -- `CartService.bindTable` in
+`frontend/storefront-milliy`, called through `DineInService.bindCartToTable`; its
+open defect is the missing checkout token, in the status note at the top.)
 
 **The service charge itself.** `dinein.location_settings.service_charge_rate_bp`
 is the rate's home and every session pins it, but nothing computes a charge from
