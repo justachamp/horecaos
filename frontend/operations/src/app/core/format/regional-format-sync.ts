@@ -7,10 +7,12 @@ import { settingsPaths } from '../api/settings-paths';
 import { CurrentLocation } from '../auth/current-location';
 import { RegionalFormats, applyRegionalFormats, resetRegionalFormats } from './regional-format';
 
-/** The one field this reads from `OperationsBrandController.get`'s `BrandView`. */
-interface BrandFormatsView {
-  readonly regionalFormats?: Partial<Record<keyof RegionalFormats, string | null>> | null;
-}
+/**
+ * How a brand writes amounts and phones, as `LocationServiceOperationsController.regionalFormats`
+ * answers it. Every field may be absent: an older platform sends none of them, and that reads as
+ * the defaults.
+ */
+type BrandFormatsView = Partial<Record<keyof RegionalFormats, string | null>>;
 
 /**
  * Keeps the console's formatters on the brand the operator is working in
@@ -20,12 +22,20 @@ interface BrandFormatsView {
  * is what writes it. The shell injects it once, and from then on it follows
  * {@link CurrentLocation.scope}: whenever the operator's brand resolves or
  * changes — a location picked in another brand — it reads that brand's formats
- * from the brand read every screen already makes and applies them.
+ * and applies them.
  *
- * **Best effort, on purpose.** A brand the operator cannot read, a network
- * error or an older platform that sends no formats all leave the formatters on
- * the defaults, which is how this console always showed money. A price must
- * never fail to render because a display preference could not be fetched.
+ * **Read at the location, not at the brand.** The brand read needs `BRAND_READ`,
+ * and the people who read money and phone numbers all day — the cashier, the
+ * kitchen lead, the branch manager — hold `LOCATION_READ` at their own branch
+ * and nothing at the brand. So this asks the location's own endpoint
+ * (`settingsPaths.locationRegionalFormats`), which every operator role can read;
+ * reading the brand instead left exactly those roles on the defaults, with a 403
+ * on every shell load that the fallback below hid.
+ *
+ * **Best effort, on purpose.** A network error or an older platform that sends no
+ * formats leaves the formatters on the defaults, which is how this console always
+ * showed money. A price must never fail to render because a display preference
+ * could not be fetched.
  *
  * **Stale replies are dropped.** Switching from brand A to brand B while A's
  * read is in flight must not let A's late answer overwrite B's formats.
@@ -56,10 +66,10 @@ export class RegionalFormatSync {
     this.followedBrandId = scope.brandId;
     try {
       const result = await firstValueFrom(
-        this.api.get<BrandFormatsView>(settingsPaths.brand(scope)),
+        this.api.get<BrandFormatsView>(settingsPaths.locationRegionalFormats(scope)),
       );
       if (this.followedBrandId === scope.brandId) {
-        applyRegionalFormats(result.value?.regionalFormats);
+        applyRegionalFormats(result.value);
       }
     } catch {
       if (this.followedBrandId === scope.brandId) {
@@ -71,7 +81,7 @@ export class RegionalFormatSync {
   }
 
   /** The brand-profile screen just saved new formats for this brand: use them at once. */
-  applySaved(scope: LocationScope, formats: BrandFormatsView['regionalFormats']): void {
+  applySaved(scope: LocationScope, formats: BrandFormatsView | null | undefined): void {
     this.followedBrandId = scope.brandId;
     applyRegionalFormats(formats);
   }

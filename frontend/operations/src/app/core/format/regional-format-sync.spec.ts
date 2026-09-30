@@ -21,8 +21,9 @@ class FakeCurrentLocation {
   readonly scope = signal<LocationScope | null>(null);
 }
 
+/** What `LocationServiceOperationsController.regionalFormats` answers: the formats themselves. */
 function brandReply(regionalFormats: unknown) {
-  return of({ value: { id: 'brand', regionalFormats }, version: 1 });
+  return of({ value: regionalFormats, version: 1 });
 }
 
 async function flush(): Promise<void> {
@@ -32,8 +33,8 @@ async function flush(): Promise<void> {
 
 /**
  * Row 10.12: what makes `formatMoney` and `formatPhone` follow a brand is `RegionalFormatSync`
- * reading the brand once its scope resolves. These specs go from the brand read to the formatters'
- * output, not to a signal.
+ * reading the brand's formats once its scope resolves. These specs go from that read to the
+ * formatters' output, not to a signal.
  */
 describe('RegionalFormatSync', () => {
   let location: FakeCurrentLocation;
@@ -72,9 +73,26 @@ describe('RegionalFormatSync', () => {
     await flush();
 
     expect(get).toHaveBeenCalledTimes(1);
-    expect(get.mock.calls[0][0]).toContain('/brands/brand-a');
     expect(formatMoney(TOTAL, 'en', { withUnit: true })).toBe(`UZS${NBSP}146,000`);
     expect(formatPhone('+998901234567')).toBe('+998 (90) 123-45-67');
+  });
+
+  it('reads the formats at the location, which every operator role can read, not at the brand', async () => {
+    // The brand read needs BRAND_READ. A cashier or a kitchen lead holds LOCATION_READ at their
+    // own branch and nothing at the brand, so reading the brand left them on the defaults behind
+    // a swallowed 403. The path is the contract: it is the location's own regional-formats read.
+    get.mockReturnValue(brandReply({ moneySymbolPlacement: 'BEFORE', moneyGrouping: 'DOT' }));
+    build();
+
+    location.scope.set(SCOPE_A);
+    TestBed.tick();
+    await flush();
+
+    expect(get).toHaveBeenCalledTimes(1);
+    expect(get.mock.calls[0][0]).toBe(
+      '/api/v1/operations/tenants/t1/brands/brand-a/locations/loc-a/regional-formats',
+    );
+    expect(formatMoney(TOTAL, 'en', { withUnit: true })).toBe(`UZS${NBSP}146.000`);
   });
 
   it('follows the operator to another brand, and does not re-read the one it already follows', async () => {
@@ -124,7 +142,7 @@ describe('RegionalFormatSync', () => {
     TestBed.tick();
     await flush();
     replyA.next({
-      value: { regionalFormats: { moneySymbolPlacement: 'BEFORE', moneyGrouping: 'COMMA' } },
+      value: { moneySymbolPlacement: 'BEFORE', moneyGrouping: 'COMMA' },
       version: 1,
     });
     replyA.complete();
@@ -133,7 +151,7 @@ describe('RegionalFormatSync', () => {
     expect(activeRegionalFormats().moneyGrouping).toBe('DOT');
   });
 
-  it('leaves the formatters on the defaults when the brand cannot be read, and tries again next time', async () => {
+  it('leaves the formatters on the defaults when the formats cannot be read, and tries again next time', async () => {
     get.mockReturnValueOnce(throwError(() => new Error('403')));
     build();
 
@@ -150,7 +168,7 @@ describe('RegionalFormatSync', () => {
   });
 
   it('reads an older platform’s reply, one with no formats, as the defaults', async () => {
-    get.mockReturnValue(of({ value: { id: 'brand' }, version: 1 }));
+    get.mockReturnValue(of({ value: {}, version: 1 }));
     build();
 
     location.scope.set(SCOPE_A);

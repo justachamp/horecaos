@@ -166,6 +166,16 @@ export const settingsPaths = {
   },
 
   /**
+   * `LocationServiceOperationsController.regionalFormats` — how this location's brand writes
+   * amounts and phone numbers (Settings 10.12), gated by the `LOCATION_READ` every operator holds
+   * at their own location. {@link brand} carries the same object but needs `BRAND_READ`, which a
+   * cashier, a kitchen lead and a branch manager do not have.
+   */
+  locationRegionalFormats(scope: LocationScope): string {
+    return `${this.location(scope)}/regional-formats`;
+  },
+
+  /**
    * `LocationServiceOperationsController.serviceSummary` — manual override,
    * every bound schedule's full grid, preparation bands, live capacity. Reads
    * what the four write endpoints below already persist.
