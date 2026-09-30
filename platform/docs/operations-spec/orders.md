@@ -1,7 +1,9 @@
 # Operations spec — Orders
 
 `apps/operations` · IA section 1 · screens 1.1 Order board, 1.2 Order detail,
-1.3 New order, 1.4 Drafts, 1.5 Reservations.
+1.3 New order, 1.4 Drafts, 1.5 Reservations. (1.6 Call centre and 1.7 Operator
+inbox have no screen spec of their own here; §0.5 records the one ruling on
+telephony that this document's screens depend on.)
 
 This is the section the console exists for. Everything else in operations is
 configuration for what happens here. It is used standing up, on a 1366×768
@@ -45,15 +47,28 @@ unbuilt.
 
 ## 0. Rulings made before the screens
 
-Four places where the sources disagree. Deciding them first keeps them out of
+Five places where the sources disagree. Deciding them first keeps them out of
 every section below.
 
 **0.1 One order, one location. The multi-step order does not exist.**
-IA 1.2 lists "multi-step (multi-branch) composition with per-step status". The
-parity matrix declines Delever's `steps[]` outright, and `ordering.orders` binds
-`location_id` with a foreign key and a trigger that refuses rebinding. The IA
-line is stale. There is no per-step status, no step tab, no step money. An order
-that needs two kitchens is two orders, and the customer is told so on the call.
+IA 1.2 listed "multi-step (multi-branch) composition with per-step status". The
+parity matrix declines Delever's `steps[]` outright, and the schema is built the
+same way: `ordering.orders.location_id` is `NOT NULL` under the foreign key
+`fk_order_location` (V0022) and no ordering command changes it, while a *cart* is
+bound to one location by `trg_carts_no_rebinding`, which refuses to move it —
+moving location rebuilds and reprices the cart (ADR 0019). The IA line was stale
+and was struck on 2026-09-11. There is no per-step status, no step tab, no step
+money. An order that needs two kitchens is two orders, and the customer is told
+so on the call.
+
+*Declined, not deferred (recorded 2026-09-30 against gap-map row `1.2d`).* The
+reason is the one the parity matrix gives: two nested state machines and per-step
+money for a customer behaviour — ordering from two kitchens in one basket — that no
+evidence in the inventory shows anyone doing. The matrix cites ADR 0019, which
+binds a cart to one location and rebuilds on change, and ADR 0002's refusal of
+extra hierarchy tiers. Nothing is scheduled against it and no console screen,
+endpoint or table is owed. Reopening it is a new ADR (ADR 0019 is Accepted), not a
+wave.
 
 **0.2 There is no backward status transition, and the IA promises one.**
 IA 1.1 owns "backward status transitions (gated, reason-required, audited — an
@@ -96,6 +111,31 @@ Delever and the legacy dashboard both open on "new orders". That is the wrong
 first screen: a new order is the least urgent thing on it, because nothing has
 gone wrong with it yet. The board opens on **Внимание**, a saved view over
 several statuses, and Новые is the tab next to it. See §2.2.
+
+**0.5 There is no softphone, and the console places no call.**
+IA 1.6 listed a softphone and, with it, click-to-call. ADR 0064 (Accepted) decides
+the platform never carries audio, and its alternatives table refuses a
+softphone/WebRTC inside the operations app: it "carries audio, codecs, and
+telephony reliability into this platform's scope for little pilot value; operators
+keep their handsets/softphones", to be revisited only when a provider round
+demands it. The IA line was struck on 2026-09-11. What is built instead is the
+other side of the same record: caller resolution and the screen-pop, operator
+presence and the call log (IA 1.6, tier 3, gap-map row `1.6`), and the
+call-to-order provenance that New order (§5) records when it is opened from a
+claimed call.
+
+*The softphone is declined, not deferred; click-to-call is not built (recorded
+2026-09-30 against gap-map row `1.6a`).* For the softphone the decision is ADR
+0064's and nothing is owed. For click-to-call the record is narrower and should be
+read as it is: ADR 0064 does not name it, and the IA note that struck it reasoned
+that dialling needs the same client. A provider-placed call would be a
+*call-control* capability that ADR 0064 lets an adapter declare "where offered", and
+neither shipped VOICE adapter declares it (`VoiceProviderCapabilityCatalog` lists
+`INGEST_EVENTS_PUSH` only). So click-to-call is not scheduled; it waits on an
+adapter that declares call control, which waits on the owner naming a voice
+provider (ADR 0064's open inputs). Where §3.7 says a revealed number comes «with
+call and copy», the call is a hand-off of the number to the operator's own device,
+never a call the console places.
 
 ---
 
@@ -1445,7 +1485,8 @@ guard so tomorrow's plan never shows "past").
 | Order status timeline | **Match, and beat** | Delever renders time-per-stage; ours renders three lanes and shows losing approval decisions |
 | Twelve-item overflow menu | **Beat** | §2.9: two inline affordances chosen by state, everything else in the overflow |
 | Free-form «Изменить заказ» | **Beat** | ADR 0039's ten intent-named commands, each with a declared consequence vector |
-| Multi-branch `steps[]` | **Skip** | Declined in the matrix; two nested state machines for a behaviour no evidence shows anyone using |
+| Multi-branch `steps[]` | **Skip** | Declined in the matrix; two nested state machines for a behaviour no evidence shows anyone using (§0.1) |
+| Embedded softphone (and click-to-call through it) | **Skip** | ADR 0064: the platform never carries audio; operators keep their handsets. Screen-pop, presence and the call log are built instead (§0.5) |
 | Tenant-editable order statuses | **Skip** | The same status name would mean different things in two tenants, and every report and automation becomes ungovernable |
 | Externally computed «Свободная скидка» on our own channels | **Skip on HorecaOS channels, allow on marketplace** | It exists so aggregators can push a discount we cannot re-derive. On an aggregator order that is unavoidable and flagged; extending it to our channels destroys ADR 0018's central promise |
 | Live courier map as an Orders sibling | **Move** | It is IA 3.2, under Delivery. An operator working the queue does not need a map; a dispatcher does |

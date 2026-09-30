@@ -39,10 +39,13 @@ That shapes them more than any style guide would.
 | [catalog-offering-listing-backfill.md](catalog-offering-listing-backfill.md) | A pre-existing tenant's offerings were set `AVAILABLE` before the auto-listing fix and still read as unsellable |
 
 **A runbook that has never been executed is a draft.** Each file above carries a
-`Last executed` line in its header, and every one except `deploy.md` and
-`restore.md` currently reads `never`. ADR 0023 requires each to be exercised once
-— as a game day or during a real incident — before it counts, and the date to go
-in that line is the date it was actually run rather than the date it was written.
+`Last executed` line in its header. Most read `never`; the few that have been run
+say when, where, and which steps that run did and did not exercise, so read the
+file's own line rather than any summary of it (a run that found nothing to do, as
+`catalog-offering-listing-backfill.md`'s did, exercises less than its date
+suggests). ADR 0023 requires each to be exercised once — as a game day or during a
+real incident — before it counts, and the date to go in that line is the date it
+was actually run rather than the date it was written.
 
 ## The two numbers to know before reading anything else
 

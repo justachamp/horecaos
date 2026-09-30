@@ -25,6 +25,18 @@
   13's storefront `/dine-in` flow, which for an `ORDER_AND_PAY` table with no live
   session renders `dineIn.notSeated` ("Ask a member of staff to seat you, then
   scan the code again") and disables ordering.
+  Status note, 2026-09-30 (documentation pass, no code; the status above is
+  unchanged): ordering now has a table binding. Batch 15 built the cart-to-table
+  binding this record's Context and Open inputs describe (`V0435`, `PUT
+  .../carts/{cartId}/table`, `dinein.api.TableBindingPort`), so nothing here should
+  be read as "checkout knows nothing about a table". Read against the tree at
+  `acd96539`, both customer storefronts now make the `PUT` (`frontend/storefront`
+  and `frontend/storefront-milliy`), but only `frontend/storefront` sends the
+  guest's `X-Dine-In-Token` at checkout; `frontend/storefront-milliy` does not, so
+  its table-bound checkout should be refused with `TABLE_TOKEN_REQUIRED` (read from
+  the two codebases and `CartCheckoutAndOrderTests#aBoundCartWithoutATokenIsRefused`;
+  not reproduced against a running stack, and not fixed by this note). Self-seating
+  itself remains unbuilt.
 - Date proposed: 2026-09-29
 - Date decided: —
 - Deciders: proposed by Claude (wave batch 14, w7-adrs-stops-dispatch-walkin) as an
@@ -132,9 +144,13 @@ about seating. Since batch 15 a cart *may* be bound to a table (ADR 0047's
 "ordering's cart-to-table binding", built): `PUT .../carts/{cartId}/table`
 (`StorefrontOrderingController#bindTable`, `CartService#bindTable`) stores the table
 of the guest's `X-Dine-In-Token` in `ordering.cart_fulfillment.dinein_table_id`
-(`V0435`) -- never a table id from the request -- and only the storefront
-(`frontend/storefront`) makes the call; the milliy storefront and every
-operator-keyed order do not. For a bound cart the guard re-proves the guest at
+(`V0435`) -- never a table id from the request. Both customer storefronts make the
+call (corrected 2026-09-30: this sentence said only `frontend/storefront` did, which
+stopped being true when `frontend/storefront-milliy` gained its table basket later
+in batch 15); an operator-keyed order does not, and instead names the party's
+session in the placement itself (`dineInSessionId` on `POST .../orders`). Only
+`frontend/storefront` sends the guest token at checkout, so a table-bound
+`frontend/storefront-milliy` checkout should be refused (`TABLE_TOKEN_REQUIRED`). For a bound cart the guard re-proves the guest at
 checkout from a live token (`TABLE_TOKEN_REQUIRED`, `TABLE_TOKEN_ENDED`,
 `TABLE_BINDING_STALE`), refuses when nobody is seated at the table
 (`TABLE_NOT_SEATED`, `TableBindingPort#isSeated`), and puts the order on the
