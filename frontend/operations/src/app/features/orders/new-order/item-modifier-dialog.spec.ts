@@ -216,6 +216,27 @@ describe('ItemModifierDialog', () => {
     expect(confirmations).toEqual([{ selections: [], commentPresetCodes: [] }]);
   });
 
+  it('row 10.12: a preset reads the labels map, so a wording beyond the triple shows where the console column is blank', () => {
+    const fixture = render(
+      [],
+      [
+        {
+          code: 'NO_ONIONS',
+          labelRu: '',
+          labelUz: '',
+          labelEn: '',
+          labels: { kaa: 'Piyazsiz' },
+          label: 'Piyazsiz',
+        },
+        { ...EXTRA_SPICY_PRESET, labels: { en: 'Extra spicy, please' } },
+      ],
+    );
+    const host: HTMLElement = fixture.nativeElement;
+
+    expect(host.textContent).toContain('Piyazsiz');
+    expect(host.textContent).toContain('Extra spicy, please');
+  });
+
   it('checking a preset adds its code to the confirmation, in the product’s own offered order', () => {
     const fixture = render([], [NO_ONIONS_PRESET, EXTRA_SPICY_PRESET]);
     const host: HTMLElement = fixture.nativeElement;

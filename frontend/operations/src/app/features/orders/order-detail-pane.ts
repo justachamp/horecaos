@@ -21,6 +21,7 @@ import { LatenessPolicy, PLATFORM_DEFAULT_LATENESS_POLICY } from '../../core/lat
 import { LatenessPolicyApi } from '../../core/lateness-policy-api';
 import { formatMoney } from '../../core/format/money';
 import { I18n, Locale } from '../../core/i18n/i18n';
+import { presetLabelFor } from '../../core/i18n/locale-labels';
 import { MessageKey } from '../../core/i18n/messages.en';
 import { TPipe } from '../../core/i18n/t.pipe';
 import { Combobox, ComboboxOption } from '../../shared/ui/combobox';
@@ -1905,16 +1906,9 @@ export class OrderDetailPane {
     return line.productName;
   }
 
-  /** Row 2.1b: a preset's label in the console's own locale, matching `data-privacy-page.ts`'s own `consentLabel` selection. */
+  /** Row 2.1b/10.12: a preset's wording in the console's own language, read from the `labels` map with the triple's columns as the floor (`presetLabelFor`). */
   protected presetLabel(preset: OrderLineCommentPreset): string {
-    switch (this.i18n.locale()) {
-      case 'ru':
-        return preset.labelRu;
-      case 'uz-Latn':
-        return preset.labelUz;
-      default:
-        return preset.labelEn;
-    }
+    return presetLabelFor(preset, this.i18n.locale());
   }
 
   /** §3.6's «Комментарий клиента к позиции» pointer: whether any line has one to reveal, above. */

@@ -158,3 +158,81 @@ export function pickLabel(
   }
   return Object.values(labels).find((value) => value.trim().length > 0) ?? '';
 }
+
+/**
+ * The wording of one preset comment as the platform sends it — on an order
+ * line (`CommentPresetChip`) and on a menu product (`CommentPresetOption`).
+ *
+ * `labelRu` / `labelUz` / `labelEn` are the platform triple's columns and stay
+ * the required floor. `labels` holds every wording the row has, keyed by
+ * locale — the triple plus any language a tenant's brands offer beyond it
+ * (row 10.12, V0430 for the catalog and V0433 for the order-line snapshot) —
+ * and `label` is the wording the platform itself resolved for the language the
+ * menu was requested in, then the brand's default. Both are optional so a
+ * fixture, or a platform that predates them, still reads.
+ */
+export interface PresetWording {
+  readonly labelRu: string;
+  readonly labelUz: string;
+  readonly labelEn: string;
+  readonly labels?: Readonly<Record<string, string>>;
+  readonly label?: string;
+}
+
+/** The triple's columns in the order the platform lists them — the walk when the console language has nothing. */
+const PRESET_TRIPLE_ORDER: readonly ('ru' | 'uz-Latn' | 'en')[] = ['ru', 'uz-Latn', 'en'];
+
+function presetColumn(preset: PresetWording, locale: 'ru' | 'uz-Latn' | 'en'): string {
+  switch (locale) {
+    case 'ru':
+      return preset.labelRu;
+    case 'uz-Latn':
+      return preset.labelUz;
+    case 'en':
+      return preset.labelEn;
+  }
+}
+
+function filled(value: string | null | undefined): value is string {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
+/**
+ * A preset's wording in the console's own language.
+ *
+ * The console used to pick one of the three columns by a `ru` / `uz-Latn` /
+ * else-`en` switch, so a wording the platform stored and served beyond the
+ * triple was shown nowhere. This reads, in order:
+ *
+ * 1. the `labels` map for the console language — where a language beyond the
+ *    triple reaches the screen once a brand offers one;
+ * 2. that language's triple column — the floor every preset has;
+ * 3. `label`, the wording the platform resolved for the request;
+ * 4. the triple in platform order (`ru`, `uz-Latn`, `en`);
+ * 5. any wording the map holds;
+ *
+ * and an empty string only for a preset with no wording at all, which the
+ * schema does not allow.
+ */
+export function presetLabelFor(preset: PresetWording, locale: string): string {
+  const own = preset.labels?.[locale];
+  if (filled(own)) {
+    return own;
+  }
+  if (locale === 'ru' || locale === 'uz-Latn' || locale === 'en') {
+    const column = presetColumn(preset, locale);
+    if (filled(column)) {
+      return column;
+    }
+  }
+  if (filled(preset.label)) {
+    return preset.label;
+  }
+  for (const candidate of PRESET_TRIPLE_ORDER) {
+    const column = presetColumn(preset, candidate);
+    if (filled(column)) {
+      return column;
+    }
+  }
+  return Object.values(preset.labels ?? {}).find(filled) ?? '';
+}

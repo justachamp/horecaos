@@ -49,7 +49,7 @@ export interface OrderLineCommentPreset {
   /**
    * Every wording the line's snapshot holds, by locale: the triple plus any locale a tenant's
    * brands support beyond it (row 10.12). Optional so a fixture, or an older platform, still reads;
-   * the console renders the operator's own language from the three fields above.
+   * the console renders through `presetLabelFor`, this map first and the three fields above as the floor.
    */
   readonly labels?: Readonly<Record<string, string>>;
 }

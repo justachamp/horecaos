@@ -18,6 +18,7 @@ import { ApiError } from '../../../core/api/problem-details';
 import { CurrentLocation } from '../../../core/auth/current-location';
 import { formatMoney } from '../../../core/format/money';
 import { I18n } from '../../../core/i18n/i18n';
+import { presetLabelFor } from '../../../core/i18n/locale-labels';
 import { MessageKey } from '../../../core/i18n/messages.en';
 import { TPipe } from '../../../core/i18n/t.pipe';
 import { Combobox, ComboboxOption } from '../../../shared/ui/combobox';
@@ -463,16 +464,9 @@ export class NewOrderPage implements OnInit {
     return index;
   });
 
-  /** The console's own locale label for a checked preset code, matching `item-modifier-dialog.ts`'s own `presetLabel`. */
+  /** The console's own language wording for a checked preset code, matching `item-modifier-dialog.ts`'s own `presetLabel`. */
   private presetLabel(preset: CommentPresetOption): string {
-    switch (this.i18n.locale()) {
-      case 'ru':
-        return preset.labelRu;
-      case 'uz-Latn':
-        return preset.labelUz;
-      default:
-        return preset.labelEn;
-    }
+    return presetLabelFor(preset, this.i18n.locale());
   }
 
   /** «Без лука, Поострее» — a basket line's checked presets, resolved to the console's own locale. */

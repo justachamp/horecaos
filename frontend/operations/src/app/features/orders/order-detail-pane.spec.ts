@@ -322,6 +322,51 @@ describe('OrderDetailPane: rendering the loaded order', () => {
     expect(presets?.textContent).toContain('Extra spicy');
   });
 
+  it('row 10.12: a chip reads the labels map, so a wording beyond the triple shows where the console column is blank', async () => {
+    configure({
+      get: apiGet({
+        value: detail({
+          lines: [
+            {
+              lineNumber: 1,
+              productName: 'Лагман',
+              quantity: 1,
+              finalAmountMinor: 73_000,
+              modifiers: [],
+              commentPresets: [
+                {
+                  code: 'NO_ONIONS',
+                  labelRu: '',
+                  labelUz: '',
+                  labelEn: '',
+                  labels: { kaa: 'Piyazsiz' },
+                },
+                {
+                  code: 'EXTRA_SPICY',
+                  labelRu: 'Поострее',
+                  labelUz: 'Achchiqroq',
+                  labelEn: 'Extra spicy',
+                  labels: { en: 'Extra spicy, please' },
+                },
+              ],
+              lineId: 'line-1',
+              hasNote: false,
+            },
+          ],
+        }),
+        version: 3,
+      }),
+    });
+    const fixture = await render();
+    const chips = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll(
+        '[data-testid="order-detail-line-presets"] li',
+      ),
+    ).map((chip) => chip.textContent?.trim());
+
+    expect(chips).toEqual(['Piyazsiz', 'Extra spicy, please']);
+  });
+
   it('batch 14: shows the table a dine-in order was seated at in the header, beside its number', async () => {
     const base = detail();
     configure({
