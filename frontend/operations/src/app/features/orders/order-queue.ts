@@ -26,11 +26,9 @@ import { TPipe } from '../../core/i18n/t.pipe';
 import { RealtimeClient } from '../../core/realtime/realtime-client';
 import { startVisibilityPoll } from '../../core/realtime/visibility-poll';
 import { ServiceStatus } from '../../shell/service-status';
-import { ConnectionStateBanner } from '../../shared/ui/connection-state-banner';
 import { DateRange, DateRangePicker } from '../../shared/ui/date-range-picker';
 import { FilterBar, FilterBarChip } from '../../shared/ui/filter-bar';
 import { OrderTableChip } from '../../shared/ui/order-table-chip/order-table-chip';
-import { StaleIndicator } from '../../shared/ui/stale-indicator';
 import { StatusPill } from '../../shared/ui/status-pill';
 import { Toasts } from '../../shared/ui/toast';
 import { CouriersApi, RosterEntryResponse } from '../couriers/couriers-api';
@@ -55,6 +53,10 @@ import {
 import { CountableOrder, OrderCounts, TabCounts, zeroTabCounts } from './order-counts';
 import { describeApiError, errorReference, mutationErrorNotice } from './order-errors';
 import { OrderOutcomeReasonDialog, OutcomeReasonSubmission } from './order-outcome-reason-dialog';
+import { OrderQueueBulkBar } from './order-queue-bulk-bar';
+import { OrderQueueBulkResult } from './order-queue-bulk-result';
+import { OrderQueueToolbar } from './order-queue-toolbar';
+import { OrderRowActions, RowActionItem } from './order-row-actions';
 import {
   ORDER_PAYMENT_STATUS_PROJECTIONS,
   paymentStatusProjectionLabel,
@@ -227,8 +229,10 @@ interface RowDialogState {
     StatusPill,
     FilterBar,
     DateRangePicker,
-    ConnectionStateBanner,
-    StaleIndicator,
+    OrderQueueBulkBar,
+    OrderQueueBulkResult,
+    OrderQueueToolbar,
+    OrderRowActions,
   ],
   templateUrl: './order-queue.html',
   styleUrl: './order-queue.css',
@@ -709,10 +713,6 @@ export class OrderQueue implements OnInit {
     return [...members].sort(
       definition.severityOrdered ? compareOrderSeverity : compareNewestFirst,
     );
-  }
-
-  protected tabCount(tab: OrderTabId): number {
-    return this.tabCounts()[tab];
   }
 
   protected statusLabel(status: string): string {
@@ -1310,6 +1310,12 @@ export class OrderQueue implements OnInit {
     this.lastBulkSubmission = null;
   }
 
+  /** Handed to the bulk-result panel as functions, which must keep this instance as `this`. */
+  protected readonly bulkItemLabeller = (orderId: string): string =>
+    this.bulkResultItemLabel(orderId);
+  protected readonly bulkProblemLabeller = (code: string | null | undefined): string =>
+    this.bulkProblemLabel(code);
+
   protected bulkResultItemLabel(orderId: string): string {
     const row = this.rows().find((r) => r.order.orderId === orderId);
     return row ? row.order.publicOrderNumber : orderId.slice(0, 8);
@@ -1386,6 +1392,21 @@ export class OrderQueue implements OnInit {
       (key, values) => this.i18n.t(key, values),
       (status) => this.statusLabel(status),
     );
+  }
+
+  /** The inline buttons of a row's actions cell, each with the words the operator reads for it. */
+  protected inlineActionItems(order: OrderSummaryResponse): readonly RowActionItem[] {
+    return this.inlineActions(order).map((action) => ({
+      action,
+      label: this.actionLabel(order, action),
+    }));
+  }
+
+  protected overflowActionItems(order: OrderSummaryResponse): readonly RowActionItem[] {
+    return this.overflowActions(order).map((action) => ({
+      action,
+      label: this.actionLabel(order, action),
+    }));
   }
 
   protected isRowBusy(orderId: string): boolean {

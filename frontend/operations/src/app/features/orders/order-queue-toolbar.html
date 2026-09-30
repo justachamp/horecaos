@@ -1,0 +1,43 @@
+<div class="order-queue__toolbar">
+  <div class="order-queue__tabs" role="tablist">
+    @for (tab of tabs(); track tab.id) {
+      <button
+        type="button"
+        role="tab"
+        class="tab"
+        [class.tab--active]="activeTab() === tab.id"
+        [attr.aria-selected]="activeTab() === tab.id"
+        (click)="selectTab(tab.id)"
+      >
+        {{ tab.labelKey | t }}
+        @if (tabCount(tab.id) > 0) {
+          <span class="tab__count" [class.tab__count--attention]="tab.id === 'attention'">{{
+            tabCount(tab.id)
+          }}</span>
+        }
+      </button>
+    }
+  </div>
+
+  <div class="order-queue__status">
+    <q-connection-state-banner [state]="connectionState()" />
+    @if (updatedStamp(); as stamp) {
+      <span
+        class="order-queue__stamp q-caption q-tnum"
+        [class.order-queue__stamp--pulse]="refreshing()"
+      >
+        {{ stamp }}
+      </span>
+      <q-stale-indicator [updatedAt]="lastUpdatedAt()" />
+    }
+    <button
+      type="button"
+      class="order-queue__refresh"
+      (click)="manualRefresh()"
+      [attr.aria-label]="'orders.queue.refresh' | t"
+      [attr.title]="'orders.queue.refresh' | t"
+    >
+      <span aria-hidden="true">⟳</span>
+    </button>
+  </div>
+</div>

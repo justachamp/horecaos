@@ -1,0 +1,54 @@
+<div class="order-queue__bulk-bar" data-testid="order-queue-bulk-bar">
+  <span class="q-body-sm" data-testid="order-queue-bulk-count">{{
+    'orders.queue.selection.selected' | t: { count: selectionCount() }
+  }}</span>
+
+  @if (bulkAdvanceTargetStatus(); as target) {
+    <button
+      type="button"
+      class="order-queue__bulk-action"
+      [disabled]="bulkBusy()"
+      (click)="onBulkAdvanceClick()"
+      data-testid="order-queue-bulk-advance"
+    >
+      {{ bulkAdvanceLabel() }}
+    </button>
+  } @else if (selectionCount() > 1) {
+    <span class="q-caption order-queue__bulk-unavailable">{{
+      'orders.queue.bulk.advanceUnavailable' | t
+    }}</span>
+  }
+
+  @if (canBulkCancel()) {
+    <button
+      type="button"
+      class="order-queue__bulk-action order-queue__bulk-action--danger"
+      [disabled]="bulkBusy()"
+      (click)="onBulkCancelClick()"
+      data-testid="order-queue-bulk-cancel"
+    >
+      {{ 'orders.queue.bulk.cancel' | t }}
+    </button>
+  } @else if (bulkCancelUnavailableMessage(); as message) {
+    <span
+      class="q-caption order-queue__bulk-unavailable"
+      data-testid="order-queue-bulk-cancel-unavailable"
+      >{{ message }}</span
+    >
+  }
+
+  <!-- §2.10: bulk courier assignment is explicitly out of scope — said
+       here rather than offered as a button that would 400. -->
+  <span class="q-caption order-queue__bulk-note" data-testid="order-queue-bulk-courier-note">{{
+    'orders.queue.bulk.courierNote' | t
+  }}</span>
+
+  <button
+    type="button"
+    class="order-queue__bulk-clear"
+    (click)="clearSelection()"
+    data-testid="order-queue-bulk-clear"
+  >
+    {{ 'orders.queue.selection.clear' | t }}
+  </button>
+</div>
