@@ -1,0 +1,16 @@
+<div class="pay-list">
+  @for (choice of choices(); track choice.code) {
+    <button
+      type="button"
+      class="pay-row"
+      [class.is-active]="selected() === choice.code"
+      (click)="choose.emit(choice.code)"
+    >
+      <span class="pay-row__dot"></span>
+      <span class="pay-row__badge">{{ choice.code.charAt(0) }}</span>
+      <span class="pay-row__label">
+        {{ choice.labelKey ? (choice.labelKey | t) : choice.code }}
+      </span>
+    </button>
+  }
+</div>
