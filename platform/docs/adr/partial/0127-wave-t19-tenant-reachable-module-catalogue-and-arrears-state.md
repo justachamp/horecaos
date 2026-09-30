@@ -326,6 +326,13 @@ the case it did not spell out. Covered by
 `.aModuleReBoughtAtALowerQuantityInTheSameMonthBillsTheMostItWasHeldAt` and
 `.aModuleEndedInOneMonthAndBoughtAgainInTheNextBillsEachMonthOnce`.
 
+The screen's End notice ("billed up to and including ...") is cleared when the
+tenant starts an Add, and a statement built after a re-buy is one line, so the
+two no longer disagree. Also on the screen: when an End succeeded but the list
+could not be read back, the held row is now marked ended from the server's own
+answer (`ModuleEndedView.endedAt`) instead of staying shown as live with an End
+button that would only answer 409. Covered by `subscription-page.spec.ts`.
+
 ## References
 
 - ADR 0025 — fine-grained authorization and capability model

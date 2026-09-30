@@ -626,6 +626,37 @@ describe('SubscriptionPage', () => {
     expect(host.querySelector('[role="alert"]')).toBeNull();
   });
 
+  it('a successful End whose re-read fails still stops showing the module as live, with no End button', async () => {
+    const host = await loadWithHeld([SELF_BOUGHT_MODULE, ALREADY_HELD_MODULE]);
+    clickEnd(host);
+    fixture.detectChanges();
+
+    api.modulesHeld.mockRejectedValue(
+      new ApiError(ApiErrorCode.INTERNAL_ERROR, 500, null, 'corr-4'),
+    );
+    (host.querySelector('[data-testid="q-confirm-confirm"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    // The server said it ended; the screen must not contradict the notice above the table.
+    const held = heldRows(host)
+      .map((row) => row.textContent)
+      .join(' ');
+    expect(held).not.toContain('Self-service kiosk');
+    expect(held).toContain('Analytics');
+    expect(host.querySelector('[data-testid="subscription-module-end"]')).toBeNull();
+    expect(host.querySelector('[data-testid="subscription-module-ended"]')).not.toBeNull();
+    // The catalogue offers the module again rather than saying it is still added.
+    const kioskRow = [...host.querySelectorAll('.table tbody tr')].find(
+      (row) =>
+        row.textContent?.includes('Self-service kiosk') &&
+        !row.closest('[data-testid="subscription-held-modules"]'),
+    );
+    expect(kioskRow?.textContent).not.toContain('Added');
+    expect(kioskRow?.querySelector('button')?.textContent?.trim()).toBe('Add');
+    expect(host.querySelector('[role="alert"]')).toBeNull();
+  });
+
   it('will not open the End step for a module the server says the tenant cannot end', async () => {
     const host = await loadWithHeld([ALREADY_HELD_MODULE]);
     const page = fixture.componentInstance as unknown as {
