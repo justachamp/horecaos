@@ -849,6 +849,12 @@ export const messagesRu: MessageCatalogue = {
     'У части позиций меню фискальная классификация заполнена не полностью (ИКПУ, код упаковки, единица или фискальное название).',
   'settings.home.readiness.code.CHANNEL_NO_PAYMENT_METHOD':
     'У канала продаж не включён ни один способ оплаты, поэтому заказ через него принять нельзя.',
+  'settings.home.readiness.code.CHANNEL_NO_FULFILLMENT_MODE':
+    'У канала продаж не включён ни один способ получения (доставка, самовывоз или в зале), поэтому заказ через него принять нельзя.',
+  'settings.home.readiness.code.CHANNEL_NO_SERVICEABLE_MODE':
+    'У канала продаж включены способы получения, но ни для одного не привязан график работы в заведении, где канал доступен.',
+  'settings.home.readiness.code.LOCATION_NO_SERVICE_SCHEDULE':
+    'У заведения не привязан график работы для способа получения, который здесь продаётся, поэтому по нему оно закрыто.',
   'settings.home.readiness.code.INSTALLATION_SECRET_ROTATION_DUE':
     'Учётные данные подключения к провайдеру не обновлялись дольше срока ротации.',
   'settings.home.readiness.code.MERCHANT_SECRET_ROTATION_DUE':
@@ -1399,7 +1405,7 @@ export const messagesRu: MessageCatalogue = {
     'Не классифицировано: {unclassified} из {total} позиций',
   'settings.fiscalization.classification.empty': 'Всё классифицировано.',
   'settings.fiscalization.classification.notAnEditor':
-    'Классификация по позициям выполняется в редакторе товаров. Это отчёт о покрытии, а не редактор.',
+    'Полная классификация отдельного блюда (единица, фискальное название, маркировка) правится в редакторе товаров. Эта вкладка показывает покрытие и массово заполняет ИКПУ и коды упаковки.',
   'settings.fiscalization.classification.field.type': 'Тип',
   'settings.fiscalization.classification.field.name': 'Название',
   'settings.fiscalization.classification.field.category': 'Категория',
@@ -1415,6 +1421,34 @@ export const messagesRu: MessageCatalogue = {
   'settings.fiscalization.classification.deliveryFee.markingRequired': 'Требуется маркировка',
   'settings.fiscalization.classification.deliveryFee.submit': 'Сохранить',
   'settings.fiscalization.classification.deliveryFee.submitting': 'Сохранение…',
+  'settings.fiscalization.backfill.title': 'Заполнение ИКПУ и кодов упаковки',
+  'settings.fiscalization.backfill.lead':
+    'У {count} блюд не хватает ИКПУ или кода упаковки. Введите коды вручную или скопируйте столбец из таблицы и вставьте в первую ячейку — значения встанут вниз по списку.',
+  'settings.fiscalization.backfill.referenceNote':
+    'Официальный справочник ИКПУ ещё не загружен, поэтому код проверяется только по формату (17 цифр), а искать его по названию нельзя. Единицу измерения и фискальное название задают в фискальном верстаке каталога.',
+  'settings.fiscalization.backfill.empty': 'У всех блюд есть ИКПУ и код упаковки.',
+  'settings.fiscalization.backfill.column.mxik': 'ИКПУ (17 цифр)',
+  'settings.fiscalization.backfill.column.packageCode': 'Код упаковки',
+  'settings.fiscalization.backfill.copyDefault': 'Взять из категории',
+  'settings.fiscalization.backfill.copyDefault.title':
+    'Заполнить пустые ячейки тем, что используют {agreeing} из {sample} классифицированных блюд категории «{category}»: {mxik}, упаковка {package}',
+  'settings.fiscalization.backfill.copyDefault.unavailable':
+    'Копировать нечего: в категории нет классифицированных блюд, либо в ячейках уже другие коды.',
+  'settings.fiscalization.backfill.copyAll': 'Взять коды категорий в пустые ячейки ({count})',
+  'settings.fiscalization.backfill.dirty': 'Несохранённых строк: {count}',
+  'settings.fiscalization.backfill.discard': 'Отменить',
+  'settings.fiscalization.backfill.save': 'Сохранить строк: {count}',
+  'settings.fiscalization.backfill.saving': 'Сохранение…',
+  'settings.fiscalization.backfill.error.mxik': 'ИКПУ — ровно 17 цифр.',
+  'settings.fiscalization.backfill.error.packageCode': 'Код упаковки — только цифры, не больше 10.',
+  'settings.fiscalization.backfill.error.clear':
+    'Здесь код нельзя очистить; измените его в редакторе товаров.',
+  'settings.fiscalization.backfill.invalidSkipped':
+    'В строках ({count}) код в неверном формате, они не отправлены. Исправьте выделенные ячейки.',
+  'settings.fiscalization.backfill.summary':
+    'Сохранено: {saved}, уже заполнено: {unchanged}, не сохранено: {failed}.',
+  'settings.fiscalization.backfill.status.notFound': 'Такого блюда больше нет.',
+  'settings.fiscalization.backfill.status.failed': 'Не сохранено. Повторите.',
 
   // 10.9 Уведомления
   'settings.notifications.title': 'Уведомления',

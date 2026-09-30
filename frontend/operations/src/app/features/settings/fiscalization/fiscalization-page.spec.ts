@@ -95,6 +95,7 @@ describe('FiscalizationPage', () => {
     retireFiscalTerminal: ReturnType<typeof vi.fn>;
     fiscalCoverage: ReturnType<typeof vi.fn>;
     classifyDeliveryFee: ReturnType<typeof vi.fn>;
+    backfillCodes: ReturnType<typeof vi.fn>;
   };
 
   beforeEach(async () => {
@@ -117,6 +118,13 @@ describe('FiscalizationPage', () => {
       retireFiscalTerminal: vi.fn().mockResolvedValue({ ...TERMINAL, status: 'RETIRED' }),
       fiscalCoverage: vi.fn().mockResolvedValue(COVERAGE),
       classifyDeliveryFee: vi.fn().mockResolvedValue(undefined),
+      backfillCodes: vi.fn().mockImplementation(async (_scope, items: { nodeId: string }[]) =>
+        items.map((item) => ({
+          nodeType: 'VARIANT',
+          nodeId: item.nodeId,
+          status: 'CLASSIFIED',
+        })),
+      ),
     };
 
     await TestBed.configureTestingModule({
@@ -347,5 +355,105 @@ describe('FiscalizationPage', () => {
       SCOPE,
       expect.objectContaining({ mxikCode: '10101001001000000' }),
     );
+  });
+  describe('the ИКПУ / package-code backfill on Tab 3 (row 10.7c)', () => {
+    const BACKFILL_COVERAGE: FiscalCoverageSummary = {
+      totalNodes: 4,
+      unclassifiedCount: 3,
+      nodes: [
+        {
+          nodeType: 'VARIANT',
+          nodeId: 'plov',
+          name: 'Plov',
+          categoryName: 'Mains',
+          locationCount: 3,
+          categoryId: 'cat-mains',
+          mxikCode: null,
+          packageCode: null,
+        },
+        {
+          nodeType: 'VARIANT',
+          nodeId: 'samsa',
+          name: 'Samsa',
+          categoryName: 'Snacks',
+          locationCount: 1,
+          categoryId: 'cat-snacks',
+          mxikCode: '10706001001000000',
+          packageCode: '1500316',
+        },
+        {
+          nodeType: 'MODIFIER_OPTION',
+          nodeId: 'option-1',
+          name: 'Cheese',
+          categoryName: null,
+          locationCount: 0,
+        },
+      ],
+      categoryDefaults: [],
+    };
+
+    async function openClassification(): Promise<void> {
+      api.fiscalCoverage.mockResolvedValue(BACKFILL_COVERAGE);
+      selectTab(2);
+      await flushMicrotasks();
+      fixture.detectChanges();
+    }
+
+    function type(testId: string, value: string): void {
+      const target = fixture.nativeElement.querySelector(
+        `[data-testid="${testId}"]`,
+      ) as HTMLInputElement;
+      target.value = value;
+      target.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+    }
+
+    it('lists a dish short of a code in the editor and keeps it out of the read-only list', async () => {
+      await openClassification();
+
+      const editorRows = [
+        ...fixture.nativeElement.querySelectorAll('[data-testid="backfill-row"]'),
+      ] as HTMLElement[];
+      expect(editorRows.map((row) => row.textContent)).toEqual([expect.stringContaining('Plov')]);
+
+      const tableRows = [
+        ...fixture.nativeElement.querySelectorAll('table.table tbody tr'),
+      ] as HTMLElement[];
+      const tableText = tableRows.map((row) => row.textContent).join('|');
+      expect(tableText).toContain('Cheese');
+      expect(tableText).toContain('Samsa');
+      expect(tableText).not.toContain('Plov');
+    });
+
+    it('hides the read-only list entirely when the editor already shows every unclassified node', async () => {
+      api.fiscalCoverage.mockResolvedValue({
+        ...BACKFILL_COVERAGE,
+        nodes: [BACKFILL_COVERAGE.nodes[0]],
+      });
+      selectTab(2);
+      await flushMicrotasks();
+      fixture.detectChanges();
+
+      expect(fixture.nativeElement.querySelector('table.table')).toBeNull();
+      expect(text()).not.toContain('Everything is classified.');
+    });
+
+    it('writes through the bulk endpoint and reloads the coverage once a row was applied', async () => {
+      await openClassification();
+      expect(api.fiscalCoverage).toHaveBeenCalledTimes(1);
+
+      type('backfill-mxik-plov', '10706001001000000');
+      type('backfill-package-plov', '1500316');
+      (
+        fixture.nativeElement.querySelector('[data-testid="backfill-save"]') as HTMLButtonElement
+      ).click();
+      await flushMicrotasks();
+      fixture.detectChanges();
+
+      expect(api.backfillCodes).toHaveBeenCalledWith(SCOPE, [
+        { nodeId: 'plov', mxikCode: '10706001001000000', packageCode: '1500316' },
+      ]);
+      expect(api.fiscalCoverage).toHaveBeenCalledTimes(2);
+    });
   });
 });

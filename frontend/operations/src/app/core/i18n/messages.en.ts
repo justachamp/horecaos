@@ -882,6 +882,12 @@ export const messagesEn = {
     'Some menu items still lack a complete fiscal classification (ИКПУ, package code, unit or fiscal name).',
   'settings.home.readiness.code.CHANNEL_NO_PAYMENT_METHOD':
     'A sales channel has no payment method enabled, so no order can be taken through it.',
+  'settings.home.readiness.code.CHANNEL_NO_FULFILLMENT_MODE':
+    'A sales channel has no fulfilment mode enabled (delivery, pickup or dine-in), so no order can be taken through it.',
+  'settings.home.readiness.code.CHANNEL_NO_SERVICEABLE_MODE':
+    'A sales channel has fulfilment modes enabled, but none has opening hours bound at a location it serves.',
+  'settings.home.readiness.code.LOCATION_NO_SERVICE_SCHEDULE':
+    'A location has no opening hours bound for a fulfilment mode it sells, so it stays closed for that mode.',
   'settings.home.readiness.code.INSTALLATION_SECRET_ROTATION_DUE':
     'A provider connection’s credential is overdue for rotation.',
   'settings.home.readiness.code.MERCHANT_SECRET_ROTATION_DUE':
@@ -1433,7 +1439,7 @@ export const messagesEn = {
   'settings.fiscalization.classification.headline': 'Unclassified: {unclassified} of {total} items',
   'settings.fiscalization.classification.empty': 'Everything is classified.',
   'settings.fiscalization.classification.notAnEditor':
-    'Per-item classification happens in the product editor. This is a coverage report, not an editor.',
+    'A single dish’s full classification (unit, fiscal name, marking) is edited in the product editor. This tab reports coverage and fills in ИКПУ and package codes in bulk.',
   'settings.fiscalization.classification.field.type': 'Type',
   'settings.fiscalization.classification.field.name': 'Name',
   'settings.fiscalization.classification.field.category': 'Category',
@@ -1449,6 +1455,34 @@ export const messagesEn = {
   'settings.fiscalization.classification.deliveryFee.markingRequired': 'Requires marking',
   'settings.fiscalization.classification.deliveryFee.submit': 'Save',
   'settings.fiscalization.classification.deliveryFee.submitting': 'Saving…',
+  'settings.fiscalization.backfill.title': 'Fill in ИКПУ and package codes',
+  'settings.fiscalization.backfill.lead':
+    '{count} dishes still lack an ИКПУ or a package code. Type each code, or copy a column from a spreadsheet and paste it into the first cell to fill down.',
+  'settings.fiscalization.backfill.referenceNote':
+    'The official ИКПУ list is not imported yet, so a code is checked by format only (17 digits) and cannot be looked up by name. Unit code and fiscal name are set in the catalog’s fiscal workbench.',
+  'settings.fiscalization.backfill.empty': 'Every dish has an ИКПУ and a package code.',
+  'settings.fiscalization.backfill.column.mxik': 'ИКПУ (17 digits)',
+  'settings.fiscalization.backfill.column.packageCode': 'Package code',
+  'settings.fiscalization.backfill.copyDefault': 'Copy category default',
+  'settings.fiscalization.backfill.copyDefault.title':
+    'Fill the empty cells with what {agreeing} of {sample} classified dishes in “{category}” use: {mxik}, package {package}',
+  'settings.fiscalization.backfill.copyDefault.unavailable':
+    'Nothing to copy: the category has no classified dish, or the cells already hold other codes.',
+  'settings.fiscalization.backfill.copyAll': 'Copy category defaults into empty cells ({count})',
+  'settings.fiscalization.backfill.dirty': '{count} unsaved rows',
+  'settings.fiscalization.backfill.discard': 'Discard',
+  'settings.fiscalization.backfill.save': 'Save {count} rows',
+  'settings.fiscalization.backfill.saving': 'Saving…',
+  'settings.fiscalization.backfill.error.mxik': 'An ИКПУ is exactly 17 digits.',
+  'settings.fiscalization.backfill.error.packageCode': 'A package code is digits only, up to 10.',
+  'settings.fiscalization.backfill.error.clear':
+    'A code cannot be cleared here; change it in the product editor.',
+  'settings.fiscalization.backfill.invalidSkipped':
+    '{count} rows have a code in the wrong format and were not sent. Fix the highlighted cells.',
+  'settings.fiscalization.backfill.summary':
+    'Saved {saved}, already set {unchanged}, not saved {failed}.',
+  'settings.fiscalization.backfill.status.notFound': 'This dish no longer exists.',
+  'settings.fiscalization.backfill.status.failed': 'Not saved. Try again.',
 
   // 10.9 Notifications
   'settings.notifications.title': 'Notifications',

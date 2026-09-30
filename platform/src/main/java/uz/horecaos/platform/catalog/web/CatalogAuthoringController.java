@@ -550,14 +550,38 @@ public class CatalogAuthoringController {
                     + "q-data-grid column across hundreds of rows in one call, rather than one "
                     + "variant at a time through the single-node classification endpoints. "
                     + "Idempotent, and one bad node id does not fail the rest of the batch — every "
-                    + "item gets its own outcome.")
+                    + "item gets its own outcome (CLASSIFIED, SKIPPED_EMPTY, NOT_FOUND, or UNCHANGED "
+                    + "for a merge that would change nothing). mode REPLACE (the default) makes each "
+                    + "item the node's whole classification; mode MERGE fills only what the item "
+                    + "supplies and keeps what the node already holds, which is what a backfill of "
+                    + "half-classified nodes needs — an item sent in MERGE mode may carry only "
+                    + "mxikCode, packageCode, fiscalUnitCode, fiscalName and barcode. The ИКПУ's "
+                    + "shape is not checked here (ADR 0038: it belongs to the official list); a "
+                    + "console may check it before it sends. One audit fact covers the batch.")
     public ResponseEntity<BulkClassifyResponse> bulkClassify(
             @PathVariable UUID tenantId, @PathVariable UUID brandId, @Valid @RequestBody BulkClassifyRequest request) {
+        CatalogAuthoringService.BulkClassifyMode mode =
+                request.mode() == null ? CatalogAuthoringService.BulkClassifyMode.REPLACE : request.mode();
+        if (mode == CatalogAuthoringService.BulkClassifyMode.MERGE) {
+            // A merge writes the fields an item supplies and never the constraints, so an
+            // item that sets one would be silently ignored -- refuse it instead, whole,
+            // before anything is written.
+            request.items().stream()
+                    .filter(item -> item.fiscal() != null && item.fiscal().setsAConstraint())
+                    .findFirst()
+                    .ifPresent(item -> {
+                        throw new ApiException(
+                                ErrorCode.VALIDATION_FAILED,
+                                "A MERGE batch fills mxikCode, packageCode, fiscalUnitCode, fiscalName and "
+                                        + "barcode only; marking, excise, alcohol and age restriction change through "
+                                        + "the node's own classification");
+                    });
+        }
         List<CatalogAuthoringService.BulkClassifyItem> items = request.items().stream()
                 .map(item -> new CatalogAuthoringService.BulkClassifyItem(item.node(), item.classification()))
                 .toList();
-        List<CatalogAuthoringService.BulkClassifyOutcome> outcomes =
-                authoring.bulkClassify(tenantId, brandId, items, actorId());
+        List<CatalogAuthoringService.BulkClassifyOutcome> outcomes = authoring.bulkClassify(
+                tenantId, brandId, items, mode, actorId(), currentActor.get().subject());
         return ResponseEntity.ok(new BulkClassifyResponse(
                 outcomes.stream().map(BulkClassifyOutcomeResponse::of).toList()));
     }
@@ -976,11 +1000,29 @@ public class CatalogAuthoringController {
             @Positive @Nullable Integer fiscalUnitCode,
             @Size(max = 63) @Nullable String fiscalName,
             @Size(max = 13) @Nullable String barcode,
-            boolean markingRequired,
+            @Nullable Boolean markingRequired,
             FiscalClassification.@Nullable MarkingScheme markingScheme,
-            boolean excisable,
+            @Nullable Boolean excisable,
             @PositiveOrZero @Max(10_000) @Nullable Integer alcoholByVolumeBp,
             @Positive @Max(120) @Nullable Integer ageRestrictionYears) {
+
+        /** Whether the request touches marking, excise, alcohol or age restriction. */
+        boolean setsAConstraint() {
+            return marking()
+                    || markingScheme != null
+                    || Boolean.TRUE.equals(excisable)
+                    || alcoholByVolumeBp != null
+                    || ageRestrictionYears != null;
+        }
+
+        /**
+         * Boxed on the wire because Jackson 3 refuses a body that omits a
+         * primitive, and a batch that only fills ИКПУ and package code has no
+         * reason to spell out {@code "markingRequired": false} on every row.
+         */
+        private boolean marking() {
+            return Boolean.TRUE.equals(markingRequired);
+        }
 
         FiscalClassification toClassification() {
             // A marking scheme is implied by the requirement rather than demanded
@@ -988,7 +1030,7 @@ public class CatalogAuthoringController {
             // that must carry both is a request that can carry a contradiction.
             FiscalClassification.MarkingScheme scheme = markingScheme != null
                     ? markingScheme
-                    : (markingRequired
+                    : (marking()
                             ? FiscalClassification.MarkingScheme.DATA_MATRIX
                             : FiscalClassification.MarkingScheme.NONE);
             return new FiscalClassification(
@@ -997,9 +1039,9 @@ public class CatalogAuthoringController {
                     fiscalUnitCode,
                     fiscalName,
                     barcode,
-                    markingRequired,
+                    marking(),
                     scheme,
-                    excisable,
+                    Boolean.TRUE.equals(excisable),
                     alcoholByVolumeBp,
                     ageRestrictionYears);
         }
@@ -1091,8 +1133,15 @@ public class CatalogAuthoringController {
     /** How many {@code location_offerings} rows a stop-in-all-branches call changed. */
     public record StopInAllBranchesResponse(int locationsChanged) {}
 
-    /** A {@link CatalogAuthoringController#bulkClassify} batch. */
-    public record BulkClassifyRequest(@NotEmpty @Valid List<BulkClassifyItemRequest> items) {}
+    /**
+     * A {@link CatalogAuthoringController#bulkClassify} batch.
+     *
+     * @param mode absent means {@code REPLACE}, what the endpoint did before the
+     *             field existed, so a client written against that keeps its meaning
+     */
+    public record BulkClassifyRequest(
+            @NotEmpty @Valid List<BulkClassifyItemRequest> items,
+            CatalogAuthoringService.@Nullable BulkClassifyMode mode) {}
 
     /**
      * One item of a bulk classify batch: a target node and what to set it to.

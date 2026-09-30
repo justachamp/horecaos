@@ -102,6 +102,28 @@ export interface FiscalCoverageNode {
   readonly name: string | null;
   readonly categoryName: string | null;
   readonly locationCount: number;
+  /** The variant's category (batch 16); absent for a modifier option, the fee, and an older server. */
+  readonly categoryId?: string | null;
+  /** What the node already holds for its ИКПУ (batch 16); an unclassified node may hold some fields. */
+  readonly mxikCode?: string | null;
+  /** What the node already holds for its package code (batch 16). */
+  readonly packageCode?: string | null;
+}
+
+/**
+ * Mirrors `CatalogQueryController.CategoryDefaultResponse`: the pair of codes
+ * most of a category's classified dishes carry together. Derived, not stored —
+ * there is no «category default» setting to edit.
+ */
+export interface FiscalCategoryDefault {
+  readonly categoryId: string;
+  readonly categoryName: string | null;
+  readonly mxikCode: string;
+  readonly packageCode: string;
+  /** How many of the category's classified dishes carry exactly this pair. */
+  readonly agreeingCount: number;
+  /** How many classified dishes the category has. */
+  readonly sampleSize: number;
 }
 
 /** Mirrors `CatalogQueryController.FiscalCoverageResponse`. */
@@ -109,6 +131,38 @@ export interface FiscalCoverageSummary {
   readonly totalNodes: number;
   readonly unclassifiedCount: number;
   readonly nodes: readonly FiscalCoverageNode[];
+  /** Absent on an older server, which then offers no «copy category default». */
+  readonly categoryDefaults?: readonly FiscalCategoryDefault[];
+}
+
+/** One row of a backfill batch: the variant, and only the codes to write. */
+export interface FiscalBackfillItem {
+  readonly nodeId: string;
+  readonly mxikCode?: string;
+  readonly packageCode?: string;
+}
+
+/** Mirrors `CatalogAuthoringService.BulkClassifyStatus`. */
+export type FiscalBackfillStatus = 'CLASSIFIED' | 'UNCHANGED' | 'SKIPPED_EMPTY' | 'NOT_FOUND';
+
+/** Mirrors `CatalogAuthoringController.BulkClassifyOutcomeResponse`. */
+export interface FiscalBackfillOutcome {
+  readonly nodeType: 'VARIANT' | 'MODIFIER_OPTION' | 'FEE';
+  readonly nodeId: string;
+  readonly status: FiscalBackfillStatus;
+}
+
+interface BulkClassifyRequest {
+  readonly mode: 'MERGE';
+  readonly items: readonly {
+    readonly nodeType: 'VARIANT';
+    readonly nodeId: string;
+    readonly fiscal: { readonly mxikCode?: string; readonly packageCode?: string };
+  }[];
+}
+
+interface BulkClassifyResponse {
+  readonly outcomes: readonly FiscalBackfillOutcome[];
 }
 
 /**
@@ -355,6 +409,38 @@ export class FiscalizationApi {
         nodes: [],
       }
     );
+  }
+
+  /**
+   * Writes ИКПУ and package codes for a batch of variants through
+   * `CatalogAuthoringController.bulkClassify` in `MERGE` mode (gap map row
+   * 10.7c): a code a row supplies replaces the stored one and a code it omits
+   * keeps the stored one, so completing a half-classified dish cannot blank
+   * the unit or fiscal name someone entered earlier. One outcome per row, in
+   * the order sent; a bad row does not fail the others. The caller batches —
+   * one call is one intent, and one `Idempotency-Key`.
+   */
+  async backfillCodes(
+    scope: LocationScope,
+    items: readonly FiscalBackfillItem[],
+  ): Promise<readonly FiscalBackfillOutcome[]> {
+    const result = await firstValueFrom(
+      this.api.put<BulkClassifyRequest, BulkClassifyResponse>(
+        settingsPaths.catalogBulkFiscalClassification(scope),
+        command({
+          mode: 'MERGE',
+          items: items.map((item) => ({
+            nodeType: 'VARIANT' as const,
+            nodeId: item.nodeId,
+            fiscal: {
+              ...(item.mxikCode ? { mxikCode: item.mxikCode } : {}),
+              ...(item.packageCode ? { packageCode: item.packageCode } : {}),
+            },
+          })),
+        }),
+      ),
+    );
+    return result.outcomes;
   }
 
   /**

@@ -5,8 +5,10 @@ import { CurrentLocation } from '../../../core/auth/current-location';
 import { I18n } from '../../../core/i18n/i18n';
 import { TPipe } from '../../../core/i18n/t.pipe';
 import { describeApiError } from '../../orders/order-errors';
+import { FiscalBackfillEditor, isMissingCodes } from './fiscal-backfill-editor';
 import {
   ClassifyDeliveryFeeRequest,
+  FiscalCoverageNode,
   FiscalCoverageSummary,
   FiscalizationApi,
   FiscalTerminalHealth,
@@ -43,12 +45,14 @@ const TERMINAL_KINDS: readonly FiscalTerminalKind[] = [
  * this wave builds in place of P21's not-yet-merged fiscal workbench: a
  * per-brand unclassified count and node list, plus the one write this screen
  * keeps for itself — the delivery fee's own ИКПУ and marking control, "the
- * one people forget" — everything else stays the product editor's (10.7's
- * own text: "not an editor").
+ * one people forget". Batch 16 adds the bulk backfill of ИКПУ and package
+ * codes for dishes (`FiscalBackfillEditor`); everything else about a single
+ * dish's classification stays the product editor's (10.7's own text: "not an
+ * editor").
  */
 @Component({
   selector: 'q-fiscalization-page',
-  imports: [TPipe],
+  imports: [TPipe, FiscalBackfillEditor],
   templateUrl: './fiscalization-page.html',
   styleUrl: './fiscalization-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -472,6 +476,29 @@ export class FiscalizationPage {
         return this.i18n.t('settings.fiscalization.classification.nodeType.MODIFIER_OPTION');
       case 'FEE':
         return this.i18n.t('settings.fiscalization.classification.nodeType.FEE');
+    }
+  }
+
+  /**
+   * What the read-only list still shows: every unclassified node except the
+   * dishes the backfill editor above it is already listing, so no dish appears
+   * twice. A dish that has both codes but still lacks a unit code or a fiscal
+   * name stays here, because the editor cannot fix that.
+   */
+  protected listedNodes(nodes: readonly FiscalCoverageNode[]): readonly FiscalCoverageNode[] {
+    return nodes.filter((node) => !isMissingCodes(node));
+  }
+
+  /** The backfill applied at least one row: reload, so the headline and both lists follow it. */
+  protected async onBackfillSaved(): Promise<void> {
+    const scope = this.location.scope();
+    if (!scope) {
+      return;
+    }
+    try {
+      await this.reloadCoverage(scope);
+    } catch (error) {
+      this.coverageError.set(this.describe(error));
     }
   }
 

@@ -420,6 +420,15 @@ export const settingsPaths = {
     return `${CONTROL_PLANE}/tenants/${enc(scope.tenantId)}/brands/${enc(scope.brandId)}/catalog/fiscal-coverage`;
   },
 
+  /**
+   * `CatalogAuthoringController.bulkClassify` — control-plane surface,
+   * pre-existing (the catalog's fiscal workbench already writes through it).
+   * Tab 3's ИКПУ / package-code backfill sends it in `MERGE` mode.
+   */
+  catalogBulkFiscalClassification(scope: LocationScope): string {
+    return `${CONTROL_PLANE}/tenants/${enc(scope.tenantId)}/brands/${enc(scope.brandId)}/catalog/fiscal-classifications/bulk`;
+  },
+
   /** `CatalogAuthoringController.classifyFee` — control-plane surface, pre-existing. */
   catalogFeeFiscalClassification(scope: LocationScope, feeCode: string): string {
     return `${CONTROL_PLANE}/tenants/${enc(scope.tenantId)}/brands/${enc(scope.brandId)}/catalog/fees/${enc(feeCode)}/fiscal-classification`;

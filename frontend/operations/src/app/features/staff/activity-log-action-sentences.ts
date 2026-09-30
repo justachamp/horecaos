@@ -180,6 +180,11 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       ru: 'Каталог комментарий шаблон обновлено',
       'uz-Latn': 'Katalog izoh shablon yangilandi',
     },
+    'catalog.fiscalClassification.bulkSet': {
+      en: 'Fiscal classifications set in bulk',
+      ru: 'Фискальная классификация заполнена массово',
+      'uz-Latn': 'Fiskal tasnif ommaviy oʻrnatildi',
+    },
     'catalog.itemSaleSchedule.replaced': {
       en: 'Catalog item sale schedule replaced',
       ru: 'Каталог позиция продажа расписание заменено',

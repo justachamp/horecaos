@@ -928,11 +928,61 @@ public class CatalogAuthoringService {
      * BulkClassifyStatus#NOT_FOUND} and every other item is still applied,
      * the same "N independent outcomes, never one all-or-nothing" contract
      * {@code POST .../orders/bulk-actions} already uses.
+     *
+     * <p>{@link BulkClassifyMode#REPLACE}, what this overload has always done.
      */
     @Transactional
     public List<BulkClassifyOutcome> bulkClassify(
             UUID tenantId, UUID brandId, List<BulkClassifyItem> items, @Nullable UUID actorId) {
+        return bulkClassify(
+                tenantId,
+                brandId,
+                items,
+                BulkClassifyMode.REPLACE,
+                actorId,
+                actorId == null ? "unknown" : actorId.toString());
+    }
+
+    /**
+     * {@link #bulkClassify(UUID, UUID, List, UUID)} with a choice of how an item
+     * meets what the node already holds (gap map row {@code 10.7c}).
+     *
+     * <p>{@link BulkClassifyMode#MERGE} is what a backfill needs. A node that has
+     * a classification but not a complete one — an ИКПУ and no package code, a
+     * unit and a fiscal name and neither code — is exactly what a backfill
+     * finds, and {@link BulkClassifyMode#REPLACE} would write the item over the
+     * whole row: filling in the package code would blank the unit and the fiscal
+     * name someone entered earlier. Under MERGE a field the item supplies
+     * replaces the stored one and a field it omits keeps the stored one, and the
+     * constraints on marking, excise and age restriction are never touched (the
+     * controller refuses an item that sets them). An item that would leave the
+     * row as it is reports {@link BulkClassifyStatus#UNCHANGED} and writes
+     * nothing, so a re-run of a half-finished paste is quiet.
+     *
+     * <p>Audited as one fact for the whole batch — what each node held before
+     * and after, keyed by node — because the fiscal fields are what a receipt is
+     * built from and a bulk write is how a wrong code reaches four hundred of
+     * them. Nothing is recorded when no node changed.
+     *
+     * @param actorId      the row's {@code classified_by}, absent when the caller's
+     *                     subject is not a UUID
+     * @param actorSubject who the audit fact names
+     */
+    @Transactional
+    public List<BulkClassifyOutcome> bulkClassify(
+            UUID tenantId,
+            UUID brandId,
+            List<BulkClassifyItem> items,
+            BulkClassifyMode mode,
+            @Nullable UUID actorId,
+            String actorSubject) {
+        // One read of the brand's classifications rather than one per item; kept
+        // current as the batch is applied, so a node named twice in one batch is
+        // merged in sequence the way two calls would be.
+        Map<UUID, FiscalClassification> stored = new HashMap<>(store.classificationsForBrand(tenantId, brandId));
         List<BulkClassifyOutcome> outcomes = new ArrayList<>(items.size());
+        Map<String, Object> beforeDoc = new LinkedHashMap<>();
+        Map<String, Object> afterDoc = new LinkedHashMap<>();
         for (BulkClassifyItem item : items) {
             if (!store.priceableNodeExistsInBrand(tenantId, brandId, item.node())) {
                 outcomes.add(new BulkClassifyOutcome(item.node(), BulkClassifyStatus.NOT_FOUND));
@@ -943,15 +993,82 @@ public class CatalogAuthoringService {
                 outcomes.add(new BulkClassifyOutcome(item.node(), BulkClassifyStatus.SKIPPED_EMPTY));
                 continue;
             }
-            classify(tenantId, brandId, item.node(), fiscal, actorId);
+            FiscalClassification before = stored.getOrDefault(item.node().id(), FiscalClassification.unclassified());
+            FiscalClassification after = mode == BulkClassifyMode.MERGE ? mergedOver(before, fiscal) : fiscal;
+            if (mode == BulkClassifyMode.MERGE && after.equals(before)) {
+                outcomes.add(new BulkClassifyOutcome(item.node(), BulkClassifyStatus.UNCHANGED));
+                continue;
+            }
+            classify(tenantId, brandId, item.node(), after, actorId);
+            stored.put(item.node().id(), after);
+            String key = item.node().id().toString();
+            beforeDoc.putIfAbsent(key, fiscalSummary(before));
+            afterDoc.put(key, fiscalSummary(after));
             outcomes.add(new BulkClassifyOutcome(item.node(), BulkClassifyStatus.CLASSIFIED));
         }
+        if (!afterDoc.isEmpty()) {
+            audit.record(AuditFact.of("catalog.fiscalClassification.bulkSet", AuditClass.BUSINESS)
+                    .by(ActorRef.user(actorSubject, null))
+                    .at(ResourceScope.brand(tenantId, brandId))
+                    .target("Brand", brandId)
+                    .because("Bulk-classified %d priceable nodes (%s)".formatted(afterDoc.size(), mode))
+                    .usingCapability(Capability.CATALOG_AUTHOR.code())
+                    .changed(ChangeDocuments.diff(beforeDoc, afterDoc))
+                    .correlatedBy(brandId.toString())
+                    .occurredAt(clock.instant())
+                    .build());
+        }
         return outcomes;
+    }
+
+    /**
+     * {@code incoming} laid over {@code stored}: each of the five value fields
+     * the merge mode writes takes the incoming value where there is one and the
+     * stored one where there is not, and everything else — marking, excise,
+     * alcohol, age — stays as stored. Kept here rather than on {@link
+     * FiscalClassification} because {@link FiscalClassification#orInherited}
+     * already means «take the stricter of two constraints», which is the
+     * opposite of what an operator's edit means.
+     */
+    private static FiscalClassification mergedOver(FiscalClassification stored, FiscalClassification incoming) {
+        return new FiscalClassification(
+                incoming.mxikCode() != null ? incoming.mxikCode() : stored.mxikCode(),
+                incoming.packageCode() != null ? incoming.packageCode() : stored.packageCode(),
+                incoming.fiscalUnitCode() != null ? incoming.fiscalUnitCode() : stored.fiscalUnitCode(),
+                incoming.fiscalName() != null ? incoming.fiscalName() : stored.fiscalName(),
+                incoming.barcode() != null ? incoming.barcode() : stored.barcode(),
+                stored.markingRequired(),
+                stored.markingScheme(),
+                stored.excisable(),
+                stored.alcoholByVolumeBasisPoints(),
+                stored.ageRestrictionYears());
+    }
+
+    /**
+     * The four required fields as an audit value: enough to say what a receipt
+     * line was built from before and after, and nothing an operator did not
+     * type into a fiscal classification (ADR 0029: no personal data here).
+     */
+    private static Map<String, Object> fiscalSummary(FiscalClassification fiscal) {
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("mxikCode", fiscal.mxikCode());
+        summary.put("packageCode", fiscal.packageCode());
+        summary.put("fiscalUnitCode", fiscal.fiscalUnitCode());
+        summary.put("fiscalName", fiscal.fiscalName());
+        return summary;
     }
 
     /** One item of a {@link #bulkClassify} batch: a target node and what to set it to. */
     public record BulkClassifyItem(
             PriceableNode node, @Nullable FiscalClassification fiscal) {}
+
+    /** How a batch item meets what its node already holds. */
+    public enum BulkClassifyMode {
+        /** The item becomes the node's whole classification. What the endpoint did before this enum. */
+        REPLACE,
+        /** A field the item supplies replaces the stored one; a field it omits keeps the stored one. */
+        MERGE
+    }
 
     /** One node's outcome within a {@link #bulkClassify} batch. */
     public enum BulkClassifyStatus {
@@ -959,7 +1076,9 @@ public class CatalogAuthoringService {
         /** The classification carried no fields at all — nothing was written. */
         SKIPPED_EMPTY,
         /** The node id does not belong to this brand, or does not exist. */
-        NOT_FOUND
+        NOT_FOUND,
+        /** A merge that would have left the node as it already is — nothing was written. */
+        UNCHANGED
     }
 
     public record BulkClassifyOutcome(PriceableNode node, BulkClassifyStatus status) {}

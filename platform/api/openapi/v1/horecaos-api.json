@@ -3401,6 +3401,10 @@
             },
             "minItems" : 1,
             "type" : "array"
+          },
+          "mode" : {
+            "enum" : [ "REPLACE", "MERGE" ],
+            "type" : "string"
           }
         },
         "required" : [ "items" ],
@@ -4342,6 +4346,32 @@
           },
           "status" : {
             "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "CategoryDefaultResponse" : {
+        "properties" : {
+          "agreeingCount" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "categoryId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "categoryName" : {
+            "type" : "string"
+          },
+          "mxikCode" : {
+            "type" : "string"
+          },
+          "packageCode" : {
+            "type" : "string"
+          },
+          "sampleSize" : {
+            "format" : "int32",
+            "type" : "integer"
           }
         },
         "type" : "object"
@@ -10591,6 +10621,18 @@
         },
         "type" : "object"
       },
+      "FindingSubject" : {
+        "properties" : {
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "type" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "FindingView" : {
         "properties" : {
           "code" : {
@@ -10732,12 +10774,19 @@
       },
       "FiscalCoverageNodeResponse" : {
         "properties" : {
+          "categoryId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
           "categoryName" : {
             "type" : "string"
           },
           "locationCount" : {
             "format" : "int32",
             "type" : "integer"
+          },
+          "mxikCode" : {
+            "type" : "string"
           },
           "name" : {
             "type" : "string"
@@ -10749,12 +10798,21 @@
           "nodeType" : {
             "enum" : [ "VARIANT", "MODIFIER_OPTION", "FEE" ],
             "type" : "string"
+          },
+          "packageCode" : {
+            "type" : "string"
           }
         },
         "type" : "object"
       },
       "FiscalCoverageResponse" : {
         "properties" : {
+          "categoryDefaults" : {
+            "items" : {
+              "$ref" : "#/components/schemas/CategoryDefaultResponse"
+            },
+            "type" : "array"
+          },
           "nodes" : {
             "items" : {
               "$ref" : "#/components/schemas/FiscalCoverageNodeResponse"
@@ -27161,6 +27219,9 @@
           },
           "stepKey" : {
             "type" : "string"
+          },
+          "subject" : {
+            "$ref" : "#/components/schemas/FindingSubject"
           }
         },
         "type" : "object"
@@ -31585,7 +31646,7 @@
     },
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/fiscal-classifications/bulk" : {
       "put" : {
-        "description" : "The fiscal workbench's bulk fill: ИКПУ and package code filled down a q-data-grid column across hundreds of rows in one call, rather than one variant at a time through the single-node classification endpoints. Idempotent, and one bad node id does not fail the rest of the batch — every item gets its own outcome.",
+        "description" : "The fiscal workbench's bulk fill: ИКПУ and package code filled down a q-data-grid column across hundreds of rows in one call, rather than one variant at a time through the single-node classification endpoints. Idempotent, and one bad node id does not fail the rest of the batch — every item gets its own outcome (CLASSIFIED, SKIPPED_EMPTY, NOT_FOUND, or UNCHANGED for a merge that would change nothing). mode REPLACE (the default) makes each item the node's whole classification; mode MERGE fills only what the item supplies and keeps what the node already holds, which is what a backfill of half-classified nodes needs — an item sent in MERGE mode may carry only mxikCode, packageCode, fiscalUnitCode, fiscalName and barcode. The ИКПУ's shape is not checked here (ADR 0038: it belongs to the official list); a console may check it before it sends. One audit fact covers the batch.",
         "operationId" : "bulkClassify",
         "parameters" : [ {
           "in" : "path",
@@ -31632,7 +31693,7 @@
     },
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/fiscal-coverage" : {
       "get" : {
-        "description" : "Settings 10.7 Tab 3, built locally by wave P34 in place of P21's not-yet-merged fiscal workbench. The unclassified list is ordered with the delivery fee first, then by offering breadth descending.",
+        "description" : "Settings 10.7 Tab 3, built locally by wave P34 in place of P21's not-yet-merged fiscal workbench. The unclassified list is ordered with the delivery fee first, then by offering breadth descending. Each node carries the ИКПУ and package code it already holds (a half-classified node is listed too), and categoryDefaults gives, per category, the pair its classified variants most often carry together — there is no stored category default; this is derived.",
         "operationId" : "fiscalCoverage",
         "parameters" : [ {
           "in" : "path",
@@ -38101,7 +38162,7 @@
     },
     "/api/v1/control-plane/tenants/{tenantId}/onboarding-runs/{runId}/validate" : {
       "post" : {
-        "description" : "Runs every read-only readiness check now, synchronously, against the tenant's current configuration rather than the run's persisted step status — so a tenant can see what activation would find before committing to a resume or an activate call. Nothing is written: a step's stored status only changes when the scheduler actually executes it. The activation smoke test is not included, because unlike every other check it is not a pure read. Checks that are not onboarding steps ride along: SMS template moderation, fiscal classification coverage, channel payment-method coverage and secret-rotation age. Each offending item is its own row; a row from an advisory check carries advisory=true and is left out of allPassed. Use a fresh Idempotency-Key to see a fresh answer — replaying one returns the same recorded outcome, as ADR 0031 requires for every effectful request, even one with no state of its own to replay.",
+        "description" : "Runs every read-only readiness check now, synchronously, against the tenant's current configuration rather than the run's persisted step status — so a tenant can see what activation would find before committing to a resume or an activate call. Nothing is written: a step's stored status only changes when the scheduler actually executes it. The activation smoke test is not included, because unlike every other check it is not a pure read. Checks that are not onboarding steps ride along: SMS template moderation, fiscal classification coverage, channel payment-method coverage, channel fulfilment-mode coverage, location service-binding coverage and secret-rotation age. Each offending item is its own row; a row that is about one location carries locationId, and one about another object (a sales channel) carries subject {type, id}, so a client can link to that item. A row from an advisory check carries advisory=true and is left out of allPassed. Use a fresh Idempotency-Key to see a fresh answer — replaying one returns the same recorded outcome, as ADR 0031 requires for every effectful request, even one with no state of its own to replay.",
         "operationId" : "validate",
         "parameters" : [ {
           "in" : "path",

@@ -182,30 +182,73 @@ public class CatalogQueryController {
             summary = "How much of this brand's menu still lacks ADR 0038 fiscal classification",
             description = "Settings 10.7 Tab 3, built locally by wave P34 in place of P21's "
                     + "not-yet-merged fiscal workbench. The unclassified list is ordered with the "
-                    + "delivery fee first, then by offering breadth descending.")
+                    + "delivery fee first, then by offering breadth descending. Each node carries the "
+                    + "ИКПУ and package code it already holds (a half-classified node is listed too), "
+                    + "and categoryDefaults gives, per category, the pair its classified variants most "
+                    + "often carry together — there is no stored category default; this is derived.")
     public FiscalCoverageResponse fiscalCoverage(@PathVariable UUID tenantId, @PathVariable UUID brandId) {
         return FiscalCoverageResponse.of(query.fiscalCoverage(tenantId, brandId));
     }
 
     public record FiscalCoverageResponse(
-            int totalNodes, int unclassifiedCount, List<FiscalCoverageNodeResponse> nodes) {
+            int totalNodes,
+            int unclassifiedCount,
+            List<FiscalCoverageNodeResponse> nodes,
+            List<CategoryDefaultResponse> categoryDefaults) {
         static FiscalCoverageResponse of(CatalogQueryService.FiscalCoverageSummary summary) {
             return new FiscalCoverageResponse(
                     summary.totalNodes(),
                     summary.unclassifiedCount(),
-                    summary.nodes().stream().map(FiscalCoverageNodeResponse::of).toList());
+                    summary.nodes().stream().map(FiscalCoverageNodeResponse::of).toList(),
+                    summary.categoryDefaults().stream()
+                            .map(CategoryDefaultResponse::of)
+                            .toList());
         }
     }
 
+    /**
+     * @param categoryId  the node's category, absent for a modifier option and the delivery fee
+     * @param mxikCode    what the node already holds for its ИКПУ, if anything
+     * @param packageCode what the node already holds for its package code, if anything
+     */
     public record FiscalCoverageNodeResponse(
             uz.horecaos.platform.catalog.domain.CatalogEntities.PriceableType nodeType,
             UUID nodeId,
             @Nullable String name,
             @Nullable String categoryName,
-            int locationCount) {
+            int locationCount,
+            @Nullable UUID categoryId,
+            @Nullable String mxikCode,
+            @Nullable String packageCode) {
         static FiscalCoverageNodeResponse of(CatalogQueryService.FiscalCoverageNode node) {
             return new FiscalCoverageNodeResponse(
-                    node.nodeType(), node.nodeId(), node.name(), node.categoryName(), node.locationCount());
+                    node.nodeType(),
+                    node.nodeId(),
+                    node.name(),
+                    node.categoryName(),
+                    node.locationCount(),
+                    node.categoryId(),
+                    node.mxikCode(),
+                    node.packageCode());
+        }
+    }
+
+    /** What most of a category's classified variants carry — the backfill editor's «copy from category default». */
+    public record CategoryDefaultResponse(
+            UUID categoryId,
+            @Nullable String categoryName,
+            String mxikCode,
+            String packageCode,
+            int agreeingCount,
+            int sampleSize) {
+        static CategoryDefaultResponse of(CatalogQueryService.CategoryDefault categoryDefault) {
+            return new CategoryDefaultResponse(
+                    categoryDefault.categoryId(),
+                    categoryDefault.categoryName(),
+                    categoryDefault.mxikCode(),
+                    categoryDefault.packageCode(),
+                    categoryDefault.agreeingCount(),
+                    categoryDefault.sampleSize());
         }
     }
 

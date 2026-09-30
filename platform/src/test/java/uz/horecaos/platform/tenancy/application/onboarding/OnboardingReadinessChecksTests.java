@@ -317,6 +317,280 @@ class OnboardingReadinessChecksTests {
         assertThat(channels().checkKey()).isEqualTo("CHANNEL_PAYMENT_COVERAGE_VALIDATE");
     }
 
+    @Test
+    void channelPaymentFindingNamesTheChannelAsItsSubjectSoTheConsoleCanOpenIt() {
+        UUID storefront = insertChannel(tenantId, "STOREFRONT", "ACTIVE");
+
+        List<StepResult.Finding> findings = findings(channels().check(tenantId));
+
+        assertThat(findings).singleElement().satisfies(finding -> {
+            assertThat(finding.subject()).isEqualTo(StepResult.FindingSubject.salesChannel(storefront));
+            assertThat(finding.subject())
+                    .extracting(StepResult.FindingSubject::type)
+                    .isEqualTo("SALES_CHANNEL");
+        });
+    }
+
+    // ------------------------------------------------- CHANNEL_FULFILLMENT_COVERAGE
+
+    @Test
+    void fulfilmentCoverageNamesAnActiveChannelWithNoEnabledMode() {
+        UUID storefront = insertChannel(tenantId, "STOREFRONT", "ACTIVE");
+
+        List<StepResult.Finding> findings = findings(fulfilment().check(tenantId));
+
+        assertThat(findings).singleElement().satisfies(finding -> {
+            assertThat(finding.errorCode()).isEqualTo("CHANNEL_NO_FULFILLMENT_MODE");
+            assertThat(finding.detail()).isEqualTo("Sales channel STOREFRONT has no enabled fulfilment mode");
+            assertThat(finding.locationId())
+                    .as("a channel is a route to market for the whole tenant, not one branch")
+                    .isNull();
+            assertThat(finding.subject())
+                    .as("the channel itself, so the console can open its setup")
+                    .isEqualTo(StepResult.FindingSubject.salesChannel(storefront));
+        });
+    }
+
+    @Test
+    void fulfilmentCoverageDoesNotCountADisabledMode() {
+        UUID storefront = insertChannel(tenantId, "STOREFRONT", "ACTIVE");
+        setChannelMode(storefront, "PICKUP", false);
+        serveChannelAt(storefront, locationId, "ACTIVE");
+        bindSchedule(locationId, "PICKUP");
+
+        List<StepResult.Finding> findings = findings(fulfilment().check(tenantId));
+
+        assertThat(findings)
+                .as("a mode registered on the channel but switched off offers nothing, however well it is bound")
+                .singleElement()
+                .satisfies(finding -> assertThat(finding.errorCode()).isEqualTo("CHANNEL_NO_FULFILLMENT_MODE"));
+    }
+
+    @Test
+    void fulfilmentCoveragePassesWhenAnEnabledModeHasAScheduleAtAnActiveLocationTheChannelServes() {
+        UUID storefront = insertChannel(tenantId, "STOREFRONT", "ACTIVE");
+        setChannelMode(storefront, "PICKUP", true);
+        serveChannelAt(storefront, locationId, "ACTIVE");
+        bindSchedule(locationId, "PICKUP");
+
+        assertThat(fulfilment().check(tenantId).outcome()).isEqualTo(StepResult.Outcome.COMPLETED);
+    }
+
+    @Test
+    void fulfilmentCoverageNamesAChannelWhoseEnabledModesAreBoundAtNoLocation() {
+        UUID storefront = insertChannel(tenantId, "STOREFRONT", "ACTIVE");
+        setChannelMode(storefront, "DELIVERY", true);
+        setChannelMode(storefront, "PICKUP", true);
+        // Switched on at the location, but the location has no schedule for either mode.
+        serveChannelAt(storefront, locationId, "ACTIVE");
+
+        List<StepResult.Finding> findings = findings(fulfilment().check(tenantId));
+
+        assertThat(findings).singleElement().satisfies(finding -> {
+            assertThat(finding.errorCode()).isEqualTo("CHANNEL_NO_SERVICEABLE_MODE");
+            assertThat(finding.detail()).contains("STOREFRONT", "none has a schedule bound");
+            assertThat(finding.subject()).isEqualTo(StepResult.FindingSubject.salesChannel(storefront));
+        });
+    }
+
+    @Test
+    void fulfilmentCoverageDoesNotAcceptAScheduleBoundForADifferentMode() {
+        UUID storefront = insertChannel(tenantId, "STOREFRONT", "ACTIVE");
+        setChannelMode(storefront, "DELIVERY", true);
+        serveChannelAt(storefront, locationId, "ACTIVE");
+        // The location has hours for dine-in only; the channel sells delivery.
+        bindSchedule(locationId, "DINE_IN");
+
+        assertThat(findings(fulfilment().check(tenantId)))
+                .singleElement()
+                .satisfies(finding -> assertThat(finding.errorCode()).isEqualTo("CHANNEL_NO_SERVICEABLE_MODE"));
+    }
+
+    @Test
+    void fulfilmentCoverageNamesAChannelServedAtNoLocationAtAll() {
+        UUID storefront = insertChannel(tenantId, "STOREFRONT", "ACTIVE");
+        setChannelMode(storefront, "PICKUP", true);
+        bindSchedule(locationId, "PICKUP");
+
+        assertThat(findings(fulfilment().check(tenantId)))
+                .as("a schedule at a location the channel is not switched on for reaches nobody on this channel")
+                .singleElement()
+                .satisfies(finding -> assertThat(finding.errorCode()).isEqualTo("CHANNEL_NO_SERVICEABLE_MODE"));
+    }
+
+    @Test
+    void fulfilmentCoverageIgnoresAnInactiveChannelLocationLinkAndALocationThatIsNotActive() {
+        UUID storefront = insertChannel(tenantId, "STOREFRONT", "ACTIVE");
+        setChannelMode(storefront, "PICKUP", true);
+        UUID paused = UUID.randomUUID();
+        insertLocation(tenantId, brandId, paused, "PAUSED1", "SUSPENDED");
+        bindSchedule(paused, "PICKUP");
+        serveChannelAt(storefront, paused, "ACTIVE");
+        serveChannelAt(storefront, locationId, "INACTIVE");
+        bindSchedule(locationId, "PICKUP");
+
+        assertThat(findings(fulfilment().check(tenantId)))
+                .as("the only bound location is suspended, and the active one is switched off for the channel")
+                .singleElement()
+                .satisfies(finding -> assertThat(finding.errorCode()).isEqualTo("CHANNEL_NO_SERVICEABLE_MODE"));
+    }
+
+    @Test
+    void fulfilmentCoverageNamesEveryOffendingChannelInCodeOrderAndSkipsCoveredAndInactiveOnes() {
+        insertChannel(tenantId, "STOREFRONT", "ACTIVE");
+        insertChannel(tenantId, "KIOSK", "ACTIVE");
+        UUID covered = insertChannel(tenantId, "POS", "ACTIVE");
+        setChannelMode(covered, "DINE_IN", true);
+        serveChannelAt(covered, locationId, "ACTIVE");
+        bindSchedule(locationId, "DINE_IN");
+        insertChannel(tenantId, "OLD_ONE", "ARCHIVED");
+
+        List<StepResult.Finding> findings = findings(fulfilment().check(tenantId));
+
+        assertThat(findings)
+                .extracting(StepResult.Finding::detail)
+                .containsExactly(
+                        "Sales channel KIOSK has no enabled fulfilment mode",
+                        "Sales channel STOREFRONT has no enabled fulfilment mode");
+    }
+
+    @Test
+    void fulfilmentCoverageNeverReadsAnotherTenantsChannels() {
+        UUID otherTenant = UUID.randomUUID();
+        insertTenant(otherTenant);
+        insertChannel(otherTenant, "THEIRS", "ACTIVE");
+
+        assertThat(fulfilment().check(tenantId).outcome()).isEqualTo(StepResult.Outcome.COMPLETED);
+    }
+
+    @Test
+    void fulfilmentCoverageIsBlockingBecauseAChannelServingNothingCannotFinishACart() {
+        assertThat(fulfilment().advisory()).isFalse();
+        assertThat(fulfilment().checkKey()).isEqualTo("CHANNEL_FULFILLMENT_COVERAGE_VALIDATE");
+    }
+
+    // ------------------------------------------------- LOCATION_SERVICE_BINDING_COVERAGE
+
+    @Test
+    void bindingCoverageNamesAnActiveLocationLackingAScheduleForAModeAChannelSellsThere() {
+        UUID storefront = insertChannel(tenantId, "STOREFRONT", "ACTIVE");
+        setChannelMode(storefront, "DELIVERY", true);
+        setChannelMode(storefront, "PICKUP", true);
+        serveChannelAt(storefront, locationId, "ACTIVE");
+        bindSchedule(locationId, "PICKUP");
+
+        List<StepResult.Finding> findings = findings(bindings().check(tenantId));
+
+        assertThat(findings).singleElement().satisfies(finding -> {
+            assertThat(finding.errorCode()).isEqualTo("LOCATION_NO_SERVICE_SCHEDULE");
+            assertThat(finding.detail()).isEqualTo("Location MAIN01 has no schedule bound for DELIVERY");
+            assertThat(finding.locationId())
+                    .as("location-scoped: the console opens the location where its hours are set")
+                    .isEqualTo(locationId);
+            assertThat(finding.subject()).isNull();
+        });
+    }
+
+    @Test
+    void bindingCoverageNamesEveryMissingModeOfALocationInOneRow() {
+        UUID storefront = insertChannel(tenantId, "STOREFRONT", "ACTIVE");
+        setChannelMode(storefront, "DELIVERY", true);
+        setChannelMode(storefront, "PICKUP", true);
+        setChannelMode(storefront, "DINE_IN", true);
+        serveChannelAt(storefront, locationId, "ACTIVE");
+        bindSchedule(locationId, "DINE_IN");
+
+        assertThat(findings(bindings().check(tenantId)))
+                .singleElement()
+                .satisfies(finding -> assertThat(finding.detail())
+                        .isEqualTo("Location MAIN01 has no schedule bound for DELIVERY, PICKUP"));
+    }
+
+    @Test
+    void bindingCoveragePassesOnceEveryModeTheLocationSellsHasASchedule() {
+        UUID storefront = insertChannel(tenantId, "STOREFRONT", "ACTIVE");
+        setChannelMode(storefront, "DELIVERY", true);
+        setChannelMode(storefront, "PICKUP", true);
+        serveChannelAt(storefront, locationId, "ACTIVE");
+        bindSchedule(locationId, "DELIVERY");
+        bindSchedule(locationId, "PICKUP");
+
+        assertThat(bindings().check(tenantId).outcome()).isEqualTo(StepResult.Outcome.COMPLETED);
+    }
+
+    @Test
+    void bindingCoverageDoesNotDemandAScheduleForAModeNothingSellsThere() {
+        UUID storefront = insertChannel(tenantId, "STOREFRONT", "ACTIVE");
+        setChannelMode(storefront, "PICKUP", true);
+        // Switched off, or reaching this location only through a channel that is off or inactive.
+        setChannelMode(storefront, "DELIVERY", false);
+        UUID retired = insertChannel(tenantId, "RETIRED_ONE", "INACTIVE");
+        setChannelMode(retired, "DINE_IN", true);
+        serveChannelAt(storefront, locationId, "ACTIVE");
+        serveChannelAt(retired, locationId, "ACTIVE");
+        UUID unserved = insertChannel(tenantId, "KIOSK", "ACTIVE");
+        setChannelMode(unserved, "DINE_IN", true);
+        serveChannelAt(unserved, locationId, "INACTIVE");
+        bindSchedule(locationId, "PICKUP");
+
+        assertThat(bindings().check(tenantId).outcome())
+                .as("only PICKUP is sold here and PICKUP has hours")
+                .isEqualTo(StepResult.Outcome.COMPLETED);
+    }
+
+    @Test
+    void bindingCoverageNamesAnActiveLocationNoChannelReachesAndWithNoScheduleAtAll() {
+        List<StepResult.Finding> findings = findings(bindings().check(tenantId));
+
+        assertThat(findings).singleElement().satisfies(finding -> {
+            assertThat(finding.errorCode()).isEqualTo("LOCATION_NO_SERVICE_SCHEDULE");
+            assertThat(finding.detail()).isEqualTo("Location MAIN01 has no service schedule bound");
+            assertThat(finding.locationId()).isEqualTo(locationId);
+        });
+    }
+
+    @Test
+    void bindingCoveragePassesALocationNoChannelReachesOnceItHasAnySchedule() {
+        bindSchedule(locationId, "DINE_IN");
+
+        assertThat(bindings().check(tenantId).outcome()).isEqualTo(StepResult.Outcome.COMPLETED);
+    }
+
+    @Test
+    void bindingCoverageNamesEveryOffendingLocationInCodeOrderAndSkipsOnesThatAreNotActive() {
+        UUID second = UUID.randomUUID();
+        insertLocation(tenantId, brandId, second, "AAA01", "ACTIVE");
+        UUID draft = UUID.randomUUID();
+        insertLocation(tenantId, brandId, draft, "DRAFT1", "DRAFT");
+        UUID archived = UUID.randomUUID();
+        insertLocation(tenantId, brandId, archived, "OLD01", "ARCHIVED");
+
+        List<StepResult.Finding> findings = findings(bindings().check(tenantId));
+
+        assertThat(findings)
+                .as("both active locations named in one pass, in a stable order; a draft or archived one is not open")
+                .extracting(StepResult.Finding::locationId)
+                .containsExactly(second, locationId);
+    }
+
+    @Test
+    void bindingCoverageNeverReadsAnotherTenantsLocations() {
+        bindSchedule(locationId, "PICKUP");
+        UUID otherTenant = UUID.randomUUID();
+        UUID otherBrand = UUID.randomUUID();
+        insertTenant(otherTenant);
+        insertBrand(otherTenant, otherBrand, "THEIRS", "ACTIVE");
+        insertLocation(otherTenant, otherBrand, UUID.randomUUID(), "THEIRS1", "ACTIVE");
+
+        assertThat(bindings().check(tenantId).outcome()).isEqualTo(StepResult.Outcome.COMPLETED);
+    }
+
+    @Test
+    void bindingCoverageIsBlockingBecauseALocationWithNoHoursIsClosedForThatMode() {
+        assertThat(bindings().advisory()).isFalse();
+        assertThat(bindings().checkKey()).isEqualTo("LOCATION_SERVICE_BINDING_COVERAGE_VALIDATE");
+    }
+
     // ------------------------------------------------- SECRET_ROTATION_AGE
 
     @Test
@@ -475,6 +749,14 @@ class OnboardingReadinessChecksTests {
         return new OnboardingReadinessChecks.ChannelPaymentCoverage(jdbc);
     }
 
+    private OnboardingReadinessChecks.ChannelFulfillmentCoverage fulfilment() {
+        return new OnboardingReadinessChecks.ChannelFulfillmentCoverage(jdbc);
+    }
+
+    private OnboardingReadinessChecks.LocationServiceBindingCoverage bindings() {
+        return new OnboardingReadinessChecks.LocationServiceBindingCoverage(jdbc);
+    }
+
     private OnboardingReadinessChecks.SecretRotationAge rotation(Duration period) {
         return new OnboardingReadinessChecks.SecretRotationAge(jdbc, CLOCK, period);
     }
@@ -518,15 +800,70 @@ class OnboardingReadinessChecksTests {
     }
 
     private void insertLocation(UUID owner, UUID ownerBrand, UUID id) {
+        insertLocation(owner, ownerBrand, id, "MAIN01", "ACTIVE");
+    }
+
+    private void insertLocation(UUID owner, UUID ownerBrand, UUID id, String code, String status) {
         jdbc.sql("""
                 INSERT INTO tenant.locations
                     (id, tenant_id, brand_id, code, slug, display_name, timezone, status, version)
-                VALUES (:id, :tenantId, :brandId, 'MAIN01', :slug, 'Main', 'Asia/Tashkent', 'ACTIVE', 0)
+                VALUES (:id, :tenantId, :brandId, :code, :slug, 'Main', 'Asia/Tashkent', :status, 0)
                 """)
                 .param("id", id)
                 .param("tenantId", owner)
                 .param("brandId", ownerBrand)
+                .param("code", code)
                 .param("slug", "l-" + id.toString().substring(0, 8))
+                .param("status", status)
+                .update();
+    }
+
+    private void setChannelMode(UUID channelId, String mode, boolean enabled) {
+        jdbc.sql("""
+                INSERT INTO tenant.channel_fulfillment_modes (tenant_id, channel_id, fulfillment_mode, enabled)
+                VALUES (:tenantId, :channelId, :mode, :enabled)
+                """)
+                .param("tenantId", tenantId)
+                .param("channelId", channelId)
+                .param("mode", mode)
+                .param("enabled", enabled)
+                .update();
+    }
+
+    private void serveChannelAt(UUID channelId, UUID atLocation, String status) {
+        jdbc.sql("""
+                INSERT INTO tenant.sales_channel_locations (tenant_id, channel_id, location_id, status)
+                VALUES (:tenantId, :channelId, :locationId, :status)
+                """)
+                .param("tenantId", tenantId)
+                .param("channelId", channelId)
+                .param("locationId", atLocation)
+                .param("status", status)
+                .update();
+    }
+
+    /** Binds a fresh schedule of the fixture brand to the location for one mode. */
+    private void bindSchedule(UUID atLocation, String mode) {
+        UUID scheduleId = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO tenant.service_schedules (id, tenant_id, brand_id, name)
+                VALUES (:id, :tenantId, :brandId, :name)
+                """)
+                .param("id", scheduleId)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("name", "Hours " + scheduleId)
+                .update();
+        jdbc.sql("""
+                INSERT INTO tenant.location_service_bindings
+                    (tenant_id, brand_id, location_id, fulfillment_mode, schedule_id)
+                VALUES (:tenantId, :brandId, :locationId, :mode, :scheduleId)
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("locationId", atLocation)
+                .param("mode", mode)
+                .param("scheduleId", scheduleId)
                 .update();
     }
 

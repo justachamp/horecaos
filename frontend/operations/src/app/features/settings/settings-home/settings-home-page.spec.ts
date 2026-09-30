@@ -481,6 +481,137 @@ describe('SettingsHomePage', () => {
     });
   });
 
+  describe('batch 16: fulfilment-mode and service-binding coverage, and per-item links', () => {
+    type Check = ValidationOutcome['checks'][number];
+
+    const NO_MODE: Check = {
+      stepKey: 'CHANNEL_FULFILLMENT_COVERAGE_VALIDATE',
+      passed: false,
+      errorCode: 'CHANNEL_NO_FULFILLMENT_MODE',
+      detail: 'Sales channel STOREFRONT has no enabled fulfilment mode',
+      locationId: null,
+      subject: { type: 'SALES_CHANNEL', id: 'channel-storefront' },
+    };
+    const NO_SERVICEABLE: Check = {
+      stepKey: 'CHANNEL_FULFILLMENT_COVERAGE_VALIDATE',
+      passed: false,
+      errorCode: 'CHANNEL_NO_SERVICEABLE_MODE',
+      detail:
+        'Sales channel KIOSK has enabled fulfilment modes, but none has a schedule bound at an active location the channel serves',
+      locationId: null,
+      subject: { type: 'SALES_CHANNEL', id: 'channel-kiosk' },
+    };
+    const NO_SCHEDULE: Check = {
+      stepKey: 'LOCATION_SERVICE_BINDING_COVERAGE_VALIDATE',
+      passed: false,
+      errorCode: 'LOCATION_NO_SERVICE_SCHEDULE',
+      detail: 'Location MAIN01 has no schedule bound for DELIVERY, PICKUP',
+      locationId: 'location-main',
+    };
+
+    function outcomeOf(...checks: Check[]): ValidationOutcome {
+      return { allPassed: false, checks };
+    }
+
+    function hrefs(fixture: ComponentFixture<SettingsHomePage>): (string | null)[] {
+      return [...fixture.nativeElement.querySelectorAll('.readiness__row a')].map(
+        (link: HTMLAnchorElement) => link.getAttribute('href'),
+      );
+    }
+
+    it('links a channel with no fulfilment mode to that channel’s own setup, not to the list', async () => {
+      const fixture = await render({ validate: () => Promise.resolve(outcomeOf(NO_MODE)) });
+
+      expect(hrefs(fixture)).toEqual(['/settings/channel-setup/channel-storefront']);
+      const row = fixture.nativeElement.querySelector('.readiness__row')?.textContent ?? '';
+      expect(row).toContain('no fulfilment mode enabled');
+      expect(row).toContain('STOREFRONT');
+    });
+
+    it('links a channel whose modes have no hours at any location to its own setup as well', async () => {
+      const fixture = await render({
+        validate: () => Promise.resolve(outcomeOf(NO_SERVICEABLE)),
+      });
+
+      expect(hrefs(fixture)).toEqual(['/settings/channel-setup/channel-kiosk']);
+      expect(fixture.nativeElement.querySelector('.readiness__row')?.textContent).toContain(
+        'none has opening hours bound',
+      );
+    });
+
+    it('sends each of two channels with the same sentence to its own setup', async () => {
+      const kiosk: Check = {
+        ...NO_MODE,
+        detail: 'Sales channel KIOSK has no enabled fulfilment mode',
+        subject: { type: 'SALES_CHANNEL', id: 'channel-kiosk' },
+      };
+      const fixture = await render({
+        validate: () => Promise.resolve(outcomeOf(NO_MODE, kiosk)),
+      });
+
+      expect(hrefs(fixture)).toEqual([
+        '/settings/channel-setup/channel-storefront',
+        '/settings/channel-setup/channel-kiosk',
+      ]);
+    });
+
+    it('also opens the channel of a no-payment-method finding when the server names it', async () => {
+      const fixture = await render({
+        validate: () =>
+          Promise.resolve(
+            outcomeOf({
+              stepKey: 'CHANNEL_PAYMENT_COVERAGE_VALIDATE',
+              passed: false,
+              errorCode: 'CHANNEL_NO_PAYMENT_METHOD',
+              detail: 'Sales channel STOREFRONT has no enabled payment method',
+              locationId: null,
+              subject: { type: 'SALES_CHANNEL', id: 'channel-storefront' },
+            }),
+          ),
+      });
+
+      expect(hrefs(fixture)).toEqual(['/settings/channel-setup/channel-storefront']);
+    });
+
+    it('keeps linking by error code when the server sends no subject (an older server)', async () => {
+      const { subject: _omitted, ...withoutSubject } = NO_MODE;
+      const fixture = await render({
+        validate: () => Promise.resolve(outcomeOf(withoutSubject)),
+      });
+
+      expect(hrefs(fixture)).toEqual(['/settings/sales-channels']);
+    });
+
+    it('does not guess a screen for a subject type it does not know', async () => {
+      const fixture = await render({
+        validate: () =>
+          Promise.resolve(
+            outcomeOf({ ...NO_MODE, subject: { type: 'FUTURE_THING', id: 'thing-1' } }),
+          ),
+      });
+
+      expect(hrefs(fixture)).toEqual(['/settings/sales-channels']);
+    });
+
+    it('links a location with no schedule bound into that location and names the missing modes', async () => {
+      const fixture = await render({ validate: () => Promise.resolve(outcomeOf(NO_SCHEDULE)) });
+
+      expect(hrefs(fixture)).toEqual(['/settings/locations/location-main']);
+      const row = fixture.nativeElement.querySelector('.readiness__row')?.textContent ?? '';
+      expect(row).toContain('no opening hours bound');
+      expect(row).toContain('DELIVERY, PICKUP');
+    });
+
+    it('counts both new checks as blocking rows, not advisory ones', async () => {
+      const fixture = await render({
+        validate: () => Promise.resolve(outcomeOf(NO_MODE, NO_SCHEDULE)),
+      });
+
+      expect(fixture.nativeElement.querySelectorAll('.readiness__row').length).toBe(2);
+      expect(fixture.nativeElement.querySelector('.readiness__advisory')).toBeNull();
+    });
+  });
+
   it('renders the denied state on a 403 from the readiness check', async () => {
     const fixture = await render({
       validate: () => Promise.reject(new ApiError('INSUFFICIENT_CAPABILITY', 403, null, null)),
