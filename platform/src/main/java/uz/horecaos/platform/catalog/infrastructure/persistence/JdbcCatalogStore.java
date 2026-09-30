@@ -2618,7 +2618,10 @@ public class JdbcCatalogStore {
                              WHERE lo.tenant_id = v.tenant_id AND lo.variant_id = v.id
                                AND lo.status = 'AVAILABLE') AS location_count,
                            (fc.id IS NULL OR fc.mxik_code IS NULL OR fc.package_code IS NULL
-                              OR fc.fiscal_unit_code IS NULL OR fc.fiscal_name IS NULL) AS unclassified
+                              OR fc.fiscal_unit_code IS NULL OR fc.fiscal_name IS NULL) AS unclassified,
+                           first_category.id AS category_id,
+                           fc.mxik_code AS mxik_code,
+                           fc.package_code AS package_code
                     FROM catalog.variants v
                     JOIN catalog.products p
                         ON p.id = v.product_id AND p.tenant_id = v.tenant_id AND p.brand_id = v.brand_id
@@ -2653,7 +2656,10 @@ public class JdbcCatalogStore {
                            CAST(NULL AS varchar) AS category_name,
                            0 AS location_count,
                            (fc.id IS NULL OR fc.mxik_code IS NULL OR fc.package_code IS NULL
-                              OR fc.fiscal_unit_code IS NULL OR fc.fiscal_name IS NULL) AS unclassified
+                              OR fc.fiscal_unit_code IS NULL OR fc.fiscal_name IS NULL) AS unclassified,
+                           CAST(NULL AS uuid) AS category_id,
+                           fc.mxik_code AS mxik_code,
+                           fc.package_code AS package_code
                     FROM catalog.modifier_options o
                     LEFT JOIN catalog.translations t
                         ON t.entity_type = 'MODIFIER_OPTION' AND t.entity_id = o.id AND t.tenant_id = o.tenant_id
@@ -2671,7 +2677,10 @@ public class JdbcCatalogStore {
                            CAST(NULL AS varchar) AS category_name,
                            0 AS location_count,
                            (fc.id IS NULL OR fc.mxik_code IS NULL OR fc.package_code IS NULL
-                              OR fc.fiscal_unit_code IS NULL OR fc.fiscal_name IS NULL) AS unclassified
+                              OR fc.fiscal_unit_code IS NULL OR fc.fiscal_name IS NULL) AS unclassified,
+                           CAST(NULL AS uuid) AS category_id,
+                           fc.mxik_code AS mxik_code,
+                           fc.package_code AS package_code
                     FROM catalog.fees f
                     LEFT JOIN catalog.fiscal_classifications fc
                         ON fc.priceable_type = 'FEE' AND fc.priceable_id = f.id AND fc.tenant_id = f.tenant_id
@@ -2691,7 +2700,10 @@ public class JdbcCatalogStore {
                         row.getString("name"),
                         row.getString("category_name"),
                         row.getInt("location_count"),
-                        row.getBoolean("unclassified")))
+                        row.getBoolean("unclassified"),
+                        row.getObject("category_id", UUID.class),
+                        row.getString("mxik_code"),
+                        row.getString("package_code")))
                 .list();
     }
 
@@ -2699,6 +2711,15 @@ public class JdbcCatalogStore {
      * One priceable node in the fiscal coverage report: what it is, what it is
      * called, where it sits, how many locations sell it, and whether ADR 0038's
      * four required fields are all present.
+     *
+     * @param categoryId  the category {@code categoryName} names (a variant's
+     *                    first category by sort order), or null for a node that
+     *                    sits in none — a modifier option, the delivery fee
+     * @param mxikCode    what the node's classification already holds for the
+     *                    ИКПУ, or null; carried so a backfill editor can show
+     *                    the half-filled rows it is completing and a write can
+     *                    leave alone what is already there
+     * @param packageCode the same for the package code
      */
     public record FiscalCoverageNodeRow(
             PriceableType nodeType,
@@ -2706,7 +2727,10 @@ public class JdbcCatalogStore {
             @Nullable String name,
             @Nullable String categoryName,
             int locationCount,
-            boolean unclassified) {}
+            boolean unclassified,
+            @Nullable UUID categoryId,
+            @Nullable String mxikCode,
+            @Nullable String packageCode) {}
 
     // --------------------------------------------------- row 4.2g: per-item sale schedule
 

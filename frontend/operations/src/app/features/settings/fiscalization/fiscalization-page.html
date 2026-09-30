@@ -671,44 +671,56 @@
         </div>
       }
 
-      <table class="table">
-        <thead>
-          <tr>
-            <th class="q-caption">{{ 'settings.fiscalization.classification.field.type' | t }}</th>
-            <th class="q-caption">{{ 'settings.fiscalization.classification.field.name' | t }}</th>
-            <th class="q-caption">
-              {{ 'settings.fiscalization.classification.field.category' | t }}
-            </th>
-            <th class="q-caption">
-              {{ 'settings.fiscalization.classification.field.locations' | t }}
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (node of summary.nodes; track node.nodeId) {
+      <q-fiscal-backfill-editor
+        [nodes]="summary.nodes"
+        [categoryDefaults]="summary.categoryDefaults ?? []"
+        (saved)="onBackfillSaved()"
+      />
+
+      @if (listedNodes(summary.nodes).length > 0 || summary.nodes.length === 0) {
+        <table class="table">
+          <thead>
             <tr>
-              <td class="q-body-sm">
-                {{ nodeTypeLabel(node.nodeType) }}
-              </td>
-              <td class="q-body-sm">
-                {{
-                  node.nodeType === 'FEE'
-                    ? ('settings.fiscalization.classification.deliveryFee.name' | t)
-                    : (node.name ?? '—')
-                }}
-              </td>
-              <td class="q-body-sm">{{ node.categoryName ?? '—' }}</td>
-              <td class="q-body-sm">{{ node.locationCount }}</td>
+              <th class="q-caption">
+                {{ 'settings.fiscalization.classification.field.type' | t }}
+              </th>
+              <th class="q-caption">
+                {{ 'settings.fiscalization.classification.field.name' | t }}
+              </th>
+              <th class="q-caption">
+                {{ 'settings.fiscalization.classification.field.category' | t }}
+              </th>
+              <th class="q-caption">
+                {{ 'settings.fiscalization.classification.field.locations' | t }}
+              </th>
             </tr>
-          } @empty {
-            <tr>
-              <td class="q-body-sm empty" colspan="4">
-                {{ 'settings.fiscalization.classification.empty' | t }}
-              </td>
-            </tr>
-          }
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            @for (node of listedNodes(summary.nodes); track node.nodeId) {
+              <tr>
+                <td class="q-body-sm">
+                  {{ nodeTypeLabel(node.nodeType) }}
+                </td>
+                <td class="q-body-sm">
+                  {{
+                    node.nodeType === 'FEE'
+                      ? ('settings.fiscalization.classification.deliveryFee.name' | t)
+                      : (node.name ?? '—')
+                  }}
+                </td>
+                <td class="q-body-sm">{{ node.categoryName ?? '—' }}</td>
+                <td class="q-body-sm">{{ node.locationCount }}</td>
+              </tr>
+            } @empty {
+              <tr>
+                <td class="q-body-sm empty" colspan="4">
+                  {{ 'settings.fiscalization.classification.empty' | t }}
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      }
 
       <p class="q-caption hint">{{ 'settings.fiscalization.classification.notAnEditor' | t }}</p>
     }

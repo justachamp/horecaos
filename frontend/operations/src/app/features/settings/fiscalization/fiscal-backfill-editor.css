@@ -1,0 +1,125 @@
+.backfill {
+  margin-top: 24px;
+}
+
+.backfill__note {
+  color: var(--q-ink-subtle);
+  max-width: 720px;
+  margin-top: 4px;
+}
+
+.backfill__empty {
+  color: var(--q-ink-subtle);
+}
+
+.backfill__toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 12px 0;
+  flex-wrap: wrap;
+}
+
+.backfill__spacer {
+  flex: 1;
+}
+
+.backfill__button {
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  cursor: pointer;
+}
+
+.backfill__button--primary {
+  border-color: var(--q-primary);
+  background: var(--q-primary);
+  color: var(--q-inverse-ink);
+}
+
+.backfill__button:disabled {
+  border-color: var(--q-hairline);
+  background: var(--q-surface-2);
+  color: var(--q-ink-subtle);
+  cursor: default;
+}
+
+.backfill__problem {
+  color: var(--q-error-text);
+  background: var(--q-error-tint);
+  padding: 8px 12px;
+  border-radius: var(--q-radius);
+  max-width: 720px;
+  margin: 8px 0;
+}
+
+.backfill__table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 8px;
+}
+
+.backfill__table thead th {
+  text-align: left;
+  color: var(--q-ink-muted);
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--q-hairline);
+}
+
+.backfill__table tbody td {
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--q-hairline);
+  vertical-align: top;
+}
+
+.backfill__num {
+  text-align: right;
+}
+
+.backfill__cell {
+  width: 100%;
+  min-width: 150px;
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--q-surface-2);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  box-sizing: border-box;
+  font-variant-numeric: tabular-nums;
+}
+
+.backfill__cell--dirty {
+  background: var(--q-warning-tint);
+}
+
+.backfill__cell--invalid {
+  border-color: var(--q-error-text);
+  background: var(--q-error-tint);
+}
+
+.backfill__error {
+  display: block;
+  color: var(--q-error-text);
+  margin-top: 2px;
+}
+
+.backfill__actions {
+  white-space: nowrap;
+}
+
+.backfill__link {
+  background: none;
+  border: none;
+  color: var(--q-primary);
+  cursor: pointer;
+  padding: 0;
+}
+
+.backfill__link:disabled {
+  color: var(--q-ink-subtle);
+  cursor: default;
+}

@@ -1058,6 +1058,7 @@ export interface BulkClassifyOutcomeResponse {
 
 export interface BulkClassifyRequest {
   items: Array<BulkClassifyItemRequest>;
+  mode?: "REPLACE" | "MERGE";
 }
 
 export interface BulkClassifyResponse {
@@ -1361,6 +1362,15 @@ export interface CatalogSummaryResponse {
   code?: string;
   name?: string;
   status?: string;
+}
+
+export interface CategoryDefaultResponse {
+  agreeingCount?: number;
+  categoryId?: string;
+  categoryName?: string;
+  mxikCode?: string;
+  packageCode?: string;
+  sampleSize?: number;
 }
 
 export interface CategorySummaryResponse {
@@ -3314,6 +3324,11 @@ export interface FeatureFlagView {
   tenants?: Array<TenantSetting>;
 }
 
+export interface FindingSubject {
+  id?: string;
+  type?: string;
+}
+
 export interface FindingView {
   code?: string;
   detail?: string;
@@ -3357,14 +3372,18 @@ export interface FiscalClassificationView {
 }
 
 export interface FiscalCoverageNodeResponse {
+  categoryId?: string;
   categoryName?: string;
   locationCount?: number;
+  mxikCode?: string;
   name?: string;
   nodeId?: string;
   nodeType?: "VARIANT" | "MODIFIER_OPTION" | "FEE";
+  packageCode?: string;
 }
 
 export interface FiscalCoverageResponse {
+  categoryDefaults?: Array<CategoryDefaultResponse>;
   nodes?: Array<FiscalCoverageNodeResponse>;
   totalNodes?: number;
   unclassifiedCount?: number;
@@ -8599,6 +8618,7 @@ export interface ValidationResult {
   locationId?: string;
   passed?: boolean;
   stepKey?: string;
+  subject?: FindingSubject;
 }
 
 export interface VariableCatalogueEntry {

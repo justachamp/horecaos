@@ -471,10 +471,73 @@ public class CatalogQueryService {
                                         .reversed())
                         .thenComparing(row -> row.name() == null ? "" : row.name()))
                 .map(row -> new FiscalCoverageNode(
-                        row.nodeType(), row.nodeId(), row.name(), row.categoryName(), row.locationCount()))
+                        row.nodeType(),
+                        row.nodeId(),
+                        row.name(),
+                        row.categoryName(),
+                        row.locationCount(),
+                        row.categoryId(),
+                        row.mxikCode(),
+                        row.packageCode()))
                 .toList();
-        return new FiscalCoverageSummary(rows.size(), unclassified.size(), unclassified);
+        return new FiscalCoverageSummary(rows.size(), unclassified.size(), unclassified, categoryDefaults(rows));
     }
+
+    /**
+     * What each category already agrees on (gap map row {@code 10.7c}: the
+     * backfill editor's «copy from category default»).
+     *
+     * <p>There is no stored «category default» and none is invented here: the
+     * default of a category is the ИКПУ and package code that most of its
+     * already-classified variants carry together. Only a variant with both
+     * codes votes, and a variant votes in its first category — the one the
+     * coverage list shows beside it — so the default an operator is offered for
+     * a row is the one drawn from the dishes that sit next to it on the menu.
+     * A tie goes to the lowest ИКПУ and then the lowest package code, so the
+     * answer does not move between two reads of the same data. A category with
+     * no classified variant has no default, and the editor offers nothing for
+     * its rows rather than a guess. The operator still reviews the copied cells
+     * and saves them: this suggests, it does not classify.
+     */
+    static List<CategoryDefault> categoryDefaults(List<JdbcCatalogStore.FiscalCoverageNodeRow> rows) {
+        Map<UUID, Map<CodePair, Integer>> votes = new LinkedHashMap<>();
+        Map<UUID, String> names = new HashMap<>();
+        for (JdbcCatalogStore.FiscalCoverageNodeRow row : rows) {
+            if (row.nodeType() != PriceableType.VARIANT
+                    || row.categoryId() == null
+                    || row.mxikCode() == null
+                    || row.packageCode() == null) {
+                continue;
+            }
+            votes.computeIfAbsent(row.categoryId(), id -> new HashMap<>())
+                    .merge(new CodePair(row.mxikCode(), row.packageCode()), 1, Integer::sum);
+            if (row.categoryName() != null) {
+                names.putIfAbsent(row.categoryId(), row.categoryName());
+            }
+        }
+        List<CategoryDefault> defaults = new ArrayList<>();
+        votes.forEach((categoryId, byPair) -> {
+            Map.Entry<CodePair, Integer> best = byPair.entrySet().stream()
+                    .min(Map.Entry.<CodePair, Integer>comparingByValue()
+                            .reversed()
+                            .thenComparing(entry -> entry.getKey().mxikCode())
+                            .thenComparing(entry -> entry.getKey().packageCode()))
+                    .orElseThrow();
+            defaults.add(new CategoryDefault(
+                    categoryId,
+                    names.get(categoryId),
+                    best.getKey().mxikCode(),
+                    best.getKey().packageCode(),
+                    best.getValue(),
+                    byPair.values().stream().mapToInt(Integer::intValue).sum()));
+        });
+        defaults.sort(
+                java.util.Comparator.comparing((CategoryDefault d) -> d.categoryName() == null ? "" : d.categoryName())
+                        .thenComparing(CategoryDefault::categoryId));
+        return List.copyOf(defaults);
+    }
+
+    private record CodePair(String mxikCode, String packageCode) {}
 
     public record CatalogSummary(UUID catalogId, String code, String name, String status) {}
 
@@ -590,14 +653,48 @@ public class CatalogQueryService {
             Map<String, LocalizedFields> translations,
             List<ModifierOptionView> options) {}
 
-    public record FiscalCoverageSummary(int totalNodes, int unclassifiedCount, List<FiscalCoverageNode> nodes) {}
+    /**
+     * @param categoryDefaults per category, the ИКПУ and package code its
+     *                         classified variants most often carry together —
+     *                         see {@link #categoryDefaults}
+     */
+    public record FiscalCoverageSummary(
+            int totalNodes,
+            int unclassifiedCount,
+            List<FiscalCoverageNode> nodes,
+            List<CategoryDefault> categoryDefaults) {}
 
+    /**
+     * @param categoryId  the category a variant sits in (its first), or null for
+     *                    a modifier option and the delivery fee
+     * @param mxikCode    what the node already holds for the ИКПУ, if anything —
+     *                    an unclassified node may hold some of the four fields
+     * @param packageCode the same for the package code
+     */
     public record FiscalCoverageNode(
             PriceableType nodeType,
             UUID nodeId,
             @Nullable String name,
             @Nullable String categoryName,
-            int locationCount) {}
+            int locationCount,
+            @Nullable UUID categoryId,
+            @Nullable String mxikCode,
+            @Nullable String packageCode) {}
+
+    /**
+     * @param agreeingCount how many of the category's classified variants carry
+     *                      exactly this pair
+     * @param sampleSize    how many classified variants the category has, so a
+     *                      default backed by one of one reads differently from
+     *                      one backed by nine of ten
+     */
+    public record CategoryDefault(
+            UUID categoryId,
+            @Nullable String categoryName,
+            String mxikCode,
+            String packageCode,
+            int agreeingCount,
+            int sampleSize) {}
 
     public record ModifierOptionView(
             UUID optionId,

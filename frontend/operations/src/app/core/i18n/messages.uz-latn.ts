@@ -1373,7 +1373,7 @@ export const messagesUzLatn: MessageCatalogue = {
     'Tasniflanmagan: {total} tadan {unclassified} tasi',
   'settings.fiscalization.classification.empty': 'Hammasi tasniflangan.',
   'settings.fiscalization.classification.notAnEditor':
-    'Har bir mahsulotni tasniflash mahsulot muharririda amalga oshiriladi. Bu qamrov hisoboti, muharrir emas.',
+    'Alohida taomning toʻliq tasnifi (oʻlchov birligi, fiskal nom, markirovka) mahsulot muharririda tahrirlanadi. Bu bandda qamrov koʻrsatiladi va IKPU hamda qadoq kodlari ommaviy toʻldiriladi.',
   'settings.fiscalization.classification.field.type': 'Turi',
   'settings.fiscalization.classification.field.name': 'Nomi',
   'settings.fiscalization.classification.field.category': 'Toifasi',
@@ -1389,6 +1389,35 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.fiscalization.classification.deliveryFee.markingRequired': 'Markirovka talab qilinadi',
   'settings.fiscalization.classification.deliveryFee.submit': 'Saqlash',
   'settings.fiscalization.classification.deliveryFee.submitting': 'Saqlanmoqda…',
+  'settings.fiscalization.backfill.title': 'IKPU va qadoq kodlarini toʻldirish',
+  'settings.fiscalization.backfill.lead':
+    '{count} ta taomda IKPU yoki qadoq kodi yetishmaydi. Kodlarni qoʻlda kiriting yoki jadvaldan ustunni nusxalab, birinchi katakka joylang — qiymatlar pastga qarab joylashadi.',
+  'settings.fiscalization.backfill.referenceNote':
+    'IKPUning rasmiy roʻyxati hali yuklanmagan, shuning uchun kod faqat formati boʻyicha tekshiriladi (17 raqam) va uni nomi boʻyicha qidirib boʻlmaydi. Oʻlchov birligi va fiskal nom katalogning fiskal ish stolida belgilanadi.',
+  'settings.fiscalization.backfill.empty': 'Barcha taomlarda IKPU va qadoq kodi bor.',
+  'settings.fiscalization.backfill.column.mxik': 'IKPU (17 raqam)',
+  'settings.fiscalization.backfill.column.packageCode': 'Qadoq kodi',
+  'settings.fiscalization.backfill.copyDefault': 'Toifadan olish',
+  'settings.fiscalization.backfill.copyDefault.title':
+    'Boʻsh kataklarni “{category}” toifasidagi {sample} ta tasniflangan taomdan {agreeing} tasi ishlatadigan qiymat bilan toʻldirish: {mxik}, qadoq {package}',
+  'settings.fiscalization.backfill.copyDefault.unavailable':
+    'Nusxalash uchun hech narsa yoʻq: toifada tasniflangan taom yoʻq yoki kataklarda boshqa kodlar bor.',
+  'settings.fiscalization.backfill.copyAll': 'Toifa kodlarini boʻsh kataklarga olish ({count})',
+  'settings.fiscalization.backfill.dirty': 'Saqlanmagan qatorlar: {count}',
+  'settings.fiscalization.backfill.discard': 'Bekor qilish',
+  'settings.fiscalization.backfill.save': 'Qatorlarni saqlash: {count}',
+  'settings.fiscalization.backfill.saving': 'Saqlanmoqda…',
+  'settings.fiscalization.backfill.error.mxik': 'IKPU roppa-rosa 17 raqamdan iborat.',
+  'settings.fiscalization.backfill.error.packageCode':
+    'Qadoq kodi faqat raqamlardan iborat, 10 tagacha.',
+  'settings.fiscalization.backfill.error.clear':
+    'Kodni bu yerda oʻchirib boʻlmaydi; mahsulot muharririda oʻzgartiring.',
+  'settings.fiscalization.backfill.invalidSkipped':
+    'Qatorlarda ({count}) kod formati notoʻgʻri, ular yuborilmadi. Belgilangan kataklarni tuzating.',
+  'settings.fiscalization.backfill.summary':
+    'Saqlandi: {saved}, allaqachon toʻldirilgan: {unchanged}, saqlanmadi: {failed}.',
+  'settings.fiscalization.backfill.status.notFound': 'Bu taom endi mavjud emas.',
+  'settings.fiscalization.backfill.status.failed': 'Saqlanmadi. Qayta urinib koʻring.',
 
   // 10.9 Bildirishnomalar
   'settings.notifications.title': 'Bildirishnomalar',
