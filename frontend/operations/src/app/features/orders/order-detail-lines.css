@@ -1,0 +1,79 @@
+:host {
+  display: contents;
+}
+
+.pane__lines-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.pane__lines-table th {
+  text-align: left;
+  font-size: var(--q-type-caption);
+  font-weight: 400;
+  color: var(--q-ink-subtle);
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--q-hairline);
+}
+
+.pane__lines-table td {
+  padding: 8px 6px;
+  vertical-align: top;
+  border-bottom: 1px solid var(--q-hairline);
+  font-size: var(--q-type-body-sm);
+}
+
+.pane__num-col {
+  text-align: right;
+}
+
+.pane__reveal-link {
+  margin-top: 4px;
+  padding: 2px 8px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-primary);
+  font-size: var(--q-type-caption);
+  cursor: pointer;
+}
+
+.pane__reveal-link:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.pane__line-variant {
+  color: var(--q-ink-muted);
+}
+
+.pane__line-modifiers {
+  margin: 4px 0 0;
+  padding-left: 16px;
+  color: var(--q-ink-muted);
+}
+
+.pane__line-note {
+  margin: 4px 0 0;
+  color: var(--q-ink-muted);
+}
+/* Row 2.1b: presets render as chips ahead of the free note, list-style
+   already reset by this same rule .pane__line-modifiers relies on to sit
+   flush with the product name. */
+.pane__line-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pane__preset-chip {
+  padding: 1px 8px;
+  border: 1px solid var(--q-hairline);
+  border-radius: 999px;
+  background: var(--q-canvas);
+  color: var(--q-ink-muted);
+  font-size: var(--q-type-caption);
+}

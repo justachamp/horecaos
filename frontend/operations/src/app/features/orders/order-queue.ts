@@ -56,7 +56,7 @@ import { OrderOutcomeReasonDialog, OutcomeReasonSubmission } from './order-outco
 import { OrderQueueBulkBar } from './order-queue-bulk-bar';
 import { OrderQueueBulkResult } from './order-queue-bulk-result';
 import { OrderQueueToolbar } from './order-queue-toolbar';
-import { OrderRowActions, RowActionItem } from './order-row-actions';
+import { OrderRowActions, LabelledAction } from './order-row-actions';
 import {
   ORDER_PAYMENT_STATUS_PROJECTIONS,
   paymentStatusProjectionLabel,
@@ -1395,14 +1395,14 @@ export class OrderQueue implements OnInit {
   }
 
   /** The inline buttons of a row's actions cell, each with the words the operator reads for it. */
-  protected inlineActionItems(order: OrderSummaryResponse): readonly RowActionItem[] {
+  protected inlineActionItems(order: OrderSummaryResponse): readonly LabelledAction[] {
     return this.inlineActions(order).map((action) => ({
       action,
       label: this.actionLabel(order, action),
     }));
   }
 
-  protected overflowActionItems(order: OrderSummaryResponse): readonly RowActionItem[] {
+  protected overflowActionItems(order: OrderSummaryResponse): readonly LabelledAction[] {
     return this.overflowActions(order).map((action) => ({
       action,
       label: this.actionLabel(order, action),

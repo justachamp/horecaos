@@ -3,8 +3,8 @@ import { ChangeDetectionStrategy, Component, input, output } from '@angular/core
 import { TPipe } from '../../core/i18n/t.pipe';
 import { OrderActionResponse } from './order-actions';
 
-/** One action on a row: what the policy allows, and the words the operator reads for it. */
-export interface RowActionItem {
+/** One action: what the policy allows, and the words the operator reads for it. */
+export interface LabelledAction {
   readonly action: OrderActionResponse;
   readonly label: string;
 }
@@ -27,8 +27,8 @@ export interface RowActionItem {
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class OrderRowActions {
-  readonly inlineActions = input.required<readonly RowActionItem[]>();
-  readonly overflowActions = input.required<readonly RowActionItem[]>();
+  readonly inlineActions = input.required<readonly LabelledAction[]>();
+  readonly overflowActions = input.required<readonly LabelledAction[]>();
   readonly busy = input.required<boolean>();
   readonly overflowOpen = input.required<boolean>();
 

@@ -3,13 +3,13 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { I18n } from '../../core/i18n/i18n';
 import { OrderActionResponse } from './order-actions';
-import { OrderRowActions, RowActionItem } from './order-row-actions';
+import { OrderRowActions, LabelledAction } from './order-row-actions';
 
 const ADVANCE: OrderActionResponse = { action: 'ADVANCE', targetStatus: 'PREPARING' };
 const CANCEL: OrderActionResponse = { action: 'CANCEL' };
 
-const INLINE: readonly RowActionItem[] = [{ action: ADVANCE, label: 'Start preparing' }];
-const OVERFLOW: readonly RowActionItem[] = [{ action: CANCEL, label: 'Cancel order' }];
+const INLINE: readonly LabelledAction[] = [{ action: ADVANCE, label: 'Start preparing' }];
+const OVERFLOW: readonly LabelledAction[] = [{ action: CANCEL, label: 'Cancel order' }];
 
 function render(overrides: { busy?: boolean; overflowOpen?: boolean } = {}) {
   const fixture = TestBed.createComponent(OrderRowActions);
