@@ -263,6 +263,72 @@ class CatalogAvailabilityReadModelTests {
     }
 
     @Test
+    @DisplayName(
+            "a name the requested locale lacks is read in the next locale that has one, and the search finds it there (row 10.12)")
+    void aNameTheRequestedLocaleLacksIsReadInTheNextLocaleThatHasOne() {
+        UUID catalogId = authoring.createCatalog(TENANT, BRAND, "MAIN", "Main menu", LOCALE);
+        UUID hot = authoring.createCategory(TENANT, BRAND, catalogId, null, "HOT", "Issiq", LOCALE, 1);
+        var plov = authoring.createProduct(
+                TENANT, BRAND, catalogId, "PLOV", "Osh", null, LOCALE, "SKU-PLOV", "PIECE", UNCLASSIFIED, ACTOR);
+        var lagman = authoring.createProduct(
+                TENANT, BRAND, catalogId, "LAGMAN", "Lagman", null, LOCALE, "SKU-LAGMAN", "PIECE", UNCLASSIFIED, ACTOR);
+        var somsa = authoring.createProduct(
+                TENANT, BRAND, catalogId, "SOMSA", "Самса", null, "ru", "SKU-SOMSA", "PIECE", UNCLASSIFIED, ACTOR);
+        authoring.placeProductInCategory(TENANT, BRAND, hot, plov.productId(), 1);
+        for (var product : List.of(plov, lagman, somsa)) {
+            authoring.setOffering(
+                    TENANT, BRAND, LOCATION, product.defaultVariantId(), OfferingStatus.AVAILABLE, List.of("DELIVERY"));
+            inventory.listVariantAtLocation(TENANT, BRAND, LOCATION, product.defaultVariantId(), TrackingMode.BINARY);
+        }
+        // Lagman also has a Russian name; Osh is written only in the server's locale, Samsa only in Russian.
+        authoring.translate(
+                TENANT,
+                BRAND,
+                uz.horecaos.platform.catalog.domain.CatalogEntities.EntityType.PRODUCT,
+                lagman.productId(),
+                "ru",
+                "Лагман",
+                null);
+
+        // The console is in English; the brand's default is Russian; the server's is Uzbek.
+        List<String> english = List.of("en", "ru", LOCALE);
+        var page = store.variantsAtLocation(TENANT, BRAND, LOCATION, english, null, 50, null, null);
+        assertThat(page)
+                .extracting(row -> row.productName())
+                .as("each product shows the first language in the chain it has a name in")
+                .containsExactlyInAnyOrder("Osh", "Лагман", "Самса");
+        assertThat(page)
+                .filteredOn(row -> row.variantId().equals(plov.defaultVariantId()))
+                .singleElement()
+                .satisfies(row -> assertThat(row.categoryName())
+                        .as("the category falls back through the same chain")
+                        .isEqualTo("Issiq"));
+
+        assertThat(store.variantsAtLocation(TENANT, BRAND, LOCATION, english, null, 50, "osh", null))
+                .as("the search matches the name that is shown, server-locale fallback included")
+                .extracting(row -> row.variantId())
+                .containsExactly(plov.defaultVariantId());
+        assertThat(store.variantsAtLocation(TENANT, BRAND, LOCATION, english, null, 50, "самс", null))
+                .as("and a name in the brand's default language")
+                .extracting(row -> row.variantId())
+                .containsExactly(somsa.defaultVariantId());
+
+        List<String> withoutBrandDefault = List.of("en", LOCALE);
+        assertThat(store.variantsAtLocation(TENANT, BRAND, LOCATION, withoutBrandDefault, null, 50, "самс", null))
+                .as("a chain that leaves the brand's default out cannot find a name only written in it")
+                .isEmpty();
+        assertThat(store.variantsAtLocation(TENANT, BRAND, LOCATION, "en", null, 50, "osh", null))
+                .as("a caller that names one locale sees what it always saw: no name, and no match")
+                .isEmpty();
+
+        var counts = store.variantAvailabilityCounts(TENANT, BRAND, LOCATION, english, "самс");
+        assertThat(counts.total()).as("the badges search the same name").isEqualTo(1);
+        assertThat(store.variantAvailabilityCounts(TENANT, BRAND, LOCATION, "en", "самс")
+                        .total())
+                .isZero();
+    }
+
+    @Test
     @DisplayName("toggling a variant off publishes the ADR 0058 stop-list event with the stock item's own brand")
     void togglingOffPublishesAnAvailabilityChangedEvent() {
         UUID catalogId = authoring.createCatalog(TENANT, BRAND, "MAIN", "Main menu", LOCALE);

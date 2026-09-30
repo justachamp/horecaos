@@ -1,10 +1,11 @@
 import { TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
 import { of, throwError } from 'rxjs';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ApiClient } from '../../core/api/api-client';
 import { CurrentLocation } from '../../core/auth/current-location';
+import { applyRegionalFormats, resetRegionalFormats } from '../../core/format/regional-format';
 import { ApiError, ApiErrorCode } from '../../core/api/problem-details';
 import { I18n } from '../../core/i18n/i18n';
 import { ReasonResponse, ReferenceDataApi } from '../settings/reference-data/reference-data-api';
@@ -326,6 +327,51 @@ describe('OrderDetailPane: rendering the loaded order', () => {
     expect(presets).not.toBeNull();
     expect(presets?.textContent).toContain('No onions');
     expect(presets?.textContent).toContain('Extra spicy');
+  });
+
+  it('row 10.12: a chip reads the labels map, so a wording beyond the triple shows where the console column is blank', async () => {
+    configure({
+      get: apiGet({
+        value: detail({
+          lines: [
+            {
+              lineNumber: 1,
+              productName: 'Лагман',
+              quantity: 1,
+              finalAmountMinor: 73_000,
+              modifiers: [],
+              commentPresets: [
+                {
+                  code: 'NO_ONIONS',
+                  labelRu: '',
+                  labelUz: '',
+                  labelEn: '',
+                  labels: { kaa: 'Piyazsiz' },
+                },
+                {
+                  code: 'EXTRA_SPICY',
+                  labelRu: 'Поострее',
+                  labelUz: 'Achchiqroq',
+                  labelEn: 'Extra spicy',
+                  labels: { en: 'Extra spicy, please' },
+                },
+              ],
+              lineId: 'line-1',
+              hasNote: false,
+            },
+          ],
+        }),
+        version: 3,
+      }),
+    });
+    const fixture = await render();
+    const chips = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll(
+        '[data-testid="order-detail-line-presets"] li',
+      ),
+    ).map((chip) => chip.textContent?.trim());
+
+    expect(chips).toEqual(['Piyazsiz', 'Extra spicy, please']);
   });
 
   it('batch 14: shows the table a dine-in order was seated at in the header, beside its number', async () => {
@@ -771,6 +817,42 @@ describe('OrderDetailPane: PII reveal is a separate audited call (§1.5)', () =>
 
     expect(revealPhone).toHaveBeenCalledTimes(1);
     expect(fixture.nativeElement.textContent).toContain('+998901234567');
+  });
+
+  describe('the number is written in the brand’s own pattern (row 10.12)', () => {
+    afterEach(() => resetRegionalFormats());
+
+    it('re-writes the masked number, and the revealed one, but copies the raw number', async () => {
+      applyRegionalFormats({ phoneDisplayPattern: '+###-##-###-##-##' });
+      const revealPhone = vi.fn().mockReturnValue(of({ phone: '+998901234567' }));
+      configure({ get: apiGet({ value: detail(), version: 3 }), revealApi: { revealPhone } });
+      const fixture = await render();
+      const shown = (): string =>
+        (
+          fixture.nativeElement.querySelector(
+            '[data-testid="order-detail-phone-reveal"]',
+          ) as HTMLElement
+        ).parentElement?.querySelector('.q-mono')?.textContent ?? '';
+
+      expect(shown()).toBe('+998-90-•••-••-42');
+
+      (
+        fixture.nativeElement.querySelector(
+          '[data-testid="order-detail-phone-reveal"]',
+        ) as HTMLButtonElement
+      ).click();
+      await flushMicrotasks();
+      fixture.detectChanges();
+
+      expect(shown()).toBe('+998-90-123-45-67');
+    });
+
+    it('shows the number as it arrives when the brand chose no pattern', async () => {
+      configure({ get: apiGet({ value: detail(), version: 3 }) });
+      const fixture = await render();
+
+      expect(fixture.nativeElement.textContent).toContain('+998 90 ••• •• 42');
+    });
   });
 
   it('copy makes its own independent reveal call rather than reusing an already-revealed value', async () => {

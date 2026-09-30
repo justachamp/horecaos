@@ -4,6 +4,7 @@ import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/rou
 import { Auth } from '../core/auth/auth';
 import { CurrentLocation, LocationOption } from '../core/auth/current-location';
 import { SessionCapabilities } from '../core/auth/session-capabilities';
+import { RegionalFormatSync } from '../core/format/regional-format-sync';
 import { I18n, LOCALES, Locale, isLocale } from '../core/i18n/i18n';
 import { TPipe } from '../core/i18n/t.pipe';
 import { RealtimeClient } from '../core/realtime/realtime-client';
@@ -129,6 +130,12 @@ export class Shell {
     // unfiltered rail would otherwise show is as short as the session
     // context read allows.
     void this.capabilities.ensureLoaded();
+    // Row 10.12: the brand's own money and phone formats, applied to every
+    // formatter in the console. Constructing the sync is what starts it — it
+    // follows the location's brand from here on, so it is built here, with
+    // the other shell-wide loaders, rather than by whichever screen first
+    // happens to show an amount.
+    inject(RegionalFormatSync);
     // IA X.37: starts the presence/screen-pop poll the shell's own call bar
     // reads, here rather than waiting for an operator to open
     // `/orders/call-centre` first — the entire point of the bar is that a

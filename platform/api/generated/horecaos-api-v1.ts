@@ -965,6 +965,7 @@ export interface BrandView {
   id?: string;
   locales?: Array<BrandLocaleView>;
   logoAssetId?: string;
+  regionalFormats?: RegionalFormatsView;
   slug?: string;
   status?: "DRAFT" | "ACTIVE" | "SUSPENDED" | "ARCHIVED";
   telegramHandle?: string;
@@ -6628,6 +6629,18 @@ export interface RegionResponse {
   version?: number;
 }
 
+export interface RegionalFormatsRequest {
+  moneyGrouping?: string;
+  moneySymbolPlacement?: string;
+  phoneDisplayPattern?: string;
+}
+
+export interface RegionalFormatsView {
+  moneyGrouping?: string;
+  moneySymbolPlacement?: string;
+  phoneDisplayPattern?: string;
+}
+
 export interface RegisterCourierRequest {
   courierTypeId: string;
   displayReference: string;
@@ -9114,6 +9127,7 @@ export interface Operations {
   "attach": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/products/{productId}/comment-presets"; request: { parameters: { path: { brandId: string; productId: string; tenantId: string } }; body: AttachPresetRequest }; responses: { "200": ProductPresetResponse } };
   "detach": { method: "DELETE"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/products/{productId}/comment-presets/{presetId}"; request: { parameters: { path: { brandId: string; presetId: string; productId: string; tenantId: string } } }; responses: { "200": unknown } };
   "updateBrandProfile": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/profile"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: UpdateBrandProfileRequest }; responses: { "200": BrandView } };
+  "reviseRegionalFormats": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/regional-formats"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: RegionalFormatsRequest }; responses: { "200": BrandView } };
   "list_29": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/service-schedules"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<ScheduleSummaryResponse> } };
   "create_16": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/service-schedules"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: CreateScheduleRequest }; responses: { "200": ScheduleView } };
   "upsertException": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/service-schedules/{scheduleId}/exceptions"; request: { parameters: { path: { brandId: string; scheduleId: string; tenantId: string } }; body: ExceptionRequest }; responses: { "200": unknown } };

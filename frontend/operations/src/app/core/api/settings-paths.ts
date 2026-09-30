@@ -91,6 +91,16 @@ export const settingsPaths = {
   },
 
   /**
+   * `TenantControlPlaneController.reviseRegionalFormats` (control-plane
+   * surface), row 10.12 — where the currency unit sits on a total, how
+   * thousands are grouped and how a phone number is written. Its own act
+   * beside {@link brandProfileWrite}, which never touches them.
+   */
+  brandRegionalFormats(scope: LocationScope): string {
+    return `${this.brandRevise(scope)}/regional-formats`;
+  },
+
+  /**
    * `TenantProfileController.tenantProfile` (row 10.1) — the tenant's own
    * country/currency/timezone, read-only, shown beside the brand's editable
    * fields. Operations-native (`BRAND_READ` at `TENANT` scope, the same

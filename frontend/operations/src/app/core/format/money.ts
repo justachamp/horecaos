@@ -24,6 +24,13 @@
  */
 
 import { Locale } from '../i18n/i18n';
+import {
+  NO_BREAK_SPACE,
+  RegionalFormats,
+  activeRegionalFormats,
+  decimalSeparatorFor,
+  groupDigits,
+} from './regional-format';
 
 export interface Money {
   /** Integer count of minor units. For UZS a minor unit is a whole som. */
@@ -48,20 +55,10 @@ const MINOR_UNIT_EXPONENT: Readonly<Record<string, number>> = {
 };
 
 /**
- * U+00A0 NO-BREAK SPACE as the group separator.
+ * The unit written on a total, per locale — after the amount by default, before
+ * it where the brand chose so (`regional-format.ts`).
  *
- * A plain space lets a browser break `146 000` across two lines in a dense
- * table, where the halves then read as two different numbers. `Intl`'s own
- * separator is not used because it varies by locale and by ICU version, and an
- * amount that groups differently between two operators' browsers is a support
- * call nobody can reproduce.
- */
-const GROUP_SEPARATOR = ' ';
-
-/**
- * The unit written after a total, per locale.
- *
- * Only after a total. `docs/operations-spec/orders.md` §1.3: rows carry the bare
+ * Only on a total. `docs/operations-spec/orders.md` §1.3: rows carry the bare
  * number, because repeating the unit on forty rows is forty pieces of noise
  * between the operator and the one figure that differs.
  */
@@ -72,8 +69,13 @@ const UZS_UNIT: Readonly<Record<Locale, string>> = {
 };
 
 export interface MoneyFormatOptions {
-  /** Append the currency unit. Use on totals, not on rows. */
+  /** Write the currency unit. Use on totals, not on rows. */
   readonly withUnit?: boolean;
+  /**
+   * Formats to use instead of the brand's own — for a preview of a choice that has not been saved
+   * yet, and nothing else. A screen showing real money never passes this.
+   */
+  readonly formats?: RegionalFormats;
 }
 
 /**
@@ -82,6 +84,11 @@ export interface MoneyFormatOptions {
  * Grouping is done here rather than by `Intl.NumberFormat` so that the output is
  * identical in every browser and every locale, which is what makes a column of
  * amounts scannable.
+ *
+ * Two things follow the brand's regional formats (Settings 10.12,
+ * `regional-format.ts`): the character between groups of three digits, and
+ * whether the unit of a total is written after the amount or before it. The
+ * default — a no-break space, the unit after — is what this always did.
  */
 export function formatMoney(
   money: Money,
@@ -98,23 +105,29 @@ export function formatMoney(
     );
   }
 
+  const formats = options.formats ?? activeRegionalFormats();
   const negative = money.amountMinor < 0;
   const absolute = Math.abs(money.amountMinor);
   const digits = String(absolute).padStart(exponent + 1, '0');
   const majorDigits = exponent === 0 ? digits : digits.slice(0, -exponent);
   const minorDigits = exponent === 0 ? '' : digits.slice(-exponent);
 
-  let text = group(majorDigits);
+  let text = groupDigits(majorDigits, formats.moneyGrouping);
   if (exponent > 0) {
-    text += `${decimalSeparator(locale)}${minorDigits}`;
+    text += `${decimalSeparatorFor(locale, formats.moneyGrouping)}${minorDigits}`;
+  }
+  if (options.withUnit) {
+    const unit = unitFor(money.currency, locale);
+    text =
+      formats.moneySymbolPlacement === 'BEFORE'
+        ? `${unit}${NO_BREAK_SPACE}${text}`
+        : `${text}${NO_BREAK_SPACE}${unit}`;
   }
   if (negative) {
     // U+2212 MINUS SIGN, not a hyphen. In tabular figures a hyphen is narrower
-    // than a digit and a column of negatives stops aligning.
+    // than a digit and a column of negatives stops aligning. It leads the whole
+    // figure, unit included, wherever the unit is written.
     text = `−${text}`;
-  }
-  if (options.withUnit) {
-    text += `${GROUP_SEPARATOR}${unitFor(money.currency, locale)}`;
   }
   return text;
 }
@@ -129,14 +142,6 @@ export function minorUnitExponent(currency: string): number {
     );
   }
   return exponent;
-}
-
-function group(digits: string): string {
-  return digits.replace(/\B(?=(\d{3})+(?!\d))/g, GROUP_SEPARATOR);
-}
-
-function decimalSeparator(locale: Locale): string {
-  return locale === 'en' ? '.' : ',';
 }
 
 function unitFor(currency: string, locale: Locale): string {

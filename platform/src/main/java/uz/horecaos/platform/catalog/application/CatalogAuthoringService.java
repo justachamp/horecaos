@@ -1337,11 +1337,37 @@ public class CatalogAuthoringService {
                 tenantId, brandId, locationId, locale, cursor, limit, search, offeringStatusFilter);
     }
 
+    /**
+     * The matrix read above, reading a name in the first of {@code nameLocales} the product has one
+     * in (row 10.12) -- see {@link JdbcCatalogStore#variantsAtLocation(UUID, UUID, UUID, List, UUID,
+     * int, String, String)}.
+     */
+    @Transactional(readOnly = true)
+    public List<JdbcCatalogStore.VariantAvailabilityRow> variantsAtLocation(
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            List<String> nameLocales,
+            @Nullable UUID cursor,
+            int limit,
+            @Nullable String search,
+            @Nullable String offeringStatusFilter) {
+        return store.variantsAtLocation(
+                tenantId, brandId, locationId, nameLocales, cursor, limit, search, offeringStatusFilter);
+    }
+
     /** The stop list's own tab badges (gap map row 2.5) — see {@link JdbcCatalogStore#variantAvailabilityCounts}. */
     @Transactional(readOnly = true)
     public JdbcCatalogStore.VariantAvailabilityCountsRow variantAvailabilityCounts(
             UUID tenantId, UUID brandId, UUID locationId, String locale, @Nullable String search) {
         return store.variantAvailabilityCounts(tenantId, brandId, locationId, locale, search);
+    }
+
+    /** The badges above, searching the name the page shows -- the first of {@code nameLocales} the product has one in (row 10.12). */
+    @Transactional(readOnly = true)
+    public JdbcCatalogStore.VariantAvailabilityCountsRow variantAvailabilityCounts(
+            UUID tenantId, UUID brandId, UUID locationId, List<String> nameLocales, @Nullable String search) {
+        return store.variantAvailabilityCounts(tenantId, brandId, locationId, nameLocales, search);
     }
 
     /**

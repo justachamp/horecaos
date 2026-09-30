@@ -1,10 +1,31 @@
-import { ChangeDetectionStrategy, Component, WritableSignal, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  WritableSignal,
+  computed,
+  inject,
+  signal,
+} from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 
+import { LocationScope } from '../../../core/api/operations-paths';
 import { ApiError } from '../../../core/api/problem-details';
 import { CurrentLocation } from '../../../core/auth/current-location';
+import { formatMoney } from '../../../core/format/money';
+import { PhonePipe } from '../../../core/format/phone.pipe';
+import { formatPhone } from '../../../core/format/phone';
+import {
+  MONEY_GROUPINGS,
+  MONEY_SYMBOL_PLACEMENTS,
+  MoneyGrouping,
+  MoneySymbolPlacement,
+  RegionalFormats,
+  normalizeRegionalFormats,
+} from '../../../core/format/regional-format';
+import { RegionalFormatSync } from '../../../core/format/regional-format-sync';
 import { I18n } from '../../../core/i18n/i18n';
 import { TPipe } from '../../../core/i18n/t.pipe';
+import { LocationsApi } from '../locations/locations-api';
 import { MediaUploader, mediaUploaderRejectionMessageKey } from '../../../shared/ui/media-uploader';
 import { MediaApi } from '../../catalog/media-api';
 import { describeApiError } from '../../orders/order-errors';
@@ -26,6 +47,30 @@ interface LocaleDraft {
 
 /** `uz.horecaos.platform.tenancy.domain.BrandProfile.KNOWN_LOCALES`, mirrored. */
 const KNOWN_LOCALES: readonly BrandLocaleCode[] = ['ru', 'uz-Latn', 'en'];
+
+/** The phone patterns the format picker offers ahead of a custom one; `#` is one digit. */
+const PHONE_PATTERN_PRESETS: readonly string[] = [
+  '+### ## ### ## ##',
+  '+### (##) ###-##-##',
+  '+###-##-###-##-##',
+];
+
+/** The select's value for "the operator will type a pattern", and for "show a number as it arrives". */
+const PHONE_CUSTOM = '__custom__';
+const PHONE_AS_RECEIVED = '';
+
+/** What the format card's preview writes: a whole som total, and a Tashkent mobile number. */
+const PREVIEW_AMOUNT_MINOR = 146_000;
+const PREVIEW_PHONE = '+998901234567';
+
+/** `BrandRegionalFormats`' own rule, mirrored: seven to fifteen `#` slots and only `# + ( ) - .` and spaces. */
+function isValidPhonePattern(pattern: string): boolean {
+  if (!/^[+#() .-]{1,32}$/.test(pattern)) {
+    return false;
+  }
+  const slots = pattern.split('#').length - 1;
+  return slots >= 7 && slots <= 15;
+}
 
 /**
  * 10.1 Brand profile, 10.12 languages and regional formats —
@@ -53,6 +98,15 @@ const KNOWN_LOCALES: readonly BrandLocaleCode[] = ['ru', 'uz-Latn', 'en'];
  * than a free-text list: the console has an editor for exactly ru/uz-Latn/en
  * today, so offering a fourth would record a choice nothing can render.
  *
+ * **Formats (row `10.12`).** A third, separate write: where the currency unit
+ * sits on a total, how thousands are grouped and how a phone number is
+ * written, saved through `.../regional-formats` and applied to every formatter
+ * in the console at once (`RegionalFormatSync`). The card's preview writes a
+ * sample total and number through the same `formatMoney` and `formatPhone`
+ * the rest of the console uses, from the draft, before anything is saved. The
+ * timezone is shown beside them but read-only: it is the tenant's and each
+ * branch's own, not a brand's.
+ *
  * **Country/currency/timezone, read-only** (row `10.1`'s own named gap,
  * closed this wave): `TenantProfileController.tenantProfile`, a third read
  * beside {@link BrandProfileApi.getBrand} — these are tenant facts
@@ -63,7 +117,7 @@ const KNOWN_LOCALES: readonly BrandLocaleCode[] = ['ru', 'uz-Latn', 'en'];
  */
 @Component({
   selector: 'q-brand-profile-page',
-  imports: [TPipe, MediaUploader],
+  imports: [TPipe, PhonePipe, MediaUploader],
   templateUrl: './brand-profile-page.html',
   styleUrl: './brand-profile-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -71,10 +125,18 @@ const KNOWN_LOCALES: readonly BrandLocaleCode[] = ['ru', 'uz-Latn', 'en'];
 export class BrandProfilePage {
   private readonly api = inject(BrandProfileApi);
   private readonly mediaApi = inject(MediaApi);
+  private readonly locationsApi = inject(LocationsApi);
+  private readonly regionalSync = inject(RegionalFormatSync);
   private readonly location = inject(CurrentLocation);
   protected readonly i18n = inject(I18n);
 
   protected readonly knownLocales = KNOWN_LOCALES;
+  protected readonly moneySymbolPlacements = MONEY_SYMBOL_PLACEMENTS;
+  protected readonly moneyGroupings = MONEY_GROUPINGS;
+  protected readonly phonePatternPresets = PHONE_PATTERN_PRESETS;
+  protected readonly phoneCustom = PHONE_CUSTOM;
+  protected readonly phoneAsReceived = PHONE_AS_RECEIVED;
+  protected readonly previewPhone = PREVIEW_PHONE;
 
   protected readonly loading = signal(true);
   protected readonly denied = signal(false);
@@ -96,6 +158,43 @@ export class BrandProfilePage {
   protected readonly draftLocales = signal<readonly LocaleDraft[]>([]);
   protected readonly profileSaving = signal(false);
   protected readonly profileError = signal<string | null>(null);
+
+  // ------------------------------------------- 10.12: regional display formats
+  protected readonly editingFormats = signal(false);
+  protected readonly draftPlacement = signal<MoneySymbolPlacement>('AFTER');
+  protected readonly draftGrouping = signal<MoneyGrouping>('SPACE');
+  /** The phone select's value: `''` as it arrives, one of {@link PHONE_PATTERN_PRESETS}, or {@link PHONE_CUSTOM}. */
+  protected readonly draftPhoneChoice = signal(PHONE_AS_RECEIVED);
+  protected readonly draftCustomPattern = signal('');
+  protected readonly formatsSaving = signal(false);
+  protected readonly formatsError = signal<string | null>(null);
+  /** Every branch's own timezone, read-only; best effort, empty until (or unless) the read lands. */
+  protected readonly branchTimezones = signal<readonly { name: string; timezone: string }[]>([]);
+
+  /** The pattern the draft currently holds, `null` for "as it arrives". */
+  protected readonly draftPhonePattern = computed<string | null>(() => {
+    const choice = this.draftPhoneChoice();
+    if (choice === PHONE_AS_RECEIVED) {
+      return null;
+    }
+    const pattern = choice === PHONE_CUSTOM ? this.draftCustomPattern().trim() : choice;
+    return pattern === '' ? null : pattern;
+  });
+
+  /** The draft as the formatters would read it — what the preview writes. */
+  protected readonly draftFormats = computed<RegionalFormats>(() => ({
+    moneySymbolPlacement: this.draftPlacement(),
+    moneyGrouping: this.draftGrouping(),
+    phoneDisplayPattern: this.draftPhonePattern(),
+  }));
+
+  /** The brand's stored formats, or the defaults for a platform that sends none. */
+  protected readonly storedFormats = computed<RegionalFormats>(() =>
+    normalizeRegionalFormats(this.brand()?.regionalFormats),
+  );
+
+  /** The tenant's currency, or `UZS` while (or unless) it has not loaded — the preview's only need of it. */
+  private readonly previewCurrency = computed(() => this.tenantMarket()?.defaultCurrency ?? 'UZS');
 
   /** `MediaAssetService.downloadUrl` thumbnails for the current logo/banner, best-effort like `product-editor-page`'s own photo grid. */
   protected readonly logoPreviewUrl = signal<string | null>(null);
@@ -249,6 +348,120 @@ export class BrandProfilePage {
     }
   }
 
+  // ----------------------------------------------- regional display formats
+
+  protected startEditingFormats(): void {
+    const stored = this.storedFormats();
+    this.draftPlacement.set(stored.moneySymbolPlacement);
+    this.draftGrouping.set(stored.moneyGrouping);
+    const pattern = stored.phoneDisplayPattern;
+    if (pattern === null) {
+      this.draftPhoneChoice.set(PHONE_AS_RECEIVED);
+      this.draftCustomPattern.set('');
+    } else if (PHONE_PATTERN_PRESETS.includes(pattern)) {
+      this.draftPhoneChoice.set(pattern);
+      this.draftCustomPattern.set('');
+    } else {
+      this.draftPhoneChoice.set(PHONE_CUSTOM);
+      this.draftCustomPattern.set(pattern);
+    }
+    this.formatsError.set(null);
+    this.editingFormats.set(true);
+  }
+
+  protected cancelEditingFormats(): void {
+    this.editingFormats.set(false);
+    this.formatsError.set(null);
+  }
+
+  protected setPlacement(value: string): void {
+    const placement = MONEY_SYMBOL_PLACEMENTS.find((candidate) => candidate === value);
+    if (placement) {
+      this.draftPlacement.set(placement);
+    }
+  }
+
+  protected setGrouping(value: string): void {
+    const grouping = MONEY_GROUPINGS.find((candidate) => candidate === value);
+    if (grouping) {
+      this.draftGrouping.set(grouping);
+    }
+  }
+
+  protected async saveFormats(): Promise<void> {
+    const scope = this.location.scope();
+    if (!scope || this.formatsSaving()) {
+      return;
+    }
+    const pattern = this.draftPhonePattern();
+    if (pattern !== null && !isValidPhonePattern(pattern)) {
+      this.formatsError.set(this.i18n.t('settings.brandProfile.formats.error.pattern'));
+      return;
+    }
+    this.formatsSaving.set(true);
+    this.formatsError.set(null);
+    try {
+      const updated = await this.api.reviseRegionalFormats(scope, {
+        moneySymbolPlacement: this.draftPlacement(),
+        moneyGrouping: this.draftGrouping(),
+        phoneDisplayPattern: pattern ?? undefined,
+      });
+      this.brand.set(updated);
+      // Every amount and phone in the console reads the new formats from here on, not just this card.
+      this.regionalSync.applySaved(scope, updated.regionalFormats);
+      this.editingFormats.set(false);
+    } catch (error) {
+      this.formatsError.set(this.describe(error));
+    } finally {
+      this.formatsSaving.set(false);
+    }
+  }
+
+  protected placementLabel(placement: MoneySymbolPlacement): string {
+    return placement === 'BEFORE'
+      ? this.i18n.t('settings.brandProfile.formats.placement.BEFORE')
+      : this.i18n.t('settings.brandProfile.formats.placement.AFTER');
+  }
+
+  protected groupingLabel(grouping: MoneyGrouping): string {
+    switch (grouping) {
+      case 'SPACE':
+        return this.i18n.t('settings.brandProfile.formats.grouping.SPACE');
+      case 'COMMA':
+        return this.i18n.t('settings.brandProfile.formats.grouping.COMMA');
+      case 'DOT':
+        return this.i18n.t('settings.brandProfile.formats.grouping.DOT');
+      case 'NONE':
+        return this.i18n.t('settings.brandProfile.formats.grouping.NONE');
+    }
+  }
+
+  /** A whole-som total written the way `formats` would write it — the card's live preview. */
+  protected previewTotal(formats: RegionalFormats): string {
+    const money = { amountMinor: PREVIEW_AMOUNT_MINOR, currency: this.previewCurrency() };
+    try {
+      return formatMoney(money, this.i18n.locale(), { withUnit: true, formats });
+    } catch {
+      // A currency the console has no exponent for: preview in the platform's own.
+      return formatMoney({ ...money, currency: 'UZS' }, this.i18n.locale(), {
+        withUnit: true,
+        formats,
+      });
+    }
+  }
+
+  /** The sample number written the way `formats` would write it. */
+  protected previewPhoneText(formats: RegionalFormats): string {
+    return formatPhone(PREVIEW_PHONE, formats.phoneDisplayPattern);
+  }
+
+  /** The pattern as the read-only view names it: the pattern itself, or "as stored". */
+  protected phonePatternText(formats: RegionalFormats): string {
+    return (
+      formats.phoneDisplayPattern ?? this.i18n.t('settings.brandProfile.formats.phone.asReceived')
+    );
+  }
+
   // --------------------------------------------------------- logo/banner
 
   /**
@@ -329,6 +542,7 @@ export class BrandProfilePage {
       this.brand.set(brand);
       void this.loadMediaPreviews(brand);
       void this.loadTenantMarket(scope.tenantId);
+      void this.loadBranchTimezones(scope);
     } catch (error) {
       if (error instanceof ApiError && error.status === 403) {
         this.denied.set(true);
@@ -376,6 +590,21 @@ export class BrandProfilePage {
       this.tenantMarket.set(await this.api.tenantProfile(tenantId));
     } catch {
       this.tenantMarket.set(null);
+    }
+  }
+
+  /**
+   * Row 10.12 — each branch's own timezone, read-only beside the tenant's default. Best effort,
+   * like {@link loadTenantMarket}: an operator who cannot list the branches still gets the card.
+   */
+  private async loadBranchTimezones(scope: LocationScope): Promise<void> {
+    try {
+      const locations = await this.locationsApi.list(scope);
+      this.branchTimezones.set(
+        locations.map((location) => ({ name: location.displayName, timezone: location.timezone })),
+      );
+    } catch {
+      this.branchTimezones.set([]);
     }
   }
 

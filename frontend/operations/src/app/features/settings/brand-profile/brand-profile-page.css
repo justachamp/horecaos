@@ -99,7 +99,8 @@
   width: 100%;
 }
 
-input.field {
+input.field,
+select.field {
   margin-top: 4px;
   height: 40px;
   padding: 0 12px;
@@ -186,4 +187,9 @@ input.field {
   background: var(--q-canvas);
   color: var(--q-ink);
   cursor: pointer;
+}
+
+/* The formats card's live preview sits under the pickers, set apart from them. */
+.formats-preview {
+  margin-top: 16px;
 }

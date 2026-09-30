@@ -1064,6 +1064,32 @@ export const messagesRu: MessageCatalogue = {
   'settings.brandProfile.locale.ru': 'Русский',
   'settings.brandProfile.locale.uzLatn': 'Узбекский (латиница)',
   'settings.brandProfile.locale.en': 'Английский',
+  'settings.brandProfile.section.formats': 'Форматы',
+  'settings.brandProfile.formats.lead':
+    'Как операторы этого бренда видят суммы и телефоны в консоли. Только отображение: сохранённые, экспортируемые данные и то, что получает клиент, не меняются.',
+  'settings.brandProfile.formats.placement': 'Знак валюты в итогах',
+  'settings.brandProfile.formats.placement.AFTER': 'После суммы',
+  'settings.brandProfile.formats.placement.BEFORE': 'Перед суммой',
+  'settings.brandProfile.formats.grouping': 'Разделитель тысяч',
+  'settings.brandProfile.formats.grouping.SPACE': 'Пробел',
+  'settings.brandProfile.formats.grouping.COMMA': 'Запятая',
+  'settings.brandProfile.formats.grouping.DOT': 'Точка',
+  'settings.brandProfile.formats.grouping.NONE': 'Без разделителя',
+  'settings.brandProfile.formats.phone': 'Формат телефона',
+  'settings.brandProfile.formats.phone.asReceived': 'Как в системе',
+  'settings.brandProfile.formats.phone.custom': 'Свой шаблон',
+  'settings.brandProfile.formats.phone.pattern': 'Шаблон',
+  'settings.brandProfile.formats.phone.patternHint':
+    'Один знак # на цифру, от семи до пятнадцати. + ( ) - . и пробелы остаются как написаны.',
+  'settings.brandProfile.formats.timezone.hint':
+    'Здесь только для просмотра: часовой пояс по умолчанию задаёт тенант, у каждого филиала он свой.',
+  'settings.brandProfile.formats.timezone.tenant': 'По умолчанию у тенанта',
+  'settings.brandProfile.formats.timezone.branches': 'Часовые пояса филиалов',
+  'settings.brandProfile.formats.preview': 'Пример',
+  'settings.brandProfile.formats.preview.total': 'Итого',
+  'settings.brandProfile.formats.preview.phone': 'Телефон',
+  'settings.brandProfile.formats.error.pattern':
+    'В шаблоне телефона от 7 до 15 знаков #, допустимы только # + ( ) - . и пробел.',
 
   // 10.4 Каналы продаж
   'settings.salesChannels.title': 'Каналы продаж',

@@ -1074,6 +1074,32 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.brandProfile.locale.ru': 'Rus tili',
   'settings.brandProfile.locale.uzLatn': 'Oʻzbek (lotin)',
   'settings.brandProfile.locale.en': 'Ingliz tili',
+  'settings.brandProfile.section.formats': 'Formatlar',
+  'settings.brandProfile.formats.lead':
+    'Ushbu brend operatorlari konsolda summa va telefon raqamlarini qanday koʻradi. Faqat koʻrinish: saqlangan, eksport qilinadigan maʻlumot va mijozga boradigan narsa oʻzgarmaydi.',
+  'settings.brandProfile.formats.placement': 'Jamida valyuta belgisi',
+  'settings.brandProfile.formats.placement.AFTER': 'Summadan keyin',
+  'settings.brandProfile.formats.placement.BEFORE': 'Summadan oldin',
+  'settings.brandProfile.formats.grouping': 'Minglik ajratgich',
+  'settings.brandProfile.formats.grouping.SPACE': 'Probel',
+  'settings.brandProfile.formats.grouping.COMMA': 'Vergul',
+  'settings.brandProfile.formats.grouping.DOT': 'Nuqta',
+  'settings.brandProfile.formats.grouping.NONE': 'Ajratgichsiz',
+  'settings.brandProfile.formats.phone': 'Telefon raqami formati',
+  'settings.brandProfile.formats.phone.asReceived': 'Tizimdagidek',
+  'settings.brandProfile.formats.phone.custom': 'Oʻz shablonim',
+  'settings.brandProfile.formats.phone.pattern': 'Shablon',
+  'settings.brandProfile.formats.phone.patternHint':
+    'Har bir raqam uchun bitta #, yettitadan oʻn beshtagacha. + ( ) - . va probellar yozilganidek qoladi.',
+  'settings.brandProfile.formats.timezone.hint':
+    'Bu yerda faqat koʻrish uchun: standart vaqt mintaqasini tenant belgilaydi, har bir filialning oʻzi bor.',
+  'settings.brandProfile.formats.timezone.tenant': 'Tenant standarti',
+  'settings.brandProfile.formats.timezone.branches': 'Filiallarning vaqt mintaqalari',
+  'settings.brandProfile.formats.preview': 'Namuna',
+  'settings.brandProfile.formats.preview.total': 'Jami',
+  'settings.brandProfile.formats.preview.phone': 'Telefon',
+  'settings.brandProfile.formats.error.pattern':
+    'Telefon shablonida 7 tadan 15 tagacha # boʻlishi va faqat # + ( ) - . hamda probel ishlatilishi kerak.',
 
   // 10.4 Sotuv kanallari
   'settings.salesChannels.title': 'Sotuv kanallari',

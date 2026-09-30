@@ -1,4 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
+
+import { applyRegionalFormats, resetRegionalFormats } from '../../core/format/regional-format';
 
 import {
   ddmm,
@@ -83,6 +85,19 @@ describe('formatCount', () => {
 
   it('signs a negative count with a real minus', () => {
     expect(formatCount(-7)).toBe('−7');
+  });
+
+  describe('with the brand’s own grouping (row 10.12)', () => {
+    afterEach(() => resetRegionalFormats());
+
+    it('groups with the separator the brand chose, the one formatMoney uses', () => {
+      applyRegionalFormats({ moneyGrouping: 'COMMA' });
+      expect(formatCount(12_400)).toBe('12,400');
+      applyRegionalFormats({ moneyGrouping: 'DOT' });
+      expect(formatCount(-1_234_567)).toBe('−1.234.567');
+      applyRegionalFormats({ moneyGrouping: 'NONE' });
+      expect(formatCount(12_400)).toBe('12400');
+    });
   });
 });
 

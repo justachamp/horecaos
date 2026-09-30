@@ -1187,13 +1187,21 @@ who will never open any other settings screen, and because half the console's ot
 | Часовой пояс | IANA | `tenant.tenants.default_timezone`; per-location `tenant.locations.timezone` |
 | Формат даты | read-only `DD.MM` | platform reference data (control-plane 8.3) |
 | Формат времени | read-only 24h | same |
-| Формат телефона | read-only UZ | same |
-| Денежный формат | read-only: whole som, thousand-grouped, no minor units | same |
+| Формат телефона | **built (batch 16): a pattern, `#` per digit** — as stored, three presets or a custom one; shown on the order detail, the reports customer column and the brand and branch contact phone | `tenant.brands.phone_display_pattern` (V0441), `PUT .../brands/{brandId}/regional-formats` |
+| Денежный формат | **built (batch 16):** the unit before or after a total, thousands separated by a space, comma, dot or nothing. Still whole som, no minor units | `tenant.brands.money_symbol_placement` / `money_grouping` (V0441), the same endpoint |
 
-**Judgement.** Currency, date, time and phone formats are **derived from country and shown
-read-only**, not offered as choices. Every one of them is a source of subtle breakage when a
-tenant sets it wrong, none of them varies within Uzbekistan, and control-plane 8.3 already owns the
-country reference data. The one genuinely tenant-owned choice is the language set and the default.
+**Judgement.** Currency, date and time formats are **derived from country and shown read-only**,
+not offered as choices. Every one of them is a source of subtle breakage when a tenant sets it
+wrong, none of them varies within Uzbekistan, and control-plane 8.3 already owns the country
+reference data. The one genuinely tenant-owned choice is the language set and the default.
+
+*Amended in batch 16 by the owner's brief:* how a brand writes an **amount** (where the unit sits,
+how thousands are grouped) and a **phone number** (a digit pattern) is a brand's own display choice,
+on the brand profile's **Форматы** card. It is display only — money stays integer minor units plus a
+currency and a phone stays E.164 on the wire and in every export — and the defaults reproduce what
+the console did before. The timezone is shown on the same card, read-only: it is the tenant's
+(`tenant.tenants.default_timezone`) and each branch's own, never a brand's. Date and time formats
+remain derived and read-only.
 
 Two consequences the screen must state, because they surprise people:
 

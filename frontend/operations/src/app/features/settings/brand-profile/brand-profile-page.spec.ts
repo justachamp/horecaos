@@ -2,14 +2,17 @@ import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { of, throwError } from 'rxjs';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LocationScope } from '../../../core/api/operations-paths';
 import { ApiError, ApiErrorCode } from '../../../core/api/problem-details';
 import { CurrentLocation } from '../../../core/auth/current-location';
+import { applyRegionalFormats, resetRegionalFormats } from '../../../core/format/regional-format';
+import { RegionalFormatSync } from '../../../core/format/regional-format-sync';
 import { I18n } from '../../../core/i18n/i18n';
 import { MediaUploader } from '../../../shared/ui/media-uploader';
 import { MediaApi, MediaAssetView } from '../../catalog/media-api';
+import { LocationsApi } from '../locations/locations-api';
 import { BrandProfileApi, BrandView, TenantMarketView } from './brand-profile-api';
 import { BrandProfilePage } from './brand-profile-page';
 
@@ -70,7 +73,17 @@ describe('BrandProfilePage', () => {
     reviseBrand: ReturnType<typeof vi.fn>;
     updateProfile: ReturnType<typeof vi.fn>;
     tenantProfile: ReturnType<typeof vi.fn>;
+    reviseRegionalFormats: ReturnType<typeof vi.fn>;
   };
+  let locationsApi: { list: ReturnType<typeof vi.fn> };
+  let regionalSync: { applySaved: ReturnType<typeof vi.fn> };
+  /** The branches `LocationsApi.list` answers with; a test sets it before `render()`. */
+  let branches: readonly { displayName: string; timezone: string }[] = [];
+
+  afterEach(() => {
+    branches = [];
+    resetRegionalFormats();
+  });
   let mediaApi: {
     upload: ReturnType<typeof vi.fn>;
     downloadUrl: ReturnType<typeof vi.fn>;
@@ -86,8 +99,11 @@ describe('BrandProfilePage', () => {
       reviseBrand: vi.fn(),
       updateProfile: vi.fn(),
       tenantProfile: vi.fn().mockResolvedValue(TENANT_MARKET),
+      reviseRegionalFormats: vi.fn(),
       ...overrides,
     };
+    locationsApi = { list: vi.fn().mockResolvedValue(branches) };
+    regionalSync = { applySaved: vi.fn() };
     mediaApi = {
       // No asset by default; individual tests set a downloadUrl per id.
       downloadUrl: vi.fn().mockReturnValue(throwError(() => new Error('no such asset'))),
@@ -98,6 +114,8 @@ describe('BrandProfilePage', () => {
       imports: [BrandProfilePage],
       providers: [
         { provide: BrandProfileApi, useValue: api },
+        { provide: LocationsApi, useValue: locationsApi },
+        { provide: RegionalFormatSync, useValue: regionalSync },
         { provide: MediaApi, useValue: mediaApi },
         { provide: CurrentLocation, useValue: location },
       ],
@@ -384,5 +402,178 @@ describe('BrandProfilePage', () => {
 
     expect(upload).not.toHaveBeenCalled();
     expect(profileBlock.querySelector('[role="alert"]')?.textContent).toContain('larger');
+  });
+  // ------------------------------------------------ 10.12: the Formats card
+
+  const NBSP = '\u00a0';
+
+  const BRAND_WITH_FORMATS: BrandView = {
+    ...BRAND,
+    regionalFormats: {
+      moneySymbolPlacement: 'BEFORE',
+      moneyGrouping: 'DOT',
+      phoneDisplayPattern: '+### (##) ###-##-##',
+    },
+  };
+
+  function formatsBlock(): HTMLElement {
+    return fixture.nativeElement.querySelector(
+      '[data-testid="brand-profile-formats"]',
+    ) as HTMLElement;
+  }
+
+  function pick(selector: string, value: string): void {
+    const select = formatsBlock().querySelector(selector) as HTMLSelectElement;
+    select.value = value;
+    select.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+  }
+
+  function testId(id: string): string {
+    return (formatsBlock().querySelector(`[data-testid="${id}"]`)?.textContent ?? '').trim();
+  }
+
+  it('shows the defaults on the Formats card for a brand the platform sends no formats for', async () => {
+    await render();
+
+    expect(testId('formats-placement')).toContain('After the amount');
+    expect(testId('formats-grouping')).toContain('Space');
+    expect(testId('formats-phone')).toContain('As stored');
+    expect(testId('formats-preview-total')).toBe(`146${NBSP}000${NBSP}UZS`);
+    expect(testId('formats-preview-phone')).toBe('+998901234567');
+  });
+
+  it('shows the brand’s stored formats, and a preview written by the same formatters the console uses', async () => {
+    await render({ getBrand: vi.fn().mockResolvedValue(BRAND_WITH_FORMATS) });
+
+    expect(testId('formats-placement')).toContain('Before the amount');
+    expect(testId('formats-grouping')).toContain('Dot');
+    expect(testId('formats-phone')).toContain('+### (##) ###-##-##');
+    expect(testId('formats-preview-total')).toBe(`UZS${NBSP}146.000`);
+    expect(testId('formats-preview-phone')).toBe('+998 (90) 123-45-67');
+  });
+
+  it('writes the brand’s own contact phone in its pattern once one is set', async () => {
+    applyRegionalFormats({ phoneDisplayPattern: '+### (##) ###-##-##' });
+    await render();
+
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain('+998 (71) 200-00-00');
+  });
+
+  it('shows the timezone read-only: the tenant’s default and each branch’s own', async () => {
+    branches = [
+      { displayName: 'Chilonzor', timezone: 'Asia/Tashkent' },
+      { displayName: 'Samarkand', timezone: 'Asia/Samarkand' },
+    ];
+    await render();
+
+    const zone = testId('formats-timezone');
+    expect(zone).toContain('Asia/Tashkent');
+    expect(zone).toContain('Chilonzor');
+    expect(zone).toContain('Asia/Samarkand');
+    expect(
+      formatsBlock().querySelector('select#formats-timezone, input#formats-timezone'),
+    ).toBeNull();
+  });
+
+  it('previews a draft before it is saved, without touching what is stored', async () => {
+    await render();
+    (formatsBlock().querySelector('[data-testid="formats-edit"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    pick('[data-testid="formats-placement-select"]', 'BEFORE');
+    pick('[data-testid="formats-grouping-select"]', 'COMMA');
+    pick('[data-testid="formats-phone-select"]', '+### (##) ###-##-##');
+
+    expect(testId('formats-draft-preview-total')).toBe(`UZS${NBSP}146,000`);
+    expect(testId('formats-draft-preview-phone')).toBe('+998 (90) 123-45-67');
+    expect(api.reviseRegionalFormats).not.toHaveBeenCalled();
+  });
+
+  it('saves the formats through their own endpoint and applies them to every formatter at once', async () => {
+    await render({ reviseRegionalFormats: vi.fn().mockResolvedValue(BRAND_WITH_FORMATS) });
+    (formatsBlock().querySelector('[data-testid="formats-edit"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    pick('[data-testid="formats-placement-select"]', 'BEFORE');
+    pick('[data-testid="formats-grouping-select"]', 'DOT');
+    pick('[data-testid="formats-phone-select"]', '+### (##) ###-##-##');
+    (formatsBlock().querySelector('[data-testid="formats-save"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(api.reviseRegionalFormats).toHaveBeenCalledWith(SCOPE, {
+      moneySymbolPlacement: 'BEFORE',
+      moneyGrouping: 'DOT',
+      phoneDisplayPattern: '+### (##) ###-##-##',
+    });
+    expect(regionalSync.applySaved).toHaveBeenCalledWith(SCOPE, BRAND_WITH_FORMATS.regionalFormats);
+    // Back on the read-only card, now showing what was saved.
+    expect(formatsBlock().querySelector('[data-testid="formats-save"]')).toBeNull();
+    expect(testId('formats-preview-total')).toBe(`UZS${NBSP}146.000`);
+  });
+
+  it('leaves the pattern out of the request to clear it, and takes a custom pattern as typed', async () => {
+    await render({ reviseRegionalFormats: vi.fn().mockResolvedValue(BRAND) });
+    (formatsBlock().querySelector('[data-testid="formats-edit"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    (formatsBlock().querySelector('[data-testid="formats-save"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    expect(api.reviseRegionalFormats).toHaveBeenLastCalledWith(SCOPE, {
+      moneySymbolPlacement: 'AFTER',
+      moneyGrouping: 'SPACE',
+      phoneDisplayPattern: undefined,
+    });
+
+    (formatsBlock().querySelector('[data-testid="formats-edit"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    pick('[data-testid="formats-phone-select"]', '__custom__');
+    const input = formatsBlock().querySelector('#formats-phone-pattern') as HTMLInputElement;
+    input.value = '###-##-###-##-##';
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    (formatsBlock().querySelector('[data-testid="formats-save"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    expect(api.reviseRegionalFormats).toHaveBeenLastCalledWith(
+      SCOPE,
+      expect.objectContaining({ phoneDisplayPattern: '###-##-###-##-##' }),
+    );
+  });
+
+  it('refuses a custom pattern the platform would refuse, without a request', async () => {
+    await render();
+    (formatsBlock().querySelector('[data-testid="formats-edit"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    pick('[data-testid="formats-phone-select"]', '__custom__');
+    const input = formatsBlock().querySelector('#formats-phone-pattern') as HTMLInputElement;
+    input.value = '+## ##';
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    (formatsBlock().querySelector('[data-testid="formats-save"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(api.reviseRegionalFormats).not.toHaveBeenCalled();
+    expect(testId('formats-error')).toContain('between 7 and 15');
+    expect(formatsBlock().querySelector('[data-testid="formats-save"]')).not.toBeNull();
+  });
+
+  it('stays editable, with the reason, when the platform refuses the save', async () => {
+    await render({
+      reviseRegionalFormats: vi
+        .fn()
+        .mockRejectedValue(new ApiError(ApiErrorCode.VALIDATION_FAILED, 400, null, null)),
+    });
+    (formatsBlock().querySelector('[data-testid="formats-edit"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    (formatsBlock().querySelector('[data-testid="formats-save"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(formatsBlock().querySelector('[data-testid="formats-error"]')).not.toBeNull();
+    expect(regionalSync.applySaved).not.toHaveBeenCalled();
+    expect(formatsBlock().querySelector('[data-testid="formats-save"]')).not.toBeNull();
   });
 });

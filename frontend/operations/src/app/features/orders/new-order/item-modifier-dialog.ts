@@ -10,6 +10,7 @@ import {
 
 import { formatMoney } from '../../../core/format/money';
 import { I18n } from '../../../core/i18n/i18n';
+import { presetLabelFor } from '../../../core/i18n/locale-labels';
 import { TPipe } from '../../../core/i18n/t.pipe';
 import { Modal } from '../../../shared/ui/modal';
 import { NumberStepper } from '../../../shared/ui/number-stepper';
@@ -134,16 +135,9 @@ export class ItemModifierDialog {
     this.quantities.set(next);
   }
 
-  /** Row 2.1b: a preset's label in the console's own locale — matches `order-detail-pane.ts`'s own `presetLabel`. */
+  /** Row 2.1b/10.12: a preset's wording in the console's own language — matches `order-detail-pane.ts`'s own `presetLabel`. */
   protected presetLabel(preset: CommentPresetOption): string {
-    switch (this.i18n.locale()) {
-      case 'ru':
-        return preset.labelRu;
-      case 'uz-Latn':
-        return preset.labelUz;
-      default:
-        return preset.labelEn;
-    }
+    return presetLabelFor(preset, this.i18n.locale());
   }
 
   protected isPresetChecked(code: string): boolean {

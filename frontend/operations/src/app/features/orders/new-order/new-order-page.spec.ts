@@ -960,6 +960,36 @@ describe('NewOrderPage', () => {
     expect(fixture.componentInstance['pendingModifiers']()).toBeNull();
   });
 
+  it('row 10.12: a basket line names its checked presets from the labels map, a wording beyond the triple included', async () => {
+    await render({
+      menu: vi.fn().mockResolvedValue(
+        menuWith({}, [
+          {
+            code: 'NO_ONIONS',
+            labelRu: '',
+            labelUz: '',
+            labelEn: '',
+            labels: { kaa: 'Piyazsiz' },
+            label: 'Piyazsiz',
+          },
+        ]),
+      ),
+    });
+
+    fixture.componentInstance['onItemSelected']({ id: 'v-1', label: 'Cheeseburger' });
+    fixture.detectChanges();
+    fixture.componentInstance['onModifierConfirm']({
+      selections: [],
+      commentPresetCodes: ['NO_ONIONS'],
+    });
+    fixture.detectChanges();
+
+    const summary = (fixture.nativeElement as HTMLElement).querySelector(
+      '[data-testid="new-order-line-presets"]',
+    );
+    expect(summary?.textContent?.trim()).toBe('Piyazsiz');
+  });
+
   it('row 2.1b: a product with neither modifier groups nor presets skips the dialog and adds straight to the basket', async () => {
     await render();
 

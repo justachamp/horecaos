@@ -17,6 +17,7 @@ import { TimeZone, formatClock } from '../../core/format/datetime';
 import { LatenessPolicy, PLATFORM_DEFAULT_LATENESS_POLICY } from '../../core/lateness-policy';
 import { LatenessPolicyApi } from '../../core/lateness-policy-api';
 import { I18n } from '../../core/i18n/i18n';
+import { presetLabelFor } from '../../core/i18n/locale-labels';
 import { TPipe } from '../../core/i18n/t.pipe';
 import { RealtimeClient } from '../../core/realtime/realtime-client';
 import { CouriersApi, RosterEntryResponse } from '../couriers/couriers-api';
@@ -516,16 +517,9 @@ export class KitchenQueuePage implements OnInit {
     return this.kitchenNoteByOrderId().get(ticket.orderId) ?? null;
   }
 
-  /** Row 2.1b: a preset's label in the console's own locale — matches `order-detail-pane.ts`'s own `presetLabel`. */
+  /** Row 2.1b/10.12: a preset's wording in the console's own language — matches `order-detail-pane.ts`'s own `presetLabel`. */
   protected presetLabel(preset: OrderLineCommentPreset): string {
-    switch (this.i18n.locale()) {
-      case 'ru':
-        return preset.labelRu;
-      case 'uz-Latn':
-        return preset.labelUz;
-      default:
-        return preset.labelEn;
-    }
+    return presetLabelFor(preset, this.i18n.locale());
   }
 
   // ------------------------------------------------------- P16: line notes

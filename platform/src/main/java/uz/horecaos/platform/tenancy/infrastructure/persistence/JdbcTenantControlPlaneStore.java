@@ -30,6 +30,7 @@ import uz.horecaos.platform.tenancy.application.OperatingUnitNotDeletableExcepti
 import uz.horecaos.platform.tenancy.application.port.TenantControlPlaneStore;
 import uz.horecaos.platform.tenancy.domain.Brand;
 import uz.horecaos.platform.tenancy.domain.BrandProfile;
+import uz.horecaos.platform.tenancy.domain.BrandRegionalFormats;
 import uz.horecaos.platform.tenancy.domain.CoordinateSource;
 import uz.horecaos.platform.tenancy.domain.CustomerIdentityMode;
 import uz.horecaos.platform.tenancy.domain.CustomerIdentityPolicy;
@@ -275,13 +276,14 @@ public class JdbcTenantControlPlaneStore implements TenantControlPlaneStore {
     @Override
     public BrandProfile findBrandProfile(TenantId tenantId, BrandId brandId) {
         BrandContact contact = jdbc.sql("""
-                        SELECT contact_phone, telegram_handle FROM tenant.brands
+                        SELECT contact_phone, telegram_handle,
+                               money_symbol_placement, money_grouping, phone_display_pattern
+                        FROM tenant.brands
                         WHERE tenant_id = :tenantId AND id = :brandId
                         """)
                 .param("tenantId", tenantId.value())
                 .param("brandId", brandId.value())
-                .query((row, number) ->
-                        new BrandContact(row.getString("contact_phone"), row.getString("telegram_handle")))
+                .query((row, number) -> mapBrandContact(row))
                 .single();
 
         List<BrandProfile.BrandLocale> locales = jdbc.sql("""
@@ -301,17 +303,24 @@ public class JdbcTenantControlPlaneStore implements TenantControlPlaneStore {
                         """).param("tenantId", tenantId.value()).param("brandId", brandId.value()));
 
         return new BrandProfile(
-                contact.contactPhone(), contact.telegramHandle(), media.get("LOGO"), media.get("BANNER"), locales);
+                contact.contactPhone(),
+                contact.telegramHandle(),
+                media.get("LOGO"),
+                media.get("BANNER"),
+                locales,
+                contact.formats());
     }
 
     @Override
     public Map<BrandId, BrandProfile> findBrandProfiles(TenantId tenantId) {
         Map<BrandId, BrandContact> contacts = new LinkedHashMap<>();
-        jdbc.sql("SELECT id, contact_phone, telegram_handle FROM tenant.brands WHERE tenant_id = :tenantId")
+        jdbc.sql("""
+                        SELECT id, contact_phone, telegram_handle,
+                               money_symbol_placement, money_grouping, phone_display_pattern
+                        FROM tenant.brands WHERE tenant_id = :tenantId
+                        """)
                 .param("tenantId", tenantId.value())
-                .query((row, number) -> Map.entry(
-                        new BrandId(row.getObject("id", UUID.class)),
-                        new BrandContact(row.getString("contact_phone"), row.getString("telegram_handle"))))
+                .query((row, number) -> Map.entry(new BrandId(row.getObject("id", UUID.class)), mapBrandContact(row)))
                 .list()
                 .forEach(entry -> contacts.put(entry.getKey(), entry.getValue()));
 
@@ -349,13 +358,24 @@ public class JdbcTenantControlPlaneStore implements TenantControlPlaneStore {
                             contact.telegramHandle(),
                             mediaForBrand.get("LOGO"),
                             mediaForBrand.get("BANNER"),
-                            locales.getOrDefault(brandId, List.of())));
+                            locales.getOrDefault(brandId, List.of()),
+                            contact.formats()));
         }
         return profiles;
     }
 
     private record BrandContact(
-            @Nullable String contactPhone, @Nullable String telegramHandle) {}
+            @Nullable String contactPhone, @Nullable String telegramHandle, BrandRegionalFormats formats) {}
+
+    private static BrandContact mapBrandContact(ResultSet row) throws SQLException {
+        return new BrandContact(
+                row.getString("contact_phone"),
+                row.getString("telegram_handle"),
+                new BrandRegionalFormats(
+                        BrandRegionalFormats.MoneySymbolPlacement.valueOf(row.getString("money_symbol_placement")),
+                        BrandRegionalFormats.MoneyGrouping.valueOf(row.getString("money_grouping")),
+                        row.getString("phone_display_pattern")));
+    }
 
     /**
      * Replaces a brand's whole profile in one transaction: contact columns,
@@ -401,6 +421,28 @@ public class JdbcTenantControlPlaneStore implements TenantControlPlaneStore {
                 .update();
         upsertBrandMedia(tenantId, brandId, "LOGO", profile.logoAssetId());
         upsertBrandMedia(tenantId, brandId, "BANNER", profile.bannerAssetId());
+    }
+
+    /**
+     * Replaces the three display formats and nothing else: {@link #updateBrandProfile}
+     * leaves them alone, so a contact or language correction can never reset them.
+     */
+    @Override
+    public void updateBrandRegionalFormats(TenantId tenantId, BrandId brandId, BrandRegionalFormats formats) {
+        jdbc.sql("""
+                        UPDATE tenant.brands SET
+                            money_symbol_placement = :placement,
+                            money_grouping = :grouping,
+                            phone_display_pattern = :phonePattern,
+                            updated_at = now()
+                        WHERE tenant_id = :tenantId AND id = :brandId
+                        """)
+                .param("tenantId", tenantId.value())
+                .param("brandId", brandId.value())
+                .param("placement", formats.moneySymbolPlacement().name())
+                .param("grouping", formats.moneyGrouping().name())
+                .param("phonePattern", formats.phoneDisplayPattern())
+                .update();
     }
 
     private void upsertBrandMedia(TenantId tenantId, BrandId brandId, String role, @Nullable UUID assetId) {

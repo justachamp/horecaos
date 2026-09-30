@@ -676,7 +676,7 @@
             <dd class="q-body-sm">
               @if (detail.value.customer.phoneMasked) {
                 <span class="q-mono">{{
-                  revealedPhone() ?? detail.value.customer.phoneMasked
+                  revealedPhone() ?? detail.value.customer.phoneMasked | phone
                 }}</span>
                 <button
                   type="button"
