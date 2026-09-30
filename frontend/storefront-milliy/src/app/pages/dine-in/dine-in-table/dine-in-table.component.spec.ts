@@ -996,6 +996,28 @@ describe('DineInTableComponent', () => {
         expect(view.carts.cart()?.lines ?? []).toEqual([]);
       });
 
+      it("is taken away if the table's visit ends while it is open: a dish put on a closed session would be refused", async () => {
+        const view = setUp();
+        view.dineIn.seed(admission());
+        view.menuService.home.mockResolvedValue(menuWithRequiredSize());
+        view.dineIn.bill.mockResolvedValue(bill({ totalMinor: 45_000, roundCount: 1 }));
+        await settle(view.fixture);
+        await view.click('dine-in-choose');
+        expect(view.q('modifier-picker')).not.toBeNull();
+        view.dineIn.requestBill.mockRejectedValue(
+          new HorecaOSApiError({
+            status: 404,
+            code: 'RESOURCE_NOT_FOUND',
+            detail: 'no such session',
+          }),
+        );
+
+        await view.click('dine-in-request-bill');
+
+        expect(view.q('dine-in-session-ended')).not.toBeNull();
+        expect(view.q('modifier-picker')).toBeNull();
+      });
+
       it('takes one write at a time: a second confirm while the first is in flight is not sent', async () => {
         const view = await seated();
         await view.click('dine-in-choose');

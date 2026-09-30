@@ -147,7 +147,7 @@
       />
     }
 
-    @if (picking(); as request) {
+    @if (ordering() && picking(); as request) {
       <app-modifier-picker
         [item]="request.item"
         [variantId]="request.variantId"
