@@ -835,6 +835,12 @@ export const messagesUzLatn: MessageCatalogue = {
     'Menyudagi ayrim pozitsiyalarda fiskal tasnif toʻliq emas (IKPU, qadoq kodi, birlik yoki fiskal nom).',
   'settings.home.readiness.code.CHANNEL_NO_PAYMENT_METHOD':
     'Savdo kanalida yoqilgan toʻlov usuli yoʻq, shuning uchun u orqali buyurtma qabul qilib boʻlmaydi.',
+  'settings.home.readiness.code.CHANNEL_NO_FULFILLMENT_MODE':
+    'Savdo kanalida yoqilgan olish usuli yoʻq (yetkazib berish, olib ketish yoki zalda), shuning uchun u orqali buyurtma qabul qilib boʻlmaydi.',
+  'settings.home.readiness.code.CHANNEL_NO_SERVICEABLE_MODE':
+    'Savdo kanalida olish usullari yoqilgan, ammo kanal xizmat koʻrsatadigan filialda birortasiga ish jadvali biriktirilmagan.',
+  'settings.home.readiness.code.LOCATION_NO_SERVICE_SCHEDULE':
+    'Filialda sotiladigan olish usuli uchun ish jadvali biriktirilmagan, shuning uchun u shu usul boʻyicha yopiq.',
   'settings.home.readiness.code.INSTALLATION_SECRET_ROTATION_DUE':
     'Provayder ulanishining kirish maʻlumotlarini almashtirish muddati oʻtib ketgan.',
   'settings.home.readiness.code.MERCHANT_SECRET_ROTATION_DUE':

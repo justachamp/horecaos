@@ -852,7 +852,13 @@ public class OnboardingService implements OnboardingHealthQuery {
                     (List<OnboardingStepHandler.StepResult.Finding>) findings;
             return typed.stream()
                     .map(finding -> new ValidationResult(
-                            stepKey, false, finding.errorCode(), finding.detail(), finding.locationId(), advisory))
+                            stepKey,
+                            false,
+                            finding.errorCode(),
+                            finding.detail(),
+                            finding.locationId(),
+                            advisory,
+                            finding.subject()))
                     .toList();
         }
         return List.of(new ValidationResult(
@@ -1305,6 +1311,11 @@ public class OnboardingService implements OnboardingHealthQuery {
      *                   advisory (settings.md §10.0): shown, but not counted
      *                   against {@link ValidationOutcome#allPassed()}; false for
      *                   every {@code VALIDATING}-phase step
+     * @param subject    the one non-location object the finding is about (a
+     *                   sales channel), when it names one, so the console can
+     *                   link to that object rather than to a list; {@code null}
+     *                   for every finding that names none — serialised as an
+     *                   absent {@code subject}, which an older console ignores
      */
     public record ValidationResult(
             String stepKey,
@@ -1312,7 +1323,19 @@ public class OnboardingService implements OnboardingHealthQuery {
             @Nullable String errorCode,
             @Nullable String detail,
             @Nullable UUID locationId,
-            boolean advisory) {
+            boolean advisory,
+            OnboardingStepHandler.StepResult.@Nullable Subject subject) {
+
+        /** A finding that names no per-item object — what every result was before {@code subject} existed. */
+        public ValidationResult(
+                String stepKey,
+                boolean passed,
+                @Nullable String errorCode,
+                @Nullable String detail,
+                @Nullable UUID locationId,
+                boolean advisory) {
+            this(stepKey, passed, errorCode, detail, locationId, advisory, null);
+        }
 
         /** A blocking finding — what every result was before {@code advisory} existed. */
         public ValidationResult(
@@ -1321,7 +1344,7 @@ public class OnboardingService implements OnboardingHealthQuery {
                 @Nullable String errorCode,
                 @Nullable String detail,
                 @Nullable UUID locationId) {
-            this(stepKey, passed, errorCode, detail, locationId, false);
+            this(stepKey, passed, errorCode, detail, locationId, false, null);
         }
     }
 

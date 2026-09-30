@@ -21,7 +21,7 @@ import { TPipe } from '../../../core/i18n/t.pipe';
 import { Combobox, ComboboxOption } from '../../../shared/ui/combobox';
 import { describeApiError } from '../../orders/order-errors';
 import { ConfigurationApi } from '../configuration-api';
-import { ReadinessApi, ValidationResult } from './readiness-api';
+import { ReadinessApi, SALES_CHANNEL_SUBJECT, ValidationResult } from './readiness-api';
 import { SettingsNavGroup, visibleSettings } from '../settings-nav';
 import { CONFIGURATION_KEY_ROUTES, REFERENCE_LISTS } from '../settings-search-index';
 
@@ -65,6 +65,11 @@ const READINESS_CODE_KEYS: Readonly<Record<string, MessageKey>> = {
   // `OnboardingStep` of their own — see `OnboardingReadinessChecks`.
   FISCAL_CLASSIFICATION_INCOMPLETE: 'settings.home.readiness.code.FISCAL_CLASSIFICATION_INCOMPLETE',
   CHANNEL_NO_PAYMENT_METHOD: 'settings.home.readiness.code.CHANNEL_NO_PAYMENT_METHOD',
+  // Batch 16: the two checks batch 15 left — channel fulfilment-mode coverage
+  // and location service-binding coverage.
+  CHANNEL_NO_FULFILLMENT_MODE: 'settings.home.readiness.code.CHANNEL_NO_FULFILLMENT_MODE',
+  CHANNEL_NO_SERVICEABLE_MODE: 'settings.home.readiness.code.CHANNEL_NO_SERVICEABLE_MODE',
+  LOCATION_NO_SERVICE_SCHEDULE: 'settings.home.readiness.code.LOCATION_NO_SERVICE_SCHEDULE',
   INSTALLATION_SECRET_ROTATION_DUE: 'settings.home.readiness.code.INSTALLATION_SECRET_ROTATION_DUE',
   MERCHANT_SECRET_ROTATION_DUE: 'settings.home.readiness.code.MERCHANT_SECRET_ROTATION_DUE',
 };
@@ -79,6 +84,13 @@ const READINESS_CODE_KEYS: Readonly<Record<string, MessageKey>> = {
 function readinessLink(finding: ValidationResult): readonly string[] | null {
   if (finding.locationId) {
     return ['/settings/locations', finding.locationId];
+  }
+  // Batch 16: a finding that names one object links to that object, not to the
+  // list it sits in. A channel opens its own setup hub; a subject type this
+  // console has no screen for falls through to the code-keyed link below, so
+  // a server that grows a new type before this file does still shows the row.
+  if (finding.subject?.type === SALES_CHANNEL_SUBJECT && finding.subject.id) {
+    return ['/settings/channel-setup', finding.subject.id];
   }
   if (finding.errorCode === 'NO_BRAND' || finding.errorCode === 'NO_ACTIVE_BRAND') {
     return ['/settings/brand'];
@@ -101,7 +113,11 @@ function readinessLink(finding: ValidationResult): readonly string[] | null {
   if (finding.errorCode === 'FISCAL_CLASSIFICATION_INCOMPLETE') {
     return ['/settings/fiscalization'];
   }
-  if (finding.errorCode === 'CHANNEL_NO_PAYMENT_METHOD') {
+  if (
+    finding.errorCode === 'CHANNEL_NO_PAYMENT_METHOD' ||
+    finding.errorCode === 'CHANNEL_NO_FULFILLMENT_MODE' ||
+    finding.errorCode === 'CHANNEL_NO_SERVICEABLE_MODE'
+  ) {
     return ['/settings/sales-channels'];
   }
   if (
@@ -134,6 +150,7 @@ function withUniqueKeys(findings: readonly ValidationResult[]): readonly Readine
     const base = [
       finding.stepKey,
       finding.locationId ?? '',
+      finding.subject ? `${finding.subject.type}:${finding.subject.id}` : '',
       finding.errorCode ?? '',
       finding.detail ?? '',
     ].join('|');
@@ -156,14 +173,15 @@ function bySeverity(a: ValidationResult, b: ValidationResult): number {
  * 10.0 Settings home — `docs/operations-spec/settings.md` §10.0.
  *
  * **The readiness panel**, added in wave P31: not the spec's full
- * multi-source table (channel-fulfilment-mode and service-binding coverage
- * still have no read behind them), but `OnboardingController.validate`
+ * multi-source table, but `OnboardingController.validate`
  * reshaped into exactly what it can honestly answer today — every
  * `VALIDATING`-phase check, every offending item named rather than only the
  * first (see `OnboardingService.validationResultsFor`), plus the ad hoc checks
  * that ride along without an `OnboardingStep`: SMS-template moderation, and —
  * batch 15 — fiscal classification coverage, channel payment-method coverage
- * and secret-rotation age. A finding the server marks `advisory` sorts after
+ * and secret-rotation age, then — batch 16 — channel fulfilment-mode coverage
+ * and location service-binding coverage. A finding that names one channel
+ * carries a `subject`, and its row links to that channel's own setup. A finding the server marks `advisory` sorts after
  * the blocking ones and carries a muted tag rather than reading as a
  * stop-the-line error. The empty state ("Всё настроено") is the same one
  * settings.md asks for.

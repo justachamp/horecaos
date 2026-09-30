@@ -16,6 +16,21 @@ export interface OnboardingRunView {
 }
 
 /**
+ * The one non-location object a finding is about (mirrors
+ * `OnboardingStepHandler.StepResult.Subject`): a type from a closed
+ * vocabulary plus its identifier, never a name. A type this console has no
+ * screen for is rendered without a per-item link, so a server that grows a new
+ * type before this list does still shows the finding.
+ */
+export interface ValidationSubject {
+  readonly type: string;
+  readonly id: string;
+}
+
+/** The subject types this console can open (`SALES_CHANNEL` → the channel's setup hub). */
+export const SALES_CHANNEL_SUBJECT = 'SALES_CHANNEL';
+
+/**
  * One `validate` finding, expanded to one row per offending item (wave P31's
  * own reshape of `OnboardingService.ValidationResult` — `locationId` is the
  * field that reshape added).
@@ -33,6 +48,13 @@ export interface ValidationResult {
    * conservative reading.
    */
   readonly advisory?: boolean;
+  /**
+   * The channel (or other non-location object) this finding names, when it
+   * names one — the per-item deep link (gap map row 10.0, batch 16). Absent on
+   * an older server and on every finding that names no single object, which
+   * then links by error code alone, exactly as before.
+   */
+  readonly subject?: ValidationSubject | null;
 }
 
 /** Mirrors uz.horecaos.platform.tenancy.application.onboarding.OnboardingService.ValidationOutcome. */

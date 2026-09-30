@@ -826,6 +826,12 @@ export const messagesRu: MessageCatalogue = {
     'У части позиций меню фискальная классификация заполнена не полностью (ИКПУ, код упаковки, единица или фискальное название).',
   'settings.home.readiness.code.CHANNEL_NO_PAYMENT_METHOD':
     'У канала продаж не включён ни один способ оплаты, поэтому заказ через него принять нельзя.',
+  'settings.home.readiness.code.CHANNEL_NO_FULFILLMENT_MODE':
+    'У канала продаж не включён ни один способ получения (доставка, самовывоз или в зале), поэтому заказ через него принять нельзя.',
+  'settings.home.readiness.code.CHANNEL_NO_SERVICEABLE_MODE':
+    'У канала продаж включены способы получения, но ни для одного не привязан график работы в заведении, где канал доступен.',
+  'settings.home.readiness.code.LOCATION_NO_SERVICE_SCHEDULE':
+    'У заведения не привязан график работы для способа получения, который здесь продаётся, поэтому по нему оно закрыто.',
   'settings.home.readiness.code.INSTALLATION_SECRET_ROTATION_DUE':
     'Учётные данные подключения к провайдеру не обновлялись дольше срока ротации.',
   'settings.home.readiness.code.MERCHANT_SECRET_ROTATION_DUE':

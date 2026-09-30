@@ -859,6 +859,12 @@ export const messagesEn = {
     'Some menu items still lack a complete fiscal classification (ИКПУ, package code, unit or fiscal name).',
   'settings.home.readiness.code.CHANNEL_NO_PAYMENT_METHOD':
     'A sales channel has no payment method enabled, so no order can be taken through it.',
+  'settings.home.readiness.code.CHANNEL_NO_FULFILLMENT_MODE':
+    'A sales channel has no fulfilment mode enabled (delivery, pickup or dine-in), so no order can be taken through it.',
+  'settings.home.readiness.code.CHANNEL_NO_SERVICEABLE_MODE':
+    'A sales channel has fulfilment modes enabled, but none has opening hours bound at a location it serves.',
+  'settings.home.readiness.code.LOCATION_NO_SERVICE_SCHEDULE':
+    'A location has no opening hours bound for a fulfilment mode it sells, so it stays closed for that mode.',
   'settings.home.readiness.code.INSTALLATION_SECRET_ROTATION_DUE':
     'A provider connection’s credential is overdue for rotation.',
   'settings.home.readiness.code.MERCHANT_SECRET_ROTATION_DUE':
