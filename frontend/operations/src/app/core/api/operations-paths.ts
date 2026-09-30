@@ -69,6 +69,31 @@ export const operationsPaths = {
   },
 
   /**
+   * The same board across every branch of the brand — the «Все филиалы» mode
+   * (gap map row `1.1`, wave 16): `OperationsBrandOrderController.board`, the
+   * branch board's own statement over a wider set of branches. `ORDER_READ` at
+   * `BRAND` scope, so a location-scoped principal is refused (403) and keeps
+   * {@link orderBoard}. Takes the same filters plus a repeatable `locationId`;
+   * each row carries its own `locationId`.
+   */
+  brandOrderBoard(scope: LocationScope): string {
+    return `${OPERATIONS}${tenantBrand(scope)}/orders/board`;
+  },
+
+  /**
+   * The aggregator bindings this branch's orders arrived through — the options
+   * behind the toolbar's «Агрегатор» filter (row `1.1c`, wave 16).
+   */
+  orderMarketplaceBindings(scope: LocationScope): string {
+    return `${this.orders(scope)}/marketplace-bindings`;
+  },
+
+  /** {@link orderMarketplaceBindings} across the brand — `ORDER_READ` at `BRAND` scope. */
+  brandOrderMarketplaceBindings(scope: LocationScope): string {
+    return `${OPERATIONS}${tenantBrand(scope)}/orders/marketplace-bindings`;
+  },
+
+  /**
    * N independent `ADVANCE`/`CANCEL` commands under one bulk operation id
    * (ADR 0039, orders.md §2.10, wave P07) — `OrderBulkActionService`, capped
    * at 200 orders, always `202` with a per-item outcome list. Bulk courier

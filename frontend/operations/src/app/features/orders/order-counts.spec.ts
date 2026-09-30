@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiClient } from '../../core/api/api-client';
 import { ApiError, ApiErrorCode } from '../../core/api/problem-details';
 import { PLATFORM_DEFAULT_LATENESS_POLICY } from '../../core/lateness-policy';
-import { OrderCountsResponse } from './order-detail';
+import { OrderBrandCountsResponse, OrderCountsResponse } from './order-detail';
 import { CountableOrder, OrderCounts, zeroTabCounts } from './order-counts';
 
 const NOW = new Date('2026-08-30T12:00:00Z');
@@ -156,5 +156,137 @@ describe('OrderCounts: consuming GET .../orders/counts', () => {
     await counts.forOrders(SCOPE, [], NOW, POLICY);
 
     expect(get).toHaveBeenCalledWith('/api/v1/tenants/t1/brands/b1/locations/l1/orders/counts');
+  });
+});
+
+describe('OrderCounts: the brand-wide read (wave 16, «Все филиалы»)', () => {
+  it('reads the brand’s totals, from the brand counts endpoint rather than a branch’s', async () => {
+    const get = vi.fn().mockReturnValue(
+      of({
+        value: {
+          totals: countsResponse({
+            newOrders: 7,
+            inKitchen: 4,
+            ready: 2,
+            fulfilling: 3,
+            completed: 20,
+            cancelled: 5,
+            total: 41,
+          }),
+        } satisfies OrderBrandCountsResponse,
+        version: null,
+      }),
+    );
+    const counts = configure(get);
+
+    const result = await counts.forOrders(SCOPE, [], NOW, POLICY, true);
+
+    expect(get.mock.calls[0][0]).toBe('/api/v1/operations/tenants/t1/brands/b1/orders/counts');
+    expect(result).toEqual({
+      attention: 0,
+      new: 7,
+      preparing: 6,
+      delivering: 3,
+      completed: 20,
+      cancelled: 5,
+      all: 41,
+    });
+  });
+
+  it('keeps Внимание derived from the loaded orders, exactly as the branch read does', async () => {
+    const get = vi
+      .fn()
+      .mockReturnValue(of({ value: { totals: countsResponse({ total: 9 }) }, version: null }));
+    const counts = configure(get);
+
+    const result = await counts.forOrders(
+      SCOPE,
+      [order({ status: 'AWAITING_APPROVAL' })],
+      NOW,
+      POLICY,
+      true,
+    );
+
+    expect(result.attention).toBe(1);
+    expect(result.all).toBe(9);
+  });
+
+  it('falls back to deriving every tab from the page when the brand read is refused', async () => {
+    const get = vi
+      .fn()
+      .mockReturnValue(
+        throwError(() => new ApiError(ApiErrorCode.INSUFFICIENT_CAPABILITY, 403, null, null)),
+      );
+    const counts = configure(get);
+
+    const result = await counts.forOrders(
+      SCOPE,
+      [order({ status: 'PREPARING' }), order({ status: 'COMPLETED' })],
+      NOW,
+      POLICY,
+      true,
+    );
+
+    expect(result.preparing).toBe(1);
+    expect(result.completed).toBe(1);
+    expect(result.all).toBe(2);
+  });
+
+  it('does not mistake a branch-shaped answer for the brand’s (no totals key)', async () => {
+    const get = vi
+      .fn()
+      .mockReturnValue(of({ value: countsResponse({ total: 99 }), version: null }));
+    const counts = configure(get);
+
+    const result = await counts.forOrders(
+      SCOPE,
+      [order({ status: 'RECEIVED' })],
+      NOW,
+      POLICY,
+      true,
+    );
+
+    expect(
+      result.all,
+      'derived from the one order, not read from a shape the brand endpoint never sends',
+    ).toBe(1);
+  });
+});
+
+describe('OrderCounts: a policy per order (wave 16)', () => {
+  /** A branch that warns an hour ahead of the promise, where the platform default warns five minutes ahead. */
+  const WARNS_EARLY = {
+    delivery: { atRiskBeforeSeconds: 3600, lateAfterSeconds: 0, noPromiseFallbackSeconds: 2700 },
+    pickup: { atRiskBeforeSeconds: 3600, lateAfterSeconds: 0, noPromiseFallbackSeconds: 2700 },
+    dineIn: { atRiskBeforeSeconds: 3600, lateAfterSeconds: 0, noPromiseFallbackSeconds: 2700 },
+  };
+
+  it('counts Внимание by each order’s own branch policy', async () => {
+    const counts = configure(vi.fn().mockReturnValue(throwError(() => new Error('unreachable'))));
+    // Promised twenty minutes from now: comfortably normal under the default's five-minute warning,
+    // already at risk under a branch that warns an hour ahead.
+    const promised = new Date(NOW.getTime() + 20 * 60_000);
+    const orders = [
+      order({ status: 'PREPARING', promisedAt: promised, locationId: 'default-branch' }),
+      order({ status: 'PREPARING', promisedAt: promised, locationId: 'early-branch' }),
+    ];
+
+    const result = await counts.forOrders(SCOPE, orders, NOW, (o) =>
+      o.locationId === 'early-branch' ? WARNS_EARLY : POLICY,
+    );
+
+    expect(result.attention, 'at risk at the early-warning branch only').toBe(1);
+  });
+
+  it('a single policy still judges every order alike', async () => {
+    const counts = configure(vi.fn().mockReturnValue(throwError(() => new Error('unreachable'))));
+    const promised = new Date(NOW.getTime() + 20 * 60_000);
+    const orders = [
+      order({ status: 'PREPARING', promisedAt: promised, locationId: 'a' }),
+      order({ status: 'PREPARING', promisedAt: promised, locationId: 'b' }),
+    ];
+
+    expect((await counts.forOrders(SCOPE, orders, NOW, WARNS_EARLY)).attention).toBe(2);
+    expect((await counts.forOrders(SCOPE, orders, NOW, POLICY)).attention).toBe(0);
   });
 });

@@ -274,6 +274,60 @@ public final class OrderActionsPolicy {
     }
 
     /**
+     * {@link #availableFor(OrderStatus, FulfillmentMode, Set, boolean, boolean)},
+     * with {@code ISSUE_INVOICE} added when this order is waiting on an online
+     * payment nobody has made (gap map row 1.1e, orders.md §4.9 «Выставить счёт»).
+     *
+     * <p>A sixth-argument overload for the reason the fifth and fourth are: the
+     * sweeps in {@code OrderActionsPolicyTests} exercise the shorter forms and
+     * have no opinion about a payment. {@code OrderActionResponse.allFor} — the
+     * one caller that has the order's payment projection — calls this one.
+     *
+     * <p>The gate is the endpoint's own. {@code POST .../orders/{id}/payment/
+     * re-presentations} declares {@code PAYMENT_INITIATE} at <em>tenant</em>
+     * scope and hands the order to {@code PaymentCheckoutService}, which refuses
+     * a cash order, a paid one, and an order whose intent has closed. So the
+     * action is offered exactly where that call can succeed as far as this order's
+     * own row can tell: it has not ended, its payment is still owed online, and
+     * the caller holds the capability. The caller supplies that capability
+     * already resolved at the endpoint's scope — the location-scoped set the other
+     * branches read would offer the button to a principal the endpoint refuses.
+     *
+     * @param awaitingOnlinePayment see {@link #awaitsOnlinePayment}
+     */
+    public static List<OrderAction> availableFor(
+            OrderStatus status,
+            FulfillmentMode mode,
+            Set<Capability> grantedCapabilities,
+            boolean courierUnassigned,
+            boolean amendmentAwaitingOperator,
+            boolean awaitingOnlinePayment) {
+        List<OrderAction> actions = new ArrayList<>(
+                availableFor(status, mode, grantedCapabilities, courierUnassigned, amendmentAwaitingOperator));
+
+        if (awaitingOnlinePayment && !status.terminal() && grantedCapabilities.contains(Capability.PAYMENT_INITIATE)) {
+            actions.add(new OrderAction(OrderActionCode.ISSUE_INVOICE, null));
+        }
+
+        return List.copyOf(actions);
+    }
+
+    /**
+     * Whether an order's payment projection says an online payment is still owed.
+     *
+     * <p>{@code PENDING} is the one value that means it: checkout writes it only
+     * for an order that must be paid before it can be confirmed (an online
+     * tender), {@code NOT_REQUIRED} for cash and marketplace orders, and every
+     * later payment fact moves it off {@code PENDING} to a settled or failed
+     * value. {@code FAILED} is deliberately not included — a failed attempt takes
+     * the order to the terminal {@code PAYMENT_FAILED}, where "a new attempt is a
+     * new order" (ADR 0019).
+     */
+    public static boolean awaitsOnlinePayment(String paymentStatusProjection) {
+        return "PENDING".equals(paymentStatusProjection);
+    }
+
+    /**
      * The window {@link DeliveryPlanTrigger} keeps a delivery plan open in:
      * from {@code CONFIRMED}, when the plan is opened, through {@code
      * FULFILLING}, the last non-terminal status a delivery order reaches

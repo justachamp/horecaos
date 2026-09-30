@@ -12,6 +12,7 @@ import { SalesChannelsApi } from '../settings/sales-channels/sales-channels-api'
 import { CouriersApi, RosterEntryResponse } from '../couriers/couriers-api';
 import { DispatchApi, DispatchResponse } from '../delivery/dispatch-api';
 import { KitchenApi, KitchenEventsResponse } from '../kitchen/kitchen-api';
+import { OrderPaymentView, PaymentsApi } from '../finance/payments/payments-api';
 import { OrderActionsApi } from './order-actions-api';
 import { AmendmentResponse } from './order-amendments';
 import { OrderAmendmentsApi } from './order-amendments-api';
@@ -165,6 +166,7 @@ function configure(options: {
   couriersApi?: Partial<CouriersApi>;
   kitchenApi?: Partial<KitchenApi>;
   posExportApi?: Partial<OrderPosExportApi>;
+  paymentsApi?: Partial<PaymentsApi>;
   newOrderApi?: Partial<NewOrderApi>;
   channelsApi?: Partial<SalesChannelsApi>;
   router?: Partial<Router>;
@@ -234,6 +236,10 @@ function configure(options: {
           forOrder: () => Promise.resolve({ posCapable: false, export: null }),
         },
       },
+      // Row 1.1e (wave 16): only a test about «Выставить счёт» supplies the
+      // payments seam; every other keeps the real root-provided `PaymentsApi`
+      // over the stubbed `ApiClient`, exactly as before this option existed.
+      ...(options.paymentsApi ? [{ provide: PaymentsApi, useValue: options.paymentsApi }] : []),
       // Wave 10 (rows 1.2c/2.1d): ADD_LINES's own search reuses NewOrderApi,
       // CHANGE_PAYMENT_METHOD's own picker reuses SalesChannelsApi's matrix —
       // every test not focused on either gets a harmless empty answer, the
@@ -1968,6 +1974,64 @@ describe('OrderDetailPane: §3.6 Комментарии — the amendment client
     await flushMicrotasks();
 
     expect(confirm).toHaveBeenCalledWith(FAKE_SCOPE, 'order-1', 'amendment-9', 2, 'PHONE');
+  });
+
+  /**
+   * «Выставить счёт» (gap map row 1.1e, wave 16): `ISSUE_INVOICE` arrives in
+   * `summary.actions` for an order still owed an online payment. Its form is
+   * the payment panel's own, so the header action's whole job is to open it.
+   */
+  it('wires the header ISSUE_INVOICE action to open the payment panel’s re-issue form', async () => {
+    const providerPayment: OrderPaymentView = {
+      orderId: 'order-1',
+      publicOrderNumber: '0142',
+      orderStatus: 'PAYMENT_AUTHORIZING',
+      orderTotal: { amountMinor: 146_000, currency: 'UZS' },
+      intent: {
+        intentId: 'intent-1',
+        tender: 'PROVIDER',
+        method: 'CLICK',
+        providerType: 'CLICK',
+        amount: { amountMinor: 146_000, currency: 'UZS' },
+        status: 'PENDING',
+        createdAt: '2026-09-30T09:00:00Z',
+        settledAt: null,
+      },
+      payment: [],
+      attempts: [],
+      captured: { amountMinor: 0, currency: 'UZS' },
+      returned: { amountMinor: 0, currency: 'UZS' },
+    };
+    configure({
+      get: apiGet({
+        value: detail({
+          summary: {
+            ...detail().summary,
+            status: 'PAYMENT_AUTHORIZING',
+            paymentStatusProjection: 'PENDING',
+            actions: [{ action: 'ISSUE_INVOICE' }],
+          },
+        }),
+        version: 3,
+      }),
+      paymentsApi: { orderPayment: vi.fn().mockResolvedValue(providerPayment) },
+    });
+    const fixture = await render();
+    const host: HTMLElement = fixture.nativeElement;
+    host.querySelectorAll('q-order-payment-panel').forEach((panel) => {
+      (panel as HTMLElement).scrollIntoView = vi.fn();
+    });
+    expect(host.querySelector('[data-testid="order-payment-reissue-form"]')).toBeNull();
+
+    const primary = host.querySelector(
+      '[data-testid="order-detail-primary-action"]',
+    ) as HTMLButtonElement;
+    expect(primary.textContent?.trim()).toBe('Issue invoice');
+    primary.click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(host.querySelector('[data-testid="order-payment-reissue-form"]')).not.toBeNull();
   });
 
   it('the header RESOLVE action does nothing if the history no longer names an amendment still carrying RESOLVE', async () => {

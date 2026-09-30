@@ -1,7 +1,9 @@
 package uz.horecaos.platform.integration.api.provider;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 
@@ -70,6 +72,21 @@ public interface ProviderInstallationLookup {
             UUID tenantId, UUID installationId, UUID brandId, @Nullable UUID locationId) {
         return Optional.empty();
     }
+
+    /**
+     * The provider and display name of the installation each of these bindings
+     * belongs to — regardless of the binding's or installation's current status,
+     * because an order placed through a since-suspended binding still has to be
+     * named on the board. Absent for an id that names no binding of this tenant.
+     * Defaulted, like {@link #binding}, so the several test doubles of this port
+     * that predate this need grow no mechanical implementation.
+     */
+    default Map<UUID, BindingLabel> bindingLabels(UUID tenantId, Set<UUID> bindingIds) {
+        return Map.of();
+    }
+
+    /** A binding's operator-facing name: never a credential. */
+    record BindingLabel(String providerType, String displayName) {}
 
     /**
      * A binding's non-sensitive installation detail, resolved from ADR 0026.

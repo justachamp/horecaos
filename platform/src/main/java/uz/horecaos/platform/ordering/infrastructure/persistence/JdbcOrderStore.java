@@ -1244,7 +1244,15 @@ public class JdbcOrderStore {
     }
 
     /**
-     * The operations board for one location, newest first, one page (ADR 0102).
+     * The operations board, newest first, one page (ADR 0102): one location's, or
+     * — when {@link OrderListQuery#locationIds()} names several or none — a set of
+     * the brand's branches (the brand-scoped board, wave 16).
+     *
+     * <p>The location set is one more predicate of the one statement, never a
+     * second statement: the brand board reads exactly what the branch board reads,
+     * so the two cannot disagree about a filter. Its tenant and brand predicates
+     * stay unconditional; only the location predicate widens, and the branch
+     * endpoint always names exactly one location.
      *
      * <p>Every predicate orders.md §2.4 names is in the statement rather than in
      * a stream after it. That is not a performance preference: a filter applied
@@ -1282,6 +1290,13 @@ public class JdbcOrderStore {
     public List<OrderBoardRow> listForLocation(
             OrderListQuery query, @Nullable Instant beforeCreatedAt, @Nullable UUID beforeId, int limit) {
 
+        if (query.lateOnly() && query.lateness() == null) {
+            // Refusing beats answering: with no thresholds the late predicate
+            // matches nothing, and an empty board reads as "nothing is late".
+            throw new IllegalStateException(
+                    "A late-only board query needs the lateness thresholds resolved first (OrderQueryService does)");
+        }
+
         return jdbc.sql("SELECT " + ORDER_COLUMNS + """
                         ,
                                (SELECT CASE
@@ -1295,7 +1310,8 @@ public class JdbcOrderStore {
                                    AND p.status IN ('MANUAL_ACTION_REQUIRED', 'FAILED_RETRYABLE'))
                                AS process_attention
                         FROM ordering.orders
-                        WHERE tenant_id = :tenantId AND brand_id = :brandId AND location_id = :locationId
+                        WHERE tenant_id = :tenantId AND brand_id = :brandId
+                          AND (:allLocations OR location_id = ANY(CAST(:locationIds AS uuid[])))
                           AND (:statusFilterEmpty OR status = ANY(:statuses))
                           AND (CAST(:from AS timestamptz) IS NULL
                                OR created_at >= CAST(:from AS timestamptz))
@@ -1325,6 +1341,38 @@ public class JdbcOrderStore {
                           AND (CAST(:origin AS varchar) IS NULL OR origin = CAST(:origin AS varchar))
                           AND (CAST(:paymentStatus AS varchar) IS NULL
                                OR payment_status_projection = CAST(:paymentStatus AS varchar))
+                          AND (CAST(:marketplaceBindingId AS uuid) IS NULL
+                               OR marketplace_binding_id = CAST(:marketplaceBindingId AS uuid))
+                          AND (NOT :callbackRequested OR callback_requested)
+                          AND (NOT :problemOnly OR EXISTS (
+                                  SELECT 1 FROM ordering.order_process_states p
+                                   WHERE p.tenant_id = orders.tenant_id AND p.order_id = orders.id
+                                     AND p.status IN ('MANUAL_ACTION_REQUIRED', 'FAILED_RETRYABLE')))
+                          AND (:fiscalFilterEmpty OR EXISTS (
+                                  SELECT 1 FROM fiscal.fiscal_documents f
+                                   WHERE f.tenant_id = orders.tenant_id AND f.order_id = orders.id
+                                     AND f.status = ANY(:fiscalStatuses)))
+                          AND (NOT :lateOnly OR (
+                                  status = ANY(CAST(:openStatuses AS varchar[]))
+                                  AND EXISTS (
+                                      SELECT 1
+                                        FROM unnest(CAST(:lateLocationIds AS uuid[]),
+                                                    CAST(:lateModes AS varchar[]),
+                                                    CAST(:lateAfterSeconds AS int[]),
+                                                    CAST(:lateFallbackSeconds AS int[]))
+                                             AS t(location_id, fulfillment_mode,
+                                                  late_after_seconds, fallback_seconds)
+                                       WHERE t.location_id = orders.location_id
+                                         AND t.fulfillment_mode = orders.fulfillment_mode
+                                         AND CASE
+                                               WHEN orders.promised_at IS NOT NULL
+                                                 THEN orders.promised_at
+                                                      < CAST(:now AS timestamptz)
+                                                        - t.late_after_seconds * interval '1 second'
+                                               ELSE orders.created_at
+                                                    + t.fallback_seconds * interval '1 second'
+                                                    < CAST(:now AS timestamptz)
+                                             END)))
                           AND (:unbounded
                                OR (created_at, id)
                                   < (CAST(:beforeCreatedAt AS timestamptz), CAST(:beforeId AS uuid)))
@@ -1333,7 +1381,8 @@ public class JdbcOrderStore {
                         """)
                 .param("tenantId", query.tenantId())
                 .param("brandId", query.brandId())
-                .param("locationId", query.locationId())
+                .param("allLocations", query.locationIds().isEmpty())
+                .param("locationIds", uuidStrings(query.locationIds()))
                 .param("statusFilterEmpty", query.statuses().isEmpty())
                 .param("statuses", query.statuses().toArray(String[]::new))
                 .param("from", utcOrNull(query.from()))
@@ -1348,6 +1397,43 @@ public class JdbcOrderStore {
                 .param("reference", query.normalisedReference())
                 .param("origin", query.origin())
                 .param("paymentStatus", query.paymentStatus())
+                .param(
+                        "marketplaceBindingId",
+                        query.marketplaceBindingId() == null
+                                ? null
+                                : query.marketplaceBindingId().toString())
+                .param("callbackRequested", query.callbackRequested())
+                .param("problemOnly", query.problemOnly())
+                .param("fiscalFilterEmpty", query.fiscalStatuses().isEmpty())
+                .param("fiscalStatuses", query.fiscalStatuses().toArray(String[]::new))
+                .param("lateOnly", query.lateOnly())
+                .param("openStatuses", OPEN_STATUS_NAMES)
+                .param(
+                        "now",
+                        utcOrNull(
+                                query.lateness() == null
+                                        ? Instant.EPOCH
+                                        : query.lateness().now()))
+                .param(
+                        "lateLocationIds",
+                        query.lateness() == null
+                                ? new String[0]
+                                : query.lateness().locationIds())
+                .param(
+                        "lateModes",
+                        query.lateness() == null
+                                ? new String[0]
+                                : query.lateness().modes())
+                .param(
+                        "lateAfterSeconds",
+                        query.lateness() == null
+                                ? new String[0]
+                                : query.lateness().lateAfterSeconds())
+                .param(
+                        "lateFallbackSeconds",
+                        query.lateness() == null
+                                ? new String[0]
+                                : query.lateness().fallbackSeconds())
                 .param("unbounded", beforeCreatedAt == null)
                 // Cast in the statement rather than typed here, so the null a
                 // first page sends is a typed null the row comparison can be
@@ -1380,18 +1466,91 @@ public class JdbcOrderStore {
      * life of the order.
      */
     public Optional<Instant> locationOrderCursor(UUID tenantId, UUID brandId, UUID locationId, UUID orderId) {
+        return boardOrderCursor(tenantId, brandId, List.of(locationId), orderId);
+    }
+
+    /**
+     * {@link #locationOrderCursor} over a set of the brand's branches, or over the
+     * whole brand when {@code locationIds} is empty — the brand-scoped board's
+     * cursor (wave 16). The tenant and brand predicates are unconditional, so a
+     * cursor naming another brand's or another tenant's order resolves to nothing
+     * exactly as it does on the branch board.
+     */
+    public Optional<Instant> boardOrderCursor(UUID tenantId, UUID brandId, List<UUID> locationIds, UUID orderId) {
         return jdbc.sql("""
                 SELECT created_at FROM ordering.orders
                 WHERE tenant_id = :tenantId AND brand_id = :brandId
-                  AND location_id = :locationId AND id = :orderId
+                  AND (:allLocations OR location_id = ANY(CAST(:locationIds AS uuid[])))
+                  AND id = :orderId
                 """)
                 .param("tenantId", tenantId)
                 .param("brandId", brandId)
-                .param("locationId", locationId)
+                .param("allLocations", locationIds.isEmpty())
+                .param("locationIds", uuidStrings(locationIds))
                 .param("orderId", orderId)
                 .query((row, number) ->
                         row.getObject("created_at", OffsetDateTime.class).toInstant())
                 .optional();
+    }
+
+    /**
+     * The branches of this brand that hold an order still in play — the
+     * locations whose lateness policy the «Только опаздывающие» filter needs
+     * resolved when the board is asked across the whole brand. A branch with
+     * nothing open cannot contribute a late order, so it is not resolved.
+     */
+    public List<UUID> locationsWithOpenOrders(UUID tenantId, UUID brandId) {
+        return jdbc.sql("""
+                SELECT DISTINCT location_id FROM ordering.orders
+                WHERE tenant_id = :tenantId AND brand_id = :brandId
+                  AND status = ANY(CAST(:openStatuses AS varchar[]))
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("openStatuses", OPEN_STATUS_NAMES)
+                .query((row, number) -> row.getObject("location_id", UUID.class))
+                .list();
+    }
+
+    /**
+     * Which aggregator bindings the orders in scope arrived through (ADR 0040,
+     * V0038's {@code marketplace_binding_id}), most recently used first — the
+     * small read model behind the board's «Агрегатор» filter. Counts only; the
+     * binding's own name is integration's to give and is resolved by the caller
+     * through {@code MarketplaceBindingLookup}.
+     *
+     * @param locationIds the branches in scope, or empty for the whole brand
+     */
+    public List<MarketplaceBindingUsage> marketplaceBindingUsage(UUID tenantId, UUID brandId, List<UUID> locationIds) {
+        return jdbc.sql("""
+                SELECT marketplace_binding_id, count(*) AS order_count, max(created_at) AS last_order_at
+                  FROM ordering.orders
+                 WHERE tenant_id = :tenantId AND brand_id = :brandId
+                   AND origin = 'MARKETPLACE' AND marketplace_binding_id IS NOT NULL
+                   AND (:allLocations OR location_id = ANY(CAST(:locationIds AS uuid[])))
+                 GROUP BY marketplace_binding_id
+                 ORDER BY max(created_at) DESC, marketplace_binding_id
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("allLocations", locationIds.isEmpty())
+                .param("locationIds", uuidStrings(locationIds))
+                .query((row, number) -> new MarketplaceBindingUsage(
+                        row.getObject("marketplace_binding_id", UUID.class),
+                        row.getLong("order_count"),
+                        row.getObject("last_order_at", OffsetDateTime.class).toInstant()))
+                .list();
+    }
+
+    /** The non-terminal statuses, by name — what «Только опаздывающие» and the open-branch read compare against. */
+    private static final String[] OPEN_STATUS_NAMES = java.util.Arrays.stream(OrderStatus.values())
+            .filter(status -> !status.terminal())
+            .map(OrderStatus::name)
+            .toArray(String[]::new);
+
+    /** UUIDs as text, for {@code CAST(:x AS uuid[])} — the same shape {@code ANY(:statuses)} binds. */
+    private static String[] uuidStrings(List<UUID> ids) {
+        return ids.stream().map(UUID::toString).toArray(String[]::new);
     }
 
     /**
@@ -2640,12 +2799,19 @@ public class JdbcOrderStore {
     /**
      * The order board's filter set (ADR 0102, orders.md §2.4).
      *
-     * <p>A record rather than eleven parameters, so that {@link #fingerprint()}
+     * <p>A record rather than a long parameter list, so that {@link #fingerprint()}
      * can be derived from the same value the query is built from. A cursor
      * pinned to a hash computed separately from the filters is a cursor that
      * stops matching the moment somebody adds a filter and forgets the hash —
      * and the failure is an incoherent page, not an error.
      *
+     * @param locationIds  the branches in scope. The branch board always names
+     *                     exactly one; the brand-scoped board (wave 16) names
+     *                     the branches the operator narrowed to, or none for
+     *                     every branch of the brand. Empty is therefore "the
+     *                     whole brand", never "no branch" — the branch endpoint
+     *                     is the only caller that must not pass it empty, and it
+     *                     builds its query from its own path variable
      * @param statuses     empty means every status, not none
      * @param from         inclusive lower bound on {@code created_at}
      * @param to           exclusive upper bound on {@code created_at}
@@ -2662,11 +2828,34 @@ public class JdbcOrderStore {
      *                     Оплата column's own value (wave 10, gap map row
      *                     `1.1c`), distinct from {@code paymentMethodCode}'s
      *                     Способ оплаты
+     * @param marketplaceBindingId {@code ordering.orders.marketplace_binding_id}
+     *                     (V0038): one aggregator installation's binding, the
+     *                     finer «Агрегатор» filter beside {@code origin} (wave 16)
+     * @param lateOnly     «Только опаздывающие» (orders.md §2.4/§2.7): a
+     *                     non-terminal order past its promise plus the resolved
+     *                     policy's grace, or with no promise past the
+     *                     no-promise fallback. The thresholds are policy (ADR
+     *                     0030) and are resolved by {@code OrderQueryService}
+     *                     into {@link #lateness}; the flag alone is what the
+     *                     cursor is pinned to
+     * @param problemOnly  «С проблемой»: any process of the order in
+     *                     {@code MANUAL_ACTION_REQUIRED} or
+     *                     {@code FAILED_RETRYABLE}
+     * @param callbackRequested «Требуется звонок»: {@code callback_requested}
+     *                     (V0029) — the flag is cleared when the callback is
+     *                     resolved, so true is exactly "still owed a call"
+     * @param fiscalStatuses «Фискализация»: any fiscal document of the order in
+     *                     one of these statuses ({@code fiscal.fiscal_documents},
+     *                     ADR 0038). Empty means no fiscal filter
+     * @param lateness     the resolved thresholds for {@link #lateOnly}; null
+     *                     until {@link #withLateness} supplies them, and never
+     *                     part of the fingerprint — a clock reading is not a
+     *                     filter
      */
     public record OrderListQuery(
             UUID tenantId,
             UUID brandId,
-            UUID locationId,
+            List<UUID> locationIds,
             List<String> statuses,
             @Nullable Instant from,
             @Nullable Instant to,
@@ -2677,13 +2866,88 @@ public class JdbcOrderStore {
             @Nullable String createdByActorId,
             @Nullable String reference,
             @Nullable String origin,
-            @Nullable String paymentStatus) {
+            @Nullable String paymentStatus,
+            @Nullable UUID marketplaceBindingId,
+            boolean lateOnly,
+            boolean problemOnly,
+            boolean callbackRequested,
+            List<String> fiscalStatuses,
+            @Nullable Lateness lateness) {
 
         /** ASCII unit separator: not producible by any parameter of this query. */
         private static final String FINGERPRINT_SEPARATOR = "\u001f";
 
         public OrderListQuery {
+            locationIds = locationIds.stream().distinct().sorted().toList();
             statuses = List.copyOf(statuses);
+            fiscalStatuses = List.copyOf(fiscalStatuses);
+        }
+
+        /**
+         * The branch board's query: exactly one location, and none of the wave-16
+         * filters. The shape every caller had before the brand board existed.
+         */
+        public OrderListQuery(
+                UUID tenantId,
+                UUID brandId,
+                UUID locationId,
+                List<String> statuses,
+                @Nullable Instant from,
+                @Nullable Instant to,
+                @Nullable String channelCode,
+                @Nullable String fulfillmentMode,
+                @Nullable UUID courierId,
+                @Nullable String paymentMethodCode,
+                @Nullable String createdByActorId,
+                @Nullable String reference,
+                @Nullable String origin,
+                @Nullable String paymentStatus) {
+            this(
+                    tenantId,
+                    brandId,
+                    List.of(locationId),
+                    statuses,
+                    from,
+                    to,
+                    channelCode,
+                    fulfillmentMode,
+                    courierId,
+                    paymentMethodCode,
+                    createdByActorId,
+                    reference,
+                    origin,
+                    paymentStatus,
+                    null,
+                    false,
+                    false,
+                    false,
+                    List.of(),
+                    null);
+        }
+
+        /** This query with the lateness thresholds {@link #lateOnly} needs. */
+        public OrderListQuery withLateness(Lateness resolved) {
+            return new OrderListQuery(
+                    tenantId,
+                    brandId,
+                    locationIds,
+                    statuses,
+                    from,
+                    to,
+                    channelCode,
+                    fulfillmentMode,
+                    courierId,
+                    paymentMethodCode,
+                    createdByActorId,
+                    reference,
+                    origin,
+                    paymentStatus,
+                    marketplaceBindingId,
+                    lateOnly,
+                    problemOnly,
+                    callbackRequested,
+                    fiscalStatuses,
+                    resolved);
         }
 
         /**
@@ -2704,7 +2968,8 @@ public class JdbcOrderStore {
          * the only place that can be stated once for every filter at once.
          * Statuses are sorted, because {@code ?status=NEW&status=READY} and
          * {@code ?status=READY&status=NEW} are the same query and must produce
-         * the same cursor.
+         * the same cursor; the location and fiscal-status sets are sorted for
+         * the same reason.
          *
          * <p>Joined on the ASCII unit separator, which no parameter of this
          * query can contain. A plain concatenation would let two different
@@ -2718,7 +2983,7 @@ public class JdbcOrderStore {
                     FINGERPRINT_SEPARATOR,
                     tenantId.toString(),
                     brandId.toString(),
-                    locationId.toString(),
+                    String.join(",", locationIds.stream().map(UUID::toString).toList()),
                     String.join(",", statuses.stream().sorted().toList()),
                     String.valueOf(from),
                     String.valueOf(to),
@@ -2729,9 +2994,59 @@ public class JdbcOrderStore {
                     String.valueOf(createdByActorId),
                     String.valueOf(normalisedReference()),
                     String.valueOf(origin),
-                    String.valueOf(paymentStatus));
+                    String.valueOf(paymentStatus),
+                    String.valueOf(marketplaceBindingId),
+                    String.valueOf(lateOnly),
+                    String.valueOf(problemOnly),
+                    String.valueOf(callbackRequested),
+                    String.join(",", fiscalStatuses.stream().sorted().toList()));
         }
     }
+
+    /**
+     * The lateness thresholds behind «Только опаздывающие», one row per
+     * (branch, fulfilment mode), read from the policy in force at that branch
+     * (ADR 0030, orders.md §2.7) as of {@code now}.
+     */
+    public record Lateness(Instant now, List<LatenessThreshold> thresholds) {
+
+        public Lateness {
+            thresholds = List.copyOf(thresholds);
+        }
+
+        String[] locationIds() {
+            return thresholds.stream().map(t -> t.locationId().toString()).toArray(String[]::new);
+        }
+
+        String[] modes() {
+            return thresholds.stream().map(t -> t.mode().name()).toArray(String[]::new);
+        }
+
+        String[] lateAfterSeconds() {
+            return thresholds.stream()
+                    .map(t -> Integer.toString(t.lateAfterSeconds()))
+                    .toArray(String[]::new);
+        }
+
+        String[] fallbackSeconds() {
+            return thresholds.stream()
+                    .map(t -> Integer.toString(t.noPromiseFallbackSeconds()))
+                    .toArray(String[]::new);
+        }
+    }
+
+    /**
+     * @param lateAfterSeconds         grace past the promise before an order is late
+     * @param noPromiseFallbackSeconds how long from creation an unpromised order may run
+     */
+    public record LatenessThreshold(
+            UUID locationId, FulfillmentMode mode, int lateAfterSeconds, int noPromiseFallbackSeconds) {}
+
+    /**
+     * One aggregator binding's use in a scope: how many orders arrived through it
+     * and when the latest did.
+     */
+    public record MarketplaceBindingUsage(UUID bindingId, long orderCount, Instant lastOrderAt) {}
 
     /**
      * The order's customer snapshot, still encrypted (ADR 0029).

@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import {
   EMPTY_ORDER_QUEUE_FILTERS,
+  FISCAL_STATUS_ATTENTION,
   OrderQueueFilterState,
   boardQueryParams,
   filtersFromQueryParams,
@@ -276,5 +277,143 @@ describe('OrderQueueFilterState', () => {
         Object.defineProperty(globalThis, 'localStorage', original);
       }
     }
+  });
+
+  // ------------------------------------------------ wave 16: branch mode, binding, toggles
+
+  it('boardQueryParams: sends the branch only on the brand board’s mode — the branch board’s path already names it', () => {
+    const narrowed = { ...EMPTY_ORDER_QUEUE_FILTERS, locationId: 'l2' };
+    expect(boardQueryParams(narrowed, null)).toEqual({});
+    expect(boardQueryParams({ ...narrowed, allBranches: true }, null)).toEqual({
+      locationId: 'l2',
+    });
+    expect(
+      boardQueryParams({ ...EMPTY_ORDER_QUEUE_FILTERS, allBranches: true }, null),
+      'the mode alone narrows nothing',
+    ).toEqual({});
+  });
+
+  it('boardQueryParams: passes the aggregator binding and the four toggles as the board’s own parameters', () => {
+    expect(
+      boardQueryParams(
+        {
+          ...EMPTY_ORDER_QUEUE_FILTERS,
+          marketplaceBindingId: 'bind-1',
+          lateOnly: true,
+          problemOnly: true,
+          callbackRequested: true,
+          fiscalStatus: 'ISSUED',
+        },
+        null,
+      ),
+    ).toEqual({
+      marketplaceBindingId: 'bind-1',
+      late: 'true',
+      problem: 'true',
+      callbackRequested: 'true',
+      fiscalStatus: 'ISSUED',
+    });
+  });
+
+  it('boardQueryParams: the fiscal attention shortcut is failed + blocked, as two parameters', () => {
+    expect(
+      boardQueryParams(
+        { ...EMPTY_ORDER_QUEUE_FILTERS, fiscalStatus: FISCAL_STATUS_ATTENTION },
+        null,
+      )['fiscalStatus'],
+    ).toEqual(['FAILED', 'BLOCKED']);
+  });
+
+  it('each new filter counts toward hasActive — but the «Все филиалы» mode does not', () => {
+    for (const patch of [
+      { locationId: 'l2' },
+      { marketplaceBindingId: 'bind-1' },
+      { lateOnly: true },
+      { problemOnly: true },
+      { callbackRequested: true },
+      { fiscalStatus: 'FAILED' },
+    ]) {
+      // Each case starts from nothing: the previous one persisted its filter.
+      localStorage.clear();
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({});
+      const state = service();
+      state.loadForTab('all');
+      state.update(patch);
+      expect(state.hasActive(), JSON.stringify(patch)).toBe(true);
+    }
+
+    localStorage.clear();
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({});
+
+    const modeOnly = service();
+    modeOnly.loadForTab('all');
+    modeOnly.update({ allBranches: true });
+    expect(modeOnly.hasActive(), 'a mode says which board is read, not how it is narrowed').toBe(
+      false,
+    );
+  });
+
+  it('reset keeps the «Все филиалы» mode beside the date range, and clears everything else', () => {
+    const state = service();
+    state.loadForTab('all');
+    state.update({
+      allBranches: true,
+      locationId: 'l2',
+      lateOnly: true,
+      marketplaceBindingId: 'bind-1',
+      fiscalStatus: 'FAILED',
+    });
+
+    state.reset();
+
+    expect(state.current()).toEqual({ ...EMPTY_ORDER_QUEUE_FILTERS, allBranches: true });
+  });
+
+  it('round-trips the branch mode, the branch, the binding and the toggles through the URL', () => {
+    const filters = {
+      ...EMPTY_ORDER_QUEUE_FILTERS,
+      allBranches: true,
+      locationId: 'l2',
+      marketplaceBindingId: 'bind-1',
+      lateOnly: true,
+      problemOnly: true,
+      callbackRequested: true,
+      fiscalStatus: FISCAL_STATUS_ATTENTION,
+    };
+
+    const params = filtersToQueryParams(filters);
+    expect(params).toMatchObject({
+      branches: 'all',
+      branch: 'l2',
+      binding: 'bind-1',
+      late: '1',
+      problem: '1',
+      callback: '1',
+      fiscal: 'ATTENTION',
+    });
+    expect(filtersFromQueryParams(convertToParamMap(params))).toEqual(filters);
+  });
+
+  it('the new URL parameters count as filter parameters, so a link carrying only one is honoured', () => {
+    for (const name of ['branches', 'branch', 'binding', 'late', 'problem', 'callback', 'fiscal']) {
+      expect(hasFilterQueryParams(convertToParamMap({ [name]: 'x' })), name).toBe(true);
+    }
+  });
+
+  it('a filter set stored before these fields existed still loads, with the new ones at their defaults', () => {
+    localStorage.setItem(
+      'horecaos.operations.orderQueue.filters.all',
+      JSON.stringify({ channelCode: 'wolt', mineOnly: true }),
+    );
+    const state = service();
+    state.loadForTab('all');
+
+    expect(state.current()).toEqual({
+      ...EMPTY_ORDER_QUEUE_FILTERS,
+      channelCode: 'wolt',
+      mineOnly: true,
+    });
   });
 });

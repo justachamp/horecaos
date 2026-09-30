@@ -1,6 +1,9 @@
 package uz.horecaos.platform.integration.provider;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
@@ -32,5 +35,15 @@ class OrderingMarketplaceBindingAdapter implements MarketplaceBindingLookup {
         return installations
                 .bindingForInstallation(tenantId, installationId, brandId, locationId)
                 .map(BindingRef::bindingId);
+    }
+
+    @Override
+    public Map<UUID, BindingLabel> labelsOf(UUID tenantId, Set<UUID> bindingIds) {
+        Map<UUID, BindingLabel> labels = new HashMap<>();
+        installations
+                .bindingLabels(tenantId, bindingIds)
+                .forEach((bindingId, label) ->
+                        labels.put(bindingId, new BindingLabel(label.providerType(), label.displayName())));
+        return Map.copyOf(labels);
     }
 }

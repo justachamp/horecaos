@@ -284,7 +284,7 @@ Primary row, always visible:
 |---|---|---|---|
 | Search | text input, `/` focuses | empty | §2.8 |
 | Period | date-range pill pair with presets *Сегодня · Вчера · 7 дней · Период* | Сегодня (business date) | `ordering.orders.created_at` |
-| Филиал | multi-select dropdown, searchable, with a live active-order count per branch | all branches the actor is scoped to | `tenant.locations` via `location_id` |
+| Филиал | multi-select dropdown, searchable, with a live active-order count per branch | all branches the actor is scoped to | `tenant.locations` via `location_id`. **Built for a brand-level reader (ADR 0144):** the «Все филиалы» mode reads `GET /api/v1/operations/tenants/{t}/brands/{b}/orders/board` (`ORDER_READ` at `BRAND`; the branch board's own statement over a set of branches, repeatable `?locationId=`), the console offers a single-select over the shell's branch roster, and each row carries its `locationId`. A location-scoped actor keeps today's single-branch board. Not built: the multi-select, the live per-branch count |
 | Канал | multi-select, `<optgroup>` by `system_type` | all | `tenant.sales_channels.display_name`, matched via `channel_id`; the row displays `channel_code_snapshot` |
 | Тип | segmented control Доставка / Самовывоз / В зале | all | `fulfillment_mode` |
 | Оплата | multi-select | all | `payment_status_projection`, **built** on the row (ADR 0102); the method beside it is `payments.payment_intents.payment_method_code`, filterable as `?paymentMethodCode=` on `.../orders/board` but not yet rendered on the row |
@@ -296,12 +296,12 @@ one that is set:
 | Filter | Control | Source |
 |---|---|---|
 | Мои заказы | toggle | **built** — `?createdByActorId=` on `.../orders/board` (ADR 0102), over `created_by_actor_id` (ADR 0039, V0029). The client supplies its own subject; there is no server-side `me` |
-| Только опаздывающие | toggle | derived, §2.7 |
-| С проблемой | toggle | `order_process_states.status` in the two failure states |
-| Требуется звонок | toggle | `callback_requested` is **built** (ADR 0039, V0029, set via the `SET_CALLBACK_REQUESTED` amendment command); the filter on the list query is not |
-| Агрегатор | multi-select of bindings | **built, not read by ordering — ADR 0040** `marketplace_binding_id` (V0038) |
+| Только опаздывающие | toggle | derived, §2.7 — **built (ADR 0144)**: `?late=true`, the resolved `ordering.lateness` policy applied per branch and mode in the board statement (not over, and past the promise plus grace, or past the no-promise fallback), held to `OrderLatenessPolicy.evaluate` by a test |
+| С проблемой | toggle | `order_process_states.status` in the two failure states — **built (ADR 0144)**: `?problem=true` |
+| Требуется звонок | toggle | `callback_requested` is **built** (ADR 0039, V0029, set via the `SET_CALLBACK_REQUESTED` amendment command); the filter — **built (ADR 0144)**: `?callbackRequested=true` |
+| Агрегатор | multi-select of bindings | **built (ADR 0144)** — `?marketplaceBindingId=` on both boards over `marketplace_binding_id` (V0038); the options are `GET .../orders/marketplace-bindings` (branch and brand), the bindings the orders in scope arrived through, with the installation's name through `MarketplaceBindingLookup`. One binding at a time, not a multi-select |
 | Способ оплаты | multi-select | `?paymentMethodCode=` on `.../orders/board` is **built** (ADR 0102) over `payments.payment_intents`; one code at a time, not a multi-select, until somebody needs more |
-| Фискализация | multi-select of `PENDING/BLOCKED/FAILED/ISSUED` | **not built — ADR 0038** `fiscal.fiscal_documents.status` |
+| Фискализация | multi-select of `PENDING/BLOCKED/FAILED/ISSUED` | **built (ADR 0144)** — `?fiscalStatus=` (repeatable; any of the table's six values) over `fiscal.fiscal_documents.status`, an `EXISTS` on any document of the order; the console offers one status or «Требует внимания» (failed + blocked). No fiscal chip on the row yet |
 
 A control that is filtering shows it in its own border and fill (Togora §2b),
 not only by a chip elsewhere. **Сбросить фильтры** clears everything except the
@@ -1162,9 +1162,15 @@ console-facing half of the same rule &sect;3.11 states: a failed export is
 never rendered as an order failure, because the order is real and only its
 kitchen copy may be missing.
 
-### 4.9 Payment (ADR 0013, not built)
+### 4.9 Payment (ADR 0013; «Выставить счёт» built, ADR 0144)
 
-- **Выставить счёт** — re-issue a payment invoice. Delever's own page documents
+- **Выставить счёт** — **built.** `POST /api/v1/operations/tenants/{t}/orders/{id}/payment/re-presentations`
+  (wave P12), `PAYMENT_INITIATE` at tenant scope, idempotent, and — since ADR 0144 —
+  audited (`payment.checkout_reissued`, never the phone). `actions[]` carries
+  `ISSUE_INVOICE` for an order whose payment projection is `PENDING`, that has
+  not ended, when the caller holds that capability; the row action opens the
+  order and the detail header opens the payment panel's re-issue form. It re-issues
+  a payment invoice. Delever's own page documents
   the fields: phone, order id, payment type. Ours needs only the phone (the
   order is in context) plus the method, because the case it exists for is *the
   customer's payment account is registered to a different number*. Idempotent;

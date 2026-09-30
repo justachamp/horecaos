@@ -5,7 +5,9 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
+import java.time.Clock;
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -18,7 +20,14 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import uz.horecaos.platform.audit.api.ActorRef;
+import uz.horecaos.platform.audit.api.AuditClass;
+import uz.horecaos.platform.audit.api.AuditFact;
+import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.iam.api.Capability;
+import uz.horecaos.platform.iam.api.CurrentActor;
+import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.ordering.api.OrderDirectory;
 import uz.horecaos.platform.payments.application.PaymentCheckoutService;
@@ -82,20 +91,30 @@ public class OperationsPaymentController {
     private final JdbcSettlementStore settlements;
     private final OrderDirectory orders;
     private final PaymentCheckoutService checkout;
+    private final AuditRecorder audit;
+    private final CurrentActor currentActor;
+    private final Clock clock;
 
+    @SuppressWarnings("checkstyle:ParameterNumber")
     public OperationsPaymentController(
             JdbcPaymentIntentStore intents,
             JdbcPaymentAttemptStore attempts,
             JdbcPaymentTransactionStore transactions,
             JdbcSettlementStore settlements,
             OrderDirectory orders,
-            PaymentCheckoutService checkout) {
+            PaymentCheckoutService checkout,
+            AuditRecorder audit,
+            CurrentActor currentActor,
+            Clock clock) {
         this.intents = intents;
         this.attempts = attempts;
         this.transactions = transactions;
         this.settlements = settlements;
         this.orders = orders;
         this.checkout = checkout;
+        this.audit = audit;
+        this.currentActor = currentActor;
+        this.clock = clock;
     }
 
     @GetMapping
@@ -193,6 +212,7 @@ public class OperationsPaymentController {
 
         try {
             var session = checkout.openOrRePresent(tenantId, orderId, null, request);
+            recordReissue(tenantId, orderId, request, session, body.reason());
             return ResponseEntity.ok(PaymentSessionResponse.of(session));
 
         } catch (PaymentCheckoutService.CheckoutRefusedException refused) {
@@ -212,6 +232,52 @@ public class OperationsPaymentController {
         }
     }
 
+    /**
+     * The audit fact for a checkout surface handed out on an operator's request
+     * (ADR 0027; gap map row {@code 1.1e}, «Выставить счёт»). Written only after
+     * the surface exists: a refused or uncertain presentation handed nobody
+     * anything, and its refusal is already the response.
+     *
+     * <p>Scoped to the order's own branch, so a branch manager's activity log
+     * shows the invoices sent for their orders. The fact records <em>that</em> a
+     * payable link or a push was issued, through which provider and whether it was
+     * an abandoned attempt handed back — never the phone the invoice was pushed
+     * to (ADR 0029: personal data reaches no audit document, only the fact that
+     * a push recipient was named) and never the link itself, which is a bearer of
+     * the payment.
+     */
+    private void recordReissue(
+            UUID tenantId,
+            UUID orderId,
+            PresentationRequest request,
+            PaymentCheckoutService.PaymentSession session,
+            @Nullable String reason) {
+        OrderDirectory.OrderSummary order = orders.summary(tenantId, orderId)
+                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such order"));
+
+        var after = new LinkedHashMap<String, Object>();
+        after.put("attemptId", session.attemptId().toString());
+        after.put("provider", session.providerType().name());
+        after.put("presentation", session.presentationKind().name());
+        after.put("rePresented", session.rePresented());
+        after.put("presentationCount", session.presentationCount());
+        after.put("pushedToRecipient", request.pushRecipient() != null);
+
+        audit.record(AuditFact.of("payment.checkout_reissued", AuditClass.BUSINESS)
+                .by(ActorRef.user(currentActor.get().subject(), null))
+                .at(ResourceScope.location(tenantId, order.brandId(), order.locationId()))
+                .target("ordering.order", orderId)
+                .because(reason == null || reason.isBlank() ? DEFAULT_REISSUE_REASON : reason.strip())
+                .changed(ChangeDocuments.created(after))
+                .usingCapability(Capability.PAYMENT_INITIATE.code())
+                .correlatedBy(orderId.toString())
+                .occurredAt(clock.instant())
+                .build());
+    }
+
+    /** Recorded when the operator gave no reason of their own — the action is the reason, and it must not be blank. */
+    private static final String DEFAULT_REISSUE_REASON = "Operator re-issued the order's payment checkout";
+
     private static ErrorCode errorCodeFor(String code) {
         return switch (code) {
             case "ORDER_NOT_FOUND", "NO_PAYMENT_INTENT" -> ErrorCode.RESOURCE_NOT_FOUND;
@@ -230,13 +296,18 @@ public class OperationsPaymentController {
      * @param pushRecipient the phone to push an invoice to, on Click only.
      *                      Personal data under ADR 0029: never stored on the
      *                      attempt, never logged, never published in an event
+     * @param reason        why the operator is issuing it (optional): recorded with
+     *                      the audit fact, defaulted when absent so the console's
+     *                      one-click «Выставить счёт» stays one click
      */
     public record RePresentationRequest(
             @Size(max = 24) String presentation,
             @Size(max = 2) String language,
 
             @Size(max = 12) @Pattern(regexp = "^998\\d{9}$", message = "must be 998 followed by nine digits")
-            String pushRecipient) {
+            String pushRecipient,
+
+            @Size(max = 255) @Nullable String reason) {
 
         PresentationRequest toDomain() {
             PresentationKind kind = presentation == null || presentation.isBlank()
