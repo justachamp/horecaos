@@ -9,6 +9,9 @@ import org.jspecify.annotations.Nullable;
  *
  * <p>Ending it keeps the row, because a statement for a month it was live in
  * still has to find it.
+ *
+ * <p>{@code acquiredVia} records the door it came through (ADR 0127): only a
+ * {@link ModuleAcquisition#SELF_SERVICE} module can be ended by the tenant.
  */
 public record TenantModule(
         UUID id,
@@ -18,12 +21,18 @@ public record TenantModule(
         Instant startedAt,
         String startedBy,
         String startReason,
+        ModuleAcquisition acquiredVia,
         @Nullable Instant endedAt,
         @Nullable String endedBy,
         @Nullable String endReason) {
 
     public boolean isLive() {
         return endedAt == null;
+    }
+
+    /** Whether the tenant itself may end this module: it bought it, and it is still live. */
+    public boolean endableByTenant() {
+        return isLive() && acquiredVia == ModuleAcquisition.SELF_SERVICE;
     }
 
     /** Whether it was live at any moment of {@code [start, end)}. */

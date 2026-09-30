@@ -82,6 +82,15 @@ import uz.horecaos.platform.web.authorization.RequiresCapability;
  * that already holds {@code refund.execute} (`PlatformRoleTests
  * .aTenantAdminHasNoCommercialOrExecutionAuthority`).
  *
+ * <p>Wave 16 adds the symmetric undo, {@code endPurchasedModule}, under the
+ * same {@code COMMERCIAL_SUBSCRIPTION_MANAGE} at {@code ScopeType.TENANT} (ADR
+ * 0087 already names that capability for "give or end one"): a tenant ends a
+ * module it bought itself and no other. {@code tenant_modules.acquired_via}
+ * (V0442) is what tells the two doors apart, not free text, so a
+ * platform-assigned module is refused and stays HorecaOS's to end. The cost of
+ * the end is what ADR 0087 and ADR 0088 already decided — nothing is prorated,
+ * so the month it ends in bills it whole and the next does not.
+ *
  * <p>Period close does not belong on this list: ADR 0088 (Built) already
  * decided a month is closed by issuing its statement, which is HorecaOS-staff
  * work on {@code CommercialStatementController.issue} — deliberately manual
@@ -96,6 +105,9 @@ public class CommercialOperationsController {
 
     /** Non-PII: a purchase from this screen is the tenant's own act, recorded like any other. */
     private static final String SELF_SERVICE_PURCHASE_REASON = "Purchased from the operations console";
+
+    /** Non-PII, for the same reason: undoing one's own purchase is the tenant's own act. */
+    private static final String SELF_SERVICE_END_REASON = "Ended from the operations console";
 
     private final SubscriptionService subscriptions;
     private final EntitlementService entitlements;
@@ -241,9 +253,27 @@ public class CommercialOperationsController {
                     + "Billed on the next statement (ADR 0088) — this does not move money by itself.")
     public ResponseEntity<CommercialModuleController.TenantModuleAdded> purchaseModule(
             @PathVariable UUID tenantId, @Valid @RequestBody PurchaseModuleRequest body) {
-        UUID id = modules.add(
+        UUID id = modules.purchase(
                 tenantId, body.moduleId(), body.quantity(), actor(), SELF_SERVICE_PURCHASE_REASON, correlationId());
         return ResponseEntity.ok(new CommercialModuleController.TenantModuleAdded(id));
+    }
+
+    @PostMapping("/modules/{tenantModuleId}/end")
+    @RequiresCapability(value = Capability.COMMERCIAL_SUBSCRIPTION_MANAGE, scope = ScopeType.TENANT, mutating = true)
+    @Operation(
+            summary = "End a module this tenant bought itself",
+            description = "The undo for the inline purchase (ADR 0127). Only a module the tenant "
+                    + "bought from its own console: one HorecaOS assigned is refused with 422 and "
+                    + "reason MODULE_ASSIGNED_BY_PLATFORM, and another tenant's module is not found. "
+                    + "Its features switch off now. Nothing is prorated (ADR 0087, ADR 0088): the "
+                    + "month it ends in still bills it in full, named by lastBilledPeriod, and no "
+                    + "later month does. This does not move money by itself.")
+    public ResponseEntity<ModuleEnded> endPurchasedModule(
+            @PathVariable UUID tenantId, @PathVariable UUID tenantModuleId) {
+        ModuleCatalogService.ModuleEnding ending =
+                modules.endOwnPurchase(tenantId, tenantModuleId, actor(), SELF_SERVICE_END_REASON, correlationId());
+        return ResponseEntity.ok(
+                new ModuleEnded(tenantModuleId, ending.endedAt().toString(), ending.lastBilledPeriod()));
     }
 
     private ActorRef actor() {
@@ -261,6 +291,14 @@ public class CommercialOperationsController {
 
     public record PurchaseModuleRequest(
             @NotNull UUID moduleId, @Min(1) Integer quantity) {}
+
+    /**
+     * A tenant's own module, ended. {@code lastBilledPeriod} is the last
+     * {@code yyyy-MM} month, in the tenant's timezone, whose statement still
+     * bills it (ADR 0088): nothing is prorated, so the month it ended in is
+     * billed in full and the next one is not.
+     */
+    public record ModuleEnded(UUID tenantModuleId, String endedAt, String lastBilledPeriod) {}
 
     /** A subscription as the merchant sees it, with its plan named rather than only its id. */
     public record SubscriptionResponse(

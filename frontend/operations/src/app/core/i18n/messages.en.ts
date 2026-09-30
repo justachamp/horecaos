@@ -5563,8 +5563,24 @@ export const messagesEn = {
   'finance.subscription.modules.confirm.activatesFallback': 'its features',
   'finance.subscription.modules.confirm.confirm': 'Buy',
   'finance.subscription.modules.confirm.cancel': 'Cancel',
+  'finance.subscription.modules.held.title': 'Your modules',
+  'finance.subscription.modules.held.source': 'Source',
+  'finance.subscription.modules.held.source.SELF_SERVICE': 'Bought by you',
+  'finance.subscription.modules.held.source.PLATFORM': 'Assigned by HorecaOS',
+  'finance.subscription.modules.held.contactHorecaos': 'Contact HorecaOS to remove',
+  'finance.subscription.modules.held.empty': 'You have no modules yet.',
+  'finance.subscription.modules.end': 'End',
+  'finance.subscription.modules.end.confirm.title': 'End this module?',
+  'finance.subscription.modules.end.confirm.body':
+    '{name} switches off now. Nothing is prorated: it is still billed in full on the statement for the current month, and not after that.',
+  'finance.subscription.modules.end.confirm.bodyOneOff':
+    '{name} switches off now. It was billed once when you added it, and ending it does not refund that.',
+  'finance.subscription.modules.end.confirm.confirm': 'End module',
+  'finance.subscription.modules.end.confirm.cancel': 'Keep it',
+  'finance.subscription.modules.end.done':
+    '{name} has ended. It is billed up to and including the {period} statement, and not after.',
   'finance.subscription.notBuiltNote':
-    'Period close is HorecaOS staff work (a month is closed by issuing its statement, ADR 0088); the prepaid wallet is not built yet (ADR 0095); ending a purchased module is not self-service yet — contact HorecaOS to remove one.',
+    'Period close is HorecaOS staff work (a month is closed by issuing its statement, ADR 0088); the prepaid wallet is not built yet (ADR 0095); a module HorecaOS assigned is ended by HorecaOS — contact HorecaOS to remove one.',
 
   // ---------------------------------------------------------------- staff 9.3 (wave 39)
   'staff.shell.activity': 'Activity',

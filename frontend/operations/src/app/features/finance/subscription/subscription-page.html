@@ -304,6 +304,87 @@
             }
           </tbody>
         </table>
+
+        <h2 class="q-subhead section-title">{{ 'finance.subscription.modules.held.title' | t }}</h2>
+        @if (endNotice(); as notice) {
+          <div class="notice-band" role="status" data-testid="subscription-module-ended">
+            <span class="q-body-sm">
+              {{
+                'finance.subscription.modules.end.done'
+                  | t: { name: notice.name, period: notice.period }
+              }}
+            </span>
+          </div>
+        }
+        <table class="table" data-testid="subscription-held-modules">
+          <thead>
+            <tr>
+              <th class="q-caption">{{ 'finance.subscription.modules.name' | t }}</th>
+              <th class="q-caption">{{ 'finance.subscription.modules.billingUnit' | t }}</th>
+              <th class="q-caption num">{{ 'finance.subscription.modules.price' | t }}</th>
+              <th class="q-caption">{{ 'finance.subscription.modules.held.source' | t }}</th>
+              <th class="q-caption"></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (held of liveModules(); track held.tenantModuleId) {
+              <tr>
+                <td class="q-body-sm">
+                  {{ held.moduleName }}
+                  @if (held.quantity !== null) {
+                    <span class="q-caption muted">× {{ held.quantity }}</span>
+                  }
+                </td>
+                <td class="q-body-sm">{{ billingUnitLabel(held.billingUnit) }}</td>
+                <td class="q-body-sm q-tnum num">{{ money(held.unitPrice) }}</td>
+                <td class="q-body-sm">
+                  {{
+                    (held.acquiredVia === 'SELF_SERVICE'
+                      ? 'finance.subscription.modules.held.source.SELF_SERVICE'
+                      : 'finance.subscription.modules.held.source.PLATFORM'
+                    ) | t
+                  }}
+                </td>
+                <td class="q-body-sm actions">
+                  @if (held.endableByTenant) {
+                    <button
+                      type="button"
+                      class="secondary"
+                      [disabled]="endingModuleId() !== null || purchasingModuleId() !== null"
+                      (click)="requestEnd(held)"
+                      data-testid="subscription-module-end"
+                    >
+                      {{ 'finance.subscription.modules.end' | t }}
+                    </button>
+                  } @else {
+                    <span class="q-caption muted">{{
+                      'finance.subscription.modules.held.contactHorecaos' | t
+                    }}</span>
+                  }
+                </td>
+              </tr>
+            } @empty {
+              <tr>
+                <td class="q-body-sm empty" colspan="5">
+                  {{ 'finance.subscription.modules.held.empty' | t }}
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      }
+
+      @if (endTarget(); as held) {
+        <q-confirm-dialog
+          [title]="'finance.subscription.modules.end.confirm.title' | t"
+          [body]="endConfirmBody(held)"
+          [confirmLabel]="'finance.subscription.modules.end.confirm.confirm' | t"
+          [cancelLabel]="'finance.subscription.modules.end.confirm.cancel' | t"
+          tone="destructive"
+          [busy]="endingModuleId() === held.tenantModuleId"
+          (confirm)="confirmEnd()"
+          (cancel)="cancelEnd()"
+        />
       }
 
       @if (purchaseTarget(); as module) {

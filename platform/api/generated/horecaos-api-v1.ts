@@ -4477,6 +4477,12 @@ export interface ModuleDrafted {
   moduleId?: string;
 }
 
+export interface ModuleEnded {
+  endedAt?: string;
+  lastBilledPeriod?: string;
+  tenantModuleId?: string;
+}
+
 export interface ModuleView {
   activatedAt?: string;
   approvedBy?: string;
@@ -8300,8 +8306,10 @@ export interface TenantModuleAdded {
 }
 
 export interface TenantModuleView {
+  acquiredVia?: string;
   billingUnit?: string;
   endReason?: string;
+  endableByTenant?: boolean;
   endedAt?: string;
   endedBy?: string;
   moduleCode?: string;
@@ -9804,6 +9812,7 @@ export interface Operations {
   "modulesOnSale": { method: "GET"; path: "/api/v1/tenants/{tenantId}/commercial/modules"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<ModuleView> } };
   "purchaseModule": { method: "POST"; path: "/api/v1/tenants/{tenantId}/commercial/modules"; request: { parameters: { path: { tenantId: string } }; body: PurchaseModuleRequest }; responses: { "200": TenantModuleAdded } };
   "modulesHeld": { method: "GET"; path: "/api/v1/tenants/{tenantId}/commercial/modules/held"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<TenantModuleView> } };
+  "endPurchasedModule": { method: "POST"; path: "/api/v1/tenants/{tenantId}/commercial/modules/{tenantModuleId}/end"; request: { parameters: { path: { tenantId: string; tenantModuleId: string } } }; responses: { "200": ModuleEnded } };
   "statements": { method: "GET"; path: "/api/v1/tenants/{tenantId}/commercial/statements"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<StatementView> } };
   "oneStatement": { method: "GET"; path: "/api/v1/tenants/{tenantId}/commercial/statements/{statementId}"; request: { parameters: { path: { statementId: string; tenantId: string } } }; responses: { "200": StatementView } };
   "statementExport": { method: "GET"; path: "/api/v1/tenants/{tenantId}/commercial/statements/{statementId}/export"; request: { parameters: { path: { statementId: string; tenantId: string } } }; responses: { "200": string } };

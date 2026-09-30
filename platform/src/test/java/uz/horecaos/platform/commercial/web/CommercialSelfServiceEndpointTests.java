@@ -8,10 +8,15 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 
 import java.time.Duration;
 import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.YearMonth;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -31,11 +36,17 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.testcontainers.DockerClientFactory;
+import tools.jackson.databind.json.JsonMapper;
 import uz.horecaos.platform.audit.api.ActorRef;
+import uz.horecaos.platform.commercial.api.EntitlementKeys;
 import uz.horecaos.platform.commercial.application.ModuleCatalogService;
 import uz.horecaos.platform.commercial.application.PlanCatalogService;
+import uz.horecaos.platform.commercial.application.StatementService;
 import uz.horecaos.platform.commercial.application.SubscriptionService;
 import uz.horecaos.platform.commercial.domain.BillingUnit;
+import uz.horecaos.platform.commercial.domain.Statement;
+import uz.horecaos.platform.commercial.domain.StatementLine;
+import uz.horecaos.platform.commercial.infrastructure.persistence.JdbcModuleStore;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.PlatformRole;
 import uz.horecaos.platform.iam.infrastructure.authorization.RoleRegistrySynchronizer;
@@ -55,6 +66,11 @@ import uz.horecaos.platform.web.idempotency.IdempotencyInterceptor;
  * tenant's scope gets 200/204, one who holds it at a <em>different</em>
  * tenant's scope is refused exactly like one who does not hold it at all —
  * scope containment, not merely capability possession, is what is under test.
+ *
+ * <p>Wave 16 (ADR 0127 status note) adds the symmetric end: a tenant undoes
+ * a module it bought itself, and only that — a module HorecaOS assigned is
+ * refused with its own reason, another tenant's module is not found, and the
+ * month it ends in still bills it (ADR 0087/0088: nothing is prorated).
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -69,6 +85,9 @@ class CommercialSelfServiceEndpointTests {
     private static final String OWNER = "self-service-owner";
     private static final String ADMIN_WITHOUT_EXTRAS = "self-service-admin";
     private static final String OTHER_TENANT_OWNER = "self-service-other-owner";
+
+    private static final ZoneId TASHKENT = ZoneId.of("Asia/Tashkent");
+    private static final JsonMapper JSON = JsonMapper.builder().build();
 
     private static final String MODULES = "/api/v1/tenants/" + TENANT + "/commercial/modules";
     private static final String ARREARS = "/api/v1/tenants/" + TENANT + "/commercial/arrears";
@@ -110,7 +129,14 @@ class CommercialSelfServiceEndpointTests {
     @Autowired
     private ModuleCatalogService modules;
 
+    @Autowired
+    private StatementService statements;
+
+    @Autowired
+    private JdbcModuleStore moduleStore;
+
     private UUID onSaleModuleId;
+    private UUID digestsModuleId;
 
     @BeforeEach
     void reset() {
@@ -149,6 +175,20 @@ class CommercialSelfServiceEndpointTests {
                 "corr");
         modules.activate(draftedModuleId, APPROVER, "signed off", "corr");
         onSaleModuleId = draftedModuleId;
+
+        UUID digests = modules.draft(
+                "self-service-digests",
+                "Telegram digests",
+                null,
+                BillingUnit.PER_TENANT,
+                "UZS",
+                90_000,
+                List.of(EntitlementKeys.TELEGRAM_DIGESTS_ENABLED.code()),
+                AUTHOR,
+                "new line",
+                "corr");
+        modules.activate(digests, APPROVER, "signed off", "corr");
+        digestsModuleId = digests;
     }
 
     // ---------------------------------------------------------- catalogue
@@ -219,6 +259,210 @@ class CommercialSelfServiceEndpointTests {
                 .isEqualTo(0);
     }
 
+    // ------------------------------------------------- ending a self-purchase
+
+    @Test
+    void anOwnerEndsAModuleItPurchasedItselfAndTheEndIsAudited() throws Exception {
+        UUID held = purchaseAs(OWNER, TENANT, digestsModuleId, "purchase-digests");
+        assertThat(moduleStore.liveFeatureKeys(TENANT))
+                .as("the purchase switched the feature on")
+                .contains(EntitlementKeys.TELEGRAM_DIGESTS_ENABLED.code());
+
+        MvcResult ended = endAs(OWNER, TENANT, held, "end-digests");
+
+        assertThat(ended.getResponse().getStatus()).isEqualTo(200);
+        Instant endedAt = jdbc.sql("SELECT ended_at FROM commercial.tenant_modules WHERE id = :id")
+                .param("id", held)
+                .query(OffsetDateTime.class)
+                .single()
+                .toInstant();
+        String body = ended.getResponse().getContentAsString();
+        assertThat(body)
+                .contains("\"tenantModuleId\":\"" + held + "\"")
+                .contains("\"lastBilledPeriod\":\"" + periodKeyOf(endedAt) + "\"");
+        assertThat(jdbc.sql("SELECT ended_by || '|' || end_reason FROM commercial.tenant_modules WHERE id = :id")
+                        .param("id", held)
+                        .query(String.class)
+                        .single())
+                .isEqualTo(OWNER + "|Ended from the operations console");
+        assertThat(moduleStore.liveFeatureKeys(TENANT))
+                .as("ending it switches the feature off at once")
+                .doesNotContain(EntitlementKeys.TELEGRAM_DIGESTS_ENABLED.code());
+
+        // The audit fact carries a before/after, the actor, the tenant scope and the capability.
+        assertThat(auditField(held, "live", "before")).isEqualTo("true");
+        assertThat(auditField(held, "live", "after")).isEqualTo("false");
+        assertThat(auditField(held, "acquiredVia", "before")).isEqualTo("SELF_SERVICE");
+        assertThat(auditField(held, "lastBilledPeriod", "before"))
+                .as("before the end, the module was billing with no last month")
+                .isNull();
+        assertThat(auditField(held, "lastBilledPeriod", "after")).isEqualTo(periodKeyOf(endedAt));
+        assertThat(jdbc.sql("""
+                        SELECT actor_subject || '|' || scope_type || '|' || scope_id || '|' || capability_used
+                               || '|' || reason
+                          FROM audit.audit_events
+                         WHERE action_code = 'commercial.tenant_module.ended' AND target_id = :id
+                        """).param("id", held).query(String.class).single())
+                .isEqualTo(OWNER + "|TENANT|" + TENANT + "|" + Capability.COMMERCIAL_SUBSCRIPTION_MANAGE.code()
+                        + "|Ended from the operations console");
+    }
+
+    @Test
+    void anEndedModuleStillBillsTheMonthItEndedInAndNoLaterOne() throws Exception {
+        UUID held = purchaseAs(OWNER, TENANT, onSaleModuleId, "purchase-kds");
+
+        MvcResult ended = endAs(OWNER, TENANT, held, "end-kds");
+
+        assertThat(ended.getResponse().getStatus()).isEqualTo(200);
+        Instant endedAt = jdbc.sql("SELECT ended_at FROM commercial.tenant_modules WHERE id = :id")
+                .param("id", held)
+                .query(OffsetDateTime.class)
+                .single()
+                .toInstant();
+        String period = periodKeyOf(endedAt);
+        Statement thisMonth = statements.draft(TENANT, period);
+        assertThat(thisMonth.lines())
+                .as("ADR 0087/0088: nothing is prorated, so a module that was live on any day of "
+                        + "the month bills the whole month it ended in")
+                .filteredOn(line -> StatementLine.MODULE.equals(line.kind()))
+                .singleElement()
+                .satisfies(line -> {
+                    assertThat(line.referenceCode()).isEqualTo("self-service-kds");
+                    assertThat(line.quantity()).isEqualTo(1);
+                    assertThat(line.amountMinor()).isEqualTo(150_000);
+                });
+
+        YearMonth next = YearMonth.parse(period).plusMonths(1);
+        Instant nextStart = next.atDay(1).atStartOfDay(TASHKENT).toInstant();
+        Instant nextEnd = next.plusMonths(1).atDay(1).atStartOfDay(TASHKENT).toInstant();
+        assertThat(moduleStore.overlapping(TENANT, nextStart, nextEnd))
+                .as("the month after the end does not bill it")
+                .isEmpty();
+    }
+
+    @Test
+    void aModuleHorecaosAssignedCannotBeEndedByTheTenant() throws Exception {
+        UUID assigned = modules.add(TENANT, onSaleModuleId, null, AUTHOR, "sold with the pilot", "corr");
+
+        MvcResult refused = endAs(OWNER, TENANT, assigned, "end-assigned");
+
+        assertThat(refused.getResponse().getStatus()).isEqualTo(422);
+        assertThat(refused.getResponse().getContentAsString())
+                .contains("UNPROCESSABLE_STATE")
+                .contains("MODULE_ASSIGNED_BY_PLATFORM");
+        assertThat(jdbc.sql("SELECT ended_at IS NULL FROM commercial.tenant_modules WHERE id = :id")
+                        .param("id", assigned)
+                        .query(Boolean.class)
+                        .single())
+                .as("a refused end changes nothing")
+                .isTrue();
+        assertThat(endedAuditFacts(assigned)).isZero();
+    }
+
+    @Test
+    void aModuleOfAnotherTenantIsNotFoundEvenWhenItWasSelfPurchased() throws Exception {
+        UUID theirs = purchaseAs(OTHER_TENANT_OWNER, OTHER_TENANT, onSaleModuleId, "purchase-other");
+
+        MvcResult missing = endAs(OWNER, TENANT, theirs, "end-cross-tenant");
+
+        assertThat(missing.getResponse().getStatus()).isEqualTo(404);
+        assertThat(missing.getResponse().getContentAsString()).contains("RESOURCE_NOT_FOUND");
+        assertThat(jdbc.sql("SELECT ended_at IS NULL FROM commercial.tenant_modules WHERE id = :id")
+                        .param("id", theirs)
+                        .query(Boolean.class)
+                        .single())
+                .isTrue();
+    }
+
+    @Test
+    void anotherTenantsOwnerCannotEndThisTenantsModule() throws Exception {
+        UUID held = purchaseAs(OWNER, TENANT, onSaleModuleId, "purchase-mine");
+
+        MvcResult refused = endAs(OTHER_TENANT_OWNER, TENANT, held, "end-by-neighbour");
+
+        assertThat(refused.getResponse().getStatus())
+                .as("OTHER_TENANT_OWNER's grant covers OTHER_TENANT, not TENANT")
+                .isEqualTo(403);
+        assertThat(jdbc.sql("SELECT ended_at IS NULL FROM commercial.tenant_modules WHERE id = :id")
+                        .param("id", held)
+                        .query(Boolean.class)
+                        .single())
+                .isTrue();
+    }
+
+    @Test
+    void aCallerWithoutSubscriptionManageCannotEndAModule() throws Exception {
+        UUID held = purchaseAs(OWNER, TENANT, onSaleModuleId, "purchase-for-admin-test");
+
+        MvcResult refused = endAs(ADMIN_WITHOUT_EXTRAS, TENANT, held, "end-by-admin");
+
+        assertThat(refused.getResponse().getStatus()).isEqualTo(403);
+        assertThat(refused.getResponse().getContentAsString())
+                .contains("INSUFFICIENT_CAPABILITY")
+                .contains(Capability.COMMERCIAL_SUBSCRIPTION_MANAGE.code());
+        assertThat(endedAuditFacts(held)).isZero();
+    }
+
+    @Test
+    void endingAModuleTwiceIsAConflictTheSecondTime() throws Exception {
+        UUID held = purchaseAs(OWNER, TENANT, onSaleModuleId, "purchase-twice");
+        assertThat(endAs(OWNER, TENANT, held, "end-first").getResponse().getStatus())
+                .isEqualTo(200);
+
+        MvcResult second = endAs(OWNER, TENANT, held, "end-second");
+
+        assertThat(second.getResponse().getStatus()).isEqualTo(409);
+        assertThat(second.getResponse().getContentAsString()).contains("RESOURCE_CONFLICT");
+        assertThat(endedAuditFacts(held)).as("only the first end is audited").isEqualTo(1);
+    }
+
+    @Test
+    void endingAModuleRequiresAnIdempotencyKey() throws Exception {
+        UUID held = purchaseAs(OWNER, TENANT, onSaleModuleId, "purchase-keyless");
+
+        MvcResult refused = mvc.perform(post(MODULES + "/" + held + "/end").with(tokenFor(OWNER)))
+                .andReturn();
+
+        assertThat(refused.getResponse().getStatus()).isEqualTo(400);
+        assertThat(refused.getResponse().getContentAsString()).contains("IDEMPOTENCY_KEY_REQUIRED");
+        assertThat(endedAuditFacts(held)).isZero();
+    }
+
+    @Test
+    void theHeldListSaysHowEachModuleWasAcquiredAndWhichTheTenantMayEnd() throws Exception {
+        UUID bought = purchaseAs(OWNER, TENANT, onSaleModuleId, "purchase-list");
+        UUID assigned = modules.add(TENANT, digestsModuleId, null, AUTHOR, "sold with the pilot", "corr");
+
+        MvcResult listed =
+                mvc.perform(get(MODULES + "/held").with(tokenFor(OWNER))).andReturn();
+
+        assertThat(listed.getResponse().getStatus()).isEqualTo(200);
+        var rows = JSON.readTree(listed.getResponse().getContentAsString());
+        Map<String, String> byId = new HashMap<>();
+        for (var row : rows) {
+            byId.put(
+                    row.get("tenantModuleId").asString(),
+                    row.get("acquiredVia").asString() + "|"
+                            + row.get("endableByTenant").asBoolean());
+        }
+        assertThat(byId)
+                .containsEntry(bought.toString(), "SELF_SERVICE|true")
+                .containsEntry(assigned.toString(), "PLATFORM|false");
+
+        endAs(OWNER, TENANT, bought, "end-list");
+        var after = JSON.readTree(mvc.perform(get(MODULES + "/held").with(tokenFor(OWNER)))
+                .andReturn()
+                .getResponse()
+                .getContentAsString());
+        for (var row : after) {
+            if (bought.toString().equals(row.get("tenantModuleId").asString())) {
+                assertThat(row.get("endableByTenant").asBoolean())
+                        .as("an ended module is no longer endable")
+                        .isFalse();
+            }
+        }
+    }
+
     // -------------------------------------------------------------- arrears
 
     @Test
@@ -252,6 +496,55 @@ class CommercialSelfServiceEndpointTests {
     }
 
     // ------------------------------------------------------------------ util
+
+    private UUID purchaseAs(String subject, UUID tenantId, UUID moduleId, String idempotencyKey) throws Exception {
+        MvcResult purchased = mvc.perform(post("/api/v1/tenants/" + tenantId + "/commercial/modules")
+                        .with(tokenFor(subject))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, idempotencyKey)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"moduleId\":\"" + moduleId + "\"}"))
+                .andReturn();
+        assertThat(purchased.getResponse().getStatus()).isEqualTo(200);
+        return jdbc.sql(
+                        "SELECT id FROM commercial.tenant_modules WHERE tenant_id = :tenantId AND module_id = :moduleId")
+                .param("tenantId", tenantId)
+                .param("moduleId", moduleId)
+                .query(UUID.class)
+                .single();
+    }
+
+    private MvcResult endAs(String subject, UUID tenantId, UUID tenantModuleId, String idempotencyKey)
+            throws Exception {
+        return mvc.perform(post("/api/v1/tenants/" + tenantId + "/commercial/modules/" + tenantModuleId + "/end")
+                        .with(tokenFor(subject))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, idempotencyKey))
+                .andReturn();
+    }
+
+    private @Nullable String auditField(UUID tenantModuleId, String field, String side) {
+        return jdbc.sql("""
+                        SELECT change_document -> :field ->> :side
+                          FROM audit.audit_events
+                         WHERE action_code = 'commercial.tenant_module.ended' AND target_id = :id
+                        """)
+                .param("field", field)
+                .param("side", side)
+                .param("id", tenantModuleId)
+                .query(String.class)
+                .optional()
+                .orElse(null);
+    }
+
+    private int endedAuditFacts(UUID tenantModuleId) {
+        return jdbc.sql("""
+                        SELECT count(*) FROM audit.audit_events
+                         WHERE action_code = 'commercial.tenant_module.ended' AND target_id = :id
+                        """).param("id", tenantModuleId).query(Integer.class).single();
+    }
+
+    private static String periodKeyOf(Instant instant) {
+        return YearMonth.from(instant.atZone(TASHKENT)).toString();
+    }
 
     private void insertTenant(UUID id, String slug) {
         jdbc.sql("""

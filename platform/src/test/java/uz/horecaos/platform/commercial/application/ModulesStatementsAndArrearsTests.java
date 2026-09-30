@@ -156,7 +156,7 @@ class ModulesStatementsAndArrearsTests {
         metering = new UsageMeteringService(usageStore, entitlements, clock);
         plans = new PlanCatalogService(planStore, audit, clock);
         subscriptions = new SubscriptionService(subscriptionStore, planStore, entitlements, audit, clock);
-        modules = new ModuleCatalogService(moduleStore, audit, clock);
+        modules = new ModuleCatalogService(moduleStore, subscriptionStore, audit, clock);
         statements = new StatementService(
                 subscriptionStore, planStore, moduleStore, statementStore, usageStore, wallet, audit, clock);
         arrears = new ArrearsService(new JdbcArrearsStore(jdbc), statementStore);

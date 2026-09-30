@@ -9708,11 +9708,17 @@
       },
       "TenantModuleView" : {
         "properties" : {
+          "acquiredVia" : {
+            "type" : "string"
+          },
           "billingUnit" : {
             "type" : "string"
           },
           "endReason" : {
             "type" : "string"
+          },
+          "endableByTenant" : {
+            "type" : "boolean"
           },
           "endedAt" : {
             "type" : "string"
