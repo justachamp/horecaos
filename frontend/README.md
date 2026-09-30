@@ -92,7 +92,8 @@ runs them; what they cover differs by app.
   ```
 
 `control-plane` vendors `design-tokens/tokens.css`; `npm run check:tokens` diffs the copy
-against the source of record. It is not a CI step yet.
+against the source of record. It is a CI step ("Design tokens drift check (control-plane)"),
+and the lint and prettier ignores for the vendored sheet rest on it.
 
 ## Component styles and bundle budgets
 
