@@ -241,3 +241,11 @@
   gap: 8px;
   margin-top: 8px;
 }
+
+/* Its own class: the header component's stylesheet cannot reach a label in this template. */
+.new-order__pre-order-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--q-ink-subtle);
+}
