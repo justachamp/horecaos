@@ -2267,6 +2267,9 @@
             "format" : "uuid",
             "type" : "string"
           },
+          "regionalFormats" : {
+            "$ref" : "#/components/schemas/RegionalFormatsView"
+          },
           "slug" : {
             "type" : "string"
           },
@@ -12902,6 +12905,20 @@
           "version" : {
             "format" : "int32",
             "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "RegionalFormatsView" : {
+        "properties" : {
+          "moneyGrouping" : {
+            "type" : "string"
+          },
+          "moneySymbolPlacement" : {
+            "type" : "string"
+          },
+          "phoneDisplayPattern" : {
+            "type" : "string"
           }
         },
         "type" : "object"

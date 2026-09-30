@@ -24,6 +24,7 @@ import uz.horecaos.platform.tenancy.api.LocationId;
 import uz.horecaos.platform.tenancy.api.TenantId;
 import uz.horecaos.platform.tenancy.application.OperatingUnitNotDeletableException;
 import uz.horecaos.platform.tenancy.domain.Brand;
+import uz.horecaos.platform.tenancy.domain.BrandRegionalFormats;
 import uz.horecaos.platform.tenancy.domain.CoordinateSource;
 import uz.horecaos.platform.tenancy.domain.CustomerIdentityMode;
 import uz.horecaos.platform.tenancy.domain.CustomerIdentityPolicy;
@@ -610,8 +611,8 @@ class JdbcTenantControlPlaneStoreTests {
                 null,
                 List.of(
                         new uz.horecaos.platform.tenancy.domain.BrandProfile.BrandLocale("ru", "Бренд ПР", true),
-                        new uz.horecaos.platform.tenancy.domain.BrandProfile.BrandLocale(
-                                "uz-Latn", "Brend PR", false)));
+                        new uz.horecaos.platform.tenancy.domain.BrandProfile.BrandLocale("uz-Latn", "Brend PR", false)),
+                BrandRegionalFormats.defaults());
         store.updateBrandProfile(tenant.id(), brand.id(), profile);
 
         assertThat(store.findBrandProfile(tenant.id(), brand.id())).isEqualTo(profile);
@@ -625,10 +626,102 @@ class JdbcTenantControlPlaneStoreTests {
         // A whole-set write replaces what was there, the same "whole place"
         // shape `updateLocationPlace` already establishes: the logo is
         // dropped by being left out of the next write, not carried forward.
-        var replaced =
-                new uz.horecaos.platform.tenancy.domain.BrandProfile("+998712009999", null, null, null, List.of());
+        var replaced = new uz.horecaos.platform.tenancy.domain.BrandProfile(
+                "+998712009999", null, null, null, List.of(), BrandRegionalFormats.defaults());
         store.updateBrandProfile(tenant.id(), brand.id(), replaced);
         assertThat(store.findBrandProfile(tenant.id(), brand.id())).isEqualTo(replaced);
+    }
+
+    /**
+     * Row 10.12: a brand's display formats are three columns of their own. A new brand reads the
+     * defaults (what the console did before), a write replaces them for that brand alone, the
+     * whole-set profile write leaves them where they are, and the database itself refuses a value
+     * the domain would.
+     */
+    @Test
+    void aBrandsRegionalFormatsAreItsOwnColumnsAndTheProfileWriteLeavesThemAlone() {
+        Tenant tenant = tenant("018f6f4e-899d-7b1c-a8cf-0242ac120600", "tenant-formats");
+        store.insertTenant(tenant);
+        Brand brand = Brand.draft(
+                new BrandId(UUID.fromString("018f6f4e-899d-7b1c-a8cf-0242ac120601")),
+                tenant.id(),
+                "BRAND_FM",
+                new Slug("brand-fm"),
+                "Brand FM");
+        store.insertBrand(brand);
+        Brand other = Brand.draft(
+                new BrandId(UUID.fromString("018f6f4e-899d-7b1c-a8cf-0242ac120602")),
+                tenant.id(),
+                "BRAND_FM2",
+                new Slug("brand-fm2"),
+                "Brand FM2");
+        store.insertBrand(other);
+
+        assertThat(store.findBrandProfile(tenant.id(), brand.id()).formats())
+                .as("a brand that has chosen nothing reads what the console did before")
+                .isEqualTo(BrandRegionalFormats.defaults());
+
+        BrandRegionalFormats chosen = new BrandRegionalFormats(
+                BrandRegionalFormats.MoneySymbolPlacement.BEFORE,
+                BrandRegionalFormats.MoneyGrouping.COMMA,
+                "+### (##) ###-##-##");
+        store.updateBrandRegionalFormats(tenant.id(), brand.id(), chosen);
+
+        assertThat(store.findBrandProfile(tenant.id(), brand.id()).formats()).isEqualTo(chosen);
+        assertThat(store.findBrandProfiles(tenant.id()))
+                .as("the batched read carries them too")
+                .hasEntrySatisfying(
+                        brand.id(), profile -> assertThat(profile.formats()).isEqualTo(chosen));
+        assertThat(store.findBrandProfile(tenant.id(), other.id()).formats())
+                .as("the other brand's formats are untouched")
+                .isEqualTo(BrandRegionalFormats.defaults());
+
+        store.updateBrandProfile(
+                tenant.id(),
+                brand.id(),
+                new uz.horecaos.platform.tenancy.domain.BrandProfile(
+                        "+998712009999", null, null, null, List.of(), BrandRegionalFormats.defaults()));
+        assertThat(store.findBrandProfile(tenant.id(), brand.id()).formats())
+                .as("a contact correction does not reset the display formats")
+                .isEqualTo(chosen);
+
+        store.updateBrandRegionalFormats(tenant.id(), brand.id(), BrandRegionalFormats.defaults());
+        assertThat(store.findBrandProfile(tenant.id(), brand.id()).formats())
+                .as("clearing the pattern and choosing the defaults reads the defaults again")
+                .isEqualTo(BrandRegionalFormats.defaults());
+    }
+
+    @Test
+    void theDatabaseRefusesARegionalFormatTheDomainWouldRefuse() {
+        Tenant tenant = tenant("018f6f4e-899d-7b1c-a8cf-0242ac120610", "tenant-formats-check");
+        store.insertTenant(tenant);
+        Brand brand = Brand.draft(
+                new BrandId(UUID.fromString("018f6f4e-899d-7b1c-a8cf-0242ac120611")),
+                tenant.id(),
+                "BRAND_FC",
+                new Slug("brand-fc"),
+                "Brand FC");
+        store.insertBrand(brand);
+
+        assertThatThrownBy(() -> jdbc.sql("UPDATE tenant.brands SET money_grouping = 'PIPE' WHERE id = :id")
+                        .param("id", brand.id().value())
+                        .update())
+                .isInstanceOf(DataIntegrityViolationException.class);
+        assertThatThrownBy(() -> jdbc.sql("UPDATE tenant.brands SET money_symbol_placement = 'MIDDLE' WHERE id = :id")
+                        .param("id", brand.id().value())
+                        .update())
+                .isInstanceOf(DataIntegrityViolationException.class);
+        assertThatThrownBy(() -> jdbc.sql("UPDATE tenant.brands SET phone_display_pattern = '+## ##' WHERE id = :id")
+                        .param("id", brand.id().value())
+                        .update())
+                .as("too few digit slots")
+                .isInstanceOf(DataIntegrityViolationException.class);
+        assertThatThrownBy(() -> jdbc.sql(
+                                "UPDATE tenant.brands SET phone_display_pattern = '+### abc ### ###' WHERE id = :id")
+                        .param("id", brand.id().value())
+                        .update())
+                .as("letters are not part of a pattern")
+                .isInstanceOf(DataIntegrityViolationException.class);
     }
 
     private static Tenant tenant(String id, String slug) {

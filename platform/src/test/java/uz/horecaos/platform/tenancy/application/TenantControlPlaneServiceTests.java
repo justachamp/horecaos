@@ -1122,6 +1122,91 @@ class TenantControlPlaneServiceTests {
                 .satisfies(brand -> assertThat(brand.contactPhone()).isNull());
     }
 
+    // ------------------------------------------------ 10.12: a brand's regional display formats
+
+    @Test
+    @DisplayName("a brand's regional formats are set on their own, audited, and survive a profile correction")
+    void aBrandsRegionalFormatsAreSetAuditedAndSurviveAProfileCorrection() {
+        Harness h = new Harness();
+        BrandId brandId = h.brand("FORMATS", "formats");
+
+        assertThat(h.service.getBrand(h.tenantId, brandId).regionalFormats())
+                .as("a brand that has chosen nothing reads what the console did before")
+                .isEqualTo(new TenantControlPlaneService.RegionalFormatsView("AFTER", "SPACE", null));
+
+        var updated = h.service.reviseRegionalFormats(
+                h.tenantId,
+                brandId,
+                new TenantControlPlaneService.RegionalFormatsCommand("BEFORE", "COMMA", "+### ## ### ## ##"));
+
+        assertThat(updated.regionalFormats())
+                .isEqualTo(new TenantControlPlaneService.RegionalFormatsView("BEFORE", "COMMA", "+### ## ### ## ##"));
+        assertThat(h.service.getBrand(h.tenantId, brandId).regionalFormats())
+                .as("persisted, not just returned")
+                .isEqualTo(updated.regionalFormats());
+
+        var fact = h.audited.stream()
+                .filter(f -> f.actionCode().equals("brand.regional_formats_revised"))
+                .findFirst()
+                .orElseThrow();
+        assertThat(fact.changeDocument().toString())
+                .as("the audit fact names what changed: display preference, not personal data")
+                .contains("moneySymbolPlacement")
+                .contains("BEFORE")
+                .contains("COMMA")
+                .contains("phoneDisplayPattern");
+
+        var afterProfileWrite = h.service.updateBrandProfile(
+                h.tenantId,
+                brandId,
+                new TenantControlPlaneService.UpdateBrandProfileCommand("+998712000000", null, null, null, List.of()));
+        assertThat(afterProfileWrite.regionalFormats())
+                .as("a contact correction neither resets the formats nor reports them reset")
+                .isEqualTo(updated.regionalFormats());
+        assertThat(h.service.getBrand(h.tenantId, brandId).regionalFormats()).isEqualTo(updated.regionalFormats());
+
+        var defaulted = h.service.reviseRegionalFormats(
+                h.tenantId, brandId, new TenantControlPlaneService.RegionalFormatsCommand(null, null, null));
+        assertThat(defaulted.regionalFormats())
+                .as(
+                        "an absent placement and grouping mean the defaults, an absent pattern shows a number as it arrives")
+                .isEqualTo(new TenantControlPlaneService.RegionalFormatsView("AFTER", "SPACE", null));
+    }
+
+    @Test
+    @DisplayName("a regional format the console cannot render is refused")
+    void aBrandsRegionalFormatsRefuseAnUnrenderableValue() {
+        Harness h = new Harness();
+        BrandId brandId = h.brand("BADFORMATS", "badformats");
+
+        assertThatThrownBy(() -> h.service.reviseRegionalFormats(
+                        h.tenantId,
+                        brandId,
+                        new TenantControlPlaneService.RegionalFormatsCommand("MIDDLE", null, null)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("MIDDLE");
+        assertThatThrownBy(() -> h.service.reviseRegionalFormats(
+                        h.tenantId, brandId, new TenantControlPlaneService.RegionalFormatsCommand(null, "PIPE", null)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("PIPE");
+        assertThatThrownBy(() -> h.service.reviseRegionalFormats(
+                        h.tenantId,
+                        brandId,
+                        new TenantControlPlaneService.RegionalFormatsCommand(null, null, "+## ##")))
+                .as("too few digit slots")
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("slots");
+        assertThatThrownBy(() -> h.service.reviseRegionalFormats(
+                        h.tenantId,
+                        brandId,
+                        new TenantControlPlaneService.RegionalFormatsCommand(null, null, "+### call ### ###")))
+                .as("a pattern is digit slots and punctuation, nothing else")
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThat(h.service.getBrand(h.tenantId, brandId).regionalFormats())
+                .as("a refused write leaves the stored formats alone")
+                .isEqualTo(new TenantControlPlaneService.RegionalFormatsView("AFTER", "SPACE", null));
+    }
+
     /**
      * Moves a freshly created tenant from {@code PROVISIONING} to
      * {@code ACTIVE}, which is what makes it suspendable.
@@ -1287,7 +1372,16 @@ class TenantControlPlaneServiceTests {
         @Override
         public void updateBrandProfile(
                 TenantId tenantId, BrandId brandId, uz.horecaos.platform.tenancy.domain.BrandProfile profile) {
-            brandProfiles.put(brandId, profile);
+            // The real store leaves the display formats alone on a profile write; so does this.
+            brandProfiles.put(
+                    brandId,
+                    profile.withFormats(findBrandProfile(tenantId, brandId).formats()));
+        }
+
+        @Override
+        public void updateBrandRegionalFormats(
+                TenantId tenantId, BrandId brandId, uz.horecaos.platform.tenancy.domain.BrandRegionalFormats formats) {
+            brandProfiles.put(brandId, findBrandProfile(tenantId, brandId).withFormats(formats));
         }
 
         @Override

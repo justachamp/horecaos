@@ -700,6 +700,7 @@ export interface BrandView {
   id?: string;
   locales?: Array<BrandLocaleView>;
   logoAssetId?: string;
+  regionalFormats?: RegionalFormatsView;
   slug?: string;
   status?: "DRAFT" | "ACTIVE" | "SUSPENDED" | "ARCHIVED";
   telegramHandle?: string;
@@ -4064,6 +4065,12 @@ export interface RegionResponse {
   regionId?: string;
   status?: string;
   version?: number;
+}
+
+export interface RegionalFormatsView {
+  moneyGrouping?: string;
+  moneySymbolPlacement?: string;
+  phoneDisplayPattern?: string;
 }
 
 export interface RegisterCourierRequest {
