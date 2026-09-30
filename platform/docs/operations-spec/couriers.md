@@ -834,13 +834,61 @@ origins:** every adjustment becomes a `courier_ledger_entries` row carrying
 | Effect | `BONUS` or `PENALTY`, and an amount in whole som |
 | Window | rolling days, calendar week, calendar month, or one shift |
 | Trigger | shift close, period close, or nightly |
-| Conditions | typed set: delivered count, `ON_TIME` count, `ON_TIME` rate, `GEO_UNVERIFIED` rate, cash variance count, hours worked |
+| Conditions | a closed set of seven delivery-outcome bases, five of them evaluated and two manual-only by design — see «The bases, and the two that are manual-only» below. *(This row used to list an `ON_TIME` count and hours worked; neither is a basis — corrected 2026-09-30.)* |
 | Scope | brand, locations, courier types |
 
 Conditions use the shared `ConditionBuilder` (IA component gaps) — the same component as
 promotions, auto-add, dispatch rules and automations. **No scripting**, for the reasons
 ADR 0018 gives about pricing rules: a rule that cannot be reproduced cannot be defended
 in a payout dispute.
+
+### The bases, and the two that are manual-only
+
+*Recorded 2026-09-30 against gap-map row `3.4c`. The record is
+[ADR 0108](../adr/partial/0108-wave-t16-courier-types-rate-cards-and-adjustment-rules.md)
+(Decision status Proposed; it builds on ADR 0042, Accepted, which closed the set).*
+
+`courier_adjustment_reasons.outcome_basis` is a closed set of seven, on purpose:
+every code names a delivery outcome, never a behaviour, because routinely sanctioning
+how a self-employed person conducts themselves is the fact pattern that reclassifies
+the engagement (V0040). A reason is either **manual-only** (none of the six `rule_*`
+columns set, picked from a dropdown on a manual entry) or **wired** (all six set,
+posted by `AdjustmentRuleEvaluator`, origin `RULE`).
+
+| Basis | Unit of the threshold | Read from | Evaluated |
+|---|---|---|---|
+| `DELIVERED_VOLUME` | count | earnings recorded against the window | shift close, period close |
+| `LATE_DELIVERY` | count | earnings with `on_time_outcome = LATE` | shift close, period close |
+| `ON_TIME_RATE` | basis points | `ON_TIME` over delivered | shift close, period close |
+| `GEO_UNVERIFIED_RATE` | basis points | `geo_unverified` over delivered | shift close, period close |
+| `CASH_VARIANCE` | minor currency units | `CASH_VARIANCE` ledger entries | **period close only** (`SETTLEMENT_PERIOD` window) |
+| `ORDER_UNDELIVERED` | — | `fulfillment.delivery_exceptions`, which nothing in the courier module reads | **never — manual-only** |
+| `ORDER_DAMAGED` | — | the same | **never — manual-only** |
+
+**`ORDER_UNDELIVERED` and `ORDER_DAMAGED` are manual-only by design, and the design is
+conditional, not permanent.** They name facts that live in
+`fulfillment.delivery_exceptions`, which nothing in the courier module queries (ADR
+0108). The two therefore stay manual — a manager records the adjustment by hand
+(«Record an adjustment», below), naming the reason code — "by construction until" a
+reader exists. That reader is the whole of what is missing; no ADR refuses the rule, so
+this is *not built* rather than declined, and building it is a reader plus a case in
+the evaluator, not a redesign. Until then the guards are these, and only these:
+the rule form in `apps/operations` (delivery → courier types and rates) will not let an
+operator wire a reason on either basis, and the evaluator returns no reading for them
+(`default -> null`). **The API does not refuse it:** `POST .../adjustment-reasons`
+accepts all six `rule_*` fields on either basis and the rule then never fires, so a
+direct caller can define a dead rule. That is a known hole in the guard, not a feature.
+
+Two facts about the guards that the table above would otherwise hide. First, the rule
+form's list of wireable bases (`EVALUATED_BASES` in `courier-types-rates-page.ts`) still
+has four entries and omits `CASH_VARIANCE`, which the evaluator has read at settlement
+close since batch 10, so from the console a `CASH_VARIANCE` reason can be authored
+manual-only and a wired one only through the API. Second, this document's earlier
+condition list carried an `ON_TIME` count and hours worked. Neither is a basis:
+`LATE_DELIVERY` is the count and `ON_TIME_RATE` the rate; hours worked were left out of
+V0260 on purpose ("a fifth outcome_basis value with no existing reader") and no open
+input in ADR 0108 owns them, although V0260's header comment says one does. Hours
+worked is therefore neither built nor decided.
 
 Every rule has a **simulator** answering "who would this have hit last week, and for how
 much" before it is activated. A penalty rule shipped without that preview is a labour
