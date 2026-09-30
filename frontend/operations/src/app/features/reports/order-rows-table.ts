@@ -3,6 +3,7 @@ import { ChangeDetectionStrategy, Component, inject, input } from '@angular/core
 import { I18n } from '../../core/i18n/i18n';
 import { MessageKey } from '../../core/i18n/messages.en';
 import { TPipe } from '../../core/i18n/t.pipe';
+import { PhonePipe } from '../../core/format/phone.pipe';
 import { formatDate, formatTime } from '../../core/format/datetime';
 import { formatMoney } from '../../core/format/money';
 import { orderStatusLabel } from '../orders/order-status';
@@ -65,7 +66,7 @@ const SEVERITY_AMBER_SECONDS = 30 * 60;
  */
 @Component({
   selector: 'q-order-rows-table',
-  imports: [TPipe],
+  imports: [TPipe, PhonePipe],
   templateUrl: './order-rows-table.html',
   styleUrl: './order-rows-table.css',
   changeDetection: ChangeDetectionStrategy.OnPush,

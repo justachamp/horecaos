@@ -1069,6 +1069,32 @@ export const messagesEn = {
   'settings.brandProfile.locale.ru': 'Russian',
   'settings.brandProfile.locale.uzLatn': 'Uzbek (Latin)',
   'settings.brandProfile.locale.en': 'English',
+  'settings.brandProfile.section.formats': 'Formats',
+  'settings.brandProfile.formats.lead':
+    'How this brand’s operators read amounts and phone numbers in the console. Display only: nothing stored, exported or sent to a customer changes.',
+  'settings.brandProfile.formats.placement': 'Currency unit on totals',
+  'settings.brandProfile.formats.placement.AFTER': 'After the amount',
+  'settings.brandProfile.formats.placement.BEFORE': 'Before the amount',
+  'settings.brandProfile.formats.grouping': 'Thousands separator',
+  'settings.brandProfile.formats.grouping.SPACE': 'Space',
+  'settings.brandProfile.formats.grouping.COMMA': 'Comma',
+  'settings.brandProfile.formats.grouping.DOT': 'Dot',
+  'settings.brandProfile.formats.grouping.NONE': 'None',
+  'settings.brandProfile.formats.phone': 'Phone number format',
+  'settings.brandProfile.formats.phone.asReceived': 'As stored',
+  'settings.brandProfile.formats.phone.custom': 'Custom pattern',
+  'settings.brandProfile.formats.phone.pattern': 'Pattern',
+  'settings.brandProfile.formats.phone.patternHint':
+    'One # per digit, seven to fifteen of them. + ( ) - . and spaces are kept as written.',
+  'settings.brandProfile.formats.timezone.hint':
+    'Read-only here: the tenant sets a default time zone and each branch has its own.',
+  'settings.brandProfile.formats.timezone.tenant': 'Tenant default',
+  'settings.brandProfile.formats.timezone.branches': 'Branch time zones',
+  'settings.brandProfile.formats.preview': 'Example',
+  'settings.brandProfile.formats.preview.total': 'Total',
+  'settings.brandProfile.formats.preview.phone': 'Phone',
+  'settings.brandProfile.formats.error.pattern':
+    'A phone pattern needs between 7 and 15 # signs and nothing but # + ( ) - . and spaces.',
 
   // 10.4 Sales channels
   'settings.salesChannels.title': 'Sales channels',

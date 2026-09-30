@@ -1,10 +1,11 @@
 import { TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
 import { of, throwError } from 'rxjs';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ApiClient } from '../../core/api/api-client';
 import { CurrentLocation } from '../../core/auth/current-location';
+import { applyRegionalFormats, resetRegionalFormats } from '../../core/format/regional-format';
 import { ApiError, ApiErrorCode } from '../../core/api/problem-details';
 import { I18n } from '../../core/i18n/i18n';
 import { ReasonResponse, ReferenceDataApi } from '../settings/reference-data/reference-data-api';
@@ -810,6 +811,42 @@ describe('OrderDetailPane: PII reveal is a separate audited call (§1.5)', () =>
 
     expect(revealPhone).toHaveBeenCalledTimes(1);
     expect(fixture.nativeElement.textContent).toContain('+998901234567');
+  });
+
+  describe('the number is written in the brand’s own pattern (row 10.12)', () => {
+    afterEach(() => resetRegionalFormats());
+
+    it('re-writes the masked number, and the revealed one, but copies the raw number', async () => {
+      applyRegionalFormats({ phoneDisplayPattern: '+###-##-###-##-##' });
+      const revealPhone = vi.fn().mockReturnValue(of({ phone: '+998901234567' }));
+      configure({ get: apiGet({ value: detail(), version: 3 }), revealApi: { revealPhone } });
+      const fixture = await render();
+      const shown = (): string =>
+        (
+          fixture.nativeElement.querySelector(
+            '[data-testid="order-detail-phone-reveal"]',
+          ) as HTMLElement
+        ).parentElement?.querySelector('.q-mono')?.textContent ?? '';
+
+      expect(shown()).toBe('+998-90-•••-••-42');
+
+      (
+        fixture.nativeElement.querySelector(
+          '[data-testid="order-detail-phone-reveal"]',
+        ) as HTMLButtonElement
+      ).click();
+      await flushMicrotasks();
+      fixture.detectChanges();
+
+      expect(shown()).toBe('+998-90-123-45-67');
+    });
+
+    it('shows the number as it arrives when the brand chose no pattern', async () => {
+      configure({ get: apiGet({ value: detail(), version: 3 }) });
+      const fixture = await render();
+
+      expect(fixture.nativeElement.textContent).toContain('+998 90 ••• •• 42');
+    });
   });
 
   it('copy makes its own independent reveal call rather than reusing an already-revealed value', async () => {

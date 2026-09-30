@@ -24,6 +24,7 @@ import { I18n, Locale } from '../../core/i18n/i18n';
 import { presetLabelFor } from '../../core/i18n/locale-labels';
 import { MessageKey } from '../../core/i18n/messages.en';
 import { TPipe } from '../../core/i18n/t.pipe';
+import { PhonePipe } from '../../core/format/phone.pipe';
 import { Combobox, ComboboxOption } from '../../shared/ui/combobox';
 import { OrderTableChip } from '../../shared/ui/order-table-chip/order-table-chip';
 import { ConfirmDialog } from '../../shared/ui/confirm-dialog';
@@ -194,6 +195,7 @@ type DialogKind =
   selector: 'q-order-detail-pane',
   imports: [
     TPipe,
+    PhonePipe,
     OrderTableChip,
     OrderOutcomeReasonDialog,
     OrderAmendMenu,

@@ -91,7 +91,9 @@
         </div>
         <div class="field">
           <dt class="q-caption">{{ 'settings.locations.field.phone' | t }}</dt>
-          <dd class="q-body">{{ location.contactPhone ?? '—' }}</dd>
+          <dd class="q-body">
+            {{ location.contactPhone ? (location.contactPhone | phone) : '—' }}
+          </dd>
         </div>
         <div class="field">
           <dt class="q-caption">{{ 'settings.locations.field.landmark' | t }}</dt>

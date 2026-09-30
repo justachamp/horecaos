@@ -1,9 +1,10 @@
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LocationScope } from '../../../core/api/operations-paths';
 import { CurrentLocation } from '../../../core/auth/current-location';
+import { applyRegionalFormats, resetRegionalFormats } from '../../../core/format/regional-format';
 import { I18n } from '../../../core/i18n/i18n';
 import { LocaleSet } from '../../../core/i18n/locale-set';
 import { LocationDetailPane } from './location-detail-pane';
@@ -167,6 +168,25 @@ describe('LocationDetailPane', () => {
     expect(api.profile).toHaveBeenCalledWith(SCOPE);
     expect(api.serviceSummary).toHaveBeenCalledWith(SCOPE);
     expect((fixture.nativeElement as HTMLElement).textContent).toContain('Chilanzar');
+  });
+
+  describe('the contact phone follows the brand’s pattern (row 10.12)', () => {
+    afterEach(() => resetRegionalFormats());
+
+    it('shows the branch phone as stored until the brand chooses a pattern, then in it', () => {
+      const phoneText = (): string =>
+        Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('.field'))
+          .find((field) => field.querySelector('dt')?.textContent?.includes('Phone'))
+          ?.querySelector('dd')
+          ?.textContent?.trim() ?? '';
+
+      expect(phoneText()).toBe('+998712000000');
+
+      applyRegionalFormats({ phoneDisplayPattern: '+### (##) ###-##-##' });
+      fixture.detectChanges();
+
+      expect(phoneText()).toBe('+998 (71) 200-00-00');
+    });
   });
 
   it('shows the bound schedule’s grid and the shared-with-others warning on the Hours tab', () => {

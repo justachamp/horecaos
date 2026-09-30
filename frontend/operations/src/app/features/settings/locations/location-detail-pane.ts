@@ -15,6 +15,7 @@ import { CurrentLocation } from '../../../core/auth/current-location';
 import { I18n } from '../../../core/i18n/i18n';
 import { LocaleSet } from '../../../core/i18n/locale-set';
 import { TPipe } from '../../../core/i18n/t.pipe';
+import { PhonePipe } from '../../../core/format/phone.pipe';
 import { ScheduleException, ScheduleGrid, ScheduleRule } from '../../../shared/ui/schedule-grid';
 import { describeApiError } from '../../orders/order-errors';
 import { FloorPlanPane } from './floor-plan-pane';
@@ -82,7 +83,7 @@ const FULFILLMENT_MODES = ['DELIVERY', 'PICKUP', 'DINE_IN'] as const;
  */
 @Component({
   selector: 'q-location-detail-pane',
-  imports: [TPipe, ScheduleGrid, NgTemplateOutlet, FloorPlanPane],
+  imports: [TPipe, PhonePipe, ScheduleGrid, NgTemplateOutlet, FloorPlanPane],
   templateUrl: './location-detail-pane.html',
   styleUrl: './location-detail-pane.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
