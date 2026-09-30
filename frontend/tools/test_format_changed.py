@@ -33,6 +33,7 @@ import format_changed as fc  # noqa: E402
 REPO = HERE.parents[1]
 WORKFLOW = REPO / ".github" / "workflows" / "ci.yml"
 APP = "frontend/operations"
+APPS = ("operations", "control-plane", "storefront", "storefront-milliy")
 
 
 def code(step: str) -> str:
@@ -290,12 +291,44 @@ class CommandLineTests(unittest.TestCase):
         self.assertEqual(2, code)
         self.assertIn("not a frontend app", err)
 
-    def test_the_checked_extensions_match_the_apps_own_format_check_glob(self) -> None:
-        scripts = json.loads((REPO / APP / "package.json").read_text(encoding="utf-8"))["scripts"]
-        glob = re.search(r"\{([a-z,]+)\}", scripts["format:check"])
-        self.assertIsNotNone(glob, scripts["format:check"])
-        assert glob is not None
-        self.assertEqual({"." + ext for ext in glob.group(1).split(",")}, set(fc.EXTENSIONS))
+    def test_the_checked_extensions_match_each_apps_own_format_check_glob(self) -> None:
+        # One source of truth: the app's `npm run format:check` glob. A changed-files check
+        # that covered fewer extensions would pass a file the app's own script rejects.
+        for app in APPS:
+            with self.subTest(app=app):
+                scripts = json.loads((REPO / "frontend" / app / "package.json").read_text(encoding="utf-8"))["scripts"]
+                glob = re.search(r"\{([a-z,]+)\}", scripts["format:check"])
+                self.assertIsNotNone(glob, scripts["format:check"])
+                assert glob is not None
+                self.assertEqual(
+                    {"." + ext for ext in glob.group(1).split(",")},
+                    set(fc.extensions_for(REPO / "frontend" / app)),
+                )
+
+    def test_the_scss_storefronts_check_scss_and_operations_does_not(self) -> None:
+        self.assertIn(".scss", fc.extensions_for(REPO / "frontend" / "storefront"))
+        self.assertIn(".scss", fc.extensions_for(REPO / "frontend" / "storefront-milliy"))
+        self.assertNotIn(".scss", fc.extensions_for(REPO / "frontend" / "operations"))
+
+    def test_an_app_with_no_format_script_gets_the_default_extensions(self) -> None:
+        r = TempRepo()
+        self.addCleanup(r.close)
+        r.write("frontend/bare/package.json", '{"scripts": {}}\n')
+        self.assertEqual(fc.EXTENSIONS, fc.extensions_for(r.path / "frontend" / "bare"))
+        self.assertEqual(fc.EXTENSIONS, fc.extensions_for(r.path / "frontend" / "missing"))
+        r.write("frontend/broken/package.json", "{not json")
+        self.assertEqual(fc.EXTENSIONS, fc.extensions_for(r.path / "frontend" / "broken"))
+
+    def test_scss_is_listed_for_an_app_whose_format_check_covers_it(self) -> None:
+        r = TempRepo()
+        self.addCleanup(r.close)
+        script = '{"scripts": {"format:check": "prettier --check \\"src/**/*.{ts,scss}\\""}}\n'
+        r.write("frontend/styled/package.json", script)
+        base = r.commit("base")
+        r.write("frontend/styled/src/app/a.scss")
+        r.write("frontend/styled/src/app/b.html")  # not in this app's glob
+        r.commit("change")
+        self.assertEqual(["src/app/a.scss"], fc.changed_files(r.path, "frontend/styled", base)[0])
 
 
 STUB_PRETTIER = """#!/bin/sh
@@ -449,8 +482,17 @@ class RealPrettierTests(unittest.TestCase):
         self.assertNotEqual(0, self.check())
 
 
+OTHER_APPS = ("control-plane", "storefront", "storefront-milliy")
+OTHER_LINT_STEP = "Lint (control-plane, storefront, storefront-milliy)"
+OTHER_FORMAT_STEP = "Format check on changed files (control-plane, storefront, storefront-milliy)"
+
+
 class WorkflowWiringTests(unittest.TestCase):
-    """The steps that make lint and the whole-tree format check real must stay in ci.yml."""
+    """The steps that make lint and the format checks real must stay in ci.yml.
+
+    operations: lint plus the whole-tree `npm run format:check`. The other three apps: lint
+    plus the changed-files check (their trees are not prettier-clean yet, see format_changed.py).
+    """
 
     @classmethod
     def setUpClass(cls) -> None:
@@ -467,6 +509,12 @@ class WorkflowWiringTests(unittest.TestCase):
 
     def assert_only_for_operations(self, step: str) -> None:
         self.assertRegex(code(step), r"(?m)^        if: matrix\.app == 'operations'$")
+
+    def assert_only_for_the_other_apps(self, step: str) -> None:
+        self.assertRegex(code(step), r"(?m)^        if: matrix\.app != 'operations'$")
+
+    def scripts(self, app: str) -> dict[str, str]:
+        return json.loads((REPO / "frontend" / app / "package.json").read_text(encoding="utf-8"))["scripts"]
 
     def assert_runs_in_the_app_directory(self, step: str) -> None:
         self.assertRegex(code(step), r"(?m)^        working-directory: frontend/\$\{\{ matrix\.app \}\}$")
@@ -501,9 +549,54 @@ class WorkflowWiringTests(unittest.TestCase):
         names = re.findall(r"^      - name: (.+)$", self.block, re.MULTILINE)
         order = {name: index for index, name in enumerate(names)}
         install = order["Install"]
-        for gate in ("Lint (operations)", "Format check (operations)"):
+        for gate in ("Lint (operations)", "Format check (operations)", OTHER_LINT_STEP, OTHER_FORMAT_STEP):
             self.assertGreater(order[gate], install)
             self.assertLess(order[gate], order["Test and build"])
+
+    def test_every_other_app_lints_in_ci_with_a_rules_check(self) -> None:
+        # `npm run lint` alone passes for a config that lost its rules; `lint:rules`
+        # (frontend/tools/lint-config.test.mjs) is what fails then.
+        step = self.step(OTHER_LINT_STEP)
+        self.assert_only_for_the_other_apps(step)
+        self.assert_runs_in_the_app_directory(step)
+        self.assertEqual(["npm run lint", "npm run lint:rules"], run_lines(step))
+        for app in OTHER_APPS:
+            with self.subTest(app=app):
+                scripts = self.scripts(app)
+                self.assertTrue(scripts["lint"].startswith("eslint "), scripts["lint"])
+                self.assertEqual("node ../tools/lint-config.test.mjs", scripts["lint:rules"])
+                self.assertTrue((REPO / "frontend" / app / "eslint.config.mjs").is_file())
+
+    def test_every_other_app_is_format_checked_on_the_files_a_change_touched(self) -> None:
+        step = self.step(OTHER_FORMAT_STEP)
+        self.assert_only_for_the_other_apps(step)
+        self.assertEqual(
+            ['python3 frontend/tools/format_changed.py --app ${{ matrix.app }} --base "$FORMAT_BASE"'],
+            run_lines(step),
+        )
+        # The base is the PR's base branch, or on a push the tip the push replaced.
+        self.assertIn("github.base_ref", code(step))
+        self.assertIn("github.event.before", code(step))
+        for app in OTHER_APPS:
+            with self.subTest(app=app):
+                scripts = self.scripts(app)
+                self.assertTrue(scripts["format"].startswith("prettier --write "), scripts["format"])
+                self.assertTrue(scripts["format:check"].startswith("prettier --check "), scripts["format:check"])
+
+    def test_the_changed_files_check_can_see_the_merge_base(self) -> None:
+        # A depth-1 checkout has no merge base, and format_changed.py would then fall back to
+        # "every file" and fail on trees nobody has touched.
+        checkout = re.search(r"- uses: actions/checkout@v4\n(.*?)(?=^      - )", self.block, re.MULTILINE | re.DOTALL)
+        self.assertIsNotNone(checkout)
+        assert checkout is not None
+        self.assertRegex(code(checkout.group(1)), r"(?m)^          fetch-depth: 0$")
+
+    def test_every_app_in_the_matrix_has_a_lint_and_a_format_gate(self) -> None:
+        matrix = re.search(r"app: \[([^\]]+)\]", self.block)
+        self.assertIsNotNone(matrix)
+        assert matrix is not None
+        apps = {name.strip() for name in matrix.group(1).split(",")}
+        self.assertEqual(set(APPS), apps, "a new app in the matrix needs its own lint and format wiring")
 
     def test_this_file_runs_in_ci_because_it_also_guards_the_wiring(self) -> None:
         step = self.step("Tooling tests (operations)")

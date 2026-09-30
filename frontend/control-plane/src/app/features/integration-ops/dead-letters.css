@@ -73,7 +73,7 @@
 
 .count {
   color: var(--q-ink-subtle);
-  font-size: 14px;
+  font-size: var(--q-type-body-sm);
   margin-left: 6px;
 }
 
@@ -133,7 +133,7 @@
 
 .lastError {
   font-family: var(--q-font-mono);
-  font-size: 12px;
+  font-size: var(--q-type-caption);
   white-space: pre-wrap;
   margin: 0;
   max-height: 240px;

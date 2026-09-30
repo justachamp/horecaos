@@ -84,11 +84,11 @@ class FakeUiCartService {
   orderComment = '';
 
   items = () => this.cartData()?.items ?? [];
-  subtotalFormatted = () => '25 000 so\'m';
-  deliveryFee = () => '10 000 so\'m';
-  totalAmount = () => '35 000 so\'m';
+  subtotalFormatted = () => "25 000 so'm";
+  deliveryFee = () => "10 000 so'm";
+  totalAmount = () => "35 000 so'm";
   hasDiscount = () => false;
-  discountFormatted = () => '0 so\'m';
+  discountFormatted = () => "0 so'm";
   appliedPromoCode = (): string | null => null;
   deliveryTimeDisplay = (): string | null => null;
   deliveryUnresolvedMessage = (): string | null => null;
@@ -269,7 +269,10 @@ describe('CheckoutComponent.confirm -- guards that must hold before the platform
     // it in this file. Spying on the seam instead of the global keeps this
     // test honest about what fired without paying that cost.
     const redirectSpy = vi
-      .spyOn(fixture.componentInstance as unknown as { redirectTo(url: string): void }, 'redirectTo')
+      .spyOn(
+        fixture.componentInstance as unknown as { redirectTo(url: string): void },
+        'redirectTo',
+      )
       .mockImplementation(() => {});
     const navigateSpy = vi.spyOn(router, 'navigate');
 
@@ -328,7 +331,7 @@ describe('CheckoutComponent -- promo code (ADR 0072)', () => {
   });
 
   it('surfaces a refusal as the message UiCartService already translated, never a raw code', async () => {
-    const { fixture, cart } = await setUp((cart) => {
+    const { fixture } = await setUp((cart) => {
       cart.applyPromoCode = vi.fn(async () => {
         cart.promoError.set('checkout.promoExpired');
         return false;
@@ -360,7 +363,12 @@ describe('CheckoutComponent -- promo code (ADR 0072)', () => {
 
 /** A platform refusal the way `ApiClient` normalises it: code plus a business `reason`. */
 function refusal(reason: string, code = 'RESOURCE_CONFLICT', status = 409): HorecaOSApiError {
-  return new HorecaOSApiError({ status, code, detail: 'refused', problem: { status, code, reason } });
+  return new HorecaOSApiError({
+    status,
+    code,
+    detail: 'refused',
+    problem: { status, code, reason },
+  });
 }
 
 describe('CheckoutComponent.confirm -- a failure names its reason instead of one generic sentence', () => {
@@ -554,6 +562,8 @@ describe('CheckoutComponent -- a basket the platform would not price on arrival'
   it('shows nothing for a basket that priced', async () => {
     const { fixture } = await setUp();
 
-    expect(fixture.nativeElement.querySelector('[data-testid="checkout-pricing-error"]')).toBeNull();
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="checkout-pricing-error"]'),
+    ).toBeNull();
   });
 });

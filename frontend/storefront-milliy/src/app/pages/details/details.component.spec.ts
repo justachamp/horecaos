@@ -186,6 +186,31 @@ describe('DetailsComponent', () => {
     expect(comp.chosenIn('g1')).toEqual(['o1', 'o2']);
   });
 
+  it('takes as many options as the guest likes from a group with no ceiling: a maximum of zero is "unlimited", not "none"', async () => {
+    const open = group({ maximumSelections: 0 });
+    const { comp } = await setUp(product({ modifierGroups: [open] }));
+
+    comp.toggleOption(open, 'o1');
+    comp.toggleOption(open, 'o2');
+    comp.toggleOption(open, 'o3');
+
+    expect(comp.chosenIn('g1')).toEqual(['o1', 'o2', 'o3']);
+  });
+
+  it('holds a group that must have a minimum to it whatever its required flag says, as the table screen does', async () => {
+    const pair = group({ required: false, minimumSelections: 2, maximumSelections: 3 });
+    const { comp, cart } = await setUp(product({ modifierGroups: [pair] }));
+
+    expect(comp.canAdd()).toBe(false);
+    await comp.addToCart();
+    expect(cart.add).not.toHaveBeenCalled();
+
+    comp.toggleOption(pair, 'o1');
+    expect(comp.canAdd()).toBe(false);
+    comp.toggleOption(pair, 'o2');
+    expect(comp.canAdd()).toBe(true);
+  });
+
   it('never lets quantity fall below one', async () => {
     const { comp } = await setUp();
 
@@ -260,7 +285,9 @@ describe('DetailsComponent -- sold out and the sale window (rows 4.4c/4.4d, 4.2g
     const host = fixture.nativeElement as HTMLElement;
 
     expect(comp.canAdd()).toBe(false);
-    expect(host.querySelector('[data-testid="details-sold-out"]')?.textContent).toContain('dish.soldOut');
+    expect(host.querySelector('[data-testid="details-sold-out"]')?.textContent).toContain(
+      'dish.soldOut',
+    );
     expect((host.querySelector('.cta') as HTMLButtonElement).disabled).toBe(true);
 
     await comp.addToCart();
@@ -268,7 +295,9 @@ describe('DetailsComponent -- sold out and the sale window (rows 4.4c/4.4d, 4.2g
   });
 
   it('shows the sale-window text and refuses the add for a dish outside its window, without calling it sold out', async () => {
-    const { comp, fixture, cart } = await setUp(product({ variants: [variantOf({ onSaleNow: false })] }));
+    const { comp, fixture, cart } = await setUp(
+      product({ variants: [variantOf({ onSaleNow: false })] }),
+    );
     const host = fixture.nativeElement as HTMLElement;
 
     expect(comp.canAdd()).toBe(false);
@@ -285,7 +314,10 @@ describe('DetailsComponent -- sold out and the sale window (rows 4.4c/4.4d, 4.2g
   it('preselects a portion that can be bought right now over an earlier one waiting for its window', async () => {
     const { comp } = await setUp(
       product({
-        variants: [variantOf({ id: 'v1', onSaleNow: false }), variantOf({ id: 'v2', name: 'Katta' })],
+        variants: [
+          variantOf({ id: 'v1', onSaleNow: false }),
+          variantOf({ id: 'v2', name: 'Katta' }),
+        ],
       }),
     );
 
@@ -310,7 +342,13 @@ describe('DetailsComponent -- sold out and the sale window (rows 4.4c/4.4d, 4.2g
     const { comp } = await setUp(
       product({
         variants: [
-          variantOf({ id: 'v1', name: 'Nonushta', price: 10_000, isDefault: true, onSaleNow: false }),
+          variantOf({
+            id: 'v1',
+            name: 'Nonushta',
+            price: 10_000,
+            isDefault: true,
+            onSaleNow: false,
+          }),
           variantOf({ id: 'v2', name: 'Kunlik', price: 18_000 }),
         ],
       }),
@@ -323,7 +361,10 @@ describe('DetailsComponent -- sold out and the sale window (rows 4.4c/4.4d, 4.2g
   it('follows the chosen portion: picking the off-window one blocks the add, picking the other frees it', async () => {
     const { comp, fixture } = await setUp(
       product({
-        variants: [variantOf({ id: 'v1' }), variantOf({ id: 'v2', name: 'Katta', onSaleNow: false })],
+        variants: [
+          variantOf({ id: 'v1' }),
+          variantOf({ id: 'v2', name: 'Katta', onSaleNow: false }),
+        ],
       }),
     );
     const host = fixture.nativeElement as HTMLElement;
@@ -374,9 +415,9 @@ describe('DetailsComponent.addToCart -- a refusal stays on the page and says why
 
     expect(navigate).not.toHaveBeenCalled();
     expect(comp.addError()).toBe('errors.reason.itemOutOfSaleWindow');
-    expect((fixture.nativeElement as HTMLElement).querySelector('[role="alert"]')?.textContent).toContain(
-      'errors.reason.itemOutOfSaleWindow',
-    );
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('[role="alert"]')?.textContent,
+    ).toContain('errors.reason.itemOutOfSaleWindow');
   });
 
   it('a sold-out refusal is named too', async () => {

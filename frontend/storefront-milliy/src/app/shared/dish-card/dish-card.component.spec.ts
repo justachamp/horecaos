@@ -4,7 +4,12 @@ import { provideRouter } from '@angular/router';
 
 import { DishCardComponent } from './dish-card.component';
 import { TranslateService } from '../../services/translate.service';
-import type { MenuItem, MenuItemModifierGroup, MenuItemVariant } from '../../types/home.types';
+import type {
+  MenuItem,
+  MenuItemModifierGroup,
+  MenuItemModifierOption,
+  MenuItemVariant,
+} from '../../types/home.types';
 
 class FakeTranslateService {
   get = (key: string): string => key;
@@ -39,7 +44,27 @@ function group(overrides: Partial<MenuItemModifierGroup> = {}): MenuItemModifier
   };
 }
 
-function dish(variants: MenuItemVariant[] = [variant()], modifierGroups: MenuItemModifierGroup[] = []): MenuItem {
+function option(id: string): MenuItemModifierOption {
+  return { id, label: id, amountMinor: null, maximumQuantity: 1 };
+}
+
+/** A mandatory group the guest can actually choose from: it offers options. */
+function choice(overrides: Partial<MenuItemModifierGroup> = {}): MenuItemModifierGroup {
+  return group({
+    id: 'size',
+    name: 'Size',
+    required: true,
+    minimumSelections: 1,
+    maximumSelections: 1,
+    options: [option('small'), option('large')],
+    ...overrides,
+  });
+}
+
+function dish(
+  variants: MenuItemVariant[] = [variant()],
+  modifierGroups: MenuItemModifierGroup[] = [],
+): MenuItem {
   return {
     id: 'p1',
     name: 'Osh',
@@ -79,6 +104,7 @@ interface Inputs {
     [quantities]="inputs().quantities"
     [busy]="inputs().busy"
     (quantityChange)="changes.push($event)"
+    (choose)="chooses.push($event)"
   />`,
 })
 class Host {
@@ -90,6 +116,7 @@ class Host {
     busy: false,
   });
   readonly changes: { variantId: string; quantity: number }[] = [];
+  readonly chooses: { item: MenuItem; variantId: string }[] = [];
 }
 
 function render(inputs: Partial<Inputs> = {}) {
@@ -105,12 +132,14 @@ function render(inputs: Partial<Inputs> = {}) {
     fixture,
     host,
     changes: fixture.componentInstance.changes,
+    chooses: fixture.componentInstance.chooses,
     set: (next: Partial<Inputs>) => {
       fixture.componentInstance.inputs.update((current) => ({ ...current, ...next }));
       fixture.detectChanges();
     },
     q: (testId: string) => host.querySelector<HTMLButtonElement>(`[data-testid="${testId}"]`),
-    all: (testId: string) => Array.from(host.querySelectorAll<HTMLButtonElement>(`[data-testid="${testId}"]`)),
+    all: (testId: string) =>
+      Array.from(host.querySelectorAll<HTMLButtonElement>(`[data-testid="${testId}"]`)),
   };
 }
 
@@ -248,7 +277,10 @@ describe('DishCardComponent -- ordering at a table (ADR 0047)', () => {
 
     it('offers nothing for a portion that is unavailable and not held', () => {
       const view = render({
-        item: dish([variant({ id: 'small', name: 'S' }), variant({ id: 'large', name: 'L', active: false })]),
+        item: dish([
+          variant({ id: 'small', name: 'S' }),
+          variant({ id: 'large', name: 'L', active: false }),
+        ]),
         quantities: { small: 1 },
       });
 
@@ -270,27 +302,102 @@ describe('DishCardComponent -- ordering at a table (ADR 0047)', () => {
   });
 
   describe('a dish that asks the guest to choose something', () => {
-    it('with a required group is not orderable from the table here, and says a member of staff will help', () => {
-      const view = render({
-        item: dish([variant()], [group({ required: true, minimumSelections: 1 })]),
-      });
+    it('with a required group offers to choose its options instead of a plain add', () => {
+      const item = dish([variant()], [choice()]);
+      const view = render({ item });
 
       expect(view.q('dine-in-add')).toBeNull();
-      expect(view.q('dine-in-needs-staff')?.textContent).toContain('dineIn.needsStaff');
+      expect(view.q('dine-in-needs-staff')).toBeNull();
+      expect(view.q('dine-in-choose')?.textContent).toContain('dineIn.choose');
+
+      view.q('dine-in-choose')!.click();
+
+      // The card only reports the wish; the screen opens the picker and writes the line.
+      expect(view.chooses).toEqual([{ item, variantId: 'v1' }]);
+      expect(view.changes).toEqual([]);
     });
 
     it('with a group that must have a minimum is treated the same, whatever its required flag says', () => {
-      const view = render({ item: dish([variant()], [group({ required: false, minimumSelections: 1 })]) });
+      const view = render({
+        item: dish([variant()], [choice({ required: false, minimumSelections: 1 })]),
+      });
 
       expect(view.q('dine-in-add')).toBeNull();
+      expect(view.q('dine-in-choose')).not.toBeNull();
+    });
+
+    it('offers to choose for each portion that can be bought, naming the portion', () => {
+      const item = dish(
+        [
+          variant({ id: 'small', name: 'S', price: 30_000 }),
+          variant({ id: 'large', name: 'L', price: 50_000 }),
+          variant({ id: 'gone', name: 'XL', active: false }),
+        ],
+        [choice()],
+      );
+      const view = render({ item });
+
+      expect(view.all('dine-in-choose').length).toBe(2);
+      expect(view.host.textContent).toContain('S');
+      expect(view.host.textContent).toContain('50\u00a0000');
+
+      view.all('dine-in-choose')[1].click();
+      expect(view.chooses).toEqual([{ item, variantId: 'large' }]);
+    });
+
+    it('offers no choosing on a dish that cannot be bought: its badge says why', () => {
+      const view = render({ item: dish([variant({ active: false })], [choice()]) });
+
+      expect(view.q('dish-sold-out')).not.toBeNull();
+      expect(view.q('dine-in-choose')).toBeNull();
+    });
+
+    it('draws no Choose button unless the table takes orders: the menu-only table and the home screen are unchanged', () => {
+      const view = render({ item: dish([variant()], [choice()]), ordering: false });
+
+      expect(view.q('dine-in-choose')).toBeNull();
+    });
+
+    it('never draws a Choose button inside a link: a linked card opens the product page', () => {
+      const view = render({ item: dish([variant()], [choice()]), linked: true });
+
+      expect(view.q('dine-in-choose')).toBeNull();
+    });
+
+    it('with a mandatory group that offers nothing to choose from, says a member of staff will help', () => {
+      const view = render({
+        item: dish([variant()], [group({ required: true, minimumSelections: 1, options: [] })]),
+      });
+
+      expect(view.q('dine-in-add')).toBeNull();
+      expect(view.q('dine-in-choose')).toBeNull();
+      expect(view.q('dine-in-needs-staff')?.textContent).toContain('dineIn.needsStaff');
+    });
+
+    it('with a mandatory group that offers fewer options than its minimum is treated the same', () => {
+      const view = render({
+        item: dish([variant()], [choice({ minimumSelections: 3, maximumSelections: 3 })]),
+      });
+
+      expect(view.q('dine-in-choose')).toBeNull();
       expect(view.q('dine-in-needs-staff')).not.toBeNull();
     });
 
-    it('with only optional groups can be ordered plain', () => {
+    it('with only optional groups can be ordered plain, with nothing to choose', () => {
       const view = render({ item: dish([variant()], [group()]) });
 
       expect(view.q('dine-in-add')).not.toBeNull();
+      expect(view.q('dine-in-choose')).toBeNull();
       expect(view.q('dine-in-needs-staff')).toBeNull();
+    });
+
+    it('keeps the way out of a plain portion already held, and still offers to choose', () => {
+      const view = render({ item: dish([variant()], [choice()]), quantities: { v1: 2 } });
+
+      expect(view.q('dine-in-increase')!.disabled).toBe(true);
+      expect(view.q('dine-in-choose')).not.toBeNull();
+      view.q('dine-in-decrease')!.click();
+      expect(view.changes).toEqual([{ variantId: 'v1', quantity: 1 }]);
     });
   });
 });

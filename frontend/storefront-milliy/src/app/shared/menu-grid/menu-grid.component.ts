@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, input, output, signal } from '@angular/core';
 
-import type { CategoryItem, MenuCategory } from '../../types/home.types';
+import type { CategoryItem, MenuCategory, MenuItem } from '../../types/home.types';
 import { DishCardComponent } from '../dish-card/dish-card.component';
 import { TranslatePipe } from '../translate/translate.pipe';
 
@@ -35,6 +35,8 @@ export class MenuGridComponent {
   readonly busy = input(false);
   /** A dish's portion was asked for in a new quantity. */
   readonly quantityChange = output<{ variantId: string; quantity: number }>();
+  /** A dish's options are to be chosen for one of its portions. */
+  readonly choose = output<{ item: MenuItem; variantId: string }>();
 
   protected readonly activeCategoryId = signal<string | null>(null);
 

@@ -375,7 +375,10 @@
       "itemUnavailable": "This item just sold out.",
       "holdExpired": "Your basket hold expired. Please review your order and try again.",
       "tableNotAtBranch": "This table is at another branch. Scan the code on your own table.",
-      "quoteExpired": "The price has expired. Please review your order and try again."
+      "quoteExpired": "The price has expired. Please review your order and try again.",
+      "modifierMinimum": "Choose the required options for this dish.",
+      "modifierMaximum": "You chose more than this dish allows.",
+      "modifierNotOffered": "One of the options you chose is no longer offered. Close this and choose again."
     }
   },
   "money": {
@@ -458,6 +461,17 @@
     "heldUnavailable": "No longer available. Take it out of your order to continue.",
     "clearOrder": "Clear the order",
     "priceRefreshed": "The price was updated and your order has not been sent. Check the total and press Order again.",
-    "sessionEnded": "This table visit has ended. Scan the code on your table again to keep ordering."
+    "sessionEnded": "This table visit has ended. Scan the code on your table again to keep ordering.",
+    "choose": "Choose options",
+    "pickerAdd": "Add to order",
+    "pickerExactly": "Choose {{count}}",
+    "pickerBetween": "Choose {{min}} to {{max}}",
+    "pickerAtLeast": "Choose at least {{count}}",
+    "pickerUpTo": "Choose up to {{count}}",
+    "pickerMissing": "Still to choose: {{groups}}",
+    "pickerOptionUnnamed": "Option",
+    "chooseRequired": "Choose the required options first.",
+    "customLinesTitle": "Dishes with your choices",
+    "lineGone": "A dish that is no longer on the menu"
   }
 }

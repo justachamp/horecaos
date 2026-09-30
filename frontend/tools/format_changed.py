@@ -3,21 +3,23 @@
 
 What it is for
 --------------
-A local shortcut, not the CI gate. CI runs the plain `npm run format:check`, which checks
-every file under src/ and is what keeps the tree prettier-clean (it used to run this
-script instead, while about a hundred files predated the prettier config; the tree was
-reformatted in one commit and that reason is gone). Use this script when you want to check,
-or list, only what your change touched -- for instance before pushing, or from a hook --
-without waiting on the whole tree.
+The prettier gate for the apps whose tree is not prettier-clean yet. `operations` was
+reformatted in one commit, so CI runs the plain `npm run format:check` for it and this
+script is only a local shortcut there. `control-plane`, `storefront` and `storefront-milliy`
+each have on the order of a hundred files that predate their prettier config, and a blanket
+reformat while other branches are open would conflict with every one of them; for those three
+CI runs this script instead, so the ratchet is: a file a change adds or edits must be
+prettier-clean. Once nothing is in flight, reformat an app in one commit, switch its CI step
+to `npm run format:check`, and stop calling this script for it.
 
 What "touched" means
 --------------------
-Files under <app>/src with an extension `format:check` covers (ts, html, css, json) that
-were added, copied, modified or renamed between the merge base of <base> and HEAD --
-plus, so the same command works on a developer machine, uncommitted and untracked ones.
-On a CI checkout the working tree equals HEAD, so this is exactly the change under
-test. Deleted files are skipped; files matched by the app's .prettierignore are skipped
-by prettier itself.
+Files under <app>/src with an extension the app's own `format:check` script covers (ts, html,
+css, json; the two SCSS storefronts add scss) that were added, copied, modified or renamed
+between the merge base of <base> and HEAD -- plus, so the same command works on a developer
+machine, uncommitted and untracked ones. On a CI checkout the working tree equals HEAD, so
+this is exactly the change under test. Deleted files are skipped; files matched by the app's
+.prettierignore are skipped by prettier itself.
 
 <base> is the branch the change will be merged into (`origin/main`). A base that is empty,
 all zeros (a new branch) or not in the clone falls back to the parent of HEAD, so the
@@ -35,6 +37,8 @@ node_modules. Standard library only.
 from __future__ import annotations
 
 import argparse
+import json
+import re
 import shutil
 import subprocess
 import sys
@@ -44,7 +48,9 @@ from typing import Sequence
 FRONTEND = Path(__file__).resolve().parents[1]
 REPO = FRONTEND.parent
 
-# The extensions in package.json's format:check glob ("src/**/*.{ts,html,css,json}").
+# The extensions in package.json's format:check glob ("src/**/*.{ts,html,css,json}"). This is the
+# default; an app whose own format:check glob covers more (the SCSS storefronts add scss) is
+# checked for what its glob says -- see extensions_for.
 EXTENSIONS = (".ts", ".html", ".css", ".json")
 NULL_SHA = "0" * 40
 # Keep each prettier invocation well under the operating system's argument limit.
@@ -86,14 +92,33 @@ def _lines(output: str) -> list[str]:
     return [item for item in output.split("\0") if item]
 
 
+def extensions_for(app_dir: Path) -> tuple[str, ...]:
+    """The file extensions this app's own `format:check` script covers.
+
+    Read from the script's `{ts,html,...}` glob, so the changed-files check can never cover
+    less (a file the app's script would flag but this misses) or more (a file it would not
+    look at) than `npm run format:check` does. An app with no package.json, no such script or
+    no brace glob gets EXTENSIONS.
+    """
+    try:
+        scripts = json.loads((app_dir / "package.json").read_text(encoding="utf-8")).get("scripts", {})
+    except (OSError, ValueError):
+        return EXTENSIONS
+    glob = re.search(r"\{([A-Za-z0-9,]+)\}", scripts.get("format:check", ""))
+    if glob is None:
+        return EXTENSIONS
+    return tuple("." + extension for extension in glob.group(1).split(",") if extension)
+
+
 def changed_files(repo: Path, app: str, base: str | None) -> tuple[list[str], str]:
     """Paths relative to the app directory, sorted, plus the base-resolution note."""
     source = f"{app}/src"
     revision, note = resolve_base(repo, base)
+    extensions = extensions_for(repo / app)
     tracked = _lines(git(repo, "diff", "--name-only", "-z", "--diff-filter=ACMR", revision, "--", source).stdout)
     untracked = _lines(git(repo, "ls-files", "--others", "--exclude-standard", "-z", "--", source).stdout)
     prefix = f"{app}/"
-    files = sorted({path[len(prefix):] for path in tracked + untracked if path.endswith(EXTENSIONS)})
+    files = sorted({path[len(prefix):] for path in tracked + untracked if path.endswith(extensions)})
     return files, note
 
 
@@ -137,7 +162,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         print("\n".join(files))
         return 0
     if not files:
-        print(f"format_changed: no {'/'.join(e.lstrip('.') for e in EXTENSIONS)} file under frontend/{args.app}/src changed; nothing to check")
+        covered = "/".join(e.lstrip(".") for e in extensions_for(app_dir))
+        print(f"format_changed: no {covered} file under frontend/{args.app}/src changed; nothing to check")
         return 0
 
     print(f"format_changed: checking {len(files)} changed file(s) in frontend/{args.app}")
@@ -146,7 +172,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(
             "\nformat_changed: the [warn] files above are not prettier-formatted. Fix them with\n"
             f"  cd frontend/{args.app} && npx prettier --write <those files>\n"
-            "(only files this change touched are checked here; CI checks the whole tree with `npm run format:check`).",
+            "(only files this change touched are checked here; `npm run format:check` checks the whole tree,"
+            " which CI runs only for operations).",
             file=sys.stderr,
         )
     return status

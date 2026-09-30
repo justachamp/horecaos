@@ -4910,6 +4910,17 @@ export const messagesUzLatn: MessageCatalogue = {
   'marketing.automations.preview.loading': 'Mosliklar yuklanmoqda…',
   'marketing.automations.preview.empty': 'Bugun bu qoidaga mos mijoz yoʻq.',
   'marketing.automations.preview.unnamed': 'Nomsiz mijoz',
+  'marketing.automations.preview.simulateTitle': 'Mijozni sinab koʻrish',
+  'marketing.automations.preview.simulateIntro':
+    'Bu qoida faollashtirilgach ishga tushishini bilish uchun mijozning koʻrsatkichlarini kiriting. Haqiqiy mijozlar oʻqilmaydi va hech narsa yuborilmaydi.',
+  'marketing.automations.preview.sampleTitle': 'Bugun mos keladigan mijozlar',
+  'marketing.automations.preview.outcome':
+    '“{template}” shablonini {channel} orqali yuboradi, {cooldownDays} kunda koʻpi bilan bir marta',
+  'marketing.automations.condition.BIRTHDAY': 'Tugʻilgan kundan oldin yoki keyin necha kun',
+  'marketing.automations.condition.INACTIVITY': 'Oxirgi buyurtmadan beri necha kun',
+  'marketing.automations.condition.CART_ABANDONMENT': 'Savat tashlab ketilganidan beri necha soat',
+  'marketing.automations.condition.CASHBACK_CHANGE':
+    'Keshbek oʻzgarishi miqdori, minimal birliklar',
 
   // ---------------------------------------------------------------- customers 5.3/5.4 (wave 39)
   'customers.nav.label': 'Mijozlar boʻlimi',

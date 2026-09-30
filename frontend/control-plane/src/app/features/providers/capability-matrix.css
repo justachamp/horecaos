@@ -31,6 +31,6 @@
   padding: 4px 10px;
   border: 1px solid var(--q-hairline);
   font-family: var(--q-font-mono);
-  font-size: 12px;
+  font-size: var(--q-type-caption);
   color: var(--q-ink);
 }

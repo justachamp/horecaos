@@ -112,6 +112,11 @@ describe('i18n content: every REASON_MESSAGE_KEYS target resolves in every local
     'TABLE_NOT_SEATED',
     'TABLE_NOT_AT_THIS_BRANCH',
     'TABLE_NOT_APPLICABLE',
+    'MODIFIER_GROUP_MINIMUM_NOT_MET',
+    'MODIFIER_GROUP_MAXIMUM_EXCEEDED',
+    'MODIFIER_OPTION_NOT_REPEATABLE',
+    'MODIFIER_OPTION_QUANTITY_EXCEEDED',
+    'MODIFIER_NOT_OFFERED',
   ] as const;
 
   it.each(REASON_CODES)('%s maps to a key every locale actually has', (reason) => {
@@ -154,6 +159,17 @@ describe('i18n content: the keys the new cart / sale-window / table screens rend
     'dineIn.roundPending',
     'dineIn.roundRetry',
     'dineIn.roundAttachFailed',
+    'dineIn.choose',
+    'dineIn.pickerAdd',
+    'dineIn.pickerExactly',
+    'dineIn.pickerBetween',
+    'dineIn.pickerAtLeast',
+    'dineIn.pickerUpTo',
+    'dineIn.pickerMissing',
+    'dineIn.pickerOptionUnnamed',
+    'dineIn.chooseRequired',
+    'dineIn.customLinesTitle',
+    'dineIn.lineGone',
     'auth.slogan',
     'auth.phonePlaceholder',
     'auth.continue',
@@ -194,6 +210,9 @@ describe('i18n content: the keys the new cart / sale-window / table screens rend
     'errors.reason.deliveryFeeUnresolved',
     'errors.reason.itemOutOfSaleWindow',
     'errors.reason.itemUnavailable',
+    'errors.reason.modifierMinimum',
+    'errors.reason.modifierMaximum',
+    'errors.reason.modifierNotOffered',
   ] as const;
 
   it.each(RENDERED_KEYS)('%s is a string in every locale', (key) => {
@@ -208,8 +227,13 @@ describe('i18n content: the keys the new cart / sale-window / table screens rend
       expect(getNested(dict, 'dineIn.tableLabel'), id).toContain('{{code}}');
       expect(getNested(dict, 'dineIn.itemsInCart'), id).toContain('{{count}}');
       expect(getNested(dict, 'dineIn.roundCount'), id).toContain('{{count}}');
+      expect(getNested(dict, 'dineIn.pickerExactly'), id).toContain('{{count}}');
+      expect(getNested(dict, 'dineIn.pickerAtLeast'), id).toContain('{{count}}');
+      expect(getNested(dict, 'dineIn.pickerUpTo'), id).toContain('{{count}}');
+      expect(getNested(dict, 'dineIn.pickerBetween'), id).toContain('{{min}}');
+      expect(getNested(dict, 'dineIn.pickerBetween'), id).toContain('{{max}}');
+      expect(getNested(dict, 'dineIn.pickerMissing'), id).toContain('{{groups}}');
       expect(getNested(dict, 'auth.errors.codeRejectedWithTries'), id).toContain('{{count}}');
     }
   });
 });
-

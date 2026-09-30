@@ -11,6 +11,7 @@ import {
   variantAvailability,
   type ItemAvailability,
 } from '../../utils/item-availability';
+import { canBeSatisfied, isMandatory } from '../../utils/modifier-selection';
 import { TranslatePipe } from '../translate/translate.pipe';
 
 /**
@@ -48,9 +49,12 @@ import { TranslatePipe } from '../translate/translate.pipe';
  * (its badge says why).
  *
  * A dish whose modifier group *must* be chosen from (`required`, or a non-zero
- * minimum) is not offered here: choosing needs the product page's picker, and
- * that page adds to the delivery basket. The card says a member of staff will
- * help rather than adding a plain dish the kitchen would have to refuse.
+ * minimum) cannot be added plain: the kitchen would have to refuse it. Its portions
+ * carry a **Choose** button instead, which asks the screen (`choose`) to open the
+ * option picker for that portion; the picker returns the selection and the screen
+ * writes the line. The card holds no selection state. Only a mandatory group with
+ * fewer options than it demands (a menu published with an empty group) leaves the
+ * guest nothing to choose, and there the card says a member of staff will help.
  *
  * A portion the basket *already holds* keeps its stepper even when it can no
  * longer be bought (sold out, out of its window, or its dish now needs staff):
@@ -82,6 +86,8 @@ export class DishCardComponent {
   readonly busy = input(false);
   /** The guest asked for `quantity` of a portion (0 takes it out of the basket). */
   readonly quantityChange = output<{ variantId: string; quantity: number }>();
+  /** The guest wants to choose the options for a portion of this dish before adding it. */
+  readonly choose = output<{ item: MenuItem; variantId: string }>();
 
   protected readonly availability = computed<ItemAvailability>(() => itemAvailability(this.item()));
 
@@ -99,10 +105,19 @@ export class DishCardComponent {
     return preferredSellableVariant(this.item())?.remainingQuantity ?? null;
   });
 
+  /** The groups the guest must choose from before this dish can be ordered. */
+  private readonly mandatoryGroups = computed(() => this.item().modifierGroups.filter(isMandatory));
+
   /** True when the dish cannot be added plain: a group the guest must choose from. */
-  protected readonly needsStaff = computed(() =>
-    this.item().modifierGroups.some((group) => group.required || group.minimumSelections > 0),
+  protected readonly needsChoice = computed(() => this.mandatoryGroups().length > 0);
+
+  /** The guest can make the choice here: every mandatory group offers enough options to satisfy it. */
+  protected readonly choosable = computed(
+    () => this.needsChoice() && this.mandatoryGroups().every(canBeSatisfied),
   );
+
+  /** The dish must be chosen from and cannot be: only a member of staff can put it in. */
+  protected readonly needsStaff = computed(() => this.needsChoice() && !this.choosable());
 
   /**
    * The portions the card draws controls for: the ones that can be bought right
@@ -116,11 +131,22 @@ export class DishCardComponent {
    * ({@link canAdd}).
    */
   protected readonly portions = computed<readonly MenuItemVariant[]>(() =>
-    this.item().variants.filter((variant) => this.canAdd(variant) || this.quantityOf(variant.id) > 0),
+    this.item().variants.filter(
+      (variant) => this.canAdd(variant) || this.quantityOf(variant.id) > 0,
+    ),
   );
 
   protected readonly showControls = computed(
     () => this.ordering() && !this.linked() && this.portions().length > 0,
+  );
+
+  /** The portions the guest can pick options for right now. */
+  protected readonly choosePortions = computed<readonly MenuItemVariant[]>(() =>
+    this.item().variants.filter((variant) => this.canChoose(variant)),
+  );
+
+  protected readonly showChoose = computed(
+    () => this.ordering() && !this.linked() && this.choosePortions().length > 0,
   );
 
   protected readonly showStaffNote = computed(
@@ -131,9 +157,14 @@ export class DishCardComponent {
     return this.quantities()[variantId] ?? 0;
   }
 
-  /** A portion may be put in the basket (or more of it) only while it can be bought plain. */
+  /** A portion may be put in the basket (or more of it) plain only while nothing has to be chosen for it. */
   protected canAdd(variant: MenuItemVariant): boolean {
-    return !this.needsStaff() && variantAvailability(variant) === 'AVAILABLE';
+    return !this.needsChoice() && variantAvailability(variant) === 'AVAILABLE';
+  }
+
+  /** A portion of a dish that must be chosen from can be picked for while it can be bought. */
+  protected canChoose(variant: MenuItemVariant): boolean {
+    return this.choosable() && variantAvailability(variant) === 'AVAILABLE';
   }
 
   protected request(variantId: string, quantity: number): void {

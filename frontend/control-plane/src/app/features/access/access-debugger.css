@@ -94,5 +94,5 @@ button.primary:disabled {
 
 .capabilities {
   font-family: var(--q-font-mono);
-  font-size: 12px;
+  font-size: var(--q-type-caption);
 }

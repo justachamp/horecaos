@@ -4907,6 +4907,16 @@ export const messagesEn = {
   'marketing.automations.preview.loading': 'Loading matches…',
   'marketing.automations.preview.empty': 'No customer matches this rule today.',
   'marketing.automations.preview.unnamed': 'Unnamed customer',
+  'marketing.automations.preview.simulateTitle': 'Try a customer',
+  'marketing.automations.preview.simulateIntro':
+    'Type the figures of a customer to see whether this rule would fire once armed. Nothing is read from a real customer and nothing is sent.',
+  'marketing.automations.preview.sampleTitle': 'Customers who match today',
+  'marketing.automations.preview.outcome':
+    'Sends “{template}” by {channel}, at most once every {cooldownDays} days',
+  'marketing.automations.condition.BIRTHDAY': 'Days from the birthday, before or after',
+  'marketing.automations.condition.INACTIVITY': 'Days since the last order',
+  'marketing.automations.condition.CART_ABANDONMENT': 'Hours since the cart was left',
+  'marketing.automations.condition.CASHBACK_CHANGE': 'Size of the cashback change, minor units',
 
   // ---------------------------------------------------------------- customers 5.3/5.4 (wave 39)
   'customers.nav.label': 'Customers section',

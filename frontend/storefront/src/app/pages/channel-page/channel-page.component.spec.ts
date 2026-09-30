@@ -1,4 +1,3 @@
-import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, provideRouter } from '@angular/router';
 
@@ -35,7 +34,9 @@ function setUp(slug: string | null) {
       provideRouter([]),
       {
         provide: ActivatedRoute,
-        useValue: { snapshot: { paramMap: { get: (key: string) => (key === 'slug' ? slug : null) } } },
+        useValue: {
+          snapshot: { paramMap: { get: (key: string) => (key === 'slug' ? slug : null) } },
+        },
       },
       { provide: ChannelPagesService, useValue: pages },
       { provide: TranslateService, useClass: FakeTranslateService },

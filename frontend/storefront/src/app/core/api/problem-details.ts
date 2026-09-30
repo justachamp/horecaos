@@ -26,7 +26,6 @@ export type ErrorCode =
   | 'UNSUPPORTED_MEDIA_TYPE'
   | 'RATE_LIMIT_EXCEEDED'
   | 'INTERNAL_ERROR'
-  // eslint-disable-next-line @typescript-eslint/ban-types
   | (string & {});
 
 /** A field-level failure: a stable code, not prose. */

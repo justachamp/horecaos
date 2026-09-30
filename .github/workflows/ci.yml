@@ -374,6 +374,11 @@ jobs:
         app: [control-plane, operations, storefront, storefront-milliy]
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The changed-files format check below measures a change against its
+          # merge base, so it needs the history between the two. The repository
+          # is small.
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
@@ -386,8 +391,22 @@ jobs:
         # scale in tokens.css owns every size). The tree was clean when this step
         # was added; before it, three violations landed unnoticed because
         # nothing ran `npm run lint`. `lint:rules` proves the rule itself still
-        # fails on a violation. The other apps have no lint script yet.
+        # fails on a violation. The other three apps have their own step below.
         if: matrix.app == 'operations'
+        working-directory: frontend/${{ matrix.app }}
+        run: |
+          npm run lint
+          npm run lint:rules
+
+      - name: Lint (control-plane, storefront, storefront-milliy)
+        # ESLint 8.57 with the typescript-eslint recommended rules, plus (control-plane
+        # only, which vendors the closed type scale) the same horecaos px rule
+        # operations enforces, imported from frontend/operations' plugin rather than
+        # copied. Each app's tree was clean when this step was added. `lint:rules`
+        # (frontend/tools/lint-config.test.mjs) feeds the configured linter code that
+        # is wrong and code that is fine, so a config that silently lost its rules
+        # fails here instead of passing for ever.
+        if: matrix.app != 'operations'
         working-directory: frontend/${{ matrix.app }}
         run: |
           npm run lint
@@ -401,10 +420,31 @@ jobs:
         # clone, was never checked for the files it brought. The tree has been
         # prettier-clean since it was reformatted in one commit, so the plain
         # script the app already has does the job. To fix a failure:
-        # `npm run format` in the app. The other apps have no format script yet.
+        # `npm run format` in the app. The other three apps are not there yet:
+        # see the changed-files step below.
         if: matrix.app == 'operations'
         working-directory: frontend/${{ matrix.app }}
         run: npm run format:check
+
+      - name: Format check on changed files (control-plane, storefront, storefront-milliy)
+        # NOT `npm run format:check`: each of these trees has on the order of a
+        # hundred files that predate its prettier config and were never formatted,
+        # so the whole-tree check is red on code nobody touched, and a blanket
+        # reformat while other branches are open would conflict with every one of
+        # them. Until each app is reformatted in one commit (after which its step
+        # becomes `npm run format:check`, as operations' did) the ratchet is: a
+        # file a change adds or edits must be prettier-clean.
+        #
+        # frontend/tools/format_changed.py lists the src/ files that differ from
+        # the merge base -- the pull request's base branch, or on a push the tip
+        # the push replaced -- and runs prettier --check on exactly those. Run the
+        # same command locally:
+        #   python3 frontend/tools/format_changed.py --app control-plane --base main
+        # and fix a failure with `npx prettier --write <the [warn] files>` in the app.
+        if: matrix.app != 'operations'
+        env:
+          FORMAT_BASE: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || github.event.before }}
+        run: python3 frontend/tools/format_changed.py --app ${{ matrix.app }} --base "$FORMAT_BASE"
 
       - name: Tooling tests (operations)
         # frontend/tools/test_format_changed.py tests the local changed-files
