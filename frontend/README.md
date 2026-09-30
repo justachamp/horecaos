@@ -76,6 +76,27 @@ Only `operations` has a lint script and a `format`/`format:check` pair today; th
   python3 frontend/tools/test_format_changed.py                                  # the tooling tests, also run in CI
   ```
 
+## Component styles and bundle budgets
+
+Each app warns at 4 kB per component stylesheet (`anyComponentStyle`) and 500 kB for the initial
+bundle; the numbers are what the build prints (`ng build`), measured on minified output.
+When a page's stylesheet grows past 4 kB:
+
+- **Rules several pages carry byte for byte** belong in a shared sheet, under a `q-` name the page
+  opts into by using it in its template. `operations/src/app/shared/styles/` holds three
+  (`modal.css`, `dialog.css`, `controls.css`), loaded from `styles.css`. Bare names such as
+  `.dialog` or `.primary` cannot be made global: other pages mean something else by them.
+- **A region with rules of its own** becomes a component that takes what it shows as inputs and
+  raises what the user asks for (`host: display contents` keeps the box tree unchanged). The page keeps
+  every read, write and decision; the order queue's toolbar, the detail pane's money section and
+  the product editor's Photos tab are examples.
+- Do not raise the budget. `operations`' initial bundle is about 770 kB (error budget 825 kB), of which the Russian
+  catalogue (the default locale, eager by ADR 0035's loading model) is 466 kB.
+
+`operations` also has `npm run i18n:dead`, which lists message keys nothing references;
+`--write` removes them from all three locales (`--app-dir ../control-plane --variables
+'^(en|ru|uzLatn)$'` scans control-plane).
+
 ## Known debts
 
 - **Two OIDC libraries against one Keycloak realm.** `control-plane` uses
