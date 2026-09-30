@@ -330,8 +330,8 @@ public final class OnboardingReadinessChecks {
      *
      * <p><strong>Blocking.</strong> ADR 0036's resolver refuses an order on a
      * channel whose requested mode is not enabled (rule 3), and refuses it again
-     * at a location that has no schedule bound for that mode. A channel where
-     * neither ever holds opens a cart nobody can complete, which is the same
+     * at a location that has no schedule bound for that mode. A channel for
+     * which neither holds opens a cart nobody can complete, which is the same
      * failure {@link ChannelPaymentCoverage} names for payment methods. Two
      * shapes, two codes, because they are fixed on different screens:
      *
