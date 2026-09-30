@@ -1269,6 +1269,24 @@ describe('DineInTableComponent', () => {
         expect(view.q('dine-in-order')).toBeNull();
       });
 
+      it('takes a held plain line out whole when its dish has since gained a required group: one fewer would be refused', async () => {
+        const view = setUp();
+        view.dineIn.seed(admission());
+        view.menuService.home.mockResolvedValue(menuWithRequiredSize());
+        view.carts.preload([line('variant-1', 2)]);
+        // The platform checks a dish's selection rules on every write of a line, so a
+        // plain line of a dish that must be chosen from is refused at any quantity.
+        view.carts.putLine.mockRejectedValue(refusal('MODIFIER_GROUP_MINIMUM_NOT_MET'));
+
+        await settle(view.fixture);
+        await view.click('dine-in-decrease');
+
+        expect(view.carts.putLine).not.toHaveBeenCalled();
+        expect(view.carts.removeLine).toHaveBeenCalledWith('variant-1');
+        expect(view.q('dine-in-quantity')).toBeNull();
+        expect(view.q('dine-in-order')).toBeNull();
+      });
+
       it('offers to clear the order when the platform will not price it, and ordering works again afterwards', async () => {
         const view = setUp();
         view.dineIn.seed(admission());

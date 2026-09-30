@@ -43,6 +43,17 @@ export class ChosenLinesComponent {
   readonly busy = input(false);
   readonly quantityChange = output<{ lineKey: string; quantity: number }>();
 
+  /**
+   * The quantity the decrease button asks for. One fewer -- except on a line that
+   * can no longer be bought: the platform checks stock, the sale window and the
+   * dish's selection rules on every write of a line, whatever quantity it writes,
+   * so one fewer would be refused every time and the guest could never reach zero.
+   * The way out there is the whole line.
+   */
+  protected lowered(line: ChosenLine): number {
+    return line.available ? line.quantity - 1 : 0;
+  }
+
   protected request(line: ChosenLine, quantity: number): void {
     if (!this.busy()) {
       this.quantityChange.emit({ lineKey: line.lineKey, quantity: Math.max(0, quantity) });

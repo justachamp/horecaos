@@ -125,6 +125,8 @@ describe('ChosenLinesComponent', () => {
     expect(view.q('dine-in-custom-line-unavailable')).not.toBeNull();
     expect(view.q('dine-in-custom-increase')!.disabled).toBe(true);
     view.q('dine-in-custom-decrease')!.click();
-    expect(view.state.changes).toEqual([{ lineKey: 'v1+opt-large', quantity: 1 }]);
+    // The whole line: the platform checks stock on every write of a line, so a PUT
+    // of one fewer for a dish that is gone would be refused and the guest stuck.
+    expect(view.state.changes).toEqual([{ lineKey: 'v1+opt-large', quantity: 0 }]);
   });
 });
