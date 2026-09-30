@@ -55,9 +55,10 @@ const MINOR_UNIT_EXPONENT: Readonly<Record<string, number>> = {
 };
 
 /**
- * The unit written after a total, per locale.
+ * The unit written on a total, per locale — after the amount by default, before
+ * it where the brand chose so (`regional-format.ts`).
  *
- * Only after a total. `docs/operations-spec/orders.md` §1.3: rows carry the bare
+ * Only on a total. `docs/operations-spec/orders.md` §1.3: rows carry the bare
  * number, because repeating the unit on forty rows is forty pieces of noise
  * between the operator and the one figure that differs.
  */
