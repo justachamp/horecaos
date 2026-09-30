@@ -288,6 +288,92 @@ class ModulesStatementsAndArrearsTests {
     }
 
     @Test
+    void endingAndReAddingAModuleInOneMonthBillsItOnceForTheMonth() {
+        startOnBasicPlan();
+        clock.set(AUGUST);
+        UUID kiosk = activeModule("kiosk", BillingUnit.PER_UNIT, 50_000);
+        UUID analytics = activeModule("analytics", BillingUnit.PER_TENANT, 150_000);
+        UUID whiteLabel = activeModule("white-label", BillingUnit.ONE_OFF, 1_000_000);
+
+        // One kiosk, "I want two": the only way to change a quantity is to end and add again.
+        UUID firstKiosk = modules.add(PILOT, kiosk, 1, AUTHOR, "one kiosk", "corr");
+        modules.end(PILOT, firstKiosk, AUTHOR, "wants two", "corr");
+        modules.add(PILOT, kiosk, 2, AUTHOR, "two kiosks", "corr");
+        // A whole-tenant module bought, undone by mistake and bought again.
+        UUID firstAnalytics = modules.add(PILOT, analytics, null, AUTHOR, "bought", "corr");
+        modules.end(PILOT, firstAnalytics, AUTHOR, "by mistake", "corr");
+        modules.add(PILOT, analytics, null, AUTHOR, "bought again", "corr");
+        UUID firstApp = modules.add(PILOT, whiteLabel, null, AUTHOR, "the app", "corr");
+        modules.end(PILOT, firstApp, AUTHOR, "by mistake", "corr");
+        modules.add(PILOT, whiteLabel, null, AUTHOR, "the app again", "corr");
+        clock.set(SEPTEMBER);
+
+        Statement august = statements.draft(PILOT, "2026-08");
+
+        assertThat(august.lines())
+                .filteredOn(line -> line.kind().equals(StatementLine.MODULE))
+                .as("ADR 0088: a module live on any day of the month bills that month once, not once per row")
+                .extracting(StatementLine::referenceCode, StatementLine::quantity, StatementLine::amountMinor)
+                .containsExactlyInAnyOrder(
+                        org.assertj.core.groups.Tuple.tuple("kiosk", 2L, 100_000L),
+                        org.assertj.core.groups.Tuple.tuple("analytics", 1L, 150_000L),
+                        org.assertj.core.groups.Tuple.tuple("white-label", 1L, 1_000_000L));
+        assertThat(august.totalMinor()).isEqualTo(1_200_000L + 100_000L + 150_000L + 1_000_000L);
+        assertThat(statements.draft(PILOT, "2026-08").totalMinor())
+                .as("computing the month again reads the same")
+                .isEqualTo(august.totalMinor());
+
+        assertThat(statements.draft(PILOT, "2026-09").lines())
+                .filteredOn(line -> line.kind().equals(StatementLine.MODULE))
+                .as("the re-bought rows are still live: one line each in the month after too")
+                .extracting(StatementLine::referenceCode, StatementLine::quantity)
+                .containsExactlyInAnyOrder(
+                        org.assertj.core.groups.Tuple.tuple("kiosk", 2L),
+                        org.assertj.core.groups.Tuple.tuple("analytics", 1L));
+    }
+
+    @Test
+    void aModuleReBoughtAtALowerQuantityInTheSameMonthBillsTheMostItWasHeldAt() {
+        startOnBasicPlan();
+        clock.set(AUGUST);
+        UUID kiosk = activeModule("kiosk", BillingUnit.PER_UNIT, 50_000);
+        UUID three = modules.add(PILOT, kiosk, 3, AUTHOR, "three kiosks", "corr");
+        modules.end(PILOT, three, AUTHOR, "wants one", "corr");
+        modules.add(PILOT, kiosk, 1, AUTHOR, "one kiosk", "corr");
+        clock.set(SEPTEMBER);
+
+        assertThat(statements.draft(PILOT, "2026-08").lines())
+                .filteredOn(line -> line.kind().equals(StatementLine.MODULE))
+                .as("nothing is prorated, so a re-buy never bills the month for less than the module was held at")
+                .extracting(StatementLine::quantity)
+                .containsExactly(3L);
+        assertThat(statements.draft(PILOT, "2026-09").lines())
+                .filteredOn(line -> line.kind().equals(StatementLine.MODULE))
+                .extracting(StatementLine::quantity)
+                .containsExactly(1L);
+    }
+
+    @Test
+    void aModuleEndedInOneMonthAndBoughtAgainInTheNextBillsEachMonthOnce() {
+        startOnBasicPlan();
+        clock.set(AUGUST);
+        UUID kiosk = activeModule("kiosk", BillingUnit.PER_UNIT, 50_000);
+        UUID first = modules.add(PILOT, kiosk, 1, AUTHOR, "one kiosk", "corr");
+        modules.end(PILOT, first, AUTHOR, "not needed", "corr");
+        clock.set(SEPTEMBER);
+        modules.add(PILOT, kiosk, 2, AUTHOR, "needed after all", "corr");
+
+        assertThat(statements.draft(PILOT, "2026-08").lines())
+                .filteredOn(line -> line.kind().equals(StatementLine.MODULE))
+                .extracting(StatementLine::quantity)
+                .containsExactly(1L);
+        assertThat(statements.draft(PILOT, "2026-09").lines())
+                .filteredOn(line -> line.kind().equals(StatementLine.MODULE))
+                .extracting(StatementLine::quantity)
+                .containsExactly(2L);
+    }
+
+    @Test
     void aStatementIsIssuedOnceForAnEndedMonthAndCorrectedByVoiding() {
         startOnBasicPlan();
         clock.set(SEPTEMBER);
