@@ -23,8 +23,8 @@
 - Date decided: —
 - Deciders: proposed by Claude and built on the platform owner's instruction of
   2026-09-30; Ayubkhon Abbosov (platform owner) decides
-- Depends on: [ADR 0025](built/0025-authorization-and-capability-model.md),
-  [ADR 0030](built/0030-policy-resolution-and-configuration-scopes.md),
+- Depends on: [ADR 0025](../built/0025-fine-grained-authorization-and-capability-model.md),
+  [ADR 0030](../built/0030-configuration-and-policy-resolution.md),
   [ADR 0031](../built/0031-http-api-conventions.md),
   [ADR 0102](../built/0102-the-order-board-query-reads-what-the-board-shows-wave-p04.md),
   [ADR 0038](../partial/0038-legal-entities-fiscal-receipts-and-product-classification.md),
