@@ -50,6 +50,38 @@ describe('LatenessPolicyApi: the tenant late colour', () => {
     expect(policy.dineIn.atRiskBeforeSeconds).toBe(600);
   });
 
+  it('keeps each mode’s own numbers apart, as a tenant’s lateness document serves them (rows X.39 / 10.3b)', async () => {
+    const policy = await apiReturning(
+      wire({
+        delivery: {
+          atRiskBeforeSeconds: 900,
+          lateAfterSeconds: 60,
+          noPromiseFallbackSeconds: 3600,
+        },
+        pickup: { atRiskBeforeSeconds: 120, lateAfterSeconds: 0, noPromiseFallbackSeconds: 1800 },
+        dineIn: { atRiskBeforeSeconds: 0, lateAfterSeconds: 30, noPromiseFallbackSeconds: 1200 },
+        isPlatformDefault: false,
+        policyVersion: 2,
+      }),
+    ).resolve(SCOPE);
+
+    expect(policy.delivery).toEqual({
+      atRiskBeforeSeconds: 900,
+      lateAfterSeconds: 60,
+      noPromiseFallbackSeconds: 3600,
+    });
+    expect(policy.pickup).toEqual({
+      atRiskBeforeSeconds: 120,
+      lateAfterSeconds: 0,
+      noPromiseFallbackSeconds: 1800,
+    });
+    expect(policy.dineIn).toEqual({
+      atRiskBeforeSeconds: 0,
+      lateAfterSeconds: 30,
+      noPromiseFallbackSeconds: 1200,
+    });
+  });
+
   it('reads a #rrggbb colour, lower-cased', async () => {
     const policy = await apiReturning(wire({ lateColour: '#8A3FFC' })).resolve(SCOPE);
 

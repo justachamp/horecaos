@@ -1228,7 +1228,7 @@ export const messagesRu: MessageCatalogue = {
   'settings.orderPolicy.field.lateOrderThresholdMinutes': 'Заказ опаздывает с (минуты)',
   'settings.orderPolicy.field.atRiskBeforeMinutes': 'Предупреждать до обещанного времени (минуты)',
   'settings.orderPolicy.atRiskBeforeMinutes.hint':
-    'За сколько минут до обещанного времени заказ помечается как «под риском». Действует для всех типов заказов — на доске заказов и на кухонной доске.',
+    'За сколько минут до обещанного времени заказ помечается как «под риском». Значение по умолчанию для типа заказа, у которого нет своего значения в границах опоздания ниже. Действует на доске заказов и на кухонной доске.',
   'settings.orderPolicy.field.lateColour': 'Цвет опаздывающего заказа',
   'settings.orderPolicy.lateColour.hint':
     'Так опаздывающие заказы выглядят на доске заказов и на кухонной доске. Оставьте стандартный цвет, если фирменный стиль не требует другого: плохо читаемый цвет прячет заказы, которым нужно внимание в первую очередь, — учитывайте предупреждение о контрасте.',
@@ -1250,6 +1250,29 @@ export const messagesRu: MessageCatalogue = {
   'settings.orderPolicy.preorderBranchResolution.BY_OPENING_TIME': 'Скорее всех откроется',
   'settings.orderPolicy.field.operatorPromoCodeAllowed': 'Оператор может вводить промокод',
   'settings.orderPolicy.revertReason': 'Возврат к унаследованному значению',
+
+  // Rows X.39 / 10.3b — редактор документа ordering.lateness
+  'settings.latenessPolicy.title': 'Когда заказ считается опаздывающим',
+  'settings.latenessPolicy.lead':
+    'Задаётся отдельно для доставки, самовывоза и зала. Эти числа читают доска заказов, кухонная очередь и кухонные экраны.',
+  'settings.latenessPolicy.version': 'Версия {version}',
+  'settings.latenessPolicy.mode.delivery': 'Доставка',
+  'settings.latenessPolicy.mode.pickup': 'Самовывоз',
+  'settings.latenessPolicy.mode.dineIn': 'В зале',
+  'settings.latenessPolicy.summary':
+    'Под риском за {atRisk} до обещанного времени · опоздание через {lateAfter} с после него · без обещания: опоздание через {fallback}',
+  'settings.latenessPolicy.unit.minutes': '{n} мин',
+  'settings.latenessPolicy.summary.default': '(по умолчанию)',
+  'settings.latenessPolicy.oneDocument':
+    'Сохраняется одним версионным документом для всех трёх типов заказов, поэтому правка любого открывает все три.',
+  'settings.latenessPolicy.field.atRisk': 'Предупреждать до обещанного времени (мин)',
+  'settings.latenessPolicy.field.lateAfter': 'Опоздание после обещанного времени (сек)',
+  'settings.latenessPolicy.field.fallback': 'Без обещания: опоздание через (мин)',
+  'settings.latenessPolicy.blankMeansDefault':
+    'Оставьте поле «Предупреждать до обещанного времени» пустым, чтобы взять значение по умолчанию: {minutes} мин ({source}).',
+  'settings.latenessPolicy.default.scalar': 'значение «Предупреждать до обещанного времени» выше',
+  'settings.latenessPolicy.default.platform': 'значение платформы по умолчанию',
+  'settings.latenessPolicy.reload': 'Перезагрузить и отбросить мои изменения',
 
   // 4.4d Базовые настройки каталога
   'settings.catalog.title': 'Базовые настройки каталога',

@@ -1438,6 +1438,18 @@
         },
         "type" : "object"
       },
+      "AtRiskDefaultResponse" : {
+        "properties" : {
+          "seconds" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "source" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "AttachMediaRequest" : {
         "properties" : {
           "channel" : {
@@ -1922,6 +1934,42 @@
           }
         },
         "required" : [ "documentYaml", "reason" ],
+        "type" : "object"
+      },
+      "AuthorLatenessPolicyRequest" : {
+        "properties" : {
+          "brandId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "delivery" : {
+            "$ref" : "#/components/schemas/ModeRequest"
+          },
+          "dineIn" : {
+            "$ref" : "#/components/schemas/ModeRequest"
+          },
+          "expectedVersion" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "pickup" : {
+            "$ref" : "#/components/schemas/ModeRequest"
+          },
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "scopeType" : {
+            "enum" : [ "PLATFORM", "TENANT", "BRAND", "LOCATION" ],
+            "type" : "string"
+          }
+        },
+        "required" : [ "delivery", "dineIn", "pickup", "reason", "scopeType" ],
         "type" : "object"
       },
       "AuthorPolicyRequest" : {
@@ -9678,6 +9726,48 @@
         },
         "type" : "object"
       },
+      "EditorResponse" : {
+        "properties" : {
+          "atRiskDefault" : {
+            "$ref" : "#/components/schemas/AtRiskDefaultResponse"
+          },
+          "currentVersionAtScope" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "delivery" : {
+            "$ref" : "#/components/schemas/ModeResponse"
+          },
+          "dineIn" : {
+            "$ref" : "#/components/schemas/ModeResponse"
+          },
+          "inspectedLevels" : {
+            "items" : {
+              "$ref" : "#/components/schemas/LevelResponse"
+            },
+            "type" : "array"
+          },
+          "isPlatformDefault" : {
+            "type" : "boolean"
+          },
+          "pickup" : {
+            "$ref" : "#/components/schemas/ModeResponse"
+          },
+          "policyId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "policyVersion" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "winningScope" : {
+            "enum" : [ "PLATFORM", "TENANT", "BRAND", "LOCATION" ],
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "EffectiveBindingView" : {
         "properties" : {
           "bindingId" : {
@@ -12189,6 +12279,18 @@
         },
         "type" : "object"
       },
+      "LevelResponse" : {
+        "properties" : {
+          "outcome" : {
+            "type" : "string"
+          },
+          "scopeType" : {
+            "enum" : [ "PLATFORM", "TENANT", "BRAND", "LOCATION" ],
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "LiabilityResponse" : {
         "properties" : {
           "accountCount" : {
@@ -13745,6 +13847,45 @@
           },
           "sharedWithLocationCount" : {
             "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "ModeRequest" : {
+        "properties" : {
+          "atRiskBeforeSeconds" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "lateAfterSeconds" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "noPromiseFallbackSeconds" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "required" : [ "lateAfterSeconds", "noPromiseFallbackSeconds" ],
+        "type" : "object"
+      },
+      "ModeResponse" : {
+        "properties" : {
+          "atRiskBeforeSeconds" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "effectiveAtRiskBeforeSeconds" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "lateAfterSeconds" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "noPromiseFallbackSeconds" : {
+            "format" : "int32",
             "type" : "integer"
           }
         },
@@ -50640,6 +50781,96 @@
         "tags" : [ "Merchant bindings" ]
       }
     },
+    "/api/v1/operations/tenants/{tenantId}/order-lateness-policy" : {
+      "get" : {
+        "description" : "Resolves ordering.lateness through the ADR 0030 chain (LOCATION, BRAND, TENANT, platform default) at TENANT, BRAND or LOCATION scope. Each fulfilment mode carries its own at-risk window -- null where it has none and takes atRiskDefault, the tenant's ordering.at_risk_before_minutes when one was set, the platform's five minutes otherwise -- plus effective, the number the boards actually use. currentVersionAtScope is the version to send back as expectedVersion: 0 when this exact scope has authored nothing and merely inherits.",
+        "operationId" : "readLatenessPolicyEditor",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "scopeType",
+          "required" : true,
+          "schema" : {
+            "enum" : [ "PLATFORM", "TENANT", "BRAND", "LOCATION" ],
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "brandId",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "locationId",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/EditorResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The lateness document in force at a scope, as the editor needs it",
+        "tags" : [ "Order lateness policy editor" ]
+      },
+      "post" : {
+        "description" : "Whole-document replace: ADR 0030 versions the document as one unit, so all three fulfilment modes are sent, an unset at-risk window as null. Never edits a version in force -- orders keep resolving the version they already did. expectedVersion must be the currentVersionAtScope a prior GET reported for this same scope (null or 0 when it had authored nothing), or the write is refused with STALE_VERSION naming both versions. At-risk and no-promise windows are whole minutes; every window is at most a day.",
+        "operationId" : "authorLatenessPolicy",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/AuthorLatenessPolicyRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/EditorResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Publish the next version of the lateness document at exactly one scope",
+        "tags" : [ "Order lateness policy editor" ]
+      }
+    },
     "/api/v1/operations/tenants/{tenantId}/order-outcome-reasons" : {
       "get" : {
         "operationId" : "list_11",
@@ -71462,6 +71693,9 @@
   }, {
     "description" : "A merchant's own error taxonomy and inbox replay",
     "name" : "Integration failures (tenant)"
+  }, {
+    "description" : "The ordering.lateness document as authored per scope (ADR 0030), and its next version",
+    "name" : "Order lateness policy editor"
   }, {
     "description" : "The full ADR 0025 capability vocabulary",
     "name" : "Capability registry"

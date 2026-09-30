@@ -27,9 +27,10 @@ import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcPolicyResolve
  * own reasoning: the point of ADR 0030 is one precedence implementation, so a
  * stub resolver would test the thing ADR 0030 replaced.
  *
- * <p>No authoring here: {@code OrderLatenessPolicyService} carries no {@code
- * author} method (wave P31's job), so an override is inserted directly, the
- * same way this suite's sibling inserts one for {@code ordering.acceptance}.
+ * <p>No authoring here: {@code OrderLatenessPolicyService} only reads --
+ * publishing is {@code OrderLatenessPolicyAuthoringService}, tested in its own
+ * class -- so an override is inserted directly, the same way this suite's
+ * sibling inserts one for {@code ordering.acceptance}.
  */
 class OrderLatenessPolicyServiceTests {
 
@@ -135,9 +136,12 @@ class OrderLatenessPolicyServiceTests {
     }
 
     @Test
-    void aSetAtRiskThresholdReplacesEveryModesAtRiskEdgeAndNothingElse() {
+    void aSetAtRiskScalarIsTheDefaultOnlyForTheModesTheDocumentLeavesUnset() {
+        // Wave 16 (X.39 / 10.3b): the per-mode at-risk minutes replace batch 15's single scalar; the
+        // scalar stays as the default for a mode the document does not set. DELIVERY is left unset
+        // here, PICKUP and DINE_IN carry their own.
         activate("TENANT", null, null, """
-                {"delivery":{"atRiskBeforeSeconds":300,"lateAfterSeconds":60,"noPromiseFallbackSeconds":2700},
+                {"delivery":{"atRiskBeforeSeconds":null,"lateAfterSeconds":60,"noPromiseFallbackSeconds":2700},
                  "pickup":{"atRiskBeforeSeconds":180,"lateAfterSeconds":10,"noPromiseFallbackSeconds":1800},
                  "dineIn":{"atRiskBeforeSeconds":90,"lateAfterSeconds":0,"noPromiseFallbackSeconds":1200}}""");
 
@@ -145,14 +149,30 @@ class OrderLatenessPolicyServiceTests {
                 .resolve(TENANT, BRAND, LOCATION)
                 .policy();
 
-        assertThat(resolved.delivery().atRiskBeforeSeconds()).isEqualTo(600);
-        assertThat(resolved.pickup().atRiskBeforeSeconds()).isEqualTo(600);
-        assertThat(resolved.dineIn().atRiskBeforeSeconds()).isEqualTo(600);
+        assertThat(resolved.delivery().atRiskBeforeSeconds())
+                .as("a mode with no value of its own takes the scalar")
+                .isEqualTo(600);
+        assertThat(resolved.pickup().atRiskBeforeSeconds())
+                .as("a mode's own value beats the scalar")
+                .isEqualTo(180);
+        assertThat(resolved.dineIn().atRiskBeforeSeconds()).isEqualTo(90);
         assertThat(resolved.delivery().lateAfterSeconds())
                 .as("grace stays per mode")
                 .isEqualTo(60);
         assertThat(resolved.pickup().lateAfterSeconds()).isEqualTo(10);
         assertThat(resolved.dineIn().noPromiseFallbackSeconds()).isEqualTo(1200);
+    }
+
+    @Test
+    void withNoDocumentAuthoredTheScalarStillMovesEveryModesAtRiskEdge() {
+        OrderLatenessPolicy resolved = serviceWith(java.util.Map.of("ordering.at_risk_before_minutes", 10))
+                .resolve(TENANT, BRAND, LOCATION)
+                .policy();
+
+        assertThat(resolved.delivery().atRiskBeforeSeconds()).isEqualTo(600);
+        assertThat(resolved.pickup().atRiskBeforeSeconds()).isEqualTo(600);
+        assertThat(resolved.dineIn().atRiskBeforeSeconds()).isEqualTo(600);
+        assertThat(resolved.delivery().noPromiseFallbackSeconds()).isEqualTo(2700);
     }
 
     @Test
@@ -212,6 +232,95 @@ class OrderLatenessPolicyServiceTests {
         assertThat(service.resolve(TENANT, BRAND, LOCATION).lateColour())
                 .as("unset")
                 .isNull();
+    }
+
+    // ------------------------------------ wave 16: the authored form and its default
+
+    @Test
+    void theAuthoredDocumentKeepsAnUnsetWindowUnsetWhereTheResolvedPolicyFillsItIn() {
+        activate("TENANT", null, null, """
+                {"delivery":{"atRiskBeforeSeconds":null,"lateAfterSeconds":60,"noPromiseFallbackSeconds":2700},
+                 "pickup":{"atRiskBeforeSeconds":0,"lateAfterSeconds":0,"noPromiseFallbackSeconds":1800},
+                 "dineIn":{"atRiskBeforeSeconds":90,"lateAfterSeconds":0,"noPromiseFallbackSeconds":1200}}""");
+        OrderLatenessPolicyService withScalar = serviceWith(java.util.Map.of("ordering.at_risk_before_minutes", 12));
+
+        OrderLatenessPolicyService.Authored authored =
+                withScalar.authoredAt(ResourceScope.location(TENANT, BRAND, LOCATION));
+
+        assertThat(authored.document().delivery().atRiskBeforeSeconds())
+                .as("the editor must be able to tell 'unset' from a window")
+                .isNull();
+        assertThat(authored.document().pickup().atRiskBeforeSeconds()).isZero();
+        assertThat(authored.winningScope()).isEqualTo(ResourceScope.ScopeType.TENANT);
+        assertThat(authored.policyVersion()).isEqualTo(1);
+        assertThat(withScalar
+                        .resolve(TENANT, BRAND, LOCATION)
+                        .policy()
+                        .delivery()
+                        .atRiskBeforeSeconds())
+                .as("while the boards' answer has the scalar filled in")
+                .isEqualTo(720);
+    }
+
+    @Test
+    void withNothingAuthoredTheAuthoredDocumentIsTheUnsetPlatformDefaultWithNoWinningScope() {
+        OrderLatenessPolicyService.Authored authored =
+                service.authoredAt(ResourceScope.location(TENANT, BRAND, LOCATION));
+
+        assertThat(authored.document())
+                .isEqualTo(uz.horecaos.platform.ordering.domain.OrderLatenessDocument.platformDefault());
+        assertThat(authored.policyId()).isNull();
+        assertThat(authored.policyVersion()).isZero();
+        assertThat(authored.winningScope()).isNull();
+    }
+
+    @Test
+    void theDefaultWindowIsTheScalarOnlyWhenOneWasSetAndThePlatformsFiveMinutesOtherwise() {
+        ResourceScope scope = ResourceScope.location(TENANT, BRAND, LOCATION);
+
+        OrderLatenessPolicyService.AtRiskDefault unset = service.atRiskDefaultAt(scope);
+        assertThat(unset.seconds()).isEqualTo(300);
+        assertThat(unset.source()).isEqualTo(OrderLatenessPolicyService.AtRiskDefault.Source.PLATFORM_DEFAULT);
+
+        OrderLatenessPolicyService.AtRiskDefault set = serviceWith(
+                        java.util.Map.of("ordering.at_risk_before_minutes", 12))
+                .atRiskDefaultAt(scope);
+        assertThat(set.seconds()).isEqualTo(720);
+        assertThat(set.source()).isEqualTo(OrderLatenessPolicyService.AtRiskDefault.Source.SCALAR);
+
+        OrderLatenessPolicyService.AtRiskDefault zero = serviceWith(
+                        java.util.Map.of("ordering.at_risk_before_minutes", 0))
+                .atRiskDefaultAt(scope);
+        assertThat(zero.seconds()).as("zero minutes is a real setting").isZero();
+        assertThat(zero.source()).isEqualTo(OrderLatenessPolicyService.AtRiskDefault.Source.SCALAR);
+    }
+
+    @Test
+    void eachModeResolvesItsOwnWindowThroughTheTenantBrandLocationChain() {
+        activate("TENANT", null, null, """
+                {"delivery":{"atRiskBeforeSeconds":900,"lateAfterSeconds":0,"noPromiseFallbackSeconds":2700},
+                 "pickup":{"atRiskBeforeSeconds":null,"lateAfterSeconds":0,"noPromiseFallbackSeconds":2700},
+                 "dineIn":{"atRiskBeforeSeconds":null,"lateAfterSeconds":0,"noPromiseFallbackSeconds":2700}}""");
+        activate("LOCATION", BRAND, LOCATION, """
+                {"delivery":{"atRiskBeforeSeconds":null,"lateAfterSeconds":0,"noPromiseFallbackSeconds":2700},
+                 "pickup":{"atRiskBeforeSeconds":60,"lateAfterSeconds":0,"noPromiseFallbackSeconds":2700},
+                 "dineIn":{"atRiskBeforeSeconds":null,"lateAfterSeconds":0,"noPromiseFallbackSeconds":2700}}""");
+        OrderLatenessPolicyService withScalar = serviceWith(java.util.Map.of("ordering.at_risk_before_minutes", 7));
+
+        OrderLatenessPolicy atLocation =
+                withScalar.resolve(TENANT, BRAND, LOCATION).policy();
+        OrderLatenessPolicy atSibling =
+                withScalar.resolve(TENANT, BRAND, SIBLING_LOCATION).policy();
+
+        assertThat(atLocation.delivery().atRiskBeforeSeconds())
+                .as("the location's document replaces the tenant's whole: delivery says nothing there")
+                .isEqualTo(420);
+        assertThat(atLocation.pickup().atRiskBeforeSeconds()).isEqualTo(60);
+        assertThat(atLocation.dineIn().atRiskBeforeSeconds()).isEqualTo(420);
+        assertThat(atSibling.delivery().atRiskBeforeSeconds())
+                .as("the sibling still resolves the tenant's own delivery window")
+                .isEqualTo(900);
+        assertThat(atSibling.pickup().atRiskBeforeSeconds()).isEqualTo(420);
     }
 
     private String thresholdsSet(int atRiskBefore, int lateAfter, int noPromiseFallback) {

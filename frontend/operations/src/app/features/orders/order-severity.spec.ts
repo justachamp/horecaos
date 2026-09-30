@@ -342,6 +342,66 @@ describe('computeOrderSeverity and computeTicketSeverity share one AT_RISK bound
   });
 });
 
+describe('the order board and the kitchen queue agree per fulfilment mode (rows X.39 / 10.3b)', () => {
+  // What the server serves once a tenant edits the ordering.lateness document: a window and a
+  // no-promise fallback of each mode's own.
+  const PER_MODE: LatenessPolicy = {
+    delivery: { atRiskBeforeSeconds: 600, lateAfterSeconds: 0, noPromiseFallbackSeconds: 3600 },
+    pickup: { atRiskBeforeSeconds: 120, lateAfterSeconds: 0, noPromiseFallbackSeconds: 1800 },
+    dineIn: { atRiskBeforeSeconds: 0, lateAfterSeconds: 0, noPromiseFallbackSeconds: 1200 },
+  };
+  const MODES = [
+    { fulfillmentMode: 'DELIVERY', fulfilmentMode: 'DELIVERY' },
+    { fulfillmentMode: 'PICKUP', fulfilmentMode: 'PICKUP' },
+    { fulfillmentMode: 'DINE_IN', fulfilmentMode: 'DINE_IN' },
+  ] as const;
+
+  it('gives one promise a different level per mode, and both boards give the same level for each', () => {
+    const promisedAt = minutesFromNow(5); // inside delivery's 10 min, outside pickup's 2 and dine-in's 0
+    const expected = { DELIVERY: 'AT_RISK', PICKUP: 'NORMAL', DINE_IN: 'NORMAL' } as const;
+
+    for (const { fulfillmentMode, fulfilmentMode } of MODES) {
+      const order = computeOrderSeverity(
+        baseInput({ status: 'PREPARING', fulfillmentMode, promisedAt }),
+        NOW,
+        PER_MODE,
+      );
+      const ticket = computeTicketSeverity(
+        { targetReadyAt: promisedAt, createdAt: NOW, fulfilmentMode },
+        NOW,
+        PER_MODE,
+      );
+
+      expect(order.level, `order board, ${fulfillmentMode}`).toBe(expected[fulfillmentMode]);
+      expect(ticket.level, `kitchen queue, ${fulfillmentMode}`).toBe(expected[fulfillmentMode]);
+    }
+  });
+
+  it('applies each mode’s own no-promise fallback on both boards', () => {
+    const createdAt = minutesAgo(25); // delivery allows 60, pickup 30, dine-in 20
+
+    for (const [mode, late] of [
+      ['DELIVERY', false],
+      ['PICKUP', false],
+      ['DINE_IN', true],
+    ] as const) {
+      const order = computeOrderSeverity(
+        baseInput({ status: 'PREPARING', fulfillmentMode: mode, promisedAt: null, createdAt }),
+        NOW,
+        PER_MODE,
+      );
+      const ticket = computeTicketSeverity(
+        { targetReadyAt: null, createdAt, fulfilmentMode: mode },
+        NOW,
+        PER_MODE,
+      );
+
+      expect(order.level, `order board, ${mode}`).toBe(late ? 'LATE' : 'NORMAL');
+      expect(ticket.level, `kitchen queue, ${mode}`).toBe(late ? 'BREACHED' : 'NORMAL');
+    }
+  });
+});
+
 describe('formatSeverityCaption', () => {
   const translate = (key: string, values?: Readonly<Record<string, string | number>>) =>
     values ? `${key}:${JSON.stringify(values)}` : key;

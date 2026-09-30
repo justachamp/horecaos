@@ -1240,7 +1240,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.orderPolicy.field.atRiskBeforeMinutes':
     'Belgilangan vaqtdan oldin ogohlantirish (daqiqa)',
   'settings.orderPolicy.atRiskBeforeMinutes.hint':
-    'Buyurtma belgilangan vaqtdan necha daqiqa oldin «xavf ostida» deb koʻrsatiladi. Buyurtmaning barcha turlariga, buyurtmalar taxtasida ham, oshxona taxtasida ham amal qiladi.',
+    'Buyurtma belgilangan vaqtdan necha daqiqa oldin «xavf ostida» deb koʻrsatiladi. Quyidagi kechikish chegaralarida oʻz qiymati boʻlmagan buyurtma turi uchun standart qiymat. Buyurtmalar taxtasida ham, oshxona taxtasida ham amal qiladi.',
   'settings.orderPolicy.field.lateColour': 'Kechikkan buyurtma rangi',
   'settings.orderPolicy.lateColour.hint':
     'Kechikkan buyurtmalar buyurtmalar taxtasida va oshxona taxtasida shu rangda koʻrsatiladi. Brendingiz boshqasini talab qilmasa, standart rangni qoldiring: qatorda yomon koʻrinadigan rang eng koʻp diqqat talab qiladigan buyurtmalarni yashiradi — kontrast ogohlantirishiga eʻtibor bering.',
@@ -1264,6 +1264,30 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.orderPolicy.preorderBranchResolution.BY_OPENING_TIME': 'Eng tez ochiladigan',
   'settings.orderPolicy.field.operatorPromoCodeAllowed': 'Operator promokod kiritishi mumkin',
   'settings.orderPolicy.revertReason': 'Meros qiymatga qaytarildi',
+
+  // Rows X.39 / 10.3b — ordering.lateness hujjati tahrirlovchisi
+  'settings.latenessPolicy.title': 'Buyurtma qachon kechikkan hisoblanadi',
+  'settings.latenessPolicy.lead':
+    'Yetkazib berish, olib ketish va zal uchun alohida belgilanadi. Bu sonlarni buyurtmalar taxtasi, oshxona navbati va oshxona ekranlari oʻqiydi.',
+  'settings.latenessPolicy.version': '{version}-versiya',
+  'settings.latenessPolicy.mode.delivery': 'Yetkazib berish',
+  'settings.latenessPolicy.mode.pickup': 'Olib ketish',
+  'settings.latenessPolicy.mode.dineIn': 'Zalda',
+  'settings.latenessPolicy.summary':
+    'Belgilangan vaqtdan oldin ogohlantirish: {atRisk} · kechikish: {lateAfter} soniya · vaʻdasiz kechikish chegarasi: {fallback}',
+  'settings.latenessPolicy.unit.minutes': '{n} daqiqa',
+  'settings.latenessPolicy.summary.default': '(standart)',
+  'settings.latenessPolicy.oneDocument':
+    'Buyurtmaning uch turi uchun bitta versiyalangan hujjat sifatida saqlanadi, shuning uchun istalganini tahrirlash uchalasini ochadi.',
+  'settings.latenessPolicy.field.atRisk': 'Belgilangan vaqtdan oldin ogohlantirish (daqiqa)',
+  'settings.latenessPolicy.field.lateAfter': 'Belgilangan vaqtdan keyin kechikish (soniya)',
+  'settings.latenessPolicy.field.fallback': 'Vaʻdasiz: kechikish (daqiqa)',
+  'settings.latenessPolicy.blankMeansDefault':
+    '“Belgilangan vaqtdan oldin ogohlantirish” maydonini standart qiymat uchun boʻsh qoldiring: {minutes} daqiqa ({source}).',
+  'settings.latenessPolicy.default.scalar':
+    'yuqoridagi “Belgilangan vaqtdan oldin ogohlantirish” qiymati',
+  'settings.latenessPolicy.default.platform': 'platformaning standart qiymati',
+  'settings.latenessPolicy.reload': 'Qayta yuklash va oʻzgarishlarimni bekor qilish',
 
   // 4.4d Katalogning bazaviy sozlamalari
   'settings.catalog.title': 'Katalogning bazaviy sozlamalari',

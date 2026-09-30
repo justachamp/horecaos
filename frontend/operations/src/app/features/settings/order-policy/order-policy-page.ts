@@ -29,6 +29,7 @@ import { InheritedField } from '../../../shared/ui/inherited-field/inherited-fie
 import { describeApiError } from '../../orders/order-errors';
 import { ConfigurationApi } from '../configuration-api';
 import { SettingsScope } from '../settings-scope';
+import { LatenessPolicyCard } from './lateness-policy-card';
 import {
   AcceptanceMode,
   AcceptancePolicyResponse,
@@ -195,7 +196,7 @@ const CARD5_FIELDS: readonly OrderPolicyFieldDef[] = [
  */
 @Component({
   selector: 'q-order-policy-page',
-  imports: [TPipe, InheritedField, NgTemplateOutlet, ColorInput],
+  imports: [TPipe, InheritedField, NgTemplateOutlet, ColorInput, LatenessPolicyCard],
   templateUrl: './order-policy-page.html',
   styleUrl: './order-policy-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -206,6 +207,14 @@ export class OrderPolicyPage {
   private readonly tenant = inject(CurrentTenant);
   protected readonly scope = inject(SettingsScope);
   protected readonly i18n = inject(I18n);
+
+  protected readonly tenantId = this.tenant.tenantId;
+
+  /**
+   * Bumped when the *Warn before the promised time* scalar changes, so the lateness card's "default" —
+   * the number a kind of order with no window of its own takes — follows what was just saved.
+   */
+  protected readonly latenessReloadToken = signal(0);
 
   protected readonly card2Fields = CARD2_FIELDS;
   protected readonly card3Fields = CARD3_FIELDS;
@@ -511,6 +520,7 @@ export class OrderPolicyPage {
         ...this.fieldValueInput(field),
       });
       await this.reloadField(tenantId, brandId, locationId, field.code);
+      this.noteFieldChanged(field.code);
       this.editingFieldCode.set(null);
     } catch (error) {
       this.fieldSaveError.set(this.describe(error));
@@ -541,10 +551,18 @@ export class OrderPolicyPage {
         reason: this.i18n.t('settings.orderPolicy.revertReason'),
       });
       await this.reloadField(tenantId, brandId, locationId, field.code);
+      this.noteFieldChanged(field.code);
     } catch (error) {
       this.fieldSaveError.set(this.describe(error));
     } finally {
       this.fieldSaving.set(false);
+    }
+  }
+
+  /** The lateness card shows this scalar as its default, so it re-reads when the scalar changes. */
+  private noteFieldChanged(code: string): void {
+    if (code === 'ordering.at_risk_before_minutes') {
+      this.latenessReloadToken.update((token) => token + 1);
     }
   }
 

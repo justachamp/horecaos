@@ -21,9 +21,11 @@
       <button type="button" class="field__action q-caption" (click)="setValueRequested.emit()">
         {{ 'inheritedField.action.setValue' | t }}
       </button>
-      <button type="button" class="field__action q-caption" (click)="revertToInherit.emit()">
-        {{ 'inheritedField.action.revertToInherit' | t }}
-      </button>
+      @if (revertable()) {
+        <button type="button" class="field__action q-caption" (click)="revertToInherit.emit()">
+          {{ 'inheritedField.action.revertToInherit' | t }}
+        </button>
+      }
     }
     @case ('SET_HERE') {
       <span class="field__value q-body-sm">{{ displayValue() }}</span>
@@ -33,9 +35,11 @@
       <button type="button" class="field__action q-caption" (click)="setValueRequested.emit()">
         {{ 'inheritedField.action.edit' | t }}
       </button>
-      <button type="button" class="field__action q-caption" (click)="revertToInherit.emit()">
-        {{ 'inheritedField.action.revertToInherit' | t }}
-      </button>
+      @if (revertable()) {
+        <button type="button" class="field__action q-caption" (click)="revertToInherit.emit()">
+          {{ 'inheritedField.action.revertToInherit' | t }}
+        </button>
+      }
     }
     @case ('INHERITED') {
       <span class="field__value field__value--muted q-body-sm">{{ displayValue() }}</span>

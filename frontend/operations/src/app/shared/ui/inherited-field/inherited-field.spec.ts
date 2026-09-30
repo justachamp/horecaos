@@ -128,6 +128,29 @@ describe('InheritedField', () => {
     expect(emitted).toBe(true);
   });
 
+  it('offers "revert to inherit" on a value set here by default', async () => {
+    const fixture = await render(SET_AT_BRAND, 'BRAND');
+    const labels = [...fixture.nativeElement.querySelectorAll('.field__action')].map(
+      (action: HTMLElement) => action.textContent?.trim(),
+    );
+    expect(labels).toHaveLength(2);
+  });
+
+  it('drops "revert to inherit" for a versioned document that cannot be withdrawn, keeping edit', async () => {
+    await TestBed.configureTestingModule({ imports: [InheritedField] }).compileComponents();
+    TestBed.inject(I18n).setLocale('en');
+    const fixture = TestBed.createComponent(InheritedField);
+    fixture.componentRef.setInput('label', 'Delivery');
+    fixture.componentRef.setInput('resolution', SET_AT_BRAND);
+    fixture.componentRef.setInput('currentScopeType', 'BRAND');
+    fixture.componentRef.setInput('revertable', false);
+    fixture.detectChanges();
+
+    const actions = fixture.nativeElement.querySelectorAll('.field__action');
+    expect(actions).toHaveLength(1);
+    expect(actions[0].textContent).toContain('Edit');
+  });
+
   it('renders a loading placeholder before the resolution arrives', async () => {
     const fixture = await render(null);
     expect(fixture.nativeElement.querySelector('.field__chip')).toBeFalsy();

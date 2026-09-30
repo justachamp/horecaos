@@ -17,6 +17,8 @@ import org.junit.jupiter.api.Test;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.ordering.application.OrderLatenessPolicyService;
 import uz.horecaos.platform.ordering.application.OrderQueryService;
+import uz.horecaos.platform.ordering.domain.OrderLatenessDocument;
+import uz.horecaos.platform.ordering.domain.OrderLatenessDocument.ModeThresholds;
 import uz.horecaos.platform.ordering.domain.OrderLatenessPolicy;
 import uz.horecaos.platform.ordering.domain.OrderPromise;
 import uz.horecaos.platform.ordering.domain.OrderStatus;
@@ -42,17 +44,19 @@ class OrderLatenessPolicyControllerTests {
     private static final UUID ORDER_ID = UUID.randomUUID();
     private static final Instant NOW = Instant.parse("2026-09-13T10:00:00Z");
 
-    /** Always answers the platform default, at whatever scope is asked. */
+    /** Answers one document -- the platform default unless a test sets another -- at whatever scope is asked. */
     private static final class FakeResolver implements PolicyResolver {
         @Nullable
         ResourceScope lastScope;
+
+        OrderLatenessDocument document = OrderLatenessDocument.platformDefault();
 
         @Override
         @SuppressWarnings("unchecked")
         public <P> Optional<ResolvedPolicy<P>> resolve(PolicyKey<P> key, ResourceScope scope) {
             lastScope = scope;
-            return Optional.of(new ResolvedPolicy<>(key.code(), UUID.randomUUID(), 1, scope.type(), "fake-hash", (P)
-                    OrderLatenessPolicy.platformDefault()));
+            return Optional.of(
+                    new ResolvedPolicy<>(key.code(), UUID.randomUUID(), 1, scope.type(), "fake-hash", (P) document));
         }
 
         @Override
@@ -144,6 +148,66 @@ class OrderLatenessPolicyControllerTests {
                 .isEqualTo(45 * 60);
     }
 
+    /**
+     * Wave 16 (X.39 / 10.3b): the at-risk window is per fulfilment mode, and the server-side severity
+     * answer reads the mode of the order it is asked about -- the same order, promised 8 minutes out,
+     * is at risk as a delivery (10-minute window) and normal as a pickup (2-minute window).
+     */
+    @Test
+    void aModesOwnAtRiskWindowDecidesTheServerSideSeverityOfAnOrderOfThatMode() {
+        FakeResolver resolver = new FakeResolver();
+        resolver.document = new OrderLatenessDocument(
+                new ModeThresholds(600, 0, 2700), new ModeThresholds(120, 0, 2700), new ModeThresholds(null, 0, 2700));
+        Instant promisedAt = NOW.plus(Duration.ofMinutes(8));
+
+        OrderQueryService delivery = mock(OrderQueryService.class);
+        when(delivery.detail(TENANT_ID, ORDER_ID))
+                .thenReturn(Optional.of(
+                        orderDetail(promisedAt, OrderStatus.PREPARING, LOCATION_ID, FulfillmentMode.DELIVERY)));
+        OrderQueryService pickup = mock(OrderQueryService.class);
+        when(pickup.detail(TENANT_ID, ORDER_ID))
+                .thenReturn(Optional.of(
+                        orderDetail(promisedAt, OrderStatus.PREPARING, LOCATION_ID, FulfillmentMode.PICKUP)));
+        OrderQueryService dineIn = mock(OrderQueryService.class);
+        when(dineIn.detail(TENANT_ID, ORDER_ID))
+                .thenReturn(Optional.of(
+                        orderDetail(promisedAt, OrderStatus.PREPARING, LOCATION_ID, FulfillmentMode.DINE_IN)));
+        OrderLatenessPolicyService service =
+                new OrderLatenessPolicyService(resolver, new uz.horecaos.platform.support.FakeConfigurationResolver());
+        Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
+
+        assertThat(new OrderLatenessPolicyController(service, delivery, clock)
+                        .severity(TENANT_ID, BRAND_ID, LOCATION_ID, ORDER_ID)
+                        .level())
+                .as("8 minutes out is inside delivery's own 10-minute window")
+                .isEqualTo(OrderLatenessPolicy.LatenessLevel.AT_RISK.name());
+        assertThat(new OrderLatenessPolicyController(service, pickup, clock)
+                        .severity(TENANT_ID, BRAND_ID, LOCATION_ID, ORDER_ID)
+                        .level())
+                .as("and outside pickup's own 2-minute window")
+                .isEqualTo(OrderLatenessPolicy.LatenessLevel.NORMAL.name());
+        assertThat(new OrderLatenessPolicyController(service, dineIn, clock)
+                        .severity(TENANT_ID, BRAND_ID, LOCATION_ID, ORDER_ID)
+                        .level())
+                .as("dine-in sets none, so it takes the default 5 minutes, and 8 minutes out is outside that")
+                .isEqualTo(OrderLatenessPolicy.LatenessLevel.NORMAL.name());
+
+        LatenessPolicyResponseView served = LatenessPolicyResponseView.of(
+                new OrderLatenessPolicyController(service, delivery, clock).policy(TENANT_ID, BRAND_ID, LOCATION_ID));
+        assertThat(served.delivery()).isEqualTo(600);
+        assertThat(served.pickup()).isEqualTo(120);
+        assertThat(served.dineIn()).isEqualTo(300);
+    }
+
+    private record LatenessPolicyResponseView(int delivery, int pickup, int dineIn) {
+        static LatenessPolicyResponseView of(OrderLatenessPolicyController.LatenessPolicyResponse response) {
+            return new LatenessPolicyResponseView(
+                    response.delivery().atRiskBeforeSeconds(),
+                    response.pickup().atRiskBeforeSeconds(),
+                    response.dineIn().atRiskBeforeSeconds());
+        }
+    }
+
     @Test
     void theLateColourRidesOnTheServedPolicyOnlyWhenItIsAValidHex() {
         OrderLatenessPolicyController controller = new OrderLatenessPolicyController(
@@ -208,6 +272,11 @@ class OrderLatenessPolicyControllerTests {
     }
 
     private static OrderQueryService.OrderDetail orderDetail(Instant promisedAt, OrderStatus status, UUID locationId) {
+        return orderDetail(promisedAt, status, locationId, FulfillmentMode.DELIVERY);
+    }
+
+    private static OrderQueryService.OrderDetail orderDetail(
+            Instant promisedAt, OrderStatus status, UUID locationId, FulfillmentMode mode) {
         OrderPromise promise = new OrderPromise(promisedAt, PromiseBasis.PREPARATION_BAND, 25, null);
         OrderRow row = new OrderRow(
                 ORDER_ID,
@@ -219,7 +288,7 @@ class OrderLatenessPolicyControllerTests {
                 "DIRECT",
                 UUID.randomUUID(),
                 "guest-hash",
-                FulfillmentMode.DELIVERY,
+                mode,
                 "AUTO_CONFIRM",
                 null,
                 0,

@@ -393,6 +393,31 @@ scalars edited with the card's inherit/override control) and are overlaid on the
 give one answer. Reporting's SLA buckets (ADR 0107) stay platform-fixed and are
 not read from these.
 
+**The document has an editor (wave 16, rows `X.39`/`10.3b`).** `GET`/`POST
+/api/v1/operations/tenants/{tenantId}/order-lateness-policy`
+(`TENANT_CONFIGURATION_READ`/`WRITE`) read and publish `ordering.lateness` at
+TENANT, BRAND or LOCATION scope: the whole document is replaced, the version the
+form was opened at travels as `expectedVersion` (a second operator's save in
+between is `STALE_VERSION`, and the card offers a reload rather than a retry),
+and every publication leaves an `ordering.lateness-policy.authored` audit fact
+with the per-mode numbers that moved. Per fulfilment mode a tenant sets the grace
+past the promise (`late_after_seconds`, seconds, up to a day), the no-promise
+fallback (whole minutes, one minute to a day) and the at-risk window (whole
+minutes, 0 to a day, or none). **A mode with no window of its own takes
+`ordering.at_risk_before_minutes`** when one was set anywhere in the chain, and
+the platform's five minutes otherwise — the batch 15 scalar is now the default
+for the modes not set, not a replacement for all three — while a window a mode
+does carry wins over the scalar even where the scalar is set at a narrower scope.
+A published version is never withdrawn, so the card has no "revert to inherited"
+for this document; it is overridden by publishing at the narrower scope. The
+order board, the order-detail header, the kitchen queue, the kitchen VDU and the
+wallboard VDU read the per-mode numbers through `GET .../orders/lateness-policy`
+and the shared evaluator, unchanged. `ordering.late_order_threshold_minutes`
+(card 2's «Заказ опаздывает с») is still stored and read by nothing: whether it
+means a grace after the promise or a limit from acceptance is an owner decision,
+and until that is made the line where late begins is this document's
+`late_after_seconds`.
+
 **Inputs.** `now`, `status`, and a policy resolved through ADR 0030 at key
 `ordering.lateness`. The promise itself is **built**, just not from the table
 this document originally expected: `ordering.orders.promised_at` (+
