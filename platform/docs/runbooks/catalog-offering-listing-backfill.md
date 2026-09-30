@@ -1,22 +1,24 @@
 # Listing a tenant's pre-existing offerings into inventory
 
-**Last executed:** 2026-09-29 on **pre-prod**: nothing to backfill. Ten
-offerings were checked across the two JizBiz branches and all ten were already
-listed in inventory, so the backlog was empty (no *candidates*, in this
-runbook's word for an offering that still has no stock item). With no backlog
-there was no location for steps 2 to 4 to act on, so their `curl` path has
-still not run against a real host. Also 2026-09-29, locally, in two halves —
-read the second one before trusting the rest of this file on a real host.
-Not yet run against production.
+**Last executed:** 2026-09-29, on **pre-prod** only: the backlog was empty, so
+nothing was listed. **Not yet run against production.** Steps 2 to 4 (the `curl`
+path) have not run against any real host, pre-prod included, because there was no
+location for them to act on; the tests named below are the only evidence for them.
 
-- Step 1's query ran against the local Postgres: an empty backlog (the
-  local fixtures are fully listed), then the same query on three
-  deliberately unlisted rows inside a rolled-back transaction, which returned
-  the one expected location with `unlisted_count = 3`.
-- Steps 2 to 4 were **not** run with `curl` against a running API. Signing
-  in needs a staff access token, and standing up the app, Keycloak and a
-  grant for one runbook was out of proportion. Instead these tests in
-  `platform/src/test/java/uz/horecaos/platform/inventory/web/` guard it:
+What has been exercised, and where (all on 2026-09-29):
+
+- **Step 1, on pre-prod.** Run after the auto-listing fix shipped. Ten offerings
+  were checked across the two JizBiz branches and all ten were already listed in
+  inventory, so the backlog was empty (no *candidates*, in this runbook's word for an
+  offering that still has no stock item) and step 1 had no rows to show.
+- **Step 1, on the local Postgres.** An empty backlog first (the local fixtures are
+  fully listed), then the same query on three deliberately unlisted rows inside a
+  rolled-back transaction, which returned the one expected location with
+  `unlisted_count = 3`.
+- **Steps 2 to 4, by test only.** Not run with `curl` against a running API,
+  locally or anywhere else: signing in needs a staff access token, and standing up
+  the app, Keycloak and a grant for one runbook was out of proportion. Instead these
+  tests in `platform/src/test/java/uz/horecaos/platform/inventory/web/` guard it:
   - `InventoryUnlistedOfferingsReportTests#runbookCommandsAreRealAndItsChecksHold`
     parses this very file and dispatches its own `curl` commands (method,
     path, headers) at the real controllers over MockMvc, then asserts the
@@ -28,13 +30,7 @@ Not yet run against production.
     fails if this note cites a test that is not there.
 
   A renamed path or field fails one of those rather than an operator.
-- Pre-prod (2026-09-29): run after the auto-listing fix shipped. Ten
-  offerings were checked and **none** was missing from inventory at either of
-  the two JizBiz branches — everything was already listed, so step 1 had no
-  rows to show and there was nothing to backfill. Steps 2 to 4 need a backlog
-  to act on and were therefore not exercised there; the local-only note above
-  is still the only evidence for them.
-- Production: not yet run. When it is, update the "Last executed" line at the
+- **Production: not yet run.** When it is, update the "Last executed" line at the
   top of this file with the date, the host, and what it found.
 
 One-time catch-up, not a recurring job. From this wave onward,
