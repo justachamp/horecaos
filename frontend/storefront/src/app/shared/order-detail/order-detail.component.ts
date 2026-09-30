@@ -5,7 +5,6 @@ import { OrderDetail, OrderLineItem } from '../../pages/orders/orders.data';
 import {
   OrdersService,
   type ApiOrderDetail,
-  type ApiOrderLineItem,
   type ReorderPlanResponse,
 } from '../../services/orders.service';
 import { NotificationService } from '../../services/notification.service';
@@ -13,7 +12,10 @@ import { TranslateService } from '../../services/translate.service';
 import { TranslatePipe } from '../translate/translate.pipe';
 import { NavigationHistoryService } from '../../services/navigation-history.service';
 import { UiCartService } from '../../services/ui-cart.service';
-import { LocationProfileService, type LocationProfile } from '../../services/location-profile.service';
+import {
+  LocationProfileService,
+  type LocationProfile,
+} from '../../services/location-profile.service';
 
 /**
  * A single order's detail, plus (ADR 0074) whether it can be ordered again.
@@ -52,7 +54,7 @@ import { LocationProfileService, type LocationProfile } from '../../services/loc
   standalone: true,
   imports: [CommonModule, RouterLink, TranslatePipe],
   templateUrl: './order-detail.component.html',
-  styleUrl: './order-detail.component.scss'
+  styleUrl: './order-detail.component.scss',
 })
 export class OrderDetailComponent implements OnInit {
   order = signal<OrderDetail | null>(null);
@@ -77,7 +79,9 @@ export class OrderDetailComponent implements OnInit {
   readonly canRepeat = computed(() => {
     const plan = this.reorderPlan();
     const current = this.order();
-    return plan !== null && current !== null && plan.verdict === 'READY' && plan.orderId === current.id;
+    return (
+      plan !== null && current !== null && plan.verdict === 'READY' && plan.orderId === current.id
+    );
   });
 
   /**
@@ -98,7 +102,7 @@ export class OrderDetailComponent implements OnInit {
     private router: Router,
     private history: NavigationHistoryService,
     private ordersService: OrdersService,
-    private notification: NotificationService
+    private notification: NotificationService,
   ) {}
 
   ngOnInit(): void {
@@ -117,7 +121,7 @@ export class OrderDetailComponent implements OnInit {
       },
       error: (err) => {
         this.loading.set(false);
-        this.error.set(err?.error?.message ?? err?.message ?? "Buyurtma yuklanmadi.");
+        this.error.set(err?.error?.message ?? err?.message ?? 'Buyurtma yuklanmadi.');
       },
     });
     this.loadReorderPlan(id);
@@ -187,7 +191,8 @@ export class OrderDetailComponent implements OnInit {
 
   private mapToOrderDetail(api: ApiOrderDetail): OrderDetail {
     const currency = this.translate.get('common.currency') || "so'm";
-    const format = (n: number) => (n > 0 ? `${n.toLocaleString('uz-UZ')} ${currency}` : `0 ${currency}`);
+    const format = (n: number) =>
+      n > 0 ? `${n.toLocaleString('uz-UZ')} ${currency}` : `0 ${currency}`;
     const rawItems = api.items ?? [];
     const lineItems: OrderLineItem[] = rawItems.map((i) => {
       const price = Number(i.price) || 0;
@@ -235,7 +240,8 @@ export class OrderDetailComponent implements OnInit {
   private extractPrice(val: unknown): number {
     if (val == null) return 0;
     if (typeof val === 'number') return val;
-    if (typeof val === 'object' && 'price' in val) return Number((val as { price?: unknown }).price) || 0;
+    if (typeof val === 'object' && 'price' in val)
+      return Number((val as { price?: unknown }).price) || 0;
     return Number(val) || 0;
   }
 
@@ -256,7 +262,7 @@ export class OrderDetailComponent implements OnInit {
       },
       error: (err) => {
         this.cancelling.set(false);
-        this.cancelError.set(err?.error?.message ?? err?.message ?? "Buyurtma bekor qilinmadi.");
+        this.cancelError.set(err?.error?.message ?? err?.message ?? 'Buyurtma bekor qilinmadi.');
       },
     });
   }

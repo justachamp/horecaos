@@ -44,11 +44,16 @@ export class TelegramWebappService {
     window.addEventListener('message', (e) => {
       if (typeof e.data !== 'string') return;
       try {
-        const { eventType, eventData } = JSON.parse(e.data) as { eventType?: string; eventData?: unknown };
+        const { eventType, eventData } = JSON.parse(e.data) as {
+          eventType?: string;
+          eventData?: unknown;
+        };
         if (eventType === 'clipboard_text_received' && eventData && typeof eventData === 'object') {
           handleClipboardEvent(eventData as { req_id?: string; data?: string | null });
         }
-      } catch {}
+      } catch {
+        // Any other window's message that is not our JSON envelope: not for us.
+      }
     });
 
     // Desktop/Mobile: Telegram calls receiveEvent (docs.telegram-mini-apps.com/platform/events)
@@ -105,7 +110,9 @@ export class TelegramWebappService {
       if (parent?.postMessage && parent !== window.self) {
         parent.postMessage(JSON.stringify({ eventType, eventData }), this.webTargetOrigin);
       }
-    } catch {}
+    } catch {
+      // A parent that cannot be reached (cross-origin, detached): the event is dropped.
+    }
   }
 
   /** Whether the app is running inside Telegram (not when opened directly in browser) */
@@ -151,8 +158,11 @@ export class TelegramWebappService {
     }
 
     // 3. From Telegram WebApp API (Bot API 8.0+)
-    const tg = (window as unknown as { Telegram?: { WebApp?: { isFullscreen?: boolean; isExpanded?: boolean } } })
-      .Telegram?.WebApp;
+    const tg = (
+      window as unknown as {
+        Telegram?: { WebApp?: { isFullscreen?: boolean; isExpanded?: boolean } };
+      }
+    ).Telegram?.WebApp;
     if (tg) {
       if (typeof tg.isFullscreen === 'boolean') {
         this._mode = tg.isFullscreen ? 'fullscreen' : 'compact';
@@ -214,10 +224,7 @@ export class TelegramWebappService {
 
     // Desktop and Mobile: use TelegramWebviewProxy
     if (win.TelegramWebviewProxy?.postEvent) {
-      win.TelegramWebviewProxy.postEvent(
-        'web_app_setup_swipe_behavior',
-        JSON.stringify(eventData)
-      );
+      win.TelegramWebviewProxy.postEvent('web_app_setup_swipe_behavior', JSON.stringify(eventData));
       return;
     }
 

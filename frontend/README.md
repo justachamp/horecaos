@@ -59,22 +59,40 @@ verified by eye, not by a script.
 
 ## Formatting and lint in CI
 
-Only `operations` has a lint script and a `format`/`format:check` pair today; the CI job
-`Frontend builds (operations)` runs two gates the other three apps do not:
+Every app has `npm run lint` and `npm run format:check`, and the CI job `Frontend builds`
+runs them; what they cover differs by app.
 
-- **`npm run lint` and `npm run lint:rules`.** `eslint-plugin-horecaos` rejects a raw
-  `font-size: 10px` anywhere under `src/` (use a `--q-type-*` token or a `.q-*` class from
-  `tokens.css`). Both are clean; the job fails on the first regression.
-- **`npm run format:check`** on the whole `src/` tree (`ts`, `html`, `css`, `json`). The
-  tree is prettier-clean and CI keeps it so; fix a failure with `npm run format` in the
-  app. `tools/format_changed.py` is a local shortcut that checks (or, with `--list`, only
-  names) the files your change touched against a base branch; CI does not use it.
+- **`operations`** — `npm run lint` and `npm run lint:rules`: `eslint-plugin-horecaos` rejects
+  a raw `font-size: 10px` anywhere under `src/` (use a `--q-type-*` token or a `.q-*` class from
+  `tokens.css`), and `lint:rules` proves the rule itself still fails on a violation. Then
+  **`npm run format:check`** on the whole `src/` tree (`ts`, `html`, `css`, `json`); the tree is
+  prettier-clean and CI keeps it so. Fix a failure with `npm run format` in the app.
+- **`control-plane`, `storefront`, `storefront-milliy`** — ESLint 8.57 with the
+  `typescript-eslint` recommended rules, `@eslint/js` recommended, and `eqeqeq` (flat config,
+  `eslint.config.mjs` in each app; underscore-prefixed arguments and variables are the way to say
+  "deliberately unused"). `control-plane` also runs operations' `horecaos/no-raw-px-font-size`
+  — imported from `frontend/operations/tools/eslint-plugin-horecaos`, not copied — because it
+  vendors the closed type scale; the two storefronts are Tailwind/SCSS apps with no such scale,
+  so the rule is not applied there. Angular templates are not linted (`angular-eslint` needs
+  ESLint 9; operations is on 8.57, so the upgrade is one change across the apps).
+  `npm run lint:rules` runs `tools/lint-config.test.mjs`, which feeds the configured linter code
+  that is wrong and code that is fine, so a config that silently lost its rules fails instead of
+  passing for ever.
+- **Formatting of those three** is a ratchet, not a tree gate: each tree has on the order of a
+  hundred files that predate its prettier config, and a blanket reformat while other branches
+  are open would conflict with every one of them. CI runs `tools/format_changed.py`, which
+  checks only the `src/` files a change added or edited (against the merge base), so a file a
+  change touches must be prettier-clean. When nothing is in flight, reformat one app in a single
+  commit (`npm run format`) and switch its CI step to `npm run format:check`, as operations did.
 
   ```bash
-  python3 frontend/tools/format_changed.py --app operations --base main --list   # what would be checked
-  python3 frontend/tools/format_changed.py --app operations --base main          # check it (needs npm ci)
-  python3 frontend/tools/test_format_changed.py                                  # the tooling tests, also run in CI
+  python3 frontend/tools/format_changed.py --app control-plane --base main --list   # what would be checked
+  python3 frontend/tools/format_changed.py --app control-plane --base main          # check it (needs npm ci)
+  python3 frontend/tools/test_format_changed.py                                     # the tooling tests, also run in CI
   ```
+
+`control-plane` vendors `design-tokens/tokens.css`; `npm run check:tokens` diffs the copy
+against the source of record. It is not a CI step yet.
 
 ## Known debts
 

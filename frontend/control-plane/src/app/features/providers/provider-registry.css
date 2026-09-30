@@ -44,7 +44,7 @@
   border: 1px solid var(--q-hairline);
   margin: 0 4px 4px 0;
   font-family: var(--q-font-mono);
-  font-size: 12px;
+  font-size: var(--q-type-caption);
 }
 
 .fieldTag.secret {

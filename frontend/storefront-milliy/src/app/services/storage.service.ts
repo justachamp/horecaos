@@ -2,16 +2,26 @@ import { Injectable } from '@angular/core';
 
 /** Telegram Cloud Storage API (callback-based) */
 interface TelegramCloudStorage {
-  setItem(key: string, value: string, callback?: (err: unknown, stored: boolean) => void): TelegramCloudStorage;
-  getItem(key: string, callback: (err: unknown, value: string | null) => void): TelegramCloudStorage;
-  removeItem(key: string, callback?: (err: unknown, removed: boolean) => void): TelegramCloudStorage;
+  setItem(
+    key: string,
+    value: string,
+    callback?: (err: unknown, stored: boolean) => void,
+  ): TelegramCloudStorage;
+  getItem(
+    key: string,
+    callback: (err: unknown, value: string | null) => void,
+  ): TelegramCloudStorage;
+  removeItem(
+    key: string,
+    callback?: (err: unknown, removed: boolean) => void,
+  ): TelegramCloudStorage;
 }
 
 /** CloudStorage requires Telegram Web App 6.9+ */
 function isCloudStorageSupported(): boolean {
   if (typeof window === 'undefined') return false;
-  const version = (window as unknown as { Telegram?: { WebApp?: { version?: string } } })
-    ?.Telegram?.WebApp?.version;
+  const version = (window as unknown as { Telegram?: { WebApp?: { version?: string } } })?.Telegram
+    ?.WebApp?.version;
   if (!version) return false;
   const [major, minor] = version.split('.').map((n) => parseInt(n, 10) || 0);
   return major > 6 || (major === 6 && minor >= 9);
@@ -27,8 +37,9 @@ export class StorageService {
   private get cloudStorage(): TelegramCloudStorage | null {
     if (typeof window === 'undefined') return null;
     if (!isCloudStorageSupported()) return null;
-    const tg = (window as unknown as { Telegram?: { WebApp?: { CloudStorage?: TelegramCloudStorage } } })
-      ?.Telegram?.WebApp?.CloudStorage;
+    const tg = (
+      window as unknown as { Telegram?: { WebApp?: { CloudStorage?: TelegramCloudStorage } } }
+    )?.Telegram?.WebApp?.CloudStorage;
     return tg ?? null;
   }
 
@@ -79,7 +90,7 @@ export class StorageService {
       try {
         await new Promise<void>((resolve, reject) => {
           try {
-            cloud.setItem(key, value, (err) => {
+            cloud.setItem(key, value, () => {
               this.setInLocal(key, value); // Mirror for getItemSync; fallback on error
               resolve();
             });
