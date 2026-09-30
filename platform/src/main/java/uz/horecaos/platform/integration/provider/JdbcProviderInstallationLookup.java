@@ -3,8 +3,11 @@ package uz.horecaos.platform.integration.provider;
 import java.time.Clock;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
@@ -102,6 +105,30 @@ public class JdbcProviderInstallationLookup
                         rs.getObject("brand_id", UUID.class),
                         rs.getObject("location_id", UUID.class)))
                 .optional();
+    }
+
+    @Override
+    public Map<UUID, BindingLabel> bindingLabels(UUID tenantId, Set<UUID> bindingIds) {
+        if (bindingIds.isEmpty()) {
+            return Map.of();
+        }
+        return jdbc
+                .sql("""
+                SELECT b.id, i.provider_type, i.display_name
+                  FROM integration.bindings b
+                  JOIN integration.installations i
+                    ON i.id = b.installation_id AND i.tenant_id = b.tenant_id
+                 WHERE b.tenant_id = :tenantId
+                   AND b.id = ANY(CAST(:bindingIds AS uuid[]))
+                """)
+                .param("tenantId", tenantId)
+                .param("bindingIds", bindingIds.stream().map(UUID::toString).toArray(String[]::new))
+                .query((rs, n) -> Map.entry(
+                        rs.getObject("id", UUID.class),
+                        new BindingLabel(rs.getString("provider_type"), rs.getString("display_name"))))
+                .list()
+                .stream()
+                .collect(Collectors.toUnmodifiableMap(Map.Entry::getKey, Map.Entry::getValue));
     }
 
     @Override

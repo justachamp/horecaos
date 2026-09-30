@@ -57,9 +57,11 @@ import uz.horecaos.platform.ordering.application.CartService;
 import uz.horecaos.platform.ordering.application.CheckoutService;
 import uz.horecaos.platform.ordering.application.OrderAcceptancePolicyService;
 import uz.horecaos.platform.ordering.application.OrderAmendmentService;
+import uz.horecaos.platform.ordering.application.OrderBoardReadModels;
 import uz.horecaos.platform.ordering.application.OrderBulkActionService;
 import uz.horecaos.platform.ordering.application.OrderDecisionPortAdapter;
 import uz.horecaos.platform.ordering.application.OrderInventoryProcess;
+import uz.horecaos.platform.ordering.application.OrderLatenessPolicyService;
 import uz.horecaos.platform.ordering.application.OrderOutcomeReasonService;
 import uz.horecaos.platform.ordering.application.OrderOutcomeService;
 import uz.horecaos.platform.ordering.application.OrderPaymentProcess;
@@ -339,7 +341,12 @@ class OrderAmendmentAndOutcomeTests {
                 protection,
                 objectMapper,
                 auditRecorder,
-                clock);
+                clock,
+                new OrderBoardReadModels(
+                        orderStore,
+                        org.mockito.Mockito.mock(OrderLatenessPolicyService.class),
+                        org.mockito.Mockito.mock(uz.horecaos.platform.ordering.api.MarketplaceBindingLookup.class),
+                        clock));
         reasons = new OrderOutcomeReasonService(reasonStore, auditRecorder, clock);
         rejectReasons = new RejectReasonQueryService(new JdbcRejectReasonStore(jdbc));
         outcomes = new OrderOutcomeService(orderState, reasons, rejectReasons, orderStore, protection, objectMapper);

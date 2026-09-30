@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.time.Instant;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
@@ -12,16 +13,23 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import uz.horecaos.platform.iam.api.AuthorizationService;
 import uz.horecaos.platform.iam.api.Capability;
+import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.ordering.application.LiveBoardQueryService;
 import uz.horecaos.platform.ordering.application.OrderCountsPeriod;
+import uz.horecaos.platform.ordering.application.OrderQueryService;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore;
+import uz.horecaos.platform.ordering.web.OperationsOrderController.MarketplaceBindingsResponse;
 import uz.horecaos.platform.ordering.web.OperationsOrderController.OrderMixSliceResponse;
+import uz.horecaos.platform.ordering.web.OperationsOrderController.OrderSummaryResponse;
+import uz.horecaos.platform.web.api.Page;
 import uz.horecaos.platform.web.authorization.RequiresCapability;
 
 /**
- * The brand's order counters, for the Home live board (IA 0.1, 0.1c).
+ * The brand's order counters, for the Home live board (IA 0.1, 0.1c), and the
+ * order board across the brand's branches (row 1.1, wave 16).
  *
  * <p>A sibling of {@link OperationsOrderController} rather than a method on it,
  * because the scope is genuinely different: everything on that controller is at
@@ -42,6 +50,17 @@ import uz.horecaos.platform.web.authorization.RequiresCapability;
  * volumes. The console treats that 403 as a routing answer, not an error, and
  * falls back to the location-scoped counts for its own branch.
  *
+ * <p><strong>The brand board is the branch board with a wider set of branches.</strong>
+ * {@code GET .../orders/board} reads through the same {@link OrderQueryService}
+ * and the same {@code JdbcOrderStore.listForLocation} statement as the branch
+ * board — {@link OrderBoardFilters} owns the validation and the paging for both —
+ * and differs in exactly two ways: it needs {@code ORDER_READ} at {@code BRAND}
+ * scope, and the branches it reads are the {@code locationId} values the caller
+ * narrows to, or every branch of the brand. Each row carries its {@code
+ * locationId}, and its {@code actions[]} are computed from what the caller holds
+ * <em>at that row's branch</em>: a brand-level grant covers every branch, but the
+ * array is asked per branch on the page rather than assumed uniform.
+ *
  * <p>Read-only, so no {@code Idempotency-Key} and no expected version: there is
  * nothing here to replay.
  */
@@ -51,9 +70,19 @@ import uz.horecaos.platform.web.authorization.RequiresCapability;
 public class OperationsBrandOrderController {
 
     private final LiveBoardQueryService liveBoard;
+    private final OrderQueryService orderQuery;
+    private final AuthorizationService authorization;
+    private final CurrentActor currentActor;
 
-    public OperationsBrandOrderController(LiveBoardQueryService liveBoard) {
+    public OperationsBrandOrderController(
+            LiveBoardQueryService liveBoard,
+            OrderQueryService orderQuery,
+            AuthorizationService authorization,
+            CurrentActor currentActor) {
         this.liveBoard = liveBoard;
+        this.orderQuery = orderQuery;
+        this.authorization = authorization;
+        this.currentActor = currentActor;
     }
 
     @GetMapping("/counts")
@@ -75,6 +104,91 @@ public class OperationsBrandOrderController {
             @RequestParam(defaultValue = "ALL_TIME") OrderCountsPeriod period) {
 
         return ResponseEntity.ok(BrandOrderCountsResponse.of(liveBoard.forBrand(tenantId, brandId, period), period));
+    }
+
+    @GetMapping("/board")
+    @RequiresCapability(value = Capability.ORDER_READ, scope = ScopeType.BRAND)
+    @Operation(
+            summary = "The order board across the brand's branches: filtered and paged",
+            description = "orders.md §2.4/§2.5 (ADR 0102), the «Все филиалы» mode: the branch "
+                    + "board's whole filter set, and the same statement, over every branch of "
+                    + "the brand — or over the `locationId` values given (repeat the parameter "
+                    + "for several; the Филиал filter). A branch of another brand or tenant "
+                    + "matches nothing, exactly as on the branch board. Each row carries its "
+                    + "`locationId`, and `actions[]` is computed from the caller's grants at that "
+                    + "row's branch. `ORDER_READ` at BRAND scope: a location-scoped grant is "
+                    + "refused with 403 — the console's signal to keep its single-branch board — "
+                    + "and a caller who needs only some branches asks the branch endpoint for "
+                    + "each. Keyset-paginated (ADR 0031); changing a filter or the branch set "
+                    + "invalidates the cursor.")
+    @SuppressWarnings("checkstyle:ParameterNumber")
+    public Page<OrderSummaryResponse> board(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @RequestParam(required = false) @Nullable List<UUID> locationId,
+            @RequestParam(required = false) @Nullable List<String> status,
+            @RequestParam(required = false) @Nullable Instant from,
+            @RequestParam(required = false) @Nullable Instant to,
+            @RequestParam(required = false) @Nullable String channelCode,
+            @RequestParam(required = false) @Nullable String fulfillmentMode,
+            @RequestParam(required = false) @Nullable UUID courierId,
+            @RequestParam(required = false) @Nullable String paymentMethodCode,
+            @RequestParam(required = false) @Nullable String createdByActorId,
+            @RequestParam(required = false) @Nullable String reference,
+            @RequestParam(required = false) @Nullable String origin,
+            @RequestParam(required = false) @Nullable String paymentStatus,
+            @RequestParam(required = false) @Nullable UUID marketplaceBindingId,
+            @RequestParam(required = false) @Nullable Boolean late,
+            @RequestParam(required = false) @Nullable Boolean problem,
+            @RequestParam(required = false) @Nullable Boolean callbackRequested,
+            @RequestParam(required = false) @Nullable List<String> fiscalStatus,
+            @RequestParam(required = false) @Nullable String cursor,
+            @RequestParam(required = false) @Nullable Integer limit) {
+
+        JdbcOrderStore.OrderListQuery query = OrderBoardFilters.query(
+                tenantId,
+                brandId,
+                locationId == null ? List.of() : locationId,
+                status,
+                from,
+                to,
+                channelCode,
+                fulfillmentMode,
+                courierId,
+                paymentMethodCode,
+                createdByActorId,
+                reference,
+                origin,
+                paymentStatus,
+                marketplaceBindingId,
+                late,
+                problem,
+                callbackRequested,
+                fiscalStatus);
+
+        String subject = currentActor.get().subject();
+        boolean invoiceCapability = OperationsOrderController.invoiceCapabilityHeld(authorization, subject, tenantId);
+        return OrderBoardFilters.page(orderQuery, query, cursor, limit, branch -> {
+            Set<Capability> granted = OperationsOrderController.grantedActionCapabilities(
+                    authorization, subject, tenantId, brandId, branch);
+            return OperationsOrderController.withInvoiceCapability(granted, invoiceCapability);
+        });
+    }
+
+    @GetMapping("/marketplace-bindings")
+    @RequiresCapability(value = Capability.ORDER_READ, scope = ScopeType.BRAND)
+    @Operation(
+            summary = "The aggregator bindings the brand's orders arrived through",
+            description = "The options behind the board's «Агрегатор» filter in the «Все филиалы» mode "
+                    + "(orders.md §2.4, ADR 0040): one entry per provider binding that has an order "
+                    + "at any of the brand's branches (or at the `locationId` values given), most "
+                    + "recently used first. ORDER_READ at BRAND scope.")
+    public MarketplaceBindingsResponse marketplaceBindings(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @RequestParam(required = false) @Nullable List<UUID> locationId) {
+        return MarketplaceBindingsResponse.of(
+                orderQuery.marketplaceBindings(tenantId, brandId, locationId == null ? List.of() : locationId));
     }
 
     /**
