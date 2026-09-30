@@ -8,7 +8,7 @@
   } @else if (profile(); as p) {
     <h2 class="q-title">{{ p.value.displayName ?? ('customers.detail.unnamed' | t) }}</h2>
     <p class="q-body-sm status-line">
-      <span class="status-badge">{{ statusLabel(p.value.status) }}</span>
+      <span class="q-status-badge">{{ statusLabel(p.value.status) }}</span>
       <span class="q-ink-muted"
         >{{ 'customers.detail.registered' | t }} {{ formatRegisteredAt(p.value.createdAt) }}</span
       >
@@ -115,7 +115,7 @@
             <dd class="q-body">{{ p.value.preferredTimezone ?? '—' }}</dd>
           </div>
         </dl>
-        <button type="button" class="secondary" (click)="startEditingProfile()">
+        <button type="button" class="q-btn-secondary" (click)="startEditingProfile()">
           {{ 'customers.edit' | t }}
         </button>
       } @else {
@@ -149,7 +149,7 @@
           <div class="form__actions">
             <button
               type="button"
-              class="secondary"
+              class="q-btn-secondary"
               (click)="editingProfile.set(false)"
               [disabled]="profileSaving()"
             >
@@ -157,7 +157,7 @@
             </button>
             <button
               type="button"
-              class="primary"
+              class="q-btn-primary"
               (click)="saveProfile()"
               [disabled]="profileSaving()"
             >
@@ -180,7 +180,7 @@
               />
               <button
                 type="button"
-                class="secondary"
+                class="q-btn-secondary"
                 (click)="cancelEditingContact()"
                 [disabled]="contactActionPending()"
               >
@@ -188,7 +188,7 @@
               </button>
               <button
                 type="button"
-                class="primary"
+                class="q-btn-primary"
                 (click)="saveEditedContact()"
                 [disabled]="contactActionPending()"
               >
@@ -241,7 +241,7 @@
         @if (!revealedContacts()) {
           <button
             type="button"
-            class="secondary reveal-link"
+            class="q-btn-secondary reveal-link"
             [disabled]="revealingContacts()"
             (click)="revealContacts()"
           >
@@ -271,7 +271,7 @@
           />
           <button
             type="button"
-            class="secondary"
+            class="q-btn-secondary"
             (click)="addContact()"
             [disabled]="addingContact()"
           >
@@ -291,7 +291,7 @@
             <p class="q-body q-mono">
               {{ dateOfBirth() ?? ('customers.profile.dateOfBirth.none' | t) }}
             </p>
-            <button type="button" class="secondary" (click)="startEditingDob()">
+            <button type="button" class="q-btn-secondary" (click)="startEditingDob()">
               {{ 'customers.edit' | t }}
             </button>
           } @else {
@@ -305,13 +305,18 @@
               <div class="form__actions">
                 <button
                   type="button"
-                  class="secondary"
+                  class="q-btn-secondary"
                   (click)="editingDob.set(false)"
                   [disabled]="dobSaving()"
                 >
                   {{ 'customers.cancel' | t }}
                 </button>
-                <button type="button" class="primary" (click)="saveDob()" [disabled]="dobSaving()">
+                <button
+                  type="button"
+                  class="q-btn-primary"
+                  (click)="saveDob()"
+                  [disabled]="dobSaving()"
+                >
                   {{ dobSaving() ? ('customers.saving' | t) : ('customers.save' | t) }}
                 </button>
               </div>
@@ -320,7 +325,7 @@
         } @else if (p.value.hasDateOfBirth) {
           <button
             type="button"
-            class="secondary reveal-link"
+            class="q-btn-secondary reveal-link"
             [disabled]="revealingDob()"
             (click)="revealDob()"
           >
@@ -328,7 +333,11 @@
           </button>
         } @else {
           <p class="q-body-sm">{{ 'customers.profile.dateOfBirth.none' | t }}</p>
-          <button type="button" class="secondary" (click)="editingDob.set(true); draftDob.set('')">
+          <button
+            type="button"
+            class="q-btn-secondary"
+            (click)="editingDob.set(true); draftDob.set('')"
+          >
             {{ 'customers.profile.dateOfBirth.add' | t }}
           </button>
           @if (editingDob()) {
@@ -342,13 +351,18 @@
               <div class="form__actions">
                 <button
                   type="button"
-                  class="secondary"
+                  class="q-btn-secondary"
                   (click)="editingDob.set(false)"
                   [disabled]="dobSaving()"
                 >
                   {{ 'customers.cancel' | t }}
                 </button>
-                <button type="button" class="primary" (click)="saveDob()" [disabled]="dobSaving()">
+                <button
+                  type="button"
+                  class="q-btn-primary"
+                  (click)="saveDob()"
+                  [disabled]="dobSaving()"
+                >
                   {{ dobSaving() ? ('customers.saving' | t) : ('customers.save' | t) }}
                 </button>
               </div>
@@ -360,7 +374,7 @@
       <section class="block">
         <h3 class="q-subhead">{{ 'customers.profile.merge' | t }}</h3>
         <p class="q-body-sm">{{ 'customers.profile.merge.lead' | t }}</p>
-        <button type="button" class="secondary" (click)="openMergeDialog()">
+        <button type="button" class="q-btn-secondary" (click)="openMergeDialog()">
           {{ 'customers.profile.merge.action' | t }}
         </button>
       </section>
@@ -438,7 +452,7 @@
               <div class="form__actions">
                 <button
                   type="button"
-                  class="secondary"
+                  class="q-btn-secondary"
                   (click)="cancelAddressForm()"
                   [disabled]="addressSaving()"
                 >
@@ -446,7 +460,7 @@
                 </button>
                 <button
                   type="button"
-                  class="primary"
+                  class="q-btn-primary"
                   (click)="saveEditedAddress(address)"
                   [disabled]="addressSaving()"
                 >
@@ -500,7 +514,7 @@
         }
 
         @if (!addingAddress()) {
-          <button type="button" class="secondary" (click)="startAddingAddress()">
+          <button type="button" class="q-btn-secondary" (click)="startAddingAddress()">
             {{ 'customers.address.add' | t }}
           </button>
         } @else {
@@ -571,7 +585,7 @@
             <div class="form__actions">
               <button
                 type="button"
-                class="secondary"
+                class="q-btn-secondary"
                 (click)="cancelAddressForm()"
                 [disabled]="addressSaving()"
               >
@@ -579,7 +593,7 @@
               </button>
               <button
                 type="button"
-                class="primary"
+                class="q-btn-primary"
                 (click)="saveNewAddress()"
                 [disabled]="addressSaving()"
               >
@@ -645,7 +659,7 @@
       @if (ordersHasMore()) {
         <button
           type="button"
-          class="secondary load-more"
+          class="q-btn-secondary load-more"
           (click)="loadMoreOrders()"
           [disabled]="loadingOrders()"
         >
@@ -748,7 +762,7 @@
           <div class="form__actions">
             <button
               type="button"
-              class="primary"
+              class="q-btn-primary"
               (click)="recordConsent()"
               [disabled]="recordingConsent() || !consentPolicyVersion().trim()"
             >
@@ -834,7 +848,7 @@
               <div class="form__actions">
                 <button
                   type="button"
-                  class="secondary"
+                  class="q-btn-secondary"
                   (click)="cancelAdjusting()"
                   [disabled]="adjustSaving()"
                 >
@@ -842,7 +856,7 @@
                 </button>
                 <button
                   type="button"
-                  class="primary"
+                  class="q-btn-primary"
                   data-testid="cashback-adjust-submit"
                   (click)="submitAdjustment(balance)"
                   [disabled]="
@@ -934,8 +948,8 @@
         @if (status.active) {
           <p class="q-body">
             <span
-              class="status-badge status-badge--active"
-              [class.status-badge--expired]="status.expired"
+              class="q-status-badge q-status-badge--active"
+              [class.q-status-badge--expired]="status.expired"
               data-testid="blacklist-status-badge"
             >
               {{ blacklistExpiryLabel(status) }}
@@ -962,7 +976,7 @@
             />
             <button
               type="button"
-              class="secondary"
+              class="q-btn-secondary"
               (click)="lift()"
               [disabled]="liftingBlacklist()"
             >
@@ -972,7 +986,7 @@
         } @else {
           <p class="q-body-sm">{{ 'customers.blacklist.notActive' | t }}</p>
           @if (!addingBlacklistEntry()) {
-            <button type="button" class="secondary" (click)="startAddingBlacklistEntry()">
+            <button type="button" class="q-btn-secondary" (click)="startAddingBlacklistEntry()">
               {{ 'customers.blacklist.add' | t }}
             </button>
           } @else {
@@ -994,7 +1008,7 @@
               <div class="form__actions">
                 <button
                   type="button"
-                  class="secondary"
+                  class="q-btn-secondary"
                   (click)="addingBlacklistEntry.set(false)"
                   [disabled]="blacklistSaving()"
                 >
@@ -1002,7 +1016,7 @@
                 </button>
                 <button
                   type="button"
-                  class="primary"
+                  class="q-btn-primary"
                   (click)="submitBlacklistEntry()"
                   [disabled]="blacklistSaving()"
                 >
@@ -1055,7 +1069,7 @@
         } @else {
           <button
             type="button"
-            class="secondary reveal-link"
+            class="q-btn-secondary reveal-link"
             [disabled]="revealingBlacklistHistory()"
             (click)="revealBlacklistHistory()"
           >
@@ -1166,7 +1180,7 @@
       @if (canRaiseErasure() && !hasPendingErasureRequest()) {
         <button
           type="button"
-          class="secondary"
+          class="q-btn-secondary"
           data-testid="erasure-raise"
           (click)="raiseErasure()"
           [disabled]="raisingErasure()"
@@ -1235,8 +1249,8 @@
 </div>
 
 @if (mergeDialogOpen()) {
-  <div class="dialog__backdrop">
-    <div class="dialog" role="dialog" aria-modal="true">
+  <div class="q-dialog-backdrop">
+    <div class="q-dialog pane__dialog" role="dialog" aria-modal="true">
       <h2 class="q-emphasis">{{ 'customers.merge.title' | t }}</h2>
       <p class="q-body-sm">{{ 'customers.merge.lead' | t }}</p>
       <div class="dialog__field">
@@ -1249,7 +1263,7 @@
         />
         <button
           type="button"
-          class="secondary"
+          class="q-btn-secondary"
           (click)="searchMergeTarget()"
           [disabled]="mergeSearching()"
         >
@@ -1266,10 +1280,10 @@
           {{ candidate.displayName ?? candidate.id }}
         </button>
       }
-      <div class="dialog__actions">
+      <div class="q-dialog__actions">
         <button
           type="button"
-          class="dialog__dismiss"
+          class="q-dialog__dismiss"
           (click)="closeMergeDialog()"
           [disabled]="merging()"
         >
@@ -1277,7 +1291,7 @@
         </button>
         <button
           type="button"
-          class="dialog__confirm"
+          class="q-dialog__confirm"
           (click)="confirmMerge()"
           [disabled]="merging() || !mergeTargetId()"
         >

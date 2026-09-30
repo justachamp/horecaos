@@ -19,6 +19,8 @@
 
 /* Rules several pages share, under q- names a page opts into (see each file's own header). */
 @import './app/shared/styles/modal.css';
+@import './app/shared/styles/dialog.css';
+@import './app/shared/styles/controls.css';
 
 /* Angular's mount node. The generated sheet names React's. */
 q-root {
