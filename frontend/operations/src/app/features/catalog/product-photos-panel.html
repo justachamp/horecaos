@@ -1,0 +1,87 @@
+<label class="editor__photo-channel-picker">
+  <span class="q-body-sm">{{ 'catalog.editor.photos.channel.label' | t }}</span>
+  <select
+    [value]="selectedPhotoChannel()"
+    (change)="channelChanged.emit($any($event.target).value)"
+    data-testid="editor-photo-channel-select"
+  >
+    <option [value]="allChannelsCode()">
+      {{ 'catalog.editor.photos.channel.all' | t }}
+    </option>
+    @for (channel of photoChannels(); track channel.id) {
+      <option [value]="channel.code">{{ channel.displayName }}</option>
+    }
+  </select>
+</label>
+@if (selectedChannelPhotos().length === 0) {
+  <p class="q-caption">
+    {{
+      (selectedPhotoChannel() === allChannelsCode()
+        ? 'catalog.editor.photos.empty'
+        : 'catalog.editor.photos.channel.empty'
+      ) | t
+    }}
+  </p>
+} @else {
+  <div class="editor__photo-grid">
+    @for (
+      item of selectedChannelPhotos();
+      track item.mediaAssetId + item.role + item.channelCode;
+      let i = $index, count = $count
+    ) {
+      <div class="editor__photo-tile" data-testid="editor-photo-tile">
+        @if (photoUrls()[item.mediaAssetId]; as url) {
+          <img [src]="url" alt="" class="editor__photo-image" />
+        } @else {
+          <div class="editor__photo-placeholder q-caption">
+            {{ photoRoleLabel(item.role) }}
+          </div>
+        }
+        <div class="editor__photo-meta">
+          <span class="q-caption">{{ photoRoleLabel(item.role) }}</span>
+          @if (item.channelCode !== 'ALL') {
+            <span class="q-caption q-mono">{{ item.channelCode }}</span>
+          }
+        </div>
+        <div class="editor__photo-actions">
+          <button
+            type="button"
+            [disabled]="i === 0 || savingField() === 'photo-reorder:' + item.mediaAssetId"
+            (click)="reorderRequested.emit({ item, direction: -1 })"
+            [attr.aria-label]="'catalog.editor.photos.moveUp' | t"
+            data-testid="editor-photo-move-up"
+          >
+            ↑
+          </button>
+          <button
+            type="button"
+            [disabled]="i === count - 1 || savingField() === 'photo-reorder:' + item.mediaAssetId"
+            (click)="reorderRequested.emit({ item, direction: 1 })"
+            [attr.aria-label]="'catalog.editor.photos.moveDown' | t"
+            data-testid="editor-photo-move-down"
+          >
+            ↓
+          </button>
+          <button
+            type="button"
+            [disabled]="savingField() === 'photo-detach:' + item.mediaAssetId"
+            (click)="detachRequested.emit(item)"
+            data-testid="editor-photo-detach"
+          >
+            {{ 'catalog.editor.photos.detach' | t }}
+          </button>
+        </div>
+      </div>
+    }
+  </div>
+}
+<p class="q-caption" data-testid="editor-photo-channel-hint">
+  {{ 'catalog.editor.photos.channel.hint' | t }}
+</p>
+<q-media-uploader
+  [uploading]="uploadingPhoto()"
+  (cropped)="uploadRequested.emit($event)"
+  (selected)="uploadRequested.emit($event)"
+  (rejected)="rejected.emit($event)"
+  data-testid="editor-photo-uploader"
+/>

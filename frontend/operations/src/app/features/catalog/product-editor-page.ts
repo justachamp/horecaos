@@ -21,7 +21,7 @@ import { TPipe } from '../../core/i18n/t.pipe';
 import { ActorChip } from '../../shared/ui/actor-chip';
 import { Combobox, ComboboxOption } from '../../shared/ui/combobox';
 import { LocalizedFieldGroup } from '../../shared/ui/localized-field-group';
-import { MediaUploader, mediaUploaderRejectionMessageKey } from '../../shared/ui/media-uploader';
+import { mediaUploaderRejectionMessageKey } from '../../shared/ui/media-uploader';
 import { ScheduleGrid } from '../../shared/ui/schedule-grid';
 import { describeApiError } from '../orders/order-errors';
 import { ActivityLogApi, AuditEventView } from '../staff/activity-log-api';
@@ -54,13 +54,11 @@ import {
 } from './product-comment-presets-api';
 import { CommentPresetsApi, PresetResponse } from '../settings/comment-presets/comment-presets-api';
 import { ChannelView, SalesChannelsApi } from '../settings/sales-channels/sales-channels-api';
+import { ProductEditorHeader } from './product-editor-header';
+import { ProductPhotosPanel } from './product-photos-panel';
+import { ListingNotice, ProductUnlistedBanner, UnlistedRow } from './product-unlisted-banner';
 
 const STATUSES: readonly CatalogStatus[] = ['DRAFT', 'ACTIVE', 'ARCHIVED'];
-
-/** What a list-everywhere click left unresolved (see `listingNoticeByVariant`). */
-type ListingNotice =
-  | { readonly kind: 'partial'; readonly listed: number; readonly candidate: number }
-  | { readonly kind: 'recountFailed' };
 
 type EditorTab =
   | 'BASIC'
@@ -230,7 +228,9 @@ const FINDING_LABEL_KEYS: Readonly<Partial<Record<string, MessageKey>>> = {
     LocalizedFieldGroup,
     ActorChip,
     Combobox,
-    MediaUploader,
+    ProductEditorHeader,
+    ProductPhotosPanel,
+    ProductUnlistedBanner,
     ScheduleGrid,
   ],
   templateUrl: './product-editor-page.html',
@@ -329,6 +329,11 @@ export class ProductEditorPage implements OnInit {
       .map((variant) => ({ variantId: variant.variantId, count: counts[variant.variantId] ?? 0 }))
       .filter((row) => row.count > 0);
   });
+
+  /** The banner's rows with each variant's name in the editing locale. */
+  protected readonly unlistedBannerRows = computed<readonly UnlistedRow[]>(() =>
+    this.unlistedVariantRows().map((row) => ({ ...row, label: this.variantLabel(row.variantId) })),
+  );
 
   protected readonly historyLoading = signal(false);
   protected readonly historyLoaded = signal(false);
@@ -1145,17 +1150,6 @@ export class ProductEditorPage implements OnInit {
       this.handleSaveError(error);
     } finally {
       this.savingField.set(null);
-    }
-  }
-
-  protected photoRoleLabel(role: string): string {
-    switch (role) {
-      case 'PRIMARY':
-        return this.i18n.t('catalog.editor.photos.role.PRIMARY');
-      case 'GALLERY':
-        return this.i18n.t('catalog.editor.photos.role.GALLERY');
-      default:
-        return role;
     }
   }
 
