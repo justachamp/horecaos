@@ -1,0 +1,35 @@
+:host {
+  display: contents;
+}
+
+.kitchen__warning-band,
+.kitchen__notice-band,
+.kitchen__error-band {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+}
+
+.kitchen__warning-band {
+  background: var(--q-warning-tint);
+  color: var(--q-warning-text);
+}
+
+.kitchen__notice-band {
+  background: var(--q-info-tint);
+  color: var(--q-info-text);
+}
+
+.kitchen__error-band {
+  background: var(--q-error-tint);
+  color: var(--q-error-text);
+}
+
+.kitchen__notice-dismiss {
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: var(--q-type-body);
+  color: inherit;
+}
