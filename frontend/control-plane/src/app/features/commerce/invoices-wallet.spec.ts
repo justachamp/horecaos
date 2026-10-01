@@ -1,6 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { SessionContextService } from '../../core/auth/session-context.service';
 import { APP_CONFIG, AppConfig } from '../../core/config/app-config';
@@ -16,58 +16,135 @@ import {
 } from './commerce-api';
 import { InvoicesWallet, previousMonth } from './invoices-wallet';
 
-const CONFIG: AppConfig = { apiBaseUrl: 'https://api.test.horecaos.uz', displayTimeZone: 'Asia/Tashkent' };
+const CONFIG: AppConfig = {
+  apiBaseUrl: 'https://api.test.horecaos.uz',
+  displayTimeZone: 'Asia/Tashkent',
+};
 const UZS = (amountMinor: number) => ({ amountMinor, currency: 'UZS' });
 
 const DRAFT: StatementView = {
-  statementId: null, number: null, periodKey: '2026-08', periodStart: '2026-07-31T19:00:00Z',
-  periodEnd: '2026-08-31T19:00:00Z', status: 'DRAFT', total: UZS(1_500_000), issuedBy: null, issuedAt: null,
-  issueReason: null, voidedBy: null, voidedAt: null, voidReason: null,
+  statementId: null,
+  number: null,
+  periodKey: '2026-08',
+  periodStart: '2026-07-31T19:00:00Z',
+  periodEnd: '2026-08-31T19:00:00Z',
+  status: 'DRAFT',
+  total: UZS(1_500_000),
+  issuedBy: null,
+  issuedAt: null,
+  issueReason: null,
+  voidedBy: null,
+  voidedAt: null,
+  voidReason: null,
   lines: [
-    { lineNumber: 1, kind: 'PLAN', referenceCode: 'BASIC@v1', description: 'BASIC v1, MONTHLY', quantity: 1, unitPrice: UZS(1_200_000), amount: UZS(1_200_000) },
-    { lineNumber: 2, kind: 'MODULE', referenceCode: 'kds', description: 'KDS, PER_LOCATION', quantity: 3, unitPrice: UZS(100_000), amount: UZS(300_000) },
+    {
+      lineNumber: 1,
+      kind: 'PLAN',
+      referenceCode: 'BASIC@v1',
+      description: 'BASIC v1, MONTHLY',
+      quantity: 1,
+      unitPrice: UZS(1_200_000),
+      amount: UZS(1_200_000),
+    },
+    {
+      lineNumber: 2,
+      kind: 'MODULE',
+      referenceCode: 'kds',
+      description: 'KDS, PER_LOCATION',
+      quantity: 3,
+      unitPrice: UZS(100_000),
+      amount: UZS(300_000),
+    },
   ],
 };
 
 const ISSUED: StatementView = {
-  ...DRAFT, statementId: 'st-1', number: 'S-2026-07-000001', periodKey: '2026-07', status: 'ISSUED',
-  issuedBy: 'finance', issuedAt: '2026-08-01T05:00:00Z', issueReason: 'July close',
+  ...DRAFT,
+  statementId: 'st-1',
+  number: 'S-2026-07-000001',
+  periodKey: '2026-07',
+  status: 'ISSUED',
+  issuedBy: 'finance',
+  issuedAt: '2026-08-01T05:00:00Z',
+  issueReason: 'July close',
 };
 
 const WALLET: WalletOverviewView = {
-  paidBalance: UZS(300_000), bonusBalance: UZS(200_000), bonusSpendableBalance: UZS(200_000),
-  paymentMethod: 'INVOICE', cardTokenReference: null,
+  paidBalance: UZS(300_000),
+  bonusBalance: UZS(200_000),
+  bonusSpendableBalance: UZS(200_000),
+  paymentMethod: 'INVOICE',
+  cardTokenReference: null,
 };
 
 const LEDGER: readonly WalletEntryView[] = [
   {
-    entryId: 'w-1', moneyKind: 'PAID', entryType: 'TOP_UP', amount: UZS(1_000_000), statementId: null,
-    grantId: null, expiresAt: null, externalReference: 'MT103-7781', reason: 'August transfer',
-    recordedBy: 'finance-1', approvedBy: null, createdAt: '2026-08-03T06:00:00Z',
+    entryId: 'w-1',
+    moneyKind: 'PAID',
+    entryType: 'TOP_UP',
+    amount: UZS(1_000_000),
+    statementId: null,
+    grantId: null,
+    expiresAt: null,
+    externalReference: 'MT103-7781',
+    reason: 'August transfer',
+    recordedBy: 'finance-1',
+    approvedBy: null,
+    createdAt: '2026-08-03T06:00:00Z',
   },
   {
-    entryId: 'w-2', moneyKind: 'BONUS', entryType: 'STATEMENT_PAYMENT', amount: UZS(-200_000),
-    statementId: 'st-1', grantId: 'g-1', expiresAt: null, externalReference: null,
-    reason: 'statement S-2026-07-000001 paid from a bonus grant', recordedBy: 'system:wallet-settlement',
-    approvedBy: null, createdAt: '2026-08-01T05:00:00Z',
+    entryId: 'w-2',
+    moneyKind: 'BONUS',
+    entryType: 'STATEMENT_PAYMENT',
+    amount: UZS(-200_000),
+    statementId: 'st-1',
+    grantId: 'g-1',
+    expiresAt: null,
+    externalReference: null,
+    reason: 'statement S-2026-07-000001 paid from a bonus grant',
+    recordedBy: 'system:wallet-settlement',
+    approvedBy: null,
+    createdAt: '2026-08-01T05:00:00Z',
   },
 ];
 
 /** A second page of the ledger, to be appended to the first. */
 const MORE_LEDGER: readonly WalletEntryView[] = [
   {
-    entryId: 'w-0', moneyKind: 'BONUS', entryType: 'BONUS_GRANT', amount: UZS(400_000), statementId: null,
-    grantId: 'g-1', expiresAt: '2026-12-01T00:00:00Z', externalReference: null, reason: 'launch credit',
-    recordedBy: 'finance-1', approvedBy: 'finance-2', createdAt: '2026-07-01T05:00:00Z',
+    entryId: 'w-0',
+    moneyKind: 'BONUS',
+    entryType: 'BONUS_GRANT',
+    amount: UZS(400_000),
+    statementId: null,
+    grantId: 'g-1',
+    expiresAt: '2026-12-01T00:00:00Z',
+    externalReference: null,
+    reason: 'launch credit',
+    recordedBy: 'finance-1',
+    approvedBy: 'finance-2',
+    createdAt: '2026-07-01T05:00:00Z',
   },
 ];
 
 const GRANTS: readonly BonusGrantView[] = [
-  { grantId: 'g-1', granted: UZS(400_000), remaining: UZS(200_000), expiresAt: '2026-12-01T00:00:00Z', reason: 'launch credit' },
+  {
+    grantId: 'g-1',
+    granted: UZS(400_000),
+    remaining: UZS(200_000),
+    expiresAt: '2026-12-01T00:00:00Z',
+    reason: 'launch credit',
+  },
 ];
 
 const PAYMENTS: readonly StatementPaymentView[] = [
-  { statementId: 'st-1', number: 'S-2026-07-000001', periodKey: '2026-07', total: UZS(1_500_000), paid: UZS(1_200_000), due: UZS(300_000) },
+  {
+    statementId: 'st-1',
+    number: 'S-2026-07-000001',
+    periodKey: '2026-07',
+    total: UZS(1_500_000),
+    paid: UZS(1_200_000),
+    due: UZS(300_000),
+  },
 ];
 
 class FakeCommerceApi {
@@ -75,7 +152,9 @@ class FakeCommerceApi {
   readonly draftStatement = vi.fn().mockResolvedValue(DRAFT);
   readonly statement = vi.fn().mockResolvedValue(ISSUED);
   readonly exportStatement = vi.fn().mockResolvedValue('number\r\n');
-  readonly issueStatement = vi.fn().mockResolvedValue({ statementId: 'st-2', number: 'S-2026-08-000002' });
+  readonly issueStatement = vi
+    .fn()
+    .mockResolvedValue({ statementId: 'st-2', number: 'S-2026-08-000002' });
   readonly voidStatement = vi.fn().mockResolvedValue(undefined);
   wallet = vi.fn().mockResolvedValue(WALLET);
   readonly walletLedger = vi.fn().mockResolvedValue({ items: LEDGER, nextCursor: null });
@@ -83,15 +162,34 @@ class FakeCommerceApi {
   readonly statementPayments = vi.fn().mockResolvedValue(PAYMENTS);
   readonly recordTransfer = vi.fn().mockResolvedValue({ entryId: 'w-3' });
   readonly recordDeposit = vi.fn().mockResolvedValue({ entryId: 'w-4' });
-  readonly proposeWalletAdjustment = vi.fn().mockResolvedValue({ status: 'AWAITING_APPROVAL', approvalRequestId: 'ap-1' });
-  readonly proposeBonusGrant = vi.fn().mockResolvedValue({ status: 'AWAITING_APPROVAL', approvalRequestId: 'ap-2' });
-  readonly proposeRefund = vi.fn().mockResolvedValue({ status: 'AWAITING_APPROVAL', approvalRequestId: 'ap-3' });
+  readonly proposeWalletAdjustment = vi
+    .fn()
+    .mockResolvedValue({ status: 'AWAITING_APPROVAL', approvalRequestId: 'ap-1' });
+  readonly proposeBonusGrant = vi
+    .fn()
+    .mockResolvedValue({ status: 'AWAITING_APPROVAL', approvalRequestId: 'ap-2' });
+  readonly proposeRefund = vi
+    .fn()
+    .mockResolvedValue({ status: 'AWAITING_APPROVAL', approvalRequestId: 'ap-3' });
   readonly setPaymentMethod = vi.fn().mockResolvedValue(undefined);
 }
 
 describe('InvoicesWallet', () => {
   let fixture: ComponentFixture<InvoicesWallet>;
   let api: FakeCommerceApi;
+
+  // The screen opens on last month (`previousMonth(new Date())`), and every fixture here is
+  // August's. Left on the wall clock these specs pass in September and fail from the first of
+  // October on, with the issue call carrying the wrong period. Only `Date` is faked, so the
+  // component's timers and `settle()` still run for real.
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-09-11T09:00:00Z'));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
 
   async function create(staff = true): Promise<void> {
     api = new FakeCommerceApi();
@@ -102,7 +200,10 @@ describe('InvoicesWallet', () => {
       providers: [
         { provide: APP_CONFIG, useValue: CONFIG },
         { provide: CommerceApi, useValue: api },
-        { provide: TenantsApi, useValue: { listTenants: vi.fn().mockResolvedValue({ items: [], nextCursor: null }) } },
+        {
+          provide: TenantsApi,
+          useValue: { listTenants: vi.fn().mockResolvedValue({ items: [], nextCursor: null }) },
+        },
         {
           provide: SessionContextService,
           useValue: {
@@ -111,7 +212,10 @@ describe('InvoicesWallet', () => {
             current: () => ({ subject: 'me' }),
           },
         },
-        { provide: ActivatedRoute, useValue: { snapshot: { queryParamMap: convertToParamMap({ tenantId: 'tenant-1' }) } } },
+        {
+          provide: ActivatedRoute,
+          useValue: { snapshot: { queryParamMap: convertToParamMap({ tenantId: 'tenant-1' }) } },
+        },
       ],
     }).compileComponents();
     fixture = TestBed.createComponent(InvoicesWallet);
@@ -193,7 +297,9 @@ describe('InvoicesWallet', () => {
     // A spend of bonus money reads negative, with the U+2212 the money
     // formatter uses, and names the entry type rather than a raw code.
     expect(el('[data-entry="STATEMENT_PAYMENT"]').textContent).toContain('−200 000');
-    expect(el('[data-entry="STATEMENT_PAYMENT"]').textContent).toContain(ru['wallet.entry.STATEMENT_PAYMENT']);
+    expect(el('[data-entry="STATEMENT_PAYMENT"]').textContent).toContain(
+      ru['wallet.entry.STATEMENT_PAYMENT'],
+    );
     expect(el('[data-grant="g-1"]').textContent).toContain('200 000');
     expect(el('.wallet').textContent).toContain(ru['wallet.ledger.appendOnly']);
   });
@@ -252,7 +358,9 @@ describe('InvoicesWallet', () => {
       reason: 'a misposted transfer',
     });
     expect(fixture.nativeElement.textContent).toContain(ru['wallet.change.awaiting']);
-    expect(el<HTMLAnchorElement>('.approvalsLink').getAttribute('href')).toBe('/compliance/approvals');
+    expect(el<HTMLAnchorElement>('.approvalsLink').getAttribute('href')).toBe(
+      '/compliance/approvals',
+    );
   });
 
   it('a correction of bonus money names the grant it corrects', async () => {
@@ -321,7 +429,9 @@ describe('InvoicesWallet', () => {
 
     for (const typed of ['-0', '-', '−']) {
       await type('.adjustmentForm [name="amount"]', typed);
-      expect(el<HTMLButtonElement>('.adjustmentForm button[type="submit"]').disabled, typed).toBe(true);
+      expect(el<HTMLButtonElement>('.adjustmentForm button[type="submit"]').disabled, typed).toBe(
+        true,
+      );
       el<HTMLButtonElement>('.adjustmentForm button[type="submit"]').click();
       await settle();
     }
@@ -331,7 +441,11 @@ describe('InvoicesWallet', () => {
 
   it('shows the tenant its own collection method, and sends the one chosen', async () => {
     await create();
-    api.wallet.mockResolvedValue({ ...WALLET, paymentMethod: 'CARD', cardTokenReference: 'vault:pilot' });
+    api.wallet.mockResolvedValue({
+      ...WALLET,
+      paymentMethod: 'CARD',
+      cardTokenReference: 'vault:pilot',
+    });
     await fixture.componentInstance['load']();
     await settle();
     el<HTMLButtonElement>('.openMethod').click();
@@ -387,7 +501,11 @@ describe('InvoicesWallet', () => {
     await create();
     // A grant that is past its date but that the hourly sweep has not lapsed
     // yet: the ledger still sums it, and no statement can spend it.
-    api.wallet.mockResolvedValue({ ...WALLET, bonusBalance: UZS(200_000), bonusSpendableBalance: UZS(150_000) });
+    api.wallet.mockResolvedValue({
+      ...WALLET,
+      bonusBalance: UZS(200_000),
+      bonusSpendableBalance: UZS(150_000),
+    });
     await fixture.componentInstance['load']();
     await settle();
 
@@ -401,16 +519,32 @@ describe('InvoicesWallet', () => {
     api.walletLedger.mockResolvedValue({
       items: [
         {
-          entryId: 'w-9', moneyKind: 'PAID', entryType: 'DEPOSIT_REVERSAL', amount: UZS(-500_000),
-          statementId: null, grantId: null, expiresAt: null, externalReference: 'MT103-DEP',
-          reason: 'recorded against the wrong tenant', recordedBy: 'finance-1',
-          approvedBy: 'finance-2', createdAt: '2026-09-15T09:00:00Z',
+          entryId: 'w-9',
+          moneyKind: 'PAID',
+          entryType: 'DEPOSIT_REVERSAL',
+          amount: UZS(-500_000),
+          statementId: null,
+          grantId: null,
+          expiresAt: null,
+          externalReference: 'MT103-DEP',
+          reason: 'recorded against the wrong tenant',
+          recordedBy: 'finance-1',
+          approvedBy: 'finance-2',
+          createdAt: '2026-09-15T09:00:00Z',
         },
         {
-          entryId: 'w-10', moneyKind: 'PAID', entryType: 'SOMETHING_NEW', amount: UZS(-1_000),
-          statementId: null, grantId: null, expiresAt: null, externalReference: null,
-          reason: 'a type the server has and no catalogue names yet', recordedBy: 'system',
-          approvedBy: null, createdAt: '2026-09-15T09:00:00Z',
+          entryId: 'w-10',
+          moneyKind: 'PAID',
+          entryType: 'SOMETHING_NEW',
+          amount: UZS(-1_000),
+          statementId: null,
+          grantId: null,
+          expiresAt: null,
+          externalReference: null,
+          reason: 'a type the server has and no catalogue names yet',
+          recordedBy: 'system',
+          approvedBy: null,
+          createdAt: '2026-09-15T09:00:00Z',
         },
       ],
       nextCursor: null,
@@ -426,7 +560,9 @@ describe('InvoicesWallet', () => {
     expect(reversal.textContent?.trim().length).toBeGreaterThan(0);
 
     // And the next type the server grows shows itself rather than nothing.
-    expect(el('[data-entry="SOMETHING_NEW"] .entryLabel').textContent?.trim()).toBe('SOMETHING_NEW');
+    expect(el('[data-entry="SOMETHING_NEW"] .entryLabel').textContent?.trim()).toBe(
+      'SOMETHING_NEW',
+    );
   });
 
   it('shows a payment method nobody labelled by its raw code', async () => {
@@ -440,7 +576,11 @@ describe('InvoicesWallet', () => {
 
   it('says card charging is not connected, and offers nothing to someone who may only read', async () => {
     await create();
-    api.wallet.mockResolvedValue({ ...WALLET, paymentMethod: 'CARD', cardTokenReference: 'vault:pilot' });
+    api.wallet.mockResolvedValue({
+      ...WALLET,
+      paymentMethod: 'CARD',
+      cardTokenReference: 'vault:pilot',
+    });
     await fixture.componentInstance['load']();
     await settle();
 
