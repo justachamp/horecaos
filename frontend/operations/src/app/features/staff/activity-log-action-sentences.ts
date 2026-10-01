@@ -930,6 +930,11 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       ru: 'Платёж способ обновлено',
       'uz-Latn': 'Toʻlov usul yangilandi',
     },
+    'payment.checkout_reissue_requested': {
+      en: 'Payment checkout re-issue requested',
+      ru: 'Запрошена повторная выдача платёжной ссылки',
+      'uz-Latn': 'Toʻlov havolasini qayta chiqarish soʻraldi',
+    },
     'payment.checkout_reissued': {
       en: 'Payment checkout re-issued',
       ru: 'Платёжная ссылка выставлена повторно',

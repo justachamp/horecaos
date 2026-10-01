@@ -13,6 +13,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -84,6 +86,8 @@ import uz.horecaos.platform.web.authorization.RequiresCapability;
         description = "One order's payment intent, its settlement tenders and attempts, and "
                 + "re-presenting its checkout surface")
 public class OperationsPaymentController {
+
+    private static final Logger log = LoggerFactory.getLogger(OperationsPaymentController.class);
 
     private final JdbcPaymentIntentStore intents;
     private final JdbcPaymentAttemptStore attempts;
@@ -210,9 +214,20 @@ public class OperationsPaymentController {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, malformed.getMessage());
         }
 
+        OrderDirectory.OrderSummary order = orders.summary(tenantId, orderId)
+                .orElseThrow(() -> new ApiException(
+                        ErrorCode.RESOURCE_NOT_FOUND, "No such order", Map.of("reason", "ORDER_NOT_FOUND")));
+
+        // Before the checkout, not after it: opening one is an external effect no
+        // transaction can take back (a payable link, or an invoice on a customer's
+        // phone), so "an audit failure fails the action" (ADR 0027) is kept by making
+        // the first write the gate. A store that is down stops the issue here, with
+        // nothing sent and the Idempotency-Key released for the retry.
+        recordReissueRequested(tenantId, order, request, body.reason());
+
         try {
             var session = checkout.openOrRePresent(tenantId, orderId, null, request);
-            recordReissue(tenantId, orderId, request, session, body.reason());
+            recordReissue(tenantId, order, request, session, body.reason());
             return ResponseEntity.ok(PaymentSessionResponse.of(session));
 
         } catch (PaymentCheckoutService.CheckoutRefusedException refused) {
@@ -233,6 +248,31 @@ public class OperationsPaymentController {
     }
 
     /**
+     * The audit fact for an operator's request to hand a customer a checkout surface
+     * again (ADR 0027; gap map row {@code 1.1e}, «Выставить счёт»), written
+     * <em>before</em> the checkout is opened.
+     *
+     * <p>Opening the checkout is an external effect, so it cannot share a
+     * transaction with its own evidence. Writing this first is what keeps the rule
+     * that an audit failure fails the action: if the store is down the exception
+     * leaves the request here, before anything was sent, and the retry is served
+     * once it is back. It records <em>that the operator asked</em> and for which
+     * presentation, so a request the checkout then refuses stays on the trail --
+     * who tried to re-issue what, and was told no -- with no {@code
+     * payment.checkout_reissued} beside it.
+     *
+     * <p>Nothing about the phone an invoice would be pushed to: only that a
+     * recipient was named (ADR 0029).
+     */
+    private void recordReissueRequested(
+            UUID tenantId, OrderDirectory.OrderSummary order, PresentationRequest request, @Nullable String reason) {
+        var after = new LinkedHashMap<String, Object>();
+        after.put("requestedPresentation", request.preferredKind().name());
+        after.put("pushedToRecipient", request.pushRecipient() != null);
+        audit.record(reissueFact("payment.checkout_reissue_requested", tenantId, order, reason, after));
+    }
+
+    /**
      * The audit fact for a checkout surface handed out on an operator's request
      * (ADR 0027; gap map row {@code 1.1e}, «Выставить счёт»). Written only after
      * the surface exists: a refused or uncertain presentation handed nobody
@@ -245,16 +285,20 @@ public class OperationsPaymentController {
      * to (ADR 0029: personal data reaches no audit document, only the fact that
      * a push recipient was named) and never the link itself, which is a bearer of
      * the payment.
+     *
+     * <p>Not allowed to fail the response. By here the link exists and the
+     * customer can pay it, and {@link #recordReissueRequested} has already put the
+     * action on the trail; answering 500 for it would tell the operator it does not
+     * exist and release the Idempotency-Key on a payment surface that is live. So a
+     * failure to write the detail is logged at {@code ERROR} -- the order and the
+     * attempt, never the recipient -- and the session is returned.
      */
     private void recordReissue(
             UUID tenantId,
-            UUID orderId,
+            OrderDirectory.OrderSummary order,
             PresentationRequest request,
             PaymentCheckoutService.PaymentSession session,
             @Nullable String reason) {
-        OrderDirectory.OrderSummary order = orders.summary(tenantId, orderId)
-                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such order"));
-
         var after = new LinkedHashMap<String, Object>();
         after.put("attemptId", session.attemptId().toString());
         after.put("provider", session.providerType().name());
@@ -263,16 +307,34 @@ public class OperationsPaymentController {
         after.put("presentationCount", session.presentationCount());
         after.put("pushedToRecipient", request.pushRecipient() != null);
 
-        audit.record(AuditFact.of("payment.checkout_reissued", AuditClass.BUSINESS)
+        try {
+            audit.record(reissueFact("payment.checkout_reissued", tenantId, order, reason, after));
+        } catch (RuntimeException unwritten) {
+            log.error(
+                    "The audit fact for the checkout issued for order {} (attempt {}) could not be written; "
+                            + "the request fact stands",
+                    order.orderId(),
+                    session.attemptId(),
+                    unwritten);
+        }
+    }
+
+    private AuditFact reissueFact(
+            String actionCode,
+            UUID tenantId,
+            OrderDirectory.OrderSummary order,
+            @Nullable String reason,
+            Map<String, Object> after) {
+        return AuditFact.of(actionCode, AuditClass.BUSINESS)
                 .by(ActorRef.user(currentActor.get().subject(), null))
                 .at(ResourceScope.location(tenantId, order.brandId(), order.locationId()))
-                .target("ordering.order", orderId)
+                .target("ordering.order", order.orderId())
                 .because(reason == null || reason.isBlank() ? DEFAULT_REISSUE_REASON : reason.strip())
                 .changed(ChangeDocuments.created(after))
                 .usingCapability(Capability.PAYMENT_INITIATE.code())
-                .correlatedBy(orderId.toString())
+                .correlatedBy(order.orderId().toString())
                 .occurredAt(clock.instant())
-                .build());
+                .build();
     }
 
     /** Recorded when the operator gave no reason of their own — the action is the reason, and it must not be blank. */

@@ -1231,9 +1231,13 @@ kitchen copy may be missing.
 
 - **Выставить счёт** — **built.** `POST /api/v1/operations/tenants/{t}/orders/{id}/payment/re-presentations`
   (wave P12), `PAYMENT_INITIATE` at tenant scope, idempotent, and — since ADR 0144 —
-  audited (`payment.checkout_reissued`, never the phone). `actions[]` carries
-  `ISSUE_INVOICE` for an order whose payment projection is `PENDING`, that has
-  not ended, when the caller holds that capability; the row action opens the
+  audited (`payment.checkout_reissue_requested` before the checkout is opened and
+  `payment.checkout_reissued` after it, never the phone). `actions[]` carries
+  `ISSUE_INVOICE` for an order whose payment projection is `PENDING` **and** whose
+  live payment intent can be presented (open, a provider tender with a seller, no
+  attempt in doubt — an expired or uncertain attempt leaves the projection
+  `PENDING`, so the projection alone is not the gate), that has not ended, when
+  the caller holds that capability; the row action opens the
   order and the detail header opens the payment panel's re-issue form. It re-issues
   a payment invoice. Delever's own page documents
   the fields: phone, order id, payment type. Ours needs only the phone (the

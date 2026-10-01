@@ -14,7 +14,7 @@
   **and** whose live payment intent can be presented (open, provider tender,
   seller set, no attempt in doubt), when the caller holds `PAYMENT_INITIATE` at
   tenant scope, and the existing `POST .../payment/re-presentations` writes an
-  audit fact. Console: «Все филиалы»
+  audit fact before the checkout is opened and another after it. Console: «Все филиалы»
   with a Филиал column and filter, the binding select, the toggles, the fiscal
   select and the header/row «Выставить счёт». Not built: bulk actions across
   branches (the selection column is withheld on «Все филиалы»), a `BRAND`-scoped
@@ -118,10 +118,23 @@ browser.
    `ordering` still joins no `payments` table for a second field on a row (the
    `ActiveCourierAssignmentsPort` shape). Whether the seller's merchant account
    still resolves today (`BINDING_UNAVAILABLE`, `BINDING_CHANGED`) is not known
-   from rows and is left to the endpoint's own refusal. The endpoint records
-   `payment.checkout_reissued` (business class, scoped to the order's branch, the
-   provider, the presentation kind and *that* a recipient was named — never the
-   phone or the link) and accepts an optional `reason`.
+   from rows and is left to the endpoint's own refusal.
+
+   The endpoint accepts an optional `reason` and writes two business-class facts,
+   scoped to the order's branch and carrying *that* a recipient was named — never
+   the phone or the link. Opening the checkout is an external effect (a link, or
+   an invoice pushed to a phone) that no transaction takes back, so ADR 0027's
+   "an audit failure fails the action" is kept by ordering the writes rather than
+   by sharing a transaction: `payment.checkout_reissue_requested` (the requested
+   presentation kind) is written **before** the checkout is opened, so an audit
+   store that is down stops the issue instead of leaving a payable link nobody
+   recorded; `payment.checkout_reissued` (the provider, the presentation kind,
+   the attempt, whether it was an abandoned attempt handed back and how many
+   times it has been shown) is written after it. The second is the detail of what
+   was issued: if it cannot be written the response is still the issued session
+   and the failure is logged at `ERROR`, because answering 500 for a link that
+   exists would tell the operator it does not. A refused request leaves the first
+   fact and not the second.
 
 ## Alternatives considered
 
@@ -179,7 +192,8 @@ browser.
 - `PaymentIntentPort.ordersWithPresentablePayment(tenantId, orderIds)` — the
   payments-side read behind `ISSUE_INVOICE`; the default answers none.
 - `POST .../payment/re-presentations` gains an optional `reason` and writes
-  `payment.checkout_reissued`.
+  `payment.checkout_reissue_requested` before the checkout is opened and
+  `payment.checkout_reissued` after it.
 - No migration: `ix_orders_marketplace`, the partial index on
   `callback_requested`, and `fiscal.fiscal_documents (tenant_id, order_id, …)`
   already serve the predicates.
