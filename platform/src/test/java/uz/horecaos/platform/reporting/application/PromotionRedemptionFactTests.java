@@ -206,7 +206,12 @@ class PromotionRedemptionFactTests {
         assertThat(log.rows())
                 .filteredOn(r -> r.orderId().equals(cancelled))
                 .singleElement()
-                .satisfies(r -> assertThat(r.orderStatus()).isEqualTo("CANCELLED"));
+                .satisfies(r -> {
+                    assertThat(r.orderStatus()).isEqualTo("CANCELLED");
+                    assertThat(r.channelCode())
+                            .as("report 7.9 names the channel of each redemption")
+                            .isEqualTo("TELEGRAM");
+                });
     }
 
     @Test

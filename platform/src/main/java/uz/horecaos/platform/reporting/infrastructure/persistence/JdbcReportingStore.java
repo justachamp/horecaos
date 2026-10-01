@@ -1231,7 +1231,7 @@ public class JdbcReportingStore {
                 SELECT r.redemption_id, r.business_date, r.brand_id, r.promotion_id, r.promotion_code,
                        r.definition_version, r.source_kind, r.order_id, r.customer_subject_hash,
                        r.discount_minor, r.markup_minor, r.currency, r.redeemed_at,
-                       o.terminal_status
+                       o.terminal_status, o.channel_code
                   FROM reporting.fact_promotion_redemption r
                   LEFT JOIN reporting.fact_order o
                     ON o.tenant_id = r.tenant_id AND o.order_id = r.order_id
@@ -1260,7 +1260,8 @@ public class JdbcReportingStore {
                         row.getString("currency"),
                         row.getObject("redeemed_at", java.time.OffsetDateTime.class)
                                 .toInstant(),
-                        row.getString("terminal_status")))
+                        row.getString("terminal_status"),
+                        row.getString("channel_code")))
                 .list();
     }
 
@@ -1324,7 +1325,8 @@ public class JdbcReportingStore {
             long markupMinor,
             String currency,
             Instant redeemedAt,
-            @Nullable String orderStatus) {}
+            @Nullable String orderStatus,
+            @Nullable String channelCode) {}
 
     /**
      * w6-reporting-facts, batch 11 (7.4c, ADR 0023/0125): every {@code

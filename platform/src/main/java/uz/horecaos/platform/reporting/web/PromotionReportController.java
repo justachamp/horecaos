@@ -120,6 +120,7 @@ public class PromotionReportController {
     /**
      * @param customerSubject the ADR 0029 pseudonym, never an account id
      * @param orderStatus the order's terminal status in {@code fact_order}, null while it has none
+     * @param channelCode the sales channel the order came through, from {@code fact_order}; null until the day closes
      */
     public record RedemptionRowResponse(
             UUID redemptionId,
@@ -135,7 +136,8 @@ public class PromotionReportController {
             long markupSom,
             String currency,
             Instant redeemedAt,
-            @Nullable String orderStatus) {
+            @Nullable String orderStatus,
+            @Nullable String channelCode) {
 
         static RedemptionRowResponse of(JdbcReportingStore.PromotionRedemptionRow row) {
             return new RedemptionRowResponse(
@@ -152,7 +154,8 @@ public class PromotionReportController {
                     row.markupMinor(),
                     row.currency(),
                     row.redeemedAt(),
-                    row.orderStatus());
+                    row.orderStatus(),
+                    row.channelCode());
         }
     }
 
