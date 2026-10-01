@@ -10,6 +10,7 @@ import { Router, RouterOutlet } from '@angular/router';
 
 import { CurrentBrand } from '../../../core/auth/current-brand';
 import { ApiError } from '../../../core/api/problem-details';
+import { formatMoneyRange } from '../../../core/format/money';
 import { I18n } from '../../../core/i18n/i18n';
 import { MessageKey } from '../../../core/i18n/messages.en';
 import { TPipe } from '../../../core/i18n/t.pipe';
@@ -351,6 +352,11 @@ export class CampaignsPage implements OnInit {
 
   protected channelLabelKey(channel: string): MessageKey {
     return `marketing.channel.${channel}` as MessageKey;
+  }
+
+  /** A campaign's cost estimate, low to high, written the way the brand writes money (Settings 10.12). */
+  protected costRange(campaign: CampaignView, lowMinor: number, highMinor: number): string {
+    return formatMoneyRange(lowMinor, highMinor, campaign.currency ?? 'UZS', this.i18n.locale());
   }
 
   protected statusLabelKey(status: string): MessageKey {

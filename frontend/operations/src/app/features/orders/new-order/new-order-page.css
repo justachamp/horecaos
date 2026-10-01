@@ -173,6 +173,18 @@
   font-weight: 600;
 }
 
+/*
+ * The pre-order checkbox lays out like the aggregator checkbox in the header (new-order-header.css),
+ * a flex row in subtle ink. The header's rule is scoped to the header by view encapsulation, so this
+ * label, which sits in the page, needs its own.
+ */
+.new-order__pre-order-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--q-ink-subtle);
+}
+
 .new-order__fulfillment-toggle {
   display: flex;
   gap: 4px;

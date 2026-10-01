@@ -192,6 +192,45 @@ class CatalogAuthoringControllerEndpointTests {
                 .contains("\"total\":1");
     }
 
+    @Test
+    void variantAvailabilityShowsTheNameTheRequestedLocaleRanksFirstNotTheOneThatSortsFirst() throws Exception {
+        // The brand's default is `ru`, the server's is `uz`, and the product is written in both. 'ru' sorts
+        // before 'uz', so a join that ordered by the locale code would show the Russian name to a console in
+        // Uzbek. The chain for `locale=uz` is [uz, ru] and for `locale=ru` it is [ru, uz].
+        jdbc.sql("""
+                INSERT INTO tenant.brand_locales (tenant_id, brand_id, locale, is_default)
+                VALUES (:tenantId, :brandId, 'ru', true)
+                """).param("tenantId", TENANT).param("brandId", BRAND).update();
+        insertName(PRODUCT, "uz", "Qo'y burger");
+        insertName(PRODUCT, "ru", "Бургер из баранины");
+
+        MvcResult uzbek = mvc.perform(get(catalogPath() + "/locations/" + LOCATION + "/variants")
+                        .with(tokenFor(OWNER))
+                        .queryParam("locale", "uz"))
+                .andReturn();
+        assertThat(uzbek.getResponse().getContentAsString(UTF_8))
+                .as("the requested locale outranks the brand's default")
+                .contains("\"productName\":\"Qo'y burger\"")
+                .doesNotContain("Бургер из баранины");
+
+        MvcResult russian = mvc.perform(get(catalogPath() + "/locations/" + LOCATION + "/variants")
+                        .with(tokenFor(OWNER))
+                        .queryParam("locale", "ru"))
+                .andReturn();
+        assertThat(russian.getResponse().getContentAsString(UTF_8))
+                .contains("\"productName\":\"Бургер из баранины\"")
+                .doesNotContain("Qo'y burger");
+
+        MvcResult counts = mvc.perform(get(catalogPath() + "/locations/" + LOCATION + "/variants/availability-counts")
+                        .with(tokenFor(OWNER))
+                        .queryParam("locale", "uz")
+                        .queryParam("search", "баран"))
+                .andReturn();
+        assertThat(counts.getResponse().getContentAsString(UTF_8))
+                .as("the badges rank the names the same way, so the Russian name is not found from an Uzbek console")
+                .contains("\"total\":0");
+    }
+
     // ----------------------------------------------------------- row 4.2g: sale schedule
 
     @Test

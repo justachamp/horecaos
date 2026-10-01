@@ -1075,6 +1075,29 @@ public class TenantControlPlaneService {
         return toView(location, store.findLocationContent(tenantId, locationId));
     }
 
+    /**
+     * The regional display formats of the brand a location belongs to, for the
+     * operators who work that location (Settings 10.12).
+     *
+     * <p>{@link #getBrand} carries the same formats but sits behind {@code
+     * BRAND_READ} and a tenant-level {@code TENANT_READ}, and neither is held
+     * by {@code LOCATION_MANAGER} or {@code LOCATION_STAFF}: the cashier, the
+     * kitchen lead and the branch manager read money and phone numbers all day
+     * and would never receive the brand's choice. The caller's {@code
+     * LOCATION_READ} at this very location is the authorization, checked by the
+     * controller before this runs, so nothing else of the brand is exposed
+     * here -- only how it wants amounts and phones written. The location must
+     * belong to the brand in the path, or the answer is a not-found rather than
+     * another brand's formats.
+     */
+    @Transactional(readOnly = true)
+    public RegionalFormatsView getRegionalFormatsForLocation(
+            TenantId tenantId, BrandId brandId, LocationId locationId) {
+        Brand brand = requireBrand(tenantId, brandId);
+        requireLocation(brand, locationId);
+        return RegionalFormatsView.of(store.findBrandProfile(tenantId, brandId).formats());
+    }
+
     private Tenant requireTenant(TenantId tenantId) {
         return store.findTenant(Objects.requireNonNull(tenantId, "Tenant ID is required"))
                 .orElseThrow(() -> new TenantResourceNotFoundException("Tenant was not found"));

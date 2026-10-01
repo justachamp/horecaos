@@ -1203,6 +1203,13 @@ the console did before. The timezone is shown on the same card, read-only: it is
 (`tenant.tenants.default_timezone`) and each branch's own, never a brand's. Date and time formats
 remain derived and read-only.
 
+*How the console gets them.* The formatters follow the brand of the operator's current location, and they
+read it at the **location**: `GET .../brands/{brandId}/locations/{locationId}/regional-formats`, gated
+by `LOCATION_READ` at that location. The brand read (`GET .../brands/{brandId}`) carries the same object
+but needs `BRAND_READ`, which the branch manager, the cashier and the kitchen lead do not hold — those
+are the people who read money and phone numbers all day, so a formats source behind the brand read
+would have left them on the defaults.
+
 Two consequences the screen must state, because they surprise people:
 
 - Removing a language does **not** delete translations. It stops offering the tab and stops

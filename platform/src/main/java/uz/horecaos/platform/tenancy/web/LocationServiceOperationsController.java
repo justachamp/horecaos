@@ -32,6 +32,7 @@ import uz.horecaos.platform.tenancy.api.TenantId;
 import uz.horecaos.platform.tenancy.application.ServiceScheduleService;
 import uz.horecaos.platform.tenancy.application.TenantControlPlaneService;
 import uz.horecaos.platform.tenancy.application.TenantControlPlaneService.LocationView;
+import uz.horecaos.platform.tenancy.application.TenantControlPlaneService.RegionalFormatsView;
 import uz.horecaos.platform.tenancy.domain.channel.ServiceMode;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcServiceabilityStore;
 import uz.horecaos.platform.web.api.ApiException;
@@ -72,6 +73,25 @@ public class LocationServiceOperationsController {
     public LocationView profile(
             @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID locationId) {
         return tenants.getLocation(new TenantId(tenantId), new BrandId(brandId), new LocationId(locationId));
+    }
+
+    /**
+     * How this location's brand writes amounts and phone numbers (Settings
+     * 10.12), for every operator who works the location.
+     *
+     * <p>The brand read carries the same object but needs {@code BRAND_READ},
+     * which the people who read money all day -- the cashier, the kitchen
+     * lead, the branch manager -- do not hold. This is the read the console's
+     * formatters follow, gated by the {@code LOCATION_READ} every one of them
+     * has at their own location.
+     */
+    @GetMapping("/regional-formats")
+    @RequiresCapability(value = Capability.LOCATION_READ, scope = ScopeType.LOCATION)
+    @Operation(summary = "The brand's regional display formats, for the console's money and phone formatters")
+    public RegionalFormatsView regionalFormats(
+            @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID locationId) {
+        return tenants.getRegionalFormatsForLocation(
+                new TenantId(tenantId), new BrandId(brandId), new LocationId(locationId));
     }
 
     /**

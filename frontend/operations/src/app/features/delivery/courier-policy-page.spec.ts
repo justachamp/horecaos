@@ -1,10 +1,11 @@
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ConfigurationResolutionView } from '../../core/api/configuration';
 import { LocationScope } from '../../core/api/operations-paths';
 import { CurrentLocation } from '../../core/auth/current-location';
+import { applyRegionalFormats, resetRegionalFormats } from '../../core/format/regional-format';
 import { CourierPolicyView, CouriersApi } from '../couriers/couriers-api';
 import { I18n } from '../../core/i18n/i18n';
 import { ConfigurationApi } from '../settings/configuration-api';
@@ -52,6 +53,8 @@ async function flushMicrotasks(): Promise<void> {
 describe('CourierPolicyPage', () => {
   let fixture: ComponentFixture<CourierPolicyPage>;
 
+  afterEach(() => resetRegionalFormats());
+
   async function render(
     api: Partial<CouriersApi>,
     configApi: Partial<ConfigurationApi> = {
@@ -88,6 +91,19 @@ describe('CourierPolicyPage', () => {
     // Thin-space grouped, orders.md §1.3's own UZS convention — never comma-grouped.
     expect(host.textContent?.replace(/\s/g, '')).toContain('5000000');
     expect(host.textContent).toContain('30');
+  });
+
+  // Row 10.12: the Formats card says it controls how operators read amounts across the console.
+  it('groups the money rows the way the brand chose, not always with a no-break space', async () => {
+    applyRegionalFormats({ moneyGrouping: 'COMMA' });
+    const host = await render({ policy: () => Promise.resolve(POLICY) });
+
+    const ceiling = host.querySelector('[data-testid="policy-row-cashCeilingMinor"]')?.textContent;
+    const threshold = host.querySelector(
+      '[data-testid="policy-row-penaltyApprovalThresholdMinor"]',
+    )?.textContent;
+    expect(ceiling).toContain('5,000,000');
+    expect(threshold).toContain('200,000');
   });
 
   // Row 3.3: onlineWithinMinutes is genuinely enforced (the roster reads it),

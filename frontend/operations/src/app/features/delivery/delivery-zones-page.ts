@@ -11,6 +11,7 @@ import { RouterLink } from '@angular/router';
 import { ApiError } from '../../core/api/problem-details';
 import { CurrentBrand } from '../../core/auth/current-brand';
 import { CurrentLocation } from '../../core/auth/current-location';
+import { formatMoney } from '../../core/format/money';
 import { I18n } from '../../core/i18n/i18n';
 import {
   LabelsByLocale,
@@ -266,6 +267,20 @@ export class DeliveryZonesPage implements OnInit {
   protected isFree(zone: ZoneSummaryResponse): boolean {
     const id = zone.deliveryTariffId;
     return !!id && this.tariffs().some((option) => option.tariffId === id && option.free);
+  }
+
+  /**
+   * A zone threshold written the way the brand writes money (Settings 10.12). The summary names
+   * the zone's currency; a platform that predates the field only ever priced in UZS.
+   */
+  protected threshold(zone: ZoneSummaryResponse, minor: number): string {
+    return formatMoney(
+      { amountMinor: minor, currency: zone.currency ?? 'UZS' },
+      this.i18n.locale(),
+      {
+        withUnit: true,
+      },
+    );
   }
 
   /** The zone's name in the operator's own locale — the point of authoring three. */

@@ -125,11 +125,16 @@
                           {{ active.maxDistanceMeters }}
                         </span>
                         <span class="q-caption">
-                          {{ 'delivery.tariffs.detail.minFee' | t }}: {{ active.minFeeMinor }}
+                          {{ 'delivery.tariffs.detail.minFee' | t }}:
+                          {{ amount(active.minFeeMinor, active.currency, true) }}
                         </span>
                         <span class="q-caption">
                           {{ 'delivery.tariffs.detail.maxFee' | t }}:
-                          {{ active.maxFeeMinor ?? '—' }}
+                          {{
+                            active.maxFeeMinor === null || active.maxFeeMinor === undefined
+                              ? '—'
+                              : amount(active.maxFeeMinor, active.currency, true)
+                          }}
                         </span>
                         <span class="q-caption">
                           {{ 'delivery.tariffs.detail.accrual' | t }}:
@@ -138,7 +143,7 @@
                         <span class="q-caption">
                           {{ 'delivery.tariffs.detail.rounding' | t }}:
                           @if (active.feeRoundingStepMinor) {
-                            {{ active.feeRoundingStepMinor }} /
+                            {{ amount(active.feeRoundingStepMinor, active.currency, true) }} /
                             {{ roundingKey(active.feeRoundingRule) | t }}
                           } @else {
                             —
@@ -174,8 +179,8 @@
                               <td class="q-mono">{{ band.bandSet }}</td>
                               <td class="q-tnum">{{ band.fromMeters }}</td>
                               <td class="q-tnum">{{ band.toMeters }}</td>
-                              <td class="q-tnum">{{ band.baseMinor }}</td>
-                              <td class="q-tnum">{{ band.perKmMinor }}</td>
+                              <td class="q-tnum">{{ amount(band.baseMinor, active.currency) }}</td>
+                              <td class="q-tnum">{{ amount(band.perKmMinor, active.currency) }}</td>
                             </tr>
                           }
                         </tbody>
@@ -200,7 +205,9 @@
                                 <td class="q-tnum">{{ rule.fromTime }}–{{ rule.toTime }}</td>
                                 <td class="q-mono">{{ rule.bandSet ?? '—' }}</td>
                                 <td class="q-tnum">×{{ rule.multiplierBasisPoints / 10000 }}</td>
-                                <td class="q-tnum">{{ rule.surchargeMinor }}</td>
+                                <td class="q-tnum">
+                                  {{ amount(rule.surchargeMinor, active.currency) }}
+                                </td>
                               </tr>
                             }
                           </tbody>
@@ -223,7 +230,7 @@
                               <tr data-testid="tariff-discount-row">
                                 <td>{{ discountKindKey(discount.kind) | t }}</td>
                                 <td class="q-tnum">
-                                  {{ discount.amountMinor ?? discount.allowanceMeters }}
+                                  {{ discountValue(discount, active.currency) }}
                                 </td>
                                 <td>{{ describeDayMask(discount.dayMask) }}</td>
                                 <td class="q-tnum">

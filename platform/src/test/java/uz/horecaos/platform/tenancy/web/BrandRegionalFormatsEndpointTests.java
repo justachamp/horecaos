@@ -49,6 +49,9 @@ class BrandRegionalFormatsEndpointTests {
     private static final UUID OTHER_TENANT = UUID.fromString("018f9b20-9000-7000-8000-0000000000f5");
     private static final UUID BRAND = UUID.fromString("018f9b20-9000-7000-8000-0000000000f2");
     private static final UUID LOCATION = UUID.fromString("018f9b20-9000-7000-8000-0000000000f3");
+    private static final UUID SISTER_LOCATION = UUID.fromString("018f9b20-9000-7000-8000-0000000000f6");
+    private static final UUID OTHER_BRAND = UUID.fromString("018f9b20-9000-7000-8000-0000000000f7");
+    private static final UUID OTHER_BRAND_LOCATION = UUID.fromString("018f9b20-9000-7000-8000-0000000000f8");
 
     private static final String ADMIN = "regional-formats-admin";
     private static final String STAFF = "regional-formats-staff";
@@ -56,6 +59,7 @@ class BrandRegionalFormatsEndpointTests {
 
     private static final String WRITE = "/api/v1/control-plane/tenants/" + TENANT + "/brands/" + BRAND;
     private static final String READ = "/api/v1/operations/tenants/" + TENANT + "/brands/" + BRAND;
+    private static final String LOCATION_READ = READ + "/locations/" + LOCATION + "/regional-formats";
 
     @SuppressWarnings("NullAway")
     private static TestDatabase.Handle db;
@@ -105,6 +109,28 @@ class BrandRegionalFormatsEndpointTests {
                 .param("id", LOCATION)
                 .param("tenantId", TENANT)
                 .param("brandId", BRAND)
+                .update();
+        jdbc.sql("""
+                INSERT INTO tenant.locations (id, tenant_id, brand_id, code, slug, display_name,
+                    timezone, status, version)
+                VALUES (:id, :tenantId, :brandId, 'BETA', 'beta', 'Beta', 'Asia/Tashkent', 'ACTIVE', 0)
+                """)
+                .param("id", SISTER_LOCATION)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .update();
+        jdbc.sql("""
+                INSERT INTO tenant.brands (id, tenant_id, code, slug, display_name, status, version)
+                VALUES (:id, :tenantId, 'SIDE', 'side', 'Side', 'ACTIVE', 0)
+                """).param("id", OTHER_BRAND).param("tenantId", TENANT).update();
+        jdbc.sql("""
+                INSERT INTO tenant.locations (id, tenant_id, brand_id, code, slug, display_name,
+                    timezone, status, version)
+                VALUES (:id, :tenantId, :brandId, 'GAMMA', 'gamma', 'Gamma', 'Asia/Tashkent', 'ACTIVE', 0)
+                """)
+                .param("id", OTHER_BRAND_LOCATION)
+                .param("tenantId", TENANT)
+                .param("brandId", OTHER_BRAND)
                 .update();
         grant(ADMIN, PlatformRole.TENANT_ADMIN, TENANT, "TENANT", TENANT);
         grant(STAFF, PlatformRole.LOCATION_STAFF, TENANT, "LOCATION", LOCATION);
@@ -239,6 +265,71 @@ class BrandRegionalFormatsEndpointTests {
         assertThat(read.getResponse().getContentAsString(UTF_8))
                 .contains("\"moneyGrouping\":\"SPACE\"")
                 .contains("\"phoneDisplayPattern\":null");
+    }
+
+    @Test
+    void aLocationOperatorReadsTheirBrandsFormatsWithoutHoldingBrandRead() throws Exception {
+        mvc.perform(put(WRITE + "/regional-formats")
+                        .with(tokenFor(ADMIN))
+                        .header("Idempotency-Key", "regional-formats-location-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"moneySymbolPlacement":"BEFORE","moneyGrouping":"COMMA",
+                                 "phoneDisplayPattern":"+### (##) ###-##-##"}
+                                """))
+                .andReturn();
+
+        MvcResult brandRead = mvc.perform(get(READ).with(tokenFor(STAFF))).andReturn();
+        assertThat(brandRead.getResponse().getStatus())
+                .as("location-staff holds LOCATION_READ but not BRAND_READ, which is why the brand read cannot"
+                        + " carry the formats to the people who work the order boards")
+                .isEqualTo(403);
+
+        MvcResult read = mvc.perform(get(LOCATION_READ).with(tokenFor(STAFF))).andReturn();
+
+        assertThat(read.getResponse().getStatus())
+                .as(read.getResponse().getContentAsString(UTF_8))
+                .isEqualTo(200);
+        assertThat(read.getResponse().getContentAsString(UTF_8))
+                .contains("\"moneySymbolPlacement\":\"BEFORE\"")
+                .contains("\"moneyGrouping\":\"COMMA\"")
+                .contains("\"phoneDisplayPattern\":\"+### (##) ###-##-##\"");
+    }
+
+    @Test
+    void theLocationReadServesTheDefaultsToABrandThatChoseNothing() throws Exception {
+        MvcResult read = mvc.perform(get(LOCATION_READ).with(tokenFor(STAFF))).andReturn();
+
+        assertThat(read.getResponse().getStatus())
+                .as(read.getResponse().getContentAsString(UTF_8))
+                .isEqualTo(200);
+        assertThat(read.getResponse().getContentAsString(UTF_8))
+                .contains("\"moneySymbolPlacement\":\"AFTER\"")
+                .contains("\"moneyGrouping\":\"SPACE\"")
+                .contains("\"phoneDisplayPattern\":null");
+    }
+
+    @Test
+    void theLocationReadIsRefusedForAnotherLocationAnotherTenantAndAMismatchedBrand() throws Exception {
+        MvcResult sisterLocation = mvc.perform(get(READ + "/locations/" + SISTER_LOCATION + "/regional-formats")
+                        .with(tokenFor(STAFF)))
+                .andReturn();
+        assertThat(sisterLocation.getResponse().getStatus())
+                .as("a grant on one location does not read through another")
+                .isEqualTo(403);
+
+        MvcResult otherTenant =
+                mvc.perform(get(LOCATION_READ).with(tokenFor(STRANGER))).andReturn();
+        assertThat(otherTenant.getResponse().getStatus())
+                .as("another tenant's administrator cannot read this brand's formats")
+                .isIn(403, 404);
+
+        MvcResult mismatched = mvc.perform(get(READ + "/locations/" + OTHER_BRAND_LOCATION + "/regional-formats")
+                        .with(tokenFor(ADMIN)))
+                .andReturn();
+        assertThat(mismatched.getResponse().getStatus())
+                .as("a location that belongs to a different brand is not found under this one")
+                .isEqualTo(404);
     }
 
     @Test

@@ -1,11 +1,12 @@
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { BrandScope } from '../../core/api/catalog-paths';
 import { Auth } from '../../core/auth/auth';
 import { CurrentBrand } from '../../core/auth/current-brand';
 import { CurrentLocation } from '../../core/auth/current-location';
+import { applyRegionalFormats, resetRegionalFormats } from '../../core/format/regional-format';
 import { I18n } from '../../core/i18n/i18n';
 import {
   ActiveVersionResponse,
@@ -58,6 +59,8 @@ async function flushMicrotasks(): Promise<void> {
 
 describe('DeliveryTariffsPage', () => {
   let fixture: ComponentFixture<DeliveryTariffsPage>;
+
+  afterEach(() => resetRegionalFormats());
 
   async function render(api: Partial<DeliveryTariffsApi>): Promise<void> {
     await TestBed.configureTestingModule({
@@ -156,6 +159,59 @@ describe('DeliveryTariffsPage', () => {
     expect(rule.textContent).toContain('Mon, Tue, Wed, Thu, Fri');
     expect(rule.textContent).not.toContain('Sat');
     expect(rule.textContent).not.toContain('Every day');
+  });
+
+  it('writes every fee and rate-table amount the way the brand chose (row 10.12)', async () => {
+    applyRegionalFormats({ moneySymbolPlacement: 'BEFORE', moneyGrouping: 'COMMA' });
+    await expand({
+      tariff: TARIFF,
+      activeVersion: version({
+        minFeeMinor: 5_000,
+        maxFeeMinor: 40_000,
+        feeRoundingStepMinor: 1_000,
+        feeRoundingRule: 'HALF_UP',
+        bands: [
+          { bandSet: 'BASE', fromMeters: 0, toMeters: 5_000, baseMinor: 12_000, perKmMinor: 2_500 },
+        ],
+        timeRules: [
+          {
+            priority: 0,
+            dayMask: 31,
+            fromTime: '18:00:00',
+            toTime: '22:00:00',
+            bandSet: null,
+            multiplierBasisPoints: 15_000,
+            surchargeMinor: 3_000,
+          },
+        ],
+        discounts: [
+          {
+            priority: 0,
+            kind: 'AMOUNT',
+            amountMinor: 4_000,
+            allowanceMeters: null,
+            dayMask: 127,
+            fromTime: '10:00:00',
+            toTime: '14:00:00',
+          },
+        ],
+      }),
+    });
+
+    const facts = host().querySelector('.tariff-detail__facts')!.textContent!;
+    const written = facts.replace(/\s+/g, ' ');
+    expect(written).toContain('UZS 5,000');
+    expect(written).toContain('UZS 40,000');
+    expect(written).toContain('UZS 1,000');
+    const band = host().querySelector('[data-testid="tariff-band-row"]')!.textContent!;
+    expect(band).toContain('12,000');
+    expect(band).toContain('2,500');
+    expect(host().querySelector('[data-testid="tariff-time-rule-row"]')!.textContent).toContain(
+      '3,000',
+    );
+    expect(host().querySelector('[data-testid="tariff-discount-row"]')!.textContent).toContain(
+      '4,000',
+    );
   });
 
   it('renders RADIUS_FALLBACK on a ROAD tariff rather than hiding it', async () => {
