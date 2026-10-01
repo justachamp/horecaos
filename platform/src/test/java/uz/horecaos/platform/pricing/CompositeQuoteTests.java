@@ -340,6 +340,35 @@ class CompositeQuoteTests {
                 .isEqualTo(1L);
     }
 
+    @Test
+    @DisplayName("the schema keeps a combo line's grouping key paired, and refuses one on a delivery-fee line")
+    void theSchemaKeepsTheGroupingKeyWhole() {
+        quotes.quote(request(comboLine("l", 1, pick(burgerInLunch, 1), pick(colaInLunch, 1))));
+
+        assertThat(catchThrowable(() -> jdbc.sql("""
+                                UPDATE pricing.quote_lines SET combo_selection_id = NULL
+                                WHERE combo_container_variant_id IS NOT NULL
+                                """).update()))
+                .as("a selection without its container, or the reverse, describes nothing")
+                .hasMessageContaining("ck_quote_line_combo_pair");
+    }
+
+    @Test
+    @DisplayName("an ordinary cart is unchanged: no combo columns, no hidden adjustment, the same lines as before")
+    void anOrdinaryCartIsUntouched() {
+        var quote = quotes.quote(request(line("b", burger, 2)));
+
+        assertThat(quote.total().minor()).isEqualTo(60_000L);
+        assertThat(quote.lines()).singleElement().satisfies(line -> {
+            assertThat(line.lineId()).isEqualTo("b");
+            assertThat(line.comboSelectionId()).isNull();
+            assertThat(line.comboContainerVariantId()).isNull();
+        });
+        assertThat(quote.adjustments())
+                .extracting(adjustment -> adjustment.descriptionCode())
+                .doesNotContain("HIDDEN_MODIFIER", "COMBO_COMPONENT_PRICE", "NESTED_MODIFIERS");
+    }
+
     // ----------------------------------------------------------- hidden groups
 
     @Test

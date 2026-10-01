@@ -33,6 +33,7 @@ import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.testcontainers.DockerClientFactory;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
+import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.PlatformRole;
 import uz.horecaos.platform.iam.infrastructure.authorization.RoleRegistrySynchronizer;
@@ -107,6 +108,9 @@ class CompositeProductAuthoringEndpointTests {
     @Autowired
     private ObjectMapper json;
 
+    @Autowired
+    private JdbcCatalogStore store;
+
     @BeforeEach
     void reset() {
         jdbc.sql("TRUNCATE TABLE platform.idempotency_records").update();
@@ -114,7 +118,7 @@ class CompositeProductAuthoringEndpointTests {
         jdbc.sql("TRUNCATE TABLE catalog.combo_components, catalog.combo_groups, "
                         + "catalog.product_modifier_groups, catalog.variant_modifier_groups, "
                         + "catalog.modifier_options, catalog.modifier_groups, catalog.translations, "
-                        + "catalog.variants, catalog.products CASCADE")
+                        + "catalog.catalog_products, catalog.catalogs, catalog.variants, catalog.products CASCADE")
                 .update();
         jdbc.sql("TRUNCATE TABLE tenant.tenants CASCADE").update();
         roleRegistry.synchronize();
@@ -767,6 +771,163 @@ class CompositeProductAuthoringEndpointTests {
         assertThat(count("catalog.variant_modifier_groups")).isZero();
     }
 
+    // ------------------------------------------- publication and duplication
+
+    @Test
+    void aHiddenGroupIsNeverPublishedAsACustomerChoice() throws Exception {
+        UUID catalogId = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO catalog.catalogs (id, tenant_id, brand_id, code, name, status)
+                VALUES (:id, :tenantId, :brandId, 'MAIN', 'Main', 'ACTIVE')
+                """)
+                .param("id", catalogId)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .update();
+        jdbc.sql("""
+                INSERT INTO catalog.catalog_products (tenant_id, brand_id, catalog_id, product_id)
+                VALUES (:tenantId, :brandId, :catalogId, :productId)
+                """)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("catalogId", catalogId)
+                .param("productId", BURGER_PRODUCT)
+                .update();
+        attachToProduct(BURGER_PRODUCT, SAUCE_GROUP);
+        attachToProduct(BURGER_PRODUCT, BOX_GROUP);
+
+        assertThat(store.modifierGroupIdsByProduct(TENANT, BRAND, catalogId).get(BURGER_PRODUCT))
+                .as("both are customer-facing until one is made hidden")
+                .containsExactlyInAnyOrder(SAUCE_GROUP, BOX_GROUP);
+
+        setPolicy(BURGER_PRODUCT, BOX_GROUP, 1, "{\"visibility\":\"HIDDEN_AUTO_SELECT\"}");
+
+        assertThat(store.modifierGroupIdsByProduct(TENANT, BRAND, catalogId).get(BURGER_PRODUCT))
+                .as("the quote applies the delivery box; the storefront never shows it as an option")
+                .containsExactly(SAUCE_GROUP);
+    }
+
+    @Test
+    void duplicatingAProductKeepsItsHiddenPolicyAndItsVariantsOwnGroups() throws Exception {
+        attachToProduct(BURGER_PRODUCT, BOX_GROUP);
+        setPolicy(
+                BURGER_PRODUCT,
+                BOX_GROUP,
+                1,
+                "{\"visibility\":\"HIDDEN_AUTO_SELECT\",\"applicableFulfillmentModes\":[\"DELIVERY\"]}");
+        mvc.perform(put(catalogPath() + "/variants/" + BURGER_VARIANT + "/modifier-groups/" + SAUCE_GROUP)
+                        .with(tokenFor(OWNER))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "dup-variant-attach")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andReturn();
+        mvc.perform(
+                        put(catalogPath() + "/variants/" + BURGER_VARIANT + "/modifier-groups/" + SAUCE_GROUP
+                                        + "/overrides")
+                                .with(tokenFor(OWNER))
+                                .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "dup-variant-policy")
+                                .header("If-Match", "W/\"1\"")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(
+                                        "{\"visibility\":\"VISIBLE\",\"requiredOverride\":true,\"minimumSelectionsOverride\":1}"))
+                .andReturn();
+
+        MvcResult duplicated = mvc.perform(post(catalogPath() + "/products/" + BURGER_PRODUCT + "/duplicate")
+                        .with(tokenFor(OWNER))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "duplicate-1"))
+                .andReturn();
+        assertThat(duplicated.getResponse().getStatus())
+                .as(duplicated.getResponse().getContentAsString(UTF_8))
+                .isEqualTo(200);
+        JsonNode copy = json.readTree(duplicated.getResponse().getContentAsString(UTF_8));
+        UUID copiedProduct = UUID.fromString(copy.get("productId").asString());
+        UUID copiedVariant = UUID.fromString(copy.get("defaultVariantId").asString());
+
+        assertThat(jdbc.sql("""
+                                SELECT visibility || ':' || array_to_string(applicable_fulfillment_modes, ',')
+                                FROM catalog.product_modifier_groups
+                                WHERE product_id = :id AND modifier_group_id = :group
+                                """)
+                        .param("id", copiedProduct)
+                        .param("group", BOX_GROUP)
+                        .query(String.class)
+                        .single())
+                .as("a copy that kept the group and lost its policy would stop charging for the box")
+                .isEqualTo("HIDDEN_AUTO_SELECT:DELIVERY");
+        assertThat(jdbc.sql("""
+                                SELECT required_override::text || ':' || minimum_selections_override
+                                FROM catalog.variant_modifier_groups
+                                WHERE variant_id = :id AND modifier_group_id = :group
+                                """)
+                        .param("id", copiedVariant)
+                        .param("group", SAUCE_GROUP)
+                        .query(String.class)
+                        .single())
+                .as("the variant's own attachment travels to the variant it was copied to")
+                .isEqualTo("true:1");
+        assertThat(jdbc.sql("SELECT version FROM catalog.product_modifier_groups WHERE product_id = :id")
+                        .param("id", copiedProduct)
+                        .query(Integer.class)
+                        .single())
+                .as("a copy starts at its first version")
+                .isEqualTo(1);
+    }
+
+    @Test
+    void theSchemaRefusesACrossTenantReferenceWhateverTheServiceDoes() {
+        assertThatThrownBy(() -> insertGroupDirectly(FOREIGN_VARIANT, "stolen"))
+                .as("a combo group's container must be this brand's variant")
+                .hasMessageContaining("fk_combo_group_container");
+        UUID group = insertGroupDirectly(COMBO_VARIANT, "own");
+        assertThatThrownBy(() -> insertComponentDirectly(group, FOREIGN_VARIANT))
+                .as("and so must a component")
+                .hasMessageContaining("fk_combo_component_variant");
+        assertThatThrownBy(() -> jdbc.sql("""
+                                INSERT INTO catalog.variant_modifier_groups (tenant_id, brand_id, variant_id,
+                                    modifier_group_id, visibility)
+                                VALUES (:tenantId, :brandId, :variant, :group, 'HIDDEN_AUTO_SELECT')
+                                """)
+                        .param("tenantId", TENANT)
+                        .param("brandId", BRAND)
+                        .param("variant", FOREIGN_VARIANT)
+                        .param("group", BOX_GROUP)
+                        .update())
+                .as("nor can an attachment reach into another brand")
+                .hasMessageContaining("fk_vmg_variant");
+    }
+
+    @Test
+    void theSchemaRefusesPoliciesTheServiceWouldRefuse() {
+        attachDirectly(BURGER_PRODUCT, BOX_GROUP);
+
+        assertThatThrownBy(() -> jdbc.sql("""
+                                UPDATE catalog.product_modifier_groups SET visibility = 'LOUD'
+                                WHERE product_id = :id
+                                """).param("id", BURGER_PRODUCT).update())
+                .hasMessageContaining("ck_pmg_visibility");
+        assertThatThrownBy(() -> jdbc.sql("""
+                                UPDATE catalog.product_modifier_groups
+                                   SET applicable_fulfillment_modes = ARRAY['DELIVERY']
+                                WHERE product_id = :id
+                                """).param("id", BURGER_PRODUCT).update())
+                .as("modes on a visible group would be a column that silently does nothing")
+                .hasMessageContaining("ck_pmg_modes");
+        assertThatThrownBy(() -> jdbc.sql("""
+                                UPDATE catalog.product_modifier_groups
+                                   SET visibility = 'HIDDEN_AUTO_SELECT',
+                                       applicable_fulfillment_modes = ARRAY['TAKEAWAY']
+                                WHERE product_id = :id
+                                """).param("id", BURGER_PRODUCT).update())
+                .as("the fulfilment vocabulary is closed")
+                .hasMessageContaining("ck_pmg_modes");
+        assertThatThrownBy(() -> jdbc.sql("""
+                                UPDATE catalog.product_modifier_groups
+                                   SET minimum_selections_override = 3, maximum_selections_override = 2
+                                WHERE product_id = :id
+                                """).param("id", BURGER_PRODUCT).update())
+                .hasMessageContaining("ck_pmg_override_range");
+    }
+
     // ---------------------------------------------------------------- helpers
 
     private void assertPolicyRefused(String body) throws Exception {
@@ -865,6 +1026,18 @@ class CompositeProductAuthoringEndpointTests {
                 .param("brandId", BRAND)
                 .param("group", group)
                 .param("variant", variant)
+                .update();
+    }
+
+    private void attachDirectly(UUID productId, UUID groupId) {
+        jdbc.sql("""
+                INSERT INTO catalog.product_modifier_groups (tenant_id, brand_id, product_id, modifier_group_id)
+                VALUES (:tenantId, :brandId, :product, :group)
+                """)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("product", productId)
+                .param("group", groupId)
                 .update();
     }
 
