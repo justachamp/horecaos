@@ -203,7 +203,15 @@ public record Quote(
              * and they answer to different owners — the waiver to a zone, this to a
              * rate table.
              */
-            DELIVERY_TARIFF_DISCOUNT
+            DELIVERY_TARIFF_DISCOUNT,
+            /**
+             * ADR 0140 stage 2b. A markup promotion's per-unit uplift on a line,
+             * recorded as a positive adjustment beside the base price it raises.
+             * Applied before any discount, so a discount is computed on the marked-up
+             * price, and part of {@code subtotal}: it never touches {@code
+             * discount_minor}, which stays non-negative.
+             */
+            ITEM_MARKUP
         }
     }
 }

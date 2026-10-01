@@ -85,8 +85,13 @@ class PromotionEvaluatorTests {
     }
 
     @Test
-    @DisplayName("an exclusive promotion suppresses every other, even a better one")
-    void exclusiveSuppressesEverythingElse() {
+    @DisplayName("an exclusive promotion that is worth at least as much suppresses every other")
+    void exclusiveSuppressesEverythingElseWhenItIsWorthMore() {
+        // ADR 0140 made exclusivity comparative: the customer receives the larger
+        // of the exclusive promotion and the best non-exclusive combination. The
+        // earlier form of this test pinned the opposite (an exclusive ten percent
+        // beating a non-exclusive fifty), which is the customer-hostile outcome
+        // the record replaced; PromotionEvaluatorRuleEngineTests pins that case.
         Promotion exclusive = new Promotion(
                 UUID.randomUUID(),
                 TENANT,
@@ -103,17 +108,16 @@ class PromotionEvaluatorTests {
                 null,
                 1,
                 List.of(productIs(OSH)),
-                List.of(percentAction(1_000)));
-        Promotion betterButNotExclusive = itemPercentOffProduct("OSH50", "SEASONAL", OSH, 5_000);
+                List.of(percentAction(6_000)));
+        Promotion lessButNotExclusive = itemPercentOffProduct("OSH50", "SEASONAL", OSH, 5_000);
 
-        Outcome outcome =
-                evaluator.evaluate(List.of(exclusive, betterButNotExclusive), basketWithBoth(), context(), NOW);
+        Outcome outcome = evaluator.evaluate(List.of(exclusive, lessButNotExclusive), basketWithBoth(), context(), NOW);
 
         assertThat(outcome.applied())
-                .as("exclusivity beats a larger discount in another group")
+                .as("the exclusive promotion is worth more, so it applies alone")
                 .extracting(PromotionEvaluator.AppliedPromotion::code)
                 .containsExactly("LAUNCH");
-        assertThat(outcome.lineDiscountsMinor().get("line-osh")).isEqualTo(4_000L);
+        assertThat(outcome.lineDiscountsMinor().get("line-osh")).isEqualTo(24_000L);
     }
 
     @Test

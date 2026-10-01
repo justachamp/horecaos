@@ -54,8 +54,13 @@ public class PricingEngine {
      * <p>Bumped to 2 by ADR 0037: a quote priced before delivery fees existed has
      * no fee line and no waiver, and re-deriving it under these rules would add
      * one to a total the customer already agreed to.
+     *
+     * <p>Bumped to 3 by ADR 0140: item markups (stage 2b), per-line clamping of
+     * stacked item discounts, comparative exclusivity, a gift bounded per
+     * promotion and a context hash that covers every condition input. A quote
+     * priced under 2 is never re-derived.
      */
-    public static final int CALCULATION_VERSION = 2;
+    public static final int CALCULATION_VERSION = 3;
 
     /**
      * Stages 3 and 4, as a collaborator rather than as inlined code.
@@ -130,6 +135,49 @@ public class PricingEngine {
                     Money.of(lineGross, currency),
                     Money.of(lineGross, currency),
                     Money.zero(currency)));
+        }
+
+        // Stage 2b (ADR 0140). A markup is a price-plane step: it uplifts the
+        // lines before any discount looks at them, so a discount is computed on
+        // the price the customer would otherwise have paid.
+        PromotionEvaluator.MarkupOutcome markups = evaluateMarkups(inputs, lines, now);
+        if (!markups.isEmpty()) {
+            List<Quote.QuoteLine> uplifted = new ArrayList<>(lines.size());
+            for (Quote.QuoteLine line : lines) {
+                long uplift = markups.lineMarkupsMinor().getOrDefault(line.lineId(), 0L);
+                if (uplift <= 0) {
+                    uplifted.add(line);
+                    continue;
+                }
+                grossTotal = Math.addExact(grossTotal, uplift);
+                long perUnit = uplift / line.quantity();
+                uplifted.add(Quote.QuoteLine.item(
+                        line.lineId(),
+                        Objects.requireNonNull(line.variantId(), "an ITEM line always carries a variant"),
+                        line.quantity(),
+                        line.descriptionSnapshot(),
+                        Money.of(Math.addExact(line.unitAmount().minor(), perUnit), currency),
+                        Money.of(Math.addExact(line.baseAmount().minor(), uplift), currency),
+                        Money.of(Math.addExact(line.finalAmount().minor(), uplift), currency),
+                        Money.zero(currency)));
+            }
+            lines = uplifted;
+            for (PromotionEvaluator.AppliedMarkup applied : markups.applied()) {
+                for (Map.Entry<String, Long> entry : applied.perLineMinor().entrySet()) {
+                    if (entry.getValue() <= 0) {
+                        continue;
+                    }
+                    adjustments.add(new Adjustment(
+                            ++sequence,
+                            entry.getKey(),
+                            Adjustment.Type.ITEM_MARKUP,
+                            "PROMOTION",
+                            applied.promotionId(),
+                            applied.definitionVersion(),
+                            Money.of(entry.getValue(), currency),
+                            applied.code()));
+                }
+            }
         }
 
         // Stages 3 and 4 (ADR 0018). Promotions reduce the gross *before* tax is
@@ -310,6 +358,22 @@ public class PricingEngine {
                 ? Math.addExact(grossTotal, delivery.feeMinor())
                 : Math.addExact(Math.addExact(grossTotal, totalTax), delivery.feeMinor());
 
+        List<PromotionEvaluator.TraceEntry> trace = new ArrayList<>(markups.trace());
+        trace.addAll(offers.trace());
+
+        // The most restrictive value across every applied promotion wins, markups
+        // included (ADR 0140): an order carrying any promotion that suppresses
+        // accrual earns no points, and one carrying any that blocks redemption
+        // cannot spend them.
+        boolean accrualAllowed = offers.applied().stream()
+                        .noneMatch(applied -> applied.loyaltyAccrual() == Promotion.LoyaltyAccrual.SUPPRESS)
+                && markups.applied().stream()
+                        .noneMatch(applied -> applied.loyaltyAccrual() == Promotion.LoyaltyAccrual.SUPPRESS);
+        boolean redemptionAllowed = offers.applied().stream()
+                        .noneMatch(applied -> applied.loyaltyRedemption() == Promotion.LoyaltyRedemption.BLOCK)
+                && markups.applied().stream()
+                        .noneMatch(applied -> applied.loyaltyRedemption() == Promotion.LoyaltyRedemption.BLOCK);
+
         return new Result(
                 Money.of(subtotal, currency),
                 Money.of(totalTax, currency),
@@ -319,7 +383,10 @@ public class PricingEngine {
                 delivery.lines(),
                 List.copyOf(adjustments),
                 delivery.shortfallMinor(),
-                contextHash(request, inputs));
+                contextHash(request, inputs),
+                List.copyOf(trace),
+                accrualAllowed,
+                redemptionAllowed);
     }
 
     /**
@@ -495,6 +562,43 @@ public class PricingEngine {
             return EMPTY_OFFERS;
         }
 
+        long deliveryFee =
+                inputs.deliveryCharge() == null || !inputs.deliveryCharge().isResolved()
+                        ? 0L
+                        : inputs.deliveryCharge().feeMinor();
+
+        return promotions.evaluate(
+                offers.promotions(),
+                new PromotionEvaluator.Basket(inputs.currency(), basketLinesOf(offers, lines), grossTotal, deliveryFee),
+                offers.context(),
+                now);
+    }
+
+    /**
+     * Stage 2b's read: the markups that apply to the basket as stages 1 and 2
+     * priced it, before any discount has touched a line.
+     */
+    private PromotionEvaluator.MarkupOutcome evaluateMarkups(
+            PricingInputs inputs, List<Quote.QuoteLine> lines, java.time.Instant now) {
+
+        PromotionInputs offers = inputs.promotions();
+        if (offers == null
+                || offers.promotions().stream().noneMatch(promotion -> promotion.kind() == Promotion.Kind.MARKUP)) {
+            return EMPTY_MARKUPS;
+        }
+        long goods = lines.stream()
+                .filter(line -> line.type() == Quote.LineType.ITEM)
+                .mapToLong(line -> line.finalAmount().minor())
+                .sum();
+        return promotions.evaluateMarkups(
+                offers.promotions(),
+                new PromotionEvaluator.Basket(inputs.currency(), basketLinesOf(offers, lines), goods, 0L),
+                offers.context(),
+                now);
+    }
+
+    private static List<PromotionEvaluator.BasketLine> basketLinesOf(
+            PromotionInputs offers, List<Quote.QuoteLine> lines) {
         List<PromotionEvaluator.BasketLine> basketLines = new ArrayList<>(lines.size());
         for (Quote.QuoteLine line : lines) {
             if (line.type() != Quote.LineType.ITEM) {
@@ -515,21 +619,14 @@ public class PricingEngine {
                     line.unitAmount().minor(),
                     line.finalAmount().minor()));
         }
-
-        long deliveryFee =
-                inputs.deliveryCharge() == null || !inputs.deliveryCharge().isResolved()
-                        ? 0L
-                        : inputs.deliveryCharge().feeMinor();
-
-        return promotions.evaluate(
-                offers.promotions(),
-                new PromotionEvaluator.Basket(inputs.currency(), basketLines, grossTotal, deliveryFee),
-                offers.context(),
-                now);
+        return basketLines;
     }
 
     private static final PromotionEvaluator.Outcome EMPTY_OFFERS =
             new PromotionEvaluator.Outcome(Map.of(), 0L, 0L, List.of());
+
+    private static final PromotionEvaluator.MarkupOutcome EMPTY_MARKUPS =
+            new PromotionEvaluator.MarkupOutcome(Map.of(), List.of(), List.of());
 
     /** The one delivery line, gross beside net, built the same way at each step. */
     private static Quote.QuoteLine deliveryLine(String currency, long gross, long net) {
@@ -620,8 +717,17 @@ public class PricingEngine {
         // store returned them. Without this a promotion suspended or re-authored
         // while the customer was choosing a payment method would leave the quote
         // valid and the total wrong -- the same hole the delivery clause above
-        // exists to close. The coupon set is in the hash for the same reason: a
-        // quote priced with a code presented is not the quote priced without it.
+        // exists to close.
+        //
+        // ADR 0140, the second half of the same rule: every value a condition
+        // reads is a term here too -- the channel type, the payment method, the
+        // delivery zone, the order position, the segments, the service instant
+        // and the local day and minute, the fulfilment mode, the limits already
+        // reached and the catalog membership of each line. A quote priced with a
+        // different answer to any of them is not the same quote.
+        // PricingEngineContextHashTests enumerates PromotionContext and fails the
+        // build when a component is missing, so the next condition cannot repeat
+        // the hole the previous evaluator had.
         PromotionInputs offers = inputs.promotions();
         canonical.append("|promotions=");
         if (offers == null || offers.promotions().isEmpty()) {
@@ -631,11 +737,54 @@ public class PricingEngine {
                     .map(promotion -> promotion.promotionId() + ":" + promotion.definitionVersion())
                     .sorted()
                     .forEach(entry -> canonical.append(entry).append(","));
+            PromotionEvaluator.PromotionContext context = offers.context();
             canonical.append("|coupons=");
-            offers.context().presentedCouponPromotionIds().stream()
-                    .map(UUID::toString)
+            appendSorted(canonical, context.presentedCouponPromotionIds());
+            // The request's own channel and location are already terms above. The
+            // context's copies are what the CHANNEL and LOCATION conditions read, and
+            // nothing makes them the same value, so they are terms of their own.
+            canonical.append("|ctxChannel=").append(context.channel());
+            canonical.append("|ctxLocation=").append(context.locationId());
+            canonical.append("|channelType=").append(context.channelType());
+            canonical.append("|fulfilment=").append(context.fulfillmentMode());
+            canonical.append("|payment=").append(context.paymentMethodCode());
+            canonical.append("|zone=").append(context.deliveryZoneId());
+            canonical.append("|firstOrder=").append(context.firstOrder());
+            canonical
+                    .append("|sequence=")
+                    .append(context.brandOrderPosition())
+                    .append(":")
+                    .append(context.channelOrderPosition());
+            canonical.append("|segments=");
+            appendSorted(canonical, context.customerSegments());
+            canonical
+                    .append("|service=")
+                    .append(
+                            context.serviceInstant() == null
+                                    ? "none"
+                                    : context.serviceInstant().truncatedTo(java.time.temporal.ChronoUnit.SECONDS));
+            canonical
+                    .append("|local=")
+                    .append(context.localDayOfWeek())
+                    .append(":")
+                    .append(context.localMinuteOfDay());
+            canonical.append("|limitReached=");
+            appendSorted(canonical, context.limitReachedPromotionIds());
+            canonical.append("|notClaimed=");
+            appendSorted(canonical, context.notClaimedAtPlacementPromotionIds());
+            request.lines().stream()
+                    .map(QuoteRequest.Line::variantId)
+                    .distinct()
                     .sorted()
-                    .forEach(entry -> canonical.append(entry).append(","));
+                    .forEach(variantId -> {
+                        MenuMembershipLookup.Membership membership =
+                                offers.membership().get(variantId);
+                        canonical.append("|member=").append(variantId).append(":");
+                        if (membership != null) {
+                            canonical.append(membership.productId()).append(":");
+                            appendSorted(canonical, membership.categoryIds());
+                        }
+                    });
         }
 
         // Sorted by line id, so the same cart in a different order hashes the
@@ -662,6 +811,14 @@ public class PricingEngine {
         } catch (NoSuchAlgorithmException impossible) {
             throw new IllegalStateException("SHA-256 is required", impossible);
         }
+    }
+
+    /** A set in a canonical string: sorted, so the same members hash the same in any order. */
+    private static void appendSorted(StringBuilder canonical, java.util.Collection<?> members) {
+        members.stream()
+                .map(String::valueOf)
+                .sorted()
+                .forEach(entry -> canonical.append(entry).append(","));
     }
 
     public enum TaxMode {
@@ -800,7 +957,41 @@ public class PricingEngine {
             List<Quote.QuoteLine> lines,
             List<Adjustment> adjustments,
             @Nullable Long deliveryShortfallMinor,
-            String contextHash) {}
+            String contextHash,
+            List<PromotionEvaluator.TraceEntry> promotionTrace,
+            boolean loyaltyAccrualAllowed,
+            boolean loyaltyRedemptionAllowed) {
+
+        public Result {
+            promotionTrace = promotionTrace == null ? List.of() : List.copyOf(promotionTrace);
+        }
+
+        /** A result with no promotion trace and no loyalty restriction: every caller that predates ADR 0140. */
+        public Result(
+                Money subtotal,
+                Money tax,
+                Money fees,
+                Money discount,
+                Money total,
+                List<Quote.QuoteLine> lines,
+                List<Adjustment> adjustments,
+                @Nullable Long deliveryShortfallMinor,
+                String contextHash) {
+            this(
+                    subtotal,
+                    tax,
+                    fees,
+                    discount,
+                    total,
+                    lines,
+                    adjustments,
+                    deliveryShortfallMinor,
+                    contextHash,
+                    List.of(),
+                    true,
+                    true);
+        }
+    }
 
     /** Thrown when a cart contains something with no active price. */
     public static class UnpricedItemException extends RuntimeException {
