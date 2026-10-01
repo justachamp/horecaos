@@ -128,7 +128,10 @@ public class LocationContactPersonController {
         }
     }
 
-    public record ContactPersonsResponse(List<ContactPersonResponse> contacts, long version) {}
+    public record ContactPersonsResponse(
+            // A list is not a record component the scanner descends into; without this the stored
+            // reply to a replace (ADR 0031) holds each contact's name and phone in clear (ADR 0029).
+            @Classified(DataClass.PERSONAL) List<ContactPersonResponse> contacts, long version) {}
 
     public record ContactPersonRequest(
             @NotBlank @Size(max = 24) String relationshipCode,

@@ -471,7 +471,10 @@ public class StaffMemberController {
         }
     }
 
-    public record EmergencyContactsResponse(List<EmergencyContactResponse> contacts, int memberVersion) {
+    public record EmergencyContactsResponse(
+            // The scanner reads record components and a list is not one: without this the stored
+            // reply to a replace (ADR 0031) holds a third party's name in clear (ADR 0029).
+            @Classified(DataClass.PERSONAL) List<EmergencyContactResponse> contacts, int memberVersion) {
 
         static EmergencyContactsResponse of(List<ContactView> views, int memberVersion) {
             return new EmergencyContactsResponse(

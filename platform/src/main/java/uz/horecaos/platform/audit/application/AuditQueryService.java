@@ -305,7 +305,7 @@ public class AuditQueryService {
                 view.occurredAt());
     }
 
-    /** {@link #withResolvedActorDisplay(AuditEventView)}, for the one-event detail read. */
+    /** The one-event detail read's counterpart of {@link #withResolvedActorDisplays(List)}. */
     private AuditEventDetail withResolvedActorDisplay(AuditEventDetail detail) {
         if (!needsActorName(detail.actorDisplay(), detail.actorSubject(), detail.actorType(), detail.tenantId())) {
             return detail;

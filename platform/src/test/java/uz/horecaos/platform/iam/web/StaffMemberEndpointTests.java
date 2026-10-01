@@ -7,6 +7,10 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.classic.spi.ThrowableProxyUtil;
+import ch.qos.logback.core.read.ListAppender;
 import java.net.URI;
 import java.time.Duration;
 import java.time.Instant;
@@ -15,12 +19,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -426,6 +432,64 @@ class StaffMemberEndpointTests {
         assertThat(String.valueOf(record.get("response_body"))).doesNotContain("Replayed", "Shahlo");
     }
 
+    // ======================================================================= logs
+
+    /**
+     * ADR 0029 over the whole flow: at TRACE, where Spring's message converters log
+     * the request body they read and the response they write, and including the
+     * refusals -- a validation failure and a stale version, which are exactly the
+     * lines that tend to echo what the caller typed.
+     */
+    @Test
+    @DisplayName("no name, phone or employee number reaches any log line, with tracing on, across edits and refusals")
+    void noPersonalValueReachesALogLine() throws Exception {
+        ListAppender<ILoggingEvent> lines = captureAllLogs();
+        try {
+            put(
+                    me(),
+                    COOK_1,
+                    "{\"firstName\":\"Leakcheck\",\"lastName\":\"Zebrowski\",\"phone\":\"+998 93 616 05 71\"}",
+                    versionOf(get(me(), COOK_1)));
+            // Refusals that carry personal values in the request.
+            put(
+                    me(),
+                    COOK_1,
+                    "{\"firstName\":\"Leakcheck\",\"phone\":\"not-a-phone-616\"}",
+                    versionOf(get(me(), COOK_1)));
+            put(me(), COOK_1, "{\"firstName\":\"Leakcheck\",\"lastName\":\"Zebrowski\"}", 999);
+            String own = branchMembers(LOC_1) + "/" + memberId(COOK_2);
+            put(
+                    own,
+                    L1_MANAGER,
+                    "{\"firstName\":\"Rustam\",\"phone\":\"+998 94 717 06 82\",\"employeeNumber\":\"EMP-LEAK-7\"}",
+                    versionOf(get(own, L1_MANAGER)));
+            String contacts = own + "/emergency-contacts";
+            put(
+                    contacts,
+                    L1_MANAGER,
+                    "{\"contacts\":[{\"relationshipCode\":\"SPOUSE\",\"name\":\"Thirdparty Leaker\",\"phone\":\"+998 71 808 09 10\"}]}",
+                    versionOf(get(contacts, L1_MANAGER)));
+            get(contacts, L1_MANAGER);
+            // Another tenant's person, and an unknown one: the refusals.
+            get(branchMembers(LOC_1) + "/" + memberId(COOK_3), L1_MANAGER);
+
+            List<ILoggingEvent> captured = snapshot(lines);
+            assertThat(captured)
+                    .as("the capture saw the platform working, or silence would pass for hygiene")
+                    .anyMatch(event -> event.getLoggerName().startsWith("org.springframework.web"));
+            String everything = captured.stream()
+                    .map(event ->
+                            event.getFormattedMessage() + " " + ThrowableProxyUtil.asString(event.getThrowableProxy()))
+                    .collect(Collectors.joining("\n"));
+            assertThat(everything)
+                    .doesNotContain("Leakcheck", "Zebrowski", "616 05 71", "998936160571", "not-a-phone-616")
+                    .doesNotContain("EMP-LEAK-7", "717 06 82", "998947170682")
+                    .doesNotContain("Thirdparty", "Leaker", "808 09 10", "998718080910");
+        } finally {
+            releaseAllLogs(lines);
+        }
+    }
+
     // ======================================================================= photo
 
     @Test
@@ -757,6 +821,33 @@ class StaffMemberEndpointTests {
                 .param("code", code)
                 .param("slug", code.toLowerCase())
                 .update();
+    }
+
+    private static ch.qos.logback.classic.@Nullable Level previousRootLevel;
+
+    /** At {@code Level.ALL}: what an operator chasing a bug with tracing on would see. */
+    private static ListAppender<ILoggingEvent> captureAllLogs() {
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        Logger root = (Logger) LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME);
+        previousRootLevel = root.getLevel();
+        root.setLevel(ch.qos.logback.classic.Level.ALL);
+        root.addAppender(appender);
+        return appender;
+    }
+
+    private static void releaseAllLogs(ListAppender<ILoggingEvent> appender) {
+        Logger root = (Logger) LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME);
+        root.detachAppender(appender);
+        root.setLevel(previousRootLevel);
+        appender.stop();
+    }
+
+    /** Logback's list appender synchronizes on itself, so a copy under that lock is stable. */
+    private static List<ILoggingEvent> snapshot(ListAppender<ILoggingEvent> appender) {
+        synchronized (appender) {
+            return List.copyOf(appender.list);
+        }
     }
 
     private static RequestPostProcessor tokenFor(String subject) {
