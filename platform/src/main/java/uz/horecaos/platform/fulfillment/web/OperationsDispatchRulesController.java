@@ -788,21 +788,28 @@ public class OperationsDispatchRulesController {
             @NotBlank @Size(max = 1000) String reason) {
 
         DeliverySourcingPolicy toDocument() {
-            // The record's own constructor refuses a nonsense number with IllegalArgumentException, which
-            // would surface as a 500. A refusal names the field, as a 400 with ADR 0031's stable code.
-            DeliverySourcingPolicy candidate;
-            try {
-                candidate = new DeliverySourcingPolicy(
-                        preparationLeadSeconds,
-                        partnerLeadSeconds,
-                        safetyBufferSeconds,
-                        pickupToleranceSeconds,
-                        offerRounds,
-                        maxOfferSeconds,
-                        latestAssignmentSlackSeconds);
-            } catch (IllegalArgumentException invalid) {
-                throw new ApiException(ErrorCode.VALIDATION_FAILED, invalid.getMessage());
+            // Named by field first: the record's own constructor refuses a nonsense number with an
+            // IllegalArgumentException about the invariant, which would surface as a 500 -- or as a
+            // sentence that does not say which box the operator typed into.
+            List<String> violations = SourcingPolicyAuthoringService.violations(
+                    preparationLeadSeconds,
+                    partnerLeadSeconds,
+                    safetyBufferSeconds,
+                    pickupToleranceSeconds,
+                    offerRounds,
+                    maxOfferSeconds,
+                    latestAssignmentSlackSeconds);
+            if (!violations.isEmpty()) {
+                throw new ApiException(ErrorCode.VALIDATION_FAILED, String.join("; ", violations));
             }
+            DeliverySourcingPolicy candidate = new DeliverySourcingPolicy(
+                    preparationLeadSeconds,
+                    partnerLeadSeconds,
+                    safetyBufferSeconds,
+                    pickupToleranceSeconds,
+                    offerRounds,
+                    maxOfferSeconds,
+                    latestAssignmentSlackSeconds);
             return candidate;
         }
     }

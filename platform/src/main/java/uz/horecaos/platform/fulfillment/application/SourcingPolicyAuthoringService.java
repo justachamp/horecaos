@@ -122,16 +122,40 @@ public class SourcingPolicyAuthoringService {
      * here so a refusal names the field rather than surfacing as the constructor's exception.
      */
     public static List<String> violations(DeliverySourcingPolicy document) {
+        return violations(
+                document.preparationLeadSeconds(),
+                document.partnerLeadSeconds(),
+                document.safetyBufferSeconds(),
+                document.pickupToleranceSeconds(),
+                document.offerRounds(),
+                document.maxOfferSeconds(),
+                document.latestAssignmentSlackSeconds());
+    }
+
+    /**
+     * The same bounds over the raw numbers, so a refusal can name the field <em>before</em> {@link
+     * DeliverySourcingPolicy}'s constructor refuses a number it cannot hold: the record's own messages
+     * are about the invariant ("At least one in-house offer round is required"), not about the field
+     * an operator just typed into.
+     */
+    public static List<String> violations(
+            int preparationLeadSeconds,
+            int partnerLeadSeconds,
+            int safetyBufferSeconds,
+            int pickupToleranceSeconds,
+            int offerRounds,
+            int maxOfferSeconds,
+            int latestAssignmentSlackSeconds) {
         List<String> found = new ArrayList<>();
-        durationViolation("preparationLeadSeconds", document.preparationLeadSeconds(), 0, found);
-        durationViolation("partnerLeadSeconds", document.partnerLeadSeconds(), 0, found);
-        durationViolation("safetyBufferSeconds", document.safetyBufferSeconds(), 0, found);
-        durationViolation("pickupToleranceSeconds", document.pickupToleranceSeconds(), 1, found);
-        durationViolation("latestAssignmentSlackSeconds", document.latestAssignmentSlackSeconds(), 0, found);
-        if (document.offerRounds() < 1 || document.offerRounds() > MAX_OFFER_ROUNDS) {
+        durationViolation("preparationLeadSeconds", preparationLeadSeconds, 0, found);
+        durationViolation("partnerLeadSeconds", partnerLeadSeconds, 0, found);
+        durationViolation("safetyBufferSeconds", safetyBufferSeconds, 0, found);
+        durationViolation("pickupToleranceSeconds", pickupToleranceSeconds, 1, found);
+        durationViolation("latestAssignmentSlackSeconds", latestAssignmentSlackSeconds, 0, found);
+        if (offerRounds < 1 || offerRounds > MAX_OFFER_ROUNDS) {
             found.add("offerRounds must be between 1 and " + MAX_OFFER_ROUNDS);
         }
-        if (document.maxOfferSeconds() < 15 || document.maxOfferSeconds() > MAX_OFFER_SECONDS) {
+        if (maxOfferSeconds < 15 || maxOfferSeconds > MAX_OFFER_SECONDS) {
             found.add("maxOfferSeconds must be between 15 and " + MAX_OFFER_SECONDS);
         }
         return List.copyOf(found);

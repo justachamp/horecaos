@@ -58,6 +58,8 @@ import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcSourcingJ
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcSourcingJournal;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.support.TestDatabase;
+import uz.horecaos.platform.telemetry.api.RealtimeSignal;
+import uz.horecaos.platform.telemetry.api.RealtimeSignalPublisher;
 import uz.horecaos.platform.tenancy.api.PolicyKey;
 import uz.horecaos.platform.tenancy.api.PolicyResolver;
 import uz.horecaos.platform.tenancy.api.ResolvedPolicy;
@@ -106,6 +108,7 @@ class DeliverySourcingTests {
     private RecordingBookings bookings;
     private ConfigurableFleet fleet;
     private ConfigurableOrders orders;
+    private RecordingRealtime realtime;
 
     private UUID branch;
     private UUID channelId;
@@ -169,6 +172,7 @@ class DeliverySourcingTests {
         orders = new ConfigurableOrders();
         bookings = new RecordingBookings();
         fleet = new ConfigurableFleet();
+        realtime = new RecordingRealtime();
 
         planning = new DeliveryPlanningService(orders, planStore, jobStore, branches, unconfigured(), clock);
         DeliverySourcingService sourcing =
@@ -180,6 +184,7 @@ class DeliverySourcingTests {
                 planStore,
                 jobStore,
                 branches,
+                realtime,
                 clock,
                 Duration.ofSeconds(5),
                 Duration.ofMinutes(2),
@@ -1068,6 +1073,17 @@ class DeliverySourcingTests {
                     status == BookingStatus.BOOKED ? prefix + ++references : null,
                     null,
                     null);
+        }
+    }
+
+    /** The ADR 0045 signals the runner published, in order. */
+    private static final class RecordingRealtime implements RealtimeSignalPublisher {
+
+        private final List<RealtimeSignal> published = new ArrayList<>();
+
+        @Override
+        public void publish(RealtimeSignal signal) {
+            published.add(signal);
         }
     }
 
