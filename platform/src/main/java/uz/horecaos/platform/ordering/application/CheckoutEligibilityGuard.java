@@ -20,6 +20,7 @@ import uz.horecaos.platform.ordering.domain.CartStatus;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcCartStore;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcCartStore.CartLineRow;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcCartStore.CartRow;
+import uz.horecaos.platform.pricing.api.PromotionQueryPort;
 import uz.horecaos.platform.pricing.api.QuoteAcceptancePort;
 import uz.horecaos.platform.pricing.api.QuoteSnapshot;
 import uz.horecaos.platform.tenancy.api.ConfigurationResolver;
@@ -55,6 +56,7 @@ class CheckoutEligibilityGuard {
     private final ConfigurationResolver configuration;
     private final OrderingTenantContext tenancy;
     private final CartSaleWindowRules saleWindows;
+    private final PromotionQueryPort promotionQuery;
 
     @SuppressWarnings("checkstyle:ParameterNumber")
     CheckoutEligibilityGuard(
@@ -70,7 +72,8 @@ class CheckoutEligibilityGuard {
             CustomerBlacklistPort blacklist,
             ConfigurationResolver configuration,
             OrderingTenantContext tenancy,
-            CartSaleWindowRules saleWindows) {
+            CartSaleWindowRules saleWindows,
+            PromotionQueryPort promotionQuery) {
         this.carts = carts;
         this.cartService = cartService;
         this.channels = channels;
@@ -84,6 +87,7 @@ class CheckoutEligibilityGuard {
         this.configuration = configuration;
         this.tenancy = tenancy;
         this.saleWindows = saleWindows;
+        this.promotionQuery = promotionQuery;
     }
 
     /** Every fact a validated checkout needs downstream, gathered in one read-only pass. */
@@ -378,6 +382,19 @@ class CheckoutEligibilityGuard {
         if (!channels.enabledPaymentMethodCodes(command.tenantId(), cart.channelId())
                 .contains(paymentMethodCode)) {
             return Result.rejected("PAYMENT_METHOD_UNAVAILABLE", "This channel does not offer " + paymentMethodCode);
+        }
+
+        // ADR 0140: the payment method is an input to the price whenever a promotion reads
+        // it. The cart was priced with the method it had selected (none, until the
+        // customer chose one), so a checkout that names a different method is paying for
+        // a total nobody quoted: it is refused PRICE_CHANGED and re-quoted, never charged
+        // the difference. Only when a payment-method promotion exists -- otherwise the
+        // method cannot move the total and the cart has no reason to carry one.
+        if (!paymentMethodCode.equals(cart.paymentMethodCode())
+                && promotionQuery.paymentMethodChangesTheTotal(command.tenantId(), command.brandId(), null)) {
+            return Result.rejected(
+                    "PRICE_CHANGED",
+                    "The payment method changes what this order costs; select it on the cart and request a new quote");
         }
 
         // ADR 0013's precondition, and the last read-only refusal about the

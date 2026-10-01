@@ -405,6 +405,36 @@ public class StorefrontOrderingController {
         }
     }
 
+    @PutMapping("/carts/{cartId}/payment-method")
+    @CustomerOwned
+    @Idempotent
+    @Operation(
+            summary = "Select how the cart will be paid",
+            description = "ADR 0140. The method is an input to the price whenever a promotion reads it "
+                    + "(\"5% off when paying by Click\"), so it is stored on the cart before pricing, and "
+                    + "clears any attached quote the same way a line edit does. A null code clears the "
+                    + "selection, and an unselected method never earns a payment-method promotion. "
+                    + "Checkout with a different method than the cart was priced with is refused "
+                    + "PRICE_CHANGED when such a promotion exists, which is the re-quote the customer "
+                    + "app has to design around.")
+    public ResponseEntity<CartResponse> setPaymentMethod(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID cartId,
+            @Valid @RequestBody SelectPaymentMethodRequest body,
+            jakarta.servlet.http.HttpServletRequest request) {
+        try {
+            long expected = AggregateVersion.requireIfMatch(request);
+            var view = carts.setPaymentMethod(
+                    tenantId, brandId, accountId(tenantId, brandId), cartId, (int) expected, body.paymentMethodCode());
+            return ResponseEntity.ok(CartResponse.of(view));
+        } catch (CartService.StaleCartException stale) {
+            throw ApiException.staleVersion(stale.expected(), stale.actual());
+        } catch (CartService.CartRefusedException refused) {
+            throw refusal(refused);
+        }
+    }
+
     @DeleteMapping("/carts/{cartId}/promo-code")
     @CustomerOwned
     @Idempotent
@@ -791,6 +821,10 @@ public class StorefrontOrderingController {
 
     public record MoveLocationRequest(@NotNull UUID locationId) {}
 
+    /** ADR 0140. Null clears the selection; otherwise a code the cart's channel sells. */
+    public record SelectPaymentMethodRequest(
+            @Nullable @Size(max = 32) String paymentMethodCode) {}
+
     /** ADR 0072. Normalized (trimmed, upper-cased) by {@code CartService} before lookup. */
     public record ApplyPromoCodeRequest(
             @NotBlank @Size(min = 1, max = 32) String code) {}
@@ -892,7 +926,8 @@ public class StorefrontOrderingController {
             @Nullable String contextHash,
             Instant expiresAt,
             List<CartLineResponse> lines,
-            @Nullable String appliedPromoCode) {
+            @Nullable String appliedPromoCode,
+            @Nullable String paymentMethodCode) {
 
         // `currency` then `fulfillmentMode`, in that order, and it is worth
         // saying why a line this dull carries a comment. The two arguments were
@@ -922,7 +957,8 @@ public class StorefrontOrderingController {
                                     line.commentPresetCodes(),
                                     line.customerNoteEncrypted() != null))
                             .toList(),
-                    view.cart().appliedCouponCode());
+                    view.cart().appliedCouponCode(),
+                    view.cart().paymentMethodCode());
         }
     }
 

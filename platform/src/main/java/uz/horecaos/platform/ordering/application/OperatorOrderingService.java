@@ -366,6 +366,28 @@ public class OperatorOrderingService {
             version = view.cart().version();
         }
 
+        // ADR 0140: the method the order will be paid by is an input to its price when a
+        // promotion reads it, and checkout refuses a method the cart was not priced with.
+        // An operator names the method up front, so it goes on the cart before pricing.
+        if (command.paymentMethodCode() != null && !command.paymentMethodCode().isBlank()) {
+            try {
+                var view = carts.setPaymentMethod(
+                        command.tenantId(),
+                        command.brandId(),
+                        command.customerAccountId(),
+                        cart.cartId(),
+                        version,
+                        command.paymentMethodCode());
+                version = view.cart().version();
+            } catch (CartService.CartRefusedException unavailable) {
+                if (!"PAYMENT_METHOD_UNAVAILABLE".equals(unavailable.code())) {
+                    throw unavailable;
+                }
+                // A method the channel does not offer is checkout's refusal to make, with its own
+                // typed outcome; the cart simply carries no method and prices as it always did.
+            }
+        }
+
         var priced =
                 carts.price(command.tenantId(), command.brandId(), command.customerAccountId(), cart.cartId(), version);
 

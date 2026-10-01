@@ -779,7 +779,13 @@ public class CartService {
                 // learns whether it is eligible, only what the resulting quote
                 // says.
                 cart.appliedCouponCode(),
-                deliveryFor(tenantId, cartId, cart, channel)));
+                deliveryFor(tenantId, cartId, cart, channel),
+                null,
+                // ADR 0140: what only the cart knows and a promotion may read -- how the
+                // customer means to pay and whether this is a delivery, a pickup or a
+                // table. The instant stays null: on the cart path it is the clock.
+                new CartPricingPort.PricingCommand.PromotionFrame(
+                        null, cart.paymentMethodCode(), cart.fulfillmentMode().name(), null, null)));
 
         if (!carts.attachQuote(
                 tenantId,
@@ -862,6 +868,43 @@ public class CartService {
             throw new StaleCartException(expectedVersion, cart.version());
         }
         log.debug("Cart {} applied promo code", cartId);
+        return view(tenantId, brandId, callerAccountId, cartId).orElseThrow();
+    }
+
+    /**
+     * ADR 0140: selects the money method the customer means to pay by, or clears
+     * the selection with a null code.
+     *
+     * <p>The method is an input to the price whenever a promotion reads it, so it
+     * lives on the cart and invalidates the attached quote exactly as a line edit
+     * does; checkout then refuses a method different from the one the cart was priced
+     * with when a payment-method promotion exists ({@code PRICE_CHANGED}), which is
+     * the re-quote the record names as its checkout friction. Refused unless the
+     * cart's channel sells the method, for the same reason checkout refuses it.
+     */
+    @Transactional
+    public CartView setPaymentMethod(
+            UUID tenantId,
+            UUID brandId,
+            UUID callerAccountId,
+            UUID cartId,
+            int expectedVersion,
+            @Nullable String rawCode) {
+        CartRow cart = requireEditable(tenantId, brandId, callerAccountId, cartId);
+        if (cart.version() != expectedVersion) {
+            throw new StaleCartException(expectedVersion, cart.version());
+        }
+        String normalized =
+                rawCode == null || rawCode.isBlank() ? null : rawCode.trim().toUpperCase(Locale.ROOT);
+        if (normalized != null
+                && !channels.enabledPaymentMethodCodes(tenantId, cart.channelId())
+                        .contains(normalized)) {
+            throw new CartRefusedException("PAYMENT_METHOD_UNAVAILABLE", "This channel does not offer " + normalized);
+        }
+        if (!carts.setPaymentMethodAndInvalidatePricing(
+                tenantId, cartId, expectedVersion, normalized, clock.instant())) {
+            throw new StaleCartException(expectedVersion, cart.version());
+        }
         return view(tenantId, brandId, callerAccountId, cartId).orElseThrow();
     }
 

@@ -256,8 +256,11 @@ public class PromotionInputResolver {
         // is reported as never claimed at placement.
         Set<UUID> heldIds = new HashSet<>();
         if (amendment && request.carriedRedemptionOrderId() != null) {
-            promotions.heldByOrder(request.tenantId(), request.carriedRedemptionOrderId()).stream()
-                    .filter(row -> "REDEEMED".equals(row.status()))
+            // A RELEASED row counts too: the order claimed its slot at placement and the slot
+            // stays consumed when the promotion stops applying, so the order keeps its
+            // entitlement and the row comes back if a later amendment makes it apply again.
+            promotions
+                    .heldByOrder(request.tenantId(), request.carriedRedemptionOrderId())
                     .forEach(row -> heldIds.add(row.promotionId()));
         }
         Set<UUID> limitReached = new HashSet<>();
@@ -327,9 +330,6 @@ public class PromotionInputResolver {
         if (amendment && request.carriedRedemptionOrderId() != null) {
             for (JdbcPromotionStore.LedgerRow held :
                     promotions.heldByOrder(request.tenantId(), request.carriedRedemptionOrderId())) {
-                if (!"REDEEMED".equals(held.status())) {
-                    continue;
-                }
                 promotionAtVersion(
                                 request.tenantId(),
                                 request.brandId(),

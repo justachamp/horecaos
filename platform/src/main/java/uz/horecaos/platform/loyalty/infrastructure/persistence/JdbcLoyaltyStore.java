@@ -1673,6 +1673,11 @@ public class JdbcLoyaltyStore {
      * this account's customer" is the non-transferability rule, and a rule
      * checked against a value the caller supplied is a rule the caller can lie
      * about.
+     *
+     * @param accrualAllowed ADR 0140: false when a promotion the order carries
+     *        suppresses loyalty accrual, copied onto the order from its accepted quote
+     * @param redemptionAllowed ADR 0140: false when a promotion the order carries
+     *        blocks spending points on it
      */
     public record OrderFacts(
             UUID brandId,
@@ -1681,12 +1686,15 @@ public class JdbcLoyaltyStore {
             String channelCode,
             String currency,
             long totalMinor,
-            long feeMinor) {}
+            long feeMinor,
+            boolean accrualAllowed,
+            boolean redemptionAllowed) {}
 
     public Optional<OrderFacts> orderFacts(UUID tenantId, UUID orderId) {
         return jdbc.sql("""
                 SELECT brand_id, customer_account_id, channel_id, channel_code_snapshot,
-                       currency, total_minor, fee_minor
+                       currency, total_minor, fee_minor,
+                       loyalty_accrual_allowed, loyalty_redemption_allowed
                   FROM ordering.orders
                  WHERE tenant_id = :tenantId AND id = :orderId
                 """)
@@ -1699,7 +1707,9 @@ public class JdbcLoyaltyStore {
                         row.getString("channel_code_snapshot"),
                         row.getString("currency"),
                         row.getLong("total_minor"),
-                        row.getLong("fee_minor")))
+                        row.getLong("fee_minor"),
+                        row.getBoolean("loyalty_accrual_allowed"),
+                        row.getBoolean("loyalty_redemption_allowed")))
                 .optional();
     }
 

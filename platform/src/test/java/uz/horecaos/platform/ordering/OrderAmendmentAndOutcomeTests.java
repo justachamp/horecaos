@@ -246,7 +246,11 @@ class OrderAmendmentAndOutcomeTests {
                 new JdbcCatalogPricingContext(jdbc, "uz"),
                 channelStore,
                 deliveryFees,
-                uz.horecaos.platform.pricing.PromotionTestSupport.resolver(jdbc, promoCodeStore),
+                uz.horecaos.platform.pricing.PromotionTestSupport.resolver(
+                        jdbc,
+                        promoCodeStore,
+                        new uz.horecaos.platform.ordering.application.OrderHistoryService(jdbc),
+                        null),
                 clock,
                 new FakeConfigurationResolver());
         var serviceability = new ServiceabilityService(serviceabilityStore, clock);
@@ -369,7 +373,13 @@ class OrderAmendmentAndOutcomeTests {
                 UNWIRED_PAYMENTS,
                 protection,
                 new FakeConfigurationResolver(),
-                new PromoCodeRedemptionService(promoCodeStore, clock));
+                new PromoCodeRedemptionService(promoCodeStore, clock),
+                new uz.horecaos.platform.pricing.application.PromotionRedemptionService(
+                        new uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPromotionStore(
+                                jdbc, objectMapper)),
+                new uz.horecaos.platform.pricing.application.PromotionRedemptionService(
+                        new uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPromotionStore(
+                                jdbc, objectMapper)));
         bulkActions = new OrderBulkActionService(
                 orderStore, new JdbcBulkOperationStore(jdbc), orderState, outcomes, auditRecorder, clock);
 
@@ -407,7 +417,13 @@ class OrderAmendmentAndOutcomeTests {
                 customerBlacklist,
                 new FakeConfigurationResolver(),
                 saleWindowRules,
-                commentPresetLookup);
+                commentPresetLookup,
+                new uz.horecaos.platform.pricing.application.PromotionRedemptionService(
+                        new uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPromotionStore(
+                                jdbc, objectMapper)),
+                new uz.horecaos.platform.pricing.application.PromotionRedemptionService(
+                        new uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPromotionStore(
+                                jdbc, objectMapper)));
 
         seedTenancyAndCatalog();
         seedPricingAndStock();
@@ -3738,6 +3754,21 @@ class OrderAmendmentAndOutcomeTests {
                 .param("tenantId", TENANT)
                 .param("channelId", storefrontChannel)
                 .update();
+        // ADR 0140: a second, operator-settled method (a card terminal at the counter), so a
+        // payment-method promotion has something to be switched to and from without a provider.
+        jdbc.sql("""
+                INSERT INTO payments.payment_methods (id, tenant_id, code, display_name, responsibility, status)
+                VALUES (:id, :tenantId, 'TERMINAL', 'TERMINAL', 'OPERATOR', 'ACTIVE')
+                ON CONFLICT ON CONSTRAINT uq_payment_method_code DO NOTHING
+                """).param("id", UUID.randomUUID()).param("tenantId", TENANT).update();
+        jdbc.sql("""
+                INSERT INTO tenant.channel_payment_methods (tenant_id, channel_id, payment_method_code, enabled)
+                VALUES (:tenantId, :channelId, 'TERMINAL', true)
+                ON CONFLICT DO NOTHING
+                """)
+                .param("tenantId", TENANT)
+                .param("channelId", storefrontChannel)
+                .update();
 
         UUID scheduleId = UUID.randomUUID();
         jdbc.sql("""
@@ -3930,6 +3961,387 @@ class OrderAmendmentAndOutcomeTests {
     private static final OrderTablesPort NO_ORDER_TABLES = (tenantId, orderIds) -> Map.of();
 
     /** The unwired payments port, which is a stand-in in production too. */
+
+    // ----------------------------------------------------- ADR 0140: amendments keep the order's promotions
+
+    private static uz.horecaos.platform.pricing.domain.PromotionDefinition automatic(
+            String code,
+            String group,
+            @Nullable Integer maximumRedemptions,
+            @Nullable Integer maximumPerCustomer,
+            List<uz.horecaos.platform.pricing.domain.PromotionDefinition.ConditionDefinition> conditions,
+            long basisPoints) {
+        return new uz.horecaos.platform.pricing.domain.PromotionDefinition(
+                code,
+                "Promotion " + code,
+                uz.horecaos.platform.pricing.domain.Promotion.Kind.DISCOUNT,
+                uz.horecaos.platform.pricing.domain.Promotion.Scope.ORDER,
+                group,
+                false,
+                0,
+                false,
+                null,
+                "UZS",
+                NOW.minus(Duration.ofDays(1)),
+                null,
+                maximumRedemptions,
+                maximumPerCustomer,
+                uz.horecaos.platform.pricing.domain.Promotion.LoyaltyAccrual.ACCRUE,
+                uz.horecaos.platform.pricing.domain.Promotion.LoyaltyRedemption.ALLOW,
+                conditions,
+                List.of(new uz.horecaos.platform.pricing.domain.PromotionDefinition.ActionDefinition(
+                        1,
+                        uz.horecaos.platform.pricing.domain.Promotion.Action.Type.ORDER_PERCENTAGE_DISCOUNT,
+                        Map.of("basisPoints", basisPoints))));
+    }
+
+    private static uz.horecaos.platform.pricing.domain.PromotionDefinition.ConditionDefinition condition(
+            uz.horecaos.platform.pricing.domain.Promotion.Condition.Type type, Map<String, Object> operands) {
+        return new uz.horecaos.platform.pricing.domain.PromotionDefinition.ConditionDefinition(1, type, operands);
+    }
+
+    /** An ACTIVE automatic promotion at definition version 1, with its version recorded, exactly as authoring leaves one. */
+    private UUID activateAutomatic(uz.horecaos.platform.pricing.domain.PromotionDefinition definition) {
+        var promotions = new uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPromotionStore(
+                jdbc, JsonMapper.builder().build());
+        UUID id = UUID.randomUUID();
+        promotions.insertDraft(id, TENANT, BRAND, definition, clock.instant());
+        promotions.transition(TENANT, BRAND, id, 1, List.of("DRAFT"), "VALIDATED", clock.instant());
+        promotions.appendDefinitionVersion(TENANT, BRAND, id, 1, definition, "fixture", "VALIDATED", clock.instant());
+        promotions.activate(TENANT, BRAND, id, 2, "fixture", null, clock.instant());
+        return id;
+    }
+
+    private CheckoutService.CheckoutResult placeOrderPaying(String idempotencyKey, @Nullable String method) {
+        UUID cart = openCart();
+        tx(() -> carts.putLine(
+                TENANT, BRAND, CUSTOMER, cart, cartVersion(cart), "a", burgerVariant, 2, List.of(), null));
+        if (method != null) {
+            tx(() -> carts.setPaymentMethod(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart), method));
+        }
+        tx(() -> carts.price(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart)));
+        var row = cartStore.find(TENANT, BRAND, cart).orElseThrow();
+        return tx(() -> checkout.checkout(new CheckoutService.CheckoutCommand(
+                TENANT,
+                BRAND,
+                cart,
+                row.version(),
+                Objects.requireNonNull(row.pricingQuoteId()),
+                Objects.requireNonNull(row.pricingContextHash()),
+                idempotencyKey,
+                method == null ? "CASH" : method,
+                0L,
+                "CUSTOMER",
+                CUSTOMER.toString(),
+                null,
+                null,
+                false)));
+    }
+
+    private OrderAmendmentService.AmendmentCommand oneMoreBurger() {
+        return OrderAmendmentService.AmendmentCommand.addLines(
+                List.of(new OrderAmendmentService.AmendmentCommand.LineRequest(burgerVariant, 1, List.of())));
+    }
+
+    private List<Map<String, Object>> ledgerRows(UUID orderId) {
+        return jdbc.sql("SELECT * FROM pricing.promotion_redemptions WHERE order_id = :id ORDER BY promotion_id")
+                .param("id", orderId)
+                .query()
+                .listOfRows();
+    }
+
+    private long ledgerAmountsMatchTheQuote(UUID orderId, UUID quoteId) {
+        long ledger = jdbc.sql("SELECT COALESCE(sum(discount_minor), 0) FROM pricing.promotion_redemptions "
+                        + "WHERE order_id = :id AND status = 'REDEEMED'")
+                .param("id", orderId)
+                .query(Long.class)
+                .single();
+        long adjustments = -1 * promotionAdjustmentSum(quoteId);
+        assertThat(ledger)
+                .as(
+                        "the ledger row's amounts equal the sum of the promotion's adjustments on the current revision's quote")
+                .isEqualTo(adjustments);
+        return ledger;
+    }
+
+    @Test
+    @DisplayName(
+            "ADR 0140: an order placed inside a promotion's window keeps it when a line is added after the window closes")
+    void anAmendmentKeepsAWindowPromotionAfterTheWindowCloses() {
+        UUID promotion = activateAutomatic(automatic(
+                "LUNCH10",
+                "lunch",
+                null,
+                null,
+                List.of(condition(
+                        uz.horecaos.platform.pricing.domain.Promotion.Condition.Type.TIME_OF_DAY,
+                        Map.of("fromMinuteOfDay", 12 * 60, "toMinuteOfDay", 15 * 60))),
+                1_000L));
+        // 12:30 in Tashkent. A new order at 15:05 would get nothing -- that is the control below.
+        clock.advance(Duration.ofMinutes(30));
+        UUID orderId = orderIdOf(placeOrderPaying("idem-window-1", null));
+        var placed = orderStore.find(TENANT, orderId).orElseThrow();
+        assertThat(placed.discountMinor())
+                .as("10% of 100 000 inside the window")
+                .isEqualTo(10_000L);
+        assertThat(placed.totalMinor()).isEqualTo(90_000L);
+        UUID checkoutQuote = placed.pricingQuoteId();
+
+        clock.advance(Duration.ofHours(2).plusMinutes(35));
+
+        var proposed = proposeOnly(orderId, "k-window-1", oneMoreBurger());
+        assertThat(proposed.amendment().deltaTotalMinor())
+                .as("one more 50 000 burger less its 10%%: +45 000. Judged at 15:05 the window had closed and the "
+                        + "customer would have been asked to confirm +60 000 for a burger worth 50 000")
+                .isEqualTo(45_000L);
+        confirmAndApply(orderId, proposed.amendment().id());
+
+        var amended = orderStore.find(TENANT, orderId).orElseThrow();
+        assertThat(amended.discountMinor()).isEqualTo(15_000L);
+        assertThat(amended.totalMinor()).isEqualTo(135_000L);
+        assertThat(reconciles(amended.subtotalMinor(), amended.taxMinor(), amended.feeMinor(), amended.discountMinor()))
+                .isEqualTo(amended.totalMinor());
+
+        var rows = ledgerRows(orderId);
+        assertThat(rows)
+                .as("one ledger row for (order, promotion), however many revisions")
+                .hasSize(1);
+        assertThat(rows.get(0))
+                .containsEntry("promotion_id", promotion)
+                .containsEntry("claimed_quote_id", checkoutQuote)
+                .containsEntry("discount_minor", 15_000L)
+                .containsEntry("last_revision", 2)
+                .containsEntry("status", "REDEEMED");
+        UUID currentQuote = amendmentStore
+                .find(TENANT, proposed.amendment().id())
+                .orElseThrow()
+                .quoteId();
+        assertThat(rows.get(0)).containsEntry("current_quote_id", currentQuote);
+        ledgerAmountsMatchTheQuote(orderId, currentQuote);
+
+        // The control: the same cart placed now, after the window, gets no promotion at all.
+        UUID late = orderIdOf(placeOrderPaying("idem-window-2", null));
+        assertThat(orderStore.find(TENANT, late).orElseThrow().discountMinor()).isZero();
+    }
+
+    @Test
+    @DisplayName("ADR 0140: an amended first order stays first, even after the customer placed a second order")
+    void anAmendedFirstOrderStaysFirst() {
+        UUID promotion = activateAutomatic(automatic(
+                "WELCOME10",
+                "first",
+                null,
+                1,
+                List.of(condition(
+                        uz.horecaos.platform.pricing.domain.Promotion.Condition.Type.ORDER_SEQUENCE,
+                        Map.of("mode", "FIRST", "basis", "BRAND"))),
+                1_000L));
+        UUID first = orderIdOf(placeOrderPaying("idem-first-1", null));
+        assertThat(orderStore.find(TENANT, first).orElseThrow().discountMinor()).isEqualTo(10_000L);
+        UUID second = orderIdOf(placeOrderPaying("idem-first-2", null));
+        assertThat(orderStore.find(TENANT, second).orElseThrow().discountMinor())
+                .as("the second order is not the customer's first")
+                .isZero();
+
+        var proposed = proposeOnly(first, "k-first-1", oneMoreBurger());
+        confirmAndApply(first, proposed.amendment().id());
+
+        var amended = orderStore.find(TENANT, first).orElseThrow();
+        assertThat(amended.discountMinor())
+                .as("recorded position 1 is authoritative: the later order does not make this one second")
+                .isEqualTo(15_000L);
+        assertThat(ledgerRows(first)).hasSize(1);
+        assertThat(jdbc.sql("SELECT consumed_count FROM pricing.promotions WHERE id = :id")
+                        .param("id", promotion)
+                        .query(Integer.class)
+                        .single())
+                .as("the amendment claimed no second slot")
+                .isEqualTo(1);
+        assertThat(jdbc.sql("SELECT consumed_count FROM pricing.promotion_customer_usage WHERE promotion_id = :id")
+                        .param("id", promotion)
+                        .query(Integer.class)
+                        .single())
+                .isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("ADR 0140: a payment-method promotion follows the method an amendment switches to, and back")
+    void aPaymentMethodAmendmentReprices() {
+        UUID promotion = activateAutomatic(automatic(
+                "TERMINAL5",
+                "pay",
+                null,
+                null,
+                List.of(condition(
+                        uz.horecaos.platform.pricing.domain.Promotion.Condition.Type.PAYMENT_METHOD,
+                        Map.of("paymentMethodCodes", List.of("TERMINAL")))),
+                500L));
+        UUID orderId = orderIdOf(placeOrderPaying("idem-pay-promo-1", "TERMINAL"));
+        assertThat(orderStore.find(TENANT, orderId).orElseThrow().discountMinor())
+                .isEqualTo(5_000L);
+
+        var toCash = proposeOnly(
+                orderId, "k-pay-promo-1", OrderAmendmentService.AmendmentCommand.changePaymentMethod("CASH"));
+        assertThat(toCash.amendment().deltaTotalMinor())
+                .as(
+                        "a payment-method change on its own reprices when a payment-method promotion is involved: cash loses the 5 000")
+                .isEqualTo(5_000L);
+        confirmAndApply(orderId, toCash.amendment().id());
+        assertThat(orderStore.find(TENANT, orderId).orElseThrow().discountMinor())
+                .isZero();
+        assertThat(ledgerRows(orderId))
+                .singleElement()
+                .satisfies(row -> assertThat(row.get("status")).isEqualTo("RELEASED"));
+
+        var back = proposeOnly(
+                orderId, "k-pay-promo-2", OrderAmendmentService.AmendmentCommand.changePaymentMethod("TERMINAL"));
+        assertThat(back.amendment().deltaTotalMinor())
+                .as("switching back restores it")
+                .isEqualTo(-5_000L);
+        confirmAndApply(orderId, back.amendment().id());
+
+        assertThat(orderStore.find(TENANT, orderId).orElseThrow().discountMinor())
+                .isEqualTo(5_000L);
+        assertThat(ledgerRows(orderId))
+                .as("the same row came back; there is still one per (order, promotion)")
+                .singleElement()
+                .satisfies(row -> {
+                    assertThat(row.get("status")).isEqualTo("REDEEMED");
+                    assertThat(row.get("promotion_id")).isEqualTo(promotion);
+                    assertThat(row.get("discount_minor")).isEqualTo(5_000L);
+                });
+    }
+
+    @Test
+    @DisplayName("ADR 0140: the last slot's order is amended without a second slot, and the next order is refused")
+    void orderOneHundredOfOneHundredIsAmended() {
+        UUID promotion = activateAutomatic(automatic("ONLYONE", "limit", 1, null, List.of(), 1_000L));
+        UUID orderId = orderIdOf(placeOrderPaying("idem-last-1", null));
+        assertThat(orderStore.find(TENANT, orderId).orElseThrow().discountMinor())
+                .isEqualTo(10_000L);
+        assertThat(consumed(promotion)).isEqualTo(1);
+
+        var proposed = proposeOnly(orderId, "k-last-1", oneMoreBurger());
+        confirmAndApply(orderId, proposed.amendment().id());
+
+        assertThat(orderStore.find(TENANT, orderId).orElseThrow().discountMinor())
+                .as("the order holds the promotion; testing the limit against itself would refuse order 1 of 1")
+                .isEqualTo(15_000L);
+        assertThat(consumed(promotion))
+                .as("an amendment never increments the counter")
+                .isEqualTo(1);
+
+        UUID next = orderIdOf(placeOrderPaying("idem-last-2", null));
+        assertThat(orderStore.find(TENANT, next).orElseThrow().discountMinor())
+                .as("the limit is used up for everyone else")
+                .isZero();
+    }
+
+    @Test
+    @DisplayName(
+            "ADR 0140: an amendment applies an unlimited promotion that began after placement, never a limited one it does not hold")
+    void anAmendmentOnlyAddsUnlimitedPromotions() {
+        UUID orderId = orderIdOf(placeOrderPaying("idem-late-1", null));
+        assertThat(orderStore.find(TENANT, orderId).orElseThrow().discountMinor())
+                .isZero();
+        UUID limited = activateAutomatic(automatic("LIMITEDLATE", "limited", 100, null, List.of(), 2_000L));
+        UUID unlimited = activateAutomatic(automatic("OPENLATE", "open", null, null, List.of(), 1_000L));
+
+        var proposed = proposeOnly(orderId, "k-late-1", oneMoreBurger());
+        confirmAndApply(orderId, proposed.amendment().id());
+
+        assertThat(orderStore.find(TENANT, orderId).orElseThrow().discountMinor())
+                .as("10% of 150 000 from the unlimited promotion; the limited one was never claimed at placement")
+                .isEqualTo(15_000L);
+        assertThat(ledgerRows(orderId))
+                .singleElement()
+                .satisfies(row -> assertThat(row.get("promotion_id")).isEqualTo(unlimited));
+        assertThat(consumed(limited)).isZero();
+    }
+
+    @Test
+    @DisplayName(
+            "ADR 0140: an order keeps a since-suspended and since-edited promotion at its recorded version; a new order does not")
+    void anOrderKeepsItsPromotionAtTheVersionItWasPricedUnder() {
+        var definition = automatic("KEEP10", "keep", null, null, List.of(), 1_000L);
+        UUID promotion = activateAutomatic(definition);
+        UUID orderId = orderIdOf(placeOrderPaying("idem-keep-1", null));
+
+        // The marketer suspends it, makes it 50%, and leaves it as a draft.
+        var promotions = new uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPromotionStore(
+                jdbc, JsonMapper.builder().build());
+        int version = promotions.find(TENANT, BRAND, promotion).orElseThrow().version();
+        assertThat(promotions.transition(
+                        TENANT, BRAND, promotion, version, List.of("ACTIVE"), "SUSPENDED", clock.instant()))
+                .isTrue();
+        assertThat(promotions.replaceDefinition(
+                        TENANT,
+                        BRAND,
+                        promotion,
+                        version + 1,
+                        automatic("KEEP10", "keep", null, null, List.of(), 5_000L),
+                        2,
+                        clock.instant()))
+                .isTrue();
+
+        var proposed = proposeOnly(orderId, "k-keep-1", oneMoreBurger());
+        confirmAndApply(orderId, proposed.amendment().id());
+
+        assertThat(orderStore.find(TENANT, orderId).orElseThrow().discountMinor())
+                .as("10%% of 150 000 at the recorded version 1, not the 50%% the draft now says")
+                .isEqualTo(15_000L);
+        UUID fresh = orderIdOf(placeOrderPaying("idem-keep-2", null));
+        assertThat(orderStore.find(TENANT, fresh).orElseThrow().discountMinor())
+                .as("a new order gets nothing: the promotion is not live")
+                .isZero();
+    }
+
+    @Test
+    @DisplayName(
+            "ADR 0140: a promotion that suppresses loyalty accrual marks the order, and the amendment re-derives the flag")
+    void loyaltyFlagsReachTheOrder() {
+        var suppressing = new uz.horecaos.platform.pricing.domain.PromotionDefinition(
+                "NOPOINTS",
+                "No points",
+                uz.horecaos.platform.pricing.domain.Promotion.Kind.DISCOUNT,
+                uz.horecaos.platform.pricing.domain.Promotion.Scope.ORDER,
+                "points",
+                false,
+                0,
+                false,
+                null,
+                "UZS",
+                NOW.minus(Duration.ofDays(1)),
+                null,
+                null,
+                null,
+                uz.horecaos.platform.pricing.domain.Promotion.LoyaltyAccrual.SUPPRESS,
+                uz.horecaos.platform.pricing.domain.Promotion.LoyaltyRedemption.BLOCK,
+                List.of(),
+                List.of(new uz.horecaos.platform.pricing.domain.PromotionDefinition.ActionDefinition(
+                        1,
+                        uz.horecaos.platform.pricing.domain.Promotion.Action.Type.ORDER_PERCENTAGE_DISCOUNT,
+                        Map.of("basisPoints", 1_000L))));
+        activateAutomatic(suppressing);
+
+        UUID orderId = orderIdOf(placeOrderPaying("idem-points-1", null));
+
+        assertThat(jdbc.sql(
+                                "SELECT loyalty_accrual_allowed, loyalty_redemption_allowed FROM ordering.orders WHERE id = :id")
+                        .param("id", orderId)
+                        .query()
+                        .singleRow())
+                .containsEntry("loyalty_accrual_allowed", false)
+                .containsEntry("loyalty_redemption_allowed", false);
+    }
+
+    private int consumed(UUID promotionId) {
+        return jdbc.sql("SELECT consumed_count FROM pricing.promotions WHERE id = :id")
+                .param("id", promotionId)
+                .query(Integer.class)
+                .single();
+    }
+
     private static final PaymentIntentPort UNWIRED_PAYMENTS = new PaymentIntentPort() {
         @Override
         public @Nullable UUID createIntent(
