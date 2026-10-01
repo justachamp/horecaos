@@ -1,24 +1,52 @@
 # ADR 0142: Dispatch rules
 
 - Decision status: Accepted
-- Implementation status: Not started — no dispatch rule exists as a record, a
-  document, an endpoint or a screen. What an operator cannot decide today is
-  compiled in or deployed as configuration: `DeliveryPlanningService.open`
-  writes `SourcingMode.FLEET_FIRST` on every plan; `ShipmentBookingPort.partners`
-  returns the branch's delivery bindings ordered by ADR 0026 scope specificity
-  and then the binding's `priority` column, and consults neither the order's
-  zone nor its source; `SourcingPlanner` fixes the fleet-then-partner ladder;
-  the offer, lead and window numbers are an ADR 0030 policy document
-  (`fulfillment.sourcing`, settable down to the branch) that nothing can author —
-  `DeliverySourcingPolicies.SOURCING` has readers and no writer, so the
-  provisional `DeliverySourcingPolicy.DEFAULTS` are in force everywhere; there
-  is no grouping of any kind; and the only unpaid-order threshold is a deploy
-  property (`horecaos.ordering.workers.payment.stale-after`, PT30M) that flags
-  an order for a person and never cancels it. What is built and this record
-  keeps: the durable plan and sourcing job, the single-winner attempt journal,
-  quote scoring, manual assign and external booking on the dispatch board
-  (`ManualDispatchService`, `ManualExternalBookingService`), and the
-  `DISPATCH_BOARD` realtime signal for those manual actions.
+- Implementation status: Partial — built in operations batch 17 (2026-10-01),
+  except grouping's data feed and the unpaid-order `CANCEL`, both of which wait
+  on an owner this record names. **Built.** V0465 adds `delivery_plans.dispatch_policy_id`/
+  `dispatch_policy_version`/`dispatch_rule_id`/`dispatch_decision` and widens
+  `ck_plan_mode` to admit `PARTNER_FIRST`. `DispatchRulesDocument` is the
+  `fulfillment.dispatch_rules` policy (`DeliverySourcingPolicies.DISPATCH_RULES`,
+  TENANT/BRAND/LOCATION, replace-not-merge); `DispatchRuleEvaluator` is the one
+  pure function the runtime and the simulator both call;
+  `DispatchRulesValidator` refuses, at publish, a name that is not this tenant's
+  active delivery installation, a rule an enabled rule above it shadows, a start
+  that leaves a partner no time, `holdBeforeConfirm`, and grouping.
+  `DeliveryPlanningService.open` evaluates once at plan creation and stores the
+  matched rule, the resolved action, the skipped installations and the pinned
+  document version; `DeliverySourcingRunner` reads that decision back from the
+  plan and `DeliverySourcingService` applies its `exclude`/`order`/`selection`
+  (`LADDER` asks no quote, `CHEAPEST` is `QuoteScoring` unchanged) over the live
+  `ShipmentBookingPort.partners` list, so an edit never reroutes an order in
+  flight. `SourcingMode.PARTNER_FIRST` is the fifth mode: the partner lane first,
+  the fleet only once that lane ended with a definite answer, an uncertain attempt
+  still escalating first, and `handoverDeadline` keyed on "a partner lane follows
+  the fleet lane". `PickupPlan` takes a dispatch start (basis plus a bounded
+  offset) and `CALCULATION_VERSION` is 2. `OperationsDispatchRulesController`
+  serves `GET`/`PUT .../dispatch-rules` (`If-Match`, `Idempotency-Key`), `.../options`,
+  `.../usage`, `POST .../simulations` and the missing writer for
+  `fulfillment.sourcing` at `GET`/`PUT .../sourcing-policy`, behind the new
+  `delivery.dispatch_rules.read`/`.write`; `ordering.payment_window` is a policy
+  of `ordering` (`OperationsPaymentWindowController`, `order.payment-window.manage`)
+  that `OrderPaymentProcess` reads in place of the deploy property, which stays the
+  fallback. Each publication leaves a field-level audit fact naming rules by id.
+  `DeliverySourcingRunner` now publishes the `DISPATCH_BOARD` signal that only
+  manual actions did. The console has Delivery > Dispatch rules (the ordered rule
+  list on `q-rule-list`, the condition and action editors, the simulator, the
+  timings and the unpaid-order window) and the read-only summary on the order
+  policy's Automation card. **Not built.** (1) Grouping's feed: the
+  `FleetCandidate.groupableWithMetres` ranking bias is in `SourcingPlanner` and
+  tested, but nothing populates it in production -- the decrypt purpose that reads
+  another order's drop-off, `shipments.run_key` and the bounded wait are not
+  built, and publishing a rule with `grouping` is refused unless
+  `horecaos.fulfillment.dispatch.grouping-enabled` is set, which it is not: how a
+  courier is paid for one run is finance's open input. (2) `CANCEL` on
+  the unpaid window is a named value refused at publish, ADR 0019's open input
+  (product); the window only decides when an order reaches the stuck list. (3)
+  `holdBeforeConfirm` is reserved and refused. (4) No approval gate on publishing
+  (owner), and no default rule set beyond the built-in default (operations). (5)
+  Row `3.8`'s IA text for "auto-recreate after late payment" has nothing to build,
+  as the Context argues.
 - Date proposed: 2026-09-29
 - Date decided: 2026-10-01
 - Deciders: proposed by Claude (wave batch 14, w7-adrs-stops-dispatch-walkin)
@@ -505,29 +533,29 @@ single-winner indexes changes.
 
 ## Implementation checklist
 
-- [ ] Flyway: the `delivery_plans` and `shipments` columns above, granted.
-- [ ] `DispatchRuleEvaluator` and the document types in `fulfillment.domain.sourcing`;
+- [x] Flyway: the `delivery_plans` columns above (V0465); the `shipments` `run_key` columns wait with grouping.
+- [x] `DispatchRuleEvaluator` and the document types in `fulfillment.domain.sourcing`;
       the `PolicyKey` `fulfillment.dispatch_rules`; startup registry check.
-- [ ] `DeliveryOrderPort.DeliveryOrder` gains channel id, channel system type and
+- [x] `DeliveryOrderPort.DeliveryOrder` gains channel id, channel system type and
       zone id (from the fee-resolution evidence).
-- [ ] `DeliveryPlanningService.open` evaluates and stores the decision; bump
+- [x] `DeliveryPlanningService.open` evaluates and stores the decision; bump
       `PickupPlan.CALCULATION_VERSION`.
-- [ ] `DeliverySourcingService` applies `exclude`/`order`/`selection`.
-- [ ] `SourcingMode.PARTNER_FIRST`; `SourcingPlanner` lane order and
+- [x] `DeliverySourcingService` applies `exclude`/`order`/`selection`.
+- [x] `SourcingMode.PARTNER_FIRST`; `SourcingPlanner` lane order and
       `handoverDeadline` keyed on "a partner lane follows the fleet lane";
       `SourcingDecision.PARTNER_FIRST_MODE`; the `ck_plan_mode` migration; the
       comment in `DeliverySourcingService.source` that quotes are taken "once the
       fleet lane has been conceded" made true of both orders.
-- [ ] Publish-time validation and lint; the simulator endpoint; the `usage` read.
-- [ ] `delivery.dispatch_rules.read` / `.write` and role bundles; the writer and
+- [x] Publish-time validation and lint; the simulator endpoint; the `usage` read.
+- [x] `delivery.dispatch_rules.read` / `.write` and role bundles; the writer and
       screen for `fulfillment.sourcing`.
-- [ ] `ordering.payment_window` policy key and its `order.payment-window.manage`
+- [x] `ordering.payment_window` policy key and its `order.payment-window.manage`
       capability; `OrderPaymentProcess` reads it in place of the deploy property.
-- [ ] `DISPATCH_BOARD` signal from `DeliverySourcingRunner`.
-- [ ] Console screen IA 3.8 on the shared `q-condition-builder` / `q-rule-list`
+- [x] `DISPATCH_BOARD` signal from `DeliverySourcingRunner`.
+- [x] Console screen IA 3.8 on the shared `q-rule-list` (the condition editor is a closed-vocabulary form, not the generic `q-condition-builder`)
       components (gap-map row `X.25`) with the simulator panel; the read-only
       summary card at `settings.md` Card 3; ru / uz-latn / en strings.
-- [ ] Grouping: `FleetCandidate` field, the ranking change, `run_key` — after the
+- [ ] Grouping: `FleetCandidate` field and the ranking change are built; the feed, `run_key` — after the
       pay decision.
 - [ ] Tests listed under Testing, each seen failing first.
 - [ ] Update ADR 0014's status line to record that its "service zone" filter and
