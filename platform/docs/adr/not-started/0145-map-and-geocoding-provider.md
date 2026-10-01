@@ -15,12 +15,14 @@
   `ProviderInstallationController.secretCategoryFor` refuses to store a secret
   for it; `GeoPoint` in `tenancy.api`; `RoadDistancePort` answering empty (the
   subject of ADR 0147, not this record). The only live third-party map in the
-  repository is outside the platform's control: `frontend/storefront` and
-  `frontend/storefront-milliy` load the Yandex Maps 2.1 script and call
-  `geocode-maps.yandex.ru` directly from the customer's browser with a browser
-  key that ships as a default in each image's `docker-entrypoint.sh` and
-  `public/config.json` (`GeocodingService`, `YandexMapsService`), and the
-  storefront saves what the customer confirms as `CUSTOMER_PIN`. The operations
+  repository is outside the platform's control: `frontend/storefront` loads the
+  Yandex Maps 2.1 script on its address screen (`locations-add`) and calls
+  `geocode-maps.yandex.ru` directly from the customer's browser
+  (`GeocodingService`, `YandexMapsService`), and saves what the customer confirms
+  as `CUSTOMER_PIN`; `frontend/storefront-milliy` carries the same two services
+  and the same key configuration with no screen calling them yet (its checkout
+  notes that creating an address "needs the geocoding/marker flow"). Both images
+  ship a browser key as a default in `docker-entrypoint.sh` and `public/config.json`. The operations
   console, the control plane and the mobile app have no map at all.
 - Date proposed: 2026-10-01
 - Date decided: —
@@ -74,7 +76,7 @@ closed on its proposed default.
 
 ## Context
 
-Eight gap-map rows are blocked on one unmade decision: `X.4` (MapCanvas,
+Nine gap-map rows are blocked on one unmade decision: `X.4` (MapCanvas,
 PolygonEditor, BoundingBoxEditor, MapPin and AddressPicker — the design-system
 primitive the rows below consume), `1.3b` (New order's address pane has a
 structured address and no pin or search), `3.2` (the live courier map shows
@@ -90,7 +92,8 @@ also lists "a map of points and routes" as its last gap.
 
 **The notes are right about the platform and wrong about the repository.** The
 platform has no provider. The customer-facing storefronts have one, inherited
-from the legacy application they were ported from, and it is Yandex. The
+from the legacy application they were ported from, and it is Yandex (live in
+`frontend/storefront`, carried and unused in `frontend/storefront-milliy`). The
 storefront's own `GeocodingService` says so in a comment worth repeating: the
 legacy backend proxied geocoding at `/customers/addresses/action/geocode`, "the
 platform has no equivalent and is not going to grow one by accident", so the
@@ -247,13 +250,13 @@ provider-neutral seams so that the choice is an adapter swap.**
 | Keep calling the geocoder from the browser | Works today. But it sends personal data to a third party outside ADR 0029's controls, ships a shared key in git, cannot be metered per tenant, and ties every front end to one vendor's response shape | Never for new code; the storefront migrates at its next address change |
 | Bring-your-own-key per tenant at launch | Puts a vendor contract and a billing relationship on every restaurant owner, most of whom cannot pay a foreign vendor either | A chain asks for its own contract: `ProviderCategory.GEOCODING` is kept for it |
 | Persist geocoder output as `GEOCODER` points | No row needs it, and it is the one choice that makes the storage-licence question load-bearing | An automatic backfill is wanted *and* the licence allows storage |
-| A vendor-neutral tile and geocoder stack built from open components behind a managed provider | Looks like the exit, is in fact a fifth option with its own bake-off and its own operator | The self-hosted option is chosen |
+| No provider yet: keep the coordinate table and the four-number bounding box | Costs nothing and ships nothing. Nine rows stay `PARTIAL` or `NOT BUILT`, a zone stays a radius typed into a form, and the storefront keeps sending addresses to a vendor nobody chose | Never; the cheapest part of this record is the part that stops the accident |
 
 ## Consequences
 
 ### Positive
 
-- Eight rows stop waiting on a decision, and the order they ship in is fixed by
+- Nine rows stop waiting on a decision, and the order they ship in is fixed by
   dependency: the primitive (`X.4`) first, then the consumers.
 - The customer's address stops reaching a third party from the browser by
   default, and starts being metered, rate limited and auditable.

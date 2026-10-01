@@ -19,8 +19,9 @@
   channel alone (`Collectors.toMap(NotificationChannelAdapter::channel, …)`), so
   a second SMS adapter would fail at startup with a duplicate key.
   `notifications.delivery_status_events` (V0026: append-only, unique on the
-  provider's event id, six normalised statuses) exists and is written only by the
-  status query, never by an inbound receipt. `CampaignMessagePort.isWired("SMS")`
+  provider's event id, six normalised statuses) exists and is written only from
+  the answer to a send or a status query (`NotificationDispatchService.record`),
+  never from an inbound receipt. `CampaignMessagePort.isWired("SMS")`
   is false everywhere — the only implementation, `CampaignTelegramDeliveryService`,
   answers true for `MESSAGING_APP` alone — so an approved SMS campaign refuses to
   expand and a courier broadcast (`marketing.courier_broadcasts`, V0307) is

@@ -38,7 +38,10 @@
     platform supplies** (engineering). Community reports say the admin API accepts
     a `credentials` element of type `totp` with `secretData`, and also say an
     ordinary user cannot create one through the account API; neither has been run
-    against 26.7 here. This is the first thing to prove, in a spike a day long.
+    against 26.7 here, nor has the direct grant's answer to a missing `totp` (which
+    the same reports describe as indistinguishable from a wrong password) or the
+    holding of two OTP credentials on one account. This is the first thing to
+    prove, in a spike a day long.
     Proposed default: build Decision 3 as written if it works; if it does not,
     enrol through Keycloak's own `CONFIGURE_TOTP` required-action page (the
     alternative below), which needs the owner to accept one narrow exception to
@@ -154,7 +157,8 @@ administrator action and never a link.**
    asks for the current password again, shows the secret as a QR code
    (`q-qr-code` already exists) and as text, and takes the first code in
    `q-otp-input`. The platform generates 20 random bytes, returns them inside a
-   sealed, 10-minute, single-purpose token (so no table holds a pending secret),
+   sealed (authenticated encryption, key held as an ADR 0028 reference),
+   10-minute, single-purpose token, so no table holds a pending secret,
    and on confirmation registers the credential with Keycloak through the admin
    API, then proves it by performing a direct grant with password and code; if that
    fails the new credential is deleted and the user is told. Nothing in the
@@ -168,9 +172,9 @@ administrator action and never a link.**
    `MFA_ENROLMENT_REQUIRED` with a short-lived enrolment ticket valid only for the
    enrolment endpoints. Enrolment is also offered at the end of invitation
    acceptance (ADR 0097, ADR 0116), when the account is new, which narrows the window in
-   which a stolen first password can claim the factor. The same enforcement ships
-   in three phases behind one setting: `OFF`, `PROMPT` (offer, do not require),
-   `REQUIRED`.
+   which a stolen first password can claim the factor. Enforcement for
+   platform accounts ships in three phases behind one deploy setting: `OFF`,
+   `PROMPT` (offer, do not require) and `REQUIRED`.
 
 5. **Recovery is a second authenticator or an administrator, never a link.**
    - A second device is added by someone already signed in with a valid code.
