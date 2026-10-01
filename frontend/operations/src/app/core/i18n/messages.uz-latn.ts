@@ -1852,6 +1852,30 @@ export const messagesUzLatn: MessageCatalogue = {
     'Stol ishlamayapti, mehmonlarni oʻtqazib boʻlmaydi.',
   'settings.locations.floorPlan.seat.done': 'Mehmonlar {table} stolga oʻtqazildi.',
   'settings.locations.floorPlan.seat.errorOccupied': 'Bu stolga hozirgina mehmonlar oʻtqazildi.',
+  'settings.locations.floorPlan.field.selfSeat': 'Mehmonlar oʻzlari oʻtirishi mumkin',
+  'settings.locations.floorPlan.selfSeat.on': 'Yoqilgan',
+  'settings.locations.floorPlan.selfSeat.off': 'Oʻchirilgan',
+  'settings.locations.floorPlan.selfSeat.hint':
+    'Boʻsh stol kodini skanerlab, hisobga kirgan mehmon xodimni kutmasdan oʻtirishi mumkin. Ushlab turish vaqti tugagach, restoran qabul qilgan buyurtma boʻlmasa va siz stolni mahkamlamagan boʻlsangiz, stol zalga qaytadi. Faqat «buyurtma va toʻlov» rejimida ishlaydi; stolga oʻzingiz oʻtqazishingiz, mahkamlashingiz yoki boʻshatishingiz mumkin.',
+  'settings.locations.floorPlan.field.claimTtl':
+    'Mehmon oʻzi egallagan stol necha daqiqa ushlab turiladi',
+  'settings.locations.floorPlan.field.horizon':
+    'Yaqin daqiqalarda band qilingan stollarga mehmonni qoʻymaslik, daqiqa',
+  'settings.locations.floorPlan.field.maxUnconfirmed':
+    'Tasdiqlanmagan, oʻzi egallangan stollarning eng koʻpi',
+  'settings.locations.floorPlan.field.dailyClaims': 'Bir mehmon uchun kuniga oʻzi oʻtirishlar soni',
+  'settings.locations.floorPlan.field.paymentDefer': 'Toʻlov jarayonida qoʻshimcha daqiqalar',
+  'settings.locations.floorPlan.claim.unconfirmed':
+    'Mehmon oʻzi oʻtirdi. Buyurtma qabul qilinmasa yoki stolni mahkamlamasangiz, stol soat {time} da zalga qaytadi.',
+  'settings.locations.floorPlan.claim.confirmed': 'Mehmon oʻzi oʻtirdi, endi bu oddiy stol.',
+  'settings.locations.floorPlan.claim.keep': 'Stolni mahkamlash',
+  'settings.locations.floorPlan.claim.release': 'Stolni boʻshatish',
+  'settings.locations.floorPlan.claim.kept': '{table} stoli mehmon uchun mahkamlandi.',
+  'settings.locations.floorPlan.claim.released': '{table} stoli yana zalda.',
+  'settings.locations.floorPlan.claim.defaultReason':
+    'Mehmon oʻzi oʻtirdi; zal rejasidan hal qilindi',
+  'reservations.notice.tableOccupiedNow':
+    'Tasdiqlandi. Bu stollardan birida allaqachon mehmonlar oʻtiribdi — bron kelishidan oldin zalni tekshiring.',
 
   'finance.scope.denied': 'Bu hisobga Moliya boʻlimiga ruxsat berilmagan.',
 

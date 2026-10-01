@@ -2,7 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { Observable, catchError, map, tap, throwError } from 'rxjs';
 
 import { ApiClient } from '../../core/api/api-client';
-import { IntentCommandRegistry } from '../../core/api/idempotency';
+import { IntentCommandRegistry, command } from '../../core/api/idempotency';
 import { LocationScope, operationsPaths } from '../../core/api/operations-paths';
 import { ApiError, ApiErrorCode } from '../../core/api/problem-details';
 
@@ -57,6 +57,24 @@ export interface SessionView {
   readonly version: number;
   /** Every table the party sits at; a party pushed together for a large group has several. */
   readonly tables: readonly SessionTableView[];
+  /**
+   * Who opened it (ADR 0143): `STAFF` (a person with `dinein.session.manage`) or
+   * `GUEST_QR` (a guest seated themselves from the table's code). Never who the guest is.
+   */
+  readonly origin: 'STAFF' | 'GUEST_QR' | (string & {});
+  /** When an unconfirmed guest claim gives the table back; null once confirmed, and for a staff session. */
+  readonly claimExpiresAt: string | null;
+  /** When staff or an accepted round made a guest's claim an ordinary session; null while it is provisional. */
+  readonly confirmedAt: string | null;
+}
+
+/**
+ * A guest's self-seated table that nobody has confirmed: it lapses at
+ * `claimExpiresAt` unless a round the restaurant accepted lands on it or staff keep it
+ * (ADR 0143).
+ */
+export function isUnconfirmedClaim(session: SessionView): boolean {
+  return session.origin === 'GUEST_QR' && session.confirmedAt === null;
 }
 
 /** Mirrors `TableSessionController.RoundResponse`. */
@@ -73,9 +91,10 @@ export interface RoundView {
  * Callers: the reservations screen seats a booking (`open` with a
  * `reservationId`, W01); the floor plan's "Seat walk-in" opens one with none;
  * the New Order screen lists what is live and attaches a placed DINE_IN order as
- * a round, so an operator-keyed order shows its table at once. State-actions and
- * force-closures stay uncalled: the running bill and settlement screen is a
- * different, unbuilt surface with no IA row of its own yet.
+ * a round, so an operator-keyed order shows its table at once. The one state-action
+ * called is the release of a guest's unconfirmed claim (ADR 0143); the rest of
+ * state-actions and force-closures stay uncalled: the running bill and settlement
+ * screen is a different, unbuilt surface with no IA row of its own yet.
  */
 @Injectable({ providedIn: 'root' })
 export class TableSessionsApi {
@@ -123,6 +142,44 @@ export class TableSessionsApi {
     return this.api
       .get<readonly SessionView[]>(operationsPaths.dineInSessions(scope))
       .pipe(map((result) => result.value ?? []));
+  }
+
+  /**
+   * Keeps a guest's self-seated table for them (`DINEIN_SESSION_MANAGE`, ADR 0143): a
+   * guest who seated themselves holds a claim that lapses if nothing the restaurant
+   * accepted is on it, and a member of staff who sees them standing there confirms it.
+   * Conditional on the session's version, like every other write to one.
+   */
+  confirmClaim(
+    scope: LocationScope,
+    sessionId: string,
+    reason: string,
+    expectedVersion: number,
+  ): Observable<SessionView> {
+    return this.api.post<{ reason: string }, SessionView>(
+      operationsPaths.dineInSessionClaimConfirmations(scope, sessionId),
+      command({ reason }),
+      { expectedVersion },
+    );
+  }
+
+  /**
+   * Gives a guest's unconfirmed claim back to the room by closing the session
+   * (`DINEIN_SESSION_MANAGE`, `state-actions` to `CLOSED`) -- the override ADR 0143
+   * keeps for staff beside the sweeper. Closing owes nothing and needs no force-close
+   * grant when no round is on it.
+   */
+  release(
+    scope: LocationScope,
+    sessionId: string,
+    reason: string,
+    expectedVersion: number,
+  ): Observable<SessionView> {
+    return this.api.post<{ targetStatus: string; reason: string }, SessionView>(
+      operationsPaths.dineInSessionStateActions(scope, sessionId),
+      command({ targetStatus: 'CLOSED', reason }),
+      { expectedVersion },
+    );
   }
 
   /**

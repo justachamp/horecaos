@@ -54,6 +54,31 @@ describe('TableToken', () => {
     expect(unknown.querySelector('[data-testid="table-token-occupied-badge"]')).toBeNull();
   });
 
+  it('marks a table a guest seated themselves at, unconfirmed apart from confirmed (ADR 0143)', () => {
+    const claim = render({ occupied: true, selfSeated: true, claimUnconfirmed: true });
+    const badge = claim.querySelector('[data-testid="table-token-self-seated-badge"]');
+    expect(badge).not.toBeNull();
+    expect(badge!.getAttribute('data-claim')).toBe('unconfirmed');
+    expect(
+      claim.querySelector('[data-testid="table-token-t-1"]')!.classList.contains('token--claim'),
+    ).toBe(true);
+
+    fixture.destroy();
+    const kept = render({ occupied: true, selfSeated: true, claimUnconfirmed: false });
+    expect(
+      kept
+        .querySelector('[data-testid="table-token-self-seated-badge"]')!
+        .getAttribute('data-claim'),
+    ).toBe('confirmed');
+    expect(
+      kept.querySelector('[data-testid="table-token-t-1"]')!.classList.contains('token--claim'),
+    ).toBe(false);
+
+    fixture.destroy();
+    const hosted = render({ occupied: true });
+    expect(hosted.querySelector('[data-testid="table-token-self-seated-badge"]')).toBeNull();
+  });
+
   it('renders at its table’s layoutX/layoutY', () => {
     const host = render();
     const token = host.querySelector<HTMLElement>('[data-testid="table-token-t-1"]')!;

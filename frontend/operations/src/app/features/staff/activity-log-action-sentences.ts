@@ -640,6 +640,16 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       ru: 'Зал бронь запрошено',
       'uz-Latn': 'Zal bron soʻralindi',
     },
+    'dinein.session.claim-confirmed': {
+      en: 'Dinein session claim confirmed',
+      ru: 'Зал сессия самопосадка подтверждено',
+      'uz-Latn': 'Zal sessiya oʻzi oʻtirish tasdiqlandi',
+    },
+    'dinein.session.claim-lapsed': {
+      en: 'Dinein session claim lapsed',
+      ru: 'Зал сессия самопосадка истекло',
+      'uz-Latn': 'Zal sessiya oʻzi oʻtirish muddati tugadi',
+    },
     'dinein.session.opened': {
       en: 'Dinein session opened',
       ru: 'Зал сессия открыто',

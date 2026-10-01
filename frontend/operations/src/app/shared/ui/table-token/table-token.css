@@ -79,3 +79,21 @@
   border: 2px solid var(--q-canvas);
   background: var(--q-error-text);
 }
+
+/* A claim nobody has confirmed yet: dashed, so it reads as provisional beside a seated party. */
+.token--claim {
+  border-style: dashed;
+}
+
+.token__selfSeated {
+  position: absolute;
+  bottom: 2px;
+  left: 4px;
+  font-size: var(--q-type-caption-sm);
+  line-height: 1;
+  color: var(--q-primary);
+}
+
+.token__selfSeated[data-claim='confirmed'] {
+  color: var(--q-ink-subtle);
+}

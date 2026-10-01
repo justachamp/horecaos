@@ -149,6 +149,9 @@ function sessionView(overrides: Partial<SessionView> = {}): SessionView {
     closeReasonCode: null,
     version: 1,
     tables: [{ tableId: 't1', code: 'T1', displayName: 'Table 1' }],
+    origin: 'STAFF',
+    claimExpiresAt: null,
+    confirmedAt: null,
     ...overrides,
   };
 }
@@ -366,6 +369,73 @@ describe('ReservationsPage', () => {
     expect(host.querySelector('[data-testid="reservations-detail"]')?.textContent).toContain(
       'Confirmed',
     );
+  });
+
+  it('tells the host when a party is already sitting at a table they just confirmed over (ADR 0143)', async () => {
+    const stateAction = vi
+      .fn()
+      .mockReturnValue(
+        of(reservation({ status: 'CONFIRMED', version: 2, tableOccupiedNow: true })),
+      );
+    await render({
+      availability: () => Promise.resolve([table()]),
+      listForDay: () => Promise.resolve([reservation()]),
+      stateAction,
+    });
+
+    const host = fixture.nativeElement as HTMLElement;
+    (host.querySelector('[data-testid="reservations-cell-booked"]') as HTMLElement).click();
+    fixture.detectChanges();
+    (
+      host.querySelector('[data-testid="reservations-action-CONFIRMED"]') as HTMLButtonElement
+    ).click();
+    fixture.detectChanges();
+    const code = host.querySelector('[data-testid="order-reason-dialog-code"]') as HTMLInputElement;
+    code.value = 'Table confirmed available';
+    code.dispatchEvent(new Event('input'));
+    (
+      host.querySelector('[data-testid="order-reason-dialog-confirm"]') as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(host.querySelector('[data-testid="reservations-detail"]')?.textContent).toContain(
+      'Confirmed',
+    );
+    expect(host.querySelector('[data-testid="reservations-notice"]')?.textContent).toContain(
+      'already sitting',
+    );
+  });
+
+  it('says nothing extra when the confirmed booking’s table is free', async () => {
+    const stateAction = vi
+      .fn()
+      .mockReturnValue(
+        of(reservation({ status: 'CONFIRMED', version: 2, tableOccupiedNow: false })),
+      );
+    await render({
+      availability: () => Promise.resolve([table()]),
+      listForDay: () => Promise.resolve([reservation()]),
+      stateAction,
+    });
+
+    const host = fixture.nativeElement as HTMLElement;
+    (host.querySelector('[data-testid="reservations-cell-booked"]') as HTMLElement).click();
+    fixture.detectChanges();
+    (
+      host.querySelector('[data-testid="reservations-action-CONFIRMED"]') as HTMLButtonElement
+    ).click();
+    fixture.detectChanges();
+    const code = host.querySelector('[data-testid="order-reason-dialog-code"]') as HTMLInputElement;
+    code.value = 'Table confirmed available';
+    code.dispatchEvent(new Event('input'));
+    (
+      host.querySelector('[data-testid="order-reason-dialog-confirm"]') as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(host.querySelector('[data-testid="reservations-notice"]')).toBeNull();
   });
 
   it('offers "mark completed" for a seated booking', async () => {
