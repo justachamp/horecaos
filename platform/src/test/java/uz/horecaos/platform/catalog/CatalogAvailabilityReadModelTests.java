@@ -20,6 +20,7 @@ import org.testcontainers.DockerClientFactory;
 import tools.jackson.databind.json.JsonMapper;
 import uz.horecaos.platform.catalog.application.CatalogAuthoringService;
 import uz.horecaos.platform.catalog.application.CatalogItemDisplayLookup;
+import uz.horecaos.platform.catalog.domain.CatalogEntities.EntityType;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.OfferingStatus;
 import uz.horecaos.platform.catalog.domain.FiscalClassification;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
@@ -281,14 +282,7 @@ class CatalogAvailabilityReadModelTests {
             inventory.listVariantAtLocation(TENANT, BRAND, LOCATION, product.defaultVariantId(), TrackingMode.BINARY);
         }
         // Lagman also has a Russian name; Osh is written only in the server's locale, Samsa only in Russian.
-        authoring.translate(
-                TENANT,
-                BRAND,
-                uz.horecaos.platform.catalog.domain.CatalogEntities.EntityType.PRODUCT,
-                lagman.productId(),
-                "ru",
-                "Лагман",
-                null);
+        authoring.translate(TENANT, BRAND, EntityType.PRODUCT, lagman.productId(), "ru", "Лагман", null);
 
         // The console is in English; the brand's default is Russian; the server's is Uzbek.
         List<String> english = List.of("en", "ru", LOCALE);
@@ -326,6 +320,89 @@ class CatalogAvailabilityReadModelTests {
         assertThat(store.variantAvailabilityCounts(TENANT, BRAND, LOCATION, "en", "самс")
                         .total())
                 .isZero();
+    }
+
+    @Test
+    @DisplayName(
+            "a product written in several of the chain's languages shows the one the chain ranks first, not the one that sorts first (row 10.12)")
+    void theChainsOrderDecidesWhichNameIsShownNotTheAlphabet() {
+        UUID catalogId = authoring.createCatalog(TENANT, BRAND, "MAIN", "Main menu", LOCALE);
+        UUID hot = authoring.createCategory(TENANT, BRAND, catalogId, null, "HOT", "Issiq", LOCALE, 1);
+        // Lagman is written in uz and ru: 'ru' sorts before 'uz'. Samsa is written in ru and en: 'en' sorts
+        // before 'ru'. Each pair is the opposite of the order a chain asks for in one of the two cases below,
+        // so a join that ordered by the locale code would pick the same name for both chains.
+        var lagman = authoring.createProduct(
+                TENANT, BRAND, catalogId, "LAGMAN", "Lagman", null, LOCALE, "SKU-LAGMAN", "PIECE", UNCLASSIFIED, ACTOR);
+        var somsa = authoring.createProduct(
+                TENANT, BRAND, catalogId, "SOMSA", "Самса", null, "ru", "SKU-SOMSA", "PIECE", UNCLASSIFIED, ACTOR);
+        authoring.placeProductInCategory(TENANT, BRAND, hot, lagman.productId(), 1);
+        for (var product : List.of(lagman, somsa)) {
+            authoring.setOffering(
+                    TENANT, BRAND, LOCATION, product.defaultVariantId(), OfferingStatus.AVAILABLE, List.of("DELIVERY"));
+            inventory.listVariantAtLocation(TENANT, BRAND, LOCATION, product.defaultVariantId(), TrackingMode.BINARY);
+        }
+        authoring.translate(TENANT, BRAND, EntityType.PRODUCT, lagman.productId(), "ru", "Лагман", null);
+        authoring.translate(TENANT, BRAND, EntityType.PRODUCT, somsa.productId(), "en", "Samsa", null);
+        authoring.translate(TENANT, BRAND, EntityType.CATEGORY, hot, "ru", "Горячее", null);
+
+        // A console in Uzbek on a brand whose default is Russian: its own language outranks the brand's.
+        List<String> uzbekConsole = List.of(LOCALE, "ru");
+        var inUzbek = store.variantsAtLocation(TENANT, BRAND, LOCATION, uzbekConsole, null, 50, null, null);
+        assertThat(nameOf(inUzbek, lagman.defaultVariantId()))
+                .as("the requested locale beats the brand's default when the product has both")
+                .isEqualTo("Lagman");
+        assertThat(nameOf(inUzbek, somsa.defaultVariantId()))
+                .as("a product with no name in the requested locale falls to the next one in the chain")
+                .isEqualTo("Самса");
+        assertThat(inUzbek)
+                .filteredOn(row -> row.variantId().equals(lagman.defaultVariantId()))
+                .singleElement()
+                .satisfies(row -> assertThat(row.categoryName())
+                        .as("the category is ranked by the same chain")
+                        .isEqualTo("Issiq"));
+
+        // The same data read by a console in Russian: now the Russian name is first in the chain.
+        List<String> russianConsole = List.of("ru", LOCALE);
+        var inRussian = store.variantsAtLocation(TENANT, BRAND, LOCATION, russianConsole, null, 50, null, null);
+        assertThat(nameOf(inRussian, lagman.defaultVariantId())).isEqualTo("Лагман");
+        assertThat(inRussian)
+                .filteredOn(row -> row.variantId().equals(lagman.defaultVariantId()))
+                .singleElement()
+                .satisfies(row -> assertThat(row.categoryName()).isEqualTo("Горячее"));
+
+        // Russian first, English second: the alphabet would put English first.
+        assertThat(nameOf(
+                        store.variantsAtLocation(TENANT, BRAND, LOCATION, List.of("ru", "en"), null, 50, null, null),
+                        somsa.defaultVariantId()))
+                .as("ru ranks above en in this chain although 'en' sorts first")
+                .isEqualTo("Самса");
+        assertThat(nameOf(
+                        store.variantsAtLocation(TENANT, BRAND, LOCATION, List.of("en", "ru"), null, 50, null, null),
+                        somsa.defaultVariantId()))
+                .isEqualTo("Samsa");
+
+        // The search and the tab badges follow the name that is shown, which is the ranked one.
+        assertThat(store.variantsAtLocation(TENANT, BRAND, LOCATION, uzbekConsole, null, 50, "лагман", null))
+                .as("the Russian name is not the one shown to an Uzbek console, so it is not what it finds")
+                .isEmpty();
+        assertThat(store.variantsAtLocation(TENANT, BRAND, LOCATION, russianConsole, null, 50, "лагман", null))
+                .extracting(row -> row.variantId())
+                .containsExactly(lagman.defaultVariantId());
+        assertThat(store.variantAvailabilityCounts(TENANT, BRAND, LOCATION, uzbekConsole, "лагман")
+                        .total())
+                .as("the badges rank the names the same way")
+                .isZero();
+        assertThat(store.variantAvailabilityCounts(TENANT, BRAND, LOCATION, russianConsole, "лагман")
+                        .total())
+                .isEqualTo(1);
+    }
+
+    private static String nameOf(List<JdbcCatalogStore.VariantAvailabilityRow> rows, UUID variantId) {
+        return rows.stream()
+                .filter(row -> row.variantId().equals(variantId))
+                .map(row -> row.productName())
+                .findFirst()
+                .orElseThrow();
     }
 
     @Test
