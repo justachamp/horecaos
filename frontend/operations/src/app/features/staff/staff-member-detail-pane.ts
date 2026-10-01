@@ -11,12 +11,18 @@ import { ActivatedRoute, Router } from '@angular/router';
 
 import { Auth } from '../../core/auth/auth';
 import { CurrentTenant } from '../../core/auth/current-tenant';
+import { OwnProfile } from '../../core/auth/own-profile';
+import { SessionCapabilities } from '../../core/auth/session-capabilities';
 import { ApiError } from '../../core/api/problem-details';
+import { StaffMember, hasName } from '../../core/api/staff-member';
 import { I18n } from '../../core/i18n/i18n';
+import { MessageKey } from '../../core/i18n/messages.en';
+import { localeDisplayName } from '../../core/i18n/locale-labels';
 import { TPipe } from '../../core/i18n/t.pipe';
 import { describeApiError } from '../orders/order-errors';
 import { CAPABILITY_SENTENCES, capabilityAreaName, sentenceLocale } from './capability-sentences';
 import { StaffAccessDialog } from './staff-access-dialog';
+import { StaffEmergencyContacts } from './staff-emergency-contacts';
 import {
   GrantRequest,
   GrantView,
@@ -27,9 +33,12 @@ import {
   TelegramStaffLinkView,
 } from './staff-api';
 import { StaffJobDialog } from './staff-job-dialog';
+import { StaffMembersApi } from './staff-members-api';
+import { ProfileDraft, toManagerRequest } from './staff-profile-draft';
+import { StaffProfileForm } from './staff-profile-form';
 import { roleLabel, scopeLevelLabel } from './staff-role-labels';
 
-type StaffTab = 'access' | 'security';
+type StaffTab = 'access' | 'profile' | 'contacts' | 'security';
 
 interface CapabilityGroup {
   readonly area: string;
@@ -38,25 +47,39 @@ interface CapabilityGroup {
 
 /**
  * Карточка сотрудника — the person record (operations IA §9.1, staff-and-access.md
- * §3), reduced to what is P-tier: the **Доступ** and **Безопасность** tabs.
+ * §3): the identity block (photo, the name the tenant keeps, the `S-0142`
+ * reference, employment, today's orders, a deep link into the activity log) and
+ * four tabs -- **Доступ**, **Профиль**, **Контакты** and **Безопасность**.
  * **Активность** and **Смены** are left off entirely rather than built
  * half-way — both are person-scoped slices of screens the IA tiers at 2
  * (9.8 Журнал действий, 9.6 Смены), and neither's backend exists yet either
  * (§11.6, §11.11, §11.13).
  *
- * No stored name exists (§11.1): the identity block shows the Keycloak
- * subject, captioned as not built, exactly where the spec would put a photo
- * and a name.
+ * The person is the tenant's own record of them (ADR 0139), read singly so the
+ * full phone, the employee number and a short-lived photo link are present --
+ * the list carries none of them. A subject with a job and no record (an
+ * account that predates the record) still opens a card, by its identifier,
+ * saying it has no profile yet; there is then nothing on Профиль or Контакты to
+ * show, and those tabs are not offered.
+ *
+ * **«Завершить работу» is one act with two halves** (ADR 0139): the record goes
+ * to `ENDED` and each job is revoked, one audited revoke per job and never as
+ * one transaction. The platform reports how many jobs were left when a revoke
+ * failed part-way; the card then flags the drift and the same button finishes
+ * it. Nobody ends their own employment from here.
  */
 @Component({
   selector: 'q-staff-member-detail-pane',
-  imports: [TPipe, StaffJobDialog, StaffAccessDialog],
+  imports: [TPipe, StaffJobDialog, StaffAccessDialog, StaffProfileForm, StaffEmergencyContacts],
   templateUrl: './staff-member-detail-pane.html',
   styleUrl: './staff-member-detail-pane.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class StaffMemberDetailPane {
   private readonly api = inject(StaffApi);
+  private readonly membersApi = inject(StaffMembersApi);
+  private readonly capabilities = inject(SessionCapabilities);
+  private readonly ownProfile = inject(OwnProfile);
   private readonly tenant = inject(CurrentTenant);
   private readonly auth = inject(Auth);
   private readonly router = inject(Router);
@@ -77,6 +100,23 @@ export class StaffMemberDetailPane {
   protected readonly directory = signal<ScopeDirectory>({ brands: [], locations: [] });
   protected readonly telegramLinks = signal<readonly TelegramStaffLinkView[]>([]);
   protected readonly expandedGrantId = signal<string | null>(null);
+
+  /**
+   * Everyone the tenant keeps a record for, as the list returns them: how a
+   * subject on a grant ("granted by") is shown as a name. Empty when the read
+   * was refused, and the card then shows the identifier as it always did.
+   */
+  private readonly colleagues = signal<readonly StaffMember[]>([]);
+  /** This person, read singly (full phone, employee number, signed photo link), or `null` when the tenant keeps no record. */
+  protected readonly member = signal<StaffMember | null>(null);
+  protected readonly editingProfile = signal(false);
+  protected readonly profileBusy = signal(false);
+  protected readonly profileError = signal<string | null>(null);
+  protected readonly notice = signal<string | null>(null);
+
+  protected readonly endDialogOpen = signal(false);
+  protected readonly endBusy = signal(false);
+  protected readonly endError = signal<string | null>(null);
 
   /** Staff 9.2d — null while loading or on a fetch failure, which the card renders as simply absent. */
   protected readonly todayCounts = signal<OperatorTodayCounts | null>(null);
@@ -118,6 +158,41 @@ export class StaffMemberDetailPane {
   );
 
   protected readonly isSelf = computed(() => this.auth.subject() === this.subjectId());
+
+  /** `staff.profile.manage` held anywhere: a usability affordance, the platform checks it on every write. */
+  protected readonly canManageProfile = computed(() =>
+    this.capabilities.has('STAFF_PROFILE_MANAGE'),
+  );
+  protected readonly canReadEmergency = computed(() =>
+    this.capabilities.has('STAFF_EMERGENCY_CONTACT_READ'),
+  );
+
+  /** The name the tenant keeps, else the `S-0142` reference, else the identifier -- never blank. */
+  protected readonly title = computed(() => {
+    const member = this.member();
+    if (member === null) {
+      return this.subjectId();
+    }
+    return hasName(member) ? member.displayName : member.displayReference;
+  });
+
+  /** An ended employee still holding a job: the drift to finish. */
+  protected readonly accessDrift = computed(() => {
+    const member = this.member();
+    return member !== null && member.employmentStatus === 'ENDED' && this.activeGrants().length > 0;
+  });
+
+  protected readonly initials = computed(() => {
+    const member = this.member();
+    if (member === null) {
+      return '';
+    }
+    return [member.firstName, member.lastName]
+      .map((part) => (part ?? '').trim())
+      .filter((part) => part.length > 0)
+      .map((part) => Array.from(part)[0].toUpperCase())
+      .join('');
+  });
 
   protected readonly accessStatusKey = computed<'staff.status.revoked' | 'staff.status.ok'>(() =>
     this.activeGrants().length === 0 ? 'staff.status.revoked' : 'staff.status.ok',
@@ -198,6 +273,129 @@ export class StaffMemberDetailPane {
     return Array.from(byArea, ([area, sentences]) => ({ area, sentences: sentences.sort() })).sort(
       (a, b) => a.area.localeCompare(b.area),
     );
+  }
+
+  /** A subject shown as the name the tenant keeps for them, else the identifier. */
+  protected personLabel(subject: string): string {
+    const found = this.colleagues().find((candidate) => candidate.principalSubject === subject);
+    return found !== undefined && hasName(found) ? found.displayName : subject;
+  }
+
+  protected statusKey(member: StaffMember): MessageKey {
+    switch (member.employmentStatus) {
+      case 'PENDING':
+        return 'staff.status.invited';
+      case 'ACTIVE':
+        return 'staff.profile.status.ACTIVE';
+      case 'ON_LEAVE':
+        return 'staff.status.onLeave';
+      case 'ENDED':
+        return 'staff.status.ended';
+    }
+  }
+
+  protected languageName(code: string): string {
+    return localeDisplayName(this.i18n, code === 'uz' ? 'uz-Latn' : code);
+  }
+
+  // ------------------------------------------------------------- profile
+
+  protected startEditingProfile(): void {
+    this.profileError.set(null);
+    this.editingProfile.set(true);
+  }
+
+  protected cancelEditingProfile(): void {
+    this.editingProfile.set(false);
+  }
+
+  /**
+   * Saves a manager's edit. The record's own version goes in `If-Match`: if
+   * somebody else changed the person since this card was read the platform
+   * answers 409 and the card says so, never overwrites.
+   */
+  protected async saveProfile(draft: ProfileDraft): Promise<void> {
+    const tenantId = this.tenant.tenantId();
+    const current = this.member();
+    if (!tenantId || current === null) {
+      return;
+    }
+    this.profileBusy.set(true);
+    this.profileError.set(null);
+    try {
+      const updated = await this.membersApi.update(
+        tenantId,
+        current.memberId,
+        toManagerRequest(draft, current),
+        current.version,
+      );
+      this.member.set(updated);
+      this.editingProfile.set(false);
+      this.notice.set(this.i18n.t('staff.profile.saved'));
+      if (this.isSelf()) {
+        // The same record the shell chip reads: show the new name at once.
+        this.ownProfile.apply(updated);
+      }
+    } catch (error) {
+      this.profileError.set(this.describe(error));
+    } finally {
+      this.profileBusy.set(false);
+    }
+  }
+
+  /** The contacts panel moved the record's version; carry it into the next save so its `If-Match` is not stale. */
+  protected onContactsVersion(version: number): void {
+    const current = this.member();
+    if (current !== null) {
+      this.member.set({ ...current, version });
+    }
+  }
+
+  // ----------------------------------------------------- end employment
+
+  protected openEndDialog(): void {
+    this.endError.set(null);
+    this.endDialogOpen.set(true);
+  }
+
+  protected closeEndDialog(): void {
+    this.endDialogOpen.set(false);
+  }
+
+  protected async confirmEnd({
+    reason,
+    employedUntil,
+  }: {
+    reason: string;
+    employedUntil?: string;
+  }): Promise<void> {
+    const tenantId = this.tenant.tenantId();
+    const current = this.member();
+    if (!tenantId || current === null) {
+      return;
+    }
+    this.endBusy.set(true);
+    this.endError.set(null);
+    try {
+      const result = await this.membersApi.endEmployment(
+        tenantId,
+        current.memberId,
+        { reason, employedUntil: employedUntil ?? null },
+        current.version,
+      );
+      this.member.set(result.member);
+      this.endDialogOpen.set(false);
+      this.notice.set(
+        result.remainingGrants > 0
+          ? this.i18n.t('staff.end.partial', { remaining: result.remainingGrants })
+          : this.i18n.t('staff.end.done', { count: result.revokedGrants }),
+      );
+      await this.reload(tenantId);
+    } catch (error) {
+      this.endError.set(this.describe(error));
+    } finally {
+      this.endBusy.set(false);
+    }
   }
 
   // -------------------------------------------------------------- add job
@@ -340,6 +538,10 @@ export class StaffMemberDetailPane {
     this.notFound.set(false);
     this.todayCounts.set(null);
     this.todayCountsLoading.set(true);
+    this.member.set(null);
+    this.editingProfile.set(false);
+    this.notice.set(null);
+    this.activeTab.set('access');
     await this.tenant.ensureLoaded();
     const tenantId = this.tenant.tenantId();
     if (!tenantId) {
@@ -348,17 +550,28 @@ export class StaffMemberDetailPane {
       return;
     }
     try {
-      const [grants, roles, directory, telegramLinks] = await Promise.all([
+      const [grants, roles, directory, telegramLinks, colleagues] = await Promise.all([
         this.api.listGrants(tenantId, true),
         this.api.roles(tenantId),
         this.api.scopeDirectory(tenantId),
         this.api.telegramLinks(tenantId).catch(() => []),
+        // A refused read of the records leaves the card on the identifier, as
+        // it was before the record existed; it never blanks the access tab.
+        this.membersApi.list(tenantId).catch(() => []),
       ]);
       this.allGrants.set(grants);
       this.roles.set(roles);
       this.directory.set(directory);
       this.telegramLinks.set(telegramLinks);
-      if (!grants.some((g) => g.principalSubject === subjectId)) {
+      this.colleagues.set(colleagues);
+      const listed = colleagues.find((candidate) => candidate.principalSubject === subjectId);
+      if (listed !== undefined) {
+        // The list is masked and has no photo link; the single read has both.
+        this.member.set(
+          await this.membersApi.detail(tenantId, listed.memberId).catch(() => listed),
+        );
+      }
+      if (!grants.some((g) => g.principalSubject === subjectId) && listed === undefined) {
         this.notFound.set(true);
       } else {
         void this.loadTodayCounts(tenantId, subjectId);

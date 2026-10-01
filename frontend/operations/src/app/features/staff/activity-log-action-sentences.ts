@@ -710,6 +710,11 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       ru: 'Доступ личность расхождение обнаружено',
       'uz-Latn': 'Huquq shaxs farq aniqlandi',
     },
+    'iam.location_contact.updated': {
+      en: 'Branch contact persons changed',
+      ru: 'Контактные лица филиала изменены',
+      'uz-Latn': 'Filialning aloqa shaxslari oʻzgartirildi',
+    },
     'integration.secret_written': {
       en: 'Integration secret written',
       ru: 'Интеграция секрет записано',
@@ -1039,6 +1044,36 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       en: 'Reporting metric signed',
       ru: 'Отчётность метрика подписано',
       'uz-Latn': 'Hisobotlar koʻrsatkich imzolandi',
+    },
+    'staff.emergency_contact.read': {
+      en: 'Emergency contacts viewed',
+      ru: 'Просмотрены экстренные контакты',
+      'uz-Latn': 'Favqulodda kontaktlar koʻrildi',
+    },
+    'staff.emergency_contact.updated': {
+      en: 'Emergency contacts changed',
+      ru: 'Экстренные контакты изменены',
+      'uz-Latn': 'Favqulodda kontaktlar oʻzgartirildi',
+    },
+    'staff.member.anonymised': {
+      en: 'Former employee’s personal details erased',
+      ru: 'Личные данные бывшего сотрудника стёрты',
+      'uz-Latn': 'Sobiq xodimning shaxsiy maʻlumotlari oʻchirildi',
+    },
+    'staff.member.created': {
+      en: 'Staff profile created',
+      ru: 'Создана карточка сотрудника',
+      'uz-Latn': 'Xodim kartochkasi yaratildi',
+    },
+    'staff.member.employment_ended': {
+      en: 'Employment ended',
+      ru: 'Работа завершена',
+      'uz-Latn': 'Ish tugatildi',
+    },
+    'staff.member.updated': {
+      en: 'Staff profile changed',
+      ru: 'Карточка сотрудника изменена',
+      'uz-Latn': 'Xodim kartochkasi oʻzgartirildi',
     },
     'telemetry.courier_track.revealed': {
       en: 'Telemetry courier track revealed',

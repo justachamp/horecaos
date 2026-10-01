@@ -3,11 +3,17 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { ApiError, ApiErrorCode } from '../../core/api/problem-details';
+import { StaffMember } from '../../core/api/staff-member';
 import { Auth } from '../../core/auth/auth';
 import { CurrentTenant } from '../../core/auth/current-tenant';
+import { OwnProfile } from '../../core/auth/own-profile';
+import { SessionCapabilities } from '../../core/auth/session-capabilities';
 import { I18n } from '../../core/i18n/i18n';
 import { GrantView, StaffApi } from './staff-api';
 import { StaffMemberDetailPane } from './staff-member-detail-pane';
+import { StaffMembersApi } from './staff-members-api';
+import { staffMember, staffMemberDetail } from './staff-member.testing';
 
 function grant(overrides: Partial<GrantView>): GrantView {
   return {
@@ -68,15 +74,48 @@ function makeApi(grants: readonly GrantView[]) {
   };
 }
 
-async function setUp(grants: readonly GrantView[], subjectId = 'staff-1') {
+interface SetUpOptions {
+  /** What the list returns (masked); defaults to no records at all. */
+  readonly listed?: readonly StaffMember[];
+  /** What the single read returns for the first listed member. */
+  readonly detail?: StaffMember;
+  /** The capabilities the viewer holds, as the wire names them. */
+  readonly held?: readonly string[];
+  /** The signed-in subject. */
+  readonly viewer?: string;
+  readonly membersApi?: Record<string, unknown>;
+}
+
+async function setUp(
+  grants: readonly GrantView[],
+  subjectId = 'staff-1',
+  options: SetUpOptions = {},
+) {
   const api = makeApi(grants);
+  const membersApi = {
+    list: vi.fn().mockResolvedValue(options.listed ?? []),
+    detail: vi.fn().mockResolvedValue(options.detail ?? (options.listed ?? [])[0]),
+    update: vi.fn(),
+    endEmployment: vi.fn(),
+    emergencyContacts: vi.fn().mockResolvedValue({ contacts: [], memberVersion: 3 }),
+    replaceEmergencyContacts: vi.fn(),
+    ...options.membersApi,
+  };
+  const held = new Set(options.held ?? []);
+  const ownProfile = { apply: vi.fn() };
   await TestBed.configureTestingModule({
     imports: [StaffMemberDetailPane],
     providers: [
       provideRouter([]),
       { provide: StaffApi, useValue: api },
+      { provide: StaffMembersApi, useValue: membersApi },
+      {
+        provide: SessionCapabilities,
+        useValue: { has: (capability: string) => held.has(capability) },
+      },
+      { provide: OwnProfile, useValue: ownProfile },
       { provide: CurrentTenant, useValue: new FakeCurrentTenant() },
-      { provide: Auth, useValue: { subject: signal('someone-else') } },
+      { provide: Auth, useValue: { subject: signal(options.viewer ?? 'someone-else') } },
     ],
   }).compileComponents();
   TestBed.inject(I18n).setLocale('ru');
@@ -86,7 +125,7 @@ async function setUp(grants: readonly GrantView[], subjectId = 'staff-1') {
   fixture.detectChanges();
   await flushMicrotasks();
   fixture.detectChanges();
-  return { fixture, api };
+  return { fixture, api, membersApi, ownProfile };
 }
 
 describe('StaffMemberDetailPane', () => {
@@ -284,5 +323,322 @@ describe('StaffMemberDetailPane', () => {
 
     expect(api.revokeTelegramLink).toHaveBeenCalledWith('t1', 'link-1', 'Device was lost');
     expect(api.telegramLinks).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('StaffMemberDetailPane: the tenant’s record of the person (ADR 0139)', () => {
+  const GRANT = grant({ principalSubject: 'staff-1' });
+
+  function text(fixture: ComponentFixture<StaffMemberDetailPane>): string {
+    return (fixture.nativeElement as HTMLElement).textContent ?? '';
+  }
+
+  function click(fixture: ComponentFixture<StaffMemberDetailPane>, testId: string): void {
+    (fixture.nativeElement.querySelector(`[data-testid="${testId}"]`) as HTMLButtonElement).click();
+    fixture.detectChanges();
+  }
+
+  function type(
+    fixture: ComponentFixture<StaffMemberDetailPane>,
+    testId: string,
+    value: string,
+  ): void {
+    const input = fixture.nativeElement.querySelector(`[data-testid="${testId}"]`) as
+      HTMLInputElement | HTMLSelectElement;
+    input.value = value;
+    input.dispatchEvent(new Event(input instanceof HTMLSelectElement ? 'change' : 'input'));
+    fixture.detectChanges();
+  }
+
+  it('titles the card with the name the tenant keeps, and shows the S-reference, not the identifier', async () => {
+    const { fixture } = await setUp([GRANT], 'staff-1', {
+      listed: [staffMember({ principalSubject: 'staff-1' })],
+      detail: staffMemberDetail({ principalSubject: 'staff-1' }),
+    });
+
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="staff-detail-title"]')?.textContent,
+    ).toContain('Aziza Karimova');
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="staff-detail-reference"]')?.textContent,
+    ).toContain('S-0001');
+  });
+
+  it('shows the photo from the single read when the person has one, else initials', async () => {
+    const withPhoto = await setUp([GRANT], 'staff-1', {
+      listed: [staffMember({ principalSubject: 'staff-1', hasPhoto: true })],
+      detail: staffMemberDetail({
+        principalSubject: 'staff-1',
+        hasPhoto: true,
+        photoUrl: 'https://files.example.uz/p.jpg?sig=1',
+      }),
+    });
+    expect(
+      withPhoto.fixture.nativeElement
+        .querySelector('[data-testid="staff-detail-photo"]')
+        ?.getAttribute('src'),
+    ).toBe('https://files.example.uz/p.jpg?sig=1');
+  });
+
+  it('falls back to the identifier and says there is no profile when the tenant keeps no record', async () => {
+    const { fixture } = await setUp([GRANT], 'staff-1');
+
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="staff-detail-title"]')?.textContent,
+    ).toContain('staff-1');
+    expect(text(fixture)).toContain('Профиль ещё не создан');
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="staff-detail-tab-profile"]'),
+    ).toBeNull();
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="staff-detail-tab-contacts"]'),
+    ).toBeNull();
+  });
+
+  it('opens a card for a former colleague who has a record and no job', async () => {
+    const { fixture } = await setUp([], 'former-1', {
+      listed: [
+        staffMember({
+          principalSubject: 'former-1',
+          employmentStatus: 'ENDED',
+          employedUntil: '2026-09-20',
+          hasActiveAccess: false,
+        }),
+      ],
+    });
+
+    expect(text(fixture)).not.toContain('Такого сотрудника нет');
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="staff-detail-employment"]')?.textContent,
+    ).toContain('Не работает');
+  });
+
+  it('shows who granted a job by name when the tenant keeps one for them, else by identifier', async () => {
+    const { fixture } = await setUp([GRANT], 'staff-1', {
+      listed: [
+        staffMember({ principalSubject: 'staff-1' }),
+        staffMember({
+          memberId: 'm2',
+          principalSubject: 'owner-1',
+          firstName: 'Olim',
+          lastName: 'Rahimov',
+          displayName: 'Olim Rahimov',
+        }),
+      ],
+      detail: staffMemberDetail({ principalSubject: 'staff-1' }),
+    });
+
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="staff-detail-granted-by"]')?.textContent,
+    ).toContain('Olim Rahimov');
+  });
+
+  it('shows the full phone on the Профиль tab as a call link, with the sign-in number kept apart', async () => {
+    const { fixture } = await setUp([GRANT], 'staff-1', {
+      listed: [staffMember({ principalSubject: 'staff-1' })],
+      detail: staffMemberDetail({ principalSubject: 'staff-1', phone: '+998901234542' }),
+    });
+
+    click(fixture, 'staff-detail-tab-profile');
+
+    const phone = fixture.nativeElement.querySelector('[data-testid="staff-detail-phone"]');
+    expect(phone?.textContent).toContain('+998901234542');
+    expect(phone?.getAttribute('href')).toBe('tel:+998901234542');
+    expect(text(fixture)).toContain('Номер для входа задаётся при приглашении');
+  });
+
+  it('offers editing and ending employment only to a viewer who may manage profiles', async () => {
+    const member = staffMemberDetail({ principalSubject: 'staff-1' });
+    const without = await setUp([GRANT], 'staff-1', {
+      listed: [member],
+      detail: member,
+      held: [],
+    });
+    click(without.fixture, 'staff-detail-tab-profile');
+    expect(
+      without.fixture.nativeElement.querySelector('[data-testid="staff-detail-edit-profile"]'),
+    ).toBeNull();
+    expect(
+      without.fixture.nativeElement.querySelector('[data-testid="staff-detail-end-employment"]'),
+    ).toBeNull();
+  });
+
+  it('does not offer to end the viewer’s own employment', async () => {
+    const member = staffMemberDetail({ principalSubject: 'staff-1' });
+    const { fixture } = await setUp([GRANT], 'staff-1', {
+      listed: [member],
+      detail: member,
+      held: ['STAFF_PROFILE_MANAGE'],
+      viewer: 'staff-1',
+    });
+
+    click(fixture, 'staff-detail-tab-profile');
+
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="staff-detail-edit-profile"]'),
+    ).not.toBeNull();
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="staff-detail-end-employment"]'),
+    ).toBeNull();
+  });
+
+  it('saves an edit as a replace carrying the record’s version, then shows the new name and tells the shell chip when it is the viewer', async () => {
+    const member = staffMemberDetail({ principalSubject: 'staff-1', version: 4 });
+    const updated = staffMemberDetail({
+      principalSubject: 'staff-1',
+      firstName: 'Azizakhon',
+      displayName: 'Azizakhon Karimova',
+      version: 5,
+    });
+    const { fixture, membersApi, ownProfile } = await setUp([GRANT], 'staff-1', {
+      listed: [member],
+      detail: member,
+      held: ['STAFF_PROFILE_MANAGE'],
+      viewer: 'staff-1',
+      membersApi: { update: vi.fn().mockResolvedValue(updated) },
+    });
+    click(fixture, 'staff-detail-tab-profile');
+    click(fixture, 'staff-detail-edit-profile');
+
+    type(fixture, 'staff-profile-first-name', 'Azizakhon');
+    click(fixture, 'staff-profile-save');
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(membersApi.update).toHaveBeenCalledTimes(1);
+    const [tenantId, memberId, request, version] = membersApi.update.mock.calls[0];
+    expect(tenantId).toBe('t1');
+    expect(memberId).toBe('m1');
+    expect(version).toBe(4);
+    expect(request).toMatchObject({ firstName: 'Azizakhon', lastName: 'Karimova' });
+    // Employment untouched: the status goes only when it changed.
+    expect(request.employmentStatus).toBeNull();
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="staff-detail-title"]')?.textContent,
+    ).toContain('Azizakhon Karimova');
+    expect(ownProfile.apply).toHaveBeenCalledWith(updated);
+  });
+
+  it('shows the platform’s refusal in the form and keeps it open when the record changed under the editor', async () => {
+    const member = staffMemberDetail({ principalSubject: 'staff-1' });
+    const { fixture } = await setUp([GRANT], 'staff-1', {
+      listed: [member],
+      detail: member,
+      held: ['STAFF_PROFILE_MANAGE'],
+      membersApi: {
+        update: vi
+          .fn()
+          .mockRejectedValue(new ApiError(ApiErrorCode.STALE_VERSION, 409, null, 'corr-3')),
+      },
+    });
+    click(fixture, 'staff-detail-tab-profile');
+    click(fixture, 'staff-detail-edit-profile');
+    click(fixture, 'staff-profile-save');
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="staff-profile-error"]'),
+    ).not.toBeNull();
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="staff-profile-form"]'),
+    ).not.toBeNull();
+  });
+
+  it('ends employment with a reason and the last day, then reloads the jobs and reports how many were taken away', async () => {
+    const member = staffMemberDetail({ principalSubject: 'staff-1', version: 2 });
+    const ended = staffMemberDetail({
+      principalSubject: 'staff-1',
+      employmentStatus: 'ENDED',
+      employedUntil: '2026-09-30',
+      version: 3,
+      hasActiveAccess: false,
+    });
+    const { fixture, api, membersApi } = await setUp([GRANT], 'staff-1', {
+      listed: [member],
+      detail: member,
+      held: ['STAFF_PROFILE_MANAGE'],
+      membersApi: {
+        endEmployment: vi
+          .fn()
+          .mockResolvedValue({ member: ended, revokedGrants: 1, remainingGrants: 0 }),
+      },
+    });
+    click(fixture, 'staff-detail-tab-profile');
+    click(fixture, 'staff-detail-end-employment');
+
+    type(fixture, 'staff-access-dialog-reason', 'Resigned');
+    type(fixture, 'staff-access-dialog-until', '2026-09-30');
+    click(fixture, 'staff-access-dialog-confirm');
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(membersApi.endEmployment).toHaveBeenCalledWith(
+      't1',
+      'm1',
+      { reason: 'Resigned', employedUntil: '2026-09-30' },
+      2,
+    );
+    expect(api.listGrants).toHaveBeenCalledTimes(2); // initial load + reload after the act
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="staff-detail-notice"]')?.textContent,
+    ).toContain('Снято должностей: 1');
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="staff-detail-employment"]')?.textContent,
+    ).toContain('Не работает');
+  });
+
+  it('says so, and offers to finish, when ending employment left a job behind', async () => {
+    const member = staffMemberDetail({ principalSubject: 'staff-1', version: 2 });
+    const endedWithAccess = staffMemberDetail({
+      principalSubject: 'staff-1',
+      employmentStatus: 'ENDED',
+      employedUntil: '2026-09-30',
+      version: 3,
+      accessDrift: true,
+    });
+    const { fixture } = await setUp([GRANT], 'staff-1', {
+      listed: [member],
+      detail: member,
+      held: ['STAFF_PROFILE_MANAGE'],
+      membersApi: {
+        endEmployment: vi
+          .fn()
+          .mockResolvedValue({ member: endedWithAccess, revokedGrants: 1, remainingGrants: 2 }),
+      },
+    });
+    click(fixture, 'staff-detail-tab-profile');
+    click(fixture, 'staff-detail-end-employment');
+    type(fixture, 'staff-access-dialog-reason', 'Resigned');
+    click(fixture, 'staff-access-dialog-confirm');
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="staff-detail-notice"]')?.textContent,
+    ).toContain('не удалось снять должностей: 2');
+    // The grant is still active in the reloaded list, so the drift banner is up.
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="staff-detail-drift"]'),
+    ).not.toBeNull();
+  });
+
+  it('does not read the emergency contacts when the card opens, only when asked', async () => {
+    const member = staffMemberDetail({ principalSubject: 'staff-1' });
+    const { fixture, membersApi } = await setUp([GRANT], 'staff-1', {
+      listed: [member],
+      detail: member,
+      held: ['STAFF_EMERGENCY_CONTACT_READ'],
+    });
+
+    click(fixture, 'staff-detail-tab-contacts');
+    expect(membersApi.emergencyContacts).not.toHaveBeenCalled();
+
+    click(fixture, 'staff-emergency-show');
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(membersApi.emergencyContacts).toHaveBeenCalledTimes(1);
+    expect(membersApi.emergencyContacts).toHaveBeenCalledWith('t1', 'm1');
   });
 });

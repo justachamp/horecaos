@@ -8,6 +8,9 @@ import { CurrentTenant } from '../../core/auth/current-tenant';
 import { I18n } from '../../core/i18n/i18n';
 import { GrantView } from './staff-api';
 import { StaffApi } from './staff-api';
+import { StaffMember } from '../../core/api/staff-member';
+import { StaffMembersApi } from './staff-members-api';
+import { staffMember } from './staff-member.testing';
 import { StaffPage } from './staff-page';
 
 function grant(overrides: Partial<GrantView>): GrantView {
@@ -89,13 +92,22 @@ async function setUp(
     state: string;
     invitedAt: string;
   }[] = [],
+  members: readonly StaffMember[] | Error = [],
 ) {
   const api = makeApi(grants, invitations);
+  const membersApi = {
+    list: vi
+      .fn()
+      .mockImplementation(() =>
+        members instanceof Error ? Promise.reject(members) : Promise.resolve(members),
+      ),
+  };
   await TestBed.configureTestingModule({
     imports: [StaffPage],
     providers: [
       provideRouter([]),
       { provide: StaffApi, useValue: api },
+      { provide: StaffMembersApi, useValue: membersApi },
       { provide: CurrentTenant, useValue: new FakeCurrentTenant() },
       { provide: Auth, useValue: { subject: signal(subject) } },
     ],
@@ -105,7 +117,7 @@ async function setUp(
   fixture.detectChanges();
   await flushMicrotasks();
   fixture.detectChanges();
-  return { fixture, api };
+  return { fixture, api, membersApi };
 }
 
 describe('StaffPage', () => {
@@ -333,5 +345,249 @@ describe('StaffPage', () => {
       '[data-testid="staff-invite-dialog-link"]',
     ) as HTMLInputElement | null;
     expect(linkField?.value).toBe('https://ops.example.uz/invite#token=fresh');
+  });
+});
+
+describe('StaffPage: the tenant’s record of each person (ADR 0139)', () => {
+  function textOf(fixture: ComponentFixture<StaffPage>): string {
+    return (fixture.nativeElement as HTMLElement).textContent ?? '';
+  }
+
+  function names(fixture: ComponentFixture<StaffPage>): string[] {
+    return Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('[data-testid="staff-row-name"]'),
+    ).map((element) => element.textContent?.trim() ?? '');
+  }
+
+  it('shows the person’s name, masked phone and reference, not the account identifier', async () => {
+    const { fixture } = await setUp(
+      [grant({ principalSubject: 'subject-1' })],
+      'the-operator',
+      [],
+      [staffMember({ principalSubject: 'subject-1' })],
+    );
+
+    const text = textOf(fixture);
+    expect(text).toContain('Aziza Karimova');
+    expect(text).toContain('+998 90 ••• •• 42');
+    expect(text).toContain('S-0001');
+    expect(text).not.toContain('subject-1');
+  });
+
+  it('never shows a full phone number on the list, even if the payload carried one', async () => {
+    // The platform sends `phone: null` on a list. This pins that the template
+    // reads only `maskedPhone`, so a payload that ever carried the full number
+    // would still not print it.
+    const { fixture } = await setUp(
+      [grant({ principalSubject: 'subject-1' })],
+      'the-operator',
+      [],
+      [staffMember({ principalSubject: 'subject-1', phone: '+998901234542' })],
+    );
+
+    expect(textOf(fixture)).not.toContain('+998901234542');
+    expect(textOf(fixture)).not.toContain('901234542');
+  });
+
+  it('lists an account with a job and no record by its identifier, and says it has no profile yet', async () => {
+    const { fixture } = await setUp([grant({ principalSubject: 'legacy-subject' })]);
+
+    expect(textOf(fixture)).toContain('legacy-subject');
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="staff-row-no-record"]')?.textContent,
+    ).toContain('Профиль ещё не создан');
+  });
+
+  it('shows a record with no name by its S-reference, never by the subject', async () => {
+    const { fixture } = await setUp(
+      [grant({ principalSubject: 'subject-1' })],
+      'the-operator',
+      [],
+      [
+        staffMember({
+          principalSubject: 'subject-1',
+          firstName: null,
+          lastName: null,
+          displayName: 'S-0042',
+          displayReference: 'S-0042',
+        }),
+      ],
+    );
+
+    expect(names(fixture)).toEqual(['S-0042']);
+    expect(textOf(fixture)).not.toContain('subject-1');
+  });
+
+  it('lists a former colleague who has a record and no job, as «Не работает» with the end date', async () => {
+    const { fixture } = await setUp(
+      [grant({ principalSubject: 'someone-else' })],
+      'the-operator',
+      [],
+      [
+        staffMember({
+          memberId: 'm9',
+          principalSubject: 'former-1',
+          firstName: 'Bobur',
+          lastName: 'Aliyev',
+          displayName: 'Bobur Aliyev',
+          employmentStatus: 'ENDED',
+          employedUntil: '2026-09-20',
+          hasActiveAccess: false,
+        }),
+      ],
+    );
+
+    const text = textOf(fixture);
+    expect(text).toContain('Bobur Aliyev');
+    expect(text).toContain('Не работает');
+    expect(text).toContain('Работа завершена 2026-09-20');
+  });
+
+  it('flags a person whose employment ended while a job is still active, and offers to take the job away, not to add one', async () => {
+    const { fixture } = await setUp(
+      [grant({ principalSubject: 'subject-1', status: 'ACTIVE' })],
+      'the-operator',
+      [],
+      [
+        staffMember({
+          principalSubject: 'subject-1',
+          employmentStatus: 'ENDED',
+          employedUntil: '2026-09-20',
+          accessDrift: true,
+        }),
+      ],
+    );
+
+    expect(textOf(fixture)).toContain('Доступ остался');
+    expect(fixture.nativeElement.querySelector('[data-testid="staff-row-suspend"]')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('[data-testid="staff-row-add-job"]')).toBeNull();
+    expect(fixture.nativeElement.querySelector('[data-testid="staff-row-restore"]')).toBeNull();
+  });
+
+  it('counts a person whose employment has ended and who has no job among the suspended', async () => {
+    const { fixture } = await setUp(
+      [grant({ principalSubject: 'subject-1' })],
+      'the-operator',
+      [],
+      [
+        staffMember({ principalSubject: 'subject-1' }),
+        staffMember({
+          memberId: 'm9',
+          principalSubject: 'former-1',
+          employmentStatus: 'ENDED',
+          employedUntil: '2026-09-20',
+          hasActiveAccess: false,
+        }),
+      ],
+    );
+
+    expect(textOf(fixture)).toContain('Приостановлены (1)');
+    expect(textOf(fixture)).toContain('Активные (1)');
+  });
+
+  it('marks someone on leave', async () => {
+    const { fixture } = await setUp(
+      [grant({ principalSubject: 'subject-1' })],
+      'the-operator',
+      [],
+      [staffMember({ principalSubject: 'subject-1', employmentStatus: 'ON_LEAVE' })],
+    );
+
+    expect(textOf(fixture)).toContain('В отпуске');
+  });
+
+  it('finds a person by a piece of their name and by their reference', async () => {
+    const { fixture } = await setUp(
+      [grant({ id: 'g1', principalSubject: 'a' }), grant({ id: 'g2', principalSubject: 'b' })],
+      'the-operator',
+      [],
+      [
+        staffMember({ memberId: 'm1', principalSubject: 'a', displayReference: 'S-0001' }),
+        staffMember({
+          memberId: 'm2',
+          principalSubject: 'b',
+          firstName: 'Bobur',
+          lastName: 'Aliyev',
+          displayName: 'Bobur Aliyev',
+          displayReference: 'S-0002',
+        }),
+      ],
+    );
+    const search = fixture.nativeElement.querySelector('[data-testid="staff-search"]');
+
+    search.value = 'aliy';
+    search.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    expect(names(fixture)).toEqual(['Bobur Aliyev']);
+
+    search.value = 's-0001';
+    search.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    expect(names(fixture)).toEqual(['Aziza Karimova']);
+  });
+
+  it('does not match a typed phone number, which would put it where an access log keeps it', async () => {
+    const { fixture } = await setUp(
+      [grant({ principalSubject: 'a' })],
+      'the-operator',
+      [],
+      [staffMember({ principalSubject: 'a', maskedPhone: '+998 90 ••• •• 42' })],
+    );
+    const search = fixture.nativeElement.querySelector('[data-testid="staff-search"]');
+
+    search.value = '+998 90';
+    search.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    expect(names(fixture)).toEqual([]);
+  });
+
+  it('orders people of the same standing by name with Russian collation', async () => {
+    const { fixture } = await setUp(
+      [
+        grant({ id: 'g1', principalSubject: 'a' }),
+        grant({ id: 'g2', principalSubject: 'b' }),
+        grant({ id: 'g3', principalSubject: 'c' }),
+      ],
+      'the-operator',
+      [],
+      [
+        staffMember({
+          memberId: 'm1',
+          principalSubject: 'a',
+          firstName: 'Ёлкин',
+          lastName: null,
+          displayName: 'Ёлкин',
+        }),
+        staffMember({
+          memberId: 'm2',
+          principalSubject: 'b',
+          firstName: 'Яна',
+          lastName: null,
+          displayName: 'Яна',
+        }),
+        staffMember({
+          memberId: 'm3',
+          principalSubject: 'c',
+          firstName: 'Анна',
+          lastName: null,
+          displayName: 'Анна',
+        }),
+      ],
+    );
+
+    expect(names(fixture)).toEqual(['Анна', 'Ёлкин', 'Яна']);
+  });
+
+  it('still lists everyone, by identifier, when the read of the records fails', async () => {
+    const { fixture } = await setUp(
+      [grant({ principalSubject: 'subject-1' })],
+      'the-operator',
+      [],
+      new Error('refused'),
+    );
+
+    expect(textOf(fixture)).toContain('subject-1');
+    expect(fixture.nativeElement.querySelector('[data-testid="staff-row-suspend"]')).not.toBeNull();
   });
 });

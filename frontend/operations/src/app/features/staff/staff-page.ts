@@ -22,13 +22,20 @@ import {
 } from './staff-api';
 import { StaffInviteDialog } from './staff-invite-dialog';
 import { StaffJobDialog } from './staff-job-dialog';
+import { StaffMember, StaffMembersApi } from './staff-members-api';
 import { roleLabel, scopeLevelLabel } from './staff-role-labels';
 import {
   COMPANY_WIDE_GROUP,
   StaffPerson,
+  StaffStatus,
   activeGrants,
   groupIntoPeople,
   groupsFor,
+  hasNoAccess,
+  initialsOf,
+  matchesQuery,
+  nameOf,
+  referenceOf,
   revokedGrants,
   sortByAttention,
   statusOf,
@@ -49,15 +56,17 @@ interface GroupRow {
 /**
  * Люди — the staff list (operations IA §9.1, staff-and-access.md §2).
  *
- * There is no separate staff-person record (§11.1): every row is a
- * `principalSubject` derived from `iam.grants`, never a stored name. The
- * «Сотрудник» column therefore shows the identifier, muted and captioned as
- * not built, rather than pretending a name exists.
+ * Each row is a person the tenant keeps a record for (ADR 0139): name, masked
+ * phone, the `S-0142` reference and employment, joined to the jobs they hold.
+ * The jobs come from `iam.grants`; the person comes from `iam.staff_members`,
+ * read once for the whole list (`StaffMembersApi.list`), sorted and searched
+ * here because a name is ciphertext in the database. A subject with a job and
+ * no record (an account that predates the record) is still listed, by its
+ * identifier, and says it has no profile yet.
  *
- * Three of the spec's six sort weights are not computable with this backend
- * and are honestly dropped — see `staff-row.ts`'s own doc. The «Приглашены»
- * and «Без должности» status pills are dropped for the same reason: neither
- * state is derivable from grants alone.
+ * Two of the spec's six sort weights are not computable with this backend and
+ * are honestly dropped — see `staff-row.ts`'s own doc. The «Без должности»
+ * pill is dropped for the same reason.
  */
 @Component({
   selector: 'q-staff-page',
@@ -68,6 +77,7 @@ interface GroupRow {
 })
 export class StaffPage {
   private readonly api = inject(StaffApi);
+  private readonly membersApi = inject(StaffMembersApi);
   private readonly tenant = inject(CurrentTenant);
   private readonly auth = inject(Auth);
   private readonly route = inject(ActivatedRoute);
@@ -80,6 +90,8 @@ export class StaffPage {
   protected readonly docked = signal(false);
 
   private readonly grants = signal<readonly GrantView[]>([]);
+  /** The tenant's own records of its people (ADR 0139). Empty when the read is refused: the list then falls back to identifiers. */
+  private readonly members = signal<readonly StaffMember[]>([]);
   protected readonly roles = signal<readonly RoleDescriptor[]>([]);
   protected readonly directory = signal<ScopeDirectory>({ brands: [], locations: [] });
   private readonly telegramLinks = signal<readonly TelegramStaffLinkView[]>([]);
@@ -114,7 +126,7 @@ export class StaffPage {
 
   protected readonly notice = signal<string | null>(null);
 
-  private readonly people = computed(() => groupIntoPeople(this.grants()));
+  private readonly people = computed(() => groupIntoPeople(this.grants(), this.members()));
   /** Every subject with an open staff invitation — staff-row.ts's `INVITED` status (ADR 0116). */
   private readonly invitedSubjects = computed(
     () => new Set(this.invitations().map((invitation) => invitation.principalSubject)),
@@ -131,7 +143,7 @@ export class StaffPage {
     // Computed before filtering (Togora §2b, per staff-and-access.md §2), so a
     // pill's own count never moves when a different pill is what narrowed the table.
     const all = this.sortedPeople();
-    const suspended = all.filter((p) => statusOf(p, this.loadedAt()).kind === 'ALL_REVOKED').length;
+    const suspended = all.filter((p) => hasNoAccess(statusOf(p, this.loadedAt()))).length;
     return { all: all.length, active: all.length - suspended, suspended };
   });
 
@@ -139,14 +151,14 @@ export class StaffPage {
     let list = this.sortedPeople();
     const status = this.statusFilter();
     if (status === 'active') {
-      list = list.filter((p) => statusOf(p, this.loadedAt()).kind !== 'ALL_REVOKED');
+      list = list.filter((p) => !hasNoAccess(statusOf(p, this.loadedAt())));
     } else if (status === 'suspended') {
-      list = list.filter((p) => statusOf(p, this.loadedAt()).kind === 'ALL_REVOKED');
+      list = list.filter((p) => hasNoAccess(statusOf(p, this.loadedAt())));
     }
 
-    const query = this.search().trim().toLowerCase();
-    if (query) {
-      list = list.filter((p) => p.principalSubject.toLowerCase().includes(query));
+    const query = this.search();
+    if (query.trim()) {
+      list = list.filter((p) => matchesQuery(p, query));
     }
 
     const jobs = this.selectedJobCodes();
@@ -242,6 +254,12 @@ export class StaffPage {
         ? this.i18n.t('staff.row.revoked.reason', { reason: status.lastRevokedReason })
         : this.i18n.t('staff.row.revoked.noReason');
     }
+    if (status.kind === 'ENDED') {
+      return this.i18n.t('staff.row.ended', { date: this.endedOn(status) });
+    }
+    if (status.kind === 'ACCESS_DRIFT') {
+      return this.i18n.t('staff.row.accessDrift', { date: this.endedOn(status) });
+    }
     if (status.kind === 'EXPIRING_SOON') {
       // `formatDate` wants the tenant's IANA zone (ADR 0031); nothing this
       // page loads carries it, so a day-granularity date renders in UTC
@@ -256,6 +274,70 @@ export class StaffPage {
       return this.i18n.t('staff.row.invited');
     }
     return null;
+  }
+
+  /** `employed_until` is a calendar date, not an instant: shown as it is stored, never shifted through a zone. */
+  private endedOn(status: Extract<StaffStatus, { endedOn: string | null }>): string {
+    return status.endedOn ?? '—';
+  }
+
+  /** The status pill's message key — one place, so the template carries no nested ternary. */
+  protected statusLabelKey(person: StaffPerson) {
+    switch (this.statusOfPerson(person).kind) {
+      case 'ALL_REVOKED':
+        return 'staff.status.revoked';
+      case 'ENDED':
+        return 'staff.status.ended';
+      case 'ACCESS_DRIFT':
+        return 'staff.status.accessDrift';
+      case 'EXPIRING_SOON':
+        return 'staff.status.expiring';
+      case 'INVITED':
+        return 'staff.status.invited';
+      case 'ON_LEAVE':
+        return 'staff.status.onLeave';
+      case 'OK':
+        return 'staff.status.ok';
+    }
+  }
+
+  /** No access left to grant: every job revoked, or employment ended and the jobs gone with it. */
+  protected isInactive(person: StaffPerson): boolean {
+    return hasNoAccess(this.statusOfPerson(person));
+  }
+
+  /** A person whose employment has ended is not handed a new job from a list row. */
+  protected canAddJob(person: StaffPerson): boolean {
+    const kind = this.statusOfPerson(person).kind;
+    return kind !== 'ENDED' && kind !== 'ACCESS_DRIFT';
+  }
+
+  /** «Приостановить доступ» is offered while there is an active job to take away -- which is also how an owner finishes an access drift. */
+  protected canSuspend(person: StaffPerson): boolean {
+    return activeGrants(person).length > 0;
+  }
+
+  /** «Восстановить» brings back the last revoked batch of jobs; it is never offered for someone whose employment has ended. */
+  protected canRestore(person: StaffPerson): boolean {
+    return this.statusOfPerson(person).kind === 'ALL_REVOKED';
+  }
+
+  /** The tenant's name for the person, or `null` — the template then shows the identifier and says there is no profile. */
+  protected nameOf(person: StaffPerson): string | null {
+    return nameOf(person);
+  }
+
+  protected referenceOf(person: StaffPerson): string | null {
+    return referenceOf(person);
+  }
+
+  protected initialsOf(person: StaffPerson): string {
+    return initialsOf(person);
+  }
+
+  /** The list carries the masked number only; the full one is on the card. */
+  protected maskedPhoneOf(person: StaffPerson): string | null {
+    return person.member?.maskedPhone ?? null;
   }
 
   protected activeJobsOf(person: StaffPerson): readonly GrantView[] {
@@ -577,12 +659,14 @@ export class StaffPage {
     if (!tenantId) {
       return;
     }
-    const [grants, invitations] = await Promise.all([
+    const [grants, invitations, members] = await Promise.all([
       this.api.listGrants(tenantId, true),
       this.api.staffInvitations(tenantId).catch(() => []),
+      this.membersApi.list(tenantId).catch(() => []),
     ]);
     this.grants.set(grants);
     this.invitations.set(invitations);
+    this.members.set(members);
     this.loadedAt.set(new Date());
   }
 
@@ -596,18 +680,22 @@ export class StaffPage {
       return;
     }
     try {
-      const [grants, roles, directory, telegramLinks, invitations] = await Promise.all([
+      const [grants, roles, directory, telegramLinks, invitations, members] = await Promise.all([
         this.api.listGrants(tenantId, true),
         this.api.roles(tenantId),
         this.api.scopeDirectory(tenantId),
         this.api.telegramLinks(tenantId).catch(() => []),
         this.api.staffInvitations(tenantId).catch(() => []),
+        // A refused or failed read of the records must not blank the list: it
+        // then shows identifiers, as it did before the record existed.
+        this.membersApi.list(tenantId).catch(() => []),
       ]);
       this.grants.set(grants);
       this.roles.set(roles);
       this.directory.set(directory);
       this.telegramLinks.set(telegramLinks);
       this.invitations.set(invitations);
+      this.members.set(members);
       this.loadedAt.set(new Date());
     } catch (error) {
       if (error instanceof ApiError && error.status === 403) {

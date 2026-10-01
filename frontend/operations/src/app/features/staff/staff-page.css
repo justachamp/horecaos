@@ -155,6 +155,43 @@
   border-left-color: var(--q-warning);
 }
 
+.person {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.person__text {
+  min-width: 0;
+}
+
+/* Initials, not a photo: the list carries `hasPhoto` and never a link to it (ADR 0139) -- the photo is on the card. */
+.avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  background: var(--q-surface-1);
+  border: 1px solid var(--q-hairline);
+  color: var(--q-ink-muted);
+  font-size: var(--q-type-caption);
+  font-weight: 600;
+}
+
+.person-name {
+  display: inline-block;
+  margin-right: 6px;
+  font-weight: 600;
+  color: var(--q-ink);
+}
+
+.person-meta {
+  margin: 2px 0 0;
+  color: var(--q-ink-muted);
+}
+
 .person-id {
   display: inline-block;
 }

@@ -19,17 +19,53 @@
       {{ 'staff.detail.back' | t }}
     </button>
 
+    @if (notice(); as message) {
+      <p class="q-body-sm notice" role="status" data-testid="staff-detail-notice">{{ message }}</p>
+    }
+
     <div class="identity">
-      <div class="identity__avatar" aria-hidden="true"></div>
+      @if (member(); as person) {
+        @if (person.photoUrl; as photo) {
+          <img
+            class="identity__avatar identity__avatar--photo"
+            [src]="photo"
+            [alt]="title()"
+            data-testid="staff-detail-photo"
+          />
+        } @else {
+          <div class="identity__avatar identity__avatar--initials" aria-hidden="true">
+            {{ initials() || '·' }}
+          </div>
+        }
+      } @else {
+        <div class="identity__avatar" aria-hidden="true"></div>
+      }
       <div>
-        <h2 class="q-title q-mono">{{ subjectId() }}</h2>
-        <p class="q-caption not-built-note">{{ 'staff.detail.identity.notBuilt' | t }}</p>
+        <h2 class="q-title" [class.q-mono]="!member()" data-testid="staff-detail-title">
+          {{ title() }}
+        </h2>
+        @if (member(); as person) {
+          <p class="q-caption q-mono identity__reference" data-testid="staff-detail-reference">
+            {{ person.displayReference }}
+          </p>
+        } @else {
+          <p class="q-caption not-built-note">{{ 'staff.row.noRecord' | t }}</p>
+        }
         <span
           class="status-pill"
           [class.status-pill--revoked]="accessStatusKey() === 'staff.status.revoked'"
         >
           {{ accessStatusKey() | t }}
         </span>
+        @if (member(); as person) {
+          <span
+            class="status-pill"
+            [class.status-pill--revoked]="person.employmentStatus === 'ENDED'"
+            data-testid="staff-detail-employment"
+          >
+            {{ statusKey(person) | t }}
+          </span>
+        }
         @if (memberSince(); as since) {
           <span class="q-caption identity__since">{{
             'staff.detail.since' | t: { date: since.slice(0, 10) }
@@ -58,6 +94,20 @@
       </div>
     </div>
 
+    @if (accessDrift() && canManageProfile() && !isSelf()) {
+      <div class="drift" role="alert" data-testid="staff-detail-drift">
+        <p class="q-body-sm">{{ 'staff.detail.drift' | t }}</p>
+        <button
+          type="button"
+          class="text-button text-button--destructive"
+          (click)="openEndDialog()"
+          data-testid="staff-detail-finish-end"
+        >
+          {{ 'staff.detail.drift.finish' | t }}
+        </button>
+      </div>
+    }
+
     <div class="tabs">
       <button
         type="button"
@@ -67,6 +117,26 @@
       >
         {{ 'staff.detail.tab.access' | t }}
       </button>
+      @if (member()) {
+        <button
+          type="button"
+          class="tab"
+          [class.tab--on]="activeTab() === 'profile'"
+          (click)="selectTab('profile')"
+          data-testid="staff-detail-tab-profile"
+        >
+          {{ 'staff.detail.tab.profile' | t }}
+        </button>
+        <button
+          type="button"
+          class="tab"
+          [class.tab--on]="activeTab() === 'contacts'"
+          (click)="selectTab('contacts')"
+          data-testid="staff-detail-tab-contacts"
+        >
+          {{ 'staff.detail.tab.contacts' | t }}
+        </button>
+      }
       <button
         type="button"
         class="tab"
@@ -110,7 +180,9 @@
                 </div>
                 <div>
                   <dt class="q-caption">{{ 'staff.detail.field.grantedBy' | t }}</dt>
-                  <dd class="q-body-sm q-mono">{{ grant.grantedBy }}</dd>
+                  <dd class="q-body-sm" data-testid="staff-detail-granted-by">
+                    {{ personLabel(grant.grantedBy) }}
+                  </dd>
                 </div>
                 <div>
                   <dt class="q-caption">{{ 'staff.detail.field.reason' | t }}</dt>
@@ -169,6 +241,107 @@
         >
           {{ 'staff.action.addJob' | t }}
         </button>
+      </div>
+    } @else if (activeTab() === 'profile' && member(); as person) {
+      <div class="tab-panel" data-testid="staff-detail-profile">
+        @if (editingProfile()) {
+          <q-staff-profile-form
+            [member]="person"
+            [manager]="true"
+            [busy]="profileBusy()"
+            [serverError]="profileError()"
+            (submitted)="saveProfile($event)"
+            (cancelled)="cancelEditingProfile()"
+          />
+        } @else {
+          <dl class="card__fields">
+            <div>
+              <dt class="q-caption">{{ 'staff.profile.field.firstName' | t }}</dt>
+              <dd class="q-body-sm">{{ person.firstName ?? '—' }}</dd>
+            </div>
+            <div>
+              <dt class="q-caption">{{ 'staff.profile.field.lastName' | t }}</dt>
+              <dd class="q-body-sm">{{ person.lastName ?? '—' }}</dd>
+            </div>
+            <div>
+              <dt class="q-caption">{{ 'staff.profile.field.phone' | t }}</dt>
+              <dd class="q-body-sm">
+                @if (person.phone; as phone) {
+                  <a class="q-tnum" [href]="'tel:' + phone" data-testid="staff-detail-phone">{{
+                    phone
+                  }}</a>
+                } @else {
+                  —
+                }
+              </dd>
+              <dd class="q-caption hint">{{ 'staff.profile.phone.signIn' | t }}</dd>
+            </div>
+            <div>
+              <dt class="q-caption">{{ 'staff.profile.field.status' | t }}</dt>
+              <dd class="q-body-sm">{{ statusKey(person) | t }}</dd>
+            </div>
+            <div>
+              <dt class="q-caption">{{ 'staff.profile.field.employeeNumber' | t }}</dt>
+              <dd class="q-body-sm">{{ person.employeeNumber ?? '—' }}</dd>
+            </div>
+            <div>
+              <dt class="q-caption">{{ 'staff.profile.field.employedFrom' | t }}</dt>
+              <dd class="q-body-sm">{{ person.employedFrom ?? '—' }}</dd>
+            </div>
+            <div>
+              <dt class="q-caption">{{ 'staff.profile.field.employedUntil' | t }}</dt>
+              <dd class="q-body-sm">{{ person.employedUntil ?? '—' }}</dd>
+            </div>
+            <div>
+              <dt class="q-caption">{{ 'staff.profile.field.uiLocale' | t }}</dt>
+              <dd class="q-body-sm">
+                {{ person.uiLocale ? languageName(person.uiLocale) : '—' }}
+              </dd>
+            </div>
+            <div>
+              <dt class="q-caption">{{ 'staff.profile.field.spoken' | t }}</dt>
+              <dd class="q-body-sm">
+                @for (code of person.spokenLanguages; track code; let last = $last) {
+                  {{ languageName(code) }}{{ last ? '' : ', ' }}
+                } @empty {
+                  —
+                }
+              </dd>
+            </div>
+          </dl>
+          @if (canManageProfile()) {
+            <div class="profile-actions">
+              <button
+                type="button"
+                class="primary-button"
+                (click)="startEditingProfile()"
+                data-testid="staff-detail-edit-profile"
+              >
+                {{ 'staff.profile.edit' | t }}
+              </button>
+              @if (!isSelf() && person.employmentStatus !== 'ENDED') {
+                <button
+                  type="button"
+                  class="text-button text-button--destructive"
+                  (click)="openEndDialog()"
+                  data-testid="staff-detail-end-employment"
+                >
+                  {{ 'staff.accessDialog.endEmployment.title' | t }}
+                </button>
+              }
+            </div>
+          }
+        }
+      </div>
+    } @else if (activeTab() === 'contacts' && member(); as person) {
+      <div class="tab-panel" data-testid="staff-detail-contacts">
+        <q-staff-emergency-contacts
+          [tenantId]="tenantId() ?? ''"
+          [member]="person"
+          [canRead]="canReadEmergency()"
+          [canManage]="canManageProfile()"
+          (versionChanged)="onContactsVersion($event)"
+        />
       </div>
     } @else {
       <div class="tab-panel">
@@ -272,5 +445,17 @@
     [serverError]="removeError()"
     (confirmed)="confirmRemove($event)"
     (dismiss)="closeRemoveDialog()"
+  />
+}
+
+@if (endDialogOpen()) {
+  <q-staff-access-dialog
+    mode="endEmployment"
+    [principalSubject]="subjectId()"
+    [affectedJobCount]="activeGrants().length"
+    [busy]="endBusy()"
+    [serverError]="endError()"
+    (confirmed)="confirmEnd($event)"
+    (dismiss)="closeEndDialog()"
   />
 }
