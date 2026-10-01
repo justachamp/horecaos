@@ -787,7 +787,14 @@ public class StorefrontOrderingController {
             // ADR 0137: a decimal, so a splittable variant can be ordered by the portion.
             // Whether this particular variant takes a fraction is the cart's decision
             // against its published attributes; this only bounds the number.
-            @NotNull @DecimalMin(value = "0", inclusive = false) @DecimalMax("999") @Digits(integer = 3, fraction = 3)
+            // Not "required" in the published contract: it was an optional-looking primitive in v1
+            // (a missing value is still refused, by validation), and the contract gate forbids
+            // making a released optional property required.
+            @Schema(requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+            @NotNull
+            @DecimalMin(value = "0", inclusive = false)
+            @DecimalMax("999")
+            @Digits(integer = 3, fraction = 3)
             BigDecimal quantity,
 
             @Size(max = 20) List<UUID> modifierOptionIds,

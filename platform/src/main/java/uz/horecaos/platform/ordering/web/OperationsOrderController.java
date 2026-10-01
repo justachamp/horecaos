@@ -1,6 +1,7 @@
 package uz.horecaos.platform.ordering.web;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -1777,7 +1778,14 @@ public class OperationsOrderController {
             @NotNull UUID variantId,
             // ADR 0137: a decimal; whether this variant takes a fraction is the cart's
             // decision against its published attributes.
-            @NotNull @DecimalMin(value = "0", inclusive = false) @DecimalMax("999") @Digits(integer = 3, fraction = 3)
+            // Not "required" in the published contract: it was an optional-looking primitive in v1
+            // (a missing value is still refused, by validation), and the contract gate forbids
+            // making a released optional property required.
+            @Schema(requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+            @NotNull
+            @DecimalMin(value = "0", inclusive = false)
+            @DecimalMax("999")
+            @Digits(integer = 3, fraction = 3)
             BigDecimal quantity,
 
             @Size(max = 20) List<UUID> modifierOptionIds,
@@ -1899,7 +1907,14 @@ public class OperationsOrderController {
             @NotBlank @Size(max = 200) String nameSnapshot,
             // ADR 0137: an aggregator may sell by the portion or by weight, so a manual
             // entry takes a decimal quantity like the order line it becomes.
-            @NotNull @DecimalMin(value = "0", inclusive = false) @DecimalMax("999") @Digits(integer = 3, fraction = 3)
+            // Not "required" in the published contract: it was an optional-looking primitive in v1
+            // (a missing value is still refused, by validation), and the contract gate forbids
+            // making a released optional property required.
+            @Schema(requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+            @NotNull
+            @DecimalMin(value = "0", inclusive = false)
+            @DecimalMax("999")
+            @Digits(integer = 3, fraction = 3)
             BigDecimal quantity,
 
             @PositiveOrZero long unitAmountMinor,
