@@ -1244,6 +1244,8 @@ export const messagesRu: MessageCatalogue = {
   'settings.orderPolicy.field.averageOrderMinutes': 'Среднее время заказа (минуты)',
   'settings.orderPolicy.field.maximumOrderMinutes': 'Максимальное время заказа (минуты)',
   'settings.orderPolicy.field.lateOrderThresholdMinutes': 'Заказ опаздывает с (минуты)',
+  'settings.orderPolicy.lateOrderThresholdMinutes.hint':
+    'Пока не применяется: это значение нигде не используется, поэтому его изменение не влияет на то, когда заказ считается опаздывающим. Когда заказ считается опаздывающим, задаётся в блоке «Когда заказ считается опаздывающим» ниже.',
   'settings.orderPolicy.field.atRiskBeforeMinutes': 'Предупреждать до обещанного времени (минуты)',
   'settings.orderPolicy.atRiskBeforeMinutes.hint':
     'За сколько минут до обещанного времени заказ помечается как «под риском». Значение по умолчанию для типа заказа, у которого нет своего значения в границах опоздания ниже. Действует на доске заказов и на кухонной доске.',

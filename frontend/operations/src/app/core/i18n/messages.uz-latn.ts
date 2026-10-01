@@ -1255,6 +1255,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.orderPolicy.field.averageOrderMinutes': 'Oʻrtacha buyurtma vaqti (daqiqa)',
   'settings.orderPolicy.field.maximumOrderMinutes': 'Maksimal buyurtma vaqti (daqiqa)',
   'settings.orderPolicy.field.lateOrderThresholdMinutes': 'Buyurtma kechikadi (daqiqa)',
+  'settings.orderPolicy.lateOrderThresholdMinutes.hint':
+    'Hozircha qoʻllanilmaydi: bu qiymatni hech narsa oʻqimaydi, shuning uchun uni oʻzgartirish buyurtma qachon kechikkan hisoblanishiga taʻsir qilmaydi. Buyurtma qachon kechikkan hisoblanishi quyidagi «Buyurtma qachon kechikkan hisoblanadi» blokida belgilanadi.',
   'settings.orderPolicy.field.atRiskBeforeMinutes':
     'Belgilangan vaqtdan oldin ogohlantirish (daqiqa)',
   'settings.orderPolicy.atRiskBeforeMinutes.hint':

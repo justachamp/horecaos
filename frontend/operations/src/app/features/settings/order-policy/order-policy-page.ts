@@ -46,6 +46,8 @@ interface OrderPolicyFieldDef {
   readonly kind: FieldKind;
   readonly options?: readonly { readonly value: string; readonly labelKey: MessageKey }[];
   readonly hintKey?: MessageKey;
+  /** Show {@link hintKey} while the value is being edited too, not only beside the resolved value. */
+  readonly hintWhileEditing?: boolean;
   readonly min?: number;
   readonly max?: number;
   readonly step?: number;
@@ -80,6 +82,10 @@ const CARD2_FIELDS: readonly OrderPolicyFieldDef[] = [
     kind: 'integer',
     min: 1,
     max: 600,
+    // Stored, read by nothing: what it should mean is an owner decision, so the screen says so
+    // rather than letting a saved number look like it moved the line (the boundaries card below does).
+    hintKey: 'settings.orderPolicy.lateOrderThresholdMinutes.hint',
+    hintWhileEditing: true,
   },
   {
     code: 'ordering.at_risk_before_minutes',

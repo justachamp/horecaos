@@ -337,6 +337,31 @@ describe('OrderPolicyPage', () => {
     );
   });
 
+  // "Order is late after" is stored and read by nothing: what it should mean is an owner decision.
+  // It stays editable, but the screen must not let a saved number look like it moved the line.
+  const LATE_THRESHOLD_ROW = 3;
+
+  it('says on the “Order is late after” scalar that it is not applied yet, and points at the boundaries card', () => {
+    const row = rowAt(LATE_THRESHOLD_ROW);
+
+    expect(row.textContent).toContain('Order is late after (minutes)');
+    expect(row.textContent).toContain('Not applied yet');
+    expect(row.textContent).toContain('When an order counts as late');
+  });
+
+  it('keeps that note in front of the operator while the scalar is being edited', () => {
+    (rowAt(LATE_THRESHOLD_ROW).querySelector('.field__action') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    expect(rowAt(LATE_THRESHOLD_ROW).querySelector('input')).not.toBeNull();
+    expect(rowAt(LATE_THRESHOLD_ROW).textContent).toContain('Not applied yet');
+  });
+
+  it('puts no such note on the scalars that are applied', () => {
+    expect(rowAt(AT_RISK_ROW).textContent).not.toContain('Not applied yet');
+    expect(rowAt(0).textContent).not.toContain('Not applied yet');
+  });
+
   it('sets the at-risk threshold at the scope bar’s scope, sending the version it read as the concurrency check', async () => {
     configApi.resolution.mockImplementation((_tenantId: string, code: string) =>
       Promise.resolve(

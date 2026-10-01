@@ -291,6 +291,10 @@
             }
           }
 
+          @if (field.hintWhileEditing && field.hintKey) {
+            <p class="q-caption hint">{{ field.hintKey | t }}</p>
+          }
+
           <label class="q-caption" [for]="'field-reason-' + field.code">{{
             'settings.orderPolicy.field.reason' | t
           }}</label>
