@@ -790,6 +790,7 @@ public class OperationsOrderController {
         Set<Capability> granted = grantedRowCapabilities(tenantId, brandId, locationId);
         UUID courierId = orderQuery.courierIdFor(tenantId, orderId);
         boolean amendmentAwaitingOperator = orderQuery.amendmentAwaitingOperatorFor(tenantId, orderId);
+        boolean presentablePayment = orderQuery.presentablePaymentFor(tenantId, detail.order());
         // Only a DINE_IN order can sit at a table; asking about a delivery or a pickup
         // would only spend a query on an answer that is always empty.
         OrderTablesPort.OrderTable table = detail.order().fulfillmentMode() == FulfillmentMode.DINE_IN
@@ -803,6 +804,7 @@ public class OperationsOrderController {
                         granted,
                         courierId,
                         amendmentAwaitingOperator,
+                        presentablePayment,
                         table,
                         staffDisplayNames));
     }
@@ -2543,6 +2545,10 @@ public class OperationsOrderController {
          *                   ({@link OrderQueryService#amendmentAwaitingOperatorFor}),
          *                   the {@code RESOLVE} counterpart to {@code courierId}
          *                   above (gap map row 1.1e)
+         * @param presentablePayment resolved separately by the caller ({@link
+         *                   OrderQueryService#presentablePaymentFor}), the
+         *                   {@code ISSUE_INVOICE} counterpart to {@code courierId}
+         *                   above (gap map row 1.1e)
          * @param table      resolved separately by the caller ({@link
          *                   OrderQueryService#tableFor}), the single-order
          *                   counterpart to the board's batched lookup
@@ -2552,9 +2558,11 @@ public class OperationsOrderController {
                 Set<Capability> grantedCapabilities,
                 @Nullable UUID courierId,
                 boolean amendmentAwaitingOperator,
+                boolean presentablePayment,
                 OrderTablesPort.@Nullable OrderTable table) {
             return of(
-                    new JdbcOrderStore.OrderBoardRow(order, null, courierId, amendmentAwaitingOperator, table),
+                    new JdbcOrderStore.OrderBoardRow(
+                            order, null, courierId, amendmentAwaitingOperator, presentablePayment, table),
                     grantedCapabilities);
         }
 
@@ -2578,7 +2586,8 @@ public class OperationsOrderController {
                             grantedCapabilities,
                             row.courierId(),
                             row.amendmentAwaitingOperator(),
-                            order.paymentStatusProjection()),
+                            order.paymentStatusProjection(),
+                            row.presentablePayment()),
                     order.promise().promisedAt(),
                     order.promise().basis().name(),
                     order.paymentStatusProjection(),
@@ -2615,14 +2624,15 @@ public class OperationsOrderController {
                 Set<Capability> grantedCapabilities,
                 @Nullable UUID courierId,
                 boolean amendmentAwaitingOperator,
-                String paymentStatusProjection) {
+                String paymentStatusProjection,
+                boolean presentablePayment) {
             return OrderActionsPolicy.availableFor(
                             status,
                             mode,
                             grantedCapabilities,
                             courierId == null,
                             amendmentAwaitingOperator,
-                            OrderActionsPolicy.awaitsOnlinePayment(paymentStatusProjection))
+                            OrderActionsPolicy.awaitsOnlinePayment(paymentStatusProjection, presentablePayment))
                     .stream()
                     .map(OrderActionResponse::of)
                     .toList();
@@ -2690,11 +2700,18 @@ public class OperationsOrderController {
                 Set<Capability> grantedCapabilities,
                 @Nullable UUID courierId,
                 boolean amendmentAwaitingOperator,
+                boolean presentablePayment,
                 OrderTablesPort.@Nullable OrderTable table,
                 StaffDisplayNames staffDisplayNames) {
             var order = detail.order();
             return new OrderDetailResponse(
-                    OrderSummaryResponse.of(order, grantedCapabilities, courierId, amendmentAwaitingOperator, table),
+                    OrderSummaryResponse.of(
+                            order,
+                            grantedCapabilities,
+                            courierId,
+                            amendmentAwaitingOperator,
+                            presentablePayment,
+                            table),
                     order.subtotalMinor(),
                     order.taxMinor(),
                     order.acceptanceMode(),

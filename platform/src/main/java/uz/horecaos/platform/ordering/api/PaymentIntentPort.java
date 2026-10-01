@@ -1,5 +1,7 @@
 package uz.horecaos.platform.ordering.api;
 
+import java.util.Collection;
+import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 
@@ -68,6 +70,28 @@ public interface PaymentIntentPort {
             String currency,
             String paymentMethodCode,
             String idempotencyKey);
+
+    /**
+     * Which of these orders have a payment an operator can hand a checkout surface
+     * for right now — the read behind the order board's «Выставить счёт»
+     * ({@code ISSUE_INVOICE}).
+     *
+     * <p>Asked of the intent and its attempts, not of the order's {@code
+     * payment_status_projection}: the projection stays {@code PENDING} through an
+     * attempt that aged out or one whose outcome is unknown, so it cannot tell an
+     * order the re-presentation endpoint will serve from one it answers {@code
+     * NO_PAYMENT_INTENT} or {@code PAYMENT_IN_DOUBT}. An order absent from the
+     * result has no payment to present, or none that may be shown again.
+     *
+     * <p>A port rather than a join for the reason {@code ActiveCourierAssignmentsPort}
+     * gives: the board's own filter predicates may leave the {@code ordering}
+     * schema (ADR 0102), a second field on every row goes through the module that
+     * owns the fact. Defaults to "none" so a build with no payments module offers
+     * no invoice, which is also the truth there: nothing can be presented.
+     */
+    default Set<UUID> ordersWithPresentablePayment(UUID tenantId, Collection<UUID> orderIds) {
+        return Set.of();
+    }
 
     /**
      * Whether a real implementation is present.

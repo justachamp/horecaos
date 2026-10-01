@@ -82,7 +82,10 @@ function configureForBulk(
       { provide: RejectReasonsApi, useValue: stubRejectReasons() },
       {
         provide: LatenessPolicyApi,
-        useValue: { resolve: () => Promise.resolve(PLATFORM_DEFAULT_LATENESS_POLICY) },
+        useValue: {
+          resolve: () => Promise.resolve(PLATFORM_DEFAULT_LATENESS_POLICY),
+          tryResolve: () => Promise.resolve(PLATFORM_DEFAULT_LATENESS_POLICY),
+        },
       },
       {
         provide: SessionCapabilities,
@@ -176,7 +179,10 @@ function configure(getOrders: ReturnType<typeof vi.fn>): void {
       { provide: RejectReasonsApi, useValue: stubRejectReasons() },
       {
         provide: LatenessPolicyApi,
-        useValue: { resolve: () => Promise.resolve(PLATFORM_DEFAULT_LATENESS_POLICY) },
+        useValue: {
+          resolve: () => Promise.resolve(PLATFORM_DEFAULT_LATENESS_POLICY),
+          tryResolve: () => Promise.resolve(PLATFORM_DEFAULT_LATENESS_POLICY),
+        },
       },
     ],
   });
@@ -572,7 +578,10 @@ function configureWithActions(
       { provide: ReferenceDataApi, useValue: referenceDataApi },
       {
         provide: LatenessPolicyApi,
-        useValue: { resolve: () => Promise.resolve(PLATFORM_DEFAULT_LATENESS_POLICY) },
+        useValue: {
+          resolve: () => Promise.resolve(PLATFORM_DEFAULT_LATENESS_POLICY),
+          tryResolve: () => Promise.resolve(PLATFORM_DEFAULT_LATENESS_POLICY),
+        },
       },
     ],
   });
@@ -1388,7 +1397,10 @@ describe('OrderQueue: toolbar filters (orders.md §2.4, wave P07)', () => {
         { provide: RejectReasonsApi, useValue: stubRejectReasons() },
         {
           provide: LatenessPolicyApi,
-          useValue: { resolve: () => Promise.resolve(PLATFORM_DEFAULT_LATENESS_POLICY) },
+          useValue: {
+          resolve: () => Promise.resolve(PLATFORM_DEFAULT_LATENESS_POLICY),
+          tryResolve: () => Promise.resolve(PLATFORM_DEFAULT_LATENESS_POLICY),
+        },
         },
       ],
     });
@@ -2583,7 +2595,10 @@ describe('OrderQueue: the Курьер column resolves courierId against the ros
         { provide: RejectReasonsApi, useValue: stubRejectReasons() },
         {
           provide: LatenessPolicyApi,
-          useValue: { resolve: () => Promise.resolve(PLATFORM_DEFAULT_LATENESS_POLICY) },
+          useValue: {
+          resolve: () => Promise.resolve(PLATFORM_DEFAULT_LATENESS_POLICY),
+          tryResolve: () => Promise.resolve(PLATFORM_DEFAULT_LATENESS_POLICY),
+        },
         },
         { provide: CouriersApi, useValue: { roster } },
       ],
@@ -2672,7 +2687,10 @@ describe('OrderQueue: the Клиент column batches customer labels by page (g
         { provide: RejectReasonsApi, useValue: stubRejectReasons() },
         {
           provide: LatenessPolicyApi,
-          useValue: { resolve: () => Promise.resolve(PLATFORM_DEFAULT_LATENESS_POLICY) },
+          useValue: {
+          resolve: () => Promise.resolve(PLATFORM_DEFAULT_LATENESS_POLICY),
+          tryResolve: () => Promise.resolve(PLATFORM_DEFAULT_LATENESS_POLICY),
+        },
         },
         {
           provide: SessionCapabilities,
@@ -2816,7 +2834,10 @@ describe('OrderQueue: the table chip beside a dine-in order (batch 14)', () => {
         { provide: RejectReasonsApi, useValue: stubRejectReasons() },
         {
           provide: LatenessPolicyApi,
-          useValue: { resolve: () => Promise.resolve(PLATFORM_DEFAULT_LATENESS_POLICY) },
+          useValue: {
+          resolve: () => Promise.resolve(PLATFORM_DEFAULT_LATENESS_POLICY),
+          tryResolve: () => Promise.resolve(PLATFORM_DEFAULT_LATENESS_POLICY),
+        },
         },
       ],
     });
@@ -2921,7 +2942,13 @@ describe('OrderQueue: the tenant late colour (row X.39)', () => {
         { provide: ApiClient, useValue: { get: ordersResponse(orders) } },
         { provide: OrderCounts, useValue: { forOrders: () => Promise.resolve(zeroTabCounts()) } },
         { provide: RejectReasonsApi, useValue: stubRejectReasons() },
-        { provide: LatenessPolicyApi, useValue: { resolve: () => Promise.resolve(policy) } },
+        {
+          provide: LatenessPolicyApi,
+          useValue: {
+            resolve: () => Promise.resolve(policy),
+            tryResolve: () => Promise.resolve(policy),
+          },
+        },
       ],
     });
     TestBed.inject(I18n).setLocale('en');

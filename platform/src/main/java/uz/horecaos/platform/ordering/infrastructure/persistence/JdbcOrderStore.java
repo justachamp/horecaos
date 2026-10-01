@@ -2754,6 +2754,21 @@ public class JdbcOrderStore {
      *                         #ordersAwaitingOperatorResolution}, exactly the
      *                         same two-step shape {@code courierId} already
      *                         has
+     * @param presentablePayment this order has a payment an operator can hand a
+     *                         checkout surface for right now -- a live provider
+     *                         intent none of whose attempts is in doubt (gap map
+     *                         row 1.1e's {@code ISSUE_INVOICE}). Always {@code
+     *                         false} as this class constructs the row --
+     *                         {@code payments.*} is not read here for a second
+     *                         field on every row -- and filled in afterward by
+     *                         {@link
+     *                         uz.horecaos.platform.ordering.application.OrderQueryService#forLocation}
+     *                         through {@link
+     *                         uz.horecaos.platform.ordering.api.PaymentIntentPort#ordersWithPresentablePayment},
+     *                         the same two-step shape {@code courierId} has. The
+     *                         order's own {@code payment_status_projection} is not
+     *                         enough: it stays {@code PENDING} through an expired
+     *                         or uncertain attempt
      * @param table            the table (or joined tables) and session a DINE_IN
      *                         order was placed at, or null for every order that
      *                         was not attached to a table session. Always null
@@ -2769,30 +2784,40 @@ public class JdbcOrderStore {
             @Nullable String processAttention,
             @Nullable UUID courierId,
             boolean amendmentAwaitingOperator,
+            boolean presentablePayment,
             OrderTablesPort.@Nullable OrderTable table) {
 
         /**
-         * The row as this store constructs it: no courier, no open amendment and
-         * no table, each filled in afterward by {@code OrderQueryService} through
-         * the port or store that owns the fact.
+         * The row as this store constructs it: no courier, no open amendment, no
+         * presentable payment and no table, each filled in afterward by {@code
+         * OrderQueryService} through the port or store that owns the fact.
          */
         public OrderBoardRow(OrderRow order, @Nullable String processAttention) {
-            this(order, processAttention, null, false, null);
+            this(order, processAttention, null, false, false, null);
         }
 
         /** {@link #courierId} filled in, once the caller has resolved it through the port. */
         public OrderBoardRow withCourierId(@Nullable UUID resolvedCourierId) {
-            return new OrderBoardRow(order, processAttention, resolvedCourierId, amendmentAwaitingOperator, table);
+            return new OrderBoardRow(
+                    order, processAttention, resolvedCourierId, amendmentAwaitingOperator, presentablePayment, table);
         }
 
         /** {@link #amendmentAwaitingOperator} filled in, once the caller has resolved it through the store. */
         public OrderBoardRow withAmendmentAwaitingOperator(boolean resolvedAmendmentAwaitingOperator) {
-            return new OrderBoardRow(order, processAttention, courierId, resolvedAmendmentAwaitingOperator, table);
+            return new OrderBoardRow(
+                    order, processAttention, courierId, resolvedAmendmentAwaitingOperator, presentablePayment, table);
+        }
+
+        /** {@link #presentablePayment} filled in, once the caller has resolved it through the payments port. */
+        public OrderBoardRow withPresentablePayment(boolean resolvedPresentablePayment) {
+            return new OrderBoardRow(
+                    order, processAttention, courierId, amendmentAwaitingOperator, resolvedPresentablePayment, table);
         }
 
         /** {@link #table} filled in, once the caller has resolved it through {@link OrderTablesPort}. */
         public OrderBoardRow withTable(OrderTablesPort.@Nullable OrderTable resolvedTable) {
-            return new OrderBoardRow(order, processAttention, courierId, amendmentAwaitingOperator, resolvedTable);
+            return new OrderBoardRow(
+                    order, processAttention, courierId, amendmentAwaitingOperator, presentablePayment, resolvedTable);
         }
     }
 

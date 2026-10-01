@@ -565,8 +565,11 @@ export class OrderQueue implements OnInit {
     await this.location.ensureLoaded();
     const scope = this.location.scope();
     if (scope) {
-      this.latenessPolicy = await this.latenessPolicyApi.resolve(scope);
-      this.branchPolicies.set(scope.locationId, this.latenessPolicy);
+      const resolved = await this.latenessPolicyApi.tryResolve(scope);
+      this.latenessPolicy = resolved ?? PLATFORM_DEFAULT_LATENESS_POLICY;
+      if (resolved) {
+        this.branchPolicies.set(scope.locationId, resolved);
+      }
       this.lateColour.set(this.latenessPolicy.lateColour ?? null);
     }
     await this.refresh();
@@ -604,8 +607,15 @@ export class OrderQueue implements OnInit {
 
   /**
    * Fetches the policy of every branch on this page that the board has not yet
-   * shown a row of. One request per branch per session; `LatenessPolicyApi`
-   * falls back to the platform default on any failure, so this never throws.
+   * resolved one for. One request per branch per session **when it succeeds**.
+   *
+   * A branch whose read failed is not remembered: `LatenessPolicyApi.resolve`'s
+   * platform-default fallback would tint that branch's rows by numbers the
+   * «Только опаздывающие» filter — which resolves the branch's real policy on the
+   * server — does not use, and caching it would keep the two disagreeing for the
+   * rest of the session. It is asked again on the next refresh instead, and until
+   * it answers {@link policyFor} judges the branch's rows by the shell's policy.
+   * This never throws.
    */
   private async ensureBranchPolicies(
     scope: LocationScope,
@@ -624,11 +634,20 @@ export class OrderQueue implements OnInit {
     const resolved = await Promise.all(
       missing.map(
         async (locationId) =>
-          [locationId, await this.latenessPolicyApi.resolve({ ...scope, locationId })] as const,
+          [locationId, await this.latenessPolicyApi.tryResolve({ ...scope, locationId })] as const,
       ),
     );
     for (const [locationId, policy] of resolved) {
+      if (!policy) {
+        continue;
+      }
       this.branchPolicies.set(locationId, policy);
+      if (locationId === scope.locationId) {
+        // The shell's own branch failed at start-up and has answered since: it is
+        // the fallback for every branch not yet resolved, and owns the late colour.
+        this.latenessPolicy = policy;
+        this.lateColour.set(policy.lateColour ?? null);
+      }
     }
   }
 

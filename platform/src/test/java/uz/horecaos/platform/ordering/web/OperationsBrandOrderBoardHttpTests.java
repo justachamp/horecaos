@@ -31,6 +31,7 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
@@ -40,6 +41,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.PlatformRole;
+import uz.horecaos.platform.iam.api.accounts.StaffDisplayNames;
 import uz.horecaos.platform.iam.infrastructure.authorization.RoleRegistrySynchronizer;
 import uz.horecaos.platform.ordering.OrderBoardFixtures;
 import uz.horecaos.platform.support.TestDatabase;
@@ -127,6 +129,14 @@ class OperationsBrandOrderBoardHttpTests {
     @Autowired
     @SuppressWarnings("NullAway")
     private RoleRegistrySynchronizer roleRegistry;
+
+    /**
+     * The detail read names an order's creator through the identity provider, which
+     * this suite does not run; the board rows it mostly reads name no one.
+     */
+    @MockitoBean
+    @SuppressWarnings("NullAway")
+    private StaffDisplayNames staffDisplayNames;
 
     private OrderBoardFixtures fixtures;
 
@@ -350,6 +360,7 @@ class OperationsBrandOrderBoardHttpTests {
                 .at(TENANT, BRAND, CHILONZOR)
                 .status("PAYMENT_AUTHORIZING")
                 .paymentStatusProjection("PENDING"));
+        fixtures.insertProviderIntent(TENANT, BRAND, CHILONZOR, unpaidOnline, "PENDING");
         UUID cash = insert("HT-I2", CHILONZOR);
         UUID paid =
                 fixtures.insertOrder(order("HT-I3").at(TENANT, BRAND, CHILONZOR).paymentStatusProjection("CAPTURED"));
@@ -357,6 +368,7 @@ class OperationsBrandOrderBoardHttpTests {
                 .at(TENANT, BRAND, YUNUSOBOD)
                 .status("PAYMENT_FAILED")
                 .paymentStatusProjection("PENDING"));
+        fixtures.insertProviderIntent(TENANT, BRAND, YUNUSOBOD, endedUnpaid, "PENDING");
 
         Map<UUID, Set<String>> asFinance = actionsByOrder(ok(get(BRAND_BOARD).with(tokenFor(FINANCE))));
         assertThat(asFinance.get(unpaidOnline)).contains("ISSUE_INVOICE");
@@ -373,6 +385,95 @@ class OperationsBrandOrderBoardHttpTests {
                         .get(unpaidOnline))
                 .as("the branch board and the brand board give one answer")
                 .contains("ISSUE_INVOICE");
+    }
+
+    /**
+     * The projection stays {@code PENDING} through an attempt that aged out or one
+     * whose outcome is unknown ({@code PaymentAttemptService.applyToIntent}
+     * publishes nothing for {@code EXPIRED} or {@code UNCERTAIN}), so the row's
+     * projection alone offers «Выставить счёт» on an order the endpoint answers
+     * 404 {@code NO_PAYMENT_INTENT} or 409 {@code PAYMENT_IN_DOUBT}. The live
+     * intent is what the endpoint reads, so it is what the action is gated on.
+     */
+    @Test
+    @DisplayName("«Выставить счёт» is not offered once the payment is closed or in doubt, though the projection "
+            + "still says PENDING")
+    void issueInvoiceFollowsTheLiveIntentAndNotTheProjectionAlone() throws Exception {
+        UUID merchant = fixtures.insertMerchantBinding(TENANT, WOLT_BINDING);
+
+        UUID presented = awaitingOnline("HT-J1");
+        UUID presentedIntent = fixtures.insertProviderIntent(TENANT, BRAND, CHILONZOR, presented, "AUTHORIZING");
+        fixtures.insertPaymentAttempt(TENANT, presentedIntent, merchant, "PRESENTED");
+
+        UUID reserved = awaitingOnline("HT-J2");
+        UUID reservedIntent = fixtures.insertProviderIntent(TENANT, BRAND, CHILONZOR, reserved, "AUTHORIZING");
+        fixtures.insertPaymentAttempt(TENANT, reservedIntent, merchant, "RESERVED");
+
+        UUID notYetPresented = awaitingOnline("HT-J3");
+        fixtures.insertProviderIntent(TENANT, BRAND, CHILONZOR, notYetPresented, "PENDING");
+
+        UUID expired = awaitingOnline("HT-J4");
+        UUID expiredIntent = fixtures.insertProviderIntent(TENANT, BRAND, CHILONZOR, expired, "EXPIRED");
+        fixtures.insertPaymentAttempt(TENANT, expiredIntent, merchant, "EXPIRED");
+
+        UUID uncertain = awaitingOnline("HT-J5");
+        UUID uncertainIntent = fixtures.insertProviderIntent(TENANT, BRAND, CHILONZOR, uncertain, "AUTHORIZING");
+        fixtures.insertPaymentAttempt(TENANT, uncertainIntent, merchant, "UNCERTAIN");
+
+        UUID noIntentAtAll = awaitingOnline("HT-J6");
+
+        Map<UUID, Set<String>> onTheBrandBoard =
+                actionsByOrder(ok(get(BRAND_BOARD).with(tokenFor(FINANCE))));
+        Map<UUID, Set<String>> onTheBranchBoard =
+                actionsByOrder(ok(get(CHILONZOR_BOARD).with(tokenFor(FINANCE))));
+
+        for (Map<UUID, Set<String>> board : List.of(onTheBrandBoard, onTheBranchBoard)) {
+            assertThat(board.get(presented))
+                    .as("an abandoned checkout is handed back")
+                    .contains("ISSUE_INVOICE");
+            assertThat(board.get(reserved))
+                    .as("a customer already on the provider's page is sent back to it")
+                    .contains("ISSUE_INVOICE");
+            assertThat(board.get(notYetPresented))
+                    .as("no attempt yet: the endpoint opens the first")
+                    .contains("ISSUE_INVOICE");
+            assertThat(board.get(expired))
+                    .as("the reservation aged out: the endpoint answers 404 NO_PAYMENT_INTENT")
+                    .doesNotContain("ISSUE_INVOICE");
+            assertThat(board.get(uncertain))
+                    .as("the outcome is unknown: the endpoint answers 409 and says do not re-present")
+                    .doesNotContain("ISSUE_INVOICE");
+            assertThat(board.get(noIntentAtAll)).as("no payment to present").doesNotContain("ISSUE_INVOICE");
+        }
+
+        assertThat(detailActions(presented))
+                .as("the detail read agrees with the board")
+                .contains("ISSUE_INVOICE");
+        assertThat(detailActions(expired))
+                .as("the detail read agrees with the board")
+                .doesNotContain("ISSUE_INVOICE");
+        assertThat(detailActions(uncertain))
+                .as("the detail read agrees with the board")
+                .doesNotContain("ISSUE_INVOICE");
+    }
+
+    /** An online order waiting on its payment: the state whose projection is {@code PENDING}. */
+    private UUID awaitingOnline(String seed) {
+        return fixtures.insertOrder(order(seed)
+                .at(TENANT, BRAND, CHILONZOR)
+                .status("PAYMENT_AUTHORIZING")
+                .paymentStatusProjection("PENDING"));
+    }
+
+    private Set<String> detailActions(UUID orderId) throws Exception {
+        JsonNode detail = ok(
+                get("/api/v1/tenants/" + TENANT + "/brands/" + BRAND + "/locations/" + CHILONZOR + "/orders/" + orderId)
+                        .with(tokenFor(FINANCE)));
+        Set<String> actions = new java.util.HashSet<>();
+        detail.get("summary")
+                .get("actions")
+                .forEach(action -> actions.add(action.get("action").asString()));
+        return actions;
     }
 
     @Test

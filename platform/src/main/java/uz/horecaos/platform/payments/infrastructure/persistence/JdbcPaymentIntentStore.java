@@ -6,14 +6,18 @@ import static uz.horecaos.platform.payments.infrastructure.persistence.PaymentTi
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import uz.horecaos.platform.payments.domain.CaptureTiming;
+import uz.horecaos.platform.payments.domain.PaymentAttemptStatus;
 import uz.horecaos.platform.payments.domain.PaymentIntent;
 import uz.horecaos.platform.payments.domain.PaymentIntentStatus;
 import uz.horecaos.platform.payments.domain.PaymentMethod;
@@ -118,6 +122,62 @@ public class JdbcPaymentIntentStore {
                 .param("orderId", orderId)
                 .query(JdbcPaymentIntentStore::map)
                 .optional();
+    }
+
+    /**
+     * Which of {@code orderIds} have a payment the operations console can hand a
+     * checkout surface for right now: the read behind the board's «Выставить
+     * счёт», one statement for a whole page.
+     *
+     * <p>The predicate is {@code PaymentCheckoutService.openOrRePresent}'s own
+     * refusals, taken as far as rows can say, so the action is not offered where
+     * the endpoint answers a refusal:
+     *
+     * <ul>
+     *   <li>the order's live intent is still open ({@code PENDING} or {@code
+     *       AUTHORIZING}) — an expired, failed or cancelled intent no longer holds
+     *       the order and the endpoint answers {@code NO_PAYMENT_INTENT}, and a
+     *       paid one answers {@code ALREADY_PAID};</li>
+     *   <li>it is a provider tender with a seller — cash has no surface
+     *       ({@code NOT_PAYABLE_ONLINE}) and an intent with no legal entity
+     *       cannot be charged ({@code SELLER_UNRESOLVED});</li>
+     *   <li>none of its attempts is in a state that forbids showing a surface —
+     *       {@code UNCERTAIN} is a charge that may already have happened
+     *       ({@code PAYMENT_IN_DOUBT}), and the statuses are read from {@link
+     *       PaymentAttemptStatus#rePresentable()} rather than listed a second
+     *       time.</li>
+     * </ul>
+     *
+     * <p>What rows cannot say is left to the endpoint: whether the seller's
+     * merchant account still resolves today ({@code BINDING_UNAVAILABLE},
+     * {@code BINDING_CHANGED}).
+     */
+    public Set<UUID> ordersWithPresentablePayment(UUID tenantId, Collection<UUID> orderIds) {
+        if (orderIds.isEmpty()) {
+            return Set.of();
+        }
+        String[] forbidden = Arrays.stream(PaymentAttemptStatus.values())
+                .filter(status -> !status.terminal() && !status.rePresentable())
+                .map(Enum::name)
+                .toArray(String[]::new);
+        return Set.copyOf(jdbc.sql("""
+                        SELECT i.order_id
+                        FROM payments.payment_intents i
+                        WHERE i.tenant_id = :tenantId
+                          AND i.order_id IN (:orderIds)
+                          AND i.status IN ('PENDING', 'AUTHORIZING')
+                          AND i.tender = 'PROVIDER'
+                          AND i.legal_entity_id IS NOT NULL
+                          AND NOT EXISTS (
+                              SELECT 1 FROM payments.payment_attempts a
+                               WHERE a.tenant_id = i.tenant_id AND a.intent_id = i.id
+                                 AND a.status = ANY(CAST(:forbidden AS varchar[])))
+                        """)
+                .param("tenantId", tenantId)
+                .param("orderIds", orderIds)
+                .param("forbidden", forbidden)
+                .query(UUID.class)
+                .list());
     }
 
     /**

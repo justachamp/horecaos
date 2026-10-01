@@ -31,26 +31,39 @@ interface LatenessPolicyResponse {
  * document (wave P06). Read-only: authoring is `TENANT_CONFIGURATION_WRITE`
  * and lands with wave P31's settings surface.
  *
- * Falls back to {@link PLATFORM_DEFAULT_LATENESS_POLICY} on any read failure
- * — a denied capability, a network error, or a server that has not yet
- * deployed the endpoint — the same documented fallback `OrderCounts` and
+ * {@link resolve} falls back to {@link PLATFORM_DEFAULT_LATENESS_POLICY} on any
+ * read failure — a denied capability, a network error, or a server that has not
+ * yet deployed the endpoint — the same documented fallback `OrderCounts` and
  * `RejectReasonsApi` already use for their own reads: a queue with a slightly
  * generic ramp is a better failure than a queue that will not render.
+ *
+ * A caller that keeps the answer for longer than one render uses {@link
+ * tryResolve} instead, which says when there was none: a fallback that is
+ * cached is a branch judged by the platform default for as long as it is kept,
+ * against a server that filters by the branch's real policy.
  */
 @Injectable({ providedIn: 'root' })
 export class LatenessPolicyApi {
   private readonly api = inject(ApiClient);
 
+  /** The branch's policy, or the platform default when it could not be read. */
   async resolve(scope: LocationScope): Promise<LatenessPolicy> {
+    return (await this.tryResolve(scope)) ?? PLATFORM_DEFAULT_LATENESS_POLICY;
+  }
+
+  /**
+   * The branch's policy, or `null` when it could not be read — a failed or
+   * malformed response. Never the fallback: the caller decides what to show
+   * meanwhile, and does not remember the absence.
+   */
+  async tryResolve(scope: LocationScope): Promise<LatenessPolicy | null> {
     try {
       const result = await firstValueFrom(
         this.api.get<LatenessPolicyResponse>(operationsPaths.orderLatenessPolicy(scope)),
       );
-      return isLatenessPolicyResponse(result.value)
-        ? toPolicy(result.value)
-        : PLATFORM_DEFAULT_LATENESS_POLICY;
+      return isLatenessPolicyResponse(result.value) ? toPolicy(result.value) : null;
     } catch {
-      return PLATFORM_DEFAULT_LATENESS_POLICY;
+      return null;
     }
   }
 }

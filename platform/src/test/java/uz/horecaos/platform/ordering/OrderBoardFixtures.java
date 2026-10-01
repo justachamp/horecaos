@@ -4,6 +4,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -450,6 +451,127 @@ public final class OrderBoardFixtures {
                 .param("issuedAt", issued ? NOON.atOffset(ZoneOffset.UTC) : null)
                 .param("blockedAt", blocked ? NOON.atOffset(ZoneOffset.UTC) : null)
                 .update();
+    }
+
+    // --------------------------------------------------------------- payments
+
+    /**
+     * The provider-tender payment intent of an order, in {@code status}, carrying
+     * what {@code ck_payment_intent_settled} demands of it: a settled instant for
+     * every status but the two open ones. Its seller is set, because an intent
+     * with none is one {@code PaymentCheckoutService} refuses to present.
+     */
+    public UUID insertProviderIntent(UUID tenantId, UUID brandId, UUID locationId, UUID orderId, String status) {
+        return insertIntent(tenantId, brandId, locationId, orderId, status, true, true);
+    }
+
+    /** A provider intent with no legal entity: {@code SELLER_UNRESOLVED}, so nothing can be charged through it. */
+    public UUID insertSellerlessProviderIntent(
+            UUID tenantId, UUID brandId, UUID locationId, UUID orderId, String status) {
+        return insertIntent(tenantId, brandId, locationId, orderId, status, true, false);
+    }
+
+    /** A cash intent: collected at handover, with no checkout surface ({@code NOT_PAYABLE_ONLINE}). */
+    public UUID insertCashIntent(UUID tenantId, UUID brandId, UUID locationId, UUID orderId, String status) {
+        return insertIntent(tenantId, brandId, locationId, orderId, status, false, false);
+    }
+
+    private UUID insertIntent(
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            UUID orderId,
+            String status,
+            boolean provider,
+            boolean seller) {
+        boolean open = "PENDING".equals(status) || "AUTHORIZING".equals(status);
+        UUID intentId = derived("intent:" + orderId);
+        jdbc.sql("""
+                INSERT INTO payments.payment_intents (id, tenant_id, order_id, brand_id,
+                    location_id, legal_entity_id, tender, payment_method_code, provider_type,
+                    requested_amount_minor, currency, status, capture_timing, idempotency_key,
+                    settled_at)
+                VALUES (:id, :t, :orderId, :b, :loc, :seller, :tender, :method, :providerType,
+                    101000, 'UZS', :status, :captureTiming, :key, :settledAt)
+                """)
+                .param("id", intentId)
+                .param("t", tenantId)
+                .param("orderId", orderId)
+                .param("b", brandId)
+                .param("loc", locationId)
+                .param("seller", seller ? derived("seller:" + tenantId) : null)
+                .param("tender", provider ? "PROVIDER" : "CASH")
+                .param("method", provider ? "PAYME" : "CASH")
+                .param("providerType", provider ? "PAYME" : null)
+                .param("status", status)
+                .param("captureTiming", provider ? "BEFORE_CONFIRMATION" : "ON_HANDOVER")
+                .param("key", "intent-" + orderId)
+                .param("settledAt", open ? null : NOON.atOffset(ZoneOffset.UTC))
+                .update();
+        return intentId;
+    }
+
+    /**
+     * One attempt against {@code intentId}, in {@code status}, with the merchant
+     * account and the obligation or settled instant the table's checks demand of
+     * that status (V0027): an {@code UNCERTAIN} attempt its named resolver and
+     * deadline, every terminal one the instant it settled.
+     */
+    public void insertPaymentAttempt(UUID tenantId, UUID intentId, UUID merchantBindingId, String status) {
+        boolean open = Set.of("INITIATED", "PRESENTED", "RESERVED", "UNCERTAIN").contains(status);
+        boolean uncertain = "UNCERTAIN".equals(status);
+        jdbc.sql("""
+                INSERT INTO payments.payment_attempts (id, tenant_id, intent_id, provider_type,
+                    merchant_binding_id, merchant_trans_id, business_date,
+                    requested_amount_minor, currency, status, uncertain_since,
+                    uncertain_resolver, uncertain_deadline, settled_at)
+                VALUES (:id, :t, :intent, 'PAYME', :binding, :mti, DATE '2026-09-10',
+                    101000, 'UZS', :status, :since, :resolver, :deadline, :settledAt)
+                """)
+                .param("id", derived("attempt:" + intentId + status))
+                .param("t", tenantId)
+                .param("intent", intentId)
+                .param("binding", merchantBindingId)
+                .param("mti", derived("mti:" + intentId + status).toString().replace("-", ""))
+                .param("status", status)
+                .param("since", uncertain ? NOON.atOffset(ZoneOffset.UTC) : null)
+                .param("resolver", uncertain ? "PAYME_CHECK_TRANSACTION" : null)
+                .param("deadline", uncertain ? NOON.plusSeconds(900).atOffset(ZoneOffset.UTC) : null)
+                .param("settledAt", open ? null : NOON.atOffset(ZoneOffset.UTC))
+                .update();
+    }
+
+    /**
+     * An active Payme merchant account for {@code tenantId}, resolved through the
+     * integration installation and binding {@link #marketplaceBinding} made for
+     * {@code integrationBindingId} — the only two rows the account must point at,
+     * which is all an attempt's foreign key needs.
+     */
+    public UUID insertMerchantBinding(UUID tenantId, UUID integrationBindingId) {
+        UUID legalEntityId = derived("seller:" + tenantId);
+        jdbc.sql("""
+                INSERT INTO tenant.legal_entities (id, tenant_id, code, legal_name, tin, status)
+                VALUES (:id, :t, 'LE-BOARD', 'Board MCHJ', '123456789', 'ACTIVE')
+                ON CONFLICT DO NOTHING
+                """).param("id", legalEntityId).param("t", tenantId).update();
+        UUID merchantBindingId = derived("merchant-binding:" + integrationBindingId);
+        jdbc.sql("""
+                INSERT INTO payments.merchant_bindings (id, tenant_id, legal_entity_id,
+                    provider_type, installation_id, binding_id, merchant_account_reference,
+                    secret_reference, callback_path_segment, supports_reversal,
+                    supports_partner_fiscalization, status, effective_from)
+                VALUES (:id, :t, :legalEntity, 'PAYME', :installation, :binding, 'cashbox-board',
+                    'horecaos:test:provider_payment:tenant:payme', :segment, false, false,
+                    'ACTIVE', DATE '2026-01-01')
+                """)
+                .param("id", merchantBindingId)
+                .param("t", tenantId)
+                .param("legalEntity", legalEntityId)
+                .param("installation", derived("installation:" + integrationBindingId))
+                .param("binding", integrationBindingId)
+                .param("segment", "board-" + merchantBindingId.toString().substring(0, 8))
+                .update();
+        return merchantBindingId;
     }
 
     // ------------------------------------------------------------------ ids

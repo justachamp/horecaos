@@ -437,7 +437,10 @@ public class OrderQueryService implements OrderCountsQuery {
         List<JdbcOrderStore.OrderBoardRow> rows = orders.listForLocation(resolved, before, cursorOrderId, limit);
         return withTables(
                 query.tenantId(),
-                withAmendmentAwaitingOperator(query.tenantId(), withCourierAssignments(query.tenantId(), rows)));
+                withPresentablePayments(
+                        query.tenantId(),
+                        withAmendmentAwaitingOperator(
+                                query.tenantId(), withCourierAssignments(query.tenantId(), rows))));
     }
 
     /**
@@ -520,6 +523,53 @@ public class OrderQueryService implements OrderCountsQuery {
                 .map(row -> row.withAmendmentAwaitingOperator(
                         awaiting.contains(row.order().orderId())))
                 .toList();
+    }
+
+    /**
+     * Fills in {@link JdbcOrderStore.OrderBoardRow#presentablePayment()} for a
+     * page of board rows (gap map row 1.1e's {@code ISSUE_INVOICE}): one round
+     * trip through {@link PaymentIntentPort#ordersWithPresentablePayment}, asked
+     * only about the rows that could be offered the action at all -- an order that
+     * has not ended and whose projection still says an online payment is owed --
+     * so a page of cash and finished orders costs no query.
+     *
+     * <p>The projection is the cheap first cut and the intent the deciding fact:
+     * see {@link OrderActionsPolicy#awaitsOnlinePayment}.
+     */
+    private List<JdbcOrderStore.OrderBoardRow> withPresentablePayments(
+            UUID tenantId, List<JdbcOrderStore.OrderBoardRow> rows) {
+        Set<UUID> candidates = rows.stream()
+                .filter(row -> couldOfferInvoice(row.order()))
+                .map(row -> row.order().orderId())
+                .collect(Collectors.toSet());
+        if (candidates.isEmpty()) {
+            return rows;
+        }
+        Set<UUID> presentable = payments.ordersWithPresentablePayment(tenantId, candidates);
+        if (presentable.isEmpty()) {
+            return rows;
+        }
+        return rows.stream()
+                .map(row -> row.withPresentablePayment(
+                        presentable.contains(row.order().orderId())))
+                .toList();
+    }
+
+    private static boolean couldOfferInvoice(OrderRow order) {
+        return !order.status().terminal() && OrderActionsPolicy.paymentMayBeOwed(order.paymentStatusProjection());
+    }
+
+    /**
+     * Whether this order has a payment an operator can hand a checkout surface
+     * for right now -- the detail-screen counterpart to {@link #forLocation}'s
+     * batched {@link JdbcOrderStore.OrderBoardRow#presentablePayment()}, so the
+     * two screens never disagree about whether «Выставить счёт» is offered.
+     */
+    @Transactional(readOnly = true)
+    public boolean presentablePaymentFor(UUID tenantId, OrderRow order) {
+        return couldOfferInvoice(order)
+                && payments.ordersWithPresentablePayment(tenantId, Set.of(order.orderId()))
+                        .contains(order.orderId());
     }
 
     /**
