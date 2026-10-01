@@ -88,7 +88,17 @@ public record QuoteSnapshot(
     /**
      * One item line of a priced cart.
      *
-     * @param lineKey the cart's stable line key, so lines match up without relying on order
+     * @param lineKey the cart's stable line key, so lines match up without relying on order.
+     *                A combo's component lines carry the cart line's key followed by
+     *                {@code ~} and a position, so each is stable on its own and all of them
+     *                sort next to the line they came from
+     * @param comboSelectionId ADR 0136: groups the component lines of one combo purchase,
+     *                null on every other line. An order copies it onto each component
+     *                order line, and a report counts distinct values to know how many
+     *                combos were sold
+     * @param comboContainerVariantId the combo this component was bought as part of, set
+     *                exactly when {@code comboSelectionId} is. Display and receipt-header
+     *                metadata: the container is never a line and never has an amount
      */
     public record Line(
             String lineKey,
@@ -98,7 +108,33 @@ public record QuoteSnapshot(
             long unitAmountMinor,
             long baseAmountMinor,
             long finalAmountMinor,
-            long taxAmountMinor) {}
+            long taxAmountMinor,
+            @Nullable UUID comboSelectionId,
+            @Nullable UUID comboContainerVariantId) {
+
+        /** A line that is not part of a combo, which is every line before ADR 0136. */
+        public Line(
+                String lineKey,
+                UUID variantId,
+                int quantity,
+                String descriptionSnapshot,
+                long unitAmountMinor,
+                long baseAmountMinor,
+                long finalAmountMinor,
+                long taxAmountMinor) {
+            this(
+                    lineKey,
+                    variantId,
+                    quantity,
+                    descriptionSnapshot,
+                    unitAmountMinor,
+                    baseAmountMinor,
+                    finalAmountMinor,
+                    taxAmountMinor,
+                    null,
+                    null);
+        }
+    }
 
     /**
      * One step of the calculation, in the order it was applied.

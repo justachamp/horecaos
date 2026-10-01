@@ -230,14 +230,20 @@ public class JdbcPricingStore {
             lineParams.put("base", line.baseAmount().minor());
             lineParams.put("finalAmount", line.finalAmount().minor());
             lineParams.put("tax", line.taxAmount().minor());
+            // ADR 0136. Null on every line that is not a combo component; a HashMap
+            // for the same reason variantId is one.
+            lineParams.put("comboSelectionId", line.comboSelectionId());
+            lineParams.put("comboContainerVariantId", line.comboContainerVariantId());
 
             jdbc.sql("""
                     INSERT INTO pricing.quote_lines (
                         quote_id, line_id, tenant_id, line_type, source_variant_id, quantity,
                         description_snapshot, unit_amount_minor, base_amount_minor,
-                        final_amount_minor, tax_amount_minor)
+                        final_amount_minor, tax_amount_minor,
+                        combo_selection_id, combo_container_variant_id)
                     VALUES (:quoteId, :lineId, :tenantId, :lineType, :variantId, :quantity,
-                        :description, :unit, :base, :finalAmount, :tax)
+                        :description, :unit, :base, :finalAmount, :tax,
+                        :comboSelectionId, :comboContainerVariantId)
                     """).params(lineParams).update();
         }
 
@@ -342,7 +348,8 @@ public class JdbcPricingStore {
         // fiscal receipt, and is not this change.
         List<QuoteSnapshot.Line> lines = jdbc.sql("""
                 SELECT line_id, source_variant_id, quantity, description_snapshot,
-                       unit_amount_minor, base_amount_minor, final_amount_minor, tax_amount_minor
+                       unit_amount_minor, base_amount_minor, final_amount_minor, tax_amount_minor,
+                       combo_selection_id, combo_container_variant_id
                 FROM pricing.quote_lines
                 WHERE quote_id = :quoteId AND tenant_id = :tenantId AND line_type = 'ITEM'
                 ORDER BY line_id
@@ -357,7 +364,9 @@ public class JdbcPricingStore {
                         row.getLong("unit_amount_minor"),
                         row.getLong("base_amount_minor"),
                         row.getLong("final_amount_minor"),
-                        row.getLong("tax_amount_minor")))
+                        row.getLong("tax_amount_minor"),
+                        row.getObject("combo_selection_id", UUID.class),
+                        row.getObject("combo_container_variant_id", UUID.class)))
                 .list();
 
         List<QuoteSnapshot.Adjustment> adjustments = jdbc.sql("""

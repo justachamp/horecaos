@@ -23,10 +23,13 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
+import uz.horecaos.platform.pricing.application.CompositePricing;
+import uz.horecaos.platform.pricing.application.CompositeProductsLookup;
 import uz.horecaos.platform.pricing.application.PricingEngine;
 import uz.horecaos.platform.pricing.application.QuoteService;
 import uz.horecaos.platform.pricing.domain.Quote;
 import uz.horecaos.platform.pricing.domain.QuoteRequest;
+import uz.horecaos.platform.tenancy.api.FulfillmentMode;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
 import uz.horecaos.platform.web.authorization.RequiresCapability;
@@ -75,9 +78,29 @@ public class QuoteController {
                 body.channel(),
                 body.lines().stream()
                         .map(line -> new QuoteRequest.Line(
-                                line.lineId(), line.variantId(), line.quantity(), line.modifierOptionIds()))
+                                line.lineId(),
+                                line.variantId(),
+                                line.quantity(),
+                                line.modifierOptionIds(),
+                                line.comboPicks() == null
+                                        ? List.of()
+                                        : line.comboPicks().stream()
+                                                .map(pick -> new QuoteRequest.ComboPick(
+                                                        pick.componentId(),
+                                                        pick.quantity() == null ? 1 : pick.quantity()))
+                                                .toList(),
+                                line.nestedModifiers() == null
+                                        ? List.of()
+                                        : line.nestedModifiers().stream()
+                                                .map(nested -> new QuoteRequest.NestedModifier(
+                                                        nested.parentOptionId(), nested.optionId()))
+                                                .toList()))
                         .toList(),
-                idempotencyKey);
+                idempotencyKey,
+                null,
+                null,
+                null,
+                body.fulfillmentMode());
 
         try {
             return ResponseEntity.ok(QuoteResponse.of(quotes.quote(request)));
@@ -88,6 +111,26 @@ public class QuoteController {
                     ErrorCode.VALIDATION_FAILED,
                     unpriced.getMessage(),
                     java.util.Map.of("priceableId", unpriced.priceableId().toString()));
+        } catch (CompositePricing.CompositeSelectionException selection) {
+            // A selection the catalog does not allow: well formed, naming real things, and
+            // refused by what they are. The code says which rule, the id says which row.
+            throw new ApiException(
+                    ErrorCode.UNPROCESSABLE_STATE,
+                    selection.getMessage(),
+                    java.util.Map.of(
+                            "findingCode",
+                            selection.code(),
+                            "subjectId",
+                            selection.subjectId().toString()));
+        } catch (CompositeProductsLookup.HiddenModifierAmbiguousException ambiguous) {
+            throw new ApiException(
+                    ErrorCode.UNPROCESSABLE_STATE,
+                    ambiguous.getMessage(),
+                    java.util.Map.of(
+                            "findingCode",
+                            "HIDDEN_MODIFIER_GROUP_AMBIGUOUS",
+                            "subjectId",
+                            ambiguous.groupId().toString()));
         } catch (QuoteService.NoPublishedMenuException
                 | QuoteService.NoPriceBookException
                 | QuoteService.NoTaxProfileException misconfigured) {
@@ -129,17 +172,45 @@ public class QuoteController {
         };
     }
 
+    /**
+     * @param fulfillmentMode ADR 0136: how the order leaves the location. Decides which
+     *                        hidden auto-selected groups are applied. Absent means a
+     *                        collection, which is what a request without it has always
+     *                        been priced as
+     */
     public record QuoteRequestBody(
             @NotNull UUID locationId,
             UUID customerAccountId,
             @Size(max = 32) String channel,
-            @NotEmpty @Size(max = 100) List<LineBody> lines) {}
+            @NotEmpty @Size(max = 100) List<LineBody> lines,
+            @Nullable FulfillmentMode fulfillmentMode) {}
 
+    /**
+     * @param lineId at most 64 characters, and at most 60 when the line carries combo picks:
+     *               each component line is the id followed by {@code ~} and its position,
+     *               and must still fit a quote line's 64
+     * @param comboPicks ADR 0136: what was chosen inside a combo. Required exactly when
+     *               {@code variantId} is a combo's container, which is never sold directly
+     * @param nestedModifiers ADR 0136: second-level selections, each naming the first-level
+     *               option whose linked variant offers it
+     */
     public record LineBody(
             @NotBlank @Size(max = 64) String lineId,
             @NotNull UUID variantId,
             @Positive @Max(999) int quantity,
-            @Size(max = 20) List<UUID> modifierOptionIds) {}
+            @Size(max = 20) List<UUID> modifierOptionIds,
+            @Nullable @Size(max = 40) List<@Valid ComboPickBody> comboPicks,
+            @Nullable @Size(max = 20) List<@Valid NestedModifierBody> nestedModifiers) {}
+
+    /**
+     * @param quantity how many times the component was picked; absent means once
+     */
+    public record ComboPickBody(
+            @NotNull UUID componentId,
+            @Nullable @Positive @Max(99) Integer quantity) {}
+
+    public record NestedModifierBody(
+            @NotNull UUID parentOptionId, @NotNull UUID optionId) {}
 
     /**
      * The proof checkout offers that the cart it is accepting is the cart that was priced.
@@ -178,7 +249,9 @@ public class QuoteController {
                                     line.descriptionSnapshot(),
                                     line.unitAmount().minor(),
                                     line.finalAmount().minor(),
-                                    line.taxAmount().minor()))
+                                    line.taxAmount().minor(),
+                                    line.comboSelectionId(),
+                                    line.comboContainerVariantId()))
                             .toList(),
                     quote.adjustments().stream()
                             .map(a -> new AdjustmentResponse(
@@ -195,6 +268,9 @@ public class QuoteController {
      * One line of a priced cart, an item or the delivery fee.
      *
      * @param variantId null on the delivery-fee line, never on an item line.
+     * @param comboSelectionId ADR 0136: shared by the component lines of one combo
+     *                         purchase, null on every other line
+     * @param comboContainerVariantId the combo the component was bought as part of
      */
     public record LineResponse(
             String lineId,
@@ -203,7 +279,9 @@ public class QuoteController {
             String description,
             long unitAmountMinor,
             long finalAmountMinor,
-            long taxAmountMinor) {}
+            long taxAmountMinor,
+            @Nullable UUID comboSelectionId,
+            @Nullable UUID comboContainerVariantId) {}
 
     /**
      * Every step that made up the total, so "why is this 47,000 som" has an answer.
