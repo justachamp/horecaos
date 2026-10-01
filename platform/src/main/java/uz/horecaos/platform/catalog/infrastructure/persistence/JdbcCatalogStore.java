@@ -51,10 +51,22 @@ public class JdbcCatalogStore {
 
     private final JdbcClient jdbc;
     private final ObjectMapper objectMapper;
+    private final JdbcPhysicalAttributesStore physicalAttributes;
 
     public JdbcCatalogStore(JdbcClient jdbc, ObjectMapper objectMapper) {
         this.jdbc = jdbc;
         this.objectMapper = objectMapper;
+        this.physicalAttributes = new JdbcPhysicalAttributesStore(jdbc);
+    }
+
+    /**
+     * The variants of one brand that carry ADR 0137 physical attributes, read with the
+     * rest of a publication snapshot so the validator and the published payload see
+     * the same state.
+     */
+    public Map<UUID, uz.horecaos.platform.catalog.domain.PhysicalAttributes> physicalAttributesForBrand(
+            UUID tenantId, UUID brandId) {
+        return physicalAttributes.forBrand(tenantId, brandId);
     }
 
     // ---------------------------------------------------------------- authoring

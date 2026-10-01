@@ -2,6 +2,7 @@ package uz.horecaos.platform.catalog.web;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -12,6 +13,7 @@ import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalTime;
 import java.util.List;
@@ -33,6 +35,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import uz.horecaos.platform.catalog.api.CatalogNameLocales;
 import uz.horecaos.platform.catalog.application.CatalogAuthoringService;
+import uz.horecaos.platform.catalog.application.PhysicalAttributesAuthoringService;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.EntityType;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.OfferingStatus;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.PriceableNode;
@@ -40,12 +43,14 @@ import uz.horecaos.platform.catalog.domain.CatalogEntities.PriceableType;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.Status;
 import uz.horecaos.platform.catalog.domain.FiscalClassification;
 import uz.horecaos.platform.catalog.domain.ItemSaleSchedule;
+import uz.horecaos.platform.catalog.domain.PhysicalAttributes;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.media.api.MediaAssetId;
 import uz.horecaos.platform.tenancy.api.BrandLocaleLookup;
+import uz.horecaos.platform.web.api.AggregateVersion;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
 import uz.horecaos.platform.web.api.Page;
@@ -79,6 +84,7 @@ public class CatalogAuthoringController {
     private static final String DEFAULT_EXCLUSION_REASON = "OPERATOR_DISABLED";
 
     private final CatalogAuthoringService authoring;
+    private final PhysicalAttributesAuthoringService physicalAttributes;
     private final CurrentActor currentActor;
     private final BrandLocaleLookup brandLocales;
     private final String defaultLocale;
@@ -91,10 +97,12 @@ public class CatalogAuthoringController {
      */
     public CatalogAuthoringController(
             CatalogAuthoringService authoring,
+            PhysicalAttributesAuthoringService physicalAttributes,
             CurrentActor currentActor,
             BrandLocaleLookup brandLocales,
             @Value("${horecaos.catalog.default-locale:uz}") String defaultLocale) {
         this.authoring = authoring;
+        this.physicalAttributes = physicalAttributes;
         this.currentActor = currentActor;
         this.brandLocales = brandLocales;
         this.defaultLocale = defaultLocale;
@@ -398,6 +406,144 @@ public class CatalogAuthoringController {
             @Valid @RequestBody FiscalClassificationRequest request) {
         authoring.classify(tenantId, brandId, PriceableNode.variant(variantId), request.toClassification(), actorId());
         return ResponseEntity.noContent().build();
+    }
+
+    // ------------------------------------------- row 4.2c: physical and nutritional attributes
+
+    @GetMapping("/variants/{variantId}/physical-attributes")
+    @RequiresCapability(value = Capability.CATALOG_READ, scope = ScopeType.BRAND)
+    @Operation(
+            summary = "A variant's weight, catchweight, portions and КБЖУ",
+            description = "ADR 0137. A variant with none of it reads as version 0 with every field empty "
+                    + "-- the row is optional, so the editor renders empty fields rather than a row that "
+                    + "has to exist to be absent. The ETag is the version to quote in If-Match when writing.")
+    public ResponseEntity<PhysicalAttributesResponse> physicalAttributes(
+            @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID variantId) {
+        try {
+            return physicalResponse(physicalAttributes.read(tenantId, brandId, variantId));
+        } catch (CatalogAuthoringService.UnknownCatalogEntityException unknown) {
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, unknown.getMessage());
+        }
+    }
+
+    @PutMapping("/variants/{variantId}/physical-attributes")
+    @RequiresCapability(value = Capability.CATALOG_AUTHOR, scope = ScopeType.BRAND, mutating = true)
+    @Operation(
+            summary = "Set a variant's weight, catchweight, portions and КБЖУ",
+            description = "ADR 0137. One upsert of the whole set under If-Match (0 when the variant has no "
+                    + "row yet); an empty set clears the row. A catchweight variant's price is per "
+                    + "catchweightQuantumGrams, and a decimal portionSize makes the variant orderable by the "
+                    + "portion. The marking exclusion (a marked good cannot be catchweight or splittable) is "
+                    + "a publication blocker, not a write refusal -- the fiscal classification it is checked "
+                    + "against is authored on another screen.")
+    public ResponseEntity<PhysicalAttributesResponse> setPhysicalAttributes(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID variantId,
+            HttpServletRequest http,
+            @Valid @RequestBody PhysicalAttributesRequest request) {
+        long expected = AggregateVersion.requireIfMatch(http);
+        if (expected < 0 || expected > Integer.MAX_VALUE) {
+            throw new ApiException(ErrorCode.INVALID_REQUEST, "If-Match must carry a version the editor read");
+        }
+        try {
+            return physicalResponse(physicalAttributes.replace(
+                    tenantId,
+                    brandId,
+                    variantId,
+                    request.toAttributes(),
+                    (int) expected,
+                    currentActor.get().subject()));
+        } catch (PhysicalAttributes.InvalidPhysicalAttributesException invalid) {
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, invalid.getMessage(), Map.of("reason", invalid.code()));
+        } catch (PhysicalAttributesAuthoringService.StalePhysicalAttributesException stale) {
+            throw ApiException.staleVersion(stale.expected(), stale.actual());
+        } catch (CatalogAuthoringService.UnknownCatalogEntityException unknown) {
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, unknown.getMessage());
+        }
+    }
+
+    private static ResponseEntity<PhysicalAttributesResponse> physicalResponse(
+            PhysicalAttributesAuthoringService.View view) {
+        return ResponseEntity.ok()
+                .eTag(AggregateVersion.toETag(view.version()))
+                .body(PhysicalAttributesResponse.of(view));
+    }
+
+    /**
+     * ADR 0137's one attribute row as an author sends it. Every field is boxed
+     * and optional: Jackson 3 refuses a body that omits a primitive, and the
+     * editor sends only what the author filled in.
+     *
+     * @param catchweight       absent reads as false
+     * @param splittable        absent reads as false
+     * @param portionSize       the step a splittable variant may be ordered in, e.g. 0.5
+     * @param caloriesKcalPer100 КБЖУ per 100 g (per 100 mL for a volume-measured variant)
+     */
+    public record PhysicalAttributesRequest(
+            @Nullable @Positive Integer netWeightGrams,
+            @Nullable @Positive Integer netVolumeMillilitres,
+            @Nullable Boolean catchweight,
+            @Nullable @Positive Integer catchweightQuantumGrams,
+            @Nullable @Positive Integer catchweightNominalGrams,
+            @Nullable Boolean splittable,
+            @Nullable BigDecimal portionSize,
+            @Nullable BigDecimal caloriesKcalPer100,
+            @Nullable BigDecimal proteinGramsPer100,
+            @Nullable BigDecimal fatGramsPer100,
+            @Nullable BigDecimal carbohydratesGramsPer100) {
+
+        PhysicalAttributes toAttributes() {
+            return new PhysicalAttributes(
+                    netWeightGrams,
+                    netVolumeMillilitres,
+                    Boolean.TRUE.equals(catchweight),
+                    catchweightQuantumGrams,
+                    catchweightNominalGrams,
+                    Boolean.TRUE.equals(splittable),
+                    portionSize,
+                    caloriesKcalPer100,
+                    proteinGramsPer100,
+                    fatGramsPer100,
+                    carbohydratesGramsPer100);
+        }
+    }
+
+    /** @param version 0 when the variant carries no attributes */
+    public record PhysicalAttributesResponse(
+            @Nullable Integer netWeightGrams,
+            @Nullable Integer netVolumeMillilitres,
+            boolean catchweight,
+            @Nullable Integer catchweightQuantumGrams,
+            @Nullable Integer catchweightNominalGrams,
+            boolean splittable,
+            @Nullable BigDecimal portionSize,
+            @Nullable BigDecimal caloriesKcalPer100,
+            @Nullable BigDecimal proteinGramsPer100,
+            @Nullable BigDecimal fatGramsPer100,
+            @Nullable BigDecimal carbohydratesGramsPer100,
+            int version) {
+
+        static PhysicalAttributesResponse of(PhysicalAttributesAuthoringService.View view) {
+            PhysicalAttributes attributes = view.attributes();
+            if (attributes == null) {
+                return new PhysicalAttributesResponse(
+                        null, null, false, null, null, false, null, null, null, null, null, view.version());
+            }
+            return new PhysicalAttributesResponse(
+                    attributes.netWeightGrams(),
+                    attributes.netVolumeMillilitres(),
+                    attributes.catchweight(),
+                    attributes.catchweightQuantumGrams(),
+                    attributes.catchweightNominalGrams(),
+                    attributes.splittable(),
+                    attributes.portionSize(),
+                    attributes.caloriesKcalPer100(),
+                    attributes.proteinGramsPer100(),
+                    attributes.fatGramsPer100(),
+                    attributes.carbohydratesGramsPer100(),
+                    view.version());
+        }
     }
 
     @PutMapping("/modifier-options/{optionId}/fiscal-classification")

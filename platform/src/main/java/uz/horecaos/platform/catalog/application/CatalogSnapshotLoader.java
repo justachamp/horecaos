@@ -24,6 +24,7 @@ import uz.horecaos.platform.catalog.domain.CatalogEntities.Product;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.PublicationItem;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.Variant;
 import uz.horecaos.platform.catalog.domain.FiscalClassification;
+import uz.horecaos.platform.catalog.domain.PhysicalAttributes;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore.MediaRelationRow;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore.TranslationRow;
@@ -162,7 +163,8 @@ public class CatalogSnapshotLoader {
                 priced,
                 offered,
                 loadFiscalContext(tenantId, brandId, offerings),
-                pricingWired);
+                pricingWired,
+                store.physicalAttributesForBrand(tenantId, brandId));
     }
 
     /**
@@ -248,6 +250,7 @@ public class CatalogSnapshotLoader {
                                 // must not have to reach back into authoring — which is
                                 // mutable and may have moved on.
                                 putClassification(entry, snapshot.effectiveClassification(variant));
+                                putPhysical(entry, snapshot.physicalByVariant().get(variant.id()));
                                 entry.put("isDefault", variant.isDefault());
                                 entry.put("sortOrder", variant.sortOrder());
                                 entry.put("status", variant.status().name());
@@ -344,6 +347,44 @@ public class CatalogSnapshotLoader {
         }
         putIfPresent(target, "alcoholByVolumeBp", fiscal.alcoholByVolumeBasisPoints());
         putIfPresent(target, "ageRestrictionYears", fiscal.ageRestrictionYears());
+    }
+
+    /**
+     * Writes the physical attributes a customer, a cart and the pricing engine read
+     * from the published menu (ADR 0137), omitting the whole block for a variant
+     * that carries none.
+     *
+     * <p>Published rather than read live for the reason the classification is: a
+     * quote has to be priced against the facts the customer was shown, and an
+     * author flipping a variant to catchweight must not reinterpret a price while
+     * the old menu is still on screen. The block is a copy, so it changes only with
+     * the next publication.
+     *
+     * <p>КБЖУ travels in a nested {@code nutrition} object, per 100 g (or per
+     * 100 mL), so the storefront scales it to a portion from the stored figures
+     * rather than from a second stored value that could drift from them.
+     */
+    private static void putPhysical(Map<String, Object> target, @Nullable PhysicalAttributes physical) {
+        if (physical == null) {
+            return;
+        }
+        Map<String, Object> block = new LinkedHashMap<>();
+        putIfPresent(block, "netWeightGrams", physical.netWeightGrams());
+        putIfPresent(block, "netVolumeMillilitres", physical.netVolumeMillilitres());
+        block.put("catchweight", physical.catchweight());
+        putIfPresent(block, "catchweightQuantumGrams", physical.catchweightQuantumGrams());
+        putIfPresent(block, "catchweightNominalGrams", physical.catchweightNominalGrams());
+        block.put("splittable", physical.splittable());
+        putIfPresent(block, "portionSize", physical.portionSize());
+        Map<String, Object> nutrition = new LinkedHashMap<>();
+        putIfPresent(nutrition, "caloriesKcalPer100", physical.caloriesKcalPer100());
+        putIfPresent(nutrition, "proteinGramsPer100", physical.proteinGramsPer100());
+        putIfPresent(nutrition, "fatGramsPer100", physical.fatGramsPer100());
+        putIfPresent(nutrition, "carbohydratesGramsPer100", physical.carbohydratesGramsPer100());
+        if (!nutrition.isEmpty()) {
+            block.put("nutrition", nutrition);
+        }
+        target.put("physical", block);
     }
 
     /**
