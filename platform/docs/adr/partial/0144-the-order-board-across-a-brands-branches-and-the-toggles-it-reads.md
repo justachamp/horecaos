@@ -88,8 +88,9 @@ browser.
 
 4. **The four toggles are read in the statement.** `late` resolves the
    `ordering.lateness` policy (ADR 0030) for each branch in scope and applies
-   `OrderLatenessPolicy`'s rule as a predicate — a test holds the SQL to
-   `OrderLatenessPolicy.evaluate`. `problem` is an `EXISTS` over
+   `OrderLatenessPolicy`'s rule as a predicate —
+   `OrderBoardTogglesQueryTests#theLateFilterAgreesWithTheDomainRule` holds the
+   SQL to `OrderLatenessPolicy.evaluate`. `problem` is an `EXISTS` over
    `ordering.order_process_states`. `callbackRequested` reads `callback_requested`
    (V0029). `fiscalStatus` is an `EXISTS` over `fiscal.fiscal_documents` — a
    fourth cross-schema read beside ADR 0102's three, under the same rule (a read
@@ -215,7 +216,8 @@ back. A branch manager sees none of the mode and loses nothing they had.
 
 - [ADR 0102](../built/0102-the-order-board-query-reads-what-the-board-shows-wave-p04.md)
 - orders.md §2.4, §2.5, §2.7, §4.9
-- `OrderBoardBrandScopeQueryTests`, `OrderBoardTogglesQueryTests`,
-  `OperationsBrandOrderBoardHttpTests` (including
+- `OrderBoardBrandScopeQueryTests`, `OrderBoardTogglesQueryTests` (including
+  `theLateFilterAgreesWithTheDomainRule`, the one test tying the late predicate
+  to the domain rule), `OperationsBrandOrderBoardHttpTests` (including
   `issueInvoiceFollowsTheLiveIntentAndNotTheProjectionAlone`),
   `OperationsPaymentReissueAuditHttpTests`

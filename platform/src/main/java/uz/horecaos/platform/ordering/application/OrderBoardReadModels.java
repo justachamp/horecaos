@@ -44,7 +44,9 @@ import uz.horecaos.platform.tenancy.api.FulfillmentMode;
  * and {@code GET .../{orderId}/lateness} read, so the toolbar's filter and a
  * row's late tint are one answer and cannot drift. The rule itself is {@link
  * OrderLatenessPolicy#evaluate}'s, restated as a predicate: {@code
- * OrderLatenessPolicyBoardAgreementTests} holds the two together.
+ * OrderBoardTogglesQueryTests#theLateFilterAgreesWithTheDomainRule} holds the two
+ * together, and is the only thing that does -- change either side and that test
+ * is the one to read first.
  *
  * <p><strong>Aggregator bindings.</strong> Which provider bindings the orders in
  * scope arrived through, with the name integration gives each. Ordering owns the
