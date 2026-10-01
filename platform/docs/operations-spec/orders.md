@@ -452,11 +452,20 @@ A published version is never withdrawn, so the card has no "revert to inherited"
 for this document; it is overridden by publishing at the narrower scope. The
 order board, the order-detail header, the kitchen queue, the kitchen VDU and the
 wallboard VDU read the per-mode numbers through `GET .../orders/lateness-policy`
-and the shared evaluator, unchanged. `ordering.late_order_threshold_minutes`
+and the shared evaluator, unchanged. Those screens stay open for a whole shift
+(a wall display for days), so each re-reads the policy on the poll it already
+has, at most once a minute per branch — the server holds the resolved document
+for 60 s — and a published document reaches an open screen within about a
+minute and a poll, without a reload; a read that fails is asked for again on the
+next poll, and never replaces a policy that was read earlier. A publication also
+drops the cached resolution of every brand and location beneath the scope it
+was published at, and the editor reads the document and its version from the
+table rather than the cache. `ordering.late_order_threshold_minutes`
 (card 2's «Заказ опаздывает с») is still stored and read by nothing: whether it
 means a grace after the promise or a limit from acceptance is an owner decision,
 and until that is made the line where late begins is this document's
-`late_after_seconds`.
+`late_after_seconds`. The field says so on the card («Пока не применяется»), in
+the viewer and in the editor.
 
 **Inputs.** `now`, `status`, and a policy resolved through ADR 0030 at key
 `ordering.lateness`. The promise itself is **built**, just not from the table

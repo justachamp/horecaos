@@ -69,16 +69,25 @@ public class OrderLatenessPolicyAuthoringService {
         this.clock = clock;
     }
 
-    /** The document in force at a scope, and everything the editor needs to draw it and to save it back. */
+    /**
+     * The document in force at a scope, and everything the editor needs to draw it and to save it back.
+     *
+     * <p>Read from the table, never from the resolution cache: the document is shown beside {@link
+     * Editor#versionAtScope()}, which is what the next save is compared with, and a cached document
+     * paired with a current version is a form that passes the check on numbers the operator never saw.
+     * The version is read <em>first</em>, so when a publication lands between the two reads the document
+     * is at least as new as the version and the save is refused rather than waved through.
+     */
     public Editor view(ResourceScope scope) {
-        Authored authored = reads.authoredAt(scope);
+        int versionAtScope = author.currentVersion(OrderingConfigurationKeys.LATENESS_POLICY, scope);
+        Authored authored = reads.authoredUncachedAt(scope);
         return editorOf(
                 scope,
                 authored.document(),
                 authored.policyId(),
                 authored.policyVersion(),
                 authored.winningScope(),
-                author.currentVersion(OrderingConfigurationKeys.LATENESS_POLICY, scope));
+                versionAtScope);
     }
 
     /**
@@ -109,7 +118,7 @@ public class OrderLatenessPolicyAuthoringService {
         // What this scope resolved to a moment ago -- its own version, an ancestor's, or the platform
         // default. That is the "before" an operator means by "who changed when an order counts as
         // late"; the shared mechanism's own fact records only that a new version exists, with a hash.
-        Authored before = reads.authoredAt(scope);
+        Authored before = reads.authoredUncachedAt(scope);
         ResolvedPolicy<OrderLatenessDocument> published = author.author(
                 OrderingConfigurationKeys.LATENESS_POLICY,
                 scope,

@@ -25,6 +25,7 @@ import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.api.ConfigurationKey;
 import uz.horecaos.platform.tenancy.api.ConfigurationResolver;
 import uz.horecaos.platform.tenancy.api.ConfigurationValueAuthor;
+import uz.horecaos.platform.tenancy.api.PolicyResolver;
 
 /**
  * ADR 0033, against real Spring-managed beans rather than hand-constructed
@@ -72,6 +73,9 @@ class CacheEvictionIntegrationTests {
 
     @Autowired
     private OrderAcceptancePolicyService orderAcceptancePolicy;
+
+    @Autowired
+    private PolicyResolver policyResolver;
 
     @Autowired
     private JdbcProviderEnvironmentLookup providerEnvironments;
@@ -215,8 +219,71 @@ class CacheEvictionIntegrationTests {
         orderAcceptancePolicy.author(scope, approval(60), ActorRef.user("owner-1", null), "shorten the window");
 
         assertThat(orderAcceptancePolicy.resolveAt(scope).policy().approvalTimeoutSeconds())
-                .as("a missing @CacheEvict on JdbcPolicyResolver#evict, or a missing call to it "
+                .as("a missing eviction in PolicyCurrentCacheEvictor, or a missing call to it "
                         + "from JdbcPolicyAuthor#author, would leave this reading the sixty-second-old 600")
+                .isEqualTo(60);
+    }
+
+    /**
+     * The harm behind the editor's stale pair: a resolution is cached under the scope that asked, so a
+     * location that inherits the tenant's document holds it under its own key, and evicting only the
+     * tenant's key left it answering the version just replaced. Through the real beans: a missing
+     * descendant sweep in {@code PolicyCurrentCacheEvictor}, or keys {@code @Cacheable} writes that the
+     * sweep does not recognise, leaves the location and brand readings at 600.
+     */
+    @Test
+    void aPolicyPublishedAtTheTenantReachesTheBrandAndLocationsAlreadyCachedBeneathIt() {
+        ResourceScope tenant = ResourceScope.tenant(TENANT);
+        UUID brandId = UUID.fromString("018f6f4e-899d-7b1c-a8cf-0242ac129002");
+        ResourceScope brand = ResourceScope.brand(TENANT, brandId);
+        ResourceScope location =
+                ResourceScope.location(TENANT, brandId, UUID.fromString("018f6f4e-899d-7b1c-a8cf-0242ac129003"));
+
+        orderAcceptancePolicy.author(tenant, approval(600), ActorRef.user("owner-1", null), "initial");
+        assertThat(orderAcceptancePolicy.resolveAt(location).policy().approvalTimeoutSeconds())
+                .as("the location resolves through the tenant and caches that under its own key")
+                .isEqualTo(600);
+        assertThat(orderAcceptancePolicy.resolveAt(brand).policy().approvalTimeoutSeconds())
+                .isEqualTo(600);
+
+        orderAcceptancePolicy.author(tenant, approval(60), ActorRef.user("owner-1", null), "shorten the window");
+
+        assertThat(orderAcceptancePolicy.resolveAt(location).policy().approvalTimeoutSeconds())
+                .as("the location key was not the one evicted before; it must not keep the replaced 600")
+                .isEqualTo(60);
+        assertThat(orderAcceptancePolicy.resolveAt(brand).policy().approvalTimeoutSeconds())
+                .isEqualTo(60);
+    }
+
+    /**
+     * The editor's read goes to the table: the cached answer keeps serving the boards, the uncached one
+     * is what a form built from it can trust.
+     */
+    @Test
+    void resolveUncachedSeesTheTableWhileResolveKeepsAnsweringFromTheCache() {
+        ResourceScope tenant = ResourceScope.tenant(TENANT);
+        orderAcceptancePolicy.author(tenant, approval(600), ActorRef.user("owner-1", null), "initial");
+        assertThat(policyResolver.resolve(OrderAcceptancePolicyService.ACCEPTANCE, tenant))
+                .as("populates the cache")
+                .isPresent();
+
+        // A change that does not go through the author, so nothing evicts.
+        jdbc.sql("UPDATE tenant.policies SET document = jsonb_set(document, '{approvalTimeoutSeconds}', '60')")
+                .update();
+
+        assertThat(policyResolver
+                        .resolve(OrderAcceptancePolicyService.ACCEPTANCE, tenant)
+                        .orElseThrow()
+                        .document()
+                        .approvalTimeoutSeconds())
+                .as("the cached answer")
+                .isEqualTo(600);
+        assertThat(policyResolver
+                        .resolveUncached(OrderAcceptancePolicyService.ACCEPTANCE, tenant)
+                        .orElseThrow()
+                        .document()
+                        .approvalTimeoutSeconds())
+                .as("the table")
                 .isEqualTo(60);
     }
 

@@ -268,6 +268,34 @@ class OrderLatenessPolicyEditorHttpTests {
     }
 
     @Test
+    @DisplayName(
+            "a tenant document published over a cached one reaches a location the boards had warm, editor and board alike")
+    void aTenantPublicationReachesALocationWhoseResolutionWasAlreadyCached() throws Exception {
+        String atLocation = "scopeType=LOCATION&brandId=" + BRAND + "&locationId=" + LOCATION;
+        publish("TENANT", null, null, mode(600, 0, 2700), mode(600, 0, 2700), mode(600, 0, 2700), null, "v1");
+        // What the boards and the late-only filter do all shift: the location resolves through the
+        // tenant's document and caches it under its own key.
+        assertThat(boardPolicy(LOCATION).get("delivery").get("lateAfterSeconds").asInt())
+                .isZero();
+        assertThat(read(atLocation).get("policyVersion").asInt()).isEqualTo(1);
+
+        publish("TENANT", null, null, mode(900, 60, 2700), mode(900, 60, 2700), mode(900, 60, 2700), 1, "v2");
+
+        assertThat(boardPolicy(LOCATION).get("delivery").get("lateAfterSeconds").asInt())
+                .as("the board's next poll")
+                .isEqualTo(60);
+        JsonNode editor = read(atLocation);
+        assertThat(editor.get("policyVersion").asInt())
+                .as("the editor opened at this location shows the tenant's version 2, not the cached 1")
+                .isEqualTo(2);
+        assertThat(editor.get("delivery").get("atRiskBeforeSeconds").asInt()).isEqualTo(900);
+        assertThat(editor.get("delivery").get("lateAfterSeconds").asInt()).isEqualTo(60);
+        assertThat(editor.get("currentVersionAtScope").asInt())
+                .as("the location has still authored nothing of its own")
+                .isZero();
+    }
+
+    @Test
     @DisplayName("the batch 15 scalar stays the default for a mode with no window of its own")
     void theScalarIsTheDefaultForTheModesNotSet() throws Exception {
         setScalarMinutes(12);
