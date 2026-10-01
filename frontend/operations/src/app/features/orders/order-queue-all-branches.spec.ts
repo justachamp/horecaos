@@ -577,9 +577,10 @@ describe('OrderQueue: «Все филиалы» (gap map row 1.1, wave 16)', () 
         h.policyReads.filter((id) => id === 'l2'),
         'a failure is not remembered: the next refresh asks again',
       ).toHaveLength(2);
-      expect(isLate(host, '0002'), 'now the branch’s real policy, the one the server filters by').toBe(
-        false,
-      );
+      expect(
+        isLate(host, '0002'),
+        'now the branch’s real policy, the one the server filters by',
+      ).toBe(false);
 
       await refresh();
 
