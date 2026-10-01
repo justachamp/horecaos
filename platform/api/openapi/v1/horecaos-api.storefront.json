@@ -138,6 +138,9 @@
           "tenantId" : {
             "format" : "uuid",
             "type" : "string"
+          },
+          "walkInAvailable" : {
+            "type" : "boolean"
           }
         },
         "type" : "object"
@@ -674,6 +677,13 @@
       },
       "GuestBillResponse" : {
         "properties" : {
+          "claimExpiresAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "confirmed" : {
+            "type" : "boolean"
+          },
           "currency" : {
             "type" : "string"
           },
@@ -683,6 +693,52 @@
               "type" : "string"
             },
             "type" : "array"
+          },
+          "origin" : {
+            "type" : "string"
+          },
+          "roundCount" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "sessionId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "totalMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "GuestSeatingResponse" : {
+        "properties" : {
+          "claimExpiresAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "confirmed" : {
+            "type" : "boolean"
+          },
+          "created" : {
+            "type" : "boolean"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "orderIds" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "origin" : {
+            "type" : "string"
           },
           "roundCount" : {
             "format" : "int32",
@@ -1600,6 +1656,18 @@
         "required" : [ "coordinateSource", "fields" ],
         "type" : "object"
       },
+      "SeatRequest" : {
+        "properties" : {
+          "partySize" : {
+            "format" : "int32",
+            "maximum" : 200,
+            "minimum" : 1,
+            "type" : "integer"
+          }
+        },
+        "required" : [ "partySize" ],
+        "type" : "object"
+      },
       "ServiceabilityView" : {
         "properties" : {
           "acceptsScheduledOrders" : {
@@ -2087,6 +2155,44 @@
           }
         },
         "summary" : "Exchange a scanned table code for a guest token",
+        "tags" : [ "QR dine-in" ]
+      }
+    },
+    "/api/v1/storefront/dine-in/sessions" : {
+      "post" : {
+        "description" : "A guest who has scanned a free table opens a provisional session -- a claim -- without waiting for staff (ADR 0143). It is an explicit action, never a side effect of scanning, and it needs both credentials a round does: the table's guest token (X-Dine-In-Token, the proof of where) and the customer's ordinary signed-in session (Authorization: Bearer, the proof of who). It never accepts a table, a location or a tenant. The claim becomes an ordinary session once a round the restaurant has accepted is on it, and lapses -- giving the table back to the room -- if nothing follows within its window. If somebody already sits at the table, the call answers with their session and created=false rather than a second one. Every reason the table cannot be taken (the branch has not turned this on, a booking holds the table, a cap is reached, the account is refused, the table is out of service) is one answer, 409 TABLE_NOT_AVAILABLE, with no reason.",
+        "operationId" : "seat",
+        "parameters" : [ {
+          "in" : "header",
+          "name" : "X-Dine-In-Token",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/SeatRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/GuestSeatingResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Seat yourself at a free table",
         "tags" : [ "QR dine-in" ]
       }
     },

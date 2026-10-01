@@ -979,6 +979,10 @@ export interface CircleRequest {
   radiusMeters?: number;
 }
 
+export interface ClaimConfirmationRequest {
+  reason: string;
+}
+
 export interface ClassificationRowResponse {
   abcClass?: string;
   categoryId?: string;
@@ -4337,6 +4341,7 @@ export interface ReservationResponse {
   reservationId?: string;
   status?: string;
   tableIds?: Array<string>;
+  tableOccupiedNow?: boolean;
   turnaroundMinutes?: number;
   version?: number;
 }
@@ -4702,10 +4707,13 @@ export interface SessionDetailResponse {
 
 export interface SessionResponse {
   businessDate?: string;
+  claimExpiresAt?: string;
   closeReasonCode?: string;
   closedAt?: string;
+  confirmedAt?: string;
   currency?: string;
   openedAt?: string;
+  origin?: string;
   partySize?: number;
   reservationId?: string;
   serviceChargeRateBp?: number;
@@ -4750,7 +4758,14 @@ export interface SettingsRequest {
   qrMode: string;
   reason: string;
   serviceChargeRateBp?: number;
+  sessionCurrency?: string;
   turnaroundMinutes?: number;
+  walkInClaimTtlMinutes?: number;
+  walkInDailyClaimsPerAccount?: number;
+  walkInHorizonMinutes?: number;
+  walkInMaxUnconfirmed?: number;
+  walkInPaymentDeferMinutes?: number;
+  walkInSelfSeat?: boolean;
 }
 
 export interface SettingsResponse {
@@ -4758,9 +4773,16 @@ export interface SettingsResponse {
   locationId?: string;
   qrMode?: string;
   serviceChargeRateBp?: number;
+  sessionCurrency?: string;
   storefrontHostname?: string;
   turnaroundMinutes?: number;
   version?: number;
+  walkInClaimTtlMinutes?: number;
+  walkInDailyClaimsPerAccount?: number;
+  walkInHorizonMinutes?: number;
+  walkInMaxUnconfirmed?: number;
+  walkInPaymentDeferMinutes?: number;
+  walkInSelfSeat?: boolean;
 }
 
 export interface SettlementPeriodResponse {
@@ -5875,6 +5897,7 @@ export interface Operations {
   "live": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/dine-in/sessions"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } } }; responses: { "200": Array<SessionResponse> } };
   "open": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/dine-in/sessions"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } }; body: TableSessionControllerOpenRequest }; responses: { "200": SessionResponse } };
   "find_1": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/dine-in/sessions/{sessionId}"; request: { parameters: { path: { brandId: string; locationId: string; sessionId: string; tenantId: string } } }; responses: { "200": SessionDetailResponse } };
+  "confirmClaim": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/dine-in/sessions/{sessionId}/claim-confirmations"; request: { parameters: { path: { brandId: string; locationId: string; sessionId: string; tenantId: string } }; body: ClaimConfirmationRequest }; responses: { "200": SessionResponse } };
   "forceClose": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/dine-in/sessions/{sessionId}/force-closures"; request: { parameters: { path: { brandId: string; locationId: string; sessionId: string; tenantId: string } }; body: ForceCloseRequest }; responses: { "200": SessionResponse } };
   "addRound": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/dine-in/sessions/{sessionId}/rounds"; request: { parameters: { path: { brandId: string; locationId: string; sessionId: string; tenantId: string } }; body: RoundRequest }; responses: { "200": RoundResponse } };
   "stateAction_2": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/dine-in/sessions/{sessionId}/state-actions"; request: { parameters: { path: { brandId: string; locationId: string; sessionId: string; tenantId: string } }; body: TableSessionControllerStateActionRequest }; responses: { "200": SessionResponse } };
