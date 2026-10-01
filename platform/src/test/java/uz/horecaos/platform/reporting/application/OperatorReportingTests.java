@@ -231,7 +231,7 @@ class OperatorReportingTests {
         // are what actually change if OTHER_TENANT's line leaked in and merged
         // (2 -> 7 units, 60_000 -> 1_059_000 som), so those are what this pins.
         assertThat(result.rows()).hasSize(1);
-        assertThat(result.rows().getFirst().totalQuantity()).isEqualTo(2);
+        assertThat(result.rows().getFirst().totalQuantity()).isEqualByComparingTo("2");
         assertThat(result.rows().getFirst().totalNetSom()).isEqualTo(60_000L);
     }
 

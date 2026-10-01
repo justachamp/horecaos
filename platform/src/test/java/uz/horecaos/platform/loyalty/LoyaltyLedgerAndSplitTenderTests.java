@@ -1174,6 +1174,111 @@ class LoyaltyLedgerAndSplitTenderTests {
                 .isEqualTo(82_000L);
     }
 
+    // ------------------------------------------------ ADR 0137: restating a planned settlement
+
+    @Test
+    @DisplayName("a planned cash settlement follows a corrected order total; the points leg is never resized")
+    void aPlannedSettlementIsRestatedToTheWeighedTotal() {
+        UUID order = completedOrder("R-1", 94_000L, 0L);
+        seedBalance(12_000L);
+        planPointsAndCash(order, 94_000L, 12_000L, 82_000L, "k-restate-1");
+
+        assertThat(restate(order, 100_000L)).isTrue();
+
+        var settlement = settlementStore.findSettlement(TENANT, order).orElseThrow();
+        assertThat(settlement.totalDueMinor()).isEqualTo(100_000L);
+        assertThat(settlementStore.tendersOf(TENANT, settlement.id()))
+                .extracting(
+                        JdbcSettlementStore.TenderRow::settlesFromBalance, JdbcSettlementStore.TenderRow::amountMinor)
+                .containsExactlyInAnyOrder(
+                        org.assertj.core.api.Assertions.tuple(true, 12_000L),
+                        org.assertj.core.api.Assertions.tuple(false, 88_000L));
+        assertThat(settlements.cashDueMinor(TENANT, order, "CASH"))
+                .as("the courier is told to collect the weighed amount less the points")
+                .isEqualTo(88_000L);
+
+        // And it can be corrected again, downwards.
+        assertThat(restate(order, 60_000L)).isTrue();
+        assertThat(settlements.cashDueMinor(TENANT, order, "CASH")).isEqualTo(48_000L);
+        assertThat(settlementStore.findSettlement(TENANT, order).orElseThrow().totalDueMinor())
+                .isEqualTo(60_000L);
+    }
+
+    @Test
+    @DisplayName("a correction that would leave nothing to pay in money is refused and changes nothing")
+    void aRestatementCannotLeaveTheMoneyLegEmpty() {
+        UUID order = completedOrder("R-2", 94_000L, 0L);
+        seedBalance(12_000L);
+        planPointsAndCash(order, 94_000L, 12_000L, 82_000L, "k-restate-2");
+
+        // 12,000 is exactly the points leg: ADR 0046 requires at least one som of money.
+        assertThat(restate(order, 12_000L)).isFalse();
+
+        assertThat(settlementStore.findSettlement(TENANT, order).orElseThrow().totalDueMinor())
+                .isEqualTo(94_000L);
+        assertThat(settlements.cashDueMinor(TENANT, order, "CASH")).isEqualTo(82_000L);
+    }
+
+    @Test
+    @DisplayName("once any leg has settled the plan is not moved: that is a refund or a charge, not a restatement")
+    void aSettledSettlementIsNotRestated() {
+        UUID order = completedOrder("R-3", 94_000L, 0L);
+        seedBalance(12_000L);
+        planPointsAndCash(order, 94_000L, 12_000L, 82_000L, "k-restate-3");
+        UUID settlementId =
+                settlementStore.findSettlement(TENANT, order).orElseThrow().id();
+        UUID pointsTender = settlementStore.tendersOf(TENANT, settlementId).stream()
+                .filter(JdbcSettlementStore.TenderRow::settlesFromBalance)
+                .findFirst()
+                .orElseThrow()
+                .id();
+        transactions.executeWithoutResult(
+                status -> settlements.recordTenderSettled(TENANT, order, pointsTender, "test"));
+
+        assertThat(restate(order, 100_000L)).isFalse();
+
+        assertThat(settlementStore.findSettlement(TENANT, order).orElseThrow().totalDueMinor())
+                .isEqualTo(94_000L);
+    }
+
+    @Test
+    @DisplayName("an order with no settlement, and a restatement to the same total, are trivially fine")
+    void restatingNothingIsFine() {
+        UUID unsettled = completedOrder("R-4", 50_000L, 0L);
+        assertThat(restate(unsettled, 60_000L))
+                .as("nothing was planned, so nothing disagrees")
+                .isTrue();
+
+        UUID order = completedOrder("R-5", 94_000L, 0L);
+        seedBalance(12_000L);
+        planPointsAndCash(order, 94_000L, 12_000L, 82_000L, "k-restate-5");
+        int versionBefore =
+                settlementStore.findSettlement(TENANT, order).orElseThrow().version();
+
+        assertThat(restate(order, 94_000L)).isTrue();
+        assertThat(settlementStore.findSettlement(TENANT, order).orElseThrow().version())
+                .as("the same total writes nothing")
+                .isEqualTo(versionBefore);
+    }
+
+    private boolean restate(UUID order, long totalMinor) {
+        return Boolean.TRUE.equals(
+                transactions.execute(status -> settlements.restateTotal(TENANT, order, totalMinor, "scale")));
+    }
+
+    private void planPointsAndCash(UUID order, long total, long points, long cash, String key) {
+        transactions.execute(status -> settlements.plan(new SettlementPlan(
+                TENANT,
+                BRAND,
+                order,
+                customerId,
+                "UZS",
+                total,
+                List.of(new PlannedTender(pointsMethod, points), new PlannedTender(cashMethod, cash)),
+                key,
+                "test")));
+    }
+
     /**
      * W05: the operations read exposes exactly these rows as the IA's
      * {@code payment[]} array, so this is also the test that the read model has

@@ -212,7 +212,7 @@ class ProductClassificationServiceTests {
         ClassificationRun run = service.run(TENANT, FROM, TO, List.of(), List.of(), "staff-subject-1");
 
         assertThat(run.rows()).hasSize(1);
-        assertThat(run.rows().get(0).quantityTotal()).isEqualTo(10);
+        assertThat(run.rows().get(0).quantityTotal()).isEqualByComparingTo("10");
     }
 
     /**
@@ -260,7 +260,7 @@ class ProductClassificationServiceTests {
         ClassificationRun run = service.run(TENANT, FROM, TO, List.of(), List.of(LEGAL_ENTITY_A), "staff-subject-1");
 
         assertThat(run.rows()).hasSize(1);
-        assertThat(run.rows().get(0).quantityTotal()).isEqualTo(10);
+        assertThat(run.rows().get(0).quantityTotal()).isEqualByComparingTo("10");
         assertThat(run.rows().get(0).revenueGrossSom()).isEqualTo(100_000L);
     }
 
