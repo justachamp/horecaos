@@ -806,9 +806,11 @@ public class CatalogAuthoringService {
         for (UUID categoryId : store.categoriesForProduct(tenantId, brandId, productId)) {
             store.addProductToCategory(tenantId, brandId, categoryId, newProductId, categorySortOrder++);
         }
-        for (JdbcCatalogStore.AttachedGroup group : store.modifierGroupsForProduct(tenantId, brandId, productId)) {
-            store.attachModifierGroupToProduct(tenantId, brandId, newProductId, group.groupId(), group.sortOrder());
-        }
+        // Policy included (ADR 0136): a copy that kept a group but lost its
+        // hidden-packaging visibility would stop charging for the box.
+        store.copyProductModifierAttachments(tenantId, brandId, productId, newProductId);
+        variantIdMap.forEach((sourceVariantId, copiedVariantId) ->
+                store.copyVariantModifierAttachments(tenantId, brandId, sourceVariantId, copiedVariantId));
 
         Set<UUID> sourceEntityIds = new HashSet<>(variantIdMap.keySet());
         sourceEntityIds.add(productId);

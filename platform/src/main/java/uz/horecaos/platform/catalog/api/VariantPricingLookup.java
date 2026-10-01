@@ -20,6 +20,19 @@ public interface VariantPricingLookup {
     Set<UUID> pricedVariants(UUID tenantId, UUID brandId, Set<UUID> variantIds);
 
     /**
+     * The subset of combo component ids (ADR 0136) that currently have an active
+     * {@code COMBO_COMPONENT} price.
+     *
+     * <p>Defaults to none, so a stand-in that knows nothing about combos reports
+     * every component unpriced rather than quietly passing it: the validator
+     * blocks on a component with no price, and an implementation that predates
+     * combos must not be the reason one reaches a customer.
+     */
+    default Set<UUID> pricedComboComponents(UUID tenantId, UUID brandId, Set<UUID> componentIds) {
+        return Set.of();
+    }
+
+    /**
      * Whether this implementation actually consults pricing data.
      *
      * <p>Exists so the stand-in used before the pricing module ships can say so,

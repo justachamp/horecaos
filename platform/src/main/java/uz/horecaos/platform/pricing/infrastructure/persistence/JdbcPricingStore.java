@@ -136,7 +136,20 @@ public class JdbcPricingStore {
 
     /** Which of these variants have an active price anywhere in the brand. */
     public Set<UUID> pricedVariants(UUID tenantId, UUID brandId, Set<UUID> variantIds, Instant at) {
-        if (variantIds.isEmpty()) {
+        return pricedAnywhere(tenantId, brandId, "VARIANT", variantIds, at);
+    }
+
+    /**
+     * Which of these combo components (ADR 0136) have an active price in any active
+     * price book of the brand -- {@link #pricedVariants}' question, asked of the
+     * fourth priceable type.
+     */
+    public Set<UUID> pricedComboComponents(UUID tenantId, UUID brandId, Set<UUID> componentIds, Instant at) {
+        return pricedAnywhere(tenantId, brandId, "COMBO_COMPONENT", componentIds, at);
+    }
+
+    private Set<UUID> pricedAnywhere(UUID tenantId, UUID brandId, String type, Set<UUID> ids, Instant at) {
+        if (ids.isEmpty()) {
             return Set.of();
         }
         return Set.copyOf(jdbc.sql("""
@@ -144,13 +157,14 @@ public class JdbcPricingStore {
                 FROM pricing.prices p
                 JOIN pricing.price_books pb ON pb.id = p.price_book_id
                 WHERE p.tenant_id = :tenantId AND p.brand_id = :brandId
-                  AND p.priceable_type = 'VARIANT' AND p.priceable_id = ANY(:ids)
+                  AND p.priceable_type = :type AND p.priceable_id = ANY(:ids)
                   AND pb.status = 'ACTIVE'
                   AND p.valid_from <= :at AND (p.valid_until IS NULL OR p.valid_until > :at)
                 """)
                 .param("tenantId", tenantId)
                 .param("brandId", brandId)
-                .param("ids", variantIds.toArray(UUID[]::new))
+                .param("type", type)
+                .param("ids", ids.toArray(UUID[]::new))
                 .param("at", OffsetDateTime.ofInstant(at, ZoneOffset.UTC))
                 .query(UUID.class)
                 .list());

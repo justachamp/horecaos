@@ -34,6 +34,12 @@ public final class CatalogEntities {
         MODIFIER_GROUP,
         MODIFIER_OPTION,
         /**
+         * One choice a combo asks the customer to make (ADR 0136). It has a name
+         * -- its heading on the choice screen -- and no media of its own: the
+         * container variant carries the picture.
+         */
+        COMBO_GROUP,
+        /**
          * A charge that reaches a receipt as an ordinary line without being a
          * catalog item — today only the delivery fee (ADR 0038).
          *
