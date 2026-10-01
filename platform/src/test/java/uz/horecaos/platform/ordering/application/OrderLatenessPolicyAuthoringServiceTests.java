@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import javax.sql.DataSource;
 import org.jspecify.annotations.Nullable;
@@ -25,12 +26,16 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
+import uz.horecaos.platform.ordering.api.OrderingConfigurationKeys;
 import uz.horecaos.platform.ordering.application.OrderLatenessPolicyAuthoringService.Editor;
 import uz.horecaos.platform.ordering.domain.OrderLatenessDocument;
 import uz.horecaos.platform.ordering.domain.OrderLatenessDocument.ModeThresholds;
 import uz.horecaos.platform.ordering.domain.OrderLatenessPolicy;
 import uz.horecaos.platform.support.FakeConfigurationResolver;
 import uz.horecaos.platform.support.TestDatabase;
+import uz.horecaos.platform.tenancy.api.PolicyKey;
+import uz.horecaos.platform.tenancy.api.PolicyResolver;
+import uz.horecaos.platform.tenancy.api.ResolvedPolicy;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcPolicyAuthor;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcPolicyResolver;
 import uz.horecaos.platform.web.api.ApiException;
@@ -230,6 +235,87 @@ class OrderLatenessPolicyAuthoringServiceTests {
                 .isInstanceOfSatisfying(
                         ApiException.class,
                         error -> assertThat(error.errorCode()).isEqualTo(ErrorCode.STALE_VERSION));
+    }
+
+    // ------------------------------------------------- the editor reads the table
+
+    /**
+     * What the production resolver does for up to a minute after a publication it was not told about
+     * (a reader that cached the old version between the eviction and the commit): {@code resolve}
+     * answers {@code held}, while {@code resolveUncached} and {@code pinned} go to the table.
+     */
+    private OrderLatenessPolicyAuthoringService authoringOverAResolverHolding(
+            ResolvedPolicy<OrderLatenessDocument> held) {
+        JsonMapper mapper = JsonMapper.builder().build();
+        Clock clock = Clock.fixed(Instant.parse("2026-09-30T10:00:00Z"), ZoneOffset.UTC);
+        JdbcPolicyResolver table = new JdbcPolicyResolver(jdbc, mapper);
+        PolicyResolver stale = new PolicyResolver() {
+            @Override
+            @SuppressWarnings("unchecked")
+            public <P> Optional<ResolvedPolicy<P>> resolve(PolicyKey<P> key, ResourceScope scope) {
+                return Optional.of((ResolvedPolicy<P>) held);
+            }
+
+            @Override
+            public <P> Optional<ResolvedPolicy<P>> resolveUncached(PolicyKey<P> key, ResourceScope scope) {
+                return table.resolveUncached(key, scope);
+            }
+
+            @Override
+            public <P> Optional<ResolvedPolicy<P>> pinned(PolicyKey<P> key, UUID policyId, int policyVersion) {
+                return table.pinned(key, policyId, policyVersion);
+            }
+        };
+        return new OrderLatenessPolicyAuthoringService(
+                new OrderLatenessPolicyService(stale, new FakeConfigurationResolver(Map.of())),
+                new JdbcPolicyAuthor(jdbc, mapper, facts::add, clock, (keyCode, scope) -> {}),
+                facts::add,
+                clock);
+    }
+
+    private ResolvedPolicy<OrderLatenessDocument> tenantVersionOneAsACacheStillHoldsIt() {
+        authoring.author(TENANT_SCOPE, uniform(300, 0, 2700), null, OWNER, "version one");
+        ResolvedPolicy<OrderLatenessDocument> held = new JdbcPolicyResolver(
+                        jdbc, JsonMapper.builder().build())
+                .resolveUncached(OrderingConfigurationKeys.LATENESS_POLICY, LOCATION_SCOPE)
+                .orElseThrow();
+        authoring.author(TENANT_SCOPE, uniform(600, 60, 2700), 1, OWNER, "version two");
+        return held;
+    }
+
+    @Test
+    void theEditorShowsTheDocumentInTheTableNotAnOlderOneTheResolverStillHolds() {
+        OrderLatenessPolicyAuthoringService editor =
+                authoringOverAResolverHolding(tenantVersionOneAsACacheStillHoldsIt());
+
+        Editor view = editor.view(LOCATION_SCOPE);
+
+        assertThat(view.policyVersion())
+                .as("the resolver still holds version 1; the table has 2")
+                .isEqualTo(2);
+        assertThat(view.document().delivery().atRiskBeforeSeconds()).isEqualTo(600);
+        assertThat(view.document().delivery().lateAfterSeconds()).isEqualTo(60);
+        assertThat(view.versionAtScope())
+                .as("and the location has authored nothing of its own")
+                .isZero();
+    }
+
+    @Test
+    void theAuditBeforeIsWhatTheTableHeldNotWhatTheResolverStillHeld() {
+        OrderLatenessPolicyAuthoringService editor =
+                authoringOverAResolverHolding(tenantVersionOneAsACacheStillHoldsIt());
+        facts.clear();
+
+        editor.author(LOCATION_SCOPE, uniform(60, 0, 900), 0, OWNER, "a food-court counter");
+
+        AuditFact fact = facts.stream()
+                .filter(candidate -> candidate.actionCode().equals("ordering.lateness-policy.authored"))
+                .findFirst()
+                .orElseThrow();
+        assertThat(change(fact, "policyVersion"))
+                .as("the tenant's version 2 was in force when the location overrode it")
+                .containsEntry("before", 2);
+        assertThat(change(fact, "delivery.atRiskBeforeSeconds")).containsEntry("before", 600);
     }
 
     // -------------------------------------------------------------- validation

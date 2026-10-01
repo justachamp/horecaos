@@ -56,7 +56,10 @@ describe('VduPage', () => {
         { provide: KitchenApi, useValue: { board: () => Promise.resolve(board) } },
         {
           provide: LatenessPolicyApi,
-          useValue: { resolve: () => Promise.resolve(policy) },
+          useValue: {
+            resolve: () => Promise.resolve(policy),
+            read: () => Promise.resolve(policy),
+          },
         },
       ],
     }).compileComponents();
@@ -203,7 +206,10 @@ describe('VduPage', () => {
         { provide: KitchenApi, useValue: { board: vi.fn() } },
         {
           provide: LatenessPolicyApi,
-          useValue: { resolve: () => Promise.resolve(PLATFORM_DEFAULT_LATENESS_POLICY) },
+          useValue: {
+            resolve: () => Promise.resolve(PLATFORM_DEFAULT_LATENESS_POLICY),
+            read: () => Promise.resolve(PLATFORM_DEFAULT_LATENESS_POLICY),
+          },
         },
       ],
     }).compileComponents();
@@ -216,5 +222,98 @@ describe('VduPage', () => {
     expect(
       (fixture.nativeElement as HTMLElement).querySelector('[data-testid="vdu-denied"]'),
     ).not.toBeNull();
+  });
+});
+
+/**
+ * A wall display is opened once and left up for days: an owner publishing new
+ * lateness numbers must reach it through the ordinary poll, not a browser reload.
+ */
+describe('VduPage: the lateness policy follows an edit', () => {
+  const GRACE_ONE_HOUR: LatenessPolicy = {
+    delivery: { atRiskBeforeSeconds: 300, lateAfterSeconds: 3600, noPromiseFallbackSeconds: 2700 },
+    pickup: { atRiskBeforeSeconds: 300, lateAfterSeconds: 3600, noPromiseFallbackSeconds: 2700 },
+    dineIn: { atRiskBeforeSeconds: 300, lateAfterSeconds: 3600, noPromiseFallbackSeconds: 2700 },
+  };
+
+  function setUp(read: ReturnType<typeof vi.fn>): ComponentFixture<VduPage> {
+    // Overdue by thirty seconds: LATE under the platform default (no grace),
+    // not yet late once the tenant allows an hour of grace.
+    const overdue = ticket({
+      ticketId: 'd',
+      sequenceLabel: 'D',
+      targetReadyAt: new Date(Date.now() - 30_000).toISOString(),
+    });
+    TestBed.configureTestingModule({
+      imports: [VduPage],
+      providers: [
+        {
+          provide: CurrentLocation,
+          useValue: {
+            scope: signal<LocationScope | null>(SCOPE),
+            denied: signal(false),
+            ensureLoaded: () => Promise.resolve(),
+          },
+        },
+        {
+          provide: KitchenApi,
+          useValue: { board: () => Promise.resolve({ tickets: [overdue], warnings: [] }) },
+        },
+        {
+          provide: LatenessPolicyApi,
+          useValue: { read, resolve: () => Promise.resolve(PLATFORM_DEFAULT_LATENESS_POLICY) },
+        },
+      ],
+    });
+    TestBed.inject(I18n).setLocale('en');
+    return TestBed.createComponent(VduPage);
+  }
+
+  function isDanger(fixture: ComponentFixture<VduPage>): boolean {
+    return (fixture.nativeElement as HTMLElement)
+      .querySelector('[data-testid="vdu-card"]')!
+      .classList.contains('vdu__card--danger');
+  }
+
+  it('applies a policy published after the screen opened, on a later poll', async () => {
+    vi.useFakeTimers();
+    try {
+      const read = vi
+        .fn()
+        .mockResolvedValueOnce(PLATFORM_DEFAULT_LATENESS_POLICY)
+        .mockResolvedValue(GRACE_ONE_HOUR);
+      const fixture = setUp(read);
+      fixture.detectChanges();
+      await vi.advanceTimersByTimeAsync(0);
+      fixture.detectChanges();
+      expect(isDanger(fixture)).toBe(true);
+
+      // The policy is cached server-side for a minute, so a minute and a poll later it is read again.
+      await vi.advanceTimersByTimeAsync(70_000);
+      fixture.detectChanges();
+
+      expect(isDanger(fixture)).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not treat a failed first read as the loaded policy: the next poll asks again', async () => {
+    vi.useFakeTimers();
+    try {
+      const read = vi.fn().mockResolvedValueOnce(null).mockResolvedValue(GRACE_ONE_HOUR);
+      const fixture = setUp(read);
+      fixture.detectChanges();
+      await vi.advanceTimersByTimeAsync(0);
+      fixture.detectChanges();
+      expect(isDanger(fixture)).toBe(true);
+
+      await vi.advanceTimersByTimeAsync(11_000);
+      fixture.detectChanges();
+
+      expect(isDanger(fixture)).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

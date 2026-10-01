@@ -84,7 +84,7 @@ function configureForBulk(
         provide: LatenessPolicyApi,
         useValue: {
           resolve: () => Promise.resolve(PLATFORM_DEFAULT_LATENESS_POLICY),
-          tryResolve: () => Promise.resolve(PLATFORM_DEFAULT_LATENESS_POLICY),
+          read: () => Promise.resolve(PLATFORM_DEFAULT_LATENESS_POLICY),
         },
       },
       {
@@ -181,7 +181,7 @@ function configure(getOrders: ReturnType<typeof vi.fn>): void {
         provide: LatenessPolicyApi,
         useValue: {
           resolve: () => Promise.resolve(PLATFORM_DEFAULT_LATENESS_POLICY),
-          tryResolve: () => Promise.resolve(PLATFORM_DEFAULT_LATENESS_POLICY),
+          read: () => Promise.resolve(PLATFORM_DEFAULT_LATENESS_POLICY),
         },
       },
     ],
@@ -580,7 +580,7 @@ function configureWithActions(
         provide: LatenessPolicyApi,
         useValue: {
           resolve: () => Promise.resolve(PLATFORM_DEFAULT_LATENESS_POLICY),
-          tryResolve: () => Promise.resolve(PLATFORM_DEFAULT_LATENESS_POLICY),
+          read: () => Promise.resolve(PLATFORM_DEFAULT_LATENESS_POLICY),
         },
       },
     ],
@@ -1399,7 +1399,7 @@ describe('OrderQueue: toolbar filters (orders.md §2.4, wave P07)', () => {
           provide: LatenessPolicyApi,
           useValue: {
             resolve: () => Promise.resolve(PLATFORM_DEFAULT_LATENESS_POLICY),
-            tryResolve: () => Promise.resolve(PLATFORM_DEFAULT_LATENESS_POLICY),
+            read: () => Promise.resolve(PLATFORM_DEFAULT_LATENESS_POLICY),
           },
         },
       ],
@@ -2597,7 +2597,7 @@ describe('OrderQueue: the Курьер column resolves courierId against the ros
           provide: LatenessPolicyApi,
           useValue: {
             resolve: () => Promise.resolve(PLATFORM_DEFAULT_LATENESS_POLICY),
-            tryResolve: () => Promise.resolve(PLATFORM_DEFAULT_LATENESS_POLICY),
+            read: () => Promise.resolve(PLATFORM_DEFAULT_LATENESS_POLICY),
           },
         },
         { provide: CouriersApi, useValue: { roster } },
@@ -2689,7 +2689,7 @@ describe('OrderQueue: the Клиент column batches customer labels by page (g
           provide: LatenessPolicyApi,
           useValue: {
             resolve: () => Promise.resolve(PLATFORM_DEFAULT_LATENESS_POLICY),
-            tryResolve: () => Promise.resolve(PLATFORM_DEFAULT_LATENESS_POLICY),
+            read: () => Promise.resolve(PLATFORM_DEFAULT_LATENESS_POLICY),
           },
         },
         {
@@ -2836,7 +2836,7 @@ describe('OrderQueue: the table chip beside a dine-in order (batch 14)', () => {
           provide: LatenessPolicyApi,
           useValue: {
             resolve: () => Promise.resolve(PLATFORM_DEFAULT_LATENESS_POLICY),
-            tryResolve: () => Promise.resolve(PLATFORM_DEFAULT_LATENESS_POLICY),
+            read: () => Promise.resolve(PLATFORM_DEFAULT_LATENESS_POLICY),
           },
         },
       ],
@@ -2944,10 +2944,7 @@ describe('OrderQueue: the tenant late colour (row X.39)', () => {
         { provide: RejectReasonsApi, useValue: stubRejectReasons() },
         {
           provide: LatenessPolicyApi,
-          useValue: {
-            resolve: () => Promise.resolve(policy),
-            tryResolve: () => Promise.resolve(policy),
-          },
+          useValue: { resolve: () => Promise.resolve(policy), read: () => Promise.resolve(policy) },
         },
       ],
     });
@@ -3043,6 +3040,110 @@ describe('OrderQueue: the tenant late colour (row X.39)', () => {
     await flushMicrotasks();
 
     expect(rowFor(harness.routeNativeElement!, '0203').classList).toContain('order-row--warning');
+  });
+});
+
+/**
+ * An operator leaves the order board open all shift: a lateness policy the owner
+ * publishes meanwhile must reach it through the ordinary 10 s poll, not a reload.
+ */
+describe('OrderQueue: the lateness policy follows an edit', () => {
+  const MINUTE = 60 * 1000;
+  const GRACE_TWO_HOURS: LatenessPolicy = {
+    delivery: { atRiskBeforeSeconds: 300, lateAfterSeconds: 7200, noPromiseFallbackSeconds: 7200 },
+    pickup: { atRiskBeforeSeconds: 300, lateAfterSeconds: 7200, noPromiseFallbackSeconds: 7200 },
+    dineIn: { atRiskBeforeSeconds: 300, lateAfterSeconds: 7200, noPromiseFallbackSeconds: 7200 },
+    lateColour: '#00aa00',
+  };
+
+  function configureWithReads(
+    orders: readonly OrderSummaryResponse[],
+    read: () => Promise<LatenessPolicy | null>,
+  ): void {
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter([{ path: 'orders', component: OrderQueue }]),
+        {
+          provide: CurrentLocation,
+          useValue: {
+            scope: signal(FAKE_SCOPE),
+            denied: signal(false),
+            ensureLoaded: () => Promise.resolve(),
+            options: signal([]),
+            selectLocation: () => undefined,
+          },
+        },
+        { provide: ApiClient, useValue: { get: ordersResponse(orders) } },
+        { provide: OrderCounts, useValue: { forOrders: () => Promise.resolve(zeroTabCounts()) } },
+        { provide: RejectReasonsApi, useValue: stubRejectReasons() },
+        {
+          provide: LatenessPolicyApi,
+          useValue: {
+            read,
+            resolve: async () => (await read()) ?? PLATFORM_DEFAULT_LATENESS_POLICY,
+          },
+        },
+      ],
+    });
+    TestBed.inject(I18n).setLocale('en');
+  }
+
+  function overdueOrder(): OrderSummaryResponse {
+    return order({
+      orderId: 'late',
+      publicOrderNumber: '0301',
+      status: 'PREPARING',
+      fulfillmentMode: 'PICKUP',
+      promisedAt: new Date(Date.now() - 30 * MINUTE).toISOString(),
+    });
+  }
+
+  function rowFor(host: HTMLElement): HTMLElement {
+    return host.querySelector('[data-testid="order-row"]') as HTMLElement;
+  }
+
+  it('re-reads the policy on the poll: a grace and a colour published later reach the open board', async () => {
+    // Only the interval and the clock: the harness itself still needs real timeouts.
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] });
+    try {
+      const read = vi
+        .fn()
+        .mockResolvedValueOnce({ ...PLATFORM_DEFAULT_LATENESS_POLICY, lateColour: '#8a3ffc' })
+        .mockResolvedValue(GRACE_TWO_HOURS);
+      configureWithReads([overdueOrder()], read);
+      const harness = await RouterTestingHarness.create('/orders?tab=all');
+      await flushMicrotasks();
+      const host = harness.routeNativeElement!;
+      expect(rowFor(host).classList).toContain('order-row--danger');
+      expect(rowFor(host).style.getPropertyValue('--q-sla-late')).toBe('#8a3ffc');
+
+      vi.advanceTimersByTime(70_000);
+      await flushMicrotasks();
+
+      expect(rowFor(host).classList).not.toContain('order-row--danger');
+      expect(rowFor(host).style.getPropertyValue('--q-sla-late')).toBe('');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not take a failed first read for the loaded policy: the next poll asks again', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] });
+    try {
+      const read = vi.fn().mockResolvedValueOnce(null).mockResolvedValue(GRACE_TWO_HOURS);
+      configureWithReads([overdueOrder()], read);
+      const harness = await RouterTestingHarness.create('/orders?tab=all');
+      await flushMicrotasks();
+      const host = harness.routeNativeElement!;
+      expect(rowFor(host).classList).toContain('order-row--danger');
+
+      vi.advanceTimersByTime(11_000);
+      await flushMicrotasks();
+
+      expect(rowFor(host).classList).not.toContain('order-row--danger');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

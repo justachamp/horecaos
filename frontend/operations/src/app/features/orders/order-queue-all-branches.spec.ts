@@ -44,7 +44,7 @@ type GetCall = { readonly path: string; readonly params: Record<string, unknown>
 
 interface Harnessing {
   readonly calls: GetCall[];
-  /** The branch of every lateness-policy read, in the order they were asked. */
+  /** The location id of every lateness-policy read, in order. */
   readonly policyReads: string[];
   readonly selectLocation: ReturnType<typeof vi.fn>;
   readonly forOrders: ReturnType<typeof vi.fn>;
@@ -80,7 +80,6 @@ function configure(options: {
   readonly branches?: readonly LocationOption[];
   readonly bulk?: boolean;
   readonly actions?: Partial<OrderActionsApi>;
-  /** A branch's policy; `null` is a read that failed (the real api falls back to the platform default). */
   readonly policyFor?: (locationId: string) => LatenessPolicy | null;
 }): Harnessing {
   const calls: GetCall[] = [];
@@ -118,13 +117,8 @@ function configure(options: {
       {
         provide: LatenessPolicyApi,
         useValue: {
-          resolve: (scope: { locationId: string }) => {
-            policyReads.push(scope.locationId);
-            return Promise.resolve(
-              options.policyFor?.(scope.locationId) ?? PLATFORM_DEFAULT_LATENESS_POLICY,
-            );
-          },
-          tryResolve: (scope: { locationId: string }) => {
+          // `null` from `policyFor` is a read that failed: `read` says so, `resolve` papers over it.
+          read: (scope: { locationId: string }) => {
             policyReads.push(scope.locationId);
             return Promise.resolve(
               options.policyFor
@@ -132,6 +126,10 @@ function configure(options: {
                 : PLATFORM_DEFAULT_LATENESS_POLICY,
             );
           },
+          resolve: (scope: { locationId: string }) =>
+            Promise.resolve(
+              options.policyFor?.(scope.locationId) ?? PLATFORM_DEFAULT_LATENESS_POLICY,
+            ),
         },
       },
       {
@@ -445,8 +443,8 @@ describe('OrderQueue: «Все филиалы» (gap map row 1.1, wave 16)', () 
     expect(late('0002'), 'the same lateness at a branch that allows two hours').toBe(false);
   });
 
-  it('asks again for a branch whose lateness policy could not be read, instead of remembering the platform default', async () => {
-    const relaxed: LatenessPolicy = {
+  describe('follows a branch policy edit made after the board opened', () => {
+    const RELAXED: LatenessPolicy = {
       delivery: {
         atRiskBeforeSeconds: 300,
         lateAfterSeconds: 7200,
@@ -455,105 +453,175 @@ describe('OrderQueue: «Все филиалы» (gap map row 1.1, wave 16)', () 
       pickup: { atRiskBeforeSeconds: 300, lateAfterSeconds: 7200, noPromiseFallbackSeconds: 7200 },
       dineIn: { atRiskBeforeSeconds: 300, lateAfterSeconds: 7200, noPromiseFallbackSeconds: 7200 },
     };
-    const promised = new Date(Date.now() - 30 * 60_000).toISOString();
-    let secondBranchAnswers = false;
-    const h = configure({
-      respond: () =>
-        page([
-          order({
-            orderId: 'second',
-            locationId: 'l2',
-            publicOrderNumber: '0002',
-            status: 'PREPARING',
-            fulfillmentMode: 'DELIVERY',
-            promisedAt: promised,
-          }),
-        ]),
-      policyFor: (locationId) =>
-        locationId === 'l2'
-          ? secondBranchAnswers
-            ? relaxed
-            : null
-          : PLATFORM_DEFAULT_LATENESS_POLICY,
-    });
-    const harness = await RouterTestingHarness.create('/orders?tab=all&branches=all');
-    await settle();
-    const host = harness.routeNativeElement!;
-    const isLate = () =>
-      host
-        .querySelector<HTMLElement>('[data-testid="order-row"]')
+
+    function twoBranchBoard(): OrderSummaryResponse[] {
+      const promised = new Date(Date.now() - 30 * 60_000).toISOString();
+      return [
+        order({
+          orderId: 'own',
+          locationId: 'l1',
+          publicOrderNumber: '0001',
+          status: 'PREPARING',
+          fulfillmentMode: 'DELIVERY',
+          promisedAt: promised,
+        }),
+        order({
+          orderId: 'other',
+          locationId: 'l2',
+          publicOrderNumber: '0002',
+          status: 'PREPARING',
+          fulfillmentMode: 'DELIVERY',
+          promisedAt: promised,
+        }),
+      ];
+    }
+
+    function isLate(host: HTMLElement, number: string): boolean | undefined {
+      return [...host.querySelectorAll<HTMLElement>('[data-testid="order-row"]')]
+        .find((row) => row.querySelector('.q-mono')?.textContent?.trim() === number)
         ?.classList.contains('order-row--danger');
-    const refresh = async () => {
+    }
+
+    it('re-reads every branch’s policy on the poll, the shell branch’s and the others’', async () => {
+      // Only the interval and the clock: the harness itself still needs real timeouts.
+      vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] });
+      try {
+        let own: LatenessPolicy = PLATFORM_DEFAULT_LATENESS_POLICY;
+        let other: LatenessPolicy = PLATFORM_DEFAULT_LATENESS_POLICY;
+        configure({
+          respond: () => page(twoBranchBoard()),
+          policyFor: (locationId) => (locationId === 'l2' ? other : own),
+        });
+        const harness = await RouterTestingHarness.create('/orders?tab=all&branches=all');
+        await settle();
+        const host = harness.routeNativeElement!;
+        expect(isLate(host, '0001')).toBe(true);
+        expect(isLate(host, '0002')).toBe(true);
+
+        own = RELAXED;
+        other = RELAXED;
+        vi.advanceTimersByTime(70_000);
+        await settle();
+
+        expect(isLate(host, '0001'), 'the shell branch’s own edit').toBe(false);
+        expect(isLate(host, '0002'), 'another branch’s edit').toBe(false);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('does not take a branch whose first read failed for a loaded one: the next refresh asks again', async () => {
+      vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] });
+      try {
+        let other: LatenessPolicy | null = null;
+        configure({
+          respond: () => page(twoBranchBoard()),
+          policyFor: (locationId) =>
+            locationId === 'l2' ? other : PLATFORM_DEFAULT_LATENESS_POLICY,
+        });
+        const harness = await RouterTestingHarness.create('/orders?tab=all&branches=all');
+        await settle();
+        const host = harness.routeNativeElement!;
+        expect(isLate(host, '0002'), 'unread policy: the platform default').toBe(true);
+
+        other = RELAXED;
+        vi.advanceTimersByTime(11_000);
+        await settle();
+
+        expect(isLate(host, '0002')).toBe(false);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('asks again for a branch whose policy could not be read, and holds the answer once it comes', async () => {
+      const promised = new Date(Date.now() - 30 * 60_000).toISOString();
+      let secondBranchAnswers = false;
+      const h = configure({
+        respond: () =>
+          page([
+            order({
+              orderId: 'second',
+              locationId: 'l2',
+              publicOrderNumber: '0002',
+              status: 'PREPARING',
+              fulfillmentMode: 'DELIVERY',
+              promisedAt: promised,
+            }),
+          ]),
+        policyFor: (locationId) =>
+          locationId === 'l2'
+            ? secondBranchAnswers
+              ? RELAXED
+              : null
+            : PLATFORM_DEFAULT_LATENESS_POLICY,
+      });
+      const harness = await RouterTestingHarness.create('/orders?tab=all&branches=all');
+      await settle();
+      const host = harness.routeNativeElement!;
+      const refresh = async () => {
+        (host.querySelector('.order-queue__refresh') as HTMLButtonElement).click();
+        await settle();
+      };
+
+      expect(
+        h.policyReads.filter((id) => id === 'l2'),
+        'asked once, and it failed',
+      ).toHaveLength(1);
+      expect(isLate(host, '0002'), 'meanwhile judged by the shell’s own policy').toBe(true);
+
+      secondBranchAnswers = true;
+      await refresh();
+
+      expect(
+        h.policyReads.filter((id) => id === 'l2'),
+        'a failure is not remembered: the next refresh asks again',
+      ).toHaveLength(2);
+      expect(isLate(host, '0002'), 'now the branch’s real policy, the one the server filters by').toBe(
+        false,
+      );
+
+      await refresh();
+
+      expect(
+        h.policyReads.filter((id) => id === 'l2'),
+        'an answer is held for the tracker’s max age, not re-read on every refresh',
+      ).toHaveLength(2);
+      expect(
+        h.policyReads.filter((id) => id === 'l1'),
+        'the shell’s branch is read once inside that window',
+      ).toHaveLength(1);
+    });
+
+    it('takes the shell’s own branch policy up when its first read failed and a later one answers', async () => {
+      const promised = new Date(Date.now() - 30 * 60_000).toISOString();
+      let shellBranchAnswers = false;
+      configure({
+        respond: () =>
+          page([
+            order({
+              orderId: 'first',
+              locationId: 'l1',
+              publicOrderNumber: '0001',
+              status: 'PREPARING',
+              fulfillmentMode: 'DELIVERY',
+              promisedAt: promised,
+            }),
+          ]),
+        policyFor: () => (shellBranchAnswers ? RELAXED : null),
+      });
+      const harness = await RouterTestingHarness.create('/orders?tab=all&branches=all');
+      await settle();
+      const host = harness.routeNativeElement!;
+
+      expect(isLate(host, '0001')).toBe(true);
+
+      shellBranchAnswers = true;
       (host.querySelector('.order-queue__refresh') as HTMLButtonElement).click();
       await settle();
-    };
 
-    expect(
-      h.policyReads.filter((id) => id === 'l2'),
-      'asked once, and it failed',
-    ).toHaveLength(1);
-    expect(isLate(), 'meanwhile judged by the shell’s own policy').toBe(true);
-
-    secondBranchAnswers = true;
-    await refresh();
-
-    expect(
-      h.policyReads.filter((id) => id === 'l2'),
-      'a failure is not remembered: the next refresh asks again',
-    ).toHaveLength(2);
-    expect(isLate(), 'now the branch’s real policy, the one the server filters by').toBe(false);
-
-    await refresh();
-
-    expect(
-      h.policyReads.filter((id) => id === 'l2'),
-      'an answer is remembered for the session',
-    ).toHaveLength(2);
-    expect(
-      h.policyReads.filter((id) => id === 'l1'),
-      'the shell’s branch is read once, at start-up',
-    ).toHaveLength(1);
-  });
-
-  it('takes the shell’s own branch policy up when its start-up read failed and a later one answers', async () => {
-    const relaxed: LatenessPolicy = {
-      delivery: {
-        atRiskBeforeSeconds: 300,
-        lateAfterSeconds: 7200,
-        noPromiseFallbackSeconds: 7200,
-      },
-      pickup: { atRiskBeforeSeconds: 300, lateAfterSeconds: 7200, noPromiseFallbackSeconds: 7200 },
-      dineIn: { atRiskBeforeSeconds: 300, lateAfterSeconds: 7200, noPromiseFallbackSeconds: 7200 },
-      lateColour: '#8a3ffc',
-    };
-    const promised = new Date(Date.now() - 30 * 60_000).toISOString();
-    let shellBranchAnswers = false;
-    configure({
-      respond: () =>
-        page([
-          order({
-            orderId: 'first',
-            locationId: 'l1',
-            publicOrderNumber: '0001',
-            status: 'PREPARING',
-            fulfillmentMode: 'DELIVERY',
-            promisedAt: promised,
-          }),
-        ]),
-      policyFor: () => (shellBranchAnswers ? relaxed : null),
+      expect(isLate(host, '0001')).toBe(false);
     });
-    const harness = await RouterTestingHarness.create('/orders?tab=all&branches=all');
-    await settle();
-    const host = harness.routeNativeElement!;
-    const row = () => host.querySelector<HTMLElement>('[data-testid="order-row"]');
-
-    expect(row()?.classList.contains('order-row--danger')).toBe(true);
-
-    shellBranchAnswers = true;
-    (host.querySelector('.order-queue__refresh') as HTMLButtonElement).click();
-    await settle();
-
-    expect(row()?.classList.contains('order-row--danger')).toBe(false);
   });
 });
 

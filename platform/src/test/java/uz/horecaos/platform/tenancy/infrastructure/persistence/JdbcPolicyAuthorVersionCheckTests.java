@@ -188,6 +188,60 @@ class JdbcPolicyAuthorVersionCheckTests {
                 .isEqualTo(2);
     }
 
+    // ------------------------------------------------------------- cache eviction
+
+    /** A writer whose eviction port records every call, so the timing of the eviction is observable. */
+    private JdbcPolicyAuthor recordingAuthor(List<String> evictions) {
+        return new JdbcPolicyAuthor(
+                jdbc,
+                JsonMapper.builder().build(),
+                fact -> {},
+                Clock.fixed(Instant.parse("2026-09-30T10:00:00Z"), ZoneOffset.UTC),
+                (keyCode, scope) -> evictions.add(keyCode + "@" + scope.type()));
+    }
+
+    @Test
+    void evictsAgainOnceTheTransactionHasCommittedBecauseAReaderMayHaveCachedTheOldVersionInBetween() {
+        List<String> evictions = new ArrayList<>();
+        JdbcPolicyAuthor recording = recordingAuthor(evictions);
+
+        transactions.executeWithoutResult(status -> {
+            recording.author(PROBE, ResourceScope.tenant(TENANT), new Probe(600), 0, OPERATOR, "first");
+            assertThat(evictions)
+                    .as("once as the pointer moves, so a read later in this transaction resolves the new version")
+                    .containsExactly(PROBE.code() + "@TENANT");
+        });
+
+        assertThat(evictions)
+                .as("and once more when the commit is done: a reader between the first eviction and the commit "
+                        + "cached the version being replaced, and only this call removes it")
+                .containsExactly(PROBE.code() + "@TENANT", PROBE.code() + "@TENANT");
+    }
+
+    @Test
+    void evictsAgainWhenTheTransactionRollsBackBecauseAReaderInItMayHaveCachedAVersionThatNoLongerExists() {
+        List<String> evictions = new ArrayList<>();
+        JdbcPolicyAuthor recording = recordingAuthor(evictions);
+
+        assertThatThrownBy(() -> transactions.executeWithoutResult(status -> {
+                    recording.author(PROBE, ResourceScope.tenant(TENANT), new Probe(600), 0, OPERATOR, "first");
+                    throw new IllegalStateException("the surrounding work failed");
+                }))
+                .isInstanceOf(IllegalStateException.class);
+
+        assertThat(evictions).hasSize(2);
+        assertThat(author.currentVersion(PROBE, ResourceScope.tenant(TENANT))).isZero();
+    }
+
+    @Test
+    void outsideAnyTransactionTheEvictionHappensOnce() {
+        List<String> evictions = new ArrayList<>();
+
+        recordingAuthor(evictions).author(PROBE, ResourceScope.tenant(TENANT), new Probe(600), 0, OPERATOR, "first");
+
+        assertThat(evictions).hasSize(1);
+    }
+
     @Test
     void theUnconditionalPathStillPublishesWithoutAnyExpectation() {
         ResourceScope tenant = ResourceScope.tenant(TENANT);

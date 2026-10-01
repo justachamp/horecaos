@@ -1278,6 +1278,8 @@ export const messagesEn = {
   'settings.orderPolicy.field.averageOrderMinutes': 'Average order time (minutes)',
   'settings.orderPolicy.field.maximumOrderMinutes': 'Maximum order time (minutes)',
   'settings.orderPolicy.field.lateOrderThresholdMinutes': 'Order is late after (minutes)',
+  'settings.orderPolicy.lateOrderThresholdMinutes.hint':
+    'Not applied yet: nothing reads this number, so changing it does not change when an order is marked late. When an order counts as late is set in “When an order counts as late” below.',
   'settings.orderPolicy.field.atRiskBeforeMinutes': 'Warn before the promised time (minutes)',
   'settings.orderPolicy.atRiskBeforeMinutes.hint':
     'How far ahead of the promised time an order shows as at risk. The default for any kind of order with no value of its own in the lateness boundaries below. Shown on the order board and the kitchen board.',

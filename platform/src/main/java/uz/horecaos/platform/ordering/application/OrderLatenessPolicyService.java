@@ -1,5 +1,6 @@
 package uz.horecaos.platform.ordering.application;
 
+import java.util.Optional;
 import java.util.UUID;
 import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
@@ -12,6 +13,7 @@ import uz.horecaos.platform.ordering.domain.OrderLatenessPolicy;
 import uz.horecaos.platform.tenancy.api.ConfigurationResolver;
 import uz.horecaos.platform.tenancy.api.PolicyResolver;
 import uz.horecaos.platform.tenancy.api.Resolved;
+import uz.horecaos.platform.tenancy.api.ResolvedPolicy;
 
 /**
  * Resolves the {@code ordering.lateness} policy (ADR 0030, orders.md §2.7,
@@ -92,9 +94,21 @@ public class OrderLatenessPolicyService {
      * tell them apart, by design.
      */
     public Authored authoredAt(ResourceScope scope) {
-        return policies.resolve(OrderingConfigurationKeys.LATENESS_POLICY, scope)
-                .map(resolved -> new Authored(
-                        resolved.document(), resolved.policyId(), resolved.policyVersion(), resolved.winningScope()))
+        return authoredFrom(policies.resolve(OrderingConfigurationKeys.LATENESS_POLICY, scope));
+    }
+
+    /**
+     * {@link #authoredAt}, read from the table rather than the resolution cache. The editor shows this
+     * document next to the version a save is checked against (read from the table too), and the audit
+     * fact's "before" is what a save replaces; neither can come from a copy up to a minute old.
+     */
+    public Authored authoredUncachedAt(ResourceScope scope) {
+        return authoredFrom(policies.resolveUncached(OrderingConfigurationKeys.LATENESS_POLICY, scope));
+    }
+
+    private static Authored authoredFrom(Optional<ResolvedPolicy<OrderLatenessDocument>> resolved) {
+        return resolved.map(found ->
+                        new Authored(found.document(), found.policyId(), found.policyVersion(), found.winningScope()))
                 .orElseGet(() -> new Authored(OrderLatenessDocument.platformDefault(), null, 0, null));
     }
 

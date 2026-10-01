@@ -6,6 +6,7 @@ import {
   inject,
   input,
   signal,
+  untracked,
 } from '@angular/core';
 
 import {
@@ -36,6 +37,19 @@ interface ModeDraft {
 }
 
 type DraftField = keyof ModeDraft;
+
+/**
+ * What the open form was started against. The scope and the version are captured when the operator
+ * clicks Edit and sent back unchanged, whatever the page's inputs or the loaded view have become
+ * since: a form opened at the brand's version 2 publishes against version 2 at the brand, never
+ * against whatever scope the bar has moved to or whichever read landed last.
+ */
+interface OpenedForm {
+  readonly scopeType: EditableScopeType;
+  readonly brandId: string | null;
+  readonly locationId: string | null;
+  readonly expectedVersion: number | null;
+}
 
 interface ModeErrors {
   readonly atRiskMinutes: boolean;
@@ -74,7 +88,10 @@ const MAX_SECONDS = 86_400;
  * **Concurrency.** The form is opened at the `currentVersionAtScope` the read reported and
  * sends it back as `expectedVersion`; a second operator publishing underneath it gets a
  * `STALE_VERSION` here rather than silently discarding the first one's numbers, and the only
- * way forward is a reload that drops the stale edit.
+ * way forward is a reload that drops the stale edit. The scope and version are captured when the
+ * form opens and sent back as captured; moving the scope bar drops the document and the form at
+ * once (the new scope is read before anything is offered), while a re-read for any other reason
+ * (the scalar above moved) refreshes the document and leaves an open draft alone.
  *
  * `ordering.late_order_threshold_minutes` (*Order is late after*) is deliberately not read by
  * anything and not touched here: what it should mean is an owner decision.
@@ -116,6 +133,11 @@ export class LatenessPolicyCard {
   protected readonly draftReason = signal('');
 
   private loadGeneration = 0;
+
+  /** The scope the signals above describe, so a move to another one can drop them at once. */
+  private shownScopeKey: string | null = null;
+
+  private opened: OpenedForm | null = null;
 
   /** The default the blank at-risk boxes stand for, in whole-or-decimal minutes. */
   protected readonly defaultAtRiskMinutes = computed(() =>
@@ -178,9 +200,17 @@ export class LatenessPolicyCard {
       const brandId = this.brandId();
       const locationId = this.locationId();
       this.reloadToken();
-      if (tenantId) {
-        void this.load(tenantId, scopeType, brandId, locationId);
+      if (!tenantId) {
+        return;
       }
+      untracked(() => {
+        const scopeKey = [tenantId, scopeType, brandId, locationId].join('|');
+        if (scopeKey !== this.shownScopeKey) {
+          this.shownScopeKey = scopeKey;
+          this.forgetShownScope();
+        }
+        void this.load(tenantId, scopeType, brandId, locationId);
+      });
     });
   }
 
@@ -211,6 +241,12 @@ export class LatenessPolicyCard {
     if (!view) {
       return;
     }
+    this.opened = {
+      scopeType: this.scopeType(),
+      brandId: this.brandId(),
+      locationId: this.locationId(),
+      expectedVersion: view.currentVersionAtScope > 0 ? view.currentVersionAtScope : null,
+    };
     this.draft.set({
       delivery: draftOf(view.delivery),
       pickup: draftOf(view.pickup),
@@ -224,6 +260,7 @@ export class LatenessPolicyCard {
 
   protected cancelEditing(): void {
     this.editing.set(false);
+    this.opened = null;
     this.stale.set(false);
   }
 
@@ -237,30 +274,39 @@ export class LatenessPolicyCard {
 
   protected async save(): Promise<void> {
     const tenantId = this.tenantId();
-    const view = this.view();
-    if (!tenantId || !view || !this.canSave()) {
+    const opened = this.opened;
+    if (!tenantId || !opened || !this.editing() || !this.canSave()) {
       return;
     }
     const drafts = this.draft();
+    const scopeKey = this.shownScopeKey;
     this.saving.set(true);
     this.saveError.set(null);
     this.stale.set(false);
     try {
       const updated = await this.api.publish(tenantId, {
-        scopeType: this.scopeType(),
-        brandId: this.brandId(),
-        locationId: this.locationId(),
+        scopeType: opened.scopeType,
+        brandId: opened.brandId,
+        locationId: opened.locationId,
         delivery: inputOf(drafts.delivery),
         pickup: inputOf(drafts.pickup),
         dineIn: inputOf(drafts.dineIn),
-        expectedVersion: view.currentVersionAtScope > 0 ? view.currentVersionAtScope : null,
+        expectedVersion: opened.expectedVersion,
         reason: this.draftReason().trim(),
       });
-      this.view.set(updated);
-      this.editing.set(false);
+      if (scopeKey === this.shownScopeKey) {
+        // A read that left before this publish landed describes the document it replaced.
+        this.loadGeneration++;
+        this.loading.set(false);
+        this.view.set(updated);
+        this.editing.set(false);
+        this.opened = null;
+      }
     } catch (error) {
-      this.stale.set(error instanceof ApiError && error.code === ApiErrorCode.STALE_VERSION);
-      this.saveError.set(this.describe(error));
+      if (scopeKey === this.shownScopeKey) {
+        this.stale.set(error instanceof ApiError && error.code === ApiErrorCode.STALE_VERSION);
+        this.saveError.set(this.describe(error));
+      }
     } finally {
       this.saving.set(false);
     }
@@ -273,9 +319,23 @@ export class LatenessPolicyCard {
       return;
     }
     this.editing.set(false);
+    this.opened = null;
     this.stale.set(false);
     this.saveError.set(null);
     await this.load(tenantId, this.scopeType(), this.brandId(), this.locationId());
+  }
+
+  /**
+   * The scope bar moved: what is on screen belongs to the scope it left. Clear it before the read for
+   * the new scope returns, or the form (and its Publish) stays up over the new scope until then.
+   */
+  private forgetShownScope(): void {
+    this.view.set(null);
+    this.editing.set(false);
+    this.opened = null;
+    this.stale.set(false);
+    this.saveError.set(null);
+    this.draftReason.set('');
   }
 
   private async load(
@@ -290,12 +350,13 @@ export class LatenessPolicyCard {
     try {
       const view = await this.api.get(tenantId, scopeType, brandId, locationId);
       if (generation === this.loadGeneration) {
+        // The document, not the form: a re-read because the scalar it defaults to moved must not
+        // take a draft away (the scope bar moving does, in forgetShownScope).
         this.view.set(view);
-        // A different scope's edit is not this scope's edit.
-        this.editing.set(false);
       }
     } catch (error) {
-      if (generation === this.loadGeneration) {
+      // A form that is open keeps its draft over a failed re-read; the next successful one refreshes the rest.
+      if (generation === this.loadGeneration && !this.editing()) {
         this.view.set(null);
         this.loadError.set(this.describe(error));
       }

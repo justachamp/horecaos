@@ -125,8 +125,7 @@ describe('LatenessPolicyApi: the tenant late colour', () => {
     expect(policy).toBe(PLATFORM_DEFAULT_LATENESS_POLICY);
     expect(policy.lateColour ?? null).toBeNull();
   });
-
-  it('says there was no answer, instead of answering with the fallback, when the read fails (tryResolve)', async () => {
+  it('read() says null, not the default, when the read fails — the caller must tell the two apart', async () => {
     TestBed.configureTestingModule({
       providers: [
         {
@@ -136,17 +135,20 @@ describe('LatenessPolicyApi: the tenant late colour', () => {
       ],
     });
 
-    expect(await TestBed.inject(LatenessPolicyApi).tryResolve(SCOPE)).toBeNull();
+    expect(await TestBed.inject(LatenessPolicyApi).read(SCOPE)).toBeNull();
   });
 
-  it('says there was no answer for a malformed payload too, and still answers a good one (tryResolve)', async () => {
+  it('read() says null for a body that is not the document', async () => {
     expect(
-      await apiReturning({ value: { delivery: 'soon' }, version: null }).tryResolve(SCOPE),
+      await apiReturning({ value: { unexpected: true }, version: null }).read(SCOPE),
     ).toBeNull();
-    TestBed.resetTestingModule();
+  });
 
-    const policy = await apiReturning(wire()).tryResolve(SCOPE);
+  it('read() answers the document unchanged when the tenant is on the platform default too', async () => {
+    const policy = await apiReturning(wire({ isPlatformDefault: true })).read(SCOPE);
 
-    expect(policy?.delivery.atRiskBeforeSeconds).toBe(600);
+    expect(policy).not.toBeNull();
+    expect(policy).not.toBe(PLATFORM_DEFAULT_LATENESS_POLICY);
+    expect(policy!.delivery.atRiskBeforeSeconds).toBe(600);
   });
 });

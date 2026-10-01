@@ -17,6 +17,8 @@ import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import tools.jackson.databind.ObjectMapper;
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
@@ -201,12 +203,7 @@ public class JdbcPolicyAuthor implements PolicyAuthor {
             throw concurrentPublication(expectedVersion, version);
         }
 
-        // Right after the pointer moves, not before: an eviction that fires
-        // and is then rolled back with its transaction is merely a wasted
-        // cache miss, but one that fires before the write would let a
-        // concurrent reader repopulate the cache with the version this call
-        // is about to replace.
-        policyCurrentCache.evict(key.code(), scope);
+        evictResolutions(key.code(), scope);
 
         audit.record(AuditFact.of("tenant.policy.authored", AuditClass.BUSINESS)
                 .by(authoredBy)
@@ -229,6 +226,28 @@ public class JdbcPolicyAuthor implements PolicyAuthor {
                 .build());
 
         return new ResolvedPolicy<>(key.code(), policyId, version, scope.type(), hash, document);
+    }
+
+    /**
+     * Drops the cached resolutions this publication changes -- the scope's and every scope beneath it.
+     *
+     * <p>Twice. Right after the pointer moves, so a read later in this same transaction resolves the
+     * version just written, and again once the transaction has completed: between the first eviction
+     * and the commit a concurrent reader still sees the version being replaced, and its answer is
+     * cached for the TTL. Nothing but an eviction after the commit (or after a rollback, when the
+     * reader in this transaction cached a version that then ceased to exist) removes that. A
+     * publication outside any transaction has only the first.
+     */
+    private void evictResolutions(String keyCode, ResourceScope scope) {
+        policyCurrentCache.evict(keyCode, scope);
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCompletion(int status) {
+                    policyCurrentCache.evict(keyCode, scope);
+                }
+            });
+        }
     }
 
     /**
