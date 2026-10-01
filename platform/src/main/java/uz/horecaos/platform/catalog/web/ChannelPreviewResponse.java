@@ -44,14 +44,14 @@ import uz.horecaos.platform.tenancy.api.SalesChannel;
  * @param nextCursor null on the last page
  */
 public record ChannelPreviewResponse(
-        ChannelView channel,
+        PreviewChannelView channel,
         UUID locationId,
-        @Nullable BindingView binding,
+        @Nullable PreviewBindingView binding,
         String locale,
-        Pricing pricing,
+        PreviewPricing pricing,
         boolean publishable,
         boolean channelReady,
-        List<Finding> findings,
+        List<PreviewFindingView> findings,
         List<ProjectedCategory> categories,
         List<MenuModifierGroup> modifierGroups,
         List<ProjectedProduct> items,
@@ -61,14 +61,18 @@ public record ChannelPreviewResponse(
             ChannelPreview preview, boolean firstPage, @Nullable String nextCursor, UUID tenantId) {
         Map<UUID, ResolvedMedia> media = preview.media();
         return new ChannelPreviewResponse(
-                ChannelView.of(preview.channel()),
+                PreviewChannelView.of(preview.channel()),
                 preview.locationId(),
-                preview.binding() == null ? null : BindingView.of(preview.binding()),
+                preview.binding() == null ? null : PreviewBindingView.of(preview.binding()),
                 preview.locale(),
-                new Pricing(preview.priceAuthority().name(), preview.currency()),
+                new PreviewPricing(preview.priceAuthority().name(), preview.currency()),
                 preview.publishable(),
                 preview.channelReady(),
-                firstPage ? preview.findings().stream().map(Finding::of).toList() : List.of(),
+                firstPage
+                        ? preview.findings().stream()
+                                .map(PreviewFindingView::of)
+                                .toList()
+                        : List.of(),
                 firstPage
                         ? preview.categories().stream()
                                 .map(category -> ProjectedCategory.of(category, media, tenantId))
@@ -82,13 +86,13 @@ public record ChannelPreviewResponse(
     }
 
     /** @param authority {@code HORECAOS}, or {@code EXTERNAL} when the aggregator sets the price and no amount is stated */
-    public record Pricing(String authority, @Nullable String currency) {}
+    public record PreviewPricing(String authority, @Nullable String currency) {}
 
-    public record ChannelView(
+    public record PreviewChannelView(
             UUID id, String code, String displayName, String systemType, String status, boolean externallyPriced) {
 
-        static ChannelView of(SalesChannel channel) {
-            return new ChannelView(
+        static PreviewChannelView of(SalesChannel channel) {
+            return new PreviewChannelView(
                     channel.id(),
                     channel.code(),
                     channel.displayName(),
@@ -99,11 +103,11 @@ public record ChannelPreviewResponse(
     }
 
     /** The marketplace binding at the previewed branch; a catalogue provider code and a tenant-typed name, never a credential. */
-    public record BindingView(
+    public record PreviewBindingView(
             UUID bindingId, String status, @Nullable String rulesetCode, String providerType, String displayName) {
 
-        static BindingView of(MarketplaceBindingRow row) {
-            return new BindingView(
+        static PreviewBindingView of(MarketplaceBindingRow row) {
+            return new PreviewBindingView(
                     row.bindingId(), row.status(), row.rulesetCode(), row.providerType(), row.displayName());
         }
     }
@@ -116,7 +120,7 @@ public record ChannelPreviewResponse(
      * @param productId the product that owns the entity the finding names, so a variant-scoped
      *     finding can deep-link to the editor that fixes it; null when it has none
      */
-    public record Finding(
+    public record PreviewFindingView(
             String severity,
             String code,
             @Nullable String entityType,
@@ -126,10 +130,10 @@ public record ChannelPreviewResponse(
             String source,
             @Nullable UUID productId) {
 
-        static Finding of(PreviewFinding preview) {
+        static PreviewFindingView of(PreviewFinding preview) {
             CatalogPublicationController.FindingView view =
                     CatalogPublicationController.FindingView.of(preview.finding());
-            return new Finding(
+            return new PreviewFindingView(
                     view.severity(),
                     view.code(),
                     view.entityType(),
@@ -232,11 +236,12 @@ public record ChannelPreviewResponse(
     }
 
     /** A branch a channel sells at, and the marketplace binding that covers it. */
-    public record TargetView(UUID locationId, @Nullable BindingView binding) {
+    public record PreviewTargetView(
+            UUID locationId, @Nullable PreviewBindingView binding) {
 
-        static TargetView of(PreviewTarget target) {
-            return new TargetView(
-                    target.locationId(), target.binding() == null ? null : BindingView.of(target.binding()));
+        static PreviewTargetView of(PreviewTarget target) {
+            return new PreviewTargetView(
+                    target.locationId(), target.binding() == null ? null : PreviewBindingView.of(target.binding()));
         }
     }
 }

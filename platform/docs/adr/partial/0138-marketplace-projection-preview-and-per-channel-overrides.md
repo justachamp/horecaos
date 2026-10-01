@@ -1,12 +1,23 @@
 # ADR 0138: Marketplace projection preview and per-channel overrides
 
 - Decision status: Accepted
-- Implementation status: Not started — no preview endpoint, no projection
-  assembly, and no channel-scoped media override exists. The layers this
-  record composes are individually built (`catalog.location_offerings`,
-  `catalog.channel_offering_exclusions`, `pricing.price_book_assignments` at
-  `CHANNEL` scope) but nothing joins them into a single answer, and nothing
-  reads them for any purpose but the live storefront and the live publication.
+- Implementation status: Partial — the preview, the override and the console
+  screen exist (operations batch 17). `ChannelPreviewService` snapshots and
+  validates the draft as `publish` does and assembles it with the very
+  `StorefrontCatalogQuery.assemble` a customer's menu read uses, so the
+  offering (or bound named menu), exclusion, price-plane and media gates are one
+  implementation; `GET …/catalogs/{id}/channels/{id}/preview` (cursor-paginated,
+  `catalog.read`) and `GET …/channels/{id}/preview-targets` serve it;
+  `catalog.channel_media_overrides` (V0451) with `PUT`/`GET …/media-overrides`
+  (`catalog.author`, audited) is the channel image layer; `marketplace_ruleset_code`
+  (V0452), the `MarketplaceRuleset` plug point and its empty registry exist; and
+  the operations console draws the projection in the `PhoneFrame` family with
+  findings and deep links. Not built: any per-marketplace ruleset (the open
+  input, left to product and partnerships, so no ruleset code can be set yet and
+  there is no endpoint to set one), the outbound push that would consume the
+  projection (ADR 0040), a rendered mock of a marketplace's own app, and the
+  `CatalogDraftChanged` event this record says an override write rides — no such
+  event exists in code, so an override write is audited and nothing more.
 - Date proposed: 2026-09-25
 - Date decided: 2026-10-01
 - Deciders: proposed by Claude (wave batch 12, w2-catalog-adrs) from
@@ -345,20 +356,23 @@ override table; nothing about a live publication depends on either existing.
 
 ## Implementation checklist
 
-- [ ] `catalog.channel_media_overrides` (Flyway; number reserved by the wave
-      that picks this up).
-- [ ] `integration.bindings.marketplace_ruleset_code` column.
-- [ ] `CatalogPublicationService.preview(catalogId, channelId)` composing the
+- [x] `catalog.channel_media_overrides` (Flyway; number reserved by the wave
+      that picks this up). V0451; its key also carries `media_asset_id`, so a
+      channel can override a GALLERY and not only one PRIMARY.
+- [x] `integration.bindings.marketplace_ruleset_code` column. V0452.
+- [x] `CatalogPublicationService.preview(catalogId, channelId)` composing the
       four-step order in Decision, reusing `publish`'s snapshot assembly.
-- [ ] `GET …/catalogs/{id}/channels/{channelId}/preview` on
+      Landed as `ChannelPreviewService.preview`, beside `publish` rather than in
+      it so `publish`'s own constructor, which dozens of tests call, is untouched.
+- [x] `GET …/catalogs/{id}/channels/{channelId}/preview` on
       `CatalogPublicationController`.
-- [ ] `PUT …/channels/{id}/media-overrides/{entityType}/{entityId}` on
+- [x] `PUT …/channels/{id}/media-overrides/{entityType}/{entityId}` on
       `CatalogAuthoringController`.
-- [ ] `CatalogValidator` marketplace-rule scaffolding (Specification), firing
+- [x] `CatalogValidator` marketplace-rule scaffolding (Specification), firing
       nothing until a ruleset is authored.
-- [ ] Operations screen: `catalog.md` §4.10's preview region, extended to
+- [x] Operations screen: `catalog.md` §4.10's preview region, extended to
       show the composed projection and marketplace findings per channel.
-- [ ] Domain and API tests: the four-step composition order, the
+- [x] Domain and API tests: the four-step composition order, the
       `externally_priced` price-omission case, the media-override fallback,
       and a proof that `preview()` and `publish()` agree on item membership
       for a channel with no exclusions or overrides set.

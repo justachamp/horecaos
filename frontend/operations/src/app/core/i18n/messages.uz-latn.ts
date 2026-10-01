@@ -2608,7 +2608,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'catalog.publication.channel.preview': 'Oldindan koʻrish',
   'catalog.preview.title': 'Kanal oldindan koʻrinishi',
   'catalog.preview.honesty':
-    'HorecaOS joriy qoralamadan bu kanalga nimani yuborishini koʻrsatadi. Bu bizning maʼlumotimiz, agregator ilovasining oʻzi menyuni qanday chizishi emas.',
+    'HorecaOS joriy qoralamadan bu kanalga nimani yuborishini koʻrsatadi. Bu bizning maʻlumotimiz, agregator ilovasining oʻzi menyuni qanday chizishi emas.',
   'catalog.preview.back': 'Nashrga qaytish',
   'catalog.preview.loading': 'Kanal oldindan koʻrinishi yuklanmoqda',
   'catalog.preview.denied': 'Bu brend katalogiga ruxsat yoʻq',
@@ -2645,7 +2645,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'catalog.preview.image.default': 'Mahsulotning odatiy rasmi',
   'catalog.preview.override.title': 'Kanal uchun rasm',
   'catalog.preview.override.hint':
-    'Mahsulotning oʻz rasmlaridan qaysilari bu kanalda koʻrinishini tanlang. Birinchi tanlangani asosiy. Narxlarga taʼsir qilmaydi.',
+    'Mahsulotning oʻz rasmlaridan qaysilari bu kanalda koʻrinishini tanlang. Birinchi tanlangani asosiy. Narxlarga taʻsir qilmaydi.',
   'catalog.preview.override.empty': 'Mahsulotda tanlash uchun oʻz rasmlari yoʻq.',
   'catalog.preview.override.save': 'Saqlash',
   'catalog.preview.override.clear': 'Mahsulotning odatiy rasmlariga qaytish',

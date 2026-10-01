@@ -92,7 +92,11 @@ class MarketplaceRulesetTests {
     @DisplayName("a ruleset's findings come through, in its own words")
     void aRulesetsFindingsComeThrough() {
         ValidationFinding unmet = ValidationFinding.blocker(
-                ChannelFindings.MARKETPLACE_IMAGE_REQUIREMENT_UNMET, EntityType.PRODUCT, UUID.randomUUID(), "BURGER", "needs a picture");
+                ChannelFindings.MARKETPLACE_IMAGE_REQUIREMENT_UNMET,
+                EntityType.PRODUCT,
+                UUID.randomUUID(),
+                "BURGER",
+                "needs a picture");
 
         List<ValidationFinding> raised = VALIDATOR.marketplaceFindings(ruleset("UZUM_V1", unmet), emptyProjection());
 

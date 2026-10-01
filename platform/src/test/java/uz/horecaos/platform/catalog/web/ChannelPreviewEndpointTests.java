@@ -260,7 +260,7 @@ class ChannelPreviewEndpointTests {
     @DisplayName("price resolves CHANNEL over LOCATION over BRAND, and a variant the channel's book lacks is a finding")
     void priceBookPrecedence() throws Exception {
         w.offerEverythingAt(w.l1);
-        UUID locationBook = w.priceBook("LOCATION_BOOK", "LOCATION", w.l1, Map.of(w.lagman, 20_000L, w.plov, 21_000L));
+        w.priceBook("LOCATION_BOOK", "LOCATION", w.l1, Map.of(w.lagman, 20_000L, w.plov, 21_000L));
 
         // BRAND book is 30 000 / 25 000 / ... (World). With only a LOCATION book assigned,
         // that book answers for the branch -- and for the storefront channel too, since
@@ -491,6 +491,28 @@ class ChannelPreviewEndpointTests {
         assertThat(noVariant.path("source").asText()).isEqualTo("CATALOG");
         assertThat(noVariant.path("entityId").asText()).isEqualTo(hollow.toString());
 
+        // The preview's universal findings ARE the validation endpoint's: one rule set, two doors.
+        JsonNode validation = json(mvc.perform(
+                get(base() + "/catalogs/" + w.catalogId + "/validation").with(owner())));
+        assertThat(validation.path("publishable").asBoolean())
+                .isEqualTo(preview.path("publishable").asBoolean());
+        Set<String> viaValidation = new LinkedHashSet<>();
+        validation
+                .path("findings")
+                .forEach(f -> viaValidation.add(
+                        f.path("code").asText() + "|" + f.path("entityId").asText()));
+        Set<String> viaPreview = new LinkedHashSet<>();
+        preview.path("findings").forEach(f -> {
+            if (f.path("source").asText().equals("CATALOG")) {
+                viaPreview.add(
+                        f.path("code").asText() + "|" + f.path("entityId").asText());
+            }
+        });
+        assertThat(viaPreview)
+                .as("same findings, same entities")
+                .isEqualTo(viaValidation)
+                .isNotEmpty();
+
         // The binding names no ruleset: that is itself a finding, because nothing marketplace-specific ran.
         JsonNode notAssigned = findings(preview, ChannelFindings.MARKETPLACE_RULESET_NOT_ASSIGNED)
                 .getFirst();
@@ -691,12 +713,28 @@ class ChannelPreviewEndpointTests {
         assertThat(ambiguous.getResponse().getStatus()).isEqualTo(400);
         assertThat(body(ambiguous)).contains("locationId or bindingId");
 
-        UUID targets = w.uzum;
+        UUID binding = w.marketplaceBinding(w.uzum, TEST_RULESET);
         JsonNode listed = json(mvc.perform(
-                get(base() + "/channels/" + targets + "/preview-targets").with(owner())));
+                get(base() + "/channels/" + w.uzum + "/preview-targets").with(owner())));
         assertThat(listed)
                 .extracting(n -> n.path("locationId").asText())
                 .containsExactlyInAnyOrder(w.l1.toString(), w.l2.toString());
+        // The marketplace binding is offered with the branch it covers, and only there.
+        for (JsonNode target : listed) {
+            if (target.path("locationId").asText().equals(w.l1.toString())) {
+                assertThat(target.path("binding").path("bindingId").asText()).isEqualTo(binding.toString());
+                assertThat(target.path("binding").path("rulesetCode").asText()).isEqualTo(TEST_RULESET);
+                assertThat(target.path("binding").path("displayName").asText()).isEqualTo("Uzum Tezkor");
+            } else {
+                assertThat(target.path("binding").isNull() || !target.has("binding"))
+                        .isTrue();
+            }
+        }
+
+        // The binding names the branch itself: no locationId needed (the channel sells at two).
+        JsonNode viaBinding = preview(w.uzum, "bindingId", binding.toString());
+        assertThat(viaBinding.path("locationId").asText()).isEqualTo(w.l1.toString());
+        assertThat(viaBinding.path("binding").path("bindingId").asText()).isEqualTo(binding.toString());
     }
 
     // ------------------------------------------------------ capability, tenant
@@ -753,6 +791,10 @@ class ChannelPreviewEndpointTests {
         assertThat(status(get(base() + "/channels/" + other.uzum + "/preview-targets")
                         .with(owner())))
                 .as("their channel's targets")
+                .isEqualTo(404);
+        assertThat(status(get(base() + "/channels/" + other.uzum + "/media-overrides")
+                        .with(owner())))
+                .as("their channel's image overrides")
                 .isEqualTo(404);
     }
 
@@ -1148,7 +1190,7 @@ class ChannelPreviewEndpointTests {
                     .param("tenantId", tenant)
                     .param("brandId", brand)
                     .param("code", code)
-                    .param("slug", code.toLowerCase())
+                    .param("slug", code.toLowerCase(java.util.Locale.ROOT))
                     .update();
             return id;
         }

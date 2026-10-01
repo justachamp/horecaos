@@ -165,11 +165,11 @@ public class CatalogPublicationController {
             description = "What a console offers to preview: one entry per branch the channel is active "
                     + "at, carrying the binding that covers it (and the ruleset it names) when the "
                     + "channel is backed by a marketplace installation.")
-    public List<ChannelPreviewResponse.TargetView> previewTargets(
+    public List<ChannelPreviewResponse.PreviewTargetView> previewTargets(
             @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID channelId) {
         try {
             return channelPreview.targets(tenantId, brandId, channelId).stream()
-                    .map(ChannelPreviewResponse.TargetView::of)
+                    .map(ChannelPreviewResponse.PreviewTargetView::of)
                     .toList();
         } catch (ChannelPreviewService.UnknownPreviewTargetException unknown) {
             throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, unknown.getMessage());
