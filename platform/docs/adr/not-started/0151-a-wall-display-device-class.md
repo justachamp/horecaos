@@ -325,7 +325,7 @@ paired it changes nothing about any wall.
 - ADR 0025, ADR 0027, ADR 0028, ADR 0031, ADR 0041 (displays and devices, rollout step
   4), ADR 0045, ADR 0062, ADR 0079 (the primitive, the deferred VDU and EXPO), ADR 0098,
   ADR 0119 (device shell, the whoami input)
-- `platform/docs/operations-gap-map.md` rows `2.4`, `X.2`, `0.1e`; wave `T02`
+- `platform/docs/operations-gap-map.md` rows `2.4`, `0.1e`; wave `T02`
 - `DevicePrincipalClass`, `PlatformRole`, `Capability`, `TenantRoleCatalog`,
   `KitchenDeviceService`, `KitchenDeviceController`, `KitchenBoardController`,
   `DeviceEnrolmentService`, `GrantController` (`/session/context`); `V0192`, `V0145`
