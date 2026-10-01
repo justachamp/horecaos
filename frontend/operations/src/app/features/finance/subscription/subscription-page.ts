@@ -11,6 +11,7 @@ import { describeApiError } from '../../orders/order-errors';
 import {
   CommercialApi,
   EntitlementSnapshotView,
+  ModuleEndedView,
   SellableModuleView,
   StatementView,
   SubscriptionView,
@@ -411,8 +412,9 @@ export class SubscriptionPage {
     this.moduleActionError.set(null);
     this.endNotice.set(null);
     this.endingModuleId.set(held.tenantModuleId);
+    let ended: ModuleEndedView | null = null;
     try {
-      const ended = await this.api.endModule(this.requireTenantId(), held.tenantModuleId);
+      ended = await this.api.endModule(this.requireTenantId(), held.tenantModuleId);
       this.endNotice.set({ name: held.moduleName, period: ended.lastBilledPeriod });
     } catch (error) {
       this.moduleActionError.set(this.describe(error));
@@ -421,9 +423,29 @@ export class SubscriptionPage {
     // and the entitlements changed; after a refusal (already ended, no longer
     // the tenant's to end) the list was stale and must stop offering the button.
     // A failed re-read must not turn a successful end into an error.
-    await this.refreshModules().catch(() => undefined);
+    const reread = await this.refreshModules().then(
+      () => true,
+      () => false,
+    );
+    if (ended !== null && !reread) {
+      // The server has ended it whether or not the list could be read back, and
+      // the notice above says so: do not leave the row shown as live with an End
+      // button under it. Mark it ended from the server's own answer.
+      this.markEnded(held.tenantModuleId, ended.endedAt);
+    }
     this.endTarget.set(null);
     this.endingModuleId.set(null);
+  }
+
+  /** Shows one held module as ended, when the server said so but the list could not be read back. */
+  private markEnded(tenantModuleId: string, endedAt: string): void {
+    this.modulesHeld.update((current) =>
+      current.map((held) =>
+        held.tenantModuleId === tenantModuleId
+          ? { ...held, endedAt, endableByTenant: false }
+          : held,
+      ),
+    );
   }
 
   private async refreshModules(): Promise<void> {

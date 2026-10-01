@@ -300,6 +300,39 @@ than from a new one:
 Still not built, in this record's own scope: the grace window above. The prepaid
 wallet stays with ADR 0095.
 
+### 2026-09-30 — correction: a module ended and bought again in one month bills once
+
+The note above says the statement for the month a module ends in carries its
+`MODULE` line in full and no later month does. That held for a module that is
+only ended. It did not hold for one that is ended and then bought again in the
+same month, which the tenant's End and Add buttons make a two-click path (and
+which `ModuleCatalogService.add` already named as the way to change a
+quantity): `StatementService.draft` added one `MODULE` line for every
+`tenant_modules` row that overlapped the month, so a `PER_UNIT` kiosk ended at
+one and bought at two billed three units, and a `PER_TENANT` module bought,
+undone and bought again billed its price twice. That contradicted ADR 0088's
+own rule that a module live on any day of the month bills that month, once.
+
+`StatementService.moduleCharges` now reads the month's rows and produces one
+charge per module, in the order the tenant first held them. Where rows of one
+module disagree on the unit count, the month bills the largest: nothing is
+prorated, so buying again never bills the month for less than ending alone
+would have, and raising a quantity by ending and adding again bills the new,
+higher count. A module ended in one month and bought again in a later one is
+still one line in each month, since the two rows never overlap the same month.
+No decision changed and no ADR was superseded; ADR 0088's rule is applied to
+the case it did not spell out. Covered by
+`ModulesStatementsAndArrearsTests.endingAndReAddingAModuleInOneMonthBillsItOnceForTheMonth`,
+`.aModuleReBoughtAtALowerQuantityInTheSameMonthBillsTheMostItWasHeldAt` and
+`.aModuleEndedInOneMonthAndBoughtAgainInTheNextBillsEachMonthOnce`.
+
+The screen's End notice ("billed up to and including ...") is cleared when the
+tenant starts an Add, and a statement built after a re-buy is one line, so the
+two no longer disagree. Also on the screen: when an End succeeded but the list
+could not be read back, the held row is now marked ended from the server's own
+answer (`ModuleEndedView.endedAt`) instead of staying shown as live with an End
+button that would only answer 409. Covered by `subscription-page.spec.ts`.
+
 ## References
 
 - ADR 0025 — fine-grained authorization and capability model
