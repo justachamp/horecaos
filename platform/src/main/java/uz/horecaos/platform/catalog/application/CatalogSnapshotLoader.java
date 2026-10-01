@@ -22,11 +22,16 @@ import uz.horecaos.platform.catalog.domain.CatalogEntities.ModifierOption;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.OfferingStatus;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.Product;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.PublicationItem;
+import uz.horecaos.platform.catalog.domain.CatalogEntities.Status;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.Variant;
+import uz.horecaos.platform.catalog.domain.CompositeProducts.ComboComponent;
+import uz.horecaos.platform.catalog.domain.CompositeProducts.ComboGroup;
+import uz.horecaos.platform.catalog.domain.CompositeProducts.ModifierAttachment;
 import uz.horecaos.platform.catalog.domain.FiscalClassification;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore.MediaRelationRow;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore.TranslationRow;
+import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCompositeCatalogStore;
 import uz.horecaos.platform.media.api.MediaAssetId;
 import uz.horecaos.platform.media.api.MediaAvailability;
 import uz.horecaos.platform.tenancy.api.BrandLocaleLookup;
@@ -162,7 +167,75 @@ public class CatalogSnapshotLoader {
                 priced,
                 offered,
                 loadFiscalContext(tenantId, brandId, offerings),
-                pricingWired);
+                pricingWired,
+                loadCompositeContext(tenantId, brandId, catalogId));
+    }
+
+    /**
+     * The composite-product inputs, read in the same transaction as the rest
+     * (ADR 0136).
+     *
+     * <p>Nothing beyond two small reads happens for a brand with no combo group and no
+     * attachment, which is every brand that has not authored either: the wider
+     * brand-wide reads exist to answer questions a brand without composite data cannot
+     * have.
+     */
+    private CatalogValidator.CompositeContext loadCompositeContext(UUID tenantId, UUID brandId, UUID catalogId) {
+        JdbcCompositeCatalogStore composite = store.composite();
+        List<ComboGroup> comboGroups = composite.comboGroupsInCatalog(tenantId, brandId, catalogId);
+        List<ModifierAttachment> attachments = composite.attachmentsForBrand(tenantId, brandId);
+        if (comboGroups.isEmpty() && attachments.isEmpty()) {
+            return CatalogValidator.CompositeContext.empty();
+        }
+
+        Map<UUID, List<ComboComponent>> componentsByGroup =
+                composite
+                        .componentsForGroups(
+                                tenantId,
+                                brandId,
+                                comboGroups.stream().map(ComboGroup::id).toList())
+                        .stream()
+                        .collect(Collectors.groupingBy(ComboComponent::comboGroupId));
+        Set<UUID> activeComponentIds = componentsByGroup.values().stream()
+                .flatMap(List::stream)
+                .filter(component -> component.status() == Status.ACTIVE)
+                .map(ComboComponent::id)
+                .collect(Collectors.toSet());
+        Set<UUID> pricedComponents = activeComponentIds.isEmpty()
+                ? Set.of()
+                : pricing.pricedComboComponents(tenantId, brandId, activeComponentIds);
+
+        List<JdbcCompositeCatalogStore.VariantFact> variantFacts = composite.variantFacts(tenantId, brandId);
+        Map<UUID, UUID> productByVariant = variantFacts.stream()
+                .collect(Collectors.toMap(
+                        JdbcCompositeCatalogStore.VariantFact::variantId,
+                        JdbcCompositeCatalogStore.VariantFact::productId));
+        Map<UUID, Status> statusByVariant = variantFacts.stream()
+                .collect(Collectors.toMap(
+                        JdbcCompositeCatalogStore.VariantFact::variantId,
+                        JdbcCompositeCatalogStore.VariantFact::status));
+
+        List<ModifierGroup> brandGroups = store.modifierGroupsForBrand(tenantId, brandId);
+        Map<UUID, ModifierGroup> groupsById =
+                brandGroups.stream().collect(Collectors.toMap(ModifierGroup::id, group -> group));
+        Map<UUID, List<ModifierOption>> optionsByGroup =
+                store
+                        .optionsForGroups(
+                                tenantId,
+                                brandId,
+                                brandGroups.stream().map(ModifierGroup::id).toList())
+                        .stream()
+                        .collect(Collectors.groupingBy(ModifierOption::modifierGroupId));
+
+        return new CatalogValidator.CompositeContext(
+                comboGroups,
+                componentsByGroup,
+                pricedComponents,
+                statusByVariant,
+                attachments,
+                productByVariant,
+                groupsById,
+                optionsByGroup);
     }
 
     /**

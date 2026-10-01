@@ -32,12 +32,12 @@ import uz.horecaos.platform.catalog.domain.CatalogEntities.Status;
 import uz.horecaos.platform.catalog.domain.CompositeProducts.AttachmentOwnerType;
 import uz.horecaos.platform.catalog.domain.CompositeProducts.ComboComponent;
 import uz.horecaos.platform.catalog.domain.CompositeProducts.ComboGroup;
-import uz.horecaos.platform.catalog.domain.CompositeProducts.FulfillmentMode;
 import uz.horecaos.platform.catalog.domain.CompositeProducts.ModifierAttachment;
 import uz.horecaos.platform.catalog.domain.CompositeProducts.Visibility;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
+import uz.horecaos.platform.tenancy.api.FulfillmentMode;
 import uz.horecaos.platform.web.api.AggregateVersion;
 import uz.horecaos.platform.web.authorization.RequiresCapability;
 

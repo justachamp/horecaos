@@ -22,7 +22,6 @@ import uz.horecaos.platform.catalog.domain.CatalogEntities.ModifierOption;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.PriceableType;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.Product;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.Variant;
-import uz.horecaos.platform.catalog.domain.CompositeProducts.FulfillmentMode;
 import uz.horecaos.platform.catalog.domain.CompositeProducts.Visibility;
 import uz.horecaos.platform.catalog.domain.FiscalClassification;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
@@ -32,6 +31,7 @@ import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore.
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore.ProductRow;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore.TranslationRow;
 import uz.horecaos.platform.tenancy.api.BrandLocaleLookup;
+import uz.horecaos.platform.tenancy.api.FulfillmentMode;
 
 /**
  * Reading back what {@link CatalogAuthoringService} wrote (ADR 0016).

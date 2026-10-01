@@ -32,7 +32,6 @@ import uz.horecaos.platform.catalog.domain.CatalogEntities.Product;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.PublicationItem;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.Status;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.Variant;
-import uz.horecaos.platform.catalog.domain.CompositeProducts.FulfillmentMode;
 import uz.horecaos.platform.catalog.domain.CompositeProducts.Visibility;
 import uz.horecaos.platform.catalog.domain.FiscalClassification;
 import uz.horecaos.platform.catalog.domain.FiscalClassification.MarkingScheme;
@@ -40,6 +39,7 @@ import uz.horecaos.platform.catalog.domain.ItemSaleSchedule;
 import uz.horecaos.platform.catalog.domain.PublicationStatus;
 import uz.horecaos.platform.catalog.domain.ValidationFinding;
 import uz.horecaos.platform.configuration.Ids;
+import uz.horecaos.platform.tenancy.api.FulfillmentMode;
 
 /**
  * Catalog persistence (ADR 0016).
@@ -53,10 +53,24 @@ public class JdbcCatalogStore {
 
     private final JdbcClient jdbc;
     private final ObjectMapper objectMapper;
+    private final JdbcCompositeCatalogStore composite;
 
     public JdbcCatalogStore(JdbcClient jdbc, ObjectMapper objectMapper) {
         this.jdbc = jdbc;
         this.objectMapper = objectMapper;
+        this.composite = new JdbcCompositeCatalogStore(jdbc);
+    }
+
+    /**
+     * Composite products' persistence (ADR 0136): combo groups and the modifier
+     * attachments' policy.
+     *
+     * <p>Reached through the store the publication loader already holds rather than
+     * injected beside it, so the loader's several callers -- and the tests that
+     * construct one by hand -- keep building it from the same four arguments.
+     */
+    public JdbcCompositeCatalogStore composite() {
+        return composite;
     }
 
     // ---------------------------------------------------------------- authoring
@@ -494,6 +508,9 @@ public class JdbcCatalogStore {
                     case MODIFIER_GROUP -> "SELECT 1 FROM catalog.modifier_groups";
                     case MODIFIER_OPTION -> "SELECT 1 FROM catalog.modifier_options";
                     case COMBO_GROUP -> "SELECT 1 FROM catalog.combo_groups";
+                    // ADR 0136: a pairing is named by the variant it offers; it has no
+                    // translations of its own to write against.
+                    case COMBO_COMPONENT -> null;
                     // ADR 0038: a fee reaches a receipt as a line without being a catalog
                     // item. It has no row anywhere, and no translations, so there is
                     // nothing to resolve and nothing that may be written against it.

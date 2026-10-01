@@ -22,7 +22,6 @@ import uz.horecaos.platform.catalog.domain.CatalogEntities.Status;
 import uz.horecaos.platform.catalog.domain.CompositeProducts.AttachmentOwnerType;
 import uz.horecaos.platform.catalog.domain.CompositeProducts.ComboComponent;
 import uz.horecaos.platform.catalog.domain.CompositeProducts.ComboGroup;
-import uz.horecaos.platform.catalog.domain.CompositeProducts.FulfillmentMode;
 import uz.horecaos.platform.catalog.domain.CompositeProducts.ModifierAttachment;
 import uz.horecaos.platform.catalog.domain.CompositeProducts.Visibility;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
@@ -30,6 +29,7 @@ import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCompositeCata
 import uz.horecaos.platform.configuration.Ids;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.ResourceScope;
+import uz.horecaos.platform.tenancy.api.FulfillmentMode;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
 

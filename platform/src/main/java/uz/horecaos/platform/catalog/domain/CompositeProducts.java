@@ -9,6 +9,7 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.ModifierGroup;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.Status;
+import uz.horecaos.platform.tenancy.api.FulfillmentMode;
 
 /**
  * Composite products: combo groups and modifier depth (ADR 0136).
@@ -36,16 +37,6 @@ public final class CompositeProducts {
     public enum Visibility {
         VISIBLE,
         HIDDEN_AUTO_SELECT
-    }
-
-    /**
-     * The fulfilment vocabulary an attachment filters on -- {@code
-     * location_offerings}' own, so one word means one thing across the catalog.
-     */
-    public enum FulfillmentMode {
-        DELIVERY,
-        PICKUP,
-        DINE_IN
     }
 
     /** Which table an attachment row lives in. */

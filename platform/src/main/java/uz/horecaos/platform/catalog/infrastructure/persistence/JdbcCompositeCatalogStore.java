@@ -18,9 +18,9 @@ import uz.horecaos.platform.catalog.domain.CatalogEntities.Status;
 import uz.horecaos.platform.catalog.domain.CompositeProducts.AttachmentOwnerType;
 import uz.horecaos.platform.catalog.domain.CompositeProducts.ComboComponent;
 import uz.horecaos.platform.catalog.domain.CompositeProducts.ComboGroup;
-import uz.horecaos.platform.catalog.domain.CompositeProducts.FulfillmentMode;
 import uz.horecaos.platform.catalog.domain.CompositeProducts.ModifierAttachment;
 import uz.horecaos.platform.catalog.domain.CompositeProducts.Visibility;
+import uz.horecaos.platform.tenancy.api.FulfillmentMode;
 
 /**
  * Persistence for composite products (ADR 0136): combo groups and components, and
@@ -270,6 +270,31 @@ public class JdbcCompositeCatalogStore {
                 .forEach(entry -> statuses.put(entry.getKey(), entry.getValue()));
         return statuses;
     }
+
+    /**
+     * Which product and status each of the brand's variants has, for the validator.
+     *
+     * <p>Brand-wide, and read only when the brand has composite data to validate: a
+     * nested option links a variant that may belong to another of the brand's
+     * catalogs, and a product-level attachment is inherited through the variant's
+     * product.
+     */
+    public List<VariantFact> variantFacts(UUID tenantId, UUID brandId) {
+        return jdbc.sql("""
+                SELECT id, product_id, status FROM catalog.variants
+                WHERE tenant_id = :tenantId AND brand_id = :brandId
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .query((row, number) -> new VariantFact(
+                        row.getObject("id", UUID.class),
+                        row.getObject("product_id", UUID.class),
+                        Status.valueOf(row.getString("status"))))
+                .list();
+    }
+
+    /** One variant's product and status. */
+    public record VariantFact(UUID variantId, UUID productId, Status status) {}
 
     // ------------------------------------------------------ modifier attachments
 

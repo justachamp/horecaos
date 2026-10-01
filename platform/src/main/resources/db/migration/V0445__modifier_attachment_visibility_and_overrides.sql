@@ -29,13 +29,18 @@
 --                              If-Match; an attachment is an aggregate of its
 --                              own as soon as it carries state.
 --
+-- The column is varchar(24), not the varchar(16) the record's table sketches:
+-- HIDDEN_AUTO_SELECT is eighteen characters, and the first test that tried to
+-- write it found out. The value is the record's; the width is not part of the
+-- decision.
+--
 -- Cross-table consistency (the effective range still satisfies min <= max, a
 -- hidden group has exactly one active option) cannot be a CHECK. The authoring
 -- service refuses what it can see at write time and CatalogValidator re-checks
 -- at publication, because the shared group can move under an override later.
 
 ALTER TABLE catalog.product_modifier_groups
-    ADD COLUMN visibility varchar(16) NOT NULL DEFAULT 'VISIBLE',
+    ADD COLUMN visibility varchar(24) NOT NULL DEFAULT 'VISIBLE',
     ADD COLUMN applicable_fulfillment_modes text[],
     ADD COLUMN required_override boolean,
     ADD COLUMN minimum_selections_override integer,
@@ -43,7 +48,7 @@ ALTER TABLE catalog.product_modifier_groups
     ADD COLUMN version integer NOT NULL DEFAULT 1;
 
 ALTER TABLE catalog.variant_modifier_groups
-    ADD COLUMN visibility varchar(16) NOT NULL DEFAULT 'VISIBLE',
+    ADD COLUMN visibility varchar(24) NOT NULL DEFAULT 'VISIBLE',
     ADD COLUMN applicable_fulfillment_modes text[],
     ADD COLUMN required_override boolean,
     ADD COLUMN minimum_selections_override integer,

@@ -40,6 +40,15 @@ public final class CatalogEntities {
          */
         COMBO_GROUP,
         /**
+         * A combo group's pairing with one variant (ADR 0136).
+         *
+         * <p>It names the target of a validation finding and nothing else, as {@link
+         * #FEE} does: a component has no translations (its name is the variant's) and
+         * no media, so the two schema checks that enumerate entity types deliberately
+         * do not list it.
+         */
+        COMBO_COMPONENT,
+        /**
          * A charge that reaches a receipt as an ordinary line without being a
          * catalog item — today only the delivery fee (ADR 0038).
          *
