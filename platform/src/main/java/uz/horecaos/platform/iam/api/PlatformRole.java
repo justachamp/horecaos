@@ -232,6 +232,9 @@ public enum PlatformRole {
                     ORDER_STATE_OVERRIDE,
                     ORDER_OUTCOME_REASON_MANAGE,
                     ORDER_ACCEPTANCE_POLICY_MANAGE,
+                    // ADR 0142 Decision 7: how long an unpaid order is waited for. Its own grant, held
+                    // by the same two roles as the acceptance policy beside it.
+                    ORDER_PAYMENT_WINDOW_MANAGE,
                     REFUND_REQUEST,
                     REFUND_APPROVE,
                     REFUND_EXECUTE,
@@ -267,6 +270,12 @@ public enum PlatformRole {
                     // tariffs immediately above.
                     DELIVERY_POLICY_READ,
                     DELIVERY_POLICY_WRITE,
+                    // ADR 0142, gap map row 3.8: the dispatch rules and the sourcing timing
+                    // numbers, beside the courier compensation policy above and decided by the
+                    // same people. A document of its own because it routes orders to a paying
+                    // partner.
+                    DELIVERY_DISPATCH_RULES_READ,
+                    DELIVERY_DISPATCH_RULES_WRITE,
                     COURIER_READ,
                     KITCHEN_STATION_MANAGE,
                     KITCHEN_TICKET_READ,
@@ -426,6 +435,9 @@ public enum PlatformRole {
                     ORDER_STATE_OVERRIDE,
                     ORDER_OUTCOME_REASON_MANAGE,
                     ORDER_ACCEPTANCE_POLICY_MANAGE,
+                    // ADR 0142 Decision 7: how long an unpaid order is waited for. Its own grant, held
+                    // by the same two roles as the acceptance policy beside it.
+                    ORDER_PAYMENT_WINDOW_MANAGE,
                     REFUND_REQUEST,
                     RECOVERY_CASE_MANAGE,
                     // Reading a fiscal document, never asking a tax authority's agent for
@@ -458,6 +470,12 @@ public enum PlatformRole {
                     // tariffs immediately above.
                     DELIVERY_POLICY_READ,
                     DELIVERY_POLICY_WRITE,
+                    // ADR 0142, gap map row 3.8: the dispatch rules and the sourcing timing
+                    // numbers, beside the courier compensation policy above and decided by the
+                    // same people. A document of its own because it routes orders to a paying
+                    // partner.
+                    DELIVERY_DISPATCH_RULES_READ,
+                    DELIVERY_DISPATCH_RULES_WRITE,
                     COURIER_READ,
                     KITCHEN_STATION_MANAGE,
                     KITCHEN_TICKET_READ,
@@ -651,6 +669,12 @@ public enum PlatformRole {
                     // policy document, same reasoning as the two roles above.
                     DELIVERY_POLICY_READ,
                     DELIVERY_POLICY_WRITE,
+                    // ADR 0142, gap map row 3.8: the dispatch rules and the sourcing timing
+                    // numbers, beside the courier compensation policy above and decided by the
+                    // same people. A document of its own because it routes orders to a paying
+                    // partner.
+                    DELIVERY_DISPATCH_RULES_READ,
+                    DELIVERY_DISPATCH_RULES_WRITE,
                     MARKETPLACE_AVAILABILITY_PUSH,
                     NOTIFICATION_TEMPLATE_AUTHOR,
                     NOTIFICATION_ROUTING_MANAGE,

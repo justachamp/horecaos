@@ -101,6 +101,8 @@ public class JdbcDeliveryOrderPort implements DeliveryOrderPort {
                        o.fee_minor,
                        o.total_minor,
                        o.payment_status_projection,
+                       o.channel_id,
+                       ch.system_type AS channel_system_type,
                        s.display_name_encrypted,
                        s.contact_encrypted,
                        s.address_encrypted,
@@ -111,10 +113,19 @@ public class JdbcDeliveryOrderPort implements DeliveryOrderPort {
                            AND r.quote_id = o.pricing_quote_id
                            AND r.outcome IN ('RESOLVED', 'EXTERNALLY_PRICED')
                          ORDER BY r.created_at DESC
-                         LIMIT 1) AS delivery_fee_resolution_id
+                         LIMIT 1) AS delivery_fee_resolution_id,
+                       (SELECT r.zone_id
+                          FROM fulfillment.delivery_fee_resolutions r
+                         WHERE r.tenant_id = o.tenant_id
+                           AND r.quote_id = o.pricing_quote_id
+                           AND r.outcome IN ('RESOLVED', 'EXTERNALLY_PRICED')
+                         ORDER BY r.created_at DESC
+                         LIMIT 1) AS delivery_zone_id
                 FROM ordering.orders o
                 LEFT JOIN ordering.order_customer_snapshots s
                        ON s.order_id = o.id AND s.tenant_id = o.tenant_id
+                LEFT JOIN tenant.sales_channels ch
+                       ON ch.id = o.channel_id AND ch.tenant_id = o.tenant_id
                 WHERE o.tenant_id = :tenantId
                   AND o.id = :orderId
                   AND o.fulfillment_mode = 'DELIVERY'
@@ -134,7 +145,10 @@ public class JdbcDeliveryOrderPort implements DeliveryOrderPort {
                         row.getString(CONTACT_COLUMN),
                         row.getString(ADDRESS_COLUMN),
                         row.getString(INSTRUCTIONS_COLUMN),
-                        row.getObject("delivery_fee_resolution_id", UUID.class)))
+                        row.getObject("delivery_fee_resolution_id", UUID.class),
+                        row.getObject("channel_id", UUID.class),
+                        row.getString("channel_system_type"),
+                        row.getObject("delivery_zone_id", UUID.class)))
                 .optional()
                 .filter(row -> row.addressEncrypted() != null)
                 .map(row -> assemble(tenantId, row));
@@ -169,11 +183,9 @@ public class JdbcDeliveryOrderPort implements DeliveryOrderPort {
                 row.feeMinor(),
                 row.deliveryFeeResolutionId(),
                 row.currency(),
-                // Prepaid means HorecaOS has the money. NOT_REQUIRED is the cash
-                // order — the courier collects at the door — and PENDING is money
-                // that has not arrived. Getting this wrong charges the customer
-                // twice or lets them pay nobody.
-                "AUTHORIZED".equals(row.paymentStatus()) || "CAPTURED".equals(row.paymentStatus()),
+                // See isPrepaid: getting this wrong charges the customer twice or lets
+                // them pay nobody.
+                isPrepaid(row.paymentStatus()),
                 // The goods the courier is carrying, which is the total less what
                 // was charged for carrying them. A partner insuring the load or
                 // collecting cash for it must not be told the delivery fee is part
@@ -183,7 +195,65 @@ public class JdbcDeliveryOrderPort implements DeliveryOrderPort {
                 // Row 3.1: computed here, alongside the one decrypt that produces
                 // the destination it is a projection of, rather than recomputed
                 // wherever a caller wants it — see DeliveryDestination#maskedLabel.
-                destination.maskedLabel());
+                destination.maskedLabel(),
+                // ADR 0142: the two facts a dispatch rule asks that fulfilment cannot
+                // read for itself. Null when the order's channel row is gone, which a
+                // rule naming a source or a channel then simply does not match.
+                row.channelId() == null || row.channelSystemType() == null
+                        ? null
+                        : new DispatchOrderFacts(
+                                row.channelId(),
+                                row.channelSystemType(),
+                                row.deliveryZoneId(),
+                                isPrepaid(row.paymentStatus())));
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>No decrypt, on purpose: the simulator re-reads a recent plan's order to ask which rule it
+     * would match today, and that must not reveal where a customer lives. Everything selected here
+     * is in clear on the order, its channel and the fee-resolution evidence. The same four
+     * predicates as {@link #deliveryOrder}, minus the sourceable-state filter -- a rule can be asked
+     * about an order that has since been delivered.
+     */
+    @Override
+    public Optional<DispatchOrderFacts> dispatchFacts(UUID tenantId, UUID orderId) {
+        return jdbc.sql("""
+                SELECT o.channel_id,
+                       ch.system_type AS channel_system_type,
+                       o.payment_status_projection,
+                       (SELECT r.zone_id
+                          FROM fulfillment.delivery_fee_resolutions r
+                         WHERE r.tenant_id = o.tenant_id
+                           AND r.quote_id = o.pricing_quote_id
+                           AND r.outcome IN ('RESOLVED', 'EXTERNALLY_PRICED')
+                         ORDER BY r.created_at DESC
+                         LIMIT 1) AS delivery_zone_id
+                FROM ordering.orders o
+                JOIN tenant.sales_channels ch
+                  ON ch.id = o.channel_id AND ch.tenant_id = o.tenant_id
+                WHERE o.tenant_id = :tenantId
+                  AND o.id = :orderId
+                  AND o.fulfillment_mode = 'DELIVERY'
+                """)
+                .param("tenantId", tenantId)
+                .param("orderId", orderId)
+                .query((row, number) -> new DispatchOrderFacts(
+                        row.getObject("channel_id", UUID.class),
+                        row.getString("channel_system_type"),
+                        row.getObject("delivery_zone_id", UUID.class),
+                        isPrepaid(row.getString("payment_status_projection"))))
+                .optional();
+    }
+
+    /**
+     * Prepaid means HorecaOS has the money. NOT_REQUIRED is the cash order -- the courier collects
+     * at the door -- and PENDING is money that has not arrived. Getting this wrong charges the
+     * customer twice or lets them pay nobody.
+     */
+    private static boolean isPrepaid(@Nullable String paymentStatus) {
+        return "AUTHORIZED".equals(paymentStatus) || "CAPTURED".equals(paymentStatus);
     }
 
     /**
@@ -223,7 +293,10 @@ public class JdbcDeliveryOrderPort implements DeliveryOrderPort {
             String contactEncrypted,
             String addressEncrypted,
             String instructionsEncrypted,
-            UUID deliveryFeeResolutionId) {
+            UUID deliveryFeeResolutionId,
+            @Nullable UUID channelId,
+            @Nullable String channelSystemType,
+            @Nullable UUID deliveryZoneId) {
 
         @Override
         public String toString() {

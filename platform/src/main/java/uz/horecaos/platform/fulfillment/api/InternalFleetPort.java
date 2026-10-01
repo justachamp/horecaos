@@ -68,6 +68,13 @@ public interface InternalFleetPort {
      *                          0045 has no fresh position. Null ranks last
      *                          rather than nearest: an unknown position is not
      *                          evidence of being close
+     * @param groupableWithMetres ADR 0142 grouping: the straight-line distance
+     *                          between this plan's drop-off and the nearest drop-off of
+     *                          an un-picked-up plan from the same branch that this
+     *                          courier already carries, or null when there is none.
+     *                          A distance only: the other order's coordinates are
+     *                          never stored (ADR 0029). Read only when a rule enables
+     *                          grouping
      */
     record FleetCandidate(
             UUID courierId,
@@ -75,10 +82,41 @@ public interface InternalFleetPort {
             int activeAssignments,
             int concurrencyCeiling,
             @Nullable Integer metresFromBranch,
-            int deliveriesThisShift) {
+            int deliveriesThisShift,
+            @Nullable Integer groupableWithMetres) {
+
+        /** A candidate nothing has measured against another drop-off: the shape every adapter answers today. */
+        public FleetCandidate(
+                UUID courierId,
+                int offerTtlSeconds,
+                int activeAssignments,
+                int concurrencyCeiling,
+                @Nullable Integer metresFromBranch,
+                int deliveriesThisShift) {
+            this(
+                    courierId,
+                    offerTtlSeconds,
+                    activeAssignments,
+                    concurrencyCeiling,
+                    metresFromBranch,
+                    deliveriesThisShift,
+                    null);
+        }
 
         public boolean hasCapacity() {
             return activeAssignments < concurrencyCeiling;
+        }
+
+        /** The same candidate, measured against the drop-off of a plan it is already carrying (ADR 0142 grouping). */
+        public FleetCandidate withGroupableWithin(@Nullable Integer metres) {
+            return new FleetCandidate(
+                    courierId,
+                    offerTtlSeconds,
+                    activeAssignments,
+                    concurrencyCeiling,
+                    metresFromBranch,
+                    deliveriesThisShift,
+                    metres);
         }
     }
 

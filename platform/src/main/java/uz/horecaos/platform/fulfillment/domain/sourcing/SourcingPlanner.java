@@ -9,6 +9,7 @@ import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.fulfillment.api.InternalFleetPort.FleetCandidate;
 import uz.horecaos.platform.fulfillment.api.ShipmentBookingPort.BookingIntent;
 import uz.horecaos.platform.fulfillment.api.ShipmentBookingPort.PartnerOption;
+import uz.horecaos.platform.fulfillment.domain.sourcing.DispatchRulesDocument.Grouping;
 
 /**
  * In-house first, a partner when the fleet cannot take it (ADR 0014).
@@ -92,6 +93,44 @@ public final class SourcingPlanner {
     private SourcingPlanner() {}
 
     /**
+     * The fleet ranking under a rule that enables grouping (ADR 0142 Decision 6): couriers already
+     * carrying an un-picked-up plan from this branch whose drop-off lies within the merge radius of
+     * this one, and who are under the run's order ceiling, rank ahead of emptier hands -- nearest
+     * drop-off first -- and everybody else ranks as before.
+     *
+     * <p>A bias on the order of asking, never a reason to ask nobody: a plan with no groupable
+     * courier is offered exactly as it would be without grouping.
+     */
+    private static Comparator<FleetCandidate> groupedRanking(Grouping grouping) {
+        return Comparator.comparing((FleetCandidate candidate) -> !isGroupable(candidate, grouping))
+                .thenComparing(
+                        candidate -> isGroupable(candidate, grouping) ? candidate.groupableWithMetres() : null,
+                        Comparator.nullsLast(Comparator.naturalOrder()))
+                .thenComparing(RANKING);
+    }
+
+    private static boolean isGroupable(FleetCandidate candidate, Grouping grouping) {
+        Integer metres = candidate.groupableWithMetres();
+        return metres != null
+                && metres <= grouping.mergeRadiusMeters()
+                && candidate.activeAssignments() < grouping.maxOrdersPerRun();
+    }
+
+    private static Optional<FleetCandidate> nextCourier(
+            List<FleetCandidate> candidates, SourcingProgress progress, @Nullable Grouping grouping) {
+        return candidates.stream()
+                .filter(FleetCandidate::hasCapacity)
+                .filter(candidate -> !progress.offeredCouriers().contains(candidate.courierId()))
+                .min(grouping == null ? RANKING : groupedRanking(grouping));
+    }
+
+    private static Optional<PartnerOption> nextPartner(List<PartnerOption> partners, SourcingProgress progress) {
+        return partners.stream()
+                .filter(option -> !progress.attemptedPartners().contains(option.bindingId()))
+                .findFirst();
+    }
+
+    /**
      * Decides who to ask next for one plan, in-house fleet or delivery partner.
      *
      * @param candidates couriers ADR 0042's dispatch gate has already allowed.
@@ -108,6 +147,23 @@ public final class SourcingPlanner {
             List<PartnerOption> partners,
             SourcingProgress progress,
             Instant now) {
+        return decide(plan, policy, mode, candidates, partners, progress, now, null);
+    }
+
+    /**
+     * {@link #decide(PickupPlan, DeliverySourcingPolicy, SourcingMode, List, List, SourcingProgress, Instant)}
+     * under a rule that may enable grouping (ADR 0142): a non-null {@code grouping} changes how the
+     * fleet lane ranks couriers and nothing else.
+     */
+    public static SourcingDecision decide(
+            PickupPlan plan,
+            DeliverySourcingPolicy policy,
+            SourcingMode mode,
+            List<FleetCandidate> candidates,
+            List<PartnerOption> partners,
+            SourcingProgress progress,
+            Instant now,
+            @Nullable Grouping grouping) {
 
         if (!now.isBefore(plan.latestAssignmentAt())) {
             // The promise is already unreachable, so every remaining automated
@@ -137,25 +193,17 @@ public final class SourcingPlanner {
         }
 
         Instant handoverDeadline = handoverDeadline(plan, policy, mode);
+        if (mode.partnerLaneFirst()) {
+            return decidePartnerFirst(plan, policy, candidates, partners, progress, now, handoverDeadline, grouping);
+        }
         String fleetReason = null;
 
         if (mode.usesFleet()) {
-            Optional<FleetCandidate> next = candidates.stream()
-                    .filter(FleetCandidate::hasCapacity)
-                    .filter(candidate -> !progress.offeredCouriers().contains(candidate.courierId()))
-                    .min(RANKING);
+            Optional<FleetCandidate> next = nextCourier(candidates, progress, grouping);
 
             fleetReason = fleetRefusal(candidates, next, progress, policy, now, handoverDeadline);
             if (fleetReason == null) {
-                FleetCandidate courier = next.orElseThrow();
-                int ttl = Math.min(courier.offerTtlSeconds(), policy.maxOfferSeconds());
-                Instant expiry = now.plusSeconds(ttl);
-                // Clamped so the offer cannot outlive the moment a partner could
-                // still have been called. An offer expiring after the handover
-                // deadline is a fleet lane that has quietly become the only lane.
-                Instant clamped = expiry.isAfter(handoverDeadline) ? handoverDeadline : expiry;
-                return new SourcingDecision.OfferInternal(
-                        courier.courierId(), clamped, SourcingDecision.FLEET_AVAILABLE);
+                return offer(next.orElseThrow(), policy, now, handoverDeadline, SourcingDecision.FLEET_AVAILABLE);
             }
         }
 
@@ -164,9 +212,7 @@ public final class SourcingPlanner {
                     fleetReason == null ? SourcingDecision.NO_INTERNAL_CANDIDATE : fleetReason);
         }
 
-        Optional<PartnerOption> partner = partners.stream()
-                .filter(option -> !progress.attemptedPartners().contains(option.bindingId()))
-                .findFirst();
+        Optional<PartnerOption> partner = nextPartner(partners, progress);
         if (partner.isEmpty()) {
             return new SourcingDecision.EscalateToOperations(
                     partners.isEmpty() ? SourcingDecision.NO_PARTNER_CONFIGURED : SourcingDecision.PARTNERS_EXHAUSTED);
@@ -235,7 +281,12 @@ public final class SourcingPlanner {
      */
     private static Instant handoverDeadline(PickupPlan plan, DeliverySourcingPolicy policy, SourcingMode mode) {
 
-        if (!mode.usesPartners()) {
+        if (!mode.partnerLaneFollowsFleet()) {
+            // Keyed on "a partner lane FOLLOWS the fleet lane", not on "the mode uses
+            // partners" (ADR 0142 Decision 9): a partner-first plan uses both, but its
+            // fleet lane has no partner behind it to protect. Keyed the other way, that
+            // lane would open already past its deadline and refuse at once with
+            // FLEET_BUDGET_SPENT.
             return plan.latestAssignmentAt();
         }
         Instant deadline = plan.pickupWindowEnd().minusSeconds(policy.partnerLeadSeconds());
@@ -244,6 +295,58 @@ public final class SourcingPlanner {
         // it is a reason to give it none, which is what returning the earlier of
         // the two does, while still letting the plan be sourced at all.
         return deadline.isBefore(plan.confirmedAt()) ? plan.confirmedAt() : deadline;
+    }
+
+    /**
+     * A named partner first, the fleet second (ADR 0142 Decision 9).
+     *
+     * <p>The partner lane runs exactly as ADR 0014 has it -- the next partner not yet tried, a single
+     * winner, nothing cancelled -- and the fleet is offered the plan only when that lane has ended
+     * with a definite answer: every eligible partner refused, or none is bound. An uncertain partner
+     * attempt never reaches here (it escalated above), so an unreconciled booking can never fall
+     * through to a courier.
+     *
+     * <p>The offer that follows carries the partner lane's end as its reason, so the attempt journal
+     * says why a courier was asked.
+     */
+    private static SourcingDecision decidePartnerFirst(
+            PickupPlan plan,
+            DeliverySourcingPolicy policy,
+            List<FleetCandidate> candidates,
+            List<PartnerOption> partners,
+            SourcingProgress progress,
+            Instant now,
+            Instant handoverDeadline,
+            @Nullable Grouping grouping) {
+
+        Optional<PartnerOption> partner = nextPartner(partners, progress);
+        if (partner.isPresent()) {
+            return bookWith(partner.get(), plan, policy, now, SourcingDecision.PARTNER_FIRST_MODE);
+        }
+
+        String partnerLaneEnded =
+                partners.isEmpty() ? SourcingDecision.NO_PARTNER_CONFIGURED : SourcingDecision.PARTNERS_EXHAUSTED;
+        Optional<FleetCandidate> next = nextCourier(candidates, progress, grouping);
+        String fleetReason = fleetRefusal(candidates, next, progress, policy, now, handoverDeadline);
+        if (fleetReason != null) {
+            return new SourcingDecision.EscalateToOperations(fleetReason);
+        }
+        return offer(next.orElseThrow(), policy, now, handoverDeadline, partnerLaneEnded);
+    }
+
+    private static SourcingDecision offer(
+            FleetCandidate courier,
+            DeliverySourcingPolicy policy,
+            Instant now,
+            Instant handoverDeadline,
+            String reason) {
+        int ttl = Math.min(courier.offerTtlSeconds(), policy.maxOfferSeconds());
+        Instant expiry = now.plusSeconds(ttl);
+        // Clamped so the offer cannot outlive the moment a partner could still have been
+        // called. An offer expiring after the handover deadline is a fleet lane that has
+        // quietly become the only lane.
+        Instant clamped = expiry.isAfter(handoverDeadline) ? handoverDeadline : expiry;
+        return new SourcingDecision.OfferInternal(courier.courierId(), clamped, reason);
     }
 
     private static SourcingDecision bookWith(

@@ -89,7 +89,8 @@ public class CamelShipmentBookingPort implements ShipmentBookingPort {
                     binding.bindingId(),
                     binding.providerType(),
                     gateway.supports(binding, DeliveryCapability.RESERVE_SHIPMENT),
-                    gateway.supports(binding, DeliveryCapability.SCHEDULE_SHIPMENT)));
+                    gateway.supports(binding, DeliveryCapability.SCHEDULE_SHIPMENT),
+                    binding.installationId()));
         }
         return List.copyOf(options);
     }

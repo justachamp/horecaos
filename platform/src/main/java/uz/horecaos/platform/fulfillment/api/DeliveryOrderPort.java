@@ -76,6 +76,10 @@ public interface DeliveryOrderPort {
      *                         decrypting anything on its 10-second poll. Null
      *                         when the destination carries neither a zone nor
      *                         a street to show
+     * @param dispatchFacts    ADR 0142: what the order's channel and delivery zone are,
+     *                         the two facts a dispatch rule asks that the fulfilment module
+     *                         cannot read for itself. Null when the adapter cannot say, which
+     *                         a rule naming a source, channel or zone then does not match
      */
     record DeliveryOrder(
             UUID orderId,
@@ -87,7 +91,34 @@ public interface DeliveryOrderPort {
             boolean prepaid,
             long itemValueMinor,
             Waypoint dropoff,
-            @Nullable String destinationLabel) {
+            @Nullable String destinationLabel,
+            @Nullable DispatchOrderFacts dispatchFacts) {
+
+        /** An order whose channel and zone are unknown: the shape every caller built before dispatch rules. */
+        public DeliveryOrder(
+                UUID orderId,
+                String orderReference,
+                Duration preparation,
+                long deliveryFeeMinor,
+                @Nullable UUID deliveryFeeResolutionId,
+                String currency,
+                boolean prepaid,
+                long itemValueMinor,
+                Waypoint dropoff,
+                @Nullable String destinationLabel) {
+            this(
+                    orderId,
+                    orderReference,
+                    preparation,
+                    deliveryFeeMinor,
+                    deliveryFeeResolutionId,
+                    currency,
+                    prepaid,
+                    itemValueMinor,
+                    dropoff,
+                    destinationLabel,
+                    null);
+        }
 
         public DeliveryOrder {
             Objects.requireNonNull(orderId, "An order id is required");
@@ -108,6 +139,42 @@ public interface DeliveryOrderPort {
         public String toString() {
             return "DeliveryOrder[order=%s, reference=%s, preparation=%s]"
                     .formatted(orderId, orderReference, preparation);
+        }
+    }
+
+    /**
+     * The two order facts a dispatch rule asks that fulfilment cannot read for itself, without
+     * decrypting anything (ADR 0142).
+     *
+     * <p>Beside {@link #deliveryOrder} rather than inside it for the simulator's sake: re-reading
+     * "which rule would this recent plan's order match" must not reveal a customer's address, and
+     * every fact here is in clear on the order and on the fee-resolution evidence. Defaulted to
+     * empty so a test double that predates dispatch rules need grow no implementation.
+     *
+     * @return empty when the order is not this tenant's or the adapter cannot say
+     */
+    default Optional<DispatchOrderFacts> dispatchFacts(UUID tenantId, UUID orderId) {
+        return Optional.empty();
+    }
+
+    /**
+     * An order's sales channel and delivery zone.
+     *
+     * @param channelId         the order's sales channel
+     * @param channelSystemType {@code tenant.sales_channels.system_type}, ADR 0036's closed set
+     * @param zoneId            the delivery zone the order was priced in, from its fee-resolution
+     *                          evidence; null for an order with none (a pickup, an externally
+     *                          priced aggregator order, a snapshot that predates the evidence)
+     */
+    record DispatchOrderFacts(
+            UUID channelId,
+            String channelSystemType,
+            @Nullable UUID zoneId,
+            boolean prepaid) {
+
+        public DispatchOrderFacts {
+            Objects.requireNonNull(channelId, "A channel is required");
+            Objects.requireNonNull(channelSystemType, "A channel system type is required");
         }
     }
 
