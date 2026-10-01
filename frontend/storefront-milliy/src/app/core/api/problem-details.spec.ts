@@ -268,6 +268,7 @@ describe('reasonMessageKey', () => {
     ['NO_TARIFF', 'errors.reason.deliveryFeeUnresolved'],
     ['LOCATION_NOT_LOCATED', 'errors.reason.deliveryFeeUnresolved'],
     ['SOLD_OUT', 'errors.reason.itemUnavailable'],
+    ['ON_STOP', 'errors.reason.itemUnavailable'],
     ['NOT_STOCKED_AT_LOCATION', 'errors.reason.itemUnavailable'],
     ['RESERVATION_NO_LONGER_HELD', 'errors.reason.holdExpired'],
     ['NOT_SERVICEABLE', 'errors.reason.notServiceable'],

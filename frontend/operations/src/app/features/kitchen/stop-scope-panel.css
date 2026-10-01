@@ -1,0 +1,96 @@
+.scope-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--q-hairline);
+  background: var(--q-surface-1);
+}
+
+.scope-panel__head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.scope-panel__head h2 {
+  margin: 0;
+}
+
+.scope-panel__close {
+  margin-left: auto;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: var(--q-type-body);
+  color: var(--q-ink-muted);
+}
+
+.scope-panel__group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.scope-panel__option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--q-type-body-sm);
+}
+
+.scope-panel__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.scope-panel__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.scope-panel__select {
+  padding: 6px 10px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  font-size: var(--q-type-body-sm);
+  min-width: 200px;
+  background: var(--q-canvas);
+  color: var(--q-ink);
+}
+
+.scope-panel__hint {
+  margin: 0;
+  color: var(--q-ink-muted);
+}
+
+.scope-panel__error {
+  margin: 0;
+  color: var(--q-error-text);
+}
+
+.scope-panel__actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.scope-panel__apply {
+  padding: 6px 16px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  cursor: pointer;
+  font-size: var(--q-type-body-sm);
+}
+
+.scope-panel__apply:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}

@@ -447,6 +447,48 @@ export const operationsPaths = {
   },
 
   /**
+   * ADR 0141 — a stop with a scope, a source and an optional end, at this branch
+   * (`InventoryStopController`, same legacy tenant prefix as every
+   * `InventoryController` path above and for the same reason). `POST` stops dishes at
+   * `LOCATION` scope, or one `CHANNEL` here; `GET` lists the stops that touch the branch.
+   * Mutation: key required.
+   */
+  inventoryStopsAtLocation(scope: LocationScope): string {
+    return `${LEGACY_TENANT_PREFIX}${tenantBrandLocation(scope)}/inventory/stops`;
+  },
+
+  /** `DELETE` lifts one stop that touches this branch alone. Mutation: key and `If-Match`. */
+  inventoryStopAtLocation(scope: LocationScope, stopId: string): string {
+    return `${this.inventoryStopsAtLocation(scope)}/${encodeURIComponent(stopId)}`;
+  },
+
+  /**
+   * ADR 0141 — the brand-wide route: `POST` stops at `BRAND`, `MENU` or a `CHANNEL`
+   * everywhere (needs `inventory.stop.manage`, which a branch manager does not hold).
+   */
+  inventoryStopsAtBrand(scope: LocationScope): string {
+    return `${LEGACY_TENANT_PREFIX}${tenantBrand(scope)}/inventory/stops`;
+  },
+
+  /** `DELETE` lifts any stop of the brand. Mutation: key and `If-Match`. */
+  inventoryStopAtBrand(scope: LocationScope, stopId: string): string {
+    return `${this.inventoryStopsAtBrand(scope)}/${encodeURIComponent(stopId)}`;
+  },
+
+  /**
+   * ADR 0141 — what each connected marketplace has and has not been told about the stop list
+   * at this branch, and since when (`MarketplacePropagationController`, integration module).
+   */
+  inventoryMarketplacePropagation(scope: LocationScope): string {
+    return `${LEGACY_TENANT_PREFIX}${tenantBrandLocation(scope)}/inventory/marketplace-propagation`;
+  },
+
+  /** ADR 0141 — "why can't I sell this?" for one dish here; optional `channel` query param (a channel code). */
+  inventoryAvailabilityExplanation(scope: LocationScope, variantId: string): string {
+    return `${LEGACY_TENANT_PREFIX}${tenantBrandLocation(scope)}/inventory/variants/${encodeURIComponent(variantId)}/availability-explanation`;
+  },
+
+  /**
    * Current availability for a set of variants at this location (query param
    * `variantIds`, max 100), with an optional `channel` query param
    * (`tenant.sales_channels.system_type`, e.g. `AGGREGATOR`) that also

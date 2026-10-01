@@ -2879,6 +2879,40 @@ export const messagesEn = {
   'kitchen.stopList.action.stop': 'Stop',
   'kitchen.stopList.action.unstop': 'Restore',
   'kitchen.stopList.empty': 'No products at this location yet',
+  'kitchen.stopList.column.scope': 'Scope',
+  'kitchen.stopList.status.partial': 'Partly stopped',
+  'kitchen.stopList.source.bot': 'Bot',
+  'kitchen.stopList.scope.location': 'This branch',
+  'kitchen.stopList.scope.brand': 'Whole brand',
+  'kitchen.stopList.scope.menu': 'A menu',
+  'kitchen.stopList.scope.channel': 'One channel',
+  'kitchen.stopList.stop.until': 'until {when}',
+  'kitchen.stopList.stop.indefinite': 'until lifted',
+  'kitchen.stopList.stop.lift': 'Lift this stop',
+  'kitchen.stopList.stop.lifted': 'Stop lifted',
+  'kitchen.stopList.panel.open': 'Stop by scope…',
+  'kitchen.stopList.panel.title': 'Stop with a scope',
+  'kitchen.stopList.panel.scope': 'How far the stop reaches',
+  'kitchen.stopList.panel.union':
+    'Every stop that covers a dish applies together. A branch cannot override a brand-wide stop.',
+  'kitchen.stopList.panel.channelPlaceholder': 'Choose a channel',
+  'kitchen.stopList.panel.channelHere': 'This branch only',
+  'kitchen.stopList.panel.menuPlaceholder': 'Choose a menu',
+  'kitchen.stopList.panel.duration': 'Until',
+  'kitchen.stopList.panel.duration.indefinite': 'Until I lift it',
+  'kitchen.stopList.panel.duration.endOfDay': 'The end of the trading day',
+  'kitchen.stopList.panel.duration.until': 'A set time',
+  'kitchen.stopList.panel.reason.recall': 'Recall',
+  'kitchen.stopList.panel.apply': 'Stop',
+  'kitchen.stopList.panel.frozen':
+    'New scoped stops are paused for this company. Stops already made stay in force and can still be lifted.',
+  'kitchen.stopList.propagation.manual':
+    '{name}: not propagated automatically — update the partner portal by hand',
+  'kitchen.stopList.propagation.suspended':
+    '{name}: updates to the partner are paused — update the partner portal by hand',
+  'kitchen.stopList.propagation.pending':
+    '{name}: {count} items not confirmed since {since} — update in the partner portal',
+  'kitchen.stopList.propagation.inSync': '{name}: in sync',
 
   // Capacity & buffer settings (2.6) — wave 43
   'kitchen.capacity.title': 'Capacity & buffer settings',

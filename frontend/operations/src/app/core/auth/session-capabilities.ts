@@ -37,7 +37,8 @@ export type Capability =
   | 'BRAND_READ'
   | 'TENANT_READ'
   | 'DINEIN_SESSION_READ'
-  | 'DINEIN_SESSION_MANAGE';
+  | 'DINEIN_SESSION_MANAGE'
+  | 'INVENTORY_STOP_MANAGE';
 
 /**
  * Whether the signed-in operator holds a given capability *anywhere* — the
