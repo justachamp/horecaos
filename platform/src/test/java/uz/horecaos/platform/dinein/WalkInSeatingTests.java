@@ -631,6 +631,10 @@ class WalkInSeatingTests {
 
     @Test
     @DisplayName("a guest opening waits for the table row, and a staff seating does too")
+    // The holder takes FOR NO KEY UPDATE, not FOR UPDATE: a foreign key check on session_tables takes
+    // FOR KEY SHARE on the table row, which FOR UPDATE would block by itself and so make this pass
+    // whether or not the code under test locked anything. FOR NO KEY UPDATE is blocked only by the
+    // explicit FOR UPDATE the code takes.
     void aClaimAndAStaffSeatingQueueBehindTheTableRow() throws Exception {
         enableSelfSeat();
         String guest = exchange(tableOne);
@@ -638,7 +642,7 @@ class WalkInSeatingTests {
 
         try (Connection holder = dataSource.getConnection()) {
             holder.setAutoCommit(false);
-            execute(holder, "SELECT 1 FROM dinein.tables WHERE id = '" + tableOne + "' FOR UPDATE");
+            execute(holder, "SELECT 1 FROM dinein.tables WHERE id = '" + tableOne + "' FOR NO KEY UPDATE");
 
             ExecutorService pool = Executors.newFixedThreadPool(2);
             try {
@@ -672,7 +676,7 @@ class WalkInSeatingTests {
 
         try (Connection holder = dataSource.getConnection()) {
             holder.setAutoCommit(false);
-            execute(holder, "SELECT 1 FROM dinein.tables WHERE id = '" + tableOne + "' FOR UPDATE");
+            execute(holder, "SELECT 1 FROM dinein.tables WHERE id = '" + tableOne + "' FOR NO KEY UPDATE");
 
             ExecutorService pool = Executors.newSingleThreadExecutor();
             try {
@@ -689,7 +693,7 @@ class WalkInSeatingTests {
 
         try (Connection holder = dataSource.getConnection()) {
             holder.setAutoCommit(false);
-            execute(holder, "SELECT 1 FROM dinein.tables WHERE id = '" + tableOne + "' FOR UPDATE");
+            execute(holder, "SELECT 1 FROM dinein.tables WHERE id = '" + tableOne + "' FOR NO KEY UPDATE");
 
             ExecutorService pool = Executors.newSingleThreadExecutor();
             try {
