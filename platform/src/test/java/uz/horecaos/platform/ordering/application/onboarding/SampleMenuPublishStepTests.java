@@ -43,7 +43,6 @@ import uz.horecaos.platform.inventory.infrastructure.persistence.JdbcInventorySt
 import uz.horecaos.platform.pricing.api.SampleMenuPricingPort;
 import uz.horecaos.platform.pricing.application.PriceAuthoringService;
 import uz.horecaos.platform.pricing.application.PricingEngine;
-import uz.horecaos.platform.pricing.application.PromoCodeEligibilityService;
 import uz.horecaos.platform.pricing.application.QuoteService;
 import uz.horecaos.platform.pricing.application.SampleMenuPricing;
 import uz.horecaos.platform.pricing.infrastructure.catalog.JdbcCatalogPricingContext;
@@ -763,8 +762,7 @@ class SampleMenuPublishStepTests {
                 new JdbcCatalogPricingContext(jdbc, "uz"),
                 channels,
                 deliveryFees,
-                promoCodes,
-                new PromoCodeEligibilityService(promoCodes),
+                uz.horecaos.platform.pricing.PromotionTestSupport.resolver(jdbc, promoCodes),
                 CLOCK,
                 new FakeConfigurationResolver());
         return new OrderingOnboardingStepHandlers.ActivationSmokeTest(

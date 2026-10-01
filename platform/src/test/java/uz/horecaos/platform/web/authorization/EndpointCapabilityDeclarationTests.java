@@ -190,7 +190,8 @@ class EndpointCapabilityDeclarationTests {
                     || isPreAccountTelegramSignInEndpoint(handler)
                     || isDeviceEnrolmentBootstrapEndpoint(handler)
                     || isPreAccountPickupLocationSearchEndpoint(handler)
-                    || isDeliveryFeePreviewEndpoint(handler)) {
+                    || isDeliveryFeePreviewEndpoint(handler)
+                    || isPromotionSimulationEndpoint(handler)) {
                 continue;
             }
             if (!declaresReplayProtection(handler)) {
@@ -574,6 +575,22 @@ class EndpointCapabilityDeclarationTests {
     private static boolean isDeliveryFeePreviewEndpoint(Method handler) {
         return pathOf(handler)
                 .equals("/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/delivery-fee");
+    }
+
+    /**
+     * Whether this endpoint is the promotion simulator (ADR 0140): a POST only because
+     * its input is a cart, not a query string.
+     *
+     * <p>It writes no quote, no redemption and no counter -- the response says so in
+     * its own documentation and a test asserts it -- so there is no effect for a
+     * replay key to guard, and a marketer pressing "simulate" twice should not be
+     * told to send an {@code Idempotency-Key} for a read. It is not exempt from
+     * authorization: it still declares {@code PRICING_READ} at brand scope, and
+     * {@link #everyMutatingEndpointDeclaresHowItIsAuthorized} still checks that.
+     * Matched on the exact path, as every exemption here is.
+     */
+    private static boolean isPromotionSimulationEndpoint(Method handler) {
+        return pathOf(handler).equals("/api/v1/operations/tenants/{tenantId}/brands/{brandId}/promotions/simulate");
     }
 
     /**

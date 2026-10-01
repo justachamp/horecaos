@@ -37,6 +37,11 @@ import uz.horecaos.platform.fulfillment.api.DeliveryFeeOutcome;
  * @param deliveryMinBasketMinor the zone's minimum basket, or null when it sets
  *                          none, for a storefront to render "minimum basket X"
  * @param deliveryFreeFromMinor the zone's free-delivery threshold, or null
+ * @param loyaltyAccrualAllowed ADR 0140: false when an applied promotion
+ *                          suppresses loyalty accrual. The order copies it, and
+ *                          {@code loyalty} reads the order's copy
+ * @param loyaltyRedemptionAllowed ADR 0140: false when an applied promotion
+ *                          blocks spending points on the order
  */
 public record QuoteSnapshot(
         UUID quoteId,
@@ -59,7 +64,58 @@ public record QuoteSnapshot(
         @Nullable DeliveryFeeOutcome deliveryOutcome,
         @Nullable Long deliveryShortfallMinor,
         @Nullable Long deliveryMinBasketMinor,
-        @Nullable Long deliveryFreeFromMinor) {
+        @Nullable Long deliveryFreeFromMinor,
+        boolean loyaltyAccrualAllowed,
+        boolean loyaltyRedemptionAllowed) {
+
+    /** A snapshot with no loyalty restriction: every caller that predates ADR 0140. */
+    public QuoteSnapshot(
+            UUID quoteId,
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            @Nullable UUID customerAccountId,
+            String currency,
+            Status status,
+            UUID catalogPublicationId,
+            String contextHash,
+            long subtotalMinor,
+            long taxMinor,
+            long feeMinor,
+            long discountMinor,
+            long totalMinor,
+            Instant expiresAt,
+            List<Line> lines,
+            List<Adjustment> adjustments,
+            @Nullable DeliveryFeeOutcome deliveryOutcome,
+            @Nullable Long deliveryShortfallMinor,
+            @Nullable Long deliveryMinBasketMinor,
+            @Nullable Long deliveryFreeFromMinor) {
+        this(
+                quoteId,
+                tenantId,
+                brandId,
+                locationId,
+                customerAccountId,
+                currency,
+                status,
+                catalogPublicationId,
+                contextHash,
+                subtotalMinor,
+                taxMinor,
+                feeMinor,
+                discountMinor,
+                totalMinor,
+                expiresAt,
+                lines,
+                adjustments,
+                deliveryOutcome,
+                deliveryShortfallMinor,
+                deliveryMinBasketMinor,
+                deliveryFreeFromMinor,
+                true,
+                true);
+    }
 
     public enum Status {
         ACTIVE,

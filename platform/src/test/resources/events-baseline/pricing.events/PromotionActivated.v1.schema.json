@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.horecaos.uz/events/pricing.events/PromotionActivated.v1.schema.json",
+  "title": "PromotionActivated v1 payload",
+  "description": "A promotion was put in front of customers (ADR 0140, ADR 0018). definitionVersion is the immutable version recorded in the promotion's definition history, the same number every adjustment it later produces carries. Ids, scope, kind and the validity window only: a consumer reads the rule through the authorized promotions API, never from the event.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["promotionId", "brandId", "definitionVersion", "scope", "kind", "validFrom"],
+  "properties": {
+    "promotionId": { "type": "string", "format": "uuid" },
+    "brandId": { "type": "string", "format": "uuid" },
+    "definitionVersion": { "type": "integer", "minimum": 1 },
+    "scope": { "type": "string", "enum": ["ITEM", "ORDER", "DELIVERY"] },
+    "kind": { "type": "string", "enum": ["DISCOUNT", "MARKUP"] },
+    "validFrom": { "type": "string", "format": "date-time" },
+    "validUntil": { "type": ["string", "null"], "format": "date-time" }
+  }
+}

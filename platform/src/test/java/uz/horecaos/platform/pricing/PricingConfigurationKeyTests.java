@@ -59,6 +59,30 @@ class PricingConfigurationKeyTests {
                 .containsExactlyInAnyOrder(ScopeType.PLATFORM, ScopeType.TENANT);
     }
 
+    @Test
+    @DisplayName("the ADR 0140 promotion keys are declared identically on both sides with the record's defaults")
+    void thePromotionKeysAgreeAndCarryTheRecordsDefaults() {
+        assertThat(registered("pricing.promotion.approval.percentage_over_bp"))
+                .isEqualTo(PricingConfigurationKeys.PROMOTION_APPROVAL_PERCENTAGE_OVER_BP);
+        assertThat(registered("pricing.promotion.approval.amount_over_minor"))
+                .isEqualTo(PricingConfigurationKeys.PROMOTION_APPROVAL_AMOUNT_OVER_MINOR);
+        assertThat(registered("pricing.promotion.approval.always_for_markup"))
+                .isEqualTo(PricingConfigurationKeys.PROMOTION_APPROVAL_ALWAYS_FOR_MARKUP);
+        assertThat(registered("pricing.promotion.simulate.max_lines"))
+                .isEqualTo(PricingConfigurationKeys.PROMOTION_SIMULATE_MAX_LINES);
+
+        assertThat(PricingConfigurationKeys.PROMOTION_APPROVAL_PERCENTAGE_OVER_BP.defaultValue())
+                .as("30%")
+                .isEqualTo(3000);
+        assertThat(PricingConfigurationKeys.PROMOTION_APPROVAL_AMOUNT_OVER_MINOR.defaultValue())
+                .as("100 000 som")
+                .isEqualTo(100000L);
+        assertThat(PricingConfigurationKeys.PROMOTION_APPROVAL_ALWAYS_FOR_MARKUP.defaultValue())
+                .isEqualTo(true);
+        assertThat(PricingConfigurationKeys.PROMOTION_SIMULATE_MAX_LINES.defaultValue())
+                .isEqualTo(50);
+    }
+
     private static ConfigurationKey<?> registered(String code) {
         return ConfigurationKeys.require(code);
     }

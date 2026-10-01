@@ -528,6 +528,31 @@ public final class EventCatalog {
                             + "previously served its scope. Carries the book's new version, never "
                             + "an amount — a consumer resolves current prices through the "
                             + "authorized price-query API."),
+            new EventContract(
+                    "PromotionActivated",
+                    1,
+                    "pricing",
+                    PRICING_EVENTS_TOPIC,
+                    "promotionId",
+                    "events/pricing.events/PromotionActivated.v1.schema.json",
+                    Retention.BUSINESS_FACT,
+                    Classification.INTERNAL,
+                    "A promotion was put in front of customers (ADR 0140). Carries the definition "
+                            + "version recorded in its history, the scope, the kind and the validity "
+                            + "window -- never a condition, an operand or an amount; a consumer reads "
+                            + "the rule through the authorized promotions API."),
+            new EventContract(
+                    "PromotionSuspended",
+                    1,
+                    "pricing",
+                    PRICING_EVENTS_TOPIC,
+                    "promotionId",
+                    "events/pricing.events/PromotionSuspended.v1.schema.json",
+                    Retention.BUSINESS_FACT,
+                    Classification.INTERNAL,
+                    "A promotion was taken out of front of customers (ADR 0140). New orders stop "
+                            + "receiving it; an order that already holds it keeps it under its "
+                            + "recorded definition version."),
             // ADR 0012's durable scheduler command. The claim that decided this
             // command should exist happened in PostgreSQL, under FOR UPDATE SKIP
             // LOCKED, in the same transaction that advanced the schedule's

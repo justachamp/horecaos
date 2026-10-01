@@ -372,6 +372,8 @@ five unpublished siblings.
 | Event | Version | Key | Schema | Version-1 payload |
 |---|---|---|---|---|
 | `PriceBookActivated` | 1 | `priceBookId` | [`PriceBookActivated.v1`](../../src/main/resources/events/pricing.events/PriceBookActivated.v1.schema.json) | `priceBookId`, `brandId`, `version`, `currency` |
+| `PromotionActivated` | 1 | `promotionId` | [`PromotionActivated.v1`](../../src/main/resources/events/pricing.events/PromotionActivated.v1.schema.json) | `promotionId`, `brandId`, `definitionVersion`, `scope`, `kind`, `validFrom`, `validUntil` |
+| `PromotionSuspended` | 1 | `promotionId` | [`PromotionSuspended.v1`](../../src/main/resources/events/pricing.events/PromotionSuspended.v1.schema.json) | `promotionId`, `brandId`, `definitionVersion`, `scope`, `kind` |
 
 Fired once per activation, alongside the ADR 0027 audit fact
 `PriceAuthoringService#activate` writes in the same transaction — a price book
@@ -381,14 +383,20 @@ context hash fails to match. Never an amount: a consumer resolves current
 prices through the authorized price-query API with `priceBookId`, the same
 discipline `inventory.events` applies to a product name.
 
-ADR 0018 names five further pricing facts — `PromotionActivated`,
-`PromotionSuspended`, `PricingQuoteCreated`, `PricingQuoteAccepted`, and the
-coupon/benefit lifecycle events. None is published yet, and none is catalogued
-here: there is no promotion-activation flow yet to produce the first, and
-quote creation/acceptance are high-volume per-request facts whose payload
-shape and retention deserve their own decision rather than riding along with
-a once-a-day control-plane activation — the same restraint `inventory.events`
-states for its own six unpublished siblings.
+`PromotionActivated` and `PromotionSuspended` (ADR 0140, the two facts ADR 0018
+already names) are published when a promotion's lifecycle moves, in the same
+`BEFORE_COMMIT` transaction as the change and its ADR 0027 audit fact. They
+carry ids, the definition version, scope, kind and (for activation) the window
+and nothing else; no consumer is specified. A resume is an activation of the
+same definition version and publishes `PromotionActivated` again.
+
+ADR 0018 names three further pricing facts — `PricingQuoteCreated`,
+`PricingQuoteAccepted`, and the coupon/benefit lifecycle events. None is
+published yet, and none is catalogued here: quote creation/acceptance are
+high-volume per-request facts whose payload shape and retention deserve their
+own decision rather than riding along with a once-a-day control-plane
+activation — the same restraint `inventory.events` states for its own six
+unpublished siblings.
 
 ## `pos.commands`
 

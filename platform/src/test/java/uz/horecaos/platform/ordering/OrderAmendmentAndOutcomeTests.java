@@ -246,8 +246,7 @@ class OrderAmendmentAndOutcomeTests {
                 new JdbcCatalogPricingContext(jdbc, "uz"),
                 channelStore,
                 deliveryFees,
-                promoCodeStore,
-                new PromoCodeEligibilityService(promoCodeStore),
+                uz.horecaos.platform.pricing.PromotionTestSupport.resolver(jdbc, promoCodeStore),
                 clock,
                 new FakeConfigurationResolver());
         var serviceability = new ServiceabilityService(serviceabilityStore, clock);

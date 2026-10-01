@@ -553,11 +553,63 @@ public final class ConfigurationKeys {
                     + "the resolver's own refusal does not read this key yet.")
             .build();
 
+    /**
+     * ADR 0140: declared identically in {@code pricing.api.PricingConfigurationKeys}, where it is consumed (this registry is internal to tenancy and a reference the other way would make the modules cyclic). The percentage, in basis points, above which activating a promotion
+     * needs a second person (ADR 0018 asks for four-eyes "above configured risk
+     * thresholds"). 3000 is 30%: provisional, finance to confirm.
+     */
+    public static final ConfigurationKey<Integer> PROMOTION_APPROVAL_PERCENTAGE_OVER_BP = ConfigurationKey.of(
+                    "pricing.promotion.approval.percentage_over_bp", Integer.class)
+            .defaultValue(3000)
+            .ownedBy("pricing")
+            .tenantVisible()
+            .describedAs("Activating a promotion whose largest percentage exceeds this many basis points "
+                    + "needs a second signature (ADR 0027).")
+            .build();
+
+    /**
+     * ADR 0140: the fixed amount, in minor units, above which activating a promotion
+     * needs a second person. 100 000 (som): provisional, finance to confirm.
+     */
+    public static final ConfigurationKey<Long> PROMOTION_APPROVAL_AMOUNT_OVER_MINOR = ConfigurationKey.of(
+                    "pricing.promotion.approval.amount_over_minor", Long.class)
+            .defaultValue(100000L)
+            .ownedBy("pricing")
+            .tenantVisible()
+            .describedAs("Activating a promotion whose largest fixed amount exceeds this many minor units "
+                    + "needs a second signature (ADR 0027).")
+            .build();
+
+    /**
+     * ADR 0140: whether activating a markup always needs a second person. A markup
+     * changes what customers pay rather than what they are given; on by default.
+     */
+    public static final ConfigurationKey<Boolean> PROMOTION_APPROVAL_ALWAYS_FOR_MARKUP = ConfigurationKey.of(
+                    "pricing.promotion.approval.always_for_markup", Boolean.class)
+            .defaultValue(true)
+            .ownedBy("pricing")
+            .tenantVisible()
+            .describedAs("Activating a markup always needs a second signature (ADR 0027).")
+            .build();
+
+    /** ADR 0140: the most lines a simulated cart may hold; the simulator is a read and must stay cheap. */
+    public static final ConfigurationKey<Integer> PROMOTION_SIMULATE_MAX_LINES = ConfigurationKey.of(
+                    "pricing.promotion.simulate.max_lines", Integer.class)
+            .defaultValue(50)
+            .ownedBy("pricing")
+            .tenantVisible()
+            .describedAs("The most lines a promotion simulation may price.")
+            .build();
+
     private static final Map<String, ConfigurationKey<?>> BY_CODE = index(List.of(
             CART_EXPIRY_MINUTES,
             ORDERING_CART_RETENTION_DAYS,
             COURIER_APPLICANT_RETENTION_MONTHS,
             QUOTE_TTL_SECONDS,
+            PROMOTION_APPROVAL_PERCENTAGE_OVER_BP,
+            PROMOTION_APPROVAL_AMOUNT_OVER_MINOR,
+            PROMOTION_APPROVAL_ALWAYS_FOR_MARKUP,
+            PROMOTION_SIMULATE_MAX_LINES,
             INVENTORY_RESERVATION_TTL_SECONDS,
             COMMERCIAL_ENFORCEMENT_CEILING,
             TELEMETRY_COLLECTION_GATE,

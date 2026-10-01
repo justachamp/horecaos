@@ -29,12 +29,14 @@ CREATE TABLE pricing.promotion_definition_versions (
     recorded_by varchar(255) NOT NULL,
     -- Which lifecycle step wrote it. A validate writes the row; an activation of
     -- the same version finds it already there, because a VALIDATED promotion
-    -- cannot be edited without going back to DRAFT, which bumps the version.
+    -- cannot be edited without going back to DRAFT, which bumps the version. A
+    -- reorder of priorities (the only change an ACTIVE promotion accepts without
+    -- going back to DRAFT) writes a new version of its own.
     reason varchar(16) NOT NULL,
 
     CONSTRAINT pk_promotion_definition_versions PRIMARY KEY (promotion_id, definition_version),
     CONSTRAINT ck_promotion_definition_object CHECK (jsonb_typeof(definition) = 'object'),
-    CONSTRAINT ck_promotion_definition_reason CHECK (reason IN ('VALIDATED', 'ACTIVATED')),
+    CONSTRAINT ck_promotion_definition_reason CHECK (reason IN ('VALIDATED', 'ACTIVATED', 'REPRIORITISED', 'CODE_ACTIVATED')),
     CONSTRAINT fk_promotion_definition_promotion FOREIGN KEY (promotion_id, tenant_id, brand_id)
         REFERENCES pricing.promotions (id, tenant_id, brand_id)
 );

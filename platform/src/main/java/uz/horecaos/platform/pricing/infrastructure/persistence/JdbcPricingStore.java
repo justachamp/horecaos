@@ -157,6 +157,15 @@ public class JdbcPricingStore {
     }
 
     public void insertQuote(Quote quote, @Nullable String idempotencyKey, Map<String, Object> calculationDocument) {
+        insertQuote(quote, idempotencyKey, calculationDocument, true, true);
+    }
+
+    public void insertQuote(
+            Quote quote,
+            @Nullable String idempotencyKey,
+            Map<String, Object> calculationDocument,
+            boolean loyaltyAccrualAllowed,
+            boolean loyaltyRedemptionAllowed) {
         jdbc.sql("""
                 INSERT INTO pricing.quotes (
                     id, tenant_id, brand_id, location_id, customer_account_id, currency, status,
@@ -164,13 +173,14 @@ public class JdbcPricingStore {
                     subtotal_minor, tax_minor, fee_minor, discount_minor, total_minor,
                     calculation_document, expires_at, idempotency_key, created_at,
                     delivery_outcome, delivery_shortfall_minor, delivery_min_basket_minor,
-                    delivery_free_from_minor)
+                    delivery_free_from_minor, loyalty_accrual_allowed, loyalty_redemption_allowed)
                 VALUES (
                     :id, :tenantId, :brandId, :locationId, :customerId, :currency, :status,
                     :publicationId, :calculationVersion, :contextHash,
                     :subtotal, :tax, :fee, :discount, :total,
                     CAST(:document AS jsonb), :expiresAt, :idempotencyKey, :createdAt,
-                    :deliveryOutcome, :deliveryShortfall, :deliveryMinBasket, :deliveryFreeFrom)
+                    :deliveryOutcome, :deliveryShortfall, :deliveryMinBasket, :deliveryFreeFrom,
+                    :loyaltyAccrual, :loyaltyRedemption)
                 """)
                 .param("id", quote.quoteId())
                 .param("tenantId", quote.tenantId())
@@ -199,6 +209,8 @@ public class JdbcPricingStore {
                 .param("deliveryShortfall", quote.deliveryShortfallMinor())
                 .param("deliveryMinBasket", quote.deliveryMinBasketMinor())
                 .param("deliveryFreeFrom", quote.deliveryFreeFromMinor())
+                .param("loyaltyAccrual", loyaltyAccrualAllowed)
+                .param("loyaltyRedemption", loyaltyRedemptionAllowed)
                 .update();
 
         for (Quote.QuoteLine line : quote.lines()) {
@@ -249,6 +261,25 @@ public class JdbcPricingStore {
         }
     }
 
+    /**
+     * The {@code promotionInputs} a quote was priced with, as recorded in its
+     * calculation document (ADR 0140), or empty for a quote priced before
+     * calculation version 3, which recorded none.
+     */
+    public Optional<Map<String, Object>> findPromotionInputs(UUID tenantId, UUID quoteId) {
+        return jdbc.sql("""
+                SELECT (calculation_document -> 'promotionInputs')::text
+                FROM pricing.quotes
+                WHERE tenant_id = :tenantId AND id = :id AND (calculation_document -> 'promotionInputs') IS NOT NULL
+                """)
+                .param("tenantId", tenantId)
+                .param("id", quoteId)
+                .query(String.class)
+                .optional()
+                .map(json -> objectMapper.readValue(
+                        json, new tools.jackson.core.type.TypeReference<Map<String, Object>>() {}));
+    }
+
     public Optional<QuoteRow> findQuote(UUID tenantId, UUID quoteId) {
         return jdbc.sql("""
                 SELECT id, status, context_hash, total_minor, currency, expires_at,
@@ -283,7 +314,8 @@ public class JdbcPricingStore {
                 SELECT id, tenant_id, brand_id, location_id, customer_account_id, currency, status,
                        catalog_publication_id, context_hash, subtotal_minor, tax_minor, fee_minor,
                        discount_minor, total_minor, expires_at, delivery_outcome,
-                       delivery_shortfall_minor, delivery_min_basket_minor, delivery_free_from_minor
+                       delivery_shortfall_minor, delivery_min_basket_minor, delivery_free_from_minor,
+                       loyalty_accrual_allowed, loyalty_redemption_allowed
                 FROM pricing.quotes
                 WHERE tenant_id = :tenantId AND id = :id
                 """)
@@ -312,7 +344,9 @@ public class JdbcPricingStore {
                                 : DeliveryFeeOutcome.valueOf(row.getString("delivery_outcome")),
                         row.getObject("delivery_shortfall_minor", Long.class),
                         row.getObject("delivery_min_basket_minor", Long.class),
-                        row.getObject("delivery_free_from_minor", Long.class)))
+                        row.getObject("delivery_free_from_minor", Long.class),
+                        row.getBoolean("loyalty_accrual_allowed"),
+                        row.getBoolean("loyalty_redemption_allowed")))
                 .optional();
 
         if (header.isEmpty()) {
@@ -395,7 +429,9 @@ public class JdbcPricingStore {
                 found.deliveryOutcome(),
                 found.deliveryShortfallMinor(),
                 found.deliveryMinBasketMinor(),
-                found.deliveryFreeFromMinor()));
+                found.deliveryFreeFromMinor(),
+                found.loyaltyAccrualAllowed(),
+                found.loyaltyRedemptionAllowed()));
     }
 
     public Optional<UUID> findByIdempotencyKey(UUID tenantId, String idempotencyKey) {
