@@ -1,0 +1,94 @@
+:host {
+  display: block;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 20px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+}
+
+.card h2 {
+  margin: 0;
+}
+
+.card__muted {
+  margin: 0;
+  color: var(--q-ink-subtle);
+}
+
+.card__skeleton {
+  height: 96px;
+  background: var(--q-surface-1);
+}
+
+.card__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+}
+
+.card__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--q-ink-muted);
+}
+
+.card__error {
+  margin: 0;
+  padding: 8px 12px;
+  background: var(--q-error-tint);
+  color: var(--q-error-text);
+  border-radius: var(--q-radius);
+}
+
+.card__notice {
+  margin: 0;
+  color: var(--q-ink-muted);
+}
+
+.card__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.field {
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+}
+
+.primary,
+.secondary {
+  height: 36px;
+  padding: 0 16px;
+  border-radius: var(--q-radius);
+  cursor: pointer;
+}
+
+.primary {
+  border: none;
+  background: var(--q-primary);
+  color: var(--q-inverse-ink);
+}
+
+.secondary {
+  border: 1px solid var(--q-hairline);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+}
+
+.primary:disabled,
+.secondary:disabled {
+  background: var(--q-surface-2);
+  color: var(--q-ink-subtle);
+  cursor: default;
+}

@@ -29,6 +29,7 @@ import { InheritedField } from '../../../shared/ui/inherited-field/inherited-fie
 import { describeApiError } from '../../orders/order-errors';
 import { ConfigurationApi } from '../configuration-api';
 import { SettingsScope } from '../settings-scope';
+import { DispatchRulesSummaryCard } from './dispatch-rules-summary-card';
 import { LatenessPolicyCard } from './lateness-policy-card';
 import {
   AcceptanceMode,
@@ -202,7 +203,14 @@ const CARD5_FIELDS: readonly OrderPolicyFieldDef[] = [
  */
 @Component({
   selector: 'q-order-policy-page',
-  imports: [TPipe, InheritedField, NgTemplateOutlet, ColorInput, LatenessPolicyCard],
+  imports: [
+    TPipe,
+    InheritedField,
+    NgTemplateOutlet,
+    ColorInput,
+    LatenessPolicyCard,
+    DispatchRulesSummaryCard,
+  ],
   templateUrl: './order-policy-page.html',
   styleUrl: './order-policy-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,

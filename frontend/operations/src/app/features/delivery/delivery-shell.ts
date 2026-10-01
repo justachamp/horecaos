@@ -15,11 +15,10 @@ import { TPipe } from '../../core/i18n/t.pipe';
  * is not one of these tabs. Same multi-screen-siblings shape
  * `catalog-shell.ts`/`kitchen-shell.ts` already use.
  *
- * `dispatch-rules` routes to the shared `NotBuiltPage`: ADR 0014's own
- * automated sourcing is real, but a provider-agnostic, operator-authored
- * rule engine (conditions → provider/service-tier/fallback, cascade search,
- * loser cancellation, merge radius, unpaid-order timeout) has no schema, no
- * service and no ADR anywhere in this build — see the wave's final report.
+ * `dispatch-rules` (3.8, ADR 0142) is the ordered rule document per scope -- which partner serves which
+ * zone, source or branch, partners first or own couriers first, when the search for a courier
+ * starts -- with a simulator that runs the platform's own evaluator, the writer for ADR 0014's sourcing
+ * timings, and the unpaid-order window.
  */
 @Component({
   selector: 'q-delivery-shell',

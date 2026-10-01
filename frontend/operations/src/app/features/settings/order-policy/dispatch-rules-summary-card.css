@@ -1,0 +1,48 @@
+:host {
+  display: block;
+}
+
+.summary {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.summary__skeleton {
+  height: 48px;
+  background: var(--q-surface-1);
+}
+
+.summary__muted {
+  margin: 0;
+  color: var(--q-ink-subtle);
+}
+
+.summary__error {
+  margin: 0;
+  color: var(--q-error-text);
+}
+
+.summary__rules {
+  margin: 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.summary__rules li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+}
+
+.summary__off {
+  text-decoration: line-through;
+  color: var(--q-ink-subtle);
+}
+
+.summary__link {
+  align-self: flex-start;
+  color: var(--q-primary);
+}

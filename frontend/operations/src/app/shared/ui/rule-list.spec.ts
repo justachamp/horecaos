@@ -150,3 +150,72 @@ describe('RuleList', () => {
     });
   });
 });
+
+describe('RuleList selection (ADR 0142: the dispatch rules editor)', () => {
+  @Component({
+    selector: 'q-rule-list-selectable-host',
+    imports: [RuleList],
+    template: `
+      <q-rule-list
+        [items]="items"
+        [selectable]="selectable()"
+        [selectedId]="selectedId()"
+        (selected)="chosen = $event"
+      />
+    `,
+  })
+  class SelectableHost {
+    readonly items = ITEMS;
+    readonly selectable = signal(true);
+    readonly selectedId = signal<string | null>('r2');
+    chosen: string | null = null;
+  }
+
+  function render(): {
+    fixture: ReturnType<typeof TestBed.createComponent<SelectableHost>>;
+    host: HTMLElement;
+  } {
+    TestBed.configureTestingModule({});
+    TestBed.inject(I18n).setLocale('en');
+    const fixture = TestBed.createComponent(SelectableHost);
+    fixture.detectChanges();
+    return { fixture, host: fixture.nativeElement };
+  }
+
+  it('reports the rule whose body was clicked, and marks the selected one', () => {
+    const { fixture, host } = render();
+    const bodies = host.querySelectorAll<HTMLElement>('.rule-list__body');
+
+    expect(bodies[1].getAttribute('aria-pressed')).toBe('true');
+    expect(bodies[0].getAttribute('aria-pressed')).toBe('false');
+    expect(host.querySelectorAll('.rule-list__row--selected')).toHaveLength(1);
+
+    bodies[2].click();
+    expect(fixture.componentInstance.chosen).toBe('r3');
+  });
+
+  it('is a keyboard control too: Enter chooses the rule', () => {
+    const { fixture, host } = render();
+    const first = host.querySelector<HTMLElement>('.rule-list__body')!;
+
+    first.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+
+    expect(first.getAttribute('role')).toBe('button');
+    expect(first.getAttribute('tabindex')).toBe('0');
+    expect(fixture.componentInstance.chosen).toBe('r1');
+  });
+
+  it('is inert by default, so every existing host renders and behaves exactly as before', () => {
+    const { fixture, host } = render();
+    fixture.componentInstance.selectable.set(false);
+    fixture.detectChanges();
+    const first = host.querySelector<HTMLElement>('.rule-list__body')!;
+
+    first.click();
+
+    expect(first.getAttribute('role')).toBeNull();
+    expect(first.getAttribute('tabindex')).toBeNull();
+    expect(fixture.componentInstance.chosen).toBeNull();
+    expect(host.querySelectorAll('.rule-list__row--selected')).toHaveLength(0);
+  });
+});

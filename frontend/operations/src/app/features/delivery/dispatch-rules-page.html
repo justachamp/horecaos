@@ -1,0 +1,264 @@
+<div class="rules">
+  <header class="rules__head">
+    <h1 class="q-title">{{ 'delivery.rules.title' | t }}</h1>
+    <p class="q-body-sm rules__muted">{{ 'delivery.rules.intro' | t }}</p>
+  </header>
+
+  @if (loading()) {
+    <div class="rules__skeleton" [attr.aria-label]="'delivery.rules.loading' | t"></div>
+  } @else if (denied()) {
+    <div class="rules__denied" data-testid="rules-denied">
+      <p class="q-body-sm">{{ 'delivery.rules.denied' | t }}</p>
+    </div>
+  } @else if (loadError(); as error) {
+    <div class="rules__error" role="alert" data-testid="rules-load-error">
+      <span class="q-body-sm">{{ error }}</span>
+      <button type="button" class="q-body secondary" (click)="load()">
+        {{ 'delivery.rules.reload' | t }}
+      </button>
+    </div>
+  } @else if (view(); as v) {
+    <div
+      class="rules__scopeSelector"
+      role="radiogroup"
+      [attr.aria-label]="'delivery.rules.scope.label' | t"
+      data-testid="rules-scope-selector"
+    >
+      @for (level of scopeLevels; track level) {
+        <button
+          type="button"
+          class="rules__scopeOption q-body-sm"
+          [class.rules__scopeOption--active]="scopeLevel() === level"
+          role="radio"
+          [attr.aria-checked]="scopeLevel() === level"
+          (click)="selectScope(level)"
+          [attr.data-testid]="'rules-scope-' + level"
+        >
+          {{ scopeLabel(level) | t }}
+        </button>
+      }
+    </div>
+
+    <div class="rules__scope q-caption" data-testid="rules-scope">
+      @if (v.isBuiltIn) {
+        <span data-testid="rules-built-in">{{ 'delivery.rules.builtIn' | t }}</span>
+      } @else {
+        <span>{{ 'delivery.rules.resolvedAt' | t: { scope: winningLabel(v) } }}</span>
+        <span class="q-mono rules__muted">{{
+          'delivery.rules.version' | t: { version: v.policyVersion }
+        }}</span>
+        @if (v.versionAtScope === 0) {
+          <span data-testid="rules-inherited">{{
+            'delivery.rules.inherited' | t: { scope: winningLabel(v) }
+          }}</span>
+        }
+      }
+    </div>
+
+    <div class="rules__columns">
+      <section class="rules__card" data-testid="rules-list-card">
+        <div class="rules__cardHead">
+          <h2 class="q-subhead">{{ 'delivery.rules.rules.heading' | t }}</h2>
+          @if (canWrite()) {
+            <button
+              type="button"
+              class="q-body secondary"
+              [disabled]="atLimit()"
+              (click)="addRule()"
+              data-testid="rules-add"
+            >
+              {{ 'delivery.rules.add' | t }}
+            </button>
+          }
+        </div>
+        <p class="q-caption rules__muted">{{ 'delivery.rules.rules.hint' | t }}</p>
+
+        <q-rule-list
+          [items]="listItems()"
+          [selectable]="true"
+          [selectedId]="selectedId()"
+          (selected)="select($event)"
+          (reorder)="reorder($event)"
+          (enabledChange)="toggleEnabled($event)"
+        />
+        @if (listItems().length === 0) {
+          <p class="q-caption rules__muted" data-testid="rules-empty">
+            {{ 'delivery.rules.empty' | t }}
+          </p>
+        }
+
+        <div class="rules__default" data-testid="rules-default">
+          <h3 class="q-body-sm">{{ 'delivery.rules.default.heading' | t }}</h3>
+          <p class="q-caption rules__muted">{{ 'delivery.rules.default.hint' | t }}</p>
+          @if (defaultUsage(); as used) {
+            <p class="q-caption rules__muted" data-testid="rules-default-usage">{{ used }}</p>
+          }
+          @if (draft(); as d) {
+            <q-dispatch-action-form
+              [action]="d.default"
+              [options]="options()"
+              [groupingAllowed]="v.groupingAllowed"
+              idPrefix="default"
+              (actionChange)="setDefault($event)"
+            />
+          }
+        </div>
+      </section>
+
+      <section class="rules__card" data-testid="rules-edit-card">
+        <h2 class="q-subhead">{{ 'delivery.rules.edit.heading' | t }}</h2>
+        @if (selected(); as rule) {
+          <div class="rules__form">
+            <label class="rules__field q-caption">
+              {{ 'delivery.rules.name' | t }}
+              <input
+                class="q-body field"
+                type="text"
+                maxlength="120"
+                [value]="rule.name"
+                (input)="rename($any($event.target).value)"
+                data-testid="rule-name"
+              />
+            </label>
+            <label class="rules__field q-caption">
+              {{ 'delivery.rules.id' | t }}
+              <input
+                class="q-body field q-mono"
+                type="text"
+                maxlength="63"
+                [value]="rule.id"
+                [disabled]="selectedIsPublished()"
+                [attr.aria-invalid]="idProblem()"
+                (input)="retype($any($event.target).value)"
+                data-testid="rule-id"
+              />
+              <span class="rules__muted">{{ 'delivery.rules.id.hint' | t }}</span>
+            </label>
+
+            <h3 class="q-body-sm">{{ 'delivery.rules.when.heading' | t }}</h3>
+            <p class="q-caption rules__muted">{{ 'delivery.rules.when.hint' | t }}</p>
+            <q-dispatch-conditions-form
+              [conditions]="rule.when"
+              [options]="options()"
+              [scopeLevel]="scopeLevel()"
+              idPrefix="rule"
+              (conditionsChange)="setConditions($event)"
+            />
+
+            <h3 class="q-body-sm">{{ 'delivery.rules.then.heading' | t }}</h3>
+            <q-dispatch-action-form
+              [action]="rule.then"
+              [options]="options()"
+              [groupingAllowed]="v.groupingAllowed"
+              idPrefix="rule-action"
+              (actionChange)="setRuleAction($event)"
+            />
+
+            @if (canWrite()) {
+              <button
+                type="button"
+                class="q-body secondary rules__danger"
+                (click)="deleteSelected()"
+                data-testid="rule-delete"
+              >
+                {{ 'delivery.rules.delete' | t }}
+              </button>
+            }
+          </div>
+        } @else {
+          <p class="q-body-sm rules__muted" data-testid="rules-edit-none">
+            {{ 'delivery.rules.edit.none' | t }}
+          </p>
+        }
+      </section>
+    </div>
+
+    @if (canWrite()) {
+      <section class="rules__publish" data-testid="rules-publish-bar">
+        @if (dirty()) {
+          <p class="q-body-sm" data-testid="rules-dirty">{{ 'delivery.rules.dirty' | t }}</p>
+        }
+        @if (stale()) {
+          <div class="rules__error" role="alert" data-testid="rules-stale">
+            <span class="q-body-sm">{{ 'delivery.rules.stale' | t }}</span>
+            <button type="button" class="q-body secondary" (click)="load()">
+              {{ 'delivery.rules.reload' | t }}
+            </button>
+          </div>
+        }
+        @if (problems().length > 0) {
+          <div class="rules__error" role="alert" data-testid="rules-problems">
+            <p class="q-body-sm">{{ 'delivery.rules.problems' | t }}</p>
+            <ul>
+              @for (problem of problems(); track problem) {
+                <li class="q-body-sm">{{ problem }}</li>
+              }
+            </ul>
+          </div>
+        }
+        @if (saveError(); as error) {
+          <p class="q-body-sm rules__error" role="alert" data-testid="rules-save-error">
+            {{ error }}
+          </p>
+        }
+        @if (notice(); as message) {
+          <p class="q-body-sm rules__muted" role="status" data-testid="rules-notice">
+            {{ message }}
+          </p>
+        }
+        <label class="rules__field q-caption">
+          {{ 'delivery.rules.reason' | t }}
+          <input
+            class="q-body field"
+            type="text"
+            [value]="reason()"
+            (input)="reason.set($any($event.target).value)"
+            data-testid="rules-reason"
+          />
+          @if (dirty() && reason().trim() === '') {
+            <span class="rules__muted" data-testid="rules-reason-required">{{
+              'delivery.rules.reasonRequired' | t
+            }}</span>
+          }
+        </label>
+        <div class="rules__actions">
+          <button
+            type="button"
+            class="q-body secondary"
+            [disabled]="!dirty() || saving()"
+            (click)="discard()"
+            data-testid="rules-discard"
+          >
+            {{ 'delivery.rules.discard' | t }}
+          </button>
+          <button
+            type="button"
+            class="q-body primary"
+            [disabled]="!canPublish()"
+            (click)="publish()"
+            data-testid="rules-publish"
+          >
+            {{ saving() ? ('delivery.rules.publishing' | t) : ('delivery.rules.publish' | t) }}
+          </button>
+        </div>
+      </section>
+    }
+
+    @if (ids(); as target) {
+      <q-dispatch-simulator
+        [tenantId]="target.tenantId"
+        [brandId]="target.brandId"
+        [locationId]="target.locationId"
+        [scopeLevel]="scopeLevel()"
+        [draft]="draft()"
+        [dirty]="dirty()"
+        [options]="options()"
+      />
+    }
+
+    @if (scope(); as callScope) {
+      <q-sourcing-timings-card [scope]="callScope" [canWrite]="canWrite()" />
+      <q-payment-window-card [scope]="callScope" [canWrite]="canManagePaymentWindow()" />
+    }
+  }
+</div>
