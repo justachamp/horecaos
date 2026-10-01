@@ -2,7 +2,11 @@ package uz.horecaos.platform.catalog.web;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -14,6 +18,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import uz.horecaos.platform.catalog.application.CatalogPublicationService;
+import uz.horecaos.platform.catalog.application.ChannelPreviewService;
 import uz.horecaos.platform.catalog.domain.PublicationStatus;
 import uz.horecaos.platform.catalog.domain.ValidationFinding;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
@@ -21,7 +26,9 @@ import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.web.api.ApiException;
+import uz.horecaos.platform.web.api.Cursor;
 import uz.horecaos.platform.web.api.ErrorCode;
+import uz.horecaos.platform.web.api.Page;
 import uz.horecaos.platform.web.authorization.RequiresCapability;
 
 /**
@@ -37,12 +44,17 @@ import uz.horecaos.platform.web.authorization.RequiresCapability;
 public class CatalogPublicationController {
 
     private final CatalogPublicationService publication;
+    private final ChannelPreviewService channelPreview;
     private final JdbcCatalogStore store;
     private final CurrentActor currentActor;
 
     public CatalogPublicationController(
-            CatalogPublicationService publication, JdbcCatalogStore store, CurrentActor currentActor) {
+            CatalogPublicationService publication,
+            ChannelPreviewService channelPreview,
+            JdbcCatalogStore store,
+            CurrentActor currentActor) {
         this.publication = publication;
+        this.channelPreview = channelPreview;
         this.store = store;
         this.currentActor = currentActor;
     }
@@ -80,6 +92,96 @@ public class CatalogPublicationController {
             return ResponseEntity.ok(new DraftPreviewResponse(preview.contentHash(), preview.itemCount()));
         } catch (IllegalArgumentException unknown) {
             throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, unknown.getMessage());
+        }
+    }
+
+    @GetMapping("/catalogs/{catalogId}/channels/{channelId}/preview")
+    @RequiresCapability(value = Capability.CATALOG_READ, scope = ScopeType.BRAND)
+    @Operation(
+            summary = "What one channel would receive at one branch if the draft were published now (ADR 0138)",
+            description = "A dry run of the publication pipeline addressed at a channel: the draft is "
+                    + "snapshotted and validated as publish does it, then assembled by the same code a "
+                    + "customer's menu read goes through, so the gates apply in ADR 0138's order -- the "
+                    + "branch's offerings (or its bound named menu), the channel's exclusions, the "
+                    + "channel's price plane (or no price at all when the aggregator sets it), and the "
+                    + "channel's images over the item's own. Nothing is written, no hash is minted, and "
+                    + "the result cannot be fetched again by reference. Name the branch with locationId "
+                    + "or the marketplace binding with bindingId; a channel that sells at exactly one "
+                    + "branch needs neither. Products are cursor-paginated; findings, categories and "
+                    + "modifier groups ride the first page only.")
+    public ChannelPreviewResponse channelPreview(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID catalogId,
+            @PathVariable UUID channelId,
+            @RequestParam(required = false) @Nullable UUID locationId,
+            @RequestParam(required = false) @Nullable UUID bindingId,
+            @RequestParam(required = false) @Nullable String locale,
+            @RequestParam(required = false) @Nullable String cursor,
+            @RequestParam(required = false) @Nullable Integer limit) {
+
+        // The cursor is pinned to the question it was minted for: a page of one
+        // channel's menu is not the continuation of another's.
+        String filterHash = sha256Prefix(String.join(
+                "|",
+                catalogId.toString(),
+                channelId.toString(),
+                String.valueOf(locationId),
+                String.valueOf(bindingId),
+                String.valueOf(locale)));
+        UUID after = null;
+        if (cursor != null && !cursor.isBlank()) {
+            Cursor decoded = Cursor.decodeUnsigned(cursor, filterHash)
+                    .orElseThrow(() -> new ApiException(
+                            ErrorCode.INVALID_REQUEST,
+                            "This cursor was issued for a different preview; start the preview again"));
+            try {
+                after = UUID.fromString(decoded.sortKey());
+            } catch (IllegalArgumentException malformed) {
+                throw new ApiException(ErrorCode.INVALID_REQUEST, "This cursor does not name a product");
+            }
+        }
+        int pageSize = Page.limitOrDefault(limit);
+
+        try {
+            ChannelPreviewService.ChannelPreview preview =
+                    channelPreview.preview(new ChannelPreviewService.PreviewRequest(
+                            tenantId, brandId, catalogId, channelId, locationId, bindingId, locale, after, pageSize));
+            String next = preview.hasMore()
+                    ? new Cursor(preview.products().getLast().productId().toString(), filterHash).encodeUnsigned()
+                    : null;
+            return ChannelPreviewResponse.of(preview, cursor == null || cursor.isBlank(), next, tenantId);
+        } catch (ChannelPreviewService.UnknownPreviewTargetException unknown) {
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, unknown.getMessage());
+        } catch (ChannelPreviewService.PreviewTargetRequiredException ambiguous) {
+            throw new ApiException(ErrorCode.INVALID_REQUEST, ambiguous.getMessage());
+        }
+    }
+
+    @GetMapping("/channels/{channelId}/preview-targets")
+    @RequiresCapability(value = Capability.CATALOG_READ, scope = ScopeType.BRAND)
+    @Operation(
+            summary = "The branches a channel sells at, with the marketplace binding at each (ADR 0138)",
+            description = "What a console offers to preview: one entry per branch the channel is active "
+                    + "at, carrying the binding that covers it (and the ruleset it names) when the "
+                    + "channel is backed by a marketplace installation.")
+    public List<ChannelPreviewResponse.TargetView> previewTargets(
+            @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID channelId) {
+        try {
+            return channelPreview.targets(tenantId, brandId, channelId).stream()
+                    .map(ChannelPreviewResponse.TargetView::of)
+                    .toList();
+        } catch (ChannelPreviewService.UnknownPreviewTargetException unknown) {
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, unknown.getMessage());
+        }
+    }
+
+    private static String sha256Prefix(String content) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            return HexFormat.of().formatHex(digest.digest(content.getBytes(StandardCharsets.UTF_8)), 0, 8);
+        } catch (NoSuchAlgorithmException impossible) {
+            throw new IllegalStateException("SHA-256 is required", impossible);
         }
     }
 

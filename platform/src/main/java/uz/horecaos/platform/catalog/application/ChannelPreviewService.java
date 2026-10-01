@@ -1,0 +1,715 @@
+package uz.horecaos.platform.catalog.application;
+
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
+import org.jspecify.annotations.Nullable;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import uz.horecaos.platform.catalog.application.ChannelProjection.MediaSource;
+import uz.horecaos.platform.catalog.application.ChannelProjection.PriceAuthority;
+import uz.horecaos.platform.catalog.application.ChannelProjection.ResolvedMedia;
+import uz.horecaos.platform.catalog.application.StorefrontCatalogQuery.AssembledMenu;
+import uz.horecaos.platform.catalog.application.StorefrontCatalogQuery.AssemblyInput;
+import uz.horecaos.platform.catalog.application.StorefrontCatalogQuery.MenuCategory;
+import uz.horecaos.platform.catalog.application.StorefrontCatalogQuery.MenuModifierGroup;
+import uz.horecaos.platform.catalog.application.StorefrontCatalogQuery.MenuProduct;
+import uz.horecaos.platform.catalog.application.StorefrontCatalogQuery.MenuVariant;
+import uz.horecaos.platform.catalog.domain.CatalogEntities.Category;
+import uz.horecaos.platform.catalog.domain.CatalogEntities.EntityType;
+import uz.horecaos.platform.catalog.domain.CatalogEntities.Product;
+import uz.horecaos.platform.catalog.domain.CatalogEntities.PublicationItem;
+import uz.horecaos.platform.catalog.domain.CatalogEntities.Variant;
+import uz.horecaos.platform.catalog.domain.ChannelFindings;
+import uz.horecaos.platform.catalog.domain.ValidationFinding;
+import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
+import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore.MediaRelationRow;
+import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcChannelProjectionStore;
+import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcChannelProjectionStore.MarketplaceBindingRow;
+import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcChannelProjectionStore.MediaOverrideRow;
+import uz.horecaos.platform.media.api.MediaAssetId;
+import uz.horecaos.platform.media.api.MediaAvailability;
+import uz.horecaos.platform.tenancy.api.SalesChannel;
+import uz.horecaos.platform.tenancy.api.SalesChannelLookup;
+
+/**
+ * A dry run of the publication pipeline, addressed at one channel at one branch
+ * (ADR 0138): what that channel would receive if the draft were published right
+ * now, and what would stop it.
+ *
+ * <p><strong>Not a second projection engine.</strong> It runs the machinery the
+ * live paths already use and returns the result instead of committing it. The
+ * draft is snapshotted by {@link CatalogSnapshotLoader} exactly as {@code
+ * CatalogPublicationService.publish} snapshots it, validated by the same {@link
+ * CatalogValidator}, and then assembled by {@link StorefrontCatalogQuery#assemble}
+ * — the very method a customer's menu read goes through — so the gates, in the
+ * order ADR 0138 fixes them, are one implementation rather than two kept in
+ * agreement by discipline:
+ *
+ * <ol>
+ *   <li>location offerings, or a bound named menu where the branch has one;
+ *   <li>the channel's sparse exclusions, brand-wide or narrowed to the branch;
+ *   <li>price: the channel's price plane (CHANNEL over LOCATION over BRAND), or
+ *       none at all when the aggregator sets the price;
+ *   <li>media: this channel's override over its per-channel relation over the
+ *       entity's own images.
+ * </ol>
+ *
+ * <p>The first three live in {@code assemble}. The fourth is the one thing a
+ * publication snapshot cannot carry — it is the same for every channel — so it is
+ * applied here, to the items, before they are assembled.
+ *
+ * <p><strong>A read.</strong> Nothing is written, no content hash is minted, and
+ * the result cannot be fetched by reference: every call recomputes from the
+ * current draft (ADR 0138's "accepted trade-off"). Price, availability and
+ * exclusions are read live, as the storefront reads them.
+ *
+ * <p><strong>Where it deliberately matches the live menu rather than the record's
+ * wording.</strong> ADR 0138 step 1 says a variant whose offering is not {@code
+ * AVAILABLE} is absent. The live storefront it says it matches shows an {@code
+ * UNAVAILABLE} (86'd) variant, not orderable; the projection does the same and
+ * carries {@code orderable = false}, because the alternative — dropping it —
+ * would make this a preview of a menu no customer is shown, and would leave the
+ * outbound availability push (ADR 0040) nothing to say a dish is stopped with.
+ * {@code HIDDEN} and absent offerings are dropped, as on the storefront.
+ */
+@Service
+public class ChannelPreviewService {
+
+    /** The sentinel {@code catalog.media_relations.channel_code} for an entity's own, every-channel image. */
+    private static final String UNIVERSAL = JdbcCatalogStore.ALL_CHANNELS;
+
+    private final JdbcCatalogStore store;
+    private final JdbcChannelProjectionStore projections;
+    private final CatalogValidator validator;
+    private final CatalogSnapshotLoader snapshots;
+    private final StorefrontCatalogQuery storefront;
+    private final SalesChannelLookup channels;
+    private final MarketplaceRulesets rulesets;
+    private final MediaAvailability media;
+
+    public ChannelPreviewService(
+            JdbcCatalogStore store,
+            JdbcChannelProjectionStore projections,
+            CatalogValidator validator,
+            CatalogSnapshotLoader snapshots,
+            StorefrontCatalogQuery storefront,
+            SalesChannelLookup channels,
+            MarketplaceRulesets rulesets,
+            MediaAvailability media) {
+        this.store = store;
+        this.projections = projections;
+        this.validator = validator;
+        this.snapshots = snapshots;
+        this.storefront = storefront;
+        this.channels = channels;
+        this.rulesets = rulesets;
+        this.media = media;
+    }
+
+    /**
+     * What this channel would receive at one branch.
+     *
+     * @throws UnknownPreviewTargetException when the catalog, channel, branch or
+     *     binding is not this tenant's (or this brand's) — one answer for "does
+     *     not exist" and "is somebody else's", so an id cannot be probed
+     * @throws PreviewTargetRequiredException when no branch was named and the
+     *     channel does not sell at exactly one
+     */
+    @Transactional(readOnly = true)
+    public ChannelPreview preview(PreviewRequest request) {
+        UUID tenantId = request.tenantId();
+        UUID brandId = request.brandId();
+
+        if (!store.catalogBelongsTo(tenantId, brandId, request.catalogId())) {
+            throw new UnknownPreviewTargetException(
+                    "Catalog %s does not belong to brand %s".formatted(request.catalogId(), brandId));
+        }
+        SalesChannel channel = channels.byId(tenantId, request.channelId())
+                .orElseThrow(() -> new UnknownPreviewTargetException("No sales channel " + request.channelId()));
+
+        List<UUID> enabledLocations = projections.activeLocationsOfChannel(tenantId, brandId, channel.id());
+        Target target = resolveTarget(request, channel, enabledLocations);
+        boolean enabledHere = enabledLocations.contains(target.locationId());
+
+        CatalogValidator.Snapshot snapshot = snapshots.load(tenantId, brandId, request.catalogId());
+        ValidationFinding.Report universal = validator.validate(snapshot);
+        List<PublicationItem> drafted = snapshots.toPublicationItems(snapshot);
+
+        String locale = request.locale() == null ? snapshot.defaultLocale() : request.locale();
+        PriceAuthority authority = channel.externallyPriced() ? PriceAuthority.EXTERNAL : PriceAuthority.HORECAOS;
+
+        MediaPlan mediaPlan = planMedia(tenantId, brandId, channel, snapshot, drafted);
+
+        AssembledMenu menu;
+        if (enabledHere) {
+            menu = storefront.assemble(new AssemblyInput(
+                    tenantId,
+                    brandId,
+                    target.locationId(),
+                    locale,
+                    channel.code(),
+                    itemsOf(mediaPlan.items(), EntityType.CATEGORY),
+                    itemsOf(mediaPlan.items(), EntityType.PRODUCT),
+                    itemsOf(mediaPlan.items(), EntityType.MODIFIER_GROUP),
+                    authority == PriceAuthority.EXTERNAL));
+        } else {
+            // The channel does not sell at this branch: it would receive nothing,
+            // and computing a menu for it would preview a fiction.
+            menu = new AssembledMenu(null, List.of(), List.of(), List.of());
+        }
+
+        List<MenuProduct> products = menu.products().stream()
+                .sorted(Comparator.comparing(MenuProduct::productId))
+                .toList();
+
+        ChannelProjection projection = new ChannelProjection(
+                tenantId,
+                brandId,
+                channel.id(),
+                channel.code(),
+                target.locationId(),
+                authority,
+                menu.currency(),
+                menu.categories(),
+                products,
+                menu.modifierGroups(),
+                mediaPlan.resolved());
+
+        List<PreviewFinding> findings = new ArrayList<>();
+        Map<UUID, UUID> productOfVariant = new HashMap<>();
+        snapshot.variants().forEach(variant -> productOfVariant.put(variant.id(), variant.productId()));
+        for (ValidationFinding finding : universal.findings()) {
+            findings.add(new PreviewFinding(finding, FindingSource.CATALOG, ownerProduct(finding, productOfVariant)));
+        }
+        List<ValidationFinding> projectionFindings =
+                projectionFindings(tenantId, channel, enabledHere, projection, snapshot, mediaPlan);
+        for (ValidationFinding finding : projectionFindings) {
+            findings.add(
+                    new PreviewFinding(finding, FindingSource.PROJECTION, ownerProduct(finding, productOfVariant)));
+        }
+        List<ValidationFinding> marketplaceFindings = marketplaceFindings(target.binding(), projection);
+        for (ValidationFinding finding : marketplaceFindings) {
+            findings.add(
+                    new PreviewFinding(finding, FindingSource.MARKETPLACE, ownerProduct(finding, productOfVariant)));
+        }
+
+        boolean channelReady = universal.publishable()
+                && projectionFindings.stream().noneMatch(ChannelPreviewService::isBlocker)
+                && marketplaceFindings.stream().noneMatch(ChannelPreviewService::isBlocker);
+
+        // One page of products, keyset on the product id. The whole projection is
+        // recomputed per page — a preview is never cached or referenced by id — so
+        // the id is the only thing that has to survive between two requests.
+        List<MenuProduct> afterCursor = request.afterProductId() == null
+                ? products
+                : products.stream()
+                        .filter(product -> product.productId().compareTo(request.afterProductId()) > 0)
+                        .toList();
+        boolean hasMore = afterCursor.size() > request.limit();
+        List<MenuProduct> page = hasMore ? afterCursor.subList(0, request.limit()) : afterCursor;
+
+        return new ChannelPreview(
+                channel,
+                target.locationId(),
+                target.binding(),
+                locale,
+                authority,
+                menu.currency(),
+                universal.publishable(),
+                channelReady,
+                findings,
+                menu.categories(),
+                menu.modifierGroups(),
+                List.copyOf(page),
+                hasMore,
+                mediaPlan.resolved());
+    }
+
+    /**
+     * The branches this channel sells at, and the marketplace binding at each —
+     * what a console needs to offer a branch to preview.
+     */
+    @Transactional(readOnly = true)
+    public List<PreviewTarget> targets(UUID tenantId, UUID brandId, UUID channelId) {
+        SalesChannel channel = channels.byId(tenantId, channelId)
+                .orElseThrow(() -> new UnknownPreviewTargetException("No sales channel " + channelId));
+        List<PreviewTarget> targets = new ArrayList<>();
+        for (UUID locationId : projections.activeLocationsOfChannel(tenantId, brandId, channel.id())) {
+            Optional<MarketplaceBindingRow> binding = channel.providerInstallation()
+                    .flatMap(installation -> projections.bindingCovering(tenantId, installation, brandId, locationId));
+            targets.add(new PreviewTarget(locationId, binding.orElse(null)));
+        }
+        return List.copyOf(targets);
+    }
+
+    // ----------------------------------------------------------------- target
+
+    private Target resolveTarget(PreviewRequest request, SalesChannel channel, List<UUID> enabledLocations) {
+        UUID tenantId = request.tenantId();
+        UUID brandId = request.brandId();
+
+        @Nullable MarketplaceBindingRow binding = null;
+        @Nullable UUID locationId = request.locationId();
+
+        if (request.bindingId() != null) {
+            binding = projections
+                    .marketplaceBinding(tenantId, request.bindingId())
+                    .filter(row -> channel.providerInstallation()
+                            .filter(row.installationId()::equals)
+                            .isPresent())
+                    .filter(row -> row.brandId() == null || row.brandId().equals(brandId))
+                    .orElseThrow(() -> new UnknownPreviewTargetException(
+                            "No marketplace binding %s on this channel".formatted(request.bindingId())));
+            if (locationId == null) {
+                locationId = binding.locationId();
+            } else if (binding.locationId() != null && !binding.locationId().equals(locationId)) {
+                throw new UnknownPreviewTargetException("That binding is bound to a different branch");
+            }
+        }
+
+        if (locationId == null) {
+            if (enabledLocations.size() == 1) {
+                locationId = enabledLocations.get(0);
+            } else {
+                throw new PreviewTargetRequiredException(enabledLocations.size());
+            }
+        }
+        if (!projections.locationBelongsToBrand(tenantId, brandId, locationId)) {
+            throw new UnknownPreviewTargetException("No branch %s in this brand".formatted(locationId));
+        }
+
+        if (binding == null) {
+            final UUID branch = locationId;
+            binding = channel.providerInstallation()
+                    .flatMap(installation -> projections.bindingCovering(tenantId, installation, brandId, branch))
+                    .orElse(null);
+        }
+        return new Target(locationId, binding);
+    }
+
+    private record Target(UUID locationId, @Nullable MarketplaceBindingRow binding) {}
+
+    // ------------------------------------------------------------------ media
+
+    /**
+     * Applies ADR 0138 step 4 to the drafted items: each product, variant and
+     * category shows, on this channel, the first of
+     *
+     * <ol>
+     *   <li>its {@code channel_media_overrides} rows for this channel, else
+     *   <li>its {@code media_relations} rows naming this channel (V0223), else
+     *   <li>its own universal images.
+     * </ol>
+     *
+     * <p>An entity with nothing in the first two is left exactly as the snapshot
+     * published it — the same list, in the same order, which is what makes the
+     * no-override projection of a channel match the live menu by construction —
+     * unless it has relations naming <em>other</em> channels. The snapshot lists
+     * every relation of an entity whatever channel it names (V0223 added the
+     * column and the loader was never taught to filter on it), so a dish carrying
+     * Uzum Tezkor's own crop would otherwise show that crop on Wolt. Here it
+     * falls back to the universal images only, which is what "default" means.
+     */
+    private MediaPlan planMedia(
+            UUID tenantId,
+            UUID brandId,
+            SalesChannel channel,
+            CatalogValidator.Snapshot snapshot,
+            List<PublicationItem> drafted) {
+
+        Map<UUID, List<MediaRelationRow>> relationsByEntity = new HashMap<>();
+        for (MediaRelationRow relation : store.mediaRelations(tenantId, brandId)) {
+            relationsByEntity
+                    .computeIfAbsent(relation.entityId(), id -> new ArrayList<>())
+                    .add(relation);
+        }
+        Map<UUID, List<MediaOverrideRow>> overridesByEntity = new HashMap<>();
+        for (MediaOverrideRow row : projections.mediaOverrides(tenantId, brandId, channel.id())) {
+            overridesByEntity
+                    .computeIfAbsent(row.entityId(), id -> new ArrayList<>())
+                    .add(row);
+        }
+
+        // The universal sentinel is also a legal channel code ("ALL" matches the
+        // code pattern), and a channel by that name must not read the universal
+        // images as its own override.
+        boolean channelCanOwnRelations = !UNIVERSAL.equals(channel.code());
+
+        Map<UUID, ResolvedMedia> resolved = new LinkedHashMap<>();
+        Map<UUID, List<String>> publishedProductMedia = new HashMap<>();
+        for (PublicationItem item : drafted) {
+            if (item.entityType() == EntityType.PRODUCT && item.content().get("mediaAssetIds") instanceof List<?> ids) {
+                publishedProductMedia.put(
+                        item.entityId(), ids.stream().map(String::valueOf).toList());
+            }
+        }
+
+        for (Product product : snapshot.products()) {
+            resolved.put(
+                    product.id(),
+                    resolveMedia(
+                            product.id(),
+                            overridesByEntity,
+                            relationsByEntity,
+                            channel,
+                            channelCanOwnRelations,
+                            publishedProductMedia.get(product.id())));
+        }
+        for (Variant variant : snapshot.variants()) {
+            resolved.put(
+                    variant.id(),
+                    resolveMedia(
+                            variant.id(), overridesByEntity, relationsByEntity, channel, channelCanOwnRelations, null));
+        }
+        for (Category category : snapshot.categories()) {
+            resolved.put(
+                    category.id(),
+                    resolveMedia(
+                            category.id(),
+                            overridesByEntity,
+                            relationsByEntity,
+                            channel,
+                            channelCanOwnRelations,
+                            null));
+        }
+
+        List<PublicationItem> items = drafted.stream()
+                .map(item -> {
+                    if (item.entityType() != EntityType.PRODUCT) {
+                        return item;
+                    }
+                    ResolvedMedia productMedia = resolved.get(item.entityId());
+                    if (productMedia == null) {
+                        return item;
+                    }
+                    Map<String, Object> content = new LinkedHashMap<>(item.content());
+                    content.put("mediaAssetIds", productMedia.mediaAssetIds());
+                    return new PublicationItem(item.entityType(), item.entityId(), item.entityVersion(), content);
+                })
+                .toList();
+
+        return new MediaPlan(items, resolved, overridesByEntity);
+    }
+
+    private static ResolvedMedia resolveMedia(
+            UUID entityId,
+            Map<UUID, List<MediaOverrideRow>> overridesByEntity,
+            Map<UUID, List<MediaRelationRow>> relationsByEntity,
+            SalesChannel channel,
+            boolean channelCanOwnRelations,
+            @Nullable List<String> published) {
+
+        List<MediaOverrideRow> overrides = overridesByEntity.getOrDefault(entityId, List.of());
+        if (!overrides.isEmpty()) {
+            return new ResolvedMedia(
+                    overrides.stream()
+                            .sorted(Comparator.comparing((MediaOverrideRow row) -> !"PRIMARY".equals(row.role()))
+                                    .thenComparingInt(MediaOverrideRow::sortOrder)
+                                    .thenComparing(MediaOverrideRow::mediaAssetId))
+                            .map(row -> row.mediaAssetId().toString())
+                            .toList(),
+                    MediaSource.CHANNEL_OVERRIDE);
+        }
+
+        List<MediaRelationRow> relations = relationsByEntity.getOrDefault(entityId, List.of());
+        if (channelCanOwnRelations) {
+            List<MediaRelationRow> own = relations.stream()
+                    .filter(relation -> channel.code().equals(relation.channelCode()))
+                    .toList();
+            if (!own.isEmpty()) {
+                return new ResolvedMedia(orderedAssets(own), MediaSource.CHANNEL_RELATION);
+            }
+        }
+
+        boolean namesAnotherChannel =
+                relations.stream().anyMatch(relation -> !UNIVERSAL.equals(relation.channelCode()));
+        if (published != null && !namesAnotherChannel) {
+            return new ResolvedMedia(published, MediaSource.DEFAULT);
+        }
+        return new ResolvedMedia(
+                orderedAssets(relations.stream()
+                        .filter(relation -> UNIVERSAL.equals(relation.channelCode()))
+                        .toList()),
+                MediaSource.DEFAULT);
+    }
+
+    private static List<String> orderedAssets(List<MediaRelationRow> relations) {
+        return relations.stream()
+                .sorted(Comparator.comparingInt(MediaRelationRow::sortOrder)
+                        .thenComparing(MediaRelationRow::mediaAssetId))
+                .map(MediaRelationRow::mediaAssetId)
+                .map(UUID::toString)
+                .distinct()
+                .toList();
+    }
+
+    private record MediaPlan(
+            List<PublicationItem> items,
+            Map<UUID, ResolvedMedia> resolved,
+            Map<UUID, List<MediaOverrideRow>> overridesByEntity) {}
+
+    private static List<PublicationItem> itemsOf(List<PublicationItem> items, EntityType type) {
+        return items.stream().filter(item -> item.entityType() == type).toList();
+    }
+
+    // --------------------------------------------------------------- findings
+
+    /**
+     * Mechanical facts about what this channel would receive here — none of them
+     * a marketplace's opinion, so a storefront preview raises them as readily as
+     * an aggregator's.
+     */
+    private List<ValidationFinding> projectionFindings(
+            UUID tenantId,
+            SalesChannel channel,
+            boolean enabledHere,
+            ChannelProjection projection,
+            CatalogValidator.Snapshot snapshot,
+            MediaPlan mediaPlan) {
+
+        List<ValidationFinding> findings = new ArrayList<>();
+
+        if (channel.status() == SalesChannel.Status.ARCHIVED) {
+            findings.add(ValidationFinding.blocker(
+                    ChannelFindings.CHANNEL_ARCHIVED,
+                    EntityType.CATALOG,
+                    null,
+                    channel.code(),
+                    "Channel %s is archived: publication to it is refused".formatted(channel.code())));
+        } else if (channel.status() == SalesChannel.Status.INACTIVE) {
+            findings.add(ValidationFinding.warning(
+                    ChannelFindings.CHANNEL_INACTIVE,
+                    EntityType.CATALOG,
+                    null,
+                    channel.code(),
+                    "Channel %s is switched off: nothing is being sent to it".formatted(channel.code())));
+        }
+
+        if (!enabledHere) {
+            findings.add(ValidationFinding.blocker(
+                    ChannelFindings.CHANNEL_NOT_ENABLED_AT_LOCATION,
+                    EntityType.CATALOG,
+                    null,
+                    channel.code(),
+                    "Channel %s does not sell at this branch, so it would receive nothing from it"
+                            .formatted(channel.code())));
+            return findings;
+        }
+
+        if (projection.products().isEmpty()) {
+            findings.add(ValidationFinding.blocker(
+                    ChannelFindings.PROJECTION_EMPTY,
+                    EntityType.CATALOG,
+                    null,
+                    channel.code(),
+                    "Every item is gated out for this channel at this branch: it would be sent an empty menu"));
+        }
+
+        if (projection.priceAuthority() == PriceAuthority.HORECAOS
+                && !projection.products().isEmpty()) {
+            if (projection.currency() == null) {
+                findings.add(ValidationFinding.blocker(
+                        ChannelFindings.CHANNEL_PRICE_BOOK_MISSING,
+                        EntityType.CATALOG,
+                        null,
+                        channel.code(),
+                        "No active price book resolves for this branch on this channel: every amount is missing"));
+            } else {
+                Set<UUID> active = snapshot.activeVariantIds();
+                for (MenuProduct product : projection.products()) {
+                    for (MenuVariant variant : product.variants()) {
+                        // Priced somewhere in the brand but not on this channel's plane.
+                        // A variant priced nowhere is already VARIANT_HAS_NO_ACTIVE_PRICE,
+                        // and saying it twice is noise an operator has to dismiss twice.
+                        if (variant.amountMinor() == null
+                                && active.contains(variant.variantId())
+                                && snapshot.pricedVariantIds().contains(variant.variantId())) {
+                            findings.add(ValidationFinding.blocker(
+                                    ChannelFindings.CHANNEL_PRICE_MISSING,
+                                    EntityType.VARIANT,
+                                    variant.variantId(),
+                                    variant.sku(),
+                                    "This variant has no price on the price plane channel %s resolves to"
+                                            .formatted(channel.code())));
+                        }
+                    }
+                }
+            }
+        }
+
+        // The universal validator checks the assets a product is attached to; an
+        // override row is not one of them, so a channel image that is still
+        // uploading or was withdrawn is caught here.
+        Map<UUID, Boolean> displayable = new HashMap<>();
+        for (List<MediaOverrideRow> rows : mediaPlan.overridesByEntity().values()) {
+            for (MediaOverrideRow row : rows) {
+                boolean shown = displayable.computeIfAbsent(
+                        row.mediaAssetId(), asset -> media.allDisplayable(tenantId, Set.of(new MediaAssetId(asset))));
+                if (!shown) {
+                    findings.add(ValidationFinding.blocker(
+                            ChannelFindings.CHANNEL_MEDIA_NOT_AVAILABLE,
+                            row.entityType(),
+                            row.entityId(),
+                            null,
+                            "A channel image for this item is not verified and ready to show"));
+                }
+            }
+        }
+        return findings;
+    }
+
+    /**
+     * The partner-specific findings, and — when none could be raised — the
+     * statement that none were checked.
+     *
+     * <p>An empty ruleset looks, to an author, exactly like "this menu is fine
+     * for the marketplace" when in truth nobody has told the platform what the
+     * marketplace requires (ADR 0138, negative consequences). So the absence of
+     * a ruleset is itself a finding: a check that did not run is not a check that
+     * passed.
+     */
+    private List<ValidationFinding> marketplaceFindings(
+            @Nullable MarketplaceBindingRow binding, ChannelProjection projection) {
+        if (binding == null) {
+            return List.of();
+        }
+        String code = binding.rulesetCode();
+        if (code == null) {
+            return List.of(ValidationFinding.warning(
+                    ChannelFindings.MARKETPLACE_RULESET_NOT_ASSIGNED,
+                    EntityType.CATALOG,
+                    null,
+                    binding.providerType(),
+                    "This binding names no marketplace ruleset: only the universal rules were checked, which is "
+                            + "not evidence the marketplace will accept the menu"));
+        }
+        Optional<MarketplaceRuleset> ruleset = rulesets.find(code);
+        if (ruleset.isEmpty()) {
+            return List.of(ValidationFinding.warning(
+                    ChannelFindings.MARKETPLACE_RULESET_UNKNOWN,
+                    EntityType.CATALOG,
+                    null,
+                    binding.providerType(),
+                    "This binding names marketplace ruleset %s, which this build does not carry: no ".formatted(code)
+                            + "partner-specific check ran"));
+        }
+        return validator.marketplaceFindings(ruleset.get(), projection);
+    }
+
+    private static boolean isBlocker(ValidationFinding finding) {
+        return finding.severity() == ValidationFinding.Severity.BLOCKER;
+    }
+
+    /**
+     * The product a finding is about, so a console can deep-link a variant-scoped
+     * finding to the editor that fixes it: a variant has no page of its own, and
+     * nothing else resolves "which product owns this variant".
+     */
+    private static @Nullable UUID ownerProduct(ValidationFinding finding, Map<UUID, UUID> productOfVariant) {
+        if (finding.entityId() == null || finding.entityType() == null) {
+            return null;
+        }
+        return switch (finding.entityType()) {
+            case PRODUCT -> finding.entityId();
+            case VARIANT -> productOfVariant.get(finding.entityId());
+            default -> null;
+        };
+    }
+
+    // ------------------------------------------------------------------ shapes
+
+    /**
+     * @param afterProductId the last product of the previous page, or null for the first
+     * @param limit the page size, already clamped by the caller
+     * @param locationId the branch to preview; null to take the channel's only one
+     * @param bindingId the marketplace binding to preview; names the branch itself when it is branch-bound
+     * @param locale a catalog locale code; null for the brand's default
+     */
+    public record PreviewRequest(
+            UUID tenantId,
+            UUID brandId,
+            UUID catalogId,
+            UUID channelId,
+            @Nullable UUID locationId,
+            @Nullable UUID bindingId,
+            @Nullable String locale,
+            @Nullable UUID afterProductId,
+            int limit) {}
+
+    /**
+     * One channel at one branch, as the dry run leaves it.
+     *
+     * @param publishable what {@code GET .../validation} would say and what {@code publish} would
+     *     decide: no universal blocker
+     * @param channelReady {@code publishable} <em>and</em> no blocker from the projection or the
+     *     marketplace ruleset — the verdict a console shows for this channel
+     * @param products one page, ordered by product id
+     * @param hasMore whether a further page follows {@code products}
+     * @param categories the whole menu's, not the page's
+     */
+    public record ChannelPreview(
+            SalesChannel channel,
+            UUID locationId,
+            @Nullable MarketplaceBindingRow binding,
+            String locale,
+            PriceAuthority priceAuthority,
+            @Nullable String currency,
+            boolean publishable,
+            boolean channelReady,
+            List<PreviewFinding> findings,
+            List<MenuCategory> categories,
+            List<MenuModifierGroup> modifierGroups,
+            List<MenuProduct> products,
+            boolean hasMore,
+            Map<UUID, ResolvedMedia> media) {}
+
+    /** A finding, where it came from, and the product that owns the entity it names. */
+    public record PreviewFinding(
+            ValidationFinding finding,
+            FindingSource source,
+            @Nullable UUID productId) {}
+
+    /** Which layer raised a finding: the catalog's own rules, the projection, or a marketplace ruleset. */
+    public enum FindingSource {
+        CATALOG,
+        PROJECTION,
+        MARKETPLACE
+    }
+
+    /** A branch a channel sells at, and the marketplace binding that covers it, if any. */
+    public record PreviewTarget(UUID locationId, @Nullable MarketplaceBindingRow binding) {}
+
+    /** The catalog, channel, branch or binding named is not this tenant's or brand's. */
+    public static final class UnknownPreviewTargetException extends RuntimeException {
+
+        public UnknownPreviewTargetException(String message) {
+            super(message);
+        }
+    }
+
+    /** No branch was named and the channel does not sell at exactly one, so there is nothing to default to. */
+    public static final class PreviewTargetRequiredException extends RuntimeException {
+
+        private final transient int branches;
+
+        public PreviewTargetRequiredException(int branches) {
+            super(
+                    branches == 0
+                            ? "This channel does not sell at any branch yet; there is nothing to preview"
+                            : "This channel sells at %d branches; name one with locationId or bindingId"
+                                    .formatted(branches));
+            this.branches = branches;
+        }
+
+        public int branches() {
+            return branches;
+        }
+    }
+}

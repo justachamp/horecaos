@@ -33,6 +33,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import uz.horecaos.platform.catalog.api.CatalogNameLocales;
 import uz.horecaos.platform.catalog.application.CatalogAuthoringService;
+import uz.horecaos.platform.catalog.application.ChannelMediaOverrideService;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.EntityType;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.OfferingStatus;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.PriceableNode;
@@ -41,6 +42,7 @@ import uz.horecaos.platform.catalog.domain.CatalogEntities.Status;
 import uz.horecaos.platform.catalog.domain.FiscalClassification;
 import uz.horecaos.platform.catalog.domain.ItemSaleSchedule;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
+import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcChannelProjectionStore.MediaOverrideRow;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
@@ -79,6 +81,7 @@ public class CatalogAuthoringController {
     private static final String DEFAULT_EXCLUSION_REASON = "OPERATOR_DISABLED";
 
     private final CatalogAuthoringService authoring;
+    private final ChannelMediaOverrideService channelMedia;
     private final CurrentActor currentActor;
     private final BrandLocaleLookup brandLocales;
     private final String defaultLocale;
@@ -91,10 +94,12 @@ public class CatalogAuthoringController {
      */
     public CatalogAuthoringController(
             CatalogAuthoringService authoring,
+            ChannelMediaOverrideService channelMedia,
             CurrentActor currentActor,
             BrandLocaleLookup brandLocales,
             @Value("${horecaos.catalog.default-locale:uz}") String defaultLocale) {
         this.authoring = authoring;
+        this.channelMedia = channelMedia;
         this.currentActor = currentActor;
         this.brandLocales = brandLocales;
         this.defaultLocale = defaultLocale;
@@ -955,6 +960,67 @@ public class CatalogAuthoringController {
                 List.copyOf(authoring.channelExclusionsAtLocation(tenantId, brandId, channelId, locationId)));
     }
 
+    @PutMapping("/channels/{channelId}/media-overrides/{entityType}/{entityId}")
+    @RequiresCapability(value = Capability.CATALOG_AUTHOR, scope = ScopeType.BRAND, mutating = true)
+    @Operation(
+            summary = "Replaces the images one channel shows for a product, variant or category (ADR 0138)",
+            description = "The whole set every time, matching the photo editor's own whole-set save: "
+                    + "what the screen shows is what is stored. An empty list removes every override and "
+                    + "the item goes back to showing its own images on that channel. Every image must be "
+                    + "a verified asset of this tenant; at most one is PRIMARY. A channel override wins "
+                    + "over the item's per-channel relation (IA 4.2f), which wins over its universal "
+                    + "images; prices are an independent axis and are never affected. It edits the "
+                    + "draft: a preview reads it at once and a live menu changes when next published.")
+    public ChannelMediaOverridesResponse replaceChannelMediaOverrides(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID channelId,
+            @PathVariable EntityType entityType,
+            @PathVariable UUID entityId,
+            @Valid @RequestBody ReplaceChannelMediaRequest request) {
+        try {
+            List<MediaOverrideRow> rows = channelMedia.replace(
+                    tenantId,
+                    brandId,
+                    channelId,
+                    entityType,
+                    entityId,
+                    request.images().stream()
+                            .map(image -> new ChannelMediaOverrideService.Image(
+                                    image.mediaAssetId(),
+                                    image.role(),
+                                    image.sortOrder() == null ? 0 : image.sortOrder()))
+                            .toList(),
+                    currentActor.get().subject());
+            return ChannelMediaOverridesResponse.of(rows);
+        } catch (ChannelMediaOverrideService.UnknownOverrideTargetException unknown) {
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, unknown.getMessage());
+        } catch (ChannelMediaOverrideService.InvalidOverrideException invalid) {
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, invalid.getMessage());
+        }
+    }
+
+    @GetMapping("/channels/{channelId}/media-overrides")
+    @RequiresCapability(value = Capability.CATALOG_READ, scope = ScopeType.BRAND)
+    @Operation(
+            summary = "The images one channel shows instead of an item's own (ADR 0138)",
+            description = "Every override this brand has written for the channel, or only one item's "
+                    + "when entityType and entityId are both given. Empty means every item shows its "
+                    + "own images on that channel.")
+    public ChannelMediaOverridesResponse channelMediaOverrides(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID channelId,
+            @RequestParam(required = false) @Nullable EntityType entityType,
+            @RequestParam(required = false) @Nullable UUID entityId) {
+        try {
+            return ChannelMediaOverridesResponse.of(
+                    channelMedia.list(tenantId, brandId, channelId, entityType, entityId));
+        } catch (ChannelMediaOverrideService.UnknownOverrideTargetException unknown) {
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, unknown.getMessage());
+        }
+    }
+
     /**
      * Actor attribution for a classification (ADR 0038).
      *
@@ -1268,6 +1334,37 @@ public class CatalogAuthoringController {
 
     /** ADR 0036 Layer B's read: which variants are currently hidden from one channel at one location. */
     public record ChannelExclusionsResponse(List<UUID> excludedVariantIds) {}
+
+    /** One image of a channel override set. {@code sortOrder} is boxed: Jackson 3 refuses a missing primitive. */
+    public record ChannelMediaImageRequest(
+            @NotNull UUID mediaAssetId,
+            @NotBlank @Pattern(regexp = "PRIMARY|GALLERY") String role,
+            @PositiveOrZero @Nullable Integer sortOrder) {}
+
+    public record ReplaceChannelMediaRequest(
+            @NotNull @Size(max = 20) List<@Valid @NotNull ChannelMediaImageRequest> images) {}
+
+    public record ChannelMediaOverrideView(
+            String entityType, UUID entityId, UUID mediaAssetId, String role, int sortOrder, int version) {
+
+        static ChannelMediaOverrideView of(MediaOverrideRow row) {
+            return new ChannelMediaOverrideView(
+                    row.entityType().name(),
+                    row.entityId(),
+                    row.mediaAssetId(),
+                    row.role(),
+                    row.sortOrder(),
+                    row.version());
+        }
+    }
+
+    public record ChannelMediaOverridesResponse(List<ChannelMediaOverrideView> images) {
+
+        static ChannelMediaOverridesResponse of(List<MediaOverrideRow> rows) {
+            return new ChannelMediaOverridesResponse(
+                    rows.stream().map(ChannelMediaOverrideView::of).toList());
+        }
+    }
 
     public record IdResponse(UUID id) {}
 

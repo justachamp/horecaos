@@ -140,6 +140,49 @@ public class StorefrontCatalogQuery {
         }
         UUID publication = publicationId.get();
 
+        AssembledMenu assembled = assemble(new AssemblyInput(
+                tenantId,
+                brandId,
+                locationId,
+                locale,
+                channelCode,
+                store.publicationItems(publication, EntityType.CATEGORY),
+                store.publicationItems(publication, EntityType.PRODUCT),
+                store.publicationItems(publication, EntityType.MODIFIER_GROUP),
+                false));
+        return Optional.of(new StorefrontMenu(
+                publication,
+                locale,
+                assembled.currency(),
+                assembled.categories(),
+                assembled.products(),
+                assembled.modifierGroups()));
+    }
+
+    /**
+     * What one location serves on one channel, assembled from the items it is
+     * handed (ADR 0138).
+     *
+     * <p>This is the whole of what {@link #menuFor} used to do once it had found
+     * the publication, lifted out so that a marketplace <em>preview</em> runs the
+     * identical gates in the identical order — location offerings or a bound
+     * named menu, then the channel's exclusions, then the sale-window and
+     * inventory state, then the price book — over a draft's items instead of a
+     * publication's. Two copies of "assemble a menu for a channel" would have to
+     * be kept in agreement by discipline; one copy is in agreement by
+     * construction, which is the point of ADR 0138 and the reason a preview
+     * built here cannot structurally disagree with what a customer is shown.
+     *
+     * <p>Not {@code @Transactional}: both callers already are, and a preview
+     * calling through the proxy must not open a second transaction.
+     */
+    public AssembledMenu assemble(AssemblyInput input) {
+        UUID tenantId = input.tenantId();
+        UUID brandId = input.brandId();
+        UUID locationId = input.locationId();
+        String locale = input.locale();
+        String channelCode = input.channelCode();
+
         // Row 10.12: what a customer is shown when their own language has no wording is the
         // brand's default language, not whichever locale the publication happened to list first.
         Optional<String> brandDefault = brandLocales.brandDefaultLocale(tenantId, brandId);
@@ -160,9 +203,9 @@ public class StorefrontCatalogQuery {
         // customer must stop being offered it at once, not after a republish.
         Set<UUID> outOfWindowVariantIds = outOfWindowVariantIds(tenantId, locationId);
 
-        List<PublicationItem> categoryItems = store.publicationItems(publication, EntityType.CATEGORY);
-        List<PublicationItem> productItems = store.publicationItems(publication, EntityType.PRODUCT);
-        List<PublicationItem> groupItems = store.publicationItems(publication, EntityType.MODIFIER_GROUP);
+        List<PublicationItem> categoryItems = input.categoryItems();
+        List<PublicationItem> productItems = input.productItems();
+        List<PublicationItem> groupItems = input.groupItems();
 
         // Row 2.1b: which presets each product offers, read live for the same
         // reason offeringByVariant is — see CommentPresetLookup's own doc.
@@ -261,8 +304,13 @@ public class StorefrontCatalogQuery {
                 .map(MenuModifierOption::optionId)
                 .collect(Collectors.toUnmodifiableSet());
 
-        Optional<MenuPriceLookup.MenuPrices> resolved =
-                prices.pricesFor(tenantId, brandId, locationId, channelCode, variantIds, optionIds);
+        // ADR 0138: an externally priced channel's number is set by the
+        // aggregator, not by a price book, so a preview of it carries none at
+        // all rather than implying one. A customer-facing read never asks for
+        // this (the flag is false there); asking for it is a preview's choice.
+        Optional<MenuPriceLookup.MenuPrices> resolved = input.externallyPriced()
+                ? Optional.empty()
+                : prices.pricesFor(tenantId, brandId, locationId, channelCode, variantIds, optionIds);
 
         String currency = resolved.map(MenuPriceLookup.MenuPrices::currency).orElse(null);
         Map<UUID, Long> variantPrices =
@@ -286,7 +334,7 @@ public class StorefrontCatalogQuery {
                 .map(group -> group.withPrices(optionPrices))
                 .toList();
 
-        return Optional.of(new StorefrontMenu(publication, locale, currency, categories, pricedProducts, pricedGroups));
+        return new AssembledMenu(currency, categories, pricedProducts, pricedGroups);
     }
 
     /**
@@ -573,7 +621,7 @@ public class StorefrontCatalogQuery {
      * therefore yields a URL that answers 404 -- a broken image, which is what a
      * retired object looks like behind any CDN, rather than a leak.
      */
-    private static List<String> imageUrls(UUID tenantId, List<String> mediaAssetIds) {
+    public static List<String> imageUrls(UUID tenantId, List<String> mediaAssetIds) {
         return mediaAssetIds.stream()
                 .map(assetId -> "/api/v1/storefront/tenants/%s/media/%s".formatted(tenantId, assetId))
                 .toList();
@@ -583,6 +631,32 @@ public class StorefrontCatalogQuery {
         Object value = content.get(key);
         return value instanceof Number number ? number.intValue() : 0;
     }
+
+    /**
+     * Everything {@link #assemble} needs to know, so a caller names the inputs
+     * rather than passing eight positional arguments of three different types.
+     *
+     * @param externallyPriced true to leave every amount unresolved (ADR 0138) —
+     *     only a preview of an aggregator channel whose price the aggregator sets
+     *     asks for it
+     */
+    public record AssemblyInput(
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            String locale,
+            String channelCode,
+            List<PublicationItem> categoryItems,
+            List<PublicationItem> productItems,
+            List<PublicationItem> groupItems,
+            boolean externallyPriced) {}
+
+    /** A menu as {@link #assemble} leaves it: {@link StorefrontMenu} without the publication it came from. */
+    public record AssembledMenu(
+            @Nullable String currency,
+            List<MenuCategory> categories,
+            List<MenuProduct> products,
+            List<MenuModifierGroup> modifierGroups) {}
 
     /**
      * One location's live menu, exactly as a customer is shown it.
