@@ -1,5 +1,6 @@
 package uz.horecaos.platform.reporting.domain;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -45,7 +46,7 @@ public record ClassificationRun(
             int revenueShareBasisPoints,
             int cumulativeShareBasisPoints,
             char abcClass,
-            int quantityTotal,
+            BigDecimal quantityTotal,
             double meanQuantityPerBucket,
             double stddevQuantityPerBucket,
             int coefficientOfVariationBasisPoints,

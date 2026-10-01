@@ -1,5 +1,6 @@
 package uz.horecaos.platform.kitchen.application.port;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -7,6 +8,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
+import uz.horecaos.platform.web.api.Quantities;
 
 /**
  * The order facts the kitchen needs to build a ticket (ADR 0041).
@@ -89,10 +91,23 @@ public interface KitchenOrderSource {
     /**
      * One line of one order, as the kitchen needs to route and count it.
      *
+     * @param quantity a decimal since ADR 0137: half a portion is half a plate, and the
+     *                 ticket says so
      * @param productId nullable in {@code ordering.order_lines}, so routing must
      *                  cope with a line that names only a variant rather than
      *                  assuming a product level exists to fall back to
      */
     record OrderLineForKitchen(
-            UUID orderLineId, int lineNumber, @Nullable UUID productId, UUID variantId, int quantity) {}
+            UUID orderLineId, int lineNumber, @Nullable UUID productId, UUID variantId, BigDecimal quantity) {
+
+        public OrderLineForKitchen {
+            quantity = Quantities.normalise(quantity);
+        }
+
+        /** A whole number of portions, which is every line there was before ADR 0137. */
+        public OrderLineForKitchen(
+                UUID orderLineId, int lineNumber, @Nullable UUID productId, UUID variantId, int quantity) {
+            this(orderLineId, lineNumber, productId, variantId, BigDecimal.valueOf(quantity));
+        }
+    }
 }

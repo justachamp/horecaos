@@ -109,6 +109,31 @@ public interface OrderSettlementPort {
     void recordTerminalOutcome(UUID tenantId, UUID orderId, String reasonCode, String actor);
 
     /**
+     * Restates the amount a settlement was planned for, because the order's total was
+     * corrected before any money moved (ADR 0137): a catchweight line weighed at handover
+     * is worth a different amount than the nominal weight it was quoted at.
+     *
+     * <p>Only ever a restatement of what has not happened yet. A settlement whose money
+     * is already in, in flight, or whose tender has a payment intent attached cannot be
+     * moved from here -- an increase would need an incremental charge and a decrease a
+     * refund, and both are provider operations this seam does not perform. The caller is
+     * told {@code false} and refuses the correction rather than leaving the order and its
+     * tenders saying two different totals.
+     *
+     * <p>The correction lands on the money tender. A balance (points) tender was
+     * reserved at its checkout figure and is never resized here, which also means a
+     * decrease can never push the money leg to zero: ADR 0046 requires at least one
+     * som of money.
+     *
+     * @return true when the settlement now sums to {@code newTotalMinor}, or the order
+     *         has none (nothing was planned, so nothing disagrees); false when it cannot
+     *         be restated
+     */
+    default boolean restateTotal(UUID tenantId, UUID orderId, long newTotalMinor, String actor) {
+        return true;
+    }
+
+    /**
      * What checkout asks payments to plan a settlement from.
      *
      * @param customerAccountId       null for a guest checkout, which has no

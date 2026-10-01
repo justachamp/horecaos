@@ -1,10 +1,12 @@
 package uz.horecaos.platform.pricing.domain;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.fulfillment.api.DeliveryFeeOutcome;
+import uz.horecaos.platform.web.api.Quantities;
 
 /**
  * A priced cart (ADR 0018).
@@ -87,20 +89,26 @@ public record Quote(
      *                            and an adjustment has neither
      * @param variantId           null on a {@link LineType#DELIVERY_FEE} line and
      *                            never on an item line
+     * @param quantity            a decimal since ADR 0137; always a whole number
+     *                            for a variant that is not sold by the portion
      * @param descriptionSnapshot the name as shown at pricing time. Copied, so a
      *                            menu rename cannot change what a historical quote
      *                            says the customer was buying
+     * @param catchweight         ADR 0137: set only for a catchweight variant, and
+     *                            what makes the line's amounts provisional until a
+     *                            weight is captured
      */
     public record QuoteLine(
             String lineId,
             LineType type,
             @Nullable UUID variantId,
-            int quantity,
+            BigDecimal quantity,
             String descriptionSnapshot,
             Money unitAmount,
             Money baseAmount,
             Money finalAmount,
-            Money taxAmount) {
+            Money taxAmount,
+            @Nullable Catchweight catchweight) {
 
         public QuoteLine {
             // Mirrors ck_quote_line_variant_agrees, stated as an equivalence so
@@ -110,18 +118,44 @@ public record Quote(
                 throw new IllegalArgumentException(
                         "An item line needs a variant and a fee line must not have one: " + type);
             }
+            quantity = Quantities.normalise(quantity);
+        }
+
+        /** A line that is not catchweight, which is every line there was before ADR 0137. */
+        public QuoteLine(
+                String lineId,
+                LineType type,
+                @Nullable UUID variantId,
+                BigDecimal quantity,
+                String descriptionSnapshot,
+                Money unitAmount,
+                Money baseAmount,
+                Money finalAmount,
+                Money taxAmount) {
+            this(
+                    lineId,
+                    type,
+                    variantId,
+                    quantity,
+                    descriptionSnapshot,
+                    unitAmount,
+                    baseAmount,
+                    finalAmount,
+                    taxAmount,
+                    null);
         }
 
         /** An ordinary basket line. */
         public static QuoteLine item(
                 String lineId,
                 UUID variantId,
-                int quantity,
+                BigDecimal quantity,
                 String descriptionSnapshot,
                 Money unitAmount,
                 Money baseAmount,
                 Money finalAmount,
-                Money taxAmount) {
+                Money taxAmount,
+                @Nullable Catchweight catchweight) {
             return new QuoteLine(
                     lineId,
                     LineType.ITEM,
@@ -131,7 +165,68 @@ public record Quote(
                     unitAmount,
                     baseAmount,
                     finalAmount,
-                    taxAmount);
+                    taxAmount,
+                    catchweight);
+        }
+
+        /** An ordinary basket line that is not catchweight. */
+        public static QuoteLine item(
+                String lineId,
+                UUID variantId,
+                BigDecimal quantity,
+                String descriptionSnapshot,
+                Money unitAmount,
+                Money baseAmount,
+                Money finalAmount,
+                Money taxAmount) {
+            return item(
+                    lineId,
+                    variantId,
+                    quantity,
+                    descriptionSnapshot,
+                    unitAmount,
+                    baseAmount,
+                    finalAmount,
+                    taxAmount,
+                    null);
+        }
+
+        /** The same line with its amounts replaced, keeping everything that identifies it. */
+        public QuoteLine withAmounts(Money newFinalAmount, Money newTaxAmount) {
+            return new QuoteLine(
+                    lineId,
+                    type,
+                    variantId,
+                    quantity,
+                    descriptionSnapshot,
+                    unitAmount,
+                    baseAmount,
+                    newFinalAmount,
+                    newTaxAmount,
+                    catchweight);
+        }
+    }
+
+    /**
+     * What makes a quote line provisional (ADR 0137).
+     *
+     * <p>The price is per {@code quantumGrams}; the quote is computed against
+     * {@code nominalGramsPerUnit} until a weight is captured, after which
+     * {@code actualWeightGrams} is the weight the line was priced at.
+     *
+     * @param pricePerQuantumMinor  the price row's amount, in minor units per quantum
+     * @param actualWeightGrams     null while the line is provisional; the weighed
+     *                              total of the whole line once it is not
+     */
+    public record Catchweight(
+            int quantumGrams,
+            int nominalGramsPerUnit,
+            long pricePerQuantumMinor,
+            @Nullable Integer actualWeightGrams) {
+
+        /** Whether a weight has been captured and the line's amounts are final. */
+        public boolean reconciled() {
+            return actualWeightGrams != null;
         }
     }
 

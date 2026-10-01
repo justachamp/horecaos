@@ -2,6 +2,7 @@ package uz.horecaos.platform.reporting.web;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
@@ -450,7 +451,7 @@ public class ReportingController {
             @RequestParam(required = false) List<String> fulfilmentType,
             @RequestParam(required = false) Integer limit,
             @RequestParam(defaultValue = "REVENUE_DESC") String sort,
-            @RequestParam(required = false) Integer afterQuantity,
+            @RequestParam(required = false) BigDecimal afterQuantity,
             @RequestParam(required = false) Long afterRevenueSom,
             @RequestParam(required = false) String afterProductName,
             @RequestParam(required = false) UUID afterVariantId) {
@@ -518,7 +519,7 @@ public class ReportingController {
      */
     private static JdbcReportingStore.@Nullable VariantSalesCursor variantSalesCursor(
             JdbcReportingStore.VariantSalesSort sort,
-            @Nullable Integer afterQuantity,
+            @Nullable BigDecimal afterQuantity,
             @Nullable Long afterRevenueSom,
             @Nullable String afterProductName,
             @Nullable UUID afterVariantId) {
@@ -1086,12 +1087,12 @@ public class ReportingController {
             @Nullable UUID variantId,
             @Nullable UUID categoryId,
             String productName,
-            int totalQuantity,
+            BigDecimal totalQuantity,
             long totalGrossSom,
             long totalNetSom,
-            @Nullable Integer deliveryQuantity,
+            @Nullable BigDecimal deliveryQuantity,
             @Nullable Long deliveryNetSom,
-            @Nullable Integer pickupQuantity,
+            @Nullable BigDecimal pickupQuantity,
             @Nullable Long pickupNetSom) {
 
         static VariantSalesRowResponse of(JdbcReportingStore.VariantSalesRow row) {

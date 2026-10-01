@@ -31,6 +31,7 @@ import uz.horecaos.platform.pricing.api.PromoCodeQueryPort;
 import uz.horecaos.platform.pricing.api.QuoteAcceptance;
 import uz.horecaos.platform.pricing.api.QuoteAcceptancePort;
 import uz.horecaos.platform.pricing.api.QuoteSnapshot;
+import uz.horecaos.platform.pricing.domain.CatchweightFacts;
 import uz.horecaos.platform.pricing.domain.Money;
 import uz.horecaos.platform.pricing.domain.Promotion;
 import uz.horecaos.platform.pricing.domain.Quote;
@@ -40,6 +41,7 @@ import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPromoCodeStor
 import uz.horecaos.platform.tenancy.api.ConfigurationResolver;
 import uz.horecaos.platform.tenancy.api.SalesChannel;
 import uz.horecaos.platform.tenancy.api.SalesChannelLookup;
+import uz.horecaos.platform.web.api.Quantities;
 
 /**
  * The quote lifecycle (ADR 0018).
@@ -172,6 +174,9 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
                 .collect(Collectors.toUnmodifiableSet());
 
         Map<UUID, Long> variantPrices = store.pricesFor(priceBook.id(), "VARIANT", variantIds, now);
+        // ADR 0137, from the same publication the quote is stamped with, so the facts a
+        // customer was shown are the facts the line is priced by.
+        Map<UUID, CatchweightFacts> catchweight = catalog.catchweightFacts(publication, variantIds);
         Map<UUID, Long> modifierPrices = store.pricesFor(priceBook.id(), "MODIFIER_OPTION", modifierIds, now);
 
         // ADR 0037. The delivery charge is resolved here, before the engine runs,
@@ -187,7 +192,11 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
         // is deliberately write-once.
         UUID quoteId = UUID.randomUUID();
         ResolvedDeliveryCharge charge = resolveDeliveryCharge(
-                request, quoteId, priceBook.currency(), goodsSubtotal(request, variantPrices, modifierPrices), now);
+                request,
+                quoteId,
+                priceBook.currency(),
+                goodsSubtotal(request, variantPrices, modifierPrices, catchweight),
+                now);
 
         var inputs = new PricingEngine.PricingInputs(
                 priceBook.currency(),
@@ -202,7 +211,8 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
                 modifierPrices,
                 catalog.descriptions(request.tenantId(), request.brandId(), variantIds),
                 charge,
-                resolvePromotionInputs(request, now));
+                resolvePromotionInputs(request, now),
+                catchweight);
 
         var result = engine.price(request, inputs, now);
 
@@ -378,18 +388,27 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
      * place that cannot explain it.
      */
     private static long goodsSubtotal(
-            QuoteRequest request, Map<UUID, Long> variantPrices, Map<UUID, Long> modifierPrices) {
+            QuoteRequest request,
+            Map<UUID, Long> variantPrices,
+            Map<UUID, Long> modifierPrices,
+            Map<UUID, CatchweightFacts> catchweight) {
         long subtotal = 0;
         for (QuoteRequest.Line line : request.lines()) {
             Long unit = variantPrices.get(line.variantId());
             if (unit == null) {
                 continue;
             }
-            long withModifiers = unit;
+            long modifiers = 0;
             for (UUID optionId : line.modifierOptionIds()) {
-                withModifiers += modifierPrices.getOrDefault(optionId, 0L);
+                modifiers += modifierPrices.getOrDefault(optionId, 0L);
             }
-            subtotal = Math.addExact(subtotal, Math.multiplyExact(withModifiers, (long) line.quantity()));
+            // The engine's own arithmetic, shared rather than restated: a delivery
+            // fee resolved against a subtotal that disagrees with the quote by a
+            // minor unit is a threshold crossed on one side only.
+            long lineGross = Math.addExact(
+                    PricingEngine.baseLineMinor(unit, line, catchweight.get(line.variantId())),
+                    Quantities.times(modifiers, line.quantity()));
+            subtotal = Math.addExact(subtotal, lineGross);
         }
         return subtotal;
     }
@@ -448,7 +467,11 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
                 command.channelCode(),
                 command.items().stream()
                         .map(item -> new QuoteRequest.Line(
-                                item.lineKey(), item.variantId(), item.quantity(), item.modifierOptionIds()))
+                                item.lineKey(),
+                                item.variantId(),
+                                item.quantity(),
+                                item.modifierOptionIds(),
+                                item.actualWeightGrams()))
                         .toList(),
                 command.idempotencyKey(),
                 // Null for a cart being collected, or a delivery cart that has not
@@ -480,6 +503,11 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
                     "ITEM_NOT_PRICED",
                     unpriced.priceableId(),
                     Objects.requireNonNullElse(unpriced.getMessage(), "ITEM_NOT_PRICED"));
+        } catch (PricingEngine.NotCatchweightException notWeighed) {
+            throw new PricingRefusedException(
+                    "NOT_CATCHWEIGHT",
+                    notWeighed.variantId(),
+                    Objects.requireNonNullElse(notWeighed.getMessage(), "NOT_CATCHWEIGHT"));
         } catch (NoPublishedMenuException noMenu) {
             throw new PricingRefusedException(
                     "NO_PUBLISHED_MENU",

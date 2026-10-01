@@ -4,6 +4,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import uz.horecaos.platform.pricing.domain.CatchweightFacts;
 
 /**
  * What pricing needs from the catalog (ADR 0018, ADR 0016).
@@ -25,6 +26,22 @@ public interface CatalogPricingContext {
      * storefront menu while the kiosk menu sat live and unused.
      */
     Optional<UUID> activePublicationId(UUID tenantId, UUID brandId, String channelCode);
+
+    /**
+     * ADR 0137: which of these variants are sold by weight, as <em>published</em>.
+     *
+     * <p>Read from the publication the quote is stamped with and never from the
+     * draft. A catchweight variant's price row means "per quantum" rather than "per
+     * unit", so an author flipping a draft flag must not reinterpret the price of a
+     * menu that is still live -- the flag takes effect with the next publication, the
+     * same moment the customer is shown "price per 100 g".
+     *
+     * <p>Defaults to "nothing is catchweight" so an implementation that predates
+     * ADR 0137 keeps pricing per unit.
+     */
+    default Map<UUID, CatchweightFacts> catchweightFacts(UUID publicationId, Set<UUID> variantIds) {
+        return Map.of();
+    }
 
     /** Display names for the quote's line snapshots, in the brand's default locale. */
     Map<UUID, String> descriptions(UUID tenantId, UUID brandId, Set<UUID> variantIds);

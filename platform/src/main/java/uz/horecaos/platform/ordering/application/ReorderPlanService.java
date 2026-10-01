@@ -1,5 +1,6 @@
 package uz.horecaos.platform.ordering.application;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -296,7 +297,7 @@ public class ReorderPlanService {
             @Nullable String variantName,
             @Nullable UUID productId,
             UUID variantId,
-            int quantity,
+            BigDecimal quantity,
             List<UUID> modifierOptionIds,
             LineStatus status,
             @Nullable Long unitAmountMinor,

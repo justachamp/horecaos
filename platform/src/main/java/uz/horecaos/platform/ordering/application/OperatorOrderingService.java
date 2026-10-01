@@ -1,5 +1,6 @@
 package uz.horecaos.platform.ordering.application;
 
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
@@ -112,13 +113,24 @@ public class OperatorOrderingService {
     /** One line an operator entered into the basket. */
     public record OrderLine(
             UUID variantId,
-            int quantity,
+            BigDecimal quantity,
             List<UUID> modifierOptionIds,
             // Row 2.1b: the coded kitchen-instruction presets, same vocabulary
             // and the same offered-subset check a customer's own cart line
             // goes through in CartService.putLine.
             List<String> commentPresetCodes,
-            @Nullable String customerNote) {}
+            @Nullable String customerNote) {
+
+        /** A whole number of units, which is every line there was before ADR 0137. */
+        public OrderLine(
+                UUID variantId,
+                int quantity,
+                List<UUID> modifierOptionIds,
+                List<String> commentPresetCodes,
+                @Nullable String customerNote) {
+            this(variantId, BigDecimal.valueOf(quantity), modifierOptionIds, commentPresetCodes, customerNote);
+        }
+    }
 
     /**
      * Where a delivery order is going — a saved address of the resolved

@@ -7,6 +7,7 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -587,7 +588,13 @@ public class KitchenBoardController {
      * customer's note is under ADR 0029 envelope encryption.
      */
     record ItemView(
-            UUID itemId, UUID orderLineId, UUID stationId, int quantity, String routedBy, String status, int version) {
+            UUID itemId,
+            UUID orderLineId,
+            UUID stationId,
+            BigDecimal quantity,
+            String routedBy,
+            String status,
+            int version) {
 
         static ItemView of(TicketItemRow item) {
             return new ItemView(
@@ -710,7 +717,7 @@ public class KitchenBoardController {
     }
 
     /** One line, reduced to the two facts a wall renders: which station, how many. */
-    record VduItemView(UUID stationId, int quantity, String status) {
+    record VduItemView(UUID stationId, BigDecimal quantity, String status) {
 
         static VduItemView of(TicketItemRow item) {
             return new VduItemView(

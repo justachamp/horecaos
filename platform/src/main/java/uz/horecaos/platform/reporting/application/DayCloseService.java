@@ -1,5 +1,6 @@
 package uz.horecaos.platform.reporting.application;
 
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -30,6 +31,7 @@ import uz.horecaos.platform.reporting.infrastructure.persistence.JdbcReportingSt
 import uz.horecaos.platform.reporting.infrastructure.persistence.JdbcReportingStore.SourceOrder;
 import uz.horecaos.platform.reporting.infrastructure.persistence.JdbcReportingStore.SourceRefund;
 import uz.horecaos.platform.reporting.infrastructure.persistence.JdbcReportingStore.SourceTender;
+import uz.horecaos.platform.web.api.Quantities;
 
 /**
  * Builds a business day's facts, and later checks that they were right
@@ -462,7 +464,11 @@ public class DayCloseService {
                 ? null
                 : (int) Duration.between(source.promisedAt(), source.closedAt()).toSeconds();
 
-        int itemCount = lines.stream().mapToInt(SourceLine::quantity).sum();
+        // The units the order asked for, whole: item_count is an integer column (V0031)
+        // and a decimal portion (ADR 0137) is counted as the plate it occupies, so the
+        // total is the exact sum rounded up once, not each half portion rounded alone.
+        int itemCount = Quantities.wholeUnitsCeiling(
+                lines.stream().map(SourceLine::quantity).reduce(BigDecimal.ZERO, BigDecimal::add));
 
         // T12: whoever approved the order, else whoever created it, else the
         // channel itself as a pseudo-operator — see OperatorAttribution's own

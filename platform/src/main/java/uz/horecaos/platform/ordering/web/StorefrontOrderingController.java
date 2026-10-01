@@ -4,12 +4,15 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
@@ -781,7 +784,12 @@ public class StorefrontOrderingController {
 
     public record PutLineRequest(
             @NotNull UUID variantId,
-            @Positive @Max(999) int quantity,
+            // ADR 0137: a decimal, so a splittable variant can be ordered by the portion.
+            // Whether this particular variant takes a fraction is the cart's decision
+            // against its published attributes; this only bounds the number.
+            @NotNull @DecimalMin(value = "0", inclusive = false) @DecimalMax("999") @Digits(integer = 3, fraction = 3)
+            BigDecimal quantity,
+
             @Size(max = 20) List<UUID> modifierOptionIds,
             // Row 2.1b: the coded kitchen-instruction presets the customer
             // picked from the product's own offered subset (@Size null-safe
@@ -936,7 +944,7 @@ public class StorefrontOrderingController {
     public record CartLineResponse(
             String lineKey,
             UUID variantId,
-            int quantity,
+            BigDecimal quantity,
             // Row 2.1b: the coded presets this line currently carries.
             List<String> commentPresetCodes,
             boolean hasCustomerNote) {}
@@ -1150,7 +1158,8 @@ public class StorefrontOrderingController {
                                             .toList(),
                                     line.modifiers().stream()
                                             .map(m -> m.sourceOptionId())
-                                            .toList()))
+                                            .toList(),
+                                    CatchweightLineResponse.of(line.line())))
                             .toList(),
                     detail.warnings());
         }
@@ -1175,11 +1184,38 @@ public class StorefrontOrderingController {
             String variantName,
             UUID productId,
             UUID variantId,
-            int quantity,
+            BigDecimal quantity,
             long unitAmountMinor,
             long finalAmountMinor,
             List<String> modifiers,
-            List<UUID> modifierOptionIds) {}
+            List<UUID> modifierOptionIds,
+            @Nullable CatchweightLineResponse catchweight) {}
+
+    /**
+     * ADR 0137: present on a line sold by weight. {@code provisional} is true until the
+     * kitchen has weighed it at handover, and means {@code finalAmountMinor} was
+     * computed against {@code nominalGramsPerUnit}; the order total the customer sees
+     * then is an estimate that the weighed amount replaces.
+     */
+    public record CatchweightLineResponse(
+            int quantumGrams,
+            int nominalGramsPerUnit,
+            long pricePerQuantumMinor,
+            boolean provisional,
+            @Nullable Integer actualWeightGrams) {
+
+        static @Nullable CatchweightLineResponse of(JdbcOrderStore.OrderLineRow line) {
+            if (!line.catchweight()) {
+                return null;
+            }
+            return new CatchweightLineResponse(
+                    Objects.requireNonNull(line.catchweightQuantumGrams()),
+                    Objects.requireNonNull(line.catchweightNominalGrams()),
+                    Objects.requireNonNull(line.catchweightPricePerQuantumMinor()),
+                    !line.reconciled(),
+                    line.actualWeightGrams());
+        }
+    }
 
     /**
      * ADR 0074's answer to "can this be ordered again".
@@ -1227,7 +1263,7 @@ public class StorefrontOrderingController {
             @Nullable String variantName,
             @Nullable UUID productId,
             UUID variantId,
-            int quantity,
+            BigDecimal quantity,
             List<UUID> modifierOptionIds,
             String status,
             @Nullable Long unitAmountMinor,

@@ -920,7 +920,9 @@ public class CloposAdapter implements PosAdapter {
                         productId instanceof Number number
                                 ? Long.toString(number.longValue())
                                 : String.valueOf(productId),
-                        quantity.intValue(),
+                        // The provider's own number, as it printed it: 2 and 0.5 both survive
+                        // (ADR 0137), where intValue() would have made a half portion zero.
+                        new java.math.BigDecimal(quantity.toString()),
                         // minor() only returns null for a null input, and price is
                         // proven non-null in this branch.
                         price == null ? 0L : Objects.requireNonNull(CloposCatalogNormalizer.minor(price))));

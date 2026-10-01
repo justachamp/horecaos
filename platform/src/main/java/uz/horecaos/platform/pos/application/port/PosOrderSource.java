@@ -1,10 +1,12 @@
 package uz.horecaos.platform.pos.application.port;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
+import uz.horecaos.platform.web.api.Quantities;
 
 /**
  * The order facts a till needs, read once and never copied (ADR 0011).
@@ -108,7 +110,7 @@ public interface PosOrderSource {
                 UUID sourceVariantId,
                 String productNameSnapshot,
                 @Nullable String variantNameSnapshot,
-                int quantity,
+                BigDecimal quantity,
                 long unitAmountMinor,
                 List<UUID> modifierOptionIds,
                 // Row 2.1b: catalog.comment_presets.id for every preset this
@@ -118,8 +120,30 @@ public interface PosOrderSource {
                 List<UUID> commentPresetIds) {
 
             public Line {
+                quantity = Quantities.normalise(quantity);
                 modifierOptionIds = List.copyOf(modifierOptionIds == null ? List.of() : modifierOptionIds);
                 commentPresetIds = List.copyOf(commentPresetIds == null ? List.of() : commentPresetIds);
+            }
+
+            /** A whole number of units, which is every line there was before ADR 0137. */
+            public Line(
+                    UUID lineId,
+                    UUID sourceVariantId,
+                    String productNameSnapshot,
+                    @Nullable String variantNameSnapshot,
+                    int quantity,
+                    long unitAmountMinor,
+                    List<UUID> modifierOptionIds,
+                    List<UUID> commentPresetIds) {
+                this(
+                        lineId,
+                        sourceVariantId,
+                        productNameSnapshot,
+                        variantNameSnapshot,
+                        BigDecimal.valueOf(quantity),
+                        unitAmountMinor,
+                        modifierOptionIds,
+                        commentPresetIds);
             }
         }
     }

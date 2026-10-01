@@ -1,5 +1,6 @@
 package uz.horecaos.platform.pos.application.port;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -11,6 +12,7 @@ import uz.horecaos.platform.pos.api.CapabilitySnapshot;
 import uz.horecaos.platform.pos.api.PosCapability;
 import uz.horecaos.platform.pos.domain.CatalogSnapshot;
 import uz.horecaos.platform.pos.domain.ExportCandidate;
+import uz.horecaos.platform.web.api.Quantities;
 
 /**
  * A point of sale, behind one provider-neutral contract (ADR 0011).
@@ -340,13 +342,31 @@ public interface PosAdapter {
         public record Line(
                 String externalProductId,
                 String nameSnapshot,
-                int quantity,
+                BigDecimal quantity,
                 long unitAmountMinor,
                 List<String> externalModifierIds,
                 @Nullable String packageCode) {
 
             public Line {
+                quantity = Quantities.normalise(quantity);
                 externalModifierIds = List.copyOf(externalModifierIds == null ? List.of() : externalModifierIds);
+            }
+
+            /** A whole number of units, which is every line there was before ADR 0137. */
+            public Line(
+                    String externalProductId,
+                    String nameSnapshot,
+                    int quantity,
+                    long unitAmountMinor,
+                    List<String> externalModifierIds,
+                    @Nullable String packageCode) {
+                this(
+                        externalProductId,
+                        nameSnapshot,
+                        BigDecimal.valueOf(quantity),
+                        unitAmountMinor,
+                        externalModifierIds,
+                        packageCode);
             }
         }
     }

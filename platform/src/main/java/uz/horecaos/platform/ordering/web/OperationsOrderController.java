@@ -4,13 +4,16 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.EnumSet;
 import java.util.List;
@@ -1005,6 +1008,8 @@ public class OperationsOrderController {
                     illegal.getMessage(),
                     java.util.Map.of(
                             "from", illegal.from().name(), "to", illegal.to().name()));
+        } catch (OrderStateService.CatchweightNotReconciledException unweighed) {
+            throw catchweightNotReconciled(unweighed);
         }
     }
 
@@ -1202,11 +1207,29 @@ public class OperationsOrderController {
                     illegal.getMessage(),
                     java.util.Map.of(
                             "from", illegal.from().name(), "to", illegal.to().name()));
+        } catch (OrderStateService.CatchweightNotReconciledException unweighed) {
+            throw catchweightNotReconciled(unweighed);
         } catch (OrderOutcomeReasonService.ReasonNotFoundException missing) {
             throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, missing.getMessage());
         } catch (IllegalArgumentException refused) {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, refused.getMessage());
         }
+    }
+
+    /**
+     * ADR 0137's {@code CATCHWEIGHT_NOT_RECONCILED}: a conflict with the order's current
+     * state, carrying the lines still to weigh so the console can take the operator to them.
+     */
+    private static ApiException catchweightNotReconciled(
+            OrderStateService.CatchweightNotReconciledException unweighed) {
+        return new ApiException(
+                ErrorCode.RESOURCE_CONFLICT,
+                unweighed.getMessage(),
+                java.util.Map.of(
+                        "reason",
+                        "CATCHWEIGHT_NOT_RECONCILED",
+                        "orderLineIds",
+                        unweighed.lineIds().stream().map(UUID::toString).toList()));
     }
 
     // ------------------------------------------------------------ amendments
@@ -1752,7 +1775,11 @@ public class OperationsOrderController {
     /** One line the operator entered into the basket, same shape as a storefront cart line. */
     public record OrderLineRequest(
             @NotNull UUID variantId,
-            @Positive @Max(999) int quantity,
+            // ADR 0137: a decimal; whether this variant takes a fraction is the cart's
+            // decision against its published attributes.
+            @NotNull @DecimalMin(value = "0", inclusive = false) @DecimalMax("999") @Digits(integer = 3, fraction = 3)
+            BigDecimal quantity,
+
             @Size(max = 20) List<UUID> modifierOptionIds,
             // Row 2.1b: the coded kitchen-instruction presets the operator
             // picked from the product's own offered subset.
@@ -1870,7 +1897,11 @@ public class OperationsOrderController {
     public record AggregatorOrderLineRequest(
             @Nullable UUID variantId,
             @NotBlank @Size(max = 200) String nameSnapshot,
-            @Positive @Max(999) int quantity,
+            // ADR 0137: an aggregator may sell by the portion or by weight, so a manual
+            // entry takes a decimal quantity like the order line it becomes.
+            @NotNull @DecimalMin(value = "0", inclusive = false) @DecimalMax("999") @Digits(integer = 3, fraction = 3)
+            BigDecimal quantity,
+
             @PositiveOrZero long unitAmountMinor,
             @Size(max = 128) @Nullable String externalItemReference) {
 
@@ -2768,7 +2799,8 @@ public class OperationsOrderController {
                                             p.code(), p.labelRu(), p.labelUz(), p.labelEn(), p.labels()))
                                     .toList(),
                             line.line().lineId(),
-                            line.line().hasNote()))
+                            line.line().hasNote(),
+                            CatchweightResponse.of(line.line())))
                     .toList();
         }
     }
@@ -2993,7 +3025,7 @@ public class OperationsOrderController {
             String productName,
             String variantName,
             String sku,
-            int quantity,
+            BigDecimal quantity,
             long finalAmountMinor,
             List<String> modifiers,
             // Row 2.1b: the coded kitchen-instruction presets this line was
@@ -3001,7 +3033,39 @@ public class OperationsOrderController {
             // locale, so the console renders whichever the operator is in.
             List<CommentPresetChip> commentPresets,
             UUID lineId,
-            boolean hasNote) {}
+            boolean hasNote,
+            // ADR 0137: present on a line sold by weight. provisional is true until the
+            // kitchen has weighed it, and means finalAmountMinor was computed against
+            // the nominal weight.
+            @Nullable CatchweightResponse catchweight) {}
+
+    /**
+     * ADR 0137: what makes an order line's amount provisional, for the console's
+     * "weigh before handover" prompt and the order detail's weighed/nominal figure.
+     *
+     * @param pricePerQuantumMinor the price the customer agreed to, per {@code quantumGrams}
+     * @param provisional          true until a weight has been captured
+     * @param actualWeightGrams    the weighed total of the whole line, once captured
+     */
+    public record CatchweightResponse(
+            int quantumGrams,
+            int nominalGramsPerUnit,
+            long pricePerQuantumMinor,
+            boolean provisional,
+            @Nullable Integer actualWeightGrams) {
+
+        static @Nullable CatchweightResponse of(JdbcOrderStore.OrderLineRow line) {
+            if (!line.catchweight()) {
+                return null;
+            }
+            return new CatchweightResponse(
+                    Objects.requireNonNull(line.catchweightQuantumGrams()),
+                    Objects.requireNonNull(line.catchweightNominalGrams()),
+                    Objects.requireNonNull(line.catchweightPricePerQuantumMinor()),
+                    !line.reconciled(),
+                    line.actualWeightGrams());
+        }
+    }
 
     /**
      * Row 2.1b. Matches {@code CommentPresetController.PresetResponse}'s own locale shape.

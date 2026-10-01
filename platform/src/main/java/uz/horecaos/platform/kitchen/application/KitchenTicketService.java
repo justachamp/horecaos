@@ -1,5 +1,6 @@
 package uz.horecaos.platform.kitchen.application;
 
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -52,6 +53,7 @@ import uz.horecaos.platform.telemetry.api.ScopeKey;
 import uz.horecaos.platform.telemetry.api.StreamChannel;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
+import uz.horecaos.platform.web.api.Quantities;
 
 /**
  * The kitchen aggregate (ADR 0041): routing a confirmed order onto stations,
@@ -325,13 +327,19 @@ public class KitchenTicketService {
             return 0;
         }
 
-        Map<UUID, Long> portionsByStation = new HashMap<>();
+        // A station's ceiling is a count of portions (V0144). Summed as decimals and
+        // rounded up once per station (ADR 0137): two half portions are one plate, and
+        // a half portion alone is still a plate somebody has to make room for.
+        Map<UUID, BigDecimal> exactPortionsByStation = new HashMap<>();
         for (RoutedLine line : routedLines) {
-            portionsByStation.merge(line.stationId(), (long) line.quantity(), Long::sum);
+            exactPortionsByStation.merge(line.stationId(), line.quantity(), BigDecimal::add);
         }
-        if (portionsByStation.isEmpty()) {
+        if (exactPortionsByStation.isEmpty()) {
             return 0;
         }
+        Map<UUID, Long> portionsByStation = new HashMap<>();
+        exactPortionsByStation.forEach(
+                (station, portions) -> portionsByStation.put(station, (long) Quantities.wholeUnitsCeiling(portions)));
 
         // ADR 0041 / ScheduleCadence: local wall-clock through the branch's own
         // IANA zone, never UTC. target_ready_at anchors which service period the
@@ -1164,5 +1172,5 @@ public class KitchenTicketService {
     private record Release(ReleaseMode mode, @Nullable Instant releaseAt, boolean fireNow, boolean ceilingExceeded) {}
 
     /** One order line, resolved onto a station but not yet written as a ticket item. */
-    private record RoutedLine(UUID orderLineId, UUID stationId, RoutingLevel level, int quantity) {}
+    private record RoutedLine(UUID orderLineId, UUID stationId, RoutingLevel level, BigDecimal quantity) {}
 }

@@ -1,5 +1,6 @@
 package uz.horecaos.platform.ordering.infrastructure.persistence;
 
+import java.math.BigDecimal;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
@@ -21,8 +22,10 @@ import uz.horecaos.platform.ordering.domain.OrderPromise;
 import uz.horecaos.platform.ordering.domain.OrderStatus;
 import uz.horecaos.platform.ordering.domain.PromiseBasis;
 import uz.horecaos.platform.ordering.domain.TransitionTrigger;
+import uz.horecaos.platform.pricing.api.QuoteSnapshot;
 import uz.horecaos.platform.tenancy.api.FulfillmentMode;
 import uz.horecaos.platform.tenancy.api.LocalizedLabels;
+import uz.horecaos.platform.web.api.Quantities;
 
 /**
  * Order persistence (ADR 0019).
@@ -340,6 +343,66 @@ public class JdbcOrderStore {
     }
 
     /**
+     * The live catchweight lines of an order that nobody has weighed yet (ADR 0137):
+     * the question behind {@code CATCHWEIGHT_NOT_RECONCILED}, which refuses to hand an
+     * order over while any of them is still priced against its nominal weight.
+     */
+    public List<UUID> unreconciledCatchweightLines(UUID tenantId, UUID orderId) {
+        return jdbc.sql("""
+                SELECT id FROM ordering.order_lines
+                WHERE tenant_id = :tenantId AND order_id = :orderId
+                  AND catchweight_quantum_grams IS NOT NULL
+                  AND actual_weight_grams IS NULL
+                  AND revision_to IS NULL
+                ORDER BY line_number
+                """)
+                .param("tenantId", tenantId)
+                .param("orderId", orderId)
+                .query(UUID.class)
+                .list();
+    }
+
+    /**
+     * Writes a reconciliation onto a live line (ADR 0137): the captured weight, where
+     * the line has one, and the amounts a re-price with that weight produced.
+     *
+     * <p>The only statement that edits an order line's money, and it names its
+     * columns: V0450 grants UPDATE on these four and nothing else. It is guarded by
+     * {@code revision_to IS NULL} so a line an amendment closed is never edited, and
+     * by the tenant and the order so a line id from another order finds nothing.
+     *
+     * @param actualWeightGrams null to leave the stored weight alone (a line the
+     *                          re-price touched only through its tax share)
+     * @return false when the line was not live on this order
+     */
+    public boolean applyReconciledAmounts(
+            UUID tenantId,
+            UUID orderId,
+            UUID lineId,
+            @Nullable Integer actualWeightGrams,
+            long baseMinor,
+            long finalMinor,
+            long taxMinor) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("tenantId", tenantId);
+        params.put("orderId", orderId);
+        params.put("lineId", lineId);
+        params.put("actualWeight", actualWeightGrams);
+        params.put("base", baseMinor);
+        params.put("finalAmount", finalMinor);
+        params.put("tax", taxMinor);
+        return jdbc.sql("""
+                        UPDATE ordering.order_lines
+                        SET actual_weight_grams = COALESCE(:actualWeight::integer, actual_weight_grams),
+                            base_amount_minor = :base,
+                            final_amount_minor = :finalAmount,
+                            tax_amount_minor = :tax
+                        WHERE tenant_id = :tenantId AND order_id = :orderId AND id = :lineId
+                          AND revision_to IS NULL
+                        """).params(params).update() == 1;
+    }
+
+    /**
      * The next line number for a new row on this order (ADR 0039 {@code
      * ADD_LINES}/{@code CHANGE_LINE_QUANTITY}).
      *
@@ -534,38 +597,87 @@ public class JdbcOrderStore {
             String productName,
             @Nullable String variantName,
             @Nullable String sku,
-            int quantity,
+            BigDecimal quantity,
             long unitMinor,
             long baseMinor,
             long finalMinor,
             long taxMinor,
             @Nullable String noteEncrypted) {
+        insertLine(
+                lineId,
+                tenantId,
+                orderId,
+                lineNumber,
+                sourceProductId,
+                sourceVariantId,
+                productName,
+                variantName,
+                sku,
+                quantity,
+                unitMinor,
+                baseMinor,
+                finalMinor,
+                taxMinor,
+                noteEncrypted,
+                null);
+    }
+
+    /**
+     * {@link #insertLine} for a line that may be sold by weight (ADR 0137): the
+     * catchweight facts of the quote line are snapshotted beside the amounts, so the
+     * order can say what its provisional figures were provisional <em>against</em>
+     * and a later menu repricing cannot change what the customer agreed to per
+     * quantum.
+     */
+    public void insertLine(
+            UUID lineId,
+            UUID tenantId,
+            UUID orderId,
+            int lineNumber,
+            @Nullable UUID sourceProductId,
+            UUID sourceVariantId,
+            String productName,
+            @Nullable String variantName,
+            @Nullable String sku,
+            BigDecimal quantity,
+            long unitMinor,
+            long baseMinor,
+            long finalMinor,
+            long taxMinor,
+            @Nullable String noteEncrypted,
+            QuoteSnapshot.@Nullable Catchweight catchweight) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("id", lineId);
+        params.put("tenantId", tenantId);
+        params.put("orderId", orderId);
+        params.put("lineNumber", lineNumber);
+        params.put("productId", sourceProductId);
+        params.put("variantId", sourceVariantId);
+        params.put("productName", productName);
+        params.put("variantName", variantName);
+        params.put("sku", sku);
+        params.put("quantity", quantity);
+        params.put("unit", unitMinor);
+        params.put("base", baseMinor);
+        params.put("finalAmount", finalMinor);
+        params.put("tax", taxMinor);
+        params.put("note", noteEncrypted);
+        params.put("quantum", catchweight == null ? null : catchweight.quantumGrams());
+        params.put("nominal", catchweight == null ? null : catchweight.nominalGramsPerUnit());
+        params.put("pricePerQuantum", catchweight == null ? null : catchweight.pricePerQuantumMinor());
+        params.put("actualWeight", catchweight == null ? null : catchweight.actualWeightGrams());
         jdbc.sql("""
                 INSERT INTO ordering.order_lines (
                     id, tenant_id, order_id, line_number, source_product_id, source_variant_id,
                     product_name_snapshot, variant_name_snapshot, sku_snapshot, quantity,
                     unit_amount_minor, base_amount_minor, final_amount_minor, tax_amount_minor,
-                    note_encrypted)
+                    note_encrypted, catchweight_quantum_grams, catchweight_nominal_grams,
+                    catchweight_price_per_quantum_minor, actual_weight_grams)
                 VALUES (:id, :tenantId, :orderId, :lineNumber, :productId, :variantId,
                     :productName, :variantName, :sku, :quantity,
-                    :unit, :base, :finalAmount, :tax, :note)
-                """)
-                .param("id", lineId)
-                .param("tenantId", tenantId)
-                .param("orderId", orderId)
-                .param("lineNumber", lineNumber)
-                .param("productId", sourceProductId)
-                .param("variantId", sourceVariantId)
-                .param("productName", productName)
-                .param("variantName", variantName)
-                .param("sku", sku)
-                .param("quantity", quantity)
-                .param("unit", unitMinor)
-                .param("base", baseMinor)
-                .param("finalAmount", finalMinor)
-                .param("tax", taxMinor)
-                .param("note", noteEncrypted)
-                .update();
+                    :unit, :base, :finalAmount, :tax, :note, :quantum, :nominal,
+                    :pricePerQuantum, :actualWeight)
+                """).params(params).update();
     }
 
     public void insertLineModifier(
@@ -1835,7 +1947,8 @@ public class JdbcOrderStore {
                 SELECT id, line_number, source_product_id, source_variant_id,
                        product_name_snapshot, variant_name_snapshot, sku_snapshot, quantity,
                        unit_amount_minor, base_amount_minor, final_amount_minor, tax_amount_minor,
-                       note_encrypted
+                       note_encrypted, catchweight_quantum_grams, catchweight_nominal_grams,
+                       catchweight_price_per_quantum_minor, actual_weight_grams
                 FROM ordering.order_lines
                 WHERE tenant_id = :tenantId AND order_id = :orderId
                   AND (:revision::integer IS NULL
@@ -1853,12 +1966,16 @@ public class JdbcOrderStore {
                         row.getString("product_name_snapshot"),
                         row.getString("variant_name_snapshot"),
                         row.getString("sku_snapshot"),
-                        row.getInt("quantity"),
+                        row.getBigDecimal("quantity"),
                         row.getLong("unit_amount_minor"),
                         row.getLong("base_amount_minor"),
                         row.getLong("final_amount_minor"),
                         row.getLong("tax_amount_minor"),
-                        row.getString("note_encrypted")))
+                        row.getString("note_encrypted"),
+                        row.getObject("catchweight_quantum_grams", Integer.class),
+                        row.getObject("catchweight_nominal_grams", Integer.class),
+                        row.getObject("catchweight_price_per_quantum_minor", Long.class),
+                        row.getObject("actual_weight_grams", Integer.class)))
                 .list();
     }
 
@@ -3188,15 +3305,33 @@ public class JdbcOrderStore {
             String productName,
             String variantName,
             String sku,
-            int quantity,
+            BigDecimal quantity,
             long unitAmountMinor,
             long baseAmountMinor,
             long finalAmountMinor,
             long taxAmountMinor,
-            String noteEncrypted) {
+            String noteEncrypted,
+            @Nullable Integer catchweightQuantumGrams,
+            @Nullable Integer catchweightNominalGrams,
+            @Nullable Long catchweightPricePerQuantumMinor,
+            @Nullable Integer actualWeightGrams) {
+
+        public OrderLineRow {
+            quantity = Quantities.normalise(quantity);
+        }
 
         public boolean hasNote() {
             return noteEncrypted != null;
+        }
+
+        /** Whether this line is sold by weight (ADR 0137). */
+        public boolean catchweight() {
+            return catchweightQuantumGrams != null;
+        }
+
+        /** Whether a weight has been captured, so the line's amounts are final (ADR 0137). */
+        public boolean reconciled() {
+            return actualWeightGrams != null;
         }
     }
 

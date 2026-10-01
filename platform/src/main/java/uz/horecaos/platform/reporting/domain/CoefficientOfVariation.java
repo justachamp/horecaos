@@ -44,14 +44,25 @@ public final class CoefficientOfVariation {
      *                                  series reaching here is a caller bug
      */
     public static SeriesStatistics of(List<Long> bucketQuantities) {
+        return ofValues(bucketQuantities.stream().map(Long::doubleValue).toList());
+    }
+
+    /**
+     * {@link #of(List)} for buckets that may hold a fraction of a unit (ADR 0137): a
+     * product sold by the half portion sells 0.5 and 1.5 in a bucket, and rounding those
+     * to whole units first would report a steady seller as erratic.
+     */
+    public static SeriesStatistics ofValues(List<Double> bucketQuantities) {
         if (bucketQuantities.isEmpty()) {
             throw new IllegalArgumentException("A coefficient of variation needs at least one bucket");
         }
         int n = bucketQuantities.size();
-        double mean =
-                bucketQuantities.stream().mapToLong(Long::longValue).average().orElseThrow();
+        double mean = bucketQuantities.stream()
+                .mapToDouble(Double::doubleValue)
+                .average()
+                .orElseThrow();
         double sumSquaredDeviation = 0.0;
-        for (Long quantity : bucketQuantities) {
+        for (Double quantity : bucketQuantities) {
             double deviation = quantity - mean;
             sumSquaredDeviation += deviation * deviation;
         }

@@ -1,5 +1,6 @@
 package uz.horecaos.platform.pricing.application;
 
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -13,12 +14,15 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 import uz.horecaos.platform.fulfillment.api.ResolvedDeliveryCharge;
+import uz.horecaos.platform.pricing.domain.CatchweightFacts;
+import uz.horecaos.platform.pricing.domain.CatchweightPricing;
 import uz.horecaos.platform.pricing.domain.Money;
 import uz.horecaos.platform.pricing.domain.Promotion;
 import uz.horecaos.platform.pricing.domain.Quote;
 import uz.horecaos.platform.pricing.domain.Quote.Adjustment;
 import uz.horecaos.platform.pricing.domain.QuoteRequest;
 import uz.horecaos.platform.pricing.domain.TaxCalculation;
+import uz.horecaos.platform.web.api.Quantities;
 
 /**
  * The deterministic pricing pipeline (ADR 0018).
@@ -94,8 +98,27 @@ public class PricingEngine {
                 modifierTotal += modifierPrice;
             }
 
-            long unitWithModifiers = Math.addExact(unit, modifierTotal);
-            long lineGross = Math.multiplyExact(unitWithModifiers, (long) line.quantity());
+            // ADR 0137. For a catchweight variant the price row is per quantum of
+            // weight, not per unit: the line is priced at its nominal weight until a
+            // weight is captured, and at the captured weight after. Everything else
+            // about the line (modifiers, promotions, tax) is unchanged.
+            CatchweightFacts catchweight = inputs.catchweight().get(line.variantId());
+            if (catchweight == null && line.actualWeightGrams() != null) {
+                throw new NotCatchweightException(line.variantId());
+            }
+
+            long unitPrice = catchweight == null ? unit : unitPriceOf(unit, catchweight);
+            long baseLine = baseLineMinor(unit, line, catchweight);
+            Quote.Catchweight lineCatchweight = catchweight == null
+                    ? null
+                    : new Quote.Catchweight(
+                            catchweight.quantumGrams(),
+                            catchweight.nominalGramsPerUnit(),
+                            unit,
+                            line.actualWeightGrams());
+            long modifiersLine = Quantities.times(modifierTotal, line.quantity());
+            long unitWithModifiers = Math.addExact(unitPrice, modifierTotal);
+            long lineGross = Math.addExact(baseLine, modifiersLine);
             grossTotal = Math.addExact(grossTotal, lineGross);
 
             adjustments.add(new Adjustment(
@@ -105,7 +128,7 @@ public class PricingEngine {
                     "PRICE_BOOK",
                     inputs.priceBookId(),
                     inputs.priceBookVersion(),
-                    Money.of(Math.multiplyExact(unit, (long) line.quantity()), currency),
+                    Money.of(baseLine, currency),
                     "BASE_PRICE"));
 
             if (modifierTotal > 0) {
@@ -116,7 +139,7 @@ public class PricingEngine {
                         "PRICE_BOOK",
                         inputs.priceBookId(),
                         inputs.priceBookVersion(),
-                        Money.of(Math.multiplyExact(modifierTotal, (long) line.quantity()), currency),
+                        Money.of(modifiersLine, currency),
                         "MODIFIERS"));
             }
 
@@ -129,7 +152,8 @@ public class PricingEngine {
                     Money.of(unitWithModifiers, currency),
                     Money.of(lineGross, currency),
                     Money.of(lineGross, currency),
-                    Money.zero(currency)));
+                    Money.zero(currency),
+                    lineCatchweight));
         }
 
         // Stages 3 and 4 (ADR 0018). Promotions reduce the gross *before* tax is
@@ -159,7 +183,8 @@ public class PricingEngine {
                         line.unitAmount(),
                         line.baseAmount(),
                         Money.of(Math.subtractExact(line.finalAmount().minor(), off), currency),
-                        Money.zero(currency)));
+                        Money.zero(currency),
+                        line.catchweight()));
             }
             lines = discounted;
 
@@ -253,7 +278,8 @@ public class PricingEngine {
                     line.unitAmount(),
                     line.baseAmount(),
                     line.finalAmount(),
-                    Money.of(lineTaxes[i], currency)));
+                    Money.of(lineTaxes[i], currency),
+                    line.catchweight()));
         }
 
         adjustments.add(new Adjustment(
@@ -320,6 +346,34 @@ public class PricingEngine {
                 List.copyOf(adjustments),
                 delivery.shortfallMinor(),
                 contextHash(request, inputs));
+    }
+
+    /**
+     * What one unit costs before modifiers: the price row itself, or for a catchweight
+     * variant the price of one nominal-weight unit (ADR 0137).
+     */
+    static long unitPriceOf(long priceRowMinor, CatchweightFacts catchweight) {
+        return CatchweightPricing.priceOf(priceRowMinor, catchweight.quantumGrams(), catchweight.nominalGramsPerUnit());
+    }
+
+    /**
+     * The base price of a whole line, before modifiers, discounts and tax.
+     *
+     * <p>A priced-per-unit line is {@code unit * quantity}, rounded once. A catchweight
+     * line is {@code price * grams / quantum}, rounded once, where {@code grams} is the
+     * captured weight of the whole line when there is one and the nominal weight of all
+     * its units when there is not -- so a provisional quote and a reconciled one differ
+     * only in which weight they were given. Shared with the goods-subtotal the delivery
+     * fee is resolved against, which must be the figure this method gives.
+     */
+    static long baseLineMinor(long priceRowMinor, QuoteRequest.Line line, @Nullable CatchweightFacts catchweight) {
+        if (catchweight == null) {
+            return Quantities.times(priceRowMinor, line.quantity());
+        }
+        BigDecimal grams = line.actualWeightGrams() != null
+                ? BigDecimal.valueOf(line.actualWeightGrams())
+                : line.quantity().multiply(BigDecimal.valueOf(catchweight.nominalGramsPerUnit()));
+        return CatchweightPricing.priceOf(priceRowMinor, catchweight.quantumGrams(), grams);
     }
 
     /**
@@ -537,7 +591,7 @@ public class PricingEngine {
                 DELIVERY_FEE_LINE_ID,
                 Quote.LineType.DELIVERY_FEE,
                 null,
-                1,
+                BigDecimal.ONE,
                 DELIVERY_FEE_DESCRIPTION,
                 Money.of(gross, currency),
                 Money.of(gross, currency),
@@ -649,7 +703,13 @@ public class PricingEngine {
                             .append(":")
                             .append(line.variantId())
                             .append("x")
-                            .append(line.quantity());
+                            // Plain digits of the normalised quantity: a whole number
+                            // hashes exactly as the int it replaced, so no in-flight
+                            // quote is invalidated by the type widening.
+                            .append(Quantities.plain(line.quantity()));
+                    if (line.actualWeightGrams() != null) {
+                        canonical.append("@").append(line.actualWeightGrams()).append("g");
+                    }
                     line.modifierOptionIds().stream()
                             .map(UUID::toString)
                             .sorted()
@@ -697,7 +757,49 @@ public class PricingEngine {
              * ADR 0018 stages 3 and 4, or null when nothing is on offer. Resolved
              * before the engine runs, like everything else here.
              */
-            @Nullable PromotionInputs promotions) {
+            @Nullable PromotionInputs promotions,
+            /*
+             * ADR 0137: the catchweight variants among the lines, by variant id, read
+             * from the published menu. A variant absent from the map is priced per
+             * unit exactly as before.
+             */
+            Map<UUID, CatchweightFacts> catchweight) {
+
+        public PricingInputs {
+            catchweight = catchweight == null ? Map.of() : Map.copyOf(catchweight);
+        }
+
+        /** Nothing sold by weight, and every call site that predates ADR 0137. */
+        public PricingInputs(
+                String currency,
+                UUID catalogPublicationId,
+                UUID priceBookId,
+                int priceBookVersion,
+                UUID taxProfileId,
+                int taxProfileVersion,
+                int taxRateBasisPoints,
+                TaxMode taxMode,
+                Map<UUID, Long> variantPrices,
+                Map<UUID, Long> modifierPrices,
+                Map<UUID, String> descriptions,
+                @Nullable ResolvedDeliveryCharge deliveryCharge,
+                @Nullable PromotionInputs promotions) {
+            this(
+                    currency,
+                    catalogPublicationId,
+                    priceBookId,
+                    priceBookVersion,
+                    taxProfileId,
+                    taxProfileVersion,
+                    taxRateBasisPoints,
+                    taxMode,
+                    variantPrices,
+                    modifierPrices,
+                    descriptions,
+                    deliveryCharge,
+                    promotions,
+                    Map.of());
+        }
 
         /** A cart with no promotions in play, and every call site that predates them. */
         public PricingInputs(
@@ -801,6 +903,26 @@ public class PricingEngine {
             List<Adjustment> adjustments,
             @Nullable Long deliveryShortfallMinor,
             String contextHash) {}
+
+    /**
+     * A weighed amount arrived for a variant that is not sold by weight (ADR 0137).
+     *
+     * <p>A refusal rather than an ignored field: capturing a weight against a
+     * fixed-price line would look accepted and change nothing, and the operator
+     * would believe a total had been corrected that had not.
+     */
+    public static class NotCatchweightException extends RuntimeException {
+        private final UUID variantId;
+
+        public NotCatchweightException(UUID variantId) {
+            super("Variant " + variantId + " is not sold by weight, so it has no weight to capture");
+            this.variantId = variantId;
+        }
+
+        public UUID variantId() {
+            return variantId;
+        }
+    }
 
     /** Thrown when a cart contains something with no active price. */
     public static class UnpricedItemException extends RuntimeException {

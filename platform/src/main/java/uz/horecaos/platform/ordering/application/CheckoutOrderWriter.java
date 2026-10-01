@@ -310,7 +310,9 @@ class CheckoutOrderWriter {
                     line.baseAmountMinor(),
                     line.finalAmountMinor(),
                     line.taxAmountMinor(),
-                    reEncryptNote(command.tenantId(), cartLine, orderLineId));
+                    reEncryptNote(command.tenantId(), cartLine, orderLineId),
+                    // ADR 0137: what a provisional figure was provisional against.
+                    line.catchweight());
 
             orderLineIdsByKey.put(line.lineKey(), orderLineId);
 

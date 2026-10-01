@@ -3,12 +3,14 @@ package uz.horecaos.platform.pricing.web;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
@@ -138,7 +140,10 @@ public class QuoteController {
     public record LineBody(
             @NotBlank @Size(max = 64) String lineId,
             @NotNull UUID variantId,
-            @Positive @Max(999) int quantity,
+
+            @NotNull @DecimalMin(value = "0", inclusive = false) @DecimalMax("999") @Digits(integer = 3, fraction = 3)
+            BigDecimal quantity,
+
             @Size(max = 20) List<UUID> modifierOptionIds) {}
 
     /**
@@ -178,7 +183,8 @@ public class QuoteController {
                                     line.descriptionSnapshot(),
                                     line.unitAmount().minor(),
                                     line.finalAmount().minor(),
-                                    line.taxAmount().minor()))
+                                    line.taxAmount().minor(),
+                                    CatchweightResponse.of(line.catchweight())))
                             .toList(),
                     quote.adjustments().stream()
                             .map(a -> new AdjustmentResponse(
@@ -199,11 +205,39 @@ public class QuoteController {
     public record LineResponse(
             String lineId,
             @Nullable UUID variantId,
-            int quantity,
+            BigDecimal quantity,
             String description,
             long unitAmountMinor,
             long finalAmountMinor,
-            long taxAmountMinor) {}
+            long taxAmountMinor,
+            @Nullable CatchweightResponse catchweight) {}
+
+    /**
+     * ADR 0137: present on a line sold by weight, and what tells a client that the
+     * line's amounts are provisional.
+     *
+     * @param pricePerQuantumMinor what the price row means: minor units per {@code quantumGrams}
+     * @param provisional          true until a weight has been captured at handover; the
+     *                             line's amounts were computed against {@code nominalGramsPerUnit}
+     */
+    public record CatchweightResponse(
+            int quantumGrams,
+            int nominalGramsPerUnit,
+            long pricePerQuantumMinor,
+            boolean provisional,
+            @Nullable Integer actualWeightGrams) {
+
+        static @Nullable CatchweightResponse of(Quote.@Nullable Catchweight catchweight) {
+            return catchweight == null
+                    ? null
+                    : new CatchweightResponse(
+                            catchweight.quantumGrams(),
+                            catchweight.nominalGramsPerUnit(),
+                            catchweight.pricePerQuantumMinor(),
+                            !catchweight.reconciled(),
+                            catchweight.actualWeightGrams());
+        }
+    }
 
     /**
      * Every step that made up the total, so "why is this 47,000 som" has an answer.

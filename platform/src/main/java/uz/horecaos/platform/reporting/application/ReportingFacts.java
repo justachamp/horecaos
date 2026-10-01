@@ -1,5 +1,6 @@
 package uz.horecaos.platform.reporting.application;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Objects;
@@ -229,7 +230,7 @@ public final class ReportingFacts {
             UUID variantId,
             @Nullable UUID categoryId,
             String productNameSnapshot,
-            int quantity,
+            BigDecimal quantity,
             long grossSom,
             long discountSom,
             long netSom,

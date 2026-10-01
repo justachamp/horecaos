@@ -1,10 +1,12 @@
 package uz.horecaos.platform.pricing.api;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.fulfillment.api.DeliveryFeeOutcome;
+import uz.horecaos.platform.web.api.Quantities;
 
 /**
  * A priced cart as stored, in the shape an order copies from (ADR 0018).
@@ -89,16 +91,66 @@ public record QuoteSnapshot(
      * One item line of a priced cart.
      *
      * @param lineKey the cart's stable line key, so lines match up without relying on order
+     * @param quantity a decimal since ADR 0137, normalised: {@code 2}, never {@code 2.000}
+     * @param catchweight ADR 0137: set only for a catchweight variant, and what makes the
+     *                    line's amounts provisional until a weight is captured
      */
     public record Line(
             String lineKey,
             UUID variantId,
-            int quantity,
+            BigDecimal quantity,
             String descriptionSnapshot,
             long unitAmountMinor,
             long baseAmountMinor,
             long finalAmountMinor,
-            long taxAmountMinor) {}
+            long taxAmountMinor,
+            @Nullable Catchweight catchweight) {
+
+        public Line {
+            quantity = Quantities.normalise(quantity);
+        }
+
+        /** A line that is not catchweight. */
+        public Line(
+                String lineKey,
+                UUID variantId,
+                BigDecimal quantity,
+                String descriptionSnapshot,
+                long unitAmountMinor,
+                long baseAmountMinor,
+                long finalAmountMinor,
+                long taxAmountMinor) {
+            this(
+                    lineKey,
+                    variantId,
+                    quantity,
+                    descriptionSnapshot,
+                    unitAmountMinor,
+                    baseAmountMinor,
+                    finalAmountMinor,
+                    taxAmountMinor,
+                    null);
+        }
+    }
+
+    /**
+     * What makes a quote line provisional (ADR 0137): the price is per {@code
+     * quantumGrams}, and the amounts were computed against {@code nominalGramsPerUnit}
+     * until {@code actualWeightGrams} says otherwise.
+     *
+     * @param pricePerQuantumMinor the price row's amount: minor units per quantum, not per unit
+     * @param actualWeightGrams    null while provisional; the weighed total of the whole line after
+     */
+    public record Catchweight(
+            int quantumGrams,
+            int nominalGramsPerUnit,
+            long pricePerQuantumMinor,
+            @Nullable Integer actualWeightGrams) {
+
+        public boolean reconciled() {
+            return actualWeightGrams != null;
+        }
+    }
 
     /**
      * One step of the calculation, in the order it was applied.

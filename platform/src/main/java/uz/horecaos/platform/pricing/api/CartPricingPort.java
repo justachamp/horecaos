@@ -1,11 +1,13 @@
 package uz.horecaos.platform.pricing.api;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.fulfillment.api.PricingAuthority;
 import uz.horecaos.platform.tenancy.api.GeoPoint;
+import uz.horecaos.platform.web.api.Quantities;
 
 /**
  * Pricing a cart, for the module that owns the cart (ADR 0018, ADR 0019).
@@ -171,11 +173,32 @@ public interface CartPricingPort {
          *
          * @param lineKey stable within the cart, so a re-quote can be compared line
          *                by line rather than by position
+         * @param quantity a decimal since ADR 0137; whole for a variant that is not
+         *                 sold by the portion
+         * @param actualWeightGrams ADR 0137: the weighed total of this line in grams, once
+         *                 captured at pick or handover, or null while the line is still
+         *                 priced provisionally. Refused for a variant that is not sold by weight
          */
-        public record Item(String lineKey, UUID variantId, int quantity, List<UUID> modifierOptionIds) {
+        public record Item(
+                String lineKey,
+                UUID variantId,
+                BigDecimal quantity,
+                List<UUID> modifierOptionIds,
+                @Nullable Integer actualWeightGrams) {
 
             public Item {
+                quantity = Quantities.normalise(quantity);
                 modifierOptionIds = modifierOptionIds == null ? List.of() : List.copyOf(modifierOptionIds);
+            }
+
+            /** A line not yet weighed. */
+            public Item(String lineKey, UUID variantId, BigDecimal quantity, List<UUID> modifierOptionIds) {
+                this(lineKey, variantId, quantity, modifierOptionIds, null);
+            }
+
+            /** A whole number of units, which is every line there was before ADR 0137. */
+            public Item(String lineKey, UUID variantId, int quantity, List<UUID> modifierOptionIds) {
+                this(lineKey, variantId, BigDecimal.valueOf(quantity), modifierOptionIds, null);
             }
         }
     }

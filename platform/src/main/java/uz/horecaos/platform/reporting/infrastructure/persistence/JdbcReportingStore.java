@@ -1,5 +1,6 @@
 package uz.horecaos.platform.reporting.infrastructure.persistence;
 
+import java.math.BigDecimal;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Duration;
@@ -35,6 +36,7 @@ import uz.horecaos.platform.reporting.domain.BusinessDayBoundary;
 import uz.horecaos.platform.reporting.domain.HolidayCalendar;
 import uz.horecaos.platform.reporting.domain.HolidayMode;
 import uz.horecaos.platform.reporting.domain.MetricDefinition;
+import uz.horecaos.platform.web.api.Quantities;
 
 /**
  * Reporting persistence (ADR 0043).
@@ -376,7 +378,7 @@ public class JdbcReportingStore {
                         row.getObject("order_id", UUID.class),
                         row.getObject("source_variant_id", UUID.class),
                         row.getString("product_name_snapshot"),
-                        row.getInt("quantity"),
+                        row.getBigDecimal("quantity"),
                         row.getLong("base_amount_minor"),
                         row.getLong("final_amount_minor"),
                         row.getObject("category_id", UUID.class)))
@@ -576,10 +578,15 @@ public class JdbcReportingStore {
             UUID orderId,
             UUID variantId,
             String productName,
-            int quantity,
+            BigDecimal quantity,
             long baseAmountMinor,
             long finalAmountMinor,
-            @Nullable UUID categoryId) {}
+            @Nullable UUID categoryId) {
+
+        public SourceLine {
+            quantity = Quantities.normalise(quantity);
+        }
+    }
 
     public record SourceRefund(UUID refundId, UUID orderId, long amountMinor, Instant occurredAt) {}
 
@@ -2265,12 +2272,12 @@ public class JdbcReportingStore {
 
         return jdbc.sql("""
                 SELECT l.variant_id, l.category_id, max(l.product_name_snapshot) AS product_name,
-                       sum(l.quantity)::integer AS total_quantity,
+                       sum(l.quantity) AS total_quantity,
                        sum(l.gross_som) AS total_gross_som,
                        sum(l.net_som) AS total_net_som,
-                       sum(l.quantity) FILTER (WHERE o.fulfilment_type = 'DELIVERY')::integer AS delivery_quantity,
+                       sum(l.quantity) FILTER (WHERE o.fulfilment_type = 'DELIVERY') AS delivery_quantity,
                        sum(l.net_som) FILTER (WHERE o.fulfilment_type = 'DELIVERY')::bigint AS delivery_net_som,
-                       sum(l.quantity) FILTER (WHERE o.fulfilment_type = 'PICKUP')::integer AS pickup_quantity,
+                       sum(l.quantity) FILTER (WHERE o.fulfilment_type = 'PICKUP') AS pickup_quantity,
                        sum(l.net_som) FILTER (WHERE o.fulfilment_type = 'PICKUP')::bigint AS pickup_net_som
                   FROM reporting.fact_order_line l
                   JOIN reporting.fact_order o
@@ -2287,12 +2294,12 @@ public class JdbcReportingStore {
                         row.getObject("variant_id", UUID.class),
                         row.getObject("category_id", UUID.class),
                         row.getString("product_name"),
-                        row.getInt("total_quantity"),
+                        row.getBigDecimal("total_quantity"),
                         row.getLong("total_gross_som"),
                         row.getLong("total_net_som"),
-                        row.getObject("delivery_quantity", Integer.class),
+                        row.getBigDecimal("delivery_quantity"),
                         row.getObject("delivery_net_som", Long.class),
-                        row.getObject("pickup_quantity", Integer.class),
+                        row.getBigDecimal("pickup_quantity"),
                         row.getObject("pickup_net_som", Long.class)))
                 .list();
     }
@@ -2359,7 +2366,7 @@ public class JdbcReportingStore {
      * make that substitution consistently.
      */
     public record VariantSalesCursor(
-            @Nullable Integer afterQuantity,
+            @Nullable BigDecimal afterQuantity,
             @Nullable Long afterRevenueSom,
             @Nullable String afterProductName,
             UUID afterVariantId) {}
@@ -2369,12 +2376,12 @@ public class JdbcReportingStore {
             @Nullable UUID variantId,
             @Nullable UUID categoryId,
             String productName,
-            int totalQuantity,
+            BigDecimal totalQuantity,
             long totalGrossSom,
             long totalNetSom,
-            @Nullable Integer deliveryQuantity,
+            @Nullable BigDecimal deliveryQuantity,
             @Nullable Long deliveryNetSom,
-            @Nullable Integer pickupQuantity,
+            @Nullable BigDecimal pickupQuantity,
             @Nullable Long pickupNetSom) {}
 
     // -------------------------------------------------------- T12: 7.5 operator leaderboard
@@ -2487,12 +2494,12 @@ public class JdbcReportingStore {
 
         return jdbc.sql("""
                 SELECT l.variant_id, l.category_id, max(l.product_name_snapshot) AS product_name,
-                       sum(l.quantity)::integer AS total_quantity,
+                       sum(l.quantity) AS total_quantity,
                        sum(l.gross_som) AS total_gross_som,
                        sum(l.net_som) AS total_net_som,
-                       sum(l.quantity) FILTER (WHERE o.fulfilment_type = 'DELIVERY')::integer AS delivery_quantity,
+                       sum(l.quantity) FILTER (WHERE o.fulfilment_type = 'DELIVERY') AS delivery_quantity,
                        sum(l.net_som) FILTER (WHERE o.fulfilment_type = 'DELIVERY')::bigint AS delivery_net_som,
-                       sum(l.quantity) FILTER (WHERE o.fulfilment_type = 'PICKUP')::integer AS pickup_quantity,
+                       sum(l.quantity) FILTER (WHERE o.fulfilment_type = 'PICKUP') AS pickup_quantity,
                        sum(l.net_som) FILTER (WHERE o.fulfilment_type = 'PICKUP')::bigint AS pickup_net_som
                   FROM reporting.fact_order_line l
                   JOIN reporting.fact_order o
@@ -2509,12 +2516,12 @@ public class JdbcReportingStore {
                         row.getObject("variant_id", UUID.class),
                         row.getObject("category_id", UUID.class),
                         row.getString("product_name"),
-                        row.getInt("total_quantity"),
+                        row.getBigDecimal("total_quantity"),
                         row.getLong("total_gross_som"),
                         row.getLong("total_net_som"),
-                        row.getObject("delivery_quantity", Integer.class),
+                        row.getBigDecimal("delivery_quantity"),
                         row.getObject("delivery_net_som", Long.class),
-                        row.getObject("pickup_quantity", Integer.class),
+                        row.getBigDecimal("pickup_quantity"),
                         row.getObject("pickup_net_som", Long.class)))
                 .list();
     }
@@ -3167,7 +3174,10 @@ public class JdbcReportingStore {
                            ((l.occurred_at AT TIME ZONE :timezone) - (:businessDayStart)::interval)
                        )::int AS hour_of_day,
                        l.category_id, l.variant_id, max(l.product_name_snapshot) AS product_name,
-                       sum(l.quantity)::integer AS qty
+                       -- Whole plates, rounded up once per (date, hour, product): demand
+                       -- planning counts portions somebody has to make (ADR 0137), and the
+                       -- forecast arithmetic downstream is integer.
+                       CEIL(sum(l.quantity))::integer AS qty
                   FROM reporting.fact_order_line l
                   JOIN reporting.fact_order o
                     ON o.tenant_id = l.tenant_id AND o.business_date = l.business_date AND o.order_id = l.order_id

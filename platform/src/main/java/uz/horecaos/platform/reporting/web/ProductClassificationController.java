@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -167,7 +168,7 @@ public class ProductClassificationController {
             int revenueShareBasisPoints,
             int cumulativeShareBasisPoints,
             String abcClass,
-            int quantityTotal,
+            BigDecimal quantityTotal,
             double meanQuantityPerBucket,
             double stddevQuantityPerBucket,
             int coefficientOfVariationBasisPoints,

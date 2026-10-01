@@ -15,6 +15,7 @@ import uz.horecaos.platform.pricing.api.QuoteAcceptance;
 import uz.horecaos.platform.pricing.api.QuoteAcceptancePort;
 import uz.horecaos.platform.pricing.api.QuoteSnapshot;
 import uz.horecaos.platform.tenancy.api.LocationCapacityPort;
+import uz.horecaos.platform.web.api.Quantities;
 
 /**
  * Steps 3 through 6 of {@link CheckoutService}'s order of operations: consume
@@ -123,7 +124,13 @@ class CheckoutReservationStep {
         // Summed rather than assigned: two lines of the same variant — one with
         // extra cheese, one without — are one stock demand, and overwriting would
         // under-reserve.
-        quote.lines().forEach(line -> quantities.merge(line.variantId(), line.quantity(), Integer::sum));
+        // Whole units, rounded up (ADR 0137): stock is held in whole units and the
+        // record leaves a fractional reservation to the one that next touches the
+        // inventory ledger. Half a cake holds one cake, which can only over-hold,
+        // never oversell.
+        quote.lines()
+                .forEach(line -> quantities.merge(
+                        line.variantId(), Quantities.wholeUnitsCeiling(line.quantity()), Integer::sum));
         return quantities;
     }
 }

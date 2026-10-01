@@ -1,5 +1,6 @@
 package uz.horecaos.platform.ordering.application;
 
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -68,6 +69,7 @@ import uz.horecaos.platform.tenancy.api.ConfigurationResolver;
 import uz.horecaos.platform.tenancy.api.FulfillmentMode;
 import uz.horecaos.platform.tenancy.api.GeoPoint;
 import uz.horecaos.platform.tenancy.api.TenantId;
+import uz.horecaos.platform.web.api.Quantities;
 
 /**
  * Amending an order without editing it (ADR 0039).
@@ -1158,8 +1160,10 @@ public class OrderAmendmentService {
 
         List<CartPricingPort.PricingCommand.Item> items = new ArrayList<>();
         for (OrderLineRow line : liveLines) {
-            int quantity = intent.changedQuantities().getOrDefault(line.lineId(), line.quantity());
-            if (intent.changedQuantities().containsKey(line.lineId()) && quantity <= line.quantity()) {
+            Integer changedTo = intent.changedQuantities().get(line.lineId());
+            boolean changed = changedTo != null;
+            BigDecimal quantity = changedTo != null ? BigDecimal.valueOf(changedTo) : line.quantity();
+            if (changed && quantity.compareTo(line.quantity()) <= 0) {
                 throw new AmendmentRefusedException(
                         "QUANTITY_DECREASE_NOT_SUPPORTED",
                         ("Line %s cannot be reduced: releasing already-committed stock has no ADR "
@@ -1172,7 +1176,12 @@ public class OrderAmendmentService {
                     line.lineId().toString(),
                     line.sourceVariantId(),
                     quantity,
-                    modifiersByLine.getOrDefault(line.lineId(), List.of())));
+                    modifiersByLine.getOrDefault(line.lineId(), List.of()),
+                    // ADR 0137: a line that was already weighed keeps its weight through
+                    // an amendment that did not touch it; one whose quantity just
+                    // changed no longer has a weight that means anything, and goes back
+                    // to provisional so the handover asks for it again.
+                    changed ? null : line.actualWeightGrams()));
         }
         for (UUID targeted : intent.changedQuantities().keySet()) {
             if (liveLines.stream().noneMatch(line -> line.lineId().equals(targeted))) {
@@ -1182,7 +1191,7 @@ public class OrderAmendmentService {
         }
         for (NewLine added : intent.addedLines()) {
             items.add(new CartPricingPort.PricingCommand.Item(
-                    added.lineKey(), added.variantId(), added.quantity(), List.of()));
+                    added.lineKey(), added.variantId(), BigDecimal.valueOf(added.quantity()), List.of()));
         }
 
         if (intent.address() != null && order.fulfillmentMode() != FulfillmentMode.DELIVERY) {
@@ -1250,13 +1259,16 @@ public class OrderAmendmentService {
             List<OrderLineRow> liveLines,
             FinancialIntent intent) {
         Map<UUID, Integer> increaseByVariant = new LinkedHashMap<>();
-        Map<UUID, Integer> liveQuantityByLine =
+        Map<UUID, BigDecimal> liveQuantityByLine =
                 liveLines.stream().collect(Collectors.toMap(OrderLineRow::lineId, OrderLineRow::quantity));
         Map<UUID, UUID> liveVariantByLine =
                 liveLines.stream().collect(Collectors.toMap(OrderLineRow::lineId, OrderLineRow::sourceVariantId));
 
         intent.changedQuantities().forEach((lineId, newQuantity) -> {
-            int delta = newQuantity - liveQuantityByLine.getOrDefault(lineId, 0);
+            // Whole units, rounded up: stock is held whole (ADR 0137 leaves a fractional
+            // reservation to the record that next touches the inventory ledger).
+            int delta = Quantities.wholeUnitsCeiling(
+                    BigDecimal.valueOf(newQuantity).subtract(liveQuantityByLine.getOrDefault(lineId, BigDecimal.ZERO)));
             if (delta > 0) {
                 UUID variantId = liveVariantByLine.get(lineId);
                 increaseByVariant.merge(variantId, delta, Integer::sum);
@@ -1362,7 +1374,8 @@ public class OrderAmendmentService {
                     quoted.baseAmountMinor(),
                     quoted.finalAmountMinor(),
                     quoted.taxAmountMinor(),
-                    null);
+                    null,
+                    quoted.catchweight());
         }
 
         for (NewLine added : intent.addedLines()) {
@@ -1388,7 +1401,8 @@ public class OrderAmendmentService {
                     quoted.baseAmountMinor(),
                     quoted.finalAmountMinor(),
                     quoted.taxAmountMinor(),
-                    null);
+                    null,
+                    quoted.catchweight());
         }
     }
 

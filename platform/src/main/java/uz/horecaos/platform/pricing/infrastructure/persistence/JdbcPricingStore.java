@@ -211,6 +211,11 @@ public class JdbcPricingStore {
             lineParams.put("lineType", line.type().name());
             lineParams.put("variantId", line.variantId());
             lineParams.put("quantity", line.quantity());
+            Quote.Catchweight catchweight = line.catchweight();
+            lineParams.put("quantum", catchweight == null ? null : catchweight.quantumGrams());
+            lineParams.put("nominal", catchweight == null ? null : catchweight.nominalGramsPerUnit());
+            lineParams.put("pricePerQuantum", catchweight == null ? null : catchweight.pricePerQuantumMinor());
+            lineParams.put("actualWeight", catchweight == null ? null : catchweight.actualWeightGrams());
             lineParams.put("description", line.descriptionSnapshot());
             lineParams.put("unit", line.unitAmount().minor());
             lineParams.put("base", line.baseAmount().minor());
@@ -221,9 +226,12 @@ public class JdbcPricingStore {
                     INSERT INTO pricing.quote_lines (
                         quote_id, line_id, tenant_id, line_type, source_variant_id, quantity,
                         description_snapshot, unit_amount_minor, base_amount_minor,
-                        final_amount_minor, tax_amount_minor)
+                        final_amount_minor, tax_amount_minor,
+                        catchweight_quantum_grams, catchweight_nominal_grams,
+                        catchweight_price_per_quantum_minor, actual_weight_grams)
                     VALUES (:quoteId, :lineId, :tenantId, :lineType, :variantId, :quantity,
-                        :description, :unit, :base, :finalAmount, :tax)
+                        :description, :unit, :base, :finalAmount, :tax,
+                        :quantum, :nominal, :pricePerQuantum, :actualWeight)
                     """).params(lineParams).update();
         }
 
@@ -328,7 +336,9 @@ public class JdbcPricingStore {
         // fiscal receipt, and is not this change.
         List<QuoteSnapshot.Line> lines = jdbc.sql("""
                 SELECT line_id, source_variant_id, quantity, description_snapshot,
-                       unit_amount_minor, base_amount_minor, final_amount_minor, tax_amount_minor
+                       unit_amount_minor, base_amount_minor, final_amount_minor, tax_amount_minor,
+                       catchweight_quantum_grams, catchweight_nominal_grams,
+                       catchweight_price_per_quantum_minor, actual_weight_grams
                 FROM pricing.quote_lines
                 WHERE quote_id = :quoteId AND tenant_id = :tenantId AND line_type = 'ITEM'
                 ORDER BY line_id
@@ -338,12 +348,22 @@ public class JdbcPricingStore {
                 .query((row, number) -> new QuoteSnapshot.Line(
                         row.getString("line_id"),
                         row.getObject("source_variant_id", UUID.class),
-                        row.getInt("quantity"),
+                        row.getBigDecimal("quantity"),
                         row.getString("description_snapshot"),
                         row.getLong("unit_amount_minor"),
                         row.getLong("base_amount_minor"),
                         row.getLong("final_amount_minor"),
-                        row.getLong("tax_amount_minor")))
+                        row.getLong("tax_amount_minor"),
+                        // Read through getObject: the primitive accessors answer 0
+                        // for a SQL null, and a quantum of 0 grams is not "not sold
+                        // by weight".
+                        row.getObject("catchweight_quantum_grams", Integer.class) == null
+                                ? null
+                                : new QuoteSnapshot.Catchweight(
+                                        row.getInt("catchweight_quantum_grams"),
+                                        row.getInt("catchweight_nominal_grams"),
+                                        row.getLong("catchweight_price_per_quantum_minor"),
+                                        row.getObject("actual_weight_grams", Integer.class))))
                 .list();
 
         List<QuoteSnapshot.Adjustment> adjustments = jdbc.sql("""

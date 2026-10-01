@@ -1,5 +1,6 @@
 package uz.horecaos.platform.reporting.application;
 
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
@@ -25,6 +26,7 @@ import uz.horecaos.platform.reporting.domain.MetricDefinition;
 import uz.horecaos.platform.reporting.domain.MetricRegistry;
 import uz.horecaos.platform.reporting.infrastructure.persistence.JdbcClassificationStore;
 import uz.horecaos.platform.reporting.infrastructure.persistence.JdbcReportingStore;
+import uz.horecaos.platform.web.api.Quantities;
 
 /**
  * The genuinely-absent half of T14 (7.7a/7.7b, ADR 0134): a persisted ABC/XYZ
@@ -130,7 +132,7 @@ public class ProductClassificationService {
             char abcClass = thresholds.abcClassOf(cumulativeShare);
 
             CoefficientOfVariation.SeriesStatistics stats =
-                    CoefficientOfVariation.of(accumulator.bucketQuantitiesAsLongs());
+                    CoefficientOfVariation.ofValues(accumulator.bucketQuantitiesAsDoubles());
             int coefficientOfVariationBasisPoints = (int) Math.round(stats.coefficientOfVariation() * 10_000.0);
             char xyzClass = thresholds.xyzClassOf(coefficientOfVariationBasisPoints);
 
@@ -276,15 +278,16 @@ public class ProductClassificationService {
     /** Running totals for one variant across every bucket in the window. */
     private static final class VariantAccumulator {
 
-        private final long[] bucketQuantities;
+        private final BigDecimal[] bucketQuantities;
         private @Nullable UUID variantId;
         private @Nullable UUID categoryId;
         private @Nullable String productName;
         private long totalGrossSom;
-        private int totalQuantity;
+        private BigDecimal totalQuantity = BigDecimal.ZERO;
 
         VariantAccumulator(int bucketCount) {
-            this.bucketQuantities = new long[bucketCount];
+            this.bucketQuantities = new BigDecimal[bucketCount];
+            java.util.Arrays.fill(bucketQuantities, BigDecimal.ZERO);
         }
 
         void add(JdbcClassificationStore.VariantBucketRow bucket) {
@@ -292,10 +295,10 @@ public class ProductClassificationService {
             this.categoryId = bucket.categoryId();
             this.productName = bucket.productName();
             this.totalGrossSom += bucket.grossSom();
-            this.totalQuantity += bucket.quantity();
+            this.totalQuantity = this.totalQuantity.add(bucket.quantity());
             int index = bucket.bucketIndex();
             if (index >= 0 && index < bucketQuantities.length) {
-                bucketQuantities[index] += bucket.quantity();
+                bucketQuantities[index] = bucketQuantities[index].add(bucket.quantity());
             }
         }
 
@@ -316,14 +319,15 @@ public class ProductClassificationService {
             return totalGrossSom;
         }
 
-        int totalQuantity() {
-            return totalQuantity;
+        BigDecimal totalQuantity() {
+            return Quantities.normalise(totalQuantity);
         }
 
-        List<Long> bucketQuantitiesAsLongs() {
-            List<Long> series = new ArrayList<>(bucketQuantities.length);
-            for (long quantity : bucketQuantities) {
-                series.add(quantity);
+        /** The per-bucket series as doubles, fractions kept (ADR 0137). */
+        List<Double> bucketQuantitiesAsDoubles() {
+            List<Double> series = new ArrayList<>(bucketQuantities.length);
+            for (BigDecimal quantity : bucketQuantities) {
+                series.add(quantity.doubleValue());
             }
             return series;
         }
