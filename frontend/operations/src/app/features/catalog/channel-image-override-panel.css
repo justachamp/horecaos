@@ -1,0 +1,67 @@
+.override {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: var(--q-surface-1);
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+}
+
+.override__grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.override__tile {
+  position: relative;
+  width: 96px;
+  height: 72px;
+  padding: 0;
+  border: 2px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-surface-0, transparent);
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.override__tile--picked {
+  border-color: var(--q-primary);
+}
+
+.override__image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.override__placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+
+.override__order {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  min-width: 20px;
+  padding: 0 4px;
+  background: var(--q-primary);
+  color: var(--q-on-primary, #fff);
+  border-radius: var(--q-radius);
+  text-align: center;
+}
+
+.override__error {
+  color: var(--q-error-text);
+}
+
+.override__actions {
+  display: flex;
+  gap: 8px;
+}

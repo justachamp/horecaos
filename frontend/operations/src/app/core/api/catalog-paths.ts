@@ -257,6 +257,38 @@ export const catalogPaths = {
     return `${this.base(scope)}/catalogs/${encodeURIComponent(catalogId)}/draft-preview`;
   },
 
+  // -------------------------------------------------- ADR 0138: marketplace projection preview
+
+  /**
+   * What one channel would receive at one branch if the draft were published now
+   * (`CatalogPublicationController#channelPreview`). A read: `catalog.read`, no side
+   * effect, nothing referenceable afterwards. Query params `locationId` or `bindingId`
+   * (a channel that sells at one branch needs neither), `locale`, `cursor`, `limit`.
+   */
+  channelPreview(scope: BrandScope, catalogId: string, channelId: string): string {
+    return `${this.base(scope)}/catalogs/${encodeURIComponent(catalogId)}/channels/${encodeURIComponent(channelId)}/preview`;
+  },
+
+  /** The branches a channel sells at, each with the marketplace binding that covers it. */
+  previewTargets(scope: BrandScope, channelId: string): string {
+    return `${this.base(scope)}/channels/${encodeURIComponent(channelId)}/preview-targets`;
+  },
+
+  /** `GET`: every image override a channel carries (query params `entityType` + `entityId` narrow it to one item). */
+  channelMediaOverrides(scope: BrandScope, channelId: string): string {
+    return `${this.base(scope)}/channels/${encodeURIComponent(channelId)}/media-overrides`;
+  },
+
+  /** `PUT`: replaces the whole set of images a channel shows for one product, variant or category. */
+  channelMediaOverride(
+    scope: BrandScope,
+    channelId: string,
+    entityType: string,
+    entityId: string,
+  ): string {
+    return `${this.channelMediaOverrides(scope, channelId)}/${encodeURIComponent(entityType)}/${encodeURIComponent(entityId)}`;
+  },
+
   // -------------------------------------------------- P47: per-item sale schedule and cross-sell
 
   /** Row 4.2g: one variant's weekly sale windows at one location. Same path for `GET` and `PUT` (whole-set replace). */

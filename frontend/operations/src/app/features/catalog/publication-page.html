@@ -114,6 +114,13 @@
                 }}
               </span>
             }
+            <a
+              class="publication__preview"
+              routerLink="/catalog/preview"
+              [queryParams]="{ channel: state.channel.id }"
+              data-testid="publication-preview-link"
+              >{{ 'catalog.publication.channel.preview' | t }}</a
+            >
             <button
               type="button"
               class="publication__publish"

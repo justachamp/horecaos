@@ -170,6 +170,11 @@
   color: var(--q-ink-subtle);
 }
 
+.publication__preview {
+  font-size: var(--q-type-caption);
+  color: var(--q-primary);
+}
+
 .publication__publish {
   padding: 6px 14px;
   border: none;

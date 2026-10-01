@@ -1,0 +1,65 @@
+<section class="override" data-testid="channel-override-panel">
+  <h3 class="q-emphasis">{{ 'catalog.preview.override.title' | t }}</h3>
+  <p class="q-caption">{{ 'catalog.preview.override.hint' | t }}</p>
+
+  @if (choices().length === 0) {
+    <p class="q-body-sm" data-testid="channel-override-empty">
+      {{ 'catalog.preview.override.empty' | t }}
+    </p>
+  } @else {
+    <div class="override__grid">
+      @for (choice of choices(); track choice.assetId) {
+        <button
+          type="button"
+          class="override__tile"
+          [class.override__tile--picked]="position(choice.assetId) > 0"
+          [attr.aria-pressed]="position(choice.assetId) > 0"
+          (click)="toggle(choice.assetId)"
+          data-testid="channel-override-choice"
+        >
+          @if (choice.url; as url) {
+            <img [src]="url" alt="" class="override__image" />
+          } @else {
+            <span class="override__placeholder q-caption">{{
+              'catalog.preview.image.none' | t
+            }}</span>
+          }
+          @if (position(choice.assetId) > 0) {
+            <span class="override__order q-tnum" data-testid="channel-override-order">{{
+              position(choice.assetId)
+            }}</span>
+          }
+        </button>
+      }
+    </div>
+  }
+
+  @if (error(); as message) {
+    <p class="override__error q-body-sm" role="alert">{{ message }}</p>
+  }
+
+  <div class="override__actions">
+    <button
+      type="button"
+      class="override__save"
+      [disabled]="saving() || picked().length === 0"
+      (click)="saved.emit(picked())"
+      data-testid="channel-override-save"
+    >
+      {{ 'catalog.preview.override.save' | t }}
+    </button>
+    @if (current().length > 0) {
+      <button
+        type="button"
+        [disabled]="saving()"
+        (click)="cleared.emit()"
+        data-testid="channel-override-clear"
+      >
+        {{ 'catalog.preview.override.clear' | t }}
+      </button>
+    }
+    <button type="button" [disabled]="saving()" (click)="cancelled.emit()">
+      {{ 'catalog.preview.override.cancel' | t }}
+    </button>
+  </div>
+</section>
