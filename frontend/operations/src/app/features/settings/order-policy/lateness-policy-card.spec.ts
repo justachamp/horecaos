@@ -250,6 +250,170 @@ describe('LatenessPolicyCard', () => {
     expect(el().textContent).toContain('Set at this level');
   });
 
+  // ------------------------------------------------- scope switch and reload
+
+  /** A GET that stays open until the test releases it, so the card is observed mid-load. */
+  function pendingRead(): { release: (view: LatenessEditorView) => void } {
+    const handle: { release: (view: LatenessEditorView) => void } = { release: () => undefined };
+    api.get.mockImplementationOnce(
+      () => new Promise<LatenessEditorView>((resolve) => (handle.release = resolve)),
+    );
+    return handle;
+  }
+
+  it('drops the previous scope’s document and its open form the moment the scope bar moves, not when the read returns', async () => {
+    await render(SET_AT_BRAND);
+    button('Edit').click();
+    fixture.detectChanges();
+    type('lateness-reason', 'a brand edit');
+    const slow = pendingRead();
+
+    fixture.componentRef.setInput('scopeType', 'LOCATION');
+    fixture.componentRef.setInput('locationId', LOCATION_ID);
+    fixture.detectChanges();
+    await flush();
+    fixture.detectChanges();
+
+    expect(el().querySelectorAll('fieldset').length, 'no form for a scope not read yet').toBe(0);
+    expect(el().querySelectorAll('q-inherited-field').length).toBe(0);
+    expect(
+      [...el().querySelectorAll('button')].some((b) => b.textContent?.includes('Publish')),
+    ).toBe(false);
+    expect(el().textContent).toContain('Loading');
+
+    slow.release(INHERITED_FROM_TENANT);
+    await flush();
+    fixture.detectChanges();
+
+    expect(el().querySelectorAll('q-inherited-field').length).toBe(3);
+    expect(el().querySelectorAll('fieldset').length).toBe(0);
+    expect(api.publish).not.toHaveBeenCalled();
+  });
+
+  it('never carries the previous scope’s version into a publish at the new scope', async () => {
+    await render(SET_AT_BRAND);
+    const slow = pendingRead();
+    fixture.componentRef.setInput('scopeType', 'LOCATION');
+    fixture.componentRef.setInput('locationId', LOCATION_ID);
+    fixture.detectChanges();
+    await flush();
+    slow.release(INHERITED_FROM_TENANT);
+    await flush();
+    fixture.detectChanges();
+    await openForm();
+    api.publish.mockResolvedValue({ ...SET_AT_BRAND, currentVersionAtScope: 1, policyVersion: 1 });
+
+    type('lateness-reason', 'location override');
+    button('Publish').click();
+    await flush();
+
+    expect(api.publish).toHaveBeenCalledTimes(1);
+    expect(api.publish.mock.calls[0][1].scopeType).toBe('LOCATION');
+    expect(api.publish.mock.calls[0][1].locationId).toBe(LOCATION_ID);
+    // The location has authored nothing: the brand's version 2 is not its version.
+    expect(api.publish.mock.calls[0][1].expectedVersion).toBeNull();
+  });
+
+  it('keeps an open draft when only the scalar it defaults to changes, and still publishes against the version it was opened at', async () => {
+    await render(SET_AT_BRAND);
+    button('Edit').click();
+    fixture.detectChanges();
+    type('lateness-delivery-atRiskMinutes', '25');
+    type('lateness-reason', 'busier Fridays');
+
+    // Another operator published version 3 meanwhile, and the scalar moved to 15 minutes.
+    api.get.mockResolvedValue({
+      ...SET_AT_BRAND,
+      atRiskDefault: { seconds: 900, source: 'SCALAR' },
+      currentVersionAtScope: 3,
+      policyVersion: 3,
+    });
+    fixture.componentRef.setInput('reloadToken', 1);
+    fixture.detectChanges();
+    await flush();
+    fixture.detectChanges();
+
+    expect(el().querySelectorAll('fieldset').length, 'the form stays open').toBe(3);
+    expect(input('lateness-delivery-atRiskMinutes').value).toBe('25');
+    expect(input('lateness-reason').value).toBe('busier Fridays');
+    expect(
+      input('lateness-dineIn-atRiskMinutes').placeholder,
+      'the default follows the scalar',
+    ).toBe('15');
+
+    api.publish.mockRejectedValue(
+      new ApiError(ApiErrorCode.STALE_VERSION, 409, { status: 409, code: 'STALE_VERSION' }, null),
+    );
+    button('Publish').click();
+    await flush();
+    fixture.detectChanges();
+
+    // Version 2 is what the operator saw when they began: the server, not the card, refuses the lost update.
+    expect(api.publish.mock.calls[0][1].expectedVersion).toBe(2);
+    expect(el().textContent).toContain('Reload and discard my changes');
+  });
+
+  it('keeps an open draft when the background re-read fails', async () => {
+    await render(SET_AT_BRAND);
+    button('Edit').click();
+    fixture.detectChanges();
+    type('lateness-reason', 'still typing');
+
+    api.get.mockRejectedValue(new ApiError(ApiErrorCode.INSUFFICIENT_CAPABILITY, 403, null, null));
+    fixture.componentRef.setInput('reloadToken', 1);
+    fixture.detectChanges();
+    await flush();
+    fixture.detectChanges();
+
+    expect(el().querySelectorAll('fieldset').length).toBe(3);
+    expect(input('lateness-reason').value).toBe('still typing');
+  });
+
+  it('does not let an older read overwrite the document just published', async () => {
+    await render(SET_AT_BRAND);
+    button('Edit').click();
+    fixture.detectChanges();
+    type('lateness-reason', 'tighten');
+    const slow = pendingRead();
+    fixture.componentRef.setInput('reloadToken', 1);
+    fixture.detectChanges();
+    await flush();
+    api.publish.mockResolvedValue({ ...SET_AT_BRAND, currentVersionAtScope: 3, policyVersion: 3 });
+
+    button('Publish').click();
+    await flush();
+    slow.release(SET_AT_BRAND); // still version 2: it left before the publish landed
+    await flush();
+    fixture.detectChanges();
+
+    expect(el().textContent).toContain('Version 3');
+  });
+
+  it('does not show a publish that came back for a scope the bar has since left', async () => {
+    await render(SET_AT_BRAND);
+    button('Edit').click();
+    fixture.detectChanges();
+    type('lateness-reason', 'brand edit');
+    let landed: (view: LatenessEditorView) => void = () => undefined;
+    api.publish.mockImplementation(
+      () => new Promise<LatenessEditorView>((resolve) => (landed = resolve)),
+    );
+    button('Publish').click();
+    fixture.detectChanges();
+
+    api.get.mockResolvedValue(INHERITED_FROM_TENANT);
+    fixture.componentRef.setInput('scopeType', 'LOCATION');
+    fixture.componentRef.setInput('locationId', LOCATION_ID);
+    fixture.detectChanges();
+    await flush();
+    landed({ ...SET_AT_BRAND, currentVersionAtScope: 9, policyVersion: 9 });
+    await flush();
+    fixture.detectChanges();
+
+    expect(el().textContent).not.toContain('Version 9');
+    expect(el().textContent).toContain('Version 3');
+  });
+
   // ---------------------------------------------------------------- editing
 
   it('opens one form for all three modes, blank windows standing for the default it names', async () => {
