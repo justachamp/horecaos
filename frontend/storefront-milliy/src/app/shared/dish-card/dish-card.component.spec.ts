@@ -261,7 +261,9 @@ describe('DishCardComponent -- ordering at a table (ADR 0047)', () => {
       expect(view.q('dine-in-held-unavailable')).not.toBeNull();
 
       view.q('dine-in-decrease')!.click();
-      expect(view.changes).toEqual([{ variantId: 'v1', quantity: 1 }]);
+      // The whole line, not one fewer: the platform checks stock on every write of
+      // a line, so a PUT of quantity 1 for a sold-out portion is refused too.
+      expect(view.changes).toEqual([{ variantId: 'v1', quantity: 0 }]);
     });
 
     it('asks for zero when the last one is taken out, and cannot be raised past what it holds', () => {
@@ -397,7 +399,20 @@ describe('DishCardComponent -- ordering at a table (ADR 0047)', () => {
       expect(view.q('dine-in-increase')!.disabled).toBe(true);
       expect(view.q('dine-in-choose')).not.toBeNull();
       view.q('dine-in-decrease')!.click();
-      expect(view.changes).toEqual([{ variantId: 'v1', quantity: 1 }]);
+      // The way out is the whole line: a plain line of a dish that must be chosen
+      // from cannot be written at any quantity (the platform refuses the PUT), so
+      // lowering it to one would be refused and the guest could never reach zero.
+      expect(view.changes).toEqual([{ variantId: 'v1', quantity: 0 }]);
+    });
+
+    it('takes the whole plain line out for a dish only staff can put in, however many are held', () => {
+      const view = render({
+        item: dish([variant()], [choice({ options: [] })]),
+        quantities: { v1: 3 },
+      });
+
+      view.q('dine-in-decrease')!.click();
+      expect(view.changes).toEqual([{ variantId: 'v1', quantity: 0 }]);
     });
   });
 });

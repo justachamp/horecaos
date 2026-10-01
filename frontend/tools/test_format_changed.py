@@ -598,6 +598,28 @@ class WorkflowWiringTests(unittest.TestCase):
         apps = {name.strip() for name in matrix.group(1).split(",")}
         self.assertEqual(set(APPS), apps, "a new app in the matrix needs its own lint and format wiring")
 
+    def test_control_plane_diffs_its_vendored_token_sheet_in_ci(self) -> None:
+        # control-plane's lint config ignores src/design-system/tokens.css -- the one file
+        # allowed a raw px font-size, because it is where the type scale is defined -- on the
+        # strength of `npm run check:tokens` keeping it a copy of the canonical sheet. A guard
+        # nothing runs leaves that file unlinted, unformatted and uncompared.
+        step = self.step("Design tokens drift check (control-plane)")
+        self.assertRegex(code(step), r"(?m)^        if: matrix\.app == 'control-plane'$")
+        self.assert_runs_in_the_app_directory(step)
+        self.assertEqual(["npm run check:tokens"], run_lines(step))
+        self.assertEqual("node scripts/check-tokens.mjs", self.scripts("control-plane")["check:tokens"])
+        # The script passes quietly when the sheet it compares against is absent, so the
+        # sheet must be there for the step to mean anything.
+        self.assertTrue((REPO / "frontend" / "design-tokens" / "tokens.css").is_file())
+        names = re.findall(r"^      - name: (.+)$", self.block, re.MULTILINE)
+        order = {name: index for index, name in enumerate(names)}
+        self.assertGreater(order["Design tokens drift check (control-plane)"], order["Install"])
+        self.assertLess(order["Design tokens drift check (control-plane)"], order["Test and build"])
+        # The exemption names the guard; if the exemption goes, so may the step.
+        config = (REPO / "frontend" / "control-plane" / "eslint.config.mjs").read_text(encoding="utf-8")
+        self.assertIn("src/design-system/tokens.css", config)
+        self.assertIn("check:tokens", config)
+
     def test_this_file_runs_in_ci_because_it_also_guards_the_wiring(self) -> None:
         step = self.step("Tooling tests (operations)")
         self.assert_only_for_operations(step)

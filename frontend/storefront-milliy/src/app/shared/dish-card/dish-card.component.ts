@@ -57,10 +57,12 @@ import { TranslatePipe } from '../translate/translate.pipe';
  * guest nothing to choose, and there the card says a member of staff will help.
  *
  * A portion the basket *already holds* keeps its stepper even when it can no
- * longer be bought (sold out, out of its window, or its dish now needs staff):
- * the stepper is then a way out only -- it cannot be raised -- and says why. The
- * platform refuses to price a basket with an unavailable line, so a line the
- * guest could not remove would stop the whole table ordering.
+ * longer be bought (sold out, out of its window, or its dish now needs a choice
+ * or staff): the stepper is then a way out only -- it cannot be raised -- and says
+ * why. The platform refuses to price a basket with an unavailable line, so a line
+ * the guest could not remove would stop the whole table ordering. The decrease on
+ * such a portion takes the whole line out ({@link lowered}), because a write of it
+ * would be refused.
  */
 @Component({
   selector: 'app-dish-card',
@@ -165,6 +167,18 @@ export class DishCardComponent {
   /** A portion of a dish that must be chosen from can be picked for while it can be bought. */
   protected canChoose(variant: MenuItemVariant): boolean {
     return this.choosable() && variantAvailability(variant) === 'AVAILABLE';
+  }
+
+  /**
+   * The quantity the decrease button asks for. One fewer -- except on a held portion
+   * that can no longer be bought (its dish now needs a choice or staff, it sold out,
+   * its sale window closed): the platform checks the selection rules, the stock and
+   * the sale window on every write of a line, whatever quantity it writes, so one
+   * fewer would be refused every time and the guest could never reach zero. The way
+   * out there is the whole line.
+   */
+  protected lowered(variant: MenuItemVariant): number {
+    return this.canAdd(variant) ? this.quantityOf(variant.id) - 1 : 0;
   }
 
   protected request(variantId: string, quantity: number): void {

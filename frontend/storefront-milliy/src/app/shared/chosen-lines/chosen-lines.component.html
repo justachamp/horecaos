@@ -27,7 +27,7 @@
           data-testid="dine-in-custom-decrease"
           [disabled]="busy()"
           [attr.aria-label]="'common.decrease' | t"
-          (click)="request(line, line.quantity - 1)"
+          (click)="request(line, lowered(line))"
         >
           −
         </button>

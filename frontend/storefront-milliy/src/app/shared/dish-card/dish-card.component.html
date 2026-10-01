@@ -97,7 +97,7 @@
                   data-testid="dine-in-decrease"
                   [disabled]="busy()"
                   [attr.aria-label]="'common.decrease' | t"
-                  (click)="request(variant.id, quantityOf(variant.id) - 1)"
+                  (click)="request(variant.id, lowered(variant))"
                 >
                   −
                 </button>

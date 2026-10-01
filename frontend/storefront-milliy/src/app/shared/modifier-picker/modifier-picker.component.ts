@@ -16,8 +16,8 @@ import { TranslateService } from '../../services/translate.service';
 import type { MenuItem, MenuItemModifierGroup, MenuItemVariant } from '../../types/home.types';
 import {
   chosenOptionIds,
-  maximumSelections,
   minimumSelections,
+  selectionRule,
   toggleOption,
   unsatisfiedGroups,
   type ModifierChoices,
@@ -124,24 +124,11 @@ export class ModifierPickerComponent {
     this.choices.update((current) => toggleOption(current, group, optionId));
   }
 
-  /**
-   * What the group asks of the guest, as a translation key and its parameters, or
-   * null when it asks nothing worth saying (optional, no ceiling).
-   */
+  /** What the group asks of the guest; see {@link selectionRule}. */
   protected rule(
     group: MenuItemModifierGroup,
   ): { key: string; params: Record<string, number> } | null {
-    const min = minimumSelections(group);
-    const max = maximumSelections(group);
-    if (Number.isFinite(max)) {
-      if (min === max) {
-        return { key: 'dineIn.pickerExactly', params: { count: min } };
-      }
-      return min > 0
-        ? { key: 'dineIn.pickerBetween', params: { min, max } }
-        : { key: 'dineIn.pickerUpTo', params: { count: max } };
-    }
-    return min > 0 ? { key: 'dineIn.pickerAtLeast', params: { count: min } } : null;
+    return selectionRule(group);
   }
 
   protected surcharge(amountMinor: number | null): string | null {

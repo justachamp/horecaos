@@ -137,10 +137,11 @@ would otherwise debug.
   independently, which works and is wasteful — and, since ADR 0062 also
   retires the Keycloak SSO cookie that used to make sign-in on a second tab
   invisible, two tabs are now also two separate sign-ins.
-- **A `sync-tokens` drift check in CI.** There is no CI here yet. `npm run
-  check:tokens` exists and compares the vendored sheet against the source of
-  record when this repository sits beside the platform one; it is the thing CI
-  should run once CI exists.
+- **A `sync-tokens` script.** The drift check runs in CI (the "Design tokens drift check
+  (control-plane)" step of `frontend-build`: `npm run check:tokens` compares the vendored
+  sheet against `frontend/design-tokens/tokens.css`, and the lint and prettier ignores for
+  that file rest on it). What is missing is the script that regenerates the vendored copy;
+  until it exists a drift is fixed by hand and the check is the only thing that notices.
 - **A published design-system package.** That is the right answer and it needs a
   registry decision first — two registries, in fact, npm-compatible for the
   three Angular applications and pub-compatible for Flutter. Until then each

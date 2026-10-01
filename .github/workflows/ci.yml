@@ -447,6 +447,19 @@ jobs:
           FORMAT_BASE: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || github.event.before }}
         run: python3 frontend/tools/format_changed.py --app ${{ matrix.app }} --base "$FORMAT_BASE"
 
+      - name: Design tokens drift check (control-plane)
+        # control-plane vendors frontend/design-tokens/tokens.css. Its ESLint config
+        # ignores that copy -- it is where the closed type scale is defined, so it is
+        # the one file allowed a raw px font-size -- and prettier ignores it too, on
+        # the strength of this check keeping it identical to the canonical sheet. Without
+        # it an edit or a drift in the vendored copy merges unlinted, unformatted and
+        # uncompared. A failure means the vendored copy was edited or the canonical
+        # sheet moved; the script's output says which and what not to do. The step
+        # is pinned by frontend/tools/test_format_changed.py.
+        if: matrix.app == 'control-plane'
+        working-directory: frontend/${{ matrix.app }}
+        run: npm run check:tokens
+
       - name: Tooling tests (operations)
         # frontend/tools/test_format_changed.py tests the local changed-files
         # helper AND reads this file to prove that the lint and format steps
