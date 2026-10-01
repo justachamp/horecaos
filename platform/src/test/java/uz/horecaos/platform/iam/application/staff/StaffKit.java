@@ -78,7 +78,7 @@ final class StaffKit {
     final TransactionTemplate tx;
     final JdbcAuthorizationService authorization;
     final GrantManagementService grants;
-    final FakePhotos photos = new FakePhotos();
+    final FakePhotos photos;
     final FakeAccounts accounts = new FakeAccounts();
     final StaffMemberService members;
     final StaffEmergencyContactService emergency;
@@ -96,19 +96,22 @@ final class StaffKit {
         jdbc = JdbcClient.create(dataSource);
         clock = Clock.fixed(NOW, ZoneOffset.UTC);
         tx = new TransactionTemplate(new DataSourceTransactionManager(dataSource));
+        photos = new FakePhotos(jdbc);
 
-        authorization = new JdbcAuthorizationService(
-                jdbc,
-                clock,
-                () -> new AuthenticatedActor("no-request-actor-in-fixture", Set.of(), Map.of()),
-                tenantId -> TenantAvailability.OPERATING) {
-            @Override
-            public void evictGrants(String subject, @Nullable UUID tenantId) {
-                // no cache in this fixture
-            }
-        };
+        authorization =
+                new JdbcAuthorizationService(
+                        jdbc,
+                        clock,
+                        () -> new AuthenticatedActor("no-request-actor-in-fixture", Set.of(), Map.of()),
+                        tenantId -> TenantAvailability.OPERATING) {
+                    @Override
+                    public void evictGrants(String subject, @Nullable UUID tenantId) {
+                        // no cache in this fixture
+                    }
+                };
 
-        JdbcAuditRecorder recorder = new JdbcAuditRecorder(jdbc, JsonMapper.builder().build());
+        JdbcAuditRecorder recorder =
+                new JdbcAuditRecorder(jdbc, JsonMapper.builder().build());
         GrantAuditListener grantAudit = new GrantAuditListener(recorder);
         StaffMemberAuditListener staffAudit = new StaffMemberAuditListener(recorder);
         ApplicationEventPublisher publisher = event -> {
@@ -136,17 +139,43 @@ final class StaffKit {
 
     // ------------------------------------------------------------------ fixtures
 
-    /** Empties everything a test of the record touches and seeds two tenants with their branches. */
+    private boolean rolesSynchronised;
+
+    /**
+     * Empties everything a test of the record touches and seeds two tenants with
+     * their branches.
+     *
+     * <p>Deletes the fixture tenants by id instead of {@code TRUNCATE tenant.tenants
+     * CASCADE}, on purpose: that statement cascades into {@code iam.roles} (tenant-defined
+     * roles reference a tenant) and empties the platform-defined rows with it, which
+     * then costs {@code RoleRegistrySynchronizer} some four hundred single statements
+     * over a connection-per-statement data source -- seconds, per test. The registry is
+     * not something a test changes, so it is written once.
+     */
     void reset() {
-        jdbc.sql("TRUNCATE TABLE tenant.staff_invitations").update();
         jdbc.sql("TRUNCATE TABLE iam.grants CASCADE").update();
         jdbc.sql("TRUNCATE TABLE audit.audit_events").update();
-        jdbc.sql("TRUNCATE TABLE tenant.tenants CASCADE").update();
+        jdbc.sql("TRUNCATE TABLE iam.staff_members, iam.staff_member_counters, media.assets CASCADE")
+                .update();
+        for (UUID tenantId : new UUID[] {TENANT_A, TENANT_B}) {
+            jdbc.sql("DELETE FROM tenant.locations WHERE tenant_id = :t")
+                    .param("t", tenantId)
+                    .update();
+            jdbc.sql("DELETE FROM tenant.brands WHERE tenant_id = :t")
+                    .param("t", tenantId)
+                    .update();
+            jdbc.sql("DELETE FROM tenant.tenants WHERE id = :t")
+                    .param("t", tenantId)
+                    .update();
+        }
         published.clear();
         accounts.clear();
         photos.clear();
         revoking.failOn = 0;
-        new RoleRegistrySynchronizer(jdbc).synchronize();
+        if (!rolesSynchronised) {
+            new RoleRegistrySynchronizer(jdbc).synchronize();
+            rolesSynchronised = true;
+        }
 
         seedTenant(TENANT_A, "staff-kit-a", "Asia/Tashkent");
         seedBrand(TENANT_A, BRAND_1, "B1");
@@ -220,8 +249,8 @@ final class StaffKit {
 
     /** Registers an invited member inside a transaction, as the invitation flow does. */
     UUID invite(UUID tenantId, String subject, String first, @Nullable String last, @Nullable String phone) {
-        tx.executeWithoutResult(status -> members.registerInvited(
-                tenantId, subject, first, last, phone, "inviting-manager", "corr-" + subject));
+        tx.executeWithoutResult(status ->
+                members.registerInvited(tenantId, subject, first, last, phone, "inviting-manager", "corr-" + subject));
         return store.findBySubject(tenantId, subject).orElseThrow().id();
     }
 
@@ -238,11 +267,21 @@ final class StaffKit {
 
     // ------------------------------------------------------------------- doubles
 
-    /** An in-memory {@link StaffPhotos}: assets are private tenant assets unless a test says otherwise. */
+    /**
+     * A {@link StaffPhotos} whose assets are real {@code media.assets} rows, so the
+     * composite reference from the staff member holds them to the same rule it
+     * holds a production asset to; private, tenant-owned and verified unless a
+     * test says otherwise.
+     */
     static final class FakePhotos implements StaffPhotos {
 
+        private final JdbcClient jdbc;
         private final Map<UUID, UUID> tenantOf = new HashMap<>();
         private final Set<UUID> notPrivate = new java.util.HashSet<>();
+
+        FakePhotos(JdbcClient jdbc) {
+            this.jdbc = jdbc;
+        }
 
         void clear() {
             tenantOf.clear();
@@ -254,11 +293,23 @@ final class StaffKit {
         }
 
         @Override
-        public Ingested ingest(UUID tenantId, byte[] content, @Nullable String originalFilename, @Nullable UUID actorId) {
+        public Ingested ingest(
+                UUID tenantId, byte[] content, @Nullable String originalFilename, @Nullable UUID actorId) {
             if (content.length > 0 && content[0] == 'X') {
                 return new Ingested(false, null, "CONTENT_NOT_AN_IMAGE");
             }
             UUID id = UUID.randomUUID();
+            jdbc.sql("""
+                    INSERT INTO media.assets (asset_id, tenant_id, owner_scope, owner_id, bucket,
+                        object_key, visibility, status, declared_content_type, declared_size_bytes,
+                        verified_content_type, verified_size_bytes, verified_checksum_sha256)
+                    VALUES (:id, :t, 'TENANT', :t, 'horecaos-media', :key, 'PRIVATE', 'AVAILABLE',
+                        'image/jpeg', 10, 'image/jpeg', 10, repeat('0', 64))
+                    """)
+                    .param("id", id)
+                    .param("t", tenantId)
+                    .param("key", tenantId + "/tenant/" + id)
+                    .update();
             tenantOf.put(id, tenantId);
             return new Ingested(true, id, null);
         }
@@ -297,6 +348,9 @@ final class StaffKit {
 
         @Override
         public Optional<String> displayName(String subjectId) {
+            if (unreachable.contains(subjectId)) {
+                throw new IllegalStateException("Keycloak is unreachable");
+            }
             StaffProfile profile = profiles.get(subjectId);
             if (profile == null) {
                 return Optional.empty();

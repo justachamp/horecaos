@@ -78,6 +78,7 @@ class OwnerInvitationFlowTests {
     private TransactionTemplate transactions;
     private FakeAuthorization authorization;
     private OwnerInvitationService invitations;
+    private RecordingStaffMemberRegistry staffMembers;
     private OwnerInvitationRelay relay;
     private UUID tenantId;
 
@@ -110,15 +111,9 @@ class OwnerInvitationFlowTests {
         // is a genuine one and not a fixture's promise.
         transactions = new TransactionTemplate(new JdbcTransactionManager(db.dataSource()));
         authorization = new FakeAuthorization();
+        staffMembers = new RecordingStaffMemberRegistry();
         invitations = new OwnerInvitationService(
-                store,
-                events,
-                accounts,
-                authorization,
-                facts::add,
-                transactions,
-                clock,
-                new RecordingStaffMemberRegistry());
+                store, events, accounts, authorization, facts::add, transactions, clock, staffMembers);
         relay = relayWith(events);
 
         tenantId = UUID.randomUUID();
@@ -174,6 +169,41 @@ class OwnerInvitationFlowTests {
                         "tenant.owner_invitation.queued",
                         "tenant.owner_invitation.sent",
                         "tenant.owner_invitation.accepted");
+    }
+
+    @Test
+    @DisplayName(
+            "ADR 0139: the owner who accepts becomes the tenant's own record of them, in the acceptance's transaction")
+    void anOwnerBecomesAStaffMemberAtAcceptance() {
+        invitations.inviteIfNeeded(tenantId, "owner-subject", "uz", UUID.randomUUID());
+        relay.runOnce();
+        String token = tokenIn(mailer.last().text());
+        assertThat(staffMembers.activated)
+                .as("nothing is recorded by merely being invited")
+                .isEmpty();
+
+        invitations.accept(token, " Dilnoza ", "Karimova", "a-long-enough-passphrase", "corr");
+
+        assertThat(staffMembers.activated)
+                .containsExactly(new RecordingStaffMemberRegistry.Activated(tenantId, "owner-subject"));
+    }
+
+    @Test
+    @DisplayName(
+            "ADR 0139: if the owner's record cannot be written the acceptance rolls back its own history line with it")
+    void aFailureRecordingTheOwnerRollsBackTheAcceptanceHistory() {
+        invitations.inviteIfNeeded(tenantId, "owner-subject", "uz", UUID.randomUUID());
+        relay.runOnce();
+        String token = tokenIn(mailer.last().text());
+        staffMembers.failActivate = new IllegalStateException("the member insert failed");
+
+        assertThatThrownBy(() -> invitations.accept(token, "Dilnoza", "Karimova", "a-long-enough-passphrase", "corr"))
+                .isSameAs(staffMembers.failActivate);
+
+        assertThat(facts)
+                .extracting(AuditFact::actionCode)
+                .as("no ACCEPTED fact: it is written in the transaction the member write failed in")
+                .doesNotContain("tenant.owner_invitation.accepted");
     }
 
     @Test

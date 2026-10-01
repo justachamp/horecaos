@@ -572,6 +572,7 @@ public class StaffMemberService implements StaffMemberRegistry {
                 now,
                 now);
         store.insert(row);
+        names.evictAfterCommit(tenantId, principalSubject);
 
         Map<String, Object> after = new LinkedHashMap<>();
         after.put("employmentStatus", StaffMembers.PENDING);
@@ -625,6 +626,7 @@ public class StaffMemberService implements StaffMemberRegistry {
                     now,
                     now);
             store.insert(row);
+            names.evictAfterCommit(tenantId, principalSubject);
             Map<String, Object> after = new LinkedHashMap<>();
             after.put("employmentStatus", StaffMembers.ACTIVE);
             after.put("firstName", SET);
@@ -734,6 +736,9 @@ public class StaffMemberService implements StaffMemberRegistry {
                 now,
                 now);
         store.insert(row);
+        // The directory may have cached the identity provider's interim name for
+        // this subject while it had no row; the row's name wins from now on.
+        names.evictAfterCommit(tenantId, principalSubject);
 
         Map<String, Object> after = new LinkedHashMap<>();
         after.put("employmentStatus", status);
