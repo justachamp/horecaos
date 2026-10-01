@@ -25,6 +25,7 @@ import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.audit.api.ChangeDocuments;
+import uz.horecaos.platform.catalog.api.ChannelAssortmentChanged;
 import uz.horecaos.platform.catalog.api.OfferingBecameAvailable;
 import uz.horecaos.platform.catalog.api.StopOverlayLookup;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.EntityType;
@@ -493,6 +494,9 @@ public class CatalogAuthoringService {
             store.upsertOfferingStatus(tenantId, brandId, locationId, variantId, status);
             publishIfAvailable(tenantId, brandId, locationId, variantId, status);
         }
+        if (!variantIds.isEmpty()) {
+            publishAssortmentChanged(tenantId, brandId, locationId);
+        }
 
         if (!variantIds.isEmpty()) {
             Map<String, Object> beforeDoc = new LinkedHashMap<>();
@@ -529,6 +533,15 @@ public class CatalogAuthoringService {
      * Silent for {@code UNAVAILABLE}/{@code HIDDEN}: nothing about taking an
      * offering down or hiding it should ever list a variant.
      */
+    /**
+     * Tells the marketplace reconciler that what this branch's channels may sell moved (ADR
+     * 0141's dirty marker). Once per gesture, not once per variant: the marker asks for a
+     * recompute of the branch, and a recompute reads every mapped item anyway.
+     */
+    private void publishAssortmentChanged(UUID tenantId, UUID brandId, @Nullable UUID locationId) {
+        events.publishEvent(new ChannelAssortmentChanged(tenantId, brandId, locationId, clock.instant()));
+    }
+
     private void publishIfAvailable(
             UUID tenantId, UUID brandId, UUID locationId, UUID variantId, OfferingStatus status) {
         if (status == OfferingStatus.AVAILABLE) {
@@ -586,6 +599,7 @@ public class CatalogAuthoringService {
         if (!changed) {
             return;
         }
+        publishAssortmentChanged(tenantId, brandId, locationId);
         audit.record(AuditFact.of("catalog.channelOffering.set", AuditClass.BUSINESS)
                 .by(ActorRef.user(actorSubject, null))
                 .at(ResourceScope.brand(tenantId, brandId))
@@ -671,6 +685,7 @@ public class CatalogAuthoringService {
             }
         }
         if (changed > 0) {
+            publishAssortmentChanged(tenantId, brandId, locationId);
             audit.record(AuditFact.of("catalog.channelOffering.bulkSet", AuditClass.BUSINESS)
                     .by(ActorRef.user(actorSubject, null))
                     .at(ResourceScope.brand(tenantId, brandId))
@@ -1238,6 +1253,7 @@ public class CatalogAuthoringService {
             List<String> fulfillmentModes) {
         store.upsertOffering(tenantId, brandId, locationId, variantId, status, String.join(",", fulfillmentModes));
         publishIfAvailable(tenantId, brandId, locationId, variantId, status);
+        publishAssortmentChanged(tenantId, brandId, locationId);
     }
 
     /**
@@ -1270,6 +1286,7 @@ public class CatalogAuthoringService {
         // react to.
         if (created) {
             publishIfAvailable(tenantId, brandId, locationId, variantId, status);
+            publishAssortmentChanged(tenantId, brandId, locationId);
         }
         return created;
     }
