@@ -17,6 +17,7 @@ import uz.horecaos.platform.fulfillment.domain.sourcing.DispatchRulesDocument.St
 import uz.horecaos.platform.fulfillment.domain.sourcing.DispatchRulesDocument.TimeWindow;
 import uz.horecaos.platform.fulfillment.domain.sourcing.DispatchRulesDocument.Weekday;
 import uz.horecaos.platform.fulfillment.domain.sourcing.SourcingMode;
+import uz.horecaos.platform.fulfillment.infrastructure.persistence.DispatchRulesDocumentMixin;
 
 /**
  * The document as it is stored (ADR 0142 "The document").
@@ -28,7 +29,10 @@ import uz.horecaos.platform.fulfillment.domain.sourcing.SourcingMode;
  */
 class DispatchRulesDocumentJsonTests {
 
-    private static final JsonMapper MAPPER = JsonMapper.builder().build();
+    // The application's mapper gets the same rename from Spring Boot's mixin scan; a hand-built one asks for it.
+    private static final JsonMapper MAPPER = JsonMapper.builder()
+            .addMixIn(DispatchRulesDocument.class, DispatchRulesDocumentMixin.class)
+            .build();
 
     private static final String RECORD_EXAMPLE = """
             {

@@ -1,6 +1,5 @@
 package uz.horecaos.platform.fulfillment.domain.sourcing;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import java.time.DayOfWeek;
 import java.util.List;
 import java.util.Objects;
@@ -31,12 +30,11 @@ import uz.horecaos.platform.fulfillment.api.ShipmentBookingPort.PartnerOption;
  * @param schema   the document shape, {@value #SCHEMA} today
  * @param rules    evaluated in order; the first enabled rule whose conditions all
  *                 hold wins
- * @param fallback what applies when no rule does. Serialised as {@code "default"}
+ * @param fallback what applies when no rule does. Serialised as {@code "default"} (a Java keyword
+ *                 cannot name a component); the rename lives in {@code DispatchRulesDocumentMixin}, in the
+ *                 persistence adapter, because the domain imports no serialisation types
  */
-public record DispatchRulesDocument(
-        int schema,
-        List<Rule> rules,
-        @JsonProperty("default") Action fallback) {
+public record DispatchRulesDocument(int schema, List<Rule> rules, Action fallback) {
 
     public static final int SCHEMA = 1;
 

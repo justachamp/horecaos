@@ -236,6 +236,13 @@ class OperationsDispatchRulesEndpointTests {
                         .query(Long.class)
                         .single())
                 .isEqualTo(1);
+        // The stored document says `default`, as the ADR's example does: the rename is a mixin on the
+        // application's mapper, and a mapper that missed it would write `fallback` and still read it back.
+        String stored = jdbc.sql(
+                        "SELECT document::text FROM tenant.policies WHERE key_code = 'fulfillment.dispatch_rules'")
+                .query(String.class)
+                .single();
+        assertThat(stored).contains("\"default\"").doesNotContain("fallback");
         assertThat(jdbc.sql("""
                         SELECT change_document::text FROM audit.audit_events
                         WHERE action_code = 'fulfillment.dispatch_rules.published' AND tenant_id = :t
