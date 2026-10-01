@@ -51,6 +51,13 @@ import { MessageKey } from '../../core/i18n/messages.en';
  * amendment's own id and version, which the row does not carry — only
  * `order-detail-pane.ts`'s `onActionClick` fetches the amendment history and
  * opens it.
+ *
+ * `ISSUE_INVOICE` (orders.md §4.9 «Выставить счёт», gap map row 1.1e, wave 16)
+ * is offered for an order still owed an online payment, to a principal who can
+ * call `POST .../payment/re-presentations`. The re-issue form and its payable
+ * link live in the order detail's payment panel (`q-order-payment-panel`), so
+ * `order-queue.ts`'s handler opens the order and `order-detail-pane.ts`'s opens
+ * that form — again one implementation of the idempotent call, not two.
  */
 export const ORDER_ACTION_CODES = [
   'APPROVE',
@@ -62,6 +69,7 @@ export const ORDER_ACTION_CODES = [
   'OVERRIDE',
   'ASSIGN_COURIER',
   'RESOLVE',
+  'ISSUE_INVOICE',
 ] as const;
 export type OrderActionCode = (typeof ORDER_ACTION_CODES)[number];
 
@@ -150,6 +158,8 @@ export function actionLabel(
       return translate('orders.action.amend');
     case 'ASSIGN_COURIER':
       return translate('orders.action.assignCourier');
+    case 'ISSUE_INVOICE':
+      return translate('orders.action.issueInvoice');
     case 'RESOLVE':
       // Reuses the amendment history table's own word for the identical
       // action (`order-detail-pane.html`'s RESOLVE row, wave 10) — see this

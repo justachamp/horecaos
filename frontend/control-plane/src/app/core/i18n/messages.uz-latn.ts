@@ -261,9 +261,6 @@ export const uzLatn: Messages = {
   'state.denied.body':
     'Ruxsat huquqlar bo‘yicha beriladi. Bu bo‘lim uchun kerakli huquqni platforma administratoridan so‘rang.',
 
-  'state.notBuilt.title': 'Hali tayyor emas',
-  'state.notBuilt.body': 'Bu bo‘limning hozircha ekrani yo‘q.',
-
   'overview.title': 'Platforma salomatligi',
   'overview.lead':
     'Barcha mijozlar bo‘yicha mijozlar, buyurtmalar, fiskal cheklar va navbatlar — ochilgan paytda hisoblangan.',
@@ -595,9 +592,12 @@ export const uzLatn: Messages = {
   'onboarding.hint.SERVICEABILITY_UNAVAILABLE':
     'Yetkazib berish qamrovini hozir tekshirib bo‘lmadi. Qayta urinish o‘zi bajariladi.',
   'onboarding.hint.NOT_REQUESTED': 'Bu ishga tushirishda namuna menyu so‘ralmagan.',
-  'onboarding.hint.SAMPLE_MENU_REJECTED': 'Namuna menyu katalog tekshiruvidan o‘tmadi va e’lon qilinmadi.',
-  'onboarding.hint.SAMPLE_MENU_UNSUPPORTED_CURRENCY': 'Namuna menyu faqat UZS da tuzilgan, mijoz esa boshqa valyutada ishlaydi, shuning uchun hech narsa yaratilmadi.',
-  'onboarding.hint.SAMPLE_PRICING_REFUSED': 'Namuna menyuga narx qo‘yib bo‘lmadi: mijozda 0 ustuvorlikdagi amaldagi narxlar kitobi bor. Ulardan biriga yuqoriroq ustuvorlik bering yoki muddatini yoping, so‘ng davom ettiring.',
+  'onboarding.hint.SAMPLE_MENU_REJECTED':
+    'Namuna menyu katalog tekshiruvidan o‘tmadi va e’lon qilinmadi.',
+  'onboarding.hint.SAMPLE_MENU_UNSUPPORTED_CURRENCY':
+    'Namuna menyu faqat UZS da tuzilgan, mijoz esa boshqa valyutada ishlaydi, shuning uchun hech narsa yaratilmadi.',
+  'onboarding.hint.SAMPLE_PRICING_REFUSED':
+    'Namuna menyuga narx qo‘yib bo‘lmadi: mijozda 0 ustuvorlikdagi amaldagi narxlar kitobi bor. Ulardan biriga yuqoriroq ustuvorlik bering yoki muddatini yoping, so‘ng davom ettiring.',
   'onboarding.hint.TENANT_MISSING': 'Mijoz yozuvi topilmadi.',
   'onboarding.hint.TRANSIENT_INFRASTRUCTURE':
     'Vaqtinchalik nosozlik. Qayta urinish o‘zi bajariladi.',
@@ -620,7 +620,8 @@ export const uzLatn: Messages = {
   'onboarding.template.label':
     'Yangi jarayonlar {code} shabloni, {version}-versiya bo‘yicha boradi: {count} ta majburiy qadam.',
   'onboarding.start.ownerLocale': 'Taklifnoma tili',
-  'onboarding.start.sampleMenu': 'Hamma narsa ishlayotganini tekshirish uchun namuna menyu yarating va e’lon qiling; mijoz uni keyinroq almashtiradi',
+  'onboarding.start.sampleMenu':
+    'Hamma narsa ishlayotganini tekshirish uchun namuna menyu yarating va e’lon qiling; mijoz uni keyinroq almashtiradi',
   'onboarding.invitation.title': 'Egaga taklifnoma',
   'onboarding.invitation.state.QUEUED': 'Yuborilishini kutmoqda',
   'onboarding.invitation.state.SENT': 'Yuborildi',
@@ -689,7 +690,6 @@ export const uzLatn: Messages = {
   'ownerInvitations.column.acceptedAt': 'Hisob yaratilgan',
   'ownerInvitations.column.attempts': 'Urinishlar',
   'ownerInvitations.column.lastError': "So'nggi xato",
-  'onboarding.invitation.recipient': 'Kimga yuborilgan',
   'onboarding.invitation.timeline': 'Tarix',
   'onboarding.invitation.timelineEmpty':
     "Bu taklifnoma tarixdan oldinroq, shuning uchun unga oid yozuv yo'q.",
@@ -834,7 +834,6 @@ export const uzLatn: Messages = {
   'deadLetters.title': 'Yetkazilmagan xabarlar',
   'deadLetters.lead':
     'Barcha qayta urinishlardan keyin ham muvaffaqiyatsiz bo‘lgan xabarlar: platforma e’lon qila olmagan va qayta ishlovchi qayta ishlay olmagan hodisalar. Har birini sabab ko‘rsatib qayta yuboring yoki yoping.',
-  'deadLetters.empty': 'Yetkazilmagan hodisalar yo‘q.',
   'deadLetters.column.event': 'Hodisa',
   'deadLetters.column.type': 'Turi',
   'deadLetters.column.attempts': 'Urinishlar',
@@ -1115,9 +1114,7 @@ export const uzLatn: Messages = {
   'staff.revokeTenant.confirm': 'Bekor qilish',
   'staff.revokeTenant.done': 'Bekor qilindi.',
   'staff.grant.roleChoose': 'Rolni tanlang',
-  'staff.grant.brand': 'Brend',
   'staff.grant.chooseBrand': 'Brendni tanlang',
-  'staff.grant.location': 'Joy',
   'staff.grant.chooseLocation': 'Joyni tanlang',
   'staff.approvals.title': 'Kutilayotgan qarorlar',
   'staff.approvals.lead':
@@ -1159,7 +1156,6 @@ export const uzLatn: Messages = {
   'auditLog.column.outcome': 'Natija',
   'auditLog.actor.system': 'Tizim',
   'auditLog.filter.action': 'Harakat kodi',
-  'auditLog.filter.outcome': 'Natija',
   'auditLog.filter.anyOutcome': 'Istalgan natija',
   'auditLog.filter.apply': 'Saralash',
   'auditLog.outcome.SUCCEEDED': 'Muvaffaqiyatli',
@@ -1540,9 +1536,6 @@ export const uzLatn: Messages = {
   'statements.void.open': 'Bekor qilish',
   'statements.void.submit': 'Hisobni bekor qilish',
   'statements.void.done': '{number} hisobi bekor qilindi.',
-  'statements.wallet.title': 'Oldindan to‘langan hamyon',
-  'statements.wallet.body':
-    'Qilinmagan. Mijozlar HorecaOS’ga qanday to‘lashi va oldindan to‘lov qanday soliqqa tortilishi hali hal qilinmagan, shuning uchun balans, to‘ldirish va kredit muddati yo‘q.',
   'dunning.lead':
     'To‘lovni kechiktirayotgan yoki to‘xtatilgan barcha mijozlar, qancha vaqtdan beri va har bir bosqich nimani cheklaydi. Mijoz o‘z-o‘zidan hech qayerga o‘tmaydi: ikki hafta kechikishdan so‘ng hodisa odamdan qaror qabul qilishni so‘raydi.',
   'statements.column.paid': 'To‘langan',
@@ -1552,35 +1545,43 @@ export const uzLatn: Messages = {
   'wallet.paid': 'To‘langan balans',
   'wallet.paid.hint': 'Mijoz HorecaOS’ga to‘lagan pul. Kuymaydi va qaytarilishi mumkin.',
   'wallet.bonus': 'Bonus balans',
-  'wallet.bonus.hint': 'HorecaOS bergan pul va hisob hozir undan ola oladigan qismi. To‘langan puldan oldin sarflanadi, har berishning muddatida kuyadi, qaytarilmaydi.',
-  'wallet.bonus.inLedger': 'Jurnalda — {amount}: muddati o‘tgan berish, kuygani yozilgunicha, o‘sha yerda sanaladi.',
+  'wallet.bonus.hint':
+    'HorecaOS bergan pul va hisob hozir undan ola oladigan qismi. To‘langan puldan oldin sarflanadi, har berishning muddatida kuyadi, qaytarilmaydi.',
+  'wallet.bonus.inLedger':
+    'Jurnalda — {amount}: muddati o‘tgan berish, kuygani yozilgunicha, o‘sha yerda sanaladi.',
   'wallet.method': 'To‘lov usuli',
   'wallet.method.hint': 'Hamyondan olingach, hisobning qoldig‘ini nima yopadi.',
   'wallet.method.INVOICE': 'Hisob va bank o‘tkazmasi',
   'wallet.method.WALLET': 'Oldindan to‘langan hamyon',
   'wallet.method.CARD': 'Karta',
   'wallet.method.change': 'To‘lov usulini o‘zgartirish',
-  'wallet.method.note': 'Sabab bilan yoziladi va auditga tushadi. Karta tokeni — provayderdagi havola; karta raqami bu yerda hech qachon saqlanmaydi.',
+  'wallet.method.note':
+    'Sabab bilan yoziladi va auditga tushadi. Karta tokeni — provayderdagi havola; karta raqami bu yerda hech qachon saqlanmaydi.',
   'wallet.method.submit': 'O‘zgartirish',
   'wallet.method.done': 'Endi to‘lov usuli — {method}.',
-  'wallet.card.notConnected': 'Kartadan yechish ulanmagan: HorecaOS’ning o‘z merchant hisobi hali yo‘q, shuning uchun bunday mijozning qoldig‘i hisob bo‘yicha kabi to‘lanmagan qoladi.',
+  'wallet.card.notConnected':
+    'Kartadan yechish ulanmagan: HorecaOS’ning o‘z merchant hisobi hali yo‘q, shuning uchun bunday mijozning qoldig‘i hisob bo‘yicha kabi to‘lanmagan qoladi.',
   'wallet.transfer.open': 'Bank o‘tkazmasini yozish',
-  'wallet.transfer.note': 'Hisob chiqarish kabi bir kishining audit qilinadigan ishi. Isbot — bankning havolasi. O‘tkazma eng eski ochiq hisobni darhol yopadi.',
+  'wallet.transfer.note':
+    'Hisob chiqarish kabi bir kishining audit qilinadigan ishi. Isbot — bankning havolasi. O‘tkazma eng eski ochiq hisobni darhol yopadi.',
   'wallet.transfer.submit': 'O‘tkazmani yozish',
   'wallet.transfer.done': 'O‘tkazma yozildi.',
   'wallet.deposit.open': 'Faollashtirish depozitini yozish',
-  'wallet.deposit.note': 'Amaldagi obuna qarzdor bo‘lgan depozitni aniq yopadi. Birinchi hisob keyin shundan to‘lanadi.',
+  'wallet.deposit.note':
+    'Amaldagi obuna qarzdor bo‘lgan depozitni aniq yopadi. Birinchi hisob keyin shundan to‘lanadi.',
   'wallet.deposit.submit': 'Depozitni yozish',
   'wallet.deposit.done': 'Faollashtirish depoziti yozildi.',
   'wallet.adjustment.open': 'Tuzatish taklif qilish',
-  'wallet.adjustment.note': 'Har ikki pul turi, ko‘paytirish yoki kamaytirish. Bonus tuzatishi qaysi berishni tuzatayotganini ko‘rsatadi; hech bir balans noldan pastga tushmaydi.',
+  'wallet.adjustment.note':
+    'Har ikki pul turi, ko‘paytirish yoki kamaytirish. Bonus tuzatishi qaysi berishni tuzatayotganini ko‘rsatadi; hech bir balans noldan pastga tushmaydi.',
   'wallet.adjustment.noGrant': 'Bu mijozda amaldagi bonus berilishi yo‘q.',
   'wallet.adjustment.submit': 'Tuzatishni taklif qilish',
   'wallet.grant.open': 'Bonus taklif qilish',
   'wallet.grant.note': 'Bonus shu sanada kuyadi va to‘langan puldan oldin sarflanadi.',
   'wallet.grant.submit': 'Bonusni taklif qilish',
   'wallet.refund.open': 'Qaytarishni taklif qilish',
-  'wallet.refund.note': 'Faqat to‘langan pul, to‘lov havolasi bilan. Bonus qaytarilmaydi — u kuyadi.',
+  'wallet.refund.note':
+    'Faqat to‘langan pul, to‘lov havolasi bilan. Bonus qaytarilmaydi — u kuyadi.',
   'wallet.refund.submit': 'Qaytarishni taklif qilish',
   'wallet.field.amount': 'Summa',
   'wallet.field.signedAmount': 'Summa, olib tashlash uchun minus bilan',
@@ -1590,7 +1591,8 @@ export const uzLatn: Messages = {
   'wallet.field.cardToken': 'Karta tokeni havolasi',
   'wallet.kind.PAID': 'To‘langan',
   'wallet.kind.BONUS': 'Bonus',
-  'wallet.change.awaiting': 'Ikkinchi imzo kutilmoqda. Hech narsa o‘zgarmadi; boshqa kishi tasdiqlagach, xuddi shu o‘zgarishni yana taklif qiling.',
+  'wallet.change.awaiting':
+    'Ikkinchi imzo kutilmoqda. Hech narsa o‘zgarmadi; boshqa kishi tasdiqlagach, xuddi shu o‘zgarishni yana taklif qiling.',
   'wallet.change.declined': 'O‘zgarish rad etildi. Hech narsa o‘zgarmadi.',
   'wallet.change.done': 'O‘zgarish hamyon jurnaliga yozildi.',
   'wallet.approvals.note': 'Tuzatish, bonus va qaytarish uchun ikkinchi kishi kerak.',
@@ -1602,8 +1604,10 @@ export const uzLatn: Messages = {
   'wallet.column.lapses': 'Kuyadi',
   'wallet.ledger.title': 'Jurnal',
   'wallet.ledger.none': 'Bu hamyonda hali hech narsa harakatlanmagan.',
-  'wallet.ledger.appendOnly': 'Har bir yozuv bir marta yoziladi. Bu yerda hech narsa tahrirlanmaydi va o‘chirilmaydi, yuqoridagi balans esa shu yozuvlarning yig‘indisi.',
-  'wallet.ledger.appendOnlyTruncated': 'Har bir yozuv bir marta yoziladi. Bu yerda hech narsa tahrirlanmaydi va o‘chirilmaydi. Bular uzunroq jurnalning eng yangi {count} ta yozuvi, shuning uchun yuqoridagi balans butun jurnalning yig‘indisi, ko‘rsatilgan qatorlarniki emas.',
+  'wallet.ledger.appendOnly':
+    'Har bir yozuv bir marta yoziladi. Bu yerda hech narsa tahrirlanmaydi va o‘chirilmaydi, yuqoridagi balans esa shu yozuvlarning yig‘indisi.',
+  'wallet.ledger.appendOnlyTruncated':
+    'Har bir yozuv bir marta yoziladi. Bu yerda hech narsa tahrirlanmaydi va o‘chirilmaydi. Bular uzunroq jurnalning eng yangi {count} ta yozuvi, shuning uchun yuqoridagi balans butun jurnalning yig‘indisi, ko‘rsatilgan qatorlarniki emas.',
   'wallet.column.when': 'Qachon',
   'wallet.column.entry': 'Yozuv',
   'wallet.column.reference': 'Havola',

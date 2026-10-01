@@ -68,7 +68,6 @@ export const messagesUzLatn: MessageCatalogue = {
   'shell.locationPicker.status.SUSPENDED': 'toʻxtatilgan',
 
   'orders.title': 'Buyurtmalar',
-  'orders.detail.empty': 'Bu yerda koʻrish uchun buyurtmani tanlang.',
   'orders.detail.close': 'Yopish',
 
   'orders.drafts.link': 'Qoralamalar',
@@ -198,6 +197,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'orders.column.payment': 'Toʻlov',
   'orders.column.customer': 'Mijoz',
   'orders.column.courier': 'Kuryer',
+  'orders.column.branch': 'Filial',
   'orders.column.status': 'Holat',
   'orders.column.actions': 'Amallar',
 
@@ -214,6 +214,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'orders.action.complete': 'Yakunlash',
   'orders.action.amend': 'Oʻzgartirish',
   'orders.action.assignCourier': 'Kuryer tayinlash',
+  'orders.action.issueInvoice': 'Hisob-faktura chiqarish',
   'orders.action.advance.PREPARING': 'Oshxonaga',
   'orders.action.advance.READY': 'Tayyor',
   'orders.action.advance.FULFILLING': 'Yetkazishga',
@@ -395,7 +396,6 @@ export const messagesUzLatn: MessageCatalogue = {
   'orders.detail.timeline.lane.commercial': 'Tijorat',
   'orders.detail.timeline.lane.production': 'Oshxona',
   'orders.detail.timeline.lane.delivery': 'Yetkazib berish',
-  'orders.detail.timeline.lane.notBuilt': 'hali qurilmagan',
   'orders.detail.timeline.trigger.CHECKOUT': 'Rasmiylashtirish',
   'orders.detail.timeline.trigger.APPROVAL_DECISION': 'Tasdiqlash qarori',
   'orders.detail.timeline.trigger.APPROVAL_TIMEOUT': 'Tasdiqlash muddati oʻtdi',
@@ -588,7 +588,6 @@ export const messagesUzLatn: MessageCatalogue = {
 
   'orders.severity.blocked': 'aralashuv talab qilinadi',
   'orders.severity.approvalDeadline': '{mmss} ichida tasdiqlang',
-  'orders.severity.noPromiseFallback': 'navbatda {duration}',
   'orders.severity.late': '{duration} kechikmoqda',
   'orders.severity.atRisk': 'kechikish xavfi bor',
 
@@ -606,7 +605,6 @@ export const messagesUzLatn: MessageCatalogue = {
   // --- orders.queue toolbar filters (orders.md §2.4, wave P07) -------------
   'orders.queue.filter.search.placeholder': 'Buyurtma №, agregator ID…',
   'orders.queue.filter.search.ariaLabel': 'Buyurtmalarni qidirish',
-  'orders.queue.filter.period.label': 'Davr',
   'orders.queue.filter.channel.label': 'Kanal',
   'orders.queue.filter.channel.all': 'Barcha kanallar',
   'orders.queue.filter.fulfillmentMode.label': 'Turi',
@@ -626,9 +624,29 @@ export const messagesUzLatn: MessageCatalogue = {
   'orders.queue.filter.origin.all': 'Barcha manbalar',
   'orders.queue.filter.origin.HORECAOS': 'Oʻz kanallari',
   'orders.queue.filter.origin.MARKETPLACE': 'Agregator',
+  'orders.queue.filter.branchMode.label': 'Filiallar',
+  'orders.queue.filter.branchMode.one': 'Shu filial',
+  'orders.queue.filter.branchMode.all': 'Barcha filiallar',
+  'orders.queue.filter.branch.label': 'Filial',
+  'orders.queue.filter.branch.all': 'Istalgan filial',
+  'orders.queue.filter.binding.label': 'Agregator',
+  'orders.queue.filter.binding.all': 'Barcha agregatorlar',
+  'orders.queue.filter.late.label': 'Faqat kechikkanlar',
+  'orders.queue.filter.problem.label': 'Muammoli',
+  'orders.queue.filter.callback.label': 'Qoʻngʻiroq kerak',
+  'orders.queue.filter.fiscal.label': 'Fiskallashtirish',
+  'orders.queue.filter.fiscal.all': 'Istalgan holat',
+  'orders.queue.filter.fiscal.ATTENTION': 'Diqqat talab qiladi (xato yoki bloklangan)',
+  'orders.queue.filter.fiscal.PENDING': 'Chek kutilmoqda',
+  'orders.queue.filter.fiscal.SUBMITTED': 'Yuborilgan',
+  'orders.queue.filter.fiscal.ISSUED': 'Chiqarilgan',
+  'orders.queue.filter.fiscal.FAILED': 'Xato',
+  'orders.queue.filter.fiscal.BLOCKED': 'Bloklangan',
+  'orders.queue.filter.fiscal.NOT_APPLICABLE': 'Talab qilinmaydi',
+  'orders.queue.allBranches.bulkNote':
+    'Ommaviy amallar bitta filialda ishlaydi — buyurtmalarni belgilash uchun «Shu filial»ni tanlang.',
 
   // --- orders.queue selection and bulk actions (orders.md §2.10, wave P07) -
-  'orders.queue.column.select': 'Tanlash',
   'orders.queue.selection.selectPage': 'Sahifadagi {count} tasini tanlash',
   'orders.queue.selection.selected': 'Tanlandi: {count}',
   'orders.queue.selection.clear': 'Tanlovni bekor qilish',
@@ -773,7 +791,6 @@ export const messagesUzLatn: MessageCatalogue = {
 
   // ---------------------------------------------------------------- settings (wave 26)
   'settings.nav.title': 'Sozlamalar',
-  'settings.scope.editing': 'Tahrirlanmoqda',
   'settings.scope.denied': 'Doirada filial yoʻq',
   'settings.nav.group.business': 'Korxona',
   'settings.nav.group.selling': 'Sotuv',
@@ -798,8 +815,6 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.home.title': 'Sozlamalar',
   'settings.home.lead':
     'Boshqa ekranlar oʻqiydigan roʻyxatlar va qoidalar: brendingiz, filiallaringiz, buyurtmalar qanday qabul qilinishi va sizga qanday toʻlanishi.',
-  'settings.home.readinessNotBuilt':
-    'Tayyorlik paneli (hozir buyurtmalarga nima xalaqit berayotgani) bir nechta modul boʻyicha oʻqishni talab qiladi — bu toʻlqinda qoʻshilmagan. Quyidan kerakli guruhni oching.',
   'settings.home.notBuiltBadge': 'Hali qurilmagan',
   'settings.home.readiness.title': 'Restoran buyurtma qabul qilishga tayyormi?',
   'settings.home.readiness.loading': 'Tayyorlik tekshirilmoqda…',
@@ -835,6 +850,12 @@ export const messagesUzLatn: MessageCatalogue = {
     'Menyudagi ayrim pozitsiyalarda fiskal tasnif toʻliq emas (IKPU, qadoq kodi, birlik yoki fiskal nom).',
   'settings.home.readiness.code.CHANNEL_NO_PAYMENT_METHOD':
     'Savdo kanalida yoqilgan toʻlov usuli yoʻq, shuning uchun u orqali buyurtma qabul qilib boʻlmaydi.',
+  'settings.home.readiness.code.CHANNEL_NO_FULFILLMENT_MODE':
+    'Savdo kanalida yoqilgan olish usuli yoʻq (yetkazib berish, olib ketish yoki zalda), shuning uchun u orqali buyurtma qabul qilib boʻlmaydi.',
+  'settings.home.readiness.code.CHANNEL_NO_SERVICEABLE_MODE':
+    'Savdo kanalida olish usullari yoqilgan, ammo kanal xizmat koʻrsatadigan filialda birortasiga ish jadvali biriktirilmagan.',
+  'settings.home.readiness.code.LOCATION_NO_SERVICE_SCHEDULE':
+    'Filialda sotiladigan olish usuli uchun ish jadvali biriktirilmagan, shuning uchun u shu usul boʻyicha yopiq.',
   'settings.home.readiness.code.INSTALLATION_SECRET_ROTATION_DUE':
     'Provayder ulanishining kirish maʻlumotlarini almashtirish muddati oʻtib ketgan.',
   'settings.home.readiness.code.MERCHANT_SECRET_ROTATION_DUE':
@@ -939,9 +960,6 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.integrations.connect.environmentCode.test': 'sinov',
   'settings.integrations.connect.environmentCode.none':
     'Bu provayder uchun hali tasdiqlangan muhit yoʻq. Ulashdan oldin platforma qoʻllab-quvvatlash xizmatiga murojaat qiling.',
-  'settings.integrations.connect.reference': 'Havola (ixtiyoriy)',
-  'settings.integrations.connect.reference.hint':
-    'Maxfiy boʻlmagan belgi, masalan merchant yoki servis id, oʻz yozuvlaringiz uchun.',
   'settings.integrations.connect.submit': 'Ulash',
   'settings.integrations.connect.submitting': 'Ulanmoqda…',
   'settings.integrations.connect.success':
@@ -971,7 +989,6 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.integrations.rotate.reason': 'Sabab',
   'settings.integrations.rotate.submit': 'Yangilash',
   'settings.integrations.rotate.submitting': 'Yangilanmoqda…',
-  'settings.integrations.rotate.success': 'Maxfiy maʻlumot yangilandi.',
   'settings.integrations.rotate.cancel': 'Bekor qilish',
   'settings.integrations.rotate.unverifiedNotice':
     'Bu provayderda maxfiy maʻlumotni foydalanishdan oldin tekshirish imkoni yoʻq. Qiymat yoziladi va almashtiriladi, haqiqiy toʻlov bilan tasdiqlanguncha tekshirilmagan deb belgilanadi.',
@@ -1002,8 +1019,6 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.integrations.registerBinding.value': 'Merchant maxfiy kaliti',
   'settings.integrations.registerBinding.submit': 'Roʻyxatdan oʻtkazish',
   'settings.integrations.registerBinding.submitting': 'Roʻyxatdan oʻtkazilmoqda…',
-  'settings.integrations.registerBinding.success':
-    'Sotuvchi bogʻlanishi qoralama sifatida roʻyxatdan oʻtkazildi. Hammasi toʻgʻri boʻlsa, faollashtiring.',
   'settings.integrations.registerBinding.cancel': 'Bekor qilish',
 
   // 10.1 Brend profili, 10.12 tillar va mintaqaviy formatlar
@@ -1045,6 +1060,32 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.brandProfile.locale.ru': 'Rus tili',
   'settings.brandProfile.locale.uzLatn': 'Oʻzbek (lotin)',
   'settings.brandProfile.locale.en': 'Ingliz tili',
+  'settings.brandProfile.section.formats': 'Formatlar',
+  'settings.brandProfile.formats.lead':
+    'Ushbu brend operatorlari konsolda summa va telefon raqamlarini qanday koʻradi. Faqat koʻrinish: saqlangan, eksport qilinadigan maʻlumot va mijozga boradigan narsa oʻzgarmaydi.',
+  'settings.brandProfile.formats.placement': 'Jamida valyuta belgisi',
+  'settings.brandProfile.formats.placement.AFTER': 'Summadan keyin',
+  'settings.brandProfile.formats.placement.BEFORE': 'Summadan oldin',
+  'settings.brandProfile.formats.grouping': 'Minglik ajratgich',
+  'settings.brandProfile.formats.grouping.SPACE': 'Probel',
+  'settings.brandProfile.formats.grouping.COMMA': 'Vergul',
+  'settings.brandProfile.formats.grouping.DOT': 'Nuqta',
+  'settings.brandProfile.formats.grouping.NONE': 'Ajratgichsiz',
+  'settings.brandProfile.formats.phone': 'Telefon raqami formati',
+  'settings.brandProfile.formats.phone.asReceived': 'Tizimdagidek',
+  'settings.brandProfile.formats.phone.custom': 'Oʻz shablonim',
+  'settings.brandProfile.formats.phone.pattern': 'Shablon',
+  'settings.brandProfile.formats.phone.patternHint':
+    'Har bir raqam uchun bitta #, yettitadan oʻn beshtagacha. + ( ) - . va probellar yozilganidek qoladi.',
+  'settings.brandProfile.formats.timezone.hint':
+    'Bu yerda faqat koʻrish uchun: standart vaqt mintaqasini tenant belgilaydi, har bir filialning oʻzi bor.',
+  'settings.brandProfile.formats.timezone.tenant': 'Tenant standarti',
+  'settings.brandProfile.formats.timezone.branches': 'Filiallarning vaqt mintaqalari',
+  'settings.brandProfile.formats.preview': 'Namuna',
+  'settings.brandProfile.formats.preview.total': 'Jami',
+  'settings.brandProfile.formats.preview.phone': 'Telefon',
+  'settings.brandProfile.formats.error.pattern':
+    'Telefon shablonida 7 tadan 15 tagacha # boʻlishi va faqat # + ( ) - . hamda probel ishlatilishi kerak.',
 
   // 10.4 Sotuv kanallari
   'settings.salesChannels.title': 'Sotuv kanallari',
@@ -1214,10 +1255,12 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.orderPolicy.field.averageOrderMinutes': 'Oʻrtacha buyurtma vaqti (daqiqa)',
   'settings.orderPolicy.field.maximumOrderMinutes': 'Maksimal buyurtma vaqti (daqiqa)',
   'settings.orderPolicy.field.lateOrderThresholdMinutes': 'Buyurtma kechikadi (daqiqa)',
+  'settings.orderPolicy.lateOrderThresholdMinutes.hint':
+    'Hozircha qoʻllanilmaydi: bu qiymatni hech narsa oʻqimaydi, shuning uchun uni oʻzgartirish buyurtma qachon kechikkan hisoblanishiga taʻsir qilmaydi. Buyurtma qachon kechikkan hisoblanishi quyidagi «Buyurtma qachon kechikkan hisoblanadi» blokida belgilanadi.',
   'settings.orderPolicy.field.atRiskBeforeMinutes':
     'Belgilangan vaqtdan oldin ogohlantirish (daqiqa)',
   'settings.orderPolicy.atRiskBeforeMinutes.hint':
-    'Buyurtma belgilangan vaqtdan necha daqiqa oldin «xavf ostida» deb koʻrsatiladi. Buyurtmaning barcha turlariga, buyurtmalar taxtasida ham, oshxona taxtasida ham amal qiladi.',
+    'Buyurtma belgilangan vaqtdan necha daqiqa oldin «xavf ostida» deb koʻrsatiladi. Quyidagi kechikish chegaralarida oʻz qiymati boʻlmagan buyurtma turi uchun standart qiymat. Buyurtmalar taxtasida ham, oshxona taxtasida ham amal qiladi.',
   'settings.orderPolicy.field.lateColour': 'Kechikkan buyurtma rangi',
   'settings.orderPolicy.lateColour.hint':
     'Kechikkan buyurtmalar buyurtmalar taxtasida va oshxona taxtasida shu rangda koʻrsatiladi. Brendingiz boshqasini talab qilmasa, standart rangni qoldiring: qatorda yomon koʻrinadigan rang eng koʻp diqqat talab qiladigan buyurtmalarni yashiradi — kontrast ogohlantirishiga eʻtibor bering.',
@@ -1241,6 +1284,30 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.orderPolicy.preorderBranchResolution.BY_OPENING_TIME': 'Eng tez ochiladigan',
   'settings.orderPolicy.field.operatorPromoCodeAllowed': 'Operator promokod kiritishi mumkin',
   'settings.orderPolicy.revertReason': 'Meros qiymatga qaytarildi',
+
+  // Rows X.39 / 10.3b — ordering.lateness hujjati tahrirlovchisi
+  'settings.latenessPolicy.title': 'Buyurtma qachon kechikkan hisoblanadi',
+  'settings.latenessPolicy.lead':
+    'Yetkazib berish, olib ketish va zal uchun alohida belgilanadi. Bu sonlarni buyurtmalar taxtasi, oshxona navbati va oshxona ekranlari oʻqiydi.',
+  'settings.latenessPolicy.version': '{version}-versiya',
+  'settings.latenessPolicy.mode.delivery': 'Yetkazib berish',
+  'settings.latenessPolicy.mode.pickup': 'Olib ketish',
+  'settings.latenessPolicy.mode.dineIn': 'Zalda',
+  'settings.latenessPolicy.summary':
+    'Belgilangan vaqtdan oldin ogohlantirish: {atRisk} · kechikish: {lateAfter} soniya · vaʻdasiz kechikish chegarasi: {fallback}',
+  'settings.latenessPolicy.unit.minutes': '{n} daqiqa',
+  'settings.latenessPolicy.summary.default': '(standart)',
+  'settings.latenessPolicy.oneDocument':
+    'Buyurtmaning uch turi uchun bitta versiyalangan hujjat sifatida saqlanadi, shuning uchun istalganini tahrirlash uchalasini ochadi.',
+  'settings.latenessPolicy.field.atRisk': 'Belgilangan vaqtdan oldin ogohlantirish (daqiqa)',
+  'settings.latenessPolicy.field.lateAfter': 'Belgilangan vaqtdan keyin kechikish (soniya)',
+  'settings.latenessPolicy.field.fallback': 'Vaʻdasiz: kechikish (daqiqa)',
+  'settings.latenessPolicy.blankMeansDefault':
+    '“Belgilangan vaqtdan oldin ogohlantirish” maydonini standart qiymat uchun boʻsh qoldiring: {minutes} daqiqa ({source}).',
+  'settings.latenessPolicy.default.scalar':
+    'yuqoridagi “Belgilangan vaqtdan oldin ogohlantirish” qiymati',
+  'settings.latenessPolicy.default.platform': 'platformaning standart qiymati',
+  'settings.latenessPolicy.reload': 'Qayta yuklash va oʻzgarishlarimni bekor qilish',
 
   // 4.4d Katalogning bazaviy sozlamalari
   'settings.catalog.title': 'Katalogning bazaviy sozlamalari',
@@ -1324,7 +1391,6 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.fiscalization.field.status': 'Holat',
   'settings.fiscalization.cancel': 'Bekor qilish',
   'settings.fiscalization.assignment.title': 'Ushbu filialning fiskal sotuvchisi',
-  'settings.fiscalization.assignment.active': '{name}, {date} dan beri',
   'settings.fiscalization.assignment.current': 'Joriy',
   'settings.fiscalization.assignment.none':
     'Faol fiskal tayinlash yoʻq — bu filial chek chiqara oladigan kanal uchun faollashtirilishi mumkin emas.',
@@ -1367,7 +1433,7 @@ export const messagesUzLatn: MessageCatalogue = {
     'Tasniflanmagan: {total} tadan {unclassified} tasi',
   'settings.fiscalization.classification.empty': 'Hammasi tasniflangan.',
   'settings.fiscalization.classification.notAnEditor':
-    'Har bir mahsulotni tasniflash mahsulot muharririda amalga oshiriladi. Bu qamrov hisoboti, muharrir emas.',
+    'Alohida taomning toʻliq tasnifi (oʻlchov birligi, fiskal nom, markirovka) mahsulot muharririda tahrirlanadi. Bu bandda qamrov koʻrsatiladi va IKPU hamda qadoq kodlari ommaviy toʻldiriladi.',
   'settings.fiscalization.classification.field.type': 'Turi',
   'settings.fiscalization.classification.field.name': 'Nomi',
   'settings.fiscalization.classification.field.category': 'Toifasi',
@@ -1383,6 +1449,37 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.fiscalization.classification.deliveryFee.markingRequired': 'Markirovka talab qilinadi',
   'settings.fiscalization.classification.deliveryFee.submit': 'Saqlash',
   'settings.fiscalization.classification.deliveryFee.submitting': 'Saqlanmoqda…',
+  'settings.fiscalization.backfill.title': 'IKPU va qadoq kodlarini toʻldirish',
+  'settings.fiscalization.backfill.lead':
+    '{count} ta taomda IKPU yoki qadoq kodi yetishmaydi. Kodlarni qoʻlda kiriting yoki jadvaldan ustunni nusxalab, birinchi katakka joylang — qiymatlar pastga qarab joylashadi. Taomda allaqachon bor kod oʻz holicha koʻrsatiladi va bu yerda oʻzgarmaydi; uni mahsulot muharririda oʻzgartiring.',
+  'settings.fiscalization.backfill.referenceNote':
+    'IKPUning rasmiy roʻyxati hali yuklanmagan, shuning uchun kod faqat formati boʻyicha tekshiriladi (17 raqam) va uni nomi boʻyicha qidirib boʻlmaydi. Oʻlchov birligi va fiskal nom katalogning fiskal ish stolida belgilanadi.',
+  'settings.fiscalization.backfill.empty': 'Barcha taomlarda IKPU va qadoq kodi bor.',
+  'settings.fiscalization.backfill.column.mxik': 'IKPU (17 raqam)',
+  'settings.fiscalization.backfill.column.packageCode': 'Qadoq kodi',
+  'settings.fiscalization.backfill.copyDefault': 'Toifadan olish',
+  'settings.fiscalization.backfill.copyDefault.title':
+    'Boʻsh kataklarni “{category}” toifasidagi {sample} ta tasniflangan taomdan {agreeing} tasi ishlatadigan qiymat bilan toʻldirish: {mxik}, qadoq {package}',
+  'settings.fiscalization.backfill.copyDefault.unavailable':
+    'Nusxalash uchun hech narsa yoʻq: toifada tasniflangan taom yoʻq yoki kataklarda boshqa kodlar bor.',
+  'settings.fiscalization.backfill.copyAll': 'Toifa kodlarini boʻsh kataklarga olish ({count})',
+  'settings.fiscalization.backfill.dirty': 'Saqlanmagan qatorlar: {count}',
+  'settings.fiscalization.backfill.discard': 'Bekor qilish',
+  'settings.fiscalization.backfill.save': 'Qatorlarni saqlash: {count}',
+  'settings.fiscalization.backfill.saving': 'Saqlanmoqda…',
+  'settings.fiscalization.backfill.error.mxik': 'IKPU roppa-rosa 17 raqamdan iborat.',
+  'settings.fiscalization.backfill.error.packageCode':
+    'Qadoq kodi faqat raqamlardan iborat, 10 tagacha.',
+  'settings.fiscalization.backfill.pasteSkipped':
+    'Qoldirilgan joylangan kodlar: {count}. Bu kataklarda taomda allaqachon kod bor; kiritilgan kodni mahsulot muharririda oʻzgartiring.',
+  'settings.fiscalization.backfill.invalidSkipped':
+    'Qatorlarda ({count}) kod formati notoʻgʻri, ular yuborilmadi. Belgilangan kataklarni tuzating.',
+  'settings.fiscalization.backfill.summary':
+    'Saqlandi: {saved}, allaqachon toʻldirilgan: {unchanged}, saqlanmadi: {failed}.',
+  'settings.fiscalization.backfill.status.notFound': 'Bu taom endi mavjud emas.',
+  'settings.fiscalization.backfill.status.conflict':
+    'Taomda allaqachon boshqa kod bor; u oʻzgartirilmadi. Roʻyxat yangilandi.',
+  'settings.fiscalization.backfill.status.failed': 'Saqlanmadi. Qayta urinib koʻring.',
 
   // 10.9 Bildirishnomalar
   'settings.notifications.title': 'Bildirishnomalar',
@@ -1408,10 +1505,6 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.notifications.field.channel': 'Yetkazish kanali',
   'settings.notifications.field.status': 'Faol',
   'settings.notifications.field.activeVersion': 'Versiya',
-  'settings.notifications.field.bodyRu': 'Matn (rus tilida)',
-  'settings.notifications.field.bodyUz': 'Matn (oʻzbek tilida)',
-  'settings.notifications.field.bodyEn': 'Matn (ingliz tilida)',
-  'settings.notifications.field.activateImmediately': 'Bu versiyani darhol faollashtirish',
   'settings.notifications.field.channel.hint':
     'Bugun faqat SMS va Telegram haqiqatda yuboradi. Email va Push sxema hamda shablon kalitida eʻlon qilingan, lekin ularni hech qanday adapter yetkazmaydi.',
   'settings.notifications.field.variant': 'Variant',
@@ -1424,13 +1517,11 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.notifications.action.rowMenu': 'Amallar',
   'settings.notifications.action.versions': 'Versiyalar',
   'settings.notifications.action.newVersion': 'Yangi versiya',
-  'settings.notifications.action.view': 'Koʻrish',
   'settings.notifications.action.activate': 'Faollashtirish',
   'settings.notifications.action.testSend': 'Sinov yuborish',
   'settings.notifications.action.close': 'Yopish',
   'settings.notifications.drawer.versionsTitle': 'Versiyalar — {key}',
   'settings.notifications.drawer.editorTitleNew': 'Yangi versiya — {key}',
-  'settings.notifications.drawer.editorTitleView': 'Versiya {version} — {key}',
   'settings.notifications.versions.empty': 'Hali versiyalar yoʻq — bu shablonda umuman matn yoʻq.',
   'settings.notifications.versions.column.version': 'Versiya',
   'settings.notifications.versions.column.status': 'Holat',
@@ -1441,10 +1532,6 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.notifications.moderation.PENDING': 'Shlyuzni kutmoqda',
   'settings.notifications.moderation.APPROVED': 'Tasdiqlangan',
   'settings.notifications.moderation.REJECTED': 'Shlyuz rad etdi',
-  'settings.notifications.moderation.warning.PENDING':
-    'Bu matn hali SMS shlyuzining tasdigʻini kutmoqda. Bu matndan foydalanadigan har bir xabar shlyuz javob berguncha ushlab turiladi — hozir faollashtirish uni yubormaydi.',
-  'settings.notifications.moderation.warning.REJECTED':
-    'Bu matn SMS shlyuzi tomonidan rad etilgan. Bu matndan foydalanadigan har bir xabar yuborilishdan ushlab turiladi — yangi versiya kerak.',
   'settings.notifications.editor.subject': 'Mavzu',
   'settings.notifications.editor.body': 'Matn',
   'settings.notifications.editor.variables': 'Oʻzgaruvchi qoʻshish',
@@ -1490,7 +1577,6 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.notifications.routing.scope.brand': 'Butun brend',
   'settings.notifications.routing.topic.flat': 'Oddiy chat',
   'settings.notifications.routing.topic.numbered': '{topic}-mavzu',
-  'settings.notifications.routing.action.editTopic': 'Mavzuni oʻzgartirish',
   'settings.notifications.routing.action.unbind': 'Uzish',
   'settings.notifications.routing.unbind.confirm.title': 'Bu chat uzilsinmi?',
   'settings.notifications.routing.unbind.confirm.body':
@@ -2178,7 +2264,6 @@ export const messagesUzLatn: MessageCatalogue = {
   'catalog.products.denied': 'Bu brend katalogiga kirish huquqi yoʻq',
   'catalog.products.empty.default': 'Filtrga mos mahsulot yoʻq',
   'catalog.products.empty.noCatalog': 'Bu brendda hali katalog yoʻq',
-  'catalog.products.loadMore': 'Yana koʻrsatish',
 
   // P21 — qator amallari, ommaviy amallar va fiskal kabinet
   'catalog.products.action.duplicate': 'Nusxalash',
@@ -2225,8 +2310,6 @@ export const messagesUzLatn: MessageCatalogue = {
   'catalog.editor.notFound': 'Bu mahsulot endi mavjud emas',
   'catalog.editor.backToList': 'Mahsulotlar roʻyxatiga',
   'catalog.editor.denied': 'Bu mahsulotni tahrirlashga ruxsat yoʻq',
-  'catalog.editor.publishedBanner':
-    'Bu mahsulot chop etilgan. Oʻzgarishlarni mijozlar faqat menyu qayta chop etilgandan keyin koʻradi.',
   'catalog.editor.tab.basic': 'Asosiy',
   'catalog.editor.tab.variants': 'Variantlar',
   'catalog.editor.tab.modifiers': 'Modifikatorlar',
@@ -2246,10 +2329,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'catalog.editor.basic.code': 'Kodi',
   'catalog.editor.basic.codeNote': 'Birinchi chop etishdan keyin oʻzgarmaydi',
   'catalog.editor.basic.status': 'Holati',
-  'catalog.editor.basic.statusNote': 'Qoralama, Faol yoki Arxiv',
   'catalog.editor.basic.catalogs': 'Kataloglar',
   'catalog.editor.basic.categories': 'Kategoriyalar',
-  'catalog.editor.basic.addCategory': 'Kategoriyaga qoʻshish…',
   'catalog.editor.basic.remove': 'Olib tashlash',
   'catalog.editor.basic.kitchenDept': 'Oshxona boʻlimi',
   'catalog.editor.kitchen.role.none': '— Yoʻnaltirilmagan —',
@@ -2265,8 +2346,6 @@ export const messagesUzLatn: MessageCatalogue = {
   'catalog.editor.variants.column.unit': 'Oʻlchov birligi',
   'catalog.editor.variants.column.default': 'Standart',
   'catalog.editor.variants.column.price': 'Asosiy narx',
-  'catalog.editor.variants.column.mxik': 'IKPU',
-  'catalog.editor.variants.column.packageCode': 'Qadoq kodi',
   'catalog.editor.variants.column.status': 'Holati',
   'catalog.editor.variants.add': 'Variant qoʻshish',
   'catalog.editor.variants.noPrice': 'Narx yoʻq',
@@ -2275,14 +2354,10 @@ export const messagesUzLatn: MessageCatalogue = {
   'catalog.editor.modifiers.library': 'Modifikator guruhlari kutubxonasi',
   'catalog.editor.modifiers.attached': 'Mahsulotga biriktirilgan',
   'catalog.editor.modifiers.attach': 'Biriktirish',
-  'catalog.editor.modifiers.required': 'Majburiy, {min}',
-  'catalog.editor.modifiers.optional': 'Ixtiyoriy, {max} tagacha',
   'catalog.editor.modifiers.empty': 'Modifikator guruhlari biriktirilmagan',
   'catalog.editor.modifiers.libraryEmpty': 'Brendda hali modifikator guruhlari yoʻq',
   'catalog.editor.modifiers.create': 'Guruh yaratish',
   'catalog.editor.photos.empty': 'Hali rasm yoʻq',
-  'catalog.editor.photos.upload': 'Rasm yuklash',
-  'catalog.editor.photos.uploading': 'Yuklanmoqda…',
   'catalog.editor.photos.moveUp': 'Oldinga siljitish',
   'catalog.editor.photos.moveDown': 'Keyinga siljitish',
   'catalog.editor.photos.detach': 'Rasmni olib tashlash',
@@ -2303,15 +2378,11 @@ export const messagesUzLatn: MessageCatalogue = {
   'catalog.editor.fiscal.alcohol': 'Spirt darajasi, %',
   'catalog.editor.fiscal.age': 'Yosh chegarasi, yil',
   'catalog.editor.fiscal.save': 'Klassifikatsiyani saqlash',
-  'catalog.editor.fiscal.inherited': 'Mahsulotdan meros qilingan',
   'catalog.editor.fiscal.notBuilt':
     'Markirovka sxemasi, aksiz, spirt darajasi va yosh chegarasi saqlanadi, lekin chop etishda hali tekshirilmaydi — ADR 0038',
   'catalog.editor.fiscal.mxikReferenceNote':
     'Boʻsh natija rasmiy ИКПУ/MXIK roʻyxati platformaga hali yuklanmaganini bildiradi — hech narsa topilmagani emas.',
   'catalog.editor.availability.location': 'Filial',
-  'catalog.editor.availability.inMenu': 'Menyuda',
-  'catalog.editor.availability.fulfillment': 'Buyurtma turlari',
-  'catalog.editor.availability.tracking': 'Hisob',
   'catalog.editor.availability.state': 'Holati',
   'catalog.editor.availability.empty': 'Mahsulot hali birorta filialda taklif qilinmagan',
   'catalog.editor.availability.stop': 'Toʻxtatish',
@@ -2408,12 +2479,10 @@ export const messagesUzLatn: MessageCatalogue = {
   'catalog.categories.form.code': 'Kodi',
   'catalog.categories.form.parent': 'Ota kategoriya',
   'catalog.categories.form.parentNone': 'Otasiz — yuqori daraja',
-  'catalog.categories.form.sortOrder': 'Tartib',
   'catalog.categories.form.status': 'Holati',
   'catalog.categories.form.save': 'Saqlash',
   'catalog.categories.products.title': 'Ushbu kategoriyadagi mahsulotlar',
   'catalog.categories.products.empty': 'Bu kategoriyada mahsulot yoʻq',
-  'catalog.categories.products.add': 'Mahsulot qoʻshish…',
   'catalog.categories.denied': 'Bu brend kategoriyalariga kirish huquqi yoʻq',
   'catalog.categories.loading': 'Kategoriyalar yuklanmoqda',
   'catalog.categories.selectPrompt': 'Tahrirlash uchun kategoriya tanlang',
@@ -2472,13 +2541,9 @@ export const messagesUzLatn: MessageCatalogue = {
   'catalog.stock.thresholds.remove': 'Olib tashlash',
 
   'catalog.menus.title': 'Menyular',
-  'catalog.menus.location.label': 'Filial',
-  'catalog.menus.location.none': 'Bu hisobga hali filial biriktirilmagan',
   'catalog.menus.column.product': 'Mahsulot',
-  'catalog.menus.column.sku': 'SKU',
   'catalog.menus.column.price': 'Narx',
   'catalog.menus.column.status': 'Menyuda',
-  'catalog.menus.column.prep': 'Tayyorlash vaqti',
   'catalog.menus.status.AVAILABLE': 'Menyuda',
   'catalog.menus.status.UNAVAILABLE': 'Toʻxtatilgan',
   'catalog.menus.status.HIDDEN': 'Yashirilgan',
@@ -2552,7 +2617,6 @@ export const messagesUzLatn: MessageCatalogue = {
   'catalog.priceList.column.status': 'Holati',
   'catalog.priceList.column.priority': 'Ustuvorlik',
   'catalog.priceList.matrix': 'Matritsa',
-  'catalog.priceList.assignBrand': 'Brendga qoʻllash',
   'catalog.priceList.activate': 'Faollashtirish',
   'catalog.priceList.relatedLinks': 'Bogʻliq ekranlar',
   'catalog.priceList.assign': 'Tayinlash',
@@ -2571,7 +2635,6 @@ export const messagesUzLatn: MessageCatalogue = {
   'catalog.priceMatrix.loading': 'Matritsa yuklanmoqda',
   'catalog.priceMatrix.denied': 'Bu brend narxlariga ruxsat yoʻq',
   'catalog.priceMatrix.notFound': 'Bu prays-buk endi mavjud emas',
-  'catalog.priceMatrix.loadError': 'Matritsani yuklab boʻlmadi',
   'catalog.priceMatrix.empty': 'Bu filtrga mos variant topilmadi',
   'catalog.priceMatrix.category': 'Kategoriya',
   'catalog.priceMatrix.allCategories': 'Barcha kategoriyalar',
@@ -2587,7 +2650,6 @@ export const messagesUzLatn: MessageCatalogue = {
   'catalog.priceMatrix.loadingMore': 'Yuklanmoqda…',
   'catalog.priceMatrix.conflict':
     'Bu narxni boshqa birov oʻzgartirdi — joriy qiymat bilan yangilandi. Qayta urinib koʻring.',
-  'catalog.priceMatrix.noBasePrice': 'Brend boʻyicha faol baza prays-buki hali yoʻq',
 
   'catalog.taxProfile.title': 'QQS / soliq profillari',
   'catalog.taxProfile.intro': 'Brend QQS stavkasini belgilaydi.',
@@ -2729,7 +2791,6 @@ export const messagesUzLatn: MessageCatalogue = {
   'kitchen.item.column.station': 'Stansiya',
   'kitchen.item.column.quantity': 'Soni',
   'kitchen.item.column.status': 'Holati',
-  'kitchen.item.hasNote': 'Mijoz izoh qoldirgan',
   'kitchen.item.lineUnresolved': 'Qator —',
   'kitchen.item.status.QUEUED': 'Navbatda',
   'kitchen.item.status.STARTED': 'Ishda',
@@ -2747,7 +2808,6 @@ export const messagesUzLatn: MessageCatalogue = {
 
   // Raspredelitelnidan o'z kuryerini biriktirish (2.1c) — P16 to'lqini
   'kitchen.assign.button': 'Kuryer biriktirish',
-  'kitchen.assign.title': 'Kuryer biriktirish',
   'kitchen.assign.loading': 'Yetkazib berish rejasi qidirilmoqda…',
   'kitchen.assign.noPlan': 'Bu buyurtma uchun yetkazib berish rejasi topilmadi',
   'kitchen.assign.empty': "Shtatda kuryerlar yo'q",
@@ -2780,8 +2840,6 @@ export const messagesUzLatn: MessageCatalogue = {
 
   'kitchen.expo.handOver': 'Topshirish',
   'kitchen.expo.empty': 'Topshirish uchun hech narsa yoʻq',
-  'kitchen.expo.noCodeVerification':
-    'Yetkazib beruvchi topshirish kodini tekshirish hali yoʻq — bu tugma faqat topshirishni qayd etadi.',
   'kitchen.expo.packedConfirm': 'Qadoqlangan va topshirishga tayyor',
   'kitchen.expo.packedWaiting': 'Qadoqlashdan oldin barcha qatorlar tayyor boʻlishi kutilmoqda',
 
@@ -2794,9 +2852,6 @@ export const messagesUzLatn: MessageCatalogue = {
   'kitchen.stopList.bulk.reason.noProduct': 'Mahsulot yoʻq',
   'kitchen.stopList.bulk.reason.equipment': 'Uskuna nosoz',
   'kitchen.stopList.bulk.reason.other': 'Boshqa',
-  'kitchen.stopList.bulk.stopAction': 'Tanlanganlarni stopga qoʻyish',
-  'kitchen.stopList.bulk.unstopAction': 'Tanlanganlarni stopdan olish',
-  'kitchen.stopList.bulk.clear': 'Tozalash',
   'kitchen.stopList.bulk.done': 'Yangilangan tovarlar: {count}',
   'kitchen.stopList.bulk.partial': 'Yangilanmadi: {failed}',
   'kitchen.stopList.bulk.tooMany':
@@ -2817,7 +2872,6 @@ export const messagesUzLatn: MessageCatalogue = {
   'kitchen.stopList.action.stop': 'Stop',
   'kitchen.stopList.action.unstop': 'Stopdan olish',
   'kitchen.stopList.empty': 'Bu filialda hali mahsulotlar yoʻq',
-  'kitchen.stopList.loadMore': 'Yana koʻrsatish',
 
   // Sigʻim va bufer sozlamalari (2.6) — 43-toʻlqin
   'kitchen.capacity.title': 'Sigʻim va bufer sozlamalari',
@@ -3083,7 +3137,6 @@ export const messagesUzLatn: MessageCatalogue = {
   'delivery.zones.column.version': 'Versiya',
   'delivery.zones.column.priority': 'Ustuvorlik',
   'delivery.zones.column.tariff': 'Tarif',
-  'delivery.zones.detail.boundLocations': 'Biriktirilgan filiallar: {count}',
   'delivery.zones.detail.freeFrom': '{amount} dan bepul',
   'delivery.zones.detail.minBasket': 'Minimal buyurtma {amount}',
   'delivery.zones.detail.loading': 'Zona maʻlumotlari yuklanmoqda',
@@ -3113,7 +3166,6 @@ export const messagesUzLatn: MessageCatalogue = {
   'delivery.zoneImport.committed': '{count} ta zona qoralama sifatida import qilindi',
   'delivery.zones.create.title': 'Zonani roʻyxatga olish',
   'delivery.zones.create.code': 'Kod',
-  'delivery.zones.create.name': 'Nomi',
   'delivery.zones.create.submit': 'Roʻyxatga olish',
   'delivery.zones.draft.action': 'Doira chizish',
   'delivery.zones.draft.title': '{code} zonasining yangi versiyasi',
@@ -3180,7 +3232,6 @@ export const messagesUzLatn: MessageCatalogue = {
   'delivery.tariffs.column.default': 'Andoza',
   'delivery.tariffs.default.yes': 'Brend andoza tarifi',
   'delivery.tariffs.detail.loading': 'Tarif maʻlumotlari yuklanmoqda',
-  'delivery.tariffs.detail.timeRules': 'Choʻqqi soat qoidalari: {count}',
   'delivery.tariffs.band.from': 'Dan (m)',
   'delivery.tariffs.band.to': 'Gacha (m)',
   'delivery.tariffs.band.base': 'Baza',
@@ -3198,8 +3249,6 @@ export const messagesUzLatn: MessageCatalogue = {
   'delivery.tariffs.draft.currency': 'Valyuta',
   'delivery.tariffs.draft.maxDistance': 'Masofa (metr)',
   'delivery.tariffs.draft.minFee': 'Minimal toʻlov (minimal birlik)',
-  'delivery.tariffs.draft.base': 'Baza toʻlovi (minimal birlik)',
-  'delivery.tariffs.draft.perKm': 'Km uchun toʻlov (minimal birlik)',
   'delivery.tariffs.draft.submit': 'Qoralamani saqlash',
   'delivery.tariffs.column.distanceMode': 'Masofa',
   'delivery.tariffs.column.reach': 'Qamrov (m)',
@@ -3385,8 +3434,6 @@ export const messagesUzLatn: MessageCatalogue = {
   'delivery.rates.cards.column.bandTo': 'Gacha (m)',
   'delivery.rates.cards.column.minimumSeconds': 'Min. toʻlanadigan soniya',
   'delivery.rates.cards.activate': 'Faollashtirish',
-  'delivery.rates.cards.perOrder': 'Buyurtma uchun (mayda birlik)',
-  'delivery.rates.cards.perShift': 'Smena uchun qatʻiy (mayda birlik)',
   'delivery.rates.cards.narrowerLocation': 'Filial ID (ixtiyoriy, butun branddan tor)',
   'delivery.rates.cards.narrowerLocationPlaceholder': 'Butun brend uchun boʻsh qoldiring',
   'delivery.rates.cards.narrowerCourierType': 'Transport sinfi (ixtiyoriy)',
@@ -3538,22 +3585,12 @@ export const messagesUzLatn: MessageCatalogue = {
     'Yetkazib berishni tasdiqlovchi fotosurat va imzolar shuncha kun saqlanadi, keyin oʻchiriladi.',
   'delivery.policy.card.courier': 'Kuryer nimani koʻradi va nima qila oladi',
   'delivery.policy.kitchenReadyOnly': 'Faqat tayyor buyurtmalarni koʻrsatish',
-  'delivery.policy.consequence.kitchenReadyOnly':
-    'Kuryer faqat oshxona allaqachon tayyor deb belgilagan buyurtmalarni koʻradi va ola oladi.',
   'delivery.policy.revealCustomerLocationTiming': 'Mijoz manzilini ochish',
   'delivery.policy.revealCustomerLocationTiming.BEFORE_ACCEPT': 'Qabul qilishdan oldin',
   'delivery.policy.revealCustomerLocationTiming.AFTER_ACCEPT': 'Qabul qilgandan keyin',
-  'delivery.policy.consequence.revealCustomerLocationTiming':
-    '«Qabul qilishdan oldin» aniq manzilni taklifni koʻrgan har bir kuryerga koʻrsatadi; «qabul qilgandan keyin» — faqat qabul qilgan kuryerga.',
   'delivery.policy.postDeliveryPaymentCheckRequired':
     'Yetkazishdan keyin toʻlov holatini tekshirish',
-  'delivery.policy.consequence.postDeliveryPaymentCheckRequired':
-    'Toʻlov tasdiqlanmaguncha buyurtma yopilmaydi.',
   'delivery.policy.gpsVerificationEnabled': 'Kuryer harakatlarini GPS radiusi boʻyicha tekshirish',
-  'delivery.policy.consequence.gpsVerificationEnabled':
-    'Standart holatda oʻchirilgan. Yoqilsa, kuryerning holati quyidagi ikkala radius boʻyicha tekshirila boshlaydi.',
-  'delivery.policy.gpsAcceptRadiusKm': 'Qabul qilish radiusi (km, olib ketish nuqtasidan)',
-  'delivery.policy.gpsStatusChangeRadiusMeters': 'Holat oʻzgarish radiusi (m, mijoz nuqtasidan)',
   'delivery.policy.gpsSummary':
     'Yoqilgan — qabul {acceptKm} km ichida, holat oʻzgarishi {statusChangeM} m ichida',
   'delivery.policy.billingMode': 'Kuryerlar billingi (shaxsiy balans)',
@@ -3648,7 +3685,6 @@ export const messagesUzLatn: MessageCatalogue = {
   'customers.import.reject.AMBIGUOUS_PHONE_MATCH':
     'Bu telefon raqami bir nechta mijozga mos keladi',
   'customers.import.reject.OTHER': 'Import qilib boʻlmadi',
-  'customers.export.dismiss': 'Yopish',
 
   'customers.detail.unnamed': 'Ismi koʻrsatilmagan mijoz',
   'customers.detail.registered': 'Roʻyxatdan oʻtgan',
@@ -3895,7 +3931,6 @@ export const messagesUzLatn: MessageCatalogue = {
   'staff.outcome.partial': '{total} tadan {succeeded} tasi bajarildi',
 
   'staff.dialog.cancel': 'Bekor qilish',
-  'staff.dialog.close': 'Yopish',
 
   'staff.jobDialog.title': 'Lavozim',
   'staff.jobDialog.role.label': 'Lavozim',
@@ -3934,10 +3969,6 @@ export const messagesUzLatn: MessageCatalogue = {
   'staff.accessDialog.revokeInvite.confirm': 'Bekor qilish',
 
   'staff.inviteDialog.title': 'Taklif qilish',
-  'staff.inviteDialog.body':
-    'Telefon orqali mustaqil taklif qilish hali qurilmagan: platforma faqat kompaniyani ulash jarayonida egasi uchun hisob yarata oladi, oddiy xodim uchun emas.',
-  'staff.inviteDialog.workaround':
-    'Allaqachon hisobi bor odamga kirish huquqi berish uchun uning kartasini oching va lavozim qoʻshing.',
   'staff.inviteDialog.rule':
     'Har bir xodimning bir yoki bir nechta lavozimi bor, va har bir lavozim biror joyda beriladi — butun kompaniyaga, bitta brendga yoki bitta filialga. Bitta filialda berilgan lavozim faqat oʻsha filialda ishlaydi.',
   'staff.inviteDialog.name.label': 'Ism va familiya',
@@ -4040,8 +4071,6 @@ export const messagesUzLatn: MessageCatalogue = {
   'reports.error.retry': 'Qayta urinish',
   'reports.empty.period': 'Tanlangan davr uchun maʻlumot yoʻq',
   'reports.export.button': 'Eksport',
-  'reports.export.notBuilt':
-    'Eksport hali qurilmagan — ADR 0043 uni oxiriga qoʻyadi, huquqlar va auditlanadigan navbatdan keyin',
   'reports.export.hint': 'Eksport markazini ochish',
   'reports.unit.minutes': 'daq',
 
@@ -4118,16 +4147,12 @@ export const messagesUzLatn: MessageCatalogue = {
   'reports.filter.period.7d': '7 kun',
   'reports.filter.period.month': 'Oy',
   'reports.filter.period.custom': 'Oʻzgacha davr',
-  'reports.filter.period.customFrom': 'Dan',
-  'reports.filter.period.customTo': 'Gacha',
-  'reports.filter.slice.label': 'Kesim',
   'reports.filter.fulfilment.label': 'Olish turi',
   'reports.filter.fulfilment.all': 'Barchasi',
   'reports.filter.fulfilment.delivery': 'Yetkazib berish',
   'reports.filter.fulfilment.pickup': 'Olib ketish',
   'reports.filter.fulfilment.dineIn': 'Zalda',
   'reports.filter.paymentType.label': 'Toʻlov turi',
-  'reports.filter.paymentType.locked': 'Toʻlovlar bilan birga qoʻshiladi (ADR 0013/0046)',
   'reports.filter.paymentType.placeholder': 'Istalgan toʻlov turi',
   'reports.filter.branch.label': 'Filial',
   'reports.filter.branch.placeholder': 'Istalgan filial',
@@ -4180,8 +4205,6 @@ export const messagesUzLatn: MessageCatalogue = {
   'reports.overview.mix.byRevenue': 'Tushum boʻyicha',
   'reports.overview.mix.fulfilment': 'Olish turi',
   'reports.overview.mix.payment': 'Toʻlov',
-  'reports.overview.mix.payment.locked':
-    'Toʻlovlar bilan birga qoʻshiladi (ADR 0013/0046) — fact_order_tender qurilmagan',
   'reports.overview.funnel.title': 'Buyurtmalar natijasi',
   'reports.overview.funnel.completed': 'Yakunlangan',
   'reports.overview.funnel.notCompleted': 'Yakunlanmagan',
@@ -4203,8 +4226,6 @@ export const messagesUzLatn: MessageCatalogue = {
   'reports.overview.funnel.liability.CUSTOMER': 'Mijoz',
   'reports.overview.funnel.liability.COURIER_PARTNER': 'Kuryer hamkori',
   'reports.overview.funnel.liability.PLATFORM': 'Platforma',
-  'reports.overview.funnel.costNotBuilt':
-    'Bekor qilish nimaga tushgani koʻrsatilmagan — ADR 0039 order_outcomes hali mavjud emas, shuning uchun bu maydon har bir qatorda boʻsh boʻlar edi.',
   'reports.overview.branches.title': 'Filiallar',
   'reports.overview.branches.name': 'Filial',
   'reports.overview.branches.revenue': 'Tushum',
@@ -4221,8 +4242,6 @@ export const messagesUzLatn: MessageCatalogue = {
     'Chegara ichida eng yomon qatorlar koʻrsatilmoqda — juda keng davr uchun toʻliq roʻyxat emas.',
   'reports.orders.commercial.piiNote':
     'Mijoz, operator va kuryer alohida, tekshiriladigan manbadan (order.read) olinadi — hisobotning oʻzi shaxsiy maʻlumot saqlamaydi (ADR 0029). Telefon maskalangan; bu maʻlumotni eksport qilish tekshiriladigan PII chiqishi hisoblanadi.',
-  'reports.orders.loadMore': 'Yana yuklash',
-  'reports.orders.loadMore.loading': 'Yuklanmoqda…',
   'reports.orders.late.empty': 'Tanlangan davrda kechikishlar yoʻq',
   'reports.orders.late.summary':
     'Davr uchun: {count} kechikish · mediana {median} · eng yomoni {worst}',
@@ -4271,8 +4290,6 @@ export const messagesUzLatn: MessageCatalogue = {
   'reports.orders.summary.measure.averageCheck': 'Oʻrtacha chek',
   'reports.orders.summary.split': 'Olish turi',
   'reports.orders.summary.branch': 'Filial',
-  'reports.orders.summary.channel': 'Kanal',
-  'reports.orders.summary.value': 'Qiymat',
   'reports.orders.summary.report1.title': 'Svodka 1',
   'reports.orders.summary.report2.title': 'Svodka 2',
   'reports.orders.summary.orderType': 'Buyurtma turi',
@@ -4496,7 +4513,6 @@ export const messagesUzLatn: MessageCatalogue = {
   'marketing.courierBroadcasts.intro':
     'Dispetcherning kuryerlarga oʻz operativ SMS xabarnomasi — smena almashinuvi, ob-havo, yoʻl yopilishi. Hech qachon mijoz kampaniyasi emas.',
   'marketing.courierBroadcasts.loading': 'Yuklanmoqda',
-  'marketing.courierBroadcasts.denied': 'Ushbu brendning kuryer xabarnomalariga kirish yoʻq',
   'marketing.courierBroadcasts.empty': 'Hali xabarnoma yoʻq',
   'marketing.courierBroadcasts.create.action': 'Yangi xabarnoma',
   'marketing.courierBroadcasts.create.title': 'Kuryer xabarnomasi qoralamasi',
@@ -4520,8 +4536,6 @@ export const messagesUzLatn: MessageCatalogue = {
   'marketing.attributionLinks.title': 'Jalb qilish havolalari',
   'marketing.attributionLinks.intro':
     'Kampaniya yoki bloger uchun kuzatiladigan ?ref= sayt havolasi yoki Telegram chuqur havolasi.',
-  'marketing.attributionLinks.loading': 'Yuklanmoqda',
-  'marketing.attributionLinks.denied': 'Ushbu brendning jalb qilish havolalariga kirish yoʻq',
   'marketing.attributionLinks.empty': 'Hali havola yaratilmagan',
   'marketing.attributionLinks.create.action': 'Havola yaratish',
   'marketing.attributionLinks.create.title': 'Jalb qilish havolasini yaratish',
@@ -4753,10 +4767,6 @@ export const messagesUzLatn: MessageCatalogue = {
   'marketing.referrals.redemptions.column.refereeReward': 'Yangi mijozga toʻlandi',
   'marketing.referrals.redemptions.empty': 'Hali birorta referal kodi ishlatilmagan.',
 
-  'marketing.referrals.links.title': 'Veb-sayt va Telegram orqali jalb qilish havolalari',
-  'marketing.referrals.links.body':
-    'Qurilmagan, va bu yashirilgan boʻshliq emas: veb-saytdagi "?ref=" havolalari, Telegramdagi "startapp" deep-linklari va Mini-App/BotFather sozlash bosqichma-bosqich oqimi ADR 0044ning marketing.attribution_links qismiga tegishli va shu ADRning oʻz roʻyxatida qolmoqda. Mijoz hamon kod olishi va doʻsti uni doʻkon oynasidan ishlatishi mumkin — bu yerda ulashiladigan havola koʻrsatilmaydi, chunki hali havolalar jadvali mavjud emas.',
-
   // -------------------------------------------------------- automations (row 6.5, ADR 0044)
   'marketing.automations.loading': 'Avtomatlashtirishlar yuklanmoqda…',
   'marketing.automations.denied': 'Ushbu brendning avtomatlashtirishlariga sizda ruxsat yoʻq.',
@@ -4802,6 +4812,17 @@ export const messagesUzLatn: MessageCatalogue = {
   'marketing.automations.preview.loading': 'Mosliklar yuklanmoqda…',
   'marketing.automations.preview.empty': 'Bugun bu qoidaga mos mijoz yoʻq.',
   'marketing.automations.preview.unnamed': 'Nomsiz mijoz',
+  'marketing.automations.preview.simulateTitle': 'Mijozni sinab koʻrish',
+  'marketing.automations.preview.simulateIntro':
+    'Bu qoida faollashtirilgach ishga tushishini bilish uchun mijozning koʻrsatkichlarini kiriting. Haqiqiy mijozlar oʻqilmaydi va hech narsa yuborilmaydi.',
+  'marketing.automations.preview.sampleTitle': 'Bugun mos keladigan mijozlar',
+  'marketing.automations.preview.outcome':
+    '“{template}” shablonini {channel} orqali yuboradi, {cooldownDays} kunda koʻpi bilan bir marta',
+  'marketing.automations.condition.BIRTHDAY': 'Tugʻilgan kundan oldin yoki keyin necha kun',
+  'marketing.automations.condition.INACTIVITY': 'Oxirgi buyurtmadan beri necha kun',
+  'marketing.automations.condition.CART_ABANDONMENT': 'Savat tashlab ketilganidan beri necha soat',
+  'marketing.automations.condition.CASHBACK_CHANGE':
+    'Keshbek oʻzgarishi miqdori, minimal birliklar',
 
   // ---------------------------------------------------------------- customers 5.3/5.4 (wave 39)
   'customers.nav.label': 'Mijozlar boʻlimi',
@@ -4845,8 +4866,6 @@ export const messagesUzLatn: MessageCatalogue = {
   'customers.segments.builder.name': 'Nomi',
   'customers.segments.builder.description': 'Tavsif',
   'customers.segments.builder.predicates': 'Shartlar',
-  'customers.segments.builder.addPredicate': 'Shart qoʻshish',
-  'customers.segments.builder.textValuesPlaceholder': 'Qiymatlar, vergul bilan',
   'customers.segments.builder.saving': 'Saqlanmoqda…',
   'customers.segments.builder.save': 'Saqlash',
   'customers.segments.predicate.type.RECENCY_DAYS': 'Oxirgi buyurtmadan necha kun oʻtdi',
@@ -4858,12 +4877,6 @@ export const messagesUzLatn: MessageCatalogue = {
   'customers.segments.predicate.type.REGISTERED_BETWEEN': 'Roʻyxatdan oʻtgan sana oraligʻi',
   'customers.segments.predicate.type.BIRTHDAY_WITHIN_DAYS': 'Tugʻilgan kun (necha kun ichida)',
   'customers.segments.predicate.type.PREFERRED_LOCALE': 'Afzal koʻrilgan til',
-  'customers.segments.predicate.type.AUDIENCE_MEMBERSHIP': 'Boshqa segmentga aʻzo',
-  'customers.segments.operator.AT_LEAST': 'kamida',
-  'customers.segments.operator.AT_MOST': 'koʻpi bilan',
-  'customers.segments.operator.BETWEEN': 'oraligʻida',
-  'customers.segments.operator.IN': 'quyidagilardan biri',
-  'customers.segments.operator.NOT_IN': 'quyidagilardan biri emas',
 
   // ---------------------------------------------------------------- 5.4 Reviews (ADR 0071, wave 59)
   'customers.reviews.title': 'Sharhlar',
@@ -5043,7 +5056,6 @@ export const messagesUzLatn: MessageCatalogue = {
   'reports.customers.newVsReturning.title': 'Tushum: yangi va qaytgan mijozlar',
   'reports.customers.newVsReturning.new': 'Yangi mijozlar',
   'reports.customers.newVsReturning.returning': 'Qaytgan mijozlar',
-  'reports.customers.newVsReturning.share': 'Tushumdagi ulush',
   'reports.customers.newVsReturning.empty':
     'Shu davrda mijozi maʻlum boʻlgan yakunlangan buyurtma yoʻq.',
   'reports.customers.cohorts.title': 'Kohortalar va ushlab qolish',
@@ -5455,8 +5467,25 @@ export const messagesUzLatn: MessageCatalogue = {
   'finance.subscription.modules.confirm.activatesFallback': 'modul funksiyalari',
   'finance.subscription.modules.confirm.confirm': 'Sotib olish',
   'finance.subscription.modules.confirm.cancel': 'Bekor qilish',
+  'finance.subscription.modules.held.title': 'Sizning modullaringiz',
+  'finance.subscription.modules.held.source': 'Manba',
+  'finance.subscription.modules.held.source.SELF_SERVICE': 'Siz sotib olgansiz',
+  'finance.subscription.modules.held.source.PLATFORM': 'HorecaOS tayinlagan',
+  'finance.subscription.modules.held.contactHorecaos':
+    'Olib tashlash uchun HorecaOS bilan bogʻlaning',
+  'finance.subscription.modules.held.empty': 'Sizda hali modullar yoʻq.',
+  'finance.subscription.modules.end': 'Oʻchirish',
+  'finance.subscription.modules.end.confirm.title': 'Modul oʻchirilsinmi?',
+  'finance.subscription.modules.end.confirm.body':
+    '{name} darhol oʻchadi. Qisman oy uchun qayta hisob-kitob yoʻq: modul joriy oy hisobotida baribir toʻliq hisoblanadi, undan keyin esa yoʻq.',
+  'finance.subscription.modules.end.confirm.bodyOneOff':
+    '{name} darhol oʻchadi. U qoʻshilganda bir marta hisoblangan, oʻchirish bu summani qaytarmaydi.',
+  'finance.subscription.modules.end.confirm.confirm': 'Modulni oʻchirish',
+  'finance.subscription.modules.end.confirm.cancel': 'Qoldirish',
+  'finance.subscription.modules.end.done':
+    '{name} oʻchirildi. U {period} hisobotigacha (shu jumladan) hisoblanadi, undan keyin esa yoʻq.',
   'finance.subscription.notBuiltNote':
-    'Davrni yopish HorecaOS xodimlari ishi (oy hisobotini chiqarish orqali yopiladi, ADR 0088); oldindan toʻlangan balans hali yaratilmagan (ADR 0095); sotib olingan modulni oʻchirish hali oʻz-oʻziga xizmat emas — uni olib tashlash uchun HorecaOS bilan bogʻlaning.',
+    'Davrni yopish HorecaOS xodimlari ishi (oy hisobotini chiqarish orqali yopiladi, ADR 0088); oldindan toʻlangan balans hali yaratilmagan (ADR 0095); HorecaOS tayinlagan modulni HorecaOS xodimlari oʻchiradi — uni olib tashlash uchun HorecaOS bilan bogʻlaning.',
 
   // ---------------------------------------------------------------- staff 9.3 (wave 39)
   'staff.shell.activity': 'Faollik',
@@ -5496,7 +5525,6 @@ export const messagesUzLatn: MessageCatalogue = {
   'staff.activity.action.tenantSuspended': 'Kompaniya toʻxtatildi',
   'staff.activity.action.tenantReactivated': 'Kompaniya qayta tiklandi',
   'staff.activity.action.tenantActivated': 'Kompaniya faollashtirildi',
-  'staff.activity.action.tenantActivate': 'Kompaniya faollashtirildi',
   'staff.activity.action.orderCancel': 'Buyurtma bekor qilindi',
   'staff.activity.filter.outcomeAll': 'Har qanday natija',
   'staff.activity.filter.outcomeSucceeded': 'Muvaffaqiyatli',
@@ -5582,19 +5610,11 @@ export const messagesUzLatn: MessageCatalogue = {
     'Restoran shaxsiy maʻlumotlarni qancha vaqt saqlaydi, bu yerda rozilik nimani anglatadi va mijozning oʻz soʻzlarini kim koʻrgan.',
   'settings.dataPrivacy.retention.title': 'Saqlash muddati',
   'settings.dataPrivacy.retention.column.category': 'Maʻlumot',
-  'settings.dataPrivacy.retention.column.status': 'Holat',
-  'settings.dataPrivacy.retention.column.note': 'Izoh',
   'settings.dataPrivacy.retention.abandonedCarts.category': 'Tashlab ketilgan savatlar',
-  'settings.dataPrivacy.retention.abandonedCarts.note':
-    'Eskirgan savat muddati oʻtgan deb belgilanadi, lekin hali hech narsa uni oʻchirmaydi yoki anonimlashtirmaydi — amalga oshirilmagan (ADR 0029).',
   'settings.dataPrivacy.retention.courierLocation.category': 'Kuryer joylashuvi tarixi',
-  'settings.dataPrivacy.retention.courierLocation.note':
-    'Jadval boʻyicha avtomatik oʻchiriladi, kunlar soni har bir kompaniya uchun sozlanadi (ADR 0045). Bu ekran hozircha sizning kompaniyangiz uchun sozlangan sonni koʻrsata olmaydi — buning uchun operatsiyaga qaratilgan sozlama yoʻq (ADR 0030).',
   'settings.dataPrivacy.retention.candidateRecords.category': 'Nomzod yozuvlari',
   'settings.dataPrivacy.retention.candidateRecords.note':
     'HorecaOSʻda ishga qabul yoki nomzodlar uchun maʻlumot modeli yoʻq — bu yerda saqlash uchun hech narsa yoʻq.',
-  'settings.dataPrivacy.retention.status.notEnforced': 'Amalga oshirilmagan',
-  'settings.dataPrivacy.retention.status.enforced': 'Amalga oshirilgan',
   'settings.dataPrivacy.retention.status.notApplicable': 'Tegishli emas',
   'settings.dataPrivacy.retention.lead':
     'Har bir maʻlumot turi qancha vaqt saqlanishini belgilang. Quyidagi har bir qiymatni faqat butun platforma uchun oshirish mumkin — qisqaroq qiymat boshqa kompaniyaning maʻlumotini muddatidan oldin hech qachon oʻchirmaydi.',
@@ -5616,14 +5636,6 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.dataPrivacy.consent.title': 'Rozilik',
   'settings.dataPrivacy.consent.lead':
     'Rozilik qarori bugun mijozning oʻz hisobida nimani qayd eta oladi.',
-  'settings.dataPrivacy.consent.states.label': 'Qaror',
-  'settings.dataPrivacy.consent.states.value':
-    'Berilgan yoki bekor qilingan — jimlikdan hech qachon xulosa chiqarilmaydi.',
-  'settings.dataPrivacy.consent.sources.label': 'Qayerdan qayd etilgan',
-  'settings.dataPrivacy.consent.sources.value':
-    'Doʻkon oynasi, qoʻllab-quvvatlash xodimi, import, migratsiya yoki API.',
-  'settings.dataPrivacy.consent.gap':
-    'Bu yerda sozlanadigan, kompaniya uchun umumiy rozilik turlari roʻyxati yoʻq — maqsad va kanal har bir nuqtada (masalan, xabarnoma shablonida) erkin matn sifatida belgilanadi. Mijozning oʻz rozilik tarixi uning shaxsiy yozuvida, bu ekranda emas.',
   'settings.dataPrivacy.consent.column.code': 'Kod',
   'settings.dataPrivacy.consent.column.label': 'Nomi',
   'settings.dataPrivacy.consent.column.channelSpecific': 'Kanal boʻyicha',
@@ -5712,7 +5724,6 @@ export const messagesUzLatn: MessageCatalogue = {
   'orders.callCentre.presence.reasonLabel': 'Sabab',
   'orders.callCentre.presence.reasonPlaceholder': 'masalan, tushlik tanaffusi',
   'orders.callCentre.presence.reasonRequired': 'Toʻxtatish uchun sabab kerak',
-  'orders.callCentre.presence.save': 'Holatni yangilash',
   'orders.callCentre.presence.error': 'Holatni yangilab boʻlmadi',
   'orders.callCentre.roster.title': 'Jamoa',
   'orders.callCentre.screenPop.title': 'Kiruvchi qoʻngʻiroq',
@@ -5786,7 +5797,6 @@ export const messagesUzLatn: MessageCatalogue = {
   'orders.newOrder.order.created': '{number}-buyurtma yaratildi',
   'orders.newOrder.order.unavailableCount': 'Savatdagi {count} ta taom endi mavjud emas',
   'orders.newOrder.order.branch': 'Filial',
-  'orders.newOrder.order.byZone': '(hudud boʻyicha)',
   'orders.newOrder.order.branchLoading': 'Filial tanlanmoqda…',
   'orders.newOrder.order.branchLoad': '{count} ta faol buyurtma',
   'orders.newOrder.order.branchClosed': 'yopiq',
@@ -6021,12 +6031,10 @@ export const messagesUzLatn: MessageCatalogue = {
   'ui.charts.table.show': 'Jadval koʻrinishida koʻrsatish',
   'ui.charts.table.hide': 'Jadvalni yashirish',
   'ui.charts.tooltip.noData': 'Tarix yetarli emas',
-  'ui.charts.sparkline.trend': '{label}: {first} dan {last} gacha dinamika',
   'ui.charts.sequential.low': 'Kamroq',
   'ui.charts.sequential.high': 'Koʻproq',
   'ui.charts.table.count': 'Soni',
   'ui.charts.table.share': 'Ulushi',
-  'ui.charts.table.value': 'Qiymat',
 
   'ui.importWizard.dropzone.instructions': 'Faylni shu yerga tashlang yoki',
   'ui.importWizard.dropzone.browse': 'fayl tanlang',

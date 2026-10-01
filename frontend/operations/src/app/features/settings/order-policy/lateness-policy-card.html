@@ -1,0 +1,142 @@
+<section class="card">
+  <h2 class="q-subhead">{{ 'settings.latenessPolicy.title' | t }}</h2>
+  <p class="q-body-sm hint">{{ 'settings.latenessPolicy.lead' | t }}</p>
+
+  @if (loading() && !view()) {
+    <p class="q-body-sm">{{ 'settings.integrations.loading' | t }}</p>
+  } @else if (loadError(); as message) {
+    <p class="q-body-sm error" role="alert">{{ message }}</p>
+  } @else if (view(); as current) {
+    @if (!editing()) {
+      @if (!current.isPlatformDefault) {
+        <p class="q-caption hint">
+          {{ 'settings.latenessPolicy.version' | t: { version: current.policyVersion } }}
+        </p>
+      }
+      <div class="rows">
+        @for (mode of modes; track mode) {
+          <q-inherited-field
+            [label]="modeLabelKey(mode) | t"
+            [resolution]="resolutionFor(mode)"
+            [loading]="loading()"
+            [currentScopeType]="scopeType()"
+            [settableScopes]="editableScopes"
+            [formatValue]="formatMode"
+            [revertable]="false"
+            (override)="startEditing()"
+            (setValueRequested)="startEditing()"
+          />
+        }
+      </div>
+      <p class="q-caption hint">{{ 'settings.latenessPolicy.oneDocument' | t }}</p>
+    } @else {
+      <div class="form">
+        @for (mode of modes; track mode) {
+          <fieldset class="mode">
+            <legend class="q-caption">{{ modeLabelKey(mode) | t }}</legend>
+            <div class="mode__row">
+              <div>
+                <label class="q-caption" [for]="fieldId(mode, 'atRiskMinutes')">{{
+                  'settings.latenessPolicy.field.atRisk' | t
+                }}</label>
+                <input
+                  [id]="fieldId(mode, 'atRiskMinutes')"
+                  class="q-body field"
+                  type="number"
+                  min="0"
+                  max="1440"
+                  step="1"
+                  [placeholder]="defaultAtRiskMinutes()"
+                  [value]="draft()[mode].atRiskMinutes"
+                  [attr.aria-invalid]="errors()[mode].atRiskMinutes"
+                  (input)="setDraft(mode, 'atRiskMinutes', $any($event.target).value)"
+                />
+              </div>
+              <div>
+                <label class="q-caption" [for]="fieldId(mode, 'lateAfterSeconds')">{{
+                  'settings.latenessPolicy.field.lateAfter' | t
+                }}</label>
+                <input
+                  [id]="fieldId(mode, 'lateAfterSeconds')"
+                  class="q-body field"
+                  type="number"
+                  min="0"
+                  max="86400"
+                  step="1"
+                  [value]="draft()[mode].lateAfterSeconds"
+                  [attr.aria-invalid]="errors()[mode].lateAfterSeconds"
+                  (input)="setDraft(mode, 'lateAfterSeconds', $any($event.target).value)"
+                />
+              </div>
+              <div>
+                <label class="q-caption" [for]="fieldId(mode, 'fallbackMinutes')">{{
+                  'settings.latenessPolicy.field.fallback' | t
+                }}</label>
+                <input
+                  [id]="fieldId(mode, 'fallbackMinutes')"
+                  class="q-body field"
+                  type="number"
+                  min="1"
+                  max="1440"
+                  step="1"
+                  [value]="draft()[mode].fallbackMinutes"
+                  [attr.aria-invalid]="errors()[mode].fallbackMinutes"
+                  (input)="setDraft(mode, 'fallbackMinutes', $any($event.target).value)"
+                />
+              </div>
+            </div>
+          </fieldset>
+        }
+        <p class="q-caption hint">
+          {{
+            'settings.latenessPolicy.blankMeansDefault'
+              | t: { minutes: defaultAtRiskMinutes(), source: (defaultSourceKey() | t) }
+          }}
+        </p>
+
+        <label class="q-caption reason" for="lateness-reason">{{
+          'settings.orderPolicy.field.reason' | t
+        }}</label>
+        <input
+          id="lateness-reason"
+          class="q-body field"
+          type="text"
+          [value]="draftReason()"
+          (input)="draftReason.set($any($event.target).value)"
+        />
+
+        @if (saveError(); as message) {
+          <p class="q-body-sm error" role="alert">{{ message }}</p>
+          @if (stale()) {
+            <button
+              type="button"
+              class="q-body secondary"
+              (click)="reloadAfterConflict()"
+              [disabled]="saving()"
+            >
+              {{ 'settings.latenessPolicy.reload' | t }}
+            </button>
+          }
+        }
+
+        <div class="form__actions">
+          <button
+            type="button"
+            class="q-body secondary"
+            (click)="cancelEditing()"
+            [disabled]="saving()"
+          >
+            {{ 'settings.orderPolicy.cancel' | t }}
+          </button>
+          <button type="button" class="q-body primary" (click)="save()" [disabled]="!canSave()">
+            {{
+              saving()
+                ? ('settings.orderPolicy.publishing' | t)
+                : ('settings.orderPolicy.publish' | t)
+            }}
+          </button>
+        </div>
+      </div>
+    }
+  }
+</section>

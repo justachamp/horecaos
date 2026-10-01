@@ -73,6 +73,22 @@ class OrderAcceptancePolicyControllerTests {
             lastDocument = document;
             return new ResolvedPolicy<>(key.code(), UUID.randomUUID(), 2, scope.type(), "fake-hash", document);
         }
+
+        @Override
+        public <P> ResolvedPolicy<P> author(
+                PolicyKey<P> key,
+                ResourceScope scope,
+                P document,
+                int expectedVersion,
+                ActorRef authoredBy,
+                String reason) {
+            return author(key, scope, document, authoredBy, reason);
+        }
+
+        @Override
+        public int currentVersion(PolicyKey<?> key, ResourceScope scope) {
+            return 0;
+        }
     }
 
     private static CurrentActor fakeActor() {

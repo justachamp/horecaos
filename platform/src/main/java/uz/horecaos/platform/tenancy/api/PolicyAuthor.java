@@ -39,4 +39,35 @@ public interface PolicyAuthor {
      *         from either call
      */
     <P> ResolvedPolicy<P> author(PolicyKey<P> key, ResourceScope scope, P document, ActorRef authoredBy, String reason);
+
+    /**
+     * {@link #author(PolicyKey, ResourceScope, Object, ActorRef, String)}, refused
+     * unless the caller has seen the version now in force at exactly this scope
+     * (wave 16, gap map row {@code X.39}: the first policy editor whose form is
+     * open long enough for a second operator to publish underneath it).
+     *
+     * <p>The append-only versioning above means every write technically
+     * succeeds, so without this check two operators editing the same scope from
+     * two open tabs would each publish a full document built from the state they
+     * last read, and the second would silently discard the first's changes. This
+     * is the same {@code STALE_VERSION} contract {@link ConfigurationValueAuthor}
+     * gives a setting, over the version {@link #currentVersion} reports.
+     *
+     * @param expectedVersion the latest version authored at exactly {@code scope},
+     *                        or 0 when nothing has been authored there yet (the
+     *                        scope resolves an ancestor's document or the platform
+     *                        default); anything else is refused with {@code
+     *                        STALE_VERSION} naming both versions
+     */
+    <P> ResolvedPolicy<P> author(
+            PolicyKey<P> key, ResourceScope scope, P document, int expectedVersion, ActorRef authoredBy, String reason);
+
+    /**
+     * The latest version authored at exactly {@code scope} — not the ancestor's
+     * that the scope may inherit — or 0 when nothing has been authored there.
+     * Read straight from the table rather than through {@link PolicyResolver}'s
+     * cache, because it is the value an {@code expectedVersion} is compared with
+     * and a stale answer would defeat the comparison.
+     */
+    int currentVersion(PolicyKey<?> key, ResourceScope scope);
 }

@@ -1,0 +1,25 @@
+<div class="new-order__categories" data-testid="new-order-categories">
+  @for (category of menu().categories; track category.categoryId) {
+    <div class="new-order__category">
+      <h3 class="q-caption new-order__category-title">{{ category.name }}</h3>
+      <div class="new-order__category-items">
+        @for (product of productsIn(category); track product.productId) {
+          <button
+            type="button"
+            class="new-order__product q-body-sm"
+            [class.new-order__product--stopped]="!isAnyVariantOrderable(product)"
+            (click)="productSelected.emit(product)"
+            data-testid="new-order-product"
+          >
+            <span>{{ product.name }}</span>
+            @if (!isAnyVariantOrderable(product)) {
+              <span class="q-caption new-order__stop-chip">{{
+                'orders.newOrder.menu.stopped' | t
+              }}</span>
+            }
+          </button>
+        }
+      </div>
+    </div>
+  }
+</div>

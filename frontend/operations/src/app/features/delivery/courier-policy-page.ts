@@ -11,6 +11,7 @@ import { ConfigurationResolutionView, EditableScopeType } from '../../core/api/c
 import { LocationScope } from '../../core/api/operations-paths';
 import { ApiError } from '../../core/api/problem-details';
 import { CurrentLocation } from '../../core/auth/current-location';
+import { formatMoney } from '../../core/format/money';
 import { I18n } from '../../core/i18n/i18n';
 import { MessageKey } from '../../core/i18n/messages.en';
 import { TPipe } from '../../core/i18n/t.pipe';
@@ -473,8 +474,12 @@ export class CourierPolicyPage implements OnInit {
     return value ? this.i18n.t('delivery.policy.yes') : this.i18n.t('delivery.policy.no');
   }
 
+  /**
+   * A policy amount as the brand writes money (Settings 10.12). The policy carries no currency of
+   * its own, so this is the platform's one — the same UZS the money inputs above assume.
+   */
   protected sumLabel(minor: number): string {
-    return new Intl.NumberFormat('ru-RU').format(minor);
+    return formatMoney({ amountMinor: minor, currency: 'UZS' }, this.i18n.locale());
   }
 
   /** GPS accept radius is entered in kilometres and stored in metres. */

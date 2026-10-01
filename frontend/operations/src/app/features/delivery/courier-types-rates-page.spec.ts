@@ -1,9 +1,10 @@
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { LocationScope } from '../../core/api/operations-paths';
 import { CurrentLocation } from '../../core/auth/current-location';
+import { applyRegionalFormats, resetRegionalFormats } from '../../core/format/regional-format';
 import { CouriersApi } from '../couriers/couriers-api';
 import { I18n } from '../../core/i18n/i18n';
 import { CourierTypesRatesPage } from './courier-types-rates-page';
@@ -17,6 +18,8 @@ async function flushMicrotasks(): Promise<void> {
 
 describe('CourierTypesRatesPage', () => {
   let fixture: ComponentFixture<CourierTypesRatesPage>;
+
+  afterEach(() => resetRegionalFormats());
 
   async function render(api: Partial<CouriersApi>): Promise<void> {
     await TestBed.configureTestingModule({
@@ -157,6 +160,60 @@ describe('CourierTypesRatesPage', () => {
 
     expect(rateCard).toHaveBeenCalledWith('t1', 'card-1');
     expect(host.querySelectorAll('[data-testid="rate-card-component-row"]')).toHaveLength(3);
+  });
+
+  it('groups a rate card’s amounts and a reason’s rule amount the way the brand chose (row 10.12)', async () => {
+    applyRegionalFormats({ moneySymbolPlacement: 'BEFORE', moneyGrouping: 'COMMA' });
+    const rateCard = vi.fn().mockResolvedValue({
+      cardId: 'card-1',
+      cardVersion: 1,
+      currency: 'UZS',
+      components: [
+        {
+          componentId: 'c1',
+          componentType: 'PER_ORDER',
+          priority: 0,
+          amountMinor: 3000,
+          bandFromMeters: null,
+          bandToMeters: null,
+          minimumPaidSeconds: null,
+        },
+      ],
+    });
+    await render({
+      types: () => Promise.resolve([]),
+      adjustmentReasons: () =>
+        Promise.resolve([
+          {
+            reasonId: 'r1',
+            code: 'LATE_PENALTY',
+            kind: 'PENALTY' as const,
+            outcomeBasis: 'LATE_DELIVERY',
+            displayName: 'Late delivery',
+            status: 'ACTIVE' as const,
+            hasRule: true,
+            ruleAmountMinor: 50000,
+            ruleCurrency: 'UZS',
+            ruleComparator: 'GTE',
+            ruleThreshold: 2,
+            ruleWindow: 'SHIFT',
+            ruleTrigger: 'SHIFT_CLOSE',
+            ruleVersion: 1,
+          },
+        ]),
+      rateCards: () => Promise.resolve([{ ...STANDARD_CARD, status: 'ACTIVE' as const }]),
+      rateCard,
+    });
+
+    const host = fixture.nativeElement as HTMLElement;
+    (host.querySelector('[data-testid="rate-card-show-components"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    const component = host.querySelector('[data-testid="rate-card-component-row"]')!;
+    expect(component.textContent).toContain('3,000');
+    const rule = host.querySelector('[data-testid="adjustment-reason-rule"]')!;
+    expect(rule.textContent?.replace(/\s/g, ' ')).toContain('UZS 50,000');
   });
 
   it('creates a courier type sending maxDistanceMeters, startingMinuteOffset and workMode', async () => {

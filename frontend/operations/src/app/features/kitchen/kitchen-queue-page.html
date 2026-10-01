@@ -1,64 +1,23 @@
 <div class="kitchen">
-  <div class="kitchen__toolbar">
-    <div class="kitchen__tabs" role="tablist">
-      @for (tab of tabs; track tab.id) {
-        <button
-          type="button"
-          class="tab"
-          [class.tab--active]="activeTab() === tab.id"
-          (click)="selectTab(tab.id)"
-        >
-          {{ tab.labelKey | t }}
-          <span class="tab__count q-tnum">{{ tabCount(tab.id) ?? '…' }}</span>
-        </button>
-      }
-    </div>
+  <q-kitchen-queue-toolbar
+    [tabs]="tabs"
+    [activeTab]="activeTab()"
+    [tabCounts]="tabCountMap()"
+    [canToggleService]="canToggleService()"
+    [serviceClosed]="serviceSummary()?.effectiveMode === 'FORCE_CLOSED'"
+    [serviceModeLabel]="serviceModeLabel()"
+    [togglingService]="togglingService()"
+    (tabSelected)="selectTab($event)"
+    (counterSaleRequested)="startCounterSale()"
+    (serviceToggleRequested)="toggleService()"
+  />
 
-    <div class="kitchen__toolbar-actions">
-      <button
-        type="button"
-        class="kitchen__counter-sale"
-        (click)="startCounterSale()"
-        data-testid="kitchen-counter-sale"
-      >
-        {{ 'kitchen.action.counterSale' | t }}
-      </button>
-
-      @if (canToggleService()) {
-        <button
-          type="button"
-          class="kitchen__service-toggle"
-          [class.kitchen__service-toggle--closed]="
-            serviceSummary()?.effectiveMode === 'FORCE_CLOSED'
-          "
-          [disabled]="togglingService()"
-          (click)="toggleService()"
-          data-testid="kitchen-service-toggle"
-        >
-          {{ serviceModeLabel() }}
-        </button>
-      }
-    </div>
-  </div>
-
-  @if (wiringWarning()) {
-    <div class="kitchen__warning-band" role="status">
-      <span class="q-body-sm">{{ 'kitchen.warning.notWired' | t }}</span>
-    </div>
-  }
-
-  @if (actionNotice(); as notice) {
-    <div class="kitchen__notice-band" role="alert">
-      <span class="q-body-sm">{{ notice }}</span>
-      <button type="button" class="kitchen__notice-dismiss" (click)="dismissNotice()">×</button>
-    </div>
-  }
-
-  @if (lastError(); as error) {
-    <div class="kitchen__error-band" role="alert">
-      <span class="q-body-sm">{{ error.code }}</span>
-    </div>
-  }
+  <q-kitchen-queue-notices
+    [wiringWarning]="wiringWarning()"
+    [actionNotice]="actionNotice()"
+    [lastError]="lastError()"
+    (noticeDismissed)="dismissNotice()"
+  />
 
   <div class="kitchen__board">
     @if (!firstLoadComplete()) {

@@ -3,7 +3,7 @@ import { TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { provideRouter } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
-import { Subject, of, throwError } from 'rxjs';
+import { NEVER, Subject, of, throwError } from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
 
 import { CurrentBrand } from '../../core/auth/current-brand';
@@ -1956,5 +1956,167 @@ describe('ProductEditorPage', () => {
     expect(host.querySelector('.editor__section')?.textContent).toContain(
       'У этой учётной записи нет прав на это действие.',
     );
+  });
+});
+
+/**
+ * The header, the Photos tab and the unlisted-branches banner are their own components (their
+ * stylesheets outgrew the editor's component-style budget). Each is presentation only: the editor
+ * binds their values and reacts to what they raise. These specs pin that wiring from the editor's
+ * side, through the DOM an operator sees.
+ */
+describe('ProductEditorPage: its extracted parts stay wired to it', () => {
+  const twoPhotos = () =>
+    productDetail({
+      media: [
+        { mediaAssetId: 'asset-a', role: 'PRIMARY', sortOrder: 0, channelCode: 'ALL' },
+        { mediaAssetId: 'asset-b', role: 'GALLERY', sortOrder: 1, channelCode: 'ALL' },
+      ],
+    });
+
+  async function openPhotos(catalogApi: Partial<CatalogApi>, mediaApi: Partial<MediaApi> = {}) {
+    configure(
+      catalogApi,
+      {},
+      { downloadUrl: () => of('https://cdn.example/thumb.jpg'), ...mediaApi },
+    );
+    const harness = await RouterTestingHarness.create('/catalog/products/product-1');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+    (host.querySelector('[data-testid="editor-tab-PHOTOS"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    const uploader = () =>
+      harness.routeDebugElement!.query(By.directive(MediaUploader))
+        .componentInstance as MediaUploader;
+    return { harness, host, uploader };
+  }
+
+  it('shows the product’s name, code and status in the header', async () => {
+    configure({ productDetail: () => of(productDetail({ status: 'DRAFT' })) });
+    const harness = await RouterTestingHarness.create('/catalog/products/product-1');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+
+    expect(host.querySelector('.editor__name')?.textContent?.trim()).toBe('Плов');
+    expect(host.querySelector('.editor__header .q-mono')?.textContent?.trim()).toBe('PLOV');
+    expect(host.querySelector('.editor__header .status-badge')?.textContent?.trim()).toBe(
+      TestBed.inject(I18n).t('catalog.status.DRAFT'),
+    );
+  });
+
+  it('opens the publish dialog from the header’s Publish button', async () => {
+    configure({ productDetail: () => of(productDetail()) });
+    const harness = await RouterTestingHarness.create('/catalog/products/product-1');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+    expect(host.querySelector('[data-testid="publish-dialog"]')).toBeNull();
+
+    (host.querySelector('[data-testid="editor-publish"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    expect(host.querySelector('[data-testid="publish-dialog"]')).not.toBeNull();
+  });
+
+  it('shows a rejected upload in the header’s save notice', async () => {
+    const { host, uploader } = await openPhotos({ productDetail: () => of(productDetail()) });
+    expect(host.querySelector('.editor__notice')).toBeNull();
+
+    uploader().rejected.emit('TOO_LARGE');
+    await flushMicrotasks();
+
+    expect(host.querySelector('.editor__notice')?.textContent?.trim()).not.toBe('');
+    expect(host.querySelector('.editor__notice')).not.toBeNull();
+  });
+
+  it('words an empty gallery for the universal set and, once a channel is picked, for that channel', async () => {
+    configure(
+      { productDetail: () => of(productDetail()) },
+      {},
+      {},
+      {},
+      {},
+      {},
+      {
+        list: () =>
+          Promise.resolve([
+            {
+              id: 'channel-1',
+              code: 'UZUM',
+              systemType: 'AGGREGATOR',
+              displayName: 'Uzum Tezkor',
+              status: 'ACTIVE',
+              pricePlaneChannelId: null,
+              externallyPriced: true,
+              guestOrdersAllowed: true,
+              providerInstallationId: null,
+              version: 1,
+              locationCount: 1,
+              enabledPaymentMethodCount: 1,
+              enabledFulfillmentModes: ['DELIVERY'],
+            } as ChannelView,
+          ]),
+      },
+    );
+    const harness = await RouterTestingHarness.create('/catalog/products/product-1');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+    (host.querySelector('[data-testid="editor-tab-PHOTOS"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    const i18n = TestBed.inject(I18n);
+    const gallery = () => host.querySelector('.editor__section')?.textContent ?? '';
+    expect(gallery()).toContain(i18n.t('catalog.editor.photos.empty'));
+
+    const select = host.querySelector<HTMLSelectElement>(
+      '[data-testid="editor-photo-channel-select"]',
+    )!;
+    select.value = 'UZUM';
+    select.dispatchEvent(new Event('change'));
+    await flushMicrotasks();
+
+    expect(gallery()).not.toContain(i18n.t('catalog.editor.photos.empty'));
+    expect(gallery()).toContain(i18n.t('catalog.editor.photos.channel.empty'));
+  });
+
+  it('holds a photo’s buttons while its move is being saved', async () => {
+    const attachMedia = vi.fn().mockReturnValue(NEVER);
+    const { host } = await openPhotos({ productDetail: () => of(twoPhotos()), attachMedia });
+    const tile = (index: number) =>
+      host.querySelectorAll<HTMLElement>('[data-testid="editor-photo-tile"]')[index];
+    const button = (index: number, id: string) =>
+      tile(index).querySelector(`[data-testid="${id}"]`) as HTMLButtonElement;
+    expect(button(0, 'editor-photo-move-down').disabled).toBe(false);
+
+    button(0, 'editor-photo-move-down').click();
+    await flushMicrotasks();
+
+    expect(attachMedia).toHaveBeenCalled();
+    expect(button(0, 'editor-photo-move-down').disabled).toBe(true);
+    expect(button(0, 'editor-photo-move-up').disabled).toBe(true);
+  });
+
+  it('moves a photo the way the button points', async () => {
+    const attachMedia = vi.fn().mockReturnValue(of(undefined));
+    const { host } = await openPhotos({ productDetail: () => of(twoPhotos()), attachMedia });
+
+    (host.querySelectorAll('[data-testid="editor-photo-move-up"]')[1] as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    const order = attachMedia.mock.calls.map((call) => [call[3], call[4].sortOrder]);
+    expect(order).toEqual([
+      ['asset-b', 0],
+      ['asset-a', 1],
+    ]);
+  });
+
+  it('tells the uploader while a photo is going up, and uploads what it hands over', async () => {
+    const upload = vi.fn().mockReturnValue(NEVER);
+    const { uploader } = await openPhotos({ productDetail: () => of(productDetail()) }, { upload });
+    expect(uploader().uploading()).toBe(false);
+
+    uploader().selected.emit(new File(['x'], 'plov.jpg'));
+    await flushMicrotasks();
+
+    expect(upload).toHaveBeenCalledTimes(1);
+    expect(uploader().uploading()).toBe(true);
   });
 });

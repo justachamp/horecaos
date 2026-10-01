@@ -1,0 +1,76 @@
+/* Confirm and prompt dialogs: a flex-column card with a dismiss/confirm pair (customer detail,
+ * the product editor's publish dialog).
+ *
+ * The same rules sat in several page stylesheets under the bare names .dialog, .dialog__backdrop
+ * and .dialog__confirm; see modal.css for why they are q- names a page opts into. The dialog's
+ * width is the one thing that differs (360, 400 and 420 px are all in use), so 420 px is the
+ * default here and a page that wants another width sets it in its own stylesheet.
+ *
+ * modal.css is the other dialect (form dialogs on the list pages: a plain card, a bare button row
+ * whose last button is primary). They differ in backdrop colour and structure, and merging them
+ * would move pixels.
+ */
+
+.q-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(22, 22, 22, 0.5);
+  z-index: 50;
+}
+
+.q-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 420px;
+  max-width: calc(100vw - 32px);
+  padding: 20px;
+  background: var(--q-canvas);
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+}
+
+.q-dialog__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.q-dialog__banner {
+  padding: 8px 10px;
+  background: var(--q-error-tint);
+  color: var(--q-error-text);
+  font-size: var(--q-type-body-sm);
+}
+
+.q-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.q-dialog__dismiss,
+.q-dialog__confirm {
+  padding: 6px 14px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  cursor: pointer;
+  font-size: var(--q-type-body-sm);
+}
+
+.q-dialog__confirm {
+  border-color: var(--q-primary);
+  background: var(--q-primary);
+  color: #fff;
+}
+
+.q-dialog__confirm:disabled,
+.q-dialog__dismiss:disabled {
+  opacity: 0.6;
+  cursor: default;
+}

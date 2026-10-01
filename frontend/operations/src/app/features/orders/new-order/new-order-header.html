@@ -1,0 +1,48 @@
+<header class="new-order__header">
+  <h1 class="q-subhead new-order__title">{{ 'orders.newOrder.title' | t }}</h1>
+  <div class="new-order__header-actions">
+    <label class="new-order__aggregator-toggle q-caption">
+      <input
+        type="checkbox"
+        [checked]="aggregatorMode()"
+        (change)="aggregatorToggled.emit()"
+        data-testid="new-order-aggregator-toggle"
+      />
+      {{ 'orders.newOrder.aggregator.toggle' | t }}
+    </label>
+    <button type="button" class="new-order__cancel q-body-sm" (click)="cancelRequested.emit()">
+      {{ 'orders.newOrder.order.cancel' | t }}
+    </button>
+    @if (aggregatorMode()) {
+      <button
+        type="button"
+        class="new-order__submit q-body-sm"
+        [disabled]="!canSubmitAggregator()"
+        (click)="aggregatorSubmitRequested.emit()"
+        data-testid="new-order-submit-aggregator"
+      >
+        {{
+          aggregatorSubmitting()
+            ? ('orders.newOrder.order.submitting' | t)
+            : ('orders.newOrder.order.submit' | t)
+        }}
+      </button>
+    } @else {
+      <button
+        type="button"
+        class="new-order__submit q-body-sm"
+        [disabled]="!canSubmit()"
+        (click)="submitRequested.emit()"
+        data-testid="new-order-submit"
+      >
+        {{
+          submitting()
+            ? ('orders.newOrder.order.submitting' | t)
+            : outOfHoursConfirming()
+              ? ('orders.newOrder.order.preOrder.confirmSubmit' | t)
+              : ('orders.newOrder.order.submit' | t)
+        }}
+      </button>
+    }
+  </div>
+</header>

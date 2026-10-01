@@ -83,7 +83,9 @@ import uz.horecaos.platform.ordering.application.CustomerBotOrderingAdapter;
 import uz.horecaos.platform.ordering.application.OrderAcceptancePolicyService;
 import uz.horecaos.platform.ordering.application.OrderActionCode;
 import uz.horecaos.platform.ordering.application.OrderActionsPolicy;
+import uz.horecaos.platform.ordering.application.OrderBoardReadModels;
 import uz.horecaos.platform.ordering.application.OrderInventoryProcess;
+import uz.horecaos.platform.ordering.application.OrderLatenessPolicyService;
 import uz.horecaos.platform.ordering.application.OrderPaymentProcess;
 import uz.horecaos.platform.ordering.application.OrderQueryService;
 import uz.horecaos.platform.ordering.application.OrderStateService;
@@ -542,7 +544,12 @@ class CartCheckoutAndOrderTests {
                 protection,
                 objectMapper,
                 new JdbcAuditRecorder(jdbc, objectMapper),
-                clock);
+                clock,
+                new OrderBoardReadModels(
+                        orderStore,
+                        org.mockito.Mockito.mock(OrderLatenessPolicyService.class),
+                        org.mockito.Mockito.mock(uz.horecaos.platform.ordering.api.MarketplaceBindingLookup.class),
+                        clock));
         // ADR 0074, production classes end to end: the real publication reader,
         // the real price lookup pricing implements, and the real InventoryService
         // behind InventoryReservationPort. A stub for any of the three would let

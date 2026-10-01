@@ -180,6 +180,11 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       ru: 'Каталог комментарий шаблон обновлено',
       'uz-Latn': 'Katalog izoh shablon yangilandi',
     },
+    'catalog.fiscalClassification.bulkSet': {
+      en: 'Fiscal classifications set in bulk',
+      ru: 'Фискальная классификация заполнена массово',
+      'uz-Latn': 'Fiskal tasnif ommaviy oʻrnatildi',
+    },
     'catalog.itemSaleSchedule.replaced': {
       en: 'Catalog item sale schedule replaced',
       ru: 'Каталог позиция продажа расписание заменено',
@@ -845,6 +850,11 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       ru: 'Опубликована политика приёма заказов',
       'uz-Latn': 'Buyurtmalarni qabul qilish siyosati eʻlon qilindi',
     },
+    'ordering.lateness-policy.authored': {
+      en: 'Order lateness boundaries published',
+      ru: 'Опубликованы границы опоздания заказов',
+      'uz-Latn': 'Buyurtma kechikish chegaralari eʻlon qilindi',
+    },
     'ordering.order.branch_overridden': {
       en: 'Ordering order branch overridden',
       ru: 'Заказы заказ филиал переопределено',
@@ -919,6 +929,16 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       en: 'Payment method updated',
       ru: 'Платёж способ обновлено',
       'uz-Latn': 'Toʻlov usul yangilandi',
+    },
+    'payment.checkout_reissue_requested': {
+      en: 'Payment checkout re-issue requested',
+      ru: 'Запрошена повторная выдача платёжной ссылки',
+      'uz-Latn': 'Toʻlov havolasini qayta chiqarish soʻraldi',
+    },
+    'payment.checkout_reissued': {
+      en: 'Payment checkout re-issued',
+      ru: 'Платёжная ссылка выставлена повторно',
+      'uz-Latn': 'Toʻlov havolasi qayta chiqarildi',
     },
     'payment.merchant_binding_secret_rotated': {
       en: 'Payment merchant binding secret rotated',

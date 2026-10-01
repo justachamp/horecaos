@@ -9,7 +9,11 @@
     "test": "ng test --watch=false",
     "test:watch": "ng test",
     "check:tokens": "node scripts/check-tokens.mjs",
-    "verify": "npm run check:tokens && npm run build && npm test"
+    "verify": "npm run check:tokens && npm run build && npm test",
+    "format": "prettier --write \"src/**/*.{ts,html,css,json}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,html,css,json}\"",
+    "lint": "eslint \"src/**/*.{ts,html,css}\"",
+    "lint:rules": "node ../tools/lint-config.test.mjs"
   },
   "private": true,
   "packageManager": "npm@11.17.0",
@@ -29,9 +33,12 @@
     "@angular/build": "^22.1.5",
     "@angular/cli": "^22.1.5",
     "@angular/compiler-cli": "^22.1.0",
+    "@eslint/js": "8.57.1",
+    "eslint": "8.57.1",
     "jsdom": "^28.0.0",
     "prettier": "^3.8.1",
     "typescript": "~6.0.2",
+    "typescript-eslint": "^8.71.0",
     "vitest": "^4.0.8"
   },
   "description": "HorecaOS's own staff console: tenants, onboarding, subscriptions, payments, platform configuration"

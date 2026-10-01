@@ -1,0 +1,93 @@
+:host {
+  display: contents;
+}
+
+/* ---- POS export (§3.11, row 1.2i, wave P42) ------------------------------ */
+
+.pane__pos-export-result {
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  background: var(--q-info-tint);
+  color: var(--q-info-text);
+}
+
+.pane__pos-export-reassurance {
+  margin: 2px 0 0;
+  color: var(--q-ink-muted);
+}
+
+.pane__pos-export-error {
+  margin: 4px 0 0;
+  color: var(--q-error-text);
+}
+
+.pane__pos-export-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 8px 0 0;
+  padding: 10px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+}
+
+.pane__pos-export-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pane__pos-export-input {
+  padding: 6px 8px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  font-family: var(--q-font-sans);
+  font-size: var(--q-type-body-sm);
+}
+
+.pane__pos-export-form-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.pane__pos-export-button {
+  padding: 6px 14px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  cursor: pointer;
+  font-size: var(--q-type-body-sm);
+}
+
+.pane__pos-export-button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.pane__pos-export-button--secondary {
+  background: transparent;
+}
+
+.pane__state-inline {
+  color: var(--q-ink-muted);
+  margin: 4px 0;
+}
+
+.pane__reveal-link {
+  margin-top: 4px;
+  padding: 2px 8px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-primary);
+  font-size: var(--q-type-caption);
+  cursor: pointer;
+}
+
+.pane__reveal-link:disabled {
+  opacity: 0.6;
+  cursor: default;
+}

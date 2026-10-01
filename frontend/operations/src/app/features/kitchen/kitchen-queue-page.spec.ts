@@ -484,6 +484,96 @@ describe('KitchenQueuePage', () => {
     expect(host.querySelector('[data-testid="kitchen-reveal-note"]')).toBeNull();
   });
 
+  it('row 10.12: a chip reads the labels map, so a wording beyond the triple shows where the console column is blank', async () => {
+    await TestBed.configureTestingModule({
+      imports: [KitchenQueuePage],
+      providers: [
+        {
+          provide: CurrentLocation,
+          useValue: {
+            scope: signal<LocationScope | null>(SCOPE),
+            denied: signal(false),
+            ensureLoaded: () => Promise.resolve(),
+          },
+        },
+        {
+          provide: KitchenApi,
+          useValue: {
+            board: () => Promise.resolve(board([DELIVERY_TICKET])),
+            stations: () => Promise.resolve([]),
+          },
+        },
+        {
+          provide: LocationsApi,
+          useValue: { serviceSummary: () => Promise.reject(new Error('n/a')) },
+        },
+        {
+          provide: ApiClient,
+          useValue: {
+            get: () =>
+              of({
+                value: {
+                  lines: [
+                    {
+                      lineNumber: 1,
+                      productName: 'Lagman',
+                      quantity: 1,
+                      finalAmountMinor: 5000000,
+                      modifiers: [],
+                      commentPresets: [
+                        {
+                          code: 'NO_ONIONS',
+                          labelRu: '',
+                          labelUz: '',
+                          labelEn: '',
+                          labels: { kaa: 'Piyazsiz' },
+                        },
+                        {
+                          code: 'EXTRA_SPICY',
+                          labelRu: 'Поострее',
+                          labelUz: 'Achchiqroq',
+                          labelEn: 'Extra spicy',
+                          labels: { en: 'Extra spicy, please' },
+                        },
+                      ],
+                      lineId: 'line-1',
+                      hasNote: false,
+                    },
+                  ],
+                  kitchenNote: null,
+                },
+                version: null,
+              }),
+          },
+        },
+        { provide: OrderRevealApi, useValue: { revealLineNote: vi.fn() } },
+        {
+          provide: DispatchApi,
+          useValue: { queue: vi.fn(() => Promise.resolve([])), assign: vi.fn() },
+        },
+        { provide: CouriersApi, useValue: { roster: vi.fn(() => Promise.resolve([])) } },
+        { provide: Router, useValue: { navigateByUrl: vi.fn() } },
+      ],
+    }).compileComponents();
+    TestBed.inject(I18n).setLocale('en');
+    fixture = TestBed.createComponent(KitchenQueuePage);
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    const header = host.querySelector('.ticket__header') as HTMLElement;
+    header.click();
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    const chips = host.querySelector('[data-testid="kitchen-line-presets"]');
+    expect(chips).not.toBeNull();
+    expect(
+      Array.from(chips?.querySelectorAll('li') ?? []).map((li) => li.textContent?.trim()),
+    ).toEqual(['Piyazsiz', 'Extra spicy, please']);
+  });
+
   // ------------------------------------------------------- P16: aggregator tab
 
   it('types the aggregator tab off channelSystemType, never a raw channel code', async () => {
@@ -1194,7 +1284,10 @@ describe('KitchenQueuePage: the tenant late colour (row X.39)', () => {
     targetReadyAt: new Date(Date.now() + 40 * MINUTE).toISOString(),
   };
 
-  async function render(policy: LatenessPolicy): Promise<HTMLElement> {
+  /** Mounts the board with the policy read by `read`, without waiting for anything to settle. */
+  async function mount(
+    read: () => Promise<LatenessPolicy | null>,
+  ): Promise<ComponentFixture<KitchenQueuePage>> {
     await TestBed.configureTestingModule({
       imports: [KitchenQueuePage],
       providers: [
@@ -1221,7 +1314,13 @@ describe('KitchenQueuePage: the tenant late colour (row X.39)', () => {
           provide: ApiClient,
           useValue: { get: () => of({ value: { lines: [], kitchenNote: null }, version: null }) },
         },
-        { provide: LatenessPolicyApi, useValue: { resolve: () => Promise.resolve(policy) } },
+        {
+          provide: LatenessPolicyApi,
+          useValue: {
+            read,
+            resolve: async () => (await read()) ?? PLATFORM_DEFAULT_LATENESS_POLICY,
+          },
+        },
         { provide: OrderRevealApi, useValue: { revealLineNote: vi.fn() } },
         {
           provide: DispatchApi,
@@ -1236,7 +1335,11 @@ describe('KitchenQueuePage: the tenant late colour (row X.39)', () => {
       ],
     }).compileComponents();
     TestBed.inject(I18n).setLocale('en');
-    const fixture = TestBed.createComponent(KitchenQueuePage);
+    return TestBed.createComponent(KitchenQueuePage);
+  }
+
+  async function render(policy: LatenessPolicy): Promise<HTMLElement> {
+    const fixture = await mount(() => Promise.resolve(policy));
     fixture.detectChanges();
     await flushMicrotasks();
     fixture.detectChanges();
@@ -1280,5 +1383,71 @@ describe('KitchenQueuePage: the tenant late colour (row X.39)', () => {
     });
 
     expect(ticketFor(host, 'A-003').classList).toContain('ticket--warning');
+  });
+  describe('follows a policy edit made after the screen opened', () => {
+    const GRACE_TWO_HOURS: LatenessPolicy = {
+      delivery: {
+        atRiskBeforeSeconds: 300,
+        lateAfterSeconds: 2 * 60 * 60,
+        noPromiseFallbackSeconds: 2700,
+      },
+      pickup: {
+        atRiskBeforeSeconds: 300,
+        lateAfterSeconds: 2 * 60 * 60,
+        noPromiseFallbackSeconds: 2700,
+      },
+      dineIn: {
+        atRiskBeforeSeconds: 300,
+        lateAfterSeconds: 2 * 60 * 60,
+        noPromiseFallbackSeconds: 2700,
+      },
+      lateColour: '#00aa00',
+    };
+
+    it('re-reads the policy on the poll: a grace published later stops the breach, and the colour follows', async () => {
+      vi.useFakeTimers();
+      try {
+        const read = vi
+          .fn()
+          .mockResolvedValueOnce({ ...PLATFORM_DEFAULT_LATENESS_POLICY, lateColour: '#8a3ffc' })
+          .mockResolvedValue(GRACE_TWO_HOURS);
+        const fixture = await mount(read);
+        fixture.detectChanges();
+        await vi.advanceTimersByTimeAsync(0);
+        fixture.detectChanges();
+        const host = fixture.nativeElement as HTMLElement;
+        expect(ticketFor(host, 'A-001').classList).toContain('ticket--danger');
+        expect(ticketFor(host, 'A-001').style.getPropertyValue('--q-sla-late')).toBe('#8a3ffc');
+
+        // Past the minute the server caches the policy for, the next 10 s poll reads it again.
+        await vi.advanceTimersByTimeAsync(70_000);
+        fixture.detectChanges();
+
+        expect(ticketFor(host, 'A-001').classList).not.toContain('ticket--danger');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('does not take a failed first read for the loaded policy: the next poll asks again', async () => {
+      vi.useFakeTimers();
+      try {
+        const read = vi.fn().mockResolvedValueOnce(null).mockResolvedValue(GRACE_TWO_HOURS);
+        const fixture = await mount(read);
+        fixture.detectChanges();
+        await vi.advanceTimersByTimeAsync(0);
+        fixture.detectChanges();
+        const host = fixture.nativeElement as HTMLElement;
+        expect(ticketFor(host, 'A-001').classList).toContain('ticket--danger');
+
+        await vi.advanceTimersByTimeAsync(11_000);
+        fixture.detectChanges();
+
+        expect(ticketFor(host, 'A-001').classList).not.toContain('ticket--danger');
+        expect(ticketFor(host, 'A-001').style.getPropertyValue('--q-sla-late')).toBe('');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 });

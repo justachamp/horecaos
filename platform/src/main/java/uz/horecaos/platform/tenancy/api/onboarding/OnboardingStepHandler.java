@@ -126,8 +126,55 @@ public interface OnboardingStepHandler {
          *                   is location-scoped, so the readiness panel can
          *                   deep-link to it; {@code null} for a tenant- or
          *                   brand-level finding
+         * @param subject    the one object this finding is about when it is not a
+         *                   location — a sales channel, say — so the panel can
+         *                   link to that object's own screen rather than to the
+         *                   list it sits in (gap map row {@code 10.0}); {@code
+         *                   null} for a finding that has no single object to
+         *                   name, which the panel then links by error code
+         *                   alone, exactly as before this field existed
          */
         public record Finding(
-                String errorCode, String detail, @Nullable UUID locationId) {}
+                String errorCode,
+                String detail,
+                @Nullable UUID locationId,
+                @Nullable FindingSubject subject) {
+
+            /** A finding with no per-item object — what every finding was before {@code subject} existed. */
+            public Finding(String errorCode, String detail, @Nullable UUID locationId) {
+                this(errorCode, detail, locationId, null);
+            }
+
+            /** A tenant-level finding about one non-location object. */
+            public static Finding about(String errorCode, String detail, FindingSubject subject) {
+                return new Finding(errorCode, detail, null, subject);
+            }
+        }
+
+        /**
+         * The object a {@link Finding} is about: a {@link #type} from the closed
+         * vocabulary below plus its identifier. An identifier and a type only —
+         * never a name, an address or a reference, so it is as safe to log and
+         * to return as a {@code locationId} is (ADR 0029).
+         *
+         * <p>Closed on purpose: the console maps each type to a screen, so a type
+         * this list does not name has nowhere to go and is rendered without a
+         * per-item link rather than guessed at.
+         */
+        public record FindingSubject(String type, UUID id) {
+
+            /** A row of {@code tenant.sales_channels}. */
+            public static final String SALES_CHANNEL = "SALES_CHANNEL";
+
+            public FindingSubject {
+                if (type.isBlank()) {
+                    throw new IllegalArgumentException("A finding subject needs a type");
+                }
+            }
+
+            public static FindingSubject salesChannel(UUID channelId) {
+                return new FindingSubject(SALES_CHANNEL, channelId);
+            }
+        }
     }
 }

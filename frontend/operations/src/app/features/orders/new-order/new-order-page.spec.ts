@@ -960,6 +960,36 @@ describe('NewOrderPage', () => {
     expect(fixture.componentInstance['pendingModifiers']()).toBeNull();
   });
 
+  it('row 10.12: a basket line names its checked presets from the labels map, a wording beyond the triple included', async () => {
+    await render({
+      menu: vi.fn().mockResolvedValue(
+        menuWith({}, [
+          {
+            code: 'NO_ONIONS',
+            labelRu: '',
+            labelUz: '',
+            labelEn: '',
+            labels: { kaa: 'Piyazsiz' },
+            label: 'Piyazsiz',
+          },
+        ]),
+      ),
+    });
+
+    fixture.componentInstance['onItemSelected']({ id: 'v-1', label: 'Cheeseburger' });
+    fixture.detectChanges();
+    fixture.componentInstance['onModifierConfirm']({
+      selections: [],
+      commentPresetCodes: ['NO_ONIONS'],
+    });
+    fixture.detectChanges();
+
+    const summary = (fixture.nativeElement as HTMLElement).querySelector(
+      '[data-testid="new-order-line-presets"]',
+    );
+    expect(summary?.textContent?.trim()).toBe('Piyazsiz');
+  });
+
   it('row 2.1b: a product with neither modifier groups nor presets skips the dialog and adds straight to the basket', async () => {
     await render();
 
@@ -1231,6 +1261,24 @@ describe('NewOrderPage', () => {
     expect(fixture.componentInstance['submitError']()).toBe(
       TestBed.inject(I18n).t('orders.newOrder.order.preOrder.closedNoOverride'),
     );
+  });
+
+  /**
+   * The pre-order checkbox kept the aggregator toggle's class when that toggle's rule moved into the
+   * header component's stylesheet, and Angular scopes a component's CSS to its own template, so the
+   * page's label was left unstyled: no flex row, no subtle ink. The label must carry a rule the
+   * page's own stylesheet defines.
+   */
+  it('lays the pre-order toggle out as a flex row with the page stylesheet, not the header component’s', async () => {
+    await render({});
+    const label = fixture.nativeElement
+      .querySelector('[data-testid="new-order-pre-order-toggle"]')!
+      .closest('label') as HTMLElement;
+
+    const style = getComputedStyle(label);
+    expect(style.display).toBe('flex');
+    expect(style.alignItems).toBe('center');
+    expect(style.gap).toBe('4px');
   });
 
   // ------------------------------------------------------------------- «Повторить» (1.3f)

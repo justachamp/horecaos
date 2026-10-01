@@ -9,6 +9,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -160,13 +161,8 @@ public class StatementService {
             addOverage(lines, tenantId, version, periodKey, start, end);
         }
 
-        for (TenantModule held : modules.overlapping(tenantId, start, end)) {
-            SellableModule module = modules.find(held.moduleId())
-                    .orElseThrow(() -> new IllegalStateException("A tenant module names a missing module"));
-            Long quantity = quantityOf(module, held, tenantId, start, end);
-            if (quantity == null) {
-                continue;
-            }
+        for (ModuleCharge charge : moduleCharges(tenantId, start, end)) {
+            SellableModule module = charge.module();
             if (currency == null) {
                 currency = module.currency();
             } else if (!currency.equals(module.currency())) {
@@ -181,7 +177,7 @@ public class StatementService {
                     StatementLine.MODULE,
                     module.code(),
                     module.name() + ", " + module.billingUnit().name(),
-                    quantity,
+                    charge.quantity(),
                     module.unitPriceMinor()));
         }
 
@@ -409,6 +405,41 @@ public class StatementService {
             return override.integerValue();
         }
         return java.util.Objects.requireNonNull(line.integerValue());
+    }
+
+    /**
+     * What the month bills for each module the tenant had live in it: one charge
+     * per module, in the order the tenant first held them.
+     *
+     * <p>ADR 0088 bills a module live on any day of the month for that month,
+     * once. A tenant module is a row, and the only way to change a quantity, or
+     * to undo a purchase made by mistake, is to end the row and add the module
+     * again -- so a month can hold several rows of one module. They are one
+     * charge, not one per row. Where the rows disagree on the unit count (a
+     * {@code PER_UNIT} module ended at three and bought again at one), the month
+     * bills the most it was held at: nothing is prorated, so re-buying never
+     * bills the month for less than ending alone would have.
+     */
+    private List<ModuleCharge> moduleCharges(UUID tenantId, Instant start, Instant end) {
+        Map<UUID, ModuleCharge> byModule = new LinkedHashMap<>();
+        for (TenantModule held : modules.overlapping(tenantId, start, end)) {
+            SellableModule module = modules.find(held.moduleId())
+                    .orElseThrow(() -> new IllegalStateException("A tenant module names a missing module"));
+            Long quantity = quantityOf(module, held, tenantId, start, end);
+            if (quantity == null) {
+                continue;
+            }
+            byModule.merge(module.id(), new ModuleCharge(module, quantity), ModuleCharge::largerOf);
+        }
+        return List.copyOf(byModule.values());
+    }
+
+    /** One module's line on a month's statement, before it is numbered. */
+    private record ModuleCharge(SellableModule module, long quantity) {
+
+        ModuleCharge largerOf(ModuleCharge other) {
+            return other.quantity > quantity ? other : this;
+        }
     }
 
     /**

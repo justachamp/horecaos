@@ -16,8 +16,8 @@ package uz.horecaos.platform.ordering.application;
  * and {@link #ISSUE_INVOICE} are declared here — so the wire contract names
  * them, and the frontend's forward-compatible rendering (an unrecognised code
  * renders its raw name rather than nothing, {@code order-actions.ts}) is ready
- * to receive whichever ships first. {@link #ISSUE_INVOICE} is the one still
- * declared and never emitted:
+ * to receive whichever ships first. All four are wired now; {@link
+ * #ISSUE_INVOICE} was the last:
  *
  * <ul>
  *   <li>{@link #COMPLETE} is wired (wave P09, gap map {@code 1.2j}) —
@@ -58,8 +58,16 @@ package uz.horecaos.platform.ordering.application;
  *       1.1e}) — see {@link OrderActionsPolicy}'s own four-argument {@code
  *       availableFor} overload.
  *   <li>{@link #ISSUE_INVOICE} targets «Выставить счёт», a re-issued payment
- *       invoice (orders.md §4.9), whose endpoint does not exist yet (gap map
- *       {@code P12}).
+ *       checkout (orders.md §4.9): {@code POST /api/v1/operations/tenants/{t}/
+ *       orders/{id}/payment/re-presentations} (wave P12's endpoint, audited and
+ *       given its action code in wave 16, gap map {@code 1.1e}). {@link
+ *       OrderActionsPolicy}'s six-argument {@code availableFor} overload emits it
+ *       for an order that is still owed an online payment (its payment projection
+ *       is {@code PENDING}), has not ended, and whose caller holds {@code
+ *       PAYMENT_INITIATE} <em>at tenant scope</em> — the scope that endpoint
+ *       declares, so the button is never shown to a principal the endpoint would
+ *       refuse. The row action opens the order; the detail pane's header action
+ *       opens the payment panel's re-issue form.
  * </ul>
  */
 public enum OrderActionCode {
@@ -105,8 +113,8 @@ public enum OrderActionCode {
     ASSIGN_COURIER,
 
     /**
-     * Re-issue a payment invoice (orders.md §4.9, «Выставить счёт»). Declared,
-     * not yet emitted — see the class doc.
+     * Re-issue a payment checkout (orders.md §4.9, «Выставить счёт»). Wired
+     * (gap map {@code 1.1e}) — see the class doc.
      */
     ISSUE_INVOICE,
 

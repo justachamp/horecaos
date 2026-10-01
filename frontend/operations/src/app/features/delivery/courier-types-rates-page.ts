@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@ang
 
 import { ApiError } from '../../core/api/problem-details';
 import { CurrentLocation } from '../../core/auth/current-location';
+import { formatMoney } from '../../core/format/money';
 import { I18n } from '../../core/i18n/i18n';
 import { TPipe } from '../../core/i18n/t.pipe';
 import {
@@ -758,7 +759,20 @@ export class CourierTypesRatesPage implements OnInit {
       return this.i18n.t('delivery.rates.reasons.manualOnly');
     }
     const comparator = reason.ruleComparator === 'LTE' ? '≤' : '≥';
-    return `${reason.outcomeBasis} ${comparator} ${reason.ruleThreshold} → ${reason.ruleAmountMinor} ${reason.ruleCurrency}`;
+    const amount =
+      reason.ruleAmountMinor !== null && reason.ruleAmountMinor !== undefined && reason.ruleCurrency
+        ? formatMoney(
+            { amountMinor: reason.ruleAmountMinor, currency: reason.ruleCurrency },
+            this.i18n.locale(),
+            { withUnit: true },
+          )
+        : '—';
+    return `${reason.outcomeBasis} ${comparator} ${reason.ruleThreshold} → ${amount}`;
+  }
+
+  /** A rate-card component's amount as a bare number the way the brand writes money (Settings 10.12). */
+  protected componentAmount(minor: number, currency: string): string {
+    return formatMoney({ amountMinor: minor, currency }, this.i18n.locale());
   }
 
   private describe(error: unknown): string {

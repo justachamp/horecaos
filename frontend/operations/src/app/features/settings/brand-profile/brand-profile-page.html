@@ -100,7 +100,7 @@
       <dl class="fields">
         <div class="field">
           <dt class="q-caption">{{ 'settings.brandProfile.field.contactPhone' | t }}</dt>
-          <dd class="q-body">{{ value.contactPhone ?? '—' }}</dd>
+          <dd class="q-body">{{ value.contactPhone ? (value.contactPhone | phone) : '—' }}</dd>
         </div>
         <div class="field">
           <dt class="q-caption">{{ 'settings.brandProfile.field.telegramHandle' | t }}</dt>
@@ -292,6 +292,192 @@
           >
             {{
               profileSaving()
+                ? ('settings.brandProfile.saving' | t)
+                : ('settings.brandProfile.save' | t)
+            }}
+          </button>
+        </div>
+      </div>
+    }
+  </section>
+
+  <section class="block" data-testid="brand-profile-formats">
+    <h2 class="q-subhead">{{ 'settings.brandProfile.section.formats' | t }}</h2>
+    <p class="q-body-sm lead">{{ 'settings.brandProfile.formats.lead' | t }}</p>
+
+    @if (!editingFormats()) {
+      <dl class="fields">
+        @if (tenantMarket(); as market) {
+          <div class="field">
+            <dt class="q-caption">{{ 'settings.brandProfile.field.currency' | t }}</dt>
+            <dd class="q-body q-mono">{{ market.defaultCurrency }}</dd>
+          </div>
+        }
+        <div class="field" data-testid="formats-placement">
+          <dt class="q-caption">{{ 'settings.brandProfile.formats.placement' | t }}</dt>
+          <dd class="q-body">{{ placementLabel(storedFormats().moneySymbolPlacement) }}</dd>
+        </div>
+        <div class="field" data-testid="formats-grouping">
+          <dt class="q-caption">{{ 'settings.brandProfile.formats.grouping' | t }}</dt>
+          <dd class="q-body">{{ groupingLabel(storedFormats().moneyGrouping) }}</dd>
+        </div>
+        <div class="field" data-testid="formats-phone">
+          <dt class="q-caption">{{ 'settings.brandProfile.formats.phone' | t }}</dt>
+          <dd class="q-body q-mono">{{ phonePatternText(storedFormats()) }}</dd>
+        </div>
+        <div class="field" data-testid="formats-preview">
+          <dt class="q-caption">{{ 'settings.brandProfile.formats.preview' | t }}</dt>
+          <dd class="q-body">
+            {{ 'settings.brandProfile.formats.preview.total' | t }}:
+            <span class="q-mono" data-testid="formats-preview-total">{{
+              previewTotal(storedFormats())
+            }}</span>
+            · {{ 'settings.brandProfile.formats.preview.phone' | t }}:
+            <span class="q-mono" data-testid="formats-preview-phone">{{
+              previewPhoneText(storedFormats())
+            }}</span>
+          </dd>
+        </div>
+        @if (tenantMarket(); as market) {
+          <div class="field" data-testid="formats-timezone">
+            <dt class="q-caption">{{ 'settings.brandProfile.field.timezone' | t }}</dt>
+            <dd class="q-body">
+              <span class="q-mono">{{ market.defaultTimezone }}</span>
+              <span class="q-caption">
+                ({{ 'settings.brandProfile.formats.timezone.tenant' | t }})</span
+              >
+              @for (branch of branchTimezones(); track branch.name) {
+                <br />
+                <span class="q-caption" data-testid="formats-branch-timezone"
+                  >{{ branch.name }} — <span class="q-mono">{{ branch.timezone }}</span></span
+                >
+              }
+            </dd>
+          </div>
+        }
+      </dl>
+      <p class="q-caption">{{ 'settings.brandProfile.formats.timezone.hint' | t }}</p>
+
+      <button
+        type="button"
+        class="q-body primary"
+        (click)="startEditingFormats()"
+        data-testid="formats-edit"
+      >
+        {{ 'settings.brandProfile.edit' | t }}
+      </button>
+    } @else {
+      <div class="form">
+        <label class="q-caption" for="formats-placement">{{
+          'settings.brandProfile.formats.placement' | t
+        }}</label>
+        <select
+          id="formats-placement"
+          class="q-body field"
+          [value]="draftPlacement()"
+          (change)="setPlacement($any($event.target).value)"
+          [disabled]="formatsSaving()"
+          data-testid="formats-placement-select"
+        >
+          @for (placement of moneySymbolPlacements; track placement) {
+            <option [value]="placement" [selected]="placement === draftPlacement()">
+              {{ placementLabel(placement) }}
+            </option>
+          }
+        </select>
+
+        <label class="q-caption" for="formats-grouping">{{
+          'settings.brandProfile.formats.grouping' | t
+        }}</label>
+        <select
+          id="formats-grouping"
+          class="q-body field"
+          [value]="draftGrouping()"
+          (change)="setGrouping($any($event.target).value)"
+          [disabled]="formatsSaving()"
+          data-testid="formats-grouping-select"
+        >
+          @for (grouping of moneyGroupings; track grouping) {
+            <option [value]="grouping" [selected]="grouping === draftGrouping()">
+              {{ groupingLabel(grouping) }}
+            </option>
+          }
+        </select>
+
+        <label class="q-caption" for="formats-phone">{{
+          'settings.brandProfile.formats.phone' | t
+        }}</label>
+        <select
+          id="formats-phone"
+          class="q-body field"
+          [value]="draftPhoneChoice()"
+          (change)="draftPhoneChoice.set($any($event.target).value)"
+          [disabled]="formatsSaving()"
+          data-testid="formats-phone-select"
+        >
+          <option [value]="phoneAsReceived" [selected]="draftPhoneChoice() === phoneAsReceived">
+            {{ 'settings.brandProfile.formats.phone.asReceived' | t }}
+          </option>
+          @for (pattern of phonePatternPresets; track pattern) {
+            <option [value]="pattern" [selected]="draftPhoneChoice() === pattern">
+              {{ pattern }}
+            </option>
+          }
+          <option [value]="phoneCustom" [selected]="draftPhoneChoice() === phoneCustom">
+            {{ 'settings.brandProfile.formats.phone.custom' | t }}
+          </option>
+        </select>
+        @if (draftPhoneChoice() === phoneCustom) {
+          <label class="q-caption" for="formats-phone-pattern">{{
+            'settings.brandProfile.formats.phone.pattern' | t
+          }}</label>
+          <input
+            id="formats-phone-pattern"
+            class="q-body field q-mono"
+            type="text"
+            maxlength="32"
+            [value]="draftCustomPattern()"
+            (input)="draftCustomPattern.set($any($event.target).value)"
+            [disabled]="formatsSaving()"
+            placeholder="+### ## ### ## ##"
+            data-testid="formats-phone-pattern"
+          />
+          <p class="q-caption">{{ 'settings.brandProfile.formats.phone.patternHint' | t }}</p>
+        }
+
+        <p class="q-body-sm formats-preview" data-testid="formats-draft-preview">
+          {{ 'settings.brandProfile.formats.preview' | t }}:
+          {{ 'settings.brandProfile.formats.preview.total' | t }}
+          <span class="q-mono" data-testid="formats-draft-preview-total">{{
+            previewTotal(draftFormats())
+          }}</span>
+          · {{ 'settings.brandProfile.formats.preview.phone' | t }}
+          <span class="q-mono" data-testid="formats-draft-preview-phone">{{
+            previewPhoneText(draftFormats())
+          }}</span>
+        </p>
+
+        @if (formatsError(); as message) {
+          <p class="q-body-sm error" role="alert" data-testid="formats-error">{{ message }}</p>
+        }
+        <div class="form__actions">
+          <button
+            type="button"
+            class="q-body secondary"
+            (click)="cancelEditingFormats()"
+            [disabled]="formatsSaving()"
+          >
+            {{ 'settings.brandProfile.cancel' | t }}
+          </button>
+          <button
+            type="button"
+            class="q-body primary"
+            (click)="saveFormats()"
+            [disabled]="formatsSaving()"
+            data-testid="formats-save"
+          >
+            {{
+              formatsSaving()
                 ? ('settings.brandProfile.saving' | t)
                 : ('settings.brandProfile.save' | t)
             }}

@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { applyRegionalFormats, resetRegionalFormats } from '../../core/format/regional-format';
 import { I18n } from '../../core/i18n/i18n';
 import { OrderRowsTable, OrderTableColumn } from './order-rows-table';
 import { CrmLogRowResponse } from './order-crm-log-api';
@@ -180,6 +181,25 @@ describe('OrderRowsTable', () => {
   });
 
   // ---------------------------------- wave 9 w4-reports-distance-crm (7.2a)
+
+  describe('the masked phone follows the brand’s pattern (row 10.12)', () => {
+    afterEach(() => resetRegionalFormats());
+
+    it('re-writes the masked number in the brand’s pattern, the mask kept', () => {
+      applyRegionalFormats({ phoneDisplayPattern: '+###-##-###-##-##' });
+      const fixture = render(
+        [row()],
+        ['orderId', 'customer'],
+        undefined,
+        new Map([[row().orderId, crmRow()]]),
+      );
+
+      expect(
+        (fixture.nativeElement as HTMLElement).querySelector('[data-testid="order-row-customer"]')
+          ?.textContent,
+      ).toContain('+998-90-•••-••-42');
+    });
+  });
 
   it('renders the customer name, masked phone, operator and courier from the joined CRM row', () => {
     const fixture = render(

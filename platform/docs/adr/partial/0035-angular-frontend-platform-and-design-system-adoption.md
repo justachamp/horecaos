@@ -88,6 +88,17 @@
   doc comment for the full model, including why the load cache is keyed off
   a `globalThis` slot rather than a module-level variable (the unit-test
   builder gives every spec file its own independent bundle).
+
+  As of 2026-09-30 (batch 16, w7-console-budgets-hygiene), the control-plane
+  console follows the same loading model: `core/i18n/i18n.service.ts` keeps
+  `ru` in the initial bundle and fetches `en` and `uz-Latn` through their own
+  dynamic-import chunks, `I18nService.use()` is a request that swaps locale
+  and text together once the catalogue is in memory, `main.ts` awaits the
+  stored locale's catalogue before bootstrapping, and the unit-test setup
+  (`src/testing/i18n-preload.setup.ts`) warms all three locales. The three
+  catalogues had been 386 kB of the control-plane's 643 kB initial bundle; it
+  is now 443 kB against the 500 kB warning. No decision changes: the model was
+  the operations console's, and this is the second application to adopt it.
 - Date proposed: 2026-08-21
 - Date decided: 2026-08-22 (amended; the 2026-08-21 decision stands except where restated below)
 - Deciders: Ayubkhon Abbosov (platform architecture, product owner)

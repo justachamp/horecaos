@@ -10,113 +10,6 @@
   min-height: 0;
 }
 
-/* ---- toolbar: tabs + refresh stamp ------------------------------------ */
-
-.order-queue__toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 8px 24px;
-  border-bottom: 1px solid var(--q-hairline);
-  flex-shrink: 0;
-}
-
-.order-queue__tabs {
-  display: flex;
-  gap: 4px;
-  flex-wrap: wrap;
-}
-
-.tab {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 10px;
-  border: 1px solid transparent;
-  border-radius: var(--q-radius);
-  background: transparent;
-  color: var(--q-ink-muted);
-  font-family: var(--q-font-sans);
-  font-size: var(--q-type-body-sm);
-  line-height: 1.29;
-  letter-spacing: 0.16px;
-  cursor: pointer;
-}
-
-.tab:hover {
-  color: var(--q-ink);
-  background: var(--q-surface-1);
-}
-
-.tab--active {
-  color: var(--q-ink);
-  background: var(--q-surface-1);
-  border-color: var(--q-hairline);
-  font-weight: 600;
-}
-
-.tab__count {
-  display: inline-block;
-  min-width: 18px;
-  padding: 0 5px;
-  border-radius: var(--q-radius);
-  background: var(--q-surface-2);
-  color: var(--q-ink-muted);
-  font-size: var(--q-type-caption);
-  line-height: 18px;
-  text-align: center;
-  font-variant-numeric: tabular-nums;
-}
-
-.tab__count--attention {
-  background: var(--q-error-tint);
-  color: var(--q-error-text);
-}
-
-.order-queue__status {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-.order-queue__stamp {
-  color: var(--q-ink-subtle);
-}
-
-/* "Loading, refetch: rows stay, the refresh stamp pulses" — §2.11. */
-.order-queue__stamp--pulse {
-  animation: order-queue-pulse 1s var(--q-ease-productive) infinite alternate;
-}
-
-@keyframes order-queue-pulse {
-  from {
-    opacity: 1;
-  }
-  to {
-    opacity: 0.4;
-  }
-}
-
-.order-queue__refresh {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border: 1px solid var(--q-hairline);
-  border-radius: var(--q-radius);
-  background: var(--q-canvas);
-  color: var(--q-ink-muted);
-  cursor: pointer;
-}
-
-.order-queue__refresh:hover {
-  color: var(--q-ink);
-  border-color: var(--q-ink-subtle);
-}
-
 /* ---- error band: keeps rows, never blanks the queue (§2.11) ---------- */
 
 .order-queue__error-band {
@@ -262,96 +155,10 @@
   color: var(--q-sla-at-risk-text);
 }
 
-.status-badge {
-  display: inline-block;
-  padding: 2px 8px;
-  border: 1px solid var(--q-hairline);
-  border-radius: var(--q-radius);
-  font-size: var(--q-type-caption);
-  color: var(--q-ink-muted);
-  white-space: nowrap;
-}
-
 /* ---- §2.9 row actions: at most two inline, the rest in overflow ------- */
 
 .order-queue__actions-col {
   width: 190px;
-}
-
-.row-actions {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  position: relative;
-}
-
-.row-actions__inline {
-  padding: 4px 8px;
-  border: 1px solid var(--q-hairline);
-  border-radius: var(--q-radius);
-  background: var(--q-canvas);
-  color: var(--q-ink);
-  font-size: var(--q-type-caption);
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.row-actions__inline:hover:not(:disabled) {
-  border-color: var(--q-primary);
-  color: var(--q-primary);
-}
-
-.row-actions__inline:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
-.row-actions__overflow {
-  position: relative;
-}
-
-.row-actions__overflow-trigger {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  border: 1px solid var(--q-hairline);
-  border-radius: var(--q-radius);
-  background: var(--q-canvas);
-  color: var(--q-ink-muted);
-  cursor: pointer;
-}
-
-.row-actions__overflow-trigger:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
-.row-actions__overflow-menu {
-  position: absolute;
-  right: 0;
-  top: calc(100% + 2px);
-  min-width: 160px;
-  display: flex;
-  flex-direction: column;
-  background: var(--q-canvas);
-  border: 1px solid var(--q-hairline);
-  z-index: 10;
-}
-
-.row-actions__overflow-item {
-  padding: 8px 12px;
-  border: none;
-  background: transparent;
-  color: var(--q-ink);
-  font-size: var(--q-type-body-sm);
-  text-align: left;
-  cursor: pointer;
-}
-
-.row-actions__overflow-item:hover {
-  background: var(--q-surface-1);
 }
 
 /* ---- skeleton / empty / denied states (§2.11) ------------------------- */
@@ -423,100 +230,6 @@
   text-align: center;
 }
 
-.order-queue__bulk-bar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-  padding: 10px 16px;
-  background: var(--q-surface-1);
-  border-bottom: 1px solid var(--q-hairline);
-}
-
-.order-queue__bulk-action {
-  padding: 6px 12px;
-  border: 1px solid var(--q-ink);
-  border-radius: var(--q-radius);
-  background: var(--q-canvas);
-  color: var(--q-ink);
-  font-size: var(--q-type-body-sm);
-  cursor: pointer;
-}
-
-.order-queue__bulk-action:disabled {
-  opacity: 0.6;
-  cursor: default;
-}
-
-.order-queue__bulk-action--danger {
-  border-color: var(--q-error-text);
-  color: var(--q-error-text);
-}
-
-.order-queue__bulk-unavailable {
-  color: var(--q-ink-subtle);
-}
-
-.order-queue__bulk-note {
-  color: var(--q-ink-subtle);
-  margin-left: auto;
-}
-
-.order-queue__bulk-clear {
-  padding: 6px 10px;
-  border: none;
-  background: none;
-  color: var(--q-ink-muted);
-  font-size: var(--q-type-body-sm);
-  text-decoration: underline;
-  cursor: pointer;
-}
-
-/* ---- bulk result panel (§2.10) ----------------------------------------- */
-
-.order-queue__bulk-result {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 12px 40px 12px 16px;
-  background: var(--q-surface-1);
-  border-top: 1px solid var(--q-hairline);
-  flex-shrink: 0;
-}
-
-.order-queue__bulk-result-items {
-  margin: 0;
-  padding-left: 18px;
-  font-size: var(--q-type-body-sm);
-  color: var(--q-ink-muted);
-  max-height: 120px;
-  overflow-y: auto;
-}
-
-.order-queue__bulk-retry {
-  align-self: flex-start;
-  padding: 6px 12px;
-  border: 1px solid var(--q-ink);
-  border-radius: var(--q-radius);
-  background: var(--q-canvas);
-  color: var(--q-ink);
-  font-size: var(--q-type-body-sm);
-  cursor: pointer;
-}
-
-.order-queue__bulk-result-dismiss {
-  position: absolute;
-  top: 8px;
-  right: 12px;
-  border: none;
-  background: none;
-  color: var(--q-ink-muted);
-  font-size: var(--q-type-body);
-  line-height: 1;
-  cursor: pointer;
-}
-
 /* ---- cursor paging (X.18) ----------------------------------------------- */
 
 .order-queue__load-more {
@@ -537,4 +250,9 @@
 .order-queue__load-more button:disabled {
   cursor: default;
   opacity: 0.6;
+}
+
+/* The «Все филиалы» note (wave 16) sits in this template, so it needs the rule the bulk bar keeps for itself. */
+.order-queue__bulk-unavailable {
+  color: var(--q-ink-subtle);
 }

@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { ApiClient } from '../core/api/api-client';
 import { LocationScope } from '../core/api/operations-paths';
 import { CurrentLocation } from '../core/auth/current-location';
-import { PLATFORM_DEFAULT_LATENESS_POLICY } from '../core/lateness-policy';
+import { LatenessPolicy, PLATFORM_DEFAULT_LATENESS_POLICY } from '../core/lateness-policy';
 import { LatenessPolicyApi } from '../core/lateness-policy-api';
 import { RealtimeClient, RealtimeFrame } from '../core/realtime/realtime-client';
 import { OrderCountsResponse } from '../features/orders/order-detail';
@@ -57,6 +57,7 @@ describe('ServiceStatus', () => {
   function setUp(
     get: ReturnType<typeof vi.fn>,
     scope: LocationScope | null = SCOPE,
+    read: ReturnType<typeof vi.fn> = vi.fn().mockResolvedValue(PLATFORM_DEFAULT_LATENESS_POLICY),
   ): {
     status: ServiceStatus;
     onFrame: ReturnType<typeof vi.fn>;
@@ -78,7 +79,10 @@ describe('ServiceStatus', () => {
         },
         {
           provide: LatenessPolicyApi,
-          useValue: { resolve: vi.fn().mockResolvedValue(PLATFORM_DEFAULT_LATENESS_POLICY) },
+          useValue: {
+            resolve: vi.fn().mockResolvedValue(PLATFORM_DEFAULT_LATENESS_POLICY),
+            read,
+          },
         },
         { provide: RealtimeClient, useValue: { onFrame, state: signal('open') } },
         { provide: ApiClient, useValue: { get } },
@@ -173,5 +177,74 @@ describe('ServiceStatus', () => {
     });
 
     expect(status.openCount()).toBe(0);
+  });
+  describe('follows a lateness policy edit', () => {
+    const GRACE_TWO_HOURS: LatenessPolicy = {
+      delivery: {
+        atRiskBeforeSeconds: 300,
+        lateAfterSeconds: 7200,
+        noPromiseFallbackSeconds: 7200,
+      },
+      pickup: { atRiskBeforeSeconds: 300, lateAfterSeconds: 7200, noPromiseFallbackSeconds: 7200 },
+      dineIn: { atRiskBeforeSeconds: 300, lateAfterSeconds: 7200, noPromiseFallbackSeconds: 7200 },
+    };
+    // No promise at all, created an hour ago: late under the platform's 45-minute fallback, not
+    // yet late under the two hours the tenant allows. (A promise already past would be at least
+    // AT_RISK under any grace, and the rail counts both.)
+    const OVERDUE = (): OrderSummaryResponse =>
+      order({
+        status: 'PREPARING',
+        promisedAt: null,
+        createdAt: new Date(Date.now() - 60 * 60_000).toISOString(),
+      });
+
+    it('re-reads a stale policy on a later refresh, so the late count follows the edit', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      try {
+        const read = vi
+          .fn()
+          .mockResolvedValueOnce(PLATFORM_DEFAULT_LATENESS_POLICY)
+          .mockResolvedValue(GRACE_TWO_HOURS);
+        const { status } = setUp(apiGet(countsResponse(), [OVERDUE()]), SCOPE, read);
+        await status.refresh();
+        expect(status.lateCount()).toBe(1);
+
+        // A minute later: the server's copy has expired, so the policy is read again.
+        vi.advanceTimersByTime(70_000);
+        await status.refresh();
+
+        expect(status.lateCount()).toBe(0);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('does not take a failed first read for the loaded policy: the next refresh asks again', async () => {
+      const read = vi.fn().mockResolvedValueOnce(null).mockResolvedValue(GRACE_TWO_HOURS);
+      const { status } = setUp(apiGet(countsResponse(), [OVERDUE()]), SCOPE, read);
+      await status.refresh();
+      expect(status.lateCount()).toBe(1);
+
+      await status.refresh();
+
+      expect(status.lateCount()).toBe(0);
+    });
+
+    it('keeps the last policy it read when a later read fails, rather than falling back to the default', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      try {
+        const read = vi.fn().mockResolvedValueOnce(GRACE_TWO_HOURS).mockResolvedValue(null);
+        const { status } = setUp(apiGet(countsResponse(), [OVERDUE()]), SCOPE, read);
+        await status.refresh();
+        expect(status.lateCount()).toBe(0);
+
+        vi.advanceTimersByTime(70_000);
+        await status.refresh();
+
+        expect(status.lateCount()).toBe(0);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 });

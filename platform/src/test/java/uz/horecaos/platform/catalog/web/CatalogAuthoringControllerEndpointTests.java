@@ -137,6 +137,100 @@ class CatalogAuthoringControllerEndpointTests {
         assertThat(result.getResponse().getContentAsString()).contains("\"total\"");
     }
 
+    // ------------------------------------------------ row 10.12: names in the brand's and the server's locale
+
+    @Test
+    void variantAvailabilityFindsAndShowsANameInTheServerLocaleOrTheBrandsDefault() throws Exception {
+        // The stop list and New order's item search send the console's language. BURGER is written only in the
+        // server's locale, `uz`, and FRIES only in the brand's own default, `ru`: before the fallback a
+        // console in English had no name for either.
+        jdbc.sql("""
+                INSERT INTO tenant.brand_locales (tenant_id, brand_id, locale, is_default)
+                VALUES (:tenantId, :brandId, 'ru', true)
+                """).param("tenantId", TENANT).param("brandId", BRAND).update();
+        insertName(PRODUCT, "uz", "Qo'y burger");
+        insertName(TARGET_PRODUCT, "ru", "Картофель фри");
+
+        MvcResult served = mvc.perform(get(catalogPath() + "/locations/" + LOCATION + "/variants")
+                        .with(tokenFor(OWNER))
+                        .queryParam("locale", "en"))
+                .andReturn();
+        assertThat(served.getResponse().getStatus())
+                .as(served.getResponse().getContentAsString(UTF_8))
+                .isEqualTo(200);
+        assertThat(served.getResponse().getContentAsString(UTF_8))
+                .as("each product shows the first language it has a name in")
+                .contains("\"productName\":\"Qo'y burger\"")
+                .contains("\"productName\":\"Картофель фри\"");
+
+        MvcResult searched = mvc.perform(get(catalogPath() + "/locations/" + LOCATION + "/variants")
+                        .with(tokenFor(OWNER))
+                        .queryParam("locale", "en")
+                        .queryParam("search", "фри"))
+                .andReturn();
+        assertThat(searched.getResponse().getContentAsString(UTF_8))
+                .as("found by the brand-default name")
+                .contains(TARGET_VARIANT.toString())
+                .doesNotContain(VARIANT.toString());
+
+        MvcResult unasked = mvc.perform(get(catalogPath() + "/locations/" + LOCATION + "/variants")
+                        .with(tokenFor(OWNER))
+                        .queryParam("search", "фри"))
+                .andReturn();
+        assertThat(unasked.getResponse().getContentAsString(UTF_8))
+                .as("a caller that sends no locale (the bulk price change) gets the brand's default")
+                .contains(TARGET_VARIANT.toString());
+
+        MvcResult counts = mvc.perform(get(catalogPath() + "/locations/" + LOCATION + "/variants/availability-counts")
+                        .with(tokenFor(OWNER))
+                        .queryParam("locale", "en")
+                        .queryParam("search", "burger"))
+                .andReturn();
+        assertThat(counts.getResponse().getStatus()).isEqualTo(200);
+        assertThat(counts.getResponse().getContentAsString(UTF_8))
+                .as("the tab badges search the same name")
+                .contains("\"total\":1");
+    }
+
+    @Test
+    void variantAvailabilityShowsTheNameTheRequestedLocaleRanksFirstNotTheOneThatSortsFirst() throws Exception {
+        // The brand's default is `ru`, the server's is `uz`, and the product is written in both. 'ru' sorts
+        // before 'uz', so a join that ordered by the locale code would show the Russian name to a console in
+        // Uzbek. The chain for `locale=uz` is [uz, ru] and for `locale=ru` it is [ru, uz].
+        jdbc.sql("""
+                INSERT INTO tenant.brand_locales (tenant_id, brand_id, locale, is_default)
+                VALUES (:tenantId, :brandId, 'ru', true)
+                """).param("tenantId", TENANT).param("brandId", BRAND).update();
+        insertName(PRODUCT, "uz", "Qo'y burger");
+        insertName(PRODUCT, "ru", "Бургер из баранины");
+
+        MvcResult uzbek = mvc.perform(get(catalogPath() + "/locations/" + LOCATION + "/variants")
+                        .with(tokenFor(OWNER))
+                        .queryParam("locale", "uz"))
+                .andReturn();
+        assertThat(uzbek.getResponse().getContentAsString(UTF_8))
+                .as("the requested locale outranks the brand's default")
+                .contains("\"productName\":\"Qo'y burger\"")
+                .doesNotContain("Бургер из баранины");
+
+        MvcResult russian = mvc.perform(get(catalogPath() + "/locations/" + LOCATION + "/variants")
+                        .with(tokenFor(OWNER))
+                        .queryParam("locale", "ru"))
+                .andReturn();
+        assertThat(russian.getResponse().getContentAsString(UTF_8))
+                .contains("\"productName\":\"Бургер из баранины\"")
+                .doesNotContain("Qo'y burger");
+
+        MvcResult counts = mvc.perform(get(catalogPath() + "/locations/" + LOCATION + "/variants/availability-counts")
+                        .with(tokenFor(OWNER))
+                        .queryParam("locale", "uz")
+                        .queryParam("search", "баран"))
+                .andReturn();
+        assertThat(counts.getResponse().getContentAsString(UTF_8))
+                .as("the badges rank the names the same way, so the Russian name is not found from an Uzbek console")
+                .contains("\"total\":0");
+    }
+
     // ----------------------------------------------------------- row 4.2g: sale schedule
 
     @Test
@@ -340,6 +434,19 @@ class CatalogAuthoringControllerEndpointTests {
 
         insertProductAndVariant(PRODUCT, VARIANT, "BURGER");
         insertProductAndVariant(TARGET_PRODUCT, TARGET_VARIANT, "FRIES");
+    }
+
+    private void insertName(UUID productId, String locale, String name) {
+        jdbc.sql("""
+                INSERT INTO catalog.translations (tenant_id, brand_id, entity_type, entity_id, locale, name)
+                VALUES (:tenantId, :brandId, 'PRODUCT', :productId, :locale, :name)
+                """)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("productId", productId)
+                .param("locale", locale)
+                .param("name", name)
+                .update();
     }
 
     private void insertProductAndVariant(UUID productId, UUID variantId, String code) {

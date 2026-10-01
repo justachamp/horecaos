@@ -375,7 +375,10 @@
       "itemUnavailable": "Bu taom hozirgina tugab qoldi.",
       "holdExpired": "Savatingiz uchun band qilingan vaqt tugadi. Buyurtmangizni qayta tekshirib, yana urinib ko'ring.",
       "tableNotAtBranch": "Bu stol boshqa filialda. O'z stolingizdagi kodni skanerlang.",
-      "quoteExpired": "Narx eskirdi. Buyurtmangizni tekshirib, yana urinib ko'ring."
+      "quoteExpired": "Narx eskirdi. Buyurtmangizni tekshirib, yana urinib ko'ring.",
+      "modifierMinimum": "Bu taom uchun majburiy variantlarni tanlang.",
+      "modifierMaximum": "Siz bu taom ruxsat etganidan ko'proq tanladingiz.",
+      "modifierNotOffered": "Tanlagan variantlaringizdan biri endi taklif etilmaydi. Oynani yopib, qaytadan tanlang."
     }
   },
   "money": {
@@ -387,7 +390,6 @@
     "portion": "Porsiya",
     "quantity": "Soni",
     "required": "majburiy",
-    "chooseRequired": "Majburiy qo‘shimchalarni tanlang",
     "addToCart": "Savatga qo‘shish",
     "adding": "Qo‘shilmoqda…",
     "addFailed": "Savatga qo‘shib bo‘lmadi",
@@ -458,6 +460,17 @@
     "heldUnavailable": "Endi mavjud emas. Davom etish uchun uni buyurtmadan olib tashlang.",
     "clearOrder": "Buyurtmani tozalash",
     "priceRefreshed": "Narx yangilandi, buyurtma yuborilmadi. Jamini tekshirib, «Buyurtma berish» tugmasini yana bosing.",
-    "sessionEnded": "Bu stoldagi tashrif tugadi. Buyurtmani davom ettirish uchun stolingizdagi kodni qayta skanerlang."
+    "sessionEnded": "Bu stoldagi tashrif tugadi. Buyurtmani davom ettirish uchun stolingizdagi kodni qayta skanerlang.",
+    "choose": "Tanlash",
+    "pickerAdd": "Buyurtmaga qo'shish",
+    "pickerExactly": "{{count}} ta tanlang",
+    "pickerBetween": "{{min}} tadan {{max}} tagacha tanlang",
+    "pickerAtLeast": "Kamida {{count}} ta tanlang",
+    "pickerUpTo": "{{count}} tagacha tanlang",
+    "pickerMissing": "Tanlash kerak: {{groups}}",
+    "pickerOptionUnnamed": "Variant",
+    "chooseRequired": "Avval majburiy variantlarni tanlang.",
+    "customLinesTitle": "Tanlovingiz bilan taomlar",
+    "lineGone": "Taom endi menyuda yo'q"
   }
 }

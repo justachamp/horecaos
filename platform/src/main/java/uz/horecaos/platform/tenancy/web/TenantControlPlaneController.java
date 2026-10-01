@@ -41,6 +41,7 @@ import uz.horecaos.platform.tenancy.application.TenantControlPlaneService.Create
 import uz.horecaos.platform.tenancy.application.TenantControlPlaneService.DescribeLocationCommand;
 import uz.horecaos.platform.tenancy.application.TenantControlPlaneService.LocationLocaleInput;
 import uz.horecaos.platform.tenancy.application.TenantControlPlaneService.LocationView;
+import uz.horecaos.platform.tenancy.application.TenantControlPlaneService.RegionalFormatsCommand;
 import uz.horecaos.platform.tenancy.application.TenantControlPlaneService.ReviseBrandCommand;
 import uz.horecaos.platform.tenancy.application.TenantControlPlaneService.ReviseLocationCommand;
 import uz.horecaos.platform.tenancy.application.TenantControlPlaneService.TenantView;
@@ -283,6 +284,37 @@ public class TenantControlPlaneController {
                                 .map(locale ->
                                         new BrandLocaleInput(locale.locale(), locale.description(), locale.isDefault()))
                                 .toList()));
+    }
+
+    /**
+     * Sets how the brand's operators read money and phone numbers in the console
+     * (Settings 10.12): where the currency unit sits on a total, how thousands are
+     * grouped, how a phone number is written.
+     *
+     * <p>Its own act beside {@link #updateBrandProfile}, not a field of it: the profile
+     * write is a whole-set replacement of contact, media and languages, and a
+     * correction to any of those must not be able to reset a display preference. It
+     * carries no {@code If-Match} for the same reason the profile does not.
+     */
+    @PutMapping("/{tenantId}/brands/{brandId}/regional-formats")
+    @RequiresCapability(value = Capability.BRAND_WRITE, scope = ScopeType.BRAND, mutating = true)
+    @Operation(
+            summary = "Set a brand's regional display formats",
+            description = "Where the currency unit sits on a total (BEFORE or AFTER the amount), "
+                    + "how thousands are grouped (SPACE, COMMA, DOT or NONE), and how a phone number "
+                    + "is written (a pattern with one # per digit, or absent to show it as it arrives). "
+                    + "Display only: nothing stored, exported or sent to a customer changes. An absent "
+                    + "placement or grouping means the default. The timezone is not set here: it is the "
+                    + "tenant's and each branch's own.")
+    BrandView reviseRegionalFormats(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @Valid @RequestBody RegionalFormatsRequest request) {
+        return service.reviseRegionalFormats(
+                new TenantId(tenantId),
+                new BrandId(brandId),
+                new RegionalFormatsCommand(
+                        request.moneySymbolPlacement(), request.moneyGrouping(), request.phoneDisplayPattern()));
     }
 
     @DeleteMapping("/{tenantId}/brands/{brandId}")
@@ -572,6 +604,23 @@ public class TenantControlPlaneController {
             @Nullable UUID bannerAssetId,
 
             @NotNull @Size(max = 8) List<@Valid BrandLocaleRequest> locales) {}
+
+    /**
+     * @param moneySymbolPlacement {@code BEFORE} or {@code AFTER}; absent means {@code AFTER}
+     * @param moneyGrouping        {@code SPACE}, {@code COMMA}, {@code DOT} or {@code NONE}; absent
+     *                             means {@code SPACE}
+     * @param phoneDisplayPattern  one {@code #} per digit (seven to fifteen of them) with {@code + ( ) - .}
+     *                             and spaces kept as written; absent shows a number as it arrives
+     */
+    record RegionalFormatsRequest(
+            @Size(max = 8) @Pattern(regexp = "BEFORE|AFTER") @Schema(example = "AFTER") @Nullable
+            String moneySymbolPlacement,
+
+            @Size(max = 8) @Pattern(regexp = "SPACE|COMMA|DOT|NONE") @Schema(example = "SPACE") @Nullable
+            String moneyGrouping,
+
+            @Size(max = 32) @Pattern(regexp = "[+#() .-]+") @Schema(example = "+### ## ### ## ##") @Nullable
+            String phoneDisplayPattern) {}
 
     /** @param locale one of {@code uz.horecaos.platform.tenancy.domain.BrandProfile#KNOWN_LOCALES} */
     record BrandLocaleRequest(

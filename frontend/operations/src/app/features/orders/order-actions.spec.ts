@@ -4,6 +4,7 @@ import { I18n } from '../../core/i18n/i18n';
 import { orderStatusLabel } from './order-status';
 import {
   DecisionIdRegistry,
+  ORDER_ACTION_CODES,
   OrderActionResponse,
   actionLabel,
   advanceReasonCode,
@@ -55,6 +56,21 @@ describe('actionLabel', () => {
     expect(actionLabel(action({ action: 'ASSIGN_COURIER' }), 'DELIVERY', t, statusLabel)).toBe(
       'Assign courier',
     );
+  });
+
+  it('labels ISSUE_INVOICE (gap map row 1.1e), never falling to the raw code', () => {
+    expect(actionLabel(action({ action: 'ISSUE_INVOICE' }), null, t, statusLabel)).toBe(
+      'Issue invoice',
+    );
+    const ru = new I18n();
+    ru.setLocale('ru');
+    expect(actionLabel(action({ action: 'ISSUE_INVOICE' }), null, ru.t.bind(ru), statusLabel)).toBe(
+      'Выставить счёт',
+    );
+  });
+
+  it('names ISSUE_INVOICE among the codes the server can emit', () => {
+    expect(ORDER_ACTION_CODES).toContain('ISSUE_INVOICE');
   });
 
   it('labels RESOLVE (gap map row 1.1e) with the amendment history’s own word, never falling to the raw code', () => {

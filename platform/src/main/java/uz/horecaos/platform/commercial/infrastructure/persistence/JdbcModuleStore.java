@@ -18,6 +18,7 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import uz.horecaos.platform.commercial.domain.BillingUnit;
+import uz.horecaos.platform.commercial.domain.ModuleAcquisition;
 import uz.horecaos.platform.commercial.domain.SellableModule;
 import uz.horecaos.platform.commercial.domain.TenantModule;
 
@@ -113,10 +114,12 @@ public class JdbcModuleStore {
         params.put("startedAt", utc(module.startedAt()));
         params.put("startedBy", module.startedBy());
         params.put("startReason", module.startReason());
+        params.put("acquiredVia", module.acquiredVia().name());
         jdbc.sql("""
                 INSERT INTO commercial.tenant_modules (
-                    id, tenant_id, module_id, quantity, started_at, started_by, start_reason)
-                VALUES (:id, :tenantId, :moduleId, :quantity, :startedAt, :startedBy, :startReason)
+                    id, tenant_id, module_id, quantity, started_at, started_by, start_reason, acquired_via)
+                VALUES (:id, :tenantId, :moduleId, :quantity, :startedAt, :startedBy, :startReason,
+                    :acquiredVia)
                 """).params(params).update();
     }
 
@@ -196,7 +199,7 @@ public class JdbcModuleStore {
 
     private static final String SELECT_TENANT_MODULE = """
             SELECT id, tenant_id, module_id, quantity, started_at, started_by, start_reason,
-                   ended_at, ended_by, end_reason
+                   acquired_via, ended_at, ended_by, end_reason
               FROM commercial.tenant_modules
             """;
 
@@ -226,6 +229,7 @@ public class JdbcModuleStore {
                 Objects.requireNonNull(instant(row, "started_at"), "started_at is NOT NULL"),
                 row.getString("started_by"),
                 row.getString("start_reason"),
+                ModuleAcquisition.valueOf(row.getString("acquired_via")),
                 instant(row, "ended_at"),
                 row.getString("ended_by"),
                 row.getString("end_reason"));

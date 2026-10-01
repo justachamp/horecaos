@@ -163,12 +163,7 @@ export type CustomerCoordinateSource = 'CUSTOMER_PIN' | 'NOT_GEOCODED' | 'LANDMA
 
 /** Every source the platform stores, for reading back an address staff created. */
 export type CoordinateSource =
-  | CustomerCoordinateSource
-  | 'GEOCODER'
-  | 'OPERATOR_PIN'
-  | 'LEGACY_UNSOURCED'
-  // eslint-disable-next-line @typescript-eslint/ban-types
-  | (string & {});
+  CustomerCoordinateSource | 'GEOCODER' | 'OPERATOR_PIN' | 'LEGACY_UNSOURCED' | (string & {});
 
 /**
  * The parts of an address, each in its own field.

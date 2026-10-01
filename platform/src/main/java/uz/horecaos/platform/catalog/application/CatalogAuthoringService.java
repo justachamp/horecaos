@@ -928,11 +928,76 @@ public class CatalogAuthoringService {
      * BulkClassifyStatus#NOT_FOUND} and every other item is still applied,
      * the same "N independent outcomes, never one all-or-nothing" contract
      * {@code POST .../orders/bulk-actions} already uses.
+     *
+     * <p>{@link BulkClassifyMode#REPLACE}, what this overload has always done.
      */
     @Transactional
     public List<BulkClassifyOutcome> bulkClassify(
             UUID tenantId, UUID brandId, List<BulkClassifyItem> items, @Nullable UUID actorId) {
+        return bulkClassify(
+                tenantId,
+                brandId,
+                items,
+                BulkClassifyMode.REPLACE,
+                actorId,
+                actorId == null ? "unknown" : actorId.toString());
+    }
+
+    /**
+     * {@link #bulkClassify(UUID, UUID, List, UUID)} with a choice of how an item
+     * meets what the node already holds (gap map row {@code 10.7c}).
+     *
+     * <p>{@link BulkClassifyMode#MERGE} is what a backfill needs. A node that has
+     * a classification but not a complete one — an ИКПУ and no package code, a
+     * unit and a fiscal name and neither code — is exactly what a backfill
+     * finds, and {@link BulkClassifyMode#REPLACE} would write the item over the
+     * whole row: filling in the package code would blank the unit and the fiscal
+     * name someone entered earlier. Under MERGE a field the item supplies fills
+     * a gap and a field it omits keeps the stored one, and the constraints on
+     * marking, excise and age restriction are never touched (the controller
+     * refuses an item that sets them). A value that differs from one the node
+     * already holds is never written: that item reports {@link
+     * BulkClassifyStatus#CONFLICT} and writes nothing for the node, so a pasted
+     * column that landed one row too low, or a second operator filling the same
+     * gap from a list read before the first saved, cannot replace a correct code.
+     * An item that would leave the row as it is reports {@link
+     * BulkClassifyStatus#UNCHANGED} and writes nothing, so a re-run of a
+     * half-finished paste is quiet. Each node is merged
+     * by the store against the row as it is when that node is written ({@link
+     * JdbcCatalogStore#mergeFiscalClassification}), never against a copy read at
+     * the start of the batch, so a marking or age restriction another operator
+     * sets while the batch runs is not written back over.
+     *
+     * <p>Audited as one fact for the whole batch — what each node held before
+     * and after, keyed by node — because the fiscal fields are what a receipt is
+     * built from and a bulk write is how a wrong code reaches four hundred of
+     * them. Nothing is recorded when no node changed.
+     *
+     * @param actorId      the row's {@code classified_by}, absent when the caller's
+     *                     subject is not a UUID
+     * @param actorSubject who the audit fact names
+     */
+    @Transactional
+    public List<BulkClassifyOutcome> bulkClassify(
+            UUID tenantId,
+            UUID brandId,
+            List<BulkClassifyItem> items,
+            BulkClassifyMode mode,
+            @Nullable UUID actorId,
+            String actorSubject) {
+        // REPLACE writes the whole row, so what an item replaces is read once for
+        // the brand rather than once per item, and kept current as the batch is
+        // applied so a node named twice is replaced in sequence the way two calls
+        // would be. MERGE reads nothing up front: the store locks and merges each
+        // node's row as it is when that node is written, so a marking or age
+        // restriction changed while the batch runs is never written back from a
+        // stale copy.
+        Map<UUID, FiscalClassification> stored = mode == BulkClassifyMode.REPLACE
+                ? new HashMap<>(store.classificationsForBrand(tenantId, brandId))
+                : Map.of();
         List<BulkClassifyOutcome> outcomes = new ArrayList<>(items.size());
+        Map<String, Object> beforeDoc = new LinkedHashMap<>();
+        Map<String, Object> afterDoc = new LinkedHashMap<>();
         for (BulkClassifyItem item : items) {
             if (!store.priceableNodeExistsInBrand(tenantId, brandId, item.node())) {
                 outcomes.add(new BulkClassifyOutcome(item.node(), BulkClassifyStatus.NOT_FOUND));
@@ -943,15 +1008,77 @@ public class CatalogAuthoringService {
                 outcomes.add(new BulkClassifyOutcome(item.node(), BulkClassifyStatus.SKIPPED_EMPTY));
                 continue;
             }
-            classify(tenantId, brandId, item.node(), fiscal, actorId);
-            outcomes.add(new BulkClassifyOutcome(item.node(), BulkClassifyStatus.CLASSIFIED));
+            FiscalClassification before;
+            FiscalClassification after;
+            BulkClassifyStatus status = BulkClassifyStatus.CLASSIFIED;
+            if (mode == BulkClassifyMode.MERGE) {
+                JdbcCatalogStore.FiscalMerge merge =
+                        store.mergeFiscalClassification(tenantId, brandId, item.node(), fiscal, "MANUAL", actorId);
+                if (merge.conflict()) {
+                    status = BulkClassifyStatus.CONFLICT;
+                } else if (!merge.changed()) {
+                    status = BulkClassifyStatus.UNCHANGED;
+                }
+                if (!merge.changed()) {
+                    outcomes.add(new BulkClassifyOutcome(item.node(), status));
+                    continue;
+                }
+                before = merge.before();
+                after = Objects.requireNonNull(merge.after());
+            } else {
+                before = stored.getOrDefault(item.node().id(), FiscalClassification.unclassified());
+                after = fiscal;
+                classify(tenantId, brandId, item.node(), after, actorId);
+                stored.put(item.node().id(), after);
+            }
+            String key = item.node().id().toString();
+            beforeDoc.putIfAbsent(key, fiscalSummary(before));
+            afterDoc.put(key, fiscalSummary(after));
+            outcomes.add(new BulkClassifyOutcome(item.node(), status));
+        }
+        if (!afterDoc.isEmpty()) {
+            audit.record(AuditFact.of("catalog.fiscalClassification.bulkSet", AuditClass.BUSINESS)
+                    .by(ActorRef.user(actorSubject, null))
+                    .at(ResourceScope.brand(tenantId, brandId))
+                    .target("Brand", brandId)
+                    .because("Bulk-classified %d priceable nodes (%s)".formatted(afterDoc.size(), mode))
+                    .usingCapability(Capability.CATALOG_AUTHOR.code())
+                    .changed(ChangeDocuments.diff(beforeDoc, afterDoc))
+                    .correlatedBy(brandId.toString())
+                    .occurredAt(clock.instant())
+                    .build());
         }
         return outcomes;
+    }
+
+    /**
+     * The four required fields as an audit value: enough to say what a receipt
+     * line was built from before and after, and nothing an operator did not
+     * type into a fiscal classification (ADR 0029: no personal data here).
+     */
+    private static Map<String, Object> fiscalSummary(FiscalClassification fiscal) {
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("mxikCode", fiscal.mxikCode());
+        summary.put("packageCode", fiscal.packageCode());
+        summary.put("fiscalUnitCode", fiscal.fiscalUnitCode());
+        summary.put("fiscalName", fiscal.fiscalName());
+        return summary;
     }
 
     /** One item of a {@link #bulkClassify} batch: a target node and what to set it to. */
     public record BulkClassifyItem(
             PriceableNode node, @Nullable FiscalClassification fiscal) {}
+
+    /** How a batch item meets what its node already holds. */
+    public enum BulkClassifyMode {
+        /** The item becomes the node's whole classification. What the endpoint did before this enum. */
+        REPLACE,
+        /**
+         * A field the item supplies fills a gap; a field it omits keeps the stored one, and a
+         * supplied value that differs from a stored one is a {@link BulkClassifyStatus#CONFLICT}.
+         */
+        MERGE
+    }
 
     /** One node's outcome within a {@link #bulkClassify} batch. */
     public enum BulkClassifyStatus {
@@ -959,7 +1086,16 @@ public class CatalogAuthoringService {
         /** The classification carried no fields at all — nothing was written. */
         SKIPPED_EMPTY,
         /** The node id does not belong to this brand, or does not exist. */
-        NOT_FOUND
+        NOT_FOUND,
+        /** A merge that would have left the node as it already is — nothing was written. */
+        UNCHANGED,
+        /**
+         * A merge item supplied a value for a field the node already holds with a
+         * different one. A merge only fills gaps, so nothing was written for the node;
+         * changing a stored value is {@link BulkClassifyMode#REPLACE}'s or the node's
+         * own classification's job.
+         */
+        CONFLICT
     }
 
     public record BulkClassifyOutcome(PriceableNode node, BulkClassifyStatus status) {}
@@ -1218,11 +1354,37 @@ public class CatalogAuthoringService {
                 tenantId, brandId, locationId, locale, cursor, limit, search, offeringStatusFilter);
     }
 
+    /**
+     * The matrix read above, reading a name in the first of {@code nameLocales} the product has one
+     * in (row 10.12) -- see {@link JdbcCatalogStore#variantsAtLocation(UUID, UUID, UUID, List, UUID,
+     * int, String, String)}.
+     */
+    @Transactional(readOnly = true)
+    public List<JdbcCatalogStore.VariantAvailabilityRow> variantsAtLocation(
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            List<String> nameLocales,
+            @Nullable UUID cursor,
+            int limit,
+            @Nullable String search,
+            @Nullable String offeringStatusFilter) {
+        return store.variantsAtLocation(
+                tenantId, brandId, locationId, nameLocales, cursor, limit, search, offeringStatusFilter);
+    }
+
     /** The stop list's own tab badges (gap map row 2.5) — see {@link JdbcCatalogStore#variantAvailabilityCounts}. */
     @Transactional(readOnly = true)
     public JdbcCatalogStore.VariantAvailabilityCountsRow variantAvailabilityCounts(
             UUID tenantId, UUID brandId, UUID locationId, String locale, @Nullable String search) {
         return store.variantAvailabilityCounts(tenantId, brandId, locationId, locale, search);
+    }
+
+    /** The badges above, searching the name the page shows -- the first of {@code nameLocales} the product has one in (row 10.12). */
+    @Transactional(readOnly = true)
+    public JdbcCatalogStore.VariantAvailabilityCountsRow variantAvailabilityCounts(
+            UUID tenantId, UUID brandId, UUID locationId, List<String> nameLocales, @Nullable String search) {
+        return store.variantAvailabilityCounts(tenantId, brandId, locationId, nameLocales, search);
     }
 
     /**

@@ -70,53 +70,15 @@
         {{ 'orders.detail.version' | t: { version: detail.value.summary.version ?? 0 } }}
       </p>
 
-      <div class="pane__actions">
-        @if (primaryAction(); as primary) {
-          <button
-            type="button"
-            class="pane__primary-action"
-            [disabled]="busy() || (primary.action === 'AMEND' && amendBlockedReason() !== null)"
-            (click)="onActionClick(primary)"
-            data-testid="order-detail-primary-action"
-          >
-            {{ actionLabel(primary) }}
-          </button>
-        }
-        @if (overflowActions().length > 0) {
-          <div class="pane__overflow">
-            <button
-              type="button"
-              class="pane__overflow-trigger"
-              [disabled]="busy()"
-              (click)="toggleHeaderOverflow()"
-              [attr.aria-label]="'orders.action.overflow' | t"
-              [attr.aria-expanded]="headerOverflowOpen()"
-              data-testid="order-detail-overflow-trigger"
-            >
-              <span aria-hidden="true">⋯</span>
-            </button>
-            @if (headerOverflowOpen()) {
-              <div class="pane__overflow-menu" data-testid="order-detail-overflow-menu">
-                @for (
-                  action of overflowActions();
-                  track action.action + (action.targetStatus ?? '')
-                ) {
-                  <button
-                    type="button"
-                    class="pane__overflow-item"
-                    [disabled]="action.action === 'AMEND' && amendBlockedReason() !== null"
-                    [attr.title]="action.action === 'AMEND' ? amendBlockedReason() : null"
-                    (click)="onActionClick(action)"
-                    [attr.data-testid]="'order-detail-action-' + action.action"
-                  >
-                    {{ actionLabel(action) }}
-                  </button>
-                }
-              </div>
-            }
-          </div>
-        }
-      </div>
+      <q-order-detail-actions
+        [primaryItem]="primaryItem()"
+        [overflowItems]="overflowItems()"
+        [busy]="busy()"
+        [amendBlockedReason]="amendBlockedReason()"
+        [overflowOpen]="headerOverflowOpen()"
+        (actionRequested)="onActionClick($event)"
+        (overflowToggled)="toggleHeaderOverflow()"
+      />
       @if (primaryAction()?.action === 'AMEND' && amendBlockedReason(); as blockedReason) {
         <p class="q-caption pane__amend-blocked" data-testid="order-detail-amend-blocked">
           {{ blockedReason }}
@@ -139,186 +101,25 @@
       <h2 class="q-emphasis pane__section-title">{{ 'orders.detail.section.lines' | t }}</h2>
       <p class="q-caption pane__snapshot-notice">{{ 'orders.detail.lines.snapshotNotice' | t }}</p>
 
-      <table class="pane__lines-table" data-testid="order-detail-lines">
-        <thead>
-          <tr>
-            <th>{{ 'orders.detail.lines.column.number' | t }}</th>
-            <th>{{ 'orders.detail.lines.column.name' | t }}</th>
-            <th class="pane__num-col">{{ 'orders.detail.lines.column.quantity' | t }}</th>
-            <th class="pane__num-col">{{ 'orders.detail.lines.column.amount' | t }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (line of detail.value.lines; track line.lineId) {
-            <tr data-testid="order-detail-line">
-              <td class="q-tnum">{{ line.lineNumber }}</td>
-              <td>
-                <div>{{ lineName(line) }}</div>
-                @if (line.variantName) {
-                  <div class="q-caption pane__line-variant">{{ line.variantName }}</div>
-                }
-                @if (line.modifiers.length > 0) {
-                  <ul class="pane__line-modifiers">
-                    @for (modifier of line.modifiers; track modifier) {
-                      <li class="q-caption">{{ modifier }}</li>
-                    }
-                  </ul>
-                }
-                @if (line.commentPresets.length > 0) {
-                  <ul class="pane__line-presets" data-testid="order-detail-line-presets">
-                    @for (preset of line.commentPresets; track preset.code) {
-                      <li class="pane__preset-chip">{{ presetLabel(preset) }}</li>
-                    }
-                  </ul>
-                }
-                @if (line.hasNote) {
-                  @if (revealedNote(line.lineId); as note) {
-                    <p class="q-caption pane__line-note">{{ note }}</p>
-                  } @else if (revealedNote(line.lineId) === null) {
-                    <p class="q-caption pane__line-note">
-                      {{ 'orders.detail.lines.note.empty' | t }}
-                    </p>
-                  } @else {
-                    <button
-                      type="button"
-                      class="pane__reveal-link"
-                      [disabled]="isRevealingNote(line.lineId)"
-                      (click)="revealLineNote(line.lineId)"
-                      [attr.data-testid]="'order-detail-line-note-reveal-' + line.lineId"
-                    >
-                      {{ 'orders.detail.lines.note.hidden' | t }}
-                    </button>
-                  }
-                }
-              </td>
-              <td class="pane__num-col q-tnum">{{ line.quantity }}</td>
-              <td class="pane__num-col q-mono q-tnum">
-                {{ formatMoneyMinor(line.finalAmountMinor, detail.value.summary.currency) }}
-              </td>
-            </tr>
-          }
-        </tbody>
-      </table>
+      <q-order-detail-lines
+        [lines]="detail.value.lines"
+        [currency]="detail.value.summary.currency"
+        [revealedNotes]="revealedNotes()"
+        [revealingNoteFor]="revealingNoteFor()"
+        (noteRevealRequested)="revealLineNote($event)"
+      />
     </section>
 
     <!-- ================================================================ Деньги (§3.5, §1.3) -->
     <section class="pane__section" [attr.aria-label]="'orders.detail.section.money' | t">
       <h2 class="q-emphasis pane__section-title">{{ 'orders.detail.section.money' | t }}</h2>
 
-      @if (moneyReconciliation(); as money) {
-        @if (money.reconciles) {
-          <dl class="pane__money">
-            <div class="pane__money-row">
-              <dt class="q-body-sm">{{ 'orders.detail.money.subtotal' | t }}</dt>
-              <dd class="q-mono q-tnum">
-                {{ formatMoneyMinor(money.subtotalMinor, detail.value.summary.currency) }}
-              </dd>
-            </div>
-            <!-- H4, orders.md §3.5 row order: Сумма позиций, Скидка, Сборы, Доставка (below), НДС, Итого. -->
-            <div class="pane__money-row" data-testid="order-detail-money-discount">
-              <dt class="q-body-sm">{{ 'orders.detail.money.discount' | t }}</dt>
-              <dd class="q-mono q-tnum">
-                {{
-                  formatMoneyMinor(
-                    -detail.value.summary.discountMinor,
-                    detail.value.summary.currency
-                  )
-                }}
-              </dd>
-            </div>
-            <div class="pane__money-row" data-testid="order-detail-money-fee">
-              <dt class="q-body-sm">{{ 'orders.detail.money.fee' | t }}</dt>
-              <dd class="q-mono q-tnum">
-                {{ formatMoneyMinor(detail.value.summary.feeMinor, detail.value.summary.currency) }}
-              </dd>
-            </div>
-            <div class="pane__money-row">
-              <dt class="q-body-sm">{{ 'orders.detail.money.tax' | t }}</dt>
-              <dd class="q-mono q-tnum">
-                {{ formatMoneyMinor(detail.value.taxMinor, detail.value.summary.currency) }}
-              </dd>
-            </div>
-            <div class="pane__money-row pane__money-row--total">
-              <dt class="q-body-sm">{{ 'orders.detail.money.total' | t }}</dt>
-              <dd class="q-mono q-tnum">
-                {{ formatMoneyMinor(money.totalMinor, detail.value.summary.currency) }}
-              </dd>
-            </div>
-          </dl>
-
-          <!-- Доставка (row 1.2n, wave P11) — both delivery money figures, and the margin between them. -->
-          @if (delivery(); as plan) {
-            <dl class="pane__money" data-testid="order-detail-delivery-money">
-              <div class="pane__money-row">
-                <dt class="q-body-sm">{{ 'orders.detail.money.deliveryCustomer' | t }}</dt>
-                <dd class="q-mono q-tnum">
-                  {{ formatMoneyMinor(plan.customerDeliveryFeeMinor, plan.currency) }}
-                </dd>
-              </div>
-              @if (plan.shipment?.sourceType === 'PARTNER') {
-                <div class="pane__money-row">
-                  <dt class="q-body-sm">{{ 'orders.detail.money.deliveryProvider' | t }}</dt>
-                  <dd class="q-mono q-tnum">
-                    @if (plan.providerCostMinor != null) {
-                      {{ formatMoneyMinor(plan.providerCostMinor, plan.currency) }}
-                    } @else {
-                      <span class="q-caption">{{
-                        'orders.detail.money.deliveryProviderUnknown' | t
-                      }}</span>
-                    }
-                  </dd>
-                </div>
-                @if (plan.providerCostMinor != null) {
-                  <div class="pane__money-row">
-                    <dt class="q-body-sm">{{ 'orders.detail.money.deliveryMargin' | t }}</dt>
-                    <dd class="q-mono q-tnum">
-                      {{ formatMoneyMinor(deliveryMarginMinor(plan) ?? 0, plan.currency) }}
-                    </dd>
-                  </div>
-                }
-              }
-            </dl>
-
-            <!-- Delivery-exception band (gap map rows 1.2f/1.2g): every open ADR 0014
-                 sourcing or cancellation exception, most recent last. Empty for the
-                 ordinary case -- sourcing settled cleanly and nothing needs an operator. -->
-            @if (plan.exceptions.length > 0) {
-              <ul class="pane__delivery-exceptions" data-testid="order-detail-delivery-exceptions">
-                @for (exception of plan.exceptions; track exception.exceptionId) {
-                  <li class="pane__delivery-exception" role="alert">
-                    <span class="q-body-sm">{{
-                      deliveryExceptionReasonLabel(exception.reasonCode)
-                    }}</span>
-                    @if (exception.detail) {
-                      <span class="q-caption">{{ exception.detail }}</span>
-                    }
-                  </li>
-                }
-              </ul>
-            }
-          }
-        } @else {
-          <div class="pane__money-error" role="alert" data-testid="order-detail-money-error">
-            <p class="q-body-sm">{{ 'orders.detail.money.error' | t }}</p>
-            <p class="q-caption q-mono">
-              {{
-                'orders.detail.money.errorDetail'
-                  | t
-                    : {
-                        lineSum: formatMoneyMinor(
-                          money.lineSumMinor,
-                          detail.value.summary.currency
-                        ),
-                        subtotal: formatMoneyMinor(
-                          money.subtotalMinor,
-                          detail.value.summary.currency
-                        ),
-                      }
-              }}
-            </p>
-          </div>
-        }
-      }
+      <q-order-detail-money
+        [moneyReconciliation]="moneyReconciliation()"
+        [summary]="detail.value.summary"
+        [taxMinor]="detail.value.taxMinor"
+        [delivery]="delivery()"
+      />
     </section>
 
     <!-- ================================================================ Исход (outcome, §3.9-ish, row 1.2) -->
@@ -676,7 +477,7 @@
             <dd class="q-body-sm">
               @if (detail.value.customer.phoneMasked) {
                 <span class="q-mono">{{
-                  revealedPhone() ?? detail.value.customer.phoneMasked
+                  revealedPhone() ?? detail.value.customer.phoneMasked | phone
                 }}</span>
                 <button
                   type="button"
@@ -1012,112 +813,23 @@
       >
         <h2 class="q-emphasis pane__section-title">{{ 'orders.detail.section.posExport' | t }}</h2>
 
-        @if (posExportPushResultLabel(); as resultLabel) {
-          <p
-            class="q-body-sm pane__pos-export-result"
-            role="status"
-            data-testid="order-detail-pos-export-result"
-          >
-            {{ resultLabel }}
-          </p>
-        }
-
-        @if (posExport()?.export; as exportView) {
-          <p class="q-body-sm" data-testid="order-detail-pos-export-state">
-            {{ posExportStateLabel() }}
-          </p>
-
-          @if (posExportShowsReassurance()) {
-            <p
-              class="q-caption pane__pos-export-reassurance"
-              data-testid="order-detail-pos-export-reassurance"
-            >
-              {{ 'orders.detail.posExport.reassurance' | t }}
-            </p>
-          }
-
-          @if (exportView.lastError) {
-            <p
-              class="q-body-sm pane__pos-export-error"
-              data-testid="order-detail-pos-export-last-error"
-            >
-              {{ 'orders.detail.posExport.lastError' | t: { detail: exportView.lastError } }}
-            </p>
-          }
-
-          @if (posExportHasMappingDeepLink()) {
-            <button
-              type="button"
-              class="pane__reveal-link"
-              (click)="openPosExportMapping()"
-              data-testid="order-detail-pos-export-fix-mapping"
-            >
-              {{ 'orders.detail.posExport.action.fixMapping' | t }}
-            </button>
-          }
-
-          @if (!posExportPushOpen()) {
-            <button
-              type="button"
-              class="pane__reveal-link"
-              (click)="openPosExportPush()"
-              data-testid="order-detail-pos-export-push-toggle"
-            >
-              {{ 'orders.detail.posExport.action.push' | t }}
-            </button>
-          } @else {
-            <div class="pane__pos-export-form" data-testid="order-detail-pos-export-push-form">
-              <label class="pane__pos-export-field">
-                <span class="q-body-sm">{{
-                  'orders.detail.posExport.action.push.reason' | t
-                }}</span>
-                <input
-                  type="text"
-                  class="pane__pos-export-input"
-                  [value]="posExportPushReason()"
-                  (input)="setPosExportPushReason($any($event.target).value)"
-                  data-testid="order-detail-pos-export-push-reason"
-                />
-              </label>
-              @if (posExportPushError(); as message) {
-                <p
-                  class="q-body-sm pane__pos-export-error"
-                  role="alert"
-                  data-testid="order-detail-pos-export-push-error"
-                >
-                  {{ message }}
-                </p>
-              }
-              <div class="pane__pos-export-form-actions">
-                <button
-                  type="button"
-                  class="pane__pos-export-button pane__pos-export-button--secondary"
-                  [disabled]="posExportPushSubmitting()"
-                  (click)="cancelPosExportPush()"
-                >
-                  {{ 'orders.action.cancel' | t }}
-                </button>
-                <button
-                  type="button"
-                  class="pane__pos-export-button"
-                  [disabled]="!canSubmitPosExportPush()"
-                  (click)="submitPosExportPush()"
-                  data-testid="order-detail-pos-export-push-submit"
-                >
-                  {{
-                    posExportPushSubmitting()
-                      ? ('orders.detail.posExport.action.push.submitting' | t)
-                      : ('orders.detail.posExport.action.push.submit' | t)
-                  }}
-                </button>
-              </div>
-            </div>
-          }
-        } @else {
-          <p class="q-body-sm pane__state-inline" data-testid="order-detail-pos-export-not-yet">
-            {{ 'orders.detail.posExport.notExportedYet' | t }}
-          </p>
-        }
+        <q-order-pos-export-panel
+          [posExport]="posExport()"
+          [resultLabel]="posExportPushResultLabel()"
+          [stateLabel]="posExportStateLabel()"
+          [showsReassurance]="posExportShowsReassurance()"
+          [hasMappingDeepLink]="posExportHasMappingDeepLink()"
+          [pushOpen]="posExportPushOpen()"
+          [pushReason]="posExportPushReason()"
+          [pushError]="posExportPushError()"
+          [pushSubmitting]="posExportPushSubmitting()"
+          [canSubmitPush]="canSubmitPosExportPush()"
+          (mappingRequested)="openPosExportMapping()"
+          (pushOpened)="openPosExportPush()"
+          (pushCancelled)="cancelPosExportPush()"
+          (pushSubmitted)="submitPosExportPush()"
+          (reasonChanged)="setPosExportPushReason($event)"
+        />
       </section>
     }
 

@@ -975,6 +975,18 @@
         },
         "type" : "object"
       },
+      "AtRiskDefaultResponse" : {
+        "properties" : {
+          "seconds" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "source" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "AttemptResponse" : {
         "properties" : {
           "acknowledgedAt" : {
@@ -1374,6 +1386,42 @@
             "type" : "string"
           }
         },
+        "type" : "object"
+      },
+      "AuthorLatenessPolicyRequest" : {
+        "properties" : {
+          "brandId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "delivery" : {
+            "$ref" : "#/components/schemas/ModeRequest"
+          },
+          "dineIn" : {
+            "$ref" : "#/components/schemas/ModeRequest"
+          },
+          "expectedVersion" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "pickup" : {
+            "$ref" : "#/components/schemas/ModeRequest"
+          },
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "scopeType" : {
+            "enum" : [ "PLATFORM", "TENANT", "BRAND", "LOCATION" ],
+            "type" : "string"
+          }
+        },
+        "required" : [ "delivery", "dineIn", "pickup", "reason", "scopeType" ],
         "type" : "object"
       },
       "AutomationPreviewResponse" : {
@@ -2266,6 +2314,9 @@
           "logoAssetId" : {
             "format" : "uuid",
             "type" : "string"
+          },
+          "regionalFormats" : {
+            "$ref" : "#/components/schemas/RegionalFormatsView"
           },
           "slug" : {
             "type" : "string"
@@ -6473,6 +6524,48 @@
         },
         "type" : "object"
       },
+      "EditorResponse" : {
+        "properties" : {
+          "atRiskDefault" : {
+            "$ref" : "#/components/schemas/AtRiskDefaultResponse"
+          },
+          "currentVersionAtScope" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "delivery" : {
+            "$ref" : "#/components/schemas/ModeResponse"
+          },
+          "dineIn" : {
+            "$ref" : "#/components/schemas/ModeResponse"
+          },
+          "inspectedLevels" : {
+            "items" : {
+              "$ref" : "#/components/schemas/LevelResponse"
+            },
+            "type" : "array"
+          },
+          "isPlatformDefault" : {
+            "type" : "boolean"
+          },
+          "pickup" : {
+            "$ref" : "#/components/schemas/ModeResponse"
+          },
+          "policyId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "policyVersion" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "winningScope" : {
+            "enum" : [ "PLATFORM", "TENANT", "BRAND", "LOCATION" ],
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "EffectiveBindingView" : {
         "properties" : {
           "bindingId" : {
@@ -7892,6 +7985,18 @@
         },
         "type" : "object"
       },
+      "LevelResponse" : {
+        "properties" : {
+          "outcome" : {
+            "type" : "string"
+          },
+          "scopeType" : {
+            "enum" : [ "PLATFORM", "TENANT", "BRAND", "LOCATION" ],
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "LiabilityResponse" : {
         "properties" : {
           "accountCount" : {
@@ -8457,6 +8562,40 @@
         "required" : [ "reason", "reasonCode" ],
         "type" : "object"
       },
+      "MarketplaceBindingResponse" : {
+        "properties" : {
+          "bindingId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "displayName" : {
+            "type" : "string"
+          },
+          "lastOrderAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "orderCount" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "providerType" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "MarketplaceBindingsResponse" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/MarketplaceBindingResponse"
+            },
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
       "MarketplaceOperationsControllerVerificationRequest" : {
         "properties" : {
           "code" : {
@@ -8810,6 +8949,60 @@
           "sharedWithLocationCount" : {
             "format" : "int64",
             "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "ModeRequest" : {
+        "properties" : {
+          "atRiskBeforeSeconds" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "lateAfterSeconds" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "noPromiseFallbackSeconds" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "required" : [ "lateAfterSeconds", "noPromiseFallbackSeconds" ],
+        "type" : "object"
+      },
+      "ModeResponse" : {
+        "properties" : {
+          "atRiskBeforeSeconds" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "effectiveAtRiskBeforeSeconds" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "lateAfterSeconds" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "noPromiseFallbackSeconds" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "ModuleEnded" : {
+        "properties" : {
+          "endedAt" : {
+            "type" : "string"
+          },
+          "lastBilledPeriod" : {
+            "type" : "string"
+          },
+          "tenantModuleId" : {
+            "format" : "uuid",
+            "type" : "string"
           }
         },
         "type" : "object"
@@ -9704,6 +9897,10 @@
             "type" : "string"
           },
           "guestReferenceHash" : {
+            "type" : "string"
+          },
+          "locationId" : {
+            "format" : "uuid",
             "type" : "string"
           },
           "orderId" : {
@@ -12370,6 +12567,11 @@
             "minLength" : 0,
             "pattern" : "^998\\d{9}$",
             "type" : "string"
+          },
+          "reason" : {
+            "maxLength" : 255,
+            "minLength" : 0,
+            "type" : "string"
           }
         },
         "type" : "object"
@@ -12902,6 +13104,20 @@
           "version" : {
             "format" : "int32",
             "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "RegionalFormatsView" : {
+        "properties" : {
+          "moneyGrouping" : {
+            "type" : "string"
+          },
+          "moneySymbolPlacement" : {
+            "type" : "string"
+          },
+          "phoneDisplayPattern" : {
+            "type" : "string"
           }
         },
         "type" : "object"
@@ -16337,11 +16553,17 @@
       },
       "TenantModuleView" : {
         "properties" : {
+          "acquiredVia" : {
+            "type" : "string"
+          },
           "billingUnit" : {
             "type" : "string"
           },
           "endReason" : {
             "type" : "string"
+          },
+          "endableByTenant" : {
+            "type" : "boolean"
           },
           "endedAt" : {
             "type" : "string"
@@ -20716,6 +20938,50 @@
         "tags" : [ "Location service operations" ]
       }
     },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/regional-formats" : {
+      "get" : {
+        "operationId" : "regionalFormats",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RegionalFormatsView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The brand's regional display formats, for the console's money and phone formatters",
+        "tags" : [ "Location service operations" ]
+      }
+    },
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/service-bindings" : {
       "put" : {
         "description" : "One binding per mode, so pickup may close before dine-in without either needing its own column on the branch.",
@@ -21569,6 +21835,191 @@
         "tags" : [ "Loyalty policy" ]
       }
     },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/orders/board" : {
+      "get" : {
+        "description" : "orders.md §2.4/§2.5 (ADR 0102), the «Все филиалы» mode: the branch board's whole filter set, and the same statement, over every branch of the brand — or over the `locationId` values given (repeat the parameter for several; the Филиал filter). A branch of another brand or tenant matches nothing, exactly as on the branch board. Each row carries its `locationId`, and `actions[]` is computed from the caller's grants at that row's branch. `ORDER_READ` at BRAND scope: a location-scoped grant is refused with 403 — the console's signal to keep its single-branch board — and a caller who needs only some branches asks the branch endpoint for each. Keyset-paginated (ADR 0031); changing a filter or the branch set invalidates the cursor.",
+        "operationId" : "board_2",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "locationId",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "status",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "from",
+          "required" : false,
+          "schema" : {
+            "format" : "date-time",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : false,
+          "schema" : {
+            "format" : "date-time",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "channelCode",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "fulfillmentMode",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "courierId",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "paymentMethodCode",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "createdByActorId",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "reference",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "origin",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "paymentStatus",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "marketplaceBindingId",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "late",
+          "required" : false,
+          "schema" : {
+            "type" : "boolean"
+          }
+        }, {
+          "in" : "query",
+          "name" : "problem",
+          "required" : false,
+          "schema" : {
+            "type" : "boolean"
+          }
+        }, {
+          "in" : "query",
+          "name" : "callbackRequested",
+          "required" : false,
+          "schema" : {
+            "type" : "boolean"
+          }
+        }, {
+          "in" : "query",
+          "name" : "fiscalStatus",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "cursor",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PageOperationsOrderControllerOrderSummaryResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The order board across the brand's branches: filtered and paged",
+        "tags" : [ "Operations brand order counters" ]
+      }
+    },
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/orders/counts" : {
       "get" : {
         "description" : "IA 0.1's live board, served brand-wide so the console stops issuing one counts request per branch per tick. `period` cuts completed, cancelled and total to the tenant's own business day (ADR 0043) rather than to UTC midnight, and defaults to ALL_TIME. The six live counters are never cut: an order placed before the boundary and still in the kitchen is still in the kitchen. Locations carries a row only for a branch that has taken an order in scope — the caller holds the brand roster it needs the display names from anyway, and renders an absent branch as zero. ORDER_READ at BRAND scope: a location-scoped grant is refused.",
@@ -21612,6 +22063,54 @@
           }
         },
         "summary" : "The brand's counters, its branch leaderboard and its two mixes, in one read",
+        "tags" : [ "Operations brand order counters" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/orders/marketplace-bindings" : {
+      "get" : {
+        "description" : "The options behind the board's «Агрегатор» filter in the «Все филиалы» mode (orders.md §2.4, ADR 0040): one entry per provider binding that has an order at any of the brand's branches (or at the `locationId` values given), most recently used first. ORDER_READ at BRAND scope.",
+        "operationId" : "marketplaceBindings_1",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "locationId",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/MarketplaceBindingsResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The aggregator bindings the brand's orders arrived through",
         "tags" : [ "Operations brand order counters" ]
       }
     },
@@ -26844,6 +27343,96 @@
         },
         "summary" : "Suspend a merchant binding",
         "tags" : [ "Merchant bindings" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/order-lateness-policy" : {
+      "get" : {
+        "description" : "Resolves ordering.lateness through the ADR 0030 chain (LOCATION, BRAND, TENANT, platform default) at TENANT, BRAND or LOCATION scope. Each fulfilment mode carries its own at-risk window -- null where it has none and takes atRiskDefault, the tenant's ordering.at_risk_before_minutes when one was set, the platform's five minutes otherwise -- plus effective, the number the boards actually use. currentVersionAtScope is the version to send back as expectedVersion: 0 when this exact scope has authored nothing and merely inherits.",
+        "operationId" : "readLatenessPolicyEditor",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "scopeType",
+          "required" : true,
+          "schema" : {
+            "enum" : [ "PLATFORM", "TENANT", "BRAND", "LOCATION" ],
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "brandId",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "locationId",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/EditorResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The lateness document in force at a scope, as the editor needs it",
+        "tags" : [ "Order lateness policy editor" ]
+      },
+      "post" : {
+        "description" : "Whole-document replace: ADR 0030 versions the document as one unit, so all three fulfilment modes are sent, an unset at-risk window as null. Never edits a version in force -- orders keep resolving the version they already did. expectedVersion must be the currentVersionAtScope a prior GET reported for this same scope (null or 0 when it had authored nothing), or the write is refused with STALE_VERSION naming both versions. At-risk and no-promise windows are whole minutes; every window is at most a day.",
+        "operationId" : "authorLatenessPolicy",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/AuthorLatenessPolicyRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/EditorResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Publish the next version of the lateness document at exactly one scope",
+        "tags" : [ "Order lateness policy editor" ]
       }
     },
     "/api/v1/operations/tenants/{tenantId}/order-outcome-reasons" : {
@@ -32654,7 +33243,7 @@
     },
     "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/board" : {
       "get" : {
-        "description" : "orders.md §2.4 (ADR 0102): the board's filter set, every predicate applied in the database rather than in the browser. An empty status filter returns everything rather than silently hiding the closed ones, because a branch reconciling a shift needs the orders that are over as much as the ones that are live. `reference` narrows this branch's orders by the order's own number or by an aggregator's or a POS's identifier (ADR 0040), normalised so `0911-142`, `0911 142` and `#0911142` are one query — it is a filter, not the tenant-wide search of orders.md §2.8, which needs an endpoint at its own scope: nothing here reaches past this location. It is not a phone lookup either: a phone number goes in a POST body, never a query string (orders.md §2.8, ADR 0029). `origin` narrows to how the order arrived — `HORECAOS` for the tenant's own channels or `MARKETPLACE` for anything recorded under an aggregator's own binding (ADR 0040, wave 9 row `1.1c`) — the coarse «Источник» toggle orders.md §2.4 names; picking one specific aggregator binding when a tenant runs several is not yet a filter here. `paymentStatus` narrows to `ordering.orders.payment_status_projection` (V0022, gap map row 1.1c) — Оплата, never to be confused with `paymentMethodCode`'s Способ оплаты. Keyset-paginated (ADR 0031): pass the previous page's `nextCursor` back as `cursor`. Changing a filter invalidates the cursor — start the list again — because a window cut for one filter set says nothing about another.",
+        "description" : "orders.md §2.4 (ADR 0102): the board's filter set, every predicate applied in the database rather than in the browser. An empty status filter returns everything rather than silently hiding the closed ones, because a branch reconciling a shift needs the orders that are over as much as the ones that are live. `reference` narrows this branch's orders by the order's own number or by an aggregator's or a POS's identifier (ADR 0040), normalised so `0911-142`, `0911 142` and `#0911142` are one query — it is a filter, not the tenant-wide search of orders.md §2.8, which needs an endpoint at its own scope: nothing here reaches past this location. It is not a phone lookup either: a phone number goes in a POST body, never a query string (orders.md §2.8, ADR 0029). `origin` narrows to how the order arrived — `HORECAOS` for the tenant's own channels or `MARKETPLACE` for anything recorded under an aggregator's own binding (ADR 0040, wave 9 row `1.1c`) — the coarse «Источник» toggle orders.md §2.4 names; `marketplaceBindingId` picks one specific aggregator binding when a tenant runs several (the options are `GET .../orders/marketplace-bindings`). `paymentStatus` narrows to `ordering.orders.payment_status_projection` (V0022, gap map row 1.1c) — Оплата, never to be confused with `paymentMethodCode`'s Способ оплаты. The four secondary toggles of orders.md §2.4: `late` (Только опаздывающие — not over and past the promise plus the branch's `ordering.lateness` grace, ADR 0030), `problem` (С проблемой — a process needing an operator or failed and awaiting retry), `callbackRequested` (Требуется звонок — the flag the callback amendment raises and clears) and `fiscalStatus` (Фискализация — any fiscal document of the order in one of the given statuses, ADR 0038). Keyset-paginated (ADR 0031): pass the previous page's `nextCursor` back as `cursor`. Changing a filter invalidates the cursor — start the list again — because a window cut for one filter set says nothing about another. The same board across a brand's branches is `GET /api/v1/operations/tenants/{t}/brands/{b}/orders/board`, which needs `ORDER_READ` at BRAND scope.",
         "operationId" : "board",
         "parameters" : [ {
           "in" : "path",
@@ -32762,6 +33351,45 @@
           "required" : false,
           "schema" : {
             "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "marketplaceBindingId",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "late",
+          "required" : false,
+          "schema" : {
+            "type" : "boolean"
+          }
+        }, {
+          "in" : "query",
+          "name" : "problem",
+          "required" : false,
+          "schema" : {
+            "type" : "boolean"
+          }
+        }, {
+          "in" : "query",
+          "name" : "callbackRequested",
+          "required" : false,
+          "schema" : {
+            "type" : "boolean"
+          }
+        }, {
+          "in" : "query",
+          "name" : "fiscalStatus",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
           }
         }, {
           "in" : "query",
@@ -33157,6 +33785,51 @@
           }
         },
         "summary" : "Carts started and never converted (IA 1.4)",
+        "tags" : [ "Operations orders" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/marketplace-bindings" : {
+      "get" : {
+        "description" : "The options behind the board's «Агрегатор» filter (orders.md §2.4, ADR 0040): one entry per provider binding that has an order at this branch, most recently used first, with how many and — where integration still resolves it — the provider and the installation's own name. Pass an entry's `bindingId` back as `marketplaceBindingId` on `GET .../orders/board`.",
+        "operationId" : "marketplaceBindings",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/MarketplaceBindingsResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The aggregator bindings this branch's orders arrived through",
         "tags" : [ "Operations orders" ]
       }
     },
@@ -37514,6 +38187,43 @@
           }
         },
         "summary" : "Every module this tenant has had",
+        "tags" : [ "Commercial" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/commercial/modules/{tenantModuleId}/end" : {
+      "post" : {
+        "description" : "The undo for the inline purchase (ADR 0127). Only a module the tenant bought from its own console: one HorecaOS assigned is refused with 422 and reason MODULE_ASSIGNED_BY_PLATFORM, and another tenant's module is not found. Its features switch off now. Nothing is prorated (ADR 0087, ADR 0088): the month it ends in still bills it in full, named by lastBilledPeriod, and no later month does. This does not move money by itself.",
+        "operationId" : "endPurchasedModule",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "tenantModuleId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ModuleEnded"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "End a module this tenant bought itself",
         "tags" : [ "Commercial" ]
       }
     },
@@ -42231,6 +42941,9 @@
   }, {
     "description" : "A merchant's own error taxonomy and inbox replay",
     "name" : "Integration failures (tenant)"
+  }, {
+    "description" : "The ordering.lateness document as authored per scope (ADR 0030), and its next version",
+    "name" : "Order lateness policy editor"
   }, {
     "description" : "Referral codes and redemptions actually happening at a brand",
     "name" : "Referrals"

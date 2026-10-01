@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { Router, provideRouter } from '@angular/router';
+import { Router, Routes, provideRouter } from '@angular/router';
 
 import { routes } from './app.routes';
 import { APP_CONFIG, type AppConfig } from './core/config/app-config';
@@ -166,5 +166,27 @@ describe('app.routes: dine-in QR (row 10.5, ADR 0047) needs no account either', 
 
     expect(ok).toBe(true);
     expect(router.url).toBe('/dine-in/table');
+  });
+});
+
+describe('app.routes: the initial bundle carries the home page and nothing else', () => {
+  /**
+   * Every routed screen except `home` (the landing route, painted on first
+   * load) is fetched on demand. A screen imported into this file statically
+   * rides in the initial bundle -- the reason storefront sat at 590 kB against a
+   * 500 kB warning -- and `PreloadAllModules` (app.config.ts) already fetches
+   * the lazy chunks in the background once the shell is up, so the visitor
+   * does not wait on a chunk when they navigate.
+   */
+  function eagerComponentPaths(list: Routes, prefix = ''): string[] {
+    return list.flatMap((route) => {
+      const path = `${prefix}/${route.path ?? ''}`;
+      const own = route.component ? [path] : [];
+      return [...own, ...eagerComponentPaths(route.children ?? [], path)];
+    });
+  }
+
+  it('routes no component eagerly except home', () => {
+    expect(eagerComponentPaths(routes)).toEqual(['/home']);
   });
 });

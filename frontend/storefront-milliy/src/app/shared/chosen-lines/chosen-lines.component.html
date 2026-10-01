@@ -1,0 +1,50 @@
+<section class="chosen" data-testid="dine-in-custom-lines">
+  <h2 class="chosen__title">{{ 'dineIn.customLinesTitle' | t }}</h2>
+  @for (line of lines(); track line.lineKey) {
+    <div class="line" data-testid="dine-in-custom-line">
+      <div class="line__text">
+        <span class="line__name">{{ line.name }}</span>
+        @if (line.portion) {
+          <span class="line__portion" data-testid="dine-in-custom-line-portion">{{
+            line.portion
+          }}</span>
+        }
+        @if (line.options.length > 0) {
+          <span class="line__options" data-testid="dine-in-custom-line-options">{{
+            line.options.join(', ')
+          }}</span>
+        }
+        @if (!line.available) {
+          <span class="line__gone" data-testid="dine-in-custom-line-unavailable">{{
+            'dineIn.heldUnavailable' | t
+          }}</span>
+        }
+      </div>
+      <span class="stepper">
+        <button
+          type="button"
+          class="stepper__btn"
+          data-testid="dine-in-custom-decrease"
+          [disabled]="busy()"
+          [attr.aria-label]="'common.decrease' | t"
+          (click)="request(line, lowered(line))"
+        >
+          −
+        </button>
+        <span class="stepper__value" data-testid="dine-in-custom-quantity">{{
+          line.quantity
+        }}</span>
+        <button
+          type="button"
+          class="stepper__btn stepper__btn--add"
+          data-testid="dine-in-custom-increase"
+          [disabled]="busy() || !line.available"
+          [attr.aria-label]="'common.increase' | t"
+          (click)="request(line, line.quantity + 1)"
+        >
+          +
+        </button>
+      </span>
+    </div>
+  }
+</section>

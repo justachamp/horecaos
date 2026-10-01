@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 
 import { CurrentTenant } from '../../../core/auth/current-tenant';
 import { formatMoney } from '../../../core/format/money';
@@ -11,6 +11,7 @@ import { describeApiError } from '../../orders/order-errors';
 import {
   CommercialApi,
   EntitlementSnapshotView,
+  ModuleEndedView,
   SellableModuleView,
   StatementView,
   SubscriptionView,
@@ -95,18 +96,25 @@ const STATEMENT_LINE_KIND_KEYS: Readonly<Record<string, MessageKey>> = {
  * confirmPurchase} calls the API; {@link cancelPurchase}/Escape/backdrop
  * close the dialog with nothing sent.
  *
+ * **Ending one's own purchase, as of ADR 0127's status note of
+ * 2026-09-30.** The catalogue's "Added" rows are joined by a "Your modules"
+ * table of every live module the tenant holds, with an "End" button only where
+ * the server says `endableByTenant` — a module the tenant bought itself, never
+ * one HorecaOS assigned (`acquiredVia`). "End" opens the same {@link
+ * ConfirmDialog} the purchase has, and says what ADR 0087/0088 already decided
+ * rather than promising a refund: its features switch off now, nothing is
+ * prorated, so the month it ends in is still billed in full and no later month
+ * is. Only {@link confirmEnd} calls the API; {@link cancelEnd}/Escape/backdrop
+ * send nothing. On success the server's `lastBilledPeriod` is shown back, so
+ * the last month the module bills is read from the statement rule, not
+ * guessed by this screen.
+ *
  * **What is honestly not.** Period close is HorecaOS-staff work: ADR 0088
  * decided a month is closed by issuing its statement, deliberately manual
  * until tax and invoicing are approved, so this screen has nothing left to
- * add for it. The prepaid wallet stays blocked on ADR 0095. A tenant
- * self-service "end" (undo a purchase) is not built either — ADR 0127's own
- * "Accepted trade-offs" section names this exact gap and closes it on
- * purpose: "this ADR adds no tenant-reachable end to match the new
- * tenant-reachable add ... building the symmetric self-service end is not
- * this wave's brief and is left for a future one to pick up if it turns out
- * to matter." `CommercialModuleController.end` stays `ScopeType.PLATFORM`;
- * widening it to tenant scope would be re-deciding a choice ADR 0127 already
- * recorded, not filling a gap it left open.
+ * add for it. The prepaid wallet stays blocked on ADR 0095. Nor is there a
+ * grace window that voids a purchase undone at once: no proration means even
+ * an immediate undo bills the month, which the End dialog says.
  */
 @Component({
   selector: 'q-subscription-page',
@@ -150,6 +158,23 @@ export class SubscriptionPage {
    * {@link cancelPurchase} or once {@link confirmPurchase} settles.
    */
   protected readonly purchaseTarget = signal<SellableModuleView | null>(null);
+
+  /** Every module the tenant holds right now; the ended ones are history, not a row to act on. */
+  protected readonly liveModules = computed(() =>
+    this.modulesHeld().filter((held) => held.endedAt === null),
+  );
+  /**
+   * ADR 0127 status note: the held module "End" opens a confirm step for,
+   * set by {@link requestEnd}, cleared by {@link cancelEnd} or once {@link
+   * confirmEnd} settles.
+   */
+  protected readonly endTarget = signal<TenantModuleView | null>(null);
+  /** Which held module an end is in flight for, so a slow write disables only its own button. */
+  protected readonly endingModuleId = signal<string | null>(null);
+  /** What the last successful end says back: the module's name and the last month that still bills it. */
+  protected readonly endNotice = signal<{ readonly name: string; readonly period: string } | null>(
+    null,
+  );
 
   protected readonly arrears = signal<TenantArrearsView | null>(null);
   protected readonly arrearsDenied = signal(false);
@@ -268,10 +293,11 @@ export class SubscriptionPage {
 
   /** Gap map row 8.6: "Add" opens the confirm step instead of purchasing at once. */
   protected requestPurchase(module: SellableModuleView): void {
-    if (this.purchasingModuleId() !== null) {
+    if (this.purchasingModuleId() !== null || this.endTarget() !== null) {
       return;
     }
     this.moduleActionError.set(null);
+    this.endNotice.set(null);
     this.purchaseTarget.set(module);
   }
 
@@ -337,6 +363,99 @@ export class SubscriptionPage {
     } finally {
       this.purchasingModuleId.set(null);
     }
+  }
+
+  /** ADR 0127 status note: "End" opens the confirm step instead of ending at once. */
+  protected requestEnd(held: TenantModuleView): void {
+    if (
+      !held.endableByTenant ||
+      this.endingModuleId() !== null ||
+      this.purchasingModuleId() !== null ||
+      this.purchaseTarget() !== null
+    ) {
+      return;
+    }
+    this.moduleActionError.set(null);
+    this.endNotice.set(null);
+    this.endTarget.set(held);
+  }
+
+  protected cancelEnd(): void {
+    if (this.endingModuleId() !== null) {
+      // ConfirmDialog disables Cancel/Escape/backdrop while busy; a defensive
+      // no-op, not a path a real click can reach.
+      return;
+    }
+    this.endTarget.set(null);
+  }
+
+  /**
+   * The end dialog's consequence text. It states the rule ADR 0087/0088 set,
+   * because "End" reads as "stop paying now" and nothing is prorated: a
+   * recurring module is still billed for the whole month it ends in and not
+   * after; a one-off was billed once when it was added and ending it refunds
+   * nothing.
+   */
+  protected endConfirmBody(held: TenantModuleView): string {
+    const key =
+      held.billingUnit === 'ONE_OFF'
+        ? 'finance.subscription.modules.end.confirm.bodyOneOff'
+        : 'finance.subscription.modules.end.confirm.body';
+    return this.i18n.t(key, { name: held.moduleName });
+  }
+
+  protected async confirmEnd(): Promise<void> {
+    const held = this.endTarget();
+    if (!held || this.endingModuleId() !== null) {
+      return;
+    }
+    this.moduleActionError.set(null);
+    this.endNotice.set(null);
+    this.endingModuleId.set(held.tenantModuleId);
+    let ended: ModuleEndedView | null = null;
+    try {
+      ended = await this.api.endModule(this.requireTenantId(), held.tenantModuleId);
+      this.endNotice.set({ name: held.moduleName, period: ended.lastBilledPeriod });
+    } catch (error) {
+      this.moduleActionError.set(this.describe(error));
+    }
+    // Read what the tenant holds again either way: after an end the row is gone
+    // and the entitlements changed; after a refusal (already ended, no longer
+    // the tenant's to end) the list was stale and must stop offering the button.
+    // A failed re-read must not turn a successful end into an error.
+    const reread = await this.refreshModules().then(
+      () => true,
+      () => false,
+    );
+    if (ended !== null && !reread) {
+      // The server has ended it whether or not the list could be read back, and
+      // the notice above says so: do not leave the row shown as live with an End
+      // button under it. Mark it ended from the server's own answer.
+      this.markEnded(held.tenantModuleId, ended.endedAt);
+    }
+    this.endTarget.set(null);
+    this.endingModuleId.set(null);
+  }
+
+  /** Shows one held module as ended, when the server said so but the list could not be read back. */
+  private markEnded(tenantModuleId: string, endedAt: string): void {
+    this.modulesHeld.update((current) =>
+      current.map((held) =>
+        held.tenantModuleId === tenantModuleId
+          ? { ...held, endedAt, endableByTenant: false }
+          : held,
+      ),
+    );
+  }
+
+  private async refreshModules(): Promise<void> {
+    const tenantId = this.requireTenantId();
+    const [modulesHeld, entitlements] = await Promise.all([
+      this.api.modulesHeld(tenantId),
+      this.api.entitlements(tenantId),
+    ]);
+    this.modulesHeld.set(modulesHeld);
+    this.entitlements.set(entitlements);
   }
 
   /** Toggles the inline line detail for one statement, fetching it the first time it opens. */

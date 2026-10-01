@@ -1,12 +1,13 @@
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { BrandScope } from '../../core/api/catalog-paths';
 import { Auth } from '../../core/auth/auth';
 import { CurrentBrand } from '../../core/auth/current-brand';
 import { CurrentLocation } from '../../core/auth/current-location';
+import { applyRegionalFormats, resetRegionalFormats } from '../../core/format/regional-format';
 import { I18n, Locale } from '../../core/i18n/i18n';
 import { LocaleSet } from '../../core/i18n/locale-set';
 import {
@@ -107,6 +108,8 @@ async function flushMicrotasks(): Promise<void> {
 describe('DeliveryZonesPage', () => {
   let fixture: ComponentFixture<DeliveryZonesPage>;
 
+  afterEach(() => resetRegionalFormats());
+
   async function render(
     api: Partial<DeliveryZonesApi>,
     tariffs: Partial<DeliveryTariffsApi> = { list: vi.fn().mockResolvedValue([]) },
@@ -204,10 +207,10 @@ describe('DeliveryZonesPage', () => {
       el.dispatchEvent(new Event('input'));
       fixture.detectChanges();
     };
-    const dialogInputs = host().querySelectorAll<HTMLInputElement>('.dialog input[type="text"]');
+    const dialogInputs = host().querySelectorAll<HTMLInputElement>('.q-modal input[type="text"]');
     type(dialogInputs[0], 'ring'); // code
     type(host().querySelector<HTMLInputElement>('[data-testid="zone-name-en"]')!, 'Ring road');
-    const submit = [...host().querySelectorAll<HTMLButtonElement>('.dialog__actions button')].at(
+    const submit = [...host().querySelectorAll<HTMLButtonElement>('.q-modal__actions button')].at(
       -1,
     )!;
     expect(submit.disabled).toBe(true); // English alone is not the default language
@@ -313,6 +316,23 @@ describe('DeliveryZonesPage', () => {
     expect(sent).toEqual({ ru: 'Центр' });
     expect(Object.keys(sent)).not.toContain('uz-Latn');
     expect(Object.keys(sent)).not.toContain('kaa');
+  });
+
+  it('writes the free-delivery and minimum-basket amounts the way the brand chose (row 10.12)', async () => {
+    applyRegionalFormats({ moneySymbolPlacement: 'BEFORE', moneyGrouping: 'COMMA' });
+    await render({
+      list: vi.fn().mockResolvedValue([ZONE]),
+      detail: vi.fn().mockResolvedValue({ zone: ZONE, boundLocationIds: [] } as ZoneDetailResponse),
+      versions: vi.fn().mockResolvedValue([]),
+    });
+
+    host().querySelector<HTMLElement>('[data-testid="zone-row"]')!.click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    const facts = host().querySelector('.zone-detail__facts')!.textContent!.replace(/\s+/g, ' ');
+    expect(facts).toContain('Free delivery from UZS 50,000');
+    expect(facts).toContain('Minimum basket UZS 20,000');
   });
 
   it('marks a zone bound to a zero-resolving tariff as free, and one bound to a priced tariff not (§3.6d)', async () => {

@@ -1,0 +1,190 @@
+<section class="backfill" data-testid="fiscal-backfill">
+  <h3 class="q-subhead">{{ 'settings.fiscalization.backfill.title' | t }}</h3>
+
+  @if (rows().length === 0) {
+    <p class="q-body-sm backfill__empty" data-testid="fiscal-backfill-empty">
+      {{ 'settings.fiscalization.backfill.empty' | t }}
+    </p>
+  } @else {
+    <p class="q-body-sm">
+      {{ 'settings.fiscalization.backfill.lead' | t: { count: rows().length } }}
+    </p>
+    <p class="q-caption backfill__note" data-testid="fiscal-backfill-reference-note">
+      {{ 'settings.fiscalization.backfill.referenceNote' | t }}
+    </p>
+
+    <div class="backfill__toolbar">
+      <button
+        type="button"
+        class="q-body-sm backfill__button"
+        (click)="copyDefaultsToAll()"
+        [disabled]="copyableCount() === 0 || saving()"
+        data-testid="backfill-copy-all"
+      >
+        {{ 'settings.fiscalization.backfill.copyAll' | t: { count: copyableCount() } }}
+      </button>
+      <span class="backfill__spacer"></span>
+      @if (dirtyRows().length > 0) {
+        <span class="q-caption" data-testid="backfill-dirty-count">
+          {{ 'settings.fiscalization.backfill.dirty' | t: { count: dirtyRows().length } }}
+        </span>
+        <button
+          type="button"
+          class="q-body-sm backfill__button"
+          (click)="discard()"
+          [disabled]="saving()"
+          data-testid="backfill-discard"
+        >
+          {{ 'settings.fiscalization.backfill.discard' | t }}
+        </button>
+      }
+      <button
+        type="button"
+        class="q-body-sm backfill__button backfill__button--primary"
+        (click)="save()"
+        [disabled]="sendableRows().length === 0 || saving()"
+        data-testid="backfill-save"
+      >
+        {{
+          saving()
+            ? ('settings.fiscalization.backfill.saving' | t)
+            : ('settings.fiscalization.backfill.save' | t: { count: sendableRows().length })
+        }}
+      </button>
+    </div>
+
+    @if (invalidRows().length > 0) {
+      <p class="q-body-sm backfill__problem" role="alert" data-testid="backfill-invalid">
+        {{ 'settings.fiscalization.backfill.invalidSkipped' | t: { count: invalidRows().length } }}
+      </p>
+    }
+    @if (pasteSkipped() > 0) {
+      <p class="q-body-sm backfill__problem" role="status" data-testid="backfill-paste-skipped">
+        {{ 'settings.fiscalization.backfill.pasteSkipped' | t: { count: pasteSkipped() } }}
+      </p>
+    }
+    @if (saveError(); as message) {
+      <p class="q-body-sm backfill__problem" role="alert" data-testid="backfill-save-error">
+        {{ message }}
+      </p>
+    }
+    @if (summary(); as result) {
+      <p class="q-body-sm" role="status" data-testid="backfill-summary">
+        {{
+          'settings.fiscalization.backfill.summary'
+            | t
+              : {
+                  saved: result.saved,
+                  unchanged: result.unchanged,
+                  failed: result.failed + result.notFound + result.conflict,
+                }
+        }}
+      </p>
+    }
+
+    <table class="backfill__table">
+      <thead>
+        <tr>
+          <th class="q-caption">{{ 'settings.fiscalization.classification.field.name' | t }}</th>
+          <th class="q-caption">
+            {{ 'settings.fiscalization.classification.field.category' | t }}
+          </th>
+          <th class="q-caption">
+            {{ 'settings.fiscalization.classification.field.locations' | t }}
+          </th>
+          <th class="q-caption">{{ 'settings.fiscalization.backfill.column.mxik' | t }}</th>
+          <th class="q-caption">{{ 'settings.fiscalization.backfill.column.packageCode' | t }}</th>
+          <th class="q-caption"></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (row of rows(); track row.nodeId; let index = $index) {
+          <tr data-testid="backfill-row" [attr.data-node-id]="row.nodeId">
+            <td class="q-body-sm">{{ row.name }}</td>
+            <td class="q-body-sm">{{ row.categoryName ?? '—' }}</td>
+            <td class="q-body-sm backfill__num">{{ row.locationCount }}</td>
+            <td>
+              <input
+                class="q-body-sm backfill__cell"
+                [class.backfill__cell--dirty]="row.mxikDirty"
+                [class.backfill__cell--stored]="row.mxikStored"
+                [class.backfill__cell--invalid]="row.mxikError !== null"
+                type="text"
+                inputmode="numeric"
+                autocomplete="off"
+                spellcheck="false"
+                [value]="row.mxik"
+                [readOnly]="row.mxikStored"
+                [attr.aria-readonly]="row.mxikStored"
+                [disabled]="saving()"
+                [attr.aria-label]="'settings.fiscalization.backfill.column.mxik' | t"
+                [attr.aria-invalid]="row.mxikError !== null"
+                [attr.aria-describedby]="row.mxikError !== null ? 'mxik-error-' + row.nodeId : null"
+                (input)="onInput(row.nodeId, 'mxik', $any($event.target).value)"
+                (paste)="onPaste($event, index, 'mxik')"
+                [attr.data-testid]="'backfill-mxik-' + row.nodeId"
+              />
+              @if (row.mxikError; as key) {
+                <span
+                  class="q-caption backfill__error"
+                  [id]="'mxik-error-' + row.nodeId"
+                  [attr.data-testid]="'backfill-mxik-error-' + row.nodeId"
+                  >{{ key | t }}</span
+                >
+              }
+            </td>
+            <td>
+              <input
+                class="q-body-sm backfill__cell"
+                [class.backfill__cell--dirty]="row.pkgDirty"
+                [class.backfill__cell--stored]="row.pkgStored"
+                [class.backfill__cell--invalid]="row.pkgError !== null"
+                type="text"
+                inputmode="numeric"
+                autocomplete="off"
+                spellcheck="false"
+                [value]="row.pkg"
+                [readOnly]="row.pkgStored"
+                [attr.aria-readonly]="row.pkgStored"
+                [disabled]="saving()"
+                [attr.aria-label]="'settings.fiscalization.backfill.column.packageCode' | t"
+                [attr.aria-invalid]="row.pkgError !== null"
+                [attr.aria-describedby]="row.pkgError !== null ? 'pkg-error-' + row.nodeId : null"
+                (input)="onInput(row.nodeId, 'pkg', $any($event.target).value)"
+                (paste)="onPaste($event, index, 'pkg')"
+                [attr.data-testid]="'backfill-package-' + row.nodeId"
+              />
+              @if (row.pkgError; as key) {
+                <span
+                  class="q-caption backfill__error"
+                  [id]="'pkg-error-' + row.nodeId"
+                  [attr.data-testid]="'backfill-package-error-' + row.nodeId"
+                  >{{ key | t }}</span
+                >
+              }
+            </td>
+            <td class="backfill__actions">
+              <button
+                type="button"
+                class="q-caption backfill__link"
+                (click)="copyDefault(row.nodeId)"
+                [disabled]="!row.canCopyDefault || saving()"
+                [attr.title]="rowTitle(row)"
+                [attr.data-testid]="'backfill-copy-' + row.nodeId"
+              >
+                {{ 'settings.fiscalization.backfill.copyDefault' | t }}
+              </button>
+              @if (row.problem; as problem) {
+                <span
+                  class="q-caption backfill__error"
+                  [attr.data-testid]="'backfill-problem-' + row.nodeId"
+                  >{{ problemLabel(problem) }}</span
+                >
+              }
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  }
+</section>

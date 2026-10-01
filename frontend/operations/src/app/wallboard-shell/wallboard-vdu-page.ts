@@ -7,11 +7,13 @@ import {
   signal,
 } from '@angular/core';
 
+import { LocationScope } from '../core/api/operations-paths';
 import { ApiError } from '../core/api/problem-details';
 import { CurrentLocation } from '../core/auth/current-location';
 import { TimeZone, formatClock } from '../core/format/datetime';
 import { LatenessPolicy, PLATFORM_DEFAULT_LATENESS_POLICY } from '../core/lateness-policy';
 import { LatenessPolicyApi } from '../core/lateness-policy-api';
+import { LatenessPolicyTracker } from '../core/lateness-policy-tracker';
 import { I18n } from '../core/i18n/i18n';
 import { TPipe } from '../core/i18n/t.pipe';
 import { RealtimeClient } from '../core/realtime/realtime-client';
@@ -80,6 +82,12 @@ export class WallboardVduPage implements OnInit {
 
   private pollHandle: ReturnType<typeof setInterval> | null = null;
   private clockHandle: ReturnType<typeof setInterval> | null = null;
+  /**
+   * The resolved `ordering.lateness` policy. A wall display is opened once and
+   * left up for days, so {@link refreshPolicy} re-reads it on the poll (at most
+   * once a minute) instead of holding the start-up copy for the page's lifetime.
+   */
+  private readonly policies = new LatenessPolicyTracker(this.latenessPolicyApi);
   private latenessPolicy: LatenessPolicy = PLATFORM_DEFAULT_LATENESS_POLICY;
 
   /** The tenant's `#rrggbb` for a late order (row `X.39`), or null for the design-system `--q-sla-late` token. */
@@ -115,8 +123,6 @@ export class WallboardVduPage implements OnInit {
     await this.location.ensureLoaded();
     const scope = this.location.scope();
     if (scope) {
-      this.latenessPolicy = await this.latenessPolicyApi.resolve(scope);
-      this.lateColour.set(this.latenessPolicy.lateColour ?? null);
       try {
         this.stations.set(await this.kitchen.stations(scope));
       } catch {
@@ -134,7 +140,10 @@ export class WallboardVduPage implements OnInit {
       return;
     }
     try {
-      const board = await this.kitchen.vdu(scope, this.selectedStation() || undefined);
+      const [board] = await Promise.all([
+        this.kitchen.vdu(scope, this.selectedStation() || undefined),
+        this.refreshPolicy(scope),
+      ]);
       this.tickets.set(
         [...board.tickets].sort((a, b) => statusRank(a.status) - statusRank(b.status)),
       );
@@ -149,6 +158,13 @@ export class WallboardVduPage implements OnInit {
     } finally {
       this.firstLoadComplete.set(true);
     }
+  }
+
+  /** Never rejects; a failed read leaves the last policy read, or the platform default before the first one. */
+  private async refreshPolicy(scope: LocationScope): Promise<void> {
+    await this.policies.refresh(scope);
+    this.latenessPolicy = this.policies.policy(scope.locationId);
+    this.lateColour.set(this.latenessPolicy.lateColour ?? null);
   }
 
   protected onStationChange(stationId: string): void {

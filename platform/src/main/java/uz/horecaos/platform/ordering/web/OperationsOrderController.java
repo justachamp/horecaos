@@ -11,15 +11,9 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
-import java.util.Arrays;
-import java.util.Base64;
 import java.util.EnumSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -61,6 +55,7 @@ import uz.horecaos.platform.ordering.application.OperatorOrderingService;
 import uz.horecaos.platform.ordering.application.OrderAction;
 import uz.horecaos.platform.ordering.application.OrderActionsPolicy;
 import uz.horecaos.platform.ordering.application.OrderAmendmentService;
+import uz.horecaos.platform.ordering.application.OrderBoardReadModels;
 import uz.horecaos.platform.ordering.application.OrderBulkActionService;
 import uz.horecaos.platform.ordering.application.OrderCallProvenanceService;
 import uz.horecaos.platform.ordering.application.OrderCountsPeriod;
@@ -85,7 +80,6 @@ import uz.horecaos.platform.tenancy.api.FulfillmentMode;
 import uz.horecaos.platform.tenancy.api.GeoPoint;
 import uz.horecaos.platform.web.api.AggregateVersion;
 import uz.horecaos.platform.web.api.ApiException;
-import uz.horecaos.platform.web.api.Cursor;
 import uz.horecaos.platform.web.api.ErrorCode;
 import uz.horecaos.platform.web.api.Page;
 import uz.horecaos.platform.web.authorization.RequiresCapability;
@@ -148,15 +142,6 @@ public class OperationsOrderController {
             // itself declares.
             Capability.DELIVERY_MANUAL_ASSIGN);
 
-    /**
-     * {@code ordering.orders.payment_status_projection}'s own seven values
-     * (V0022, {@code ck_order_payment_projection}, gap map row 1.1c) — the
-     * board's {@code paymentStatus} filter parameter refuses anything else
-     * rather than silently answering "no orders" for a typo.
-     */
-    private static final Set<String> KNOWN_PAYMENT_STATUS_PROJECTIONS =
-            Set.of("NOT_REQUIRED", "PENDING", "AUTHORIZED", "CAPTURED", "FAILED", "VOIDED", "REFUNDED");
-
     @SuppressWarnings("checkstyle:ParameterNumber")
     public OperationsOrderController(
             OrderQueryService orderQuery,
@@ -218,7 +203,15 @@ public class OperationsOrderController {
      * package-private rather than {@code private}.
      */
     Set<Capability> grantedOrderActionCapabilities(UUID tenantId, UUID brandId, UUID locationId) {
-        String subject = currentActor.get().subject();
+        return grantedActionCapabilities(authorization, currentActor.get().subject(), tenantId, brandId, locationId);
+    }
+
+    /**
+     * {@link #grantedOrderActionCapabilities} without an instance, so the
+     * brand-scoped board can ask the same question of each branch on a page.
+     */
+    static Set<Capability> grantedActionCapabilities(
+            AuthorizationService authorization, String subject, UUID tenantId, UUID brandId, UUID locationId) {
         ResourceScope scope = ResourceScope.location(tenantId, brandId, locationId);
         EnumSet<Capability> granted = EnumSet.noneOf(Capability.class);
         for (Capability capability : ACTIONS_POLICY_CAPABILITIES) {
@@ -227,6 +220,35 @@ public class OperationsOrderController {
             }
         }
         return granted;
+    }
+
+    /**
+     * What the rows of a board or a detail read gate {@code actions[]} on: the
+     * location-scoped action capabilities, plus {@link Capability#PAYMENT_INITIATE}
+     * when the principal holds it <em>at tenant scope</em> — the scope
+     * {@code POST .../payment/re-presentations} declares (row {@code 1.1e},
+     * «Выставить счёт»). Asked at tenant scope on purpose and not folded into
+     * {@link #grantedOrderActionCapabilities}: a location-scoped answer would offer
+     * the button to a principal whose grant the endpoint then refuses.
+     */
+    Set<Capability> grantedRowCapabilities(UUID tenantId, UUID brandId, UUID locationId) {
+        return withInvoiceCapability(
+                grantedOrderActionCapabilities(tenantId, brandId, locationId),
+                invoiceCapabilityHeld(authorization, currentActor.get().subject(), tenantId));
+    }
+
+    static boolean invoiceCapabilityHeld(AuthorizationService authorization, String subject, UUID tenantId) {
+        return authorization.has(subject, Capability.PAYMENT_INITIATE, ResourceScope.tenant(tenantId));
+    }
+
+    static Set<Capability> withInvoiceCapability(Set<Capability> granted, boolean invoiceCapabilityHeld) {
+        if (!invoiceCapabilityHeld) {
+            return granted;
+        }
+        EnumSet<Capability> widened = EnumSet.noneOf(Capability.class);
+        widened.addAll(granted);
+        widened.add(Capability.PAYMENT_INITIATE);
+        return widened;
     }
 
     @GetMapping
@@ -248,9 +270,27 @@ public class OperationsOrderController {
             @RequestParam(required = false) List<String> status,
             @RequestParam(defaultValue = "100") @jakarta.validation.constraints.Max(500) int limit) {
 
-        JdbcOrderStore.OrderListQuery query = boardQuery(
-                tenantId, brandId, locationId, status, null, null, null, null, null, null, null, null, null, null);
-        Set<Capability> granted = grantedOrderActionCapabilities(tenantId, brandId, locationId);
+        JdbcOrderStore.OrderListQuery query = OrderBoardFilters.query(
+                tenantId,
+                brandId,
+                List.of(locationId),
+                status,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null);
+        Set<Capability> granted = grantedRowCapabilities(tenantId, brandId, locationId);
         return ResponseEntity.ok(orderQuery.forLocation(query, null, limit).stream()
                 .map(row -> OrderSummaryResponse.of(row, granted))
                 .toList());
@@ -274,13 +314,23 @@ public class OperationsOrderController {
                     + "how the order arrived — `HORECAOS` for the tenant's own channels or "
                     + "`MARKETPLACE` for anything recorded under an aggregator's own binding "
                     + "(ADR 0040, wave 9 row `1.1c`) — the coarse «Источник» toggle orders.md §2.4 "
-                    + "names; picking one specific aggregator binding when a tenant runs several "
-                    + "is not yet a filter here. `paymentStatus` narrows to `ordering.orders"
+                    + "names; `marketplaceBindingId` picks one specific aggregator binding "
+                    + "when a tenant runs several (the options are `GET .../orders/marketplace-"
+                    + "bindings`). `paymentStatus` narrows to `ordering.orders"
                     + ".payment_status_projection` (V0022, gap map row 1.1c) — Оплата, never to be "
-                    + "confused with `paymentMethodCode`'s Способ оплаты. Keyset-paginated "
+                    + "confused with `paymentMethodCode`'s Способ оплаты. The four secondary "
+                    + "toggles of orders.md §2.4: `late` (Только опаздывающие — not over and past "
+                    + "the promise plus the branch's `ordering.lateness` grace, ADR 0030), "
+                    + "`problem` (С проблемой — a process needing an operator or failed and "
+                    + "awaiting retry), `callbackRequested` (Требуется звонок — the flag "
+                    + "the callback amendment raises and clears) and `fiscalStatus` (Фискализация "
+                    + "— any fiscal document of the order in one of the given statuses, ADR "
+                    + "0038). Keyset-paginated "
                     + "(ADR 0031): pass the previous page's `nextCursor` back as `cursor`. "
                     + "Changing a filter invalidates the cursor — start the list again — because "
-                    + "a window cut for one filter set says nothing about another.")
+                    + "a window cut for one filter set says nothing about another. The same board "
+                    + "across a brand's branches is `GET /api/v1/operations/tenants/{t}/brands/{b}"
+                    + "/orders/board`, which needs `ORDER_READ` at BRAND scope.")
     @SuppressWarnings("checkstyle:ParameterNumber")
     public Page<OrderSummaryResponse> board(
             @PathVariable UUID tenantId,
@@ -297,13 +347,18 @@ public class OperationsOrderController {
             @RequestParam(required = false) @Nullable String reference,
             @RequestParam(required = false) @Nullable String origin,
             @RequestParam(required = false) @Nullable String paymentStatus,
+            @RequestParam(required = false) @Nullable UUID marketplaceBindingId,
+            @RequestParam(required = false) @Nullable Boolean late,
+            @RequestParam(required = false) @Nullable Boolean problem,
+            @RequestParam(required = false) @Nullable Boolean callbackRequested,
+            @RequestParam(required = false) @Nullable List<String> fiscalStatus,
             @RequestParam(required = false) @Nullable String cursor,
             @RequestParam(required = false) @Nullable Integer limit) {
 
-        JdbcOrderStore.OrderListQuery query = boardQuery(
+        JdbcOrderStore.OrderListQuery query = OrderBoardFilters.query(
                 tenantId,
                 brandId,
-                locationId,
+                List.of(locationId),
                 status,
                 from,
                 to,
@@ -314,167 +369,61 @@ public class OperationsOrderController {
                 createdByActorId,
                 reference,
                 origin,
-                paymentStatus);
+                paymentStatus,
+                marketplaceBindingId,
+                late,
+                problem,
+                callbackRequested,
+                fiscalStatus);
 
-        String filterHash = filterHashOf(query);
-        @Nullable UUID cursorOrderId = null;
-        if (cursor != null && !cursor.isBlank()) {
-            Cursor decoded = Cursor.decodeUnsigned(cursor, filterHash)
-                    .orElseThrow(() -> new ApiException(
-                            ErrorCode.INVALID_REQUEST,
-                            "This cursor was issued for a different filter set; start the list again"));
-            cursorOrderId = parseCursorOrderId(decoded.sortKey());
-        }
-
-        int pageSize = Page.limitOrDefault(limit);
-        List<JdbcOrderStore.OrderBoardRow> rows;
-        try {
-            rows = orderQuery.forLocation(query, cursorOrderId, pageSize);
-        } catch (OrderQueryService.UnknownCursorException unknown) {
-            throw new ApiException(ErrorCode.INVALID_REQUEST, "This cursor does not name an order of this branch");
-        }
-
-        Set<Capability> granted = grantedOrderActionCapabilities(tenantId, brandId, locationId);
-        List<OrderSummaryResponse> items =
-                rows.stream().map(row -> OrderSummaryResponse.of(row, granted)).toList();
-
-        // A short page is the end of the collection. A full one may or may not
-        // be, and answering "maybe" with a cursor costs the caller one empty
-        // request, where answering "no" wrongly loses them every order after it.
-        String nextCursor = items.size() < pageSize
-                ? null
-                : new Cursor(rows.getLast().order().orderId().toString(), filterHash).encodeUnsigned();
-
-        return new Page<>(items, nextCursor);
+        Set<Capability> granted = grantedRowCapabilities(tenantId, brandId, locationId);
+        return OrderBoardFilters.page(orderQuery, query, cursor, limit, ignored -> granted);
     }
 
-    /** Validates the board's filter parameters and assembles the query both reads share. */
-    @SuppressWarnings("checkstyle:ParameterNumber")
-    private static JdbcOrderStore.OrderListQuery boardQuery(
-            UUID tenantId,
-            UUID brandId,
-            UUID locationId,
-            @Nullable List<String> status,
-            @Nullable Instant from,
-            @Nullable Instant to,
-            @Nullable String channelCode,
-            @Nullable String fulfillmentMode,
-            @Nullable UUID courierId,
-            @Nullable String paymentMethodCode,
-            @Nullable String createdByActorId,
-            @Nullable String reference,
-            @Nullable String origin,
-            @Nullable String paymentStatus) {
-
-        List<String> statuses = status == null ? List.of() : status;
-        statuses.forEach(OperationsOrderController::requireKnownStatus);
-        requireKnownFulfillmentMode(fulfillmentMode);
-        requireSearchableReference(reference);
-        requireKnownOrigin(origin);
-        requireKnownPaymentStatus(paymentStatus);
-
-        return new JdbcOrderStore.OrderListQuery(
-                tenantId,
-                brandId,
-                locationId,
-                statuses,
-                from,
-                to,
-                channelCode,
-                fulfillmentMode == null ? null : fulfillmentMode.toUpperCase(Locale.ROOT),
-                courierId,
-                paymentMethodCode,
-                createdByActorId,
-                reference,
-                origin == null ? null : origin.toUpperCase(Locale.ROOT),
-                paymentStatus == null ? null : paymentStatus.toUpperCase(Locale.ROOT));
+    @GetMapping("/marketplace-bindings")
+    @RequiresCapability(value = Capability.ORDER_READ, scope = ScopeType.LOCATION)
+    @Operation(
+            summary = "The aggregator bindings this branch's orders arrived through",
+            description = "The options behind the board's «Агрегатор» filter (orders.md §2.4, ADR 0040): "
+                    + "one entry per provider binding that has an order at this branch, most recently "
+                    + "used first, with how many and — where integration still resolves it — the "
+                    + "provider and the installation's own name. Pass an entry's `bindingId` back as "
+                    + "`marketplaceBindingId` on `GET .../orders/board`.")
+    public MarketplaceBindingsResponse marketplaceBindings(
+            @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID locationId) {
+        return MarketplaceBindingsResponse.of(orderQuery.marketplaceBindings(tenantId, brandId, List.of(locationId)));
     }
 
     /**
-     * The cursor's filter fingerprint, hashed so the token stays short and does
-     * not restate the caller's own query back to them in a readable form.
+     * The aggregator bindings the orders in scope arrived through — shared by the
+     * branch and the brand-scoped endpoints so their wire shape cannot diverge.
      */
-    private static String filterHashOf(JdbcOrderStore.OrderListQuery query) {
-        try {
-            byte[] digest = MessageDigest.getInstance("SHA-256")
-                    .digest(query.fingerprint().getBytes(StandardCharsets.UTF_8));
-            return Base64.getUrlEncoder().withoutPadding().encodeToString(Arrays.copyOf(digest, 12));
-        } catch (NoSuchAlgorithmException impossible) {
-            throw new IllegalStateException("SHA-256 is unavailable", impossible);
-        }
-    }
+    public record MarketplaceBindingsResponse(List<MarketplaceBindingResponse> items) {
 
-    private static UUID parseCursorOrderId(String sortKey) {
-        try {
-            return UUID.fromString(sortKey);
-        } catch (IllegalArgumentException malformed) {
-            throw new ApiException(ErrorCode.INVALID_REQUEST, "This cursor is not usable; start the list again");
-        }
-    }
-
-    private static void requireKnownFulfillmentMode(@Nullable String mode) {
-        if (mode == null) {
-            return;
-        }
-        try {
-            FulfillmentMode.valueOf(mode.toUpperCase(Locale.ROOT));
-        } catch (IllegalArgumentException unknown) {
-            // Dropping an unknown mode would answer "no orders" for a typo, which
-            // reads to an operator as a branch that has stopped taking delivery.
-            throw new ApiException(ErrorCode.VALIDATION_FAILED, "Unknown fulfillment mode \"%s\"".formatted(mode));
+        static MarketplaceBindingsResponse of(List<OrderBoardReadModels.MarketplaceBindingOption> options) {
+            return new MarketplaceBindingsResponse(options.stream()
+                    .map(option -> new MarketplaceBindingResponse(
+                            option.bindingId(),
+                            option.providerType(),
+                            option.displayName(),
+                            option.orderCount(),
+                            option.lastOrderAt()))
+                    .toList());
         }
     }
 
     /**
-     * `ordering.orders.origin`'s own two values (V0038, ADR 0040) — dropping an
-     * unknown one would silently answer "no orders" for a typo, exactly the
-     * failure {@link #requireKnownFulfillmentMode} already refuses for its own
-     * parameter.
+     * @param providerType the aggregator's catalogue code, or null when integration
+     *                     no longer resolves the binding — the caller shows the id's
+     *                     tail rather than a name it was never given
+     * @param displayName  what the tenant called the installation
      */
-    private static void requireKnownOrigin(@Nullable String origin) {
-        if (origin == null) {
-            return;
-        }
-        String normalised = origin.toUpperCase(Locale.ROOT);
-        if (!normalised.equals("HORECAOS") && !normalised.equals("MARKETPLACE")) {
-            throw new ApiException(ErrorCode.VALIDATION_FAILED, "Unknown order origin \"%s\"".formatted(origin));
-        }
-    }
-
-    /**
-     * {@code ordering.orders.payment_status_projection}'s own seven values
-     * (V0022, {@code ck_order_payment_projection}, gap map row 1.1c) —
-     * dropping an unknown one would silently answer "no orders" for a typo,
-     * exactly the failure {@link #requireKnownOrigin} already refuses for its
-     * own parameter.
-     */
-    private static void requireKnownPaymentStatus(@Nullable String paymentStatus) {
-        if (paymentStatus == null) {
-            return;
-        }
-        if (!KNOWN_PAYMENT_STATUS_PROJECTIONS.contains(paymentStatus.toUpperCase(Locale.ROOT))) {
-            throw new ApiException(
-                    ErrorCode.VALIDATION_FAILED, "Unknown payment status \"%s\"".formatted(paymentStatus));
-        }
-    }
-
-    /**
-     * A reference that normalises to nothing must not fall through to "no
-     * filter applied" ({@link JdbcOrderStore.OrderListQuery#normalisedReference()}
-     * turns it into {@code null}, indistinguishable from the caller never
-     * having supplied {@code reference} at all). Left unguarded, a search for
-     * {@code "#"} or {@code " - "} would answer with the location's entire
-     * board instead of the empty result a nonsense reference search should
-     * return — the opposite of what a filter parameter promises.
-     */
-    private static void requireSearchableReference(@Nullable String reference) {
-        if (reference == null || reference.isBlank()) {
-            return;
-        }
-        if (JdbcOrderStore.normalisedExternalReference(reference) == null) {
-            throw new ApiException(ErrorCode.VALIDATION_FAILED, "This reference has nothing searchable in it");
-        }
-    }
+    public record MarketplaceBindingResponse(
+            UUID bindingId,
+            @Nullable String providerType,
+            @Nullable String displayName,
+            long orderCount,
+            Instant lastOrderAt) {}
 
     // ------------------------------------------------------- operator order intake (ADR 0039)
 
@@ -838,9 +787,10 @@ public class OperationsOrderController {
                 .filter(found -> found.order().locationId().equals(locationId))
                 .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such order"));
 
-        Set<Capability> granted = grantedOrderActionCapabilities(tenantId, brandId, locationId);
+        Set<Capability> granted = grantedRowCapabilities(tenantId, brandId, locationId);
         UUID courierId = orderQuery.courierIdFor(tenantId, orderId);
         boolean amendmentAwaitingOperator = orderQuery.amendmentAwaitingOperatorFor(tenantId, orderId);
+        boolean presentablePayment = orderQuery.presentablePaymentFor(tenantId, detail.order());
         // Only a DINE_IN order can sit at a table; asking about a delivery or a pickup
         // would only spend a query on an answer that is always empty.
         OrderTablesPort.OrderTable table = detail.order().fulfillmentMode() == FulfillmentMode.DINE_IN
@@ -854,6 +804,7 @@ public class OperationsOrderController {
                         granted,
                         courierId,
                         amendmentAwaitingOperator,
+                        presentablePayment,
                         table,
                         staffDisplayNames));
     }
@@ -1666,16 +1617,6 @@ public class OperationsOrderController {
                 .isPresent();
         if (!atLocation) {
             throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such order");
-        }
-    }
-
-    private static void requireKnownStatus(String status) {
-        try {
-            OrderStatus.valueOf(status);
-        } catch (IllegalArgumentException unknown) {
-            // Silently dropping an unknown status would return "no orders" for a
-            // typo, which reads to an operator as a quiet shift.
-            throw new ApiException(ErrorCode.VALIDATION_FAILED, "Unknown order status \"%s\"".formatted(status));
         }
     }
 
@@ -2519,6 +2460,11 @@ public class OperationsOrderController {
      * rather than over one instance, so a field added later fails rather than
      * ships.
      *
+     * @param locationId the branch the order belongs to. The branch board carries
+     *                   it too, so the two boards share one wire shape; the
+     *                   brand-scoped board (wave 16) is where it earns its place,
+     *                   as the Филиал column's key — the name itself is tenancy's
+     *                   and the console resolves it against the brand roster
      * @param actions the IA 1.2 server-supplied {@code actions[]} array
      *                (orders.md §4.2): exactly what {@link OrderActionsPolicy}
      *                — the same rules {@code OrderStateService} enforces —
@@ -2561,6 +2507,7 @@ public class OperationsOrderController {
      */
     public record OrderSummaryResponse(
             UUID orderId,
+            UUID locationId,
             String publicOrderNumber,
             String status,
             String fulfillmentMode,
@@ -2598,6 +2545,10 @@ public class OperationsOrderController {
          *                   ({@link OrderQueryService#amendmentAwaitingOperatorFor}),
          *                   the {@code RESOLVE} counterpart to {@code courierId}
          *                   above (gap map row 1.1e)
+         * @param presentablePayment resolved separately by the caller ({@link
+         *                   OrderQueryService#presentablePaymentFor}), the
+         *                   {@code ISSUE_INVOICE} counterpart to {@code courierId}
+         *                   above (gap map row 1.1e)
          * @param table      resolved separately by the caller ({@link
          *                   OrderQueryService#tableFor}), the single-order
          *                   counterpart to the board's batched lookup
@@ -2607,9 +2558,11 @@ public class OperationsOrderController {
                 Set<Capability> grantedCapabilities,
                 @Nullable UUID courierId,
                 boolean amendmentAwaitingOperator,
+                boolean presentablePayment,
                 OrderTablesPort.@Nullable OrderTable table) {
             return of(
-                    new JdbcOrderStore.OrderBoardRow(order, null, courierId, amendmentAwaitingOperator, table),
+                    new JdbcOrderStore.OrderBoardRow(
+                            order, null, courierId, amendmentAwaitingOperator, presentablePayment, table),
                     grantedCapabilities);
         }
 
@@ -2617,6 +2570,7 @@ public class OperationsOrderController {
             JdbcOrderStore.OrderRow order = row.order();
             return new OrderSummaryResponse(
                     order.orderId(),
+                    order.locationId(),
                     order.publicOrderNumber(),
                     order.status().name(),
                     order.fulfillmentMode().name(),
@@ -2631,7 +2585,9 @@ public class OperationsOrderController {
                             order.fulfillmentMode(),
                             grantedCapabilities,
                             row.courierId(),
-                            row.amendmentAwaitingOperator()),
+                            row.amendmentAwaitingOperator(),
+                            order.paymentStatusProjection(),
+                            row.presentablePayment()),
                     order.promise().promisedAt(),
                     order.promise().basis().name(),
                     order.paymentStatusProjection(),
@@ -2667,9 +2623,16 @@ public class OperationsOrderController {
                 uz.horecaos.platform.tenancy.api.FulfillmentMode mode,
                 Set<Capability> grantedCapabilities,
                 @Nullable UUID courierId,
-                boolean amendmentAwaitingOperator) {
+                boolean amendmentAwaitingOperator,
+                String paymentStatusProjection,
+                boolean presentablePayment) {
             return OrderActionsPolicy.availableFor(
-                            status, mode, grantedCapabilities, courierId == null, amendmentAwaitingOperator)
+                            status,
+                            mode,
+                            grantedCapabilities,
+                            courierId == null,
+                            amendmentAwaitingOperator,
+                            OrderActionsPolicy.awaitsOnlinePayment(paymentStatusProjection, presentablePayment))
                     .stream()
                     .map(OrderActionResponse::of)
                     .toList();
@@ -2737,11 +2700,18 @@ public class OperationsOrderController {
                 Set<Capability> grantedCapabilities,
                 @Nullable UUID courierId,
                 boolean amendmentAwaitingOperator,
+                boolean presentablePayment,
                 OrderTablesPort.@Nullable OrderTable table,
                 StaffDisplayNames staffDisplayNames) {
             var order = detail.order();
             return new OrderDetailResponse(
-                    OrderSummaryResponse.of(order, grantedCapabilities, courierId, amendmentAwaitingOperator, table),
+                    OrderSummaryResponse.of(
+                            order,
+                            grantedCapabilities,
+                            courierId,
+                            amendmentAwaitingOperator,
+                            presentablePayment,
+                            table),
                     order.subtotalMinor(),
                     order.taxMinor(),
                     order.acceptanceMode(),

@@ -32,13 +32,20 @@ import org.jspecify.annotations.Nullable;
  *                     same as "supports nothing" — and every localized field
  *                     in the console falls back to the platform's
  *                     ru/uz-Latn/en triple until it is
+ * @param formats      how this brand's operators read money and phone numbers
+ *                     in the console (10.12). Read here so a brand view carries
+ *                     it, but written on its own act
+ *                     ({@code TenantControlPlaneService#reviseRegionalFormats}),
+ *                     never by the whole-set profile write: {@code
+ *                     updateBrandProfile} leaves the stored formats alone
  */
 public record BrandProfile(
         @Nullable String contactPhone,
         @Nullable String telegramHandle,
         @Nullable UUID logoAssetId,
         @Nullable UUID bannerAssetId,
-        List<BrandLocale> locales) {
+        List<BrandLocale> locales,
+        BrandRegionalFormats formats) {
 
     /**
      * E.164, the same pattern {@link LocationPlace} enforces for a branch's own
@@ -62,6 +69,8 @@ public record BrandProfile(
     public BrandProfile {
         Objects.requireNonNull(locales, "Brand locales is required (empty, not null, when unconfigured)");
         locales = List.copyOf(locales);
+        Objects.requireNonNull(
+                formats, "Brand regional formats is required (the defaults, not null, when unconfigured)");
 
         if (contactPhone != null && !E164.matcher(contactPhone).matches()) {
             throw new IllegalArgumentException("Brand contact phone must be E.164, for example +998712000000");
@@ -90,7 +99,12 @@ public record BrandProfile(
 
     /** A brand that has configured none of this yet — the state every brand starts in. */
     public static BrandProfile empty() {
-        return new BrandProfile(null, null, null, null, List.of());
+        return new BrandProfile(null, null, null, null, List.of(), BrandRegionalFormats.defaults());
+    }
+
+    /** The same profile with other display formats -- the profile write carries the stored ones through. */
+    public BrandProfile withFormats(BrandRegionalFormats other) {
+        return new BrandProfile(contactPhone, telegramHandle, logoAssetId, bannerAssetId, locales, other);
     }
 
     /** One language a brand's storefront offers, and its description in it. */

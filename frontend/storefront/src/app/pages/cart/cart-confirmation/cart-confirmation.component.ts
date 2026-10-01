@@ -1,7 +1,7 @@
 import { newIdempotencyKey } from '../../../core/api/idempotency';
 import { Component, OnInit, effect, signal, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { Router, RouterLink } from '@angular/router';
+import { Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { UiCartService } from '../../../services/ui-cart.service';
 import { DeliverySelectionService } from '../../../services/delivery-selection.service';
@@ -11,7 +11,10 @@ import { NotificationService } from '../../../services/notification.service';
 import { TranslatePipe } from '../../../shared/translate/translate.pipe';
 import { TranslateService } from '../../../services/translate.service';
 import { HorecaOSApiError, messageKeyFor } from '../../../core/api/problem-details';
-import { LocationProfileService, type LocationProfile } from '../../../services/location-profile.service';
+import {
+  LocationProfileService,
+  type LocationProfile,
+} from '../../../services/location-profile.service';
 import { APP_CONFIG } from '../../../core/config/app-config';
 
 export interface PaymentOption {
@@ -26,9 +29,8 @@ export interface PaymentOption {
   templateUrl: './cart-confirmation.component.html',
   styleUrl: './cart-confirmation.component.scss',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslatePipe]
+  imports: [CommonModule, FormsModule, TranslatePipe],
 })
-
 export class CartConfirmationComponent implements OnInit {
   showPaymentOptions = false;
   /**
@@ -79,7 +81,8 @@ export class CartConfirmationComponent implements OnInit {
    * ever sending `undefined` and letting the platform's 400 be the first the
    * customer hears of it.
    */
-  readonly noPaymentMethods = () => this.paymentMethodsLoaded() && this.paymentOptions().length === 0;
+  readonly noPaymentMethods = () =>
+    this.paymentMethodsLoaded() && this.paymentOptions().length === 0;
 
   get paymentMethod(): string {
     const opt = this.paymentOptions().find((o) => o.id === this.selectedPaymentId);
@@ -149,7 +152,7 @@ export class CartConfirmationComponent implements OnInit {
   constructor(
     public cart: UiCartService,
     private ordersService: OrdersService,
-    private router: Router
+    private router: Router,
   ) {
     // Prefills the recipient from the signed-in account, reactively rather
     // than as a one-time copy in `ngOnInit`. Both sources it reads --

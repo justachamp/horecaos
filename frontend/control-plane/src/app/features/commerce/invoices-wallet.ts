@@ -6,7 +6,7 @@ import { parseAmount, parseSignedAmount } from '../../core/api/money';
 import { ApiError } from '../../core/api/problem';
 import { SessionContextService } from '../../core/auth/session-context.service';
 import { I18nService } from '../../core/i18n/i18n.service';
-import { MessageKey, en } from '../../core/i18n/messages.en';
+import { MessageKey } from '../../core/i18n/messages.en';
 import { TenantDirectory } from '../../shared/tenant-directory';
 import { TenantPicker } from '../../shared/tenant-picker';
 import {
@@ -350,12 +350,12 @@ export class InvoicesWallet {
    */
   protected entryLabel(entryType: string): string {
     const key = `wallet.entry.${entryType}`;
-    return key in en ? this.i18n.t(key as MessageKey) : entryType;
+    return this.i18n.hasMessage(key) ? this.i18n.t(key) : entryType;
   }
 
   protected methodLabel(method: string): string {
     const key = `wallet.method.${method}`;
-    return key in en ? this.i18n.t(key as MessageKey) : method;
+    return this.i18n.hasMessage(key) ? this.i18n.t(key) : method;
   }
 
   /** What this statement has been paid and what is still due, or null while the wallet has not loaded. */

@@ -1,0 +1,47 @@
+<div class="pane__actions">
+  @if (primaryItem(); as primary) {
+    <button
+      type="button"
+      class="pane__primary-action"
+      [disabled]="busy() || (primary.action.action === 'AMEND' && amendBlockedReason() !== null)"
+      (click)="actionRequested.emit(primary.action)"
+      data-testid="order-detail-primary-action"
+    >
+      {{ primary.label }}
+    </button>
+  }
+  @if (overflowItems().length > 0) {
+    <div class="pane__overflow">
+      <button
+        type="button"
+        class="pane__overflow-trigger"
+        [disabled]="busy()"
+        (click)="overflowToggled.emit()"
+        [attr.aria-label]="'orders.action.overflow' | t"
+        [attr.aria-expanded]="overflowOpen()"
+        data-testid="order-detail-overflow-trigger"
+      >
+        <span aria-hidden="true">⋯</span>
+      </button>
+      @if (overflowOpen()) {
+        <div class="pane__overflow-menu" data-testid="order-detail-overflow-menu">
+          @for (
+            item of overflowItems();
+            track item.action.action + (item.action.targetStatus ?? '')
+          ) {
+            <button
+              type="button"
+              class="pane__overflow-item"
+              [disabled]="item.action.action === 'AMEND' && amendBlockedReason() !== null"
+              [attr.title]="item.action.action === 'AMEND' ? amendBlockedReason() : null"
+              (click)="actionRequested.emit(item.action)"
+              [attr.data-testid]="'order-detail-action-' + item.action.action"
+            >
+              {{ item.label }}
+            </button>
+          }
+        </div>
+      }
+    </div>
+  }
+</div>

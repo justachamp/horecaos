@@ -1115,6 +1115,9 @@
             "format" : "uuid",
             "type" : "string"
           },
+          "regionalFormats" : {
+            "$ref" : "#/components/schemas/RegionalFormatsView"
+          },
           "slug" : {
             "type" : "string"
           },
@@ -1279,6 +1282,10 @@
             },
             "minItems" : 1,
             "type" : "array"
+          },
+          "mode" : {
+            "enum" : [ "REPLACE", "MERGE" ],
+            "type" : "string"
           }
         },
         "required" : [ "items" ],
@@ -1668,6 +1675,32 @@
           },
           "status" : {
             "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "CategoryDefaultResponse" : {
+        "properties" : {
+          "agreeingCount" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "categoryId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "categoryName" : {
+            "type" : "string"
+          },
+          "mxikCode" : {
+            "type" : "string"
+          },
+          "packageCode" : {
+            "type" : "string"
+          },
+          "sampleSize" : {
+            "format" : "int32",
+            "type" : "integer"
           }
         },
         "type" : "object"
@@ -3951,6 +3984,18 @@
         },
         "type" : "object"
       },
+      "FindingSubject" : {
+        "properties" : {
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "type" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "FindingView" : {
         "properties" : {
           "code" : {
@@ -4092,12 +4137,19 @@
       },
       "FiscalCoverageNodeResponse" : {
         "properties" : {
+          "categoryId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
           "categoryName" : {
             "type" : "string"
           },
           "locationCount" : {
             "format" : "int32",
             "type" : "integer"
+          },
+          "mxikCode" : {
+            "type" : "string"
           },
           "name" : {
             "type" : "string"
@@ -4109,12 +4161,21 @@
           "nodeType" : {
             "enum" : [ "VARIANT", "MODIFIER_OPTION", "FEE" ],
             "type" : "string"
+          },
+          "packageCode" : {
+            "type" : "string"
           }
         },
         "type" : "object"
       },
       "FiscalCoverageResponse" : {
         "properties" : {
+          "categoryDefaults" : {
+            "items" : {
+              "$ref" : "#/components/schemas/CategoryDefaultResponse"
+            },
+            "type" : "array"
+          },
           "nodes" : {
             "items" : {
               "$ref" : "#/components/schemas/FiscalCoverageNodeResponse"
@@ -7881,6 +7942,46 @@
         },
         "type" : "object"
       },
+      "RegionalFormatsRequest" : {
+        "properties" : {
+          "moneyGrouping" : {
+            "example" : "SPACE",
+            "maxLength" : 8,
+            "minLength" : 0,
+            "pattern" : "SPACE|COMMA|DOT|NONE",
+            "type" : "string"
+          },
+          "moneySymbolPlacement" : {
+            "example" : "AFTER",
+            "maxLength" : 8,
+            "minLength" : 0,
+            "pattern" : "BEFORE|AFTER",
+            "type" : "string"
+          },
+          "phoneDisplayPattern" : {
+            "example" : "+### ## ### ## ##",
+            "maxLength" : 32,
+            "minLength" : 0,
+            "pattern" : "[+#() .-]+",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "RegionalFormatsView" : {
+        "properties" : {
+          "moneyGrouping" : {
+            "type" : "string"
+          },
+          "moneySymbolPlacement" : {
+            "type" : "string"
+          },
+          "phoneDisplayPattern" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "RegisterLegalEntityRequest" : {
         "properties" : {
           "code" : {
@@ -9607,11 +9708,17 @@
       },
       "TenantModuleView" : {
         "properties" : {
+          "acquiredVia" : {
+            "type" : "string"
+          },
           "billingUnit" : {
             "type" : "string"
           },
           "endReason" : {
             "type" : "string"
+          },
+          "endableByTenant" : {
+            "type" : "boolean"
           },
           "endedAt" : {
             "type" : "string"
@@ -10278,6 +10385,9 @@
           },
           "stepKey" : {
             "type" : "string"
+          },
+          "subject" : {
+            "$ref" : "#/components/schemas/FindingSubject"
           }
         },
         "type" : "object"
@@ -14377,7 +14487,7 @@
     },
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/fiscal-classifications/bulk" : {
       "put" : {
-        "description" : "The fiscal workbench's bulk fill: ИКПУ and package code filled down a q-data-grid column across hundreds of rows in one call, rather than one variant at a time through the single-node classification endpoints. Idempotent, and one bad node id does not fail the rest of the batch — every item gets its own outcome.",
+        "description" : "The fiscal workbench's bulk fill: ИКПУ and package code filled down a q-data-grid column across hundreds of rows in one call, rather than one variant at a time through the single-node classification endpoints. Idempotent, and one bad node id does not fail the rest of the batch — every item gets its own outcome (CLASSIFIED, SKIPPED_EMPTY, NOT_FOUND, UNCHANGED for a merge that would change nothing, or CONFLICT for a merge that met a different value than the node already holds). mode REPLACE (the default) makes each item the node's whole classification; mode MERGE only fills gaps — a field the item supplies goes into a field the node holds nothing in, a field it omits keeps what the node already holds, and a supplied value that differs from a stored one is never written (CONFLICT, nothing written for that node) — which is what a backfill of half-classified nodes needs. An item sent in MERGE mode may carry only mxikCode, packageCode, fiscalUnitCode, fiscalName and barcode. The ИКПУ's shape is not checked here (ADR 0038: it belongs to the official list); a console may check it before it sends. One audit fact covers the batch.",
         "operationId" : "bulkClassify",
         "parameters" : [ {
           "in" : "path",
@@ -14424,7 +14534,7 @@
     },
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/fiscal-coverage" : {
       "get" : {
-        "description" : "Settings 10.7 Tab 3, built locally by wave P34 in place of P21's not-yet-merged fiscal workbench. The unclassified list is ordered with the delivery fee first, then by offering breadth descending.",
+        "description" : "Settings 10.7 Tab 3, built locally by wave P34 in place of P21's not-yet-merged fiscal workbench. The unclassified list is ordered with the delivery fee first, then by offering breadth descending. Each node carries the ИКПУ and package code it already holds (a half-classified node is listed too), and categoryDefaults gives, per category, the pair its classified variants most often carry together — there is no stored category default; this is derived.",
         "operationId" : "fiscalCoverage",
         "parameters" : [ {
           "in" : "path",
@@ -14800,7 +14910,7 @@
     },
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/locations/{locationId}/variants" : {
       "get" : {
-        "description" : "catalog.md §4.6, the 86 screen's read side, and catalog.md §4.5's Layer A menu matrix. Gated on inventory.read rather than catalog.read, matching the screen's own denial rule — an actor who can adjust stock but never touches draft authoring still needs this list. Also the New order screen's item search (orders.md §5.5, wave P13): `query` narrows by product name, case-insensitively, exactly like `search` below but without also matching on SKU. `search` matches the product name (in locale) or the variant SKU; when both are given, `search` wins. `status` is one of AVAILABLE/UNAVAILABLE/HIDDEN/NOT_ADDED — NOT_ADDED is how the matrix asks \"what is missing from this branch's menu\", which the offering-status-blind read this endpoint used to run could never answer. Omitting every filter is the unfiltered 86-screen page it always was.",
+        "description" : "catalog.md §4.6, the 86 screen's read side, and catalog.md §4.5's Layer A menu matrix. Gated on inventory.read rather than catalog.read, matching the screen's own denial rule — an actor who can adjust stock but never touches draft authoring still needs this list. Also the New order screen's item search (orders.md §5.5, wave P13): `query` narrows by product name, case-insensitively, exactly like `search` below but without also matching on SKU. `search` matches the product name (in locale, else in the brand's default language, else in the server's, so a menu named in another language still has a name and is still found; a caller that sends no locale gets the brand's default) or the variant SKU; when both are given, `search` wins. `status` is one of AVAILABLE/UNAVAILABLE/HIDDEN/NOT_ADDED — NOT_ADDED is how the matrix asks \"what is missing from this branch's menu\", which the offering-status-blind read this endpoint used to run could never answer. Omitting every filter is the unfiltered 86-screen page it always was.",
         "operationId" : "variantsAtLocation",
         "parameters" : [ {
           "in" : "path",
@@ -14831,7 +14941,6 @@
           "name" : "locale",
           "required" : false,
           "schema" : {
-            "default" : "uz",
             "type" : "string"
           }
         }, {
@@ -14921,7 +15030,6 @@
           "name" : "locale",
           "required" : false,
           "schema" : {
-            "default" : "uz",
             "type" : "string"
           }
         }, {
@@ -18575,6 +18683,53 @@
         "tags" : [ "SaaS control plane" ]
       }
     },
+    "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/regional-formats" : {
+      "put" : {
+        "description" : "Where the currency unit sits on a total (BEFORE or AFTER the amount), how thousands are grouped (SPACE, COMMA, DOT or NONE), and how a phone number is written (a pattern with one # per digit, or absent to show it as it arrives). Display only: nothing stored, exported or sent to a customer changes. An absent placement or grouping means the default. The timezone is not set here: it is the tenant's and each branch's own.",
+        "operationId" : "reviseRegionalFormats",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RegionalFormatsRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/BrandView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Set a brand's regional display formats",
+        "tags" : [ "SaaS control plane" ]
+      }
+    },
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/service-schedules" : {
       "get" : {
         "description" : "The Hours tab's rebind picker and the shared-schedule warning's source: each schedule's name and how many locations currently bind it.",
@@ -20893,7 +21048,7 @@
     },
     "/api/v1/control-plane/tenants/{tenantId}/onboarding-runs/{runId}/validate" : {
       "post" : {
-        "description" : "Runs every read-only readiness check now, synchronously, against the tenant's current configuration rather than the run's persisted step status — so a tenant can see what activation would find before committing to a resume or an activate call. Nothing is written: a step's stored status only changes when the scheduler actually executes it. The activation smoke test is not included, because unlike every other check it is not a pure read. Checks that are not onboarding steps ride along: SMS template moderation, fiscal classification coverage, channel payment-method coverage and secret-rotation age. Each offending item is its own row; a row from an advisory check carries advisory=true and is left out of allPassed. Use a fresh Idempotency-Key to see a fresh answer — replaying one returns the same recorded outcome, as ADR 0031 requires for every effectful request, even one with no state of its own to replay.",
+        "description" : "Runs every read-only readiness check now, synchronously, against the tenant's current configuration rather than the run's persisted step status — so a tenant can see what activation would find before committing to a resume or an activate call. Nothing is written: a step's stored status only changes when the scheduler actually executes it. The activation smoke test is not included, because unlike every other check it is not a pure read. Checks that are not onboarding steps ride along: SMS template moderation, fiscal classification coverage, channel payment-method coverage, channel fulfilment-mode coverage, location service-binding coverage and secret-rotation age. Each offending item is its own row; a row that is about one location carries locationId, and one about another object (a sales channel) carries subject {type, id}, so a client can link to that item. A row from an advisory check carries advisory=true and is left out of allPassed. Use a fresh Idempotency-Key to see a fresh answer — replaying one returns the same recorded outcome, as ADR 0031 requires for every effectful request, even one with no state of its own to replay.",
         "operationId" : "validate",
         "parameters" : [ {
           "in" : "path",

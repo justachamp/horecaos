@@ -114,7 +114,7 @@ describe('CouriersPage', () => {
    * reason-code box and left the reason empty.
    */
   function typeByLabel(host: HTMLElement, label: string, value: string): void {
-    const field = [...host.querySelectorAll('label.field')].find(
+    const field = [...host.querySelectorAll('label.q-field')].find(
       (candidate) => candidate.querySelector('.q-caption')?.textContent?.trim() === label,
     )!;
     const input = field.querySelector<HTMLInputElement>('input')!;
@@ -291,7 +291,7 @@ describe('CouriersPage', () => {
     typeByLabel(host, 'Valid until', '2027-01-01');
     typeByLabel(host, 'Reason', 'sighted the certificate');
 
-    [...host.querySelectorAll('.dialog__actions button')]
+    [...host.querySelectorAll('.q-modal__actions button')]
       .find((button) => button.textContent?.trim() === 'Verify')!
       .dispatchEvent(new MouseEvent('click'));
     await flushMicrotasks();
@@ -325,7 +325,7 @@ describe('CouriersPage', () => {
     typeByLabel(host, 'Reason code', 'NO_SHOW');
     typeByLabel(host, 'Reason', 'did not come in for a week');
 
-    [...host.querySelectorAll('.dialog__actions button')]
+    [...host.querySelectorAll('.q-modal__actions button')]
       .find((button) => button.textContent?.trim() === 'Suspend')!
       .dispatchEvent(new MouseEvent('click'));
     await flushMicrotasks();

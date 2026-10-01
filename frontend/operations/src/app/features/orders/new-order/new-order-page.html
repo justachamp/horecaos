@@ -6,54 +6,18 @@
   <q-denied-state [capability]="'ORDER_PLACE'" data-testid="new-order-denied" />
 } @else {
   <div class="new-order" data-testid="new-order-page">
-    <header class="new-order__header">
-      <h1 class="q-subhead new-order__title">{{ 'orders.newOrder.title' | t }}</h1>
-      <div class="new-order__header-actions">
-        <label class="new-order__aggregator-toggle q-caption">
-          <input
-            type="checkbox"
-            [checked]="aggregatorMode()"
-            (change)="toggleAggregatorMode()"
-            data-testid="new-order-aggregator-toggle"
-          />
-          {{ 'orders.newOrder.aggregator.toggle' | t }}
-        </label>
-        <button type="button" class="new-order__cancel q-body-sm" (click)="cancel()">
-          {{ 'orders.newOrder.order.cancel' | t }}
-        </button>
-        @if (aggregatorMode()) {
-          <button
-            type="button"
-            class="new-order__submit q-body-sm"
-            [disabled]="!canSubmitAggregator()"
-            (click)="submitAggregator()"
-            data-testid="new-order-submit-aggregator"
-          >
-            {{
-              aggregatorSubmitting()
-                ? ('orders.newOrder.order.submitting' | t)
-                : ('orders.newOrder.order.submit' | t)
-            }}
-          </button>
-        } @else {
-          <button
-            type="button"
-            class="new-order__submit q-body-sm"
-            [disabled]="!canSubmit()"
-            (click)="submit()"
-            data-testid="new-order-submit"
-          >
-            {{
-              submitting()
-                ? ('orders.newOrder.order.submitting' | t)
-                : outOfHoursConfirmReason() !== null
-                  ? ('orders.newOrder.order.preOrder.confirmSubmit' | t)
-                  : ('orders.newOrder.order.submit' | t)
-            }}
-          </button>
-        }
-      </div>
-    </header>
+    <q-new-order-header
+      [aggregatorMode]="aggregatorMode()"
+      [canSubmitAggregator]="canSubmitAggregator()"
+      [aggregatorSubmitting]="aggregatorSubmitting()"
+      [canSubmit]="canSubmit()"
+      [submitting]="submitting()"
+      [outOfHoursConfirming]="outOfHoursConfirmReason() !== null"
+      (aggregatorToggled)="toggleAggregatorMode()"
+      (cancelRequested)="cancel()"
+      (submitRequested)="submit()"
+      (aggregatorSubmitRequested)="submitAggregator()"
+    />
 
     @if (submitError(); as message) {
       <p class="q-caption new-order__error" role="alert" data-testid="new-order-submit-error">
@@ -575,91 +539,21 @@
         } @else if (menuError(); as message) {
           <p class="q-caption new-order__error" data-testid="new-order-menu-error">{{ message }}</p>
         } @else if (menu(); as loadedMenu) {
-          <div class="new-order__categories" data-testid="new-order-categories">
-            @for (category of loadedMenu.categories; track category.categoryId) {
-              <div class="new-order__category">
-                <h3 class="q-caption new-order__category-title">{{ category.name }}</h3>
-                <div class="new-order__category-items">
-                  @for (product of productsIn(category, loadedMenu); track product.productId) {
-                    <button
-                      type="button"
-                      class="new-order__product q-body-sm"
-                      [class.new-order__product--stopped]="!isAnyVariantOrderable(product)"
-                      (click)="selectProductFromGrid(product)"
-                      data-testid="new-order-product"
-                    >
-                      <span>{{ product.name }}</span>
-                      @if (!isAnyVariantOrderable(product)) {
-                        <span class="q-caption new-order__stop-chip">{{
-                          'orders.newOrder.menu.stopped' | t
-                        }}</span>
-                      }
-                    </button>
-                  }
-                </div>
-              </div>
-            }
-          </div>
+          <q-new-order-menu-grid
+            [menu]="loadedMenu"
+            (productSelected)="selectProductFromGrid($event)"
+          />
         }
 
         <h2 class="q-body-sm new-order__pane-title new-order__basket-title">
           {{ 'orders.newOrder.basket.title' | t }}
         </h2>
-        @if (basket().length === 0) {
-          <p class="q-caption">{{ 'orders.newOrder.basket.empty' | t }}</p>
-        } @else {
-          <ul class="new-order__basket" data-testid="new-order-basket">
-            @for (line of basket(); track line.lineKey) {
-              <li
-                class="new-order__basket-line"
-                [class.new-order__basket-line--unavailable]="!line.orderable || !line.onSaleNow"
-              >
-                <div class="new-order__basket-line-head">
-                  <span class="q-body-sm">{{ line.productName }}</span>
-                  <q-number-stepper
-                    [value]="line.quantity"
-                    [min]="1"
-                    [max]="99"
-                    (valueChange)="setLineQuantity(line.lineKey, $event)"
-                  />
-                  <button
-                    type="button"
-                    class="new-order__remove q-caption"
-                    (click)="removeLine(line.lineKey)"
-                    data-testid="new-order-remove-line"
-                  >
-                    {{ 'orders.newOrder.basket.remove' | t }}
-                  </button>
-                </div>
-                @if (line.modifiers.length > 0) {
-                  <p class="q-caption new-order__modifiers">{{ modifierSummary(line) }}</p>
-                }
-                @if (line.commentPresetCodes.length > 0) {
-                  <p class="q-caption new-order__modifiers" data-testid="new-order-line-presets">
-                    {{ presetSummary(line) }}
-                  </p>
-                }
-                @if (!line.orderable) {
-                  <p class="q-caption new-order__error">
-                    {{ 'orders.newOrder.basket.unavailable' | t }}
-                  </p>
-                }
-                @if (line.orderable && !line.onSaleNow) {
-                  <p class="q-caption new-order__error" data-testid="new-order-line-out-of-window">
-                    {{ 'orders.newOrder.menu.itemOutOfSaleWindow' | t }}
-                  </p>
-                }
-                <input
-                  type="text"
-                  class="new-order__note q-caption"
-                  [value]="line.customerNote ?? ''"
-                  (input)="setLineNote(line.lineKey, $any($event.target).value)"
-                  [placeholder]="'orders.newOrder.basket.notePlaceholder' | t"
-                />
-              </li>
-            }
-          </ul>
-        }
+        <q-new-order-basket
+          [lines]="basketView()"
+          (quantityChanged)="setLineQuantity($event.lineKey, $event.quantity)"
+          (noteChanged)="setLineNote($event.lineKey, $event.note)"
+          (removeRequested)="removeLine($event)"
+        />
       </section>
 
       <!-- =================================================== ЗАКАЗ -->
@@ -759,7 +653,7 @@
           }
 
           @if (fulfillmentMode() !== 'DINE_IN') {
-            <label class="new-order__aggregator-toggle q-caption">
+            <label class="new-order__pre-order-toggle q-caption">
               <input
                 type="checkbox"
                 [checked]="preOrderEnabled()"

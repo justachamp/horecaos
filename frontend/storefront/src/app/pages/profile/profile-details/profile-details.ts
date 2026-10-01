@@ -6,7 +6,6 @@ import {
   signal,
   computed,
 } from '@angular/core';
-import { switchMap } from 'rxjs';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
@@ -62,7 +61,8 @@ export class ProfileDetailsComponent implements OnInit {
   ngOnInit(): void {
     this.loading.set(true);
     this.error.set(null);
-    this.profileService.load()
+    this.profileService
+      .load()
       .then(() => {
         // The platform stores one displayName; this form has two fields. The
         // service splits on the first space and rejoins on save, so opening the
@@ -128,7 +128,12 @@ export class ProfileDetailsComponent implements OnInit {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
     input.value = '';
-    if (!this.avatarAvailable || !file || !file.type.startsWith('image/') || this.uploadingAvatar()) {
+    if (
+      !this.avatarAvailable ||
+      !file ||
+      !file.type.startsWith('image/') ||
+      this.uploadingAvatar()
+    ) {
       return;
     }
     this.error.set(null);

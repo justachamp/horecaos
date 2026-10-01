@@ -16,6 +16,20 @@ export interface OnboardingRunView {
 }
 
 /**
+ * The one non-location object a finding is about (mirrors
+ * `OnboardingStepHandler.StepResult.Subject`): a type from a closed
+ * vocabulary plus its identifier, never a name. It tells two findings with the
+ * same sentence apart. No link is built from it: the only type the server sends
+ * today is a sales channel, and the findings about one are fixed on the
+ * sales-channels screen rather than in the channel's setup hub, so the row
+ * links by error code.
+ */
+export interface ValidationSubject {
+  readonly type: string;
+  readonly id: string;
+}
+
+/**
  * One `validate` finding, expanded to one row per offending item (wave P31's
  * own reshape of `OnboardingService.ValidationResult` — `locationId` is the
  * field that reshape added).
@@ -33,6 +47,13 @@ export interface ValidationResult {
    * conservative reading.
    */
   readonly advisory?: boolean;
+  /**
+   * The channel (or other non-location object) this finding names, when it
+   * names one (gap map row 10.0, batch 16). Absent on an older server and on
+   * every finding that names no single object. The row links by error code
+   * either way.
+   */
+  readonly subject?: ValidationSubject | null;
 }
 
 /** Mirrors uz.horecaos.platform.tenancy.application.onboarding.OnboardingService.ValidationOutcome. */

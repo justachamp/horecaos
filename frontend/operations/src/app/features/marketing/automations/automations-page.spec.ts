@@ -275,6 +275,145 @@ describe('AutomationsPage', () => {
     expect(api.runs).not.toHaveBeenCalled();
   });
 
+  // --------------------------------------- preview through q-rule-simulator (row X.25)
+
+  const INACTIVITY_RULE = (): AutomationRuleView =>
+    rule({
+      id: 'rule-2',
+      name: 'Win-back',
+      triggerType: 'INACTIVITY',
+      templateKey: 'AUTOMATION_INACTIVITY',
+      triggerConfig: { inactivityDays: 90 },
+      cooldownDays: 30,
+    });
+
+  async function openPreviewOf(
+    target: AutomationRuleView,
+    api: Partial<AutomationsApi>,
+  ): Promise<HTMLElement> {
+    await render(api);
+    const host = fixture.nativeElement as HTMLElement;
+    const link = [...host.querySelectorAll('[data-testid="automation-preview-link"]')][
+      (await api.list!(BRAND_SCOPE)).findIndex((candidate) => candidate.id === target.id)
+    ] as HTMLButtonElement;
+    link.click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+    return host;
+  }
+
+  function typeCandidate(host: HTMLElement, value: string): void {
+    const input = host.querySelector(
+      '[data-testid="automation-simulator"] .candidate-input',
+    ) as HTMLInputElement;
+    input.value = value;
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+  }
+
+  function simulatorRow(host: HTMLElement): HTMLElement {
+    return host.querySelector('[data-testid="automation-simulator"] .result-row') as HTMLElement;
+  }
+
+  it('previews through q-rule-simulator: the rule fires for a customer past its threshold, and says what it would do', async () => {
+    const api = fakeApi({ list: vi.fn().mockResolvedValue([INACTIVITY_RULE()]) });
+    const host = await openPreviewOf(INACTIVITY_RULE(), api);
+
+    expect(
+      host.querySelector('[data-testid="automation-simulator"] q-rule-simulator'),
+    ).not.toBeNull();
+    // The field the operator fills in is the one thing this rule's trigger reads.
+    expect(host.querySelector('[data-testid="automation-simulator"]')?.textContent).toContain(
+      'Days since the last order',
+    );
+
+    typeCandidate(host, '100');
+    const row = simulatorRow(host);
+    expect(row.classList.contains('result-row--matched')).toBe(true);
+    expect(row.textContent).toContain('Win-back');
+    expect(row.textContent).toContain('AUTOMATION_INACTIVITY');
+    expect(row.textContent).toContain('Telegram');
+    expect(row.textContent).toContain('30');
+  });
+
+  it('says the rule would not fire for a customer short of its threshold', async () => {
+    const api = fakeApi({ list: vi.fn().mockResolvedValue([INACTIVITY_RULE()]) });
+    const host = await openPreviewOf(INACTIVITY_RULE(), api);
+
+    typeCandidate(host, '89');
+    expect(simulatorRow(host).classList.contains('result-row--matched')).toBe(false);
+    expect(simulatorRow(host).textContent).toContain('Not matched');
+
+    typeCandidate(host, '90');
+    expect(simulatorRow(host).classList.contains('result-row--matched')).toBe(true);
+  });
+
+  it('evaluates a rule that is not armed yet: a preview asks whether it would fire once armed', async () => {
+    const inert = INACTIVITY_RULE();
+    expect(inert.active).toBe(false);
+    const api = fakeApi({ list: vi.fn().mockResolvedValue([inert]) });
+    const host = await openPreviewOf(inert, api);
+
+    typeCandidate(host, '365');
+
+    expect(simulatorRow(host).textContent).not.toContain('never evaluated');
+    expect(simulatorRow(host).classList.contains('result-row--matched')).toBe(true);
+  });
+
+  it('simulates only the rule being previewed, not the other rules on the page', async () => {
+    const birthday = rule({ id: 'rule-1', name: 'Birthday treat' });
+    const winBack = INACTIVITY_RULE();
+    const api = fakeApi({ list: vi.fn().mockResolvedValue([birthday, winBack]) });
+    const host = await openPreviewOf(winBack, api);
+
+    const rows = host.querySelectorAll('[data-testid="automation-simulator"] .result-row');
+    expect(rows.length).toBe(1);
+    expect(rows[0].textContent).toContain('Win-back');
+    expect(api.preview).toHaveBeenCalledWith(BRAND_SCOPE, 'rule-2');
+  });
+
+  it('reads nothing and arms nothing while a customer is typed in: the simulator makes no request', async () => {
+    const api = fakeApi({ list: vi.fn().mockResolvedValue([INACTIVITY_RULE()]) });
+    const host = await openPreviewOf(INACTIVITY_RULE(), api);
+    const listed = (api.list as ReturnType<typeof vi.fn>).mock.calls.length;
+    const previewed = (api.preview as ReturnType<typeof vi.fn>).mock.calls.length;
+
+    typeCandidate(host, '120');
+    typeCandidate(host, '5');
+    await flushMicrotasks();
+
+    expect((api.list as ReturnType<typeof vi.fn>).mock.calls.length).toBe(listed);
+    expect((api.preview as ReturnType<typeof vi.fn>).mock.calls.length).toBe(previewed);
+    expect(api.activate).not.toHaveBeenCalled();
+    expect(api.runs).not.toHaveBeenCalled();
+  });
+
+  it('keeps the server sample beside the simulator: real, masked customers who match today', async () => {
+    const api = fakeApi({
+      list: vi.fn().mockResolvedValue([INACTIVITY_RULE()]),
+      preview: vi
+        .fn()
+        .mockResolvedValue([{ customerAccountId: 'acct-9', maskedDisplayName: 'K***** L****' }]),
+    });
+    const host = await openPreviewOf(INACTIVITY_RULE(), api);
+
+    const dialog = host.querySelector('[data-testid="automation-preview-dialog"]')!;
+    expect(dialog.querySelector('[data-testid="automation-simulator"]')).not.toBeNull();
+    expect(dialog.textContent).toContain('Customers who match today');
+    expect(dialog.querySelector('[data-testid="automation-preview-row"]')?.textContent).toContain(
+      'K***** L****',
+    );
+  });
+
+  it('shows the sample alone for a rule whose trigger it cannot express', async () => {
+    const unknown = rule({ id: 'rule-3', triggerType: 'LATE_ORDER_APOLOGY', triggerConfig: {} });
+    const api = fakeApi({ list: vi.fn().mockResolvedValue([unknown]) });
+    const host = await openPreviewOf(unknown, api);
+
+    expect(host.querySelector('[data-testid="automation-simulator"]')).toBeNull();
+    expect(host.querySelector('[data-testid="automation-preview-empty"]')).not.toBeNull();
+  });
+
   it('shows the empty state when no customer matches the rule today', async () => {
     const api = fakeApi({
       list: vi.fn().mockResolvedValue([rule()]),

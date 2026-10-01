@@ -771,6 +771,165 @@ public class JdbcCatalogStore {
                 """).params(params).update();
     }
 
+    /**
+     * What {@link #mergeFiscalClassification} did to one node: the row as it was
+     * (unclassified when it had none), the row as it is now when the merge wrote
+     * something, and whether an incoming value met a different one already stored.
+     *
+     * @param after the row after the write, or {@code null} when nothing was written
+     * @param conflict an incoming value differed from a stored one, which is never
+     *     replaced; the node's gaps are not filled either unless the conflict only
+     *     showed up after the write (see {@link #mergeFiscalClassification})
+     */
+    public record FiscalMerge(
+            FiscalClassification before, @Nullable FiscalClassification after, boolean conflict) {
+
+        public boolean changed() {
+            return after != null;
+        }
+    }
+
+    /**
+     * Fills the gaps of a node's classification from {@code incoming} (gap map row
+     * {@code 10.7c}): a value {@code incoming} supplies goes into a field the node
+     * holds nothing in, a field it omits keeps what the node holds, and a value
+     * that differs from one the node already holds is never written — the merge
+     * reports a {@link FiscalMerge#conflict() conflict} instead. A backfill that
+     * pasted a neighbour's code one row too low, or a second operator filling the
+     * same gap from a list read before the first one saved, cannot replace a
+     * correct code this way. Changing a stored value is the node's own
+     * classification's job.
+     *
+     * <p>The constraint columns — marking, marking scheme, excise, alcohol
+     * strength, age restriction — are not in the write at all, neither the insert
+     * of a first row (which takes the column defaults) nor the update of an
+     * existing one. The merge is therefore decided by the database on the row as
+     * it is when the statement runs, not by a copy the caller read earlier: a
+     * manager who marks a dish while a backfill batch is in flight keeps that
+     * mark, which withdraws Payme from carts holding the dish. Kept apart from
+     * {@link #upsertFiscalClassification} because that one means «this is the
+     * whole row», and {@link FiscalClassification#orInherited} means «take the
+     * stricter of two constraints», the opposite of what an operator's edit does.
+     *
+     * <p>The row is locked first, so the conflict check and {@code before} are
+     * made on the row this write is laid over and a node named twice in one
+     * transaction merges in sequence. A node with no row has nothing to lock; if
+     * another transaction creates one in that gap the write still only fills gaps
+     * (the stored value wins in the {@code DO UPDATE}), and the row it ended up
+     * with is read back to report a conflict the check could not see. A merge that
+     * changes nothing writes nothing — no version bump, no new {@code
+     * classified_at} — which is what lets a re-run of a half-finished paste be
+     * quiet.
+     */
+    public FiscalMerge mergeFiscalClassification(
+            UUID tenantId,
+            UUID brandId,
+            PriceableNode node,
+            FiscalClassification incoming,
+            String source,
+            @Nullable UUID actorId) {
+
+        FiscalClassification locked = classificationOf(tenantId, brandId, node, true);
+        FiscalClassification before = locked != null ? locked : FiscalClassification.unclassified();
+        if (locked != null && holdsADifferentValue(locked, incoming)) {
+            return new FiscalMerge(before, null, true);
+        }
+
+        Map<String, Object> params = new HashMap<>();
+        params.put("id", UUID.randomUUID());
+        params.put("tenantId", tenantId);
+        params.put("brandId", brandId);
+        params.put("variantId", node.type() == PriceableType.VARIANT ? node.id() : null);
+        params.put("modifierOptionId", node.type() == PriceableType.MODIFIER_OPTION ? node.id() : null);
+        params.put("feeId", node.type() == PriceableType.FEE ? node.id() : null);
+        params.put("mxikCode", incoming.mxikCode());
+        params.put("packageCode", incoming.packageCode());
+        params.put("fiscalUnitCode", incoming.fiscalUnitCode());
+        params.put("fiscalName", incoming.fiscalName());
+        params.put("barcode", incoming.barcode());
+        params.put("source", source);
+        params.put("classifiedBy", actorId);
+
+        FiscalClassification after = jdbc.sql("""
+                INSERT INTO catalog.fiscal_classifications AS fc (
+                    id, tenant_id, brand_id, variant_id, modifier_option_id, fee_id,
+                    mxik_code, package_code, fiscal_unit_code, fiscal_name, barcode,
+                    source, classified_by)
+                VALUES (
+                    :id, :tenantId, :brandId, :variantId, :modifierOptionId, :feeId,
+                    :mxikCode, :packageCode, :fiscalUnitCode, :fiscalName, :barcode,
+                    :source, :classifiedBy)
+                ON CONFLICT (priceable_type, priceable_id) DO UPDATE SET
+                    mxik_code = COALESCE(fc.mxik_code, EXCLUDED.mxik_code),
+                    package_code = COALESCE(fc.package_code, EXCLUDED.package_code),
+                    fiscal_unit_code = COALESCE(fc.fiscal_unit_code, EXCLUDED.fiscal_unit_code),
+                    fiscal_name = COALESCE(fc.fiscal_name, EXCLUDED.fiscal_name),
+                    barcode = COALESCE(fc.barcode, EXCLUDED.barcode),
+                    source = EXCLUDED.source,
+                    classified_by = EXCLUDED.classified_by,
+                    classified_at = now(),
+                    version = fc.version + 1,
+                    updated_at = now()
+                WHERE (fc.mxik_code, fc.package_code, fc.fiscal_unit_code, fc.fiscal_name, fc.barcode)
+                    IS DISTINCT FROM (
+                        COALESCE(fc.mxik_code, EXCLUDED.mxik_code),
+                        COALESCE(fc.package_code, EXCLUDED.package_code),
+                        COALESCE(fc.fiscal_unit_code, EXCLUDED.fiscal_unit_code),
+                        COALESCE(fc.fiscal_name, EXCLUDED.fiscal_name),
+                        COALESCE(fc.barcode, EXCLUDED.barcode))
+                RETURNING mxik_code, package_code, fiscal_unit_code, fiscal_name,
+                          barcode, marking_required, marking_scheme, excisable,
+                          alcohol_by_volume_bp, age_restriction_years
+                """)
+                .params(params)
+                .query((row, number) -> mapClassification(row))
+                .optional()
+                .orElse(null);
+
+        // With a row locked above, the check was made on the row that was written. Without
+        // one, another transaction may have created it first: what the statement left is
+        // then the only way to know whether it held a value this item meant to set.
+        boolean conflict = false;
+        if (locked == null) {
+            FiscalClassification current = after != null ? after : classificationOf(tenantId, brandId, node, false);
+            conflict = current != null && holdsADifferentValue(current, incoming);
+        }
+        return new FiscalMerge(before, after, conflict);
+    }
+
+    /** One node's classification, or {@code null} when it has no row; {@code lock} takes the row {@code FOR UPDATE}. */
+    private @Nullable FiscalClassification classificationOf(
+            UUID tenantId, UUID brandId, PriceableNode node, boolean lock) {
+        return jdbc.sql("""
+                SELECT mxik_code, package_code, fiscal_unit_code, fiscal_name,
+                       barcode, marking_required, marking_scheme, excisable,
+                       alcohol_by_volume_bp, age_restriction_years
+                FROM catalog.fiscal_classifications
+                WHERE tenant_id = :tenantId AND brand_id = :brandId
+                  AND priceable_type = :priceableType AND priceable_id = :priceableId
+                """ + (lock ? "FOR UPDATE" : ""))
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("priceableType", node.type().name())
+                .param("priceableId", node.id())
+                .query((row, number) -> mapClassification(row))
+                .optional()
+                .orElse(null);
+    }
+
+    /** Whether {@code stored} already holds, in a field {@code incoming} supplies, a value that differs from it. */
+    private static boolean holdsADifferentValue(FiscalClassification stored, FiscalClassification incoming) {
+        return differs(stored.mxikCode(), incoming.mxikCode())
+                || differs(stored.packageCode(), incoming.packageCode())
+                || differs(stored.fiscalUnitCode(), incoming.fiscalUnitCode())
+                || differs(stored.fiscalName(), incoming.fiscalName())
+                || differs(stored.barcode(), incoming.barcode());
+    }
+
+    private static boolean differs(@Nullable Object stored, @Nullable Object incoming) {
+        return stored != null && incoming != null && !stored.equals(incoming);
+    }
+
     /** Every classified node in one brand, keyed by the node it classifies. */
     public Map<UUID, FiscalClassification> classificationsForBrand(UUID tenantId, UUID brandId) {
         Map<UUID, FiscalClassification> byNode = new LinkedHashMap<>();
@@ -1468,11 +1627,38 @@ public class JdbcCatalogStore {
             int limit,
             @Nullable String search,
             @Nullable String offeringStatusFilter) {
+        return variantsAtLocation(
+                tenantId, brandId, locationId, List.of(locale), cursorVariantId, limit, search, offeringStatusFilter);
+    }
+
+    /**
+     * {@link #variantsAtLocation(UUID, UUID, UUID, String, UUID, int, String, String)}, reading a
+     * name in the first of {@code nameLocales} the product (or its category) has one in (row
+     * 10.12).
+     *
+     * <p>The stop list and the New order item search send the console's language, so a product
+     * written only in the brand's own default -- or in the server's, before the brand chose one --
+     * had no name for an operator whose console language differed, and New order labelled the
+     * result with its variant id. The caller lists the languages in the order to try them: the one
+     * asked for, the brand's default, then {@code horecaos.catalog.default-locale}, the language a
+     * menu imported or sampled without a brand-specific one put its names in. A single locale
+     * reads exactly as this always did. The search matches the name that is shown, fallback
+     * included, as add-by-filter's does.
+     */
+    public List<VariantAvailabilityRow> variantsAtLocation(
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            List<String> nameLocales,
+            @Nullable UUID cursorVariantId,
+            int limit,
+            @Nullable String search,
+            @Nullable String offeringStatusFilter) {
         String searchPattern = search == null || search.isBlank() ? null : "%" + search.trim() + "%";
         return jdbc.sql("""
                 SELECT v.id AS variant_id,
-                       t.name AS product_name,
-                       ct.name AS category_name,
+                       pn.name AS product_name,
+                       cn.name AS category_name,
                        si.tracking_mode AS tracking_mode,
                        pos.binary_available AS binary_available,
                        lo.status AS offering_status,
@@ -1485,9 +1671,14 @@ public class JdbcCatalogStore {
                 LEFT JOIN catalog.location_offerings lo
                     ON lo.variant_id = v.id AND lo.tenant_id = v.tenant_id AND lo.brand_id = v.brand_id
                        AND lo.location_id = :locationId
-                LEFT JOIN catalog.translations t
-                    ON t.entity_type = 'PRODUCT' AND t.entity_id = p.id AND t.tenant_id = p.tenant_id
-                       AND t.brand_id = p.brand_id AND t.locale = :locale
+                LEFT JOIN LATERAL (
+                    SELECT t.name
+                    FROM catalog.translations t
+                    WHERE t.entity_type = 'PRODUCT' AND t.entity_id = p.id AND t.tenant_id = p.tenant_id
+                      AND t.brand_id = p.brand_id AND t.locale = ANY (CAST(:nameLocales AS text[]))
+                    ORDER BY array_position(CAST(:nameLocales AS text[]), t.locale)
+                    LIMIT 1
+                ) pn ON true
                 LEFT JOIN LATERAL (
                     SELECT c.id, c.tenant_id
                     FROM catalog.category_products cp
@@ -1497,9 +1688,15 @@ public class JdbcCatalogStore {
                     ORDER BY cp.sort_order, c.id
                     LIMIT 1
                 ) first_category ON true
-                LEFT JOIN catalog.translations ct
-                    ON ct.entity_type = 'CATEGORY' AND ct.entity_id = first_category.id
-                       AND ct.tenant_id = first_category.tenant_id AND ct.locale = :locale
+                LEFT JOIN LATERAL (
+                    SELECT ct.name
+                    FROM catalog.translations ct
+                    WHERE ct.entity_type = 'CATEGORY' AND ct.entity_id = first_category.id
+                      AND ct.tenant_id = first_category.tenant_id
+                      AND ct.locale = ANY (CAST(:nameLocales AS text[]))
+                    ORDER BY array_position(CAST(:nameLocales AS text[]), ct.locale)
+                    LIMIT 1
+                ) cn ON true
                 LEFT JOIN inventory.stock_items si
                     ON si.variant_id = v.id AND si.tenant_id = v.tenant_id AND si.location_id = :locationId
                 LEFT JOIN inventory.positions pos
@@ -1520,7 +1717,7 @@ public class JdbcCatalogStore {
                   AND v.status = 'ACTIVE' AND p.status = 'ACTIVE'
                   AND (CAST(:cursor AS uuid) IS NULL OR v.id > CAST(:cursor AS uuid))
                   AND (CAST(:search AS varchar) IS NULL
-                       OR t.name ILIKE :search OR v.sku ILIKE :search)
+                       OR pn.name ILIKE :search OR v.sku ILIKE :search)
                   AND (CAST(:statusFilter AS varchar) IS NULL
                        OR (:statusFilter = 'NOT_ADDED' AND lo.id IS NULL)
                        OR lo.status = :statusFilter)
@@ -1530,7 +1727,7 @@ public class JdbcCatalogStore {
                 .param("tenantId", tenantId)
                 .param("brandId", brandId)
                 .param("locationId", locationId)
-                .param("locale", locale)
+                .param("nameLocales", nameLocales.toArray(String[]::new))
                 .param("cursor", cursorVariantId)
                 .param("search", searchPattern)
                 .param("statusFilter", offeringStatusFilter)
@@ -1604,6 +1801,17 @@ public class JdbcCatalogStore {
      */
     public VariantAvailabilityCountsRow variantAvailabilityCounts(
             UUID tenantId, UUID brandId, UUID locationId, String locale, @Nullable String search) {
+        return variantAvailabilityCounts(tenantId, brandId, locationId, List.of(locale), search);
+    }
+
+    /**
+     * {@link #variantAvailabilityCounts(UUID, UUID, UUID, String, String)}, matching the search on
+     * the name that {@link #variantsAtLocation(UUID, UUID, UUID, List, UUID, int, String, String)}
+     * shows -- the first of {@code nameLocales} the product has one in (row 10.12) -- so a badge
+     * and its tab's own page agree on what a search finds.
+     */
+    public VariantAvailabilityCountsRow variantAvailabilityCounts(
+            UUID tenantId, UUID brandId, UUID locationId, List<String> nameLocales, @Nullable String search) {
         String searchPattern = search == null || search.isBlank() ? null : "%" + search.trim() + "%";
         return jdbc.sql("""
                 SELECT
@@ -1615,9 +1823,14 @@ public class JdbcCatalogStore {
                 FROM catalog.variants v
                 JOIN catalog.products p
                     ON p.id = v.product_id AND p.tenant_id = v.tenant_id AND p.brand_id = v.brand_id
-                LEFT JOIN catalog.translations t
-                    ON t.entity_type = 'PRODUCT' AND t.entity_id = p.id AND t.tenant_id = p.tenant_id
-                       AND t.brand_id = p.brand_id AND t.locale = :locale
+                LEFT JOIN LATERAL (
+                    SELECT t.name
+                    FROM catalog.translations t
+                    WHERE t.entity_type = 'PRODUCT' AND t.entity_id = p.id AND t.tenant_id = p.tenant_id
+                      AND t.brand_id = p.brand_id AND t.locale = ANY (CAST(:nameLocales AS text[]))
+                    ORDER BY array_position(CAST(:nameLocales AS text[]), t.locale)
+                    LIMIT 1
+                ) pn ON true
                 LEFT JOIN inventory.stock_items si
                     ON si.variant_id = v.id AND si.tenant_id = v.tenant_id AND si.location_id = :locationId
                 LEFT JOIN inventory.positions pos
@@ -1625,12 +1838,12 @@ public class JdbcCatalogStore {
                 WHERE v.tenant_id = :tenantId AND v.brand_id = :brandId
                   AND v.status = 'ACTIVE' AND p.status = 'ACTIVE'
                   AND (CAST(:search AS varchar) IS NULL
-                       OR t.name ILIKE :search OR v.sku ILIKE :search)
+                       OR pn.name ILIKE :search OR v.sku ILIKE :search)
                 """)
                 .param("tenantId", tenantId)
                 .param("brandId", brandId)
                 .param("locationId", locationId)
-                .param("locale", locale)
+                .param("nameLocales", nameLocales.toArray(String[]::new))
                 .param("search", searchPattern)
                 .query((row, number) -> {
                     long total = row.getLong("total");
@@ -2618,7 +2831,10 @@ public class JdbcCatalogStore {
                              WHERE lo.tenant_id = v.tenant_id AND lo.variant_id = v.id
                                AND lo.status = 'AVAILABLE') AS location_count,
                            (fc.id IS NULL OR fc.mxik_code IS NULL OR fc.package_code IS NULL
-                              OR fc.fiscal_unit_code IS NULL OR fc.fiscal_name IS NULL) AS unclassified
+                              OR fc.fiscal_unit_code IS NULL OR fc.fiscal_name IS NULL) AS unclassified,
+                           first_category.id AS category_id,
+                           fc.mxik_code AS mxik_code,
+                           fc.package_code AS package_code
                     FROM catalog.variants v
                     JOIN catalog.products p
                         ON p.id = v.product_id AND p.tenant_id = v.tenant_id AND p.brand_id = v.brand_id
@@ -2653,7 +2869,10 @@ public class JdbcCatalogStore {
                            CAST(NULL AS varchar) AS category_name,
                            0 AS location_count,
                            (fc.id IS NULL OR fc.mxik_code IS NULL OR fc.package_code IS NULL
-                              OR fc.fiscal_unit_code IS NULL OR fc.fiscal_name IS NULL) AS unclassified
+                              OR fc.fiscal_unit_code IS NULL OR fc.fiscal_name IS NULL) AS unclassified,
+                           CAST(NULL AS uuid) AS category_id,
+                           fc.mxik_code AS mxik_code,
+                           fc.package_code AS package_code
                     FROM catalog.modifier_options o
                     LEFT JOIN catalog.translations t
                         ON t.entity_type = 'MODIFIER_OPTION' AND t.entity_id = o.id AND t.tenant_id = o.tenant_id
@@ -2671,7 +2890,10 @@ public class JdbcCatalogStore {
                            CAST(NULL AS varchar) AS category_name,
                            0 AS location_count,
                            (fc.id IS NULL OR fc.mxik_code IS NULL OR fc.package_code IS NULL
-                              OR fc.fiscal_unit_code IS NULL OR fc.fiscal_name IS NULL) AS unclassified
+                              OR fc.fiscal_unit_code IS NULL OR fc.fiscal_name IS NULL) AS unclassified,
+                           CAST(NULL AS uuid) AS category_id,
+                           fc.mxik_code AS mxik_code,
+                           fc.package_code AS package_code
                     FROM catalog.fees f
                     LEFT JOIN catalog.fiscal_classifications fc
                         ON fc.priceable_type = 'FEE' AND fc.priceable_id = f.id AND fc.tenant_id = f.tenant_id
@@ -2691,7 +2913,10 @@ public class JdbcCatalogStore {
                         row.getString("name"),
                         row.getString("category_name"),
                         row.getInt("location_count"),
-                        row.getBoolean("unclassified")))
+                        row.getBoolean("unclassified"),
+                        row.getObject("category_id", UUID.class),
+                        row.getString("mxik_code"),
+                        row.getString("package_code")))
                 .list();
     }
 
@@ -2699,6 +2924,15 @@ public class JdbcCatalogStore {
      * One priceable node in the fiscal coverage report: what it is, what it is
      * called, where it sits, how many locations sell it, and whether ADR 0038's
      * four required fields are all present.
+     *
+     * @param categoryId  the category {@code categoryName} names (a variant's
+     *                    first category by sort order), or null for a node that
+     *                    sits in none — a modifier option, the delivery fee
+     * @param mxikCode    what the node's classification already holds for the
+     *                    ИКПУ, or null; carried so a backfill editor can show
+     *                    the half-filled rows it is completing and a write can
+     *                    leave alone what is already there
+     * @param packageCode the same for the package code
      */
     public record FiscalCoverageNodeRow(
             PriceableType nodeType,
@@ -2706,7 +2940,10 @@ public class JdbcCatalogStore {
             @Nullable String name,
             @Nullable String categoryName,
             int locationCount,
-            boolean unclassified) {}
+            boolean unclassified,
+            @Nullable UUID categoryId,
+            @Nullable String mxikCode,
+            @Nullable String packageCode) {}
 
     // --------------------------------------------------- row 4.2g: per-item sale schedule
 

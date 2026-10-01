@@ -1710,6 +1710,26 @@ class OnboardingServiceTests {
                     throw new UnsupportedOperationException(
                             "PolicyAuthor is not exercised by OnboardingServiceTests' own fixture");
                 }
+
+                @Override
+                public <P> uz.horecaos.platform.tenancy.api.ResolvedPolicy<P> author(
+                        uz.horecaos.platform.tenancy.api.PolicyKey<P> key,
+                        uz.horecaos.platform.iam.api.ResourceScope scope,
+                        P document,
+                        int expectedVersion,
+                        uz.horecaos.platform.audit.api.ActorRef authoredBy,
+                        String reason) {
+                    throw new UnsupportedOperationException(
+                            "PolicyAuthor is not exercised by OnboardingServiceTests' own fixture");
+                }
+
+                @Override
+                public int currentVersion(
+                        uz.horecaos.platform.tenancy.api.PolicyKey<?> key,
+                        uz.horecaos.platform.iam.api.ResourceScope scope) {
+                    throw new UnsupportedOperationException(
+                            "PolicyAuthor is not exercised by OnboardingServiceTests' own fixture");
+                }
             };
 
     /** A step whose real business rule is tested elsewhere; here it just completes. */

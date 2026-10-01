@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { LocationScope } from '../core/api/operations-paths';
 import { CurrentLocation } from '../core/auth/current-location';
 import { I18n } from '../core/i18n/i18n';
-import { PLATFORM_DEFAULT_LATENESS_POLICY } from '../core/lateness-policy';
+import { LatenessPolicy, PLATFORM_DEFAULT_LATENESS_POLICY } from '../core/lateness-policy';
 import { LatenessPolicyApi } from '../core/lateness-policy-api';
 import { RealtimeClient, RealtimeFrame } from '../core/realtime/realtime-client';
 import {
@@ -62,6 +62,8 @@ describe('WallboardVduPage', () => {
       readonly denied?: boolean;
       readonly stations?: readonly StationResponse[];
       readonly vduSpy?: ReturnType<typeof vi.fn>;
+      readonly policy?: LatenessPolicy;
+      readonly read?: ReturnType<typeof vi.fn>;
     } = {},
   ): { frameListeners: Array<(frame: RealtimeFrame) => void>; vduSpy: ReturnType<typeof vi.fn> } {
     const frameListeners: Array<(frame: RealtimeFrame) => void> = [];
@@ -91,7 +93,14 @@ describe('WallboardVduPage', () => {
         },
         {
           provide: LatenessPolicyApi,
-          useValue: { resolve: vi.fn().mockResolvedValue(PLATFORM_DEFAULT_LATENESS_POLICY) },
+          useValue: {
+            resolve: vi
+              .fn()
+              .mockResolvedValue(overrides.policy ?? PLATFORM_DEFAULT_LATENESS_POLICY),
+            read:
+              overrides.read ??
+              vi.fn().mockResolvedValue(overrides.policy ?? PLATFORM_DEFAULT_LATENESS_POLICY),
+          },
         },
         { provide: RealtimeClient, useValue: { onFrame, state: signal('open') } },
       ],
@@ -129,6 +138,103 @@ describe('WallboardVduPage', () => {
       '[data-testid="wallboard-vdu-external-reference"]',
     );
     expect(reference?.textContent?.trim()).toBe('YE-2291-04');
+  });
+
+  function cardOf(label: string): HTMLElement {
+    return Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLElement>(
+        '[data-testid="wallboard-vdu-card"]',
+      ),
+    ).find(
+      (card) =>
+        card.querySelector('[data-testid="wallboard-vdu-sequence"]')?.textContent?.trim() === label,
+    ) as HTMLElement;
+  }
+
+  it('warns a ticket by its own fulfilment mode’s at-risk window (rows X.39 / 10.3b)', async () => {
+    // Every ticket is due in five minutes; delivery warns ten minutes ahead, pickup two, dine-in none.
+    const dueInFiveMinutes = new Date(Date.now() + 5 * 60_000).toISOString();
+    setUp(
+      {
+        tickets: [
+          ticket({
+            ticketId: 'd',
+            sequenceLabel: 'D',
+            fulfilmentMode: 'DELIVERY',
+            targetReadyAt: dueInFiveMinutes,
+          }),
+          ticket({
+            ticketId: 'p',
+            sequenceLabel: 'P',
+            fulfilmentMode: 'PICKUP',
+            targetReadyAt: dueInFiveMinutes,
+          }),
+          ticket({
+            ticketId: 'h',
+            sequenceLabel: 'H',
+            fulfilmentMode: 'DINE_IN',
+            targetReadyAt: dueInFiveMinutes,
+          }),
+        ],
+      },
+      {
+        policy: {
+          delivery: {
+            atRiskBeforeSeconds: 600,
+            lateAfterSeconds: 0,
+            noPromiseFallbackSeconds: 2700,
+          },
+          pickup: { atRiskBeforeSeconds: 120, lateAfterSeconds: 0, noPromiseFallbackSeconds: 2700 },
+          dineIn: { atRiskBeforeSeconds: 0, lateAfterSeconds: 0, noPromiseFallbackSeconds: 2700 },
+        },
+      },
+    );
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(cardOf('D').classList.contains('wv__card--warning')).toBe(true);
+    expect(cardOf('P').classList.contains('wv__card--warning')).toBe(false);
+    expect(cardOf('H').classList.contains('wv__card--warning')).toBe(false);
+  });
+
+  it('paints a breached ticket with its own mode’s grace: the same overdue ticket is late for pickup only', async () => {
+    const overdueByThirtySeconds = new Date(Date.now() - 30_000).toISOString();
+    setUp(
+      {
+        tickets: [
+          ticket({
+            ticketId: 'd',
+            sequenceLabel: 'D',
+            fulfilmentMode: 'DELIVERY',
+            targetReadyAt: overdueByThirtySeconds,
+          }),
+          ticket({
+            ticketId: 'p',
+            sequenceLabel: 'P',
+            fulfilmentMode: 'PICKUP',
+            targetReadyAt: overdueByThirtySeconds,
+          }),
+        ],
+      },
+      {
+        policy: {
+          delivery: {
+            atRiskBeforeSeconds: 300,
+            lateAfterSeconds: 120,
+            noPromiseFallbackSeconds: 2700,
+          },
+          pickup: { atRiskBeforeSeconds: 300, lateAfterSeconds: 0, noPromiseFallbackSeconds: 2700 },
+          dineIn: { atRiskBeforeSeconds: 300, lateAfterSeconds: 0, noPromiseFallbackSeconds: 2700 },
+        },
+      },
+    );
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(cardOf('D').classList.contains('wv__card--danger')).toBe(false);
+    expect(cardOf('P').classList.contains('wv__card--danger')).toBe(true);
   });
 
   it('the station filter narrows the wall to one station, re-fetching with it set', async () => {
@@ -222,5 +328,75 @@ describe('WallboardVduPage', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+  describe('follows a policy edit made after the wall was opened', () => {
+    const GRACE_ONE_HOUR: LatenessPolicy = {
+      delivery: {
+        atRiskBeforeSeconds: 300,
+        lateAfterSeconds: 3600,
+        noPromiseFallbackSeconds: 2700,
+      },
+      pickup: { atRiskBeforeSeconds: 300, lateAfterSeconds: 3600, noPromiseFallbackSeconds: 2700 },
+      dineIn: { atRiskBeforeSeconds: 300, lateAfterSeconds: 3600, noPromiseFallbackSeconds: 2700 },
+    };
+
+    function isDanger(): boolean {
+      return (fixture.nativeElement as HTMLElement)
+        .querySelector('[data-testid="wallboard-vdu-card"]')!
+        .classList.contains('wv__card--danger');
+    }
+
+    function overdueBoard(): VduBoardResponse {
+      return {
+        tickets: [
+          ticket({
+            ticketId: 'd',
+            sequenceLabel: 'D',
+            targetReadyAt: new Date(Date.now() - 30_000).toISOString(),
+          }),
+        ],
+      };
+    }
+
+    it('re-reads the policy on the poll: a grace published later stops the breach', async () => {
+      vi.useFakeTimers();
+      try {
+        const read = vi
+          .fn()
+          .mockResolvedValueOnce(PLATFORM_DEFAULT_LATENESS_POLICY)
+          .mockResolvedValue(GRACE_ONE_HOUR);
+        setUp(overdueBoard(), { read });
+        fixture.detectChanges();
+        await vi.advanceTimersByTimeAsync(0);
+        fixture.detectChanges();
+        expect(isDanger()).toBe(true);
+
+        await vi.advanceTimersByTimeAsync(70_000);
+        fixture.detectChanges();
+
+        expect(isDanger()).toBe(false);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('does not take a failed first read for the loaded policy: the next poll asks again', async () => {
+      vi.useFakeTimers();
+      try {
+        const read = vi.fn().mockResolvedValueOnce(null).mockResolvedValue(GRACE_ONE_HOUR);
+        setUp(overdueBoard(), { read });
+        fixture.detectChanges();
+        await vi.advanceTimersByTimeAsync(0);
+        fixture.detectChanges();
+        expect(isDanger()).toBe(true);
+
+        await vi.advanceTimersByTimeAsync(11_000);
+        fixture.detectChanges();
+
+        expect(isDanger()).toBe(false);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 });

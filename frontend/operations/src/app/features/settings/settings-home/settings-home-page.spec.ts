@@ -481,6 +481,143 @@ describe('SettingsHomePage', () => {
     });
   });
 
+  describe('batch 16: fulfilment-mode and service-binding coverage, and per-item links', () => {
+    type Check = ValidationOutcome['checks'][number];
+
+    const NO_MODE: Check = {
+      stepKey: 'CHANNEL_FULFILLMENT_COVERAGE_VALIDATE',
+      passed: false,
+      errorCode: 'CHANNEL_NO_FULFILLMENT_MODE',
+      detail: 'Sales channel STOREFRONT has no enabled fulfilment mode',
+      locationId: null,
+      subject: { type: 'SALES_CHANNEL', id: 'channel-storefront' },
+    };
+    const NO_SERVICEABLE: Check = {
+      stepKey: 'CHANNEL_FULFILLMENT_COVERAGE_VALIDATE',
+      passed: false,
+      errorCode: 'CHANNEL_NO_SERVICEABLE_MODE',
+      detail:
+        'Sales channel KIOSK has enabled fulfilment modes, but none has a schedule bound at an active location the channel serves',
+      locationId: null,
+      subject: { type: 'SALES_CHANNEL', id: 'channel-kiosk' },
+    };
+    const NO_SCHEDULE: Check = {
+      stepKey: 'LOCATION_SERVICE_BINDING_COVERAGE_VALIDATE',
+      passed: false,
+      errorCode: 'LOCATION_NO_SERVICE_SCHEDULE',
+      detail: 'Location MAIN01 has no schedule bound for DELIVERY, PICKUP',
+      locationId: 'location-main',
+    };
+
+    function outcomeOf(...checks: Check[]): ValidationOutcome {
+      return { allPassed: false, checks };
+    }
+
+    function hrefs(fixture: ComponentFixture<SettingsHomePage>): (string | null)[] {
+      return [...fixture.nativeElement.querySelectorAll('.readiness__row a')].map(
+        (link: HTMLAnchorElement) => link.getAttribute('href'),
+      );
+    }
+
+    // The per-channel setup hub configures a Telegram bot, a web hostname or a
+    // kiosk stub; it has no control that enables a fulfilment mode, binds a
+    // location or sets a payment method, so a channel finding must not open it.
+    // The sales-channels screen holds the matrices and the location list.
+    it('links a channel with no fulfilment mode to the sales-channels screen where the modes are enabled', async () => {
+      const fixture = await render({ validate: () => Promise.resolve(outcomeOf(NO_MODE)) });
+
+      expect(hrefs(fixture)).toEqual(['/settings/sales-channels']);
+      const row = fixture.nativeElement.querySelector('.readiness__row')?.textContent ?? '';
+      expect(row).toContain('no fulfilment mode enabled');
+      expect(row).toContain('STOREFRONT');
+    });
+
+    it('links a channel whose modes have no hours at any location to the sales-channels screen as well', async () => {
+      const fixture = await render({
+        validate: () => Promise.resolve(outcomeOf(NO_SERVICEABLE)),
+      });
+
+      expect(hrefs(fixture)).toEqual(['/settings/sales-channels']);
+      expect(fixture.nativeElement.querySelector('.readiness__row')?.textContent).toContain(
+        'none has opening hours bound',
+      );
+    });
+
+    it('keeps two channels with the same sentence as two rows, both linking to the sales-channels screen', async () => {
+      const kiosk: Check = {
+        ...NO_MODE,
+        detail: 'Sales channel KIOSK has no enabled fulfilment mode',
+        subject: { type: 'SALES_CHANNEL', id: 'channel-kiosk' },
+      };
+      const fixture = await render({
+        validate: () => Promise.resolve(outcomeOf(NO_MODE, kiosk)),
+      });
+
+      expect(hrefs(fixture)).toEqual(['/settings/sales-channels', '/settings/sales-channels']);
+      const rows = [...fixture.nativeElement.querySelectorAll('.readiness__row')].map(
+        (row: HTMLElement) => row.textContent ?? '',
+      );
+      expect(rows[0]).toContain('STOREFRONT');
+      expect(rows[1]).toContain('KIOSK');
+    });
+
+    it('keeps a no-payment-method finding that names its channel on the sales-channels screen', async () => {
+      const fixture = await render({
+        validate: () =>
+          Promise.resolve(
+            outcomeOf({
+              stepKey: 'CHANNEL_PAYMENT_COVERAGE_VALIDATE',
+              passed: false,
+              errorCode: 'CHANNEL_NO_PAYMENT_METHOD',
+              detail: 'Sales channel STOREFRONT has no enabled payment method',
+              locationId: null,
+              subject: { type: 'SALES_CHANNEL', id: 'channel-storefront' },
+            }),
+          ),
+      });
+
+      expect(hrefs(fixture)).toEqual(['/settings/sales-channels']);
+    });
+
+    it('keeps linking by error code when the server sends no subject (an older server)', async () => {
+      const { subject: _omitted, ...withoutSubject } = NO_MODE;
+      const fixture = await render({
+        validate: () => Promise.resolve(outcomeOf(withoutSubject)),
+      });
+
+      expect(hrefs(fixture)).toEqual(['/settings/sales-channels']);
+    });
+
+    it('does not guess a screen for a subject type it does not know', async () => {
+      const fixture = await render({
+        validate: () =>
+          Promise.resolve(
+            outcomeOf({ ...NO_MODE, subject: { type: 'FUTURE_THING', id: 'thing-1' } }),
+          ),
+      });
+
+      expect(hrefs(fixture)).toEqual(['/settings/sales-channels']);
+    });
+
+    it('links a location with no schedule bound into that location and names the missing modes', async () => {
+      const fixture = await render({ validate: () => Promise.resolve(outcomeOf(NO_SCHEDULE)) });
+
+      expect(hrefs(fixture)).toEqual(['/settings/locations/location-main']);
+      const row = fixture.nativeElement.querySelector('.readiness__row')?.textContent ?? '';
+      expect(row).toContain('no opening hours bound');
+      expect(row).toContain('DELIVERY, PICKUP');
+    });
+
+    it('counts both new checks as blocking rows, not advisory ones', async () => {
+      const fixture = await render({
+        validate: () => Promise.resolve(outcomeOf(NO_MODE, NO_SCHEDULE)),
+      });
+
+      expect(fixture.nativeElement.querySelectorAll('.readiness__row').length).toBe(2);
+      expect(fixture.nativeElement.querySelector('.readiness__advisory')).toBeNull();
+    });
+  });
+
   it('renders the denied state on a 403 from the readiness check', async () => {
     const fixture = await render({
       validate: () => Promise.reject(new ApiError('INSUFFICIENT_CAPABILITY', 403, null, null)),

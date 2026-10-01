@@ -3,60 +3,17 @@
     <!-- §2.10: "A selection bar replaces the filter row while anything is
          selected" — never stacked above it, so the operator's attention is
          on exactly one toolbar at a time. -->
-    <div class="order-queue__bulk-bar" data-testid="order-queue-bulk-bar">
-      <span class="q-body-sm" data-testid="order-queue-bulk-count">{{
-        'orders.queue.selection.selected' | t: { count: selectionCount() }
-      }}</span>
-
-      @if (bulkAdvanceTargetStatus(); as target) {
-        <button
-          type="button"
-          class="order-queue__bulk-action"
-          [disabled]="bulkBusy()"
-          (click)="onBulkAdvanceClick()"
-          data-testid="order-queue-bulk-advance"
-        >
-          {{ bulkAdvanceLabel() }}
-        </button>
-      } @else if (selectionCount() > 1) {
-        <span class="q-caption order-queue__bulk-unavailable">{{
-          'orders.queue.bulk.advanceUnavailable' | t
-        }}</span>
-      }
-
-      @if (canBulkCancel()) {
-        <button
-          type="button"
-          class="order-queue__bulk-action order-queue__bulk-action--danger"
-          [disabled]="bulkBusy()"
-          (click)="onBulkCancelClick()"
-          data-testid="order-queue-bulk-cancel"
-        >
-          {{ 'orders.queue.bulk.cancel' | t }}
-        </button>
-      } @else if (bulkCancelUnavailableMessage(); as message) {
-        <span
-          class="q-caption order-queue__bulk-unavailable"
-          data-testid="order-queue-bulk-cancel-unavailable"
-          >{{ message }}</span
-        >
-      }
-
-      <!-- §2.10: bulk courier assignment is explicitly out of scope — said
-           here rather than offered as a button that would 400. -->
-      <span class="q-caption order-queue__bulk-note" data-testid="order-queue-bulk-courier-note">{{
-        'orders.queue.bulk.courierNote' | t
-      }}</span>
-
-      <button
-        type="button"
-        class="order-queue__bulk-clear"
-        (click)="clearSelection()"
-        data-testid="order-queue-bulk-clear"
-      >
-        {{ 'orders.queue.selection.clear' | t }}
-      </button>
-    </div>
+    <q-order-queue-bulk-bar
+      [selectionCount]="selectionCount()"
+      [bulkAdvanceTargetStatus]="bulkAdvanceTargetStatus()"
+      [bulkAdvanceLabel]="bulkAdvanceLabel()"
+      [canBulkCancel]="canBulkCancel()"
+      [bulkCancelUnavailableMessage]="bulkCancelUnavailableMessage()"
+      [bulkBusy]="bulkBusy()"
+      (advanceRequested)="onBulkAdvanceClick()"
+      (cancelRequested)="onBulkCancelClick()"
+      (clearRequested)="clearSelection()"
+    />
   } @else {
     <q-filter-bar
       [hasSecondary]="true"
@@ -82,6 +39,35 @@
           [end]="filters().dateRange?.end ?? null"
           (rangeChange)="onDateRangeChange($event)"
         />
+
+        <!-- «Все филиалы» (wave 16, gap map row 1.1): offered only to a principal who
+             reads the whole brand — a branch-scoped operator never sees it. -->
+        @if (canViewAllBranches()) {
+          <select
+            class="order-queue__select"
+            [value]="filters().allBranches ? 'ALL' : 'ONE'"
+            (change)="onBranchModeChange($any($event.target).value)"
+            [attr.aria-label]="'orders.queue.filter.branchMode.label' | t"
+            data-testid="order-queue-filter-branchMode"
+          >
+            <option value="ONE">{{ 'orders.queue.filter.branchMode.one' | t }}</option>
+            <option value="ALL">{{ 'orders.queue.filter.branchMode.all' | t }}</option>
+          </select>
+        }
+        @if (allBranchesActive()) {
+          <select
+            class="order-queue__select"
+            [value]="filters().locationId ?? ''"
+            (change)="onBranchChange($any($event.target).value)"
+            [attr.aria-label]="'orders.queue.filter.branch.label' | t"
+            data-testid="order-queue-filter-branch"
+          >
+            <option value="">{{ 'orders.queue.filter.branch.all' | t }}</option>
+            @for (branch of branchOptions(); track branch.id) {
+              <option [value]="branch.id">{{ branch.displayName }}</option>
+            }
+          </select>
+        }
 
         <select
           class="order-queue__select"
@@ -174,53 +160,93 @@
           <option value="HORECAOS">{{ 'orders.queue.filter.origin.HORECAOS' | t }}</option>
           <option value="MARKETPLACE">{{ 'orders.queue.filter.origin.MARKETPLACE' | t }}</option>
         </select>
+
+        <!-- «Агрегатор» (wave 16, gap map row 1.1c): one provider binding, finer than the
+             «Источник» toggle above. Options are the bindings the orders in scope arrived
+             through, read on first focus. -->
+        <select
+          class="order-queue__select"
+          [value]="filters().marketplaceBindingId ?? ''"
+          (focus)="ensureBindingOptionsLoaded()"
+          (change)="onBindingChange($any($event.target).value)"
+          [attr.aria-label]="'orders.queue.filter.binding.label' | t"
+          data-testid="order-queue-filter-binding"
+        >
+          <option value="">{{ 'orders.queue.filter.binding.all' | t }}</option>
+          @if (filters().marketplaceBindingId; as selectedBinding) {
+            @if (!bindingKnown(selectedBinding)) {
+              <option [value]="selectedBinding">{{ bindingLabel(selectedBinding) }}</option>
+            }
+          }
+          @for (binding of bindingOptions(); track binding.bindingId) {
+            <option [value]="binding.bindingId">{{ bindingOptionLabel(binding) }}</option>
+          }
+        </select>
+
+        <!-- «Фискализация» (wave 16, gap map row 1.1c): fiscal.fiscal_documents.status. -->
+        <select
+          class="order-queue__select"
+          [value]="filters().fiscalStatus ?? ''"
+          (change)="onFiscalStatusChange($any($event.target).value)"
+          [attr.aria-label]="'orders.queue.filter.fiscal.label' | t"
+          data-testid="order-queue-filter-fiscal"
+        >
+          <option value="">{{ 'orders.queue.filter.fiscal.all' | t }}</option>
+          @for (status of fiscalStatusOptions; track status) {
+            <option [value]="status">{{ fiscalStatusLabel(status) }}</option>
+          }
+        </select>
+
+        <!-- The three secondary toggles orders.md §2.4 lists beside «Мои заказы» (wave 16). -->
+        <label class="order-queue__toggle">
+          <input
+            type="checkbox"
+            [checked]="filters().lateOnly"
+            (change)="onLateOnlyToggle()"
+            data-testid="order-queue-filter-late"
+          />
+          {{ 'orders.queue.filter.late.label' | t }}
+        </label>
+        <label class="order-queue__toggle">
+          <input
+            type="checkbox"
+            [checked]="filters().problemOnly"
+            (change)="onProblemOnlyToggle()"
+            data-testid="order-queue-filter-problem"
+          />
+          {{ 'orders.queue.filter.problem.label' | t }}
+        </label>
+        <label class="order-queue__toggle">
+          <input
+            type="checkbox"
+            [checked]="filters().callbackRequested"
+            (change)="onCallbackRequestedToggle()"
+            data-testid="order-queue-filter-callback"
+          />
+          {{ 'orders.queue.filter.callback.label' | t }}
+        </label>
       </ng-container>
     </q-filter-bar>
   }
 
-  <div class="order-queue__toolbar">
-    <div class="order-queue__tabs" role="tablist">
-      @for (tab of tabs; track tab.id) {
-        <button
-          type="button"
-          role="tab"
-          class="tab"
-          [class.tab--active]="activeTab() === tab.id"
-          [attr.aria-selected]="activeTab() === tab.id"
-          (click)="selectTab(tab.id)"
-        >
-          {{ tab.labelKey | t }}
-          @if (tabCount(tab.id) > 0) {
-            <span class="tab__count" [class.tab__count--attention]="tab.id === 'attention'">{{
-              tabCount(tab.id)
-            }}</span>
-          }
-        </button>
-      }
-    </div>
+  @if (bulkUnavailableOnAllBranches()) {
+    <!-- The selection column is withheld on «Все филиалы»: bulk actions are one branch's endpoint. -->
+    <p class="q-caption order-queue__bulk-unavailable" data-testid="order-queue-bulk-branch-note">
+      {{ 'orders.queue.allBranches.bulkNote' | t }}
+    </p>
+  }
 
-    <div class="order-queue__status">
-      <q-connection-state-banner [state]="realtime.state()" />
-      @if (formatUpdatedAt(); as stamp) {
-        <span
-          class="order-queue__stamp q-caption q-tnum"
-          [class.order-queue__stamp--pulse]="refreshing()"
-        >
-          {{ stamp }}
-        </span>
-        <q-stale-indicator [updatedAt]="lastUpdatedAt()" />
-      }
-      <button
-        type="button"
-        class="order-queue__refresh"
-        (click)="manualRefresh()"
-        [attr.aria-label]="'orders.queue.refresh' | t"
-        [attr.title]="'orders.queue.refresh' | t"
-      >
-        <span aria-hidden="true">⟳</span>
-      </button>
-    </div>
-  </div>
+  <q-order-queue-toolbar
+    [tabs]="tabs"
+    [activeTab]="activeTab()"
+    [tabCounts]="tabCounts()"
+    [connectionState]="realtime.state()"
+    [updatedStamp]="formatUpdatedAt()"
+    [refreshing]="refreshing()"
+    [lastUpdatedAt]="lastUpdatedAt()"
+    (tabSelected)="selectTab($event)"
+    (refreshRequested)="manualRefresh()"
+  />
 
   @if (lastError(); as error) {
     <div class="order-queue__error-band" role="alert">
@@ -283,6 +309,9 @@
             }
             <th class="order-queue__rail-col" aria-hidden="true"></th>
             <th>{{ 'orders.column.number' | t }}</th>
+            @if (allBranchesActive()) {
+              <th data-testid="order-queue-branch-column">{{ 'orders.column.branch' | t }}</th>
+            }
             <th>{{ 'orders.column.time' | t }}</th>
             <th>{{ 'orders.column.type' | t }}</th>
             <th class="order-queue__num-col">{{ 'orders.column.total' | t }}</th>
@@ -307,8 +336,8 @@
               [style.--q-sla-late-text]="lateColourFor(row)"
               tabindex="0"
               data-testid="order-row"
-              (click)="openOrder(row.order.orderId)"
-              (keydown.enter)="openOrder(row.order.orderId)"
+              (click)="openOrder(row.order.orderId, row.order.locationId)"
+              (keydown.enter)="openOrder(row.order.orderId, row.order.locationId)"
             >
               @if (canSelectOrders()) {
                 <td class="order-queue__select-col" (click)="$event.stopPropagation()">
@@ -341,6 +370,9 @@
                   </div>
                 }
               </td>
+              @if (allBranchesActive()) {
+                <td data-testid="order-row-branch">{{ branchLabel(row.order) }}</td>
+              }
               <td class="q-tnum">{{ formatCreated(row.createdAt) }}</td>
               <td>
                 {{ typeLabel(row.order) }}
@@ -365,80 +397,21 @@
                 />
               </td>
               <td class="order-queue__actions-col" data-testid="order-row-actions">
-                <div class="row-actions">
-                  @for (
-                    action of inlineActions(row.order);
-                    track action.action + (action.targetStatus ?? '')
-                  ) {
-                    <button
-                      type="button"
-                      class="row-actions__inline"
-                      [disabled]="isRowBusy(row.order.orderId)"
-                      (click)="onActionClick(row.order, action, $event)"
-                      [attr.data-testid]="'order-row-action-' + action.action"
-                    >
-                      {{ actionLabel(row.order, action) }}
-                    </button>
-                  }
-                  <!-- §2.9: the overflow trigger renders on every row, terminal
-                       orders included — a closed actions[] never means there is
-                       nothing to do, only nothing left to mutate. Открыть and
-                       Копировать номер are client-only, capability-free reads
-                       (§2.9's general overflow list), so they lead every menu,
-                       terminal or not, ahead of whatever OrderActionsPolicy
-                       supplied for this status. -->
-                  <div class="row-actions__overflow">
-                    <button
-                      type="button"
-                      class="row-actions__overflow-trigger"
-                      [disabled]="isRowBusy(row.order.orderId)"
-                      (click)="toggleOverflow(row.order.orderId, $event)"
-                      [attr.aria-label]="'orders.action.overflow' | t"
-                      [attr.aria-expanded]="openOverflowFor() === row.order.orderId"
-                      data-testid="order-row-overflow-trigger"
-                    >
-                      <span aria-hidden="true">⋯</span>
-                    </button>
-                    @if (openOverflowFor() === row.order.orderId) {
-                      <div class="row-actions__overflow-menu" data-testid="order-row-overflow-menu">
-                        <button
-                          type="button"
-                          class="row-actions__overflow-item"
-                          (click)="openFromOverflow(row.order, $event)"
-                          data-testid="order-row-action-OPEN"
-                        >
-                          {{ 'orders.action.open' | t }}
-                        </button>
-                        <button
-                          type="button"
-                          class="row-actions__overflow-item"
-                          (click)="copyOrderNumber(row.order, $event)"
-                          data-testid="order-row-action-COPY_NUMBER"
-                        >
-                          {{ 'orders.action.copyNumber' | t }}
-                        </button>
-                        @for (
-                          action of overflowActions(row.order);
-                          track action.action + (action.targetStatus ?? '')
-                        ) {
-                          <button
-                            type="button"
-                            class="row-actions__overflow-item"
-                            (click)="onActionClick(row.order, action, $event)"
-                            [attr.data-testid]="'order-row-action-' + action.action"
-                          >
-                            {{ actionLabel(row.order, action) }}
-                          </button>
-                        }
-                      </div>
-                    }
-                  </div>
-                </div>
+                <q-order-row-actions
+                  [inlineActions]="inlineActionItems(row.order)"
+                  [overflowActions]="overflowActionItems(row.order)"
+                  [busy]="isRowBusy(row.order.orderId)"
+                  [overflowOpen]="openOverflowFor() === row.order.orderId"
+                  (actionClicked)="onActionClick(row.order, $event.action, $event.event)"
+                  (overflowToggled)="toggleOverflow(row.order.orderId, $event)"
+                  (openClicked)="openFromOverflow(row.order, $event)"
+                  (copyClicked)="copyOrderNumber(row.order, $event)"
+                />
               </td>
             </tr>
           } @empty {
             <tr class="order-queue__empty-row">
-              <td [attr.colspan]="canSelectOrders() ? 10 : 9">
+              <td [attr.colspan]="columnCount()">
                 <p class="q-body-sm" data-testid="order-queue-empty">{{ emptyMessage() }}</p>
               </td>
             </tr>
@@ -541,47 +514,13 @@
        проблемы" plus a named-item list plus Повторить проблемные does not
        fit one. -->
   @if (bulkResult(); as result) {
-    <div class="order-queue__bulk-result" role="status" data-testid="order-queue-bulk-result">
-      @if (result.failedCount === 0) {
-        <p class="q-body-sm">
-          {{ 'orders.queue.bulk.result.allApplied' | t: { count: result.appliedCount } }}
-        </p>
-      } @else {
-        <p class="q-body-sm">
-          {{
-            'orders.queue.bulk.result.summary'
-              | t: { applied: result.appliedCount, failed: result.failedCount }
-          }}
-        </p>
-        <ul class="order-queue__bulk-result-items">
-          @for (item of result.items; track item.orderId) {
-            @if (item.itemStatus === 'FAILED') {
-              <li data-testid="order-queue-bulk-result-item">
-                <span class="q-mono">{{ bulkResultItemLabel(item.orderId) }}</span>
-                — {{ bulkProblemLabel(item.itemProblemCode) }}
-              </li>
-            }
-          }
-        </ul>
-        <button
-          type="button"
-          class="order-queue__bulk-retry"
-          [disabled]="bulkBusy()"
-          (click)="retryFailedBulkItems()"
-          data-testid="order-queue-bulk-retry"
-        >
-          {{ 'orders.queue.bulk.result.retry' | t }}
-        </button>
-      }
-      <button
-        type="button"
-        class="order-queue__bulk-result-dismiss"
-        (click)="dismissBulkResult()"
-        [attr.aria-label]="'orders.queue.bulk.result.dismiss' | t"
-        data-testid="order-queue-bulk-result-dismiss"
-      >
-        ×
-      </button>
-    </div>
+    <q-order-queue-bulk-result
+      [result]="result"
+      [bulkBusy]="bulkBusy()"
+      [itemLabel]="bulkItemLabeller"
+      [problemLabel]="bulkProblemLabeller"
+      (retryRequested)="retryFailedBulkItems()"
+      (dismissRequested)="dismissBulkResult()"
+    />
   }
 </div>

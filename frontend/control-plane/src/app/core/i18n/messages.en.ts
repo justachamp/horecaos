@@ -273,9 +273,6 @@ export const en = {
   'state.denied.body':
     'Access is granted per capability. Ask a platform administrator for the capability this section needs.',
 
-  'state.notBuilt.title': 'Not built yet',
-  'state.notBuilt.body': 'This section has no screen yet.',
-
   'overview.title': 'Platform health',
   'overview.lead':
     'Tenants, orders, fiscal receipts and queues across every tenant, counted at the moment you open it.',
@@ -600,9 +597,12 @@ export const en = {
   'onboarding.hint.SERVICEABILITY_UNAVAILABLE':
     'Delivery coverage could not be checked just now. This retries on its own.',
   'onboarding.hint.NOT_REQUESTED': 'No sample menu was asked for when this run was started.',
-  'onboarding.hint.SAMPLE_MENU_REJECTED': 'The sample menu did not pass catalogue validation and was not published.',
-  'onboarding.hint.SAMPLE_MENU_UNSUPPORTED_CURRENCY': 'The sample menu is priced in UZS only, and this tenant trades in another currency, so nothing was created.',
-  'onboarding.hint.SAMPLE_PRICING_REFUSED': 'The sample menu could not be priced: the tenant already has a live price book at priority 0. Give one of them a higher priority, or end its window, then resume.',
+  'onboarding.hint.SAMPLE_MENU_REJECTED':
+    'The sample menu did not pass catalogue validation and was not published.',
+  'onboarding.hint.SAMPLE_MENU_UNSUPPORTED_CURRENCY':
+    'The sample menu is priced in UZS only, and this tenant trades in another currency, so nothing was created.',
+  'onboarding.hint.SAMPLE_PRICING_REFUSED':
+    'The sample menu could not be priced: the tenant already has a live price book at priority 0. Give one of them a higher priority, or end its window, then resume.',
   'onboarding.hint.TENANT_MISSING': 'The tenant record was not found.',
   'onboarding.hint.TRANSIENT_INFRASTRUCTURE': 'A temporary failure. This retries on its own.',
   'onboarding.hint.open': 'Open',
@@ -623,7 +623,8 @@ export const en = {
   'onboarding.template.label':
     'New runs follow the {code} template, version {version}: {count} required steps.',
   'onboarding.start.ownerLocale': 'Invitation language',
-  'onboarding.start.sampleMenu': 'Create and publish a sample menu so we can check everything works; the tenant replaces it later',
+  'onboarding.start.sampleMenu':
+    'Create and publish a sample menu so we can check everything works; the tenant replaces it later',
   'onboarding.invitation.title': 'Owner invitation',
   'onboarding.invitation.state.QUEUED': 'Waiting to be sent',
   'onboarding.invitation.state.SENT': 'Sent',
@@ -691,7 +692,6 @@ export const en = {
   'ownerInvitations.column.acceptedAt': 'Account set up',
   'ownerInvitations.column.attempts': 'Attempts',
   'ownerInvitations.column.lastError': 'Last failure',
-  'onboarding.invitation.recipient': 'Sent to',
   'onboarding.invitation.timeline': 'History',
   'onboarding.invitation.timelineEmpty':
     'This invitation predates the history, so nothing was recorded for it.',
@@ -832,7 +832,6 @@ export const en = {
   'deadLetters.title': 'Dead letters & replay',
   'deadLetters.lead':
     'Messages that failed after every retry: events the platform could not publish, and events a consumer could not process. Retry or resolve each one, with a reason.',
-  'deadLetters.empty': 'No dead-lettered events.',
   'deadLetters.column.event': 'Event',
   'deadLetters.column.type': 'Type',
   'deadLetters.column.attempts': 'Attempts',
@@ -1110,9 +1109,7 @@ export const en = {
   'staff.revokeTenant.confirm': 'Revoke',
   'staff.revokeTenant.done': 'Revoked.',
   'staff.grant.roleChoose': 'Choose a role',
-  'staff.grant.brand': 'Brand',
   'staff.grant.chooseBrand': 'Choose a brand',
-  'staff.grant.location': 'Location',
   'staff.grant.chooseLocation': 'Choose a location',
   'staff.approvals.title': 'Pending approvals',
   'staff.approvals.lead':
@@ -1152,7 +1149,6 @@ export const en = {
   'auditLog.column.outcome': 'Outcome',
   'auditLog.actor.system': 'System',
   'auditLog.filter.action': 'Action code',
-  'auditLog.filter.outcome': 'Outcome',
   'auditLog.filter.anyOutcome': 'Any outcome',
   'auditLog.filter.apply': 'Filter',
   'auditLog.outcome.SUCCEEDED': 'Succeeded',
@@ -1530,9 +1526,6 @@ export const en = {
   'statements.void.open': 'Void',
   'statements.void.submit': 'Void the statement',
   'statements.void.done': 'Statement {number} voided.',
-  'statements.wallet.title': 'Prepaid wallet',
-  'statements.wallet.body':
-    'Not built. How tenants pay HorecaOS, and how money paid in advance is taxed, are not decided yet, so there is no balance, top-up or credit expiry to show.',
   'dunning.lead':
     'Every tenant that is late paying or suspended, how long it has been there, and what each stage restricts. Nothing moves a tenant by itself: after two weeks late an incident asks a person to decide.',
   'statements.column.paid': 'Paid',
@@ -1542,35 +1535,43 @@ export const en = {
   'wallet.paid': 'Paid balance',
   'wallet.paid.hint': 'Money the tenant paid HorecaOS. It never lapses and can be refunded.',
   'wallet.bonus': 'Bonus balance',
-  'wallet.bonus.hint': 'Money HorecaOS granted, and what a statement could draw on now. Spent before paid money, lapses on each grant’s date, never refunded.',
-  'wallet.bonus.inLedger': 'The ledger sums {amount}: a grant past its date is counted there until the sweep writes its lapse.',
+  'wallet.bonus.hint':
+    'Money HorecaOS granted, and what a statement could draw on now. Spent before paid money, lapses on each grant’s date, never refunded.',
+  'wallet.bonus.inLedger':
+    'The ledger sums {amount}: a grant past its date is counted there until the sweep writes its lapse.',
   'wallet.method': 'Collected by',
   'wallet.method.hint': 'What pays a statement’s remainder once the wallet has been drawn on.',
   'wallet.method.INVOICE': 'Invoice and bank transfer',
   'wallet.method.WALLET': 'Prepaid wallet',
   'wallet.method.CARD': 'Card',
   'wallet.method.change': 'Change how it is collected',
-  'wallet.method.note': 'Recorded with a reason and audited. A card token is a reference held by the provider; a card number is never stored here.',
+  'wallet.method.note':
+    'Recorded with a reason and audited. A card token is a reference held by the provider; a card number is never stored here.',
   'wallet.method.submit': 'Change',
   'wallet.method.done': 'Collected by {method} from now on.',
-  'wallet.card.notConnected': 'Card charging is not connected: HorecaOS has no merchant account of its own yet, so this tenant’s remainder stays due exactly as an invoiced one does.',
+  'wallet.card.notConnected':
+    'Card charging is not connected: HorecaOS has no merchant account of its own yet, so this tenant’s remainder stays due exactly as an invoiced one does.',
   'wallet.transfer.open': 'Record a bank transfer',
-  'wallet.transfer.note': 'One person’s audited act, like issuing a statement. The bank’s reference is what proves it. It pays the oldest open statement at once.',
+  'wallet.transfer.note':
+    'One person’s audited act, like issuing a statement. The bank’s reference is what proves it. It pays the oldest open statement at once.',
   'wallet.transfer.submit': 'Record the transfer',
   'wallet.transfer.done': 'The transfer is recorded.',
   'wallet.deposit.open': 'Record the activation deposit',
-  'wallet.deposit.note': 'Pays exactly what the live subscription’s activation deposit still owes. The first statement is then paid from it.',
+  'wallet.deposit.note':
+    'Pays exactly what the live subscription’s activation deposit still owes. The first statement is then paid from it.',
   'wallet.deposit.submit': 'Record the deposit',
   'wallet.deposit.done': 'The activation deposit is recorded.',
   'wallet.adjustment.open': 'Propose a correction',
-  'wallet.adjustment.note': 'Either money kind, up or down. A correction of bonus money names the grant it corrects; neither kind may take a balance below zero.',
+  'wallet.adjustment.note':
+    'Either money kind, up or down. A correction of bonus money names the grant it corrects; neither kind may take a balance below zero.',
   'wallet.adjustment.noGrant': 'This tenant has no live bonus grant to correct.',
   'wallet.adjustment.submit': 'Propose the correction',
   'wallet.grant.open': 'Propose a bonus grant',
   'wallet.grant.note': 'Bonus money lapses on the date given here, and is spent before paid money.',
   'wallet.grant.submit': 'Propose the grant',
   'wallet.refund.open': 'Propose a refund',
-  'wallet.refund.note': 'Paid money only, naming the payout it leaves on. Bonus money is never refunded — it lapses.',
+  'wallet.refund.note':
+    'Paid money only, naming the payout it leaves on. Bonus money is never refunded — it lapses.',
   'wallet.refund.submit': 'Propose the refund',
   'wallet.field.amount': 'Amount',
   'wallet.field.signedAmount': 'Amount, with a minus to take money away',
@@ -1580,7 +1581,8 @@ export const en = {
   'wallet.field.cardToken': 'Card token reference',
   'wallet.kind.PAID': 'Paid',
   'wallet.kind.BONUS': 'Bonus',
-  'wallet.change.awaiting': 'Waiting for a second signature. Nothing has moved; propose the same change again once somebody else has approved it.',
+  'wallet.change.awaiting':
+    'Waiting for a second signature. Nothing has moved; propose the same change again once somebody else has approved it.',
   'wallet.change.declined': 'The change was declined. Nothing moved.',
   'wallet.change.done': 'The change is recorded in the ledger.',
   'wallet.approvals.note': 'A correction, a bonus grant and a refund each need a second person.',
@@ -1592,8 +1594,10 @@ export const en = {
   'wallet.column.lapses': 'Lapses',
   'wallet.ledger.title': 'Ledger',
   'wallet.ledger.none': 'Nothing has moved in this wallet yet.',
-  'wallet.ledger.appendOnly': 'Every entry is written once. Nothing here is edited or deleted, and a balance above is the sum of these entries.',
-  'wallet.ledger.appendOnlyTruncated': 'Every entry is written once. Nothing here is edited or deleted. These are the newest {count} entries of a longer ledger, so a balance above is the sum of the whole ledger and not of the rows shown.',
+  'wallet.ledger.appendOnly':
+    'Every entry is written once. Nothing here is edited or deleted, and a balance above is the sum of these entries.',
+  'wallet.ledger.appendOnlyTruncated':
+    'Every entry is written once. Nothing here is edited or deleted. These are the newest {count} entries of a longer ledger, so a balance above is the sum of the whole ledger and not of the rows shown.',
   'wallet.column.when': 'When',
   'wallet.column.entry': 'Entry',
   'wallet.column.reference': 'Reference',

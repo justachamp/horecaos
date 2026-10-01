@@ -21,6 +21,12 @@ import {
   variantAvailability,
   type ItemAvailability,
 } from '../../utils/item-availability';
+import {
+  isMandatory,
+  selectionRule,
+  toggleOption,
+  unsatisfiedGroups,
+} from '../../utils/modifier-selection';
 
 type LoadState = 'loading' | 'ready' | 'missing' | 'error';
 
@@ -96,30 +102,37 @@ export class DetailsComponent implements OnInit {
     return this.chosen()[groupId] ?? [];
   }
 
+  /** The rules are `utils/modifier-selection`'s: one implementation, shared with the table's picker. */
   protected toggleOption(group: MenuItemModifierGroup, optionId: string): void {
-    const current = this.chosenIn(group.id);
-    const isChosen = current.includes(optionId);
-    let next: readonly string[];
-    if (isChosen) {
-      next = current.filter((id) => id !== optionId);
-    } else if (group.maximumSelections === 1) {
-      // A single-selection group replaces rather than refuses: the customer
-      // pressing a second option plainly means to change their mind.
-      next = [optionId];
-    } else if (current.length >= group.maximumSelections) {
-      return;
-    } else {
-      next = [...current, optionId];
-    }
-    this.chosen.update((all) => ({ ...all, [group.id]: next }));
+    this.chosen.update((all) => toggleOption(all, group, optionId));
   }
 
-  /** Every required group must be satisfied before the basket will take this. */
+  /** Every group short of its minimum (or over its maximum) must be put right before the basket will take this. */
   protected readonly unsatisfied = computed(() =>
-    (this.item()?.modifierGroups ?? []).filter(
-      (group) => group.required && this.chosenIn(group.id).length < Math.max(1, group.minimumSelections),
-    ),
+    unsatisfiedGroups(this.item()?.modifierGroups ?? [], this.chosen()),
   );
+
+  /** The names of the groups still short, for the hint that says which ones. */
+  protected readonly unsatisfiedNames = computed(() =>
+    this.unsatisfied()
+      .map((group) => group.name)
+      .join(', '),
+  );
+
+  protected isMandatory(group: MenuItemModifierGroup): boolean {
+    return isMandatory(group);
+  }
+
+  protected isMissing(group: MenuItemModifierGroup): boolean {
+    return this.unsatisfied().includes(group);
+  }
+
+  /** What the group asks of the guest, as the table's picker says it; see {@link selectionRule}. */
+  protected rule(
+    group: MenuItemModifierGroup,
+  ): { key: string; params: Record<string, number> } | null {
+    return selectionRule(group);
+  }
 
   /** Rows 4.4c/4.4d: the chosen variant's own row, for its low-stock count. */
   protected readonly selectedVariant = computed(

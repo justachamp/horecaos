@@ -128,7 +128,7 @@
 /* The change document is data, shown as recorded: monospace, and scrolling rather than wrapping. */
 .changeDocument {
   font-family: var(--q-font-mono);
-  font-size: 12px;
+  font-size: var(--q-type-caption);
   background: var(--q-canvas);
   border: 1px solid var(--q-hairline);
   padding: 12px;

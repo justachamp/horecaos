@@ -414,10 +414,14 @@ selection with nothing to select for is clutter.
 
 **For:** which branch is slow, and whether it is slow at the pass or at the door.
 
-**Layout:** two stacked tables under the shared bar. Hidden from the navigation
-for single-location tenants — nothing on it is meaningful for one branch except
-the bucket distribution, which is folded into the overview's Band B `?` panel in
-that case.
+**Layout:** four stacked tables, A to D, under the shared bar (A and B were the
+original two; C and D are specified below). Nothing on the screen is meaningful for
+one branch except the bucket distribution, which is folded into the overview's Band B
+`?` panel in that case, so a single-location tenant gets none of the four tables:
+the intent is that the entry is hidden from the navigation. The built page does the
+second half differently: the tab stays in the reports strip and the screen prints one
+line (`reports.branches.singleLocation`) in place of all four tables when the tenant
+has one location or none (`branch-sla-report-page.ts`, `locations.length <= 1`).
 
 **Table A — branch leaderboard.** Columns: `Филиал` · `Заказы` · `Доставка /
 Самовывоз / Агрегаторы` (counts) · `Выручка` · `Средний чек` · `Ср. время
@@ -454,6 +458,51 @@ Two corrections to Delever here, both deliberate:
 Cells are tinted on a single green→red ramp keyed to the bucket, not to the
 value, so a manager reads the shape of a row without reading numbers. The bucket
 set version is printed under the table: `Интервалы: sla_bucket_set.v1`.
+
+**Tenant-configurable bucket boundaries: declined, not deferred** *(recorded
+2026-09-30 against gap-map row `10.10c`)*. The IA once promised them; nothing
+here builds, schedules or stubs an editor. The deciding record is ADR 0043 §
+"SLA buckets are platform-fixed and versioned, not tenant-configurable"
+(Accepted); [ADR 0107](../adr/built/0107-wave-p37-a-tenants-calendar-and-the-boundary-it-feeds.md)
+(Decision status Proposed, built at the owner's instruction of 2026-09-11) records
+the correction to this document, the IA and settings.md, and built the one
+compensating affordance: `GET .../reporting/sla-bucket-set` (`REPORTING_READ`,
+tenant scope) names the active set and its version, so a chart can be read against
+the definition it was computed under. That read feeds a card on Settings → Reference
+data (settings.md §10.10 «Границы SLA», which states the same decline). **This
+screen does not read it:** the version printed under Table B is a constant in the
+page (`slaBucketSetVersion = 1` in `branch-sla-report-page.ts`, and the same in
+the courier report), so it agrees with the endpoint only while the set is `v1`.
+Reopening the decline is a platform decision that accepts the recut and the
+historical-comparability cost ADR 0107 names in its first alternative, not a
+settings ticket.
+
+**Table C — per-channel counts and average check** *(specified here 2026-09-30
+from the built screen; the wave that built it, T06, had no §2.3 text to follow)*.
+Columns: `Филиал` · `Канал` · `Заказы` · `Средний чек`. One row per (branch, channel)
+pair the query returns, branches alphabetical and channels by order count within a
+branch. Source: `orders.count.v1` and `revenue.gross.v1` from the typed
+`GET .../reporting/queries`, grouped by location, channel and legal entity (money is
+always grouped by entity, rule 2 above, and the entity axis is folded back out for
+display). The average check is `average_check.v1`'s definition, gross revenue over
+order count, derived once per row from those two figures, and a pair with a zero
+count prints `—`, never zero.
+
+**Table D — payment-method split** *(same note)*. Columns: `Филиал` · `Способ
+оплаты` · `Операций` · `Сумма`. One row per (branch, method). Source: `GET
+.../reporting/payment-mix`, its `byLocation` rows, unchanged — the endpoint the
+overview's payment-mix card already reads, so the two places show the same figures.
+This is the split IA 7.3 names «used for cash-collection control»; it does not
+replace 8.3, which owns the reconciliation.
+
+**Tables C and D are flat lists, not a branch × channel matrix, and that is a
+layout position rather than a declined capability.** No ADR decides it and nothing
+refuses the matrix: the wave that built them (T06) chose flat rows and recorded the
+grid as deferred. The branch × channel × measure pivot, with its measure selector
+(`Кол-во · Сумма · Средний чек`) and its split selector, is «Сводка 2» on 7.2 (§2.2)
+and is built (gap-map row `7.2c`), so the matrix exists one tab away and the pure
+functions behind it are the reuse point if the owner wants it embedded here. Until
+that call the flat list is the specified shape.
 
 ---
 
@@ -636,9 +685,28 @@ anyone acts on, and a matrix that is a filter puts the action one click from the
 insight. Delever renders them as separate reports.
 
 **Kiosk sales report: skipped.** Present in Delever's UI, shows `Нет данных` in
-the documented instance, and kiosk is IA 10.5 tier 2. Kiosk orders appear here
+the documented instance, and kiosk is IA 10.5 (tier P; the kiosk device
+registry is the part of 10.5 not yet built). Kiosk orders appear here
 as a channel like any other; a separate report for one channel is a precedent
 that ends in eleven reports.
+
+**This is a decline, not a gap** *(recorded 2026-09-30 against gap-map row
+`7.7c`)*. The decision is this section, repeated in §5 «Skip» (the parity matrix
+grades Delever's «Kiosk sales report (Отчет киосков)» ○, peripheral, and
+records that it shows no data in the documented instance); no ADR is
+involved and none is needed. The IA was amended to match on 2026-09-11 (IA 7.7 now
+reads «kiosk readable as a channel slice of the sales report»). Reinstating a
+kiosk-only report is an owner decision, not engineering work; there is no missing
+input that would stop it being built.
+
+What the replacement needs, and does not yet have. `KIOSK` is a sales-channel
+system type, so an order placed on a kiosk channel carries that channel's code like
+any other, and the shared filter bar (§1.1) has a channel picker that the order log
+(7.2) and the overview (7.1) read. **This tab does not:** it reads the period and the fulfilment type only, and
+`GET .../reporting/variant-sales` takes no `channelCode` parameter, so «kiosk
+products» cannot be read as a channel slice here today. Adding the channel to that
+endpoint and wiring the tab to the filter bar is the buildable half of the
+replacement; it is not a kiosk report and is not scheduled by this decline.
 
 **Row severity:** products currently on stop (`catalog.location_offerings` /
 stop list) get a 3px amber left border and `СТОП` beside the name (Togora §2d,
@@ -936,7 +1004,7 @@ not from the first fact table.
 |---|---|
 | Embedded BI workspace (DataLens/Metabase) | Puts tenant isolation inside a BI tool's row-level permissions instead of ADR 0025 grants, and makes every metric definable twice. ADR 0043 rejects it. **We should be honest that a merchant comparing the two will experience this as a missing feature, because it is one.** |
 | Ad-hoc SQL / free query builder | Same reason. `POST /queries` takes metric ids and dimension ids, never an expression. |
-| Kiosk sales report | Shows `Нет данных` in Delever's own documented instance; kiosk orders appear as a channel like any other. |
+| Kiosk sales report | Shows `Нет данных` in Delever's own documented instance; kiosk orders appear as a channel like any other. A decline, not a gap — §2.7. |
 | Operator telephony KPIs (calls, answer speed, conversion) | Also `Нет данных` in Delever's instance; requires the whole telephony category (IA 1.6, tier 3). |
 | `Отменено но продано` column | A correction hack. ADR 0039 `order_outcomes` describes the same events truthfully. |
 | ClickHouse-branded product forecast | Replaced by ADR 0043's seasonal-naive model with a stored error rate. Explainable beats sophisticated for a kitchen manager. |

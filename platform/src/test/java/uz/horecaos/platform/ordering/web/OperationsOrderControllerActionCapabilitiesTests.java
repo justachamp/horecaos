@@ -182,4 +182,58 @@ class OperationsOrderControllerActionCapabilitiesTests {
                         eq(Capability.DELIVERY_MANUAL_ASSIGN),
                         eq(ResourceScope.location(TENANT, BRAND, LOCATION)));
     }
+
+    /**
+     * Row 1.1e, «Выставить счёт»: {@code POST .../payment/re-presentations} declares
+     * {@code PAYMENT_INITIATE} at <em>tenant</em> scope, so the row gates on the
+     * tenant-scope answer. A principal who holds it there gets the capability
+     * added to the set the policy reads.
+     */
+    @Test
+    void paymentInitiateHeldAtTenantScopeIsAddedToTheRowCapabilities() {
+        AuthorizationService authorization = mock(AuthorizationService.class);
+        when(authorization.has(any(), any(), any())).thenReturn(false);
+        when(authorization.has(SUBJECT, Capability.PAYMENT_INITIATE, ResourceScope.tenant(TENANT)))
+                .thenReturn(true);
+
+        Set<Capability> granted = controllerFor(authorization).grantedRowCapabilities(TENANT, BRAND, LOCATION);
+
+        assertThat(granted).containsExactly(Capability.PAYMENT_INITIATE);
+    }
+
+    /**
+     * The mirror image, and the reason it is asked at tenant scope: a grant held
+     * only at the order's branch would satisfy a location-scoped check, but the
+     * endpoint would still refuse it — offering the button would lead to a 403.
+     */
+    @Test
+    void paymentInitiateHeldOnlyAtTheBranchIsNotAddedToTheRowCapabilities() {
+        AuthorizationService authorization = mock(AuthorizationService.class);
+        when(authorization.has(any(), any(), any())).thenReturn(false);
+        when(authorization.has(SUBJECT, Capability.PAYMENT_INITIATE, ResourceScope.location(TENANT, BRAND, LOCATION)))
+                .thenReturn(true);
+
+        Set<Capability> granted = controllerFor(authorization).grantedRowCapabilities(TENANT, BRAND, LOCATION);
+
+        assertThat(granted).doesNotContain(Capability.PAYMENT_INITIATE);
+    }
+
+    /** The row capabilities are the location ones plus, at most, the payment one: nothing else is widened. */
+    @Test
+    void theRowCapabilitiesAreTheLocationOnesPlusPaymentInitiate() {
+        AuthorizationService authorization = mock(AuthorizationService.class);
+        when(authorization.has(any(), any(), any())).thenReturn(true);
+
+        Set<Capability> granted = controllerFor(authorization).grantedRowCapabilities(TENANT, BRAND, LOCATION);
+
+        assertThat(granted)
+                .containsExactlyInAnyOrder(
+                        Capability.ORDER_APPROVE,
+                        Capability.ORDER_ADVANCE,
+                        Capability.ORDER_CANCEL,
+                        Capability.ORDER_AMEND,
+                        Capability.ORDER_STATE_OVERRIDE,
+                        Capability.DELIVERY_MANUAL_ASSIGN,
+                        Capability.PAYMENT_INITIATE);
+    }
 }

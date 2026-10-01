@@ -1,5 +1,5 @@
 import { Component, input, signal } from '@angular/core';
-import { OrdersService, type ApiOrder } from '../../../services/orders.service';
+import { OrdersService } from '../../../services/orders.service';
 
 @Component({
   selector: 'app-order-reload',

@@ -42,7 +42,7 @@
         <dt>{{ 'marketing.campaign.field.estimatedCost' | t }}</dt>
         <dd class="q-tnum">
           @if (c.estimatedCostLowMinor !== null && c.estimatedCostHighMinor !== null) {
-            {{ c.estimatedCostLowMinor }}–{{ c.estimatedCostHighMinor }} {{ c.currency }}
+            {{ costRange(c, c.estimatedCostLowMinor, c.estimatedCostHighMinor) }}
             <span class="q-caption">{{ 'marketing.campaign.field.rangeHint' | t }}</span>
           } @else {
             {{ 'marketing.campaign.field.costUnknown' | t }}
@@ -61,16 +61,14 @@
 
         <dt>{{ 'marketing.campaign.field.costCeiling' | t }}</dt>
         <dd class="q-tnum">
-          {{ c.costCeilingMinor !== null ? c.costCeilingMinor + ' ' + c.currency : '—' }}
+          {{ c.costCeilingMinor !== null ? cost(c, c.costCeilingMinor) : '—' }}
         </dd>
 
         <dt>{{ 'marketing.campaign.field.spent' | t }}</dt>
-        <dd class="q-tnum">{{ c.spentCostMinor }} {{ c.currency }}</dd>
+        <dd class="q-tnum">{{ cost(c, c.spentCostMinor) }}</dd>
 
         <dt>{{ 'marketing.campaign.field.reserved' | t }}</dt>
-        <dd class="q-tnum">
-          {{ c.reservedCostMinor }} {{ c.currency }} · {{ c.reservedRecipients }}
-        </dd>
+        <dd class="q-tnum">{{ cost(c, c.reservedCostMinor) }} · {{ c.reservedRecipients }}</dd>
 
         @if (c.scheduledAt) {
           <dt>{{ 'marketing.campaign.field.scheduledAt' | t }}</dt>

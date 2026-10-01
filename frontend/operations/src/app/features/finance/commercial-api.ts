@@ -117,9 +117,28 @@ export interface TenantModuleView {
   readonly startedAt: string;
   readonly startedBy: string;
   readonly startReason: string;
+  /**
+   * Which door the module came through (`ModuleAcquisition.java`): `PLATFORM`
+   * (HorecaOS gave it) or `SELF_SERVICE` (this tenant bought it).
+   */
+  readonly acquiredVia: 'PLATFORM' | 'SELF_SERVICE';
+  /** True when the tenant itself may end it now: it bought it and it is still live. */
+  readonly endableByTenant: boolean;
   readonly endedAt: string | null;
   readonly endedBy: string | null;
   readonly endReason: string | null;
+}
+
+/** Mirrors `CommercialOperationsController.ModuleEnded`. */
+export interface ModuleEndedView {
+  readonly tenantModuleId: string;
+  readonly endedAt: string;
+  /**
+   * The last `yyyy-MM` month, in the tenant's timezone, whose statement still
+   * bills the module (ADR 0088). Nothing is prorated, so the month it ended in
+   * is billed in full and the next one is not.
+   */
+  readonly lastBilledPeriod: string;
 }
 
 /** Mirrors `ArrearsController.TenantArrearsView` (ADR 0127). */
@@ -180,6 +199,10 @@ export interface UsageView {
  * refund execution. `arrears` is the tenant-reachable, single-row mirror of
  * the platform's cross-tenant arrears board, under the new
  * `COMMERCIAL_ARREARS_READ` capability.
+ *
+ * **Ending one's own purchase, as of ADR 0127's status note of 2026-09-30** —
+ * `endModule`. A tenant undoes a module it bought itself and no other: one
+ * HorecaOS assigned stays HorecaOS's to end (`TenantModuleView.acquiredVia`).
  *
  * **What is still not.** Period close is HorecaOS-staff work — ADR 0088
  * decided a month is closed by issuing its statement, deliberately manual
@@ -263,6 +286,19 @@ export class CommercialApi {
   ): Promise<{ tenantModuleId: string }> {
     return firstValueFrom(
       this.api.post(financePaths.commercialModules(tenantId), command({ moduleId, quantity })),
+    );
+  }
+
+  /**
+   * The undo for {@link purchaseModule}: ends a module this tenant bought
+   * itself (ADR 0127). Refused with 422 `MODULE_ASSIGNED_BY_PLATFORM` for one
+   * HorecaOS assigned, so the screen offers it only where `endableByTenant`.
+   * Its features switch off at once; the month it ends in is still billed in
+   * full (nothing is prorated, ADR 0087/0088) and `lastBilledPeriod` names it.
+   */
+  async endModule(tenantId: string, tenantModuleId: string): Promise<ModuleEndedView> {
+    return firstValueFrom(
+      this.api.post(financePaths.commercialModuleEnd(tenantId, tenantModuleId), command(null)),
     );
   }
 

@@ -1,11 +1,12 @@
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { of } from 'rxjs';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ApiClient } from '../../core/api/api-client';
 import { LocationScope } from '../../core/api/operations-paths';
 import { CurrentLocation } from '../../core/auth/current-location';
+import { applyRegionalFormats, resetRegionalFormats } from '../../core/format/regional-format';
 import { I18n } from '../../core/i18n/i18n';
 import { RealtimeClient, RealtimeFrame } from '../../core/realtime/realtime-client';
 import { CouriersApi, RosterEntryResponse } from '../couriers/couriers-api';
@@ -106,6 +107,8 @@ async function flushMicrotasks(): Promise<void> {
 
 describe('DispatchBoardPage', () => {
   let fixture: ComponentFixture<DispatchBoardPage>;
+
+  afterEach(() => resetRegionalFormats());
   let dispatchApi: {
     queue: ReturnType<typeof vi.fn>;
     assign: ReturnType<typeof vi.fn>;
@@ -185,6 +188,14 @@ describe('DispatchBoardPage', () => {
     expect(host.textContent).toContain('1 / 2');
     const unassignedColumn = host.querySelector('[data-column-id="__unassigned__"]');
     expect(unassignedColumn?.querySelector('[data-testid="dispatch-card"]')).not.toBeNull();
+  });
+
+  it('writes the delivery fee on a card the way the brand chose (row 10.12)', async () => {
+    applyRegionalFormats({ moneySymbolPlacement: 'BEFORE', moneyGrouping: 'COMMA' });
+    await render();
+    const row = (fixture.nativeElement as HTMLElement).querySelector('.dispatch-card__row.q-tnum');
+
+    expect(row?.textContent?.replace(/\s/g, ' ')).toContain('UZS 12,000');
   });
 
   it('shows the non-PII destination label on the card, and nothing when the plan carries none (row 3.1)', async () => {

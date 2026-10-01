@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
@@ -18,9 +19,11 @@ import uz.horecaos.platform.tenancy.application.port.TenantControlPlaneStore;
 import uz.horecaos.platform.tenancy.domain.Brand;
 
 /**
- * The three settings-home readiness conditions that had no read behind them
- * (gap map row {@code 10.0}, settings.md §10.0): fiscal classification
- * coverage, channel payment-method coverage and secret-rotation age.
+ * The settings-home readiness conditions that had no read behind them (gap
+ * map row {@code 10.0}, settings.md §10.0): fiscal classification coverage,
+ * channel payment-method coverage and secret-rotation age (batch 15), then
+ * channel fulfilment-mode coverage and location service-binding coverage
+ * (batch 16).
  *
  * <p>Each is an {@link OnboardingReadinessCheck}: it names every offending item
  * in the {@link StepResult#failedWithFindings} shape the {@code VALIDATING}
@@ -166,9 +169,10 @@ public final class OnboardingReadinessChecks {
      * channel with none enabled at all, which is what this closes.
      *
      * <p>Tenant-scoped, not location-scoped: a channel is a route to market for
-     * the whole tenant, so the finding carries no {@code locationId} and the
-     * console links to the sales-channels list, where the payment-method count
-     * sits beside each channel and opens its setup.
+     * the whole tenant, so the finding carries no {@code locationId}. It names
+     * the channel as its {@link StepResult.FindingSubject subject}, so two channels
+     * with the same sentence stay two rows; the console links the row to the
+     * sales-channels screen, where the payment-method matrix lives.
      */
     @Component
     public static class ChannelPaymentCoverage implements OnboardingReadinessCheck {
@@ -195,7 +199,7 @@ public final class OnboardingReadinessChecks {
         @Override
         public StepResult check(UUID tenantId) {
             List<StepResult.Finding> findings = jdbc.sql("""
-                            SELECT sc.code
+                            SELECT sc.id, sc.code
                               FROM tenant.sales_channels sc
                              WHERE sc.tenant_id = :tenantId AND sc.status = 'ACTIVE'
                                AND NOT EXISTS (
@@ -205,10 +209,10 @@ public final class OnboardingReadinessChecks {
                              ORDER BY sc.code
                             """)
                     .param("tenantId", tenantId)
-                    .query((row, number) -> new StepResult.Finding(
+                    .query((row, number) -> StepResult.Finding.about(
                             NO_PAYMENT_METHOD,
                             "Sales channel %s has no enabled payment method".formatted(row.getString("code")),
-                            null))
+                            StepResult.FindingSubject.salesChannel(row.getObject("id", UUID.class))))
                     .list();
             return findings.isEmpty() ? StepResult.completed(Map.of(), null) : StepResult.failedWithFindings(findings);
         }
@@ -316,5 +320,230 @@ public final class OnboardingReadinessChecks {
                     .list();
             return findings.isEmpty() ? StepResult.completed(Map.of(), null) : StepResult.failedWithFindings(findings);
         }
+    }
+
+    /**
+     * Every active sales channel must be able to serve at least one fulfilment
+     * mode somewhere (settings.md §10.0: «Channel active with no enabled
+     * fulfilment mode», widened by the row's own note to «bound at some
+     * location»).
+     *
+     * <p><strong>Blocking.</strong> ADR 0036's resolver refuses an order on a
+     * channel whose requested mode is not enabled (rule 3), and refuses it again
+     * at a location that has no schedule bound for that mode. A channel for
+     * which neither holds opens a cart nobody can complete, which is the same
+     * failure {@link ChannelPaymentCoverage} names for payment methods. Two
+     * shapes, two codes, because they are fixed on different screens:
+     *
+     * <ul>
+     *   <li>{@value #NO_MODE} — zero enabled rows in {@code
+     *       tenant.channel_fulfillment_modes}: fixed in the sales-channels fulfilment matrix;
+     *   <li>{@value #NO_SERVICEABLE_MODE} — enabled modes, but none of them has a
+     *       schedule bound ({@code tenant.location_service_bindings}) at an
+     *       active location the channel is switched on for: fixed in the
+     *       location's hours or in the channel's location list.
+     * </ul>
+     *
+     * <p>Tenant-scoped, not location-scoped, like every channel finding: each
+     * names its channel as a {@link StepResult.FindingSubject subject} so two channels
+     * with the same sentence stay two rows; the console links each to the
+     * sales-channels screen, where the fulfilment matrix and the channel's
+     * location list are edited.
+     */
+    @Component
+    public static class ChannelFulfillmentCoverage implements OnboardingReadinessCheck {
+
+        static final String KEY = "CHANNEL_FULFILLMENT_COVERAGE_VALIDATE";
+        static final String NO_MODE = "CHANNEL_NO_FULFILLMENT_MODE";
+        static final String NO_SERVICEABLE_MODE = "CHANNEL_NO_SERVICEABLE_MODE";
+
+        private final JdbcClient jdbc;
+
+        public ChannelFulfillmentCoverage(JdbcClient jdbc) {
+            this.jdbc = jdbc;
+        }
+
+        @Override
+        public String checkKey() {
+            return KEY;
+        }
+
+        @Override
+        public boolean advisory() {
+            return false;
+        }
+
+        @Override
+        public StepResult check(UUID tenantId) {
+            List<ChannelRow> channels = jdbc.sql("""
+                            SELECT sc.id, sc.code,
+                                   EXISTS (
+                                       SELECT 1 FROM tenant.channel_fulfillment_modes cfm
+                                        WHERE cfm.tenant_id = sc.tenant_id AND cfm.channel_id = sc.id
+                                          AND cfm.enabled) AS has_mode,
+                                   EXISTS (
+                                       SELECT 1
+                                         FROM tenant.channel_fulfillment_modes cfm
+                                         JOIN tenant.sales_channel_locations scl
+                                           ON scl.tenant_id = cfm.tenant_id AND scl.channel_id = cfm.channel_id
+                                          AND scl.status = 'ACTIVE'
+                                         JOIN tenant.locations l
+                                           ON l.tenant_id = scl.tenant_id AND l.id = scl.location_id
+                                          AND l.status = 'ACTIVE'
+                                         JOIN tenant.location_service_bindings b
+                                           ON b.tenant_id = l.tenant_id AND b.location_id = l.id
+                                          AND b.fulfillment_mode = cfm.fulfillment_mode
+                                        WHERE cfm.tenant_id = sc.tenant_id AND cfm.channel_id = sc.id
+                                          AND cfm.enabled) AS serviceable
+                              FROM tenant.sales_channels sc
+                             WHERE sc.tenant_id = :tenantId AND sc.status = 'ACTIVE'
+                             ORDER BY sc.code
+                            """)
+                    .param("tenantId", tenantId)
+                    .query((row, number) -> new ChannelRow(
+                            row.getObject("id", UUID.class),
+                            row.getString("code"),
+                            row.getBoolean("has_mode"),
+                            row.getBoolean("serviceable")))
+                    .list();
+            List<StepResult.Finding> findings = new ArrayList<>();
+            for (ChannelRow channel : channels) {
+                StepResult.FindingSubject subject = StepResult.FindingSubject.salesChannel(channel.id());
+                if (!channel.hasMode()) {
+                    findings.add(StepResult.Finding.about(
+                            NO_MODE,
+                            "Sales channel %s has no enabled fulfilment mode".formatted(channel.code()),
+                            subject));
+                } else if (!channel.serviceable()) {
+                    findings.add(StepResult.Finding.about(
+                            NO_SERVICEABLE_MODE,
+                            ("Sales channel %s has enabled fulfilment modes, but none has a schedule bound "
+                                            + "at an active location the channel serves")
+                                    .formatted(channel.code()),
+                            subject));
+                }
+            }
+            return findings.isEmpty() ? StepResult.completed(Map.of(), null) : StepResult.failedWithFindings(findings);
+        }
+
+        private record ChannelRow(UUID id, String code, boolean hasMode, boolean serviceable) {}
+    }
+
+    /**
+     * Every active location must have a service schedule bound for each
+     * fulfilment mode a channel can sell there (settings.md §10.0: «Location
+     * with no schedule bound for an enabled mode»).
+     *
+     * <p><strong>Blocking.</strong> With no {@code tenant.location_service_bindings}
+     * row for a (location, mode), the resolver has no opening hours to consult
+     * and refuses the order, so the location is closed for that mode without
+     * anyone having closed it — the quietest way for a branch to be dark.
+     *
+     * <p>"Enabled mode" is read from where a customer meets it: a mode enabled on
+     * an active channel that is switched on at this location. A location no
+     * channel reaches has no such mode, so it is held to the plainer rule the
+     * row's title states — it must have some schedule bound — instead of passing
+     * for having nothing to bind. One finding per location, naming every mode it
+     * lacks, with the location as its {@code locationId} so the console opens the
+     * location where its hours are set.
+     */
+    @Component
+    public static class LocationServiceBindingCoverage implements OnboardingReadinessCheck {
+
+        static final String KEY = "LOCATION_SERVICE_BINDING_COVERAGE_VALIDATE";
+        static final String NO_SCHEDULE = "LOCATION_NO_SERVICE_SCHEDULE";
+
+        private final JdbcClient jdbc;
+
+        public LocationServiceBindingCoverage(JdbcClient jdbc) {
+            this.jdbc = jdbc;
+        }
+
+        @Override
+        public String checkKey() {
+            return KEY;
+        }
+
+        @Override
+        public boolean advisory() {
+            return false;
+        }
+
+        @Override
+        public StepResult check(UUID tenantId) {
+            List<LocationMode> rows = jdbc.sql("""
+                            SELECT l.id AS location_id, l.code, m.mode,
+                                   CASE WHEN m.mode IS NULL THEN NULL
+                                        ELSE EXISTS (
+                                            SELECT 1 FROM tenant.location_service_bindings b
+                                             WHERE b.tenant_id = l.tenant_id AND b.location_id = l.id
+                                               AND b.fulfillment_mode = m.mode) END AS bound,
+                                   EXISTS (
+                                       SELECT 1 FROM tenant.location_service_bindings b
+                                        WHERE b.tenant_id = l.tenant_id AND b.location_id = l.id) AS any_bound
+                              FROM tenant.locations l
+                              LEFT JOIN LATERAL (
+                                   SELECT DISTINCT cfm.fulfillment_mode AS mode
+                                     FROM tenant.channel_fulfillment_modes cfm
+                                     JOIN tenant.sales_channel_locations scl
+                                       ON scl.tenant_id = cfm.tenant_id AND scl.channel_id = cfm.channel_id
+                                      AND scl.location_id = l.id AND scl.status = 'ACTIVE'
+                                     JOIN tenant.sales_channels sc
+                                       ON sc.tenant_id = cfm.tenant_id AND sc.id = cfm.channel_id
+                                      AND sc.status = 'ACTIVE'
+                                    WHERE cfm.tenant_id = l.tenant_id AND cfm.enabled
+                              ) m ON true
+                             WHERE l.tenant_id = :tenantId AND l.status = 'ACTIVE'
+                             ORDER BY l.code, l.id, m.mode
+                            """)
+                    .param("tenantId", tenantId)
+                    .query((row, number) -> new LocationMode(
+                            row.getObject("location_id", UUID.class),
+                            row.getString("code"),
+                            row.getString("mode"),
+                            (Boolean) row.getObject("bound"),
+                            row.getBoolean("any_bound")))
+                    .list();
+
+            Map<UUID, List<LocationMode>> byLocation = new java.util.LinkedHashMap<>();
+            for (LocationMode row : rows) {
+                byLocation
+                        .computeIfAbsent(row.locationId(), id -> new ArrayList<>())
+                        .add(row);
+            }
+            List<StepResult.Finding> findings = new ArrayList<>();
+            for (List<LocationMode> location : byLocation.values()) {
+                LocationMode first = location.get(0);
+                if (first.mode() == null) {
+                    if (!first.anyBound()) {
+                        findings.add(new StepResult.Finding(
+                                NO_SCHEDULE,
+                                "Location %s has no service schedule bound".formatted(first.code()),
+                                first.locationId()));
+                    }
+                    continue;
+                }
+                List<String> missing = location.stream()
+                        .filter(mode -> !Boolean.TRUE.equals(mode.bound()))
+                        .map(LocationMode::mode)
+                        .toList();
+                if (!missing.isEmpty()) {
+                    findings.add(new StepResult.Finding(
+                            NO_SCHEDULE,
+                            "Location %s has no schedule bound for %s"
+                                    .formatted(first.code(), String.join(", ", missing)),
+                            first.locationId()));
+                }
+            }
+            return findings.isEmpty() ? StepResult.completed(Map.of(), null) : StepResult.failedWithFindings(findings);
+        }
+
+        /** One (location, mode) pair; {@code mode} and {@code bound} are null for a location no channel reaches. */
+        private record LocationMode(
+                UUID locationId,
+                String code,
+                @Nullable String mode,
+                @Nullable Boolean bound,
+                boolean anyBound) {}
     }
 }

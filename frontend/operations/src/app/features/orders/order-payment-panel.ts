@@ -1,4 +1,12 @@
-import { ChangeDetectionStrategy, Component, effect, inject, input, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  ElementRef,
+  effect,
+  inject,
+  input,
+  signal,
+} from '@angular/core';
 
 import { ApiError } from '../../core/api/problem-details';
 import { TimeZone, formatDateTime } from '../../core/format/datetime';
@@ -52,6 +60,7 @@ type ReissueKind = 'PAYMENT_LINK' | 'INVOICE_PUSH';
 })
 export class OrderPaymentPanel {
   private readonly api = inject(PaymentsApi);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   protected readonly i18n = inject(I18n);
 
   readonly tenantId = input.required<string>();
@@ -92,6 +101,21 @@ export class OrderPaymentPanel {
     } finally {
       this.loading.set(false);
     }
+  }
+
+  /**
+   * «Выставить счёт» from the order header (gap map row `1.1e`, wave 16): opens
+   * the re-issue form and scrolls this panel into view. Idempotent — asked twice
+   * it stays open — and it leaves an already-shown result alone, so re-clicking
+   * the header action does not wipe the link the operator is about to read out.
+   */
+  openReissue(): void {
+    if (!this.showReissueForm()) {
+      this.reissueError.set(null);
+      this.reissueResult.set(null);
+      this.showReissueForm.set(true);
+    }
+    this.host.nativeElement.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
   }
 
   protected toggleReissueForm(): void {

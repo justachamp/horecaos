@@ -1,0 +1,109 @@
+:host {
+  display: contents;
+}
+
+/* ---- toolbar: tabs + refresh stamp ------------------------------------ */
+
+.order-queue__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px 24px;
+  border-bottom: 1px solid var(--q-hairline);
+  flex-shrink: 0;
+}
+
+.order-queue__tabs {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--q-radius);
+  background: transparent;
+  color: var(--q-ink-muted);
+  font-family: var(--q-font-sans);
+  font-size: var(--q-type-body-sm);
+  line-height: 1.29;
+  letter-spacing: 0.16px;
+  cursor: pointer;
+}
+
+.tab:hover {
+  color: var(--q-ink);
+  background: var(--q-surface-1);
+}
+
+.tab--active {
+  color: var(--q-ink);
+  background: var(--q-surface-1);
+  border-color: var(--q-hairline);
+  font-weight: 600;
+}
+
+.tab__count {
+  display: inline-block;
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: var(--q-radius);
+  background: var(--q-surface-2);
+  color: var(--q-ink-muted);
+  font-size: var(--q-type-caption);
+  line-height: 18px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.tab__count--attention {
+  background: var(--q-error-tint);
+  color: var(--q-error-text);
+}
+
+.order-queue__status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.order-queue__stamp {
+  color: var(--q-ink-subtle);
+}
+/* "Loading, refetch: rows stay, the refresh stamp pulses" — §2.11. */
+.order-queue__stamp--pulse {
+  animation: order-queue-pulse 1s var(--q-ease-productive) infinite alternate;
+}
+
+@keyframes order-queue-pulse {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0.4;
+  }
+}
+
+.order-queue__refresh {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink-muted);
+  cursor: pointer;
+}
+
+.order-queue__refresh:hover {
+  color: var(--q-ink);
+  border-color: var(--q-ink-subtle);
+}

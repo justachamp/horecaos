@@ -1,0 +1,52 @@
+:host {
+  display: contents;
+}
+
+.new-order__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--q-hairline);
+}
+
+.new-order__title {
+  margin: 0;
+}
+
+.new-order__header-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.new-order__cancel,
+.new-order__submit {
+  padding: 6px 16px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  cursor: pointer;
+}
+
+.new-order__submit {
+  border-color: var(--q-primary);
+  background: var(--q-primary);
+  color: var(--q-inverse-ink);
+}
+
+.new-order__submit:disabled {
+  opacity: 0.5;
+  cursor: default;
+  background: var(--q-surface-2);
+  border-color: var(--q-hairline);
+  color: var(--q-ink-subtle);
+}
+/* ------------------------------------------------------------ wave P14 */
+
+.new-order__aggregator-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--q-ink-subtle);
+}

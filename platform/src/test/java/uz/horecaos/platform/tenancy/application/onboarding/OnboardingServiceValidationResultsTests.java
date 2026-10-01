@@ -114,6 +114,36 @@ class OnboardingServiceValidationResultsTests {
     }
 
     @Test
+    void aFindingThatNamesAChannelCarriesItsSubjectOntoItsRowAndOneThatDoesNotStaysBare() {
+        UUID channel = UUID.randomUUID();
+        StepResult outcome = StepResult.failedWithFindings(List.of(
+                StepResult.Finding.about(
+                        "CHANNEL_NO_FULFILLMENT_MODE",
+                        "Sales channel KIOSK has no enabled fulfilment mode",
+                        StepResult.FindingSubject.salesChannel(channel)),
+                new StepResult.Finding(
+                        "NO_LEGAL_ENTITY", "Location A has no active legal entity assigned", LOCATION_A)));
+
+        List<OnboardingService.ValidationResult> results =
+                OnboardingService.validationResultsFor("CHANNEL_FULFILLMENT_COVERAGE_VALIDATE", outcome, false);
+
+        assertThat(results).hasSize(2);
+        assertThat(results.get(0).subject()).isEqualTo(StepResult.FindingSubject.salesChannel(channel));
+        assertThat(results.get(0).locationId()).isNull();
+        assertThat(results.get(1).subject())
+                .as(
+                        "a location finding is linked by its locationId; adding subject to the record changed nothing for it")
+                .isNull();
+        assertThat(results.get(1).locationId()).isEqualTo(LOCATION_A);
+    }
+
+    @Test
+    void aFindingSubjectNeedsAType() {
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> new StepResult.FindingSubject(" ", UUID.randomUUID()))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
     void aRetryFromAnAdHocCheckIsOneRowAtThatChecksSeverity() {
         List<OnboardingService.ValidationResult> results = OnboardingService.validationResultsFor(
                 "SECRET_ROTATION_AGE_VALIDATE", StepResult.retry("TRANSIENT_INFRASTRUCTURE", "SQLException"), true);

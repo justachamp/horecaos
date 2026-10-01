@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { formatMoney, minorUnitExponent } from './money';
+import { DEFAULT_REGIONAL_FORMATS } from './regional-format';
 
 /**
  * The group separator is U+00A0 NO-BREAK SPACE, written as an escape throughout
@@ -66,5 +67,21 @@ describe('formatMoney', () => {
 
   it('refuses a fractional minor unit, which means money went through a float', () => {
     expect(() => formatMoney({ amountMinor: 1500.5, currency: 'UZS' }, 'ru')).toThrow(TypeError);
+  });
+  it('formats with the formats it is handed, for a preview of a choice not saved yet', () => {
+    const money = { amountMinor: 146_000, currency: 'UZS' };
+
+    expect(
+      formatMoney(money, 'en', {
+        withUnit: true,
+        formats: {
+          ...DEFAULT_REGIONAL_FORMATS,
+          moneySymbolPlacement: 'BEFORE',
+          moneyGrouping: 'DOT',
+        },
+      }),
+    ).toBe('UZS\u00a0146.000');
+    // The brand's own formats were not touched by the preview.
+    expect(formatMoney(money, 'en', { withUnit: true })).toBe('146\u00a0000\u00a0UZS');
   });
 });

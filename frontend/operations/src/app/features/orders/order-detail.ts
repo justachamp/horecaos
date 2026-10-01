@@ -49,7 +49,7 @@ export interface OrderLineCommentPreset {
   /**
    * Every wording the line's snapshot holds, by locale: the triple plus any locale a tenant's
    * brands support beyond it (row 10.12). Optional so a fixture, or an older platform, still reads;
-   * the console renders the operator's own language from the three fields above.
+   * the console renders through `presetLabelFor`, this map first and the three fields above as the floor.
    */
   readonly labels?: Readonly<Record<string, string>>;
 }
@@ -221,6 +221,16 @@ export interface OrderCountsResponse {
   readonly cancelled: number;
   readonly totalNonTerminal: number;
   readonly total: number;
+}
+
+/**
+ * `BrandOrderCountsResponse` — `GET .../brands/{b}/orders/counts`, the brand's
+ * nine counters under `totals` (the same fields, without the period and the
+ * mixes the per-branch shape also carries). What the «Все филиалы» board's tab
+ * badges read (wave 16); only `totals` is used here.
+ */
+export interface OrderBrandCountsResponse {
+  readonly totals: OrderCountsResponse;
 }
 
 /**

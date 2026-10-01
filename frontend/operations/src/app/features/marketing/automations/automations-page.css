@@ -77,6 +77,16 @@
   font-size: var(--q-type-body-sm);
 }
 
+.automations__simulator {
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--q-hairline);
+}
+
+.automations__simulator h3 {
+  margin: 0 0 4px;
+}
+
 .automations__preview-list {
   list-style: none;
   margin: 0;

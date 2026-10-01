@@ -9,6 +9,7 @@ import uz.horecaos.platform.tenancy.api.LocationId;
 import uz.horecaos.platform.tenancy.api.TenantId;
 import uz.horecaos.platform.tenancy.domain.Brand;
 import uz.horecaos.platform.tenancy.domain.BrandProfile;
+import uz.horecaos.platform.tenancy.domain.BrandRegionalFormats;
 import uz.horecaos.platform.tenancy.domain.CustomerIdentityMode;
 import uz.horecaos.platform.tenancy.domain.CustomerIdentityPolicy;
 import uz.horecaos.platform.tenancy.domain.Location;
@@ -169,8 +170,14 @@ public interface TenantControlPlaneStore {
      */
     Map<BrandId, BrandProfile> findBrandProfiles(TenantId tenantId);
 
-    /** Replaces a brand's whole profile — contact, media and its locale set together. */
+    /**
+     * Replaces a brand's whole profile — contact, media and its locale set together. The
+     * regional formats on {@code profile} are ignored: they have their own write.
+     */
     void updateBrandProfile(TenantId tenantId, BrandId brandId, BrandProfile profile);
+
+    /** Replaces a brand's display formats (10.12) and nothing else about it. */
+    void updateBrandRegionalFormats(TenantId tenantId, BrandId brandId, BrandRegionalFormats formats);
 
     boolean locationCodeOrSlugExists(Brand brand, String code, Slug slug);
 

@@ -1,0 +1,24 @@
+<div class="summary">
+  <div class="summary__row">
+    <span>{{ 'cart.subtotalLabel' | t }}</span>
+    <span class="summary__value">{{ subtotal() }}</span>
+  </div>
+  <div class="summary__row">
+    <span>{{ 'cart.delivery' | t }}</span>
+    <span class="summary__value">{{ deliveryFee() }}</span>
+  </div>
+  @if (unresolvedMessage(); as unresolved) {
+    <p class="summary__note" data-testid="delivery-unresolved">{{ unresolved }}</p>
+  }
+  @if (hasDiscount()) {
+    <div class="summary__row summary__row--discount">
+      <span>{{ 'cart.promoCode' | t }}</span>
+      <span>−{{ discount() }}</span>
+    </div>
+  }
+  <div class="summary__divider"></div>
+  <div class="summary__row summary__row--total">
+    <span>{{ 'cart.total' | t }}</span>
+    <span>{{ total() }}</span>
+  </div>
+</div>

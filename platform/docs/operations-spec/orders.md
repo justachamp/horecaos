@@ -1,7 +1,9 @@
 # Operations spec — Orders
 
 `apps/operations` · IA section 1 · screens 1.1 Order board, 1.2 Order detail,
-1.3 New order, 1.4 Drafts, 1.5 Reservations.
+1.3 New order, 1.4 Drafts, 1.5 Reservations. (1.6 Call centre and 1.7 Operator
+inbox have no screen spec of their own here; §0.5 records the one ruling on
+telephony that this document's screens depend on.)
 
 This is the section the console exists for. Everything else in operations is
 configuration for what happens here. It is used standing up, on a 1366×768
@@ -45,15 +47,28 @@ unbuilt.
 
 ## 0. Rulings made before the screens
 
-Four places where the sources disagree. Deciding them first keeps them out of
+Five places where the sources disagree. Deciding them first keeps them out of
 every section below.
 
 **0.1 One order, one location. The multi-step order does not exist.**
-IA 1.2 lists "multi-step (multi-branch) composition with per-step status". The
-parity matrix declines Delever's `steps[]` outright, and `ordering.orders` binds
-`location_id` with a foreign key and a trigger that refuses rebinding. The IA
-line is stale. There is no per-step status, no step tab, no step money. An order
-that needs two kitchens is two orders, and the customer is told so on the call.
+IA 1.2 listed "multi-step (multi-branch) composition with per-step status". The
+parity matrix declines Delever's `steps[]` outright, and the schema is built the
+same way: `ordering.orders.location_id` is `NOT NULL` under the foreign key
+`fk_order_location` (V0022) and no ordering command changes it, while a *cart* is
+bound to one location by `trg_carts_no_rebinding`, which refuses to move it —
+moving location rebuilds and reprices the cart (ADR 0019). The IA line was stale
+and was struck on 2026-09-11. There is no per-step status, no step tab, no step
+money. An order that needs two kitchens is two orders, and the customer is told
+so on the call.
+
+*Declined, not deferred (recorded 2026-09-30 against gap-map row `1.2d`).* The
+reason is the one the parity matrix gives: two nested state machines and per-step
+money for a customer behaviour — ordering from two kitchens in one basket — that no
+evidence in the inventory shows anyone doing. The matrix cites ADR 0019, which
+binds a cart to one location and rebuilds on change, and ADR 0002's refusal of
+extra hierarchy tiers. Nothing is scheduled against it and no console screen,
+endpoint or table is owed. Reopening it is a new ADR (ADR 0019 is Accepted), not a
+wave.
 
 **0.2 There is no backward status transition, and the IA promises one.**
 IA 1.1 owns "backward status transitions (gated, reason-required, audited — an
@@ -96,6 +111,31 @@ Delever and the legacy dashboard both open on "new orders". That is the wrong
 first screen: a new order is the least urgent thing on it, because nothing has
 gone wrong with it yet. The board opens on **Внимание**, a saved view over
 several statuses, and Новые is the tab next to it. See §2.2.
+
+**0.5 There is no softphone, and the console places no call.**
+IA 1.6 listed a softphone and, with it, click-to-call. ADR 0064 (Accepted) decides
+the platform never carries audio, and its alternatives table refuses a
+softphone/WebRTC inside the operations app: it "carries audio, codecs, and
+telephony reliability into this platform's scope for little pilot value; operators
+keep their handsets/softphones", to be revisited only when a provider round
+demands it. The IA line was struck on 2026-09-11. What is built instead is the
+other side of the same record: caller resolution and the screen-pop, operator
+presence and the call log (IA 1.6, tier 3, gap-map row `1.6`), and the
+call-to-order provenance that New order (§5) records when it is opened from a
+claimed call.
+
+*The softphone is declined, not deferred; click-to-call is not built (recorded
+2026-09-30 against gap-map row `1.6a`).* For the softphone the decision is ADR
+0064's and nothing is owed. For click-to-call the record is narrower and should be
+read as it is: ADR 0064 does not name it, and the IA note that struck it reasoned
+that dialling needs the same client. A provider-placed call would be a
+*call-control* capability that ADR 0064 lets an adapter declare "where offered", and
+neither shipped VOICE adapter declares it (`VoiceProviderCapabilityCatalog` lists
+`INGEST_EVENTS_PUSH` only). So click-to-call is not scheduled; it waits on an
+adapter that declares call control, which waits on the owner naming a voice
+provider (ADR 0064's open inputs). Where §3.7 says a revealed number comes «with
+call and copy», the call is a hand-off of the number to the operator's own device,
+never a call the console places.
 
 ---
 
@@ -284,7 +324,7 @@ Primary row, always visible:
 |---|---|---|---|
 | Search | text input, `/` focuses | empty | §2.8 |
 | Period | date-range pill pair with presets *Сегодня · Вчера · 7 дней · Период* | Сегодня (business date) | `ordering.orders.created_at` |
-| Филиал | multi-select dropdown, searchable, with a live active-order count per branch | all branches the actor is scoped to | `tenant.locations` via `location_id` |
+| Филиал | multi-select dropdown, searchable, with a live active-order count per branch | all branches the actor is scoped to | `tenant.locations` via `location_id`. **Built for a brand-level reader (ADR 0144):** the «Все филиалы» mode reads `GET /api/v1/operations/tenants/{t}/brands/{b}/orders/board` (`ORDER_READ` at `BRAND`; the branch board's own statement over a set of branches, repeatable `?locationId=`), the console offers a single-select over the shell's branch roster, and each row carries its `locationId`. A location-scoped actor keeps today's single-branch board. Not built: the multi-select, the live per-branch count |
 | Канал | multi-select, `<optgroup>` by `system_type` | all | `tenant.sales_channels.display_name`, matched via `channel_id`; the row displays `channel_code_snapshot` |
 | Тип | segmented control Доставка / Самовывоз / В зале | all | `fulfillment_mode` |
 | Оплата | multi-select | all | `payment_status_projection`, **built** on the row (ADR 0102); the method beside it is `payments.payment_intents.payment_method_code`, filterable as `?paymentMethodCode=` on `.../orders/board` but not yet rendered on the row |
@@ -296,12 +336,12 @@ one that is set:
 | Filter | Control | Source |
 |---|---|---|
 | Мои заказы | toggle | **built** — `?createdByActorId=` on `.../orders/board` (ADR 0102), over `created_by_actor_id` (ADR 0039, V0029). The client supplies its own subject; there is no server-side `me` |
-| Только опаздывающие | toggle | derived, §2.7 |
-| С проблемой | toggle | `order_process_states.status` in the two failure states |
-| Требуется звонок | toggle | `callback_requested` is **built** (ADR 0039, V0029, set via the `SET_CALLBACK_REQUESTED` amendment command); the filter on the list query is not |
-| Агрегатор | multi-select of bindings | **built, not read by ordering — ADR 0040** `marketplace_binding_id` (V0038) |
+| Только опаздывающие | toggle | derived, §2.7 — **built (ADR 0144)**: `?late=true`, the resolved `ordering.lateness` policy applied per branch and mode in the board statement (not over, and past the promise plus grace, or past the no-promise fallback), held to `OrderLatenessPolicy.evaluate` by `OrderBoardTogglesQueryTests#theLateFilterAgreesWithTheDomainRule` |
+| С проблемой | toggle | `order_process_states.status` in the two failure states — **built (ADR 0144)**: `?problem=true` |
+| Требуется звонок | toggle | `callback_requested` is **built** (ADR 0039, V0029, set via the `SET_CALLBACK_REQUESTED` amendment command); the filter — **built (ADR 0144)**: `?callbackRequested=true` |
+| Агрегатор | multi-select of bindings | **built (ADR 0144)** — `?marketplaceBindingId=` on both boards over `marketplace_binding_id` (V0038); the options are `GET .../orders/marketplace-bindings` (branch and brand), the bindings the orders in scope arrived through, with the installation's name through `MarketplaceBindingLookup`. One binding at a time, not a multi-select |
 | Способ оплаты | multi-select | `?paymentMethodCode=` on `.../orders/board` is **built** (ADR 0102) over `payments.payment_intents`; one code at a time, not a multi-select, until somebody needs more |
-| Фискализация | multi-select of `PENDING/BLOCKED/FAILED/ISSUED` | **not built — ADR 0038** `fiscal.fiscal_documents.status` |
+| Фискализация | multi-select of `PENDING/BLOCKED/FAILED/ISSUED` | **built (ADR 0144)** — `?fiscalStatus=` (repeatable; any of the table's six values) over `fiscal.fiscal_documents.status`, an `EXISTS` on any document of the order; the console offers one status or «Требует внимания» (failed + blocked). No fiscal chip on the row yet |
 
 A control that is filtering shows it in its own border and fill (Togora §2b),
 not only by a chip elsewhere. **Сбросить фильтры** clears everything except the
@@ -392,6 +432,40 @@ scalars edited with the card's inherit/override control) and are overlaid on the
 `ordering.lateness` document, so the boards and `GET .../{orderId}/lateness`
 give one answer. Reporting's SLA buckets (ADR 0107) stay platform-fixed and are
 not read from these.
+
+**The document has an editor (wave 16, rows `X.39`/`10.3b`).** `GET`/`POST
+/api/v1/operations/tenants/{tenantId}/order-lateness-policy`
+(`TENANT_CONFIGURATION_READ`/`WRITE`) read and publish `ordering.lateness` at
+TENANT, BRAND or LOCATION scope: the whole document is replaced, the version the
+form was opened at travels as `expectedVersion` (a second operator's save in
+between is `STALE_VERSION`, and the card offers a reload rather than a retry),
+and every publication leaves an `ordering.lateness-policy.authored` audit fact
+with the per-mode numbers that moved. Per fulfilment mode a tenant sets the grace
+past the promise (`late_after_seconds`, seconds, up to a day), the no-promise
+fallback (whole minutes, one minute to a day) and the at-risk window (whole
+minutes, 0 to a day, or none). **A mode with no window of its own takes
+`ordering.at_risk_before_minutes`** when one was set anywhere in the chain, and
+the platform's five minutes otherwise — the batch 15 scalar is now the default
+for the modes not set, not a replacement for all three — while a window a mode
+does carry wins over the scalar even where the scalar is set at a narrower scope.
+A published version is never withdrawn, so the card has no "revert to inherited"
+for this document; it is overridden by publishing at the narrower scope. The
+order board, the order-detail header, the kitchen queue, the kitchen VDU and the
+wallboard VDU read the per-mode numbers through `GET .../orders/lateness-policy`
+and the shared evaluator, unchanged. Those screens stay open for a whole shift
+(a wall display for days), so each re-reads the policy on the poll it already
+has, at most once a minute per branch — the server holds the resolved document
+for 60 s — and a published document reaches an open screen within about a
+minute and a poll, without a reload; a read that fails is asked for again on the
+next poll, and never replaces a policy that was read earlier. A publication also
+drops the cached resolution of every brand and location beneath the scope it
+was published at, and the editor reads the document and its version from the
+table rather than the cache. `ordering.late_order_threshold_minutes`
+(card 2's «Заказ опаздывает с») is still stored and read by nothing: whether it
+means a grace after the promise or a limit from acceptance is an owner decision,
+and until that is made the line where late begins is this document's
+`late_after_seconds`. The field says so on the card («Пока не применяется»), in
+the viewer and in the editor.
 
 **Inputs.** `now`, `status`, and a policy resolved through ADR 0030 at key
 `ordering.lateness`. The promise itself is **built**, just not from the table
@@ -1162,9 +1236,19 @@ console-facing half of the same rule &sect;3.11 states: a failed export is
 never rendered as an order failure, because the order is real and only its
 kitchen copy may be missing.
 
-### 4.9 Payment (ADR 0013, not built)
+### 4.9 Payment (ADR 0013; «Выставить счёт» built, ADR 0144)
 
-- **Выставить счёт** — re-issue a payment invoice. Delever's own page documents
+- **Выставить счёт** — **built.** `POST /api/v1/operations/tenants/{t}/orders/{id}/payment/re-presentations`
+  (wave P12), `PAYMENT_INITIATE` at tenant scope, idempotent, and — since ADR 0144 —
+  audited (`payment.checkout_reissue_requested` before the checkout is opened and
+  `payment.checkout_reissued` after it, never the phone). `actions[]` carries
+  `ISSUE_INVOICE` for an order whose payment projection is `PENDING` **and** whose
+  live payment intent can be presented (open, a provider tender with a seller, no
+  attempt in doubt — an expired or uncertain attempt leaves the projection
+  `PENDING`, so the projection alone is not the gate), that has not ended, when
+  the caller holds that capability; the row action opens the
+  order and the detail header opens the payment panel's re-issue form. It re-issues
+  a payment invoice. Delever's own page documents
   the fields: phone, order id, payment type. Ours needs only the phone (the
   order is in context) plus the method, because the case it exists for is *the
   customer's payment account is registered to a different number*. Idempotent;
@@ -1414,7 +1498,8 @@ guard so tomorrow's plan never shows "past").
 | Order status timeline | **Match, and beat** | Delever renders time-per-stage; ours renders three lanes and shows losing approval decisions |
 | Twelve-item overflow menu | **Beat** | §2.9: two inline affordances chosen by state, everything else in the overflow |
 | Free-form «Изменить заказ» | **Beat** | ADR 0039's ten intent-named commands, each with a declared consequence vector |
-| Multi-branch `steps[]` | **Skip** | Declined in the matrix; two nested state machines for a behaviour no evidence shows anyone using |
+| Multi-branch `steps[]` | **Skip** | Declined in the matrix; two nested state machines for a behaviour no evidence shows anyone using (§0.1) |
+| Embedded softphone (and click-to-call through it) | **Skip** | ADR 0064: the platform never carries audio; operators keep their handsets. Screen-pop, presence and the call log are built instead (§0.5) |
 | Tenant-editable order statuses | **Skip** | The same status name would mean different things in two tenants, and every report and automation becomes ungovernable |
 | Externally computed «Свободная скидка» on our own channels | **Skip on HorecaOS channels, allow on marketplace** | It exists so aggregators can push a discount we cannot re-derive. On an aggregator order that is unavoidable and flagged; extending it to our channels destroys ADR 0018's central promise |
 | Live courier map as an Orders sibling | **Move** | It is IA 3.2, under Delivery. An operator working the queue does not need a map; a dispatcher does |

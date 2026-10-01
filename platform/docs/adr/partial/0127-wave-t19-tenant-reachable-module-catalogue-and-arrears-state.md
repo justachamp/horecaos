@@ -1,7 +1,7 @@
 # ADR 0127: A tenant browses and buys its own modules, and reads its own arrears state
 
 - Decision status: Proposed
-- Implementation status: Partial — `COMMERCIAL_MODULE_READ`/`COMMERCIAL_ARREARS_READ` exist and are composed into `TENANT_OWNER`/`TENANT_FINANCE`; `CommercialOperationsController.modulesOnSale`/`.modulesHeld`/`.purchaseModule` and `ArrearsController.tenantArrears` are built, capability-enforced, and covered by `CommercialSelfServiceEndpointTests` (positive, missing-capability, and cross-tenant refusal for all four). `frontend/operations`'s `subscription-page` renders the catalogue with inline purchase and the restricted-feature banner, covered by `subscription-page.spec.ts`. Not built: a tenant-reachable `end` to undo a self-purchase (stays `ScopeType.PLATFORM`), and a purchase-confirmation step before the click commits the tenant to the price shown.
+- Implementation status: Partial — `COMMERCIAL_MODULE_READ`/`COMMERCIAL_ARREARS_READ` exist and are composed into `TENANT_OWNER`/`TENANT_FINANCE`; `CommercialOperationsController.modulesOnSale`/`.modulesHeld`/`.purchaseModule` and `ArrearsController.tenantArrears` are built, capability-enforced, and covered by `CommercialSelfServiceEndpointTests` (positive, missing-capability, and cross-tenant refusal for all four). `frontend/operations`'s `subscription-page` renders the catalogue with inline purchase behind a `q-confirm-dialog` (batch 15) and the restricted-feature banner, covered by `subscription-page.spec.ts`. As of the 2026-09-30 status note below, a tenant can also end a module it bought itself: `CommercialOperationsController.endPurchasedModule` (`COMMERCIAL_SUBSCRIPTION_MANAGE`, `ScopeType.TENANT`), V0442's `tenant_modules.acquired_via`, a "Your modules" table with a confirmed End on the subscription page, covered by `CommercialSelfServiceEndpointTests`, `TenantModuleAcquisitionTests` and `subscription-page.spec.ts`. Not built: a way to undo a purchase without paying for the month it was made in — ADR 0087 and ADR 0088 prorate nothing, so ending a self-purchase stops the module from the next statement month on but still bills the month it ends in, and a grace window that voids an immediate undo would be a decision of its own
 - Date proposed: 2026-09-14
 - Date decided: —
 - Deciders: proposed by Claude and built on the platform owner's instruction of 2026-09-11; Ayubkhon Abbosov (platform owner) decides
@@ -204,6 +204,10 @@ under the same rules the platform-admin route already enforces.
       for all three new reads plus the purchase mutation
 - [x] Angular specs: catalogue render, purchase success/failure, and the
       restricted-feature banner's presence and absence
+- [x] Purchase-confirmation step before the click commits the tenant to a price
+      (batch 15)
+- [x] Tenant-reachable end of a self-purchase, its audit fact, its consequence
+      text and its specs (status note of 2026-09-30)
 
 ## Exit criteria
 
@@ -214,6 +218,120 @@ or suspended — see a banner naming the state, how long it has held, and the
 latest statement, all without a platform-admin capability or a support
 ticket. A `TENANT_ADMIN` or a principal scoped to a different tenant is
 refused on every one of the four new endpoints.
+
+## Status notes
+
+### 2026-09-30 — a tenant ends a module it bought itself
+
+The status line and "Accepted trade-offs" above name the tenant-reachable `end`
+as not built, and the "Accepted trade-offs" entry leaves it "for a future
+[wave] to pick up if it turns out to matter". It was left open, not declined,
+and the Decision above is unchanged by this note. Wave 16 (`w6-billing-self-service`,
+gap-map row 8.6) builds it. The "Accepted trade-offs" entry records the state at
+decision time; both of its halves (the confirmation step, in batch 15, and the
+undo, here) have since been built.
+
+What was built, and the choices that follow from decisions already made rather
+than from a new one:
+
+- **`POST /api/v1/tenants/{tenantId}/commercial/modules/{tenantModuleId}/end`**
+  (`CommercialOperationsController.endPurchasedModule`), declared
+  `COMMERCIAL_SUBSCRIPTION_MANAGE` at `ScopeType.TENANT`, mutating (so it
+  requires an `Idempotency-Key`), no request body. No new capability: ADR 0087
+  already names `commercial.subscription.manage` for "give or end" a module,
+  the purchase at this scope already uses it, and it is already composed into
+  `TENANT_OWNER` and `TENANT_FINANCE` only, so the pair that can buy is the pair
+  that can undo. `TENANT_ADMIN` holds no route to it, as for the purchase.
+  `CommercialModuleController.end` stays `ScopeType.PLATFORM` and is untouched.
+- **Only a module the tenant bought.** A tenant module now records the door it
+  came through: V0442 adds `commercial.tenant_modules.acquired_via`
+  (`PLATFORM` | `SELF_SERVICE`, default `PLATFORM`, checked). `purchaseModule`
+  writes `SELF_SERVICE`; `ModuleCatalogService.add`, the platform-admin route,
+  writes `PLATFORM`. The end refuses a `PLATFORM` row with **422
+  `UNPROCESSABLE_STATE` and `reason: MODULE_ASSIGNED_BY_PLATFORM`** — a module
+  HorecaOS sold is HorecaOS's to end. Rows that predate the column are filed by
+  the one fixed, non-PII reason the tenant door has always written
+  (`Purchased from the operations console`); a platform-admin row that happens
+  to carry those exact words would be misfiled, which is the accepted edge of
+  that backfill and applies to historical rows only. The lookup is by tenant
+  and id together, so a module of another tenant is **404 `RESOURCE_NOT_FOUND`**,
+  the same answer as a random id; a caller with a grant at a different tenant is
+  refused by the capability check before the lookup; a module already ended is
+  **409 `RESOURCE_CONFLICT`**.
+- **The reason is fixed, as for the purchase** (`Ended from the operations
+  console`), for the same reason as decision 3 above: the audit trail has who and
+  what, and a text box would be friction with no reader.
+- **What the end costs is what ADR 0087 and ADR 0088 already decided.** Nothing
+  is prorated, and a module live on any day of a month bills that whole month.
+  So the end switches the module's features off at once (resolution reads live
+  `tenant_modules`), the statement for the month it ends in still carries its
+  `MODULE` line in full, and no later month does — the statement query bills a
+  module that ended after the month began, so ending on the very instant a month
+  starts leaves that month unbilled. A one-off module bills only the month it
+  started in, whenever it ends. Nothing here moves money and no statement that
+  was already issued changes (it is frozen, ADR 0088). The response carries
+  `lastBilledPeriod` (`yyyy-MM`, in the tenant's timezone), computed by the same
+  rule, so the screen reports the statement rule instead of guessing it. Because
+  of this, "undo" does not mean "as if never bought": an immediate undo of a
+  purchase still bills the month. The confirmation step says so before the click.
+  A grace window that voids a same-day undo, or any proration, would change
+  ADR 0087's and ADR 0088's accepted no-proration position and is not decided
+  here.
+- **Audit.** The existing `commercial.tenant_module.ended` fact, written with
+  `ChangeDocuments.diff` at `ResourceScope.tenant`, by the calling subject, with
+  the capability used and the fixed reason. The document carries `live`
+  (`true` to `false`), `lastBilledPeriod` (unset to the month) and, unchanged,
+  `moduleCode` and `acquiredVia`. The `commercial.tenant_module.added` fact gains
+  `acquiredVia`. No PII: module codes and enum values only. No new action code,
+  so the activity log's action catalogue is unchanged.
+- **The held-modules read** (`GET .../commercial/modules/held`, and the
+  control-plane mirror that shares its view) gains `acquiredVia` and
+  `endableByTenant` (live and self-purchased): additive fields per ADR 0031, so
+  the screen offers End only where the server will accept it.
+- **The screen.** `frontend/operations`'s `subscription-page` gains a "Your
+  modules" table of live modules with their source (bought by you, assigned by
+  HorecaOS) and an End button only on `endableByTenant` rows. End opens the same
+  `q-confirm-dialog` the purchase has, in the destructive tone, whose text says
+  the module switches off now and that nothing is prorated (a one-off says it
+  refunds nothing); Cancel, Escape and the backdrop send nothing. On success the
+  list and entitlements are read again and the server's `lastBilledPeriod` is
+  shown back. All strings are in the three catalogues.
+
+Still not built, in this record's own scope: the grace window above. The prepaid
+wallet stays with ADR 0095.
+
+### 2026-09-30 — correction: a module ended and bought again in one month bills once
+
+The note above says the statement for the month a module ends in carries its
+`MODULE` line in full and no later month does. That held for a module that is
+only ended. It did not hold for one that is ended and then bought again in the
+same month, which the tenant's End and Add buttons make a two-click path (and
+which `ModuleCatalogService.add` already named as the way to change a
+quantity): `StatementService.draft` added one `MODULE` line for every
+`tenant_modules` row that overlapped the month, so a `PER_UNIT` kiosk ended at
+one and bought at two billed three units, and a `PER_TENANT` module bought,
+undone and bought again billed its price twice. That contradicted ADR 0088's
+own rule that a module live on any day of the month bills that month, once.
+
+`StatementService.moduleCharges` now reads the month's rows and produces one
+charge per module, in the order the tenant first held them. Where rows of one
+module disagree on the unit count, the month bills the largest: nothing is
+prorated, so buying again never bills the month for less than ending alone
+would have, and raising a quantity by ending and adding again bills the new,
+higher count. A module ended in one month and bought again in a later one is
+still one line in each month, since the two rows never overlap the same month.
+No decision changed and no ADR was superseded; ADR 0088's rule is applied to
+the case it did not spell out. Covered by
+`ModulesStatementsAndArrearsTests.endingAndReAddingAModuleInOneMonthBillsItOnceForTheMonth`,
+`.aModuleReBoughtAtALowerQuantityInTheSameMonthBillsTheMostItWasHeldAt` and
+`.aModuleEndedInOneMonthAndBoughtAgainInTheNextBillsEachMonthOnce`.
+
+The screen's End notice ("billed up to and including ...") is cleared when the
+tenant starts an Add, and a statement built after a re-buy is one line, so the
+two no longer disagree. Also on the screen: when an End succeeded but the list
+could not be read back, the held row is now marked ended from the server's own
+answer (`ModuleEndedView.endedAt`) instead of staying shown as live with an End
+button that would only answer 409. Covered by `subscription-page.spec.ts`.
 
 ## References
 

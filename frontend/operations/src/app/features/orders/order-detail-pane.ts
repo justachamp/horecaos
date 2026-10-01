@@ -6,6 +6,7 @@ import {
   inject,
   input,
   signal,
+  viewChild,
 } from '@angular/core';
 import { Router } from '@angular/router';
 import { Observable, firstValueFrom } from 'rxjs';
@@ -23,6 +24,7 @@ import { formatMoney } from '../../core/format/money';
 import { I18n, Locale } from '../../core/i18n/i18n';
 import { MessageKey } from '../../core/i18n/messages.en';
 import { TPipe } from '../../core/i18n/t.pipe';
+import { PhonePipe } from '../../core/format/phone.pipe';
 import { Combobox, ComboboxOption } from '../../shared/ui/combobox';
 import { OrderTableChip } from '../../shared/ui/order-table-chip/order-table-chip';
 import { ConfirmDialog } from '../../shared/ui/confirm-dialog';
@@ -69,14 +71,15 @@ import {
   OrderApprovalDecision,
   OrderDeliveryResponse,
   OrderDetailResponse,
-  OrderLine,
-  OrderLineCommentPreset,
   OrderTimelineEntry,
   RevisionResponse,
 } from './order-detail';
 import { OrderDeliveryApi } from './order-delivery-api';
 import { describeApiError, mutationErrorNotice } from './order-errors';
 import { OrderFiscalPanel } from './order-fiscal-panel';
+import { OrderDetailActions } from './order-detail-actions';
+import { OrderDetailLines } from './order-detail-lines';
+import { OrderDetailMoney } from './order-detail-money';
 import { OrderHandoverPanel } from './order-handover-panel';
 import { orderLifecycleSteps } from './order-lifecycle-steps';
 import { MoneyReconciliation, reconcileMoney } from './order-money';
@@ -90,11 +93,12 @@ import {
   liabilityPartyLabel,
   customerRefundLabel,
   deliveryCancellationOutcomeText,
-  deliveryExceptionReasonLabel,
 } from './order-outcome-labels';
 import { OrderOutcomeReasonDialog, OutcomeReasonSubmission } from './order-outcome-reason-dialog';
 import { OrderPaymentPanel } from './order-payment-panel';
+import { LabelledAction } from './order-row-actions';
 import { OrderPosExportApi, OrderPosExportView, PosExportPushResult } from './order-pos-export-api';
+import { OrderPosExportPanel } from './order-pos-export-panel';
 import { POS_EXPORT_STATE_LABEL_KEYS, posExportReachedTheTill } from './order-pos-export-labels';
 import {
   OrderRejectReasonDialog,
@@ -193,6 +197,7 @@ type DialogKind =
   selector: 'q-order-detail-pane',
   imports: [
     TPipe,
+    PhonePipe,
     OrderTableChip,
     OrderOutcomeReasonDialog,
     OrderAmendMenu,
@@ -207,6 +212,10 @@ type DialogKind =
     Steps,
     Timeline,
     Combobox,
+    OrderDetailActions,
+    OrderDetailLines,
+    OrderDetailMoney,
+    OrderPosExportPanel,
     // ---------------------------------------------------- wave 10 financial commands
     OrderAddLinesDialog,
     OrderChangeQuantityDialog,
@@ -381,13 +390,6 @@ export class OrderDetailPane {
     );
   });
 
-  /** The margin: the customer's fee minus what the provider billed — negative whenever `fulfillment.delivery_cost_subsidies` recorded a gap, because that row is only ever written for a loss. */
-  protected deliveryMarginMinor(delivery: OrderDeliveryResponse): number | null {
-    return delivery.providerCostMinor == null
-      ? null
-      : delivery.customerDeliveryFeeMinor - delivery.providerCostMinor;
-  }
-
   /** §4.1/§4.3: STALE_VERSION, a lost approval race, and a refused transition all surface here. */
   protected readonly notice = signal<string | null>(null);
   protected readonly busy = signal(false);
@@ -433,6 +435,9 @@ export class OrderDetailPane {
    */
   protected readonly amendmentHistory = signal<readonly AmendmentResponse[] | null>(null);
   protected readonly amendmentHistoryOpen = signal(false);
+
+  /** The payment section's panel, for «Выставить счёт» to open its re-issue form (gap map row 1.1e). */
+  private readonly paymentPanel = viewChild(OrderPaymentPanel);
   protected readonly amendmentHistoryLoading = signal(false);
   protected readonly amendmentHistoryError = signal(false);
 
@@ -890,6 +895,16 @@ export class OrderDetailPane {
       : actions;
   }
 
+  /** The header's primary button: the first visible action with the words the operator reads for it. */
+  protected primaryItem(): LabelledAction | null {
+    const action = this.primaryAction();
+    return action ? { action, label: this.actionLabel(action) } : null;
+  }
+
+  protected overflowItems(): readonly LabelledAction[] {
+    return this.overflowActions().map((action) => ({ action, label: this.actionLabel(action) }));
+  }
+
   protected primaryAction(): OrderActionResponse | null {
     return this.visibleActions()[0] ?? null;
   }
@@ -966,6 +981,14 @@ export class OrderDetailPane {
           return;
         }
         this.dialog.set('amendMenu');
+        return;
+      case 'ISSUE_INVOICE':
+        // Gap map row 1.1e, «Выставить счёт» (orders.md §4.9): the re-issue form
+        // is the payment panel's own — link or invoice push, then the payable
+        // link back — over the same idempotent `POST .../payment/re-presentations`
+        // it already calls. This opens that form and brings it into view rather
+        // than carrying a second one in the header.
+        this.paymentPanel()?.openReissue();
         return;
       case 'RESOLVE':
         // Gap map row 1.1e: the order-level action does not carry the
@@ -1901,34 +1924,9 @@ export class OrderDetailPane {
 
   // ------------------------------------------------------------ §3.4 lines
 
-  protected lineName(line: OrderLine): string {
-    return line.productName;
-  }
-
-  /** Row 2.1b: a preset's label in the console's own locale, matching `data-privacy-page.ts`'s own `consentLabel` selection. */
-  protected presetLabel(preset: OrderLineCommentPreset): string {
-    switch (this.i18n.locale()) {
-      case 'ru':
-        return preset.labelRu;
-      case 'uz-Latn':
-        return preset.labelUz;
-      default:
-        return preset.labelEn;
-    }
-  }
-
   /** §3.6's «Комментарий клиента к позиции» pointer: whether any line has one to reveal, above. */
   protected hasAnyLineNote(): boolean {
     return (this.order()?.value.lines ?? []).some((line) => line.hasNote);
-  }
-
-  protected revealedNote(lineId: string): string | null | undefined {
-    // undefined = never revealed this load; null = revealed and genuinely empty.
-    return this.revealedNotes().get(lineId);
-  }
-
-  protected isRevealingNote(lineId: string): boolean {
-    return this.revealingNoteFor() === lineId;
   }
 
   protected async revealLineNote(lineId: string): Promise<void> {
@@ -2447,11 +2445,6 @@ export class OrderDetailPane {
 
   protected customerRefundLabel(value: string): string {
     return customerRefundLabel(value, (key, values) => this.i18n.t(key, values));
-  }
-
-  /** The delivery-exception band's own reason label (gap map rows 1.2f/1.2g). */
-  protected deliveryExceptionReasonLabel(value: string): string {
-    return deliveryExceptionReasonLabel(value, (key, values) => this.i18n.t(key, values));
   }
 
   /**

@@ -1,0 +1,21 @@
+<header class="editor__header">
+  <div>
+    <a routerLink="/catalog/products" class="editor__back">{{ 'catalog.editor.backToList' | t }}</a>
+    <h1 class="q-title editor__name">{{ name() }}</h1>
+    <span class="q-mono q-caption">{{ code() }}</span>
+    <span class="status-badge">{{ statusLabel() }}</span>
+  </div>
+  <div class="editor__header-actions">
+    @if (saveNotice(); as notice) {
+      <span class="q-caption editor__notice">{{ notice }}</span>
+    }
+    <button
+      type="button"
+      class="editor__publish"
+      (click)="publishRequested.emit()"
+      data-testid="editor-publish"
+    >
+      {{ 'catalog.publish.action' | t }}
+    </button>
+  </div>
+</header>

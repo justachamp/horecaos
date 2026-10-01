@@ -274,6 +274,91 @@ public final class OrderActionsPolicy {
     }
 
     /**
+     * {@link #availableFor(OrderStatus, FulfillmentMode, Set, boolean, boolean)},
+     * with {@code ISSUE_INVOICE} added when this order is waiting on an online
+     * payment nobody has made (gap map row 1.1e, orders.md §4.9 «Выставить счёт»).
+     *
+     * <p>A sixth-argument overload for the reason the fifth and fourth are: the
+     * sweeps in {@code OrderActionsPolicyTests} exercise the shorter forms and
+     * have no opinion about a payment. {@code OrderActionResponse.allFor} — the
+     * one caller that has the order's payment projection and its live intent —
+     * calls this one.
+     *
+     * <p>The gate is the endpoint's own. {@code POST .../orders/{id}/payment/
+     * re-presentations} declares {@code PAYMENT_INITIATE} at <em>tenant</em>
+     * scope and hands the order to {@code PaymentCheckoutService}, which refuses
+     * a cash order, a paid one, an order whose intent has closed and one whose
+     * attempt is in doubt. So the action is offered where that call can succeed
+     * as far as the order's row and its live intent can tell: it has not ended,
+     * an online payment is owed and can be presented (see {@link
+     * #awaitsOnlinePayment}), and the caller holds the capability. The merchant
+     * account still resolving today is the one refusal left to the endpoint. The
+     * caller supplies that capability
+     * already resolved at the endpoint's scope — the location-scoped set the other
+     * branches read would offer the button to a principal the endpoint refuses.
+     *
+     * @param awaitingOnlinePayment {@link #awaitsOnlinePayment}'s answer for this order
+     */
+    public static List<OrderAction> availableFor(
+            OrderStatus status,
+            FulfillmentMode mode,
+            Set<Capability> grantedCapabilities,
+            boolean courierUnassigned,
+            boolean amendmentAwaitingOperator,
+            boolean awaitingOnlinePayment) {
+        List<OrderAction> actions = new ArrayList<>(
+                availableFor(status, mode, grantedCapabilities, courierUnassigned, amendmentAwaitingOperator));
+
+        if (awaitingOnlinePayment && !status.terminal() && grantedCapabilities.contains(Capability.PAYMENT_INITIATE)) {
+            actions.add(new OrderAction(OrderActionCode.ISSUE_INVOICE, null));
+        }
+
+        return List.copyOf(actions);
+    }
+
+    /**
+     * Whether an online payment is still owed <em>and</em> an operator can hand
+     * the customer a checkout surface for it — the one fact {@code ISSUE_INVOICE}
+     * is gated on.
+     *
+     * <p>Two facts, and neither is enough alone. The projection is the cheap,
+     * always-present one: {@code PENDING} is written only for an order that must
+     * be paid before it can be confirmed (an online tender), {@code NOT_REQUIRED}
+     * for cash and marketplace orders, and a captured, failed, voided or refunded
+     * payment moves it off {@code PENDING}. {@code FAILED} is deliberately not
+     * included — a failed attempt takes the order to the terminal {@code
+     * PAYMENT_FAILED}, where "a new attempt is a new order" (ADR 0019).
+     *
+     * <p>But the projection does <strong>not</strong> move for every payment
+     * fact. An attempt whose reservation aged out ({@code EXPIRED}) and one whose
+     * outcome is unknown ({@code UNCERTAIN}) publish nothing to the projection
+     * ({@code PaymentAttemptService.applyToIntent}), so an order in {@code
+     * PAYMENT_AUTHORIZING} stays {@code PENDING} with a closed intent, and the
+     * endpoint answers {@code NO_PAYMENT_INTENT} or {@code PAYMENT_IN_DOUBT}. So
+     * the caller also supplies what the intent says — {@code
+     * PaymentIntentPort#ordersWithPresentablePayment} — and the action is offered
+     * only when both agree.
+     *
+     * @param presentablePayment the order has a live provider intent none of whose
+     *                           attempts forbids showing a surface again
+     */
+    public static boolean awaitsOnlinePayment(String paymentStatusProjection, boolean presentablePayment) {
+        return presentablePayment && paymentMayBeOwed(paymentStatusProjection);
+    }
+
+    /**
+     * The projection half of {@link #awaitsOnlinePayment}, on its own: whether the
+     * order's {@code payment_status_projection} still says a payment is owed.
+     *
+     * <p>Necessary, never sufficient -- an expired or uncertain attempt leaves it
+     * {@code PENDING}. It exists so a board page can decide which of its rows are
+     * worth asking the payments module about, and for nothing else.
+     */
+    public static boolean paymentMayBeOwed(String paymentStatusProjection) {
+        return "PENDING".equals(paymentStatusProjection);
+    }
+
+    /**
      * The window {@link DeliveryPlanTrigger} keeps a delivery plan open in:
      * from {@code CONFIRMED}, when the plan is opened, through {@code
      * FULFILLING}, the last non-terminal status a delivery order reaches

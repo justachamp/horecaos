@@ -6,6 +6,8 @@
  * `core/format/datetime.ts`; this file never duplicates it.
  */
 
+import { groupDigits } from '../../core/format/regional-format';
+
 /** `YYYY-MM-DD` → `DD.MM` (statistics.md §0: "Dates DD.MM"). No zone conversion — a LocalDate has none to do. */
 export function ddmm(iso: string): string {
   const [, month, day] = iso.split('-');
@@ -51,15 +53,17 @@ export function formatShare(count: number, total: number): string {
 }
 
 /**
- * Groups a plain integer with U+00A0 NO-BREAK SPACE, the same separator
- * `formatMoney` uses and for the same reason: a plain space lets a browser
- * break `12 400` across two lines in a dense table, and `Intl`'s own separator
- * varies by locale and ICU version.
+ * Groups a plain integer the way `formatMoney` groups an amount — a no-break
+ * space by default, and whatever separator the brand chose in its regional
+ * formats (Settings 10.12) — so a count of orders and a total in the same
+ * table never disagree about where a thousand ends. A plain space would let a
+ * browser break `12 400` across two lines in a dense table, and `Intl`'s own
+ * separator varies by locale and ICU version.
  */
 export function formatCount(value: number): string {
   const negative = value < 0;
   const digits = String(Math.abs(Math.round(value)));
-  const grouped = digits.replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+  const grouped = groupDigits(digits);
   return negative ? `−${grouped}` : grouped;
 }
 

@@ -59,22 +59,65 @@ verified by eye, not by a script.
 
 ## Formatting and lint in CI
 
-Only `operations` has a lint script and a `format`/`format:check` pair today; the CI job
-`Frontend builds (operations)` runs two gates the other three apps do not:
+Every app has `npm run lint` and `npm run format:check`, and the CI job `Frontend builds`
+runs them; what they cover differs by app.
 
-- **`npm run lint` and `npm run lint:rules`.** `eslint-plugin-horecaos` rejects a raw
-  `font-size: 10px` anywhere under `src/` (use a `--q-type-*` token or a `.q-*` class from
-  `tokens.css`). Both are clean; the job fails on the first regression.
-- **`npm run format:check`** on the whole `src/` tree (`ts`, `html`, `css`, `json`). The
-  tree is prettier-clean and CI keeps it so; fix a failure with `npm run format` in the
-  app. `tools/format_changed.py` is a local shortcut that checks (or, with `--list`, only
-  names) the files your change touched against a base branch; CI does not use it.
+- **`operations`** — `npm run lint` and `npm run lint:rules`: `eslint-plugin-horecaos` rejects
+  a raw `font-size: 10px` anywhere under `src/` (use a `--q-type-*` token or a `.q-*` class from
+  `tokens.css`), and `lint:rules` proves the rule itself still fails on a violation. Then
+  **`npm run format:check`** on the whole `src/` tree (`ts`, `html`, `css`, `json`); the tree is
+  prettier-clean and CI keeps it so. Fix a failure with `npm run format` in the app.
+- **`control-plane`, `storefront`, `storefront-milliy`** — ESLint 8.57 with the
+  `typescript-eslint` recommended rules, `@eslint/js` recommended, and `eqeqeq` (flat config,
+  `eslint.config.mjs` in each app; underscore-prefixed arguments and variables are the way to say
+  "deliberately unused"). `control-plane` also runs operations' `horecaos/no-raw-px-font-size`
+  — imported from `frontend/operations/tools/eslint-plugin-horecaos`, not copied — because it
+  vendors the closed type scale; the two storefronts are Tailwind/SCSS apps with no such scale,
+  so the rule is not applied there. Angular templates are not linted (`angular-eslint` needs
+  ESLint 9; operations is on 8.57, so the upgrade is one change across the apps).
+  `npm run lint:rules` runs `tools/lint-config.test.mjs`, which feeds the configured linter code
+  that is wrong and code that is fine, so a config that silently lost its rules fails instead of
+  passing for ever.
+- **Formatting of those three** is a ratchet, not a tree gate: each tree has on the order of a
+  hundred files that predate its prettier config, and a blanket reformat while other branches
+  are open would conflict with every one of them. CI runs `tools/format_changed.py`, which
+  checks only the `src/` files a change added or edited (against the merge base), so a file a
+  change touches must be prettier-clean. When nothing is in flight, reformat one app in a single
+  commit (`npm run format`) and switch its CI step to `npm run format:check`, as operations did.
 
   ```bash
-  python3 frontend/tools/format_changed.py --app operations --base main --list   # what would be checked
-  python3 frontend/tools/format_changed.py --app operations --base main          # check it (needs npm ci)
-  python3 frontend/tools/test_format_changed.py                                  # the tooling tests, also run in CI
+  python3 frontend/tools/format_changed.py --app control-plane --base main --list   # what would be checked
+  python3 frontend/tools/format_changed.py --app control-plane --base main          # check it (needs npm ci)
+  python3 frontend/tools/test_format_changed.py                                     # the tooling tests, also run in CI
   ```
+
+`control-plane` vendors `design-tokens/tokens.css`; `npm run check:tokens` diffs the copy
+against the source of record. It is a CI step ("Design tokens drift check (control-plane)"),
+and the lint and prettier ignores for the vendored sheet rest on it.
+
+## Component styles and bundle budgets
+
+Each app warns at 4 kB per component stylesheet (`anyComponentStyle`) and 500 kB for the initial
+bundle; the numbers are what the build prints (`ng build`), measured on minified output.
+When a page's stylesheet grows past 4 kB:
+
+- **Rules several pages carry byte for byte** belong in a shared sheet, under a `q-` name the page
+  opts into by using it in its template. `operations/src/app/shared/styles/` holds three
+  (`modal.css`, `dialog.css`, `controls.css`), loaded from `styles.css`. Bare names such as
+  `.dialog` or `.primary` cannot be made global: other pages mean something else by them.
+- **A region with rules of its own** becomes a component that takes what it shows as inputs and
+  raises what the user asks for (`host: display contents` keeps the box tree unchanged). The page keeps
+  every read, write and decision; the order queue's toolbar, the detail pane's money section and
+  the product editor's Photos tab are examples.
+- Do not raise the budget. `operations`' initial bundle measured 782.55 kB on 2026-09-30 against
+  the 825 kB error budget (about 42 kB of headroom), of which the Russian catalogue (the default
+  locale, eager by ADR 0035's loading model) is 466 kB. The figure ages with every merge: the
+  `Initial total` line of `ng build --configuration production` is the source of truth, so size a
+  feature against a fresh build, not against this number.
+
+`operations` also has `npm run i18n:dead`, which lists message keys nothing references;
+`--write` removes them from all three locales (`--app-dir ../control-plane --variables
+'^(en|ru|uzLatn)$'` scans control-plane).
 
 ## Known debts
 

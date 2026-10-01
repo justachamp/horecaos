@@ -1,10 +1,11 @@
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { BrandScope } from '../../../core/api/catalog-paths';
 import { CurrentBrand } from '../../../core/auth/current-brand';
+import { applyRegionalFormats, resetRegionalFormats } from '../../../core/format/regional-format';
 import { I18n } from '../../../core/i18n/i18n';
 import { AudienceSummary, CampaignView, ChannelView, MarketingApi } from '../marketing-api';
 import { CampaignsPage } from './campaigns-page';
@@ -76,6 +77,8 @@ describe('CampaignsPage', () => {
   let fixture: ComponentFixture<CampaignsPage>;
   let api: Record<string, ReturnType<typeof vi.fn>>;
 
+  afterEach(() => resetRegionalFormats());
+
   async function render(
     campaigns: readonly CampaignView[],
     channels: readonly ChannelView[] = CHANNELS,
@@ -115,6 +118,17 @@ describe('CampaignsPage', () => {
 
     expect(host.querySelectorAll('[data-testid="campaign-row"]')).toHaveLength(1);
     expect(host.textContent).toContain('Autumn promotion');
+  });
+
+  // Row 10.12: the Formats card says it controls how operators read amounts across the console.
+  it('writes a campaign’s cost estimate the way the brand chose', async () => {
+    applyRegionalFormats({ moneySymbolPlacement: 'BEFORE', moneyGrouping: 'COMMA' });
+    await render([campaign({ estimatedCostLowMinor: 42_000, estimatedCostHighMinor: 63_000 })]);
+    const row = (fixture.nativeElement as HTMLElement).querySelector(
+      '[data-testid="campaign-row"]',
+    )!;
+
+    expect(row.textContent?.replace(/\s/g, ' ')).toContain('UZS 42,000–63,000');
   });
 
   it('hints a maker that their own campaign is awaiting a second signature', async () => {

@@ -13,47 +13,6 @@
   padding: 24px 20px;
 }
 
-.new-order__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 20px;
-  border-bottom: 1px solid var(--q-hairline);
-}
-
-.new-order__title {
-  margin: 0;
-}
-
-.new-order__header-actions {
-  display: flex;
-  gap: 8px;
-}
-
-.new-order__cancel,
-.new-order__submit {
-  padding: 6px 16px;
-  border: 1px solid var(--q-hairline);
-  border-radius: var(--q-radius);
-  background: var(--q-canvas);
-  color: var(--q-ink);
-  cursor: pointer;
-}
-
-.new-order__submit {
-  border-color: var(--q-primary);
-  background: var(--q-primary);
-  color: var(--q-inverse-ink);
-}
-
-.new-order__submit:disabled {
-  opacity: 0.5;
-  cursor: default;
-  background: var(--q-surface-2);
-  border-color: var(--q-hairline);
-  color: var(--q-ink-subtle);
-}
-
 .new-order__error {
   color: var(--q-error-text);
   margin: 8px 20px 0;
@@ -195,94 +154,6 @@
   padding: 2px 0;
 }
 
-.new-order__categories {
-  margin-top: 8px;
-}
-
-.new-order__category {
-  margin-bottom: 12px;
-}
-
-.new-order__category-title {
-  color: var(--q-ink-subtle);
-  margin: 0 0 6px;
-}
-
-.new-order__category-items {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.new-order__product {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 10px;
-  border: 1px solid var(--q-hairline);
-  border-radius: var(--q-radius);
-  background: var(--q-canvas);
-  color: var(--q-ink);
-  cursor: pointer;
-}
-
-.new-order__product--stopped {
-  color: var(--q-ink-subtle);
-  text-decoration: line-through;
-}
-
-.new-order__stop-chip {
-  text-decoration: none;
-  color: var(--q-error-text);
-}
-
-.new-order__basket {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.new-order__basket-line {
-  border: 1px solid var(--q-hairline);
-  padding: 8px;
-}
-
-.new-order__basket-line--unavailable {
-  border-color: var(--q-error);
-  background: var(--q-error-tint);
-}
-
-.new-order__basket-line-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.new-order__remove {
-  border: none;
-  background: transparent;
-  color: var(--q-error-text);
-  cursor: pointer;
-}
-
-.new-order__modifiers {
-  color: var(--q-ink-subtle);
-  margin: 4px 0;
-}
-
-.new-order__note {
-  width: 100%;
-  margin-top: 6px;
-  padding: 4px 6px;
-  border: 1px solid var(--q-hairline);
-  background: var(--q-canvas);
-  color: var(--q-ink);
-}
-
 .new-order__order-row {
   display: flex;
   justify-content: space-between;
@@ -302,9 +173,12 @@
   font-weight: 600;
 }
 
-/* ------------------------------------------------------------ wave P14 */
-
-.new-order__aggregator-toggle {
+/*
+ * The pre-order checkbox lays out like the aggregator checkbox in the header (new-order-header.css),
+ * a flex row in subtle ink. The header's rule is scoped to the header by view encapsulation, so this
+ * label, which sits in the page, needs its own.
+ */
+.new-order__pre-order-toggle {
   display: flex;
   align-items: center;
   gap: 4px;
@@ -378,22 +252,4 @@
   justify-content: flex-end;
   gap: 8px;
   margin-top: 8px;
-}
-
-.new-order__branch-zone {
-  color: var(--q-ink-subtle);
-  margin-left: 4px;
-}
-
-/* ADR 0047: the order exists but its table's bill does not have it yet. */
-.new-order__notice-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-top: 6px;
-}
-
-.new-order__error-inline {
-  color: var(--q-error-text);
-  margin: 2px 0;
 }

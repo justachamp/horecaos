@@ -44,6 +44,7 @@ import uz.horecaos.platform.tenancy.application.port.TenantControlPlaneStore;
 import uz.horecaos.platform.tenancy.application.port.TenantStatusCache;
 import uz.horecaos.platform.tenancy.domain.Brand;
 import uz.horecaos.platform.tenancy.domain.BrandProfile;
+import uz.horecaos.platform.tenancy.domain.BrandRegionalFormats;
 import uz.horecaos.platform.tenancy.domain.CoordinateSource;
 import uz.horecaos.platform.tenancy.domain.CustomerIdentityMode;
 import uz.horecaos.platform.tenancy.domain.CustomerIdentityPolicy;
@@ -553,7 +554,9 @@ public class TenantControlPlaneService {
         Brand brand = requireBrand(tenantId, brandId);
 
         BrandProfile before = store.findBrandProfile(tenantId, brandId);
-        BrandProfile profile = command.toProfile();
+        // The whole-set write never touches the display formats (10.12): they have their own act
+        // below, so the profile handed back carries the stored ones through.
+        BrandProfile profile = command.toProfile().withFormats(before.formats());
         store.updateBrandProfile(tenantId, brandId, profile);
         // Never contactPhone/telegramHandle here -- the same PII exclusion
         // describeLocation's own audit map keeps for contactPhone, ADR 0029.
@@ -590,6 +593,53 @@ public class TenantControlPlaneService {
                 .map(BrandProfile.BrandLocale::locale)
                 .findFirst()
                 .ifPresent(locale -> audited.put("defaultLocale", locale));
+        return audited;
+    }
+
+    /**
+     * Sets how this brand's operators read money and phone numbers in the console
+     * (Settings 10.12): where the currency unit sits on a total, how thousands are
+     * grouped, and how a phone number is written.
+     *
+     * <p>A whole-set write of exactly those three and its own audited act, separate
+     * from {@link #updateBrandProfile}: a contact or language correction must never
+     * be able to reset them, and a format change is not a storefront content edit.
+     * Like the profile write it carries no {@code If-Match}: it is display
+     * preference, not an identity two people could race on, and the last write wins.
+     * Nothing here is personal data, so the audit fact records the values.
+     */
+    @Transactional
+    public BrandView reviseRegionalFormats(TenantId tenantId, BrandId brandId, RegionalFormatsCommand command) {
+        Objects.requireNonNull(command, "Regional formats command is required");
+        Tenant tenant = requireTenant(tenantId);
+        accessPolicy.requireTenantManagement(
+                tenant, Capability.BRAND_WRITE, ResourceScope.brand(tenantId.value(), brandId.value()));
+        Brand brand = requireBrand(tenantId, brandId);
+
+        BrandProfile before = store.findBrandProfile(tenantId, brandId);
+        BrandRegionalFormats formats = command.toFormats();
+        store.updateBrandRegionalFormats(tenantId, brandId, formats);
+        Map<String, Object> changes = ChangeDocuments.diff(formatsAudit(before.formats()), formatsAudit(formats));
+        recordAudit(
+                "brand.regional_formats_revised",
+                ResourceScope.brand(tenantId.value(), brandId.value()),
+                "Brand",
+                brandId.value(),
+                "Brand regional display formats",
+                changes);
+        return toView(brand, before.withFormats(formats));
+    }
+
+    private static Map<String, Object> formatsAudit(BrandRegionalFormats formats) {
+        Map<String, Object> audited = new LinkedHashMap<>();
+        audited.put("moneySymbolPlacement", formats.moneySymbolPlacement().name());
+        audited.put("moneyGrouping", formats.moneyGrouping().name());
+        // AuditFact refuses a null value outright, and "shown as it arrives" is the absence of a
+        // pattern, so the key is omitted rather than recorded as null -- the same treatment the
+        // profile audit gives an unset default locale.
+        if (formats.phoneDisplayPattern() != null) {
+            audited.put("phoneDisplayPattern", formats.phoneDisplayPattern());
+        }
         return audited;
     }
 
@@ -1025,6 +1075,29 @@ public class TenantControlPlaneService {
         return toView(location, store.findLocationContent(tenantId, locationId));
     }
 
+    /**
+     * The regional display formats of the brand a location belongs to, for the
+     * operators who work that location (Settings 10.12).
+     *
+     * <p>{@link #getBrand} carries the same formats but sits behind {@code
+     * BRAND_READ} and a tenant-level {@code TENANT_READ}, and neither is held
+     * by {@code LOCATION_MANAGER} or {@code LOCATION_STAFF}: the cashier, the
+     * kitchen lead and the branch manager read money and phone numbers all day
+     * and would never receive the brand's choice. The caller's {@code
+     * LOCATION_READ} at this very location is the authorization, checked by the
+     * controller before this runs, so nothing else of the brand is exposed
+     * here -- only how it wants amounts and phones written. The location must
+     * belong to the brand in the path, or the answer is a not-found rather than
+     * another brand's formats.
+     */
+    @Transactional(readOnly = true)
+    public RegionalFormatsView getRegionalFormatsForLocation(
+            TenantId tenantId, BrandId brandId, LocationId locationId) {
+        Brand brand = requireBrand(tenantId, brandId);
+        requireLocation(brand, locationId);
+        return RegionalFormatsView.of(store.findBrandProfile(tenantId, brandId).formats());
+    }
+
     private Tenant requireTenant(TenantId tenantId) {
         return store.findTenant(Objects.requireNonNull(tenantId, "Tenant ID is required"))
                 .orElseThrow(() -> new TenantResourceNotFoundException("Tenant was not found"));
@@ -1131,6 +1204,7 @@ public class TenantControlPlaneService {
                 profile.locales().stream()
                         .map(locale -> new BrandLocaleView(locale.locale(), locale.description(), locale.isDefault()))
                         .toList(),
+                RegionalFormatsView.of(profile.formats()),
                 brand.version());
     }
 
@@ -1216,11 +1290,44 @@ public class TenantControlPlaneService {
                     locales.stream()
                             .map(input -> new BrandProfile.BrandLocale(
                                     input.locale(), input.description(), input.isDefault()))
-                            .toList());
+                            .toList(),
+                    // Placeholder: the store ignores it and updateBrandProfile carries the stored formats through.
+                    BrandRegionalFormats.defaults());
         }
     }
 
     public record BrandLocaleInput(String locale, @Nullable String description, boolean isDefault) {}
+
+    /**
+     * The three display formats, as a form holds them (10.12). The two enums arrive as their
+     * names; {@code null} for either means the default, so a form that leaves one untouched
+     * does not have to know it.
+     */
+    public record RegionalFormatsCommand(
+            @Nullable String moneySymbolPlacement,
+            @Nullable String moneyGrouping,
+            @Nullable String phoneDisplayPattern) {
+
+        public BrandRegionalFormats toFormats() {
+            BrandRegionalFormats defaults = BrandRegionalFormats.defaults();
+            return new BrandRegionalFormats(
+                    moneySymbolPlacement == null
+                            ? defaults.moneySymbolPlacement()
+                            : parse(BrandRegionalFormats.MoneySymbolPlacement.class, moneySymbolPlacement),
+                    moneyGrouping == null
+                            ? defaults.moneyGrouping()
+                            : parse(BrandRegionalFormats.MoneyGrouping.class, moneyGrouping),
+                    phoneDisplayPattern);
+        }
+
+        private static <E extends Enum<E>> E parse(Class<E> type, String name) {
+            try {
+                return Enum.valueOf(type, name);
+            } catch (IllegalArgumentException unknown) {
+                throw new IllegalArgumentException("Unknown " + type.getSimpleName() + " '" + name + "'");
+            }
+        }
+    }
 
     public record CreateLocationCommand(String code, String slug, String displayName, String timezone) {}
 
@@ -1278,10 +1385,32 @@ public class TenantControlPlaneService {
             @Nullable UUID logoAssetId,
             @Nullable UUID bannerAssetId,
             List<BrandLocaleView> locales,
+            RegionalFormatsView regionalFormats,
             long version) {}
 
     /** One entry of {@link BrandView#locales}. */
     public record BrandLocaleView(String locale, @Nullable String description, boolean isDefault) {}
+
+    /**
+     * A brand's display formats (10.12), always present: a brand that has chosen none reads
+     * the defaults, which are what the console did before they were configurable.
+     *
+     * @param moneySymbolPlacement {@code BEFORE} or {@code AFTER} the amount
+     * @param moneyGrouping        {@code SPACE}, {@code COMMA}, {@code DOT} or {@code NONE}
+     * @param phoneDisplayPattern  one {@code #} per digit, or null to show a number as it arrives
+     */
+    public record RegionalFormatsView(
+            String moneySymbolPlacement,
+            String moneyGrouping,
+            @Nullable String phoneDisplayPattern) {
+
+        static RegionalFormatsView of(BrandRegionalFormats formats) {
+            return new RegionalFormatsView(
+                    formats.moneySymbolPlacement().name(),
+                    formats.moneyGrouping().name(),
+                    formats.phoneDisplayPattern());
+        }
+    }
 
     /**
      * Where a branch is, as a caller states it.

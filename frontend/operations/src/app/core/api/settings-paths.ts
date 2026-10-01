@@ -91,6 +91,16 @@ export const settingsPaths = {
   },
 
   /**
+   * `TenantControlPlaneController.reviseRegionalFormats` (control-plane
+   * surface), row 10.12 — where the currency unit sits on a total, how
+   * thousands are grouped and how a phone number is written. Its own act
+   * beside {@link brandProfileWrite}, which never touches them.
+   */
+  brandRegionalFormats(scope: LocationScope): string {
+    return `${this.brandRevise(scope)}/regional-formats`;
+  },
+
+  /**
    * `TenantProfileController.tenantProfile` (row 10.1) — the tenant's own
    * country/currency/timezone, read-only, shown beside the brand's editable
    * fields. Operations-native (`BRAND_READ` at `TENANT` scope, the same
@@ -156,6 +166,16 @@ export const settingsPaths = {
   },
 
   /**
+   * `LocationServiceOperationsController.regionalFormats` — how this location's brand writes
+   * amounts and phone numbers (Settings 10.12), gated by the `LOCATION_READ` every operator holds
+   * at their own location. {@link brand} carries the same object but needs `BRAND_READ`, which a
+   * cashier, a kitchen lead and a branch manager do not have.
+   */
+  locationRegionalFormats(scope: LocationScope): string {
+    return `${this.location(scope)}/regional-formats`;
+  },
+
+  /**
    * `LocationServiceOperationsController.serviceSummary` — manual override,
    * every bound schedule's full grid, preparation bands, live capacity. Reads
    * what the four write endpoints below already persist.
@@ -213,6 +233,16 @@ export const settingsPaths = {
   /** `OrderAcceptancePolicyController` (control-plane surface). */
   orderAcceptancePolicy(scope: LocationScope): string {
     return `${CONTROL_PLANE}/tenants/${enc(scope.tenantId)}/order-acceptance-policy`;
+  },
+
+  /**
+   * `OrderLatenessPolicyEditorController` (operations-native, rows `X.39`/`10.3b`) — the
+   * `ordering.lateness` document as authored per scope: `GET` with `scopeType`/`brandId`/
+   * `locationId` query parameters, `POST` to publish the next version. The boards read the
+   * *resolved* thresholds from `operationsPaths.orderLatenessPolicy` instead.
+   */
+  orderLatenessPolicy(scope: LocationScope): string {
+    return `${OPERATIONS}/tenants/${enc(scope.tenantId)}/order-lateness-policy`;
   },
 
   // ---------------------------------------------------------- 10.4 Sales channels
@@ -408,6 +438,15 @@ export const settingsPaths = {
    */
   catalogFiscalCoverage(scope: LocationScope): string {
     return `${CONTROL_PLANE}/tenants/${enc(scope.tenantId)}/brands/${enc(scope.brandId)}/catalog/fiscal-coverage`;
+  },
+
+  /**
+   * `CatalogAuthoringController.bulkClassify` — control-plane surface,
+   * pre-existing (the catalog's fiscal workbench already writes through it).
+   * Tab 3's ИКПУ / package-code backfill sends it in `MERGE` mode.
+   */
+  catalogBulkFiscalClassification(scope: LocationScope): string {
+    return `${CONTROL_PLANE}/tenants/${enc(scope.tenantId)}/brands/${enc(scope.brandId)}/catalog/fiscal-classifications/bulk`;
   },
 
   /** `CatalogAuthoringController.classifyFee` — control-plane surface, pre-existing. */

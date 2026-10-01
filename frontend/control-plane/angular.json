@@ -68,7 +68,11 @@
           }
         },
         "test": {
-          "builder": "@angular/build:unit-test"
+          "builder": "@angular/build:unit-test",
+          "options": {
+            "buildTarget": "control-plane:build:development",
+            "setupFiles": ["src/testing/i18n-preload.setup.ts"]
+          }
         }
       }
     }

@@ -13,7 +13,6 @@ import type {
   MenuItemCommentPreset,
   MenuItemModifierGroup,
   MenuItemVariant,
-  PopularCategory,
 } from '../../types/home.types';
 import { TranslatePipe } from '../../shared/translate/translate.pipe';
 import { TranslateService } from '../../services/translate.service';
@@ -562,5 +561,4 @@ export class ProductComponent {
     }
     return null;
   }
-
 }

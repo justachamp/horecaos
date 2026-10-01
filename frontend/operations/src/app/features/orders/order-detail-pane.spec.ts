@@ -1,10 +1,11 @@
 import { TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
-import { of, throwError } from 'rxjs';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { NEVER, of, throwError } from 'rxjs';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ApiClient } from '../../core/api/api-client';
 import { CurrentLocation } from '../../core/auth/current-location';
+import { applyRegionalFormats, resetRegionalFormats } from '../../core/format/regional-format';
 import { ApiError, ApiErrorCode } from '../../core/api/problem-details';
 import { I18n } from '../../core/i18n/i18n';
 import { ReasonResponse, ReferenceDataApi } from '../settings/reference-data/reference-data-api';
@@ -12,6 +13,7 @@ import { SalesChannelsApi } from '../settings/sales-channels/sales-channels-api'
 import { CouriersApi, RosterEntryResponse } from '../couriers/couriers-api';
 import { DispatchApi, DispatchResponse } from '../delivery/dispatch-api';
 import { KitchenApi, KitchenEventsResponse } from '../kitchen/kitchen-api';
+import { OrderPaymentView, PaymentsApi } from '../finance/payments/payments-api';
 import { OrderActionsApi } from './order-actions-api';
 import { AmendmentResponse } from './order-amendments';
 import { OrderAmendmentsApi } from './order-amendments-api';
@@ -165,6 +167,7 @@ function configure(options: {
   couriersApi?: Partial<CouriersApi>;
   kitchenApi?: Partial<KitchenApi>;
   posExportApi?: Partial<OrderPosExportApi>;
+  paymentsApi?: Partial<PaymentsApi>;
   newOrderApi?: Partial<NewOrderApi>;
   channelsApi?: Partial<SalesChannelsApi>;
   router?: Partial<Router>;
@@ -234,6 +237,10 @@ function configure(options: {
           forOrder: () => Promise.resolve({ posCapable: false, export: null }),
         },
       },
+      // Row 1.1e (wave 16): only a test about «Выставить счёт» supplies the
+      // payments seam; every other keeps the real root-provided `PaymentsApi`
+      // over the stubbed `ApiClient`, exactly as before this option existed.
+      ...(options.paymentsApi ? [{ provide: PaymentsApi, useValue: options.paymentsApi }] : []),
       // Wave 10 (rows 1.2c/2.1d): ADD_LINES's own search reuses NewOrderApi,
       // CHANGE_PAYMENT_METHOD's own picker reuses SalesChannelsApi's matrix —
       // every test not focused on either gets a harmless empty answer, the
@@ -320,6 +327,51 @@ describe('OrderDetailPane: rendering the loaded order', () => {
     expect(presets).not.toBeNull();
     expect(presets?.textContent).toContain('No onions');
     expect(presets?.textContent).toContain('Extra spicy');
+  });
+
+  it('row 10.12: a chip reads the labels map, so a wording beyond the triple shows where the console column is blank', async () => {
+    configure({
+      get: apiGet({
+        value: detail({
+          lines: [
+            {
+              lineNumber: 1,
+              productName: 'Лагман',
+              quantity: 1,
+              finalAmountMinor: 73_000,
+              modifiers: [],
+              commentPresets: [
+                {
+                  code: 'NO_ONIONS',
+                  labelRu: '',
+                  labelUz: '',
+                  labelEn: '',
+                  labels: { kaa: 'Piyazsiz' },
+                },
+                {
+                  code: 'EXTRA_SPICY',
+                  labelRu: 'Поострее',
+                  labelUz: 'Achchiqroq',
+                  labelEn: 'Extra spicy',
+                  labels: { en: 'Extra spicy, please' },
+                },
+              ],
+              lineId: 'line-1',
+              hasNote: false,
+            },
+          ],
+        }),
+        version: 3,
+      }),
+    });
+    const fixture = await render();
+    const chips = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll(
+        '[data-testid="order-detail-line-presets"] li',
+      ),
+    ).map((chip) => chip.textContent?.trim());
+
+    expect(chips).toEqual(['Piyazsiz', 'Extra spicy, please']);
   });
 
   it('batch 14: shows the table a dine-in order was seated at in the header, beside its number', async () => {
@@ -765,6 +817,42 @@ describe('OrderDetailPane: PII reveal is a separate audited call (§1.5)', () =>
 
     expect(revealPhone).toHaveBeenCalledTimes(1);
     expect(fixture.nativeElement.textContent).toContain('+998901234567');
+  });
+
+  describe('the number is written in the brand’s own pattern (row 10.12)', () => {
+    afterEach(() => resetRegionalFormats());
+
+    it('re-writes the masked number, and the revealed one, but copies the raw number', async () => {
+      applyRegionalFormats({ phoneDisplayPattern: '+###-##-###-##-##' });
+      const revealPhone = vi.fn().mockReturnValue(of({ phone: '+998901234567' }));
+      configure({ get: apiGet({ value: detail(), version: 3 }), revealApi: { revealPhone } });
+      const fixture = await render();
+      const shown = (): string =>
+        (
+          fixture.nativeElement.querySelector(
+            '[data-testid="order-detail-phone-reveal"]',
+          ) as HTMLElement
+        ).parentElement?.querySelector('.q-mono')?.textContent ?? '';
+
+      expect(shown()).toBe('+998-90-•••-••-42');
+
+      (
+        fixture.nativeElement.querySelector(
+          '[data-testid="order-detail-phone-reveal"]',
+        ) as HTMLButtonElement
+      ).click();
+      await flushMicrotasks();
+      fixture.detectChanges();
+
+      expect(shown()).toBe('+998-90-123-45-67');
+    });
+
+    it('shows the number as it arrives when the brand chose no pattern', async () => {
+      configure({ get: apiGet({ value: detail(), version: 3 }) });
+      const fixture = await render();
+
+      expect(fixture.nativeElement.textContent).toContain('+998 90 ••• •• 42');
+    });
   });
 
   it('copy makes its own independent reveal call rather than reusing an already-revealed value', async () => {
@@ -1970,6 +2058,64 @@ describe('OrderDetailPane: §3.6 Комментарии — the amendment client
     expect(confirm).toHaveBeenCalledWith(FAKE_SCOPE, 'order-1', 'amendment-9', 2, 'PHONE');
   });
 
+  /**
+   * «Выставить счёт» (gap map row 1.1e, wave 16): `ISSUE_INVOICE` arrives in
+   * `summary.actions` for an order still owed an online payment. Its form is
+   * the payment panel's own, so the header action's whole job is to open it.
+   */
+  it('wires the header ISSUE_INVOICE action to open the payment panel’s re-issue form', async () => {
+    const providerPayment: OrderPaymentView = {
+      orderId: 'order-1',
+      publicOrderNumber: '0142',
+      orderStatus: 'PAYMENT_AUTHORIZING',
+      orderTotal: { amountMinor: 146_000, currency: 'UZS' },
+      intent: {
+        intentId: 'intent-1',
+        tender: 'PROVIDER',
+        method: 'CLICK',
+        providerType: 'CLICK',
+        amount: { amountMinor: 146_000, currency: 'UZS' },
+        status: 'PENDING',
+        createdAt: '2026-09-30T09:00:00Z',
+        settledAt: null,
+      },
+      payment: [],
+      attempts: [],
+      captured: { amountMinor: 0, currency: 'UZS' },
+      returned: { amountMinor: 0, currency: 'UZS' },
+    };
+    configure({
+      get: apiGet({
+        value: detail({
+          summary: {
+            ...detail().summary,
+            status: 'PAYMENT_AUTHORIZING',
+            paymentStatusProjection: 'PENDING',
+            actions: [{ action: 'ISSUE_INVOICE' }],
+          },
+        }),
+        version: 3,
+      }),
+      paymentsApi: { orderPayment: vi.fn().mockResolvedValue(providerPayment) },
+    });
+    const fixture = await render();
+    const host: HTMLElement = fixture.nativeElement;
+    host.querySelectorAll('q-order-payment-panel').forEach((panel) => {
+      (panel as HTMLElement).scrollIntoView = vi.fn();
+    });
+    expect(host.querySelector('[data-testid="order-payment-reissue-form"]')).toBeNull();
+
+    const primary = host.querySelector(
+      '[data-testid="order-detail-primary-action"]',
+    ) as HTMLButtonElement;
+    expect(primary.textContent?.trim()).toBe('Issue invoice');
+    primary.click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(host.querySelector('[data-testid="order-payment-reissue-form"]')).not.toBeNull();
+  });
+
   it('the header RESOLVE action does nothing if the history no longer names an amendment still carrying RESOLVE', async () => {
     const history = vi
       .fn()
@@ -2896,5 +3042,229 @@ describe('OrderDetailPane: POS export and its §3.11 amendment interlock (wave P
     primary.click();
     fixture.detectChanges();
     expect(host.querySelector('[data-testid="order-amend-menu"]')).not.toBeNull();
+  });
+});
+
+/**
+ * The header buttons, the lines table, the money section and the POS export panel are their
+ * own components (their stylesheets outgrew the pane's component-style budget). Each is
+ * presentation only: the pane binds their values and reacts to what they raise. These specs
+ * pin that wiring from the pane's side, through the DOM an operator sees.
+ */
+describe('OrderDetailPane: its extracted parts stay wired to it', () => {
+  const testId = (host: HTMLElement, id: string) =>
+    host.querySelector(`[data-testid="${id}"]`) as HTMLButtonElement | null;
+  const digits = (element: Element | null) => (element?.textContent ?? '').replace(/\D/g, '');
+
+  it('disables the header buttons while an action is in flight', async () => {
+    const approve = vi.fn().mockReturnValue(NEVER);
+    configure({ get: apiGet({ value: detail(), version: 3 }), actionsApi: { approve } });
+    const fixture = await render();
+    const host: HTMLElement = fixture.nativeElement;
+    expect(testId(host, 'order-detail-primary-action')?.disabled).toBe(false);
+
+    clickPrimaryAction(fixture);
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(approve).toHaveBeenCalledTimes(1);
+    expect(testId(host, 'order-detail-primary-action')?.disabled).toBe(true);
+    expect(testId(host, 'order-detail-overflow-trigger')?.disabled).toBe(true);
+  });
+
+  it('keeps the overflow menu shut until the trigger is pressed, and shuts it again on a choice', async () => {
+    configure({ get: apiGet({ value: detail(), version: 3 }) });
+    const fixture = await render();
+    const host: HTMLElement = fixture.nativeElement;
+    expect(testId(host, 'order-detail-overflow-menu')).toBeNull();
+
+    testId(host, 'order-detail-overflow-trigger')!.click();
+    fixture.detectChanges();
+    expect(testId(host, 'order-detail-overflow-menu')).not.toBeNull();
+
+    testId(host, 'order-detail-action-REJECT')!.click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+    expect(testId(host, 'order-detail-overflow-menu')).toBeNull();
+  });
+
+  it('shows the VAT the order carries, in the money section', async () => {
+    configure({ get: apiGet({ value: detail(), version: 3 }) });
+    const fixture = await render();
+    const host: HTMLElement = fixture.nativeElement;
+
+    const rows = [...host.querySelectorAll('.pane__money-row')];
+    const vat = rows.find((row) => row.querySelector('dt')?.textContent?.includes('VAT'));
+    expect(digits(vat?.querySelector('dd') ?? null)).toBe('14600');
+  });
+
+  it('shows the delivery money beside the order’s own', async () => {
+    configure({
+      get: apiGet({ value: detail(), version: 3 }),
+      deliveryApi: { delivery: () => Promise.resolve(deliveryResponse()) },
+    });
+    const fixture = await render();
+    const host: HTMLElement = fixture.nativeElement;
+
+    expect(digits(testId(host, 'order-detail-delivery-money'))).toBe('12000');
+  });
+
+  it('formats the lines and the money in the order’s own currency', async () => {
+    const base = detail();
+    configure({
+      get: apiGet({
+        value: { ...base, summary: { ...base.summary, currency: 'USD' } },
+        version: 3,
+      }),
+    });
+    const fixture = await render();
+    const host: HTMLElement = fixture.nativeElement;
+
+    const amount = host.querySelector('[data-testid="order-detail-line"] td:last-child');
+    expect(amount?.textContent).toMatch(/1\s460\.00/);
+    expect(amount?.textContent).toContain('USD');
+  });
+
+  it('reveals a line note on request, and holds the button while it is fetched', async () => {
+    const base = detail();
+    const lines = [{ ...base.lines[0], hasNote: true }];
+    const reveal = vi.fn().mockReturnValue(of({ note: 'Ring twice' }));
+    configure({
+      get: apiGet({ value: { ...base, lines }, version: 3 }),
+      revealApi: { revealLineNote: reveal },
+    });
+    const fixture = await render();
+    const host: HTMLElement = fixture.nativeElement;
+    const button = () => testId(host, 'order-detail-line-note-reveal-line-1');
+
+    button()!.click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(reveal).toHaveBeenCalledTimes(1);
+    expect(host.querySelector('.pane__line-note')?.textContent?.trim()).toBe('Ring twice');
+    expect(button()).toBeNull();
+  });
+
+  it('disables the reveal button for the line whose note is being fetched', async () => {
+    const base = detail();
+    const lines = [{ ...base.lines[0], hasNote: true }];
+    const reveal = vi.fn().mockReturnValue(NEVER);
+    configure({
+      get: apiGet({ value: { ...base, lines }, version: 3 }),
+      revealApi: { revealLineNote: reveal },
+    });
+    const fixture = await render();
+    const host: HTMLElement = fixture.nativeElement;
+
+    testId(host, 'order-detail-line-note-reveal-line-1')!.click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(testId(host, 'order-detail-line-note-reveal-line-1')?.disabled).toBe(true);
+  });
+
+  describe('the POS export push', () => {
+    const capable = (overrides: Partial<PosExportView> = {}) => ({
+      forOrder: () =>
+        Promise.resolve({
+          posCapable: true,
+          export: posExportView({ state: 'REJECTED', permitsAmendment: true, ...overrides }),
+        }),
+    });
+
+    async function openPushForm(push: ReturnType<typeof vi.fn>) {
+      configure({
+        get: apiGet({ value: amendableDetail(), version: 3 }),
+        posExportApi: { ...capable(), push: push as unknown as OrderPosExportApi['push'] },
+      });
+      const fixture = await render();
+      await flushMicrotasks();
+      fixture.detectChanges();
+      const host: HTMLElement = fixture.nativeElement;
+      testId(host, 'order-detail-pos-export-push-toggle')!.click();
+      fixture.detectChanges();
+      const type = (reason: string) => {
+        const input = testId(
+          host,
+          'order-detail-pos-export-push-reason',
+        ) as unknown as HTMLInputElement;
+        input.value = reason;
+        input.dispatchEvent(new Event('input'));
+        fixture.detectChanges();
+      };
+      return { fixture, host, type };
+    }
+
+    it('opens a form that will not send without a reason, and closes it on Cancel', async () => {
+      const push = vi.fn();
+      const { fixture, host, type } = await openPushForm(push);
+
+      expect(testId(host, 'order-detail-pos-export-push-form')).not.toBeNull();
+      expect(testId(host, 'order-detail-pos-export-push-toggle')).toBeNull();
+      expect(testId(host, 'order-detail-pos-export-push-submit')?.disabled).toBe(true);
+
+      type('Till was offline');
+      expect(testId(host, 'order-detail-pos-export-push-submit')?.disabled).toBe(false);
+
+      (host.querySelector('.pane__pos-export-button--secondary') as HTMLButtonElement).click();
+      fixture.detectChanges();
+      expect(testId(host, 'order-detail-pos-export-push-form')).toBeNull();
+      expect(push).not.toHaveBeenCalled();
+    });
+
+    it('sends the reason typed and says so when the export cannot be sent again from its state', async () => {
+      const push = vi.fn().mockResolvedValue({
+        status: 'REJECTED',
+        state: 'ACCEPTED',
+        errorCode: 'EXPORT_NOT_SENDABLE',
+        detail: null,
+      });
+      const { fixture, host, type } = await openPushForm(push);
+
+      type('Till was offline');
+      testId(host, 'order-detail-pos-export-push-submit')!.click();
+      await flushMicrotasks();
+      fixture.detectChanges();
+
+      expect(push).toHaveBeenCalledTimes(1);
+      expect(push.mock.calls[0][2]).toBe('Till was offline');
+      expect(testId(host, 'order-detail-pos-export-result')?.textContent?.trim()).toBe(
+        'Cannot be sent again from this state',
+      );
+      expect(testId(host, 'order-detail-pos-export-push-form')).toBeNull();
+    });
+
+    it('says Sending… while the push is out', async () => {
+      const push = vi.fn().mockReturnValue(new Promise(() => undefined));
+      const { fixture, host, type } = await openPushForm(push);
+
+      type('Till was offline');
+      testId(host, 'order-detail-pos-export-push-submit')!.click();
+      await flushMicrotasks();
+      fixture.detectChanges();
+
+      expect(testId(host, 'order-detail-pos-export-push-submit')?.textContent?.trim()).toBe(
+        'Sending…',
+      );
+      expect(testId(host, 'order-detail-pos-export-push-submit')?.disabled).toBe(true);
+    });
+
+    it('keeps the form open and shows the failure when the push is refused', async () => {
+      const push = vi
+        .fn()
+        .mockRejectedValue(new ApiError(ApiErrorCode.NETWORK_UNREACHABLE, 0, null, null));
+      const { fixture, host, type } = await openPushForm(push);
+
+      type('Till was offline');
+      testId(host, 'order-detail-pos-export-push-submit')!.click();
+      await flushMicrotasks();
+      fixture.detectChanges();
+
+      expect(testId(host, 'order-detail-pos-export-push-form')).not.toBeNull();
+      const message = testId(host, 'order-detail-pos-export-push-error');
+      expect(message).not.toBeNull();
+      expect(message?.textContent?.trim()).not.toBe('');
+    });
   });
 });

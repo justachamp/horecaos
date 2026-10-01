@@ -16,7 +16,9 @@ import { CurrentLocation } from '../../core/auth/current-location';
 import { TimeZone, formatClock } from '../../core/format/datetime';
 import { LatenessPolicy, PLATFORM_DEFAULT_LATENESS_POLICY } from '../../core/lateness-policy';
 import { LatenessPolicyApi } from '../../core/lateness-policy-api';
+import { LatenessPolicyTracker } from '../../core/lateness-policy-tracker';
 import { I18n } from '../../core/i18n/i18n';
+import { presetLabelFor } from '../../core/i18n/locale-labels';
 import { TPipe } from '../../core/i18n/t.pipe';
 import { RealtimeClient } from '../../core/realtime/realtime-client';
 import { CouriersApi, RosterEntryResponse } from '../couriers/couriers-api';
@@ -39,13 +41,14 @@ import { OrderChangePaymentMethodDialog } from '../orders/order-change-payment-m
 import { describeApiError } from '../orders/order-errors';
 import { OrderAmendmentsApi } from '../orders/order-amendments-api';
 import { OrderTableChip } from '../../shared/ui/order-table-chip/order-table-chip';
+import { KitchenQueueNotices } from './kitchen-queue-notices';
+import { KitchenQueueToolbar } from './kitchen-queue-toolbar';
 import { OrderDeliveryApi } from '../orders/order-delivery-api';
 import { OrderDetailResponse, OrderLine, OrderLineCommentPreset } from '../orders/order-detail';
 import { OrderRevealApi } from '../orders/order-reveal-api';
 import { SalesChannelsApi } from '../settings/sales-channels/sales-channels-api';
 import {
   BoardCounts,
-  BoardResponse,
   ItemResponse,
   KitchenApi,
   StationResponse,
@@ -144,7 +147,14 @@ const PLACEHOLDER_TIME_ZONE: TimeZone = 'Asia/Tashkent';
  */
 @Component({
   selector: 'q-kitchen-queue-page',
-  imports: [TPipe, ExternalCourierDialog, OrderChangePaymentMethodDialog, OrderTableChip],
+  imports: [
+    TPipe,
+    ExternalCourierDialog,
+    KitchenQueueNotices,
+    KitchenQueueToolbar,
+    OrderChangePaymentMethodDialog,
+    OrderTableChip,
+  ],
   templateUrl: './kitchen-queue-page.html',
   styleUrl: './kitchen-queue-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -237,7 +247,12 @@ export class KitchenQueuePage implements OnInit {
 
   private pollHandle: ReturnType<typeof setInterval> | null = null;
 
-  /** The resolved `ordering.lateness` policy (wave P06) — fetched once in {@link start}. */
+  /**
+   * The resolved `ordering.lateness` policy (wave P06). The pass screen stays
+   * open all shift, so {@link refreshPolicy} re-reads it on the poll (at most
+   * once a minute) instead of holding the start-up copy for the page's lifetime.
+   */
+  private readonly policies = new LatenessPolicyTracker(this.latenessPolicyApi);
   private latenessPolicy: LatenessPolicy = PLATFORM_DEFAULT_LATENESS_POLICY;
 
   /** The tenant's `#rrggbb` for a late order (row `X.39`), or null for the design-system `--q-sla-late` token. */
@@ -281,8 +296,6 @@ export class KitchenQueuePage implements OnInit {
       this.firstLoadComplete.set(true);
       return;
     }
-    this.latenessPolicy = await this.latenessPolicyApi.resolve(scope);
-    this.lateColour.set(this.latenessPolicy.lateColour ?? null);
     try {
       const stations = await this.kitchen.stations(scope);
       this.stationsById.set(new Map(stations.map((station) => [station.stationId, station])));
@@ -312,7 +325,7 @@ export class KitchenQueuePage implements OnInit {
       return;
     }
     try {
-      const board: BoardResponse = await this.kitchen.board(scope);
+      const [board] = await Promise.all([this.kitchen.board(scope), this.refreshPolicy(scope)]);
       this.tickets.set(board.tickets);
       this.boardCounts.set(board.counts ?? null);
       this.wiringWarning.set(board.warnings.length > 0);
@@ -331,6 +344,13 @@ export class KitchenQueuePage implements OnInit {
     } finally {
       this.firstLoadComplete.set(true);
     }
+  }
+
+  /** Never rejects; a failed read leaves the last policy read, or the platform default before the first one. */
+  private async refreshPolicy(scope: LocationScope): Promise<void> {
+    await this.policies.refresh(scope);
+    this.latenessPolicy = this.policies.policy(scope.locationId);
+    this.lateColour.set(this.latenessPolicy.lateColour ?? null);
   }
 
   protected selectTab(tab: KitchenTabId): void {
@@ -361,6 +381,14 @@ export class KitchenQueuePage implements OnInit {
       case 'aggregator':
         return counts.aggregator;
     }
+  }
+
+  /** Every tab's count, for the toolbar. */
+  protected tabCountMap(): Readonly<Record<KitchenTabId, number | null>> {
+    return Object.fromEntries(KITCHEN_TABS.map((tab) => [tab, this.tabCount(tab)])) as Record<
+      KitchenTabId,
+      number | null
+    >;
   }
 
   protected visibleTickets(): readonly TicketResponse[] {
@@ -516,16 +544,9 @@ export class KitchenQueuePage implements OnInit {
     return this.kitchenNoteByOrderId().get(ticket.orderId) ?? null;
   }
 
-  /** Row 2.1b: a preset's label in the console's own locale — matches `order-detail-pane.ts`'s own `presetLabel`. */
+  /** Row 2.1b/10.12: a preset's wording in the console's own language — matches `order-detail-pane.ts`'s own `presetLabel`. */
   protected presetLabel(preset: OrderLineCommentPreset): string {
-    switch (this.i18n.locale()) {
-      case 'ru':
-        return preset.labelRu;
-      case 'uz-Latn':
-        return preset.labelUz;
-      default:
-        return preset.labelEn;
-    }
+    return presetLabelFor(preset, this.i18n.locale());
   }
 
   // ------------------------------------------------------- P16: line notes

@@ -7,10 +7,12 @@ import {
   signal,
 } from '@angular/core';
 
+import { LocationScope } from '../../core/api/operations-paths';
 import { ApiError } from '../../core/api/problem-details';
 import { CurrentLocation } from '../../core/auth/current-location';
 import { LatenessPolicy, PLATFORM_DEFAULT_LATENESS_POLICY } from '../../core/lateness-policy';
 import { LatenessPolicyApi } from '../../core/lateness-policy-api';
+import { LatenessPolicyTracker } from '../../core/lateness-policy-tracker';
 import { TPipe } from '../../core/i18n/t.pipe';
 import { KitchenApi, TicketResponse } from './kitchen-api';
 import { computeTicketSeverity } from './kitchen-ticket';
@@ -64,7 +66,12 @@ export class VduPage implements OnInit {
   protected readonly denied = signal(false);
 
   private pollHandle: ReturnType<typeof setInterval> | null = null;
-  /** The resolved `ordering.lateness` policy (wave P06) — fetched once in {@link start}. */
+  /**
+   * The resolved `ordering.lateness` policy (wave P06). A wall display is opened
+   * once and left up, so {@link refreshPolicy} re-reads it on the poll (at most
+   * once a minute) instead of holding the start-up copy for the page's lifetime.
+   */
+  private readonly policies = new LatenessPolicyTracker(this.latenessPolicyApi);
   private latenessPolicy: LatenessPolicy = PLATFORM_DEFAULT_LATENESS_POLICY;
 
   /** The tenant's `#rrggbb` for a late order (row `X.39`), or null for the design-system `--q-sla-late` token. */
@@ -82,12 +89,14 @@ export class VduPage implements OnInit {
 
   private async start(): Promise<void> {
     await this.location.ensureLoaded();
-    const scope = this.location.scope();
-    if (scope) {
-      this.latenessPolicy = await this.latenessPolicyApi.resolve(scope);
-      this.lateColour.set(this.latenessPolicy.lateColour ?? null);
-    }
     await this.refresh();
+  }
+
+  /** Never rejects; a failed read leaves the last policy read, or the platform default before the first one. */
+  private async refreshPolicy(scope: LocationScope): Promise<void> {
+    await this.policies.refresh(scope);
+    this.latenessPolicy = this.policies.policy(scope.locationId);
+    this.lateColour.set(this.latenessPolicy.lateColour ?? null);
   }
 
   private async refresh(): Promise<void> {
@@ -98,7 +107,10 @@ export class VduPage implements OnInit {
       return;
     }
     try {
-      const board = await this.kitchen.board(scope, 'live');
+      const [board] = await Promise.all([
+        this.kitchen.board(scope, 'live'),
+        this.refreshPolicy(scope),
+      ]);
       this.tickets.set(
         [...board.tickets].sort((a, b) => statusRank(a.status) - statusRank(b.status)),
       );

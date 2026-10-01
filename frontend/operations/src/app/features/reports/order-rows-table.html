@@ -151,7 +151,9 @@
           <td class="q-body-sm" data-testid="order-row-customer">
             {{ customerLabel(row) }}
             @if (customerPhone(row) !== '—') {
-              <span class="q-caption order-table__customer-phone">{{ customerPhone(row) }}</span>
+              <span class="q-caption order-table__customer-phone">{{
+                customerPhone(row) | phone
+              }}</span>
             }
           </td>
         }

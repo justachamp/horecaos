@@ -23,7 +23,7 @@ function nonPlatformRequest(): HttpRequest<unknown> {
   return new HttpRequest('GET', 'https://tiles.example.com/thing');
 }
 
-const passthrough: HttpHandlerFn = (req) => of(new HttpResponse({ status: 200, body: null }));
+const passthrough: HttpHandlerFn = (_req) => of(new HttpResponse({ status: 200, body: null }));
 
 describe('bearerInterceptor', () => {
   beforeEach(() => {
@@ -33,7 +33,10 @@ describe('bearerInterceptor', () => {
 
   it('attaches the bearer for a platform, non-anonymous request when a token is held', async () => {
     const session = TestBed.inject(Session);
-    session.adopt({ accessToken: 'tok-abc', expiresAt: new Date(Date.now() + 60_000).toISOString() });
+    session.adopt({
+      accessToken: 'tok-abc',
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    });
 
     let seen: HttpRequest<unknown> | null = null;
     const next: HttpHandlerFn = (req) => {
@@ -50,7 +53,10 @@ describe('bearerInterceptor', () => {
 
   it('does not attach a bearer to a non-platform request, even with a token held', async () => {
     const session = TestBed.inject(Session);
-    session.adopt({ accessToken: 'tok-abc', expiresAt: new Date(Date.now() + 60_000).toISOString() });
+    session.adopt({
+      accessToken: 'tok-abc',
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    });
 
     let seen: HttpRequest<unknown> | null = null;
     const next: HttpHandlerFn = (req) => {
@@ -67,7 +73,10 @@ describe('bearerInterceptor', () => {
 
   it('does not attach a bearer to a platform request marked ANONYMOUS', async () => {
     const session = TestBed.inject(Session);
-    session.adopt({ accessToken: 'tok-abc', expiresAt: new Date(Date.now() + 60_000).toISOString() });
+    session.adopt({
+      accessToken: 'tok-abc',
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    });
 
     let seen: HttpRequest<unknown> | null = null;
     const next: HttpHandlerFn = (req) => {
@@ -140,7 +149,10 @@ describe('expiredSessionInterceptor', () => {
 
   it('expires the session when the failure is SESSION_EXPIRED', async () => {
     const session = TestBed.inject(Session);
-    session.adopt({ accessToken: 'tok-live', expiresAt: new Date(Date.now() + 60_000).toISOString() });
+    session.adopt({
+      accessToken: 'tok-live',
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    });
 
     const failure = new HorecaOSApiError({
       status: 401,
@@ -160,7 +172,10 @@ describe('expiredSessionInterceptor', () => {
 
   it('does not expire the session for a plain UNAUTHENTICATED failure', async () => {
     const session = TestBed.inject(Session);
-    session.adopt({ accessToken: 'tok-live-2', expiresAt: new Date(Date.now() + 60_000).toISOString() });
+    session.adopt({
+      accessToken: 'tok-live-2',
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    });
 
     const failure = new HorecaOSApiError({
       status: 401,
@@ -183,7 +198,10 @@ describe('expiredSessionInterceptor', () => {
 
   it('re-throws an HttpErrorResponse normalised, without expiring on a bare 401 that is not SESSION_EXPIRED', async () => {
     const session = TestBed.inject(Session);
-    session.adopt({ accessToken: 'tok-live-3', expiresAt: new Date(Date.now() + 60_000).toISOString() });
+    session.adopt({
+      accessToken: 'tok-live-3',
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    });
 
     const httpError = new HttpErrorResponse({ status: 401, statusText: 'Unauthorized' });
     const next: HttpHandlerFn = () => throwError(() => httpError);

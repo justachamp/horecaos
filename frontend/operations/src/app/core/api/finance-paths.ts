@@ -210,6 +210,14 @@ export const financePaths = {
     return `${financePaths.commercialModules(tenantId)}/held`;
   },
 
+  /**
+   * `CommercialOperationsController.endPurchasedModule` — the undo for the
+   * inline purchase (ADR 0127's status note of 2026-09-30). POST, no body.
+   */
+  commercialModuleEnd(tenantId: string, tenantModuleId: string): string {
+    return `${financePaths.commercialModules(tenantId)}/${enc(tenantModuleId)}/end`;
+  },
+
   /** `ArrearsController.tenantArrears` — this tenant's own arrears state (ADR 0127). */
   commercialArrears(tenantId: string): string {
     return `/api/v1/tenants/${enc(tenantId)}/commercial/arrears`;

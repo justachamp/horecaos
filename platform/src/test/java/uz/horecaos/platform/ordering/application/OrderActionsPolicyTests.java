@@ -528,9 +528,11 @@ class OrderActionsPolicyTests {
      * wired (wave P09, gap map {@code 1.2j}); {@code ASSIGN_COURIER} is wired
      * too as of this wave (gap map {@code 1.1e}) — the four-argument {@code
      * availableFor} overload emits it, and the console opens the order to
-     * reach the existing assign control there. {@code RESOLVE} still needs
-     * per-amendment state {@code availableFor} does not carry, and {@code
-     * ISSUE_INVOICE} still has no endpoint at all (gap map {@code P12}). This
+     * reach the existing assign control there. {@code RESOLVE} is wired the same
+     * way (gap map {@code 1.1e}), and {@code ISSUE_INVOICE} is the last of the
+     * four: {@code POST .../orders/{id}/payment/re-presentations} has existed since
+     * wave P12 and the six-argument overload now emits the code that reaches it
+     * (wave 16). This
      * switch is exhaustive on purpose: adding a ninth {@link OrderActionCode}
      * constant without adding a branch here fails to <em>compile</em>, so a
      * future change cannot silently start emitting a code from {@link
@@ -555,7 +557,7 @@ class OrderActionsPolicyTests {
             case COMPLETE -> true; // POST .../completion (wave P09)
             case ASSIGN_COURIER -> true; // DispatchController .../dispatch/plans/{id}/assign (gap map 1.1e)
             case RESOLVE -> true; // POST .../amendments/{id}/confirmation (gap map 1.1e)
-            case ISSUE_INVOICE -> false;
+            case ISSUE_INVOICE -> true; // POST /operations/.../orders/{id}/payment/re-presentations (gap map 1.1e)
         };
     }
 
@@ -571,20 +573,22 @@ class OrderActionsPolicyTests {
                         OrderActionCode.OVERRIDE,
                         OrderActionCode.COMPLETE,
                         OrderActionCode.ASSIGN_COURIER,
-                        OrderActionCode.RESOLVE);
+                        OrderActionCode.RESOLVE,
+                        OrderActionCode.ISSUE_INVOICE);
     }
 
     /**
      * The property orders.md §4.2 exists for: {@code availableFor} never
      * offers a code with no endpoint behind it, at any status, mode or grant —
      * the array cannot lead an operator to a dead end. Swept over the
-     * five-argument overload (the maximal case: it only ever adds to the
-     * four-argument form's own result — see {@link
+     * six-argument overload (the maximal case: it only ever adds to the
+     * five-argument form's own result — see {@link #theSixArgumentOverloadAddsOnlyIssueInvoiceOnTopOfTheFiveArgumentForm},
+     * which only ever adds to the four-argument form's own result — see {@link
      * #theFiveArgumentOverloadAddsOnlyResolveOnTopOfTheFourArgumentForm}, which
      * itself only ever adds to the three-argument form — see {@link
      * #theFourArgumentOverloadAddsOnlyAssignCourierOnTopOfTheThreeArgumentForm})
-     * so {@code ASSIGN_COURIER} and {@code RESOLVE} are covered by the same
-     * sweep as everything else.
+     * so {@code ASSIGN_COURIER}, {@code RESOLVE} and {@code ISSUE_INVOICE} are
+     * covered by the same sweep as everything else.
      */
     @Test
     void theArrayNeverOffersAnActionWithNoRoute() {
@@ -594,8 +598,8 @@ class OrderActionsPolicyTests {
                 // actions for a capability present, so anything offered with less
                 // than the full grant is offered with the full grant too. Sweeping
                 // the maximum is exhaustive for "is this code ever emitted at all".
-                for (OrderAction action : OrderActionsPolicy.availableFor(
-                        status, mode, ALL_ACTION_CAPS_WITH_COURIER_ASSIGN, true, true)) {
+                for (OrderAction action :
+                        OrderActionsPolicy.availableFor(status, mode, ALL_ACTION_CAPS_WITH_INVOICE, true, true, true)) {
                     assertThat(hasRealRouteToday(action.code()))
                             .as("%s offered at %s/%s must have a real route", action.code(), status, mode)
                             .isTrue();
@@ -608,10 +612,17 @@ class OrderActionsPolicyTests {
 
     private static final Set<Capability> ALL_ACTION_CAPS_WITH_COURIER_ASSIGN;
 
+    /** Every capability the six-argument overload reads: the courier one, and the payment one ISSUE_INVOICE gates on. */
+    private static final Set<Capability> ALL_ACTION_CAPS_WITH_INVOICE;
+
     static {
         EnumSet<Capability> caps = EnumSet.copyOf(ALL_ACTION_CAPS);
         caps.add(Capability.DELIVERY_MANUAL_ASSIGN);
         ALL_ACTION_CAPS_WITH_COURIER_ASSIGN = caps;
+
+        EnumSet<Capability> withInvoice = EnumSet.copyOf(caps);
+        withInvoice.add(Capability.PAYMENT_INITIATE);
+        ALL_ACTION_CAPS_WITH_INVOICE = withInvoice;
     }
 
     /**
@@ -759,6 +770,97 @@ class OrderActionsPolicyTests {
                     .as("%s, ungranted", status)
                     .noneMatch(a -> a.code() == OrderActionCode.RESOLVE);
         }
+    }
+
+    // -------------------------------------------------- issue invoice (gap map 1.1e)
+
+    /**
+     * The six-argument overload never widens what the five-argument form
+     * already offers — it only ever adds {@code ISSUE_INVOICE} on top.
+     */
+    @Test
+    void theSixArgumentOverloadAddsOnlyIssueInvoiceOnTopOfTheFiveArgumentForm() {
+        for (OrderStatus status : OrderStatus.values()) {
+            for (FulfillmentMode mode : FulfillmentMode.values()) {
+                for (boolean awaitingOnlinePayment : new boolean[] {true, false}) {
+                    List<OrderAction> base =
+                            OrderActionsPolicy.availableFor(status, mode, ALL_ACTION_CAPS_WITH_INVOICE, true, true);
+                    List<OrderAction> withInvoice = OrderActionsPolicy.availableFor(
+                            status, mode, ALL_ACTION_CAPS_WITH_INVOICE, true, true, awaitingOnlinePayment);
+
+                    assertThat(withInvoice.stream()
+                                    .filter(a -> a.code() != OrderActionCode.ISSUE_INVOICE)
+                                    .toList())
+                            .as(
+                                    "%s/%s awaitingOnlinePayment=%s, minus ISSUE_INVOICE",
+                                    status, mode, awaitingOnlinePayment)
+                            .isEqualTo(base);
+                }
+            }
+        }
+    }
+
+    /**
+     * {@code ISSUE_INVOICE} is offered exactly when an online payment is owed, the
+     * order has not ended and the caller holds {@code PAYMENT_INITIATE} —
+     * independent of status otherwise and of fulfilment mode.
+     */
+    @Test
+    void issueInvoiceAppearsExactlyForAnUnpaidOnlineOrderThatHasNotEnded() {
+        for (OrderStatus status : OrderStatus.values()) {
+            for (FulfillmentMode mode : FulfillmentMode.values()) {
+                boolean offered =
+                        OrderActionsPolicy.availableFor(status, mode, ALL_ACTION_CAPS_WITH_INVOICE, true, false, true)
+                                .stream()
+                                .anyMatch(a -> a.code() == OrderActionCode.ISSUE_INVOICE);
+
+                assertThat(offered).as("ISSUE_INVOICE for %s/%s", status, mode).isEqualTo(!status.terminal());
+            }
+        }
+    }
+
+    @Test
+    void issueInvoiceNeverAppearsWhenNoOnlinePaymentIsOwed() {
+        for (OrderStatus status : OrderStatus.values()) {
+            assertThat(OrderActionsPolicy.availableFor(
+                            status, FulfillmentMode.DELIVERY, ALL_ACTION_CAPS_WITH_INVOICE, true, true, false))
+                    .as("%s, cash or already paid", status)
+                    .noneMatch(a -> a.code() == OrderActionCode.ISSUE_INVOICE);
+        }
+    }
+
+    @Test
+    void issueInvoiceNeverAppearsWithoutPaymentInitiate() {
+        for (OrderStatus status : OrderStatus.values()) {
+            assertThat(OrderActionsPolicy.availableFor(
+                            status, FulfillmentMode.DELIVERY, ALL_ACTION_CAPS_WITH_COURIER_ASSIGN, true, true, true))
+                    .as("%s, every order capability but not the payment one", status)
+                    .noneMatch(a -> a.code() == OrderActionCode.ISSUE_INVOICE);
+        }
+    }
+
+    /** The projection value that means "an online payment is still owed" — and only that one. */
+    @Test
+    void onlyAPendingProjectionMeansAnOnlinePaymentIsOwed() {
+        assertThat(OrderActionsPolicy.paymentMayBeOwed("PENDING")).isTrue();
+        for (String other :
+                List.of("NOT_REQUIRED", "AUTHORIZED", "CAPTURED", "FAILED", "VOIDED", "REFUNDED", "", "pending")) {
+            assertThat(OrderActionsPolicy.paymentMayBeOwed(other)).as(other).isFalse();
+            assertThat(OrderActionsPolicy.awaitsOnlinePayment(other, true))
+                    .as(other)
+                    .isFalse();
+        }
+    }
+
+    /**
+     * The projection stays {@code PENDING} through an expired or uncertain attempt,
+     * so it is never enough on its own: the order's live intent has to be one the
+     * endpoint can present as well.
+     */
+    @Test
+    void aPendingProjectionAloneNeverMeansAnOnlinePaymentCanBePresented() {
+        assertThat(OrderActionsPolicy.awaitsOnlinePayment("PENDING", true)).isTrue();
+        assertThat(OrderActionsPolicy.awaitsOnlinePayment("PENDING", false)).isFalse();
     }
 
     private static List<OrderStatus> targetsOf(OrderStatus status, FulfillmentMode mode) {

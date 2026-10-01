@@ -26,7 +26,6 @@ export type ErrorCode =
   | 'UNSUPPORTED_MEDIA_TYPE'
   | 'RATE_LIMIT_EXCEEDED'
   | 'INTERNAL_ERROR'
-  // eslint-disable-next-line @typescript-eslint/ban-types
   | (string & {});
 
 /** A field-level failure: a stable code, not prose. */
@@ -288,6 +287,16 @@ const REASON_MESSAGE_KEYS: Readonly<Record<string, string>> = {
   // currently excludes it -- shown, distinct from a product that vanished
   // from the menu entirely.
   ITEM_OUT_OF_SALE_WINDOW: 'errors.reason.itemOutOfSaleWindow',
+  // CartService.requireSelectionRules: a line whose modifier selection breaks the
+  // published menu's rules. The table's option picker enforces the same rules before
+  // it sends, so these are a menu that changed in the gap between reading it and
+  // adding the dish (or a client that skipped the picker), not a mistake the guest
+  // made on purpose.
+  MODIFIER_GROUP_MINIMUM_NOT_MET: 'errors.reason.modifierMinimum',
+  MODIFIER_GROUP_MAXIMUM_EXCEEDED: 'errors.reason.modifierMaximum',
+  MODIFIER_OPTION_NOT_REPEATABLE: 'errors.reason.modifierMaximum',
+  MODIFIER_OPTION_QUANTITY_EXCEEDED: 'errors.reason.modifierMaximum',
+  MODIFIER_NOT_OFFERED: 'errors.reason.modifierNotOffered',
   // Row 2.1b: a checked preset code the product does not actually offer --
   // the client's own picker only ever shows offered codes, so this is a
   // catalogue change in the gap between page load and the write, not a bug

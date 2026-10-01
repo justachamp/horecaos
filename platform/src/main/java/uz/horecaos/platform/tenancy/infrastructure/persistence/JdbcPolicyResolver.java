@@ -3,7 +3,6 @@ package uz.horecaos.platform.tenancy.infrastructure.persistence;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
@@ -14,7 +13,6 @@ import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.tenancy.api.PolicyKey;
 import uz.horecaos.platform.tenancy.api.PolicyResolver;
 import uz.horecaos.platform.tenancy.api.ResolvedPolicy;
-import uz.horecaos.platform.tenancy.application.port.PolicyCurrentCache;
 
 /**
  * SQL adapter for ADR 0030 policy resolution.
@@ -24,17 +22,24 @@ import uz.horecaos.platform.tenancy.application.port.PolicyCurrentCache;
  * are versioned at all: without it, editing a policy would silently rewrite the
  * meaning of every historical order, refund, and approval that referenced it.
  *
- * <p>{@link #resolve} is cached under ADR 0033's {@code tenant.policy_current}
- * and implements {@link PolicyCurrentCache} so {@code JdbcPolicyAuthor} can
- * evict the exact scope it just published, the same shape {@code
- * JdbcTenantSuspensionLookup}/{@code TenantStatusCache} uses for {@code
- * tenant.status}. {@link #pinned} is deliberately not cached: it answers what
- * a past decision actually resolved, by exact policy id and version, and a
- * diagnostic/history read has no reason to accept even a sixty-second-old
- * answer when the row it names never changes.
+ * <p>{@link #resolve} is cached under ADR 0033's {@code tenant.policy_current},
+ * keyed by the requesting scope, so publishing at one scope changes the answer
+ * under every scope beneath it; {@link PolicyCurrentCacheEvictor} is what
+ * {@code JdbcPolicyAuthor} calls to drop all of them. {@link #resolveUncached}
+ * is the same chain walk without the cache, for the editors that pair the
+ * document with a version read from the table. {@link #pinned} is deliberately
+ * not cached: it answers what a past decision actually resolved, by exact
+ * policy id and version, and a diagnostic/history read has no reason to accept
+ * even a sixty-second-old answer when the row it names never changes.
  */
 @Repository
-public class JdbcPolicyResolver implements PolicyResolver, PolicyCurrentCache {
+public class JdbcPolicyResolver implements PolicyResolver {
+
+    /** ADR 0033's registered name for the cache {@link #resolve} fills. */
+    public static final String CACHE_NAME = "tenant.policy_current";
+
+    /** Between the policy key and the scope in a cache key, and what {@link PolicyCurrentCacheEvictor} splits on. */
+    static final String KEY_SEPARATOR = "|";
 
     private static final String SELECT_ACTIVE_IN_CHAIN = """
             SELECT p.id, p.version, p.scope_type, p.document_hash, p.document::text AS document
@@ -67,9 +72,9 @@ public class JdbcPolicyResolver implements PolicyResolver, PolicyCurrentCache {
 
     @Override
     @Cacheable(
-            cacheNames = "tenant.policy_current",
-            key = "#key.code() + '|' + #scope.type() + ':' + #scope.tenantId() "
-                    + "+ ':' + #scope.brandId() + ':' + #scope.locationId()",
+            cacheNames = CACHE_NAME,
+            key = "T(uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcPolicyResolver)"
+                    + ".cacheKey(#key.code(), #scope)",
             // Spring's caching aspect unwraps an Optional-typed result before
             // evaluating `unless` and before handing it to the Cache: #result
             // here is already the bare ResolvedPolicy, or null for an empty
@@ -86,6 +91,33 @@ public class JdbcPolicyResolver implements PolicyResolver, PolicyCurrentCache {
             // query, a stored null broke the read outright.
             unless = "#result == null")
     public <P> Optional<ResolvedPolicy<P>> resolve(PolicyKey<P> key, ResourceScope scope) {
+        return resolveFromTable(key, scope);
+    }
+
+    @Override
+    public <P> Optional<ResolvedPolicy<P>> resolveUncached(PolicyKey<P> key, ResourceScope scope) {
+        return resolveFromTable(key, scope);
+    }
+
+    /**
+     * The key {@link #resolve} caches under: the policy, then the requesting scope as {@code
+     * TYPE:tenant:brand:location} (an absent id is the text {@code null}). One definition for the
+     * annotation above and for {@link PolicyCurrentCacheEvictor}, which has to recognise the keys of
+     * every scope a publication reaches.
+     */
+    public static String cacheKey(String keyCode, ResourceScope scope) {
+        return keyCode
+                + KEY_SEPARATOR
+                + scope.type()
+                + ':'
+                + scope.tenantId()
+                + ':'
+                + scope.brandId()
+                + ':'
+                + scope.locationId();
+    }
+
+    private <P> Optional<ResolvedPolicy<P>> resolveFromTable(PolicyKey<P> key, ResourceScope scope) {
         List<Row> candidates = jdbc.sql(SELECT_ACTIVE_IN_CHAIN)
                 .param("keyCode", key.code())
                 .param("tenantId", scope.tenantId())
@@ -145,20 +177,6 @@ public class JdbcPolicyResolver implements PolicyResolver, PolicyCurrentCache {
                             .formatted(key.code(), key.documentType().getSimpleName()),
                     exception);
         }
-    }
-
-    /**
-     * Called by {@code JdbcPolicyAuthor} right after it moves the {@code
-     * tenant.policy_current} pointer, so the version just published resolves
-     * on the very next call instead of waiting out the registry's TTL.
-     */
-    @Override
-    @CacheEvict(
-            cacheNames = "tenant.policy_current",
-            key = "#keyCode + '|' + #scope.type() + ':' + #scope.tenantId() "
-                    + "+ ':' + #scope.brandId() + ':' + #scope.locationId()")
-    public void evict(String keyCode, ResourceScope scope) {
-        // The annotation is the whole method.
     }
 
     private record Row(UUID id, int version, ScopeType scopeType, String documentHash, String document) {}

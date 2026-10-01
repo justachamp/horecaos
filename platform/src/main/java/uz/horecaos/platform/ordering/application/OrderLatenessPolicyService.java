@@ -1,43 +1,47 @@
 package uz.horecaos.platform.ordering.application;
 
+import java.util.Optional;
 import java.util.UUID;
 import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import uz.horecaos.platform.iam.api.ResourceScope;
+import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.ordering.api.OrderingConfigurationKeys;
+import uz.horecaos.platform.ordering.domain.OrderLatenessDocument;
 import uz.horecaos.platform.ordering.domain.OrderLatenessPolicy;
-import uz.horecaos.platform.ordering.domain.OrderLatenessPolicy.LatenessThresholds;
 import uz.horecaos.platform.tenancy.api.ConfigurationResolver;
 import uz.horecaos.platform.tenancy.api.PolicyResolver;
 import uz.horecaos.platform.tenancy.api.Resolved;
+import uz.horecaos.platform.tenancy.api.ResolvedPolicy;
 
 /**
  * Resolves the {@code ordering.lateness} policy (ADR 0030, orders.md §2.7,
- * gap map rows {@code 1.1g}/{@code X.39}).
+ * gap map rows {@code 1.1g}/{@code X.39}/{@code 10.3b}).
  *
  * <p>Precedence is not implemented here, matching {@code
  * OrderAcceptancePolicyService}'s own doc: it comes from the shared ADR 0030
  * mechanism, so lateness resolves by exactly the same rule as every other
- * scoped behavior in the platform. This service adds only the platform
- * default.
+ * scoped behavior in the platform. This service adds the platform default and
+ * the one rule that joins the document to a setting.
  *
- * <p>No {@code author} method: the {@code ordering.lateness} document itself
- * still has no editor, and this service makes no write of its own -- there is
- * nothing here for an audit fact to describe. What a tenant <em>can</em> set is
- * two scalars, through the ordinary ADR 0030 configuration surface (already
- * {@code TENANT_CONFIGURATION_WRITE}, already audited by the value author with
- * a before/after): {@link OrderingConfigurationKeys#AT_RISK_BEFORE_MINUTES} and
- * {@link OrderingConfigurationKeys#LATE_COLOUR} (gap map row {@code X.39}). This
- * service overlays them on the resolved document, so both boards -- and {@code
- * GET .../{orderId}/lateness} -- see one answer:
+ * <p>Authoring is {@link OrderLatenessPolicyAuthoringService}'s; nothing here
+ * writes. What is authored is an {@link OrderLatenessDocument}, and what this
+ * service answers with -- the same answer both boards, the kitchen queue, the
+ * VDUs and {@code GET .../{orderId}/lateness} read -- is the concrete {@link
+ * OrderLatenessPolicy} resolved from it:
  *
  * <ul>
- *   <li>the at-risk minutes replace {@code atRiskBeforeSeconds} in every
- *       fulfilment mode, but only when a value was <em>set</em> somewhere in the
- *       chain. The key's default is the platform default's own five minutes;
- *       an authored per-mode document is never overwritten by a default that
- *       merely happens to be resolved;
+ *   <li>each fulfilment mode's at-risk window is <em>its own</em> when the
+ *       document sets one. When it does not, the window is {@link
+ *       OrderingConfigurationKeys#AT_RISK_BEFORE_MINUTES} -- the batch 15 scalar,
+ *       which stays as the default for the modes not set -- provided a value was
+ *       <em>set</em> somewhere in the chain, and the platform's own five minutes
+ *       otherwise. The key's registered default is the same five minutes, so
+ *       registering it changed nothing, and a resolved default is never treated
+ *       as something a tenant chose;
+ *   <li>grace after the promise and the no-promise fallback are the
+ *       document's, per mode;
  *   <li>the late colour rides along as-is when it is exactly {@code #rrggbb},
  *       and is dropped otherwise -- it is served to a style binding, so nothing
  *       else is allowed through even if a bad value reached the table some other
@@ -46,8 +50,8 @@ import uz.horecaos.platform.tenancy.api.Resolved;
  *
  * <p>ADR 0107's reporting SLA buckets ({@code sla_bucket_set.v1}) are platform
  * fixed and are not read from here; nothing in this service touches them.
- * Until a tenant, brand, or location sets either scalar or publishes an
- * override, {@link OrderLatenessPolicy#platformDefault()} applies everywhere.
+ * Until a tenant, brand, or location sets the scalar or publishes a document,
+ * {@link OrderLatenessPolicy#platformDefault()} applies everywhere.
  */
 @Service
 public class OrderLatenessPolicyService {
@@ -73,34 +77,56 @@ public class OrderLatenessPolicyService {
      * brand may want to see what is in force without naming one location.
      */
     public Effective resolveAt(ResourceScope scope) {
-        Effective document = policies.resolve(OrderingConfigurationKeys.LATENESS_POLICY, scope)
-                .map(resolved -> new Effective(resolved.document(), resolved.policyId(), resolved.policyVersion()))
-                .orElseGet(() -> new Effective(OrderLatenessPolicy.platformDefault(), null, 0));
+        Authored authored = authoredAt(scope);
+        AtRiskDefault fallback = atRiskDefaultAt(scope);
         return new Effective(
-                withTenantAtRiskMinutes(document.policy(), scope),
-                document.policyId(),
-                document.policyVersion(),
+                authored.document().effective(fallback.seconds()),
+                authored.policyId(),
+                authored.policyVersion(),
                 tenantLateColour(scope));
     }
 
-    private OrderLatenessPolicy withTenantAtRiskMinutes(OrderLatenessPolicy document, ResourceScope scope) {
+    /**
+     * The document as authored -- a mode's own at-risk window still absent where the
+     * author left it -- together with which version and which scope supplied it. The
+     * editor needs the difference between "this mode says five minutes" and "this
+     * mode says nothing and five minutes is the default"; {@link #resolveAt} cannot
+     * tell them apart, by design.
+     */
+    public Authored authoredAt(ResourceScope scope) {
+        return authoredFrom(policies.resolve(OrderingConfigurationKeys.LATENESS_POLICY, scope));
+    }
+
+    /**
+     * {@link #authoredAt}, read from the table rather than the resolution cache. The editor shows this
+     * document next to the version a save is checked against (read from the table too), and the audit
+     * fact's "before" is what a save replaces; neither can come from a copy up to a minute old.
+     */
+    public Authored authoredUncachedAt(ResourceScope scope) {
+        return authoredFrom(policies.resolveUncached(OrderingConfigurationKeys.LATENESS_POLICY, scope));
+    }
+
+    private static Authored authoredFrom(Optional<ResolvedPolicy<OrderLatenessDocument>> resolved) {
+        return resolved.map(found ->
+                        new Authored(found.document(), found.policyId(), found.policyVersion(), found.winningScope()))
+                .orElseGet(() -> new Authored(OrderLatenessDocument.platformDefault(), null, 0, null));
+    }
+
+    /**
+     * The at-risk window a mode without one of its own gets at this scope: the tenant's
+     * {@code ordering.at_risk_before_minutes} when one was set somewhere in the chain,
+     * the platform's five minutes when not (or when an unusable value got past the
+     * write rule -- ignored rather than taking the boards down).
+     */
+    public AtRiskDefault atRiskDefaultAt(ResourceScope scope) {
         Resolved<Integer> atRisk = configuration.resolve(OrderingConfigurationKeys.AT_RISK_BEFORE_MINUTES, scope);
         Integer minutes = atRisk.value();
         if (atRisk.cameFromDefault() || minutes == null || minutes < 0) {
-            // Nothing was set (or an unusable value got past the write rule):
-            // whatever the document says stands.
-            return document;
+            return new AtRiskDefault(
+                    OrderLatenessPolicy.platformDefault().delivery().atRiskBeforeSeconds(),
+                    AtRiskDefault.Source.PLATFORM_DEFAULT);
         }
-        int seconds = Math.multiplyExact(minutes, 60);
-        return new OrderLatenessPolicy(
-                withAtRiskSeconds(document.delivery(), seconds),
-                withAtRiskSeconds(document.pickup(), seconds),
-                withAtRiskSeconds(document.dineIn(), seconds));
-    }
-
-    private static LatenessThresholds withAtRiskSeconds(LatenessThresholds thresholds, int atRiskBeforeSeconds) {
-        return new LatenessThresholds(
-                atRiskBeforeSeconds, thresholds.lateAfterSeconds(), thresholds.noPromiseFallbackSeconds());
+        return new AtRiskDefault(Math.multiplyExact(minutes, 60), AtRiskDefault.Source.SCALAR);
     }
 
     private @Nullable String tenantLateColour(ResourceScope scope) {
@@ -108,6 +134,29 @@ public class OrderLatenessPolicyService {
         return colour != null && HEX_COLOUR.matcher(colour).matches()
                 ? colour.toLowerCase(java.util.Locale.ROOT)
                 : null;
+    }
+
+    /**
+     * The authored document in force at a scope.
+     *
+     * @param policyId     null when the platform default applied
+     * @param winningScope the scope whose document supplied it, null when none did
+     */
+    public record Authored(
+            OrderLatenessDocument document,
+            @Nullable UUID policyId,
+            int policyVersion,
+            @Nullable ScopeType winningScope) {}
+
+    /** The window a mode with none of its own takes, and where that number came from. */
+    public record AtRiskDefault(int seconds, Source source) {
+
+        public enum Source {
+            /** {@code ordering.at_risk_before_minutes} was set somewhere in the chain. */
+            SCALAR,
+            /** Nothing was set: the platform's own five minutes. */
+            PLATFORM_DEFAULT
+        }
     }
 
     /**

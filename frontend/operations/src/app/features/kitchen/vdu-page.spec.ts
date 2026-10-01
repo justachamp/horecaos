@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { LocationScope } from '../../core/api/operations-paths';
 import { CurrentLocation } from '../../core/auth/current-location';
 import { I18n } from '../../core/i18n/i18n';
-import { PLATFORM_DEFAULT_LATENESS_POLICY } from '../../core/lateness-policy';
+import { LatenessPolicy, PLATFORM_DEFAULT_LATENESS_POLICY } from '../../core/lateness-policy';
 import { LatenessPolicyApi } from '../../core/lateness-policy-api';
 import { BoardResponse, KitchenApi, TicketResponse } from './kitchen-api';
 import { VduPage } from './vdu-page';
@@ -38,7 +38,10 @@ async function flushMicrotasks(): Promise<void> {
 describe('VduPage', () => {
   let fixture: ComponentFixture<VduPage>;
 
-  async function render(board: BoardResponse): Promise<void> {
+  async function render(
+    board: BoardResponse,
+    policy: LatenessPolicy = PLATFORM_DEFAULT_LATENESS_POLICY,
+  ): Promise<void> {
     await TestBed.configureTestingModule({
       imports: [VduPage],
       providers: [
@@ -53,7 +56,10 @@ describe('VduPage', () => {
         { provide: KitchenApi, useValue: { board: () => Promise.resolve(board) } },
         {
           provide: LatenessPolicyApi,
-          useValue: { resolve: () => Promise.resolve(PLATFORM_DEFAULT_LATENESS_POLICY) },
+          useValue: {
+            resolve: () => Promise.resolve(policy),
+            read: () => Promise.resolve(policy),
+          },
         },
       ],
     }).compileComponents();
@@ -101,6 +107,90 @@ describe('VduPage', () => {
     expect(references[0].textContent?.trim()).toBe('YE-2291-04');
   });
 
+  it('warns a ticket by its own fulfilment mode’s at-risk window (rows X.39 / 10.3b)', async () => {
+    // Every ticket is due in five minutes; delivery warns ten minutes ahead, pickup two, dine-in none.
+    const dueInFiveMinutes = new Date(Date.now() + 5 * 60_000).toISOString();
+    const perMode: LatenessPolicy = {
+      delivery: { atRiskBeforeSeconds: 600, lateAfterSeconds: 0, noPromiseFallbackSeconds: 2700 },
+      pickup: { atRiskBeforeSeconds: 120, lateAfterSeconds: 0, noPromiseFallbackSeconds: 2700 },
+      dineIn: { atRiskBeforeSeconds: 0, lateAfterSeconds: 0, noPromiseFallbackSeconds: 2700 },
+    };
+    await render(
+      {
+        tickets: [
+          ticket({
+            ticketId: 'd',
+            sequenceLabel: 'D',
+            fulfilmentMode: 'DELIVERY',
+            targetReadyAt: dueInFiveMinutes,
+          }),
+          ticket({
+            ticketId: 'p',
+            sequenceLabel: 'P',
+            fulfilmentMode: 'PICKUP',
+            targetReadyAt: dueInFiveMinutes,
+          }),
+          ticket({
+            ticketId: 'h',
+            sequenceLabel: 'H',
+            fulfilmentMode: 'DINE_IN',
+            targetReadyAt: dueInFiveMinutes,
+          }),
+        ],
+        warnings: [],
+      },
+      perMode,
+    );
+
+    const cardOf = (label: string): HTMLElement =>
+      Array.from(
+        (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLElement>(
+          '[data-testid="vdu-card"]',
+        ),
+      ).find((card) => card.textContent?.trim() === label) as HTMLElement;
+    expect(cardOf('D').classList.contains('vdu__card--warning')).toBe(true);
+    expect(cardOf('P').classList.contains('vdu__card--warning')).toBe(false);
+    expect(cardOf('H').classList.contains('vdu__card--warning')).toBe(false);
+  });
+
+  it('paints a breached ticket with its own mode’s grace: the same overdue ticket is late for pickup only', async () => {
+    const overdueByThirtySeconds = new Date(Date.now() - 30_000).toISOString();
+    const perMode: LatenessPolicy = {
+      delivery: { atRiskBeforeSeconds: 300, lateAfterSeconds: 120, noPromiseFallbackSeconds: 2700 },
+      pickup: { atRiskBeforeSeconds: 300, lateAfterSeconds: 0, noPromiseFallbackSeconds: 2700 },
+      dineIn: { atRiskBeforeSeconds: 300, lateAfterSeconds: 0, noPromiseFallbackSeconds: 2700 },
+    };
+    await render(
+      {
+        tickets: [
+          ticket({
+            ticketId: 'd',
+            sequenceLabel: 'D',
+            fulfilmentMode: 'DELIVERY',
+            targetReadyAt: overdueByThirtySeconds,
+          }),
+          ticket({
+            ticketId: 'p',
+            sequenceLabel: 'P',
+            fulfilmentMode: 'PICKUP',
+            targetReadyAt: overdueByThirtySeconds,
+          }),
+        ],
+        warnings: [],
+      },
+      perMode,
+    );
+
+    const cardOf = (label: string): HTMLElement =>
+      Array.from(
+        (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLElement>(
+          '[data-testid="vdu-card"]',
+        ),
+      ).find((card) => card.textContent?.trim() === label) as HTMLElement;
+    expect(cardOf('D').classList.contains('vdu__card--danger')).toBe(false);
+    expect(cardOf('P').classList.contains('vdu__card--danger')).toBe(true);
+  });
+
   it('shows the denied state when the location grant is missing', async () => {
     await TestBed.configureTestingModule({
       imports: [VduPage],
@@ -116,7 +206,10 @@ describe('VduPage', () => {
         { provide: KitchenApi, useValue: { board: vi.fn() } },
         {
           provide: LatenessPolicyApi,
-          useValue: { resolve: () => Promise.resolve(PLATFORM_DEFAULT_LATENESS_POLICY) },
+          useValue: {
+            resolve: () => Promise.resolve(PLATFORM_DEFAULT_LATENESS_POLICY),
+            read: () => Promise.resolve(PLATFORM_DEFAULT_LATENESS_POLICY),
+          },
         },
       ],
     }).compileComponents();
@@ -129,5 +222,98 @@ describe('VduPage', () => {
     expect(
       (fixture.nativeElement as HTMLElement).querySelector('[data-testid="vdu-denied"]'),
     ).not.toBeNull();
+  });
+});
+
+/**
+ * A wall display is opened once and left up for days: an owner publishing new
+ * lateness numbers must reach it through the ordinary poll, not a browser reload.
+ */
+describe('VduPage: the lateness policy follows an edit', () => {
+  const GRACE_ONE_HOUR: LatenessPolicy = {
+    delivery: { atRiskBeforeSeconds: 300, lateAfterSeconds: 3600, noPromiseFallbackSeconds: 2700 },
+    pickup: { atRiskBeforeSeconds: 300, lateAfterSeconds: 3600, noPromiseFallbackSeconds: 2700 },
+    dineIn: { atRiskBeforeSeconds: 300, lateAfterSeconds: 3600, noPromiseFallbackSeconds: 2700 },
+  };
+
+  function setUp(read: ReturnType<typeof vi.fn>): ComponentFixture<VduPage> {
+    // Overdue by thirty seconds: LATE under the platform default (no grace),
+    // not yet late once the tenant allows an hour of grace.
+    const overdue = ticket({
+      ticketId: 'd',
+      sequenceLabel: 'D',
+      targetReadyAt: new Date(Date.now() - 30_000).toISOString(),
+    });
+    TestBed.configureTestingModule({
+      imports: [VduPage],
+      providers: [
+        {
+          provide: CurrentLocation,
+          useValue: {
+            scope: signal<LocationScope | null>(SCOPE),
+            denied: signal(false),
+            ensureLoaded: () => Promise.resolve(),
+          },
+        },
+        {
+          provide: KitchenApi,
+          useValue: { board: () => Promise.resolve({ tickets: [overdue], warnings: [] }) },
+        },
+        {
+          provide: LatenessPolicyApi,
+          useValue: { read, resolve: () => Promise.resolve(PLATFORM_DEFAULT_LATENESS_POLICY) },
+        },
+      ],
+    });
+    TestBed.inject(I18n).setLocale('en');
+    return TestBed.createComponent(VduPage);
+  }
+
+  function isDanger(fixture: ComponentFixture<VduPage>): boolean {
+    return (fixture.nativeElement as HTMLElement)
+      .querySelector('[data-testid="vdu-card"]')!
+      .classList.contains('vdu__card--danger');
+  }
+
+  it('applies a policy published after the screen opened, on a later poll', async () => {
+    vi.useFakeTimers();
+    try {
+      const read = vi
+        .fn()
+        .mockResolvedValueOnce(PLATFORM_DEFAULT_LATENESS_POLICY)
+        .mockResolvedValue(GRACE_ONE_HOUR);
+      const fixture = setUp(read);
+      fixture.detectChanges();
+      await vi.advanceTimersByTimeAsync(0);
+      fixture.detectChanges();
+      expect(isDanger(fixture)).toBe(true);
+
+      // The policy is cached server-side for a minute, so a minute and a poll later it is read again.
+      await vi.advanceTimersByTimeAsync(70_000);
+      fixture.detectChanges();
+
+      expect(isDanger(fixture)).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not treat a failed first read as the loaded policy: the next poll asks again', async () => {
+    vi.useFakeTimers();
+    try {
+      const read = vi.fn().mockResolvedValueOnce(null).mockResolvedValue(GRACE_ONE_HOUR);
+      const fixture = setUp(read);
+      fixture.detectChanges();
+      await vi.advanceTimersByTimeAsync(0);
+      fixture.detectChanges();
+      expect(isDanger(fixture)).toBe(true);
+
+      await vi.advanceTimersByTimeAsync(11_000);
+      fixture.detectChanges();
+
+      expect(isDanger(fixture)).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

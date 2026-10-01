@@ -10,6 +10,7 @@ import {
 import { ApiError } from '../../core/api/problem-details';
 import { CurrentBrand } from '../../core/auth/current-brand';
 import { CurrentLocation } from '../../core/auth/current-location';
+import { formatMoney } from '../../core/format/money';
 import { I18n } from '../../core/i18n/i18n';
 import { MessageKey } from '../../core/i18n/messages.en';
 import { TPipe } from '../../core/i18n/t.pipe';
@@ -284,6 +285,25 @@ export class DeliveryTariffsPage implements OnInit {
    */
   protected fallsBackToRadius(active: ActiveVersionResponse): boolean {
     return active.distanceMode === 'ROAD';
+  }
+
+  /**
+   * An amount of the tariff's currency the way the brand writes money (Settings 10.12). A fee in
+   * the facts line carries its unit; a cell in a rate table is the bare number, as everywhere else.
+   */
+  protected amount(minor: number, currency: string, withUnit = false): string {
+    return formatMoney({ amountMinor: minor, currency }, this.i18n.locale(), { withUnit });
+  }
+
+  /** A discount's value: an amount of the tariff's currency, or the metres of delivery it waives. */
+  protected discountValue(
+    discount: { amountMinor?: number | null; allowanceMeters?: number | null },
+    currency: string,
+  ): string {
+    if (discount.amountMinor !== null && discount.amountMinor !== undefined) {
+      return this.amount(discount.amountMinor, currency);
+    }
+    return String(discount.allowanceMeters ?? '');
   }
 
   protected describeDayMask(mask: number): string {

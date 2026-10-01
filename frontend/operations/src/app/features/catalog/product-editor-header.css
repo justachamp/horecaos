@@ -1,0 +1,51 @@
+:host {
+  display: contents;
+}
+
+.editor__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  border-bottom: 1px solid var(--q-hairline);
+}
+
+.editor__back {
+  display: block;
+  color: var(--q-ink-muted);
+  font-size: var(--q-type-body-xs);
+  text-decoration: none;
+  margin-bottom: 4px;
+}
+
+.editor__name {
+  display: inline-block;
+  margin: 0 8px 0 0;
+}
+
+.editor__header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.editor__notice {
+  color: var(--q-success-text);
+}
+
+.editor__publish {
+  padding: 6px 16px;
+  border: 1px solid var(--q-primary);
+  background: var(--q-primary);
+  color: #fff;
+  border-radius: var(--q-radius);
+  cursor: pointer;
+}
+
+.status-badge {
+  padding: 2px 8px;
+  background: var(--q-surface-1);
+  border-radius: var(--q-radius);
+  font-size: var(--q-type-caption);
+  margin-left: 8px;
+}
