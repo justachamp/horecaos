@@ -517,6 +517,38 @@ public class ReportQueryService {
     }
 
     /**
+     * ADR 0140 (7.9): promotion spend over a closed range, per promotion. Read from
+     * {@code reporting.fact_promotion_redemption} joined to {@code fact_order} in the
+     * same schema; cancelled and rejected orders are excluded from the figures and
+     * remain in {@link #promotionRedemptions}'s log.
+     */
+    @Transactional(readOnly = true)
+    public PromotionSummaryResult promotionSummary(
+            UUID tenantId, LocalDate from, LocalDate to, @Nullable UUID brandId) {
+        validateRange(from, to);
+        refuseMixedBoundaryRegime(tenantId, from, to);
+        return new PromotionSummaryResult(
+                store.readPromotionSummary(tenantId, from, to, brandId),
+                provenance(tenantId, List.of(), businessDays.boundaryFor(tenantId)));
+    }
+
+    /** ADR 0140 (7.9): the redemption log behind {@link #promotionSummary}, pseudonymised, newest first, bounded. */
+    @Transactional(readOnly = true)
+    public PromotionRedemptionsResult promotionRedemptions(
+            UUID tenantId, LocalDate from, LocalDate to, @Nullable UUID promotionId, int limit) {
+        validateRange(from, to);
+        refuseMixedBoundaryRegime(tenantId, from, to);
+        return new PromotionRedemptionsResult(
+                store.readPromotionRedemptions(tenantId, from, to, promotionId, Math.min(Math.max(limit, 1), 500)),
+                provenance(tenantId, List.of(), businessDays.boundaryFor(tenantId)));
+    }
+
+    public record PromotionSummaryResult(List<JdbcReportingStore.PromotionSummaryRow> rows, Provenance provenance) {}
+
+    public record PromotionRedemptionsResult(
+            List<JdbcReportingStore.PromotionRedemptionRow> rows, Provenance provenance) {}
+
+    /**
      * T11 (7.4c, ADR 0125), w6-reporting-facts batch 11: per-order external-
      * delivery cost — the one courier report that finds money. See {@link
      * JdbcReportingStore#readExternalDeliveryCost} for {@code UNBILLED}'s

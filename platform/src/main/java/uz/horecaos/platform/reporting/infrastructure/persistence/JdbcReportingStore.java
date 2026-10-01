@@ -9,6 +9,7 @@ import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -632,7 +633,10 @@ public class JdbcReportingStore {
                 // w6-reporting-facts, batch 11 (7.4b/7.4c, ADR 0023/0125): same
                 // clear-then-rewrite shape as fact_delivery beside them.
                 "fact_delivery_fee_resolution",
-                "fact_external_delivery_cost")) {
+                "fact_external_delivery_cost",
+                // ADR 0140 (7.9): the promotion redemption fact, cleared and rewritten
+                // with the day like every other fact beside it.
+                "fact_promotion_redemption")) {
             jdbc.sql("DELETE FROM reporting.%s WHERE tenant_id = :tenantId AND business_date = :day".formatted(table))
                     .param("tenantId", tenantId)
                     .param("day", businessDate)
@@ -1108,6 +1112,219 @@ public class JdbcReportingStore {
                     :orderId, :shipmentId, :finalFeeMinor, :currency, :resolvedAt)
                 """).params(params).update();
     }
+
+    /** ADR 0140 (7.9). One row per (order, promotion); see {@code ReportingFacts.PromotionRedemptionFact}. */
+    public void insertPromotionRedemptionFact(ReportingFacts.PromotionRedemptionFact fact) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("tenantId", fact.tenantId());
+        params.put("redemptionId", fact.redemptionId());
+        params.put("businessDate", fact.businessDate());
+        params.put("boundaryVersion", fact.boundaryVersion());
+        params.put("calculationVersion", fact.metricCalculationVersion());
+        params.put("brandId", fact.brandId());
+        params.put("promotionId", fact.promotionId());
+        params.put("promotionCode", fact.promotionCode());
+        params.put("definitionVersion", fact.definitionVersion());
+        params.put("sourceKind", fact.sourceKind());
+        params.put("couponId", fact.couponId());
+        params.put("orderId", fact.orderId());
+        params.put("subjectHash", fact.customerSubjectHash());
+        params.put("discount", fact.discountMinor());
+        params.put("markup", fact.markupMinor());
+        params.put("currency", fact.currency());
+        params.put("redeemedAt", utc(fact.redeemedAt()));
+
+        jdbc.sql("""
+                INSERT INTO reporting.fact_promotion_redemption (
+                    tenant_id, redemption_id, business_date, boundary_version, metric_calculation_version,
+                    brand_id, promotion_id, promotion_code, definition_version, source_kind, coupon_id,
+                    order_id, customer_subject_hash, discount_minor, markup_minor, currency, redeemed_at)
+                VALUES (
+                    :tenantId, :redemptionId, :businessDate, :boundaryVersion, :calculationVersion,
+                    :brandId, :promotionId, :promotionCode, :definitionVersion, :sourceKind, :couponId,
+                    :orderId, :subjectHash, :discount, :markup, :currency, :redeemedAt)
+                """).params(params).update();
+    }
+
+    /** ORDER STATUSES that never became a sale: counted in the redemption log, excluded from the summary. */
+    private static final String NOT_A_SALE = "('CANCELLED', 'REJECTED', 'EXPIRED', 'PAYMENT_FAILED')";
+
+    /**
+     * ADR 0140 (7.9): per promotion over a closed range -- redemptions, unique
+     * customers, discount and markup given, revenue and average check of the orders
+     * that carried it, and the average check of the same brand's completed orders in
+     * the same period that did not.
+     *
+     * <p>Cancelled, rejected, expired and payment-failed orders stay in the log
+     * ({@link #readPromotionRedemptions}) and are excluded here, because a count
+     * that includes orders that never happened reports spend nobody incurred.
+     * "Without" is a comparison, not a causal uplift: customers who use a promotion
+     * differ from those who do not.
+     */
+    public List<PromotionSummaryRow> readPromotionSummary(
+            UUID tenantId, LocalDate from, LocalDate to, @Nullable UUID brandId) {
+        List<PromotionSummaryRow> withRows = jdbc.sql("""
+                SELECT r.brand_id, r.promotion_id, max(r.promotion_code) AS promotion_code, r.source_kind,
+                       count(*) AS redemptions,
+                       count(DISTINCT r.customer_subject_hash) AS unique_customers,
+                       COALESCE(sum(r.discount_minor), 0) AS discount_minor,
+                       COALESCE(sum(r.markup_minor), 0) AS markup_minor,
+                       COALESCE(sum(o.gross_revenue_som) FILTER (WHERE o.terminal_status = 'COMPLETED'), 0)
+                           AS revenue_with,
+                       count(*) FILTER (WHERE o.terminal_status = 'COMPLETED') AS completed_with
+                  FROM reporting.fact_promotion_redemption r
+                  JOIN reporting.fact_order o
+                    ON o.tenant_id = r.tenant_id AND o.order_id = r.order_id
+                 WHERE r.tenant_id = :tenantId AND r.business_date BETWEEN :from AND :to
+                   AND (CAST(:brandId AS uuid) IS NULL OR r.brand_id = CAST(:brandId AS uuid))
+                   AND o.terminal_status NOT IN %s
+                 GROUP BY r.brand_id, r.promotion_id, r.source_kind
+                 ORDER BY discount_minor DESC, r.promotion_id
+                """.formatted(NOT_A_SALE))
+                .param("tenantId", tenantId)
+                .param("from", from)
+                .param("to", to)
+                .param("brandId", brandId)
+                .query((row, n) -> new PromotionSummaryRow(
+                        row.getObject("brand_id", UUID.class),
+                        row.getObject("promotion_id", UUID.class),
+                        row.getString("promotion_code"),
+                        row.getString("source_kind"),
+                        row.getLong("redemptions"),
+                        row.getLong("unique_customers"),
+                        row.getLong("discount_minor"),
+                        row.getLong("markup_minor"),
+                        row.getLong("revenue_with"),
+                        row.getLong("completed_with"),
+                        0L,
+                        0L))
+                .list();
+
+        List<PromotionSummaryRow> result = new ArrayList<>(withRows.size());
+        for (PromotionSummaryRow with : withRows) {
+            long[] without = jdbc.sql("""
+                    SELECT COALESCE(sum(o.gross_revenue_som), 0) AS revenue, count(*) AS orders
+                      FROM reporting.fact_order o
+                     WHERE o.tenant_id = :tenantId AND o.brand_id = :brandId
+                       AND o.business_date BETWEEN :from AND :to AND o.terminal_status = 'COMPLETED'
+                       AND NOT EXISTS (
+                           SELECT 1 FROM reporting.fact_promotion_redemption r
+                            WHERE r.tenant_id = o.tenant_id AND r.order_id = o.order_id
+                              AND r.promotion_id = :promotionId)
+                    """)
+                    .param("tenantId", tenantId)
+                    .param("brandId", with.brandId())
+                    .param("from", from)
+                    .param("to", to)
+                    .param("promotionId", with.promotionId())
+                    .query((row, n) -> new long[] {row.getLong("revenue"), row.getLong("orders")})
+                    .single();
+            result.add(with.withComparison(without[0], without[1]));
+        }
+        return result;
+    }
+
+    /** The redemption log, newest first and bounded, cancelled orders included with their order status. */
+    public List<PromotionRedemptionRow> readPromotionRedemptions(
+            UUID tenantId, LocalDate from, LocalDate to, @Nullable UUID promotionId, int limit) {
+        return jdbc.sql("""
+                SELECT r.redemption_id, r.business_date, r.brand_id, r.promotion_id, r.promotion_code,
+                       r.definition_version, r.source_kind, r.order_id, r.customer_subject_hash,
+                       r.discount_minor, r.markup_minor, r.currency, r.redeemed_at,
+                       o.terminal_status
+                  FROM reporting.fact_promotion_redemption r
+                  LEFT JOIN reporting.fact_order o
+                    ON o.tenant_id = r.tenant_id AND o.order_id = r.order_id
+                 WHERE r.tenant_id = :tenantId AND r.business_date BETWEEN :from AND :to
+                   AND (CAST(:promotionId AS uuid) IS NULL OR r.promotion_id = CAST(:promotionId AS uuid))
+                 ORDER BY r.redeemed_at DESC, r.redemption_id
+                 LIMIT :limit
+                """)
+                .param("tenantId", tenantId)
+                .param("from", from)
+                .param("to", to)
+                .param("promotionId", promotionId)
+                .param("limit", limit)
+                .query((row, n) -> new PromotionRedemptionRow(
+                        row.getObject("redemption_id", UUID.class),
+                        row.getObject("business_date", LocalDate.class),
+                        row.getObject("brand_id", UUID.class),
+                        row.getObject("promotion_id", UUID.class),
+                        row.getString("promotion_code"),
+                        row.getInt("definition_version"),
+                        row.getString("source_kind"),
+                        row.getObject("order_id", UUID.class),
+                        row.getString("customer_subject_hash"),
+                        row.getLong("discount_minor"),
+                        row.getLong("markup_minor"),
+                        row.getString("currency"),
+                        row.getObject("redeemed_at", java.time.OffsetDateTime.class)
+                                .toInstant(),
+                        row.getString("terminal_status")))
+                .list();
+    }
+
+    /**
+     * One promotion over a range.
+     *
+     * @param completedWith the completed orders that carried it, the denominator of the average check with
+     * @param revenueWithout gross revenue of the brand's completed orders in the range that did not carry it
+     */
+    public record PromotionSummaryRow(
+            UUID brandId,
+            UUID promotionId,
+            String promotionCode,
+            String sourceKind,
+            long redemptions,
+            long uniqueCustomers,
+            long discountMinor,
+            long markupMinor,
+            long revenueWith,
+            long completedWith,
+            long revenueWithout,
+            long completedWithout) {
+
+        PromotionSummaryRow withComparison(long revenueWithout, long completedWithout) {
+            return new PromotionSummaryRow(
+                    brandId,
+                    promotionId,
+                    promotionCode,
+                    sourceKind,
+                    redemptions,
+                    uniqueCustomers,
+                    discountMinor,
+                    markupMinor,
+                    revenueWith,
+                    completedWith,
+                    revenueWithout,
+                    completedWithout);
+        }
+
+        /** Whole som, rounded half up; null when no completed order exists to average. */
+        public @Nullable Long averageCheckWith() {
+            return completedWith == 0 ? null : (revenueWith + completedWith / 2) / completedWith;
+        }
+
+        public @Nullable Long averageCheckWithout() {
+            return completedWithout == 0 ? null : (revenueWithout + completedWithout / 2) / completedWithout;
+        }
+    }
+
+    public record PromotionRedemptionRow(
+            UUID redemptionId,
+            LocalDate businessDate,
+            UUID brandId,
+            UUID promotionId,
+            String promotionCode,
+            int definitionVersion,
+            String sourceKind,
+            UUID orderId,
+            @Nullable String customerSubjectHash,
+            long discountMinor,
+            long markupMinor,
+            String currency,
+            Instant redeemedAt,
+            @Nullable String orderStatus) {}
 
     /**
      * w6-reporting-facts, batch 11 (7.4c, ADR 0023/0125): every {@code
