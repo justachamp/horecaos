@@ -41,17 +41,28 @@ interface LatenessPolicyResponse {
 export class LatenessPolicyApi {
   private readonly api = inject(ApiClient);
 
-  async resolve(scope: LocationScope): Promise<LatenessPolicy> {
+  /**
+   * The resolved policy, or `null` when it could not be read: a denied
+   * capability, a network error, a server that has not deployed the endpoint,
+   * or a body that is not the document. A screen that stays open for days
+   * (the boards, the KDS, the wall displays) asks this rather than
+   * {@link resolve}, because it has to tell "the tenant is on the platform
+   * default" from "the read failed, ask again" — see `LatenessPolicyTracker`.
+   */
+  async read(scope: LocationScope): Promise<LatenessPolicy | null> {
     try {
       const result = await firstValueFrom(
         this.api.get<LatenessPolicyResponse>(operationsPaths.orderLatenessPolicy(scope)),
       );
-      return isLatenessPolicyResponse(result.value)
-        ? toPolicy(result.value)
-        : PLATFORM_DEFAULT_LATENESS_POLICY;
+      return isLatenessPolicyResponse(result.value) ? toPolicy(result.value) : null;
     } catch {
-      return PLATFORM_DEFAULT_LATENESS_POLICY;
+      return null;
     }
+  }
+
+  /** {@link read}, with the platform default standing in for a read that failed. */
+  async resolve(scope: LocationScope): Promise<LatenessPolicy> {
+    return (await this.read(scope)) ?? PLATFORM_DEFAULT_LATENESS_POLICY;
   }
 }
 

@@ -20,6 +20,7 @@ import { CurrentTenant } from '../../core/auth/current-tenant';
 import { SessionCapabilities } from '../../core/auth/session-capabilities';
 import { LatenessPolicy, PLATFORM_DEFAULT_LATENESS_POLICY } from '../../core/lateness-policy';
 import { LatenessPolicyApi } from '../../core/lateness-policy-api';
+import { LatenessPolicyTracker } from '../../core/lateness-policy-tracker';
 import { TimeZone, formatClock, formatTime } from '../../core/format/datetime';
 import { formatMoney } from '../../core/format/money';
 import { I18n } from '../../core/i18n/i18n';
@@ -398,13 +399,16 @@ export class OrderQueue implements OnInit {
   private bindingOptionsScopeKey: string | null = null;
 
   /**
-   * The lateness policy of every branch this board has shown a row of, beyond
-   * the shell's own (wave 16): on «Все филиалы» a row is judged late by **its
+   * The lateness policy of the shell's branch and of every branch this board has
+   * shown a row of (wave 16): on «Все филиалы» a row is judged late by **its
    * branch's** policy, the same one the «Только опаздывающие» filter applied
-   * server-side, so a row's tint and the filter cannot disagree. Filled lazily
-   * from {@link ensureBranchPolicies}; only ever grows.
+   * server-side, so a row's tint and the filter cannot disagree. The board stays
+   * open all shift, so {@link refreshPolicy} and {@link ensureBranchPolicies}
+   * re-read them on the poll (each at most once a minute) rather than holding the
+   * start-up copy: an owner's edit reaches an open board without a reload, and a
+   * read that failed is asked for again instead of pinning the platform default.
    */
-  private readonly branchPolicies = new Map<string, LatenessPolicy>();
+  private readonly policies = new LatenessPolicyTracker(this.latenessPolicyApi);
 
   /**
    * Gap map row 1.1's Клиент column: name in full and masked phone for the
@@ -466,12 +470,11 @@ export class OrderQueue implements OnInit {
   private dialogRequestId = 0;
 
   /**
-   * The resolved `ordering.lateness` policy (wave P06) — fetched once per
-   * location in {@link start}, not re-fetched on every 10s poll: a tenant
-   * changing its own SLA thresholds mid-shift is rare enough that the next
-   * navigation picking it up is an acceptable bound, and every {@link
-   * decorate} call this session makes reads the same object, which is the
-   * whole point of "one policy" for row `X.39`.
+   * The shell branch's resolved `ordering.lateness` policy (wave P06), as of the
+   * last {@link refreshPolicy}. Every {@link decorate} call in one refresh reads
+   * the same object, which is the whole point of "one policy" for row `X.39`;
+   * the next refresh past the tracker's max age swaps in what the owner
+   * published since.
    */
   private latenessPolicy: LatenessPolicy = PLATFORM_DEFAULT_LATENESS_POLICY;
 
@@ -563,12 +566,6 @@ export class OrderQueue implements OnInit {
 
   private async start(): Promise<void> {
     await this.location.ensureLoaded();
-    const scope = this.location.scope();
-    if (scope) {
-      this.latenessPolicy = await this.latenessPolicyApi.resolve(scope);
-      this.branchPolicies.set(scope.locationId, this.latenessPolicy);
-      this.lateColour.set(this.latenessPolicy.lateColour ?? null);
-    }
     await this.refresh();
     this.hasStarted = true;
   }
@@ -599,37 +596,38 @@ export class OrderQueue implements OnInit {
    * as-is.
    */
   private readonly policyFor = (order: { readonly locationId?: string | null }): LatenessPolicy =>
-    (order.locationId ? this.branchPolicies.get(order.locationId) : undefined) ??
-    this.latenessPolicy;
+    order.locationId && this.policies.isLoaded(order.locationId)
+      ? this.policies.policy(order.locationId)
+      : this.latenessPolicy;
 
   /**
-   * Fetches the policy of every branch on this page that the board has not yet
-   * shown a row of. One request per branch per session; `LatenessPolicyApi`
-   * falls back to the platform default on any failure, so this never throws.
+   * Re-reads the shell branch's policy (at most once a minute — the tracker
+   * holds a younger read) and keeps {@link latenessPolicy} and {@link
+   * lateColour} on it. Never rejects; a failed read leaves the last policy read,
+   * or the platform default before the first one.
+   */
+  private async refreshPolicy(scope: LocationScope): Promise<void> {
+    await this.policies.refresh(scope);
+    this.latenessPolicy = this.policies.policy(scope.locationId);
+    this.lateColour.set(this.latenessPolicy.lateColour ?? null);
+  }
+
+  /**
+   * Re-reads the policy of every branch on this page (each at most once a minute,
+   * and a branch never read before at once). `LatenessPolicyApi.read` swallows a
+   * failure, so this never throws: an unread branch is judged by the shell
+   * branch's policy until a read succeeds, and the next refresh asks again.
    */
   private async ensureBranchPolicies(
     scope: LocationScope,
     orders: readonly OrderSummaryResponse[],
   ): Promise<void> {
-    const missing = [
-      ...new Set(
-        orders
-          .map((order) => order.locationId)
-          .filter((id): id is string => !!id && !this.branchPolicies.has(id)),
-      ),
+    const locationIds = [
+      ...new Set(orders.map((order) => order.locationId).filter((id): id is string => !!id)),
     ];
-    if (missing.length === 0) {
-      return;
-    }
-    const resolved = await Promise.all(
-      missing.map(
-        async (locationId) =>
-          [locationId, await this.latenessPolicyApi.resolve({ ...scope, locationId })] as const,
-      ),
+    await Promise.all(
+      locationIds.map((locationId) => this.policies.refresh({ ...scope, locationId })),
     );
-    for (const [locationId, policy] of resolved) {
-      this.branchPolicies.set(locationId, policy);
-    }
   }
 
   /**
@@ -688,7 +686,12 @@ export class OrderQueue implements OnInit {
     this.refreshing.set(true);
     try {
       const startState = firstPage(FETCH_LIMIT);
-      const page = await this.fetchBoardPage(scope, startState);
+      // The policy read rides alongside the board's own: past the tracker's max
+      // age it is one more request in flight, never one more wait in a row.
+      const [page] = await Promise.all([
+        this.fetchBoardPage(scope, startState),
+        this.refreshPolicy(scope),
+      ]);
       if (generation !== this.pageGeneration) {
         return;
       }

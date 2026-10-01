@@ -63,6 +63,7 @@ describe('WallboardVduPage', () => {
       readonly stations?: readonly StationResponse[];
       readonly vduSpy?: ReturnType<typeof vi.fn>;
       readonly policy?: LatenessPolicy;
+      readonly read?: ReturnType<typeof vi.fn>;
     } = {},
   ): { frameListeners: Array<(frame: RealtimeFrame) => void>; vduSpy: ReturnType<typeof vi.fn> } {
     const frameListeners: Array<(frame: RealtimeFrame) => void> = [];
@@ -96,6 +97,9 @@ describe('WallboardVduPage', () => {
             resolve: vi
               .fn()
               .mockResolvedValue(overrides.policy ?? PLATFORM_DEFAULT_LATENESS_POLICY),
+            read:
+              overrides.read ??
+              vi.fn().mockResolvedValue(overrides.policy ?? PLATFORM_DEFAULT_LATENESS_POLICY),
           },
         },
         { provide: RealtimeClient, useValue: { onFrame, state: signal('open') } },
@@ -324,5 +328,75 @@ describe('WallboardVduPage', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+  describe('follows a policy edit made after the wall was opened', () => {
+    const GRACE_ONE_HOUR: LatenessPolicy = {
+      delivery: {
+        atRiskBeforeSeconds: 300,
+        lateAfterSeconds: 3600,
+        noPromiseFallbackSeconds: 2700,
+      },
+      pickup: { atRiskBeforeSeconds: 300, lateAfterSeconds: 3600, noPromiseFallbackSeconds: 2700 },
+      dineIn: { atRiskBeforeSeconds: 300, lateAfterSeconds: 3600, noPromiseFallbackSeconds: 2700 },
+    };
+
+    function isDanger(): boolean {
+      return (fixture.nativeElement as HTMLElement)
+        .querySelector('[data-testid="wallboard-vdu-card"]')!
+        .classList.contains('wv__card--danger');
+    }
+
+    function overdueBoard(): VduBoardResponse {
+      return {
+        tickets: [
+          ticket({
+            ticketId: 'd',
+            sequenceLabel: 'D',
+            targetReadyAt: new Date(Date.now() - 30_000).toISOString(),
+          }),
+        ],
+      };
+    }
+
+    it('re-reads the policy on the poll: a grace published later stops the breach', async () => {
+      vi.useFakeTimers();
+      try {
+        const read = vi
+          .fn()
+          .mockResolvedValueOnce(PLATFORM_DEFAULT_LATENESS_POLICY)
+          .mockResolvedValue(GRACE_ONE_HOUR);
+        setUp(overdueBoard(), { read });
+        fixture.detectChanges();
+        await vi.advanceTimersByTimeAsync(0);
+        fixture.detectChanges();
+        expect(isDanger()).toBe(true);
+
+        await vi.advanceTimersByTimeAsync(70_000);
+        fixture.detectChanges();
+
+        expect(isDanger()).toBe(false);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('does not take a failed first read for the loaded policy: the next poll asks again', async () => {
+      vi.useFakeTimers();
+      try {
+        const read = vi.fn().mockResolvedValueOnce(null).mockResolvedValue(GRACE_ONE_HOUR);
+        setUp(overdueBoard(), { read });
+        fixture.detectChanges();
+        await vi.advanceTimersByTimeAsync(0);
+        fixture.detectChanges();
+        expect(isDanger()).toBe(true);
+
+        await vi.advanceTimersByTimeAsync(11_000);
+        fixture.detectChanges();
+
+        expect(isDanger()).toBe(false);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 });

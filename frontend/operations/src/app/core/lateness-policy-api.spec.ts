@@ -125,4 +125,30 @@ describe('LatenessPolicyApi: the tenant late colour', () => {
     expect(policy).toBe(PLATFORM_DEFAULT_LATENESS_POLICY);
     expect(policy.lateColour ?? null).toBeNull();
   });
+  it('read() says null, not the default, when the read fails — the caller must tell the two apart', async () => {
+    TestBed.configureTestingModule({
+      providers: [
+        {
+          provide: ApiClient,
+          useValue: { get: vi.fn().mockReturnValue(throwError(() => new Error('offline'))) },
+        },
+      ],
+    });
+
+    expect(await TestBed.inject(LatenessPolicyApi).read(SCOPE)).toBeNull();
+  });
+
+  it('read() says null for a body that is not the document', async () => {
+    expect(
+      await apiReturning({ value: { unexpected: true }, version: null }).read(SCOPE),
+    ).toBeNull();
+  });
+
+  it('read() answers the document unchanged when the tenant is on the platform default too', async () => {
+    const policy = await apiReturning(wire({ isPlatformDefault: true })).read(SCOPE);
+
+    expect(policy).not.toBeNull();
+    expect(policy).not.toBe(PLATFORM_DEFAULT_LATENESS_POLICY);
+    expect(policy!.delivery.atRiskBeforeSeconds).toBe(600);
+  });
 });

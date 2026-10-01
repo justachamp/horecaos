@@ -78,7 +78,7 @@ function configure(options: {
   readonly branches?: readonly LocationOption[];
   readonly bulk?: boolean;
   readonly actions?: Partial<OrderActionsApi>;
-  readonly policyFor?: (locationId: string) => LatenessPolicy;
+  readonly policyFor?: (locationId: string) => LatenessPolicy | null;
 }): Harnessing {
   const calls: GetCall[] = [];
   const selectLocation = vi.fn();
@@ -114,6 +114,13 @@ function configure(options: {
       {
         provide: LatenessPolicyApi,
         useValue: {
+          // `null` from `policyFor` is a read that failed: `read` says so, `resolve` papers over it.
+          read: (scope: { locationId: string }) =>
+            Promise.resolve(
+              options.policyFor
+                ? options.policyFor(scope.locationId)
+                : PLATFORM_DEFAULT_LATENESS_POLICY,
+            ),
           resolve: (scope: { locationId: string }) =>
             Promise.resolve(
               options.policyFor?.(scope.locationId) ?? PLATFORM_DEFAULT_LATENESS_POLICY,
@@ -429,6 +436,98 @@ describe('OrderQueue: «Все филиалы» (gap map row 1.1, wave 16)', () 
         ?.classList.contains('order-row--danger');
     expect(late('0001'), 'thirty minutes past the promise at a branch with no grace').toBe(true);
     expect(late('0002'), 'the same lateness at a branch that allows two hours').toBe(false);
+  });
+
+  describe('follows a branch policy edit made after the board opened', () => {
+    const RELAXED: LatenessPolicy = {
+      delivery: {
+        atRiskBeforeSeconds: 300,
+        lateAfterSeconds: 7200,
+        noPromiseFallbackSeconds: 7200,
+      },
+      pickup: { atRiskBeforeSeconds: 300, lateAfterSeconds: 7200, noPromiseFallbackSeconds: 7200 },
+      dineIn: { atRiskBeforeSeconds: 300, lateAfterSeconds: 7200, noPromiseFallbackSeconds: 7200 },
+    };
+
+    function twoBranchBoard(): OrderSummaryResponse[] {
+      const promised = new Date(Date.now() - 30 * 60_000).toISOString();
+      return [
+        order({
+          orderId: 'own',
+          locationId: 'l1',
+          publicOrderNumber: '0001',
+          status: 'PREPARING',
+          fulfillmentMode: 'DELIVERY',
+          promisedAt: promised,
+        }),
+        order({
+          orderId: 'other',
+          locationId: 'l2',
+          publicOrderNumber: '0002',
+          status: 'PREPARING',
+          fulfillmentMode: 'DELIVERY',
+          promisedAt: promised,
+        }),
+      ];
+    }
+
+    function isLate(host: HTMLElement, number: string): boolean | undefined {
+      return [...host.querySelectorAll<HTMLElement>('[data-testid="order-row"]')]
+        .find((row) => row.querySelector('.q-mono')?.textContent?.trim() === number)
+        ?.classList.contains('order-row--danger');
+    }
+
+    it('re-reads every branch’s policy on the poll, the shell branch’s and the others’', async () => {
+      // Only the interval and the clock: the harness itself still needs real timeouts.
+      vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] });
+      try {
+        let own: LatenessPolicy = PLATFORM_DEFAULT_LATENESS_POLICY;
+        let other: LatenessPolicy = PLATFORM_DEFAULT_LATENESS_POLICY;
+        configure({
+          respond: () => page(twoBranchBoard()),
+          policyFor: (locationId) => (locationId === 'l2' ? other : own),
+        });
+        const harness = await RouterTestingHarness.create('/orders?tab=all&branches=all');
+        await settle();
+        const host = harness.routeNativeElement!;
+        expect(isLate(host, '0001')).toBe(true);
+        expect(isLate(host, '0002')).toBe(true);
+
+        own = RELAXED;
+        other = RELAXED;
+        vi.advanceTimersByTime(70_000);
+        await settle();
+
+        expect(isLate(host, '0001'), 'the shell branch’s own edit').toBe(false);
+        expect(isLate(host, '0002'), 'another branch’s edit').toBe(false);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('does not take a branch whose first read failed for a loaded one: the next refresh asks again', async () => {
+      vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] });
+      try {
+        let other: LatenessPolicy | null = null;
+        configure({
+          respond: () => page(twoBranchBoard()),
+          policyFor: (locationId) =>
+            locationId === 'l2' ? other : PLATFORM_DEFAULT_LATENESS_POLICY,
+        });
+        const harness = await RouterTestingHarness.create('/orders?tab=all&branches=all');
+        await settle();
+        const host = harness.routeNativeElement!;
+        expect(isLate(host, '0002'), 'unread policy: the platform default').toBe(true);
+
+        other = RELAXED;
+        vi.advanceTimersByTime(11_000);
+        await settle();
+
+        expect(isLate(host, '0002')).toBe(false);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 });
 

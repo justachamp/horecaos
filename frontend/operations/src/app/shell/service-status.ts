@@ -4,8 +4,8 @@ import { firstValueFrom } from 'rxjs';
 import { ApiClient } from '../core/api/api-client';
 import { LocationScope, operationsPaths } from '../core/api/operations-paths';
 import { CurrentLocation } from '../core/auth/current-location';
-import { LatenessPolicy, PLATFORM_DEFAULT_LATENESS_POLICY } from '../core/lateness-policy';
 import { LatenessPolicyApi } from '../core/lateness-policy-api';
+import { LatenessPolicyTracker } from '../core/lateness-policy-tracker';
 import { RealtimeClient } from '../core/realtime/realtime-client';
 import { OrderCountsResponse } from '../features/orders/order-detail';
 import { OrderSeverityInput, computeOrderSeverity } from '../features/orders/order-severity';
@@ -93,8 +93,15 @@ export class ServiceStatus {
   readonly updatedAt: Signal<Date | null> = this.updated.asReadonly();
 
   private started = false;
-  private latenessPolicy: LatenessPolicy = PLATFORM_DEFAULT_LATENESS_POLICY;
-  private latenessPolicyLoaded = false;
+
+  /**
+   * The location's `ordering.lateness` policy. Read again whenever {@link
+   * refresh} finds the held copy older than the tracker's max age, and a read
+   * that failed is not held at all — a shell lives for the whole session, so a
+   * policy fetched once and kept would outlast every edit the owner publishes,
+   * and a start-up failure would pin the platform default for good.
+   */
+  private readonly policies = new LatenessPolicyTracker(this.latenessPolicyApi);
 
   constructor() {
     // The accelerator's other half: `COUNTERS` carries `open` inline
@@ -178,10 +185,8 @@ export class ServiceStatus {
   }
 
   private async fetchLateCount(scope: LocationScope, now: Date): Promise<number> {
-    if (!this.latenessPolicyLoaded) {
-      this.latenessPolicy = await this.latenessPolicyApi.resolve(scope);
-      this.latenessPolicyLoaded = true;
-    }
+    await this.policies.refresh(scope);
+    const latenessPolicy = this.policies.policy(scope.locationId);
     const result = await firstValueFrom(
       this.api.get<readonly OrderSummaryResponse[]>(operationsPaths.orders(scope), {
         params: { status: NON_TERMINAL_STATUSES, limit: LATE_FETCH_LIMIT },
@@ -190,9 +195,7 @@ export class ServiceStatus {
     const orders = result.value ?? [];
     let late = 0;
     for (const order of orders) {
-      if (
-        computeOrderSeverity(toSeverityInput(order), now, this.latenessPolicy).level !== 'NORMAL'
-      ) {
+      if (computeOrderSeverity(toSeverityInput(order), now, latenessPolicy).level !== 'NORMAL') {
         late += 1;
       }
     }
