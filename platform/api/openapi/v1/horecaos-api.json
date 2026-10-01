@@ -298,6 +298,21 @@
         },
         "type" : "object"
       },
+      "ActivationResponse" : {
+        "properties" : {
+          "approvalRequestId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "outcome" : {
+            "type" : "string"
+          },
+          "promotion" : {
+            "$ref" : "#/components/schemas/PromotionResponse"
+          }
+        },
+        "type" : "object"
+      },
       "ActiveVersionResponse" : {
         "properties" : {
           "bands" : {
@@ -4123,6 +4138,9 @@
             "format" : "uuid",
             "type" : "string"
           },
+          "paymentMethodCode" : {
+            "type" : "string"
+          },
           "quoteId" : {
             "format" : "uuid",
             "type" : "string"
@@ -4331,6 +4349,20 @@
           },
           "status" : {
             "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "CatalogPublicationControllerValidationResponse" : {
+        "properties" : {
+          "findings" : {
+            "items" : {
+              "$ref" : "#/components/schemas/FindingView"
+            },
+            "type" : "array"
+          },
+          "publishable" : {
+            "type" : "boolean"
           }
         },
         "type" : "object"
@@ -9052,6 +9084,20 @@
         },
         "type" : "object"
       },
+      "DestinationBody" : {
+        "properties" : {
+          "latitude" : {
+            "format" : "double",
+            "type" : "number"
+          },
+          "longitude" : {
+            "format" : "double",
+            "type" : "number"
+          }
+        },
+        "required" : [ "latitude", "longitude" ],
+        "type" : "object"
+      },
       "DestinationResponse" : {
         "properties" : {
           "addressId" : {
@@ -10486,6 +10532,30 @@
         },
         "type" : "object"
       },
+      "FactsBody" : {
+        "properties" : {
+          "brandOrderPosition" : {
+            "format" : "int32",
+            "minimum" : 1,
+            "type" : "integer"
+          },
+          "channelOrderPosition" : {
+            "format" : "int32",
+            "minimum" : 1,
+            "type" : "integer"
+          },
+          "segments" : {
+            "items" : {
+              "type" : "string"
+            },
+            "maxItems" : 50,
+            "minItems" : 0,
+            "type" : "array",
+            "uniqueItems" : true
+          }
+        },
+        "type" : "object"
+      },
       "FailureOperationsControllerReasonRequest" : {
         "properties" : {
           "reason" : {
@@ -11897,6 +11967,21 @@
         "required" : [ "displayLabel", "reason" ],
         "type" : "object"
       },
+      "IssueResponse" : {
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "message" : {
+            "type" : "string"
+          },
+          "sequence" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
       "IssuedClientResponse" : {
         "properties" : {
           "clientId" : {
@@ -12804,6 +12889,23 @@
           "date" : {
             "format" : "date",
             "type" : "string"
+          },
+          "opensAt" : {
+            "format" : "time-local",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "LocationServiceOperationsControllerRuleResponse" : {
+        "properties" : {
+          "closesAt" : {
+            "format" : "time-local",
+            "type" : "string"
+          },
+          "dayOfWeek" : {
+            "format" : "int32",
+            "type" : "integer"
           },
           "opensAt" : {
             "format" : "time-local",
@@ -13891,7 +13993,7 @@
           },
           "rules" : {
             "items" : {
-              "$ref" : "#/components/schemas/RuleResponse"
+              "$ref" : "#/components/schemas/LocationServiceOperationsControllerRuleResponse"
             },
             "type" : "array"
           },
@@ -19043,6 +19145,25 @@
         },
         "type" : "object"
       },
+      "PriorityBody" : {
+        "properties" : {
+          "orderedPromotionIds" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "maxItems" : 200,
+            "minItems" : 0,
+            "type" : "array"
+          },
+          "stackingGroup" : {
+            "minLength" : 1,
+            "type" : "string"
+          }
+        },
+        "required" : [ "orderedPromotionIds", "stackingGroup" ],
+        "type" : "object"
+      },
       "ProductDetailResponse" : {
         "properties" : {
           "catalogIds" : {
@@ -19444,6 +19565,321 @@
         },
         "type" : "object"
       },
+      "PromotionBody" : {
+        "properties" : {
+          "actions" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RuleBody"
+            },
+            "maxItems" : 20,
+            "minItems" : 0,
+            "type" : "array"
+          },
+          "code" : {
+            "maxLength" : 64,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "conditions" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RuleBody"
+            },
+            "maxItems" : 20,
+            "minItems" : 0,
+            "type" : "array"
+          },
+          "currency" : {
+            "maxLength" : 3,
+            "minLength" : 3,
+            "type" : "string"
+          },
+          "exclusive" : {
+            "type" : "boolean"
+          },
+          "kind" : {
+            "enum" : [ "DISCOUNT", "MARKUP" ],
+            "type" : "string"
+          },
+          "loyaltyAccrual" : {
+            "enum" : [ "ACCRUE", "SUPPRESS" ],
+            "type" : "string"
+          },
+          "loyaltyRedemption" : {
+            "enum" : [ "ALLOW", "BLOCK" ],
+            "type" : "string"
+          },
+          "maximumDiscountMinor" : {
+            "exclusiveMinimum" : 0,
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "maximumPerCustomer" : {
+            "format" : "int32",
+            "minimum" : 1,
+            "type" : "integer"
+          },
+          "maximumRedemptions" : {
+            "format" : "int32",
+            "minimum" : 1,
+            "type" : "integer"
+          },
+          "name" : {
+            "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "priority" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "scope" : {
+            "enum" : [ "ITEM", "ORDER", "DELIVERY" ],
+            "type" : "string"
+          },
+          "stackingGroup" : {
+            "maxLength" : 64,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "validFrom" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "validUntil" : {
+            "format" : "date-time",
+            "type" : "string"
+          }
+        },
+        "required" : [ "actions", "code", "currency", "kind", "name", "scope", "stackingGroup" ],
+        "type" : "object"
+      },
+      "PromotionControllerRedemptionResponse" : {
+        "properties" : {
+          "currency" : {
+            "type" : "string"
+          },
+          "customerAccountId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "definitionVersion" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "discountMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "markupMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "orderId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "redemptionId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "PromotionControllerRuleResponse" : {
+        "properties" : {
+          "operands" : {
+            "additionalProperties" : { },
+            "type" : "object"
+          },
+          "sequence" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "type" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "PromotionControllerValidationResponse" : {
+        "properties" : {
+          "promotion" : {
+            "$ref" : "#/components/schemas/PromotionResponse"
+          },
+          "refusals" : {
+            "items" : {
+              "$ref" : "#/components/schemas/IssueResponse"
+            },
+            "type" : "array"
+          },
+          "valid" : {
+            "type" : "boolean"
+          },
+          "warnings" : {
+            "items" : {
+              "$ref" : "#/components/schemas/IssueResponse"
+            },
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
+      "PromotionControllerVersionResponse" : {
+        "properties" : {
+          "definition" : {
+            "additionalProperties" : { },
+            "type" : "object"
+          },
+          "definitionVersion" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "reason" : {
+            "type" : "string"
+          },
+          "recordedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "recordedBy" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "PromotionReportControllerSummaryResponse" : {
+        "properties" : {
+          "provenance" : {
+            "$ref" : "#/components/schemas/ProvenanceResponse"
+          },
+          "rows" : {
+            "items" : {
+              "$ref" : "#/components/schemas/SummaryRowResponse"
+            },
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
+      "PromotionResponse" : {
+        "properties" : {
+          "actions" : {
+            "items" : {
+              "$ref" : "#/components/schemas/PromotionControllerRuleResponse"
+            },
+            "type" : "array"
+          },
+          "activatedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "activatedBy" : {
+            "type" : "string"
+          },
+          "approvalId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "code" : {
+            "type" : "string"
+          },
+          "conditions" : {
+            "items" : {
+              "$ref" : "#/components/schemas/PromotionControllerRuleResponse"
+            },
+            "type" : "array"
+          },
+          "consumedCount" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "createdAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "definitionVersion" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "exclusive" : {
+            "type" : "boolean"
+          },
+          "kind" : {
+            "type" : "string"
+          },
+          "loyaltyAccrual" : {
+            "type" : "string"
+          },
+          "loyaltyRedemption" : {
+            "type" : "string"
+          },
+          "maximumDiscountMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "maximumPerCustomer" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "maximumRedemptions" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "priority" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "promotionId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "scope" : {
+            "type" : "string"
+          },
+          "stackingGroup" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "updatedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "validFrom" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "validUntil" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "validatedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "versions" : {
+            "items" : {
+              "$ref" : "#/components/schemas/PromotionControllerVersionResponse"
+            },
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
       "ProvenanceResponse" : {
         "properties" : {
           "asOf" : {
@@ -19588,7 +20024,7 @@
             "type" : "string"
           },
           "validation" : {
-            "$ref" : "#/components/schemas/ValidationResponse"
+            "$ref" : "#/components/schemas/CatalogPublicationControllerValidationResponse"
           }
         },
         "type" : "object"
@@ -20117,6 +20553,16 @@
         },
         "type" : "object"
       },
+      "ReasonBody" : {
+        "properties" : {
+          "reason" : {
+            "maxLength" : 500,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "ReasonResponse" : {
         "properties" : {
           "allowedFulfillmentModes" : {
@@ -20503,6 +20949,79 @@
           "version" : {
             "format" : "int32",
             "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "RedemptionRowResponse" : {
+        "properties" : {
+          "brandId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "businessDate" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "channelCode" : {
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "customerSubject" : {
+            "type" : "string"
+          },
+          "definitionVersion" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "discountSom" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "markupSom" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "orderId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "orderStatus" : {
+            "type" : "string"
+          },
+          "promotionCode" : {
+            "type" : "string"
+          },
+          "promotionId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "redeemedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "redemptionId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "sourceKind" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "RedemptionsResponse" : {
+        "properties" : {
+          "provenance" : {
+            "$ref" : "#/components/schemas/ProvenanceResponse"
+          },
+          "rows" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RedemptionRowResponse"
+            },
+            "type" : "array"
           }
         },
         "type" : "object"
@@ -21410,6 +21929,21 @@
             "type" : "string"
           }
         },
+        "type" : "object"
+      },
+      "ReplayBody" : {
+        "properties" : {
+          "definitionVersion" : {
+            "exclusiveMinimum" : 0,
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "promotionId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "required" : [ "promotionId" ],
         "type" : "object"
       },
       "ReplayRequest" : {
@@ -22727,6 +23261,24 @@
         },
         "type" : "object"
       },
+      "RuleBody" : {
+        "properties" : {
+          "operands" : {
+            "additionalProperties" : { },
+            "type" : "object"
+          },
+          "sequence" : {
+            "exclusiveMinimum" : 0,
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "type" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "type" ],
+        "type" : "object"
+      },
       "RuleRequest" : {
         "properties" : {
           "closesAt" : {
@@ -22745,23 +23297,6 @@
           }
         },
         "required" : [ "closesAt", "opensAt" ],
-        "type" : "object"
-      },
-      "RuleResponse" : {
-        "properties" : {
-          "closesAt" : {
-            "format" : "time-local",
-            "type" : "string"
-          },
-          "dayOfWeek" : {
-            "format" : "int32",
-            "type" : "integer"
-          },
-          "opensAt" : {
-            "format" : "time-local",
-            "type" : "string"
-          }
-        },
         "type" : "object"
       },
       "RulesRequest" : {
@@ -23222,6 +23757,16 @@
           "version" : {
             "format" : "int32",
             "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "SelectPaymentMethodRequest" : {
+        "properties" : {
+          "paymentMethodCode" : {
+            "maxLength" : 32,
+            "minLength" : 0,
+            "type" : "string"
           }
         },
         "type" : "object"
@@ -24036,6 +24581,222 @@
           },
           "signedBy" : {
             "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "SimulatedAdjustment" : {
+        "properties" : {
+          "amountMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "definitionVersion" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "descriptionCode" : {
+            "type" : "string"
+          },
+          "lineId" : {
+            "type" : "string"
+          },
+          "promotionId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "sequence" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "type" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "SimulatedLine" : {
+        "properties" : {
+          "description" : {
+            "type" : "string"
+          },
+          "finalAmountMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "lineId" : {
+            "type" : "string"
+          },
+          "quantity" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "taxAmountMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "unitAmountMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "variantId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "SimulationBody" : {
+        "properties" : {
+          "candidate" : {
+            "$ref" : "#/components/schemas/PromotionBody"
+          },
+          "channelCode" : {
+            "maxLength" : 32,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "definitionVersions" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ReplayBody"
+            },
+            "maxItems" : 20,
+            "minItems" : 0,
+            "type" : "array"
+          },
+          "destination" : {
+            "$ref" : "#/components/schemas/DestinationBody"
+          },
+          "facts" : {
+            "$ref" : "#/components/schemas/FactsBody"
+          },
+          "fulfillmentMode" : {
+            "type" : "string"
+          },
+          "lines" : {
+            "items" : {
+              "$ref" : "#/components/schemas/SimulationLineBody"
+            },
+            "maxItems" : 200,
+            "minItems" : 0,
+            "type" : "array"
+          },
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "paymentMethodCode" : {
+            "maxLength" : 32,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "presentedCouponCode" : {
+            "maxLength" : 32,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "serviceInstant" : {
+            "format" : "date-time",
+            "type" : "string"
+          }
+        },
+        "required" : [ "channelCode", "lines", "locationId" ],
+        "type" : "object"
+      },
+      "SimulationLineBody" : {
+        "properties" : {
+          "lineId" : {
+            "maxLength" : 64,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "modifierOptionIds" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "maxItems" : 20,
+            "minItems" : 0,
+            "type" : "array"
+          },
+          "quantity" : {
+            "exclusiveMinimum" : 0,
+            "format" : "int32",
+            "maximum" : 999,
+            "type" : "integer"
+          },
+          "variantId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "required" : [ "lineId", "variantId" ],
+        "type" : "object"
+      },
+      "SimulationResponse" : {
+        "properties" : {
+          "adjustments" : {
+            "items" : {
+              "$ref" : "#/components/schemas/SimulatedAdjustment"
+            },
+            "type" : "array"
+          },
+          "contextHash" : {
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "discountMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "feeMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "fulfillmentMode" : {
+            "type" : "string"
+          },
+          "lines" : {
+            "items" : {
+              "$ref" : "#/components/schemas/SimulatedLine"
+            },
+            "type" : "array"
+          },
+          "loyaltyAccrualAllowed" : {
+            "type" : "boolean"
+          },
+          "loyaltyRedemptionAllowed" : {
+            "type" : "boolean"
+          },
+          "paymentMethodCode" : {
+            "type" : "string"
+          },
+          "serviceInstant" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "subtotalMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "taxMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "timeZone" : {
+            "type" : "string"
+          },
+          "totalMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "trace" : {
+            "items" : {
+              "$ref" : "#/components/schemas/TraceResponse"
+            },
+            "type" : "array"
           }
         },
         "type" : "object"
@@ -25165,6 +25926,53 @@
           },
           "template" : {
             "$ref" : "#/components/schemas/TemplateView"
+          }
+        },
+        "type" : "object"
+      },
+      "SummaryRowResponse" : {
+        "properties" : {
+          "averageCheckWithSom" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "averageCheckWithoutSom" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "brandId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "discountSom" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "markupSom" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "promotionCode" : {
+            "type" : "string"
+          },
+          "promotionId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "redemptions" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "revenueWithSom" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "sourceKind" : {
+            "type" : "string"
+          },
+          "uniqueCustomers" : {
+            "format" : "int64",
+            "type" : "integer"
           }
         },
         "type" : "object"
@@ -26639,6 +27447,36 @@
         },
         "type" : "object"
       },
+      "TraceResponse" : {
+        "properties" : {
+          "benefitMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "code" : {
+            "type" : "string"
+          },
+          "conditionSequence" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "lostTo" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "promotionId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "verdict" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "TransitionRequest" : {
         "properties" : {
           "cancelAt" : {
@@ -27245,20 +28083,6 @@
               "$ref" : "#/components/schemas/ValidationResult"
             },
             "type" : "array"
-          }
-        },
-        "type" : "object"
-      },
-      "ValidationResponse" : {
-        "properties" : {
-          "findings" : {
-            "items" : {
-              "$ref" : "#/components/schemas/FindingView"
-            },
-            "type" : "array"
-          },
-          "publishable" : {
-            "type" : "boolean"
           }
         },
         "type" : "object"
@@ -28447,7 +29271,7 @@
     "/api/v1/control-plane/capabilities" : {
       "get" : {
         "description" : "The code-owned registry, not one session's slice of it. Platform-admin only: the vocabulary itself is what an approval policy's requiredApproverCapability and a grant's roleCode are built from.",
-        "operationId" : "list_47",
+        "operationId" : "list_48",
         "responses" : {
           "200" : {
             "content" : {
@@ -28699,7 +29523,7 @@
     "/api/v1/control-plane/event-contracts" : {
       "get" : {
         "description" : "Code-owned (ADR 0032): a producer cannot publish an event with no entry here. Static within a build, so there is nothing to paginate.",
-        "operationId" : "list_46",
+        "operationId" : "list_47",
         "responses" : {
           "200" : {
             "content" : {
@@ -28855,7 +29679,7 @@
     },
     "/api/v1/control-plane/grants" : {
       "get" : {
-        "operationId" : "list_34",
+        "operationId" : "list_35",
         "responses" : {
           "200" : {
             "content" : {
@@ -28945,7 +29769,7 @@
     "/api/v1/control-plane/incidents" : {
       "get" : {
         "description" : "Each alert class and subject has at most one live incident; raising it again counts another occurrence.",
-        "operationId" : "list_45",
+        "operationId" : "list_46",
         "parameters" : [ {
           "in" : "query",
           "name" : "includeResolved",
@@ -29557,7 +30381,7 @@
     },
     "/api/v1/control-plane/onboarding-templates" : {
       "get" : {
-        "operationId" : "list_44",
+        "operationId" : "list_45",
         "responses" : {
           "200" : {
             "content" : {
@@ -29599,7 +30423,7 @@
     },
     "/api/v1/control-plane/onboarding-templates/{templateId}" : {
       "get" : {
-        "operationId" : "get_14",
+        "operationId" : "get_15",
         "parameters" : [ {
           "in" : "path",
           "name" : "templateId",
@@ -29797,7 +30621,7 @@
     "/api/v1/control-plane/reference-data" : {
       "get" : {
         "description" : "Countries this platform trades in with their default currency and timezone, the locales the staff consoles ship, and each country's public holidays.",
-        "operationId" : "get_13",
+        "operationId" : "get_14",
         "responses" : {
           "200" : {
             "content" : {
@@ -29940,7 +30764,7 @@
     "/api/v1/control-plane/template-reviews" : {
       "get" : {
         "description" : "Versions in force or in draft, awaiting first. A version awaiting or refused is not sent. Filter to one state with ?state=.",
-        "operationId" : "list_43",
+        "operationId" : "list_44",
         "parameters" : [ {
           "in" : "query",
           "name" : "state",
@@ -30151,7 +30975,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/approval-policies" : {
       "get" : {
         "description" : "Every version of each policy, newest first. An action code with no row here needs no second signature, which is the state every action is in until somebody publishes one.",
-        "operationId" : "list_33",
+        "operationId" : "list_34",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -31304,7 +32128,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/catalogs/{catalogId}/validation" : {
       "get" : {
         "description" : "Returns stable codes and the entity each one is about, because \"a product has no variant\" is unactionable without knowing which product.",
-        "operationId" : "validate_1",
+        "operationId" : "validate_2",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -31335,7 +32159,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/ValidationResponse"
+                  "$ref" : "#/components/schemas/CatalogPublicationControllerValidationResponse"
                 }
               }
             },
@@ -32466,7 +33290,7 @@
     },
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/menus" : {
       "get" : {
-        "operationId" : "list_32",
+        "operationId" : "list_33",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -32682,7 +33506,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/menus/{menuId}" : {
       "put" : {
         "description" : "Whole-record PUT with an expected version, the same discipline CommentPresetController's own update already uses.",
-        "operationId" : "update_9",
+        "operationId" : "update_10",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -34138,7 +34962,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/conversations/flows" : {
       "get" : {
         "description" : "Every version of every flow key, newest first. At most one version per flow key is ever active at once.",
-        "operationId" : "list_42",
+        "operationId" : "list_43",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -34232,7 +35056,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/delivery-tariffs" : {
       "get" : {
         "description" : "Operations §3.7.",
-        "operationId" : "list_31",
+        "operationId" : "list_32",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -34465,7 +35289,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/delivery-tariffs/{tariffId}/versions/{version}/activate" : {
       "post" : {
         "description" : "Refuses a band gap, an inverted fee bound, and ROAD distance with no routing binding installed. Every problem is returned at once.",
-        "operationId" : "activate_14",
+        "operationId" : "activate_15",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -34528,7 +35352,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/delivery/simulations" : {
       "get" : {
         "description" : "Runs the full resolver with a fixed clock and writes nothing. The returned evidence is the same shape the stored evidence takes, so what is seen before activation is what will be recorded after it.",
-        "operationId" : "simulate",
+        "operationId" : "simulate_1",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -35088,7 +35912,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/pricing/price-books/{priceBookId}/activation" : {
       "post" : {
         "description" : "Requires If-Match carrying the book's version, so two operators activating at once cannot both win. Quotes already issued are untouched: they carry their own totals and are honoured at the price the customer was shown until they expire.",
-        "operationId" : "activate_13",
+        "operationId" : "activate_14",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -35715,7 +36539,7 @@
     },
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/products/{productId}/comment-presets" : {
       "get" : {
-        "operationId" : "list_30",
+        "operationId" : "list_31",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -35956,7 +36780,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/service-schedules" : {
       "get" : {
         "description" : "The Hours tab's rebind picker and the shared-schedule warning's source: each schedule's name and how many locations currently bind it.",
-        "operationId" : "list_29",
+        "operationId" : "list_30",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -36183,7 +37007,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/service-zones" : {
       "get" : {
         "description" : "Operations §3.6.",
-        "operationId" : "list_28",
+        "operationId" : "list_29",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -36416,7 +37240,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/service-zones/{zoneId}/versions/{version}/activate" : {
       "post" : {
         "description" : "Refuses self-intersecting rings, geometry outside the region's box, and an area above the platform maximum — which is what stops an operator drawing a polygon around the country by accident. Every reason is returned at once rather than one attempt at a time.",
-        "operationId" : "activate_12",
+        "operationId" : "activate_13",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -36509,7 +37333,7 @@
     },
     "/api/v1/control-plane/tenants/{tenantId}/comment-presets" : {
       "get" : {
-        "operationId" : "list_27",
+        "operationId" : "list_28",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -36607,7 +37431,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/comment-presets/{presetId}" : {
       "put" : {
         "description" : "Whole-record PUT with an expected version, the same discipline every other versioned reference table in this platform uses. Archiving is status=ARCHIVED here, not a DELETE: a preset already selected on an open order's line must stay resolvable. A language beyond the platform triple that the request does not name in `labels` keeps its wording, so an editor that shows only some languages never deletes the others; the triple is always named (it is required), and an editor keeps a language it does not show by sending the wording the preset already has.",
-        "operationId" : "update_8",
+        "operationId" : "update_9",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -36751,7 +37575,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/grants" : {
       "get" : {
         "description" : "Active only by default. Pass includeInactive=true for staff-and-access.md §2's suspended-row state and §11.2's restore action, which both need to see a revoked grant, not only what remains active.",
-        "operationId" : "list_26",
+        "operationId" : "list_27",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -36915,7 +37739,7 @@
     },
     "/api/v1/control-plane/tenants/{tenantId}/integrations" : {
       "get" : {
-        "operationId" : "list_25",
+        "operationId" : "list_26",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -37576,7 +38400,7 @@
     },
     "/api/v1/control-plane/tenants/{tenantId}/legal-entities" : {
       "get" : {
-        "operationId" : "list_24",
+        "operationId" : "list_25",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -37691,7 +38515,7 @@
     },
     "/api/v1/control-plane/tenants/{tenantId}/legal-entities/{entityId}" : {
       "get" : {
-        "operationId" : "get_1",
+        "operationId" : "get_2",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -37726,7 +38550,7 @@
       },
       "put" : {
         "description" : "Everything but the taxpayer number and the lifecycle status: legal and short name, VAT registration and certificate, tax profile, registered address and contact phone. There was no way to fix any of these before this endpoint existed — a registered entity could never be corrected.",
-        "operationId" : "update_7",
+        "operationId" : "update_8",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -37781,7 +38605,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/legal-entities/{entityId}/activate" : {
       "post" : {
         "description" : "Only an ACTIVE entity may be named as a seller. Permitted from DRAFT or SUSPENDED.",
-        "operationId" : "activate_11",
+        "operationId" : "activate_12",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -37826,7 +38650,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/legal-entities/{entityId}/archive" : {
       "post" : {
         "description" : "Ends its life on the platform. Permitted from DRAFT or SUSPENDED, never from ACTIVE — an active entity must be suspended first, so a branch it still sells as never loses its seller without an operator seeing that happen. The row survives: every fiscal document it ever issued must still resolve a name and an INN years later.",
-        "operationId" : "archive_8",
+        "operationId" : "archive_9",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -37918,7 +38742,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/legal-entities/{entityId}/suspend" : {
       "post" : {
         "description" : "Its assignments are untouched. A branch it still holds blocks rather than silently falling through to another company. Permitted from ACTIVE.",
-        "operationId" : "suspend_6",
+        "operationId" : "suspend_7",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -38092,7 +38916,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/onboarding-runs/{runId}" : {
       "get" : {
         "description" : "Blocked steps are listed with the decision that would unblock them, so a tenant that is live without a check is visible rather than implied.",
-        "operationId" : "get_12",
+        "operationId" : "get_13",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -38129,7 +38953,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/onboarding-runs/{runId}/activate" : {
       "post" : {
         "description" : "Requires every required step to have completed, plus platform approval where a policy demands it. Activating twice produces one transition.",
-        "operationId" : "activate_10",
+        "operationId" : "activate_11",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -38224,7 +39048,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/onboarding-runs/{runId}/resume" : {
       "post" : {
         "description" : "Completed steps are never reset; a retry reconciles external work. Refused once the run has reached READY, ACTIVE or CANCELLED: nothing claims a step on a run the scheduler no longer drives, so reopening one there would report work that never happens.",
-        "operationId" : "resume_3",
+        "operationId" : "resume_4",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -38272,7 +39096,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/onboarding-runs/{runId}/validate" : {
       "post" : {
         "description" : "Runs every read-only readiness check now, synchronously, against the tenant's current configuration rather than the run's persisted step status — so a tenant can see what activation would find before committing to a resume or an activate call. Nothing is written: a step's stored status only changes when the scheduler actually executes it. The activation smoke test is not included, because unlike every other check it is not a pure read. Checks that are not onboarding steps ride along: SMS template moderation, fiscal classification coverage, channel payment-method coverage, channel fulfilment-mode coverage, location service-binding coverage and secret-rotation age. Each offending item is its own row; a row that is about one location carries locationId, and one about another object (a sales channel) carries subject {type, id}, so a client can link to that item. A row from an advisory check carries advisory=true and is left out of allPassed. Use a fresh Idempotency-Key to see a fresh answer — replaying one returns the same recorded outcome, as ADR 0031 requires for every effectful request, even one with no state of its own to replay.",
-        "operationId" : "validate",
+        "operationId" : "validate_1",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -38391,7 +39215,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/order-outcome-reasons" : {
       "get" : {
         "description" : "Read with ORDER_READ rather than the manage capability, because the cancel dialog has to populate its list for every operator who can cancel an order and almost none of them may author one.",
-        "operationId" : "list_23",
+        "operationId" : "list_24",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -38516,7 +39340,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/order-outcome-reasons/reorder" : {
       "put" : {
         "description" : "Whole-set: orderedReasonIds must name every currently active reason of this kind exactly once. If-Match carries the highest version among those reasons — there is no separate list-level aggregate to version — the same value the caller can compute from the list it already rendered. Returns the reordered list, each reason's version now bumped, so the caller never needs a second read before its next write.",
-        "operationId" : "reorder_2",
+        "operationId" : "reorder_3",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -38586,7 +39410,7 @@
       },
       "put" : {
         "description" : "Outcomes already recorded keep the snapshot they were recorded with. That duplication is deliberate: renaming a reason next year must not rewrite last year's funnel.",
-        "operationId" : "update_6",
+        "operationId" : "update_7",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -38855,7 +39679,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/pos-mappings" : {
       "get" : {
         "description" : "Optionally filtered by status (PROPOSED, ACTIVE, CONFLICTED, RETIRED). Newest-updated first.",
-        "operationId" : "list_22",
+        "operationId" : "list_23",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -39568,7 +40392,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/sales-channels" : {
       "get" : {
         "description" : "Archived channels are listed because a historical order still renders through one; the status says whether a new cart may use it. Each row also carries its branch count, enabled payment-method count and enabled fulfilment modes -- settings.md 10.4a's three previously absent columns.",
-        "operationId" : "list_21",
+        "operationId" : "list_22",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -39637,7 +40461,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/sales-channels/{channelId}" : {
       "put" : {
         "description" : "Everything but the code and the system type, which ADR 0036 fixes at creation because behaviour keys on the type.",
-        "operationId" : "update_5",
+        "operationId" : "update_6",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -39692,7 +40516,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/sales-channels/{channelId}/archive" : {
       "post" : {
         "description" : "Channels archive and never delete. Every order carries its channel forever, and a deleted row makes that order unattributable in every report.",
-        "operationId" : "archive_7",
+        "operationId" : "archive_8",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -40457,7 +41281,7 @@
     },
     "/api/v1/control-plane/tenants/{tenantId}/sales-channels/{channelId}/setup/pages/{slug}/{version}" : {
       "get" : {
-        "operationId" : "get_11",
+        "operationId" : "get_12",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -40751,7 +41575,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/statements" : {
       "get" : {
         "description" : "Newest month first, void ones included.",
-        "operationId" : "list_41",
+        "operationId" : "list_42",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -40783,7 +41607,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/statements/draft" : {
       "get" : {
         "description" : "Computed each time from the plan in force, the modules live during the month and the metered usage. Allowed for the month in progress.",
-        "operationId" : "draft_3",
+        "operationId" : "draft_4",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -42229,7 +43053,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/branch-tags" : {
       "get" : {
-        "operationId" : "list_20",
+        "operationId" : "list_21",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -42337,7 +43161,7 @@
     "/api/v1/operations/tenants/{tenantId}/branch-tags/{tagId}/archive" : {
       "post" : {
         "description" : "Archived, never deleted: a branch already carrying this tag must keep resolving it, and the code is freed for reuse.",
-        "operationId" : "archive_6",
+        "operationId" : "archive_7",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -42376,7 +43200,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/brands" : {
       "get" : {
-        "operationId" : "list_38",
+        "operationId" : "list_39",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -42407,7 +43231,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}" : {
       "get" : {
-        "operationId" : "get_8",
+        "operationId" : "get_9",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -42537,7 +43361,7 @@
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/conversations" : {
       "get" : {
         "description" : "HANDED_TO_OPERATOR conversations first, then a FLOW_ACTIVE conversation whose newest message nobody has answered yet, then everything else by last activity. No message bodies here — open a conversation for its decrypted history.",
-        "operationId" : "list_40",
+        "operationId" : "list_41",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -42839,7 +43663,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/delivery-tariffs" : {
       "get" : {
-        "operationId" : "list_19",
+        "operationId" : "list_20",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -43072,7 +43896,7 @@
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/delivery-tariffs/{tariffId}/versions/{version}/activate" : {
       "post" : {
         "description" : "Refuses a band gap, an inverted fee bound, and ROAD distance with no routing binding installed. Every problem is returned at once.",
-        "operationId" : "activate_9",
+        "operationId" : "activate_10",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -43125,7 +43949,7 @@
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/fiscal-terminals" : {
       "get" : {
         "description" : "Sorted the way settings.md asks: failing health first, never checked next, healthy last — an operator opens this screen to find what is broken.",
-        "operationId" : "list_18",
+        "operationId" : "list_19",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -43209,7 +44033,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/fiscal-terminals/{terminalId}" : {
       "get" : {
-        "operationId" : "get_10",
+        "operationId" : "get_11",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -43422,7 +44246,7 @@
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/fiscal-terminals/{terminalId}/suspend" : {
       "post" : {
         "description" : "Settings 10.7 Tab 2's «Отключить». A suspended terminal leaves the channel matrix immediately and no longer counts toward the activation precondition for cash at its location.",
-        "operationId" : "suspend_5",
+        "operationId" : "suspend_6",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -45767,7 +46591,7 @@
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/promo-codes" : {
       "get" : {
         "description" : "Every lifecycle state together (a freshly drafted code's coupon row is SUSPENDED until activated; a retired one is ARCHIVED), newest first — an authoring screen needs the lineage, not only what is live. Unlike a loyalty policy, more than one code may be live at once.",
-        "operationId" : "list_17",
+        "operationId" : "list_18",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -45805,7 +46629,7 @@
       },
       "post" : {
         "description" : "The promotion is DRAFT and the coupon SUSPENDED — pricing.coupon_codes has no DRAFT state of its own, so SUSPENDED is what keeps it unredeemable until activation. Nothing here discounts an order until a separate activation call promotes it, so a mistyped percentage is caught before it touches a customer's total. The discount shape is one of a closed set of three (ADR 0072) — an operator cannot author an item-level, time-windowed, or condition-combining rule from this screen.",
-        "operationId" : "draft_2",
+        "operationId" : "draft_3",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -45852,7 +46676,7 @@
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/promo-codes/{couponId}/activate" : {
       "post" : {
         "description" : "Promotes the promotion and the coupon together, in one transaction. Unlike a loyalty policy, activating one code never retires another: a brand may run several promo codes at once.",
-        "operationId" : "activate_8",
+        "operationId" : "activate_9",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -45890,7 +46714,7 @@
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/promo-codes/{couponId}/redemptions" : {
       "get" : {
         "description" : "Reservation, redemption and release rows, newest first — the drill-down a bare redeemedCount cannot answer: which customer redeemed it, on which order, when. Account and order ids only; no contact value crosses this endpoint and none can.",
-        "operationId" : "redemptions_1",
+        "operationId" : "redemptions_3",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -45971,6 +46795,568 @@
         },
         "summary" : "Withdraw a live code, or discard a draft nobody activated",
         "tags" : [ "Promo codes" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/promotions" : {
+      "get" : {
+        "description" : "Every lifecycle state together, newest first -- an authoring screen needs the lineage, not only what is live. Promo codes are listed on their own endpoint.",
+        "operationId" : "list_17",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/PromotionResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Every automatic promotion and markup this brand has authored",
+        "tags" : [ "Promotions" ]
+      },
+      "post" : {
+        "description" : "A DRAFT cannot reach a customer by any route. The rule is data in a closed vocabulary -- conditions are ANDed, there is no OR -- and nothing is checked until validate, which is where a mistyped operand is caught.",
+        "operationId" : "draft_2",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PromotionBody"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PromotionResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Draft a promotion",
+        "tags" : [ "Promotions" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/promotions/priority" : {
+      "put" : {
+        "description" : "The first promotion listed gets the highest priority. Priority only breaks ties (benefit comes first), so it is the one change a live promotion accepts without going back to DRAFT; each promotion whose priority moves takes a new definition version and a history row.",
+        "operationId" : "reorder_2",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PriorityBody"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/PromotionResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Reorder priorities within one stacking group",
+        "tags" : [ "Promotions" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/promotions/simulate" : {
+      "post" : {
+        "description" : "The real engine with a different sink: the same price book, tax profile, delivery resolution and promotion inputs a real quote uses, writing no quote, no redemption and no counter. The customer is synthetic facts, never an account id. Optionally tries an unsaved candidate definition, or replays a stored definition version. The decision trace names every promotion in the brand and says whether it applied or why it did not.",
+        "operationId" : "simulate",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/SimulationBody"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SimulationResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Simulate a cart against the brand's promotions",
+        "tags" : [ "Promotions" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/promotions/{promotionId}" : {
+      "get" : {
+        "description" : "The immutable history is what makes an old quote explainable against the rule that priced it: one version per validation, activation or reordering, newest first.",
+        "operationId" : "get_1",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "promotionId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PromotionResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "One promotion with its recorded definition versions",
+        "tags" : [ "Promotions" ]
+      },
+      "put" : {
+        "description" : "Requires If-Match. A DRAFT, VALIDATED or SUSPENDED promotion goes back to DRAFT (and takes a new definition version once the version it leaves was recorded); an ACTIVE one is never edited in place -- suspend it first.",
+        "operationId" : "update_5",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "promotionId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PromotionBody"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PromotionResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Replace a promotion's definition",
+        "tags" : [ "Promotions" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/promotions/{promotionId}/activate" : {
+      "post" : {
+        "description" : "Requires If-Match. A markup, or a promotion whose largest percentage or fixed amount exceeds the configured thresholds, needs a second person (ADR 0027): the response is then 202 with the approval request, and nothing is activated until somebody else decides it and this call is repeated. Below the thresholds it activates directly.",
+        "operationId" : "activate_8",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "promotionId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ReasonBody"
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ActivationResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Put a validated promotion in front of customers",
+        "tags" : [ "Promotions" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/promotions/{promotionId}/archive" : {
+      "post" : {
+        "description" : "Requires If-Match. An archived promotion is history and is never applied again; it is not deleted, because the orders and definition versions that name it stay reconcilable.",
+        "operationId" : "archive_6",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "promotionId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PromotionResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Retire a promotion",
+        "tags" : [ "Promotions" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/promotions/{promotionId}/redemptions" : {
+      "get" : {
+        "description" : "Bounded, newest first, ids and amounts only: an account id and an order id, never a name or a contact. One row per (order, promotion): an amended order moves its row in place, so a redemption is never counted twice.",
+        "operationId" : "redemptions_2",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "promotionId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/PromotionControllerRedemptionResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The redemptions recorded against one promotion",
+        "tags" : [ "Promotions" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/promotions/{promotionId}/resume" : {
+      "post" : {
+        "description" : "Requires If-Match. The same definition, re-checked against the world as it is now.",
+        "operationId" : "resume_3",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "promotionId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PromotionResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Put a suspended promotion back in front of customers",
+        "tags" : [ "Promotions" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/promotions/{promotionId}/suspend" : {
+      "post" : {
+        "description" : "Requires If-Match. An order that already holds the promotion keeps it under the definition version it was priced with, even through an amendment.",
+        "operationId" : "suspend_5",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "promotionId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PromotionResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Stop a live promotion applying to new orders",
+        "tags" : [ "Promotions" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/promotions/{promotionId}/validate" : {
+      "post" : {
+        "description" : "Requires If-Match. A refusal leaves the promotion a DRAFT and is returned as a stable code with the condition or action it concerns; a pass moves it to VALIDATED and records the definition in the immutable history. Warnings do not stop a promotion being validated.",
+        "operationId" : "validate",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "promotionId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PromotionControllerValidationResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Run the rule checker",
+        "tags" : [ "Promotions" ]
       }
     },
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/referrals/programs" : {
@@ -46137,7 +47523,7 @@
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/referrals/redemptions" : {
       "get" : {
         "description" : "PENDING, REWARDED, EXPIRED, and VOIDED together — the lineage a marketer or a support agent needs to answer \"why did my friend's code not pay out\".",
-        "operationId" : "redemptions",
+        "operationId" : "redemptions_1",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -46177,7 +47563,7 @@
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/referrals/summary" : {
       "get" : {
         "description" : "The marketer's headline numbers, computed from the same rows the redemption list below shows — never a separately maintained count that can drift from it.",
-        "operationId" : "summary_1",
+        "operationId" : "summary_2",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -46214,7 +47600,7 @@
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/reviews" : {
       "get" : {
         "description" : "Every filter is optional. Cursor-paginated per ADR 0031: pass the previous page's nextCursor, and a null nextCursor is the end. Row 5.2h: pass customerAccountId to narrow to one customer's own reviews — the customer detail pane's own tab.",
-        "operationId" : "list_39",
+        "operationId" : "list_40",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -46317,7 +47703,7 @@
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/reviews/summary" : {
       "get" : {
         "description" : "Computed directly from this brand's own rows, uncached and unregistered — ADR 0071 deliberately does not register this as an ADR 0043 metric while this is its only caller.",
-        "operationId" : "summary",
+        "operationId" : "summary_1",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -47029,7 +48415,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/terms-documents/{version}" : {
       "get" : {
-        "operationId" : "get_9",
+        "operationId" : "get_10",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -50771,7 +52157,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/merchant-bindings/{bindingId}" : {
       "get" : {
-        "operationId" : "get_7",
+        "operationId" : "get_8",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -53955,7 +55341,7 @@
     "/api/v1/platform-admin/commercial/tenants/{tenantId}/wallet/payment-method" : {
       "post" : {
         "description" : "INVOICE waits for a bank transfer, WALLET waits for a top-up, CARD is charged automatically once a merchant account exists — until then a CARD tenant's remainder stays due, exactly like INVOICE. Staff-changeable with a reason; audited.",
-        "operationId" : "setPaymentMethod",
+        "operationId" : "setPaymentMethod_1",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -54182,7 +55568,7 @@
     },
     "/api/v1/platform-admin/migration/programs/{programId}" : {
       "get" : {
-        "operationId" : "get_6",
+        "operationId" : "get_7",
         "parameters" : [ {
           "in" : "path",
           "name" : "programId",
@@ -54379,7 +55765,7 @@
     },
     "/api/v1/platform-admin/migration/runs/{runId}" : {
       "get" : {
-        "operationId" : "get_5",
+        "operationId" : "get_6",
         "parameters" : [ {
           "in" : "path",
           "name" : "runId",
@@ -54507,7 +55893,7 @@
     "/api/v1/platform-admin/migration/scopes/{scopeId}" : {
       "get" : {
         "description" : "The ETag carries the scope version, which every transition below requires back as expectedVersion.",
-        "operationId" : "get_4",
+        "operationId" : "get_5",
         "parameters" : [ {
           "in" : "path",
           "name" : "scopeId",
@@ -55876,6 +57262,61 @@
           }
         },
         "summary" : "Rebuild this cart at another location",
+        "tags" : [ "Storefront ordering" ]
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts/{cartId}/payment-method" : {
+      "put" : {
+        "description" : "ADR 0140. The method is an input to the price whenever a promotion reads it (\"5% off when paying by Click\"), so it is stored on the cart before pricing, and clears any attached quote the same way a line edit does. A null code clears the selection, and an unselected method never earns a payment-method promotion. Checkout with a different method than the cart was priced with is refused PRICE_CHANGED when such a promotion exists, which is the re-quote the customer app has to design around.",
+        "operationId" : "setPaymentMethod",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "cartId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/SelectPaymentMethodRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CartResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Select how the cart will be paid",
         "tags" : [ "Storefront ordering" ]
       }
     },
@@ -60435,7 +61876,7 @@
     "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/kitchen/devices" : {
       "get" : {
         "description" : "Active and revoked alike, with who enrolled or revoked each one. Behind kitchen.station.manage rather than kitchen.ticket.read, because a revocation reason and an enrolling manager's name are administrative facts a line cook's board read does not need.",
-        "operationId" : "list_37",
+        "operationId" : "list_38",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -66661,7 +68102,7 @@
     "/api/v1/tenants/{tenantId}/business-calendar" : {
       "get" : {
         "description" : "The resolved business-day boundary and timezone, whether a recut is outstanding after a previous boundary change, the declared weekend, and this tenant's own holidays.",
-        "operationId" : "get_3",
+        "operationId" : "get_4",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -67200,7 +68641,7 @@
     "/api/v1/tenants/{tenantId}/consent-types" : {
       "get" : {
         "description" : "Bootstraps the code-owned default catalogue on this tenant's first read, so a tenant with no rows yet still sees the two purposes already in production use (MARKETING_PROMOTIONS, TERMS_OF_SERVICE) rather than an empty registry.",
-        "operationId" : "list_36",
+        "operationId" : "list_37",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -68677,7 +70118,7 @@
     "/api/v1/tenants/{tenantId}/customers/{accountId}/notification-preferences" : {
       "get" : {
         "description" : "Only what has been set. An absent row means the default for that class, which is on rather than off: a customer who never expressed a preference has not opted out of anything.",
-        "operationId" : "list_35",
+        "operationId" : "list_36",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -69081,7 +70522,7 @@
     },
     "/api/v1/tenants/{tenantId}/media/assets/{assetId}" : {
       "get" : {
-        "operationId" : "get_2",
+        "operationId" : "get_3",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -71133,6 +72574,121 @@
         "tags" : [ "Reporting" ]
       }
     },
+    "/api/v1/tenants/{tenantId}/reporting/promotions/redemptions" : {
+      "get" : {
+        "description" : "Newest first, at most 500 rows. Includes orders that were later cancelled, with their order status, so a count that excludes them can be reproduced.",
+        "operationId" : "redemptions",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "from",
+          "required" : true,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : true,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "promotionId",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "default" : 200,
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RedemptionsResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "7.9: the redemption log - one row per (order, promotion), customer as a pseudonym",
+        "tags" : [ "Promotion reporting" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/reporting/promotions/summary" : {
+      "get" : {
+        "description" : "One row per promotion over the closed business days in the range. Cancelled, rejected, expired and payment-failed orders are excluded here and stay in the log. The average check with and without is a comparison over the same brand and period, not a causal uplift: customers who use a promotion differ from those who do not.",
+        "operationId" : "summary",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "from",
+          "required" : true,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : true,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "brandId",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PromotionReportControllerSummaryResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "7.9: promotion summary - redemptions, unique customers, discount given, average check with and without",
+        "tags" : [ "Promotion reporting" ]
+      }
+    },
     "/api/v1/tenants/{tenantId}/reporting/queries" : {
       "get" : {
         "description" : "Unknown metric ids are rejected rather than ignored: a silently dropped column renders as a quiet day. A money metric is refused unless the answer names the legal entity, because a combined total across two entities reconciles to neither tax filing (ADR 0038).",
@@ -72179,6 +73735,9 @@
     "description" : "The delivery queue, and manual assign/unassign",
     "name" : "Dispatch board"
   }, {
+    "description" : "Automatic discounts and markups: authoring, lifecycle, simulator, redemptions",
+    "name" : "Promotions"
+  }, {
     "description" : "A brand's own order reviews, against their orders and customers",
     "name" : "Reviews"
   }, {
@@ -72265,6 +73824,9 @@
   }, {
     "description" : "Which presets a product offers on a line",
     "name" : "Preset product comments"
+  }, {
+    "description" : "Promotion redemptions, discount given, average check with and without",
+    "name" : "Promotion reporting"
   }, {
     "description" : "Sellable modules and the tenants that have them",
     "name" : "Commercial modules"

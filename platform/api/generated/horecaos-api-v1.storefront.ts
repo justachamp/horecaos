@@ -96,6 +96,7 @@ export interface CartResponse {
   fulfillmentMode?: string;
   lines?: Array<CartLineResponse>;
   locationId?: string;
+  paymentMethodCode?: string;
   quoteId?: string;
   status?: string;
   version?: number;
@@ -529,6 +530,10 @@ export interface SaveAddressRequest {
   longitude?: number;
 }
 
+export interface SelectPaymentMethodRequest {
+  paymentMethodCode?: string;
+}
+
 export interface ServiceabilityView {
   acceptsScheduledOrders?: boolean;
   available?: boolean;
@@ -687,6 +692,7 @@ export interface Operations {
   "removeLine": { method: "DELETE"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts/{cartId}/lines/{lineKey}"; request: { parameters: { path: { brandId: string; cartId: string; lineKey: string; tenantId: string } } }; responses: { "200": CartResponse } };
   "putLine": { method: "PUT"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts/{cartId}/lines/{lineKey}"; request: { parameters: { path: { brandId: string; cartId: string; lineKey: string; tenantId: string } }; body: PutLineRequest }; responses: { "200": CartResponse } };
   "moveLocation": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts/{cartId}/location"; request: { parameters: { path: { brandId: string; cartId: string; tenantId: string } }; body: MoveLocationRequest }; responses: { "200": CartResponse } };
+  "setPaymentMethod": { method: "PUT"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts/{cartId}/payment-method"; request: { parameters: { path: { brandId: string; cartId: string; tenantId: string } }; body: SelectPaymentMethodRequest }; responses: { "200": CartResponse } };
   "paymentMethods": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts/{cartId}/payment-methods"; request: { parameters: { path: { brandId: string; cartId: string; tenantId: string } } }; responses: { "200": PaymentMethodsResponse } };
   "price": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts/{cartId}/pricing"; request: { parameters: { path: { brandId: string; cartId: string; tenantId: string } } }; responses: { "200": PricedCartResponse } };
   "removePromoCode": { method: "DELETE"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts/{cartId}/promo-code"; request: { parameters: { path: { brandId: string; cartId: string; tenantId: string } } }; responses: { "200": CartResponse } };
