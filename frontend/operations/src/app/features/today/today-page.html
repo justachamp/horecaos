@@ -137,7 +137,39 @@
 
     <section class="today__operators" data-testid="today-operators">
       <h2 class="q-emphasis">{{ 'today.operators.title' | t }}</h2>
-      <p class="q-body-sm today__locked">{{ 'today.operators.notBuilt' | t }}</p>
+      @if (!operatorsAvailable()) {
+        <p class="q-body-sm today__empty" data-testid="today-operators-unavailable">
+          {{ 'today.operators.unavailable' | t }}
+        </p>
+      } @else if (operators().length === 0) {
+        <p class="q-body-sm today__empty" data-testid="today-operators-empty">
+          {{ 'today.operators.empty' | t }}
+        </p>
+      } @else {
+        <table class="branch-table">
+          <thead>
+            <tr>
+              <th class="branch-table__rank-col" aria-hidden="true"></th>
+              <th>{{ 'today.operators.column.operator' | t }}</th>
+              <th class="branch-table__num-col">{{ 'today.operators.column.accepted' | t }}</th>
+              <th class="branch-table__num-col">{{ 'today.operators.column.created' | t }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (operator of operators(); track operator.operatorPrincipalId; let i = $index) {
+              <tr data-testid="today-operator-row">
+                <td class="branch-table__rank-col q-caption">{{ i + 1 }}</td>
+                <td data-testid="today-operator-name">
+                  {{ operator.displayName ?? ('today.operators.unnamed' | t) }}
+                </td>
+                <td class="branch-table__num-col q-mono q-tnum">{{ operator.acceptedCount }}</td>
+                <td class="branch-table__num-col q-mono q-tnum">{{ operator.createdCount }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+        <p class="q-caption today__partial">{{ 'today.operators.overlap' | t }}</p>
+      }
     </section>
   }
 </div>

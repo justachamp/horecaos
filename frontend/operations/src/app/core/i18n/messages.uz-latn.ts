@@ -1757,6 +1757,28 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.locations.tab.notifications': 'Bildirishnomalar',
   'settings.locations.tab.floorPlan': 'Zal rejasi',
   'settings.locations.edit': 'Tahrirlash',
+
+  // ---- branch contact persons (ADR 0139, row 9.2b)
+  'settings.locations.contacts.title': 'Aloqa shaxslari',
+  'settings.locations.contacts.lead':
+    'Bu filial boʻyicha kimga qoʻngʻiroq qilish kerak. Bu mehmonlar va kuryerlar koʻradigan ommaviy telefon emas.',
+  'settings.locations.contacts.empty': 'Aloqa shaxslari hali yoʻq.',
+  'settings.locations.contacts.denied':
+    'Sizning lavozimingiz filialning aloqa shaxslarini koʻrishga ruxsat bermaydi.',
+  'settings.locations.contacts.outsideNotice':
+    'Hamkasb oʻz profilidagi telefon bilan koʻrsatiladi. Begona odam uchun ism va telefonni oʻzingiz kiritasiz: bu boshqa odamning maʻlumotlari, ularni faqat oʻsha odamning xabardorligi bilan qoʻshing.',
+  'settings.locations.contacts.colleague': 'Hamkasb',
+  'settings.locations.contacts.colleague.pick': 'Hamkasbni tanlang…',
+  'settings.locations.contacts.colleague.required': 'Hamkasbni tanlang',
+  'settings.locations.contacts.addColleague': 'Hamkasb qoʻshish',
+  'settings.locations.contacts.addOutside': 'Begona odam qoʻshish',
+  'settings.locations.contacts.max': 'Koʻpi bilan oʻnta aloqa shaxsi.',
+  'settings.locations.contacts.relation.MANAGER': 'Boshqaruvchi',
+  'settings.locations.contacts.relation.OWNER': 'Egasi',
+  'settings.locations.contacts.relation.LANDLORD': 'Ijaraga beruvchi',
+  'settings.locations.contacts.relation.SECURITY': 'Qoʻriqlash',
+  'settings.locations.contacts.relation.MAINTENANCE': 'Xizmat koʻrsatish',
+  'settings.locations.contacts.relation.OTHER': 'Boshqa',
   'settings.locations.cancel': 'Bekor qilish',
   'settings.locations.save': 'Saqlash',
   'settings.locations.saving': 'Saqlanmoqda…',
@@ -2711,8 +2733,14 @@ export const messagesUzLatn: MessageCatalogue = {
   'today.branches.unavailable': 'Filiallar roʻyxatini yuklab boʻlmadi',
   'today.branches.partial': 'Koʻrsatilgan filiallar: {shown} / {total}',
   'today.operators.title': 'Operatorlar',
-  'today.operators.notBuilt':
-    'Xodimlar spravochnikasi bilan birga paydo boʻladi (IA 9.2, hali qurilmagan) — bugun buyurtmani qabul qilgan shaxsni ism bilan bogʻlash imkoni yoʻq.',
+  'today.operators.column.operator': 'Operator',
+  'today.operators.column.accepted': 'Qabul qilingan',
+  'today.operators.column.created': 'Yaratilgan',
+  'today.operators.unnamed': 'Ismsiz xodim',
+  'today.operators.empty': 'Bugun hali hech kim buyurtma olmadi',
+  'today.operators.unavailable': 'Operatorlarni yuklab boʻlmadi',
+  'today.operators.overlap':
+    'Bitta buyurtma ikkala ustunda ham hisoblanishi mumkin: bir kishi uni yaratib, qabul ham qilishi mumkin.',
 
   // ---- IA 0.2 Mening ishim (my-work-page.ts) — T01 toʻlqini ----
   'myWork.title': 'Mening ishim',
@@ -2727,7 +2755,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'myWork.payment.empty': 'Bugun hali tushumlar qayd etilmagan',
   'myWork.locked.title': 'Hali mavjud emas',
   'myWork.locked.ask':
-    'Shaxsiy maʻlumotlar va interfeys shaxsiylashtirishi xodim identifikatsiyasi boʻyicha ADR kutmoqda — uni platforma egasi hali yozmagan.',
+    'Interfeysni shaxsiylashtirish (saqlangan filtrlar, joylashuv) hali qurilmagan.',
+  'myWork.profile.body': 'Ism, telefon, rasm va tillar profilingizda oʻzgartiriladi.',
 
   // ---- IA 0.1e / X/X.3 Devor taxtasi (wallboard-shell.ts) — T23 toʻlqini ----
   'wallboard.title': 'Jonli taxta',
@@ -2740,8 +2769,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'wallboard.branches.title': 'Filiallar boʻyicha yuklama',
   'wallboard.branches.empty': 'Filiallar boʻyicha maʻlumot yoʻq',
   'wallboard.branches.unavailable': 'Filiallar roʻyxatini yuklab boʻlmadi',
-  'wallboard.operators.notBuilt':
-    'Xodimlar spravochnikasi bilan birga paydo boʻladi (IA 9.2, hali qurilmagan) — bugun buyurtmani qabul qilgan shaxsni ism bilan bogʻlash imkoni yoʻq.',
+  'wallboard.operators.deferred':
+    'Umumiy ekranda operatorlar koʻrsatilmaydi: unda xodimlarning ismlarini koʻrsatish mumkinmi, hali hal qilinmagan.',
   'wallboard.fullscreen.enter': 'Toʻliq ekranga oʻtish',
   'wallboard.freshness.loading': 'Ulanmoqda…',
   'wallboard.freshness.seconds': '{seconds} soniya oldin yangilandi',
@@ -3890,15 +3919,13 @@ export const messagesUzLatn: MessageCatalogue = {
   'staff.filter.all': 'Barchasi ({count})',
   'staff.filter.active': 'Faol ({count})',
   'staff.filter.suspended': 'Toʻxtatilgan ({count})',
-  'staff.filter.search.placeholder': 'Identifikator boʻyicha qidirish',
+  'staff.filter.search.placeholder': 'Ism yoki raqam boʻyicha qidirish',
   'staff.filter.reset': 'Filtrlarni tozalash',
 
   'staff.group.companyWide': 'Butun kompaniya',
   'staff.group.noActiveJob': 'Faol lavozim yoʻq',
 
   'staff.column.person': 'Xodim',
-  'staff.column.person.notBuilt':
-    'Ism va telefon hali saqlanmaydi — hisob identifikatori koʻrsatilgan',
   'staff.column.job': 'Lavozim',
   'staff.column.job.none': '—',
   'staff.column.scope': 'Qayerda ishlaydi',
@@ -3908,11 +3935,17 @@ export const messagesUzLatn: MessageCatalogue = {
   'staff.status.revoked': 'Kirish huquqi bekor qilingan',
   'staff.status.expiring': 'Muddati tugamoqda',
   'staff.status.invited': 'Taklif qilingan',
+  'staff.status.ended': 'Ishlamaydi',
+  'staff.status.accessDrift': 'Kirish saqlanib qolgan',
+  'staff.status.onLeave': 'Taʻtilda',
 
   'staff.row.revoked.reason': 'Kirish huquqi bekor qilingan: {reason}',
   'staff.row.revoked.noReason': 'Kirish huquqi bekor qilingan',
   'staff.row.expiring': 'Muddati {date} da tugaydi',
   'staff.row.invited': 'Hali hisobini sozlamagan',
+  'staff.row.noRecord': 'Profil hali yaratilmagan',
+  'staff.row.ended': 'Ish {date} da tugagan',
+  'staff.row.accessDrift': 'Ish {date} da tugagan, lekin lavozim hali amalda',
 
   'staff.telegram.linked': 'Telegram bogʻlangan',
   'staff.telegram.notLinked': 'Telegram bogʻlanmagan',
@@ -3967,6 +4000,10 @@ export const messagesUzLatn: MessageCatalogue = {
   'staff.accessDialog.revokeInvite.body':
     'Bu taklifni bekor qiladi va u uchun berilgan lavozimni qaytarib oladi. Allaqachon yuborilgan havola ishlamay qoladi.',
   'staff.accessDialog.revokeInvite.confirm': 'Bekor qilish',
+  'staff.accessDialog.endEmployment.title': 'Ishni tugatish',
+  'staff.accessDialog.endEmployment.body':
+    'Xodim bu yerda ishlashni toʻxtatadi va barcha lavozimlari ({count}) olib tashlanadi. Kartochka saqlanadi: eski buyurtmalarda uning ismi qoladi.',
+  'staff.accessDialog.endEmployment.date': 'Oxirgi ish kuni (boʻsh qolsa — bugun)',
 
   'staff.inviteDialog.title': 'Taklif qilish',
   'staff.inviteDialog.rule':
@@ -3993,10 +4030,13 @@ export const messagesUzLatn: MessageCatalogue = {
   'staff.detail.back': 'Roʻyxatga qaytish',
   'staff.detail.notFound': 'Bunday xodim yoʻq',
   'staff.detail.denied': 'Bu xodimning huquqlariga kirish yoʻq',
-  'staff.detail.identity.notBuilt': 'Ism, telefon va rasm hali saqlanmaydi',
   'staff.detail.since': 'Tizimda {date} dan beri',
   'staff.detail.tab.access': 'Kirish huquqi',
   'staff.detail.tab.security': 'Xavfsizlik',
+  'staff.detail.tab.profile': 'Profil',
+  'staff.detail.tab.contacts': 'Aloqa',
+  'staff.detail.drift': 'Ish tugagan, lekin xodimda hali lavozim bor.',
+  'staff.detail.drift.finish': 'Qolgan kirishni olib tashlash',
   'staff.detail.access.empty': 'Bu odamning hali birorta ham lavozimi yoʻq.',
   'staff.detail.canDo.show': 'Nima qila oladi',
   'staff.detail.canDo.hide': 'Yashirish',
@@ -4013,11 +4053,63 @@ export const messagesUzLatn: MessageCatalogue = {
   'staff.detail.today.created': 'Bugun yaratilgan: {count}',
   'staff.detail.today.accepted': 'Bugun qabul qilingan: {count}',
   'staff.detail.today.loading': 'Bugungi buyurtmalar yuklanmoqda…',
+
+  // ---- staff record (ADR 0139): profile form and card
+  'staff.profile.field.firstName': 'Ism',
+  'staff.profile.field.lastName': 'Familiya',
+  'staff.profile.field.phone': 'Aloqa telefoni',
+  'staff.profile.phone.hint':
+    'Hamkasblar qoʻngʻiroq qiladigan raqam. U kirish raqamidan farq qilishi mumkin.',
+  'staff.profile.phone.signIn': 'Kirish raqami taklif paytida belgilanadi va bu yerda oʻzgarmaydi.',
+  'staff.profile.phone.invalid': 'Telefon raqamida 7 dan 15 gacha raqam boʻladi',
+  'staff.profile.firstName.required': 'Ismni kiriting',
+  'staff.profile.field.uiLocale': 'Interfeys tili',
+  'staff.profile.uiLocale.none': 'Tanlanmagan',
+  'staff.profile.field.spoken': 'Biladigan tillar',
+  'staff.profile.field.status': 'Ish holati',
+  'staff.profile.status.ACTIVE': 'Ishlaydi',
+  'staff.profile.field.employeeNumber': 'Tabel raqami',
+  'staff.profile.field.employedFrom': 'Ish boshlangan sana',
+  'staff.profile.field.employedUntil': 'Ish tugagan sana',
+  'staff.profile.dates.invalid': 'Tugash sanasi boshlanish sanasidan oldin',
+  'staff.profile.field.reason': 'Sabab (ixtiyoriy)',
+  'staff.profile.edit': 'Tahrirlash',
+  'staff.profile.save': 'Saqlash',
+  'staff.profile.saved': 'Saqlandi',
+  'staff.end.done': 'Ish tugatildi. Olib tashlangan lavozimlar: {count}.',
+  'staff.end.partial':
+    'Ish tugatildi, lekin {remaining} ta lavozimni olib tashlab boʻlmadi. Yakunlash uchun qayta urinib koʻring.',
+  'staff.emergency.title': 'Favqulodda aloqa',
+  'staff.emergency.audited':
+    'Bu boshqa odamlarning maʻlumotlari. Har bir koʻrsatish amallar jurnaliga yoziladi.',
+  'staff.emergency.show': 'Kontaktlarni koʻrsatish',
+  'staff.emergency.hide': 'Yashirish',
+  'staff.emergency.denied':
+    'Sizning lavozimingiz favqulodda kontaktlarni koʻrishga ruxsat bermaydi.',
+  'staff.emergency.empty': 'Favqulodda kontaktlar hali yoʻq.',
+  'staff.emergency.add': 'Kontakt qoʻshish',
+  'staff.emergency.max': 'Koʻpi bilan uchta kontakt.',
+  'staff.emergency.name': 'Ism',
+  'staff.emergency.phone': 'Telefon',
+  'staff.emergency.relationship': 'Kim boʻladi',
+  'staff.emergency.name.required': 'Ismni kiriting',
+  'staff.emergency.phone.invalid': 'Telefon raqamini kiriting: 7 dan 15 gacha raqam',
+  'staff.emergency.relation.SPOUSE': 'Turmush oʻrtogʻi',
+  'staff.emergency.relation.PARENT': 'Ota-ona',
+  'staff.emergency.relation.CHILD': 'Farzand',
+  'staff.emergency.relation.SIBLING': 'Aka-uka yoki opa-singil',
+  'staff.emergency.relation.FRIEND': 'Doʻst',
+  'staff.emergency.relation.OTHER': 'Boshqa',
   'staff.detail.viewActivity': 'Amallar jurnalini koʻrish',
 
   'staff.myProfile.title': 'Mening profilim',
   'staff.myProfile.personalData.title': 'Shaxsiy maʻlumotlar',
-  'staff.myProfile.personalData.notBuilt': 'Ism, telefon va email hali bu yerda tahrirlanmaydi',
+  'staff.myProfile.noRecord':
+    'Bu kompaniya sizning hisobingiz uchun profil yuritmaydi, shuning uchun bu yerda oʻzgartiradigan narsa yoʻq.',
+  'staff.myProfile.photo.change': 'Rasmni almashtirish',
+  'staff.myProfile.photo.remove': 'Rasmni olib tashlash',
+  'staff.myProfile.photo.type': 'JPEG, PNG, WebP yoki AVIF rasmini tanlang',
+  'staff.myProfile.photo.tooLarge': 'Rasm 1 MB dan katta',
   'staff.myProfile.telegram.title': 'Telegram',
   'staff.myProfile.telegram.body': 'Botdan xabar olish uchun oʻz Telegram hisobingizni bogʻlang.',
   'staff.myProfile.telegram.issue': 'Kod olish',
@@ -6220,6 +6312,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'settings.integrations.detail.mapping.entityType.PAYMENT_TYPE': 'Toʻlov turlari',
   'settings.integrations.detail.mapping.entityType.DISCOUNT': 'Chegirmalar',
   'settings.integrations.detail.mapping.entityType.COURIER': 'Kuryerlar',
+  'settings.integrations.detail.mapping.entityType.OPERATOR': 'Operatorlar',
   'settings.integrations.detail.mapping.entityType.CANCELLATION_REASON': 'Bekor qilish sabablari',
   'settings.integrations.detail.mapping.entityType.CHANNEL_POS_CODE': 'Kanal → POS kodi',
 

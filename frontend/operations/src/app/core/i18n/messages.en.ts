@@ -1770,6 +1770,28 @@ export const messagesEn = {
   'settings.locations.tab.notifications': 'Notifications',
   'settings.locations.tab.floorPlan': 'Floor plan',
   'settings.locations.edit': 'Edit',
+
+  // ---- branch contact persons (ADR 0139, row 9.2b)
+  'settings.locations.contacts.title': 'Contact persons',
+  'settings.locations.contacts.lead':
+    'Who to call about this branch. This is not the public phone customers and couriers see.',
+  'settings.locations.contacts.empty': 'No contact persons yet.',
+  'settings.locations.contacts.denied':
+    'Your job does not allow viewing this branch’s contact persons.',
+  'settings.locations.contacts.outsideNotice':
+    'A colleague is shown with the phone from their own profile. For an outside person you type the name and phone yourself: these are another person’s details, so add them only with their knowledge.',
+  'settings.locations.contacts.colleague': 'Colleague',
+  'settings.locations.contacts.colleague.pick': 'Choose a colleague…',
+  'settings.locations.contacts.colleague.required': 'Choose a colleague',
+  'settings.locations.contacts.addColleague': 'Add a colleague',
+  'settings.locations.contacts.addOutside': 'Add an outside person',
+  'settings.locations.contacts.max': 'Ten contact persons at most.',
+  'settings.locations.contacts.relation.MANAGER': 'Manager',
+  'settings.locations.contacts.relation.OWNER': 'Owner',
+  'settings.locations.contacts.relation.LANDLORD': 'Landlord',
+  'settings.locations.contacts.relation.SECURITY': 'Security',
+  'settings.locations.contacts.relation.MAINTENANCE': 'Maintenance',
+  'settings.locations.contacts.relation.OTHER': 'Other',
   'settings.locations.cancel': 'Cancel',
   'settings.locations.save': 'Save',
   'settings.locations.saving': 'Saving…',
@@ -2720,8 +2742,14 @@ export const messagesEn = {
   'today.branches.unavailable': 'Could not load the branch list',
   'today.branches.partial': 'Branches shown: {shown} of {total}',
   'today.operators.title': 'Operators',
-  'today.operators.notBuilt':
-    'Arrives with the staff directory (IA 9.2, not yet built) — there is no way today to resolve who accepted an order to a name.',
+  'today.operators.column.operator': 'Operator',
+  'today.operators.column.accepted': 'Accepted',
+  'today.operators.column.created': 'Created',
+  'today.operators.unnamed': 'Unnamed colleague',
+  'today.operators.empty': 'Nobody has taken an order yet today',
+  'today.operators.unavailable': 'Could not load the operators',
+  'today.operators.overlap':
+    'One order can count in both columns: the same person may take it and accept it.',
 
   // ---- IA 0.2 My work (my-work-page.ts) — wave T01 ----
   'myWork.title': 'My work',
@@ -2734,8 +2762,8 @@ export const messagesEn = {
   'myWork.payment.title': 'Revenue by payment method',
   'myWork.payment.empty': 'No takings recorded yet today',
   'myWork.locked.title': 'Not available yet',
-  'myWork.locked.ask':
-    'Personal data and interface personalization wait on the staff-identity ADR, which the platform owner has not written yet.',
+  'myWork.locked.ask': 'Interface personalization (saved filters, layout) is not built yet.',
+  'myWork.profile.body': 'Your name, phone, photo and languages are edited in your profile.',
 
   // ---- IA 0.1e / X/X.3 Wallboard (wallboard-shell.ts) — wave T23 ----
   'wallboard.title': 'Live board',
@@ -2748,8 +2776,8 @@ export const messagesEn = {
   'wallboard.branches.title': 'Branch load',
   'wallboard.branches.empty': 'No branch data',
   'wallboard.branches.unavailable': 'Could not load the branch list',
-  'wallboard.operators.notBuilt':
-    'Arrives with the staff directory (IA 9.2, not yet built) — there is no way today to resolve who accepted an order to a name.',
+  'wallboard.operators.deferred':
+    'Operators are not shown on the shared screen: whether it may name individual employees is not decided yet.',
   'wallboard.fullscreen.enter': 'Enter fullscreen',
   'wallboard.freshness.loading': 'Connecting…',
   'wallboard.freshness.seconds': 'Updated {seconds}s ago',
@@ -3897,15 +3925,13 @@ export const messagesEn = {
   'staff.filter.all': 'All ({count})',
   'staff.filter.active': 'Active ({count})',
   'staff.filter.suspended': 'Suspended ({count})',
-  'staff.filter.search.placeholder': 'Search by identifier',
+  'staff.filter.search.placeholder': 'Search by name or reference',
   'staff.filter.reset': 'Reset filters',
 
   'staff.group.companyWide': 'Whole company',
   'staff.group.noActiveJob': 'No current job',
 
   'staff.column.person': 'Person',
-  'staff.column.person.notBuilt':
-    'Name and phone are not stored yet — showing the account identifier',
   'staff.column.job': 'Job',
   'staff.column.job.none': '—',
   'staff.column.scope': 'Where',
@@ -3915,11 +3941,17 @@ export const messagesEn = {
   'staff.status.revoked': 'Access revoked',
   'staff.status.expiring': 'Expiring soon',
   'staff.status.invited': 'Invited',
+  'staff.status.ended': 'Left',
+  'staff.status.accessDrift': 'Access remains',
+  'staff.status.onLeave': 'On leave',
 
   'staff.row.revoked.reason': 'Access revoked: {reason}',
   'staff.row.revoked.noReason': 'Access revoked',
   'staff.row.expiring': 'Expires {date}',
   'staff.row.invited': 'Has not set up their account yet',
+  'staff.row.noRecord': 'No profile yet',
+  'staff.row.ended': 'Employment ended {date}',
+  'staff.row.accessDrift': 'Employment ended {date}, but a job is still active',
 
   'staff.telegram.linked': 'Telegram linked',
   'staff.telegram.notLinked': 'Telegram not linked',
@@ -3973,6 +4005,10 @@ export const messagesEn = {
   'staff.accessDialog.revokeInvite.body':
     'This cancels the invitation and revokes the job it was for. The link already sent stops working.',
   'staff.accessDialog.revokeInvite.confirm': 'Revoke',
+  'staff.accessDialog.endEmployment.title': 'End employment',
+  'staff.accessDialog.endEmployment.body':
+    'This person stops working here and every job ({count}) is taken away. The record stays, so past orders still show who they were.',
+  'staff.accessDialog.endEmployment.date': 'Last day of work (leave blank for today)',
 
   'staff.inviteDialog.title': 'Invite',
   'staff.inviteDialog.rule':
@@ -3999,10 +4035,13 @@ export const messagesEn = {
   'staff.detail.back': 'Back to the list',
   'staff.detail.notFound': 'No such person',
   'staff.detail.denied': "No access to this person's rights",
-  'staff.detail.identity.notBuilt': 'Name, phone and photo are not stored yet',
   'staff.detail.since': 'On the system since {date}',
   'staff.detail.tab.access': 'Access',
   'staff.detail.tab.security': 'Security',
+  'staff.detail.tab.profile': 'Profile',
+  'staff.detail.tab.contacts': 'Contacts',
+  'staff.detail.drift': 'Employment has ended, but this person still holds a job.',
+  'staff.detail.drift.finish': 'Remove the remaining access',
   'staff.detail.access.empty': 'This person has no job yet.',
   'staff.detail.canDo.show': 'What they can do',
   'staff.detail.canDo.hide': 'Hide',
@@ -4019,11 +4058,63 @@ export const messagesEn = {
   'staff.detail.today.created': 'Created today: {count}',
   'staff.detail.today.accepted': 'Accepted today: {count}',
   'staff.detail.today.loading': 'Loading today’s orders…',
+
+  // ---- staff record (ADR 0139): profile form and card
+  'staff.profile.field.firstName': 'First name',
+  'staff.profile.field.lastName': 'Last name',
+  'staff.profile.field.phone': 'Contact phone',
+  'staff.profile.phone.hint':
+    'The number colleagues call. It can differ from the one used to sign in.',
+  'staff.profile.phone.signIn':
+    'The sign-in number is set when the person is invited and is not changed here.',
+  'staff.profile.phone.invalid': 'A phone number has 7 to 15 digits',
+  'staff.profile.firstName.required': 'Enter a first name',
+  'staff.profile.field.uiLocale': 'Interface language',
+  'staff.profile.uiLocale.none': 'Not set',
+  'staff.profile.field.spoken': 'Speaks',
+  'staff.profile.field.status': 'Employment status',
+  'staff.profile.status.ACTIVE': 'Works',
+  'staff.profile.field.employeeNumber': 'Employee number',
+  'staff.profile.field.employedFrom': 'Start date',
+  'staff.profile.field.employedUntil': 'End date',
+  'staff.profile.dates.invalid': 'The end date is before the start date',
+  'staff.profile.field.reason': 'Reason (optional)',
+  'staff.profile.edit': 'Edit',
+  'staff.profile.save': 'Save',
+  'staff.profile.saved': 'Saved',
+  'staff.end.done': 'Employment ended. Jobs removed: {count}.',
+  'staff.end.partial':
+    'Employment ended, but {remaining} jobs could not be removed. Try again to finish.',
+  'staff.emergency.title': 'Emergency contacts',
+  'staff.emergency.audited':
+    'These are other people’s details. Every time they are shown, it is recorded in the activity log.',
+  'staff.emergency.show': 'Show contacts',
+  'staff.emergency.hide': 'Hide',
+  'staff.emergency.denied': 'Your job does not allow viewing emergency contacts.',
+  'staff.emergency.empty': 'No emergency contacts yet.',
+  'staff.emergency.add': 'Add a contact',
+  'staff.emergency.max': 'Three contacts at most.',
+  'staff.emergency.name': 'Name',
+  'staff.emergency.phone': 'Phone',
+  'staff.emergency.relationship': 'Relationship',
+  'staff.emergency.name.required': 'Enter a name',
+  'staff.emergency.phone.invalid': 'Enter a phone number with 7 to 15 digits',
+  'staff.emergency.relation.SPOUSE': 'Spouse',
+  'staff.emergency.relation.PARENT': 'Parent',
+  'staff.emergency.relation.CHILD': 'Child',
+  'staff.emergency.relation.SIBLING': 'Brother or sister',
+  'staff.emergency.relation.FRIEND': 'Friend',
+  'staff.emergency.relation.OTHER': 'Other',
   'staff.detail.viewActivity': 'View activity log',
 
   'staff.myProfile.title': 'My profile',
   'staff.myProfile.personalData.title': 'Personal details',
-  'staff.myProfile.personalData.notBuilt': 'Name, phone and email are not editable here yet',
+  'staff.myProfile.noRecord':
+    'This company keeps no profile for your account, so there is nothing to edit here.',
+  'staff.myProfile.photo.change': 'Change photo',
+  'staff.myProfile.photo.remove': 'Remove photo',
+  'staff.myProfile.photo.type': 'Choose a JPEG, PNG, WebP or AVIF image',
+  'staff.myProfile.photo.tooLarge': 'The photo is larger than 1 MB',
   'staff.myProfile.telegram.title': 'Telegram',
   'staff.myProfile.telegram.body': 'Link your own Telegram account to receive alerts from the bot.',
   'staff.myProfile.telegram.issue': 'Get a code',
@@ -6224,6 +6315,7 @@ export const messagesEn = {
   'settings.integrations.detail.mapping.entityType.PAYMENT_TYPE': 'Payment types',
   'settings.integrations.detail.mapping.entityType.DISCOUNT': 'Discounts',
   'settings.integrations.detail.mapping.entityType.COURIER': 'Couriers',
+  'settings.integrations.detail.mapping.entityType.OPERATOR': 'Operators',
   'settings.integrations.detail.mapping.entityType.CANCELLATION_REASON': 'Cancellation reasons',
   'settings.integrations.detail.mapping.entityType.CHANNEL_POS_CODE': 'Channel → POS code',
 

@@ -237,19 +237,18 @@
   color: var(--q-ink-subtle);
 }
 
-/* ---- shared empty / locked note ------------------------------------------- */
+/* ---- shared empty note ------------------------------------------------------ */
 
-.today__empty,
-.today__locked {
+.today__empty {
   margin: 0;
   color: var(--q-ink-muted);
 }
 
-/* ---- operators (locked — IA 9.2 not built) --------------------------------- */
+/* ---- operators (IA 0.1d) ---------------------------------------------------- */
 
 .today__operators {
   padding: 16px 20px;
-  background: var(--q-surface-1);
+  background: var(--q-canvas);
   border: 1px solid var(--q-hairline);
   border-radius: var(--q-radius);
 }

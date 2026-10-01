@@ -220,7 +220,7 @@
   color: var(--q-ink-muted);
 }
 
-/* ---- operators (locked — IA 9.2 not built; see today-page.css's own note) --- */
+/* ---- operators (a note: naming people on a shared screen is undecided, ADR 0139) --- */
 
 .wallboard__operators {
   padding: 16px 32px;

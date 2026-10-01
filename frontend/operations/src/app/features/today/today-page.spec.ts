@@ -6,6 +6,7 @@ import { ApiError } from '../../core/api/problem-details';
 import { CurrentLocation } from '../../core/auth/current-location';
 import { I18n } from '../../core/i18n/i18n';
 import { LiveBoard, LiveBoardSnapshot } from './live-board';
+import { LiveOperators, LiveOperatorsBand } from './live-operators';
 import { TodayPage } from './today-page';
 
 const FAKE_SCOPE = { tenantId: 't1', brandId: 'b1', locationId: 'l1' };
@@ -43,6 +44,7 @@ async function flushMicrotasks(): Promise<void> {
 
 function configure(options: {
   load?: ReturnType<typeof vi.fn>;
+  operators?: ReturnType<typeof vi.fn>;
   scope?: typeof FAKE_SCOPE | null;
 }): void {
   TestBed.configureTestingModule({
@@ -59,6 +61,14 @@ function configure(options: {
       {
         provide: LiveBoard,
         useValue: { load: options.load ?? vi.fn().mockResolvedValue(snapshot()) },
+      },
+      {
+        provide: LiveOperators,
+        useValue: {
+          load:
+            options.operators ??
+            vi.fn().mockResolvedValue({ available: true, rows: [] } satisfies LiveOperatorsBand),
+        },
       },
     ],
   });
@@ -218,13 +228,102 @@ describe('TodayPage: the branch leaderboard', () => {
   });
 });
 
-describe('TodayPage: the operator band', () => {
-  it('renders as an honest locked note, never a raw actor id, since IA 9.2 is not built', async () => {
+describe('TodayPage: the operator band (IA 0.1d)', () => {
+  const band = (rows: LiveOperatorsBand['rows']): LiveOperatorsBand => ({
+    available: true,
+    rows,
+  });
+
+  it('names each person with the orders they accepted and created, in the server order', async () => {
+    configure({
+      operators: vi.fn().mockResolvedValue(
+        band([
+          {
+            operatorPrincipalId: 'sub-aziza',
+            displayName: 'Aziza Karimova',
+            createdCount: 4,
+            acceptedCount: 9,
+          },
+          {
+            operatorPrincipalId: 'sub-bobur',
+            displayName: 'Bobur Aliyev',
+            createdCount: 6,
+            acceptedCount: 2,
+          },
+        ]),
+      ),
+    });
+    const fixture = await render();
+
+    const rows = fixture.nativeElement.querySelectorAll('[data-testid="today-operator-row"]');
+    expect(rows.length).toBe(2);
+    expect(rows[0].textContent).toContain('Aziza Karimova');
+    expect(rows[0].textContent).toContain('9');
+    expect(rows[0].textContent).toContain('4');
+    expect(rows[1].textContent).toContain('Bobur Aliyev');
+  });
+
+  it('never prints the account id: a person the tenant keeps no name for is an unnamed colleague', async () => {
+    configure({
+      operators: vi.fn().mockResolvedValue(
+        band([
+          {
+            operatorPrincipalId: '7f2c9e1a-0000-4000-8000-000000000042',
+            displayName: null,
+            createdCount: 1,
+            acceptedCount: 1,
+          },
+        ]),
+      ),
+    });
+    const fixture = await render();
+
+    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(text).toContain('Unnamed colleague');
+    expect(text).not.toContain('7f2c9e1a');
+  });
+
+  it('says nobody has taken an order yet, rather than printing an empty table', async () => {
     configure({});
     const fixture = await render();
 
-    const band = fixture.nativeElement.querySelector('[data-testid="today-operators"]');
-    expect(band?.textContent).toContain('IA 9.2');
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="today-operators-empty"]'),
+    ).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('[data-testid="today-operator-row"]')).toBeNull();
+  });
+
+  it('says it could not load the operators, leaving the counters standing, when the band is unavailable', async () => {
+    configure({
+      load: vi
+        .fn()
+        .mockResolvedValue(
+          snapshot({ counts: { ...snapshot().counts, totalNonTerminal: 12, cancelled: 3 } }),
+        ),
+      operators: vi.fn().mockResolvedValue({ available: false, rows: [] }),
+    });
+    const fixture = await render();
+
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="today-operators-unavailable"]'),
+    ).not.toBeNull();
+    expect(
+      fixture.nativeElement
+        .querySelector('[data-testid="today-counter-in-progress"]')
+        ?.textContent.trim(),
+    ).toBe('12');
+  });
+
+  it('is read beside the board on every refresh, for the same scope', async () => {
+    const operators = vi.fn().mockResolvedValue(band([]));
+    configure({ operators });
+    const fixture = await render();
+    expect(operators).toHaveBeenCalledWith(FAKE_SCOPE);
+
+    fixture.nativeElement.querySelector('.today__refresh').click();
+    await flushMicrotasks();
+
+    expect(operators).toHaveBeenCalledTimes(2);
   });
 });
 

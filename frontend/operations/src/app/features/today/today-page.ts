@@ -21,6 +21,7 @@ import { ConnectionStateBanner } from '../../shared/ui/connection-state-banner';
 import { StaleIndicator } from '../../shared/ui/stale-indicator';
 import { describeApiError, errorReference } from '../orders/order-errors';
 import { BranchLoad, LiveBoard, LiveBoardSnapshot, MixSlice } from './live-board';
+import { LiveOperatorRow, LiveOperators, LiveOperatorsBand } from './live-operators';
 
 /**
  * §1.6's polling fallback, at the order board's interval — the unconditional
@@ -62,15 +63,17 @@ const PLACEHOLDER_TIME_ZONE: TimeZone = 'Asia/Tashkent';
  * counters renders where that cut falls — a supervisor reading a counter has
  * to be able to see what it counts.
  *
+ * **The operator band (IA 0.1d, ADR 0139) is real.** Who took and who
+ * accepted how many orders today, with the names the tenant keeps for them
+ * (`live-operators.ts`). It is read beside the board on a request of its own,
+ * so a band that cannot be read leaves the counters standing. The wallboard
+ * deliberately does not render it: whether a shared screen may name individual
+ * employees is a product and legal decision ADR 0139 leaves open.
+ *
  * **IA 0.2 (My work), linked from the toolbar here, is real as of wave
- * T01** — `MyWorkPage`, at the link's own route. `0.2a`/`0.2b` (personal
- * statistics by channel, revenue by payment method) ask no staff directory
- * at all: they are self-scoped by the token's own subject, which is the one
- * actor question this build can answer honestly without a name. `0.2c`/`0.2d`
- * (personal data, UI personalization) do assume a staff person record
- * (`staff-and-access.md` §11.1) that does not exist yet, and stay a named,
- * honest lock on that page rather than being built here — see
- * `my-work-page.ts`'s own doc for the boundary.
+ * T01** — `MyWorkPage`, at the link's own route. Its personal data is the
+ * «Мой профиль» page (`0.2c`); `0.2d` (UI personalization) is still a named
+ * lock there -- see `my-work-page.ts`'s own doc for the boundary.
  */
 @Component({
   selector: 'q-today-page',
@@ -82,11 +85,14 @@ const PLACEHOLDER_TIME_ZONE: TimeZone = 'Asia/Tashkent';
 export class TodayPage implements OnInit {
   private readonly location = inject(CurrentLocation);
   private readonly liveBoard = inject(LiveBoard);
+  private readonly liveOperators = inject(LiveOperators);
   private readonly i18n = inject(I18n);
   private readonly destroyRef = inject(DestroyRef);
   protected readonly realtime = inject(RealtimeClient);
 
   protected readonly snapshot = signal<LiveBoardSnapshot | null>(null);
+  /** IA 0.1d: read beside the board on its own request, so neither can blank the other -- see {@link LiveOperators}. */
+  protected readonly operatorBand = signal<LiveOperatorsBand | null>(null);
   protected readonly lastUpdatedAt = signal<Date | null>(null);
   protected readonly firstLoadComplete = signal(false);
   protected readonly refreshing = signal(false);
@@ -135,8 +141,14 @@ export class TodayPage implements OnInit {
 
     this.refreshing.set(true);
     try {
-      const snapshot = await this.liveBoard.load(scope);
+      // `LiveOperators.load` never rejects (a failed band is `available: false`),
+      // so a band that cannot be read cannot take the counters down with it.
+      const [snapshot, band] = await Promise.all([
+        this.liveBoard.load(scope),
+        this.liveOperators.load(scope),
+      ]);
       this.snapshot.set(snapshot);
+      this.operatorBand.set(band);
       this.lastUpdatedAt.set(new Date());
       this.lastError.set(null);
       this.denied.set(false);
@@ -193,6 +205,14 @@ export class TodayPage implements OnInit {
 
   protected branches(): readonly BranchLoad[] {
     return this.snapshot()?.branches ?? [];
+  }
+
+  protected operators(): readonly LiveOperatorRow[] {
+    return this.operatorBand()?.rows ?? [];
+  }
+
+  protected operatorsAvailable(): boolean {
+    return this.operatorBand()?.available ?? false;
   }
 
   protected branchesAvailable(): boolean {
