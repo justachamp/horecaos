@@ -1,6 +1,6 @@
 # ADR 0139: Staff identity: the staff person record
 
-- Decision status: Proposed
+- Decision status: Accepted
 - Implementation status: Not started — no staff person table, no `StaffDirectory`
   port, no self-service profile and no contact-person table exists. What exists
   is the interim this record replaces: Keycloak holds each staff member's first
@@ -10,7 +10,7 @@
   `iam.principals` and `iam.tenant_membership_links` (`V0057`) exist, and nothing
   in `src/main/java` reads or writes either.
 - Date proposed: 2026-09-29
-- Date decided: —
+- Date decided: 2026-10-01
 - Deciders: proposed by Claude (wave batch 14); Ayubkhon Abbosov (platform
   owner) decides. Written from `platform/docs/operations-gap-map.md` rows `0.1d`,
   `0.2c`, `9.2`, `9.2b`, `9.2c` and `X.5`, held for an ADR since batch 3 on the
@@ -63,6 +63,9 @@
     change flow, and the Delever parity matrix leaves the question open ("does
     Personal Data include phone/login change or MFA"). A verified-change flow is
     its own decision (security, product).
+
+
+**Decision record, 2026-10-01.** Accepted by Ayubkhon Abbosov (platform owner) with the instruction "accept all" over ADRs 0136–0144. Every open input above is closed on the default this record proposes for it; where a record defers an input to a named owner, that deferral stands as written and implementation proceeds without it. Implementation starts in operations batch 17 the same day.
 
 ## Context
 

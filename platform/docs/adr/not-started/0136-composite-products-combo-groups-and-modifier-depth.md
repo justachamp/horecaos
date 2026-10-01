@@ -1,12 +1,12 @@
 # ADR 0136: Composite products — combo groups and modifier depth
 
-- Decision status: Proposed
+- Decision status: Accepted
 - Implementation status: Not started — none of the tables, pricing rule, or
   authoring/cart/kitchen/export flow below exists. `catalog.variant_modifier_groups`
   (ADR 0016, `V0016`) exists and is unwritten by any code path; nothing else here
   has a column, a table, or a caller.
 - Date proposed: 2026-09-25
-- Date decided: —
+- Date decided: 2026-10-01
 - Deciders: proposed by Claude (wave batch 12, w2-catalog-adrs) from
   `platform/docs/operations-gap-map.md` rows `4.2a` and `4.2b`, both held for an
   ADR since batch 3; Ayubkhon Abbosov (platform owner) decides.
@@ -32,6 +32,9 @@
     the migration coverage register — ADR 0016's own "Legacy merchandising
     and preparation scope" section already defers this class of decision and
     this record inherits that deferral rather than closing it (product).
+
+
+**Decision record, 2026-10-01.** Accepted by Ayubkhon Abbosov (platform owner) with the instruction "accept all" over ADRs 0136–0144. Every open input above is closed on the default this record proposes for it; where a record defers an input to a named owner, that deferral stands as written and implementation proceeds without it. Implementation starts in operations batch 17 the same day.
 
 ## Context
 

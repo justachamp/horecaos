@@ -1,6 +1,6 @@
 # ADR 0142: Dispatch rules
 
-- Decision status: Proposed
+- Decision status: Accepted
 - Implementation status: Not started — no dispatch rule exists as a record, a
   document, an endpoint or a screen. What an operator cannot decide today is
   compiled in or deployed as configuration: `DeliveryPlanningService.open`
@@ -20,7 +20,7 @@
   (`ManualDispatchService`, `ManualExternalBookingService`), and the
   `DISPATCH_BOARD` realtime signal for those manual actions.
 - Date proposed: 2026-09-29
-- Date decided: —
+- Date decided: 2026-10-01
 - Deciders: proposed by Claude (wave batch 14, w7-adrs-stops-dispatch-walkin)
   from `platform/docs/operations-gap-map.md` row `3.8`, blocked on an ADR;
   Ayubkhon Abbosov (platform owner) decides.
@@ -56,6 +56,9 @@
     approval). A wrong rule can send every order to the most expensive partner;
     this record leaves it unapproved by default and registers no approval action
     (owner).
+
+
+**Decision record, 2026-10-01.** Accepted by Ayubkhon Abbosov (platform owner) with the instruction "accept all" over ADRs 0136–0144. Every open input above is closed on the default this record proposes for it; where a record defers an input to a named owner, that deferral stands as written and implementation proceeds without it. Implementation starts in operations batch 17 the same day.
 
 ## Context
 

@@ -1,6 +1,6 @@
 # ADR 0138: Marketplace projection preview and per-channel overrides
 
-- Decision status: Proposed
+- Decision status: Accepted
 - Implementation status: Not started — no preview endpoint, no projection
   assembly, and no channel-scoped media override exists. The layers this
   record composes are individually built (`catalog.location_offerings`,
@@ -8,7 +8,7 @@
   `CHANNEL` scope) but nothing joins them into a single answer, and nothing
   reads them for any purpose but the live storefront and the live publication.
 - Date proposed: 2026-09-25
-- Date decided: —
+- Date decided: 2026-10-01
 - Deciders: proposed by Claude (wave batch 12, w2-catalog-adrs) from
   `platform/docs/operations-gap-map.md` row `4.6a`, held for an ADR since
   batch 3; Ayubkhon Abbosov (platform owner) decides.
@@ -40,6 +40,9 @@
     channel-outranks-location rule) but does not extend that same claim to
     images without the owner confirming operators expect the two axes to
     agree (product).
+
+
+**Decision record, 2026-10-01.** Accepted by Ayubkhon Abbosov (platform owner) with the instruction "accept all" over ADRs 0136–0144. Every open input above is closed on the default this record proposes for it; where a record defers an input to a named owner, that deferral stands as written and implementation proceeds without it. Implementation starts in operations batch 17 the same day.
 
 ## Context
 

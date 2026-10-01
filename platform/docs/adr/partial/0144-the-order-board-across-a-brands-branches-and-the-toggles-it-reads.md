@@ -1,6 +1,6 @@
 # ADR 0144: The order board across a brand's branches, and the toggles it reads
 
-- Decision status: Proposed
+- Decision status: Accepted
 - Implementation status: Partial — built (wave 16, gap map rows `1.1`, `1.1c`, `1.1e`):
   `GET /api/v1/operations/tenants/{t}/brands/{b}/orders/board` (`ORDER_READ` at
   `BRAND`) reads the branch board's one statement over a set of branches
@@ -22,7 +22,7 @@
   subset for a principal whose grants are scattered branch by branch (they keep
   the branch board), and a per-row fiscal chip.
 - Date proposed: 2026-09-30
-- Date decided: —
+- Date decided: 2026-10-01
 - Deciders: proposed by Claude and built on the platform owner's instruction of
   2026-09-30; Ayubkhon Abbosov (platform owner) decides
 - Depends on: [ADR 0025](../built/0025-fine-grained-authorization-and-capability-model.md),
@@ -43,6 +43,9 @@
     runs it on a wallboard.
   - Whether bulk actions across branches are wanted, as one request per branch
     with one merged partial-failure panel — owner: operations product.
+
+
+**Decision record, 2026-10-01.** Accepted by Ayubkhon Abbosov (platform owner) with the instruction "accept all" over ADRs 0136–0144. Every open input above is closed on the default this record proposes for it; where a record defers an input to a named owner, that deferral stands as written and implementation proceeds without it. Implementation starts in operations batch 17 the same day.
 
 ## Context
 

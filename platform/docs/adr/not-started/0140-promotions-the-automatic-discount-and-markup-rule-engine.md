@@ -1,6 +1,6 @@
 # ADR 0140: Promotions: the automatic discount and markup rule engine
 
-- Decision status: Proposed
+- Decision status: Accepted
 - Implementation status: Not started — nothing this record decides is built: no
   authoring, validation, simulation or lifecycle endpoint for an automatic
   promotion, no markup, no payment-method, channel-type, order-sequence or
@@ -15,7 +15,7 @@
   with none of the inputs it was placed under (see Context), so a promotion
   authored by any route other than a promo code would not behave as written.
 - Date proposed: 2026-09-29
-- Date decided: —
+- Date decided: 2026-10-01
 - Deciders: proposed by Claude (wave batch 14); Ayubkhon Abbosov (platform owner)
   decides. Written from `platform/docs/operations-gap-map.md` rows `6.1` and `7.9`,
   both `deferred` since batch 3 on the grounds that no promotions ADR owns the rule
@@ -85,6 +85,9 @@
   - Sequencing. Automatic promotions are not on ADR 0055's launch path
     (storefront, operations, payments, onboarding). This record does not rank
     itself against that order (platform owner).
+
+
+**Decision record, 2026-10-01.** Accepted by Ayubkhon Abbosov (platform owner) with the instruction "accept all" over ADRs 0136–0144. Every open input above is closed on the default this record proposes for it; where a record defers an input to a named owner, that deferral stands as written and implementation proceeds without it. Implementation starts in operations batch 17 the same day.
 
 ## Context
 

@@ -1,6 +1,6 @@
 # ADR 0141: Stop scope and channel propagation
 
-- Decision status: Proposed
+- Decision status: Accepted
 - Implementation status: Not started — no stop has a scope narrower or wider
   than one location, an end, or a recorded source, and no stop reaches a
   marketplace. Today a stop is `inventory.positions.binary_available = false`
@@ -21,7 +21,7 @@
   everything in "Specification" below, and ADR 0040's `marketplace.availability.push`
   capability has no adapter, no event and no table.
 - Date proposed: 2026-09-29
-- Date decided: —
+- Date decided: 2026-10-01
 - Deciders: proposed by Claude (wave batch 14, w7-adrs-stops-dispatch-walkin)
   from `platform/docs/operations-gap-map.md` row `2.5a`, blocked on an ADR;
   Ayubkhon Abbosov (platform owner) decides.
@@ -59,6 +59,9 @@
     rejected back to the aggregator rather than accepted and flagged (this
     record accepts and flags, following ADR 0040's unmapped-line posture)
     (operations, partnerships).
+
+
+**Decision record, 2026-10-01.** Accepted by Ayubkhon Abbosov (platform owner) with the instruction "accept all" over ADRs 0136–0144. Every open input above is closed on the default this record proposes for it; where a record defers an input to a named owner, that deferral stands as written and implementation proceeds without it. Implementation starts in operations batch 17 the same day.
 
 ## Context
 

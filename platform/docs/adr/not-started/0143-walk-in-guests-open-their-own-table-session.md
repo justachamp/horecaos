@@ -1,6 +1,6 @@
 # ADR 0143: Walk-in guests open their own table session
 
-- Decision status: Proposed
+- Decision status: Accepted
 - Implementation status: Not started — no guest-side call creates a table
   session. The only writer is staff-side: `TableSessionController.open`
   (`POST /api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/dine-in/sessions`)
@@ -38,7 +38,7 @@
   not reproduced against a running stack, and not fixed by this note). Self-seating
   itself remains unbuilt.
 - Date proposed: 2026-09-29
-- Date decided: —
+- Date decided: 2026-10-01
 - Deciders: proposed by Claude (wave batch 14, w7-adrs-stops-dispatch-walkin) as an
   addition to ADR 0047 after batch 13's storefront `DineInTableComponent` recorded
   self-seating as an undecided product question; Ayubkhon Abbosov (platform owner)
@@ -78,6 +78,9 @@
   - The session currency for a guest-opened session. No location-currency read
     exists (`ReservationsPage` sends a fixed `'UZS'`, ADR 0055's single-currency
     pilot); this record adds a per-location interim setting (finance).
+
+
+**Decision record, 2026-10-01.** Accepted by Ayubkhon Abbosov (platform owner) with the instruction "accept all" over ADRs 0136–0144. Every open input above is closed on the default this record proposes for it; where a record defers an input to a named owner, that deferral stands as written and implementation proceeds without it. Implementation starts in operations batch 17 the same day.
 
 ## Context
 

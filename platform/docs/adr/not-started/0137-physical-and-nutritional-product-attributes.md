@@ -1,12 +1,12 @@
 # ADR 0137: Physical and nutritional product attributes
 
-- Decision status: Proposed
+- Decision status: Accepted
 - Implementation status: Not started — no column named in this record exists
   on any `catalog` table. `catalog.variants.unit_code` (ADR 0016) is the only
   physical fact a variant carries today, and it is a fiscal/display unit
   (`PIECE`, etc.), not a weight, a portion count, or a nutrition figure.
 - Date proposed: 2026-09-25
-- Date decided: —
+- Date decided: 2026-10-01
 - Deciders: proposed by Claude (wave batch 12, w2-catalog-adrs) from
   `platform/docs/operations-gap-map.md` row `4.2c`, held for an ADR since
   batch 3; Ayubkhon Abbosov (platform owner) decides.
@@ -37,6 +37,9 @@
     e.g. a splittable cake reserving a fractional unit against a whole-unit
     stock position — is out of scope here and left to whichever record next
     touches `inventory.positions`/`inventory.movements` (platform owner).
+
+
+**Decision record, 2026-10-01.** Accepted by Ayubkhon Abbosov (platform owner) with the instruction "accept all" over ADRs 0136–0144. Every open input above is closed on the default this record proposes for it; where a record defers an input to a named owner, that deferral stands as written and implementation proceeds without it. Implementation starts in operations batch 17 the same day.
 
 ## Context
 
