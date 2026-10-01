@@ -148,13 +148,14 @@ public class DispatchRulesAuthoringService {
         ResolvedPolicy<DispatchRulesDocument> published = author.author(
                 DeliverySourcingPolicies.DISPATCH_RULES, scope, document, expectedVersion, authoredBy, reason);
 
+        Changes changes = changesBetween(before, document);
         audit.record(AuditFact.of(AUDIT_ACTION, AuditClass.BUSINESS)
                 .by(authoredBy)
                 .at(scope)
                 .target("fulfillment.dispatch-rules", published.policyId())
                 .targetVersion((long) published.policyVersion())
                 .because(reason)
-                .changed(diff(before, document))
+                .changed(ChangeDocuments.diff(changes.before(), changes.after()))
                 .correlatedBy(published.policyId().toString())
                 .occurredAt(clock.instant())
                 .build());
@@ -243,16 +244,17 @@ public class DispatchRulesAuthoringService {
     // ------------------------------------------------------------- the audit
 
     /**
-     * The per-field diff between two documents, keyed so the activity log can say "rule far-zone then.mode
-     * FLEET_FIRST to PARTNER_FIRST". Only the fields that changed are listed -- a document of a hundred
-     * rules would otherwise put eighteen hundred unchanged pairs in every audit fact -- and a rule that
-     * was added or removed lists every one of its fields against null.
+     * The two documents as flat snapshots, narrowed to the fields that differ, ready for {@link
+     * ChangeDocuments#diff} so the activity log can say "rule far-zone then.mode FLEET_FIRST to
+     * PARTNER_FIRST". Only the fields that changed are listed -- a document of a hundred rules would
+     * otherwise put eighteen hundred unchanged pairs in every audit fact -- and a rule that was added or
+     * removed lists every one of its fields against null.
      *
      * <p>Rules are keyed by their id. An id is operator-typed text, and {@link ChangeDocuments} redacts a
      * field whose name merely <em>contains</em> a protected term ("tin", "pan", "note"), so an id that
      * happens to contain one falls back to the rule's position and the id travels in the order summary.
      */
-    static Map<String, Object> diff(DispatchRulesDocument before, DispatchRulesDocument after) {
+    static Changes changesBetween(DispatchRulesDocument before, DispatchRulesDocument after) {
         Map<String, Object> was = snapshotOf(before);
         Map<String, Object> now = snapshotOf(after);
 
@@ -266,8 +268,11 @@ public class DispatchRulesAuthoringService {
                 changedAfter.put(key, now.get(key));
             }
         }
-        return ChangeDocuments.diff(changedBefore, changedAfter);
+        return new Changes(changedBefore, changedAfter);
     }
+
+    /** The fields that differ between two documents, as the before and after halves {@link ChangeDocuments#diff} takes. */
+    record Changes(Map<String, Object> before, Map<String, Object> after) {}
 
     static Map<String, Object> snapshotOf(DispatchRulesDocument document) {
         Map<String, Object> snapshot = new LinkedHashMap<>();

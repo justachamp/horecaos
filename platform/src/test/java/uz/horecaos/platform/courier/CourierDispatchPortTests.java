@@ -619,7 +619,11 @@ class CourierDispatchPortTests {
         // two records are declared with no field one could be put in.
         assertThat(componentTypes(CourierShiftPort.OpenShift.class))
                 .containsExactly("UUID", "UUID", "UUID", "LocalDate");
-        assertThat(componentTypes(FleetCandidate.class)).containsExactly("UUID", "int", "int", "int", "Integer", "int");
+        // ADR 0142 adds the last component: how far, in metres, the courier's un-picked-up order is from
+        // this one's drop-off (null when none is close enough to group with). A distance between two
+        // addresses, not a person or an address -- still no field a name could be put in.
+        assertThat(componentTypes(FleetCandidate.class))
+                .containsExactly("UUID", "int", "int", "int", "Integer", "int", "Integer");
 
         // And the values that actually cross carry nothing of the person beyond
         // the identifier the caller already had.

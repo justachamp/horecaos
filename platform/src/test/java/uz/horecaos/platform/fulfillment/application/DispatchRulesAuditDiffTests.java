@@ -26,13 +26,19 @@ class DispatchRulesAuditDiffTests {
     private static final UUID YANDEX = UUID.fromString("00000000-0000-0000-0000-0000000000e1");
     private static final UUID NOOR = UUID.fromString("00000000-0000-0000-0000-0000000000e2");
 
+    /** What {@code DispatchRulesAuthoringService.author} puts in the audit fact: the changed fields, through the shared diff. */
+    private static Map<String, Object> diff(DispatchRulesDocument before, DispatchRulesDocument after) {
+        DispatchRulesAuthoringService.Changes changes = DispatchRulesAuthoringService.changesBetween(before, after);
+        return ChangeDocuments.diff(changes.before(), changes.after());
+    }
+
     @Test
     @DisplayName("an added rule is listed against nothing, by id, and the order summary names it")
     void anAddedRule() {
         DispatchRulesDocument before = DispatchRulesDocument.builtIn();
         DispatchRulesDocument after = document(rule("far-zone", SourcingMode.PARTNER_FIRST, YANDEX));
 
-        Map<String, Object> diff = DispatchRulesAuthoringService.diff(before, after);
+        Map<String, Object> diff = diff(before, after);
 
         assertThat(change(diff, "rules.order")).containsEntry("before", "").containsEntry("after", "far-zone");
         assertThat(change(diff, "rule.far-zone.present"))
@@ -49,7 +55,7 @@ class DispatchRulesAuditDiffTests {
     void aRemovedRule() {
         DispatchRulesDocument before = document(rule("far-zone", SourcingMode.PARTNER_FIRST, YANDEX));
 
-        Map<String, Object> diff = DispatchRulesAuthoringService.diff(before, DispatchRulesDocument.builtIn());
+        Map<String, Object> diff = diff(before, DispatchRulesDocument.builtIn());
 
         assertThat(change(diff, "rule.far-zone.present"))
                 .containsEntry("before", true)
@@ -65,7 +71,7 @@ class DispatchRulesAuditDiffTests {
         DispatchRulesDocument before = document(rule("far-zone", SourcingMode.PARTNER_FIRST, YANDEX));
         DispatchRulesDocument after = document(rule("far-zone", SourcingMode.PARTNER_FIRST, NOOR));
 
-        Map<String, Object> diff = DispatchRulesAuthoringService.diff(before, after);
+        Map<String, Object> diff = diff(before, after);
 
         assertThat(diff.keySet())
                 .as("nothing unchanged is in the fact: a document of a hundred rules would otherwise be 1800 pairs")
@@ -81,7 +87,7 @@ class DispatchRulesAuditDiffTests {
         Rule first = rule("first", SourcingMode.PARTNER_FIRST, YANDEX);
         Rule second = rule("second", SourcingMode.FLEET_ONLY);
 
-        Map<String, Object> diff = DispatchRulesAuthoringService.diff(document(first, second), document(second, first));
+        Map<String, Object> diff = diff(document(first, second), document(second, first));
 
         assertThat(diff.keySet()).containsExactly("rules.order");
         assertThat(change(diff, "rules.order"))
@@ -94,7 +100,7 @@ class DispatchRulesAuditDiffTests {
     void aNoOpPublication() {
         DispatchRulesDocument document = document(rule("far-zone", SourcingMode.PARTNER_FIRST, YANDEX));
 
-        assertThat(DispatchRulesAuthoringService.diff(document, document)).isEmpty();
+        assertThat(diff(document, document)).isEmpty();
     }
 
     @Test
@@ -104,7 +110,7 @@ class DispatchRulesAuditDiffTests {
         // is operator-typed text; "evening-tin-pickup" would otherwise hide every change to that rule.
         DispatchRulesDocument after = document(rule("evening-tin-pickup", SourcingMode.PARTNER_FIRST, YANDEX));
 
-        Map<String, Object> diff = DispatchRulesAuthoringService.diff(DispatchRulesDocument.builtIn(), after);
+        Map<String, Object> diff = diff(DispatchRulesDocument.builtIn(), after);
 
         assertThat(diff.keySet()).anyMatch(key -> key.startsWith("rule#1."));
         assertThat(diff.keySet()).noneMatch(ChangeDocuments::isProtected);
