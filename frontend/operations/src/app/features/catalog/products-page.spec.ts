@@ -642,7 +642,7 @@ describe('ProductsPage', () => {
 
   it('copies the product id to the clipboard and shows a confirmation', async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
-    Object.assign(navigator, { clipboard: { writeText } });
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
     configure({
       listCatalogs: () => of(FAKE_CATALOGS),
       listProducts: () => of({ items: [product({ productId: 'p1' })], nextCursor: null }),
@@ -663,7 +663,7 @@ describe('ProductsPage', () => {
 
   it('copies the computed public share slug, distinct from the id', async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
-    Object.assign(navigator, { clipboard: { writeText } });
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
     configure({
       listCatalogs: () => of(FAKE_CATALOGS),
       listProducts: () =>

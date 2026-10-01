@@ -183,7 +183,7 @@ describe('ChannelSetupPage', () => {
 
   it('claiming a custom hostname shows its DNS-TXT challenge, with copy and rotate actions', async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
-    Object.assign(navigator, { clipboard: { writeText } });
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
     fixture = await createFixture(channel({ systemType: 'WEB' }));
 
     setupApi.setCustomHostname.mockResolvedValue({
