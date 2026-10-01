@@ -58,6 +58,11 @@
         {{ 'settings.fiscalization.backfill.invalidSkipped' | t: { count: invalidRows().length } }}
       </p>
     }
+    @if (pasteSkipped() > 0) {
+      <p class="q-body-sm backfill__problem" role="status" data-testid="backfill-paste-skipped">
+        {{ 'settings.fiscalization.backfill.pasteSkipped' | t: { count: pasteSkipped() } }}
+      </p>
+    }
     @if (saveError(); as message) {
       <p class="q-body-sm backfill__problem" role="alert" data-testid="backfill-save-error">
         {{ message }}
@@ -71,7 +76,7 @@
               : {
                   saved: result.saved,
                   unchanged: result.unchanged,
-                  failed: result.failed + result.notFound,
+                  failed: result.failed + result.notFound + result.conflict,
                 }
         }}
       </p>
@@ -102,12 +107,15 @@
               <input
                 class="q-body-sm backfill__cell"
                 [class.backfill__cell--dirty]="row.mxikDirty"
+                [class.backfill__cell--stored]="row.mxikStored"
                 [class.backfill__cell--invalid]="row.mxikError !== null"
                 type="text"
                 inputmode="numeric"
                 autocomplete="off"
                 spellcheck="false"
                 [value]="row.mxik"
+                [readOnly]="row.mxikStored"
+                [attr.aria-readonly]="row.mxikStored"
                 [disabled]="saving()"
                 [attr.aria-label]="'settings.fiscalization.backfill.column.mxik' | t"
                 [attr.aria-invalid]="row.mxikError !== null"
@@ -129,12 +137,15 @@
               <input
                 class="q-body-sm backfill__cell"
                 [class.backfill__cell--dirty]="row.pkgDirty"
+                [class.backfill__cell--stored]="row.pkgStored"
                 [class.backfill__cell--invalid]="row.pkgError !== null"
                 type="text"
                 inputmode="numeric"
                 autocomplete="off"
                 spellcheck="false"
                 [value]="row.pkg"
+                [readOnly]="row.pkgStored"
+                [attr.aria-readonly]="row.pkgStored"
                 [disabled]="saving()"
                 [attr.aria-label]="'settings.fiscalization.backfill.column.packageCode' | t"
                 [attr.aria-invalid]="row.pkgError !== null"

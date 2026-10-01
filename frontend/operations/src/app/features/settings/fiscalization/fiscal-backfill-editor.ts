@@ -50,13 +50,14 @@ interface RowEdit {
 }
 
 /** What the last save said about a row that was not applied. */
-type RowProblem = 'notFound' | 'failed';
+type RowProblem = 'notFound' | 'conflict' | 'failed';
 
 /** Counted across the whole last save; an applied row leaves the list, so the count is what remains of it. */
 interface SaveSummary {
   readonly saved: number;
   readonly unchanged: number;
   readonly notFound: number;
+  readonly conflict: number;
   readonly failed: number;
   readonly invalid: number;
 }
@@ -68,6 +69,9 @@ interface EditorRow {
   readonly locationCount: number;
   readonly mxik: string;
   readonly pkg: string;
+  /** The dish already holds this code: the cell is shown as it is and cannot be edited here. */
+  readonly mxikStored: boolean;
+  readonly pkgStored: boolean;
   readonly mxikDirty: boolean;
   readonly pkgDirty: boolean;
   readonly mxikError: MessageKey | null;
@@ -105,11 +109,15 @@ function normalize(raw: string): string {
  *
  * **What it writes and what it does not.** Only the two codes, and only in the
  * platform's `MERGE` mode: a row that already holds a unit code or a fiscal
- * name keeps them when its package code is filled in. Clearing a stored code is
- * refused here — a backfill fills gaps; changing or removing a classification
- * is the product editor's. Rows that still lack a unit code or a fiscal name
- * after this stay on the coverage headline; those are set in the catalog's
- * fiscal workbench, which covers all four fields.
+ * name keeps them when its package code is filled in. A backfill fills gaps, so
+ * a cell that already holds a code is read-only here — typing, pasting and
+ * clearing are all ignored for it, and a pasted column fills down around it —
+ * and the platform refuses to replace a stored code with a different one (the
+ * row comes back `CONFLICT`, e.g. when another operator filled it after this
+ * list was read). Changing or removing a classification is the product
+ * editor's. Rows that still lack a unit code or a fiscal name after this stay
+ * on the coverage headline; those are set in the catalog's fiscal workbench,
+ * which covers all four fields.
  *
  * **What it cannot do yet.** There is no search by name: the official ИКПУ
  * list is not imported, so the reference lookup the product editor uses finds
@@ -136,7 +144,10 @@ export class FiscalBackfillEditor {
   readonly nodes = input.required<readonly FiscalCoverageNode[]>();
   readonly categoryDefaults = input<readonly FiscalCategoryDefault[]>([]);
 
-  /** Fired once a save has applied at least one row, so the page can reload the coverage. */
+  /**
+   * Fired once a save has applied at least one row, or met a dish that changed under it,
+   * so the page can reload the coverage.
+   */
   readonly saved = output<void>();
 
   private readonly edits = signal<ReadonlyMap<string, RowEdit>>(new Map());
@@ -145,6 +156,8 @@ export class FiscalBackfillEditor {
   protected readonly saving = signal(false);
   protected readonly saveError = signal<string | null>(null);
   protected readonly summary = signal<SaveSummary | null>(null);
+  /** Pasted codes the last paste left out because the dish already holds a code in that cell. */
+  protected readonly pasteSkipped = signal(0);
 
   private readonly candidates = computed(() => this.nodes().filter(isMissingCodes));
   private readonly storedById = computed(
@@ -159,10 +172,14 @@ export class FiscalBackfillEditor {
       const edit = edits.get(node.nodeId);
       const storedMxik = node.mxikCode ?? '';
       const storedPkg = node.packageCode ?? '';
-      const mxik = edit?.mxik ?? storedMxik;
-      const pkg = edit?.pkg ?? storedPkg;
-      const mxikDirty = edit?.mxik !== undefined;
-      const pkgDirty = edit?.pkg !== undefined;
+      // An edit for a cell that has since been filled (another operator saved, and the list
+      // was reloaded) is stale: the stored code is shown and nothing is sent for it.
+      const mxikEdit = storedMxik === '' ? edit?.mxik : undefined;
+      const pkgEdit = storedPkg === '' ? edit?.pkg : undefined;
+      const mxik = mxikEdit ?? storedMxik;
+      const pkg = pkgEdit ?? storedPkg;
+      const mxikDirty = mxikEdit !== undefined;
+      const pkgDirty = pkgEdit !== undefined;
       const categoryDefault = node.categoryId ? (defaults.get(node.categoryId) ?? null) : null;
       return {
         nodeId: node.nodeId,
@@ -171,6 +188,8 @@ export class FiscalBackfillEditor {
         locationCount: node.locationCount,
         mxik,
         pkg,
+        mxikStored: storedMxik !== '',
+        pkgStored: storedPkg !== '',
         mxikDirty,
         pkgDirty,
         mxikError: mxikDirty ? this.mxikProblem(mxik) : null,
@@ -221,6 +240,7 @@ export class FiscalBackfillEditor {
     const firstColumn = columns.indexOf(column);
     const rows = this.rows();
     const touched: string[] = [];
+    let skipped = 0;
     this.edits.update((current) => {
       let next = current;
       lines.forEach((line, offset) => {
@@ -231,13 +251,22 @@ export class FiscalBackfillEditor {
         touched.push(row.nodeId);
         line.split('\t').forEach((cell, cellOffset) => {
           const target = columns[firstColumn + cellOffset];
-          if (target) {
-            next = this.withCell(next, row.nodeId, target, cell);
+          if (!target) {
+            return;
           }
+          // A cell that already holds a code is left as it is; only a pasted value that
+          // would have changed it is worth telling the operator about.
+          const value = normalize(cell);
+          const stored = target === 'mxik' ? row.mxikStored : row.pkgStored;
+          if (stored && value !== '' && value !== (target === 'mxik' ? row.mxik : row.pkg)) {
+            skipped++;
+          }
+          next = this.withCell(next, row.nodeId, target, cell);
         });
       });
       return next;
     });
+    this.pasteSkipped.set(skipped);
     touched.forEach((id) => this.forget(id));
   }
 
@@ -259,6 +288,7 @@ export class FiscalBackfillEditor {
     this.problems.set(new Map());
     this.saveError.set(null);
     this.summary.set(null);
+    this.pasteSkipped.set(0);
   }
 
   // ---------------------------------------------------------------- saving
@@ -271,9 +301,11 @@ export class FiscalBackfillEditor {
     }
     this.saving.set(true);
     this.saveError.set(null);
-    const counts = { saved: 0, unchanged: 0, notFound: 0, failed: 0 };
+    this.pasteSkipped.set(0);
+    const counts = { saved: 0, unchanged: 0, notFound: 0, conflict: 0, failed: 0 };
     const problems = new Map(this.problems());
     let applied = false;
+    let stale = false;
     for (const batch of chunk(rows, BACKFILL_BATCH_SIZE)) {
       const items: FiscalBackfillItem[] = batch.map((row) => ({
         nodeId: row.nodeId,
@@ -293,6 +325,12 @@ export class FiscalBackfillEditor {
           } else if (status === 'NOT_FOUND') {
             counts.notFound++;
             problems.set(row.nodeId, 'notFound');
+          } else if (status === 'CONFLICT') {
+            // The platform never replaces a stored code: the dish got one after this list was
+            // read. Keep the edit marked, and have the page reload so the cell shows it.
+            counts.conflict++;
+            problems.set(row.nodeId, 'conflict');
+            stale = true;
           } else {
             counts.failed++;
             problems.set(row.nodeId, 'failed');
@@ -309,7 +347,7 @@ export class FiscalBackfillEditor {
     }
     this.summary.set({ ...counts, invalid: this.invalidRows().length });
     this.saving.set(false);
-    if (applied) {
+    if (applied || stale) {
       this.saved.emit();
     }
   }
@@ -331,24 +369,25 @@ export class FiscalBackfillEditor {
   }
 
   protected problemLabel(problem: RowProblem): string {
-    return problem === 'notFound'
-      ? this.i18n.t('settings.fiscalization.backfill.status.notFound')
-      : this.i18n.t('settings.fiscalization.backfill.status.failed');
+    switch (problem) {
+      case 'notFound':
+        return this.i18n.t('settings.fiscalization.backfill.status.notFound');
+      case 'conflict':
+        return this.i18n.t('settings.fiscalization.backfill.status.conflict');
+      default:
+        return this.i18n.t('settings.fiscalization.backfill.status.failed');
+    }
   }
 
   // --------------------------------------------------------------- internals
 
+  // An empty value is never a pending edit (a stored cell cannot be edited, and an
+  // empty cell typed back to empty is no edit), so only the format is checked.
   private mxikProblem(value: string): MessageKey | null {
-    if (value === '') {
-      return 'settings.fiscalization.backfill.error.clear';
-    }
     return MXIK_PATTERN.test(value) ? null : 'settings.fiscalization.backfill.error.mxik';
   }
 
   private packageProblem(value: string): MessageKey | null {
-    if (value === '') {
-      return 'settings.fiscalization.backfill.error.clear';
-    }
     return PACKAGE_CODE_PATTERN.test(value)
       ? null
       : 'settings.fiscalization.backfill.error.packageCode';
@@ -376,12 +415,17 @@ export class FiscalBackfillEditor {
     if (!stored) {
       return current;
     }
-    const value = normalize(raw);
     const storedValue = (column === 'mxik' ? stored.mxikCode : stored.packageCode) ?? '';
+    if (storedValue !== '') {
+      // A backfill fills gaps: a code the dish already holds is not editable here, so a
+      // typed, pasted or cleared value for it is dropped rather than made sendable.
+      return current;
+    }
+    const value = normalize(raw);
     const next = new Map(current);
     const edit: { mxik?: string; pkg?: string } = { ...next.get(nodeId) };
-    if (value === storedValue) {
-      // Typed back to what the dish already holds: nothing to send.
+    if (value === '') {
+      // Typed back to empty: the cell holds nothing, so there is nothing to send.
       delete edit[column];
     } else {
       edit[column] = value;

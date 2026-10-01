@@ -170,9 +170,9 @@ public final class OnboardingReadinessChecks {
      *
      * <p>Tenant-scoped, not location-scoped: a channel is a route to market for
      * the whole tenant, so the finding carries no {@code locationId}. It names
-     * the channel as its {@link StepResult.FindingSubject subject}, so the console
-     * links to that channel's own setup rather than to the list; an older
-     * console that ignores the subject still links to the sales-channels list.
+     * the channel as its {@link StepResult.FindingSubject subject}, so two channels
+     * with the same sentence stay two rows; the console links the row to the
+     * sales-channels screen, where the payment-method matrix lives.
      */
     @Component
     public static class ChannelPaymentCoverage implements OnboardingReadinessCheck {
@@ -337,7 +337,7 @@ public final class OnboardingReadinessChecks {
      *
      * <ul>
      *   <li>{@value #NO_MODE} — zero enabled rows in {@code
-     *       tenant.channel_fulfillment_modes}: fixed in the channel's own setup;
+     *       tenant.channel_fulfillment_modes}: fixed in the sales-channels fulfilment matrix;
      *   <li>{@value #NO_SERVICEABLE_MODE} — enabled modes, but none of them has a
      *       schedule bound ({@code tenant.location_service_bindings}) at an
      *       active location the channel is switched on for: fixed in the
@@ -345,8 +345,10 @@ public final class OnboardingReadinessChecks {
      * </ul>
      *
      * <p>Tenant-scoped, not location-scoped, like every channel finding: each
-     * names its channel as a {@link StepResult.FindingSubject subject} so the console
-     * can open that channel's setup.
+     * names its channel as a {@link StepResult.FindingSubject subject} so two channels
+     * with the same sentence stay two rows; the console links each to the
+     * sales-channels screen, where the fulfilment matrix and the channel's
+     * location list are edited.
      */
     @Component
     public static class ChannelFulfillmentCoverage implements OnboardingReadinessCheck {

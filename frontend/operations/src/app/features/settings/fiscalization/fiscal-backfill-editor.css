@@ -92,6 +92,11 @@
   font-variant-numeric: tabular-nums;
 }
 
+.backfill__cell--stored {
+  background: var(--q-surface-2);
+  color: var(--q-ink-muted);
+}
+
 .backfill__cell--dirty {
   background: var(--q-warning-tint);
 }

@@ -21,7 +21,7 @@ import { TPipe } from '../../../core/i18n/t.pipe';
 import { Combobox, ComboboxOption } from '../../../shared/ui/combobox';
 import { describeApiError } from '../../orders/order-errors';
 import { ConfigurationApi } from '../configuration-api';
-import { ReadinessApi, SALES_CHANNEL_SUBJECT, ValidationResult } from './readiness-api';
+import { ReadinessApi, ValidationResult } from './readiness-api';
 import { SettingsNavGroup, visibleSettings } from '../settings-nav';
 import { CONFIGURATION_KEY_ROUTES, REFERENCE_LISTS } from '../settings-search-index';
 
@@ -85,13 +85,13 @@ function readinessLink(finding: ValidationResult): readonly string[] | null {
   if (finding.locationId) {
     return ['/settings/locations', finding.locationId];
   }
-  // Batch 16: a finding that names one object links to that object, not to the
-  // list it sits in. A channel opens its own setup hub; a subject type this
-  // console has no screen for falls through to the code-keyed link below, so
-  // a server that grows a new type before this file does still shows the row.
-  if (finding.subject?.type === SALES_CHANNEL_SUBJECT && finding.subject.id) {
-    return ['/settings/channel-setup', finding.subject.id];
-  }
+  // A finding's `subject` names the object it is about, but the link goes by
+  // error code alone. The per-channel setup hub configures a Telegram bot, a
+  // web hostname or a kiosk stub; it has no control that enables a fulfilment
+  // mode, sets a payment method or binds a location, which are the three
+  // channel findings the server sends. Those are fixed on the sales-channels
+  // screen (the matrices and the channel's location list), so a channel
+  // subject must not send the operator to the hub.
   if (finding.errorCode === 'NO_BRAND' || finding.errorCode === 'NO_ACTIVE_BRAND') {
     return ['/settings/brand'];
   }
@@ -181,7 +181,9 @@ function bySeverity(a: ValidationResult, b: ValidationResult): number {
  * batch 15 — fiscal classification coverage, channel payment-method coverage
  * and secret-rotation age, then — batch 16 — channel fulfilment-mode coverage
  * and location service-binding coverage. A finding that names one channel
- * carries a `subject`, and its row links to that channel's own setup. A finding the server marks `advisory` sorts after
+ * carries a `subject` (it tells two like-worded rows apart), but its row links
+ * by error code: the fix lives on the sales-channels screen, not in the
+ * channel's setup hub. A finding the server marks `advisory` sorts after
  * the blocking ones and carries a muted tag rather than reading as a
  * stop-the-line error. The empty state ("Всё настроено") is the same one
  * settings.md asks for.
