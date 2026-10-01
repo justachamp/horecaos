@@ -72,7 +72,10 @@ describe('StaffReportPage', () => {
   };
   let callCentreApi: { callStats: ReturnType<typeof vi.fn> };
 
-  async function render(scope: LocationScope | null = SCOPE): Promise<void> {
+  async function render(
+    scope: LocationScope | null = SCOPE,
+    leaderboard: readonly OperatorLeaderboardRowResponse[] = [staffRow(), machineRow()],
+  ): Promise<void> {
     // ReportsFilterState restores its period and range from the URL on
     // construction, and the test worker's window.location outlives a spec
     // file: a sibling reports spec that left a ten-day custom range in the
@@ -84,7 +87,7 @@ describe('StaffReportPage', () => {
     reportingApi = {
       operatorLeaderboard: vi
         .fn()
-        .mockResolvedValue({ rows: [staffRow(), machineRow()], provenance: provenance() }),
+        .mockResolvedValue({ rows: leaderboard, provenance: provenance() }),
       operatorProducts: vi.fn().mockResolvedValue({
         operatorPrincipalId: staffRow().operatorPrincipalId,
         rows: [
@@ -139,6 +142,39 @@ describe('StaffReportPage', () => {
     expect(host.textContent).not.toContain('018f6f4e-1000-7000-8000-00000000aaaa');
   });
 
+  it('shows the name the tenant keeps for a staff row, and not the subject, once the platform sends one (ADR 0139)', async () => {
+    await render(SCOPE, [staffRow({ displayName: 'Aziza Karimova' }), machineRow()]);
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(host.querySelector('[data-testid="staff-report-name"]')?.textContent).toContain(
+      'Aziza Karimova',
+    );
+    expect(host.textContent).not.toContain('018f6f4e');
+  });
+
+  it('keeps the short subject for a staff row the tenant has no name for', async () => {
+    await render(SCOPE, [staffRow({ displayName: null })]);
+
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('[data-testid="staff-report-name"]')).toBeNull();
+    expect(host.textContent).toContain('018f6f4e');
+  });
+
+  it('names the operator on the product drill-down', async () => {
+    await render(SCOPE, [staffRow({ displayName: 'Aziza Karimova' })]);
+    const host = fixture.nativeElement as HTMLElement;
+    (
+      Array.from(host.querySelectorAll('button.link')).find(
+        (b) => b.textContent?.trim() === 'View products',
+      ) as HTMLButtonElement
+    ).click();
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(host.textContent).toContain('Aziza Karimova');
+  });
+
   it('types a machine principal as MACHINE with its channel, beside the staff rows', async () => {
     await render();
     const host = fixture.nativeElement as HTMLElement;
@@ -169,6 +205,50 @@ describe('StaffReportPage', () => {
       expect.objectContaining({ operatorPrincipalId: staffRow().operatorPrincipalId }),
     );
     expect(host.textContent).toContain('Plov');
+  });
+
+  it("names a telephony row's operator from the leaderboard when the same person is on it", async () => {
+    await render(SCOPE, [
+      staffRow({
+        displayName: 'Aziza Karimova',
+        subject: 'staff-1',
+        operatorPrincipalId: 'staff-1',
+      }),
+    ]);
+    callCentreApi.callStats.mockResolvedValue([
+      {
+        hourOfDay: 10,
+        operatorPrincipalId: 'staff-1',
+        offeredCount: 3,
+        answeredCount: 2,
+        missedCount: 1,
+        transferredCount: 0,
+        talkDurationSeconds: 240,
+      },
+      {
+        hourOfDay: 11,
+        operatorPrincipalId: 'staff-2-with-a-long-subject',
+        offeredCount: 1,
+        answeredCount: 1,
+        missedCount: 0,
+        transferredCount: 0,
+        talkDurationSeconds: 60,
+      },
+    ] as readonly CallHourStat[]);
+    const host = fixture.nativeElement as HTMLElement;
+    (
+      Array.from(host.querySelectorAll('[role="tab"]')).find(
+        (el) => el.textContent?.trim() === 'Telephony',
+      ) as HTMLButtonElement
+    ).click();
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    const operators = Array.from(
+      host.querySelectorAll('[data-testid="staff-report-telephony-operator"]'),
+    ).map((cell) => cell.textContent?.trim());
+    expect(operators).toEqual(['Aziza Karimova', 'staff-2-']);
   });
 
   it('lazily loads telephony only once the tab is first opened, and rolls up per operator across days', async () => {

@@ -10,13 +10,17 @@ import { TenantScope, posPaths } from '../../core/api/pos-paths';
  * The pairings the mapping pane offers — `MappingEntityType`. `VARIANT` and
  * `MODIFIER` are gap-map row 1.2i's fix path: the exact granularity a POS
  * export's own `LINE_UNMAPPED`/`MODIFIER_UNMAPPED` refusal names, one level
- * finer than `PRODUCT` (the sync engine's `VARIANT_PARENT`).
+ * finer than `PRODUCT` (the sync engine's `VARIANT_PARENT`). `OPERATOR` is gap-map
+ * row 9.2c (ADR 0139): the till's id for a member of staff, keyed on the
+ * tenant's own staff record -- the HorecaOS side lists people by name -- and
+ * resolved by the export path for the next order that person accepts.
  */
 export type MappingEntityType =
   | 'PRODUCT'
   | 'PAYMENT_TYPE'
   | 'DISCOUNT'
   | 'COURIER'
+  | 'OPERATOR'
   | 'CANCELLATION_REASON'
   | 'CHANNEL_POS_CODE'
   | 'VARIANT'

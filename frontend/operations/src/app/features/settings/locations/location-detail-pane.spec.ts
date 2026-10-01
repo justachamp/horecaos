@@ -7,6 +7,9 @@ import { CurrentLocation } from '../../../core/auth/current-location';
 import { applyRegionalFormats, resetRegionalFormats } from '../../../core/format/regional-format';
 import { I18n } from '../../../core/i18n/i18n';
 import { LocaleSet } from '../../../core/i18n/locale-set';
+import { SessionCapabilities } from '../../../core/auth/session-capabilities';
+import { StaffMembersApi } from '../../staff/staff-members-api';
+import { LocationContactsApi } from './location-contacts-api';
 import { LocationDetailPane } from './location-detail-pane';
 import {
   LocationLocaleCode,
@@ -118,6 +121,7 @@ const SCHEDULES: readonly ScheduleSummaryView[] = [
 describe('LocationDetailPane', () => {
   let fixture: ComponentFixture<LocationDetailPane>;
   let localeSet: FakeLocaleSet;
+  let contactsApi: { list: ReturnType<typeof vi.fn>; replace: ReturnType<typeof vi.fn> };
   let api: {
     profile: ReturnType<typeof vi.fn>;
     serviceSummary: ReturnType<typeof vi.fn>;
@@ -147,6 +151,10 @@ describe('LocationDetailPane', () => {
       replacePreparationBands: vi.fn().mockResolvedValue(undefined),
     };
     localeSet = new FakeLocaleSet();
+    contactsApi = {
+      list: vi.fn().mockResolvedValue({ contacts: [], version: 3 }),
+      replace: vi.fn(),
+    };
 
     await TestBed.configureTestingModule({
       imports: [LocationDetailPane],
@@ -154,6 +162,11 @@ describe('LocationDetailPane', () => {
         { provide: LocationsApi, useValue: api },
         { provide: CurrentLocation, useValue: new FakeCurrentLocation() },
         { provide: LocaleSet, useValue: localeSet },
+        // The contact persons are a component of their own (row 9.2b); this
+        // spec is about the pane around them.
+        { provide: LocationContactsApi, useValue: contactsApi },
+        { provide: StaffMembersApi, useValue: { listAtLocation: vi.fn().mockResolvedValue([]) } },
+        { provide: SessionCapabilities, useValue: { has: () => false } },
       ],
     }).compileComponents();
     TestBed.inject(I18n).setLocale('en');
@@ -168,6 +181,13 @@ describe('LocationDetailPane', () => {
     expect(api.profile).toHaveBeenCalledWith(SCOPE);
     expect(api.serviceSummary).toHaveBeenCalledWith(SCOPE);
     expect((fixture.nativeElement as HTMLElement).textContent).toContain('Chilanzar');
+  });
+
+  it('reads the branch’s contact persons at the branch’s own brand, under the Basics tab', () => {
+    expect(contactsApi.list).toHaveBeenCalledWith(SCOPE);
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="location-contact-persons"]'),
+    ).not.toBeNull();
   });
 
   describe('the contact phone follows the brand’s pattern (row 10.12)', () => {

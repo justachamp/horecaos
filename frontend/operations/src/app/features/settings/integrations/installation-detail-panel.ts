@@ -41,11 +41,17 @@ import {
   RotatedPartnerApiClient,
 } from './integrations-api';
 
-/** The five pairings the `10.8b` mapping tab offers, alongside `4.5a`'s own product tab on the import screen. */
+/**
+ * The six pairings the `10.8b` mapping tab offers, alongside `4.5a`'s own
+ * product tab on the import screen. `OPERATOR` (row `9.2c`, ADR 0139) is the
+ * till's id for a colleague: typed in by hand like `COURIER` -- no adapter lists
+ * a POS's operators -- against the people the tenant keeps a record of.
+ */
 const MAPPING_ENTITY_TYPES: readonly MappingEntityType[] = [
   'PAYMENT_TYPE',
   'DISCOUNT',
   'COURIER',
+  'OPERATOR',
   'CANCELLATION_REASON',
   'CHANNEL_POS_CODE',
 ];
@@ -847,6 +853,8 @@ export class InstallationDetailPanel {
         return this.i18n.t('settings.integrations.detail.mapping.entityType.DISCOUNT');
       case 'COURIER':
         return this.i18n.t('settings.integrations.detail.mapping.entityType.COURIER');
+      case 'OPERATOR':
+        return this.i18n.t('settings.integrations.detail.mapping.entityType.OPERATOR');
       case 'CANCELLATION_REASON':
         return this.i18n.t('settings.integrations.detail.mapping.entityType.CANCELLATION_REASON');
       case 'CHANNEL_POS_CODE':

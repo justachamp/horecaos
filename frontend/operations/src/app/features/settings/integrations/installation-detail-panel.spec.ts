@@ -711,6 +711,76 @@ describe('InstallationDetailPanel', () => {
     expect(mappingApi.unmapped).toHaveBeenCalledWith(TENANT_SCOPE, 'binding-2', 'COURIER');
   });
 
+  it('offers the staff as an «Операторы» pairing: the tenant’s people on the left, the till’s own id typed on the right (row 9.2c, ADR 0139)', async () => {
+    api = new FakeIntegrationsApi();
+    mappingApi = new FakePosMappingApi();
+    api.listBindings.mockResolvedValue([ACTIVE_BINDING]);
+    mappingApi.unmapped.mockImplementation(
+      (_scope: TenantScope, _binding: string, entityType: MappingEntityType) =>
+        of(
+          entityType === 'OPERATOR'
+            ? {
+                // No adapter lists a POS's operators: the right side is typed by hand.
+                sourced: false,
+                detail: 'The till’s operator ids are typed in',
+                entities: [],
+                horecaosCandidates: [
+                  { id: 'member-1', name: 'Aziza Karimova' },
+                  { id: 'member-2', name: 'Bobur Aliyev' },
+                ],
+              }
+            : EMPTY_UNMAPPED,
+        ),
+    );
+    await TestBed.configureTestingModule({
+      imports: [InstallationDetailPanel],
+      providers: [
+        { provide: IntegrationsApi, useValue: api },
+        { provide: PosMappingApi, useValue: mappingApi },
+        { provide: CurrentLocation, useValue: new FakeCurrentLocation() },
+      ],
+    }).compileComponents();
+    TestBed.inject(I18n).setLocale('en');
+    fixture = TestBed.createComponent(InstallationDetailPanel);
+    fixture.componentRef.setInput('installation', CLOPOS_INSTALLATION);
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+    tabWithText('Соответствия').click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    (
+      Array.from(host().querySelectorAll('.mapping-entity-types button')).find((b) =>
+        b.textContent?.includes('Operators'),
+      ) as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(mappingApi.list).toHaveBeenLastCalledWith(
+      TENANT_SCOPE,
+      'binding-2',
+      'OPERATOR',
+      'ACTIVE',
+      { cursor: null, limit: 50 },
+    );
+    expect(mappingApi.unmapped).toHaveBeenLastCalledWith(TENANT_SCOPE, 'binding-2', 'OPERATOR');
+
+    const leftInput = host().querySelector<HTMLInputElement>(
+      '[data-testid="q-mapping-pane-left"] [data-testid="q-combobox-input"]',
+    )!;
+    leftInput.value = 'Aziza';
+    leftInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    const options = Array.from(
+      host().querySelectorAll(
+        '[data-testid="q-mapping-pane-left"] [data-testid="q-combobox-option"]',
+      ),
+    ).map((option) => option.textContent?.trim());
+    expect(options).toEqual(['Aziza Karimova']);
+  });
+
   it('links a pair through the pane, then reloads the mapping for the active entity type', async () => {
     api = new FakeIntegrationsApi();
     mappingApi = new FakePosMappingApi();
