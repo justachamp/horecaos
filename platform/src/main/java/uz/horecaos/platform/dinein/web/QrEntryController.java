@@ -10,6 +10,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Supplier;
@@ -307,8 +308,17 @@ public class QrEntryController {
                 ErrorCode.UNAUTHENTICATED, "Attaching a round needs the signed-in session the order was placed under");
     }
 
+    /**
+     * Carries a {@code reason} so a client can tell this 401 -- the person has to sign in
+     * -- from the one a dead guest token gets, which means "scan the code again". Both are
+     * {@code UNAUTHENTICATED}, and a screen that took the first for the second would end a
+     * table visit because a customer session had lapsed.
+     */
     private static ApiException unseatedGuest() {
-        return new ApiException(ErrorCode.UNAUTHENTICATED, "Sit at this table once you have signed in");
+        return new ApiException(
+                ErrorCode.UNAUTHENTICATED,
+                "Sit at this table once you have signed in",
+                Map.of("reason", "CUSTOMER_SESSION_REQUIRED"));
     }
 
     private GuestBillResponse billResponse(GuestContext guest, SessionRow session) {
