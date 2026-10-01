@@ -192,6 +192,27 @@
         },
         "type" : "object"
       },
+      "AddComboComponentRequest" : {
+        "properties" : {
+          "componentVariantId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "defaultQuantity" : {
+            "format" : "int32",
+            "maximum" : 100,
+            "minimum" : 1,
+            "type" : "integer"
+          },
+          "sortOrder" : {
+            "format" : "int32",
+            "minimum" : 0,
+            "type" : "integer"
+          }
+        },
+        "required" : [ "componentVariantId" ],
+        "type" : "object"
+      },
       "AddModifierOptionRequest" : {
         "properties" : {
           "code" : {
@@ -506,6 +527,16 @@
         "required" : [ "role" ],
         "type" : "object"
       },
+      "AttachModifierGroupRequest" : {
+        "properties" : {
+          "sortOrder" : {
+            "format" : "int32",
+            "minimum" : 0,
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
       "AttachPresetRequest" : {
         "properties" : {
           "presetId" : {
@@ -537,15 +568,72 @@
       },
       "AttachedModifierGroupView" : {
         "properties" : {
+          "applicableFulfillmentModes" : {
+            "items" : {
+              "enum" : [ "DELIVERY", "PICKUP", "DINE_IN" ],
+              "type" : "string"
+            },
+            "type" : "array"
+          },
           "groupId" : {
             "format" : "uuid",
             "type" : "string"
           },
+          "maximumSelectionsOverride" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "minimumSelectionsOverride" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "requiredOverride" : {
+            "type" : "boolean"
+          },
           "sortOrder" : {
             "format" : "int32",
             "type" : "integer"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "visibility" : {
+            "enum" : [ "VISIBLE", "HIDDEN_AUTO_SELECT" ],
+            "type" : "string"
           }
         },
+        "type" : "object"
+      },
+      "AttachmentPolicyRequest" : {
+        "properties" : {
+          "applicableFulfillmentModes" : {
+            "items" : {
+              "enum" : [ "DELIVERY", "PICKUP", "DINE_IN" ],
+              "type" : "string"
+            },
+            "type" : "array",
+            "uniqueItems" : true
+          },
+          "maximumSelectionsOverride" : {
+            "format" : "int32",
+            "minimum" : 1,
+            "type" : "integer"
+          },
+          "minimumSelectionsOverride" : {
+            "format" : "int32",
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "requiredOverride" : {
+            "type" : "boolean"
+          },
+          "visibility" : {
+            "enum" : [ "VISIBLE", "HIDDEN_AUTO_SELECT" ],
+            "type" : "string"
+          }
+        },
+        "required" : [ "visibility" ],
         "type" : "object"
       },
       "AuditEventDetail" : {
@@ -1342,7 +1430,7 @@
             "type" : "string"
           },
           "priceableType" : {
-            "enum" : [ "VARIANT", "MODIFIER_OPTION" ],
+            "enum" : [ "VARIANT", "MODIFIER_OPTION", "COMBO_COMPONENT" ],
             "type" : "string"
           }
         },
@@ -1970,6 +2058,84 @@
         },
         "type" : "object"
       },
+      "ComboComponentResponse" : {
+        "properties" : {
+          "comboGroupId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "componentId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "componentVariantId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "defaultQuantity" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "sortOrder" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "status" : {
+            "enum" : [ "DRAFT", "ACTIVE", "ARCHIVED" ],
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "ComboGroupResponse" : {
+        "properties" : {
+          "allowSameComponentMultipleTimes" : {
+            "type" : "boolean"
+          },
+          "code" : {
+            "type" : "string"
+          },
+          "comboGroupId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "components" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ComboComponentResponse"
+            },
+            "type" : "array"
+          },
+          "containerVariantId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "maximumSelections" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "minimumSelections" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "sortOrder" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "status" : {
+            "enum" : [ "DRAFT", "ACTIVE", "ARCHIVED" ],
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
       "CommentPresetControllerLocaleSetResponse" : {
         "properties" : {
           "configured" : {
@@ -2579,6 +2745,51 @@
           }
         },
         "required" : [ "code", "displayName", "systemType" ],
+        "type" : "object"
+      },
+      "CreateComboGroupRequest" : {
+        "properties" : {
+          "allowSameComponentMultipleTimes" : {
+            "type" : "boolean"
+          },
+          "code" : {
+            "maxLength" : 64,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "containerVariantId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "locale" : {
+            "maxLength" : 16,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "maximumSelections" : {
+            "format" : "int32",
+            "maximum" : 100,
+            "minimum" : 1,
+            "type" : "integer"
+          },
+          "minimumSelections" : {
+            "format" : "int32",
+            "maximum" : 100,
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "name" : {
+            "maxLength" : 255,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "sortOrder" : {
+            "format" : "int32",
+            "minimum" : 0,
+            "type" : "integer"
+          }
+        },
+        "required" : [ "code", "containerVariantId", "locale", "maximumSelections", "minimumSelections", "name" ],
         "type" : "object"
       },
       "CreateLocationRequest" : {
@@ -5339,6 +5550,53 @@
           "version" : {
             "format" : "int32",
             "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "ModifierAttachmentResponse" : {
+        "properties" : {
+          "applicableFulfillmentModes" : {
+            "items" : {
+              "enum" : [ "DELIVERY", "PICKUP", "DINE_IN" ],
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "maximumSelectionsOverride" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "minimumSelectionsOverride" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "modifierGroupId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "ownerId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "ownerType" : {
+            "enum" : [ "PRODUCT", "VARIANT" ],
+            "type" : "string"
+          },
+          "requiredOverride" : {
+            "type" : "boolean"
+          },
+          "sortOrder" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "visibility" : {
+            "enum" : [ "VISIBLE", "HIDDEN_AUTO_SELECT" ],
+            "type" : "string"
           }
         },
         "type" : "object"
@@ -10058,7 +10316,7 @@
             "type" : "string"
           },
           "entityType" : {
-            "enum" : [ "CATALOG", "CATEGORY", "PRODUCT", "VARIANT", "MODIFIER_GROUP", "MODIFIER_OPTION", "FEE" ],
+            "enum" : [ "CATALOG", "CATEGORY", "PRODUCT", "VARIANT", "MODIFIER_GROUP", "MODIFIER_OPTION", "COMBO_GROUP", "COMBO_COMPONENT", "FEE" ],
             "type" : "string"
           },
           "locale" : {
@@ -10209,6 +10467,57 @@
           }
         },
         "required" : [ "requireClerkApproval" ],
+        "type" : "object"
+      },
+      "UpdateComboComponentRequest" : {
+        "properties" : {
+          "defaultQuantity" : {
+            "format" : "int32",
+            "maximum" : 100,
+            "minimum" : 1,
+            "type" : "integer"
+          },
+          "sortOrder" : {
+            "format" : "int32",
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "status" : {
+            "enum" : [ "DRAFT", "ACTIVE", "ARCHIVED" ],
+            "type" : "string"
+          }
+        },
+        "required" : [ "defaultQuantity", "status" ],
+        "type" : "object"
+      },
+      "UpdateComboGroupRequest" : {
+        "properties" : {
+          "allowSameComponentMultipleTimes" : {
+            "type" : "boolean"
+          },
+          "maximumSelections" : {
+            "format" : "int32",
+            "maximum" : 100,
+            "minimum" : 1,
+            "type" : "integer"
+          },
+          "minimumSelections" : {
+            "format" : "int32",
+            "maximum" : 100,
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "sortOrder" : {
+            "format" : "int32",
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "status" : {
+            "enum" : [ "DRAFT", "ACTIVE", "ARCHIVED" ],
+            "type" : "string"
+          }
+        },
+        "required" : [ "maximumSelections", "minimumSelections", "status" ],
         "type" : "object"
       },
       "UpdateLegalEntityRequest" : {
@@ -14386,6 +14695,260 @@
         "tags" : [ "Catalog authoring" ]
       }
     },
+    "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/combo-components/{componentId}" : {
+      "put" : {
+        "description" : "Requires If-Match carrying the component's version. Archiving a component is how it leaves a combo; nothing is deleted.",
+        "operationId" : "updateComponent",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "componentId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/UpdateComboComponentRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ComboComponentResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Replace a combo component's quantity, order and status",
+        "tags" : [ "Composite products" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/combo-groups" : {
+      "post" : {
+        "description" : "One choice a combo asks the customer to make. The container variant is never priced or sold directly; an order for it becomes one ordinary line per selected component. A variant that is already a component of another combo cannot become a container (no nested combos): 422 with findingCode COMBO_NESTING_FORBIDDEN. A range that cannot be completed is refused with COMBO_GROUP_RANGE_INVALID; a range that merely exceeds the components added so far is accepted here and rejected at publication, like a modifier group.",
+        "operationId" : "createComboGroup",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CreateComboGroupRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ComboGroupResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Create a combo group on a container variant",
+        "tags" : [ "Composite products" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/combo-groups/{comboGroupId}" : {
+      "get" : {
+        "operationId" : "readComboGroup",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "comboGroupId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ComboGroupResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "One combo group with its components",
+        "tags" : [ "Composite products" ]
+      },
+      "put" : {
+        "description" : "Requires If-Match carrying the group's version; a stale version is refused with STALE_VERSION. The code and the container are the group's identity and are not editable.",
+        "operationId" : "updateComboGroup",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "comboGroupId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/UpdateComboGroupRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ComboGroupResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Replace a combo group's selection range, repeat rule, order and status",
+        "tags" : [ "Composite products" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/combo-groups/{comboGroupId}/components" : {
+      "post" : {
+        "description" : "A component is a real dish or drink, classified once and usable in any number of combos. It cannot itself be a combo container (422, findingCode COMBO_NESTING_FORBIDDEN) and cannot be archived. Its price in a combo is a COMBO_COMPONENT price on a price book, set under pricing.author: until one exists the component blocks publication with COMBO_COMPONENT_HAS_NO_ACTIVE_PRICE.",
+        "operationId" : "addComponent",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "comboGroupId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/AddComboComponentRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ComboComponentResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Offer a variant inside a combo group",
+        "tags" : [ "Composite products" ]
+      }
+    },
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/export" : {
       "get" : {
         "description" : "Products, variants, categories and this import's own prices -- an operator's starting point for a correction, not a full price-book export. See CatalogImportService#export's own doc for the price scope limitation.",
@@ -15136,7 +15699,7 @@
           "name" : "entityType",
           "required" : true,
           "schema" : {
-            "enum" : [ "CATALOG", "CATEGORY", "PRODUCT", "VARIANT", "MODIFIER_GROUP", "MODIFIER_OPTION", "FEE" ],
+            "enum" : [ "CATALOG", "CATEGORY", "PRODUCT", "VARIANT", "MODIFIER_GROUP", "MODIFIER_OPTION", "COMBO_GROUP", "COMBO_COMPONENT", "FEE" ],
             "type" : "string"
           }
         }, {
@@ -15202,7 +15765,7 @@
           "name" : "entityType",
           "required" : true,
           "schema" : {
-            "enum" : [ "CATALOG", "CATEGORY", "PRODUCT", "VARIANT", "MODIFIER_GROUP", "MODIFIER_OPTION", "FEE" ],
+            "enum" : [ "CATALOG", "CATEGORY", "PRODUCT", "VARIANT", "MODIFIER_GROUP", "MODIFIER_OPTION", "COMBO_GROUP", "COMBO_COMPONENT", "FEE" ],
             "type" : "string"
           }
         }, {
@@ -16144,6 +16707,69 @@
         "tags" : [ "Catalog authoring" ]
       }
     },
+    "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/products/{productId}/modifier-groups/{groupId}/overrides" : {
+      "put" : {
+        "description" : "Visibility (VISIBLE, or HIDDEN_AUTO_SELECT for a charge the server applies without showing the customer), the fulfilment modes a hidden group applies to (null = every mode), and this product's own required/minimum/maximum -- each null meaning 'use the shared group's value'. The shared group is never edited from here: another product attaching it is unaffected. Requires If-Match carrying the attachment's version.",
+        "operationId" : "setProductAttachmentPolicy",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "productId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "groupId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/AttachmentPolicyRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ModifierAttachmentResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Set how a product offers an attached modifier group",
+        "tags" : [ "Composite products" ]
+      }
+    },
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/products/{productId}/recommendations" : {
       "get" : {
         "description" : "Row 4.2h's own management list -- an operator must be able to see and detach a target even while it is stopped or hidden, which {@code effective} below deliberately will not show.",
@@ -16694,6 +17320,54 @@
         "tags" : [ "Catalog authoring" ]
       }
     },
+    "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/variants/{variantId}/combo-groups" : {
+      "get" : {
+        "description" : "Empty for a variant that is not a container, which is not an error.",
+        "operationId" : "comboGroupsOfVariant",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "variantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/ComboGroupResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Every combo group a container variant offers",
+        "tags" : [ "Composite products" ]
+      }
+    },
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/variants/{variantId}/fiscal-classification" : {
       "put" : {
         "description" : "ИКПУ/MXIK, package code, fiscal unit and fiscal name. All four are required by Click and Payme alike; publication reports a gap in any of them rather than refusing the menu, while ADR 0038's coverage tooling is still being built.",
@@ -16910,6 +17584,180 @@
         },
         "summary" : "Replaces one variant's weekly sale windows at one location",
         "tags" : [ "Catalog authoring" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/variants/{variantId}/modifier-groups" : {
+      "get" : {
+        "description" : "Variant-level attachments only, with their visibility and overrides. The product-level ones are on the product's detail.",
+        "operationId" : "variantAttachments",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "variantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/ModifierAttachmentResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The modifier groups attached to a variant itself",
+        "tags" : [ "Composite products" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/variants/{variantId}/modifier-groups/{groupId}" : {
+      "put" : {
+        "description" : "variant_modifier_groups has existed since ADR 0016 and nothing wrote it. This is what lets an option that links a variant offer that variant's own groups -- one level of nesting, ADR 0136. A variant-level attachment of a group wins over the product-level attachment of the same group. Idempotent on (variant, group): a second call re-sorts it.",
+        "operationId" : "attachToVariant",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "variantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "groupId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/AttachModifierGroupRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ModifierAttachmentResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Attach a modifier group to a variant",
+        "tags" : [ "Composite products" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/variants/{variantId}/modifier-groups/{groupId}/overrides" : {
+      "put" : {
+        "description" : "The variant-level twin of the product route, with the same body and rules; a variant-level policy wins over the product's for the same group.",
+        "operationId" : "setVariantAttachmentPolicy",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "variantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "groupId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/AttachmentPolicyRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ModifierAttachmentResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Set how a variant offers an attached modifier group",
+        "tags" : [ "Composite products" ]
       }
     },
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/conversations/flows" : {
@@ -17785,7 +18633,7 @@
           "name" : "priceableType",
           "required" : true,
           "schema" : {
-            "enum" : [ "VARIANT", "MODIFIER_OPTION" ],
+            "enum" : [ "VARIANT", "MODIFIER_OPTION", "COMBO_COMPONENT" ],
             "type" : "string"
           }
         }, {
@@ -18085,6 +18933,69 @@
           }
         },
         "summary" : "Apply a price book to one branch",
+        "tags" : [ "Price authoring" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/pricing/price-books/{priceBookId}/combo-component-prices/{componentId}" : {
+      "put" : {
+        "description" : "Keyed to the combo component -- the pairing of a group with a variant -- and not to the variant, so the same drink can be free in one combo and 3,000 som in another. Per unit of the component: the order line reads quantity x this price, which is also what gives each component its own ИКПУ line on the receipt. Integer minor units, zero allowed (free with the box). The combo's container variant is never priced. `If-Match` is optional, as on variant prices: given, it is checked against this row's own price version, `0` for a component not yet priced in this book.",
+        "operationId" : "setComboComponentPrice",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "priceBookId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "componentId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PriceRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PriceBookResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Set what a variant costs inside one combo (ADR 0136)",
         "tags" : [ "Price authoring" ]
       }
     },
@@ -26142,6 +27053,9 @@
   }, {
     "description" : "Read-only: which templates exist and what they configure (ADR 0008)",
     "name" : "Onboarding templates"
+  }, {
+    "description" : "Combo groups, components, and modifier attachment policy",
+    "name" : "Composite products"
   }, {
     "description" : "Reading back draft catalogs, products, categories, and modifier groups",
     "name" : "Catalog reads"

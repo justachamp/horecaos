@@ -1062,6 +1062,11 @@ export interface CohortResponse {
   size?: number;
 }
 
+export interface ComboPickBody {
+  componentId: string;
+  quantity?: number;
+}
+
 export interface CommentPresetChip {
   code?: string;
   labelEn?: string;
@@ -2532,8 +2537,10 @@ export interface LiftSuppressionResponse {
 }
 
 export interface LineBody {
+  comboPicks?: Array<ComboPickBody>;
   lineId: string;
   modifierOptionIds?: Array<string>;
+  nestedModifiers?: Array<NestedModifierBody>;
   quantity?: number;
   variantId: string;
 }
@@ -2864,6 +2871,11 @@ export interface MyWorkChannelMixResponse {
   channelMix?: Array<OrderMixSliceResponse>;
   periodFrom?: string;
   periodTo?: string;
+}
+
+export interface NestedModifierBody {
+  optionId: string;
+  parentOptionId: string;
 }
 
 export interface NewRateCardRequest {
@@ -3887,6 +3899,8 @@ export interface QuoteControllerAdjustmentResponse {
 }
 
 export interface QuoteControllerLineResponse {
+  comboContainerVariantId?: string;
+  comboSelectionId?: string;
   description?: string;
   finalAmountMinor?: number;
   lineId?: string;
@@ -3899,6 +3913,7 @@ export interface QuoteControllerLineResponse {
 export interface QuoteRequestBody {
   channel?: string;
   customerAccountId?: string;
+  fulfillmentMode?: "DELIVERY" | "PICKUP" | "DINE_IN";
   lines: Array<LineBody>;
   locationId: string;
 }

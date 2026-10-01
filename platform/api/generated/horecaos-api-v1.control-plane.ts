@@ -72,6 +72,12 @@ export interface AdapterVersionView {
   providerType?: string;
 }
 
+export interface AddComboComponentRequest {
+  componentVariantId: string;
+  defaultQuantity?: number;
+  sortOrder?: number;
+}
+
 export interface AddModifierOptionRequest {
   code: string;
   fiscal?: FiscalClassificationRequest;
@@ -172,6 +178,10 @@ export interface AttachMediaRequest {
   sortOrder?: number;
 }
 
+export interface AttachModifierGroupRequest {
+  sortOrder?: number;
+}
+
 export interface AttachPresetRequest {
   presetId: string;
   sortOrder?: number;
@@ -183,8 +193,22 @@ export interface AttachRecommendationRequest {
 }
 
 export interface AttachedModifierGroupView {
+  applicableFulfillmentModes?: Array<"DELIVERY" | "PICKUP" | "DINE_IN">;
   groupId?: string;
+  maximumSelectionsOverride?: number;
+  minimumSelectionsOverride?: number;
+  requiredOverride?: boolean;
   sortOrder?: number;
+  version?: number;
+  visibility?: "VISIBLE" | "HIDDEN_AUTO_SELECT";
+}
+
+export interface AttachmentPolicyRequest {
+  applicableFulfillmentModes?: Array<"DELIVERY" | "PICKUP" | "DINE_IN">;
+  maximumSelectionsOverride?: number;
+  minimumSelectionsOverride?: number;
+  requiredOverride?: boolean;
+  visibility: "VISIBLE" | "HIDDEN_AUTO_SELECT";
 }
 
 export interface AuditEventDetail {
@@ -440,7 +464,7 @@ export interface BulkOfferingStatusResponse {
 export interface BulkPriceChangeItemRequest {
   amountMinor?: number;
   priceableId: string;
-  priceableType: "VARIANT" | "MODIFIER_OPTION";
+  priceableType: "VARIANT" | "MODIFIER_OPTION" | "COMBO_COMPONENT";
 }
 
 export interface BulkPriceChangeItemResponse {
@@ -648,6 +672,29 @@ export interface CloposSettingsView {
   requireClerkApproval?: boolean;
 }
 
+export interface ComboComponentResponse {
+  comboGroupId?: string;
+  componentId?: string;
+  componentVariantId?: string;
+  defaultQuantity?: number;
+  sortOrder?: number;
+  status?: "DRAFT" | "ACTIVE" | "ARCHIVED";
+  version?: number;
+}
+
+export interface ComboGroupResponse {
+  allowSameComponentMultipleTimes?: boolean;
+  code?: string;
+  comboGroupId?: string;
+  components?: Array<ComboComponentResponse>;
+  containerVariantId?: string;
+  maximumSelections?: number;
+  minimumSelections?: number;
+  sortOrder?: number;
+  status?: "DRAFT" | "ACTIVE" | "ARCHIVED";
+  version?: number;
+}
+
 export interface CommentPresetControllerLocaleSetResponse {
   configured?: boolean;
   defaultLocale?: string;
@@ -843,6 +890,17 @@ export interface CreateChannelRequest {
   pricePlaneChannelId?: string;
   providerInstallationId?: string;
   systemType: string;
+}
+
+export interface CreateComboGroupRequest {
+  allowSameComponentMultipleTimes?: boolean;
+  code: string;
+  containerVariantId: string;
+  locale: string;
+  maximumSelections: number;
+  minimumSelections: number;
+  name: string;
+  sortOrder?: number;
 }
 
 export interface CreateLocationRequest {
@@ -1711,6 +1769,19 @@ export interface MigrationRunView {
   targetWatermark?: string;
   transformationVersion?: number;
   version?: number;
+}
+
+export interface ModifierAttachmentResponse {
+  applicableFulfillmentModes?: Array<"DELIVERY" | "PICKUP" | "DINE_IN">;
+  maximumSelectionsOverride?: number;
+  minimumSelectionsOverride?: number;
+  modifierGroupId?: string;
+  ownerId?: string;
+  ownerType?: "PRODUCT" | "VARIANT";
+  requiredOverride?: boolean;
+  sortOrder?: number;
+  version?: number;
+  visibility?: "VISIBLE" | "HIDDEN_AUTO_SELECT";
 }
 
 export interface ModifierGroupDetailResponse {
@@ -3259,7 +3330,7 @@ export interface TransitionRequest {
 export interface TranslateRequest {
   description?: string;
   entityId: string;
-  entityType: "CATALOG" | "CATEGORY" | "PRODUCT" | "VARIANT" | "MODIFIER_GROUP" | "MODIFIER_OPTION" | "FEE";
+  entityType: "CATALOG" | "CATEGORY" | "PRODUCT" | "VARIANT" | "MODIFIER_GROUP" | "MODIFIER_OPTION" | "COMBO_GROUP" | "COMBO_COMPONENT" | "FEE";
   locale: string;
   name: string;
 }
@@ -3304,6 +3375,20 @@ export interface UpdateChannelRequest {
 
 export interface UpdateCloposSettingsRequest {
   requireClerkApproval: boolean;
+}
+
+export interface UpdateComboComponentRequest {
+  defaultQuantity: number;
+  sortOrder?: number;
+  status: "DRAFT" | "ACTIVE" | "ARCHIVED";
+}
+
+export interface UpdateComboGroupRequest {
+  allowSameComponentMultipleTimes?: boolean;
+  maximumSelections: number;
+  minimumSelections: number;
+  sortOrder?: number;
+  status: "DRAFT" | "ACTIVE" | "ARCHIVED";
 }
 
 export interface UpdateLegalEntityRequest {
@@ -3602,6 +3687,11 @@ export interface Operations {
   "channelExclusions": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/channels/{channelId}/exclusions"; request: { parameters: { path: { brandId: string; channelId: string; tenantId: string }; query: { locationId: string } } }; responses: { "200": ChannelExclusionsResponse } };
   "bulkSetChannelOffering": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/channels/{channelId}/exclusions/bulk"; request: { parameters: { path: { brandId: string; channelId: string; tenantId: string } }; body: BulkChannelOfferingRequest }; responses: { "200": BulkChannelOfferingResponse } };
   "setChannelOffering": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/channels/{channelId}/exclusions/variants/{variantId}"; request: { parameters: { path: { brandId: string; channelId: string; tenantId: string; variantId: string } }; body: SetChannelOfferingRequest }; responses: { "200": unknown } };
+  "updateComponent": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/combo-components/{componentId}"; request: { parameters: { path: { brandId: string; componentId: string; tenantId: string } }; body: UpdateComboComponentRequest }; responses: { "200": ComboComponentResponse } };
+  "createComboGroup": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/combo-groups"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: CreateComboGroupRequest }; responses: { "200": ComboGroupResponse } };
+  "readComboGroup": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/combo-groups/{comboGroupId}"; request: { parameters: { path: { brandId: string; comboGroupId: string; tenantId: string } } }; responses: { "200": ComboGroupResponse } };
+  "updateComboGroup": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/combo-groups/{comboGroupId}"; request: { parameters: { path: { brandId: string; comboGroupId: string; tenantId: string } }; body: UpdateComboGroupRequest }; responses: { "200": ComboGroupResponse } };
+  "addComponent": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/combo-groups/{comboGroupId}/components"; request: { parameters: { path: { brandId: string; comboGroupId: string; tenantId: string } }; body: AddComboComponentRequest }; responses: { "200": ComboComponentResponse } };
   "export_1": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/export"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { catalogId: string } } }; responses: { "200": string } };
   "classifyFee": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/fees/{feeCode}/fiscal-classification"; request: { parameters: { path: { brandId: string; feeCode: string; tenantId: string } }; body: FiscalClassificationRequest }; responses: { "200": CatalogAuthoringControllerIdResponse } };
   "bulkClassify": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/fiscal-classifications/bulk"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: BulkClassifyRequest }; responses: { "200": BulkClassifyResponse } };
@@ -3616,8 +3706,8 @@ export interface Operations {
   "variantsAtLocation": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/locations/{locationId}/variants"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string }; query: { cursor?: string; limit?: number; locale?: string; query?: string; search?: string; status?: string } } }; responses: { "200": PageVariantAvailabilityResponse } };
   "variantAvailabilityCounts": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/locations/{locationId}/variants/availability-counts"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string }; query: { locale?: string; search?: string } } }; responses: { "200": VariantAvailabilityCountsResponse } };
   "bulkSetOfferingStatus": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/locations/{locationId}/variants/bulk-offering-status"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } }; body: BulkOfferingStatusRequest }; responses: { "200": BulkOfferingStatusResponse } };
-  "detachMedia": { method: "DELETE"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/media/{entityType}/{entityId}/{assetId}"; request: { parameters: { path: { assetId: string; brandId: string; entityId: string; entityType: "CATALOG" | "CATEGORY" | "PRODUCT" | "VARIANT" | "MODIFIER_GROUP" | "MODIFIER_OPTION" | "FEE"; tenantId: string }; query: { channel?: string; role: string } } }; responses: { "200": unknown } };
-  "attachMedia": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/media/{entityType}/{entityId}/{assetId}"; request: { parameters: { path: { assetId: string; brandId: string; entityId: string; entityType: "CATALOG" | "CATEGORY" | "PRODUCT" | "VARIANT" | "MODIFIER_GROUP" | "MODIFIER_OPTION" | "FEE"; tenantId: string } }; body: AttachMediaRequest }; responses: { "200": unknown } };
+  "detachMedia": { method: "DELETE"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/media/{entityType}/{entityId}/{assetId}"; request: { parameters: { path: { assetId: string; brandId: string; entityId: string; entityType: "CATALOG" | "CATEGORY" | "PRODUCT" | "VARIANT" | "MODIFIER_GROUP" | "MODIFIER_OPTION" | "COMBO_GROUP" | "COMBO_COMPONENT" | "FEE"; tenantId: string }; query: { channel?: string; role: string } } }; responses: { "200": unknown } };
+  "attachMedia": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/media/{entityType}/{entityId}/{assetId}"; request: { parameters: { path: { assetId: string; brandId: string; entityId: string; entityType: "CATALOG" | "CATEGORY" | "PRODUCT" | "VARIANT" | "MODIFIER_GROUP" | "MODIFIER_OPTION" | "COMBO_GROUP" | "COMBO_COMPONENT" | "FEE"; tenantId: string } }; body: AttachMediaRequest }; responses: { "200": unknown } };
   "list_12": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/menus"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<MenuResponse> } };
   "create_9": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/menus"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: CreateMenuRequest }; responses: { "200": MenuResponse } };
   "listBindings": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/menus/bindings"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<BranchMenuBindingResponse> } };
@@ -3637,6 +3727,7 @@ export interface Operations {
   "product": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/products/{productId}"; request: { parameters: { path: { brandId: string; productId: string; tenantId: string } } }; responses: { "200": ProductDetailResponse } };
   "duplicateProduct": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/products/{productId}/duplicate"; request: { parameters: { path: { brandId: string; productId: string; tenantId: string } } }; responses: { "200": ProductResponse } };
   "attachModifierGroup": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/products/{productId}/modifier-groups/{groupId}"; request: { parameters: { path: { brandId: string; groupId: string; productId: string; tenantId: string } }; body: SortOrderRequest }; responses: { "200": unknown } };
+  "setProductAttachmentPolicy": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/products/{productId}/modifier-groups/{groupId}/overrides"; request: { parameters: { path: { brandId: string; groupId: string; productId: string; tenantId: string } }; body: AttachmentPolicyRequest }; responses: { "200": ModifierAttachmentResponse } };
   "recommendations": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/products/{productId}/recommendations"; request: { parameters: { path: { brandId: string; productId: string; tenantId: string }; query: { locale?: string } } }; responses: { "200": RecommendationListResponse } };
   "attachRecommendation": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/products/{productId}/recommendations"; request: { parameters: { path: { brandId: string; productId: string; tenantId: string } }; body: AttachRecommendationRequest }; responses: { "200": RecommendationResponse } };
   "effectiveRecommendations": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/products/{productId}/recommendations/effective"; request: { parameters: { path: { brandId: string; productId: string; tenantId: string }; query: { locale?: string; locationId: string } } }; responses: { "200": RecommendationListResponse } };
@@ -3648,10 +3739,14 @@ export interface Operations {
   "history_2": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/publications"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { limit?: number } } }; responses: { "200": Array<PublicationHistoryResponse> } };
   "rollback": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/publications/{publicationId}/activate"; request: { parameters: { path: { brandId: string; publicationId: string; tenantId: string } } }; responses: { "200": PublicationResponse } };
   "setTranslation": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/translations"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: TranslateRequest }; responses: { "200": unknown } };
+  "comboGroupsOfVariant": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/variants/{variantId}/combo-groups"; request: { parameters: { path: { brandId: string; tenantId: string; variantId: string } } }; responses: { "200": Array<ComboGroupResponse> } };
   "classifyVariant": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/variants/{variantId}/fiscal-classification"; request: { parameters: { path: { brandId: string; tenantId: string; variantId: string } }; body: FiscalClassificationRequest }; responses: { "200": unknown } };
   "setOffering": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/variants/{variantId}/location-offerings/{locationId}"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string; variantId: string } }; body: SetOfferingRequest }; responses: { "200": unknown } };
   "itemSaleSchedule": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/variants/{variantId}/location-offerings/{locationId}/sale-schedule"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string; variantId: string } } }; responses: { "200": ItemSaleScheduleResponse } };
   "replaceItemSaleSchedule": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/variants/{variantId}/location-offerings/{locationId}/sale-schedule"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string; variantId: string } }; body: ItemSaleScheduleRequest }; responses: { "200": ItemSaleScheduleResponse } };
+  "variantAttachments": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/variants/{variantId}/modifier-groups"; request: { parameters: { path: { brandId: string; tenantId: string; variantId: string } } }; responses: { "200": Array<ModifierAttachmentResponse> } };
+  "attachToVariant": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/variants/{variantId}/modifier-groups/{groupId}"; request: { parameters: { path: { brandId: string; groupId: string; tenantId: string; variantId: string } }; body: AttachModifierGroupRequest }; responses: { "200": ModifierAttachmentResponse } };
+  "setVariantAttachmentPolicy": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/variants/{variantId}/modifier-groups/{groupId}/overrides"; request: { parameters: { path: { brandId: string; groupId: string; tenantId: string; variantId: string } }; body: AttachmentPolicyRequest }; responses: { "200": ModifierAttachmentResponse } };
   "list_16": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/conversations/flows"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<FlowDocumentResponse> } };
   "author_1": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/conversations/flows/{flowKey}"; request: { parameters: { path: { brandId: string; flowKey: string; tenantId: string } }; body: AuthorFlowDocumentRequest }; responses: { "200": FlowDocumentResponse } };
   "list_11": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/delivery-tariffs"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<TariffSummaryResponse> } };
@@ -3669,12 +3764,13 @@ export interface Operations {
   "describeLocation": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/place"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } }; body: DescribeLocationRequest }; responses: { "200": LocationView } };
   "listPriceBooks": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/pricing/price-books"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<PriceBookSummaryResponse> } };
   "create_7": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/pricing/price-books"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: CreatePriceBookRequest }; responses: { "200": PriceBookResponse } };
-  "resolvedPrices": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/pricing/price-books/resolved/prices"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { channelId?: string; ids: Array<string>; locationId: string; priceableType: "VARIANT" | "MODIFIER_OPTION" } } }; responses: { "200": ResolvedPricesResponse } };
+  "resolvedPrices": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/pricing/price-books/resolved/prices"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { channelId?: string; ids: Array<string>; locationId: string; priceableType: "VARIANT" | "MODIFIER_OPTION" | "COMBO_COMPONENT" } } }; responses: { "200": ResolvedPricesResponse } };
   "read": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/pricing/price-books/{priceBookId}"; request: { parameters: { path: { brandId: string; priceBookId: string; tenantId: string } } }; responses: { "200": PriceBookResponse } };
   "activate_5": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/pricing/price-books/{priceBookId}/activation"; request: { parameters: { path: { brandId: string; priceBookId: string; tenantId: string } } }; responses: { "200": PriceBookResponse } };
   "assignToBrand": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/pricing/price-books/{priceBookId}/assignments/brand"; request: { parameters: { path: { brandId: string; priceBookId: string; tenantId: string } }; body: AssignmentRequest }; responses: { "200": PriceBookResponse } };
   "assignToChannel": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/pricing/price-books/{priceBookId}/assignments/channels/{channelId}"; request: { parameters: { path: { brandId: string; channelId: string; priceBookId: string; tenantId: string } }; body: AssignmentRequest }; responses: { "200": PriceBookResponse } };
   "assignToLocation": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/pricing/price-books/{priceBookId}/assignments/locations/{locationId}"; request: { parameters: { path: { brandId: string; locationId: string; priceBookId: string; tenantId: string } }; body: AssignmentRequest }; responses: { "200": PriceBookResponse } };
+  "setComboComponentPrice": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/pricing/price-books/{priceBookId}/combo-component-prices/{componentId}"; request: { parameters: { path: { brandId: string; componentId: string; priceBookId: string; tenantId: string } }; body: PriceRequest }; responses: { "200": PriceBookResponse } };
   "matrix": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/pricing/price-books/{priceBookId}/matrix"; request: { parameters: { path: { brandId: string; priceBookId: string; tenantId: string }; query: { categoryId?: string; cursor?: string; differsFromBase?: boolean; limit?: number; locale?: string } } }; responses: { "200": PagePriceBookMatrixRowResponse } };
   "setModifierOptionPrice": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/pricing/price-books/{priceBookId}/modifier-option-prices/{modifierOptionId}"; request: { parameters: { path: { brandId: string; modifierOptionId: string; priceBookId: string; tenantId: string } }; body: PriceRequest }; responses: { "200": PriceBookResponse } };
   "bulkApplyPrices": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/pricing/price-books/{priceBookId}/prices/bulk-apply"; request: { parameters: { path: { brandId: string; priceBookId: string; tenantId: string } }; body: BulkPriceChangeRequest }; responses: { "200": BulkPriceChangeResponse } };

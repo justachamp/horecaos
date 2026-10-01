@@ -3410,6 +3410,22 @@
         },
         "type" : "object"
       },
+      "ComboPickBody" : {
+        "properties" : {
+          "componentId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "quantity" : {
+            "exclusiveMinimum" : 0,
+            "format" : "int32",
+            "maximum" : 99,
+            "type" : "integer"
+          }
+        },
+        "required" : [ "componentId" ],
+        "type" : "object"
+      },
       "CommentPresetChip" : {
         "properties" : {
           "code" : {
@@ -8034,6 +8050,14 @@
       },
       "LineBody" : {
         "properties" : {
+          "comboPicks" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ComboPickBody"
+            },
+            "maxItems" : 40,
+            "minItems" : 0,
+            "type" : "array"
+          },
           "lineId" : {
             "maxLength" : 64,
             "minLength" : 0,
@@ -8043,6 +8067,14 @@
             "items" : {
               "format" : "uuid",
               "type" : "string"
+            },
+            "maxItems" : 20,
+            "minItems" : 0,
+            "type" : "array"
+          },
+          "nestedModifiers" : {
+            "items" : {
+              "$ref" : "#/components/schemas/NestedModifierBody"
             },
             "maxItems" : 20,
             "minItems" : 0,
@@ -9069,6 +9101,20 @@
             "type" : "string"
           }
         },
+        "type" : "object"
+      },
+      "NestedModifierBody" : {
+        "properties" : {
+          "optionId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "parentOptionId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "required" : [ "optionId", "parentOptionId" ],
         "type" : "object"
       },
       "NewRateCardRequest" : {
@@ -12292,6 +12338,14 @@
       },
       "QuoteControllerLineResponse" : {
         "properties" : {
+          "comboContainerVariantId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "comboSelectionId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
           "description" : {
             "type" : "string"
           },
@@ -12330,6 +12384,10 @@
           },
           "customerAccountId" : {
             "format" : "uuid",
+            "type" : "string"
+          },
+          "fulfillmentMode" : {
+            "enum" : [ "DELIVERY", "PICKUP", "DINE_IN" ],
             "type" : "string"
           },
           "lines" : {
