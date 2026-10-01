@@ -30,7 +30,9 @@ import org.testcontainers.DockerClientFactory;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.catalog.api.ChannelOfferingLookup;
 import uz.horecaos.platform.configuration.rls.TenantRlsSession;
+import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.inventory.api.AvailabilityDecision;
+import uz.horecaos.platform.inventory.api.BusinessDayWindows;
 import uz.horecaos.platform.inventory.api.ChannelContext;
 import uz.horecaos.platform.inventory.api.InventoryStopChanged;
 import uz.horecaos.platform.inventory.api.ReservationResult;
@@ -44,6 +46,11 @@ import uz.horecaos.platform.inventory.application.AvailabilityStopService.StopOu
 import uz.horecaos.platform.inventory.application.AvailabilityStopService.StopTargetNotFoundException;
 import uz.horecaos.platform.inventory.application.AvailabilityStopService.StopsFrozenException;
 import uz.horecaos.platform.inventory.application.InventoryService;
+import uz.horecaos.platform.inventory.application.InventoryStopGestureService;
+import uz.horecaos.platform.inventory.application.InventoryStopGestureService.Gesture;
+import uz.horecaos.platform.inventory.application.InventoryStopGestureService.GestureResult;
+import uz.horecaos.platform.inventory.application.InventoryStopGestureService.ItemOutcome;
+import uz.horecaos.platform.inventory.application.InventoryStopGestureService.ItemStatus;
 import uz.horecaos.platform.inventory.infrastructure.persistence.JdbcAvailabilityStopStore;
 import uz.horecaos.platform.inventory.infrastructure.persistence.JdbcAvailabilityStopStore.StopRow;
 import uz.horecaos.platform.inventory.infrastructure.persistence.JdbcInventoryStore;
@@ -662,6 +669,146 @@ class AvailabilityStopTests {
     }
 
     // -----------------------------------------------------------------------
+    // One gesture, many variants (InventoryStopGestureService)
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("a product-level stop is the variants the product has now, written under one group")
+    void aProductStopIsAGroupOfVariantStops() {
+        World w = world();
+        UUID product = UUID.randomUUID();
+        catalog.productHas(product, List.of(w.variantA, w.variantB));
+
+        GestureResult result = gestures(utc()).apply(gesture(w, null, product, StopScopeType.BRAND, null, false));
+
+        assertThat(result.items()).extracting(ItemOutcome::status).containsOnly(ItemStatus.APPLIED);
+        assertThat(jdbc.sql("SELECT DISTINCT group_id FROM inventory.availability_stops")
+                        .query(UUID.class)
+                        .list())
+                .as("one gesture is one group, however many variants it expanded to")
+                .containsExactly(result.groupId());
+        assertThat(jdbc.sql("SELECT variant_id FROM inventory.availability_stops")
+                        .query(UUID.class)
+                        .list())
+                .containsExactlyInAnyOrder(w.variantA, w.variantB);
+        assertThat(sellable(w, w.locationOne, w.web, w.variantA)).isFalse();
+        assertThat(sellable(w, w.locationTwo, w.web, w.variantB)).isFalse();
+    }
+
+    @Test
+    @DisplayName("a malformed gesture is refused once, before anything is written")
+    void aMalformedGestureWritesNothing() {
+        World w = world();
+        UUID product = UUID.randomUUID();
+        catalog.productHas(product, List.of(w.variantA));
+        InventoryStopGestureService service = gestures(utc());
+
+        assertThatThrownBy(
+                        () -> service.apply(gesture(w, List.of(w.variantA), product, StopScopeType.BRAND, null, false)))
+                .as("a list and a product at once")
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> service.apply(gesture(w, null, null, StopScopeType.BRAND, null, false)))
+                .as("neither a list nor a product")
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> service.apply(gesture(w, null, UUID.randomUUID(), StopScopeType.BRAND, null, false)))
+                .as("a product with no variants")
+                .isInstanceOf(IllegalArgumentException.class);
+        List<UUID> tooMany = java.util.stream.Stream.generate(UUID::randomUUID)
+                .limit(InventoryStopGestureService.MAX_ITEMS + 1L)
+                .toList();
+        assertThatThrownBy(() -> service.apply(gesture(w, tooMany, null, StopScopeType.BRAND, null, false)))
+                .as("over the cap")
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining(String.valueOf(InventoryStopGestureService.MAX_ITEMS));
+        assertThatThrownBy(
+                        () -> service.apply(gesture(w, List.of(w.variantA), null, StopScopeType.TERMINAL, null, false)))
+                .as("TERMINAL is a named, refused scope")
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> service.apply(gesture(
+                        w,
+                        List.of(w.variantA),
+                        null,
+                        StopScopeType.BRAND,
+                        clock.instant().plusSeconds(3600),
+                        true)))
+                .as("an explicit end and the end of the trading day")
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> service.apply(gesture(
+                        w,
+                        List.of(w.variantA),
+                        null,
+                        StopScopeType.BRAND,
+                        clock.instant().minusSeconds(1),
+                        false)))
+                .as("an end already in the past")
+                .isInstanceOf(IllegalArgumentException.class);
+
+        assertThat(count("inventory.availability_stops"))
+                .as("nothing was written")
+                .isZero();
+    }
+
+    @Test
+    @DisplayName("one unknown variant is reported on its own row and never rolls back the others")
+    void oneBadVariantDoesNotRollBackTheRestOfTheGesture() {
+        World w = world();
+        UUID stranger = UUID.randomUUID();
+
+        GestureResult result = gestures(utc())
+                .apply(gesture(w, List.of(w.variantA, stranger, w.variantB), null, StopScopeType.BRAND, null, false));
+
+        assertThat(result.items())
+                .extracting(item -> item.variantId() + ":" + item.status() + ":" + item.problemCode())
+                .containsExactly(
+                        w.variantA + ":APPLIED:null",
+                        stranger + ":FAILED:TARGET_NOT_FOUND",
+                        w.variantB + ":APPLIED:null");
+        assertThat(count("inventory.availability_stops"))
+                .as("the two real variants were stopped")
+                .isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("a frozen tenant refuses the whole gesture with STOPS_FROZEN, not item by item")
+    void aFrozenTenantRefusesTheWholeGesture() {
+        World w = world();
+        configuration.put("inventory.stops.creation_enabled", false);
+        rebuild();
+
+        assertThatThrownBy(() -> gestures(utc())
+                        .apply(gesture(w, List.of(w.variantA, w.variantB), null, StopScopeType.BRAND, null, false)))
+                .isInstanceOf(StopsFrozenException.class);
+        assertThat(count("inventory.availability_stops")).isZero();
+    }
+
+    @Test
+    @DisplayName("until the end of the trading day is the tenant's own boundary, not midnight UTC")
+    void endOfTheTradingDayIsTheTenantsBoundary() {
+        World w = world();
+
+        gestures(utc()).apply(gesture(w, List.of(w.variantA), null, StopScopeType.BRAND, null, true));
+        assertThat(endsAtOfOnlyStop())
+                .as("a plain calendar day: 09:00 on the first ends at midnight")
+                .isEqualTo(Instant.parse("2026-10-02T00:00:00Z"));
+
+        // A restaurant that trades past midnight rolls its day over at 04:00.
+        jdbc.sql("DELETE FROM inventory.availability_stops").update();
+        BusinessDayWindows rollover04 =
+                (tenantId, at) -> java.time.LocalDate.ofInstant(at.minus(Duration.ofHours(4)), ZoneOffset.UTC);
+        gestures(rollover04).apply(gesture(w, List.of(w.variantA), null, StopScopeType.BRAND, null, true));
+        assertThat(endsAtOfOnlyStop())
+                .as("09:00 on the first is in the business day that ends at 04:00 on the second")
+                .isEqualTo(Instant.parse("2026-10-02T04:00:00Z"));
+
+        // And the stop really does end there: it stops covering at the boundary, no sweeper needed.
+        assertThat(sellable(w, w.locationOne, w.web, w.variantA)).isFalse();
+        clock.advance(Duration.ofHours(19).plusMinutes(1));
+        assertThat(sellable(w, w.locationOne, w.web, w.variantA))
+                .as("past 04:00 the next morning the dish sells again")
+                .isTrue();
+    }
+
+    // -----------------------------------------------------------------------
     // Fixtures
     // -----------------------------------------------------------------------
 
@@ -849,6 +996,45 @@ class AvailabilityStopTests {
                 channel));
     }
 
+    private BusinessDayWindows utc() {
+        return (tenantId, at) -> at.atZone(ZoneOffset.UTC).toLocalDate();
+    }
+
+    private InventoryStopGestureService gestures(BusinessDayWindows businessDays) {
+        return new InventoryStopGestureService(stopService, catalog, businessDays, clock);
+    }
+
+    private Gesture gesture(
+            World w,
+            @Nullable List<UUID> variantIds,
+            @Nullable UUID productId,
+            StopScopeType scope,
+            @Nullable Instant endsAt,
+            boolean untilEndOfTradingDay) {
+        return new Gesture(
+                w.tenant(),
+                w.brand(),
+                scope,
+                null,
+                null,
+                null,
+                variantIds,
+                productId,
+                "RECALL",
+                endsAt,
+                untilEndOfTradingDay,
+                StopSource.OPERATOR,
+                "op-1",
+                Capability.INVENTORY_STOP_MANAGE);
+    }
+
+    private Instant endsAtOfOnlyStop() {
+        return jdbc.sql("SELECT ends_at FROM inventory.availability_stops")
+                .query((row, number) ->
+                        row.getObject("ends_at", java.time.OffsetDateTime.class).toInstant())
+                .single();
+    }
+
     private String statusOfOnlyStop() {
         return jdbc.sql("SELECT status FROM inventory.availability_stops")
                 .query(String.class)
@@ -904,9 +1090,15 @@ class AvailabilityStopTests {
             return variantIds;
         }
 
+        private final Map<UUID, List<UUID>> products = new HashMap<>();
+
+        void productHas(UUID productId, List<UUID> variantIds) {
+            products.put(productId, variantIds);
+        }
+
         @Override
         public List<UUID> variantIdsOfProduct(UUID tenantId, UUID brandId, UUID productId) {
-            return List.of();
+            return products.getOrDefault(productId, List.of());
         }
     }
 
