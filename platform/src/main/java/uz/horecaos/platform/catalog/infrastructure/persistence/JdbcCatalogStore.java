@@ -773,11 +773,16 @@ public class JdbcCatalogStore {
 
     /**
      * What {@link #mergeFiscalClassification} did to one node: the row as it was
-     * (unclassified when it had none) and as it is now, or {@code after == null}
-     * when the merge would have left the row as it already was and wrote nothing.
+     * (unclassified when it had none), the row as it is now when the merge wrote
+     * something, and whether an incoming value met a different one already stored.
+     *
+     * @param after the row after the write, or {@code null} when nothing was written
+     * @param conflict an incoming value differed from a stored one, which is never
+     *     replaced; the node's gaps are not filled either unless the conflict only
+     *     showed up after the write (see {@link #mergeFiscalClassification})
      */
     public record FiscalMerge(
-            FiscalClassification before, @Nullable FiscalClassification after) {
+            FiscalClassification before, @Nullable FiscalClassification after, boolean conflict) {
 
         public boolean changed() {
             return after != null;
@@ -785,9 +790,15 @@ public class JdbcCatalogStore {
     }
 
     /**
-     * Lays the five value fields of {@code incoming} over what the node already
-     * holds (gap map row {@code 10.7c}): a field {@code incoming} supplies
-     * replaces the stored one, a field it omits keeps the stored one.
+     * Fills the gaps of a node's classification from {@code incoming} (gap map row
+     * {@code 10.7c}): a value {@code incoming} supplies goes into a field the node
+     * holds nothing in, a field it omits keeps what the node holds, and a value
+     * that differs from one the node already holds is never written — the merge
+     * reports a {@link FiscalMerge#conflict() conflict} instead. A backfill that
+     * pasted a neighbour's code one row too low, or a second operator filling the
+     * same gap from a list read before the first one saved, cannot replace a
+     * correct code this way. Changing a stored value is the node's own
+     * classification's job.
      *
      * <p>The constraint columns — marking, marking scheme, excise, alcohol
      * strength, age restriction — are not in the write at all, neither the insert
@@ -800,13 +811,15 @@ public class JdbcCatalogStore {
      * whole row», and {@link FiscalClassification#orInherited} means «take the
      * stricter of two constraints», the opposite of what an operator's edit does.
      *
-     * <p>The row is locked first so {@code before} is the row this write is laid
-     * over and a node named twice in one transaction merges in sequence. A node
-     * with no row has nothing to lock; if another transaction creates one in that
-     * gap the write still merges into it, and only {@code before} is out of date.
-     * A merge that changes nothing writes nothing — no version bump, no new
-     * {@code classified_at} — which is what lets a re-run of a half-finished paste
-     * be quiet.
+     * <p>The row is locked first, so the conflict check and {@code before} are
+     * made on the row this write is laid over and a node named twice in one
+     * transaction merges in sequence. A node with no row has nothing to lock; if
+     * another transaction creates one in that gap the write still only fills gaps
+     * (the stored value wins in the {@code DO UPDATE}), and the row it ended up
+     * with is read back to report a conflict the check could not see. A merge that
+     * changes nothing writes nothing — no version bump, no new {@code
+     * classified_at} — which is what lets a re-run of a half-finished paste be
+     * quiet.
      */
     public FiscalMerge mergeFiscalClassification(
             UUID tenantId,
@@ -816,22 +829,11 @@ public class JdbcCatalogStore {
             String source,
             @Nullable UUID actorId) {
 
-        FiscalClassification before = jdbc.sql("""
-                SELECT mxik_code, package_code, fiscal_unit_code, fiscal_name,
-                       barcode, marking_required, marking_scheme, excisable,
-                       alcohol_by_volume_bp, age_restriction_years
-                FROM catalog.fiscal_classifications
-                WHERE tenant_id = :tenantId AND brand_id = :brandId
-                  AND priceable_type = :priceableType AND priceable_id = :priceableId
-                FOR UPDATE
-                """)
-                .param("tenantId", tenantId)
-                .param("brandId", brandId)
-                .param("priceableType", node.type().name())
-                .param("priceableId", node.id())
-                .query((row, number) -> mapClassification(row))
-                .optional()
-                .orElseGet(FiscalClassification::unclassified);
+        FiscalClassification locked = classificationOf(tenantId, brandId, node, true);
+        FiscalClassification before = locked != null ? locked : FiscalClassification.unclassified();
+        if (locked != null && holdsADifferentValue(locked, incoming)) {
+            return new FiscalMerge(before, null, true);
+        }
 
         Map<String, Object> params = new HashMap<>();
         params.put("id", UUID.randomUUID());
@@ -858,11 +860,11 @@ public class JdbcCatalogStore {
                     :mxikCode, :packageCode, :fiscalUnitCode, :fiscalName, :barcode,
                     :source, :classifiedBy)
                 ON CONFLICT (priceable_type, priceable_id) DO UPDATE SET
-                    mxik_code = COALESCE(EXCLUDED.mxik_code, fc.mxik_code),
-                    package_code = COALESCE(EXCLUDED.package_code, fc.package_code),
-                    fiscal_unit_code = COALESCE(EXCLUDED.fiscal_unit_code, fc.fiscal_unit_code),
-                    fiscal_name = COALESCE(EXCLUDED.fiscal_name, fc.fiscal_name),
-                    barcode = COALESCE(EXCLUDED.barcode, fc.barcode),
+                    mxik_code = COALESCE(fc.mxik_code, EXCLUDED.mxik_code),
+                    package_code = COALESCE(fc.package_code, EXCLUDED.package_code),
+                    fiscal_unit_code = COALESCE(fc.fiscal_unit_code, EXCLUDED.fiscal_unit_code),
+                    fiscal_name = COALESCE(fc.fiscal_name, EXCLUDED.fiscal_name),
+                    barcode = COALESCE(fc.barcode, EXCLUDED.barcode),
                     source = EXCLUDED.source,
                     classified_by = EXCLUDED.classified_by,
                     classified_at = now(),
@@ -870,11 +872,11 @@ public class JdbcCatalogStore {
                     updated_at = now()
                 WHERE (fc.mxik_code, fc.package_code, fc.fiscal_unit_code, fc.fiscal_name, fc.barcode)
                     IS DISTINCT FROM (
-                        COALESCE(EXCLUDED.mxik_code, fc.mxik_code),
-                        COALESCE(EXCLUDED.package_code, fc.package_code),
-                        COALESCE(EXCLUDED.fiscal_unit_code, fc.fiscal_unit_code),
-                        COALESCE(EXCLUDED.fiscal_name, fc.fiscal_name),
-                        COALESCE(EXCLUDED.barcode, fc.barcode))
+                        COALESCE(fc.mxik_code, EXCLUDED.mxik_code),
+                        COALESCE(fc.package_code, EXCLUDED.package_code),
+                        COALESCE(fc.fiscal_unit_code, EXCLUDED.fiscal_unit_code),
+                        COALESCE(fc.fiscal_name, EXCLUDED.fiscal_name),
+                        COALESCE(fc.barcode, EXCLUDED.barcode))
                 RETURNING mxik_code, package_code, fiscal_unit_code, fiscal_name,
                           barcode, marking_required, marking_scheme, excisable,
                           alcohol_by_volume_bp, age_restriction_years
@@ -883,7 +885,49 @@ public class JdbcCatalogStore {
                 .query((row, number) -> mapClassification(row))
                 .optional()
                 .orElse(null);
-        return new FiscalMerge(before, after);
+
+        // With a row locked above, the check was made on the row that was written. Without
+        // one, another transaction may have created it first: what the statement left is
+        // then the only way to know whether it held a value this item meant to set.
+        boolean conflict = false;
+        if (locked == null) {
+            FiscalClassification current = after != null ? after : classificationOf(tenantId, brandId, node, false);
+            conflict = current != null && holdsADifferentValue(current, incoming);
+        }
+        return new FiscalMerge(before, after, conflict);
+    }
+
+    /** One node's classification, or {@code null} when it has no row; {@code lock} takes the row {@code FOR UPDATE}. */
+    private @Nullable FiscalClassification classificationOf(
+            UUID tenantId, UUID brandId, PriceableNode node, boolean lock) {
+        return jdbc.sql("""
+                SELECT mxik_code, package_code, fiscal_unit_code, fiscal_name,
+                       barcode, marking_required, marking_scheme, excisable,
+                       alcohol_by_volume_bp, age_restriction_years
+                FROM catalog.fiscal_classifications
+                WHERE tenant_id = :tenantId AND brand_id = :brandId
+                  AND priceable_type = :priceableType AND priceable_id = :priceableId
+                """ + (lock ? "FOR UPDATE" : ""))
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("priceableType", node.type().name())
+                .param("priceableId", node.id())
+                .query((row, number) -> mapClassification(row))
+                .optional()
+                .orElse(null);
+    }
+
+    /** Whether {@code stored} already holds, in a field {@code incoming} supplies, a value that differs from it. */
+    private static boolean holdsADifferentValue(FiscalClassification stored, FiscalClassification incoming) {
+        return differs(stored.mxikCode(), incoming.mxikCode())
+                || differs(stored.packageCode(), incoming.packageCode())
+                || differs(stored.fiscalUnitCode(), incoming.fiscalUnitCode())
+                || differs(stored.fiscalName(), incoming.fiscalName())
+                || differs(stored.barcode(), incoming.barcode());
+    }
+
+    private static boolean differs(@Nullable Object stored, @Nullable Object incoming) {
+        return stored != null && incoming != null && !stored.equals(incoming);
     }
 
     /** Every classified node in one brand, keyed by the node it classifies. */

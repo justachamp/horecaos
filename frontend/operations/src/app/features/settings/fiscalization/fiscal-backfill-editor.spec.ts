@@ -252,24 +252,38 @@ describe('FiscalBackfillEditor', () => {
     expect(byId('backfill-mxik-error-bare')).toBeNull();
   });
 
-  it('refuses to clear a code a dish already holds, because a backfill only fills gaps', async () => {
+  // A backfill fills gaps. A cell that already holds a code is shown as it is and
+  // cannot be edited: changing or removing a classification is the product
+  // editor's, and a paste that lands one row too low must not be able to write a
+  // neighbour's valid-looking code over a correct one.
+  it('shows a code a dish already holds as read-only, and leaves the empty cell beside it editable', async () => {
     await render([HALF]);
 
-    type('backfill-mxik-half', '');
-
-    expect(byId('backfill-mxik-error-half')?.textContent).toContain('cannot be cleared');
-    expect(byId('backfill-save') && (byId('backfill-save') as HTMLButtonElement).disabled).toBe(
-      true,
-    );
+    expect(input('backfill-mxik-half').readOnly).toBe(true);
+    expect(input('backfill-mxik-half').getAttribute('aria-readonly')).toBe('true');
+    expect(input('backfill-package-half').readOnly).toBe(false);
   });
 
-  it('forgets an edit typed back to what the dish already holds', async () => {
+  it('never makes an edit to a stored code, typed or cleared, sendable', async () => {
     await render([HALF]);
 
     type('backfill-mxik-half', MXIK_A);
+    type('backfill-mxik-half', '');
+
+    expect(byId('backfill-dirty-count')).toBeNull();
+    expect(byId('backfill-mxik-error-half')).toBeNull();
+    expect((byId('backfill-save') as HTMLButtonElement).disabled).toBe(true);
+    await save();
+    expect(api.backfillCodes).not.toHaveBeenCalled();
+  });
+
+  it('forgets an edit typed back to what the dish already holds', async () => {
+    await render([BARE]);
+
+    type('backfill-mxik-bare', MXIK_A);
     expect(byId('backfill-dirty-count')?.textContent).toContain('1 unsaved');
 
-    type('backfill-mxik-half', MXIK_B);
+    type('backfill-mxik-bare', '');
 
     expect(byId('backfill-dirty-count')).toBeNull();
     expect((byId('backfill-save') as HTMLButtonElement).disabled).toBe(true);
@@ -324,6 +338,44 @@ describe('FiscalBackfillEditor', () => {
 
     expect(byId('backfill-mxik-error-bare')).toBeNull();
     expect(byId('backfill-mxik-error-cola')?.textContent).toContain('exactly 17 digits');
+  });
+
+  it('fills a pasted column down around a stored code instead of writing over it', async () => {
+    await render([BARE, HALF, COLA]);
+
+    paste('backfill-mxik-bare', `${MXIK_A}\n${MXIK_A}\n${MXIK_A}`);
+
+    expect(input('backfill-mxik-bare').value).toBe(MXIK_A);
+    expect(input('backfill-mxik-half').value).toBe(MXIK_B);
+    expect(input('backfill-mxik-cola').value).toBe(MXIK_A);
+    expect(byId('backfill-dirty-count')?.textContent).toContain('2 unsaved');
+    expect(byId('backfill-paste-skipped')?.textContent).toContain('Pasted codes left out: 1');
+
+    await save();
+
+    expect(itemsOfCall(0)).toEqual([
+      { nodeId: 'bare', mxikCode: MXIK_A, packageCode: undefined },
+      { nodeId: 'cola', mxikCode: MXIK_A, packageCode: undefined },
+    ]);
+  });
+
+  it('fills only the empty half of a two-column paste that meets a half-classified dish', async () => {
+    await render([HALF]);
+
+    paste('backfill-mxik-half', `${MXIK_A}\t${PACKAGE_A}\n`);
+    await save();
+
+    expect(itemsOfCall(0)).toEqual([
+      { nodeId: 'half', mxikCode: undefined, packageCode: PACKAGE_A },
+    ]);
+  });
+
+  it('says nothing about a pasted cell that only repeats the stored code', async () => {
+    await render([BARE, HALF]);
+
+    paste('backfill-mxik-bare', `${MXIK_A}\n${MXIK_B}`);
+
+    expect(byId('backfill-paste-skipped')).toBeNull();
   });
 
   // ------------------------------------------------------- copy category default
@@ -450,6 +502,55 @@ describe('FiscalBackfillEditor', () => {
     expect(byId('backfill-summary')?.textContent).toContain('Saved 1');
     expect(byId('backfill-summary')?.textContent).toContain('not saved 1');
     expect(savedCount).toBe(1);
+  });
+
+  it('marks a row the platform refuses to overwrite, keeps the rest saved, and tells the page to reload', async () => {
+    api.backfillCodes.mockImplementation(async (_scope, items: readonly FiscalBackfillItem[]) =>
+      items.map((item) => ({
+        nodeType: 'VARIANT' as const,
+        nodeId: item.nodeId,
+        status: item.nodeId === 'cola' ? ('CONFLICT' as const) : ('CLASSIFIED' as const),
+      })),
+    );
+    await render([BARE, COLA]);
+
+    type('backfill-mxik-bare', MXIK_A);
+    type('backfill-mxik-cola', MXIK_B);
+    await save();
+
+    expect(byId('backfill-problem-cola')?.textContent).toContain('already holds a code');
+    expect(byId('backfill-problem-bare')).toBeNull();
+    expect(byId('backfill-summary')?.textContent).toContain('Saved 1');
+    expect(byId('backfill-summary')?.textContent).toContain('not saved 1');
+    expect(savedCount).toBe(1);
+  });
+
+  it('reloads the page when the only outcome is a conflict, because the list it showed is stale', async () => {
+    api.backfillCodes.mockImplementation(async (_scope, items: readonly FiscalBackfillItem[]) =>
+      items.map((item) => ({
+        nodeType: 'VARIANT' as const,
+        nodeId: item.nodeId,
+        status: 'CONFLICT' as const,
+      })),
+    );
+    await render([BARE]);
+
+    type('backfill-mxik-bare', MXIK_A);
+    await save();
+
+    expect(savedCount).toBe(1);
+  });
+
+  it('drops a pending edit once a reload shows the dish now holds that code', async () => {
+    await render([BARE]);
+
+    type('backfill-mxik-bare', MXIK_A);
+    fixture.componentRef.setInput('nodes', [variant('bare', { mxikCode: MXIK_B })]);
+    fixture.detectChanges();
+
+    expect(input('backfill-mxik-bare').value).toBe(MXIK_B);
+    expect(input('backfill-mxik-bare').readOnly).toBe(true);
+    expect(byId('backfill-dirty-count')).toBeNull();
   });
 
   it('counts a row the platform found already set, and does not treat it as a failure', async () => {

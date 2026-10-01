@@ -1468,7 +1468,7 @@ export const messagesEn = {
   'settings.fiscalization.classification.deliveryFee.submitting': 'Saving…',
   'settings.fiscalization.backfill.title': 'Fill in ИКПУ and package codes',
   'settings.fiscalization.backfill.lead':
-    '{count} dishes still lack an ИКПУ or a package code. Type each code, or copy a column from a spreadsheet and paste it into the first cell to fill down.',
+    '{count} dishes still lack an ИКПУ or a package code. Type each code, or copy a column from a spreadsheet and paste it into the first cell to fill down. A code a dish already holds is shown as it is and cannot be changed here; change it in the product editor.',
   'settings.fiscalization.backfill.referenceNote':
     'The official ИКПУ list is not imported yet, so a code is checked by format only (17 digits) and cannot be looked up by name. Unit code and fiscal name are set in the catalog’s fiscal workbench.',
   'settings.fiscalization.backfill.empty': 'Every dish has an ИКПУ and a package code.',
@@ -1486,13 +1486,15 @@ export const messagesEn = {
   'settings.fiscalization.backfill.saving': 'Saving…',
   'settings.fiscalization.backfill.error.mxik': 'An ИКПУ is exactly 17 digits.',
   'settings.fiscalization.backfill.error.packageCode': 'A package code is digits only, up to 10.',
-  'settings.fiscalization.backfill.error.clear':
-    'A code cannot be cleared here; change it in the product editor.',
+  'settings.fiscalization.backfill.pasteSkipped':
+    'Pasted codes left out: {count}. Those dishes already hold a code in that cell; change a stored code in the product editor.',
   'settings.fiscalization.backfill.invalidSkipped':
     '{count} rows have a code in the wrong format and were not sent. Fix the highlighted cells.',
   'settings.fiscalization.backfill.summary':
     'Saved {saved}, already set {unchanged}, not saved {failed}.',
   'settings.fiscalization.backfill.status.notFound': 'This dish no longer exists.',
+  'settings.fiscalization.backfill.status.conflict':
+    'This dish already holds a code that differs from yours; it was not changed. The list has been refreshed.',
   'settings.fiscalization.backfill.status.failed': 'Not saved. Try again.',
 
   // 10.9 Notifications

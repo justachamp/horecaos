@@ -1434,7 +1434,7 @@ export const messagesRu: MessageCatalogue = {
   'settings.fiscalization.classification.deliveryFee.submitting': 'Сохранение…',
   'settings.fiscalization.backfill.title': 'Заполнение ИКПУ и кодов упаковки',
   'settings.fiscalization.backfill.lead':
-    'У {count} блюд не хватает ИКПУ или кода упаковки. Введите коды вручную или скопируйте столбец из таблицы и вставьте в первую ячейку — значения встанут вниз по списку.',
+    'У {count} блюд не хватает ИКПУ или кода упаковки. Введите коды вручную или скопируйте столбец из таблицы и вставьте в первую ячейку — значения встанут вниз по списку. Уже заданный у блюда код показан как есть и здесь не меняется; измените его в редакторе товаров.',
   'settings.fiscalization.backfill.referenceNote':
     'Официальный справочник ИКПУ ещё не загружен, поэтому код проверяется только по формату (17 цифр), а искать его по названию нельзя. Единицу измерения и фискальное название задают в фискальном верстаке каталога.',
   'settings.fiscalization.backfill.empty': 'У всех блюд есть ИКПУ и код упаковки.',
@@ -1452,13 +1452,15 @@ export const messagesRu: MessageCatalogue = {
   'settings.fiscalization.backfill.saving': 'Сохранение…',
   'settings.fiscalization.backfill.error.mxik': 'ИКПУ — ровно 17 цифр.',
   'settings.fiscalization.backfill.error.packageCode': 'Код упаковки — только цифры, не больше 10.',
-  'settings.fiscalization.backfill.error.clear':
-    'Здесь код нельзя очистить; измените его в редакторе товаров.',
+  'settings.fiscalization.backfill.pasteSkipped':
+    'Вставленных кодов пропущено: {count}. В этих ячейках у блюд уже есть код; заданный код меняется в редакторе товаров.',
   'settings.fiscalization.backfill.invalidSkipped':
     'В строках ({count}) код в неверном формате, они не отправлены. Исправьте выделенные ячейки.',
   'settings.fiscalization.backfill.summary':
     'Сохранено: {saved}, уже заполнено: {unchanged}, не сохранено: {failed}.',
   'settings.fiscalization.backfill.status.notFound': 'Такого блюда больше нет.',
+  'settings.fiscalization.backfill.status.conflict':
+    'У блюда уже есть другой код; он не изменён. Список обновлён.',
   'settings.fiscalization.backfill.status.failed': 'Не сохранено. Повторите.',
 
   // 10.9 Уведомления

@@ -952,12 +952,17 @@ public class CatalogAuthoringService {
      * unit and a fiscal name and neither code — is exactly what a backfill
      * finds, and {@link BulkClassifyMode#REPLACE} would write the item over the
      * whole row: filling in the package code would blank the unit and the fiscal
-     * name someone entered earlier. Under MERGE a field the item supplies
-     * replaces the stored one and a field it omits keeps the stored one, and the
-     * constraints on marking, excise and age restriction are never touched (the
-     * controller refuses an item that sets them). An item that would leave the
-     * row as it is reports {@link BulkClassifyStatus#UNCHANGED} and writes
-     * nothing, so a re-run of a half-finished paste is quiet. Each node is merged
+     * name someone entered earlier. Under MERGE a field the item supplies fills
+     * a gap and a field it omits keeps the stored one, and the constraints on
+     * marking, excise and age restriction are never touched (the controller
+     * refuses an item that sets them). A value that differs from one the node
+     * already holds is never written: that item reports {@link
+     * BulkClassifyStatus#CONFLICT} and writes nothing for the node, so a pasted
+     * column that landed one row too low, or a second operator filling the same
+     * gap from a list read before the first saved, cannot replace a correct code.
+     * An item that would leave the row as it is reports {@link
+     * BulkClassifyStatus#UNCHANGED} and writes nothing, so a re-run of a
+     * half-finished paste is quiet. Each node is merged
      * by the store against the row as it is when that node is written ({@link
      * JdbcCatalogStore#mergeFiscalClassification}), never against a copy read at
      * the start of the batch, so a marking or age restriction another operator
@@ -1005,11 +1010,17 @@ public class CatalogAuthoringService {
             }
             FiscalClassification before;
             FiscalClassification after;
+            BulkClassifyStatus status = BulkClassifyStatus.CLASSIFIED;
             if (mode == BulkClassifyMode.MERGE) {
                 JdbcCatalogStore.FiscalMerge merge =
                         store.mergeFiscalClassification(tenantId, brandId, item.node(), fiscal, "MANUAL", actorId);
+                if (merge.conflict()) {
+                    status = BulkClassifyStatus.CONFLICT;
+                } else if (!merge.changed()) {
+                    status = BulkClassifyStatus.UNCHANGED;
+                }
                 if (!merge.changed()) {
-                    outcomes.add(new BulkClassifyOutcome(item.node(), BulkClassifyStatus.UNCHANGED));
+                    outcomes.add(new BulkClassifyOutcome(item.node(), status));
                     continue;
                 }
                 before = merge.before();
@@ -1023,7 +1034,7 @@ public class CatalogAuthoringService {
             String key = item.node().id().toString();
             beforeDoc.putIfAbsent(key, fiscalSummary(before));
             afterDoc.put(key, fiscalSummary(after));
-            outcomes.add(new BulkClassifyOutcome(item.node(), BulkClassifyStatus.CLASSIFIED));
+            outcomes.add(new BulkClassifyOutcome(item.node(), status));
         }
         if (!afterDoc.isEmpty()) {
             audit.record(AuditFact.of("catalog.fiscalClassification.bulkSet", AuditClass.BUSINESS)
@@ -1062,7 +1073,10 @@ public class CatalogAuthoringService {
     public enum BulkClassifyMode {
         /** The item becomes the node's whole classification. What the endpoint did before this enum. */
         REPLACE,
-        /** A field the item supplies replaces the stored one; a field it omits keeps the stored one. */
+        /**
+         * A field the item supplies fills a gap; a field it omits keeps the stored one, and a
+         * supplied value that differs from a stored one is a {@link BulkClassifyStatus#CONFLICT}.
+         */
         MERGE
     }
 
@@ -1074,7 +1088,14 @@ public class CatalogAuthoringService {
         /** The node id does not belong to this brand, or does not exist. */
         NOT_FOUND,
         /** A merge that would have left the node as it already is — nothing was written. */
-        UNCHANGED
+        UNCHANGED,
+        /**
+         * A merge item supplied a value for a field the node already holds with a
+         * different one. A merge only fills gaps, so nothing was written for the node;
+         * changing a stored value is {@link BulkClassifyMode#REPLACE}'s or the node's
+         * own classification's job.
+         */
+        CONFLICT
     }
 
     public record BulkClassifyOutcome(PriceableNode node, BulkClassifyStatus status) {}

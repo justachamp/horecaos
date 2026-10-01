@@ -507,6 +507,137 @@ class CatalogAuthoringServiceP21Tests {
         assertThat(row.get("age_restriction_years")).isEqualTo(21);
     }
 
+    /**
+     * A MERGE fills gaps. An item that supplies a different value for a field the
+     * row already holds is reported {@code CONFLICT} and writes nothing for that
+     * node, so a pasted column that landed one row too low cannot overwrite a
+     * correct code, and the rest of the batch is still applied.
+     */
+    @Test
+    @DisplayName("a MERGE never replaces a code the row already holds: a different one is a CONFLICT, "
+            + "nothing is written for that node, and the rest of the batch is still applied")
+    void mergeDoesNotReplaceAStoredCode() {
+        UUID catalogId = authoring.createCatalog(TENANT, BRAND, "MAIN", "Asosiy menyu", LOCALE);
+        UUID held = authoring
+                .createProduct(
+                        TENANT,
+                        BRAND,
+                        catalogId,
+                        "WINE",
+                        "Sharob",
+                        null,
+                        LOCALE,
+                        "SKU-WINE",
+                        "PIECE",
+                        FiscalClassification.of("10101001001000000", null, 796, "Sharob"),
+                        ACTOR)
+                .defaultVariantId();
+        UUID bare = authoring
+                .createProduct(
+                        TENANT,
+                        BRAND,
+                        catalogId,
+                        "TEA",
+                        "Choy",
+                        null,
+                        LOCALE,
+                        "SKU-TEA",
+                        "PIECE",
+                        FiscalClassification.unclassified(),
+                        ACTOR)
+                .defaultVariantId();
+        Integer versionBefore = jdbc.sql("SELECT version FROM catalog.fiscal_classifications WHERE variant_id = :id")
+                .param("id", held)
+                .query(Integer.class)
+                .single();
+
+        List<BulkClassifyOutcome> outcomes = authoring.bulkClassify(
+                TENANT,
+                BRAND,
+                List.of(
+                        new BulkClassifyItem(
+                                PriceableNode.variant(held),
+                                FiscalClassification.of("20202002002000000", "1234567", null, null)),
+                        new BulkClassifyItem(
+                                PriceableNode.variant(bare),
+                                FiscalClassification.of("20202002002000000", "1234567", null, null))),
+                BulkClassifyMode.MERGE,
+                ACTOR,
+                ACTOR_SUBJECT);
+
+        assertThat(outcomes)
+                .extracting(BulkClassifyOutcome::status)
+                .containsExactly(BulkClassifyStatus.CONFLICT, BulkClassifyStatus.CLASSIFIED);
+        Map<String, Object> row = jdbc.sql("""
+                SELECT mxik_code, package_code, version FROM catalog.fiscal_classifications WHERE variant_id = :id
+                """).param("id", held).query().singleRow();
+        assertThat(row.get("mxik_code")).as("the stored code survives").isEqualTo("10101001001000000");
+        assertThat(row.get("package_code"))
+                .as("nothing is written for a node that conflicts, not even its gap")
+                .isNull();
+        assertThat(row.get("version")).isEqualTo(versionBefore);
+        assertThat(jdbc.sql("SELECT mxik_code FROM catalog.fiscal_classifications WHERE variant_id = :id")
+                        .param("id", bare)
+                        .query(String.class)
+                        .single())
+                .isEqualTo("20202002002000000");
+    }
+
+    /**
+     * Two operators fill the same gap: the second one's merge runs into the first
+     * one's uncommitted write, waits, and then must see the first one's code
+     * rather than overwrite it.
+     */
+    @Test
+    @DisplayName("a MERGE that meets a code another operator fills concurrently reports a CONFLICT "
+            + "instead of overwriting it")
+    void mergeDoesNotOverwriteACodeFilledConcurrently() throws Exception {
+        UUID catalogId = authoring.createCatalog(TENANT, BRAND, "MAIN", "Asosiy menyu", LOCALE);
+        UUID variantId = authoring
+                .createProduct(
+                        TENANT,
+                        BRAND,
+                        catalogId,
+                        "WINE",
+                        "Sharob",
+                        null,
+                        LOCALE,
+                        "SKU-WINE",
+                        "PIECE",
+                        FiscalClassification.of(null, "1234567", 796, "Sharob"),
+                        ACTOR)
+                .defaultVariantId();
+        List<BulkClassifyItem> items = List.of(new BulkClassifyItem(
+                PriceableNode.variant(variantId), FiscalClassification.of("20202002002000000", null, null, null)));
+
+        List<BulkClassifyOutcome> outcomes;
+        try (Connection other = db.dataSource().getConnection()) {
+            other.setAutoCommit(false);
+            try (var statement = other.createStatement()) {
+                statement.executeUpdate("""
+                        UPDATE catalog.fiscal_classifications
+                        SET mxik_code = '10101001001000000'
+                        WHERE variant_id = '%s'
+                        """.formatted(variantId));
+            }
+            CompletableFuture<List<BulkClassifyOutcome>> merge = CompletableFuture.supplyAsync(
+                    () -> authoring.bulkClassify(TENANT, BRAND, items, BulkClassifyMode.MERGE, ACTOR, ACTOR_SUBJECT));
+            awaitSomeoneWaitingOnARowLock(Duration.ofSeconds(5));
+            other.commit();
+            outcomes = merge.get(30, TimeUnit.SECONDS);
+        }
+
+        assertThat(outcomes)
+                .singleElement()
+                .satisfies(o -> assertThat(o.status()).isEqualTo(BulkClassifyStatus.CONFLICT));
+        assertThat(jdbc.sql("SELECT mxik_code FROM catalog.fiscal_classifications WHERE variant_id = :id")
+                        .param("id", variantId)
+                        .query(String.class)
+                        .single())
+                .as("the code the other operator filled first stays")
+                .isEqualTo("10101001001000000");
+    }
+
     @Test
     @DisplayName("a MERGE that adds nothing to what the row holds is UNCHANGED and does not touch its version")
     void mergeThatAddsNothingIsUnchangedAndWritesNothing() {

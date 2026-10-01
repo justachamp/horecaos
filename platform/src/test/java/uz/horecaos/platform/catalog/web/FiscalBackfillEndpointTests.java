@@ -319,6 +319,22 @@ class FiscalBackfillEndpointTests {
     }
 
     @Test
+    @DisplayName("a MERGE item that carries a different code than the node holds is a CONFLICT, writes nothing, "
+            + "and does not stop the rows after it")
+    void mergeNeverReplacesAStoredCode() throws Exception {
+        Object versionBefore = row(HALF).get("version");
+
+        String body = bulk("MERGE", item(HALF, MXIK_NEW, PACKAGE_NEW), item(BARE, MXIK_NEW, PACKAGE_NEW));
+
+        assertThat(statuses(body)).containsExactly("CONFLICT", "CLASSIFIED");
+        Map<String, Object> half = row(HALF);
+        assertThat(half.get("mxik_code")).as("the stored code stays").isEqualTo(MXIK_B);
+        assertThat(half.get("package_code")).as("not even the gap is filled").isNull();
+        assertThat(half.get("version")).isEqualTo(versionBefore);
+        assertThat(row(BARE).get("mxik_code")).isEqualTo(MXIK_NEW);
+    }
+
+    @Test
     @DisplayName("a MERGE batch that names a node twice applies the two in sequence")
     void aNodeNamedTwiceIsMergedInSequence() throws Exception {
         String body = bulk("MERGE", item(BARE, MXIK_NEW, null), item(BARE, null, PACKAGE_NEW));

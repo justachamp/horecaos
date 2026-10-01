@@ -143,7 +143,8 @@ export interface FiscalBackfillItem {
 }
 
 /** Mirrors `CatalogAuthoringService.BulkClassifyStatus`. */
-export type FiscalBackfillStatus = 'CLASSIFIED' | 'UNCHANGED' | 'SKIPPED_EMPTY' | 'NOT_FOUND';
+export type FiscalBackfillStatus =
+  'CLASSIFIED' | 'UNCHANGED' | 'SKIPPED_EMPTY' | 'NOT_FOUND' | 'CONFLICT';
 
 /** Mirrors `CatalogAuthoringController.BulkClassifyOutcomeResponse`. */
 export interface FiscalBackfillOutcome {
@@ -414,10 +415,12 @@ export class FiscalizationApi {
   /**
    * Writes ИКПУ and package codes for a batch of variants through
    * `CatalogAuthoringController.bulkClassify` in `MERGE` mode (gap map row
-   * 10.7c): a code a row supplies replaces the stored one and a code it omits
-   * keeps the stored one, so completing a half-classified dish cannot blank
-   * the unit or fiscal name someone entered earlier. One outcome per row, in
-   * the order sent; a bad row does not fail the others. The caller batches —
+   * 10.7c): a code a row supplies fills the dish's gap and a code it omits keeps
+   * the stored one, so completing a half-classified dish cannot blank the unit
+   * or fiscal name someone entered earlier. A code that differs from one the
+   * dish already holds is never written: that row comes back `CONFLICT` and
+   * nothing is written for it. One outcome per row, in the order sent; a bad
+   * row does not fail the others. The caller batches —
    * one call is one intent, and one `Idempotency-Key`.
    */
   async backfillCodes(
