@@ -125,4 +125,28 @@ describe('LatenessPolicyApi: the tenant late colour', () => {
     expect(policy).toBe(PLATFORM_DEFAULT_LATENESS_POLICY);
     expect(policy.lateColour ?? null).toBeNull();
   });
+
+  it('says there was no answer, instead of answering with the fallback, when the read fails (tryResolve)', async () => {
+    TestBed.configureTestingModule({
+      providers: [
+        {
+          provide: ApiClient,
+          useValue: { get: vi.fn().mockReturnValue(throwError(() => new Error('offline'))) },
+        },
+      ],
+    });
+
+    expect(await TestBed.inject(LatenessPolicyApi).tryResolve(SCOPE)).toBeNull();
+  });
+
+  it('says there was no answer for a malformed payload too, and still answers a good one (tryResolve)', async () => {
+    expect(
+      await apiReturning({ value: { delivery: 'soon' }, version: null }).tryResolve(SCOPE),
+    ).toBeNull();
+    TestBed.resetTestingModule();
+
+    const policy = await apiReturning(wire()).tryResolve(SCOPE);
+
+    expect(policy?.delivery.atRiskBeforeSeconds).toBe(600);
+  });
 });

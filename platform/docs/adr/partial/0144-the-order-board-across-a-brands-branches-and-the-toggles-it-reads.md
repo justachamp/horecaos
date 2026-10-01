@@ -11,8 +11,10 @@
   model; `late`, `problem`, `callbackRequested` and `fiscalStatus` are the four
   secondary toggles orders.md §2.4 marks not read by ordering, all four now read;
   `ISSUE_INVOICE` is emitted for an order whose payment projection is `PENDING`
-  when the caller holds `PAYMENT_INITIATE` at tenant scope, and the existing
-  `POST .../payment/re-presentations` writes an audit fact. Console: «Все филиалы»
+  **and** whose live payment intent can be presented (open, provider tender,
+  seller set, no attempt in doubt), when the caller holds `PAYMENT_INITIATE` at
+  tenant scope, and the existing `POST .../payment/re-presentations` writes an
+  audit fact before the checkout is opened and another after it. Console: «Все филиалы»
   with a Филиал column and filter, the binding select, the toggles, the fiscal
   select and the header/row «Выставить счёт». Not built: bulk actions across
   branches (the selection column is withheld on «Все филиалы»), a `BRAND`-scoped
@@ -86,22 +88,53 @@ browser.
 
 4. **The four toggles are read in the statement.** `late` resolves the
    `ordering.lateness` policy (ADR 0030) for each branch in scope and applies
-   `OrderLatenessPolicy`'s rule as a predicate — a test holds the SQL to
-   `OrderLatenessPolicy.evaluate`. `problem` is an `EXISTS` over
+   `OrderLatenessPolicy`'s rule as a predicate —
+   `OrderBoardTogglesQueryTests#theLateFilterAgreesWithTheDomainRule` holds the
+   SQL to `OrderLatenessPolicy.evaluate`. `problem` is an `EXISTS` over
    `ordering.order_process_states`. `callbackRequested` reads `callback_requested`
    (V0029). `fiscalStatus` is an `EXISTS` over `fiscal.fiscal_documents` — a
    fourth cross-schema read beside ADR 0102's three, under the same rule (a read
    model and a read permission; no ordering write path gains a cross-schema
    statement).
 
-5. **`ISSUE_INVOICE` is emitted where the existing endpoint can succeed.** The
-   order's payment projection is `PENDING` (checkout writes it only for a
-   payment-first order), the order has not ended, and the caller holds
-   `PAYMENT_INITIATE` **at tenant scope** — the scope the endpoint declares — so
-   a location-scoped answer never offers a button the endpoint would refuse. The
-   endpoint records `payment.checkout_reissued` (business class, scoped to the
-   order's branch, the provider, the presentation kind and *that* a recipient was
-   named — never the phone or the link) and accepts an optional `reason`.
+5. **`ISSUE_INVOICE` is emitted where the existing endpoint can succeed.** Three
+   facts, and the payment projection is only the first: the order's
+   `payment_status_projection` is `PENDING` (checkout writes it only for a
+   payment-first order) and the order has not ended; **the order's live payment
+   intent can be presented** — open (`PENDING`/`AUTHORIZING`), a provider tender
+   with a seller, and none of its attempts in a state
+   `PaymentAttemptStatus.rePresentable()` forbids (`UNCERTAIN`); and the caller
+   holds `PAYMENT_INITIATE` **at tenant scope**, the scope the endpoint declares,
+   so a location-scoped answer never offers a button the endpoint would refuse.
+
+   The projection cannot decide alone. `PaymentAttemptService.applyToIntent`
+   publishes nothing to it for an attempt that expired or whose outcome is
+   uncertain, so a Payme reservation that ages out leaves the order in
+   `PAYMENT_AUTHORIZING` with the projection still `PENDING` and the intent
+   `EXPIRED` — where the endpoint answers `404 NO_PAYMENT_INTENT` (and
+   `409 PAYMENT_IN_DOUBT` for an uncertain attempt). The intent is read through
+   `PaymentIntentPort.ordersWithPresentablePayment`, one call per page of rows and
+   only for rows whose projection is `PENDING` and which have not ended, so
+   `ordering` still joins no `payments` table for a second field on a row (the
+   `ActiveCourierAssignmentsPort` shape). Whether the seller's merchant account
+   still resolves today (`BINDING_UNAVAILABLE`, `BINDING_CHANGED`) is not known
+   from rows and is left to the endpoint's own refusal.
+
+   The endpoint accepts an optional `reason` and writes two business-class facts,
+   scoped to the order's branch and carrying *that* a recipient was named — never
+   the phone or the link. Opening the checkout is an external effect (a link, or
+   an invoice pushed to a phone) that no transaction takes back, so ADR 0027's
+   "an audit failure fails the action" is kept by ordering the writes rather than
+   by sharing a transaction: `payment.checkout_reissue_requested` (the requested
+   presentation kind) is written **before** the checkout is opened, so an audit
+   store that is down stops the issue instead of leaving a payable link nobody
+   recorded; `payment.checkout_reissued` (the provider, the presentation kind,
+   the attempt, whether it was an abandoned attempt handed back and how many
+   times it has been shown) is written after it. The second is the detail of what
+   was issued: if it cannot be written the response is still the issued session
+   and the failure is logged at `ERROR`, because answering 500 for a link that
+   exists would tell the operator it does not. A refused request leaves the first
+   fact and not the second.
 
 ## Alternatives considered
 
@@ -156,8 +189,11 @@ browser.
 - `GET .../orders/marketplace-bindings` (branch: `ORDER_READ` at `LOCATION`;
   brand: `ORDER_READ` at `BRAND`, optional `locationId`).
 - `OrderSummaryResponse.locationId` on every board and detail read.
+- `PaymentIntentPort.ordersWithPresentablePayment(tenantId, orderIds)` — the
+  payments-side read behind `ISSUE_INVOICE`; the default answers none.
 - `POST .../payment/re-presentations` gains an optional `reason` and writes
-  `payment.checkout_reissued`.
+  `payment.checkout_reissue_requested` before the checkout is opened and
+  `payment.checkout_reissued` after it.
 - No migration: `ix_orders_marketplace`, the partial index on
   `callback_requested`, and `fiscal.fiscal_documents (tenant_id, order_id, …)`
   already serve the predicates.
@@ -176,7 +212,8 @@ back first.
 - [x] Brand board over the branch statement, per-branch `actions[]`
 - [x] Binding filter and option read model
 - [x] `late`, `problem`, `callbackRequested`, `fiscalStatus`
-- [x] `ISSUE_INVOICE` emitted; re-presentation audited
+- [x] `ISSUE_INVOICE` emitted where the live intent can be presented (not on the
+      projection alone); re-presentation audited
 - [x] Console: mode, column, filters, toggles, «Выставить счёт»
 - [ ] Bulk actions across branches
 - [ ] `BRAND`-scoped realtime channel for the brand board
@@ -193,5 +230,8 @@ back. A branch manager sees none of the mode and loses nothing they had.
 
 - [ADR 0102](../built/0102-the-order-board-query-reads-what-the-board-shows-wave-p04.md)
 - orders.md §2.4, §2.5, §2.7, §4.9
-- `OrderBoardBrandScopeQueryTests`, `OrderBoardTogglesQueryTests`,
-  `OperationsBrandOrderBoardHttpTests`, `OperationsPaymentReissueAuditHttpTests`
+- `OrderBoardBrandScopeQueryTests`, `OrderBoardTogglesQueryTests` (including
+  `theLateFilterAgreesWithTheDomainRule`, the one test tying the late predicate
+  to the domain rule), `OperationsBrandOrderBoardHttpTests` (including
+  `issueInvoiceFollowsTheLiveIntentAndNotTheProjectionAlone`),
+  `OperationsPaymentReissueAuditHttpTests`

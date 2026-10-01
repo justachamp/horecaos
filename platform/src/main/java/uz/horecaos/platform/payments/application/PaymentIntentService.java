@@ -3,7 +3,9 @@ package uz.horecaos.platform.payments.application;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -103,6 +105,19 @@ public class PaymentIntentService implements PaymentIntentPort {
                             paymentMethodCode);
                     return false;
                 });
+    }
+
+    /**
+     * Which of these orders have a payment the operations console can present
+     * again (the order board's {@code ISSUE_INVOICE}). See {@link
+     * JdbcPaymentIntentStore#ordersWithPresentablePayment} for exactly which
+     * refusals of {@code PaymentCheckoutService.openOrRePresent} the answer
+     * anticipates and which it leaves to the endpoint.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public Set<UUID> ordersWithPresentablePayment(UUID tenantId, Collection<UUID> orderIds) {
+        return intents.ordersWithPresentablePayment(tenantId, orderIds);
     }
 
     /**

@@ -336,7 +336,7 @@ one that is set:
 | Filter | Control | Source |
 |---|---|---|
 | Мои заказы | toggle | **built** — `?createdByActorId=` on `.../orders/board` (ADR 0102), over `created_by_actor_id` (ADR 0039, V0029). The client supplies its own subject; there is no server-side `me` |
-| Только опаздывающие | toggle | derived, §2.7 — **built (ADR 0144)**: `?late=true`, the resolved `ordering.lateness` policy applied per branch and mode in the board statement (not over, and past the promise plus grace, or past the no-promise fallback), held to `OrderLatenessPolicy.evaluate` by a test |
+| Только опаздывающие | toggle | derived, §2.7 — **built (ADR 0144)**: `?late=true`, the resolved `ordering.lateness` policy applied per branch and mode in the board statement (not over, and past the promise plus grace, or past the no-promise fallback), held to `OrderLatenessPolicy.evaluate` by `OrderBoardTogglesQueryTests#theLateFilterAgreesWithTheDomainRule` |
 | С проблемой | toggle | `order_process_states.status` in the two failure states — **built (ADR 0144)**: `?problem=true` |
 | Требуется звонок | toggle | `callback_requested` is **built** (ADR 0039, V0029, set via the `SET_CALLBACK_REQUESTED` amendment command); the filter — **built (ADR 0144)**: `?callbackRequested=true` |
 | Агрегатор | multi-select of bindings | **built (ADR 0144)** — `?marketplaceBindingId=` on both boards over `marketplace_binding_id` (V0038); the options are `GET .../orders/marketplace-bindings` (branch and brand), the bindings the orders in scope arrived through, with the installation's name through `MarketplaceBindingLookup`. One binding at a time, not a multi-select |
@@ -1231,9 +1231,13 @@ kitchen copy may be missing.
 
 - **Выставить счёт** — **built.** `POST /api/v1/operations/tenants/{t}/orders/{id}/payment/re-presentations`
   (wave P12), `PAYMENT_INITIATE` at tenant scope, idempotent, and — since ADR 0144 —
-  audited (`payment.checkout_reissued`, never the phone). `actions[]` carries
-  `ISSUE_INVOICE` for an order whose payment projection is `PENDING`, that has
-  not ended, when the caller holds that capability; the row action opens the
+  audited (`payment.checkout_reissue_requested` before the checkout is opened and
+  `payment.checkout_reissued` after it, never the phone). `actions[]` carries
+  `ISSUE_INVOICE` for an order whose payment projection is `PENDING` **and** whose
+  live payment intent can be presented (open, a provider tender with a seller, no
+  attempt in doubt — an expired or uncertain attempt leaves the projection
+  `PENDING`, so the projection alone is not the gate), that has not ended, when
+  the caller holds that capability; the row action opens the
   order and the detail header opens the payment panel's re-issue form. It re-issues
   a payment invoice. Delever's own page documents
   the fields: phone, order id, payment type. Ours needs only the phone (the

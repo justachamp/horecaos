@@ -842,11 +842,25 @@ class OrderActionsPolicyTests {
     /** The projection value that means "an online payment is still owed" — and only that one. */
     @Test
     void onlyAPendingProjectionMeansAnOnlinePaymentIsOwed() {
-        assertThat(OrderActionsPolicy.awaitsOnlinePayment("PENDING")).isTrue();
+        assertThat(OrderActionsPolicy.paymentMayBeOwed("PENDING")).isTrue();
         for (String other :
                 List.of("NOT_REQUIRED", "AUTHORIZED", "CAPTURED", "FAILED", "VOIDED", "REFUNDED", "", "pending")) {
-            assertThat(OrderActionsPolicy.awaitsOnlinePayment(other)).as(other).isFalse();
+            assertThat(OrderActionsPolicy.paymentMayBeOwed(other)).as(other).isFalse();
+            assertThat(OrderActionsPolicy.awaitsOnlinePayment(other, true))
+                    .as(other)
+                    .isFalse();
         }
+    }
+
+    /**
+     * The projection stays {@code PENDING} through an expired or uncertain attempt,
+     * so it is never enough on its own: the order's live intent has to be one the
+     * endpoint can present as well.
+     */
+    @Test
+    void aPendingProjectionAloneNeverMeansAnOnlinePaymentCanBePresented() {
+        assertThat(OrderActionsPolicy.awaitsOnlinePayment("PENDING", true)).isTrue();
+        assertThat(OrderActionsPolicy.awaitsOnlinePayment("PENDING", false)).isFalse();
     }
 
     private static List<OrderStatus> targetsOf(OrderStatus status, FulfillmentMode mode) {
