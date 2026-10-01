@@ -90,5 +90,34 @@ public final class InventoryConfigurationKeys {
                     + "QUANTITY-listed item behaves like UNTRACKED.")
             .build();
 
+    /** The code both declarations share (ADR 0141, rollback switch 1). */
+    public static final String STOPS_CREATION_ENABLED_CODE = "inventory.stops.creation_enabled";
+
+    /**
+     * ADR 0141, rollback switch one: <em>freeze, do not disable</em>.
+     *
+     * <p>Off, a new {@code OPERATOR} or {@code BOT} stop answers {@code 409
+     * RESOURCE_CONFLICT} with {@code conflict: STOPS_FROZEN} and the console says
+     * scope stops are paused. Everything else continues: lifts, expiry, the
+     * resolver's reads — so every stop already made stays in force on every channel
+     * and nothing is sold again — and the POS poll keeps writing and ending its own
+     * {@code POS} stops, because after the POS source moved onto stops they are the
+     * only record of a POS stop. A {@code BINARY} item is still stoppable through
+     * the position toggle exactly as before stops existed; an {@code UNTRACKED} or
+     * {@code QUANTITY} item is not, as before.
+     *
+     * <p>On by default. The switch that can sell a stopped dish again
+     * ({@code inventory.stops.read_enabled}) is a decommission and is deliberately
+     * not here.
+     */
+    public static final ConfigurationKey<Boolean> STOPS_CREATION_ENABLED = ConfigurationKey.of(
+                    STOPS_CREATION_ENABLED_CODE, Boolean.class)
+            .defaultValue(true)
+            .ownedBy("inventory")
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+            .describedAs("Whether a new operator or bot stop may be created. Off freezes new "
+                    + "stops (STOPS_FROZEN); stops already in force, lifts, expiry and POS stops continue.")
+            .build();
+
     private InventoryConfigurationKeys() {}
 }

@@ -19,7 +19,7 @@ import org.springframework.stereotype.Component;
 import uz.horecaos.platform.integration.api.provider.BindingRef;
 import uz.horecaos.platform.integration.api.provider.ProviderCategory;
 import uz.horecaos.platform.integration.api.provider.ProviderOutcome;
-import uz.horecaos.platform.inventory.api.StockAvailabilityPort;
+import uz.horecaos.platform.inventory.api.AvailabilityStopPort;
 import uz.horecaos.platform.pos.application.port.PosAdapter;
 import uz.horecaos.platform.pos.application.port.PosAdapter.AvailabilityRead;
 import uz.horecaos.platform.pos.application.port.PosAdapter.PosContext;
@@ -95,14 +95,18 @@ import uz.horecaos.platform.pos.infrastructure.persistence.JdbcPosLiveAvailabili
  * <h2>Reaching the customer</h2>
  *
  * <p>A reading nothing reads is the same defect again, so every entity that
- * crosses the out-of-stock line this poll is propagated to {@code inventory}
- * through {@link StockAvailabilityPort#toggle} — the identical seam ADR 0060's
- * bot {@code /86} command uses, not a second write path. Propagation only
- * reaches a variant that both has an ADR 0011 mapping ({@link
- * JdbcPosLiveAvailabilityStore#resolveDefaultVariants}) and is {@code
- * BINARY}-tracked at this binding's location; a product with neither is a
- * perfectly ordinary shape (nobody has mapped it yet, or this location tracks it
- * by quantity) and is skipped quietly rather than logged as a failure.
+ * crosses the out-of-stock line this poll is propagated to {@code inventory} —
+ * as the poll's own {@code POS} stop (ADR 0141 Decision 4), through {@link
+ * AvailabilityStopPort}, and no longer by flipping the position boolean an
+ * operator also flips. "Back in stock" ends <em>only this binding's</em> {@code POS}
+ * stop, so it can no longer un-86 a dish an operator stopped by hand, and an
+ * operator lifting theirs no longer erases the POS's opinion. Because a stop
+ * covers any tracking mode, an {@code UNTRACKED} or {@code QUANTITY} dish the till
+ * reports out is now stopped too, where the boolean could only reach a {@code
+ * BINARY} one. Propagation only reaches a variant that has an ADR 0011 mapping
+ * ({@link JdbcPosLiveAvailabilityStore#resolveDefaultVariants}); a product with
+ * none is a perfectly ordinary shape (nobody has mapped it yet) and is skipped
+ * quietly rather than logged as a failure.
  */
 @Component
 @ConditionalOnProperty(name = "horecaos.pos.availability.poll.enabled", havingValue = "true", matchIfMissing = true)
@@ -110,16 +114,11 @@ public class PosAvailabilityPoll {
 
     private static final Logger log = LoggerFactory.getLogger(PosAvailabilityPoll.class);
 
-    /** Recorded on every propagated toggle, never a person. */
-    private static final String ACTOR_SUBJECT = "pos-availability-poll";
-
-    private static final String REASON_CODE = "POS_STOP_LIST";
-
     private final JdbcPosLiveAvailabilityStore store;
     private final JdbcPosBindingConfiguration configuration;
     private final PosAdapterRegistry adapters;
     private final PosAvailabilityPollService pollService;
-    private final StockAvailabilityPort stockAvailability;
+    private final AvailabilityStopPort stops;
     private final Clock clock;
 
     private final Counter pollSucceeded;
@@ -139,14 +138,14 @@ public class PosAvailabilityPoll {
             JdbcPosBindingConfiguration configuration,
             PosAdapterRegistry adapters,
             PosAvailabilityPollService pollService,
-            StockAvailabilityPort stockAvailability,
+            AvailabilityStopPort stops,
             Clock clock,
             MeterRegistry meterRegistry) {
         this.store = store;
         this.configuration = configuration;
         this.adapters = adapters;
         this.pollService = pollService;
-        this.stockAvailability = stockAvailability;
+        this.stops = stops;
         this.clock = clock;
         this.pollSucceeded = meterRegistry.counter("horecaos.pos.availability.poll", "outcome", "succeeded");
         this.pollFailed = meterRegistry.counter("horecaos.pos.availability.poll", "outcome", "failed");
@@ -244,15 +243,18 @@ public class PosAvailabilityPoll {
         changed.addAll(diff.newlyBackInStock());
         Map<String, UUID> variants = store.resolveDefaultVariants(candidate.tenantId(), candidate.bindingId(), changed);
 
+        UUID brandId =
+                Objects.requireNonNull(candidate.brandId(), "Binding " + candidate.bindingId() + " has no brand");
         for (String externalId : diff.newlyOutOfStock()) {
-            toggle(candidate.tenantId(), locationId, variants.get(externalId), false);
+            toggle(candidate, brandId, locationId, variants.get(externalId), false);
         }
         for (String externalId : diff.newlyBackInStock()) {
-            toggle(candidate.tenantId(), locationId, variants.get(externalId), true);
+            toggle(candidate, brandId, locationId, variants.get(externalId), true);
         }
     }
 
-    private void toggle(UUID tenantId, UUID locationId, @Nullable UUID variantId, boolean available) {
+    private void toggle(
+            Candidate candidate, UUID brandId, UUID locationId, @Nullable UUID variantId, boolean backInStock) {
         if (variantId == null) {
             // No ADR 0011 mapping to a HorecaOS product yet. An entirely
             // ordinary shape -- nobody has run a catalog sync for this binding,
@@ -261,12 +263,16 @@ public class PosAvailabilityPoll {
             return;
         }
         try {
-            stockAvailability.toggle(tenantId, locationId, variantId, available, REASON_CODE, ACTOR_SUBJECT);
+            if (backInStock) {
+                stops.liftPosStop(candidate.tenantId(), locationId, variantId, candidate.bindingId());
+            } else {
+                stops.placePosStop(candidate.tenantId(), brandId, locationId, variantId, candidate.bindingId());
+            }
             propagated.increment();
-        } catch (IllegalArgumentException | IllegalStateException notEligible) {
-            // Not stocked at this location, or tracked by quantity rather than
-            // BINARY. Both are ordinary and frequent shapes for a mapped
-            // product, not a reason to warn on every poll.
+        } catch (IllegalArgumentException notEligible) {
+            // The mapped variant is not this brand's, or this location is not.
+            // Ordinary when a mapping outlives a re-organisation, not a reason to
+            // warn on every poll.
             log.debug(
                     "POS availability change for variant {} at location {} could not be applied: {}",
                     variantId,

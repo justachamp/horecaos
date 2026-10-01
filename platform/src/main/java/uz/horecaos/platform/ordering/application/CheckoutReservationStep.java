@@ -88,7 +88,10 @@ class CheckoutReservationStep {
                 cart.locationId(),
                 command.quoteId(),
                 quote.expiresAt(),
-                quantities);
+                quantities,
+                // ADR 0141 Decision 6: the cart's own channel, so a stop that covers it
+                // refuses the hold with ON_STOP where a threshold would only have hidden it.
+                cart.channelId());
         if (!reservation.isHeld()) {
             promoCodes.release(command.tenantId(), command.quoteId());
             return new ItemsUnavailable(reservation.refusal());

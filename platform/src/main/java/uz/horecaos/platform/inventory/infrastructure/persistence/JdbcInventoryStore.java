@@ -126,6 +126,9 @@ public class JdbcInventoryStore {
      * of what happened; the position is derived state that could be rebuilt from
      * it. Writing only the position would leave "why is this sold out" with no
      * answer at all.
+     *
+     * @param sourceType who said so, the true {@code StopSource} name (ADR 0141,
+     *     Phase 0) rather than {@code OPERATOR} whoever caused it
      */
     public void setBinaryAvailability(
             UUID tenantId,
@@ -135,6 +138,7 @@ public class JdbcInventoryStore {
             String reasonCode,
             String actorType,
             @Nullable UUID actorId,
+            String sourceType,
             Instant now) {
 
         jdbc.sql("""
@@ -145,7 +149,7 @@ public class JdbcInventoryStore {
                 SELECT :movementId, s.tenant_id, s.brand_id, s.location_id, s.id,
                        COALESCE((SELECT max(m.sequence_number) FROM inventory.movements m
                                  WHERE m.stock_item_id = s.id), 0) + 1,
-                       'AVAILABILITY_CHANGE', :available, 'OPERATOR', :idempotencyKey, :reason,
+                       'AVAILABILITY_CHANGE', :available, :sourceType, :idempotencyKey, :reason,
                        :actorType, :actorId, :now
                 FROM inventory.stock_items s
                 WHERE s.id = :stockItemId AND s.tenant_id = :tenantId
@@ -159,6 +163,7 @@ public class JdbcInventoryStore {
                 .param("reason", reasonCode)
                 .param("actorType", actorType)
                 .param("actorId", actorId)
+                .param("sourceType", sourceType)
                 .param("now", OffsetDateTime.ofInstant(now, ZoneOffset.UTC))
                 .update();
 

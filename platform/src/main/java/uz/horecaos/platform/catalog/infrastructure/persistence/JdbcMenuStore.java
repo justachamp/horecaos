@@ -494,6 +494,47 @@ public class JdbcMenuStore {
     }
 
     /**
+     * {@link #findBoundMenuId} keyed by channel id rather than channel code, for
+     * a caller that already holds the id (ADR 0141's {@code MENU} stop scope,
+     * resolved through {@code catalog.api.ChannelOfferingLookup}). The same
+     * precedence: a binding for exactly this channel first, then the branch's
+     * default (channel_id NULL), then nothing. A null {@code channelId} reads the
+     * default alone, because no channel-specific binding can be said to apply to
+     * a question that names no channel.
+     */
+    public Optional<UUID> findBoundMenuIdForChannel(
+            UUID tenantId, UUID brandId, UUID locationId, @Nullable UUID channelId) {
+        return jdbc.sql("""
+                SELECT b.menu_id
+                FROM catalog.branch_menu_bindings b
+                WHERE b.tenant_id = :tenantId AND b.brand_id = :brandId AND b.location_id = :locationId
+                  AND (b.channel_id IS NULL
+                       OR (CAST(:channelId AS uuid) IS NOT NULL AND b.channel_id = CAST(:channelId AS uuid)))
+                ORDER BY (b.channel_id IS NOT NULL) DESC
+                LIMIT 1
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("locationId", locationId)
+                .param("channelId", channelId)
+                .query(UUID.class)
+                .optional();
+    }
+
+    /** Every menu bound at this branch — the default binding and each channel's own. */
+    public java.util.Set<UUID> boundMenuIdsAtLocation(UUID tenantId, UUID brandId, UUID locationId) {
+        return new java.util.HashSet<>(jdbc.sql("""
+                SELECT menu_id FROM catalog.branch_menu_bindings
+                WHERE tenant_id = :tenantId AND brand_id = :brandId AND location_id = :locationId
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("locationId", locationId)
+                .query(UUID.class)
+                .list());
+    }
+
+    /**
      * A bound menu's membership, in the exact shape
      * {@code StorefrontCatalogQuery} already consumes from {@code
      * offeringsForLocation}: variant id to {@link OfferingStatus}, HIDDEN

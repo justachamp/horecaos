@@ -134,6 +134,21 @@ public final class ConfigurationKeys {
             .build();
 
     /**
+     * ADR 0141, rollback switch one (freeze, do not disable). Declared identically in
+     * {@code inventory.api.InventoryConfigurationKeys}, where {@code
+     * AvailabilityStopService} reads it, for the reason recorded on {@link
+     * #INVENTORY_RESERVATION_TTL_SECONDS}.
+     */
+    public static final ConfigurationKey<Boolean> INVENTORY_STOPS_CREATION_ENABLED = ConfigurationKey.of(
+                    "inventory.stops.creation_enabled", Boolean.class)
+            .defaultValue(true)
+            .ownedBy("inventory")
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+            .describedAs("Whether a new operator or bot stop may be created. Off freezes new "
+                    + "stops (STOPS_FROZEN); stops already in force, lifts, expiry and POS stops continue.")
+            .build();
+
+    /**
      * ADR 0021: the strongest enforcement mode entitlement checks may apply.
      *
      * <p>Declared here so a stored row for it passes the startup validator, and
@@ -581,6 +596,7 @@ public final class ConfigurationKeys {
             ORDERING_AUTO_ACCEPT_ELIGIBLE_CHANNELS,
             ORDERING_AUTO_ACCEPT_MIN_PRIOR_ORDERS,
             CATALOG_USE_STOCK_LOGIC,
+            INVENTORY_STOPS_CREATION_ENABLED,
             CATALOG_QR_KIOSK_PRICE_PLANE,
             NOTIFICATIONS_PAYMENT_LINK_AUTO_SEND,
             NOTIFICATIONS_AGGREGATOR_SHIFT_NOTIFICATIONS_ENABLED,

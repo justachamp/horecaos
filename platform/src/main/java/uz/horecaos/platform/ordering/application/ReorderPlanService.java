@@ -182,7 +182,8 @@ public class ReorderPlanService {
         // that would fail at reservation.
         Map<UUID, String> blocked = survivingVariants.isEmpty()
                 ? Map.of()
-                : blockedBy(inventory.checkAvailability(order.tenantId(), resolveAgainstLocationId, survivingVariants));
+                : blockedBy(inventory.checkAvailabilityOnChannel(
+                        order.tenantId(), resolveAgainstLocationId, survivingVariants, order.channelId()));
 
         List<PlannedLine> lines = new ArrayList<>(detail.lines().size());
         for (OrderQueryService.DetailLine detailLine : detail.lines()) {

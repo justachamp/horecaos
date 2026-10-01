@@ -26,6 +26,7 @@ import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.catalog.api.OfferingBecameAvailable;
+import uz.horecaos.platform.catalog.api.StopOverlayLookup;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.EntityType;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.LocationOffering;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.ModifierGroup;
@@ -74,6 +75,7 @@ public class CatalogAuthoringService {
     private final Clock clock;
     private final CatalogTenantContext tenantContext;
     private final ApplicationEventPublisher events;
+    private final @Nullable StopOverlayLookup stopOverlay;
 
     /**
      * See {@code ServiceabilityService}'s matching overload for why this
@@ -111,7 +113,10 @@ public class CatalogAuthoringService {
         this(store, audit, entitlements, usage, clock, tenantContext, event -> {});
     }
 
-    @Autowired
+    /**
+     * The seven-argument form every fixture built before ADR 0141 uses: no stops, so the
+     * stop list is exactly what catalog's own SQL says.
+     */
     public CatalogAuthoringService(
             JdbcCatalogStore store,
             AuditRecorder audit,
@@ -120,6 +125,19 @@ public class CatalogAuthoringService {
             Clock clock,
             CatalogTenantContext tenantContext,
             ApplicationEventPublisher events) {
+        this(store, audit, entitlements, usage, clock, tenantContext, events, null);
+    }
+
+    @Autowired
+    public CatalogAuthoringService(
+            JdbcCatalogStore store,
+            AuditRecorder audit,
+            EntitlementService entitlements,
+            UsageMeter usage,
+            Clock clock,
+            CatalogTenantContext tenantContext,
+            ApplicationEventPublisher events,
+            @Nullable StopOverlayLookup stopOverlay) {
         this.store = store;
         this.audit = audit;
         this.entitlements = entitlements;
@@ -127,6 +145,7 @@ public class CatalogAuthoringService {
         this.clock = clock;
         this.tenantContext = tenantContext;
         this.events = events;
+        this.stopOverlay = stopOverlay;
     }
 
     @Transactional
@@ -1369,8 +1388,38 @@ public class CatalogAuthoringService {
             int limit,
             @Nullable String search,
             @Nullable String offeringStatusFilter) {
-        return store.variantsAtLocation(
-                tenantId, brandId, locationId, nameLocales, cursor, limit, search, offeringStatusFilter);
+        return withStops(
+                tenantId,
+                brandId,
+                locationId,
+                store.variantsAtLocation(
+                        tenantId, brandId, locationId, nameLocales, cursor, limit, search, offeringStatusFilter));
+    }
+
+    /**
+     * Lays the stops in force over the rows catalog's own SQL read (ADR 0141): the stop list
+     * and the New order picker then say what the storefront, the cart and checkout say. A
+     * stop on every channel here makes a dish unavailable whatever its supply; a stop on
+     * some channels only is listed on the row without changing {@code available}.
+     */
+    private List<JdbcCatalogStore.VariantAvailabilityRow> withStops(
+            UUID tenantId, UUID brandId, UUID locationId, List<JdbcCatalogStore.VariantAvailabilityRow> rows) {
+        if (stopOverlay == null || rows.isEmpty()) {
+            return rows;
+        }
+        Map<UUID, List<StopOverlayLookup.StopFact>> stopsByVariant = stopOverlay.stopsAtLocation(
+                tenantId,
+                brandId,
+                locationId,
+                rows.stream()
+                        .map(JdbcCatalogStore.VariantAvailabilityRow::variantId)
+                        .collect(java.util.stream.Collectors.toSet()));
+        if (stopsByVariant.isEmpty()) {
+            return rows;
+        }
+        return rows.stream()
+                .map(row -> row.withStops(stopsByVariant.getOrDefault(row.variantId(), List.of())))
+                .toList();
     }
 
     /** The stop list's own tab badges (gap map row 2.5) — see {@link JdbcCatalogStore#variantAvailabilityCounts}. */
@@ -1384,7 +1433,10 @@ public class CatalogAuthoringService {
     @Transactional(readOnly = true)
     public JdbcCatalogStore.VariantAvailabilityCountsRow variantAvailabilityCounts(
             UUID tenantId, UUID brandId, UUID locationId, List<String> nameLocales, @Nullable String search) {
-        return store.variantAvailabilityCounts(tenantId, brandId, locationId, nameLocales, search);
+        java.util.Set<UUID> stopped = stopOverlay == null
+                ? java.util.Set.of()
+                : stopOverlay.variantsStoppedOnEveryChannel(tenantId, brandId, locationId);
+        return store.variantAvailabilityCounts(tenantId, brandId, locationId, nameLocales, search, stopped);
     }
 
     /**

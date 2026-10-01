@@ -1270,7 +1270,13 @@ public class OrderAmendmentService {
         }
 
         ReservationResult reservation = inventory.reserveForQuote(
-                tenantId, order.brandId(), order.locationId(), quoteId, quote.expiresAt(), increaseByVariant);
+                tenantId,
+                order.brandId(),
+                order.locationId(),
+                quoteId,
+                quote.expiresAt(),
+                increaseByVariant,
+                order.channelId());
         if (!reservation.isHeld()) {
             throw new AmendmentRefusedException(
                     "INVENTORY_UNAVAILABLE", "The added quantity is not available: " + reservation.refusal());

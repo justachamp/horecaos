@@ -220,6 +220,7 @@ public enum PlatformRole {
                     INVENTORY_READ,
                     INVENTORY_ADJUST,
                     INVENTORY_AVAILABILITY_MANAGE,
+                    INVENTORY_STOP_MANAGE,
                     PRICING_READ,
                     PRICING_AUTHOR,
                     PRICING_ACTIVATE,
@@ -414,6 +415,7 @@ public enum PlatformRole {
                     INVENTORY_READ,
                     INVENTORY_ADJUST,
                     INVENTORY_AVAILABILITY_MANAGE,
+                    INVENTORY_STOP_MANAGE,
                     PRICING_READ,
                     PRICING_AUTHOR,
                     PRICING_ACTIVATE,
@@ -637,6 +639,10 @@ public enum PlatformRole {
                     SERVICEABILITY_MANAGE,
                     LOCATION_SERVICE_STATE_CHANGE,
                     INVENTORY_READ,
+                    // ADR 0141: a brand manager takes a dish off sale across the brand, a
+                    // menu or a channel; a location manager (INVENTORY_AVAILABILITY_MANAGE
+                    // at LOCATION) deliberately cannot.
+                    INVENTORY_STOP_MANAGE,
                     PRICING_READ,
                     PRICING_AUTHOR,
                     ORDER_READ,

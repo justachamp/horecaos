@@ -51,6 +51,22 @@ public record AvailabilityDecision(boolean available, List<Unavailable> unavaila
         }
 
         /**
+         * An active stop covers this dish on this channel at this location (ADR
+         * 0141 Decision 6): an operator, the Telegram bot or the POS said not to
+         * sell it here, or until then.
+         *
+         * <p>Unlike {@link #channelStopped}, this one is refused at cart and
+         * checkout as well as hidden on the menu — an explicit instruction
+         * carries the force the word "stop" implies, where a threshold is a
+         * reserve for the channels it does not name. Reported ahead of {@link
+         * #soldOut}: when both are true, the stop is the more specific fact and
+         * the one an operator can lift.
+         */
+        public static Unavailable onStop(UUID variantId) {
+            return new Unavailable(variantId, "ON_STOP");
+        }
+
+        /**
          * The hold taken for this cart lapsed before checkout reached it.
          *
          * <p>Not attributable to one dish — the whole hold expired — so it is

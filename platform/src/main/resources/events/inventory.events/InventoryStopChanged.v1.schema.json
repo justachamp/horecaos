@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.horecaos.uz/events/inventory.events/InventoryStopChanged.v1.schema.json",
+  "title": "InventoryStopChanged v1 payload",
+  "description": "A stop on a dish was made, revised, lifted or expired (ADR 0141). Symmetric by construction: active carries the direction, so a dish going on stop and coming back are the same event type. A stop has a scope (LOCATION, BRAND, MENU or CHANNEL), a source (OPERATOR, BOT or POS; KITCHEN_DEVICE and RULE are reserved) and an optional end. Identifiers and stable codes only: never a product or variant name, never free text, never personal data (ADR 0029). reasonCode is a short enumerated code. locationId is present for a LOCATION stop and for a CHANNEL stop at one branch; menuId only for MENU; channelId only for CHANNEL. A consumer resolves names through the authorized catalog API with variantId.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["stopId", "variantId", "scopeType", "source", "active", "reasonCode"],
+  "properties": {
+    "stopId": { "type": "string", "format": "uuid" },
+    "variantId": { "type": "string", "format": "uuid" },
+    "scopeType": { "type": "string", "enum": ["LOCATION", "BRAND", "MENU", "CHANNEL"] },
+    "locationId": { "type": ["string", "null"], "format": "uuid" },
+    "menuId": { "type": ["string", "null"], "format": "uuid" },
+    "channelId": { "type": ["string", "null"], "format": "uuid" },
+    "source": { "type": "string", "enum": ["OPERATOR", "BOT", "POS", "KITCHEN_DEVICE", "RULE"] },
+    "active": { "type": "boolean" },
+    "endsAt": { "type": ["string", "null"], "format": "date-time" },
+    "reasonCode": { "type": "string", "maxLength": 64 }
+  }
+}
