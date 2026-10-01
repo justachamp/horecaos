@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionOperations;
@@ -151,13 +152,16 @@ public class WalkInSeatingService {
      * Seats a signed-in guest at the table their guest token names.
      *
      * @param guestToken the plaintext {@code X-Dine-In-Token}. Hashed for the rate
-     *                   limit before any lookup, so a flood carrying one token costs
-     *                   one index probe per request and a hash
-     * @param accountId  the caller's customer account for this brand, from the
-     *                   ordinary customer session -- never from the request
+     *                   limit before any lookup, so a flood carrying one token -- live
+     *                   or not -- costs a hash and a counter per request, not an index
+     *                   probe and not a customer lookup
+     * @param accountOf  the caller's customer account for this brand, from the
+     *                   ordinary customer session -- never from the request. Asked
+     *                   only once the token has resolved to a table that takes
+     *                   orders, because the brand it needs is the table's
      * @param partySize  the guest's own word, checked against the table's seats
      */
-    public Seating seat(String guestToken, UUID accountId, int partySize) {
+    public Seating seat(String guestToken, Function<GuestContext, UUID> accountOf, int partySize) {
         if (guestToken != null && !guestToken.isBlank()) {
             RateLimiter.Decision decision = rateLimiter.check(
                     new RateLimiter.Key(OPEN_OPERATION, null, BearerToken.hash(guestToken)), OPEN_LIMIT);
@@ -173,6 +177,7 @@ public class WalkInSeatingService {
             // The same 404 every other ordering route gives a VIEW_ONLY code.
             throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "This code is not in service. Ask a member of staff.");
         }
+        UUID accountId = accountOf.apply(guest);
 
         try {
             Seating seating = inTransaction(() -> attempt(guest, accountId, partySize));
@@ -184,6 +189,11 @@ public class WalkInSeatingService {
             metrics.refused(refused.refusalClass().name());
             throw refused;
         }
+    }
+
+    /** {@link #seat(String, Function, int)} for a caller that already knows the account. */
+    public Seating seat(String guestToken, UUID accountId, int partySize) {
+        return seat(guestToken, guest -> accountId, partySize);
     }
 
     private Seating attempt(GuestContext guest, UUID accountId, int partySize) {

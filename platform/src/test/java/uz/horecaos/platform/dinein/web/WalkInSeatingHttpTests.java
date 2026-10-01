@@ -379,6 +379,28 @@ class WalkInSeatingHttpTests {
     }
 
     @Test
+    @DisplayName("the limit holds before anything is looked up: a dead token with no customer session is limited too")
+    void aDeadTokenIsLimitedToo() throws Exception {
+        String dead = "not-a-live-guest-token-" + UUID.randomUUID();
+
+        for (int attempt = 0; attempt < 5; attempt++) {
+            MvcResult refused = mvc.perform(post(sessionsPath())
+                            .header("X-Dine-In-Token", dead)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"partySize\":2}"))
+                    .andReturn();
+            assertThat(refused.getResponse().getStatus()).isEqualTo(401);
+        }
+        MvcResult limited = mvc.perform(post(sessionsPath())
+                        .header("X-Dine-In-Token", dead)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"partySize\":2}"))
+                .andReturn();
+
+        assertThat(limited.getResponse().getStatus()).isEqualTo(429);
+    }
+
+    @Test
     @DisplayName("the exchange tells a token holder whether they could sit down, and the answer follows the room")
     void theExchangeReportsWalkInAvailable() throws Exception {
         TableRow table = createTable(TENANT_A, BRAND_A, LOCATION_A1, sectionA1, "T1", 4);

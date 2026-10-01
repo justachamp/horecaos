@@ -656,14 +656,17 @@ VALUES (
     '10000000-0000-0000-0000-000000000060', 'DINE_IN', true
 ) ON CONFLICT DO NOTHING;
 
+-- walk_in_self_seat is true here so the sit-down flow of ADR 0143 can be tried on a
+-- local stack without first signing in to the console to switch it on. It ships OFF
+-- everywhere else (V0467), and this file is the local profile's alone.
 INSERT INTO dinein.location_settings (
     tenant_id, brand_id, location_id, qr_mode, turnaround_minutes,
-    guest_session_ttl_minutes, service_charge_rate_bp
+    guest_session_ttl_minutes, service_charge_rate_bp, walk_in_self_seat
 ) VALUES (
     '10000000-0000-0000-0000-000000000001',
     '10000000-0000-0000-0000-000000000002',
-    '10000000-0000-0000-0000-000000000003', 'ORDER_AND_PAY', 15, 240, 0
-) ON CONFLICT DO NOTHING;
+    '10000000-0000-0000-0000-000000000003', 'ORDER_AND_PAY', 15, 240, 0, true
+) ON CONFLICT (location_id) DO UPDATE SET walk_in_self_seat = true;
 
 INSERT INTO dinein.sections (
     id, tenant_id, brand_id, location_id, code, display_name, sort_order

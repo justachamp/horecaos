@@ -476,6 +476,23 @@ class WalkInSeatingTests {
     }
 
     @Test
+    @DisplayName("the limit comes before the lookup: a flood of a dead token is stopped, not looked up each time")
+    void aDeadTokenIsLimitedBeforeItIsLookedUp() {
+        String dead = "not-a-live-guest-token-" + UUID.randomUUID();
+        UUID account = account();
+
+        for (int attempt = 0; attempt < 5; attempt++) {
+            ApiException refused = (ApiException) catchThrowable(() -> walkIn.seat(dead, account, 2));
+            assertThat(refused.errorCode())
+                    .as("a token nobody minted is refused the way every dead token is")
+                    .isEqualTo(ErrorCode.UNAUTHENTICATED);
+        }
+        ApiException limited = (ApiException) catchThrowable(() -> walkIn.seat(dead, account, 2));
+
+        assertThat(limited.errorCode()).isEqualTo(ErrorCode.RATE_LIMIT_EXCEEDED);
+    }
+
+    @Test
     @DisplayName("a guest cannot name a table: the token's own table is the only one reachable")
     void aGuestReachesOnlyTheirOwnTable() {
         enableSelfSeat();

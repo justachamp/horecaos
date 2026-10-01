@@ -141,15 +141,20 @@ public class QrEntryController {
     public ResponseEntity<GuestSeatingResponse> seat(
             @RequestHeader(GUEST_TOKEN_HEADER) String guestToken, @Valid @RequestBody SeatRequest body) {
 
-        // Both credentials are required before anything is attempted; the table comes
-        // from the first, the person from the second, and neither from the request.
-        GuestContext guest = qr.resolve(guestToken);
-        requireOrdering(guest);
-        CustomerAccountRef caller = requireSignedIn(guest);
-
-        WalkInSeatingService.Seating seating = walkIn.seat(guestToken, caller.accountId(), body.partySize());
-        GuestBillResponse bill = billResponse(guest, seating.session());
-        return ResponseEntity.ok(GuestSeatingResponse.of(bill, seating.created()));
+        // Both credentials are required, and the per-token limit comes before either is
+        // looked up: the table is read from the first, the person from the second, and
+        // neither from the request.
+        WalkInSeatingService.Seating seating =
+                walkIn.seat(guestToken, guest -> requireSignedIn(guest).accountId(), body.partySize());
+        SessionRow session = seating.session();
+        SessionBill bill = sessions.bill(session.tenantId(), session.id());
+        GuestBillResponse billed = GuestBillResponse.of(
+                session,
+                bill.currency() == null ? session.currency() : bill.currency(),
+                bill.totalMinor(),
+                bill.roundCount(),
+                sessions.rounds(session.tenantId(), session.id()));
+        return ResponseEntity.ok(GuestSeatingResponse.of(billed, seating.created()));
     }
 
     @GetMapping("/sessions/{sessionId}")
