@@ -3,6 +3,8 @@ package uz.horecaos.platform.dinein.web;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -10,6 +12,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
@@ -26,6 +29,7 @@ import uz.horecaos.platform.dinein.application.QrEntryService;
 import uz.horecaos.platform.dinein.application.QrEntryService.GuestAdmission;
 import uz.horecaos.platform.dinein.application.QrEntryService.GuestContext;
 import uz.horecaos.platform.dinein.application.TableSessionService;
+import uz.horecaos.platform.dinein.application.WalkInSeatingService;
 import uz.horecaos.platform.dinein.application.port.SessionOrderSource.SessionBill;
 import uz.horecaos.platform.dinein.domain.QrMode;
 import uz.horecaos.platform.dinein.domain.SessionStatus;
@@ -77,11 +81,17 @@ public class QrEntryController {
 
     private final QrEntryService qr;
     private final TableSessionService sessions;
+    private final WalkInSeatingService walkIn;
     private final CurrentCustomer currentCustomer;
 
-    public QrEntryController(QrEntryService qr, TableSessionService sessions, CurrentCustomer currentCustomer) {
+    public QrEntryController(
+            QrEntryService qr,
+            TableSessionService sessions,
+            WalkInSeatingService walkIn,
+            CurrentCustomer currentCustomer) {
         this.qr = qr;
         this.sessions = sessions;
+        this.walkIn = walkIn;
         this.currentCustomer = currentCustomer;
     }
 
@@ -106,7 +116,39 @@ public class QrEntryController {
                 admission.locationId(),
                 admission.tableCode(),
                 admission.openSessionId(),
-                admission.channelCode()));
+                admission.channelCode(),
+                admission.walkInAvailable()));
+    }
+
+    @PostMapping("/sessions")
+    @Operation(
+            summary = "Seat yourself at a free table",
+            description = "A guest who has scanned a free table opens a provisional session -- a "
+                    + "claim -- without waiting for staff (ADR 0143). It is an explicit action, "
+                    + "never a side effect of scanning, and it needs both credentials a round "
+                    + "does: the table's guest token (X-Dine-In-Token, the proof of where) and "
+                    + "the customer's ordinary signed-in session (Authorization: Bearer, the "
+                    + "proof of who). It never accepts a table, a location or a tenant. The claim "
+                    + "becomes an ordinary session once a round the restaurant has accepted is "
+                    + "on it, and lapses -- giving the table back to the room -- if nothing "
+                    + "follows within its window. If somebody already sits at the table, the "
+                    + "call answers with their session and created=false rather than a second "
+                    + "one. Every reason the table cannot be taken (the branch has not turned "
+                    + "this on, a booking holds the table, a cap is reached, the account is "
+                    + "refused, the table is out of service) is one answer, 409 "
+                    + "TABLE_NOT_AVAILABLE, with no reason.")
+    public ResponseEntity<GuestSeatingResponse> seat(
+            @RequestHeader(GUEST_TOKEN_HEADER) String guestToken, @Valid @RequestBody SeatRequest body) {
+
+        // Both credentials are required before anything is attempted; the table comes
+        // from the first, the person from the second, and neither from the request.
+        GuestContext guest = qr.resolve(guestToken);
+        requireOrdering(guest);
+        CustomerAccountRef caller = requireSignedIn(guest);
+
+        WalkInSeatingService.Seating seating = walkIn.seat(guestToken, caller.accountId(), body.partySize());
+        GuestBillResponse bill = billResponse(guest, seating.session());
+        return ResponseEntity.ok(GuestSeatingResponse.of(bill, seating.created()));
     }
 
     @GetMapping("/sessions/{sessionId}")
@@ -123,9 +165,8 @@ public class QrEntryController {
         SessionRow session = qr.requireSessionAtTable(guest, sessionId);
         SessionBill bill = sessions.bill(guest.tenantId(), sessionId);
 
-        return ResponseEntity.ok(new GuestBillResponse(
-                session.id(),
-                session.status().name(),
+        return ResponseEntity.ok(GuestBillResponse.of(
+                session,
                 bill.currency() == null ? session.currency() : bill.currency(),
                 bill.totalMinor(),
                 bill.roundCount(),
@@ -145,6 +186,13 @@ public class QrEntryController {
         requireOrdering(guest);
 
         SessionRow session = qr.requireSessionAtTable(guest, sessionId);
+        if (session.unconfirmedClaim()) {
+            // There is nothing the restaurant has accepted to bill (ADR 0143, Decision
+            // 4), and a claim moved out of OPEN is a claim the lapse has to reach by a
+            // longer road. Refused, not hidden: the storefront does not offer the control
+            // while a claim is unconfirmed, and a caller that does it anyway is told why.
+            throw TableSessionService.claimUnconfirmed();
+        }
         if (session.status() == SessionStatus.BILL_REQUESTED) {
             // Idempotent by observation rather than by an idempotency key. A guest
             // tapping twice is not an error and must not read as one; ADR 0031's
@@ -152,13 +200,12 @@ public class QrEntryController {
             return ResponseEntity.ok(billResponse(guest, session));
         }
 
-        SessionRow moved = sessions.move(
+        SessionRow moved = sessions.moveByGuest(
                 guest.tenantId(),
                 sessionId,
                 SessionStatus.BILL_REQUESTED,
                 session.version(),
-                null,
-                "guest:" + guest.tableId(),
+                guest.tableId(),
                 "Requested from the table");
 
         return ResponseEntity.ok(billResponse(guest, moved));
@@ -233,13 +280,26 @@ public class QrEntryController {
      * are the same fact: nobody is signed in.
      */
     private CustomerAccountRef requireOwnOrder(GuestContext guest) {
+        return resolveCaller(guest, QrEntryController::unownedRound);
+    }
+
+    /**
+     * The signed-in customer a claim is opened for (ADR 0143). The same
+     * two-credential shape {@code addRound} uses: nobody signed in is nobody to hold
+     * the claim, and an account with no standing at this brand reads the same way.
+     */
+    private CustomerAccountRef requireSignedIn(GuestContext guest) {
+        return resolveCaller(guest, QrEntryController::unseatedGuest);
+    }
+
+    private CustomerAccountRef resolveCaller(GuestContext guest, Supplier<ApiException> refusal) {
         Optional<CustomerAccountRef> account;
         try {
             account = currentCustomer.account(guest.tenantId(), guest.brandId());
         } catch (AccessDeniedException noSession) {
-            throw unownedRound();
+            throw refusal.get();
         }
-        return account.orElseThrow(QrEntryController::unownedRound);
+        return account.orElseThrow(refusal);
     }
 
     private static ApiException unownedRound() {
@@ -247,11 +307,14 @@ public class QrEntryController {
                 ErrorCode.UNAUTHENTICATED, "Attaching a round needs the signed-in session the order was placed under");
     }
 
+    private static ApiException unseatedGuest() {
+        return new ApiException(ErrorCode.UNAUTHENTICATED, "Sit at this table once you have signed in");
+    }
+
     private GuestBillResponse billResponse(GuestContext guest, SessionRow session) {
         SessionBill bill = sessions.bill(guest.tenantId(), session.id());
-        return new GuestBillResponse(
-                session.id(),
-                session.status().name(),
+        return GuestBillResponse.of(
+                session,
                 bill.currency() == null ? session.currency() : bill.currency(),
                 bill.totalMinor(),
                 bill.roundCount(),
@@ -278,6 +341,12 @@ public class QrEntryController {
     record AddRoundRequest(@NotNull UUID orderId) {}
 
     /**
+     * The guest's own word on how many they are. A boxed {@code Integer}: Jackson 3
+     * refuses a missing primitive, and an absent party size is a 422, not a zero.
+     */
+    record SeatRequest(@NotNull @Min(1) @Max(200) Integer partySize) {}
+
+    /**
      * @param guestToken returned once. There is no endpoint that reissues it: the
      *                   guest scans again
      */
@@ -291,8 +360,71 @@ public class QrEntryController {
             String tableCode,
             @Nullable UUID openSessionId,
             /** See {@link QrEntryService.GuestAdmission#channelCode()}. */
-            @Nullable String channelCode) {}
+            @Nullable String channelCode,
+            /** See {@link QrEntryService.GuestAdmission#walkInAvailable()}. */
+            boolean walkInAvailable) {}
 
+    /**
+     * The guest's running bill and the standing of the session it belongs to.
+     *
+     * @param origin         {@code STAFF} or {@code GUEST_QR} (ADR 0143)
+     * @param claimExpiresAt when an unconfirmed claim lapses and gives the table back;
+     *                       null for a session that is not an unconfirmed claim
+     * @param confirmed      whether this is an ordinary session: always true for a
+     *                       staff-opened one, and for a claim once a round the
+     *                       restaurant accepted is on it or staff took charge
+     */
     record GuestBillResponse(
-            UUID sessionId, String status, String currency, long totalMinor, int roundCount, List<UUID> orderIds) {}
+            UUID sessionId,
+            String status,
+            String currency,
+            long totalMinor,
+            int roundCount,
+            List<UUID> orderIds,
+            String origin,
+            @Nullable Instant claimExpiresAt,
+            boolean confirmed) {
+
+        static GuestBillResponse of(
+                SessionRow session, String currency, long totalMinor, int roundCount, List<UUID> orderIds) {
+            return new GuestBillResponse(
+                    session.id(),
+                    session.status().name(),
+                    currency,
+                    totalMinor,
+                    roundCount,
+                    orderIds,
+                    session.origin().name(),
+                    session.unconfirmedClaim() ? session.claimExpiresAt() : null,
+                    !session.unconfirmedClaim());
+        }
+    }
+
+    /** {@link GuestBillResponse} plus whether this very call opened the session. */
+    record GuestSeatingResponse(
+            UUID sessionId,
+            String status,
+            String currency,
+            long totalMinor,
+            int roundCount,
+            List<UUID> orderIds,
+            String origin,
+            boolean created,
+            @Nullable Instant claimExpiresAt,
+            boolean confirmed) {
+
+        static GuestSeatingResponse of(GuestBillResponse bill, boolean created) {
+            return new GuestSeatingResponse(
+                    bill.sessionId(),
+                    bill.status(),
+                    bill.currency(),
+                    bill.totalMinor(),
+                    bill.roundCount(),
+                    bill.orderIds(),
+                    bill.origin(),
+                    created,
+                    bill.claimExpiresAt(),
+                    bill.confirmed());
+        }
+    }
 }

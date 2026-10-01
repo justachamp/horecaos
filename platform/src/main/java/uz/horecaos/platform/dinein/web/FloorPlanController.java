@@ -8,6 +8,7 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -23,6 +24,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import uz.horecaos.platform.dinein.application.FloorPlanService;
+import uz.horecaos.platform.dinein.application.FloorPlanService.WalkInChange;
 import uz.horecaos.platform.dinein.application.port.QrChannelSource;
 import uz.horecaos.platform.dinein.infrastructure.persistence.JdbcDineInStore.SectionRow;
 import uz.horecaos.platform.dinein.infrastructure.persistence.JdbcDineInStore.SettingsRow;
@@ -76,17 +78,25 @@ public class FloorPlanController {
     @PutMapping("/settings")
     @RequiresCapability(value = Capability.DINEIN_FLOORPLAN_MANAGE, scope = ScopeType.LOCATION, mutating = true)
     @Operation(
-            summary = "Configure the branch's QR mode, turnaround buffer, and service charge",
+            summary = "Configure the branch's QR mode, turnaround buffer, service charge, and self-seating",
             description = "SETTLE_OPEN_TICKET is refused here and again by the database. No POS "
                     + "adapter declares an open-ticket read or a ticket settlement, and ADR 0011 "
                     + "forbids an unsupported capability being the sole business path — so the "
-                    + "mode fails at configuration rather than at a table with a bill on it.")
+                    + "mode fails at configuration rather than at a table with a bill on it. "
+                    + "Requires If-Match (a never-configured branch reads as version 0). The "
+                    + "walkIn* fields (ADR 0143) are all optional: omitted leaves the current "
+                    + "value, and self-seating stays off until walkInSelfSeat is set true with "
+                    + "a reason. It does anything only while qrMode is ORDER_AND_PAY.")
     public ResponseEntity<SettingsResponse> configure(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @PathVariable UUID locationId,
-            @Valid @RequestBody SettingsRequest body) {
+            @Valid @RequestBody SettingsRequest body,
+            HttpServletRequest request) {
 
+        // A branch that was never configured reads as version 0, so "create it" is an
+        // If-Match of 0 and two managers doing it at once produce one row and one 409.
+        long expected = AggregateVersion.requireIfMatch(request);
         SettingsRow saved = floorPlan.configure(
                 new FloorPlanService.BranchSettings(
                         tenantId,
@@ -95,7 +105,9 @@ public class FloorPlanController {
                         body.qrMode(),
                         body.turnaroundMinutes(),
                         body.guestSessionTtlMinutes(),
-                        body.serviceChargeRateBp()),
+                        body.serviceChargeRateBp(),
+                        body.walkInChange()),
+                (int) expected,
                 currentActor.get().subject(),
                 body.reason());
 
@@ -259,7 +271,41 @@ public class FloorPlanController {
             @Min(0) @Max(240) Integer turnaroundMinutes,
             @Min(5) @Max(1440) Integer guestSessionTtlMinutes,
             @Min(0) @Max(10000) Integer serviceChargeRateBp,
-            @NotBlank @Size(max = 500) String reason) {}
+            /** ADR 0143. Omit to leave self-seating as it is; it ships off. */
+            Boolean walkInSelfSeat,
+            @Min(2) @Max(60) Integer walkInClaimTtlMinutes,
+            @Min(0) @Max(480) Integer walkInHorizonMinutes,
+            @Min(0) @Max(100) Integer walkInMaxUnconfirmed,
+            @Min(1) @Max(20) Integer walkInDailyClaimsPerAccount,
+            @Min(0) @Max(120) Integer walkInPaymentDeferMinutes,
+
+            @Size(min = 3, max = 3) @Pattern(regexp = "[A-Z]{3}")
+            String sessionCurrency,
+
+            @NotBlank @Size(max = 500) String reason) {
+
+        /** Null when the request touches none of ADR 0143's fields. */
+        @Nullable
+        WalkInChange walkInChange() {
+            if (walkInSelfSeat == null
+                    && walkInClaimTtlMinutes == null
+                    && walkInHorizonMinutes == null
+                    && walkInMaxUnconfirmed == null
+                    && walkInDailyClaimsPerAccount == null
+                    && walkInPaymentDeferMinutes == null
+                    && sessionCurrency == null) {
+                return null;
+            }
+            return new WalkInChange(
+                    walkInSelfSeat,
+                    walkInClaimTtlMinutes,
+                    walkInHorizonMinutes,
+                    walkInMaxUnconfirmed,
+                    walkInDailyClaimsPerAccount,
+                    walkInPaymentDeferMinutes,
+                    sessionCurrency);
+        }
+    }
 
     /**
      * @param storefrontHostname the verified hostname the storefront answers on
@@ -277,7 +323,14 @@ public class FloorPlanController {
             int guestSessionTtlMinutes,
             int serviceChargeRateBp,
             int version,
-            @Nullable String storefrontHostname) {
+            @Nullable String storefrontHostname,
+            boolean walkInSelfSeat,
+            int walkInClaimTtlMinutes,
+            int walkInHorizonMinutes,
+            int walkInMaxUnconfirmed,
+            int walkInDailyClaimsPerAccount,
+            int walkInPaymentDeferMinutes,
+            String sessionCurrency) {
 
         static SettingsResponse of(SettingsRow row, @Nullable String storefrontHostname) {
             return new SettingsResponse(
@@ -287,7 +340,14 @@ public class FloorPlanController {
                     row.guestSessionTtlMinutes(),
                     row.serviceChargeRateBp(),
                     row.version(),
-                    storefrontHostname);
+                    storefrontHostname,
+                    row.walkIn().selfSeat(),
+                    row.walkIn().claimTtlMinutes(),
+                    row.walkIn().horizonMinutes(),
+                    row.walkIn().maxUnconfirmed(),
+                    row.walkIn().dailyClaimsPerAccount(),
+                    row.walkIn().paymentDeferMinutes(),
+                    row.sessionCurrency());
         }
     }
 

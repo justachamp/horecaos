@@ -294,6 +294,9 @@ class EndpointCapabilityDeclarationTests {
     private static boolean isGuestBearerEndpoint(Method handler) {
         String path = pathOf(handler);
         return path.equals("/api/v1/storefront/dine-in/qr/token-exchanges")
+                // ADR 0143: a guest seats themselves. The table is proved by the guest token
+                // and the person by the customer's own session; exact path, never a prefix.
+                || path.equals("/api/v1/storefront/dine-in/sessions")
                 || path.equals("/api/v1/storefront/dine-in/sessions/{sessionId}/bill-requests")
                 || path.equals("/api/v1/storefront/dine-in/sessions/{sessionId}/rounds");
     }
