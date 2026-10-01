@@ -957,7 +957,11 @@ public class CatalogAuthoringService {
      * constraints on marking, excise and age restriction are never touched (the
      * controller refuses an item that sets them). An item that would leave the
      * row as it is reports {@link BulkClassifyStatus#UNCHANGED} and writes
-     * nothing, so a re-run of a half-finished paste is quiet.
+     * nothing, so a re-run of a half-finished paste is quiet. Each node is merged
+     * by the store against the row as it is when that node is written ({@link
+     * JdbcCatalogStore#mergeFiscalClassification}), never against a copy read at
+     * the start of the batch, so a marking or age restriction another operator
+     * sets while the batch runs is not written back over.
      *
      * <p>Audited as one fact for the whole batch — what each node held before
      * and after, keyed by node — because the fiscal fields are what a receipt is
@@ -976,10 +980,16 @@ public class CatalogAuthoringService {
             BulkClassifyMode mode,
             @Nullable UUID actorId,
             String actorSubject) {
-        // One read of the brand's classifications rather than one per item; kept
-        // current as the batch is applied, so a node named twice in one batch is
-        // merged in sequence the way two calls would be.
-        Map<UUID, FiscalClassification> stored = new HashMap<>(store.classificationsForBrand(tenantId, brandId));
+        // REPLACE writes the whole row, so what an item replaces is read once for
+        // the brand rather than once per item, and kept current as the batch is
+        // applied so a node named twice is replaced in sequence the way two calls
+        // would be. MERGE reads nothing up front: the store locks and merges each
+        // node's row as it is when that node is written, so a marking or age
+        // restriction changed while the batch runs is never written back from a
+        // stale copy.
+        Map<UUID, FiscalClassification> stored = mode == BulkClassifyMode.REPLACE
+                ? new HashMap<>(store.classificationsForBrand(tenantId, brandId))
+                : Map.of();
         List<BulkClassifyOutcome> outcomes = new ArrayList<>(items.size());
         Map<String, Object> beforeDoc = new LinkedHashMap<>();
         Map<String, Object> afterDoc = new LinkedHashMap<>();
@@ -993,14 +1003,23 @@ public class CatalogAuthoringService {
                 outcomes.add(new BulkClassifyOutcome(item.node(), BulkClassifyStatus.SKIPPED_EMPTY));
                 continue;
             }
-            FiscalClassification before = stored.getOrDefault(item.node().id(), FiscalClassification.unclassified());
-            FiscalClassification after = mode == BulkClassifyMode.MERGE ? mergedOver(before, fiscal) : fiscal;
-            if (mode == BulkClassifyMode.MERGE && after.equals(before)) {
-                outcomes.add(new BulkClassifyOutcome(item.node(), BulkClassifyStatus.UNCHANGED));
-                continue;
+            FiscalClassification before;
+            FiscalClassification after;
+            if (mode == BulkClassifyMode.MERGE) {
+                JdbcCatalogStore.FiscalMerge merge =
+                        store.mergeFiscalClassification(tenantId, brandId, item.node(), fiscal, "MANUAL", actorId);
+                if (!merge.changed()) {
+                    outcomes.add(new BulkClassifyOutcome(item.node(), BulkClassifyStatus.UNCHANGED));
+                    continue;
+                }
+                before = merge.before();
+                after = Objects.requireNonNull(merge.after());
+            } else {
+                before = stored.getOrDefault(item.node().id(), FiscalClassification.unclassified());
+                after = fiscal;
+                classify(tenantId, brandId, item.node(), after, actorId);
+                stored.put(item.node().id(), after);
             }
-            classify(tenantId, brandId, item.node(), after, actorId);
-            stored.put(item.node().id(), after);
             String key = item.node().id().toString();
             beforeDoc.putIfAbsent(key, fiscalSummary(before));
             afterDoc.put(key, fiscalSummary(after));
@@ -1019,29 +1038,6 @@ public class CatalogAuthoringService {
                     .build());
         }
         return outcomes;
-    }
-
-    /**
-     * {@code incoming} laid over {@code stored}: each of the five value fields
-     * the merge mode writes takes the incoming value where there is one and the
-     * stored one where there is not, and everything else — marking, excise,
-     * alcohol, age — stays as stored. Kept here rather than on {@link
-     * FiscalClassification} because {@link FiscalClassification#orInherited}
-     * already means «take the stricter of two constraints», which is the
-     * opposite of what an operator's edit means.
-     */
-    private static FiscalClassification mergedOver(FiscalClassification stored, FiscalClassification incoming) {
-        return new FiscalClassification(
-                incoming.mxikCode() != null ? incoming.mxikCode() : stored.mxikCode(),
-                incoming.packageCode() != null ? incoming.packageCode() : stored.packageCode(),
-                incoming.fiscalUnitCode() != null ? incoming.fiscalUnitCode() : stored.fiscalUnitCode(),
-                incoming.fiscalName() != null ? incoming.fiscalName() : stored.fiscalName(),
-                incoming.barcode() != null ? incoming.barcode() : stored.barcode(),
-                stored.markingRequired(),
-                stored.markingScheme(),
-                stored.excisable(),
-                stored.alcoholByVolumeBasisPoints(),
-                stored.ageRestrictionYears());
     }
 
     /**

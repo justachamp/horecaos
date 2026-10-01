@@ -771,6 +771,121 @@ public class JdbcCatalogStore {
                 """).params(params).update();
     }
 
+    /**
+     * What {@link #mergeFiscalClassification} did to one node: the row as it was
+     * (unclassified when it had none) and as it is now, or {@code after == null}
+     * when the merge would have left the row as it already was and wrote nothing.
+     */
+    public record FiscalMerge(
+            FiscalClassification before, @Nullable FiscalClassification after) {
+
+        public boolean changed() {
+            return after != null;
+        }
+    }
+
+    /**
+     * Lays the five value fields of {@code incoming} over what the node already
+     * holds (gap map row {@code 10.7c}): a field {@code incoming} supplies
+     * replaces the stored one, a field it omits keeps the stored one.
+     *
+     * <p>The constraint columns — marking, marking scheme, excise, alcohol
+     * strength, age restriction — are not in the write at all, neither the insert
+     * of a first row (which takes the column defaults) nor the update of an
+     * existing one. The merge is therefore decided by the database on the row as
+     * it is when the statement runs, not by a copy the caller read earlier: a
+     * manager who marks a dish while a backfill batch is in flight keeps that
+     * mark, which withdraws Payme from carts holding the dish. Kept apart from
+     * {@link #upsertFiscalClassification} because that one means «this is the
+     * whole row», and {@link FiscalClassification#orInherited} means «take the
+     * stricter of two constraints», the opposite of what an operator's edit does.
+     *
+     * <p>The row is locked first so {@code before} is the row this write is laid
+     * over and a node named twice in one transaction merges in sequence. A node
+     * with no row has nothing to lock; if another transaction creates one in that
+     * gap the write still merges into it, and only {@code before} is out of date.
+     * A merge that changes nothing writes nothing — no version bump, no new
+     * {@code classified_at} — which is what lets a re-run of a half-finished paste
+     * be quiet.
+     */
+    public FiscalMerge mergeFiscalClassification(
+            UUID tenantId,
+            UUID brandId,
+            PriceableNode node,
+            FiscalClassification incoming,
+            String source,
+            @Nullable UUID actorId) {
+
+        FiscalClassification before = jdbc.sql("""
+                SELECT mxik_code, package_code, fiscal_unit_code, fiscal_name,
+                       barcode, marking_required, marking_scheme, excisable,
+                       alcohol_by_volume_bp, age_restriction_years
+                FROM catalog.fiscal_classifications
+                WHERE tenant_id = :tenantId AND brand_id = :brandId
+                  AND priceable_type = :priceableType AND priceable_id = :priceableId
+                FOR UPDATE
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("priceableType", node.type().name())
+                .param("priceableId", node.id())
+                .query((row, number) -> mapClassification(row))
+                .optional()
+                .orElseGet(FiscalClassification::unclassified);
+
+        Map<String, Object> params = new HashMap<>();
+        params.put("id", UUID.randomUUID());
+        params.put("tenantId", tenantId);
+        params.put("brandId", brandId);
+        params.put("variantId", node.type() == PriceableType.VARIANT ? node.id() : null);
+        params.put("modifierOptionId", node.type() == PriceableType.MODIFIER_OPTION ? node.id() : null);
+        params.put("feeId", node.type() == PriceableType.FEE ? node.id() : null);
+        params.put("mxikCode", incoming.mxikCode());
+        params.put("packageCode", incoming.packageCode());
+        params.put("fiscalUnitCode", incoming.fiscalUnitCode());
+        params.put("fiscalName", incoming.fiscalName());
+        params.put("barcode", incoming.barcode());
+        params.put("source", source);
+        params.put("classifiedBy", actorId);
+
+        FiscalClassification after = jdbc.sql("""
+                INSERT INTO catalog.fiscal_classifications AS fc (
+                    id, tenant_id, brand_id, variant_id, modifier_option_id, fee_id,
+                    mxik_code, package_code, fiscal_unit_code, fiscal_name, barcode,
+                    source, classified_by)
+                VALUES (
+                    :id, :tenantId, :brandId, :variantId, :modifierOptionId, :feeId,
+                    :mxikCode, :packageCode, :fiscalUnitCode, :fiscalName, :barcode,
+                    :source, :classifiedBy)
+                ON CONFLICT (priceable_type, priceable_id) DO UPDATE SET
+                    mxik_code = COALESCE(EXCLUDED.mxik_code, fc.mxik_code),
+                    package_code = COALESCE(EXCLUDED.package_code, fc.package_code),
+                    fiscal_unit_code = COALESCE(EXCLUDED.fiscal_unit_code, fc.fiscal_unit_code),
+                    fiscal_name = COALESCE(EXCLUDED.fiscal_name, fc.fiscal_name),
+                    barcode = COALESCE(EXCLUDED.barcode, fc.barcode),
+                    source = EXCLUDED.source,
+                    classified_by = EXCLUDED.classified_by,
+                    classified_at = now(),
+                    version = fc.version + 1,
+                    updated_at = now()
+                WHERE (fc.mxik_code, fc.package_code, fc.fiscal_unit_code, fc.fiscal_name, fc.barcode)
+                    IS DISTINCT FROM (
+                        COALESCE(EXCLUDED.mxik_code, fc.mxik_code),
+                        COALESCE(EXCLUDED.package_code, fc.package_code),
+                        COALESCE(EXCLUDED.fiscal_unit_code, fc.fiscal_unit_code),
+                        COALESCE(EXCLUDED.fiscal_name, fc.fiscal_name),
+                        COALESCE(EXCLUDED.barcode, fc.barcode))
+                RETURNING mxik_code, package_code, fiscal_unit_code, fiscal_name,
+                          barcode, marking_required, marking_scheme, excisable,
+                          alcohol_by_volume_bp, age_restriction_years
+                """)
+                .params(params)
+                .query((row, number) -> mapClassification(row))
+                .optional()
+                .orElse(null);
+        return new FiscalMerge(before, after);
+    }
+
     /** Every classified node in one brand, keyed by the node it classifies. */
     public Map<UUID, FiscalClassification> classificationsForBrand(UUID tenantId, UUID brandId) {
         Map<UUID, FiscalClassification> byNode = new LinkedHashMap<>();

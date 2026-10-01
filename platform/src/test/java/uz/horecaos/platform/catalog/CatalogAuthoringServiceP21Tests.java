@@ -3,11 +3,17 @@ package uz.horecaos.platform.catalog;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.sql.Connection;
+import java.sql.SQLException;
 import java.time.Clock;
+import java.time.Duration;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
@@ -20,6 +26,7 @@ import org.testcontainers.DockerClientFactory;
 import tools.jackson.databind.json.JsonMapper;
 import uz.horecaos.platform.catalog.application.CatalogAuthoringService;
 import uz.horecaos.platform.catalog.application.CatalogAuthoringService.BulkClassifyItem;
+import uz.horecaos.platform.catalog.application.CatalogAuthoringService.BulkClassifyMode;
 import uz.horecaos.platform.catalog.application.CatalogAuthoringService.BulkClassifyOutcome;
 import uz.horecaos.platform.catalog.application.CatalogAuthoringService.BulkClassifyStatus;
 import uz.horecaos.platform.catalog.application.CatalogAuthoringService.ProductCreated;
@@ -425,6 +432,136 @@ class CatalogAuthoringServiceP21Tests {
                                 store.classificationsForBrand(TENANT, BRAND).get(plov.defaultVariantId()))
                         .mxikCode())
                 .isEqualTo("10101001001000000");
+    }
+
+    // ------------------------------------------- bulk classify: MERGE vs concurrency
+
+    /**
+     * A MERGE fills the value fields of a node; it must never write back the
+     * constraint columns it read at the start of the batch. Another operator
+     * marking the dish (which withdraws Payme from carts holding it) while a
+     * backfill batch is in flight would otherwise be undone by the batch's
+     * stale copy of the row.
+     *
+     * <p>The concurrent change is a real second connection: it updates the row
+     * and holds its lock, the merge is started on another thread and left to run
+     * into that lock, and only then does the first connection commit. That is
+     * the interleaving a lost update needs, whatever order the merge reads and
+     * writes in.
+     */
+    @Test
+    @DisplayName("a MERGE that meets a concurrent marking and age-restriction change keeps that change, "
+            + "and still fills the package code")
+    void mergeKeepsAConstraintChangedConcurrently() throws Exception {
+        UUID catalogId = authoring.createCatalog(TENANT, BRAND, "MAIN", "Asosiy menyu", LOCALE);
+        ProductCreated wine = authoring.createProduct(
+                TENANT,
+                BRAND,
+                catalogId,
+                "WINE",
+                "Sharob",
+                null,
+                LOCALE,
+                "SKU-WINE",
+                "PIECE",
+                FiscalClassification.of("10101001001000000", null, 796, "Sharob"),
+                ACTOR);
+        UUID variantId = wine.defaultVariantId();
+        List<BulkClassifyItem> items = List.of(new BulkClassifyItem(
+                PriceableNode.variant(variantId), FiscalClassification.of(null, "1234567", null, null)));
+
+        List<BulkClassifyOutcome> outcomes;
+        try (Connection other = db.dataSource().getConnection()) {
+            other.setAutoCommit(false);
+            try (var statement = other.createStatement()) {
+                statement.executeUpdate("""
+                        UPDATE catalog.fiscal_classifications
+                        SET marking_required = true, marking_scheme = 'DATA_MATRIX', excisable = true,
+                            alcohol_by_volume_bp = 1200, age_restriction_years = 21
+                        WHERE variant_id = '%s'
+                        """.formatted(variantId));
+            }
+            CompletableFuture<List<BulkClassifyOutcome>> merge = CompletableFuture.supplyAsync(
+                    () -> authoring.bulkClassify(TENANT, BRAND, items, BulkClassifyMode.MERGE, ACTOR, ACTOR_SUBJECT));
+            awaitSomeoneWaitingOnARowLock(Duration.ofSeconds(5));
+            other.commit();
+            outcomes = merge.get(30, TimeUnit.SECONDS);
+        }
+
+        assertThat(outcomes)
+                .singleElement()
+                .satisfies(o -> assertThat(o.status()).isEqualTo(BulkClassifyStatus.CLASSIFIED));
+        Map<String, Object> row = jdbc.sql("""
+                SELECT mxik_code, package_code, marking_required, marking_scheme, excisable,
+                       alcohol_by_volume_bp, age_restriction_years
+                FROM catalog.fiscal_classifications WHERE variant_id = :id
+                """).param("id", variantId).query().singleRow();
+        assertThat(row.get("package_code")).as("the merge still fills the gap").isEqualTo("1234567");
+        assertThat(row.get("mxik_code")).isEqualTo("10101001001000000");
+        assertThat(row.get("marking_required"))
+                .as("the concurrent marking survives")
+                .isEqualTo(true);
+        assertThat(row.get("marking_scheme")).isEqualTo("DATA_MATRIX");
+        assertThat(row.get("excisable")).isEqualTo(true);
+        assertThat(row.get("alcohol_by_volume_bp")).isEqualTo(1200);
+        assertThat(row.get("age_restriction_years")).isEqualTo(21);
+    }
+
+    @Test
+    @DisplayName("a MERGE that adds nothing to what the row holds is UNCHANGED and does not touch its version")
+    void mergeThatAddsNothingIsUnchangedAndWritesNothing() {
+        UUID catalogId = authoring.createCatalog(TENANT, BRAND, "MAIN", "Asosiy menyu", LOCALE);
+        ProductCreated plov = authoring.createProduct(
+                TENANT,
+                BRAND,
+                catalogId,
+                "PLOV",
+                "Osh",
+                null,
+                LOCALE,
+                "SKU-PLOV",
+                "PIECE",
+                FiscalClassification.of("10101001001000000", "1", 796, "Osh"),
+                ACTOR);
+        UUID variantId = plov.defaultVariantId();
+        Integer versionBefore = jdbc.sql("SELECT version FROM catalog.fiscal_classifications WHERE variant_id = :id")
+                .param("id", variantId)
+                .query(Integer.class)
+                .single();
+
+        List<BulkClassifyOutcome> outcomes = authoring.bulkClassify(
+                TENANT,
+                BRAND,
+                List.of(new BulkClassifyItem(
+                        PriceableNode.variant(variantId),
+                        FiscalClassification.of("10101001001000000", "1", null, null))),
+                BulkClassifyMode.MERGE,
+                ACTOR,
+                ACTOR_SUBJECT);
+
+        assertThat(outcomes)
+                .singleElement()
+                .satisfies(o -> assertThat(o.status()).isEqualTo(BulkClassifyStatus.UNCHANGED));
+        assertThat(jdbc.sql("SELECT version FROM catalog.fiscal_classifications WHERE variant_id = :id")
+                        .param("id", variantId)
+                        .query(Integer.class)
+                        .single())
+                .isEqualTo(versionBefore);
+    }
+
+    /** Blocks until some backend is waiting on a row lock, so the test knows the merge has reached its write. */
+    private void awaitSomeoneWaitingOnARowLock(Duration atMost) throws InterruptedException, SQLException {
+        long deadline = System.nanoTime() + atMost.toNanos();
+        while (System.nanoTime() < deadline) {
+            Integer waiting = jdbc.sql("""
+                    SELECT count(*)::int FROM pg_stat_activity
+                    WHERE datname = current_database() AND wait_event_type = 'Lock'
+                    """).query(Integer.class).single();
+            if (waiting != null && waiting > 0) {
+                return;
+            }
+            Thread.sleep(25);
+        }
     }
 
     // --------------------------------------------------------------- fixtures
