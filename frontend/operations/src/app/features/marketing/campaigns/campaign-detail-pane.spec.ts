@@ -1,12 +1,13 @@
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { BrandScope } from '../../../core/api/catalog-paths';
 import { Auth } from '../../../core/auth/auth';
 import { CurrentBrand } from '../../../core/auth/current-brand';
 import { ApiError, ApiErrorCode } from '../../../core/api/problem-details';
+import { applyRegionalFormats, resetRegionalFormats } from '../../../core/format/regional-format';
 import { I18n } from '../../../core/i18n/i18n';
 import { CampaignView, MarketingApi, RecipientCountsView } from '../marketing-api';
 import { CampaignDetailPane } from './campaign-detail-pane';
@@ -61,6 +62,8 @@ async function flushMicrotasks(): Promise<void> {
 describe('CampaignDetailPane', () => {
   let fixture: ComponentFixture<CampaignDetailPane>;
   let api: Record<string, ReturnType<typeof vi.fn>>;
+
+  afterEach(() => resetRegionalFormats());
 
   async function render(
     subject: string,
@@ -131,8 +134,23 @@ describe('CampaignDetailPane', () => {
     await render(OTHER_ID, campaign({ status: 'DRAFT', estimatedRecipients: 420 }));
     const host = fixture.nativeElement as HTMLElement;
 
-    expect(host.textContent).toContain('42000–63000');
+    expect(host.textContent?.replace(/\s/g, ' ')).toContain('42 000–63 000 UZS');
     expect(host.textContent).toContain('420');
+  });
+
+  // Row 10.12: the Formats card says it controls how operators read amounts across the console.
+  it('writes the cost estimate, ceiling, spend and reservation the way the brand chose', async () => {
+    applyRegionalFormats({ moneySymbolPlacement: 'BEFORE', moneyGrouping: 'COMMA' });
+    await render(
+      OTHER_ID,
+      campaign({ status: 'SENDING', reservedCostMinor: 12_000, spentCostMinor: 8_000 }),
+    );
+    const text = (fixture.nativeElement as HTMLElement).textContent!.replace(/\s/g, ' ');
+
+    expect(text).toContain('UZS 42,000–63,000');
+    expect(text).toContain('UZS 100,000');
+    expect(text).toContain('UZS 8,000');
+    expect(text).toContain('UZS 12,000');
   });
 
   it('shows a paused campaign’s block count', async () => {

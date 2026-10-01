@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { formatMoney } from './money';
+import { formatMoney, formatMoneyRange } from './money';
 import { applyRegionalFormats, resetRegionalFormats } from './regional-format';
 
 /** U+00A0 NO-BREAK SPACE, spelled as an escape for the reason `money.spec.ts` gives. */
@@ -72,5 +72,25 @@ describe('formatMoney follows the brand’s regional formats', () => {
     resetRegionalFormats();
 
     expect(formatMoney(TOTAL, 'ru', { withUnit: true })).toBe(`146${NBSP}000${NBSP}сум`);
+  });
+});
+
+/** A range such as a campaign's cost estimate writes the unit once, on the side the brand chose. */
+describe('formatMoneyRange follows the brand’s regional formats', () => {
+  afterEach(() => resetRegionalFormats());
+
+  it('writes the unit once, after the upper bound, by default', () => {
+    expect(formatMoneyRange(42_000, 63_000, 'UZS', 'en')).toBe(
+      `42${NBSP}000–63${NBSP}000${NBSP}UZS`,
+    );
+    expect(formatMoneyRange(42_000, 63_000, 'UZS', 'ru')).toBe(
+      `42${NBSP}000–63${NBSP}000${NBSP}сум`,
+    );
+  });
+
+  it('writes the unit once, before the lower bound, when the brand chose BEFORE', () => {
+    applyRegionalFormats({ moneySymbolPlacement: 'BEFORE', moneyGrouping: 'COMMA' });
+
+    expect(formatMoneyRange(42_000, 63_000, 'UZS', 'en')).toBe(`UZS${NBSP}42,000–63,000`);
   });
 });

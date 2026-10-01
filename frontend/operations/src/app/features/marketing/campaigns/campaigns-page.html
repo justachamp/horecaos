@@ -104,8 +104,13 @@
                         campaign.estimatedCostLowMinor !== null &&
                         campaign.estimatedCostHighMinor !== null
                       ) {
-                        {{ campaign.estimatedCostLowMinor }}–{{ campaign.estimatedCostHighMinor }}
-                        {{ campaign.currency }}
+                        {{
+                          costRange(
+                            campaign,
+                            campaign.estimatedCostLowMinor,
+                            campaign.estimatedCostHighMinor
+                          )
+                        }}
                       } @else {
                         —
                       }

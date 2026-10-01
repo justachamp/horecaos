@@ -130,7 +130,7 @@
             </div>
             <div class="dispatch-card__row q-tnum q-caption">
               <span>{{ plan.distanceMeters ? plan.distanceMeters + ' m' : '—' }}</span>
-              <span>{{ plan.customerDeliveryFeeMinor }} {{ plan.currency }}</span>
+              <span>{{ deliveryFeeLabel(plan) }}</span>
             </div>
             @if (plan.destinationLabel) {
               <p

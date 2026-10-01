@@ -106,14 +106,15 @@
                         <span class="q-caption">
                           {{
                             'delivery.zones.detail.freeFrom'
-                              | t: { amount: zone.freeDeliveryFromMinor }
+                              | t: { amount: threshold(zone, zone.freeDeliveryFromMinor) }
                           }}
                         </span>
                       }
                       @if (zone.minBasketMinor !== null && zone.minBasketMinor !== undefined) {
                         <span class="q-caption">
                           {{
-                            'delivery.zones.detail.minBasket' | t: { amount: zone.minBasketMinor }
+                            'delivery.zones.detail.minBasket'
+                              | t: { amount: threshold(zone, zone.minBasketMinor) }
                           }}
                         </span>
                       }

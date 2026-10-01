@@ -12,6 +12,7 @@ import { Router } from '@angular/router';
 import { Auth } from '../../../core/auth/auth';
 import { CurrentBrand } from '../../../core/auth/current-brand';
 import { ApiError, ApiErrorCode } from '../../../core/api/problem-details';
+import { formatMoney, formatMoneyRange } from '../../../core/format/money';
 import { I18n } from '../../../core/i18n/i18n';
 import { MessageKey } from '../../../core/i18n/messages.en';
 import { TPipe } from '../../../core/i18n/t.pipe';
@@ -148,6 +149,23 @@ export class CampaignDetailPane implements OnInit {
 
   protected close(): void {
     void this.router.navigate(['/marketing/campaigns']);
+  }
+
+  /**
+   * A campaign's cost figures, written the way the brand writes money (Settings 10.12). A campaign
+   * that carries no currency (a channel with no marginal cost) only ever priced in UZS.
+   */
+  protected cost(campaign: CampaignView, minor: number): string {
+    return formatMoney(
+      { amountMinor: minor, currency: campaign.currency ?? 'UZS' },
+      this.i18n.locale(),
+      { withUnit: true },
+    );
+  }
+
+  /** The estimate's low and high bounds with the unit written once. */
+  protected costRange(campaign: CampaignView, lowMinor: number, highMinor: number): string {
+    return formatMoneyRange(lowMinor, highMinor, campaign.currency ?? 'UZS', this.i18n.locale());
   }
 
   protected channelLabelKey(channel: string): MessageKey {

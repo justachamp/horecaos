@@ -225,7 +225,9 @@
               @for (component of sortedComponents(detail.components); track component.componentId) {
                 <tr data-testid="rate-card-component-row">
                   <td>{{ componentTypeLabel(component.componentType) }}</td>
-                  <td class="rates__num-col q-tnum">{{ component.amountMinor }}</td>
+                  <td class="rates__num-col q-tnum">
+                    {{ componentAmount(component.amountMinor, detail.currency) }}
+                  </td>
                   <td class="rates__num-col q-tnum">{{ component.bandFromMeters ?? '—' }}</td>
                   <td class="rates__num-col q-tnum">{{ component.bandToMeters ?? '∞' }}</td>
                   <td class="rates__num-col q-tnum">{{ component.minimumPaidSeconds ?? '—' }}</td>

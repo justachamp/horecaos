@@ -14,6 +14,7 @@ import { LocationScope, operationsPaths } from '../../core/api/operations-paths'
 import { ApiError } from '../../core/api/problem-details';
 import { CurrentLocation } from '../../core/auth/current-location';
 import { TimeZone, formatClock } from '../../core/format/datetime';
+import { formatMoney } from '../../core/format/money';
 import { I18n } from '../../core/i18n/i18n';
 import { MessageKey } from '../../core/i18n/messages.en';
 import { TPipe } from '../../core/i18n/t.pipe';
@@ -512,6 +513,15 @@ export class DispatchBoardPage implements OnInit {
 
   protected isOpen(plan: PlanQueueResponse): boolean {
     return OPEN_STATUSES.has(plan.status) && !plan.shipment;
+  }
+
+  /** What the customer pays for delivery, written the way the brand writes money (Settings 10.12). */
+  protected deliveryFeeLabel(plan: PlanQueueResponse): string {
+    return formatMoney(
+      { amountMinor: plan.customerDeliveryFeeMinor, currency: plan.currency },
+      this.i18n.locale(),
+      { withUnit: true },
+    );
   }
 
   protected planStatusLabel(status: string): string {

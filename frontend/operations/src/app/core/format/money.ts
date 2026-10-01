@@ -132,6 +132,33 @@ export function formatMoney(
   return text;
 }
 
+/**
+ * A range of one currency such as a campaign's cost estimate, with the unit written once.
+ *
+ * Both bounds are grouped the way the brand chose (Settings 10.12), and the unit sits on the side
+ * the brand chose for a total: after the upper bound by default (`42 000–63 000 сум`), before the
+ * lower bound where the brand put it first (`UZS 42,000–63,000`). Writing the unit on both bounds
+ * would read as two different figures; writing it on neither would lose it.
+ */
+export function formatMoneyRange(
+  lowMinor: number,
+  highMinor: number,
+  currency: string,
+  locale: Locale,
+  options: Pick<MoneyFormatOptions, 'formats'> = {},
+): string {
+  const placement = (options.formats ?? activeRegionalFormats()).moneySymbolPlacement;
+  const low = formatMoney({ amountMinor: lowMinor, currency }, locale, {
+    ...options,
+    withUnit: placement === 'BEFORE',
+  });
+  const high = formatMoney({ amountMinor: highMinor, currency }, locale, {
+    ...options,
+    withUnit: placement !== 'BEFORE',
+  });
+  return `${low}–${high}`;
+}
+
 /** The exponent this platform stores a currency at. Throws on an unknown code. */
 export function minorUnitExponent(currency: string): number {
   const exponent = MINOR_UNIT_EXPONENT[currency];
