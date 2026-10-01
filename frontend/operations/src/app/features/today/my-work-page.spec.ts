@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
 import { describe, expect, it, vi } from 'vitest';
 
 import { ApiError } from '../../core/api/problem-details';
@@ -36,6 +37,7 @@ function configure(options: {
 
   TestBed.configureTestingModule({
     providers: [
+      provideRouter([]),
       {
         provide: CurrentLocation,
         useValue: {
@@ -198,17 +200,35 @@ describe('MyWorkPage', () => {
 
   // ------------------------------------------------------- the locked band
 
-  describe('0.2c/0.2d — the locked band', () => {
-    it('names the staff-identity ADR for personal data and personalization, never an empty section', async () => {
+  describe('0.2c — personal data lives in «Мой профиль»', () => {
+    it('points to the profile page, where name, phone, photo and languages are edited', async () => {
+      configure({});
+      const fixture = await render();
+
+      const band = fixture.nativeElement.querySelector('[data-testid="my-work-profile-band"]');
+      expect(band).not.toBeNull();
+      expect(band.textContent).toContain('My profile');
+      expect(
+        fixture.nativeElement
+          .querySelector('[data-testid="my-work-profile-link"]')
+          .getAttribute('href'),
+      ).toBe('/my-profile');
+    });
+  });
+
+  describe('0.2d — the locked band', () => {
+    it('is still a named lock for interface personalization, never an empty section and never the plan wall', async () => {
       configure({});
       const fixture = await render();
 
       const locked = fixture.nativeElement.querySelector('[data-testid="my-work-locked-band"]');
       expect(locked).not.toBeNull();
       expect(locked.querySelector('[data-testid="q-locked-state"]')).not.toBeNull();
-      expect(locked.textContent).toContain('staff-identity ADR');
-      // Not the entitlement wall's own default title — this is a data-model
-      // gap, not an unpurchased plan, and must not read as one.
+      expect(locked.textContent).toContain('personalization');
+      // The staff-identity ADR is decided and built: the lock must not still blame it.
+      expect(locked.textContent).not.toContain('staff-identity ADR');
+      // Not the entitlement wall's own default title — this is a build gap,
+      // not an unpurchased plan, and must not read as one.
       expect(locked.textContent).not.toContain('Not included in this plan');
     });
   });

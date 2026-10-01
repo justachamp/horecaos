@@ -3,6 +3,7 @@ import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/rou
 
 import { Auth } from '../core/auth/auth';
 import { CurrentLocation, LocationOption } from '../core/auth/current-location';
+import { OwnProfile } from '../core/auth/own-profile';
 import { SessionCapabilities } from '../core/auth/session-capabilities';
 import { RegionalFormatSync } from '../core/format/regional-format-sync';
 import { I18n, LOCALES, Locale, isLocale } from '../core/i18n/i18n';
@@ -78,6 +79,7 @@ export class Shell {
   private readonly capabilities = inject(SessionCapabilities);
   private readonly voicePresence = inject(VoicePresence);
   protected readonly auth = inject(Auth);
+  private readonly ownProfile = inject(OwnProfile);
   protected readonly status = inject(ServiceStatus);
   // Field injection, not a call inside the constructor body: this is what
   // guarantees the connection is opened by the time the shell mounts,
@@ -106,6 +108,16 @@ export class Shell {
     })).filter((group) => group.items.length > 0),
   );
 
+  /**
+   * The name on the account chip: the tenant's own record of the signed-in
+   * person (ADR 0139), else the token's `name` claim for an account the tenant
+   * keeps no record for. The claim goes stale the moment «Личные данные» saves a
+   * new name, which is why it is only the fallback.
+   */
+  protected readonly accountName = computed(
+    () => this.ownProfile.displayName() ?? this.auth.displayName(),
+  );
+
   protected readonly locales = LOCALES;
   protected readonly locale = this.i18n.locale;
 
@@ -130,6 +142,8 @@ export class Shell {
     // unfiltered rail would otherwise show is as short as the session
     // context read allows.
     void this.capabilities.ensureLoaded();
+    // The chip's name (ADR 0139). Cosmetic: a refusal leaves the token claim.
+    void this.ownProfile.ensureLoaded();
     // Row 10.12: the brand's own money and phone formats, applied to every
     // formatter in the console. Constructing the sync is what starts it — it
     // follows the location's brand from here on, so it is built here, with

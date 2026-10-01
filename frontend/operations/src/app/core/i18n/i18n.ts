@@ -191,6 +191,19 @@ export function peekStoredLocale(): Locale {
   return DEFAULT_LOCALE;
 }
 
+/**
+ * Whether anybody has chosen a language on this browser. A person who has not
+ * -- a new device, a cleared profile -- gets the interface language their staff
+ * record carries (`OwnProfile`); one who has is never overridden by it.
+ */
+export function hasStoredLocale(): boolean {
+  try {
+    return isLocale(globalThis.localStorage?.getItem(STORAGE_KEY));
+  } catch {
+    return false;
+  }
+}
+
 function persistLocale(locale: Locale): void {
   try {
     globalThis.localStorage?.setItem(STORAGE_KEY, locale);
