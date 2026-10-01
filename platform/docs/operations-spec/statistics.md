@@ -414,10 +414,14 @@ selection with nothing to select for is clutter.
 
 **For:** which branch is slow, and whether it is slow at the pass or at the door.
 
-**Layout:** two stacked tables under the shared bar. Hidden from the navigation
-for single-location tenants — nothing on it is meaningful for one branch except
-the bucket distribution, which is folded into the overview's Band B `?` panel in
-that case.
+**Layout:** four stacked tables, A to D, under the shared bar (A and B were the
+original two; C and D are specified below). Nothing on the screen is meaningful for
+one branch except the bucket distribution, which is folded into the overview's Band B
+`?` panel in that case, so a single-location tenant gets none of the four tables:
+the intent is that the entry is hidden from the navigation. The built page does the
+second half differently: the tab stays in the reports strip and the screen prints one
+line (`reports.branches.singleLocation`) in place of all four tables when the tenant
+has one location or none (`branch-sla-report-page.ts`, `locations.length <= 1`).
 
 **Table A — branch leaderboard.** Columns: `Филиал` · `Заказы` · `Доставка /
 Самовывоз / Агрегаторы` (counts) · `Выручка` · `Средний чек` · `Ср. время

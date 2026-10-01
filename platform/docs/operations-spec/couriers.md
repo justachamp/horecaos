@@ -861,9 +861,18 @@ posted by `AdjustmentRuleEvaluator`, origin `RULE`).
 | `LATE_DELIVERY` | count | earnings with `on_time_outcome = LATE` | shift close, period close |
 | `ON_TIME_RATE` | basis points | `ON_TIME` over delivered | shift close, period close |
 | `GEO_UNVERIFIED_RATE` | basis points | `geo_unverified` over delivered | shift close, period close |
-| `CASH_VARIANCE` | minor currency units | `CASH_VARIANCE` ledger entries | **period close only** (`SETTLEMENT_PERIOD` window) |
+| `CASH_VARIANCE` | count (of `CASH_VARIANCE` entries in the period) | `CASH_VARIANCE` ledger entries | **period close only** (`SETTLEMENT_PERIOD` window) |
 | `ORDER_UNDELIVERED` | — | `fulfillment.delivery_exceptions`, which nothing in the courier module reads | **never — manual-only** |
 | `ORDER_DAMAGED` | — | the same | **never — manual-only** |
+
+The `CASH_VARIANCE` threshold is a **count of variance entries, not an amount**:
+`AdjustmentRuleEvaluator.evaluatePeriodClose` counts the period's ledger entries of that
+type and compares the count to `rule_threshold`, and ADR 0108 says "count". V0260's column
+comment says "minor currency units" for this basis, which disagrees with the code (an
+applied migration is not edited), so a rule authored as `CASH_VARIANCE GTE 50000` never
+fires (the count is 1 or 2) and an `LTE` rule fires for every courier. The threshold stays a
+count until someone decides otherwise; a shortfall-amount threshold would be a different
+basis and needs its own decision.
 
 **`ORDER_UNDELIVERED` and `ORDER_DAMAGED` are manual-only by design, and the design is
 conditional, not permanent.** They name facts that live in
