@@ -109,8 +109,11 @@ When a page's stylesheet grows past 4 kB:
   raises what the user asks for (`host: display contents` keeps the box tree unchanged). The page keeps
   every read, write and decision; the order queue's toolbar, the detail pane's money section and
   the product editor's Photos tab are examples.
-- Do not raise the budget. `operations`' initial bundle is about 770 kB (error budget 825 kB), of which the Russian
-  catalogue (the default locale, eager by ADR 0035's loading model) is 466 kB.
+- Do not raise the budget. `operations`' initial bundle measured 782.55 kB on 2026-09-30 against
+  the 825 kB error budget (about 42 kB of headroom), of which the Russian catalogue (the default
+  locale, eager by ADR 0035's loading model) is 466 kB. The figure ages with every merge: the
+  `Initial total` line of `ng build --configuration production` is the source of truth, so size a
+  feature against a fresh build, not against this number.
 
 `operations` also has `npm run i18n:dead`, which lists message keys nothing references;
 `--write` removes them from all three locales (`--app-dir ../control-plane --variables

@@ -1263,6 +1263,24 @@ describe('NewOrderPage', () => {
     );
   });
 
+  /**
+   * The pre-order checkbox kept the aggregator toggle's class when that toggle's rule moved into the
+   * header component's stylesheet, and Angular scopes a component's CSS to its own template, so the
+   * page's label was left unstyled: no flex row, no subtle ink. The label must carry a rule the
+   * page's own stylesheet defines.
+   */
+  it('lays the pre-order toggle out as a flex row with the page stylesheet, not the header component’s', async () => {
+    await render({});
+    const label = fixture.nativeElement
+      .querySelector('[data-testid="new-order-pre-order-toggle"]')!
+      .closest('label') as HTMLElement;
+
+    const style = getComputedStyle(label);
+    expect(style.display).toBe('flex');
+    expect(style.alignItems).toBe('center');
+    expect(style.gap).toBe('4px');
+  });
+
   // ------------------------------------------------------------------- «Повторить» (1.3f)
 
   /**
