@@ -39,6 +39,22 @@ public interface SalesChannelLookup {
     Set<String> enabledPaymentMethodCodes(UUID tenantId, UUID channelId);
 
     /**
+     * The channel an ADR 0026 installation backs ({@code provider_installation_id}), when
+     * there is exactly one active one — what a marketplace reconciler needs to turn a
+     * {@code MARKETPLACE} binding into the channel its stops and menu are keyed on (ADR 0141
+     * Decision 7: "the channel is the {@code tenant.sales_channels} row whose {@code
+     * provider_installation_id} is the binding's installation").
+     *
+     * <p>Empty for no active channel, and also for more than one: two channels on one
+     * installation name no unambiguous channel, and a push that guessed would tell a partner
+     * about the wrong one. Defaulted to empty so the test doubles of this port that predate
+     * the need are untouched.
+     */
+    default Optional<SalesChannel> byProviderInstallation(UUID tenantId, UUID installationId) {
+        return Optional.empty();
+    }
+
+    /**
      * The channel whose price-book assignments apply to {@code channelId}.
      *
      * <p>Follows {@code price_plane_channel_id} for exactly one hop. Empty when

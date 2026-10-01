@@ -149,6 +149,39 @@ public final class ConfigurationKeys {
             .build();
 
     /**
+     * ADR 0141, rollback switch two (suspend the reconciler), declared identically in {@code
+     * integration.api.MarketplaceConfigurationKeys} — see that class for why the pair exists.
+     */
+    public static final ConfigurationKey<Boolean> MARKETPLACE_AVAILABILITY_RECONCILE_ENABLED = ConfigurationKey.of(
+                    "marketplace.availability.reconcile_enabled", Boolean.class)
+            .defaultValue(true)
+            .ownedBy("integration")
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+            .describedAs("Whether the platform pushes stop-list changes to connected marketplaces. Off "
+                    + "suspends every push; resuming resends every item once.")
+            .build();
+
+    /** ADR 0141: the resync sweep's interval, declared identically in {@code integration.api.MarketplaceConfigurationKeys}. */
+    public static final ConfigurationKey<Integer> MARKETPLACE_AVAILABILITY_RESYNC_INTERVAL_SECONDS =
+            ConfigurationKey.of("marketplace.availability.resync_interval_seconds", Integer.class)
+                    .defaultValue(300)
+                    .ownedBy("integration")
+                    .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+                    .describedAs("Seconds between full recomputations of every mapped marketplace item. The "
+                            + "guarantee that a marketplace converges on the platform's current answer.")
+                    .build();
+
+    /** ADR 0141 / ADR 0040: the staleness bound, declared identically in {@code integration.api.MarketplaceConfigurationKeys}. */
+    public static final ConfigurationKey<Integer> MARKETPLACE_AVAILABILITY_STALE_AFTER_SECONDS = ConfigurationKey.of(
+                    "marketplace.availability.stale_after_seconds", Integer.class)
+            .defaultValue(1800)
+            .ownedBy("integration")
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+            .describedAs("Seconds a marketplace binding may go without a confirmed availability push "
+                    + "before it is treated as stale.")
+            .build();
+
+    /**
      * ADR 0021: the strongest enforcement mode entitlement checks may apply.
      *
      * <p>Declared here so a stored row for it passes the startup validator, and
@@ -597,6 +630,9 @@ public final class ConfigurationKeys {
             ORDERING_AUTO_ACCEPT_MIN_PRIOR_ORDERS,
             CATALOG_USE_STOCK_LOGIC,
             INVENTORY_STOPS_CREATION_ENABLED,
+            MARKETPLACE_AVAILABILITY_RECONCILE_ENABLED,
+            MARKETPLACE_AVAILABILITY_RESYNC_INTERVAL_SECONDS,
+            MARKETPLACE_AVAILABILITY_STALE_AFTER_SECONDS,
             CATALOG_QR_KIOSK_PRICE_PLANE,
             NOTIFICATIONS_PAYMENT_LINK_AUTO_SEND,
             NOTIFICATIONS_AGGREGATOR_SHIFT_NOTIFICATIONS_ENABLED,
