@@ -83,6 +83,97 @@ describe('DineInService', () => {
     });
   });
 
+  describe('seat (ADR 0143)', () => {
+    const seating = {
+      sessionId: 'session-new',
+      status: 'OPEN',
+      currency: 'UZS',
+      totalMinor: 0,
+      roundCount: 0,
+      orderIds: [],
+      origin: 'GUEST_QR',
+      created: true,
+      claimExpiresAt: '2026-10-01T10:15:00Z',
+      confirmed: false,
+    };
+
+    async function scanned(overrides: Partial<DineInAdmission> = {}) {
+      const parts = setUp();
+      parts.api.mutate.mockResolvedValueOnce(
+        admission({ openSessionId: null, walkInAvailable: true, ...overrides }),
+      );
+      await parts.service.exchange('printed-table-token');
+      return parts;
+    }
+
+    it('posts the party size with the guest token, signed in as the customer -- never anonymous', async () => {
+      const { service, api } = await scanned();
+      api.mutate.mockResolvedValueOnce(seating);
+
+      const result = await service.seat(3);
+
+      expect(api.mutate).toHaveBeenLastCalledWith(
+        'POST',
+        '/storefront/dine-in/sessions',
+        expect.objectContaining({
+          body: { partySize: 3 },
+          headers: { 'X-Dine-In-Token': 'guest-token-1' },
+        }),
+      );
+      const options = api.mutate.mock.calls.at(-1)?.[2] as { anonymous?: boolean };
+      expect(options.anonymous).toBeUndefined();
+      expect(result.created).toBe(true);
+    });
+
+    it('moves the stored admission onto the new session, and a reload lands on the seated table', async () => {
+      const { service, api } = await scanned();
+      api.mutate.mockResolvedValueOnce(seating);
+
+      await service.seat(2);
+
+      expect(service.admission()?.openSessionId).toBe('session-new');
+      expect(service.admission()?.walkInAvailable).toBe(false);
+      TestBed.resetTestingModule();
+      const { service: resumed } = setUp();
+      expect(resumed.admission()?.openSessionId).toBe('session-new');
+    });
+
+    it('leaves the admission alone when the platform refuses', async () => {
+      const { service, api } = await scanned();
+      api.mutate.mockRejectedValueOnce(
+        new HorecaOSApiError({
+          status: 409,
+          code: 'RESOURCE_CONFLICT',
+          detail: 'This table cannot be taken from here.',
+          problem: { conflict: 'TABLE_NOT_AVAILABLE' },
+        }),
+      );
+
+      await expect(service.seat(2)).rejects.toBeInstanceOf(HorecaOSApiError);
+
+      expect(service.admission()?.openSessionId).toBeNull();
+      expect(service.admission()?.walkInAvailable).toBe(true);
+    });
+
+    it('refuses without a scanned table, rather than posting with no proof of where', async () => {
+      const { service, api } = setUp();
+
+      await expect(service.seat(2)).rejects.toThrow('No table has been scanned');
+      expect(api.mutate).not.toHaveBeenCalled();
+    });
+
+    it('stops offering the table after a refusal, and offers it again when a session ends', async () => {
+      const { service } = await scanned();
+
+      service.markWalkInUnavailable();
+      expect(service.admission()?.walkInAvailable).toBe(false);
+
+      service.sessionEnded();
+      expect(service.admission()?.openSessionId).toBeNull();
+      expect(service.admission()?.walkInAvailable).toBe(true);
+    });
+  });
+
   describe('attachRound', () => {
     it('sends the guest token as X-Dine-In-Token and the order id in the body', async () => {
       const { service, api } = setUp();

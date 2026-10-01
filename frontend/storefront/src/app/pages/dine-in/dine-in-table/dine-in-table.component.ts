@@ -1,19 +1,43 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, effect, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  DestroyRef,
+  OnInit,
+  computed,
+  effect,
+  inject,
+  signal,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router, RouterLink } from '@angular/router';
 
 import { ReturnDestination } from '../../../core/auth/return-destination';
 import { Session } from '../../../core/auth/session';
 import { newIdempotencyKey } from '../../../core/api/idempotency';
-import { HorecaOSApiError } from '../../../core/api/problem-details';
+import { HorecaOSApiError, isNotFound } from '../../../core/api/problem-details';
 import { CartService, type PlatformCart, type PricedCart } from '../../../services/cart.service';
-import { type DineInAdmission, DineInBill, DineInService, type RoundFlush } from '../../../services/dine-in.service';
+import {
+  type DineInAdmission,
+  DineInBill,
+  DineInService,
+  type RoundFlush,
+} from '../../../services/dine-in.service';
 import { LangService } from '../../../services/lang.service';
 import { LocationProfileService } from '../../../services/location-profile.service';
-import { MenuService, type PublishedMenu, type PublishedProduct } from '../../../services/menu.service';
+import {
+  MenuService,
+  type PublishedMenu,
+  type PublishedProduct,
+} from '../../../services/menu.service';
 import { NotificationService } from '../../../services/notification.service';
 import { TranslateService } from '../../../services/translate.service';
 import { TranslatePipe } from '../../../shared/translate/translate.pipe';
+
+/** How often the claim's countdown moves; a minute is the finest thing it says, so this is plenty. */
+const CLAIM_CLOCK_MS = 15_000;
+
+/** The most a guest can say they are (the platform's own ceiling for a party). */
+const MAX_PARTY = 200;
 
 interface MenuRow {
   readonly categoryId: string;
@@ -41,17 +65,22 @@ interface MenuRow {
  *
  * <h2>Why an `ORDER_AND_PAY` table can still have nothing to order onto</h2>
  *
- * Opening a session is `TableSessionController.open`, and it is capability-
- * gated to an operator at `LOCATION` scope -- there is no guest-facing path
- * to it today, deliberately: creating a real table occupancy from an
- * unauthenticated scan is a product decision about self-seating and its
- * interaction with reservation holds that ADR 0047 does not settle, and this
- * wave does not settle it either (see the wave's own report). Until a host
- * seats the table -- today, only reachable by seating a *confirmed
- * reservation* through the operations reservations page; a pure walk-in has
- * no seating screen anywhere yet -- `admission.openSessionId` is null and
- * this renders the menu with ordering disabled and a plain explanation,
- * rather than a broken cart with nothing to bind to.
+ * A session is what an order is put on, and until one exists
+ * `admission.openSessionId` is null: this renders the menu with ordering disabled,
+ * rather than a broken cart with nothing to bind to. Two things end that.
+ *
+ * - **A member of staff seats the table** (`TableSessionController.open`), the path
+ *   that was always there and stays: a guest with no phone, a branch that has not
+ *   turned the next thing on.
+ * - **The guest sits down themselves** (ADR 0143), when the platform said at the scan
+ *   that it could (`admission.walkInAvailable`): the screen offers "Sit at this table"
+ *   with a party-size stepper, needs the guest signed in first, and opens a *claim* --
+ *   a provisional session. The claim is the guest's for a short window and becomes an
+ *   ordinary session once an order the restaurant accepts is on it; if nothing follows
+ *   it lapses and the table goes back to the room. Until then there is nothing to bill,
+ *   so "ask for the bill" is not offered. The platform decides again when the guest
+ *   asks and answers every "no" with one sentence, so this screen never explains *why*
+ *   a table cannot be taken -- it says to ask a member of staff.
  */
 @Component({
   selector: 'app-dine-in-table',
@@ -87,10 +116,44 @@ export class DineInTableComponent implements OnInit {
   /** An order the platform refused to put on the bill for good -- the guest is told to ask staff. */
   readonly roundLost = signal(false);
 
+  private readonly destroyRef = inject(DestroyRef);
+
   readonly admission = computed(() => this.dineIn.admission());
 
   readonly canOrder = computed(() => this.admission()?.mode === 'ORDER_AND_PAY');
   readonly isSeated = computed(() => !!this.admission()?.openSessionId);
+
+  // --------------------------------------------- sitting down (ADR 0143)
+
+  /** The platform said, at the scan, that this table could be taken from here. */
+  readonly walkInAvailable = computed(() => this.admission()?.walkInAvailable === true);
+  /** The invitation to sit: an ordering table nobody sits at, which the platform would let this guest take. */
+  readonly canSitHere = computed(
+    () => this.canOrder() && !this.isSeated() && this.walkInAvailable(),
+  );
+  readonly partySize = signal(2);
+  readonly seating = signal(false);
+  /** Why the guest could not sit down, as a translation key; null when nothing went wrong. */
+  readonly seatErrorKey = signal<string | null>(null);
+  /** The seat the platform handed back was somebody else's: orders go on their bill. */
+  readonly joinedExisting = signal(false);
+  /** Ticks, so the claim's countdown follows the clock (a `computed` alone never would). */
+  private readonly now = signal(Date.now());
+  /** The guest's claim has not been confirmed: nothing the restaurant accepted is on it yet. */
+  readonly claimUnconfirmed = computed(() => {
+    const bill = this.bill();
+    return !!bill && bill.confirmed === false;
+  });
+  /** Whole minutes until an unconfirmed claim gives the table back; null when there is no claim to lose. */
+  readonly claimMinutesLeft = computed(() => {
+    const bill = this.bill();
+    if (!bill || bill.confirmed !== false || !bill.claimExpiresAt) {
+      return null;
+    }
+    return Math.max(0, Math.ceil((Date.parse(bill.claimExpiresAt) - this.now()) / 60_000));
+  });
+  private claimClock: ReturnType<typeof setInterval> | null = null;
+  private claimReadAfterExpiry = false;
 
   /** Orders placed from this device that the table's bill has not confirmed yet. */
   readonly pendingRounds = computed(() => {
@@ -126,6 +189,13 @@ export class DineInTableComponent implements OnInit {
   }
 
   ngOnInit(): void {
+    this.claimClock = setInterval(() => this.tick(), CLAIM_CLOCK_MS);
+    this.destroyRef.onDestroy(() => {
+      if (this.claimClock !== null) {
+        clearInterval(this.claimClock);
+      }
+    });
+
     const admission = this.admission();
     if (!admission) {
       this.loading.set(false);
@@ -148,7 +218,9 @@ export class DineInTableComponent implements OnInit {
         : Promise.resolve();
 
     const cartLoad =
-      admission.mode === 'ORDER_AND_PAY' && admission.openSessionId && this.session.isAuthenticated()
+      admission.mode === 'ORDER_AND_PAY' &&
+      admission.openSessionId &&
+      this.session.isAuthenticated()
         ? this.carts
             .ensure(admission.locationId, 'DINE_IN', false, admission.channelCode ?? undefined)
             .catch(() => null)
@@ -161,6 +233,96 @@ export class DineInTableComponent implements OnInit {
 
     Promise.all([menuLoad, billLoad, cartLoad]).finally(() => this.loading.set(false));
   }
+
+  /**
+   * Moves the countdown on, and once a claim's window has passed reads the bill once: the
+   * platform may have given the table back, and a screen still offering a table that is no
+   * longer the guest's would let them order onto a bill that is gone.
+   */
+  private tick(): void {
+    this.now.set(Date.now());
+    const bill = this.bill();
+    if (
+      bill?.confirmed === false &&
+      bill.claimExpiresAt &&
+      Date.parse(bill.claimExpiresAt) <= Date.now() &&
+      !this.claimReadAfterExpiry
+    ) {
+      this.claimReadAfterExpiry = true;
+      void this.refreshBill();
+    }
+  }
+
+  stepParty(by: number): void {
+    this.partySize.set(Math.min(MAX_PARTY, Math.max(1, this.partySize() + by)));
+  }
+
+  /**
+   * Sits the guest at the table (ADR 0143). Signed-out guests are sent to sign in first and
+   * come back here; the platform needs the customer's own session beside the table's token.
+   */
+  async sitDown(): Promise<void> {
+    if (!this.canSitHere() || this.seating()) {
+      return;
+    }
+    if (!this.session.isAuthenticated()) {
+      this.signIn();
+      return;
+    }
+    this.seating.set(true);
+    this.seatErrorKey.set(null);
+    try {
+      const seating = await this.dineIn.seat(this.partySize());
+      this.joinedExisting.set(!seating.created);
+      this.claimReadAfterExpiry = false;
+      this.bill.set(seating);
+      this.now.set(Date.now());
+    } catch (failure) {
+      this.onSeatFailure(failure);
+    } finally {
+      this.seating.set(false);
+    }
+  }
+
+  private onSeatFailure(failure: unknown): void {
+    if (!(failure instanceof HorecaOSApiError)) {
+      this.seatErrorKey.set('errors.generic');
+      return;
+    }
+    if (failure.status === 401) {
+      // Two different 401s: the customer's own session lapsed (sign in again and come
+      // back) and the table's guest token is dead (scan the code again). Only the second
+      // ends the visit.
+      if (
+        failure.problem?.reason === 'CUSTOMER_SESSION_REQUIRED' ||
+        !this.session.isAuthenticated()
+      ) {
+        this.signIn();
+      } else {
+        this.dineIn.clear();
+      }
+      return;
+    }
+    if (failure.status === 409 && failure.problem?.conflict === 'TABLE_NOT_AVAILABLE') {
+      // One answer for every reason (off, held, a cap, a refused account): ask staff.
+      this.dineIn.markWalkInUnavailable();
+      this.seatErrorKey.set('dineIn.tableNotAvailable');
+      return;
+    }
+    if (failure.status === 400 && typeof failure.problem?.seats === 'number') {
+      this.seatErrorKey.set('dineIn.tooManyForTable');
+      this.tooManySeats.set(failure.problem.seats);
+      return;
+    }
+    if (failure.status === 429) {
+      this.seatErrorKey.set('dineIn.seatRateLimited');
+      return;
+    }
+    this.seatErrorKey.set('errors.generic');
+  }
+
+  /** The seat count the platform reported for "too many for this table". */
+  readonly tooManySeats = signal<number | null>(null);
 
   readonly rows = computed<readonly MenuRow[]>(() => {
     const menu = this.menu();
@@ -218,7 +380,12 @@ export class DineInTableComponent implements OnInit {
       return;
     }
     try {
-      await this.carts.ensure(admission.locationId, 'DINE_IN', true, admission.channelCode ?? undefined);
+      await this.carts.ensure(
+        admission.locationId,
+        'DINE_IN',
+        true,
+        admission.channelCode ?? undefined,
+      );
       await this.bindCartToTable(admission);
       const cart = this.carts.cart();
       const lineKey = cart?.lines.find((line) => line.variantId === variantId)?.lineKey;
@@ -247,7 +414,10 @@ export class DineInTableComponent implements OnInit {
    * refuses that (`TABLE_BINDING_STALE`), but the guest should not be the one to
    * find out. A basket with no lines has nothing to place; its first line binds it.
    */
-  private async rebindExistingCart(admission: DineInAdmission, cart: PlatformCart | null): Promise<void> {
+  private async rebindExistingCart(
+    admission: DineInAdmission,
+    cart: PlatformCart | null,
+  ): Promise<void> {
     if (!cart || cart.lines.length === 0) {
       return;
     }
@@ -456,6 +626,11 @@ export class DineInTableComponent implements OnInit {
     } catch (failure) {
       if (this.dineIn.isGuestSessionEnded(failure)) {
         this.dineIn.clear();
+      } else if (isNotFound(failure) && this.claimUnconfirmed()) {
+        // The claim lapsed and the table went back to the room. Offer to sit down again;
+        // the platform re-decides when the guest asks.
+        this.bill.set(null);
+        this.dineIn.sessionEnded();
       }
     } finally {
       this.billBusy.set(false);

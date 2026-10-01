@@ -24,6 +24,13 @@ export interface DineInAdmission {
    * registered zero or more than one, in which case this client falls back
    * to whatever channel it would otherwise browse under. */
   readonly channelCode: string | null;
+  /**
+   * Whether this guest could seat themselves right now (ADR 0143): the branch has turned
+   * self-seating on, the table is free and no confirmed booking holds it soon. A hint for
+   * the screen -- the platform decides again when the guest asks. Absent on an admission
+   * stored by an earlier build, which reads as false.
+   */
+  readonly walkInAvailable?: boolean;
 }
 
 /** `QrEntryController.GuestBillResponse`, transcribed. */
@@ -34,6 +41,22 @@ export interface DineInBill {
   readonly totalMinor: number;
   readonly roundCount: number;
   readonly orderIds: readonly string[];
+  /** `STAFF` or `GUEST_QR` (ADR 0143). Absent from a platform that predates it, which reads as staff. */
+  readonly origin?: string;
+  /**
+   * When an unconfirmed claim gives the table back to the room; null once an order the
+   * restaurant accepted is on it (or a member of staff took charge), and for a session a
+   * host opened.
+   */
+  readonly claimExpiresAt?: string | null;
+  /** Whether this is an ordinary session. False only for a guest's claim nothing has confirmed yet. */
+  readonly confirmed?: boolean;
+}
+
+/** `QrEntryController.GuestSeatingResponse`: the bill plus whether this very call opened the session. */
+export interface DineInSeating extends DineInBill {
+  /** False when somebody already sat here and this is their session, handed back rather than a second one. */
+  readonly created: boolean;
 }
 
 /**
@@ -99,7 +122,9 @@ export class DineInService {
   private readonly api = inject(ApiClient);
 
   private readonly admissionSignal = signal<DineInAdmission | null>(this.restore());
-  private readonly pendingRoundsSignal = signal<readonly PendingRound[]>(this.restorePendingRounds());
+  private readonly pendingRoundsSignal = signal<readonly PendingRound[]>(
+    this.restorePendingRounds(),
+  );
   private readonly flushesInFlight = new Map<string, Promise<RoundFlush>>();
 
   /** The current table's admission, or null once it has expired or nothing
@@ -143,6 +168,56 @@ export class DineInService {
     return response;
   }
 
+  /**
+   * Seats the guest at the table they scanned (ADR 0143): opens a provisional session --
+   * a claim -- without waiting for staff. An explicit act, never a side effect of
+   * scanning, and it needs both credentials a round does: the table's guest token and the
+   * signed-in customer session, so this call is deliberately not `anonymous`.
+   *
+   * The platform decides again under its locks (a booking may have taken the table since
+   * the scan, a cap may be reached) and answers every "no" with one `TABLE_NOT_AVAILABLE`
+   * conflict. When somebody already sits here it answers with their session and
+   * `created: false`, not a second one.
+   *
+   * On success the stored admission follows: it now has an open session, so a reload
+   * lands on the seated table rather than the invitation to sit.
+   */
+  async seat(partySize: number): Promise<DineInSeating> {
+    const seating = await this.api.mutate<DineInSeating>('POST', '/storefront/dine-in/sessions', {
+      body: { partySize },
+      headers: this.tokenHeader(),
+    });
+    this.updateAdmission({ openSessionId: seating.sessionId, walkInAvailable: false });
+    return seating;
+  }
+
+  /**
+   * The platform said this table cannot be taken from here. Stop offering it: the guest is
+   * told to ask a member of staff instead of being invited to try again.
+   */
+  markWalkInUnavailable(): void {
+    this.updateAdmission({ walkInAvailable: false });
+  }
+
+  /**
+   * The session this device was seated at is gone (a claim that lapsed, a host who closed
+   * the table). The table may be free again, so the invitation to sit is offered once more;
+   * the platform re-decides when the guest asks.
+   */
+  sessionEnded(): void {
+    this.updateAdmission({ openSessionId: null, walkInAvailable: true });
+  }
+
+  private updateAdmission(change: Partial<DineInAdmission>): void {
+    const current = this.admissionSignal();
+    if (!current) {
+      return;
+    }
+    const next = { ...current, ...change };
+    this.admissionSignal.set(next);
+    this.persist(next);
+  }
+
   /** The running bill at the guest's own table. Refused (404) for a
    * `VIEW_ONLY` code or a session that is not this table's own live one. */
   async bill(sessionId: string): Promise<DineInBill> {
@@ -183,11 +258,10 @@ export class DineInService {
    * attach a neighbouring table's bill.
    */
   async attachRound(sessionId: string, orderId: string): Promise<DineInBill> {
-    return this.api.mutate<DineInBill>(
-      'POST',
-      `/storefront/dine-in/sessions/${sessionId}/rounds`,
-      { body: { orderId }, headers: this.tokenHeader() },
-    );
+    return this.api.mutate<DineInBill>('POST', `/storefront/dine-in/sessions/${sessionId}/rounds`, {
+      body: { orderId },
+      headers: this.tokenHeader(),
+    });
   }
 
   /**
@@ -206,7 +280,9 @@ export class DineInService {
     const kept = this.pendingRoundsSignal().filter(
       (round) => !(round.sessionId === sessionId && round.orderId === orderId),
     );
-    this.setPendingRounds([...kept, { sessionId, orderId, queuedAt: Date.now() }].slice(-PENDING_ROUND_LIMIT));
+    this.setPendingRounds(
+      [...kept, { sessionId, orderId, queuedAt: Date.now() }].slice(-PENDING_ROUND_LIMIT),
+    );
   }
 
   /**
@@ -240,7 +316,9 @@ export class DineInService {
     if (running) {
       return running.then(() => this.flushPendingRounds(sessionId));
     }
-    const pass = this.attachQueuedRounds(sessionId).finally(() => this.flushesInFlight.delete(sessionId));
+    const pass = this.attachQueuedRounds(sessionId).finally(() =>
+      this.flushesInFlight.delete(sessionId),
+    );
     this.flushesInFlight.set(sessionId, pass);
     return pass;
   }

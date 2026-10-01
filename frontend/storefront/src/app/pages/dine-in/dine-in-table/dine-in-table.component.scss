@@ -56,6 +56,40 @@
   color: var(--text-primary);
 }
 
+/* The invitation to sit down at a free table (ADR 0143). */
+.table__sit {
+  background: var(--surface-raised);
+  border: 1px solid var(--border-default);
+  border-radius: 12px;
+  padding: 14px;
+  margin-bottom: 16px;
+}
+
+.table__sit-title {
+  font-size: 16px;
+  font-weight: 700;
+  margin: 0 0 4px;
+}
+
+.table__sit-hint {
+  color: var(--text-muted);
+  font-size: 13px;
+  margin: 0 0 12px;
+}
+
+.table__sit-party {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.table__sit-label {
+  font-size: 14px;
+  font-weight: 600;
+}
+
 .table__loading,
 .table__empty-menu {
   color: var(--text-muted);
