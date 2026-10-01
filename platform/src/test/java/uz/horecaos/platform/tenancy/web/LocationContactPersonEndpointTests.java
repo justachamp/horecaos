@@ -87,6 +87,10 @@ class LocationContactPersonEndpointTests {
         registry.add("spring.datasource.password", db::password);
         registry.add("horecaos.messaging.outbox.enabled", () -> "false");
         registry.add("spring.kafka.bootstrap-servers", () -> "localhost:59092");
+        // The staff member record seals names and phones under ADR 0029; a context
+        // that serves it needs the platform key-encryption key, as every other
+        // suite that reaches FieldProtection supplies.
+        registry.add("horecaos.secrets.data_encryption.platform.kek", () -> "a-test-key-encryption-key");
     }
 
     @Autowired
@@ -139,11 +143,11 @@ class LocationContactPersonEndpointTests {
     @DisplayName(
             "the branch manager lists, replaces and re-reads the branch's contacts: a colleague by member, an outsider by name and phone")
     void theBranchManagerKeepsTheBranchsContacts() throws Exception {
-        MvcResult empty = get(path(LOC_1), L1_MANAGER);
+        MvcResult empty = get(path(LOC_1), OWNER);
         assertThat(empty.getResponse().getStatus()).isEqualTo(200);
         long version = versionOf(empty);
 
-        MvcResult replaced = put(path(LOC_1), L1_MANAGER, """
+        MvcResult replaced = put(path(LOC_1), OWNER, """
                 {"contacts":[
                   {"relationshipCode":"MANAGER","staffMemberId":"%s"},
                   {"relationshipCode":"LANDLORD","name":"Anvar Ergashev","phone":"+998 71 200 30 40"}],
@@ -189,7 +193,7 @@ class LocationContactPersonEndpointTests {
     void aColleaguesNumberFollowsTheirOwnRecord() throws Exception {
         put(
                 path(LOC_1),
-                L1_MANAGER,
+                OWNER,
                 "{\"contacts\":[{\"relationshipCode\":\"MANAGER\",\"staffMemberId\":\"%s\"}]}".formatted(colleagueId),
                 versionOf(get(path(LOC_1), L1_MANAGER)));
         tx.executeWithoutResult(
@@ -204,7 +208,7 @@ class LocationContactPersonEndpointTests {
     @Test
     @DisplayName("the fact says that contacts changed and how many, and never a name or a number")
     void theAuditFactCarriesNoPersonalValue() throws Exception {
-        put(path(LOC_1), L1_MANAGER, """
+        put(path(LOC_1), OWNER, """
                 {"contacts":[{"relationshipCode":"SECURITY","name":"Gulom Security","phone":"+998 93 444 55 66"}]}
                 """, versionOf(get(path(LOC_1), L1_MANAGER)));
 
@@ -236,12 +240,20 @@ class LocationContactPersonEndpointTests {
     }
 
     @Test
-    @DisplayName("a line cook may read the branch's contacts but not change them (location.write)")
-    void aCookCannotWrite() throws Exception {
-        MvcResult refused = put(path(LOC_1), L1_COOK, "{\"contacts\":[]}", versionOf(get(path(LOC_1), L1_COOK)));
+    @DisplayName(
+            "a branch manager and a line cook read the branch's contacts but cannot change them: location.write is the owner's and the administrator's")
+    void onlyTheOwnerAndAdministratorWrite() throws Exception {
+        long version = versionOf(get(path(LOC_1), L1_COOK));
 
-        assertThat(refused.getResponse().getStatus()).isEqualTo(403);
-        assertThat(refused.getResponse().getContentAsString(UTF_8)).contains("location.write");
+        for (String reader : List.of(L1_COOK, L1_MANAGER)) {
+            MvcResult refused = put(path(LOC_1), reader, "{\"contacts\":[]}", version);
+            assertThat(refused.getResponse().getStatus()).as(reader).isEqualTo(403);
+            assertThat(refused.getResponse().getContentAsString(UTF_8)).contains("location.write");
+        }
+        assertThat(put(path(LOC_1), OWNER, "{\"contacts\":[]}", version)
+                        .getResponse()
+                        .getStatus())
+                .isEqualTo(200);
     }
 
     @Test
@@ -251,13 +263,13 @@ class LocationContactPersonEndpointTests {
 
         MvcResult foreign = put(
                 path(LOC_1),
-                L1_MANAGER,
+                OWNER,
                 "{\"contacts\":[{\"relationshipCode\":\"MANAGER\",\"staffMemberId\":\"%s\"}]}"
                         .formatted(foreignColleagueId),
                 version);
         MvcResult missing = put(
                 path(LOC_1),
-                L1_MANAGER,
+                OWNER,
                 "{\"contacts\":[{\"relationshipCode\":\"MANAGER\",\"staffMemberId\":\"%s\"}]}"
                         .formatted(UUID.randomUUID()),
                 version);
@@ -292,15 +304,14 @@ class LocationContactPersonEndpointTests {
 
         MvcResult both = put(
                 path(LOC_1),
-                L1_MANAGER,
+                OWNER,
                 "{\"contacts\":[{\"relationshipCode\":\"MANAGER\",\"staffMemberId\":\"%s\",\"name\":\"Copy\",\"phone\":\"+998 90 000 00 01\"}]}"
                         .formatted(colleagueId),
                 version);
-        MvcResult neither =
-                put(path(LOC_1), L1_MANAGER, "{\"contacts\":[{\"relationshipCode\":\"MANAGER\"}]}", version);
+        MvcResult neither = put(path(LOC_1), OWNER, "{\"contacts\":[{\"relationshipCode\":\"MANAGER\"}]}", version);
         MvcResult badRole = put(
                 path(LOC_1),
-                L1_MANAGER,
+                OWNER,
                 "{\"contacts\":[{\"relationshipCode\":\"CEO\",\"name\":\"Someone\",\"phone\":\"+998 90 000 00 01\"}]}",
                 version);
 
@@ -314,19 +325,19 @@ class LocationContactPersonEndpointTests {
             "the set is replaced under the location's version: a stale version is a conflict, and a replace moves it")
     void theSetIsGuardedByTheLocationsVersion() throws Exception {
         long version = versionOf(get(path(LOC_1), L1_MANAGER));
-        assertThat(put(path(LOC_1), L1_MANAGER, "{\"contacts\":[]}", version + 3)
+        assertThat(put(path(LOC_1), OWNER, "{\"contacts\":[]}", version + 3)
                         .getResponse()
                         .getStatus())
                 .isEqualTo(409);
 
-        MvcResult ok = put(path(LOC_1), L1_MANAGER, "{\"contacts\":[]}", version);
+        MvcResult ok = put(path(LOC_1), OWNER, "{\"contacts\":[]}", version);
         assertThat(ok.getResponse().getStatus()).isEqualTo(200);
         assertThat(jdbc.sql("SELECT version FROM tenant.locations WHERE id = :id")
                         .param("id", LOC_1)
                         .query(Long.class)
                         .single())
                 .isEqualTo(version + 1);
-        assertThat(put(path(LOC_1), L1_MANAGER, "{\"contacts\":[]}", version)
+        assertThat(put(path(LOC_1), OWNER, "{\"contacts\":[]}", version)
                         .getResponse()
                         .getStatus())
                 .as("the version that was just replaced is stale")

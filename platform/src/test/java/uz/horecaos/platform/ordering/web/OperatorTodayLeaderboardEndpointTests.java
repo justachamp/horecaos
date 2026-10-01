@@ -89,6 +89,10 @@ class OperatorTodayLeaderboardEndpointTests {
         registry.add("spring.datasource.password", db::password);
         registry.add("horecaos.messaging.outbox.enabled", () -> "false");
         registry.add("spring.kafka.bootstrap-servers", () -> "localhost:59092");
+        // The staff member record seals names and phones under ADR 0029; a context
+        // that serves it needs the platform key-encryption key, as every other
+        // suite that reaches FieldProtection supplies.
+        registry.add("horecaos.secrets.data_encryption.platform.kek", () -> "a-test-key-encryption-key");
     }
 
     @Autowired

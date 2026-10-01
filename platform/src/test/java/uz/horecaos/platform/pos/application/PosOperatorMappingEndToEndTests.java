@@ -86,6 +86,10 @@ class PosOperatorMappingEndToEndTests {
         registry.add("spring.datasource.password", db::password);
         registry.add("horecaos.messaging.outbox.enabled", () -> "false");
         registry.add("spring.kafka.bootstrap-servers", () -> "localhost:59092");
+        // The staff member record seals names and phones under ADR 0029; a context
+        // that serves it needs the platform key-encryption key, as every other
+        // suite that reaches FieldProtection supplies.
+        registry.add("horecaos.secrets.data_encryption.platform.kek", () -> "a-test-key-encryption-key");
     }
 
     @Autowired
@@ -127,7 +131,7 @@ class PosOperatorMappingEndToEndTests {
         jdbc.sql("""
                 INSERT INTO integration.installations
                     (id, tenant_id, provider_category, provider_type, environment_code, display_name, status)
-                VALUES (:id, :t, 'POS', :providerType, 'fake-env', 'Pilot', 'ACTIVE')
+                VALUES (:id, :t, 'POS', :providerType, 'clopos-open-api-v2', 'Pilot', 'ACTIVE')
                 """)
                 .param("id", INSTALLATION)
                 .param("t", TENANT)

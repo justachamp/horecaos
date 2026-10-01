@@ -108,6 +108,10 @@ class StaffMemberEndpointTests {
         registry.add("spring.datasource.password", db::password);
         registry.add("horecaos.messaging.outbox.enabled", () -> "false");
         registry.add("spring.kafka.bootstrap-servers", () -> "localhost:59092");
+        // The staff member record seals names and phones under ADR 0029; a context
+        // that serves it needs the platform key-encryption key, as every other
+        // suite that reaches FieldProtection supplies.
+        registry.add("horecaos.secrets.data_encryption.platform.kek", () -> "a-test-key-encryption-key");
     }
 
     @Autowired
@@ -263,13 +267,13 @@ class StaffMemberEndpointTests {
                 .param("t", TENANT)
                 .param("actor", COOK_1)
                 .update();
-        String before = get(auditEvents(), ADMIN).getResponse().getContentAsString(UTF_8);
+        String before = get(auditEvents(), OWNER).getResponse().getContentAsString(UTF_8);
         assertThat(before).contains(COOK_1_NAME);
 
         MvcResult mine = get(me(), COOK_1);
         put(me(), COOK_1, "{\"firstName\":\"Shahlo\",\"lastName\":\"Renamed\"}", versionOf(mine));
 
-        String after = get(auditEvents(), ADMIN).getResponse().getContentAsString(UTF_8);
+        String after = get(auditEvents(), OWNER).getResponse().getContentAsString(UTF_8);
         assertThat(after)
                 .as("the write evicted the (tenant, subject) entry once its transaction committed")
                 .contains("Shahlo Renamed")
@@ -301,7 +305,8 @@ class StaffMemberEndpointTests {
     @Test
     @DisplayName("every tenant-visible job reaches its own profile, a finance clerk's included")
     void everyJobReachesItsOwnProfile() throws Exception {
-        for (String subject : List.of(OWNER, ADMIN, BRAND_MANAGER, L1_MANAGER, COOK_1)) {
+        // The other four jobs already have a record from reset().
+        for (String subject : List.of(OWNER, ADMIN, BRAND_MANAGER)) {
             member(TENANT, subject, "Person", subject, null);
         }
         for (String subject : List.of(OWNER, ADMIN, BRAND_MANAGER, L1_MANAGER, COOK_1, FINANCE)) {
@@ -586,8 +591,9 @@ class StaffMemberEndpointTests {
                 .query(Integer.class)
                 .single();
         assertThat(reads)
-                .as("every successful read left a fact, and no refused one did")
-                .isEqualTo(3);
+                .as("the branch manager's two reads, the owner's and the administrator's each left a fact; "
+                        + "the refused reads left none")
+                .isEqualTo(4);
         assertThat(jdbc.sql("SELECT string_agg(change_document::text, ' ') FROM audit.audit_events")
                         .query(String.class)
                         .single())
