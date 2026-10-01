@@ -164,12 +164,12 @@ API as the second adapter, to be built when a measured trigger fires.**
    24-hour TTL that a new dataset version invalidates. The cache is a performance
    aid and never an authority: the fee row stores the metres it used.
 
-5. **The dataset is built off the host and shipped pinned.** The `deploy/`
-   tree (ADR 0061) runs pinned images pulled from a registry with no server-side
-   build, and the dataset follows the same rule. The Uzbekistan extract is preprocessed (MLD, car profile) in CI monthly and
-   published as an image tagged with its extract date, deployed by tag exactly as
-   the application is. The tag is the `datasetVersion`. The engine image is pinned
-   by digest.
+5. **The dataset is built off the host and shipped pinned.** The `deploy/` tree
+   (ADR 0061) runs pinned images pulled from a registry with no server-side
+   build, and the dataset follows the same rule. The Uzbekistan extract is
+   preprocessed (MLD, car profile) in CI monthly and published as an image tagged
+   with its extract date, deployed by tag exactly as the application is. The tag
+   is the `datasetVersion`. The engine image is pinned by digest.
 
 6. **A quote keeps the fee it was issued with.** `QuoteService` already puts the
    resolved delivery charge in the quote's context hash, and acceptance compares
