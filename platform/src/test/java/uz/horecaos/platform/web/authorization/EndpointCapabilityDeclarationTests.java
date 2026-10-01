@@ -24,6 +24,7 @@ import org.springframework.web.bind.annotation.ValueConstants;
 import uz.horecaos.platform.courier.api.CourierSelfAuthorized;
 import uz.horecaos.platform.customers.api.CustomerOwned;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
+import uz.horecaos.platform.iam.api.staff.StaffSelfAuthorized;
 import uz.horecaos.platform.ordering.web.OperationsOrderController;
 import uz.horecaos.platform.partner.api.PartnerBound;
 import uz.horecaos.platform.web.idempotency.Idempotent;
@@ -39,7 +40,8 @@ import uz.horecaos.platform.web.idempotency.NaturallyIdempotent;
  *
  * <p>Staff use {@link RequiresCapability}; customers use {@link CustomerOwned};
  * partner clients use {@link PartnerBound}; and couriers use
- * {@link CourierSelfAuthorized}. What the test refuses is silence and ambiguity:
+ * {@link CourierSelfAuthorized}; and a member of staff editing their own record
+ * uses {@link StaffSelfAuthorized} (ADR 0139). What the test refuses is silence and ambiguity:
  * an endpoint declaring none has made no authorization decision, while one
  * declaring two will be refused by whichever interceptor runs first.
  */
@@ -146,7 +148,8 @@ class EndpointCapabilityDeclarationTests {
 
         assertThat(undeclared).as("""
                         A mutating endpoint must declare one of @RequiresCapability,
-                        @CustomerOwned, @PartnerBound, or @CourierSelfAuthorized. None
+                        @CustomerOwned, @PartnerBound, @CourierSelfAuthorized, or
+                        @StaffSelfAuthorized. None
                         ships with no authorization decision (ADR 0025, ADR 0049).""").isEmpty();
     }
 
@@ -168,6 +171,79 @@ class EndpointCapabilityDeclarationTests {
                 .as("each endpoint has one principal model; combining strategies makes "
                         + "interceptor order decide which legitimate caller is refused")
                 .isEmpty();
+    }
+
+    @Test
+    void aStaffSelfEndpointCombinedWithACapabilityIsRefusedAsAmbiguous() throws NoSuchMethodException {
+        // ADR 0139: the capability interceptor runs first and would answer 403 to
+        // the very caller @StaffSelfAuthorized exists for -- a cook with only a
+        // location grant -- so the two strategies must never share a handler.
+        // The scan above counts the new strategy; this proves the count would
+        // catch the combination, rather than trusting that it does.
+        Method combined = Combined.class.getDeclaredMethod("both");
+        Method selfOnly = Combined.class.getDeclaredMethod("selfOnly");
+
+        assertThat(authorizationDeclarationCount(combined))
+                .as("a handler carrying both strategies must count as more than one")
+                .isGreaterThan(1);
+        assertThat(authorizationDeclarationCount(selfOnly))
+                .as("and the strategy alone counts as exactly one, or the test above could never pass")
+                .isEqualTo(1);
+    }
+
+    @Test
+    void everyStaffSelfEndpointActsOnTheCallersOwnRowOnly() {
+        // The other half of the contract. The interceptor checks that the caller
+        // holds the capability at SOME scope in the tenant -- a weaker statement
+        // than coverage, sound only because the handler can touch nothing but the
+        // caller's own row. That is true exactly when no member id can reach it,
+        // so a path that carries one -- or a brand or a location, which would
+        // invite the coverage reading -- is a different, unsafe endpoint.
+        List<String> offenders = new ArrayList<>();
+        int checked = 0;
+
+        for (Method handler : allControllerMethods()) {
+            if (handler.getAnnotation(StaffSelfAuthorized.class) == null) {
+                continue;
+            }
+            checked++;
+            String where = handler.getDeclaringClass().getSimpleName() + "#" + handler.getName();
+            String path = pathOf(handler);
+            if (!path.contains("{tenantId}")) {
+                offenders.add(where + " has no {tenantId}: the capability is checked against the path's tenant");
+            }
+            for (String identifier : new String[] {"{brandId}", "{locationId}", "{memberId}", "{subject}"}) {
+                if (path.contains(identifier)) {
+                    offenders.add(where + " names " + identifier + ": it must resolve the row from the token alone");
+                }
+            }
+            for (Parameter parameter : handler.getParameters()) {
+                String name = parameter.getName();
+                if (name.equals("memberId") || name.equals("subject") || name.equals("staffMemberId")) {
+                    offenders.add(where + " takes a " + name + " parameter");
+                }
+            }
+            if (handler.getAnnotation(RequiresCapability.class) != null) {
+                offenders.add(where + " also declares @RequiresCapability");
+            }
+        }
+
+        assertThat(checked)
+                .as("a scan that finds no self-service endpoint would pass forever")
+                .isGreaterThanOrEqualTo(3);
+        assertThat(offenders).isEmpty();
+    }
+
+    /** Stand-ins for the combination the test above must be able to see. */
+    @SuppressWarnings("unused")
+    private static final class Combined {
+
+        @StaffSelfAuthorized(uz.horecaos.platform.iam.api.Capability.STAFF_SELF_MANAGE)
+        @RequiresCapability(uz.horecaos.platform.iam.api.Capability.STAFF_PROFILE_READ)
+        void both() {}
+
+        @StaffSelfAuthorized(uz.horecaos.platform.iam.api.Capability.STAFF_SELF_MANAGE)
+        void selfOnly() {}
     }
 
     @Test
@@ -265,6 +341,7 @@ class EndpointCapabilityDeclarationTests {
         count += handler.getAnnotation(CustomerOwned.class) == null ? 0 : 1;
         count += handler.getAnnotation(PartnerBound.class) == null ? 0 : 1;
         count += handler.getAnnotation(CourierSelfAuthorized.class) == null ? 0 : 1;
+        count += handler.getAnnotation(StaffSelfAuthorized.class) == null ? 0 : 1;
         return count;
     }
 

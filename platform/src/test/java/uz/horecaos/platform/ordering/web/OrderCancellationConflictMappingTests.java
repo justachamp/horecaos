@@ -22,7 +22,7 @@ import uz.horecaos.platform.fulfillment.api.ShipmentCancellationPort;
 import uz.horecaos.platform.iam.api.AuthenticatedActor;
 import uz.horecaos.platform.iam.api.AuthorizationService;
 import uz.horecaos.platform.iam.api.CurrentActor;
-import uz.horecaos.platform.iam.api.accounts.StaffDisplayNames;
+import uz.horecaos.platform.iam.api.staff.StaffDirectory;
 import uz.horecaos.platform.ordering.application.AggregatorOrderIntakeService;
 import uz.horecaos.platform.ordering.application.CartPaymentOptions;
 import uz.horecaos.platform.ordering.application.CartService;
@@ -97,7 +97,7 @@ class OrderCancellationConflictMappingTests {
                 mock(AggregatorOrderIntakeService.class),
                 mock(ShipmentCancellationPort.class),
                 mock(MyWorkQueryService.class),
-                mock(StaffDisplayNames.class),
+                mock(StaffDirectory.class),
                 mock(ItemDisplayLookup.class),
                 mock(uz.horecaos.platform.ordering.application.BranchResolutionQueryService.class),
                 mock(uz.horecaos.platform.ordering.application.BranchOverrideReasonQueryService.class));

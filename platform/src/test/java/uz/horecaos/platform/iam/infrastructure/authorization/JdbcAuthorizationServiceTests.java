@@ -284,6 +284,11 @@ class JdbcAuthorizationServiceTests {
                 Capability.CUSTOMER_READ,
                 Capability.POS_SYNC_READ,
                 Capability.POS_EXPORT_READ,
+                // ADR 0139: a suspended tenant's managers may still look at who
+                // works for them -- names, masked phones, employment. Taking a
+                // third party's contact details out is not a read:
+                // STAFF_EMERGENCY_CONTACT_READ is classified a reveal on purpose.
+                Capability.STAFF_PROFILE_READ,
                 Capability.INTEGRATION_FAILURE_READ,
                 Capability.NOTIFICATION_READ,
                 Capability.AUDIENCE_READ,

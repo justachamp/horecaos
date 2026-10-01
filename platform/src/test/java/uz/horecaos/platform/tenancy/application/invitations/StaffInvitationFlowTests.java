@@ -46,6 +46,7 @@ import uz.horecaos.platform.iam.infrastructure.authorization.RoleRegistrySynchro
 import uz.horecaos.platform.mail.api.MailOutcome;
 import uz.horecaos.platform.mail.api.OutgoingMail;
 import uz.horecaos.platform.mail.api.PlatformMailer;
+import uz.horecaos.platform.support.RecordingStaffMemberRegistry;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcStaffInvitationStore;
 import uz.horecaos.platform.web.api.ApiException;
@@ -82,6 +83,7 @@ class StaffInvitationFlowTests {
     private FakeOrganizations organizations;
     private FakeMailer mailer;
     private StaffInvitationService service;
+    private RecordingStaffMemberRegistry registry;
 
     @BeforeAll
     static void startDatabase() {
@@ -136,6 +138,7 @@ class StaffInvitationFlowTests {
                 clock);
         store = new JdbcStaffInvitationStore(jdbc);
         accounts = new FakeStaffAccounts();
+        registry = new RecordingStaffMemberRegistry();
         organizations = new FakeOrganizations();
         mailer = new FakeMailer();
         TransactionTemplate transactions = new TransactionTemplate(new DataSourceTransactionManager(dataSource));
@@ -150,7 +153,8 @@ class StaffInvitationFlowTests {
                 audit,
                 transactions,
                 clock,
-                "http://localhost:4200");
+                "http://localhost:4200",
+                registry);
 
         new RoleRegistrySynchronizer(jdbc).synchronize();
         insertTenant();

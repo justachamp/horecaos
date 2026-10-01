@@ -101,6 +101,43 @@ public interface StaffAccounts {
     }
 
     /**
+     * What the identity provider holds about a person that the staff member
+     * record (ADR 0139) needs once, to be backfilled: first name, last name, the
+     * {@code phone} attribute {@link #create} wrote at invitation, and whether
+     * the account has a password yet (which is what tells an accepted invitation
+     * from a pending one).
+     *
+     * <p>Used only by the backfill and never at request time: the tenant's own
+     * record answers every screen, so a Keycloak outage no longer blanks a name.
+     *
+     * @return empty when the identity provider has no account under that
+     *         subject. An unreachable provider is an exception, not an empty
+     *         answer -- the backfill must be able to tell "no such account"
+     *         from "could not ask", and leaves the second for retry rather than
+     *         guessing.
+     */
+    default Optional<StaffProfile> profile(String subjectId) {
+        return Optional.empty();
+    }
+
+    /**
+     * An account's profile as far as the backfill cares. Personal data (ADR
+     * 0029): the generated {@code toString} is overridden so it can never be
+     * printed.
+     */
+    record StaffProfile(
+            @Nullable String firstName,
+            @Nullable String lastName,
+            @Nullable String phone,
+            boolean hasPassword) {
+
+        @Override
+        public String toString() {
+            return "StaffProfile[hasPassword=" + hasPassword + "]";
+        }
+    }
+
+    /**
      * Creates a new staff account directly (staff-and-access.md §4, ADR
      * 0116) -- not through {@link
      * uz.horecaos.platform.iam.api.organizations.OrganizationProvisioner#ensureMembership},

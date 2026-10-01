@@ -1,6 +1,7 @@
 package uz.horecaos.platform.pos.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -17,6 +18,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.testcontainers.DockerClientFactory;
 import tools.jackson.databind.json.JsonMapper;
 import uz.horecaos.platform.configuration.Ids;
+import uz.horecaos.platform.iam.api.staff.StaffMemberCards;
 import uz.horecaos.platform.integration.api.provider.MappingEntityType;
 import uz.horecaos.platform.integration.api.provider.ProviderOutcome;
 import uz.horecaos.platform.pos.FakePosAdapter;
@@ -117,7 +119,7 @@ class PosMappingServiceBulkAutoMatchTests {
                 new JdbcPosBindingConfiguration(jdbc, JsonMapper.builder().build());
         PosAdapterRegistry registry = new PosAdapterRegistry(List.of(adapter));
         Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
-        service = new PosMappingService(mappingStore, configuration, registry, clock);
+        service = new PosMappingService(mappingStore, configuration, registry, clock, mock(StaffMemberCards.class));
     }
 
     private UUID insertPaymentMethod(String code, String displayName) {

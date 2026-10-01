@@ -1760,6 +1760,54 @@ public enum Capability {
     TENANT_CONFIGURATION_WRITE("tenant.configuration.write", "tenant", "configuration.write"),
 
     /**
+     * ADR 0139: reading the people of a tenant -- name, masked phone in a list
+     * and the full number on a single person, photo, languages, employment.
+     *
+     * <p>Declared at {@code TENANT}, {@code BRAND} and {@code LOCATION} scope on
+     * routes that each name their own level, because a grant covers only the
+     * routes whose path names its level (ADR 0025): a branch manager's location
+     * grant cannot reach a tenant route, so the branch has a route of its own,
+     * and it answers "no such member" for anyone with no active job there.
+     */
+    STAFF_PROFILE_READ("staff.profile.read", "staff", "profile.read"),
+
+    /**
+     * ADR 0139: changing another person's profile, employment status and dates,
+     * employee number, and emergency contacts; and ending their employment.
+     *
+     * <p>At a branch the service refuses unless every active job the person
+     * holds is inside that branch. Ending employment is a tenant route only, in
+     * this version, because it also needs {@code iam.grant.manage} at each job's
+     * scope and no branch job holds that until ADR 0103 decides who manages
+     * grants; the service checks the second capability itself.
+     */
+    STAFF_PROFILE_MANAGE("staff.profile.manage", "staff", "profile.manage"),
+
+    /**
+     * ADR 0139: reading a staff member's emergency contacts -- a third party's
+     * name and phone. Every read writes an ADR 0027 fact; there is no bulk read.
+     *
+     * <p>Deliberately <em>not</em> classified a read for ADR 0078 (its action
+     * ends in {@code .reveal}, not {@code .read}): a suspended tenant keeps its
+     * ordinary reads, but taking a third party's contact details out of the
+     * building is the kind of act {@code customer.pii.reveal} and {@code
+     * courier.track.reveal} already withhold from it. The code is the ADR's.
+     */
+    STAFF_EMERGENCY_CONTACT_READ("staff.emergency-contact.read", "staff", "emergency-contact.reveal"),
+
+    /**
+     * ADR 0139: a person editing their own name, phone, photo and languages.
+     * Carried by every tenant-visible job, because a finance clerk edits her own
+     * phone too.
+     *
+     * <p>Authorised by {@code StaffSelfAuthorized}, not by scope coverage: the
+     * capability must be held at any scope in the tenant, and the handler
+     * touches only the caller's own row. It is on no route's
+     * {@code RequiresCapability}.
+     */
+    STAFF_SELF_MANAGE("staff.self.manage", "staff", "self.manage"),
+
+    /**
      * Global control-plane administration. Issued by Keycloak as described in
      * ADR 0003 and never granted through tenant administration.
      */

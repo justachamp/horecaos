@@ -18,7 +18,7 @@ import uz.horecaos.platform.iam.api.AuthorizationService;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope;
-import uz.horecaos.platform.iam.api.accounts.StaffDisplayNames;
+import uz.horecaos.platform.iam.api.staff.StaffDirectory;
 import uz.horecaos.platform.ordering.application.AggregatorOrderIntakeService;
 import uz.horecaos.platform.ordering.application.LiveBoardQueryService;
 import uz.horecaos.platform.ordering.application.MyWorkQueryService;
@@ -75,7 +75,7 @@ class OperationsOrderControllerActionCapabilitiesTests {
                 mock(AggregatorOrderIntakeService.class),
                 mock(ShipmentCancellationPort.class),
                 mock(MyWorkQueryService.class),
-                mock(StaffDisplayNames.class),
+                mock(StaffDirectory.class),
                 mock(ItemDisplayLookup.class),
                 mock(uz.horecaos.platform.ordering.application.BranchResolutionQueryService.class),
                 mock(uz.horecaos.platform.ordering.application.BranchOverrideReasonQueryService.class));

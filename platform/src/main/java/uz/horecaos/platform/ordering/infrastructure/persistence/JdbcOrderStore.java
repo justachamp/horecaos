@@ -1091,6 +1091,57 @@ public class JdbcOrderStore {
     }
 
     /**
+     * Every staff member who took or accepted an order in this brand (or one of
+     * its branches) inside the window, with the two counts {@link
+     * #operatorTodayCounts} gives for one -- the live operator band (gap map
+     * row 0.1d), read straight off {@code ordering.orders} like the single
+     * operator's card and not off a report.
+     *
+     * <p>Only a {@code USER} actor is a person: an order a bot or the website
+     * placed names a customer or a channel in those columns, and a channel is
+     * not a staff member. The list is ordered by orders accepted, then taken,
+     * and bounded -- a brand's busiest hundred is the band; the rest is the 7.5
+     * report's job.
+     *
+     * @param locationId null for the whole brand, otherwise one branch
+     */
+    public List<OperatorTodayLeaderboardRow> operatorTodayLeaderboard(
+            UUID tenantId, UUID brandId, @Nullable UUID locationId, Instant from, Instant to) {
+        String branch = locationId == null ? "" : " AND location_id = :locationId";
+        String sql = """
+                SELECT operator_subject, sum(created) AS created, sum(accepted) AS accepted
+                  FROM (
+                        SELECT created_by_actor_id AS operator_subject, 1 AS created, 0 AS accepted
+                          FROM ordering.orders
+                         WHERE tenant_id = :tenantId AND brand_id = :brandId%1$s
+                           AND created_by_actor_type = 'USER' AND created_by_actor_id IS NOT NULL
+                           AND created_at >= :from AND created_at < :to
+                        UNION ALL
+                        SELECT accepted_by_actor_id, 0, 1
+                          FROM ordering.orders
+                         WHERE tenant_id = :tenantId AND brand_id = :brandId%1$s
+                           AND accepted_by_actor_type = 'USER' AND accepted_by_actor_id IS NOT NULL
+                           AND accepted_at >= :from AND accepted_at < :to
+                       ) taken
+                 GROUP BY operator_subject
+                 ORDER BY sum(accepted) DESC, sum(created) DESC, operator_subject
+                 LIMIT 100
+                """.formatted(branch);
+        JdbcClient.StatementSpec statement = jdbc.sql(sql)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("from", utc(from))
+                .param("to", utc(to));
+        if (locationId != null) {
+            statement = statement.param("locationId", locationId);
+        }
+        return statement
+                .query((row, number) -> new OperatorTodayLeaderboardRow(
+                        row.getString("operator_subject"), row.getLong("created"), row.getLong("accepted")))
+                .list();
+    }
+
+    /**
      * The nine aggregate columns {@link #counts} and {@link #countsByLocation}
      * share, so the two can never disagree about what a badge means.
      *
@@ -3144,6 +3195,9 @@ public class JdbcOrderStore {
 
     /** One operator's today, from {@link #operatorTodayCounts} — see that method's own doc on why two numbers, not one. */
     public record OperatorTodayCountsRow(long created, long accepted) {}
+
+    /** One operator's line on the live board, from {@link #operatorTodayLeaderboard}. */
+    public record OperatorTodayLeaderboardRow(String operatorSubject, long created, long accepted) {}
 
     /**
      * The thirteen columns a customer's own order list needs, and no others.

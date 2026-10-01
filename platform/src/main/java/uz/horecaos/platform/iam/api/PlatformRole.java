@@ -94,6 +94,14 @@ public enum PlatformRole {
             "tenant-owner",
             ScopeType.TENANT,
             EnumSet.of(
+                    // ADR 0139: the tenant's own record of its people. Read, change (profile,
+                    // employment, emergency contacts) and the audited emergency-contact read are
+                    // held here at tenant scope, and by location-manager at branch scope for the
+                    // people of that branch alone; the self-service capability is every job's.
+                    STAFF_PROFILE_READ,
+                    STAFF_PROFILE_MANAGE,
+                    STAFF_EMERGENCY_CONTACT_READ,
+                    STAFF_SELF_MANAGE,
                     // ADR 0027: which of this tenant's actions need a second signature,
                     // and above what. Held here alone among the tenant bundles, and
                     // deliberately not by finance or the administrator: both execute
@@ -354,6 +362,14 @@ public enum PlatformRole {
             "tenant-admin",
             ScopeType.TENANT,
             EnumSet.of(
+                    // ADR 0139: the tenant's own record of its people. Read, change (profile,
+                    // employment, emergency contacts) and the audited emergency-contact read are
+                    // held here at tenant scope, and by location-manager at branch scope for the
+                    // people of that branch alone; the self-service capability is every job's.
+                    STAFF_PROFILE_READ,
+                    STAFF_PROFILE_MANAGE,
+                    STAFF_EMERGENCY_CONTACT_READ,
+                    STAFF_SELF_MANAGE,
                     // ADR 0044: authoring campaigns and reading audiences. Export is
                     // not here — an unrestricted download of the customer base is how a
                     // tenant's list reaches a competitor, so it sits with the owner.
@@ -535,6 +551,10 @@ public enum PlatformRole {
             "tenant-finance",
             ScopeType.TENANT,
             EnumSet.of(
+                    // ADR 0139: every job edits its own name, phone and photo (a finance clerk
+                    // changes her own phone too). Checked at any scope in the tenant, not by
+                    // coverage -- see StaffSelfAuthorized.
+                    STAFF_SELF_MANAGE,
                     // ADR 0042: what delivery cost, what is owed to each courier, and
                     // closing a settlement period. Authorising the payout is the owner's,
                     // so closing and releasing are never the same pair of hands.
@@ -612,6 +632,10 @@ public enum PlatformRole {
             "brand-manager",
             ScopeType.BRAND,
             EnumSet.of(
+                    // ADR 0139: a brand manager sees the people of their brand and edits none of
+                    // them -- changing a person is the branch manager's and above.
+                    STAFF_PROFILE_READ,
+                    STAFF_SELF_MANAGE,
                     // ADR 0044: a brand markets itself, and needs to see who it would
                     // be reaching before it does.
                     AUDIENCE_READ,
@@ -668,6 +692,13 @@ public enum PlatformRole {
             "location-manager",
             ScopeType.LOCATION,
             EnumSet.of(
+                    // ADR 0139: the branch's own people. The routes at LOCATION scope refuse a
+                    // change to anyone with a job outside this branch, and answer "no such
+                    // member" for a person of a sibling branch.
+                    STAFF_PROFILE_READ,
+                    STAFF_PROFILE_MANAGE,
+                    STAFF_EMERGENCY_CONTACT_READ,
+                    STAFF_SELF_MANAGE,
                     // ADR 0042: the branch end of a shift. Closing and approving hours
                     // are a manager's, and opening is deliberately absent — a manager who
                     // can create shift state can create paid hours for somebody who was
@@ -770,6 +801,10 @@ public enum PlatformRole {
             "location-staff",
             ScopeType.LOCATION,
             EnumSet.of(
+                    // ADR 0139: every job edits its own name, phone and photo (a finance clerk
+                    // changes her own phone too). Checked at any scope in the tenant, not by
+                    // coverage -- see StaffSelfAuthorized.
+                    STAFF_SELF_MANAGE,
                     LOCATION_READ,
                     CATALOG_READ,
                     INVENTORY_READ,
@@ -910,6 +945,10 @@ public enum PlatformRole {
             "courier-dispatcher",
             ScopeType.BRAND,
             EnumSet.of(
+                    // ADR 0139: every job edits its own name, phone and photo (a finance clerk
+                    // changes her own phone too). Checked at any scope in the tenant, not by
+                    // coverage -- see StaffSelfAuthorized.
+                    STAFF_SELF_MANAGE,
                     // ADR 0042: the dispatcher runs the board and raises adjustments for
                     // what happened on it, but does not approve them and never opens a
                     // shift on somebody's behalf.
@@ -947,6 +986,10 @@ public enum PlatformRole {
             "support-agent",
             ScopeType.TENANT,
             EnumSet.of(
+                    // ADR 0139: every job edits its own name, phone and photo (a finance clerk
+                    // changes her own phone too). Checked at any scope in the tenant, not by
+                    // coverage -- see StaffSelfAuthorized.
+                    STAFF_SELF_MANAGE,
                     // ADR 0046: "where did my points go" is the question support is
                     // called about; adjusting the balance is not theirs to do.
                     LOYALTY_READ,

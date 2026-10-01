@@ -234,9 +234,14 @@ public class SchedulingConfiguration {
      * DNS-TXT hostname challenge (V0428) and promotes it once the tenant's
      * DNS answers, closing row 10.5's WEB verification gap that otherwise
      * left a submitted hostname stuck at PENDING forever with nothing to
-     * ever re-check it.
+     * ever re-check it. ADR 0139 added the last two so far: {@code
+     * StaffMemberReconciler.reconcileOnce}, which backfills the tenant's own
+     * staff member record for accounts that predate it and keeps the
+     * completion gauges, and {@code StaffMemberRetentionSweeper.sweepOnce},
+     * which in report-only mode counts the ended employees whose personal data
+     * is past retention.
      */
-    static final int DEFAULT_POOL_SIZE = 69;
+    static final int DEFAULT_POOL_SIZE = 71;
 
     /**
      * The platform's scheduler, replacing Boot's single-threaded default.
