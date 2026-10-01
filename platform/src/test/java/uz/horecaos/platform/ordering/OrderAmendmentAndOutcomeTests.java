@@ -4335,6 +4335,147 @@ class OrderAmendmentAndOutcomeTests {
                 .containsEntry("loyalty_redemption_allowed", false);
     }
 
+    @Test
+    @DisplayName(
+            "ADR 0140: a checkout naming a payment method the cart was not priced with is refused PRICE_CHANGED when a"
+                    + " payment-method promotion exists, and goes through once the method is on the cart")
+    void aCheckoutWithAnUnquotedPaymentMethodIsRefusedPriceChanged() {
+        activateAutomatic(automatic(
+                "TERMINAL5",
+                "pay",
+                null,
+                null,
+                List.of(condition(
+                        uz.horecaos.platform.pricing.domain.Promotion.Condition.Type.PAYMENT_METHOD,
+                        Map.of("paymentMethodCodes", List.of("TERMINAL")))),
+                500L));
+        UUID cart = openCart();
+        tx(() -> carts.putLine(
+                TENANT, BRAND, CUSTOMER, cart, cartVersion(cart), "a", burgerVariant, 2, List.of(), null));
+        tx(() -> carts.price(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart)));
+
+        var unpriced = cartStore.find(TENANT, BRAND, cart).orElseThrow();
+        var refused = tx(() -> checkout.checkout(new CheckoutService.CheckoutCommand(
+                TENANT,
+                BRAND,
+                cart,
+                unpriced.version(),
+                Objects.requireNonNull(unpriced.pricingQuoteId()),
+                Objects.requireNonNull(unpriced.pricingContextHash()),
+                "idem-unquoted-method",
+                "TERMINAL",
+                0L,
+                "CUSTOMER",
+                CUSTOMER.toString(),
+                null,
+                null,
+                false)));
+
+        assertThat(refused.outcome()).isEqualTo(CheckoutService.CheckoutResult.Outcome.REJECTED);
+        assertThat(refused.rejectionCode()).isEqualTo("PRICE_CHANGED");
+        assertThat(jdbc.sql("SELECT count(*) FROM ordering.orders")
+                        .query(Long.class)
+                        .single())
+                .as("nothing was placed at a total nobody quoted")
+                .isZero();
+
+        // The way forward: select the method on the cart, price again, check out at the new quote.
+        tx(() -> carts.setPaymentMethod(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart), "TERMINAL"));
+        tx(() -> carts.price(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart)));
+        var repriced = cartStore.find(TENANT, BRAND, cart).orElseThrow();
+        var placed = tx(() -> checkout.checkout(new CheckoutService.CheckoutCommand(
+                TENANT,
+                BRAND,
+                cart,
+                repriced.version(),
+                Objects.requireNonNull(repriced.pricingQuoteId()),
+                Objects.requireNonNull(repriced.pricingContextHash()),
+                "idem-unquoted-method-2",
+                "TERMINAL",
+                0L,
+                "CUSTOMER",
+                CUSTOMER.toString(),
+                null,
+                null,
+                false)));
+
+        assertThat(placed.created()).isTrue();
+        assertThat(orderStore.find(TENANT, orderIdOf(placed)).orElseThrow().discountMinor())
+                .isEqualTo(5_000L);
+    }
+
+    @Test
+    @DisplayName("ADR 0140: a cart refuses a payment method its channel does not offer, and remembers one it does")
+    void aCartRemembersOnlyAMethodItsChannelOffers() {
+        UUID cart = openCart();
+        tx(() -> carts.putLine(
+                TENANT, BRAND, CUSTOMER, cart, cartVersion(cart), "a", burgerVariant, 2, List.of(), null));
+
+        tx(() -> carts.setPaymentMethod(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart), "TERMINAL"));
+        assertThat(cartStore.find(TENANT, BRAND, cart).orElseThrow().paymentMethodCode())
+                .isEqualTo("TERMINAL");
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+                        tx(() -> carts.setPaymentMethod(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart), "NOPE")))
+                .isInstanceOfSatisfying(
+                        CartService.CartRefusedException.class,
+                        e -> assertThat(e.code()).isEqualTo("PAYMENT_METHOD_UNAVAILABLE"));
+        assertThat(cartStore.find(TENANT, BRAND, cart).orElseThrow().paymentMethodCode())
+                .as("a refused selection leaves the previous one")
+                .isEqualTo("TERMINAL");
+    }
+
+    @Test
+    @DisplayName(
+            "ADR 0140: the prior-order count is exact, per brand or per channel, and a cancelled order never counts")
+    void thePriorOrderCountIsExact() {
+        UUID first = orderIdOf(placeOrder("idem-history-1"));
+        UUID second = orderIdOf(placeOrder("idem-history-2"));
+        var history = new uz.horecaos.platform.ordering.application.OrderHistoryService(jdbc);
+        var firstOrder = orderStore.find(TENANT, first).orElseThrow();
+        Instant afterBoth = firstOrder.createdAt().plus(Duration.ofDays(1));
+        UUID channel = firstOrder.channelId();
+        var brand = uz.horecaos.platform.pricing.api.CustomerOrderHistoryPort.Basis.BRAND;
+        var onChannel = uz.horecaos.platform.pricing.api.CustomerOrderHistoryPort.Basis.CHANNEL;
+
+        assertThat(history.countPriorOrders(TENANT, BRAND, CUSTOMER, brand, null, afterBoth, null))
+                .isEqualTo(2);
+        assertThat(history.countPriorOrders(TENANT, BRAND, CUSTOMER, brand, null, afterBoth, second))
+                .as("the order being amended is not its own predecessor")
+                .isEqualTo(1);
+        assertThat(history.countPriorOrders(
+                        TENANT,
+                        BRAND,
+                        CUSTOMER,
+                        brand,
+                        null,
+                        firstOrder.createdAt().minusSeconds(1),
+                        null))
+                .as("nothing was placed before the first order")
+                .isZero();
+        assertThat(history.countPriorOrders(TENANT, BRAND, CUSTOMER, onChannel, channel, afterBoth, null))
+                .isEqualTo(2);
+        assertThat(history.countPriorOrders(TENANT, BRAND, CUSTOMER, onChannel, UUID.randomUUID(), afterBoth, null))
+                .as("another channel has seen none of them")
+                .isZero();
+        assertThat(history.countPriorOrders(TENANT, BRAND, UUID.randomUUID(), brand, null, afterBoth, null))
+                .as("another account has placed none")
+                .isZero();
+        assertThat(history.countPriorOrders(UUID.randomUUID(), BRAND, CUSTOMER, brand, null, afterBoth, null))
+                .as("another tenant sees none of this tenant's orders")
+                .isZero();
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> history.countPriorOrders(TENANT, BRAND, CUSTOMER, onChannel, null, afterBoth, null))
+                .isInstanceOf(IllegalArgumentException.class);
+
+        jdbc.sql("UPDATE ordering.orders SET status = 'CANCELLED' WHERE id = :id")
+                .param("id", first)
+                .update();
+        assertThat(history.countPriorOrders(TENANT, BRAND, CUSTOMER, brand, null, afterBoth, null))
+                .as("a cancelled order never happened as far as 'first' is concerned")
+                .isEqualTo(1);
+    }
+
     private int consumed(UUID promotionId) {
         return jdbc.sql("SELECT consumed_count FROM pricing.promotions WHERE id = :id")
                 .param("id", promotionId)
