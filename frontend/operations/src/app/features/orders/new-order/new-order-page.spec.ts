@@ -1614,6 +1614,24 @@ describe('NewOrderPage', () => {
     expect(host.querySelector('[data-testid="new-order-table-required"]')).not.toBeNull();
   });
 
+  it('lays the pre-order checkbox out as a flex row, as the aggregator toggle above it is', async () => {
+    // `.new-order__aggregator-toggle` is styled by the header's own sheet for the aggregator
+    // checkbox; the pre-order label in this page uses the same class, and Angular scopes the
+    // header's rule to the header. Without a rule in the page's own sheet the label falls back to
+    // an inline label with default ink.
+    await render();
+    fixture.componentInstance['setFulfillmentMode']('PICKUP');
+    fixture.detectChanges();
+    const toggle = fixture.nativeElement.querySelector(
+      '[data-testid="new-order-pre-order-toggle"]',
+    ) as HTMLInputElement;
+
+    const label = getComputedStyle(toggle.closest('label')!);
+    expect(label.display).toBe('flex');
+    expect(label.alignItems).toBe('center');
+    expect(label.gap).toBe('4px');
+  });
+
   it('DINE_IN cannot be placed until the operator has named a party', async () => {
     const host = await renderDineIn();
     expect(fixture.componentInstance['canSubmit']()).toBe(false);
