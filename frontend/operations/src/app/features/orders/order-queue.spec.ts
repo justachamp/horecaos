@@ -1398,9 +1398,9 @@ describe('OrderQueue: toolbar filters (orders.md §2.4, wave P07)', () => {
         {
           provide: LatenessPolicyApi,
           useValue: {
-          resolve: () => Promise.resolve(PLATFORM_DEFAULT_LATENESS_POLICY),
-          tryResolve: () => Promise.resolve(PLATFORM_DEFAULT_LATENESS_POLICY),
-        },
+            resolve: () => Promise.resolve(PLATFORM_DEFAULT_LATENESS_POLICY),
+            tryResolve: () => Promise.resolve(PLATFORM_DEFAULT_LATENESS_POLICY),
+          },
         },
       ],
     });
@@ -2596,9 +2596,9 @@ describe('OrderQueue: the Курьер column resolves courierId against the ros
         {
           provide: LatenessPolicyApi,
           useValue: {
-          resolve: () => Promise.resolve(PLATFORM_DEFAULT_LATENESS_POLICY),
-          tryResolve: () => Promise.resolve(PLATFORM_DEFAULT_LATENESS_POLICY),
-        },
+            resolve: () => Promise.resolve(PLATFORM_DEFAULT_LATENESS_POLICY),
+            tryResolve: () => Promise.resolve(PLATFORM_DEFAULT_LATENESS_POLICY),
+          },
         },
         { provide: CouriersApi, useValue: { roster } },
       ],
@@ -2688,9 +2688,9 @@ describe('OrderQueue: the Клиент column batches customer labels by page (g
         {
           provide: LatenessPolicyApi,
           useValue: {
-          resolve: () => Promise.resolve(PLATFORM_DEFAULT_LATENESS_POLICY),
-          tryResolve: () => Promise.resolve(PLATFORM_DEFAULT_LATENESS_POLICY),
-        },
+            resolve: () => Promise.resolve(PLATFORM_DEFAULT_LATENESS_POLICY),
+            tryResolve: () => Promise.resolve(PLATFORM_DEFAULT_LATENESS_POLICY),
+          },
         },
         {
           provide: SessionCapabilities,
@@ -2835,9 +2835,9 @@ describe('OrderQueue: the table chip beside a dine-in order (batch 14)', () => {
         {
           provide: LatenessPolicyApi,
           useValue: {
-          resolve: () => Promise.resolve(PLATFORM_DEFAULT_LATENESS_POLICY),
-          tryResolve: () => Promise.resolve(PLATFORM_DEFAULT_LATENESS_POLICY),
-        },
+            resolve: () => Promise.resolve(PLATFORM_DEFAULT_LATENESS_POLICY),
+            tryResolve: () => Promise.resolve(PLATFORM_DEFAULT_LATENESS_POLICY),
+          },
         },
       ],
     });
