@@ -130,7 +130,11 @@
     "recipient": "Получатель",
     "recipientName": "Имя получателя",
     "recipientPhone": "Телефон получателя",
-    "recipientRequired": "Укажите имя и телефон получателя для доставки."
+    "recipientRequired": "Укажите имя и телефон получателя для доставки.",
+    "hiddenCharge": {
+      "title": "Добавлено автоматически, уже входит в итог",
+      "fallbackLabel": "Дополнительная плата"
+    }
   },
   "checkout": {
     "title": "Оплата",
@@ -433,7 +437,8 @@
   "dish": {
     "soldOut": "Закончилось",
     "outOfSaleWindow": "Сейчас не продаётся",
-    "lowStock": "Осталось всего {{count}} шт."
+    "lowStock": "Осталось всего {{count}} шт.",
+    "fromPrice": "от {{price}}"
   },
   "dineIn": {
     "scanFailedTitle": "Этот код больше не работает",
@@ -472,5 +477,15 @@
     "chooseRequired": "Сначала выберите обязательные варианты.",
     "customLinesTitle": "Блюда с вашим выбором",
     "lineGone": "Блюда больше нет в меню"
+  },
+  "combo": {
+    "pickExactly": "Выберите {{count}}",
+    "pickBetween": "Выберите от {{min}} до {{max}}",
+    "pickUpTo": "Выберите до {{count}}",
+    "included": "Включено",
+    "notPriced": "Цена недоступна",
+    "incomplete": "Сделайте выбор в каждой обязательной группе выше, прежде чем добавить в корзину.",
+    "unavailable": "Это комбо сейчас нельзя заказать.",
+    "total": "Цена комбо: {{price}}"
   }
 }

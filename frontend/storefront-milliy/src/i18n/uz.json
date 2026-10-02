@@ -130,7 +130,11 @@
     "recipient": "Qabul qiluvchi",
     "recipientName": "Qabul qiluvchi ismi",
     "recipientPhone": "Qabul qiluvchi telefoni",
-    "recipientRequired": "Yetkazib berish uchun qabul qiluvchining ismi va telefonini kiriting."
+    "recipientRequired": "Yetkazib berish uchun qabul qiluvchining ismi va telefonini kiriting.",
+    "hiddenCharge": {
+      "title": "Avtomatik qo'shilgan, jami summaga kiritilgan",
+      "fallbackLabel": "Qo'shimcha to'lov"
+    }
   },
   "checkout": {
     "title": "To'lov",
@@ -433,7 +437,8 @@
   "dish": {
     "soldOut": "Tugagan",
     "outOfSaleWindow": "Hozir sotuvda emas",
-    "lowStock": "Faqat {{count}} ta qoldi"
+    "lowStock": "Faqat {{count}} ta qoldi",
+    "fromPrice": "{{price}} dan"
   },
   "dineIn": {
     "scanFailedTitle": "Bu kod endi ishlamaydi",
@@ -472,5 +477,15 @@
     "chooseRequired": "Avval majburiy variantlarni tanlang.",
     "customLinesTitle": "Tanlovingiz bilan taomlar",
     "lineGone": "Taom endi menyuda yo'q"
+  },
+  "combo": {
+    "pickExactly": "{{count}} ta tanlang",
+    "pickBetween": "{{min}} dan {{max}} gacha tanlang",
+    "pickUpTo": "{{count}} tagacha tanlang",
+    "included": "Kiritilgan",
+    "notPriced": "Narx mavjud emas",
+    "incomplete": "Savatga qo'shishdan oldin yuqoridagi har bir majburiy guruhdan tanlang.",
+    "unavailable": "Bu kombo hozir buyurtma qilib bo'lmaydi.",
+    "total": "Kombo narxi: {{price}}"
   }
 }

@@ -3,7 +3,7 @@ import { Router, provideRouter } from '@angular/router';
 import { signal } from '@angular/core';
 
 import { CartComponent } from './cart.component';
-import { UiCartService } from '../../services/ui-cart.service';
+import { UiCartService, type HiddenChargeRow } from '../../services/ui-cart.service';
 import { TranslateService } from '../../services/translate.service';
 import type { CartResponseItem } from '../../types/cart.types';
 
@@ -36,12 +36,13 @@ class FakeUiCartService {
   readonly priceRefusalKey = signal<string | null>(null);
   deliveryUnresolvedMessage = (): string | null => null;
   totalItemsCount = () => this.items().reduce((sum, i) => sum + i.quantity, 0);
-  subtotalFormatted = () => '25 000 so\'m';
-  deliveryFee = () => '10 000 so\'m';
-  totalAmount = () => '35 000 so\'m';
+  subtotalFormatted = () => "25 000 so'm";
+  deliveryFee = () => "10 000 so'm";
+  totalAmount = () => "35 000 so'm";
   hasDiscount = () => false;
-  discountFormatted = () => '0 so\'m';
+  discountFormatted = () => "0 so'm";
   appliedPromoCode = (): string | null => null;
+  hiddenCharges = (): readonly HiddenChargeRow[] => [];
   load = vi.fn(async () => {});
   increaseQuantity = vi.fn();
   decreaseQuantity = vi.fn();
@@ -119,7 +120,7 @@ describe('CartComponent', () => {
     fake.items.set([line()]);
     fake.hasDiscount = () => true;
     fake.appliedPromoCode = () => 'OSH2026';
-    fake.discountFormatted = () => '5 000 so\'m';
+    fake.discountFormatted = () => "5 000 so'm";
     const { fixture } = await setUp(fake);
 
     expect(fixture.nativeElement.textContent).toContain('OSH2026');
@@ -152,9 +153,9 @@ describe('CartComponent -- failures and unavailable lines say why', () => {
     const { fixture } = await setUp(fake);
 
     expect(fixture.nativeElement.textContent).toContain('cart.loadError');
-    expect(fixture.nativeElement.querySelector('[data-testid="cart-error-detail"]')?.textContent).toContain(
-      'errors.offline',
-    );
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="cart-error-detail"]')?.textContent,
+    ).toContain('errors.offline');
   });
 
   it('a load failure with only the generic sentence adds no second, redundant line', async () => {
@@ -193,7 +194,9 @@ describe('CartComponent -- failures and unavailable lines say why', () => {
 
   it('marks a line that has gone out of its sale window, and says that rather than "sold out"', async () => {
     const fake = new FakeUiCartService();
-    fake.items.set([line({ item_id: 'a', active: false, unavailableReason: 'OUT_OF_SALE_WINDOW' })]);
+    fake.items.set([
+      line({ item_id: 'a', active: false, unavailableReason: 'OUT_OF_SALE_WINDOW' }),
+    ]);
     const { fixture } = await setUp(fake);
 
     const note = fixture.nativeElement.querySelector('[data-testid="cart-line-unavailable"]');
@@ -227,7 +230,9 @@ describe('CartComponent -- a basket the platform would not price', () => {
     fake.priceRefusalKey.set('errors.reason.itemOutOfSaleWindow');
     const { fixture } = await setUp(fake);
 
-    const note = fixture.nativeElement.querySelector('[data-testid="cart-pricing-error"]') as HTMLElement;
+    const note = fixture.nativeElement.querySelector(
+      '[data-testid="cart-pricing-error"]',
+    ) as HTMLElement;
     expect(note.textContent).toContain('errors.reason.itemOutOfSaleWindow');
     expect(note.getAttribute('role')).toBe('alert');
     expect(fixture.nativeElement.textContent).not.toContain('cart.loadError');
@@ -260,5 +265,75 @@ describe('CartComponent -- a basket the platform would not price', () => {
     fixture.detectChanges();
 
     expect((fixture.nativeElement.querySelector('.cta') as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  describe('combos and what the server added (ADR 0136)', () => {
+    it('lists the components of a combo line, with the units each puts on the order', async () => {
+      const fake = new FakeUiCartService();
+      fake.items.set([
+        line({
+          item_id: 'v-lunchcabc',
+          name: 'Lunch box',
+          price: 37_000,
+          quantity: 2,
+          comboPicks: [{ componentId: 'c-burger', quantity: 1 }],
+          comboComponents: [
+            {
+              componentId: 'c-burger',
+              name: 'Burger',
+              variantName: null,
+              quantity: 1,
+              amountMinor: 25_000,
+            },
+            {
+              componentId: 'c-cola',
+              name: 'Cola',
+              variantName: '0.5 L',
+              quantity: 4,
+              amountMinor: 3_000,
+            },
+          ],
+        }),
+      ]);
+      const { fixture } = await setUp(fake);
+
+      expect(
+        fixture.nativeElement.querySelector('[data-testid="cart-line-combo"]')?.textContent?.trim(),
+      ).toBe('Burger, Cola 0.5 L ×4');
+    });
+
+    it('shows no component list on a line that is no combo', async () => {
+      const fake = new FakeUiCartService();
+      fake.items.set([line()]);
+      const { fixture } = await setUp(fake);
+
+      expect(fixture.nativeElement.querySelector('[data-testid="cart-line-combo"]')).toBeNull();
+    });
+
+    it('itemises a charge the server added by itself, by its name and amount', async () => {
+      const fake = new FakeUiCartService();
+      fake.items.set([line()]);
+      fake.hiddenCharges = () => [
+        { optionId: 'o-box', label: 'Delivery box', amountMinor: 2_000, amount: '2 000 so‘m' },
+      ];
+      const { fixture } = await setUp(fake);
+
+      const rows = [...fixture.nativeElement.querySelectorAll('[data-testid="hidden-charge"]')];
+      expect(
+        rows.map((row) =>
+          [...(row as HTMLElement).querySelectorAll('span')].map((cell) =>
+            cell.textContent?.trim(),
+          ),
+        ),
+      ).toEqual([['Delivery box', '2 000 so‘m']]);
+    });
+
+    it('says nothing of the kind when the server added nothing', async () => {
+      const fake = new FakeUiCartService();
+      fake.items.set([line()]);
+      const { fixture } = await setUp(fake);
+
+      expect(fixture.nativeElement.querySelector('[data-testid="hidden-charges"]')).toBeNull();
+    });
   });
 });

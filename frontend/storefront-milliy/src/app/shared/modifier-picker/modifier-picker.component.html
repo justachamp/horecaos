@@ -32,7 +32,27 @@
   </header>
 
   <div class="picker__body">
-    @for (group of item().modifierGroups; track group.id) {
+    @if (isCombo()) {
+      <app-combo-choices
+        data-testid="picker-combo"
+        [groups]="comboGroups()"
+        [picks]="comboPicks()"
+        [currency]="currency()"
+        [showUnmet]="comboTouched()"
+        (picksChange)="setComboPicks($event)"
+      />
+      @if (comboUnavailable()) {
+        <p class="picker__error" role="alert" data-testid="picker-combo-unavailable">
+          {{ 'combo.unavailable' | t }}
+        </p>
+      } @else if (comboTotalText(); as total) {
+        <p class="picker__hint" data-testid="picker-combo-total">
+          {{ 'combo.total' | t: { price: total } }}
+        </p>
+      }
+    }
+
+    @for (group of modifierGroups(); track group.id) {
       <section class="group" data-testid="modifier-group" [class.is-missing]="isMissing(group)">
         <h3 class="group__name">
           {{ group.name }}
@@ -97,7 +117,7 @@
   </div>
 
   <footer class="picker__foot">
-    @if (missing().length > 0) {
+    @if (missing().length > 0 || comboMissing().length > 0) {
       <p class="picker__hint" role="status" data-testid="modifier-picker-missing">
         {{ 'dineIn.pickerMissing' | t: { groups: missingNames() } }}
       </p>

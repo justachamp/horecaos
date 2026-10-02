@@ -70,7 +70,31 @@
           }
         }
 
-        @for (group of product.modifierGroups; track group.id) {
+        @if (isCombo()) {
+          <app-combo-choices
+            data-testid="details-combo"
+            [groups]="comboGroups()"
+            [picks]="comboPicks()"
+            [currency]="currency()"
+            [showUnmet]="comboTouched()"
+            (picksChange)="setComboPicks($event)"
+          />
+          @if (comboUnavailable()) {
+            <p class="hint hint--error" data-testid="details-combo-unavailable">
+              {{ 'combo.unavailable' | t }}
+            </p>
+          } @else if (!comboComplete()) {
+            <p class="hint" role="status" data-testid="details-combo-incomplete">
+              {{ 'combo.incomplete' | t }}
+            </p>
+          } @else if (comboUnitAmount() !== null) {
+            <p class="hint" data-testid="details-combo-total">
+              {{ 'combo.total' | t: { price: comboTotalText() } }}
+            </p>
+          }
+        }
+
+        @for (group of modifierGroups(); track group.id) {
           <h2 class="section">
             {{ group.name }}
             @if (isMandatory(group)) {

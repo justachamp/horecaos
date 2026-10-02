@@ -9,12 +9,23 @@ import {
 } from '@angular/core';
 import { Router } from '@angular/router';
 
+import { formatMoney, money } from '../../core/money/money';
+import { TranslateService } from '../../services/translate.service';
+
+import { ComboChoicesComponent } from '../../shared/combo-choices/combo-choices.component';
 import { IconComponent } from '../../shared/icon/icon.component';
 import { LangService } from '../../services/lang.service';
 import { MenuService } from '../../services/menu.service';
 import { TranslatePipe } from '../../shared/translate/translate.pipe';
 import { UiCartService } from '../../services/ui-cart.service';
-import type { MenuItem, MenuItemModifierGroup } from '../../types/home.types';
+import type { MenuItem, MenuItemComboGroup, MenuItemModifierGroup } from '../../types/home.types';
+import {
+  type ComboPicks,
+  canBeSatisfied,
+  comboUnitAmountMinor,
+  comboValid,
+  picksOnTheWire,
+} from '../../utils/combo-selection';
 import {
   itemAvailability,
   preferredSellableVariant,
@@ -38,7 +49,7 @@ type LoadState = 'loading' | 'ready' | 'missing' | 'error';
 @Component({
   selector: 'app-details',
   standalone: true,
-  imports: [IconComponent, TranslatePipe],
+  imports: [ComboChoicesComponent, IconComponent, TranslatePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './details.component.html',
   styleUrl: './details.component.scss',
@@ -48,8 +59,12 @@ export class DetailsComponent implements OnInit {
   private readonly lang = inject(LangService);
   private readonly cart = inject(UiCartService);
   private readonly router = inject(Router);
+  private readonly translate = inject(TranslateService);
 
   readonly productId = input.required<string>();
+
+  /** ISO currency of the menu the product came from; null before any menu is read. */
+  protected readonly currency = this.menu.currency;
 
   protected readonly state = signal<LoadState>('loading');
   protected readonly item = signal<MenuItem | null>(null);
@@ -60,6 +75,54 @@ export class DetailsComponent implements OnInit {
 
   /** Chosen option ids per group. A group may legitimately hold several. */
   protected readonly chosen = signal<Readonly<Record<string, readonly string[]>>>({});
+
+  /**
+   * ADR 0136: the choices this product's combo asks for, empty when it is no combo. A combo's own
+   * variant is never priced or sold on its own: what the customer adds is the components picked.
+   */
+  protected readonly comboGroups = computed<readonly MenuItemComboGroup[]>(
+    () => this.item()?.comboGroups ?? [],
+  );
+
+  protected readonly isCombo = computed(() => this.comboGroups().length > 0);
+
+  /** A group that no orderable component can fill makes the whole combo unorderable for now. */
+  protected readonly comboUnavailable = computed(() =>
+    this.comboGroups().some((group) => !canBeSatisfied(group)),
+  );
+
+  /** componentId -> how many times it was picked. */
+  protected readonly comboPicks = signal<ComboPicks>({});
+
+  /** Whether the customer has started choosing, so the hint names the groups still short rather than greeting them with errors. */
+  protected readonly comboTouched = signal(false);
+
+  protected setComboPicks(next: ComboPicks): void {
+    this.comboPicks.set(next);
+    this.comboTouched.set(true);
+  }
+
+  protected readonly comboComplete = computed(
+    () => !this.isCombo() || comboValid(this.comboGroups(), this.comboPicks()),
+  );
+
+  /** What one combo costs with the picks so far, or null while a picked component has no price. */
+  protected readonly comboUnitAmount = computed(() =>
+    comboUnitAmountMinor(this.comboGroups(), this.comboPicks()),
+  );
+
+  /** What one complete combo costs, worded for the hint under its choices. */
+  protected readonly comboTotalText = computed(() => {
+    this.translate.current();
+    const total = this.comboUnitAmount();
+    const unit = this.translate.get('common.currency') || "so'm";
+    return total === null ? '' : formatMoney(money(total, this.currency() ?? 'UZS'), unit);
+  });
+
+  /** The modifier groups a screen asks about: none on a combo, whose choices are its components. */
+  protected readonly modifierGroups = computed(() =>
+    this.isCombo() ? [] : (this.item()?.modifierGroups ?? []),
+  );
 
   /**
    * Loads on init, not in the constructor.
@@ -109,7 +172,7 @@ export class DetailsComponent implements OnInit {
 
   /** Every group short of its minimum (or over its maximum) must be put right before the basket will take this. */
   protected readonly unsatisfied = computed(() =>
-    unsatisfiedGroups(this.item()?.modifierGroups ?? [], this.chosen()),
+    unsatisfiedGroups(this.modifierGroups(), this.chosen()),
   );
 
   /** The names of the groups still short, for the hint that says which ones. */
@@ -159,6 +222,8 @@ export class DetailsComponent implements OnInit {
       this.state() === 'ready' &&
       this.availability() === 'AVAILABLE' &&
       this.unsatisfied().length === 0 &&
+      this.comboComplete() &&
+      !this.comboUnavailable() &&
       !this.adding(),
   );
 
@@ -186,7 +251,12 @@ export class DetailsComponent implements OnInit {
     this.addError.set(null);
     try {
       const options = Object.values(this.chosen()).flat();
-      const added = await this.cart.add(variantId, this.quantity(), undefined, options);
+      // ADR 0136: a combo goes in as its container with the picks made; `quantity` counts combos.
+      const picks = picksOnTheWire(this.comboGroups(), this.comboPicks());
+      const added =
+        picks.length > 0
+          ? await this.cart.add(variantId, this.quantity(), undefined, options, picks)
+          : await this.cart.add(variantId, this.quantity(), undefined, options);
       if (!added) {
         // The platform refused the line -- most usefully with `ITEM_OUT_OF_SALE_WINDOW`
         // (the menu was read a moment before the window closed) or a sold-out

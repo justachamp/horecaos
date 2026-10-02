@@ -13,7 +13,21 @@ import {
 
 import { formatMoney, money } from '../../core/money/money';
 import { TranslateService } from '../../services/translate.service';
-import type { MenuItem, MenuItemModifierGroup, MenuItemVariant } from '../../types/home.types';
+import type {
+  MenuItem,
+  MenuItemComboGroup,
+  MenuItemModifierGroup,
+  MenuItemVariant,
+} from '../../types/home.types';
+import {
+  type ComboPickWire,
+  type ComboPicks,
+  comboUnitAmountMinor,
+  comboValid,
+  canBeSatisfied as comboGroupCanBeSatisfied,
+  picksOnTheWire,
+  unmetGroups as unmetComboGroups,
+} from '../../utils/combo-selection';
 import {
   chosenOptionIds,
   minimumSelections,
@@ -22,6 +36,7 @@ import {
   unsatisfiedGroups,
   type ModifierChoices,
 } from '../../utils/modifier-selection';
+import { ComboChoicesComponent } from '../combo-choices/combo-choices.component';
 import { TranslatePipe } from '../translate/translate.pipe';
 
 /** What the guest settled on for one portion of a dish. */
@@ -30,6 +45,8 @@ export interface ModifierSelection {
   readonly quantity: number;
   /** The whole selection, every group's choices in one list, as the platform's line carries it. */
   readonly modifierOptionIds: readonly string[];
+  /** ADR 0136: what was picked inside a combo, in the groups' own order; absent for a dish that is no combo. */
+  readonly comboPicks?: readonly ComboPickWire[];
 }
 
 /**
@@ -47,7 +64,7 @@ export interface ModifierSelection {
 @Component({
   selector: 'app-modifier-picker',
   standalone: true,
-  imports: [TranslatePipe],
+  imports: [ComboChoicesComponent, TranslatePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './modifier-picker.component.html',
   styleUrl: './modifier-picker.component.scss',
@@ -70,6 +87,47 @@ export class ModifierPickerComponent {
 
   protected readonly choices = signal<ModifierChoices>({});
   protected readonly quantity = signal(1);
+
+  /** ADR 0136: the choices a combo asks for, empty on a dish that is no combo. */
+  protected readonly comboGroups = computed<readonly MenuItemComboGroup[]>(
+    () => this.item().comboGroups ?? [],
+  );
+
+  protected readonly isCombo = computed(() => this.comboGroups().length > 0);
+
+  /** componentId -> how many times it was picked. */
+  protected readonly comboPicks = signal<ComboPicks>({});
+  protected readonly comboTouched = signal(false);
+
+  protected setComboPicks(next: ComboPicks): void {
+    this.comboPicks.set(next);
+    this.comboTouched.set(true);
+  }
+
+  /** The combo's choices still short of their minimum. */
+  protected readonly comboMissing = computed(() =>
+    unmetComboGroups(this.comboGroups(), this.comboPicks()),
+  );
+
+  /** A choice no orderable component can fill: the combo cannot be completed from this sheet at all. */
+  protected readonly comboUnavailable = computed(() =>
+    this.comboGroups().some((group) => !comboGroupCanBeSatisfied(group)),
+  );
+
+  /** The modifier groups the sheet asks about: none on a combo, whose choices are its components. */
+  protected readonly modifierGroups = computed<readonly MenuItemModifierGroup[]>(() =>
+    this.isCombo() ? [] : this.item().modifierGroups,
+  );
+
+  /** What one complete combo costs, or null while a picked component has no price. */
+  protected readonly comboUnitAmount = computed(() =>
+    comboUnitAmountMinor(this.comboGroups(), this.comboPicks()),
+  );
+
+  protected readonly comboTotalText = computed(() => {
+    const total = this.comboUnitAmount();
+    return total === null ? null : this.price(total);
+  });
 
   private readonly panel = viewChild<ElementRef<HTMLElement>>('panel');
 
@@ -95,17 +153,20 @@ export class ModifierPickerComponent {
   });
 
   protected readonly missing = computed(() =>
-    unsatisfiedGroups(this.item().modifierGroups, this.choices()),
+    unsatisfiedGroups(this.modifierGroups(), this.choices()),
   );
 
   protected readonly missingNames = computed(() =>
-    this.missing()
-      .map((group) => group.name)
-      .join(', '),
+    [...this.missing(), ...this.comboMissing()].map((group) => group.name).join(', '),
   );
 
   protected readonly canConfirm = computed(
-    () => this.variant() !== null && this.missing().length === 0 && !this.busy(),
+    () =>
+      this.variant() !== null &&
+      this.missing().length === 0 &&
+      comboValid(this.comboGroups(), this.comboPicks()) &&
+      !this.comboUnavailable() &&
+      !this.busy(),
   );
 
   protected isChosen(group: MenuItemModifierGroup, optionId: string): boolean {
@@ -144,10 +205,12 @@ export class ModifierPickerComponent {
     if (!variant || !this.canConfirm()) {
       return;
     }
+    const comboPicks = picksOnTheWire(this.comboGroups(), this.comboPicks());
     this.confirmed.emit({
       variantId: variant.id,
       quantity: this.quantity(),
-      modifierOptionIds: chosenOptionIds(this.item().modifierGroups, this.choices()),
+      modifierOptionIds: chosenOptionIds(this.modifierGroups(), this.choices()),
+      ...(comboPicks.length > 0 ? { comboPicks } : {}),
     });
   }
 

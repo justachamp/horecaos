@@ -130,7 +130,11 @@
     "recipient": "Recipient",
     "recipientName": "Recipient name",
     "recipientPhone": "Recipient phone",
-    "recipientRequired": "Add a recipient name and phone for this delivery."
+    "recipientRequired": "Add a recipient name and phone for this delivery.",
+    "hiddenCharge": {
+      "title": "Added automatically, already in the total",
+      "fallbackLabel": "Added charge"
+    }
   },
   "checkout": {
     "title": "Checkout",
@@ -433,7 +437,8 @@
   "dish": {
     "soldOut": "Sold out",
     "outOfSaleWindow": "Not on sale right now",
-    "lowStock": "Only {{count}} left"
+    "lowStock": "Only {{count}} left",
+    "fromPrice": "from {{price}}"
   },
   "dineIn": {
     "scanFailedTitle": "This code is not in service",
@@ -472,5 +477,15 @@
     "chooseRequired": "Choose the required options first.",
     "customLinesTitle": "Dishes with your choices",
     "lineGone": "A dish that is no longer on the menu"
+  },
+  "combo": {
+    "pickExactly": "Choose {{count}}",
+    "pickBetween": "Choose {{min}} to {{max}}",
+    "pickUpTo": "Choose up to {{count}}",
+    "included": "Included",
+    "notPriced": "Price unavailable",
+    "incomplete": "Choose from every required group above before adding to cart.",
+    "unavailable": "This combo cannot be ordered right now.",
+    "total": "Combo price: {{price}}"
   }
 }

@@ -5,15 +5,15 @@
   <div class="head__titles">
     <h1 class="head__title">{{ 'cart.title' | t }}</h1>
     @if (cart.items().length > 0) {
-      <p class="head__sub">
-        {{ cart.totalItemsCount() }} {{ 'common.itemsUnit' | t }}
-      </p>
+      <p class="head__sub">{{ cart.totalItemsCount() }} {{ 'common.itemsUnit' | t }}</p>
     }
   </div>
 </header>
 
 @switch (state()) {
-  @case ('loading') { <p class="state">{{ 'common.loading' | t }}</p> }
+  @case ('loading') {
+    <p class="state">{{ 'common.loading' | t }}</p>
+  }
   @case ('error') {
     <div class="state">
       <p>{{ 'cart.loadError' | t }}</p>
@@ -43,6 +43,9 @@
             ></div>
             <div class="line__body">
               <span class="line__name">{{ item.name }}</span>
+              @if (comboLabel(item); as components) {
+                <span class="line__addons" data-testid="cart-line-combo">{{ components }}</span>
+              }
               @if (addonLabel(item); as addons) {
                 @if (addons) {
                   <span class="line__addons">{{ addons }}</span>
@@ -54,7 +57,8 @@
                   {{
                     (item.unavailableReason === 'OUT_OF_SALE_WINDOW'
                       ? 'errors.reason.itemOutOfSaleWindow'
-                      : 'errors.reason.itemUnavailable') | t
+                      : 'errors.reason.itemUnavailable'
+                    ) | t
                   }}
                 </span>
               }
@@ -65,14 +69,18 @@
                 class="qty__btn"
                 (click)="decrease(item)"
                 [attr.aria-label]="'common.decrease' | t"
-              >−</button>
+              >
+                −
+              </button>
               <span class="qty__value">{{ item.quantity }}</span>
               <button
                 type="button"
                 class="qty__btn qty__btn--add"
                 (click)="increase(item)"
                 [attr.aria-label]="'common.increase' | t"
-              >+</button>
+              >
+                +
+              </button>
             </div>
           </div>
         }
@@ -104,6 +112,19 @@
           <div class="summary__row summary__row--discount">
             <span>{{ 'cart.promoCode' | t }} {{ cart.appliedPromoCode() }}</span>
             <span>−{{ cart.discountFormatted() }}</span>
+          </div>
+        }
+        @if (cart.hiddenCharges().length > 0) {
+          <div class="summary__hidden" data-testid="hidden-charges">
+            <div class="summary__row" data-testid="hidden-charges-title">
+              <span>{{ 'cart.hiddenCharge.title' | t }}</span>
+            </div>
+            @for (charge of cart.hiddenCharges(); track charge.optionId) {
+              <div class="summary__row" data-testid="hidden-charge">
+                <span>{{ charge.label }}</span>
+                <span class="summary__value">{{ charge.amount }}</span>
+              </div>
+            }
           </div>
         }
         <div class="summary__divider"></div>

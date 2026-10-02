@@ -189,7 +189,11 @@ describe('UiCartService.applyDestination', () => {
 
     expect(result).toBe(true);
     expect(carts.setDestination).toHaveBeenCalledWith(
-      expect.objectContaining({ addressId: 'addr-1', recipientName: 'Aziz', recipientPhone: '+998901234567' }),
+      expect.objectContaining({
+        addressId: 'addr-1',
+        recipientName: 'Aziz',
+        recipientPhone: '+998901234567',
+      }),
     );
   });
 });
@@ -474,7 +478,7 @@ describe('UiCartService.applyPromoCode / removePromoCode (ADR 0072)', () => {
     });
   }
 
-  it('trims the code, applies it, and re-prices so the discount is the platform\'s own answer', async () => {
+  it("trims the code, applies it, and re-prices so the discount is the platform's own answer", async () => {
     const { service, carts } = setUp();
     const applied = cartWith('OSH2026');
     carts.applyPromoCode.mockResolvedValue(applied);
@@ -685,7 +689,7 @@ describe('UiCartService: every cart failure reaches the customer as the specific
     expect(service.errorKey()).toBe('errors.reason.notServiceable');
   });
 
-  it('priceCart: returns null and keeps the refusal\'s own sentence for the checkout screen to show', async () => {
+  it("priceCart: returns null and keeps the refusal's own sentence for the checkout screen to show", async () => {
     const { service, carts } = setUp();
     carts.cart.set(baseCart());
     carts.price.mockRejectedValue(refusal('DELIVERY_DESTINATION_REQUIRED'));
@@ -899,7 +903,7 @@ describe('UiCartService project(): a refused pricing never renders as a zero tot
     expect(service.totalAmount()).toBe(service.formatPrice(1000));
   });
 
-  it('still reads the platform\'s own numbers once a price is held', async () => {
+  it("still reads the platform's own numbers once a price is held", async () => {
     const { service, carts, menu } = setUp();
     const cart = heldCart();
     carts.ensure.mockResolvedValue(cart);
@@ -911,5 +915,290 @@ describe('UiCartService project(): a refused pricing never renders as a zero tot
     expect(service.totalAmount()).toBe(service.formatPrice(1000));
     expect(service.subtotalFormatted()).toBe(service.formatPrice(1000));
     expect(service.priceRefusalKey()).toBeNull();
+  });
+});
+
+describe('UiCartService: combos and what the server added (ADR 0136)', () => {
+  const picks = [
+    { componentId: 'c-burger', quantity: 1 },
+    { componentId: 'c-cola', quantity: 2 },
+  ];
+
+  function comboMenu(): PublishedMenu {
+    const component = (
+      componentId: string,
+      name: string,
+      amountMinor: number,
+      defaultQuantity = 1,
+    ) => ({
+      componentId,
+      variantId: `${componentId}-v`,
+      productId: null,
+      name,
+      variantName: null,
+      defaultQuantity,
+      sortOrder: 0,
+      orderable: true,
+      amountMinor,
+    });
+    return emptyMenu({
+      products: [
+        {
+          productId: 'p-lunch',
+          code: null,
+          name: 'Lunch box',
+          description: null,
+          mediaAssetIds: [],
+          imageUrls: [],
+          variants: [
+            {
+              variantId: 'v-lunch',
+              sku: null,
+              unitCode: null,
+              isDefault: true,
+              orderable: true,
+              amountMinor: null,
+              onSaleNow: true,
+              remainingQuantity: null,
+            },
+          ],
+          modifierGroupIds: [],
+          comboGroupIds: ['g-main'],
+        },
+      ],
+      comboGroups: [
+        {
+          comboGroupId: 'g-main',
+          containerVariantId: 'v-lunch',
+          code: 'MAIN',
+          name: 'Main',
+          minimumSelections: 1,
+          maximumSelections: 3,
+          allowSameComponentMultipleTimes: true,
+          sortOrder: 0,
+          components: [
+            component('c-burger', 'Burger', 25_000),
+            component('c-cola', 'Cola', 3_000, 2),
+          ],
+        },
+      ],
+    });
+  }
+
+  it('shows a combo line as the container with its components, priced as the sum of what its picks cost', async () => {
+    const { service, carts, menu } = setUp();
+    const cart = baseCart({
+      lines: [
+        {
+          lineKey: 'v-lunchcabc',
+          variantId: 'v-lunch',
+          quantity: 2,
+          hasCustomerNote: false,
+          comboPicks: picks,
+        },
+      ],
+    });
+    carts.ensure.mockResolvedValue(cart);
+    carts.price.mockResolvedValue(pricedFor(cart));
+    menu.menu.mockResolvedValue(comboMenu());
+
+    await service.load();
+
+    const [item] = service.cartData()?.items ?? [];
+    expect(item.name).toBe('Lunch box');
+    // 25 000 + 2 picks of a cola at 3 000 x 2 units each = 25 000 + 12 000, per combo.
+    expect(item.price).toBe(37_000);
+    expect(item.comboPicks).toEqual(picks);
+    expect(item.comboComponents?.map((c) => [c.name, c.quantity])).toEqual([
+      ['Burger', 1],
+      ['Cola', 4],
+    ]);
+  });
+
+  it('puts a combo into the cart with its picks, and a plain line without any', async () => {
+    const { service, carts, menu } = setUp();
+    carts.ensure.mockResolvedValue(baseCart());
+    carts.putLine.mockResolvedValue(baseCart());
+    menu.menu.mockResolvedValue(emptyMenu());
+
+    await service.add('v-lunch', 1, undefined, [], picks);
+
+    expect(carts.putLine).toHaveBeenCalledWith(
+      expect.objectContaining({ variantId: 'v-lunch', comboPicks: picks }),
+    );
+  });
+
+  it('resends a combo’s picks on a quantity change, or its quantity would strip them', async () => {
+    const { service, carts } = setUp();
+    carts.putLine.mockResolvedValue(baseCart());
+    const item: CartResponseItem = {
+      variant_id: 'v-lunch',
+      price: 37_000,
+      item_id: 'v-lunchcabc',
+      name: 'Lunch box',
+      active: true,
+      image: null,
+      quantity: 1,
+      note: null,
+      modifierOptionIds: [],
+      modifiers: [],
+      comboPicks: picks,
+    };
+
+    await service.setQuantity(item, 2);
+
+    expect(carts.putLine).toHaveBeenCalledWith(
+      expect.objectContaining({ variantId: 'v-lunch', quantity: 2, comboPicks: picks }),
+    );
+  });
+
+  it('carries a combo’s picks across a change of fulfilment mode', async () => {
+    const { service, carts, menu } = setUp();
+    carts.cart.set(
+      baseCart({
+        lines: [
+          {
+            lineKey: 'v-lunchcabc',
+            variantId: 'v-lunch',
+            quantity: 1,
+            hasCustomerNote: false,
+            comboPicks: picks,
+          },
+        ],
+      }),
+    );
+    carts.create.mockResolvedValue(baseCart({ fulfillmentMode: 'PICKUP' }));
+    carts.putLine.mockResolvedValue(baseCart({ fulfillmentMode: 'PICKUP' }));
+    menu.menu.mockResolvedValue(emptyMenu());
+
+    await service.switchFulfillmentMode('PICKUP');
+
+    expect(carts.putLine).toHaveBeenCalledWith(
+      expect.objectContaining({ variantId: 'v-lunch', comboPicks: picks }),
+    );
+  });
+
+  it('itemises what the server added by itself, named from the menu, one row per option with the lines summed', async () => {
+    const { service, carts, menu } = setUp();
+    const cart = baseCart({
+      lines: [
+        {
+          lineKey: 'v-1',
+          variantId: 'v-1',
+          quantity: 1,
+          hasCustomerNote: false,
+        },
+      ],
+    });
+    carts.ensure.mockResolvedValue(cart);
+    carts.price.mockResolvedValue({
+      ...pricedFor(cart),
+      hiddenCharges: [
+        { lineKey: 'v-1', optionId: 'o-box', amountMinor: 2_000 },
+        { lineKey: 'v-2', optionId: 'o-box', amountMinor: 2_000 },
+      ],
+    });
+    menu.menu.mockResolvedValue(
+      emptyMenu({
+        products: [
+          {
+            productId: 'p-1',
+            code: null,
+            name: 'Salad',
+            description: null,
+            mediaAssetIds: [],
+            imageUrls: [],
+            variants: [
+              {
+                variantId: 'v-1',
+                sku: null,
+                unitCode: null,
+                isDefault: true,
+                orderable: true,
+                amountMinor: 20_000,
+                onSaleNow: true,
+                remainingQuantity: null,
+              },
+            ],
+            modifierGroupIds: [],
+          },
+        ],
+        modifierGroups: [
+          {
+            modifierGroupId: 'g-box',
+            code: 'BOX',
+            name: 'Box',
+            required: true,
+            minimumSelections: 1,
+            maximumSelections: 1,
+            allowSameOptionMultipleTimes: false,
+            options: [
+              {
+                optionId: 'o-box',
+                code: 'BOX',
+                maximumQuantity: 1,
+                amountMinor: 2_000,
+                name: 'Delivery box',
+              },
+            ],
+          },
+        ],
+      }),
+    );
+
+    await service.load();
+
+    expect(service.hiddenCharges()).toEqual([
+      {
+        optionId: 'o-box',
+        label: 'Delivery box',
+        amountMinor: 4_000,
+        amount: service.formatPrice(4_000),
+      },
+    ]);
+  });
+
+  it('shows nothing of the kind for a cart the server added nothing to', async () => {
+    const { service, carts } = setUp();
+    const cart = baseCart({
+      lines: [
+        {
+          lineKey: 'v-1',
+          variantId: 'v-1',
+          quantity: 1,
+          hasCustomerNote: false,
+        },
+      ],
+    });
+    carts.ensure.mockResolvedValue(cart);
+    carts.price.mockResolvedValue({ ...pricedFor(cart), hiddenCharges: [] });
+
+    await service.load();
+
+    expect(service.hiddenCharges()).toEqual([]);
+  });
+
+  it('names a charge whose option the menu does not carry with a neutral label rather than an id', async () => {
+    const { service, carts } = setUp();
+    const cart = baseCart({
+      lines: [
+        {
+          lineKey: 'v-1',
+          variantId: 'v-1',
+          quantity: 1,
+          hasCustomerNote: false,
+        },
+      ],
+    });
+    carts.ensure.mockResolvedValue(cart);
+    carts.price.mockResolvedValue({
+      ...pricedFor(cart),
+      hiddenCharges: [{ lineKey: 'v-1', optionId: 'o-unknown', amountMinor: 0 }],
+    });
+
+    await service.load();
+
+    expect(service.hiddenCharges()[0].label).toBe('cart.hiddenCharge.fallbackLabel');
+    expect(service.hiddenCharges()[0].amountMinor).toBe(0);
   });
 });

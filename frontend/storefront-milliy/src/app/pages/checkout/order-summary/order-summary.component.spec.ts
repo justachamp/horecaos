@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 
 import { TranslateService } from '../../../services/translate.service';
+import type { HiddenChargeRow } from '../../../services/ui-cart.service';
 import { OrderSummaryComponent } from './order-summary.component';
 
 class FakeTranslateService {
@@ -16,6 +17,7 @@ interface Inputs {
   hasDiscount: boolean;
   discount: string;
   total: string;
+  hiddenCharges: readonly HiddenChargeRow[];
 }
 
 function setUp(overrides: Partial<Inputs> = {}) {
@@ -30,6 +32,7 @@ function setUp(overrides: Partial<Inputs> = {}) {
     hasDiscount: false,
     discount: '',
     total: '32 000 so‘m',
+    hiddenCharges: [],
     ...overrides,
   };
   for (const [name, value] of Object.entries(inputs)) {
@@ -79,5 +82,35 @@ describe('OrderSummaryComponent', () => {
     const { host } = setUp();
 
     expect(host.querySelector('[data-testid="delivery-unresolved"]')).toBeNull();
+  });
+
+  describe('what the server added by itself (ADR 0136)', () => {
+    const box: HiddenChargeRow = {
+      optionId: 'o-box',
+      label: 'Delivery box',
+      amountMinor: 4_000,
+      amount: '4 000 so‘m',
+    };
+
+    it('itemises it under its own heading, between the figures and nothing added to the total', () => {
+      const { host, rows } = setUp({ hiddenCharges: [box] });
+
+      expect(host.querySelector('[data-testid="hidden-charges-title"]')).not.toBeNull();
+      expect(
+        [...host.querySelectorAll('[data-testid="hidden-charge"]')].map((row) =>
+          [...row.querySelectorAll('span')].map((cell) => cell.textContent?.trim()),
+        ),
+      ).toEqual([['Delivery box', '4 000 so‘m']]);
+      // The figures themselves are the platform's, unchanged by the itemisation.
+      expect(rows().filter((row) => row[0] === 'cart.total')).toEqual([
+        ['cart.total', '32 000 so‘m'],
+      ]);
+    });
+
+    it('draws nothing at all when the server added nothing', () => {
+      const { host } = setUp();
+
+      expect(host.querySelector('[data-testid="hidden-charges"]')).toBeNull();
+    });
   });
 });

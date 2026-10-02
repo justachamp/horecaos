@@ -149,6 +149,7 @@
       [hasDiscount]="cart.hasDiscount()"
       [discount]="cart.discountFormatted()"
       [total]="cart.totalAmount()"
+      [hiddenCharges]="cart.hiddenCharges()"
     />
 
     @if (pricingNoteKey(); as pricingRefusal) {

@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, input } from '@angular/core';
 
+import type { HiddenChargeRow } from '../../../services/ui-cart.service';
 import { TranslatePipe } from '../../../shared/translate/translate.pipe';
 
 /**
@@ -26,4 +27,9 @@ export class OrderSummaryComponent {
   readonly hasDiscount = input(false);
   readonly discount = input('');
   readonly total = input.required<string>();
+  /**
+   * ADR 0136: what the server added by itself -- a delivery box the customer never chose --
+   * itemised, each already inside the figures above. Empty when nothing was added.
+   */
+  readonly hiddenCharges = input<readonly HiddenChargeRow[]>([]);
 }

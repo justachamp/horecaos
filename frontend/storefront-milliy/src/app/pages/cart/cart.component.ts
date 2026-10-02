@@ -90,8 +90,26 @@ export class CartComponent implements OnInit {
     void this.router.navigate(['/checkout']);
   }
 
+  /**
+   * ADR 0136: a combo line's components, as `Burger, Cola 0.5 L ×4` -- the units a combo puts on
+   * the order -- or '' on every line that is no combo.
+   */
+  protected comboLabel(item: CartResponseItem): string {
+    return (item.comboComponents ?? [])
+      .map((component) => {
+        const name = component.variantName
+          ? `${component.name} ${component.variantName}`
+          : component.name;
+        return component.quantity > 1 ? `${name} ×${component.quantity}` : name;
+      })
+      .join(', ');
+  }
+
   /** Comma-joined modifier labels for one line, or '' when it has none. */
   protected addonLabel(item: CartResponseItem): string {
-    return item.modifiers.map((modifier) => modifier.label).filter(Boolean).join(', ');
+    return item.modifiers
+      .map((modifier) => modifier.label)
+      .filter(Boolean)
+      .join(', ');
   }
 }
