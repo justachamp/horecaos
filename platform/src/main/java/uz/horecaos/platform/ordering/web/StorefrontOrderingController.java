@@ -562,12 +562,13 @@ public class StorefrontOrderingController {
 
     /**
      * The promotions behind the order's current revision, read from the quote that
-     * priced it (an amendment moves the order onto its new quote). A quote that has
-     * since been pruned answers none, and the order's discount is still on the
-     * response beside it.
+     * priced it: an amendment appends a revision with its own quote, while the order
+     * row keeps the checkout quote, so reading that one would describe the price the
+     * order had before it was amended. A quote that has since been pruned answers
+     * none, and the order's discount is still on the response beside it.
      */
     private AppliedPromotions describePromotions(UUID tenantId, OrderQueryService.OrderDetail detail) {
-        return appliedPromotions.describe(tenantId, detail.order().pricingQuoteId(), null);
+        return appliedPromotions.describe(tenantId, orderQuery.currentPricingQuoteId(detail.order()), null);
     }
 
     @GetMapping("/orders")

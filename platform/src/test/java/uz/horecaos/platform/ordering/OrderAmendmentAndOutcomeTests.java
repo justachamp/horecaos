@@ -4125,6 +4125,54 @@ class OrderAmendmentAndOutcomeTests {
     }
 
     @Test
+    @DisplayName("ADR 0140: what a customer is shown for an amended order is the promotions behind its current "
+            + "revision, not the ones it was placed with")
+    void anAmendedOrderIsExplainedByItsCurrentRevision() {
+        activateAutomatic(automatic("SHOW10", "show", null, null, List.of(), 1_000L));
+        var mapper = JsonMapper.builder().build();
+        var describer = new uz.horecaos.platform.pricing.application.AppliedPromotionService(
+                new JdbcPricingStore(jdbc, mapper),
+                new JdbcPromoCodeStore(jdbc, mapper),
+                new PromoCodeEligibilityService(new JdbcPromoCodeStore(jdbc, mapper)),
+                clock);
+        var automaticDiscount = uz.horecaos.platform.pricing.api.AppliedPromotions.Source.AUTOMATIC;
+        var discount = uz.horecaos.platform.pricing.api.AppliedPromotions.Effect.DISCOUNT;
+
+        UUID orderId = orderIdOf(placeOrderPaying("idem-show-1", null));
+        var placed = orderStore.find(TENANT, orderId).orElseThrow();
+        assertThat(orderQuery.currentPricingQuoteId(placed))
+                .as("before any amendment the current revision's quote is the checkout quote")
+                .isEqualTo(placed.pricingQuoteId());
+        assertThat(describer
+                        .describe(TENANT, orderQuery.currentPricingQuoteId(placed), null)
+                        .applied())
+                .containsExactly(new uz.horecaos.platform.pricing.api.AppliedPromotions.Applied(
+                        automaticDiscount, discount, 10_000L));
+
+        var proposed = proposeOnly(orderId, "k-show-1", oneMoreBurger());
+        confirmAndApply(orderId, proposed.amendment().id());
+        var amended = orderStore.find(TENANT, orderId).orElseThrow();
+
+        assertThat(amended.discountMinor()).isEqualTo(15_000L);
+        assertThat(amended.pricingQuoteId())
+                .as("the order row keeps the checkout quote, which cancellation releases by")
+                .isEqualTo(placed.pricingQuoteId());
+        UUID current = orderQuery.currentPricingQuoteId(amended);
+        assertThat(current)
+                .as("the quote behind revision 2 is the amendment's own")
+                .isNotEqualTo(amended.pricingQuoteId())
+                .isEqualTo(proposed.amendment().quoteId());
+        assertThat(describer.describe(TENANT, current, null).applied())
+                .as("the screen's discount lines add up to the order's own discount, not to what it had at placement")
+                .containsExactly(new uz.horecaos.platform.pricing.api.AppliedPromotions.Applied(
+                        automaticDiscount, discount, amended.discountMinor()));
+        assertThat(describer.describe(TENANT, amended.pricingQuoteId(), null).applied())
+                .as("the control: the checkout quote still says 10 000, which is why it must not be read")
+                .containsExactly(new uz.horecaos.platform.pricing.api.AppliedPromotions.Applied(
+                        automaticDiscount, discount, 10_000L));
+    }
+
+    @Test
     @DisplayName("ADR 0140: an amended first order stays first, even after the customer placed a second order")
     void anAmendedFirstOrderStaysFirst() {
         UUID promotion = activateAutomatic(automatic(
