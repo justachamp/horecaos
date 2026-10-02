@@ -2080,6 +2080,67 @@ class CartCheckoutAndOrderTests {
         assertThat(((CartService.CartRefusedException) refused).code()).isEqualTo("MODIFIER_GROUP_MAXIMUM_EXCEEDED");
     }
 
+    @Test
+    @DisplayName("a product's own published rule replaces the shared group's: optional there, required here")
+    void aProductsPublishedOverrideIsEnforcedByTheCart() {
+        publishBurgerWithPolicy(extrasGroup, true, 1, 2);
+        var cart = openCart();
+
+        var refused = catchThrowable(() -> tx(() -> carts.putLine(
+                TENANT, BRAND, CUSTOMER, cart, cartVersion(cart), "burger", burgerVariant, 1, List.of(), null)));
+
+        assertThat(refused).isInstanceOf(CartService.CartRefusedException.class);
+        assertThat(((CartService.CartRefusedException) refused).code()).isEqualTo("MODIFIER_GROUP_MINIMUM_NOT_MET");
+        var view = tx(() -> carts.putLine(
+                TENANT,
+                BRAND,
+                CUSTOMER,
+                cart,
+                cartVersion(cart),
+                "burger",
+                burgerVariant,
+                1,
+                List.of(extrasBacon),
+                null));
+        assertThat(view.lines())
+                .as("and answering the group it now requires is accepted")
+                .hasSize(1);
+    }
+
+    @Test
+    @DisplayName("the same shared group on a product with no override stays optional")
+    void aSharedGroupWithoutAnOverrideKeepsItsOwnRule() {
+        publishBurger(extrasGroup);
+        var cart = openCart();
+
+        var view = putLineAndReturn(cart, "burger", burgerVariant, 1);
+
+        assertThat(view.lines()).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("a product's published maximum is the ceiling, below the shared group's")
+    void aProductsPublishedMaximumLowersTheSharedCeiling() {
+        // The shared extras group allows three picks; this product's rule allows one.
+        publishBurgerWithPolicy(extrasGroup, false, 0, 1);
+        var cart = openCart();
+
+        var refused = catchThrowable(() -> tx(() -> carts.putLine(
+                TENANT,
+                BRAND,
+                CUSTOMER,
+                cart,
+                cartVersion(cart),
+                "burger",
+                burgerVariant,
+                1,
+                List.of(extrasBacon, extrasBacon),
+                null)));
+
+        assertThat(refused).isInstanceOf(CartService.CartRefusedException.class);
+        assertThat(((CartService.CartRefusedException) refused).code()).isEqualTo("MODIFIER_GROUP_MAXIMUM_EXCEEDED");
+    }
+
     /**
      * The published product-to-group link is what makes this answerable. Without
      * it the cart would accept any option id the brand has ever published, priced
@@ -7964,6 +8025,21 @@ class CartCheckoutAndOrderTests {
                  "variants": [{"variantId": "%s", "status": "ACTIVE"}],
                  "modifierGroupIds": [%s]}
                 """.formatted(burgerVariant, groups));
+    }
+
+    /**
+     * The burger attaching {@code groupId} with this product's own rule for it, as publication writes
+     * one when an attachment overrides the shared group (ADR 0136): the effective values.
+     */
+    private void publishBurgerWithPolicy(UUID groupId, boolean required, int minimum, int maximum) {
+        insertPublicationItem("PRODUCT", Objects.requireNonNull(productIdByCode.get("BURGER")), """
+                {"code": "BURGER", "status": "ACTIVE",
+                 "variants": [{"variantId": "%s", "status": "ACTIVE"}],
+                 "modifierGroupIds": ["%s"],
+                 "modifierGroupPolicies": [{"groupId": "%s", "required": %s,
+                                            "minimumSelections": %d, "maximumSelections": %d}]}
+                """.formatted(
+                        burgerVariant, groupId, groupId, required, minimum, maximum));
     }
 
     /** The pizza without its size group, so a pizza line needs no selection. */
