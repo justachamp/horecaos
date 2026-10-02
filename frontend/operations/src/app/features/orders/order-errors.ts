@@ -147,6 +147,11 @@ export function mutationErrorNotice(
   if (error.code === ApiErrorCode.STALE_VERSION) {
     return { text: translate('orders.action.staleVersion'), shouldReread: true };
   }
+  if (isCatchweightNotReconciled(error)) {
+    // The order is as the operator saw it; what is missing is a weighing, which the order detail
+    // and the pass both offer. Re-reading would only move the operator away from it.
+    return { text: translate('orders.action.catchweightNotReconciled'), shouldReread: false };
+  }
   const conflict = transitionConflict(error);
   if (conflict) {
     return {
@@ -158,4 +163,15 @@ export function mutationErrorNotice(
     };
   }
   return { text: describeApiError(error, translate), shouldReread: false };
+}
+
+/**
+ * ADR 0137: a `409 RESOURCE_CONFLICT` whose `reason` is `CATCHWEIGHT_NOT_RECONCILED` — the order
+ * cannot leave the pass while a line sold by weight is unweighed. `orderLineIds` names them.
+ */
+export function isCatchweightNotReconciled(error: ApiError): boolean {
+  return (
+    error.code === ApiErrorCode.RESOURCE_CONFLICT &&
+    error.problem?.['reason'] === 'CATCHWEIGHT_NOT_RECONCILED'
+  );
 }

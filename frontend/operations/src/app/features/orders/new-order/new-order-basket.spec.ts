@@ -109,4 +109,49 @@ describe('NewOrderBasket', () => {
 
     expect(seen).toEqual(['qty:k7:5', 'note:k7:Extra sauce', 'remove:k7']);
   });
+
+  describe('by the portion and by weight (ADR 0137)', () => {
+    it('steps a splittable line by its portion size and never below one portion', () => {
+      const { fixture, host } = render([line({ quantity: 1, portionStep: 0.5 })]);
+      const emitted: { lineKey: string; quantity: number }[] = [];
+      fixture.componentInstance.quantityChanged.subscribe((change) => emitted.push(change));
+
+      host.querySelector<HTMLButtonElement>('[data-testid="q-number-stepper-decrement"]')!.click();
+
+      expect(emitted).toEqual([{ lineKey: 'k1', quantity: 0.5 }]);
+      const stepper = fixture.debugElement.query(By.directive(NumberStepper)).componentInstance;
+      expect(stepper.step()).toBe(0.5);
+      expect(stepper.min()).toBe(0.5);
+    });
+
+    it('writes a half portion as 0.5', () => {
+      const { host } = render([line({ quantity: 0.5, portionStep: 0.5 })]);
+
+      expect(
+        host.querySelector<HTMLInputElement>('[data-testid="q-number-stepper-input"]')!.value,
+      ).toBe('0.5');
+    });
+
+    it('keeps a plain line in whole units, with no portion or weight text', () => {
+      const { fixture, host } = render([line()]);
+
+      const stepper = fixture.debugElement.query(By.directive(NumberStepper)).componentInstance;
+      expect(stepper.step()).toBe(1);
+      expect(host.querySelector('[data-testid="new-order-line-weight"]')).toBeNull();
+    });
+
+    it('tells the operator a weighed line is an estimate until it is weighed at handover', () => {
+      const { host } = render([
+        line({
+          quantity: 2,
+          unitAmountMinor: 15_000,
+          catchweight: { quantumGrams: 100, nominalGramsPerUnit: 1_200 },
+        }),
+      ]);
+
+      const weight = host.querySelector('[data-testid="new-order-line-weight"]')!;
+      expect(weight.textContent).toContain('2.4\u00a0kg');
+      expect(weight.textContent).toContain('weighed at handover');
+    });
+  });
 });

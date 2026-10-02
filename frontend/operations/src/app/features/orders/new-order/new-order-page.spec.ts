@@ -1778,4 +1778,237 @@ describe('NewOrderPage', () => {
 
     expect(fixture.componentInstance['fulfillmentMode']()).toBe('PICKUP');
   });
+
+  // ------------------------------------------------ portions and weighed items (ADR 0137)
+
+  describe('portions and weighed items (ADR 0137)', () => {
+    const SPLITTABLE = {
+      splittable: true,
+      portionSize: 0.5,
+      catchweight: false,
+    } as const;
+
+    const CAKE = {
+      catchweight: true,
+      catchweightQuantumGrams: 100,
+      catchweightNominalGrams: 1_200,
+      splittable: false,
+    } as const;
+
+    it('starts a splittable variant at one whole portion and steps it by the portion size', async () => {
+      await render({ menu: vi.fn().mockResolvedValue(menuWith({ physical: SPLITTABLE })) });
+
+      fixture.componentInstance['onItemSelected']({ id: 'v-1', label: 'Cheeseburger' });
+      fixture.detectChanges();
+
+      const [line] = fixture.componentInstance['basket']();
+      expect(line.quantity).toBe(1);
+      expect(line.portionStep).toBe(0.5);
+    });
+
+    it('starts at the first whole multiple of a portion size that does not divide one', async () => {
+      await render({
+        menu: vi
+          .fn()
+          .mockResolvedValue(
+            menuWith({ physical: { splittable: true, portionSize: 0.3, catchweight: false } }),
+          ),
+      });
+
+      fixture.componentInstance['onItemSelected']({ id: 'v-1', label: 'Cheeseburger' });
+
+      expect(fixture.componentInstance['basket']()[0].quantity).toBe(1.2);
+    });
+
+    it('prices half a portion at half, and sends the fraction to the platform', async () => {
+      const placeOrder = vi.fn().mockResolvedValue({
+        orderId: 'order-1',
+        publicOrderNumber: '#0001',
+        status: 'CONFIRMED',
+        version: 1,
+        outcome: 'PLACED',
+        warnings: [],
+      });
+      await render({
+        menu: vi.fn().mockResolvedValue(menuWith({ physical: SPLITTABLE })),
+        placeOrder,
+      });
+      vi.spyOn(router, 'navigate').mockResolvedValue(true);
+      fixture.componentInstance['selectCandidate'](candidate());
+      fixture.componentInstance['onItemSelected']({ id: 'v-1', label: 'Cheeseburger' });
+
+      fixture.componentInstance['setLineQuantity'](
+        fixture.componentInstance['basket']()[0].lineKey,
+        0.5,
+      );
+      fixture.detectChanges();
+      await fixture.componentInstance['submit']();
+
+      expect(fixture.componentInstance['total']().subtotalMinor).toBe(15_000);
+      expect(placeOrder.mock.calls[0][1].lines[0].quantity).toBe(0.5);
+    });
+
+    it('a variant with no physical facts is still ordered in whole units', async () => {
+      await render();
+
+      fixture.componentInstance['onItemSelected']({ id: 'v-1', label: 'Cheeseburger' });
+
+      const [line] = fixture.componentInstance['basket']();
+      expect(line.portionStep).toBe(1);
+      expect(line.catchweight).toBeNull();
+    });
+
+    it('prices a weighed variant per quantum at its nominal weight, and says the total is an estimate', async () => {
+      await render({
+        menu: vi.fn().mockResolvedValue(menuWith({ amountMinor: 15_000, physical: CAKE })),
+      });
+
+      fixture.componentInstance['onItemSelected']({ id: 'v-1', label: 'Cheeseburger' });
+      fixture.detectChanges();
+
+      expect(fixture.componentInstance['total']().subtotalMinor).toBe(180_000);
+      expect(fixture.componentInstance['total']().provisional).toBe(true);
+      const host: HTMLElement = fixture.nativeElement;
+      expect(
+        host.querySelector('[data-testid="new-order-total-provisional"]')?.textContent,
+      ).toContain('estimate');
+    });
+
+    it('does not call a plain basket an estimate', async () => {
+      await render();
+
+      fixture.componentInstance['onItemSelected']({ id: 'v-1', label: 'Cheeseburger' });
+      fixture.detectChanges();
+
+      expect(
+        (fixture.nativeElement as HTMLElement).querySelector(
+          '[data-testid="new-order-total-provisional"]',
+        ),
+      ).toBeNull();
+    });
+
+    it('a weighed variant falls back to its net weight when no estimate was authored', async () => {
+      await render({
+        menu: vi.fn().mockResolvedValue(
+          menuWith({
+            amountMinor: 15_000,
+            physical: {
+              catchweight: true,
+              catchweightQuantumGrams: 100,
+              netWeightGrams: 800,
+              splittable: false,
+            },
+          }),
+        ),
+      });
+
+      fixture.componentInstance['onItemSelected']({ id: 'v-1', label: 'Cheeseburger' });
+
+      expect(fixture.componentInstance['total']().subtotalMinor).toBe(120_000);
+    });
+
+    it('«Повторить» gives a reordered line the portion and weight rules of the menu it is ordered from', async () => {
+      const reorderPlan = vi.fn().mockResolvedValue({
+        orderId: 'order-old',
+        publicOrderNumber: '#0900',
+        locationId: 'l1',
+        channelCode: 'call-centre',
+        verdict: 'READY',
+        currency: 'UZS',
+        lines: [
+          {
+            lineNumber: 1,
+            productName: 'Cheeseburger',
+            variantName: null,
+            productId: 'p-1',
+            variantId: 'v-1',
+            quantity: 0.5,
+            modifierOptionIds: [],
+            status: 'AVAILABLE',
+            unitAmountMinor: 30_000,
+            originalUnitAmountMinor: 30_000,
+          },
+        ],
+      });
+      await render(
+        { menu: vi.fn().mockResolvedValue(menuWith({ physical: SPLITTABLE })) },
+        {
+          reorderPlan,
+          ordersPageAtLocation: vi.fn().mockResolvedValue({
+            items: [
+              {
+                orderId: 'order-old',
+                publicOrderNumber: '#0900',
+                locationId: 'l1',
+                fulfillmentMode: 'PICKUP',
+                status: 'COMPLETED',
+                paymentStatus: 'CAPTURED',
+                fulfillmentStatus: 'COLLECTED',
+                currency: 'UZS',
+                totalMinor: 15_000,
+                promisedAt: null,
+                version: 1,
+                placedAt: '2026-09-01T12:00:00Z',
+              },
+            ],
+            nextCursor: null,
+          }),
+        },
+      );
+      fixture.componentInstance['selectCandidate'](candidate());
+      await fixture.componentInstance['toggleHistory']();
+
+      await fixture.componentInstance['reorder'](fixture.componentInstance['historyOrders']()[0]);
+
+      const [line] = fixture.componentInstance['basket']();
+      expect(line.quantity).toBe(0.5);
+      expect(line.portionStep).toBe(0.5);
+      expect(fixture.componentInstance['total']().subtotalMinor).toBe(15_000);
+    });
+
+    it('an aggregator entry states the price of one unit, not the price per quantum', async () => {
+      const aggregatorEntry = vi.fn().mockResolvedValue({
+        orderId: 'order-agg',
+        publicOrderNumber: '#0777',
+        status: 'RECEIVED',
+        version: 1,
+        outcome: 'CREATED',
+        warnings: [],
+      });
+      await render(
+        {
+          menu: vi.fn().mockResolvedValue(menuWith({ amountMinor: 15_000, physical: CAKE })),
+          aggregatorEntry,
+        },
+        {},
+        [
+          {
+            id: 'chan-agg',
+            code: 'uzum-tezkor',
+            systemType: 'AGGREGATOR',
+            displayName: 'Uzum Tezkor',
+            status: 'ACTIVE',
+            pricePlaneChannelId: null,
+            externallyPriced: true,
+            guestOrdersAllowed: false,
+            providerInstallationId: 'installation-1',
+            version: 1,
+            locationCount: 1,
+            enabledPaymentMethodCount: 0,
+            enabledFulfillmentModes: [],
+          },
+        ],
+      );
+      vi.spyOn(router, 'navigate').mockResolvedValue(true);
+      fixture.componentInstance['toggleAggregatorMode']();
+      fixture.componentInstance['onItemSelected']({ id: 'v-1', label: 'Cheeseburger' });
+      fixture.componentInstance['aggregatorExternalOrderId'].set('YE-1');
+      fixture.componentInstance['aggregatorTotalMinor'].set(180_000);
+      fixture.detectChanges();
+
+      await fixture.componentInstance['submitAggregator']();
+
+      expect(aggregatorEntry.mock.calls[0][1].lines[0].unitAmountMinor).toBe(180_000);
+    });
+  });
 });

@@ -1,0 +1,77 @@
+:host {
+  display: block;
+}
+
+.weigh {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+}
+
+.weigh__title,
+.weigh__intro {
+  margin: 0;
+}
+
+.weigh__intro,
+.weigh__state {
+  color: var(--q-ink-subtle);
+}
+
+.weigh__closed {
+  color: var(--q-warning);
+  margin: 0;
+}
+
+.weigh__lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.weigh__line {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: end;
+  gap: 8px 12px;
+}
+
+.weigh__what {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.weigh__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.weigh__field input {
+  width: 8rem;
+  padding: 8px 10px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  font-size: var(--q-type-body-sm);
+}
+
+.weigh__error,
+.weigh__result {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.weigh__error {
+  color: var(--q-error);
+}
+
+.weigh__result {
+  color: var(--q-success);
+}

@@ -341,6 +341,37 @@ export const messagesEn = {
     'Names and prices are fixed at the moment the order was placed.',
   'orders.detail.lines.note.hidden': '💬 has a note',
   'orders.detail.lines.note.empty': 'no note',
+  'orders.detail.lines.weight.estimate': '≈ {weight}, estimate · {price} per {quantum}',
+  'orders.detail.lines.weight.weighed': 'Weighed: {weight} · {price} per {quantum}',
+  'orders.weigh.title': 'Weighing',
+  'orders.weigh.intro':
+    'Items sold by weight are priced at their estimated weight until they are weighed. Enter the total weight of each line and the order total is corrected from it. An order cannot leave the pass while one is unweighed.',
+  'orders.weigh.closed': 'The order has left the pass: its weights can no longer be changed.',
+  'orders.weigh.state.pending': 'Estimate {weight}, not weighed yet',
+  'orders.weigh.state.done': 'Weighed {weight}',
+  'orders.weigh.input.label': 'Total weight, g',
+  'orders.weigh.input.error': 'Enter a whole number of grams above zero',
+  'orders.weigh.save': 'Record weight',
+  'orders.weigh.saving': 'Saving…',
+  'orders.weigh.result.changed': 'Recorded {weight}. The order total is now {total} ({delta}).',
+  'orders.weigh.result.unchanged': 'Recorded {weight}. The order total did not change.',
+  'orders.weigh.result.same': 'Already recorded: {weight}. Nothing changed.',
+  'orders.weigh.error.paymentTaken':
+    'The weight cannot be recorded: the order is already paid online and this weight would change its total. Collecting the difference or refunding it is not available yet.',
+  'orders.weigh.error.notWeighable':
+    'The order has left the pass: its weight can no longer be changed.',
+  'orders.weigh.error.priceChanged':
+    'The menu price changed after the order was placed, so the weight was not applied. Ask a manager.',
+  'orders.weigh.error.stale':
+    'The order changed while you were weighing and has been reloaded. Check the weight and record it again.',
+  'orders.weigh.error.settlement':
+    'The amount to collect cannot be restated because money is already in motion on this order.',
+  'orders.weigh.error.lapsed':
+    'The recalculation lapsed before it could be applied. Record the weight again.',
+  'orders.action.catchweightNotReconciled':
+    'Weigh the items sold by weight before handing the order over',
+  'orders.queue.bulk.problem.CATCHWEIGHT_NOT_RECONCILED':
+    'Items sold by weight are not weighed yet',
 
   'orders.detail.money.subtotal': 'Items subtotal',
   'orders.detail.money.discount': 'Discount',
@@ -5822,6 +5853,9 @@ export const messagesEn = {
   'orders.newOrder.basket.title': 'Basket',
   'orders.newOrder.basket.empty': 'No items yet',
   'orders.newOrder.basket.remove': 'Remove',
+  'orders.newOrder.basket.weighed': '≈ {weight}, weighed at handover',
+  'orders.newOrder.order.totalProvisional':
+    'The total includes items sold by weight: it is an estimate until they are weighed at handover',
   'orders.newOrder.basket.notePlaceholder': 'Note for the kitchen',
   'orders.newOrder.basket.unavailable': 'No longer available — remove it to continue',
   'orders.newOrder.order.title': 'Order',

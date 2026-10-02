@@ -7,6 +7,7 @@ import {
   ddmmyyyy,
   formatAverage,
   formatCount,
+  formatQuantityTotal,
   formatSecondsDuration,
   formatShare,
   formatSignedMinutes,
@@ -98,6 +99,37 @@ describe('formatCount', () => {
       applyRegionalFormats({ moneyGrouping: 'NONE' });
       expect(formatCount(12_400)).toBe('12400');
     });
+  });
+});
+
+describe('formatQuantityTotal (ADR 0137)', () => {
+  afterEach(() => resetRegionalFormats());
+
+  it('reads a whole total exactly as formatCount does, so an integer-era report does not change', () => {
+    for (const whole of [0, 7, 80, 12_400, 1_234_567]) {
+      expect(formatQuantityTotal(whole, 'ru')).toBe(formatCount(whole));
+    }
+  });
+
+  it('keeps the portions a total is made of: 3.5 sold is 3,5, never rounded up to 4', () => {
+    expect(formatQuantityTotal(3.5, 'ru')).toBe('3,5');
+    expect(formatQuantityTotal(3.5, 'uz-Latn')).toBe('3,5');
+    expect(formatQuantityTotal(3.5, 'en')).toBe('3.5');
+    expect(formatQuantityTotal(12_400.25, 'ru')).toBe('12\u00a0400,25');
+  });
+
+  it('shows no float noise and no trailing zeros', () => {
+    expect(formatQuantityTotal(0.1 + 0.2, 'en')).toBe('0.3');
+    expect(formatQuantityTotal(2.0004, 'en')).toBe('2');
+  });
+
+  it('follows the brand’s grouping and decimal mark', () => {
+    applyRegionalFormats({ moneyGrouping: 'DOT' });
+    expect(formatQuantityTotal(12_400.5, 'en')).toBe('12.400,5');
+  });
+
+  it('signs a negative total with a real minus', () => {
+    expect(formatQuantityTotal(-1.5, 'en')).toBe('−1.5');
   });
 });
 

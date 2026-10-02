@@ -1,5 +1,7 @@
-import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject, input, output } from '@angular/core';
 
+import { formatWeight } from '../../../core/format/quantity';
+import { I18n } from '../../../core/i18n/i18n';
 import { TPipe } from '../../../core/i18n/t.pipe';
 import { NumberStepper } from '../../../shared/ui/number-stepper';
 import { BasketLine } from './new-order-total';
@@ -30,9 +32,18 @@ export interface BasketLineView extends BasketLine {
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class NewOrderBasket {
+  private readonly i18n = inject(I18n);
+
   readonly lines = input.required<readonly BasketLineView[]>();
 
   readonly quantityChanged = output<{ lineKey: string; quantity: number }>();
   readonly noteChanged = output<{ lineKey: string; note: string }>();
   readonly removeRequested = output<string>();
+
+  /** The estimated weight of a line sold by weight — every unit at its nominal weight. */
+  protected estimatedWeight(line: BasketLineView): string | null {
+    return line.catchweight
+      ? formatWeight(line.quantity * line.catchweight.nominalGramsPerUnit, this.i18n.locale())
+      : null;
+  }
 }

@@ -1,3 +1,11 @@
+import {
+  catchweightPriceOf,
+  initialQuantity,
+  lineQuantityStep,
+  timesQuantity,
+} from '../../../core/format/quantity';
+import type { MenuPhysicalFacts } from './new-order-api';
+
 /**
  * The running total (orders.md §5.6's Итого), and the one guarantee it makes:
  * **never silently show a total that treats an unpriced component as free.**
@@ -33,13 +41,32 @@ export interface BasketModifierSelection {
   readonly amountMinor: number | null;
 }
 
+/**
+ * ADR 0137: what makes a line's amount an estimate. The variant's price is per `quantumGrams`,
+ * and until the kitchen weighs it at handover the line is priced at the nominal weight of
+ * every unit.
+ */
+export interface BasketCatchweight {
+  readonly quantumGrams: number;
+  readonly nominalGramsPerUnit: number;
+}
+
 export interface BasketLine {
   /** Client-local identity for the line (not the variant id — two lines can share a variant with different modifiers). */
   readonly lineKey: string;
   readonly variantId: string;
   readonly productName: string;
+  /** A decimal for a splittable variant (ADR 0137): `0.5` is half a portion. */
   readonly quantity: number;
+  /**
+   * The price row: per unit, or per `catchweight.quantumGrams` when the line is sold by weight.
+   * Null means unpriced.
+   */
   readonly unitAmountMinor: number | null;
+  /** The step the quantity moves in — the variant's portion size; absent means whole units. */
+  readonly portionStep?: number;
+  /** Present when the line is sold by weight: its amount is provisional until it is weighed. */
+  readonly catchweight?: BasketCatchweight | null;
   readonly modifiers: readonly BasketModifierSelection[];
   /** Row 2.1b: the coded presets the operator checked when this line was added. */
   readonly commentPresetCodes: readonly string[];
@@ -63,9 +90,35 @@ export interface BasketTotal {
   readonly fullyPriced: boolean;
   /** False when any line's variant is no longer orderable, or is outside its own sale window (row 4.2g). */
   readonly allAvailable: boolean;
+  /** True while any line is sold by weight: the total is an estimate the weighing at handover replaces. */
+  readonly provisional: boolean;
 }
 
-/** One line's contribution to the subtotal, or `null` when any of its components is unpriced. */
+/**
+ * What one unit costs before modifiers: the price row, or for a line sold by weight the price
+ * of one nominal-weight unit. Null when unpriced.
+ */
+export function lineUnitAmountMinor(line: BasketLine): number | null {
+  if (line.unitAmountMinor === null) {
+    return null;
+  }
+  return line.catchweight
+    ? catchweightPriceOf(
+        line.unitAmountMinor,
+        line.catchweight.quantumGrams,
+        line.catchweight.nominalGramsPerUnit,
+      )
+    : line.unitAmountMinor;
+}
+
+/**
+ * One line's contribution to the subtotal, or `null` when any of its components is unpriced.
+ *
+ * Priced the way `PricingEngine` prices it (ADR 0137): the base rounded once on the line — a
+ * portion is `unit × quantity`, a weighed line `price × grams ÷ quantum` — and the modifiers
+ * rounded once on their own sum, so the running total cannot disagree with the quote the
+ * platform makes when the order is placed.
+ */
 export function lineAmountMinor(line: BasketLine): number | null {
   if (line.unitAmountMinor === null) {
     return null;
@@ -77,7 +130,14 @@ export function lineAmountMinor(line: BasketLine): number | null {
     }
     modifiersMinor += modifier.amountMinor * modifier.quantity;
   }
-  return (line.unitAmountMinor + modifiersMinor) * line.quantity;
+  const base = line.catchweight
+    ? catchweightPriceOf(
+        line.unitAmountMinor,
+        line.catchweight.quantumGrams,
+        line.quantity * line.catchweight.nominalGramsPerUnit,
+      )
+    : timesQuantity(line.unitAmountMinor, line.quantity);
+  return base + timesQuantity(modifiersMinor, line.quantity);
 }
 
 /**
@@ -93,7 +153,11 @@ export function computeBasketTotal(
   let subtotalMinor = 0;
   let fullyPriced = true;
   let allAvailable = true;
+  let provisional = false;
   for (const line of lines) {
+    if (line.catchweight) {
+      provisional = true;
+    }
     if (!line.orderable || !line.onSaleNow) {
       allAvailable = false;
     }
@@ -104,5 +168,30 @@ export function computeBasketTotal(
     }
     subtotalMinor += amount;
   }
-  return { currency, subtotalMinor, fullyPriced, allAvailable };
+  return { currency, subtotalMinor, fullyPriced, allAvailable, provisional };
+}
+
+/**
+ * What a menu variant makes of a basket line (ADR 0137): the step its quantity moves in, the
+ * quantity a first tap starts at, and — for a variant sold by weight — what its amount is
+ * estimated from. A catchweight variant that has no authored estimate is estimated from its net
+ * weight, as the platform does; one with neither cannot be estimated and is treated as plain
+ * (the platform refuses to publish it, so this is a defence, not a path).
+ */
+export function basketFactsFor(physical: MenuPhysicalFacts | null | undefined): {
+  readonly portionStep: number;
+  readonly initialQuantity: number;
+  readonly catchweight: BasketCatchweight | null;
+} {
+  const portionStep = lineQuantityStep(physical);
+  const nominal = physical?.catchweightNominalGrams ?? physical?.netWeightGrams ?? null;
+  const quantum = physical?.catchweightQuantumGrams ?? null;
+  return {
+    portionStep,
+    initialQuantity: initialQuantity(portionStep),
+    catchweight:
+      physical?.catchweight && quantum !== null && nominal !== null
+        ? { quantumGrams: quantum, nominalGramsPerUnit: nominal }
+        : null,
+  };
 }

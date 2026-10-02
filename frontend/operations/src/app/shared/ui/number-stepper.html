@@ -11,9 +11,9 @@
   </button>
   <input
     type="text"
-    inputmode="numeric"
+    [attr.inputmode]="fractional() ? 'decimal' : 'numeric'"
     class="q-number-stepper__value q-tnum"
-    [value]="value()"
+    [value]="valueText()"
     [disabled]="disabled()"
     [attr.aria-label]="ariaLabel()"
     [attr.aria-valuemin]="min()"

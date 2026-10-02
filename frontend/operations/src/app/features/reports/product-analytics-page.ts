@@ -18,7 +18,7 @@ import { TPipe } from '../../core/i18n/t.pipe';
 import { AbcCurveChart, AbcCurvePoint } from '../../shared/ui/charts/abc-curve-chart';
 import { CatalogApi, fetchAllVariantsAtLocation } from '../catalog/catalog-api';
 import { ProvenanceBanner } from './provenance-banner';
-import { ddmm, formatCount } from './report-formatting';
+import { ddmm, formatCount, formatQuantityTotal } from './report-formatting';
 import { ReportsFilterState } from './reports-filter-state';
 import {
   AbcCurveListResponse,
@@ -360,6 +360,9 @@ export class ProductAnalyticsPage {
   }
 
   protected formatCountValue = formatCount;
+  /** ADR 0137: items sold can be a fraction of a portion, which `formatCount` would round away. */
+  protected formatQuantityValue = (value: number): string =>
+    formatQuantityTotal(value, this.i18n.locale());
 
   protected async runClassificationNow(): Promise<void> {
     const scope = this.location.scope();

@@ -21,9 +21,16 @@ export interface OrderLine {
   readonly productName: string;
   readonly variantName?: string | null;
   readonly sku?: string | null;
+  /** A decimal for a line sold by the portion or by weight (ADR 0137): `0.5` is half a portion. */
   readonly quantity: number;
   /** The line's own total, snapshotted at checkout — not a unit price. */
   readonly finalAmountMinor: number;
+  /**
+   * ADR 0137: present on a line sold by weight, absent otherwise. While it is
+   * {@link OrderLineCatchweight.provisional} `finalAmountMinor` was computed against the nominal
+   * weight and the order cannot leave the pass; a weighing replaces it.
+   */
+  readonly catchweight?: OrderLineCatchweight | null;
   readonly modifiers: readonly string[];
   /**
    * Row 2.1b: the coded kitchen-instruction presets this line was checked
@@ -38,6 +45,19 @@ export interface OrderLine {
    * is the separate, audited call that returns it (§3.4).
    */
   readonly hasNote: boolean;
+}
+
+/** `OperationsOrderController.OrderLineCatchweightResponse`. */
+export interface OrderLineCatchweight {
+  /** The price the customer agreed to is per this many grams. */
+  readonly quantumGrams: number;
+  /** The weight one unit was estimated at when the order was placed. */
+  readonly nominalGramsPerUnit: number;
+  readonly pricePerQuantumMinor: number;
+  /** True until a weight has been captured. */
+  readonly provisional: boolean;
+  /** The weighed total of the whole line — all its units together — once captured. */
+  readonly actualWeightGrams?: number | null;
 }
 
 /** `OperationsOrderController.CommentPresetChip`. */

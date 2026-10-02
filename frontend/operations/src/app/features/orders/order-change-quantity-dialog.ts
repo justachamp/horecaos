@@ -3,11 +3,14 @@ import {
   Component,
   computed,
   effect,
+  inject,
   input,
   output,
   signal,
 } from '@angular/core';
 
+import { formatQuantity } from '../../core/format/quantity';
+import { I18n } from '../../core/i18n/i18n';
 import { TPipe } from '../../core/i18n/t.pipe';
 import { Modal } from '../../shared/ui/modal';
 import { OrderLine } from './order-detail';
@@ -39,6 +42,8 @@ export interface QuantitySubmission {
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class OrderChangeQuantityDialog {
+  private readonly i18n = inject(I18n);
+
   readonly lines = input.required<readonly OrderLine[]>();
   readonly busy = input(false);
 
@@ -53,7 +58,14 @@ export class OrderChangeQuantityDialog {
     () => this.lines().find((line) => line.lineId === this.selectedLineId()) ?? null,
   );
 
-  protected readonly minQuantity = computed(() => (this.selectedLine()?.quantity ?? 0) + 1);
+  /**
+   * The smallest whole number strictly above the line's quantity. An amendment changes whole
+   * units (ADR 0137), and a line sold by the portion can hold `0.5`: the next quantity up is `1`,
+   * not `1.5`.
+   */
+  protected readonly minQuantity = computed(
+    () => Math.floor(this.selectedLine()?.quantity ?? 0) + 1,
+  );
 
   protected readonly canSubmit = computed(
     () => this.selectedLine() !== null && this.quantity() >= this.minQuantity(),
@@ -68,14 +80,18 @@ export class OrderChangeQuantityDialog {
       this.lastSeededLines = lines;
       const first = lines[0] ?? null;
       this.selectedLineId.set(first?.lineId ?? null);
-      this.quantity.set((first?.quantity ?? 0) + 1);
+      this.quantity.set(Math.floor(first?.quantity ?? 0) + 1);
     });
   }
 
   protected selectLine(lineId: string): void {
     this.selectedLineId.set(lineId);
     const line = this.lines().find((candidate) => candidate.lineId === lineId);
-    this.quantity.set((line?.quantity ?? 0) + 1);
+    this.quantity.set(Math.floor(line?.quantity ?? 0) + 1);
+  }
+
+  protected quantityText(quantity: number): string {
+    return formatQuantity(quantity, this.i18n.locale());
   }
 
   protected setQuantity(value: string): void {

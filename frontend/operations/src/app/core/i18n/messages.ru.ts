@@ -326,6 +326,33 @@ export const messagesRu: MessageCatalogue = {
   'orders.detail.lines.snapshotNotice': 'Названия и цены зафиксированы на момент оформления.',
   'orders.detail.lines.note.hidden': '💬 есть комментарий',
   'orders.detail.lines.note.empty': 'нет комментария',
+  'orders.detail.lines.weight.estimate': '≈ {weight}, оценка · {price} за {quantum}',
+  'orders.detail.lines.weight.weighed': 'Взвешено: {weight} · {price} за {quantum}',
+  'orders.weigh.title': 'Взвешивание',
+  'orders.weigh.intro':
+    'Весовые позиции считаются по ориентировочному весу, пока их не взвесят. Введите общий вес каждой позиции: сумма заказа пересчитается. Пока что-то не взвешено, заказ нельзя выдать.',
+  'orders.weigh.closed': 'Заказ уже ушёл с раздачи: вес больше нельзя менять.',
+  'orders.weigh.state.pending': 'Оценка {weight}, ещё не взвешено',
+  'orders.weigh.state.done': 'Взвешено {weight}',
+  'orders.weigh.input.label': 'Общий вес, г',
+  'orders.weigh.input.error': 'Введите целое число граммов больше нуля',
+  'orders.weigh.save': 'Записать вес',
+  'orders.weigh.saving': 'Сохранение…',
+  'orders.weigh.result.changed': 'Записано: {weight}. Сумма заказа теперь {total} ({delta}).',
+  'orders.weigh.result.unchanged': 'Записано: {weight}. Сумма заказа не изменилась.',
+  'orders.weigh.result.same': 'Уже записано: {weight}. Ничего не изменилось.',
+  'orders.weigh.error.paymentTaken':
+    'Вес нельзя записать: заказ уже оплачен онлайн, а этот вес изменил бы его сумму. Доплата или возврат разницы пока недоступны.',
+  'orders.weigh.error.notWeighable': 'Заказ уже ушёл с раздачи: вес больше нельзя менять.',
+  'orders.weigh.error.priceChanged':
+    'Цена в меню изменилась после оформления заказа, поэтому вес не применён. Обратитесь к менеджеру.',
+  'orders.weigh.error.stale':
+    'Заказ изменился, пока вы взвешивали, и загружен заново. Проверьте вес и запишите его снова.',
+  'orders.weigh.error.settlement':
+    'Сумму к получению нельзя пересчитать: по заказу уже идут платёжные операции.',
+  'orders.weigh.error.lapsed': 'Пересчёт устарел, не успев примениться. Запишите вес ещё раз.',
+  'orders.action.catchweightNotReconciled': 'Взвесьте весовые позиции, прежде чем выдавать заказ',
+  'orders.queue.bulk.problem.CATCHWEIGHT_NOT_RECONCILED': 'Весовые позиции ещё не взвешены',
 
   'orders.detail.money.subtotal': 'Сумма позиций',
   'orders.detail.money.discount': 'Скидка',
@@ -5796,6 +5823,9 @@ export const messagesRu: MessageCatalogue = {
   'orders.newOrder.basket.title': 'Корзина',
   'orders.newOrder.basket.empty': 'Пока пусто',
   'orders.newOrder.basket.remove': 'Удалить',
+  'orders.newOrder.basket.weighed': '≈ {weight}, точный вес при выдаче',
+  'orders.newOrder.order.totalProvisional':
+    'В сумме есть весовые позиции: это оценка, точная сумма — после взвешивания при выдаче',
   'orders.newOrder.basket.notePlaceholder': 'Комментарий кухне',
   'orders.newOrder.basket.unavailable': 'Больше не доступно — удалите, чтобы продолжить',
   'orders.newOrder.order.title': 'Заказ',

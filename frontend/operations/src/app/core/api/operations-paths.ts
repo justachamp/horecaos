@@ -195,6 +195,14 @@ export const operationsPaths = {
   },
 
   /**
+   * ADR 0137: capture the weighed total of one catchweight line at pick or handover. Mutation:
+   * `Idempotency-Key` and `If-Match` (the order's version) required, capability `order.advance`.
+   */
+  orderLineActualWeight(scope: LocationScope, orderId: string, lineId: string): string {
+    return `${this.order(scope, orderId)}/lines/${encodeURIComponent(lineId)}/actual-weight`;
+  },
+
+  /**
    * Reveal the customer's phone in full.
    *
    * A separate capability and a separate audited call requiring a stated purpose

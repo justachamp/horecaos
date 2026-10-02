@@ -125,4 +125,44 @@ describe('OrderChangeQuantityDialog', () => {
 
     expect(dismissed).toBe(true);
   });
+
+  describe('a line sold by the portion (ADR 0137)', () => {
+    it('offers the next whole number above a fractional quantity, since an amendment changes whole units', () => {
+      const { fixture } = render([line({ lineId: 'line-1', quantity: 0.5 })]);
+      const host: HTMLElement = fixture.nativeElement;
+      const input = host.querySelector(
+        '[data-testid="order-change-quantity-dialog-quantity"]',
+      ) as HTMLInputElement;
+
+      expect(input.value).toBe('1');
+      expect(Number(input.min)).toBe(1);
+      expect(
+        (
+          host.querySelector(
+            '[data-testid="order-change-quantity-dialog-confirm"]',
+          ) as HTMLButtonElement
+        ).disabled,
+      ).toBe(false);
+    });
+
+    it('goes above 1.5 to 2, never to 1.5 + 1', () => {
+      const { fixture } = render([line({ lineId: 'line-1', quantity: 1.5 })]);
+      const host: HTMLElement = fixture.nativeElement;
+
+      expect(
+        (
+          host.querySelector(
+            '[data-testid="order-change-quantity-dialog-quantity"]',
+          ) as HTMLInputElement
+        ).value,
+      ).toBe('2');
+    });
+
+    it('writes a line’s current quantity without float noise or trailing zeros', () => {
+      const { fixture } = render([line({ lineId: 'line-1', quantity: 0.5 })]);
+      const host: HTMLElement = fixture.nativeElement;
+
+      expect(host.querySelector('option')?.textContent).toContain('0.5');
+    });
+  });
 });

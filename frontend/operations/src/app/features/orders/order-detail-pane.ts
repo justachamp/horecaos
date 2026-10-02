@@ -79,6 +79,7 @@ import { describeApiError, mutationErrorNotice } from './order-errors';
 import { OrderFiscalPanel } from './order-fiscal-panel';
 import { OrderDetailActions } from './order-detail-actions';
 import { OrderDetailLines } from './order-detail-lines';
+import { OrderWeighingPanel } from './order-weighing-panel';
 import { OrderDetailMoney } from './order-detail-money';
 import { OrderHandoverPanel } from './order-handover-panel';
 import { orderLifecycleSteps } from './order-lifecycle-steps';
@@ -214,6 +215,7 @@ type DialogKind =
     Combobox,
     OrderDetailActions,
     OrderDetailLines,
+    OrderWeighingPanel,
     OrderDetailMoney,
     OrderPosExportPanel,
     // ---------------------------------------------------- wave 10 financial commands
@@ -256,6 +258,8 @@ export class OrderDetailPane {
   protected readonly notFound = signal(false);
   protected readonly denied = signal(false);
   protected readonly lastError = signal<ApiError | null>(null);
+  /** The branch the scale (ADR 0137) writes under — the pane's own, as every other write here. */
+  protected readonly weighingScope = computed(() => this.location.scope());
 
   protected readonly timeline = signal<readonly OrderTimelineEntry[] | null>(null);
   protected readonly timelineError = signal(false);
@@ -565,6 +569,32 @@ export class OrderDetailPane {
       }
     } finally {
       this.loading.set(false);
+    }
+  }
+
+  /**
+   * Reads the order again without resetting the rest of the pane — what a weighing needs
+   * (ADR 0137): the line is now weighed, the order's total and version are the corrected ones,
+   * and the timeline has a `CATCHWEIGHT` revision. Everything else on screen (a revealed phone, an
+   * open dialog) stays as the operator left it.
+   */
+  protected async refreshOrder(): Promise<void> {
+    const scope = this.location.scope();
+    const orderId = this.orderId();
+    if (!scope) {
+      return;
+    }
+    try {
+      const result = await firstValueFrom(
+        this.api.get<OrderDetailResponse>(operationsPaths.order(scope, orderId)),
+      );
+      if (this.orderId() === orderId) {
+        this.order.set(result);
+        void this.loadTimeline(orderId);
+      }
+    } catch {
+      // The weighing itself was recorded; a failed re-read leaves the previous picture on screen
+      // and the next load corrects it, the same trade every secondary read here makes.
     }
   }
 

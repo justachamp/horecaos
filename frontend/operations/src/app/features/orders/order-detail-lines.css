@@ -77,3 +77,8 @@
   color: var(--q-ink-muted);
   font-size: var(--q-type-caption);
 }
+
+.pane__line-weight {
+  color: var(--q-ink-subtle);
+  margin-top: 2px;
+}
