@@ -41,6 +41,7 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -482,6 +483,136 @@ class ComboOrderFlowEndToEndTests {
         assertThat(refused.error())
                 .as("an unmapped component is an unmapped line, the path ADR 0012 already has")
                 .isEqualTo("LINE_UNMAPPED");
+    }
+
+    // ============================================================= the HTTP call sites
+
+    @Test
+    @DisplayName(
+            "a customer puts a combo over the storefront API and reads the order and the repeat back with the combo")
+    void aCustomerDrivesAComboOverTheStorefrontApi() throws Exception {
+        linkCustomerPrincipal();
+        UUID cart = openCart(FulfillmentMode.PICKUP);
+        String base = "/api/v1/storefront/tenants/" + TENANT + "/brands/" + BRAND;
+
+        // A group left unanswered is refused by name, with the cart untouched.
+        MvcResult incomplete = mvc.perform(MockMvcRequestBuilders.put(base + "/carts/" + cart + "/lines/lunch")
+                        .with(customerToken())
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "put-incomplete")
+                        .header("If-Match", "\"" + cartVersion(cart) + "\"")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"variantId":"%s","quantity":1,"comboPicks":[{"componentId":"%s"}]}""".formatted(lunchVariant, burgerInLunch.id())))
+                .andReturn();
+        assertThat(incomplete.getResponse().getStatus())
+                .as(incomplete.getResponse().getContentAsString())
+                .isBetween(400, 499);
+        assertThat(incomplete.getResponse().getContentAsString()).contains("COMBO_GROUP_MINIMUM_NOT_MET");
+
+        // The console's JSON: the pick quantity omitted, the nested list omitted.
+        MvcResult put = mvc.perform(MockMvcRequestBuilders.put(base + "/carts/" + cart + "/lines/lunch")
+                        .with(customerToken())
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "put-complete")
+                        .header("If-Match", "\"" + cartVersion(cart) + "\"")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"variantId":"%s","quantity":2,"comboPicks":[{"componentId":"%s"},{"componentId":"%s"}]}""".formatted(lunchVariant, burgerInLunch.id(), colaInLunch.id())))
+                .andReturn();
+        assertThat(put.getResponse().getStatus())
+                .as(put.getResponse().getContentAsString())
+                .isEqualTo(200);
+        JsonNode line = JSON.readTree(put.getResponse().getContentAsString())
+                .get("lines")
+                .get(0);
+        assertThat(line.get("variantId").asText()).isEqualTo(lunchVariant.toString());
+        assertThat(line.get("comboPicks")).hasSize(2);
+        assertThat(line.get("comboPicks").get(0).get("quantity").asInt()).isEqualTo(1);
+
+        MvcResult priced = mvc.perform(post(base + "/carts/" + cart + "/pricing")
+                        .with(customerToken())
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "price-complete")
+                        .header("If-Match", "\"" + cartVersion(cart) + "\""))
+                .andReturn();
+        assertThat(priced.getResponse().getStatus())
+                .as(priced.getResponse().getContentAsString())
+                .isEqualTo(200);
+
+        UUID orderId = checkOut(cart);
+
+        MvcResult read = mvc.perform(get(base + "/orders/" + orderId).with(customerToken()))
+                .andReturn();
+        assertThat(read.getResponse().getStatus())
+                .as(read.getResponse().getContentAsString())
+                .isEqualTo(200);
+        JsonNode order = JSON.readTree(read.getResponse().getContentAsString());
+        JsonNode lines = order.get("lines");
+        assertThat(lines).hasSize(2);
+        assertThat(lines.get(0).get("comboName").asText()).isEqualTo("Lunch box");
+        assertThat(lines.get(0).get("comboSelectionId").asText())
+                .isEqualTo(lines.get(1).get("comboSelectionId").asText());
+
+        offer(lunchVariant);
+        offer(burgerVariant);
+        offer(colaVariant);
+        MvcResult repeat = mvc.perform(
+                        get(base + "/orders/" + orderId + "/reorder").with(customerToken()))
+                .andReturn();
+        assertThat(repeat.getResponse().getStatus())
+                .as(repeat.getResponse().getContentAsString())
+                .isEqualTo(200);
+        JsonNode planned =
+                JSON.readTree(repeat.getResponse().getContentAsString()).get("lines");
+        assertThat(planned).as("one combo to repeat, not its components").hasSize(1);
+        assertThat(planned.get(0).get("variantId").asText()).isEqualTo(lunchVariant.toString());
+        assertThat(planned.get(0).get("comboPicks")).hasSize(2);
+    }
+
+    @Test
+    @DisplayName(
+            "an operator takes a combo order by phone: each component is a line, and an incomplete combo is refused")
+    void anOperatorTakesAComboOrderByPhone() throws Exception {
+        String ordersPath = "/api/v1/tenants/" + TENANT + "/brands/" + BRAND + "/locations/" + LOCATION + "/orders";
+        String body = """
+                {"customerAccountId":"%s","channelCode":"STOREFRONT","fulfillmentMode":"PICKUP",
+                 "paymentMethodCode":"CASH",
+                 "lines":[{"variantId":"%s","quantity":3,"comboPicks":[%s]}]}""";
+        String burgerOnly = "{\"componentId\":\"" + burgerInLunch.id() + "\"}";
+        String burgerAndCola = burgerOnly + ",{\"componentId\":\"" + colaInLunch.id() + "\"}";
+
+        MvcResult incomplete = mvc.perform(post(ordersPath)
+                        .with(tokenFor(OPERATOR))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "phone-incomplete")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body.formatted(CUSTOMER, lunchVariant, burgerOnly)))
+                .andReturn();
+        assertThat(incomplete.getResponse().getStatus())
+                .as(incomplete.getResponse().getContentAsString())
+                .isBetween(400, 499);
+        assertThat(incomplete.getResponse().getContentAsString()).contains("COMBO_GROUP_MINIMUM_NOT_MET");
+
+        MvcResult placed = mvc.perform(post(ordersPath)
+                        .with(tokenFor(OPERATOR))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "phone-complete")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body.formatted(CUSTOMER, lunchVariant, burgerAndCola)))
+                .andReturn();
+        assertThat(placed.getResponse().getStatus())
+                .as(placed.getResponse().getContentAsString())
+                .isEqualTo(201);
+        UUID orderId = UUID.fromString(JSON.readTree(placed.getResponse().getContentAsString())
+                .get("orderId")
+                .asText());
+
+        List<OrderLine> lines = orderLines(orderId);
+        assertThat(lines).extracting(OrderLine::variantId).containsExactly(burgerVariant, colaVariant);
+        assertThat(lines).extracting(OrderLine::quantity).containsExactly(3, 3);
+        assertThat(lines)
+                .extracting(OrderLine::selectionId)
+                .doesNotContainNull()
+                .containsOnly(lines.get(0).selectionId());
+        assertThat(totalOf(orderId)).isEqualTo(3 * (BURGER_IN_LUNCH + COLA_IN_LUNCH));
+        assertThat(lines.get(0).comboName()).isEqualTo("Lunch box");
+        assertThat(lines.get(0).comboQuantity()).isEqualTo(3);
     }
 
     // ===================================================================== the cart
@@ -1967,6 +2098,31 @@ class ComboOrderFlowEndToEndTests {
                 .param("scopeId", TENANT)
                 .param("validFrom", Instant.now().minus(Duration.ofHours(1)).atOffset(ZoneOffset.UTC))
                 .update();
+    }
+
+    private static final String CUSTOMER_SUBJECT = "combo-flow-customer";
+
+    /** The issuer the platform trusts for customer sign-ins, so a link under it is found. */
+    @org.springframework.beans.factory.annotation.Value("${spring.security.oauth2.resourceserver.jwt.issuer-uri}")
+    private String customerIssuer;
+
+    /** The customer's own sign-in, linked to the account the cart belongs to. */
+    private void linkCustomerPrincipal() {
+        jdbc.sql("""
+                INSERT INTO customer.principal_links (
+                    id, tenant_id, customer_account_id, issuer, subject, status, linked_at)
+                VALUES (:id, :tenantId, :accountId, :issuer, :subject, 'ACTIVE', now())
+                """)
+                .param("id", UUID.randomUUID())
+                .param("tenantId", TENANT)
+                .param("accountId", CUSTOMER)
+                .param("issuer", customerIssuer)
+                .param("subject", CUSTOMER_SUBJECT)
+                .update();
+    }
+
+    private RequestPostProcessor customerToken() {
+        return jwt().jwt(builder -> builder.issuer(customerIssuer).subject(CUSTOMER_SUBJECT));
     }
 
     private static RequestPostProcessor tokenFor(String subject) {
