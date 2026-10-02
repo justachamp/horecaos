@@ -62,9 +62,7 @@ export class OrdersService {
    */
   getOrders(statuses: string[], limit = 50): Observable<ApiOrder[]> {
     const wanted = new Set(statuses.flatMap((token) => PLATFORM_STATUSES[token] ?? []));
-    return from(
-      this.api.list<OrderSummaryResponse>(`${this.brandPath}/orders`, { limit }),
-    ).pipe(
+    return from(this.api.list<OrderSummaryResponse>(`${this.brandPath}/orders`, { limit })).pipe(
       map((page: Page<OrderSummaryResponse>) => {
         for (const row of page.items) {
           this.versions.set(row.orderId, row.version);
@@ -203,6 +201,10 @@ export class OrdersService {
         name: [line.productName, line.variantName].filter(Boolean).join(' '),
         quantity: line.quantity,
         price: line.unitAmountMinor,
+        // ADR 0137: the line's own amount — `unitAmountMinor × quantity` is wrong once a weighed
+        // line has been weighed, and for a portion it is the price of a whole one.
+        lineAmount: line.finalAmountMinor,
+        catchweight: line.catchweight ?? null,
         image: null,
         note: null,
       })),
@@ -307,6 +309,22 @@ export interface OrderLineResponse {
   readonly finalAmountMinor: number;
   readonly modifiers: readonly string[];
   readonly modifierOptionIds: readonly string[];
+  /** ADR 0137: present on a line sold by weight, absent otherwise. */
+  readonly catchweight?: OrderLineCatchweight | null;
+}
+
+/**
+ * ADR 0137: `StorefrontOrderingController.CatchweightLineResponse`. `provisional` is true until the
+ * kitchen has weighed the line at handover, and means `finalAmountMinor` was computed against the
+ * nominal weight; the order total the customer sees then is an estimate the weighed amount
+ * replaces. `actualWeightGrams` is the whole line's weight — all its units together — once weighed.
+ */
+export interface OrderLineCatchweight {
+  readonly quantumGrams: number;
+  readonly nominalGramsPerUnit: number;
+  readonly pricePerQuantumMinor: number;
+  readonly provisional: boolean;
+  readonly actualWeightGrams?: number | null;
 }
 
 /**
@@ -329,11 +347,7 @@ export interface ReorderPlanResponse {
 export type ReorderVerdict = 'READY' | 'PARTIAL' | 'UNAVAILABLE';
 
 export type ReorderLineStatus =
-  | 'AVAILABLE'
-  | 'SOLD_OUT'
-  | 'WITHDRAWN'
-  | 'UNPRICED'
-  | 'MODIFIERS_WITHDRAWN';
+  'AVAILABLE' | 'SOLD_OUT' | 'WITHDRAWN' | 'UNPRICED' | 'MODIFIERS_WITHDRAWN';
 
 export interface ReorderLineResponse {
   readonly lineNumber: number;

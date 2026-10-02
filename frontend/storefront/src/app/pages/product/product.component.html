@@ -188,6 +188,7 @@
                   <span class="text-[13px] font-medium leading-snug text-text-primary">{{
                     variant.label
                   }}</span>
+                  <app-physical-facts [physical]="variant.physical" [priceMinor]="variant.price" />
                   @if (variant.remainingQuantity !== null) {
                     <p class="text-[12px] text-amber-400" data-testid="product-low-stock">
                       {{ 'product.lowStock' | t: { count: variant.remainingQuantity } }}
@@ -208,7 +209,7 @@
                         class="flex min-h-[2.75rem] min-w-0 flex-1 flex-col items-center justify-center rounded-full bg-surface-raised-2 px-3 py-2 text-center"
                       >
                         <span class="text-xs font-bold leading-tight text-text-primary">
-                          {{ qty }} {{ 'common.itemsUnit' | t }}
+                          {{ quantityLabel(qty, variant.id) }}
                         </span>
                         <span
                           class="mt-0.5 text-[11px] font-medium leading-none text-[#d4af37] sm:text-xs"
@@ -236,7 +237,7 @@
                       [attr.aria-label]="'cart.addToCart' | t"
                       (click)="increaseVariant(variant.id)"
                     >
-                      <span class="min-w-0 truncate">{{ formatPrice(variant.price) }}</span>
+                      <span class="min-w-0 truncate">{{ variant.priceLabel }}</span>
                       <span class="shrink-0 text-lg font-light leading-none" aria-hidden="true"
                         >+</span
                       >
@@ -309,7 +310,7 @@
                   class="flex min-h-[2.75rem] min-w-0 flex-1 flex-col items-center justify-center rounded-full bg-surface-raised-2 px-2 py-2 text-center"
                 >
                   <span class="text-xs font-bold leading-tight text-text-primary">
-                    {{ qty() }} {{ 'common.itemsUnit' | t }}
+                    {{ quantityLabel(qty(), variantId() ?? '') }}
                   </span>
                   <span
                     class="mt-0.5 text-[11px] font-medium leading-none text-[#d4af37] sm:text-xs"

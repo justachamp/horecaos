@@ -8,7 +8,10 @@ import { PaymentSessionService } from '../../../services/payment-session.service
 import { NotificationService } from '../../../services/notification.service';
 import { TranslateService } from '../../../services/translate.service';
 import { DeliverySelectionService } from '../../../services/delivery-selection.service';
-import { LocationProfileService, type LocationProfile } from '../../../services/location-profile.service';
+import {
+  LocationProfileService,
+  type LocationProfile,
+} from '../../../services/location-profile.service';
 import type { CheckoutResult, PricedCart } from '../../../services/cart.service';
 import type { CartResponse } from '../../../types/cart.types';
 import { HorecaOSApiError } from '../../../core/api/problem-details';
@@ -24,13 +27,14 @@ class FakeUiCartService {
   checkout = vi.fn();
   discard = vi.fn();
   deliveryAddress = vi.fn(() => '');
-  subtotalFormatted = vi.fn(() => '10 000 so\'m');
-  deliveryFee = vi.fn(() => '5 000 so\'m');
+  subtotalFormatted = vi.fn(() => "10 000 so'm");
+  deliveryFee = vi.fn(() => "5 000 so'm");
   taxFormatted = vi.fn<() => string | null>(() => null);
   discountFormatted = vi.fn<() => string | null>(() => null);
-  totalWithDelivery = vi.fn(() => '15 000 so\'m');
+  totalWithDelivery = vi.fn(() => "15 000 so'm");
   deliveryUnresolvedMessage = vi.fn<() => string | null>(() => null);
   canPlaceOrder = vi.fn(() => true);
+  hasProvisionalLines = vi.fn(() => false);
 }
 
 class FakeDeliverySelectionService {
@@ -226,7 +230,7 @@ describe('CartConfirmationComponent: the pickup screen names the actual branch',
     };
   }
 
-  it('shows the branch\'s own name and address once the profile read resolves, for the configured location', async () => {
+  it("shows the branch's own name and address once the profile read resolves, for the configured location", async () => {
     const { comp, fixture, locations } = await setUp(
       ['CASH'],
       (cart) => {
@@ -613,7 +617,11 @@ describe('CartConfirmationComponent: CLICK opens a payment session and redirects
   });
 
   afterEach(() => {
-    Object.defineProperty(window, 'location', { configurable: true, value: realLocation, writable: true });
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: realLocation,
+      writable: true,
+    });
   });
 
   it('opens the payment session and sends the browser to checkoutUrl, without an Angular navigation', async () => {
@@ -667,5 +675,29 @@ describe('CartConfirmationComponent: CLICK opens a payment session and redirects
 
     expect(paymentSessions.open).not.toHaveBeenCalled();
     expect(navigateSpy).toHaveBeenCalledWith(['/orders', 'active']);
+  });
+});
+
+describe('CartConfirmationComponent: items sold by weight (ADR 0137)', () => {
+  it('says the amount is an estimate before the customer pays, while the basket holds a weighed item', async () => {
+    const { fixture } = await setUp(['CASH'], (cart) =>
+      cart.hasProvisionalLines.mockReturnValue(true),
+    );
+
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector(
+        '[data-testid="confirm-provisional-notice"]',
+      ),
+    ).not.toBeNull();
+  });
+
+  it('says nothing of the kind for a basket of fixed units', async () => {
+    const { fixture } = await setUp();
+
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector(
+        '[data-testid="confirm-provisional-notice"]',
+      ),
+    ).toBeNull();
   });
 });

@@ -1,0 +1,56 @@
+@if (physical(); as p) {
+  @if (compact()) {
+    @if (measure(); as measure) {
+      <span class="text-[11px] text-zinc-400" data-testid="physical-measure">{{ measure }}</span>
+    }
+  } @else {
+    <div class="flex flex-col gap-1.5" data-testid="physical-facts">
+      @if (measure(); as measure) {
+        <span class="text-[12px] text-zinc-300" data-testid="physical-measure">{{ measure }}</span>
+      }
+      @if (portionStep(); as step) {
+        <p class="text-[12px] text-zinc-400" data-testid="physical-portion-step">{{ step }}</p>
+      }
+      @if (catchweight(); as weighed) {
+        <p class="text-[12px] text-zinc-300" data-testid="physical-price-per-quantum">
+          {{ weighed.perQuantum }}
+        </p>
+        <p class="text-[12px] text-zinc-400" data-testid="physical-estimate">
+          {{ weighed.estimate }}
+        </p>
+        <p class="text-[12px] text-amber-400" data-testid="physical-final-weight-notice">
+          {{ 'physical.finalWeightNotice' | t }}
+        </p>
+      }
+      @if (nutrition(); as facts) {
+        <div class="mt-1" data-testid="physical-nutrition">
+          <p class="mb-1 text-[12px] font-bold text-text-primary">
+            {{ 'physical.nutritionTitle' | t }}
+          </p>
+          <table class="w-full text-left text-[12px] text-zinc-300">
+            <thead>
+              <tr class="text-zinc-400">
+                <th class="font-normal"></th>
+                <th class="font-normal">{{ facts.per100Label }}</th>
+                @if (facts.unitLabel) {
+                  <th class="font-normal">{{ facts.unitLabel }}</th>
+                }
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of facts.rows; track row.id) {
+                <tr [attr.data-testid]="'physical-nutrition-' + row.id">
+                  <td>{{ row.label }}</td>
+                  <td>{{ figure(row.per100, row.unitSuffix) }}</td>
+                  @if (facts.unitLabel) {
+                    <td>{{ figure(row.perUnit, row.unitSuffix) }}</td>
+                  }
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </div>
+  }
+}

@@ -21,7 +21,16 @@ import { NavigationHistoryService } from '../../services/navigation-history.serv
 import { FEATURES } from '../../core/config/features';
 import { Session } from '../../core/auth/session';
 import { EcommerceItem, pushEcommerceEvent } from '../../core/analytics/ecommerce-events';
+import type { CartResponseItem } from '../../types/cart.types';
 import { presetLabelFor } from '../../utils/preset-label';
+import { PhysicalFactsComponent } from '../../shared/physical-facts/physical-facts.component';
+import {
+  formatQuantity,
+  initialQuantity,
+  portionStep,
+  unitPriceMinor,
+  type PhysicalFacts,
+} from '../../utils/physical';
 
 /** Matches `CartOrderStatusComponent`'s own fallback -- the storefront's launch scope is UZS-only. */
 const FALLBACK_CURRENCY = 'UZS';
@@ -39,6 +48,13 @@ export interface ProductVariantDisplay {
   onSaleNow: boolean;
   /** Rows 4.4c/4.4d: a low remaining count, or null for the ordinary case. See `MenuItemVariant`'s own doc. */
   remainingQuantity: number | null;
+  /** ADR 0137: the variant's weight, portions, weighed pricing and КБЖУ; null for a fixed unit sold whole. */
+  physical: PhysicalFacts | null;
+  /**
+   * What the add button reads: the price, or for a variant sold by weight an estimate for one unit
+   * at its nominal weight (its price row is per quantum, which is not what a unit costs).
+   */
+  priceLabel: string;
 }
 
 export interface ProductDisplay {
@@ -64,6 +80,10 @@ function menuItemToDisplay(item: MenuItem, formatPriceFn: (n: number) => string)
       price: v.price,
       onSaleNow: v.onSaleNow,
       remainingQuantity: v.remainingQuantity,
+      physical: v.physical ?? null,
+      priceLabel: v.physical?.catchweight
+        ? `≈ ${formatPriceFn(unitPriceMinor(v.price, v.physical))}`
+        : formatPriceFn(v.price),
     }));
   return {
     id: item.id,
@@ -87,7 +107,14 @@ function sameOptionIds(a: readonly string[], b: readonly string[]): boolean {
 @Component({
   selector: 'app-product',
   standalone: true,
-  imports: [CommonModule, RouterLink, FoodCarouselComponent, CartHintBadgeComponent, TranslatePipe],
+  imports: [
+    CommonModule,
+    RouterLink,
+    FoodCarouselComponent,
+    CartHintBadgeComponent,
+    PhysicalFactsComponent,
+    TranslatePipe,
+  ],
   templateUrl: './product.component.html',
   styleUrl: './product.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -282,7 +309,7 @@ export class ProductComponent {
     this.translate.current();
     const line = this.cartLine();
     if (!line) return '';
-    return this.formatPrice(line.price * line.quantity);
+    return this.lineTotalText(line);
   });
 
   /** Recommendations from API populars, excluding current */
@@ -402,7 +429,26 @@ export class ProductComponent {
       .items()
       .find((i) => i.variant_id === variantId && sameOptionIds(i.modifierOptionIds, selection));
     if (!line) return '';
-    return this.formatPrice(line.price * line.quantity);
+    return this.lineTotalText(line);
+  }
+
+  /** A line's amount, marked as an estimate when it is sold by weight (ADR 0137). */
+  private lineTotalText(line: CartResponseItem): string {
+    const amount = this.formatPrice(this.cartService.lineAmount(line));
+    return line.physical?.catchweight ? `≈ ${amount}` : amount;
+  }
+
+  private physicalOf(variantId: string): PhysicalFacts | null {
+    return (this.rawItem()?.variants ?? []).find((v) => v.id === variantId)?.physical ?? null;
+  }
+
+  /** `0,5 порц.`, `3 шт` — a quantity written as the customer's language writes it. */
+  quantityLabel(quantity: number, variantId: string): string {
+    this.translate.current();
+    const unit = this.translate.get(
+      this.physicalOf(variantId)?.splittable ? 'physical.portionsUnit' : 'common.itemsUnit',
+    );
+    return `${formatQuantity(quantity, this.langService.langId())} ${unit}`;
   }
 
   /**
@@ -446,7 +492,10 @@ export class ProductComponent {
       if (line) {
         this.cartService.increaseQuantity(line);
       } else {
-        void this.cartService.add(variantId, 1, undefined, selection, presetSelection);
+        // ADR 0137: a first tap puts one whole portion in the basket, or the first quantity the
+        // cart accepts for a portion size that does not divide one.
+        const quantity = initialQuantity(portionStep(this.physicalOf(variantId)));
+        void this.cartService.add(variantId, quantity, undefined, selection, presetSelection);
       }
     };
     if (!this.cartService.cartData()) {

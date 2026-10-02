@@ -14,14 +14,17 @@ import { NotificationService } from '../../services/notification.service';
 import { NavigationHistoryService } from '../../services/navigation-history.service';
 import { TranslateService } from '../../services/translate.service';
 import { UiCartService } from '../../services/ui-cart.service';
-import { LocationProfileService, type LocationProfile } from '../../services/location-profile.service';
+import {
+  LocationProfileService,
+  type LocationProfile,
+} from '../../services/location-profile.service';
 
 class FakeTranslateService {
   get(key: string): string {
     return key;
   }
-  getWithParams(key: string): string {
-    return key;
+  getWithParams(key: string, params?: Record<string, string | number>): string {
+    return params ? `${key}|${Object.values(params).join('|')}` : key;
   }
   current(): Record<string, unknown> {
     return {};
@@ -105,7 +108,9 @@ function setUp(
       provideRouter([]),
       {
         provide: ActivatedRoute,
-        useValue: { snapshot: { paramMap: { get: (key: string) => (key === 'id' ? orderId : null) } } },
+        useValue: {
+          snapshot: { paramMap: { get: (key: string) => (key === 'id' ? orderId : null) } },
+        },
       },
       { provide: OrdersService, useValue: ordersService },
       { provide: NotificationService, useValue: { show: vi.fn() } },
@@ -190,7 +195,12 @@ describe('OrderDetailComponent: names the pickup branch (2026-09-21 audit follow
       'o1',
       apiOrderDetail({ fulfillmentMode: 'PICKUP', locationId: 'loc-1' }),
       of(plan('READY')),
-      branch({ displayName: 'Central kitchen', addressLine: '1 Demo Street', district: 'Shaykhontohur', city: 'Tashkent' }),
+      branch({
+        displayName: 'Central kitchen',
+        addressLine: '1 Demo Street',
+        district: 'Shaykhontohur',
+        city: 'Tashkent',
+      }),
     );
 
     fixture.detectChanges();
@@ -242,7 +252,7 @@ describe('OrderDetailComponent: names the pickup branch (2026-09-21 audit follow
 });
 
 describe('OrderDetailComponent: the header shows the real order number, not "Order N: NaN"', () => {
-  it('carries the platform\'s own public order number through as-is, and never coerces it to NaN', async () => {
+  it("carries the platform's own public order number through as-is, and never coerces it to NaN", async () => {
     // `order_number` is `OrderResponse.publicOrderNumber` -- a string like
     // "0922-001" -- force-cast to `number` by OrdersService.toApiOrderDetail
     // (see ApiOrderDetail's own field note, and OrdersComponent's list,
@@ -298,7 +308,12 @@ describe("OrderDetailComponent.repeat -- driven by the platform's plan (ADR 0074
       apiOrderDetail(),
       of(
         plan('READY', [
-          planLine({ lineNumber: 1, variantId: 'v1', quantity: 3, modifierOptionIds: ['m1', 'm2'] }),
+          planLine({
+            lineNumber: 1,
+            variantId: 'v1',
+            quantity: 3,
+            modifierOptionIds: ['m1', 'm2'],
+          }),
           planLine({ lineNumber: 2, variantId: 'v2', quantity: 1 }),
         ]),
       ),
@@ -346,7 +361,11 @@ describe("OrderDetailComponent.repeat -- driven by the platform's plan (ADR 0074
     const { fixture } = setUp(
       'o1',
       apiOrderDetail(),
-      of(plan('UNAVAILABLE', [planLine({ status: 'WITHDRAWN', productId: null, unitAmountMinor: null })])),
+      of(
+        plan('UNAVAILABLE', [
+          planLine({ status: 'WITHDRAWN', productId: null, unitAmountMinor: null }),
+        ]),
+      ),
     );
 
     fixture.detectChanges();
@@ -357,7 +376,11 @@ describe("OrderDetailComponent.repeat -- driven by the platform's plan (ADR 0074
   });
 
   it('shows no repeat button when the plan request fails, rather than one that would fail too', async () => {
-    const { fixture, comp } = setUp('o1', apiOrderDetail(), throwError(() => new Error('network')));
+    const { fixture, comp } = setUp(
+      'o1',
+      apiOrderDetail(),
+      throwError(() => new Error('network')),
+    );
 
     fixture.detectChanges();
     await fixture.whenStable();
@@ -373,12 +396,106 @@ describe("OrderDetailComponent.repeat -- driven by the platform's plan (ADR 0074
   it('never offers the button from a plan that answers about a different order', async () => {
     // The guard is the id, not "a plan arrived" -- a stale or mismatched
     // response must not arm a button on an order it is not about.
-    const { fixture } = setUp('o1', apiOrderDetail(), of(plan('READY', [planLine()], 'someone-else')));
+    const { fixture } = setUp(
+      'o1',
+      apiOrderDetail(),
+      of(plan('READY', [planLine()], 'someone-else')),
+    );
 
     fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();
 
     expect(fixture.nativeElement.querySelector('.repeat-btn')).toBeNull();
+  });
+});
+
+describe('OrderDetailComponent: portions and weighed lines (ADR 0137)', () => {
+  const NBSP = ' ';
+
+  async function open(items: ApiOrderDetail['items']) {
+    const { fixture, comp } = setUp('o1', apiOrderDetail({ items }));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const text = () =>
+      ((fixture.nativeElement as HTMLElement).textContent ?? '').replace(/\s+/g, ' ');
+    return { fixture, comp, text, host: fixture.nativeElement as HTMLElement };
+  }
+
+  const CAKE = {
+    quantumGrams: 100,
+    nominalGramsPerUnit: 1_200,
+    pricePerQuantumMinor: 15_000,
+    provisional: true,
+    actualWeightGrams: null,
+  };
+
+  it('writes a half portion with the language’s decimal mark, and a whole quantity as before', async () => {
+    const { text } = await open([
+      { name: 'Plov', quantity: 0.5, price: 38_000, lineAmount: 19_000 },
+      { name: 'Cola', quantity: 3, price: 9_000, lineAmount: 27_000 },
+    ]);
+
+    expect(text()).toContain('0,5 physical.portionsUnit');
+    expect(text()).toContain('3 common.itemsUnit');
+  });
+
+  it('shows a weighed line as an estimate, with its estimated weight, until it is weighed', async () => {
+    const { host, text } = await open([
+      { name: 'Medovik', quantity: 1, price: 180_000, lineAmount: 180_000, catchweight: CAKE },
+    ]);
+
+    const weight = host.querySelector('[data-testid="order-line-weight"]');
+    expect(weight?.textContent).toContain('physical.estimateLine');
+    expect(weight?.textContent).toContain(`1,2${NBSP}kg`);
+    expect(text()).toContain('≈ 180');
+  });
+
+  it('shows what a line weighed and its own corrected amount once it is weighed', async () => {
+    const { host, text } = await open([
+      {
+        name: 'Medovik',
+        quantity: 1,
+        price: 180_000,
+        lineAmount: 201_000,
+        catchweight: { ...CAKE, provisional: false, actualWeightGrams: 1_340 },
+      },
+    ]);
+
+    const weight = host.querySelector('[data-testid="order-line-weight"]');
+    expect(weight?.textContent).toContain('physical.weighedLine');
+    expect(weight?.textContent).toContain(`1,34${NBSP}kg`);
+    expect(text()).toContain('201');
+    expect(text()).not.toContain('≈');
+  });
+
+  it('says the final weight and price are set at handover while any line is unweighed', async () => {
+    const { host } = await open([
+      { name: 'Medovik', quantity: 1, price: 180_000, lineAmount: 180_000, catchweight: CAKE },
+    ]);
+
+    expect(host.querySelector('[data-testid="order-final-weight-notice"]')).not.toBeNull();
+  });
+
+  it('says nothing of the kind once every weighed line is weighed, or when there is none', async () => {
+    const weighed = await open([
+      {
+        name: 'Medovik',
+        quantity: 1,
+        price: 180_000,
+        lineAmount: 201_000,
+        catchweight: { ...CAKE, provisional: false, actualWeightGrams: 1_340 },
+      },
+    ]);
+
+    expect(weighed.host.querySelector('[data-testid="order-final-weight-notice"]')).toBeNull();
+  });
+
+  it('says nothing about weight on a fixed unit', async () => {
+    const { host } = await open([{ name: 'Cola', quantity: 3, price: 9_000, lineAmount: 27_000 }]);
+
+    expect(host.querySelector('[data-testid="order-line-weight"]')).toBeNull();
+    expect(host.querySelector('[data-testid="order-final-weight-notice"]')).toBeNull();
   });
 });

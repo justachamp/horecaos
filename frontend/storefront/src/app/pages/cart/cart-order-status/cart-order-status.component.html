@@ -29,7 +29,9 @@
   <main class="mx-auto flex w-full max-w-[420px] flex-1 flex-col px-4 pb-28 pt-2">
     @if (loading()) {
       <div class="flex flex-1 flex-col items-center justify-center gap-3 py-12">
-        <span class="h-8 w-8 animate-spin rounded-full border-2 border-brand-accent border-t-transparent"></span>
+        <span
+          class="h-8 w-8 animate-spin rounded-full border-2 border-brand-accent border-t-transparent"
+        ></span>
         <p class="text-sm text-zinc-400">{{ 'common.loading' | t }}</p>
       </div>
     } @else if (loadError()) {
@@ -61,14 +63,26 @@
           <div class="flex items-center justify-between gap-3 py-3">
             <div class="min-w-0 flex-1">
               <p class="truncate text-sm font-medium text-text-primary">{{ item.name }}</p>
-              <p class="text-xs text-zinc-400">{{ item.quantity }} {{ 'common.itemsUnit' | t }}</p>
+              <p class="text-xs text-zinc-400">{{ quantityText(item) }}</p>
+              @if (weightText(item); as weight) {
+                <p class="text-xs text-zinc-400" data-testid="status-line-weight">{{ weight }}</p>
+              }
             </div>
             <span class="shrink-0 text-sm font-semibold text-text-primary">
-              {{ formatPrice(lineTotal(item)) }}
+              {{ lineAmountText(item) }}
             </span>
           </div>
         }
       </div>
+
+      @if (hasProvisionalLines()) {
+        <p
+          class="mt-3 text-xs leading-snug text-amber-400"
+          data-testid="status-final-weight-notice"
+        >
+          {{ 'physical.finalWeightNotice' | t }}
+        </p>
+      }
 
       <!-- Totals -->
       <div class="mt-4 flex flex-col gap-1.5 text-sm">

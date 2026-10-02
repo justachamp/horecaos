@@ -25,6 +25,7 @@ import {
 import { LangService } from './lang.service';
 import { DeliverySelectionService } from './delivery-selection.service';
 import { TranslateService } from './translate.service';
+import { lineAmountMinor, portionStep, type PhysicalFacts } from '../utils/physical';
 
 /** Final -- checkout will accept the fee -- vs. still a refusal. */
 function isDeliveryFeeUsable(outcome: string): boolean {
@@ -136,9 +137,35 @@ export class UiCartService {
 
   readonly items = computed(() => this.cartData()?.items ?? []);
 
+  /**
+   * How many items the basket holds, for the badge: a half portion is one plate somebody has to
+   * make (ADR 0137), so each line counts its quantity rounded up, never as a fraction of one.
+   */
   readonly totalItemsCount = computed(() =>
-    this.items().reduce((sum, item) => sum + item.quantity, 0),
+    this.items().reduce((sum, item) => sum + Math.ceil(item.quantity), 0),
   );
+
+  /**
+   * Whether the basket holds an item sold by weight (ADR 0137): its amount is an estimate at the
+   * item's nominal weight, and the final weight and total are determined at handover.
+   */
+  readonly hasProvisionalLines = computed(() =>
+    this.items().some((item) => item.physical?.catchweight),
+  );
+
+  /**
+   * One line's amount in minor units: the price row times the quantity for a portion, or for a
+   * weighed item its price per quantum at the estimated weight. The platform prices the cart; this
+   * is what a line reads before that, rounded the way the platform rounds.
+   */
+  lineAmount(item: CartResponseItem): number {
+    return lineAmountMinor(item.price, item.quantity, item.physical);
+  }
+
+  /** The step a line's quantity moves in: its portion size, or one. */
+  stepOf(item: { physical?: PhysicalFacts | null }): number {
+    return portionStep(item.physical);
+  }
 
   /**
    * The priced cart's own total -- goods, tax and (once resolved) delivery,
@@ -450,11 +477,11 @@ export class UiCartService {
   }
 
   increaseQuantity(item: CartResponseItem): void {
-    void this.setQuantity(item, item.quantity + 1);
+    void this.setQuantity(item, tidy(item.quantity + this.stepOf(item)));
   }
 
   decreaseQuantity(item: CartResponseItem): void {
-    void this.setQuantity(item, item.quantity - 1);
+    void this.setQuantity(item, tidy(item.quantity - this.stepOf(item)));
   }
 
   removeItem(item: CartResponseItem): void {
@@ -641,6 +668,7 @@ export class UiCartService {
         image: string | null;
         price: number;
         commentPresets: readonly PublishedCommentPreset[];
+        physical: PhysicalFacts | null;
       }
     >();
     for (const product of menu.products) {
@@ -650,6 +678,7 @@ export class UiCartService {
           image: product.imageUrls[0] ?? null,
           price: variant.amountMinor ?? 0,
           commentPresets: product.commentPresets,
+          physical: variant.physical ?? null,
         });
       }
     }
@@ -707,6 +736,7 @@ export class UiCartService {
           name: known.name,
           image: known.image ?? FALLBACK_IMAGE,
           price: known.price,
+          physical: known.physical,
           active: true,
           quantity: line.quantity,
           // Write-only on the platform; only its existence is reported.
@@ -723,7 +753,7 @@ export class UiCartService {
     const zero = { price: 0, discount: 0 };
     this.cartData.set({
       items,
-      items_count: items.reduce((sum, item) => sum + item.quantity, 0),
+      items_count: items.reduce((sum, item) => sum + Math.ceil(item.quantity), 0),
       subtotal: { price: this.priced()?.subtotalMinor ?? 0, discount: 0 },
       total: { price: this.priced()?.totalMinor ?? 0, discount: 0 },
       delivery: zero,
@@ -756,4 +786,9 @@ export class UiCartService {
     // Minor units, and for UZS that is whole som -- nothing divides by a hundred.
     return `${value.toLocaleString('uz-UZ')} ${currency}`;
   }
+}
+
+/** Thousandths, the scale a quantity is stored at, so `0.2 + 0.1` is `0.3` and not `0.30000000000000004`. */
+function tidy(value: number): number {
+  return Math.round(value * 1000) / 1000;
 }

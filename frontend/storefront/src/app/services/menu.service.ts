@@ -2,6 +2,7 @@ import { Injectable, inject, signal } from '@angular/core';
 
 import { ApiClient } from '../core/api/api-client';
 import { APP_CONFIG } from '../core/config/app-config';
+import type { PhysicalFacts } from '../utils/physical';
 import type {
   CategoryItem,
   CategoryItemsResponse,
@@ -231,6 +232,7 @@ export class MenuService {
       price_without_discount: variant.amountMinor ?? 0,
       onSaleNow: variant.onSaleNow,
       remainingQuantity: variant.remainingQuantity,
+      physical: variant.physical ?? null,
     }));
 
     return {
@@ -378,6 +380,12 @@ export interface PublishedVariant {
    * (null) is the ordinary case, not "unlimited".
    */
   readonly remainingQuantity: number | null;
+  /**
+   * ADR 0137: `StorefrontCatalogQuery.PhysicalFacts`. Omitted for a fixed unit sold whole (most
+   * of the menu); for a catchweight variant `amountMinor` is the price per
+   * `catchweightQuantumGrams`.
+   */
+  readonly physical?: PhysicalFacts | null;
 }
 
 export interface PublishedModifierGroup {

@@ -41,6 +41,14 @@
               <h2 class="pr-1 text-[15px] font-bold leading-snug text-text-primary">
                 {{ item.name }}
               </h2>
+              @if (estimateText(item); as estimate) {
+                <p
+                  class="pr-1 text-[12px] leading-snug text-zinc-400"
+                  data-testid="cart-line-estimate"
+                >
+                  {{ estimate }}
+                </p>
+              }
               @if (item.modifiers.length > 0) {
                 <p class="pr-1 text-[12px] leading-snug text-zinc-400">
                   {{ modifiersSummary(item) }}
@@ -68,12 +76,12 @@
                   class="flex min-h-[2.75rem] min-w-0 flex-1 flex-col items-center justify-center rounded-full bg-surface-raised-2 px-3 py-2 text-center"
                 >
                   <span class="text-xs font-bold leading-tight text-text-primary">
-                    {{ item.quantity }} {{ 'common.itemsUnit' | t }}
+                    {{ quantityLabel(item) }}
                   </span>
                   <span
                     class="mt-0.5 text-[11px] font-medium leading-none text-[#d4af37] sm:text-xs"
                   >
-                    {{ formatPrice(item.price * item.quantity) }}
+                    {{ lineTotal(item) }}
                   </span>
                 </div>
                 <button
@@ -212,6 +220,14 @@
             <p class="mt-2 text-lg font-bold leading-tight text-text-primary">
               {{ cart.totalAmount() }}
             </p>
+            @if (cart.hasProvisionalLines()) {
+              <p
+                class="mt-1 text-xs leading-snug text-amber-400"
+                data-testid="cart-provisional-notice"
+              >
+                {{ 'physical.cartNotice' | t }}
+              </p>
+            }
           </div>
           <svg
             class="mt-1 h-5 w-5 shrink-0 text-text-muted"

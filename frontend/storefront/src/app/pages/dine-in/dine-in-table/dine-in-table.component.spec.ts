@@ -7,7 +7,12 @@ import { HorecaOSApiError } from '../../../core/api/problem-details';
 import { ReturnDestination } from '../../../core/auth/return-destination';
 import { Session } from '../../../core/auth/session';
 import { CartService, type PlatformCart } from '../../../services/cart.service';
-import { DineInAdmission, DineInBill, DineInService, type RoundFlush } from '../../../services/dine-in.service';
+import {
+  DineInAdmission,
+  DineInBill,
+  DineInService,
+  type RoundFlush,
+} from '../../../services/dine-in.service';
 import { LangService } from '../../../services/lang.service';
 import { LocationProfileService } from '../../../services/location-profile.service';
 import { MenuService, type PublishedMenu } from '../../../services/menu.service';
@@ -44,7 +49,8 @@ class FakeDineInService {
   queueRound = vi.fn((sessionId: string, orderId: string) => {
     this.queued.push({ sessionId, orderId });
   });
-  pendingRoundCount = (sessionId: string) => this.queued.filter((round) => round.sessionId === sessionId).length;
+  pendingRoundCount = (sessionId: string) =>
+    this.queued.filter((round) => round.sessionId === sessionId).length;
   /** The real service's queue-then-attach, minus its storage and failure classification. */
   flushPendingRounds = vi.fn(async (sessionId: string): Promise<RoundFlush> => {
     let latest: DineInBill | null = null;
@@ -70,7 +76,9 @@ class FakeCartService {
   putLine = vi.fn();
   removeLine = vi.fn();
   price = vi.fn();
-  paymentMethods = vi.fn().mockResolvedValue({ cartId: 'cart-1', currency: 'UZS', methodCodes: [], warnings: [] });
+  paymentMethods = vi
+    .fn()
+    .mockResolvedValue({ cartId: 'cart-1', currency: 'UZS', methodCodes: [], warnings: [] });
   checkout = vi.fn();
   discard = vi.fn();
   bindTable = vi.fn().mockResolvedValue(null);
@@ -378,7 +386,15 @@ describe('DineInTableComponent', () => {
         quoteId: null,
         contextHash: null,
         expiresAt: null,
-        lines: [{ lineKey: 'variant-1', variantId: 'variant-1', quantity: 1, commentPresetCodes: [], hasCustomerNote: false }],
+        lines: [
+          {
+            lineKey: 'variant-1',
+            variantId: 'variant-1',
+            quantity: 1,
+            commentPresetCodes: [],
+            hasCustomerNote: false,
+          },
+        ],
       };
       cartService.ensure.mockResolvedValue(cartAfterAdd);
       cartService.putLine.mockImplementation(async () => {
@@ -432,7 +448,9 @@ describe('DineInTableComponent', () => {
         expect.objectContaining({ variantId: 'variant-1', quantity: 1 }),
       );
 
-      const checkoutButton = host.querySelector<HTMLButtonElement>('[data-testid="dine-in-checkout"]');
+      const checkoutButton = host.querySelector<HTMLButtonElement>(
+        '[data-testid="dine-in-checkout"]',
+      );
       expect(checkoutButton).not.toBeNull();
       checkoutButton?.click();
       await flush();
@@ -509,7 +527,12 @@ describe('DineInTableComponent -- a round the platform never confirmed onto the 
         { provide: TranslateService, useClass: FakeTranslateService },
       ],
     });
-    return { fixture: TestBed.createComponent(DineInTableComponent), cartService, notification, session };
+    return {
+      fixture: TestBed.createComponent(DineInTableComponent),
+      cartService,
+      notification,
+      session,
+    };
   }
 
   async function settle(): Promise<void> {
@@ -527,7 +550,15 @@ describe('DineInTableComponent -- a round the platform never confirmed onto the 
       quoteId: null,
       contextHash: null,
       expiresAt: null,
-      lines: [{ lineKey: 'variant-1', variantId: 'variant-1', quantity: 1, commentPresetCodes: [], hasCustomerNote: false }],
+      lines: [
+        {
+          lineKey: 'variant-1',
+          variantId: 'variant-1',
+          quantity: 1,
+          commentPresetCodes: [],
+          hasCustomerNote: false,
+        },
+      ],
     };
     cartService.ensure.mockResolvedValue(cart);
     cartService.putLine.mockImplementation(async () => {
@@ -588,7 +619,11 @@ describe('DineInTableComponent -- a round the platform never confirmed onto the 
   }
 
   const offline = () =>
-    new HorecaOSApiError({ status: 0, code: 'NETWORK_UNREACHABLE', detail: 'The request did not reach the platform.' });
+    new HorecaOSApiError({
+      status: 0,
+      code: 'NETWORK_UNREACHABLE',
+      detail: 'The request did not reach the platform.',
+    });
 
   beforeEach(() => {
     localStorage.clear();
@@ -648,14 +683,26 @@ describe('DineInTableComponent -- a round the platform never confirmed onto the 
   it('stops retrying an order the platform refuses for good, and tells the guest to ask staff', async () => {
     const api = newApi();
     api.mutate.mockRejectedValue(
-      new HorecaOSApiError({ status: 409, code: 'RESOURCE_CONFLICT', detail: 'The session is closed.' }),
+      new HorecaOSApiError({
+        status: 409,
+        code: 'RESOURCE_CONFLICT',
+        detail: 'The session is closed.',
+      }),
     );
     const first = setUpReal(api);
     await placeOrder(first.fixture, first.cartService);
 
     expect(first.notification.show).toHaveBeenCalledWith('dineIn.roundAttachFailed');
-    expect((first.fixture.nativeElement as HTMLElement).querySelector('[data-testid="dine-in-round-lost"]')).not.toBeNull();
-    expect((first.fixture.nativeElement as HTMLElement).querySelector('[data-testid="dine-in-round-pending"]')).toBeNull();
+    expect(
+      (first.fixture.nativeElement as HTMLElement).querySelector(
+        '[data-testid="dine-in-round-lost"]',
+      ),
+    ).not.toBeNull();
+    expect(
+      (first.fixture.nativeElement as HTMLElement).querySelector(
+        '[data-testid="dine-in-round-pending"]',
+      ),
+    ).toBeNull();
 
     first.fixture.destroy();
     TestBed.resetTestingModule();
@@ -700,7 +747,11 @@ describe('DineInTableComponent -- a round the platform never confirmed onto the 
     const first = setUpReal(api);
     await placeOrder(first.fixture, first.cartService);
 
-    expect((first.fixture.nativeElement as HTMLElement).querySelector('[data-testid="dine-in-round-pending"]')).not.toBeNull();
+    expect(
+      (first.fixture.nativeElement as HTMLElement).querySelector(
+        '[data-testid="dine-in-round-pending"]',
+      ),
+    ).not.toBeNull();
     expect(first.notification.show).not.toHaveBeenCalledWith('dineIn.roundAttachFailed');
   });
 });
@@ -716,7 +767,15 @@ describe('DineInTableComponent -- a cart bound to the table it is eaten at (ADR 
     quoteId: null,
     contextHash: null,
     expiresAt: null,
-    lines: [{ lineKey: 'variant-1', variantId: 'variant-1', quantity: 1, commentPresetCodes: [], hasCustomerNote: false }],
+    lines: [
+      {
+        lineKey: 'variant-1',
+        variantId: 'variant-1',
+        quantity: 1,
+        commentPresetCodes: [],
+        hasCustomerNote: false,
+      },
+    ],
   };
 
   /**
@@ -729,13 +788,15 @@ describe('DineInTableComponent -- a cart bound to the table it is eaten at (ADR 
     parts.dineIn.seed(admission());
     parts.dineIn.bill.mockResolvedValue(bill());
     parts.menuService.menu.mockResolvedValue(menu());
-    parts.cartService.ensure.mockImplementation(async (_location: string, _mode: string, create = true) => {
-      if (!create && !options.existingCart) {
-        return null;
-      }
-      parts.cartService.cart.set(create ? { ...CART, lines: [] } : CART);
-      return CART;
-    });
+    parts.cartService.ensure.mockImplementation(
+      async (_location: string, _mode: string, create = true) => {
+        if (!create && !options.existingCart) {
+          return null;
+        }
+        parts.cartService.cart.set(create ? { ...CART, lines: [] } : CART);
+        return CART;
+      },
+    );
     parts.cartService.putLine.mockImplementation(async () => {
       parts.cartService.cart.set(CART);
       return CART;
@@ -747,7 +808,9 @@ describe('DineInTableComponent -- a cart bound to the table it is eaten at (ADR 
   }
 
   async function tapAdd(fixture: { detectChanges(): void; nativeElement: unknown }): Promise<void> {
-    (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('[data-testid="dine-in-add"]')?.click();
+    (fixture.nativeElement as HTMLElement)
+      .querySelector<HTMLButtonElement>('[data-testid="dine-in-add"]')
+      ?.click();
     await flush();
     fixture.detectChanges();
     await flush();
@@ -791,7 +854,9 @@ describe('DineInTableComponent -- a cart bound to the table it is eaten at (ADR 
 
     await tapAdd(fixture);
 
-    expect(cartService.putLine).toHaveBeenCalledWith(expect.objectContaining({ variantId: 'variant-1' }));
+    expect(cartService.putLine).toHaveBeenCalledWith(
+      expect.objectContaining({ variantId: 'variant-1' }),
+    );
   });
 
   it('a guest token the platform no longer recognises, met while binding, clears the visit instead of adding', async () => {
@@ -873,7 +938,10 @@ describe('DineInTableComponent -- a cart bound to the table it is eaten at (ADR 
     });
   }
 
-  async function pressCheckout(fixture: { detectChanges(): void; nativeElement: unknown }): Promise<void> {
+  async function pressCheckout(fixture: {
+    detectChanges(): void;
+    nativeElement: unknown;
+  }): Promise<void> {
     (fixture.nativeElement as HTMLElement)
       .querySelector<HTMLButtonElement>('[data-testid="dine-in-checkout"]')
       ?.click();
@@ -968,5 +1036,154 @@ describe('DineInTableComponent -- a cart bound to the table it is eaten at (ADR 
     expect(fixture.componentInstance.checkoutError()).toBe('dineIn.tableChanged');
     expect(dineIn.queueRound).not.toHaveBeenCalled();
     expect(cartService.discard).not.toHaveBeenCalled();
+  });
+});
+
+describe('DineInTableComponent -- portions and weighed items (ADR 0137)', () => {
+  const NBSP = ' ';
+
+  function menuWith(physical: unknown, amountMinor = 45000): PublishedMenu {
+    const base = menu();
+    return {
+      ...base,
+      products: [
+        {
+          ...base.products[0],
+          variants: [
+            {
+              ...base.products[0].variants[0],
+              amountMinor,
+              physical,
+            } as PublishedMenu['products'][number]['variants'][number],
+          ],
+        },
+      ],
+    };
+  }
+
+  async function open(physical: unknown, quantity?: number) {
+    const parts = setUp();
+    parts.dineIn.seed(admission());
+    parts.dineIn.bill.mockResolvedValue(bill());
+    parts.menuService.menu.mockResolvedValue(menuWith(physical));
+    if (quantity !== undefined) {
+      parts.cartService.cart.set({
+        cartId: 'cart-1',
+        locationId: 'location-1',
+        status: 'OPEN',
+        currency: 'UZS',
+        fulfillmentMode: 'DINE_IN',
+        version: 1,
+        quoteId: null,
+        contextHash: null,
+        expiresAt: null,
+        lines: [
+          {
+            lineKey: 'variant-1',
+            variantId: 'variant-1',
+            quantity,
+            commentPresetCodes: [],
+            hasCustomerNote: false,
+          },
+        ],
+      });
+    }
+    parts.cartService.putLine.mockImplementation(async () => parts.cartService.cart());
+    parts.cartService.price.mockResolvedValue({
+      cartId: 'cart-1',
+      cartVersion: 1,
+      quoteId: 'q',
+      contextHash: 'h',
+      currency: 'UZS',
+      subtotalMinor: 0,
+      taxMinor: 0,
+      discountMinor: 0,
+      feeMinor: 0,
+      totalMinor: 0,
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+      delivery: null,
+    });
+    parts.fixture.detectChanges();
+    await flush();
+    parts.fixture.detectChanges();
+    const host = parts.fixture.nativeElement as HTMLElement;
+    const click = async (testId: string) => {
+      host.querySelector<HTMLButtonElement>(`[data-testid="${testId}"]`)?.click();
+      await flush();
+      parts.fixture.detectChanges();
+      await flush();
+    };
+    return { ...parts, host, click };
+  }
+
+  it('starts a splittable item at one whole portion and steps it by its portion size', async () => {
+    const { cartService, click } = await open({
+      catchweight: false,
+      splittable: true,
+      portionSize: 0.5,
+    });
+
+    await click('dine-in-add');
+
+    expect(cartService.putLine).toHaveBeenCalledWith(
+      expect.objectContaining({ variantId: 'variant-1', quantity: 1 }),
+    );
+  });
+
+  it('adds one portion more to a line already in the basket', async () => {
+    const { cartService, click } = await open(
+      { catchweight: false, splittable: true, portionSize: 0.5 },
+      1,
+    );
+
+    await click('dine-in-increase');
+
+    expect(cartService.putLine).toHaveBeenCalledWith(expect.objectContaining({ quantity: 1.5 }));
+  });
+
+  it('takes one portion off, and the last portion off removes the line', async () => {
+    const { cartService, click } = await open(
+      { catchweight: false, splittable: true, portionSize: 0.5 },
+      0.5,
+    );
+
+    await click('dine-in-decrease');
+
+    expect(cartService.removeLine).toHaveBeenCalledWith('variant-1');
+  });
+
+  it('keeps a plain item in whole units, as before', async () => {
+    const { cartService, click } = await open(null, 2);
+
+    await click('dine-in-increase');
+
+    expect(cartService.putLine).toHaveBeenCalledWith(expect.objectContaining({ quantity: 3 }));
+  });
+
+  it('writes a half portion with the language’s decimal mark', async () => {
+    const { host } = await open({ catchweight: false, splittable: true, portionSize: 0.5 }, 0.5);
+
+    expect(host.querySelector('[data-testid="dine-in-quantity"]')?.textContent?.trim()).toBe('0.5');
+  });
+
+  it('prices a weighed item per quantum on the menu, and shows its weight', async () => {
+    const { host } = await open({
+      catchweight: true,
+      catchweightQuantumGrams: 100,
+      catchweightNominalGrams: 1_200,
+      splittable: false,
+      netWeightGrams: 1_200,
+    });
+
+    const item = host.querySelector('[data-testid="dine-in-menu-item"]')!;
+    expect(item.textContent).toContain('physical.pricePerQuantum');
+    expect(item.textContent).toContain(`1.2${NBSP}kg`);
+  });
+
+  it('shows a fixed unit’s price as before', async () => {
+    const { host } = await open(null);
+
+    expect(host.querySelector('.table__item-price')?.textContent).toContain('45');
+    expect(host.querySelector('.table__item-price')?.textContent).not.toContain('physical');
   });
 });

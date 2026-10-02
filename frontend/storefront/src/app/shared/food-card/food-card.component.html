@@ -57,6 +57,7 @@
       @if (description()) {
         <p class="line-clamp-3 text-[13px] leading-relaxed text-zinc-400">{{ description() }}</p>
       }
+      <app-physical-facts [physical]="physical()" [compact]="true" />
     </a>
     @if (qty() === 0) {
       <button
@@ -85,7 +86,7 @@
           class="flex min-h-[2.75rem] min-w-0 flex-1 flex-col items-center justify-center rounded-full bg-surface-raised-2 px-3 py-2 text-center"
         >
           <span class="text-xs font-bold leading-tight text-text-primary">
-            {{ qty() }} {{ 'common.itemsUnit' | t }}
+            {{ qtyLabel() }}
           </span>
           <span class="mt-0.5 text-[11px] font-medium leading-none text-[#d4af37] sm:text-xs">
             {{ lineTotalFormatted() }}

@@ -102,6 +102,7 @@ class FakeUiCartService {
   add = vi.fn().mockResolvedValue(undefined);
   increaseQuantity = vi.fn();
   decreaseQuantity = vi.fn();
+  lineAmount = vi.fn((item: CartResponseItem) => item.price * item.quantity);
 }
 
 class FakeFavouritesService {
@@ -307,9 +308,7 @@ describe('ProductComponent: no orderable variant (row 4.2g, product-id fallback)
     // "every variant is unorderable" (the platform never publishes a product
     // with a genuinely empty `variants` array -- see
     // `StorefrontCatalogQuery.menuFor`'s own `variants.isEmpty()` continue).
-    menuService.item.mockResolvedValue(
-      menuItem({ variants: [onSaleVariant({ active: false })] }),
-    );
+    menuService.item.mockResolvedValue(menuItem({ variants: [onSaleVariant({ active: false })] }));
     const cartService = new FakeUiCartService();
     cartService.cartData.mockReturnValue({});
     const { fixture, comp } = await render({ menuService, cartService });
@@ -317,9 +316,7 @@ describe('ProductComponent: no orderable variant (row 4.2g, product-id fallback)
 
     expect(comp.variantId()).toBeNull();
 
-    const addButton = host.querySelector<HTMLButtonElement>(
-      '[data-testid="product-add-to-cart"]',
-    );
+    const addButton = host.querySelector<HTMLButtonElement>('[data-testid="product-add-to-cart"]');
     expect(addButton).not.toBeNull();
     expect(addButton!.disabled).toBe(true);
 
@@ -415,7 +412,10 @@ describe('ProductComponent: GA4 ecommerce events (row 10.8e)', () => {
 
     comp.increaseVariant('item-1');
 
-    const events = (window.dataLayer ?? []) as Array<{ event: string; ecommerce: { items: unknown[] } }>;
+    const events = (window.dataLayer ?? []) as Array<{
+      event: string;
+      ecommerce: { items: unknown[] };
+    }>;
     const addToCart = events.find((e) => e.event === 'add_to_cart');
     expect(addToCart?.ecommerce.items).toEqual([
       { item_id: 'item-1', item_name: 'Osh', price: 32_000, quantity: 1 },
@@ -433,5 +433,131 @@ describe('ProductComponent: GA4 ecommerce events (row 10.8e)', () => {
     const events = (window.dataLayer ?? []) as Array<{ event: string }>;
     expect(events.some((e) => e.event === 'add_to_cart')).toBe(false);
     expect(navigateSpy).toHaveBeenCalledWith(['/auth/login']);
+  });
+});
+
+describe('ProductComponent: portions and weighed items (ADR 0137)', () => {
+  const NBSP = '\u00a0';
+
+  const SPLITTABLE = { catchweight: false, splittable: true, portionSize: 0.5 } as const;
+  const CAKE = {
+    catchweight: true,
+    catchweightQuantumGrams: 100,
+    catchweightNominalGrams: 1_200,
+    splittable: false,
+  } as const;
+
+  async function open(
+    variant: ReturnType<typeof onSaleVariant>,
+    lines: readonly CartResponseItem[] = [],
+    configureCart: (cart: FakeUiCartService) => void = () => undefined,
+  ) {
+    const menuService = new FakeMenuService();
+    menuService.item.mockResolvedValue(menuItem({ variants: [variant] }));
+    const cartService = new FakeUiCartService();
+    cartService.cartData.mockReturnValue({});
+    cartService.items.mockReturnValue(lines);
+    configureCart(cartService);
+    const rendered = await render({ menuService, cartService });
+    return { ...rendered, cartService };
+  }
+
+  const normalised = (text: string | null | undefined) => (text ?? '').replace(/\s+/g, ' ');
+
+  it('shows a variant’s weight and nutrition beside its price', async () => {
+    const { fixture } = await open(
+      onSaleVariant({
+        physical: {
+          catchweight: false,
+          splittable: false,
+          netWeightGrams: 350,
+          nutrition: { caloriesKcalPer100: 215 },
+        },
+      }),
+    );
+    const host: HTMLElement = fixture.nativeElement;
+
+    expect(host.querySelector('[data-testid="physical-measure"]')?.textContent?.trim()).toBe(
+      `350${NBSP}g`,
+    );
+    expect(host.querySelector('[data-testid="physical-nutrition"]')).not.toBeNull();
+  });
+
+  it('shows nothing physical for a fixed unit', async () => {
+    const { fixture } = await open(onSaleVariant());
+
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('[data-testid="physical-facts"]'),
+    ).toBeNull();
+  });
+
+  it('offers a weighed variant at its estimated price, marked as an estimate, and says the final weight is set at handover', async () => {
+    const { fixture } = await open(onSaleVariant({ price: 15_000, physical: CAKE }));
+    const host: HTMLElement = fixture.nativeElement;
+
+    const addButton = host.querySelector('button[aria-label="cart.addToCart"]') as HTMLElement;
+    expect(normalised(addButton.textContent)).toContain('≈');
+    expect(normalised(addButton.textContent)).toContain('180 000');
+    expect(host.querySelector('[data-testid="physical-final-weight-notice"]')).not.toBeNull();
+  });
+
+  it('starts a splittable variant at one whole portion', async () => {
+    const { comp, cartService } = await open(onSaleVariant({ physical: SPLITTABLE }));
+
+    comp.increaseVariant('variant-1');
+
+    expect(cartService.add).toHaveBeenCalledWith('variant-1', 1, undefined, [], []);
+  });
+
+  it('starts a variant whose portion does not divide one at the first quantity the cart accepts', async () => {
+    const { comp, cartService } = await open(
+      onSaleVariant({ physical: { catchweight: false, splittable: true, portionSize: 0.3 } }),
+    );
+
+    comp.increaseVariant('variant-1');
+
+    expect(cartService.add).toHaveBeenCalledWith('variant-1', 1.2, undefined, [], []);
+  });
+
+  it('hands a line already in the basket to the cart, which knows its portion step', async () => {
+    const line = cartLine({
+      variant_id: 'variant-1',
+      quantity: 0.5,
+      physical: SPLITTABLE,
+    });
+    const { comp, cartService } = await open(onSaleVariant({ physical: SPLITTABLE }), [line]);
+
+    comp.increaseVariant('variant-1');
+
+    expect(cartService.increaseQuantity).toHaveBeenCalledWith(line);
+  });
+
+  it('writes a half portion with the language’s decimal mark, and its portion unit', async () => {
+    const line = cartLine({ variant_id: 'variant-1', quantity: 0.5, physical: SPLITTABLE });
+    const { fixture } = await open(onSaleVariant({ physical: SPLITTABLE }), [line]);
+
+    expect(normalised((fixture.nativeElement as HTMLElement).textContent)).toContain(
+      '0,5 physical.portionsUnit',
+    );
+  });
+
+  it('writes a whole quantity of a plain variant as before, in pieces', async () => {
+    const line = cartLine({ variant_id: 'variant-1', quantity: 3 });
+    const { fixture } = await open(onSaleVariant(), [line]);
+
+    expect(normalised((fixture.nativeElement as HTMLElement).textContent)).toContain(
+      '3 common.itemsUnit',
+    );
+  });
+
+  it('prices a line through the cart, and marks a weighed one as an estimate', async () => {
+    const line = cartLine({ variant_id: 'variant-1', price: 15_000, quantity: 2, physical: CAKE });
+    const { fixture } = await open(
+      onSaleVariant({ price: 15_000, physical: CAKE }),
+      [line],
+      (cart) => cart.lineAmount.mockReturnValue(360_000),
+    );
+
+    expect(normalised((fixture.nativeElement as HTMLElement).textContent)).toContain('≈ 360 000');
   });
 });
