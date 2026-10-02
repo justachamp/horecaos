@@ -2917,6 +2917,40 @@ export const messagesUzLatn: MessageCatalogue = {
   'kitchen.stopList.action.stop': 'Stop',
   'kitchen.stopList.action.unstop': 'Stopdan olish',
   'kitchen.stopList.empty': 'Bu filialda hali mahsulotlar yoʻq',
+  'kitchen.stopList.column.scope': 'Qamrov',
+  'kitchen.stopList.status.partial': 'Qisman stopda',
+  'kitchen.stopList.source.bot': 'Bot',
+  'kitchen.stopList.scope.location': 'Shu filial',
+  'kitchen.stopList.scope.brand': 'Butun brend',
+  'kitchen.stopList.scope.menu': 'Menyu',
+  'kitchen.stopList.scope.channel': 'Bitta kanal',
+  'kitchen.stopList.stop.until': '{when} gacha',
+  'kitchen.stopList.stop.indefinite': 'olib tashlanguncha',
+  'kitchen.stopList.stop.lift': 'Bu stopni olib tashlash',
+  'kitchen.stopList.stop.lifted': 'Stop olib tashlandi',
+  'kitchen.stopList.panel.open': 'Qamrovli stop…',
+  'kitchen.stopList.panel.title': 'Qamrovli stop',
+  'kitchen.stopList.panel.scope': 'Stop qanchalik keng amal qiladi',
+  'kitchen.stopList.panel.union':
+    'Taomga tegishli barcha stoplar birga amal qiladi. Filial butun brend stopini bekor qila olmaydi.',
+  'kitchen.stopList.panel.channelPlaceholder': 'Kanalni tanlang',
+  'kitchen.stopList.panel.channelHere': 'Faqat shu filial',
+  'kitchen.stopList.panel.menuPlaceholder': 'Menyuni tanlang',
+  'kitchen.stopList.panel.duration': 'Qachongacha',
+  'kitchen.stopList.panel.duration.indefinite': 'Men olib tashlaguncha',
+  'kitchen.stopList.panel.duration.endOfDay': 'Savdo kuni oxirigacha',
+  'kitchen.stopList.panel.duration.until': 'Belgilangan vaqtgacha',
+  'kitchen.stopList.panel.reason.recall': 'Mahsulotni qaytarib olish',
+  'kitchen.stopList.panel.apply': 'Stopga qoʻyish',
+  'kitchen.stopList.panel.frozen':
+    'Bu kompaniya uchun yangi qamrovli stoplar toʻxtatilgan. Allaqachon qoʻyilgan stoplar amalda va ularni olib tashlash mumkin.',
+  'kitchen.stopList.propagation.manual':
+    '{name}: avtomatik uzatilmaydi — hamkor kabinetini qoʻlda yangilang',
+  'kitchen.stopList.propagation.suspended':
+    '{name}: hamkorga uzatish toʻxtatilgan — hamkor kabinetini qoʻlda yangilang',
+  'kitchen.stopList.propagation.pending':
+    '{name}: {count} ta pozitsiya {since} dan beri tasdiqlanmagan — hamkor kabinetida yangilang',
+  'kitchen.stopList.propagation.inSync': '{name}: sinxronlashgan',
 
   // Sigʻim va bufer sozlamalari (2.6) — 43-toʻlqin
   'kitchen.capacity.title': 'Sigʻim va bufer sozlamalari',

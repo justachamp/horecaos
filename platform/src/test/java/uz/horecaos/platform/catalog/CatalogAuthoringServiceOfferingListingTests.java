@@ -17,6 +17,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.testcontainers.DockerClientFactory;
 import tools.jackson.databind.json.JsonMapper;
+import uz.horecaos.platform.catalog.api.ChannelAssortmentChanged;
 import uz.horecaos.platform.catalog.api.OfferingBecameAvailable;
 import uz.horecaos.platform.catalog.application.CatalogAuthoringService;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.OfferingStatus;
@@ -50,6 +51,7 @@ class CatalogAuthoringServiceOfferingListingTests {
     private JdbcCatalogStore store;
     private CatalogAuthoringService authoring;
     private final List<OfferingBecameAvailable> published = new ArrayList<>();
+    private final List<ChannelAssortmentChanged> assortment = new ArrayList<>();
 
     private UUID variantA;
     private UUID variantB;
@@ -72,7 +74,8 @@ class CatalogAuthoringServiceOfferingListingTests {
     void setUp() {
         DataSource dataSource = db.dataSource();
         jdbc = JdbcClient.create(dataSource);
-        jdbc.sql("TRUNCATE TABLE catalog.location_offerings, catalog.variants, catalog.products CASCADE")
+        jdbc.sql(
+                        "TRUNCATE TABLE catalog.channel_offering_exclusions, catalog.location_offerings, catalog.variants, catalog.products CASCADE")
                 .update();
         jdbc.sql("TRUNCATE TABLE tenant.locations, tenant.tenants CASCADE").update();
 
@@ -99,6 +102,7 @@ class CatalogAuthoringServiceOfferingListingTests {
 
         CommercialDefaults.Wired commercial = CommercialDefaults.wire(jdbc, Clock.systemUTC());
         published.clear();
+        assortment.clear();
         authoring = new CatalogAuthoringService(
                 store,
                 fact -> {},
@@ -109,6 +113,9 @@ class CatalogAuthoringServiceOfferingListingTests {
                 event -> {
                     if (event instanceof OfferingBecameAvailable offering) {
                         published.add(offering);
+                    }
+                    if (event instanceof ChannelAssortmentChanged changed) {
+                        assortment.add(changed);
                     }
                 });
     }
@@ -180,6 +187,56 @@ class CatalogAuthoringServiceOfferingListingTests {
                 TENANT, BRAND, LOCATION, List.of(variantA, variantB), OfferingStatus.UNAVAILABLE, "operator-1");
 
         assertThat(published).isEmpty();
+    }
+
+    // ------------------------------------------------- ADR 0141: the marketplace reconciler's dirty marker
+
+    @Test
+    @DisplayName("every offering write tells the reconciler the branch's assortment moved, whatever the status")
+    void offeringWritesPublishAnAssortmentMarker() {
+        authoring.setOffering(TENANT, BRAND, LOCATION, variantA, OfferingStatus.UNAVAILABLE, List.of("PICKUP"));
+
+        assertThat(published).as("UNAVAILABLE lists nothing").isEmpty();
+        assertThat(assortment)
+                .as("but it takes a dish off a marketplace, which is the reconciler's business")
+                .singleElement()
+                .satisfies(event -> {
+                    assertThat(event.tenantId()).isEqualTo(TENANT);
+                    assertThat(event.brandId()).isEqualTo(BRAND);
+                    assertThat(event.locationId()).isEqualTo(LOCATION);
+                });
+    }
+
+    @Test
+    @DisplayName("a bulk offering change publishes one marker, not one per variant")
+    void bulkOfferingChangePublishesOneMarker() {
+        authoring.bulkSetOfferingStatus(
+                TENANT, BRAND, LOCATION, List.of(variantA, variantB), OfferingStatus.UNAVAILABLE, "operator-1");
+
+        assertThat(assortment).hasSize(1);
+    }
+
+    @Test
+    @DisplayName(
+            "a channel exclusion added or removed publishes a marker, and a call that changed nothing publishes none")
+    void channelExclusionsPublishAMarkerOnlyWhenTheyChangeSomething() {
+        UUID channelId = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO tenant.sales_channels (id, tenant_id, code, system_type, display_name)
+                VALUES (:id, :tenantId, 'EATS', 'AGGREGATOR', 'Eats')
+                """).param("id", channelId).param("tenantId", TENANT).update();
+
+        authoring.setChannelOffering(TENANT, BRAND, channelId, variantA, null, false, "NOT_ON_PARTNER", "operator-1");
+        assertThat(assortment)
+                .singleElement()
+                .satisfies(event -> assertThat(event.locationId()).isNull());
+
+        assortment.clear();
+        authoring.setChannelOffering(TENANT, BRAND, channelId, variantA, null, false, "NOT_ON_PARTNER", "operator-1");
+        assertThat(assortment).as("already excluded: nothing moved").isEmpty();
+
+        authoring.setChannelOffering(TENANT, BRAND, channelId, variantA, null, true, null, "operator-1");
+        assertThat(assortment).hasSize(1);
     }
 
     private UUID createVariant(String productCode, String sku) {

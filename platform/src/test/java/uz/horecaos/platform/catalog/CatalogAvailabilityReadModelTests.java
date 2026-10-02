@@ -178,7 +178,7 @@ class CatalogAvailabilityReadModelTests {
     }
 
     @Test
-    @DisplayName("gap map row 2.5b: a kitchen's own toggle is a MANUAL stop source")
+    @DisplayName("gap map row 2.5b: a kitchen's own toggle is an OPERATOR stop source")
     void aManualToggleIsAManualStopSource() {
         UUID catalogId = authoring.createCatalog(TENANT, BRAND, "MAIN", "Main menu", LOCALE);
         var plov = authoring.createProduct(
@@ -193,7 +193,7 @@ class CatalogAvailabilityReadModelTests {
         assertThat(store.variantsAtLocation(TENANT, BRAND, LOCATION, LOCALE, null, null, 50))
                 .singleElement()
                 .satisfies(row -> {
-                    assertThat(row.stopSource()).isEqualTo("MANUAL");
+                    assertThat(row.stopSource()).isEqualTo("OPERATOR");
                     assertThat(row.stopReasonCode()).isEqualTo("OPERATIONS_STOP_LIST_TOGGLE");
                     assertThat(row.stopChangedAt()).isNotNull();
                 });

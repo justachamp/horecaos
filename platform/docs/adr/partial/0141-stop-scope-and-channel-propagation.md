@@ -1,25 +1,44 @@
 # ADR 0141: Stop scope and channel propagation
 
 - Decision status: Accepted
-- Implementation status: Not started — no stop has a scope narrower or wider
-  than one location, an end, or a recorded source, and no stop reaches a
-  marketplace. Today a stop is `inventory.positions.binary_available = false`
-  on one `(tenant, location, variant)` stock item (ADR 0017, `V0019`); it can
-  only be set on a `BINARY`-tracked item (`InventoryService.setAvailability`
-  throws for `UNTRACKED` and `QUANTITY`, and the bulk endpoint reports
-  `UNSUPPORTED_TRACKING_MODE` per item); both write capabilities
-  (`INVENTORY_ADJUST`, `INVENTORY_AVAILABILITY_MANAGE`) are `LOCATION`-scoped;
-  every availability movement is written with `source_type = 'OPERATOR'`
-  whoever caused it, and the "source" the stop list shows is inferred from a
-  free-text reason string (`JdbcCatalogStore.stopSourceOf`: `POS_STOP_LIST`
-  reads as POS, anything else as MANUAL). What is built and this record keeps:
-  the position toggle and its ledger, `InventoryAvailabilityChanged` on
-  `inventory.events`, the per-channel-type remaining-quantity threshold
-  (`inventory.channel_stop_thresholds`, `V0407`) read by the storefront menu,
-  the POS stop-list poll (`PosAvailabilityPoll`), the Telegram `/86` command,
-  the digest (`InventoryStopDigestSweeper`), and the stop-list page. Not built:
-  everything in "Specification" below, and ADR 0040's `marketplace.availability.push`
-  capability has no adapter, no event and no table.
+- Implementation status: Partial — built in operations batch 17 (wave `w6-stop-scope`):
+  `inventory.availability_stops` (`V0462`: scope `LOCATION`/`BRAND`/`MENU`/`CHANNEL`, `TERMINAL`
+  a named refused value, source `OPERATOR`/`BOT`/`POS` with `KITCHEN_DEVICE`/`RULE` reserved,
+  optional end, row-level security, granted); `AvailabilityResolver` in `inventory.application`
+  as the one reader behind the storefront menu (`InventoryMenuAvailabilityLookup`), the cart
+  (`CartService.requireAvailable`), checkout (`CheckoutReservationStep`, the amendment hold),
+  the stop list and the New order picker (`StopOverlayLookup`), the explainer
+  (`GET .../availability-explanation`) and the marketplace reconciler (`ChannelAvailabilityPort`) —
+  union precedence, a stop evaluated at the reader's own instant (so the `EXPIRED` sweeper,
+  `InventoryStopExpirySweeper`, is off the correctness path), a stop refusing with `ON_STOP` at
+  cart and checkout where a batch-11 threshold still only hides; the two create routes
+  (`inventory.stop.manage` at `BRAND`, `inventory.availability.manage` at `LOCATION`), their lifts
+  with `If-Match`, the lists, `InventoryStopChanged` v1 (schema, catalogue entry, docs row) and
+  the `STOP_LIST` realtime channel's first producer, `ChangeDocuments` audit facts; Phase 0 (the
+  position movement carries the true `source_type`, the stop list reads it) and Phase 2 for `POS`
+  (the poll writes and ends its own per-binding `POS` stop, so a POS "back in stock" no longer
+  lifts an operator's stop); an `UNTRACKED` or `QUANTITY` dish can be stopped through the single
+  toggle, the bulk toggle and the bot; rollback switch one (`inventory.stops.creation_enabled`,
+  `STOPS_FROZEN`) and switch two (`marketplace.availability.reconcile_enabled`, with the resumption
+  resend); the reconciler (`V0463`, `V0464`, `MarketplaceAvailabilityReconciler`: level-triggered,
+  desired recomputed from the resolver, `confirmed_available` NULL when unknown, the `CONFIRMED`/
+  `NOT_APPLIED`/`UNKNOWN` conclusion and the `UNCERTAIN` state, the resync sweep with per-binding
+  jitter as the guarantee, markers for stop, position, offering, channel-exclusion and menu-binding
+  changes as an accelerator, leases and an advisory lock for overlapping runs, stops before restores, a rate limit or open circuit closing
+  the door for the rest of a batch, `REJECTED_UNMAPPED`, stale-watermark recovery), the
+  `MarketplaceGateway`/route/transport with one breaker per binding and its descriptor, the
+  adapter surface (`MarketplaceAvailabilityAdapter`, `MarketplaceProviderCapabilityCatalog`), the
+  propagation read (`GET .../inventory/marketplace-propagation`) and the console: scope picker,
+  per-stop chips with lift, the partly-stopped state and the propagation banner. **No adapter for
+  any named aggregator ships** (the first open input stands unanswered), so every real binding
+  reads `MANUAL` — "not propagated automatically" — and nothing reaches a partner until an adapter
+  is registered. Not built: the partner pull endpoint (Phase 4); the decommission switch
+  (`inventory.stops.read_enabled`), the materialisation run and its acknowledged report; markers
+  for a channel's installation and for the item mapping itself, which the resync sweep covers
+  within one interval (as it does every marker, by design); `MarketplaceAvailabilityPushed` and
+  `MarketplaceChannelWentStale`, the ADR 0006 failure and the ADR 0058 alert for items unconfirmed
+  past their bound; the Phase 3 dry-run mode; and a console dialog for the explainer (the
+  endpoint and the per-stop tooltip exist).
 - Date proposed: 2026-09-29
 - Date decided: 2026-10-01
 - Deciders: proposed by Claude (wave batch 14, w7-adrs-stops-dispatch-walkin)

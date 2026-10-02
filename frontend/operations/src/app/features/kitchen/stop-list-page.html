@@ -55,9 +55,28 @@
             <option [value]="code">{{ bulkReasonLabel(code) }}</option>
           }
         </select>
+        <button
+          type="button"
+          class="stop-list__scope-open"
+          [class.stop-list__scope-open--active]="scopePanelOpen()"
+          (click)="toggleScopePanel()"
+          data-testid="stop-scope-open"
+        >
+          {{ 'kitchen.stopList.panel.open' | t }}
+        </button>
       </div>
     }
   </div>
+
+  @if (scopePanelOpen() && selectedIds().size > 0) {
+    <q-stop-scope-panel
+      [variantIds]="selectedList()"
+      (applied)="onScopeApplied($event)"
+      (closed)="scopePanelOpen.set(false)"
+    />
+  }
+
+  <q-stop-propagation-banner [refreshKey]="propagationKey()" />
 
   @if (notice(); as message) {
     <div class="stop-list__notice-band" role="alert">
@@ -102,7 +121,11 @@
         <ng-template qCell="product" let-item>{{ item.productName }}</ng-template>
         <ng-template qCell="category" let-item>{{ item.category || '—' }}</ng-template>
         <ng-template qCell="status" let-item>
-          @if (item.available) {
+          @if (isPartlyStopped(item)) {
+            <span class="status-badge status-badge--partial" data-testid="stop-list-partial">{{
+              'kitchen.stopList.status.partial' | t
+            }}</span>
+          } @else if (item.available) {
             <span class="status-badge status-badge--available">{{
               'kitchen.stopList.status.available' | t
             }}</span>
@@ -110,6 +133,29 @@
             <span class="status-badge status-badge--onStop">{{
               'kitchen.stopList.status.onStop' | t
             }}</span>
+          }
+        </ng-template>
+        <ng-template qCell="scope" let-item>
+          @for (stop of stopsOf(item); track stop.stopId) {
+            <span
+              class="stop-chip"
+              [class.stop-chip--partial]="!stop.everyChannel"
+              [attr.title]="stopDetail(stop)"
+              data-testid="stop-list-stop"
+            >
+              {{ scopeLabel(stop.scopeType) }} · {{ stopSourceName(stop) }}
+              <button
+                type="button"
+                class="stop-chip__lift"
+                [attr.aria-label]="'kitchen.stopList.stop.lift' | t"
+                (click)="liftStop(stop)"
+                data-testid="stop-list-lift"
+              >
+                ×
+              </button>
+            </span>
+          } @empty {
+            <span class="q-caption stop-list__source-none">—</span>
           }
         </ng-template>
         <ng-template qCell="source" let-item>

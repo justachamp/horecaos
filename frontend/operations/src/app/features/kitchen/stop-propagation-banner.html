@@ -1,0 +1,14 @@
+@if (bindings().length > 0) {
+  <div class="propagation" data-testid="stop-propagation">
+    @for (binding of bindings(); track binding.bindingId) {
+      <p
+        class="q-body-sm propagation__line"
+        [class.propagation__line--attention]="needsAttention(binding)"
+        [attr.data-mode]="binding.mode"
+        data-testid="stop-propagation-line"
+      >
+        {{ line(binding) }}
+      </p>
+    }
+  </div>
+}

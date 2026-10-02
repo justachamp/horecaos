@@ -34,7 +34,14 @@
   refusals, and — complementing `RowLevelSecurityBackstopTests`'s proof that
   the platform-bypass sweep reaches every tenant — the converse property, that
   a sweep bound to one tenant alone cannot reach another's row. Concurrency and
-  production-scale race tests remain unbuilt.
+  production-scale race tests remain unbuilt. ADR 0141 (batch 17) extends this
+  record's availability projection without superseding anything in it: the
+  `binary_available` boolean, the ledger, the reservations and the `QUANTITY`
+  branch are untouched, and `inventory.availability_stops` (`V0462`) adds a stop
+  with a scope, a source and an optional end that `AvailabilityResolver` composes
+  with the position and the batch-11 threshold. A `BINARY` toggle still writes the
+  boolean (its movement now carrying the true `source_type`); an `UNTRACKED` or
+  `QUANTITY` dish is stopped with a `LOCATION` stop instead of being refused.
 - Date proposed: 2026-08-19
 - Date decided: 2026-08-20
 - Deciders: Ayubkhon Abbosov (platform architecture)

@@ -346,9 +346,15 @@ is a distinct `callEventId` row in `voice.call_events`.
 | Event | Version | Key | Schema | Version-1 payload |
 |---|---|---|---|---|
 | `InventoryAvailabilityChanged` | 1 | `variantId` | [`InventoryAvailabilityChanged.v1`](../../src/main/resources/events/inventory.events/InventoryAvailabilityChanged.v1.schema.json) | `variantId`, `locationId`, `available`, `reasonCode` |
+| `InventoryStopChanged` | 1 | `variantId` | [`InventoryStopChanged.v1`](../../src/main/resources/events/inventory.events/InventoryStopChanged.v1.schema.json) | `stopId`, `variantId`, `scopeType`, `locationId?`, `menuId?`, `channelId?`, `source`, `active`, `endsAt?`, `reasonCode` |
 
 Symmetric by construction: `available` carries the direction, so a dish going
-off and a dish coming back are the same event type rather than two. Never a
+off and a dish coming back are the same event type rather than two. `InventoryStopChanged` (ADR
+0141) is symmetric the same way: `active` carries the direction, and a stop
+that is made, revised, lifted or expired is one event type. It names the stop
+(`stopId`), its scope (`LOCATION`, `BRAND`, `MENU` or `CHANNEL`), its source
+(`OPERATOR`, `BOT`, `POS`; `KITCHEN_DEVICE` and `RULE` are reserved) and an
+optional end — identifiers and stable codes only, never a name or free text. Never a
 product or variant name — a consumer resolves that through the authorized
 catalog API with `variantId` — and never `brandId`, which a consumer holding
 `locationId` can already resolve.

@@ -63,6 +63,30 @@ describe('operationsPaths inventory* group (row 4.4c/4.4d InventoryController pa
     );
   });
 
+  it('the ADR 0141 stop paths build on the legacy tenant prefix, at the branch and at the brand', () => {
+    expect(operationsPaths.inventoryStopsAtLocation(SCOPE)).toBe(
+      '/api/v1/tenants/t1/brands/b1/locations/l1/inventory/stops',
+    );
+    expect(operationsPaths.inventoryStopAtLocation(SCOPE, 's 1')).toBe(
+      '/api/v1/tenants/t1/brands/b1/locations/l1/inventory/stops/s%201',
+    );
+    expect(operationsPaths.inventoryStopsAtBrand(SCOPE)).toBe(
+      '/api/v1/tenants/t1/brands/b1/inventory/stops',
+    );
+    expect(operationsPaths.inventoryStopAtBrand(SCOPE, 's1')).toBe(
+      '/api/v1/tenants/t1/brands/b1/inventory/stops/s1',
+    );
+  });
+
+  it('the marketplace propagation and explainer paths build on the legacy tenant prefix', () => {
+    expect(operationsPaths.inventoryMarketplacePropagation(SCOPE)).toBe(
+      '/api/v1/tenants/t1/brands/b1/locations/l1/inventory/marketplace-propagation',
+    );
+    expect(operationsPaths.inventoryAvailabilityExplanation(SCOPE, 'v1')).toBe(
+      '/api/v1/tenants/t1/brands/b1/locations/l1/inventory/variants/v1/availability-explanation',
+    );
+  });
+
   it('inventoryListingBackfill builds on the legacy tenant prefix, not /operations', () => {
     expect(operationsPaths.inventoryListingBackfill(SCOPE)).toBe(
       '/api/v1/tenants/t1/brands/b1/locations/l1/inventory/listing-backfill',

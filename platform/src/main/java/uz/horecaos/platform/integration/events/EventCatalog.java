@@ -516,6 +516,19 @@ public final class EventCatalog {
                             + "a product name, only the identifiers a consumer already needs to look "
                             + "one up."),
             new EventContract(
+                    "InventoryStopChanged",
+                    1,
+                    "inventory",
+                    INVENTORY_EVENTS_TOPIC,
+                    "variantId",
+                    "events/inventory.events/InventoryStopChanged.v1.schema.json",
+                    Retention.BUSINESS_FACT,
+                    Classification.INTERNAL,
+                    "A stop on a dish was made, revised, lifted or expired (ADR 0141): a scope "
+                            + "(LOCATION, BRAND, MENU, CHANNEL), a source and an optional end. "
+                            + "Symmetric — active carries the direction — and identifiers and "
+                            + "stable codes only, never a product name or free text."),
+            new EventContract(
                     "PriceBookActivated",
                     1,
                     "pricing",

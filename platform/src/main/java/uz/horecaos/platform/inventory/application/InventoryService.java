@@ -26,18 +26,23 @@ import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.audit.api.ChangeDocuments;
+import uz.horecaos.platform.catalog.api.ChannelOfferingLookup;
 import uz.horecaos.platform.configuration.rls.TenantRlsSession;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.inventory.api.AvailabilityDecision;
 import uz.horecaos.platform.inventory.api.AvailabilityDecision.Unavailable;
 import uz.horecaos.platform.inventory.api.BusinessDayWindows;
+import uz.horecaos.platform.inventory.api.ChannelAvailabilityPort;
+import uz.horecaos.platform.inventory.api.ChannelContext;
 import uz.horecaos.platform.inventory.api.InventoryConfigurationKeys;
 import uz.horecaos.platform.inventory.api.InventoryReservationPort;
 import uz.horecaos.platform.inventory.api.ItemAvailabilityChanged;
 import uz.horecaos.platform.inventory.api.ReservationResult;
+import uz.horecaos.platform.inventory.api.StopSource;
 import uz.horecaos.platform.inventory.api.TrackingMode;
 import uz.horecaos.platform.inventory.domain.ReservationExpiry;
+import uz.horecaos.platform.inventory.infrastructure.persistence.JdbcAvailabilityStopStore;
 import uz.horecaos.platform.inventory.infrastructure.persistence.JdbcInventoryStore;
 import uz.horecaos.platform.inventory.infrastructure.persistence.JdbcInventoryStore.ChannelStopThresholdRow;
 import uz.horecaos.platform.inventory.infrastructure.persistence.JdbcInventoryStore.QuantityReservationLineRow;
@@ -49,6 +54,7 @@ import uz.horecaos.platform.tenancy.api.ConfigurationKey;
 import uz.horecaos.platform.tenancy.api.ConfigurationResolver;
 import uz.horecaos.platform.tenancy.api.ResolutionTrace;
 import uz.horecaos.platform.tenancy.api.Resolved;
+import uz.horecaos.platform.tenancy.api.SalesChannelLookup;
 
 /**
  * Availability and the reservation path, for every tracking mode ADR 0017
@@ -78,7 +84,7 @@ import uz.horecaos.platform.tenancy.api.Resolved;
  * this wave's to answer.
  */
 @Service
-public class InventoryService implements InventoryReservationPort {
+public class InventoryService implements InventoryReservationPort, ChannelAvailabilityPort {
 
     private static final Logger log = LoggerFactory.getLogger(InventoryService.class);
 
@@ -185,6 +191,9 @@ public class InventoryService implements InventoryReservationPort {
     private final TenantRlsSession rls;
     private final ConfigurationResolver configuration;
     private final BusinessDayWindows businessDays;
+    private final AvailabilityResolver resolver;
+    private final @Nullable SalesChannelLookup channels;
+    private final @Nullable AvailabilityStopService stopService;
 
     public InventoryService(JdbcInventoryStore store, ApplicationEventPublisher events, Clock clock) {
         this(store, events, clock, NO_OP_AUDIT);
@@ -214,7 +223,12 @@ public class InventoryService implements InventoryReservationPort {
         this(store, events, clock, audit, rls, configuration, NO_OP_BUSINESS_DAY_WINDOWS);
     }
 
-    @org.springframework.beans.factory.annotation.Autowired
+    /**
+     * The seven-argument form every fixture built before ADR 0141 uses: no stops, no
+     * catalog lookups, no channel registry. {@link AvailabilityResolver} then answers
+     * exactly what {@code evaluateAvailability} always did, so nothing a fixture asserts
+     * moves.
+     */
     public InventoryService(
             JdbcInventoryStore store,
             ApplicationEventPublisher events,
@@ -223,6 +237,22 @@ public class InventoryService implements InventoryReservationPort {
             TenantRlsSession rls,
             ConfigurationResolver configuration,
             BusinessDayWindows businessDays) {
+        this(store, events, clock, audit, rls, configuration, businessDays, null, null, null, null);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public InventoryService(
+            JdbcInventoryStore store,
+            ApplicationEventPublisher events,
+            Clock clock,
+            AuditRecorder audit,
+            TenantRlsSession rls,
+            ConfigurationResolver configuration,
+            BusinessDayWindows businessDays,
+            @Nullable JdbcAvailabilityStopStore stops,
+            @Nullable ChannelOfferingLookup catalog,
+            @Nullable SalesChannelLookup channels,
+            @Nullable AvailabilityStopService stopService) {
         this.store = store;
         this.events = events;
         this.clock = clock;
@@ -230,6 +260,14 @@ public class InventoryService implements InventoryReservationPort {
         this.rls = rls;
         this.configuration = configuration;
         this.businessDays = businessDays;
+        this.resolver = new AvailabilityResolver(store, stops, catalog, configuration);
+        this.channels = channels;
+        this.stopService = stopService;
+    }
+
+    /** The resolver, for the stop list's explainer and the stop service's read paths. */
+    AvailabilityResolver resolver() {
+        return resolver;
     }
 
     @Transactional
@@ -264,8 +302,119 @@ public class InventoryService implements InventoryReservationPort {
         rls.bindTenant(tenantId);
         Map<UUID, Integer> quantityOfOneEach = new java.util.HashMap<>();
         variantIds.forEach(variantId -> quantityOfOneEach.put(variantId, 1));
-        return evaluateAvailability(tenantId, locationId, quantityOfOneEach, null);
+        return evaluateAvailability(tenantId, locationId, quantityOfOneEach, ChannelContext.none());
     }
+
+    /**
+     * {@link #checkAvailability} for the cart, which knows its channel (ADR 0141 Decision
+     * 6): the same check, plus the stops that cover that channel at this location. A cart
+     * and a checkout that disagreed about a stop would turn a customer away at one and
+     * sell to them at the other, so both ask with the channel.
+     *
+     * <p>No channel system type, deliberately: a per-channel-type threshold only ever
+     * hides a dish, and the cart's refusal must agree with what checkout will actually do.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public AvailabilityDecision checkAvailabilityOnChannel(
+            UUID tenantId, UUID locationId, Set<UUID> variantIds, @Nullable UUID channelId) {
+        rls.bindTenant(tenantId);
+        Map<UUID, Integer> quantityOfOneEach = new java.util.HashMap<>();
+        variantIds.forEach(variantId -> quantityOfOneEach.put(variantId, 1));
+        return evaluateAvailability(tenantId, locationId, quantityOfOneEach, ChannelContext.ofChannel(channelId));
+    }
+
+    /**
+     * The storefront menu's read: the stops and the threshold both, because the menu
+     * knows the channel's id (which stops cover it) and its system type (which
+     * remaining-quantity threshold hides a dish early).
+     */
+    @Transactional(readOnly = true)
+    public AvailabilityDecision checkAvailabilityOnMenu(
+            UUID tenantId, UUID locationId, Set<UUID> variantIds, ChannelContext channel) {
+        rls.bindTenant(tenantId);
+        Map<UUID, Integer> quantityOfOneEach = new java.util.HashMap<>();
+        variantIds.forEach(variantId -> quantityOfOneEach.put(variantId, 1));
+        return evaluateAvailability(tenantId, locationId, quantityOfOneEach, channel);
+    }
+
+    /**
+     * What a marketplace reconciler asks (ADR 0141 Decision 7): one channel at one
+     * location, every variant at quantity one, the offering and the supply, stop and
+     * threshold composition all evaluated at the caller's {@code at}. The channel's system
+     * type is looked up here so the batch-11 threshold finally has a live consumer for
+     * {@code AGGREGATOR}.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public Map<UUID, ChannelAvailability> resolve(
+            UUID tenantId, UUID brandId, UUID locationId, UUID channelId, Set<UUID> variantIds, Instant at) {
+        rls.bindTenant(tenantId);
+        String systemType = channels == null
+                ? null
+                : channels.byId(tenantId, channelId)
+                        .map(channel -> channel.systemType().name())
+                        .orElse(null);
+        Map<UUID, ChannelAvailability> result = new LinkedHashMap<>();
+        resolver.resolveForChannel(tenantId, brandId, locationId, channelId, systemType, variantIds, at)
+                .forEach((variantId, resolution) -> result.put(
+                        variantId,
+                        resolution.sellable()
+                                ? ChannelAvailability.ok()
+                                : ChannelAvailability.blocked(resolution.reasons())));
+        return result;
+    }
+
+    /**
+     * "Why can't I sell this?" for one variant at one location on one channel (ADR 0141
+     * Decision 1, catalog.md §4.6): every covering stop, not the first, and the supply
+     * reason alongside.
+     */
+    @Transactional(readOnly = true)
+    public Explanation explain(UUID tenantId, UUID brandId, UUID locationId, UUID variantId, @Nullable UUID channelId) {
+        rls.bindTenant(tenantId);
+        Instant now = clock.instant();
+        String systemType = channelId == null || channels == null
+                ? null
+                : channels.byId(tenantId, channelId)
+                        .map(channel -> channel.systemType().name())
+                        .orElse(null);
+        AvailabilityResolver.Evaluation evaluation = resolver.evaluate(
+                tenantId, locationId, Map.of(variantId, 1), new ChannelContext(channelId, systemType), now);
+        List<String> reasons = evaluation.decision().unavailableItems().stream()
+                .map(Unavailable::reason)
+                .toList();
+        return new Explanation(
+                evaluation.decision().available(),
+                reasons,
+                evaluation.covering().getOrDefault(variantId, List.of()));
+    }
+
+    /**
+     * {@link #explain} for a caller that holds the channel's code, as the console does.
+     *
+     * @throws IllegalArgumentException when the code names no channel of this tenant -- an
+     *     explanation on a channel that does not exist would silently be the channel-less one
+     */
+    @Transactional(readOnly = true)
+    public Explanation explainOnChannelCode(
+            UUID tenantId, UUID brandId, UUID locationId, UUID variantId, @Nullable String channelCode) {
+        rls.bindTenant(tenantId);
+        UUID channelId = null;
+        if (channelCode != null && !channelCode.isBlank()) {
+            if (channels == null) {
+                throw new IllegalArgumentException("Channels cannot be resolved here");
+            }
+            channelId = channels.byCode(tenantId, channelCode)
+                    .map(uz.horecaos.platform.tenancy.api.SalesChannel::id)
+                    .orElseThrow(() -> new IllegalArgumentException("No such channel"));
+        }
+        return explain(tenantId, brandId, locationId, variantId, channelId);
+    }
+
+    /** One variant's answer, the reasons behind it, and every stop that covers it. */
+    public record Explanation(
+            boolean sellable, List<String> reasons, List<JdbcAvailabilityStopStore.StopRow> coveringStops) {}
 
     /**
      * The channel-aware read gap map row 4.4c asks for: the same check as
@@ -287,7 +436,8 @@ public class InventoryService implements InventoryReservationPort {
         rls.bindTenant(tenantId);
         Map<UUID, Integer> quantityOfOneEach = new java.util.HashMap<>();
         variantIds.forEach(variantId -> quantityOfOneEach.put(variantId, 1));
-        return evaluateAvailability(tenantId, locationId, quantityOfOneEach, channelSystemType);
+        return evaluateAvailability(
+                tenantId, locationId, quantityOfOneEach, ChannelContext.ofSystemType(channelSystemType));
     }
 
     /**
@@ -307,59 +457,9 @@ public class InventoryService implements InventoryReservationPort {
      * attempt, by design (see that method's own doc).
      */
     private AvailabilityDecision evaluateAvailability(
-            UUID tenantId,
-            UUID locationId,
-            Map<UUID, Integer> quantitiesByVariant,
-            @Nullable String channelSystemType) {
-        Map<UUID, StockItemRow> items = store.findStockItems(tenantId, locationId, quantitiesByVariant.keySet());
-        List<Unavailable> blocked = new ArrayList<>();
-        Boolean quantityLogicOn = null;
-
-        for (Map.Entry<UUID, Integer> entry : quantitiesByVariant.entrySet()) {
-            UUID variantId = entry.getKey();
-            StockItemRow item = items.get(variantId);
-            if (item == null) {
-                blocked.add(Unavailable.notStocked(variantId));
-                continue;
-            }
-            switch (item.trackingMode()) {
-                case UNTRACKED -> {
-                    // Unlimited. The catalog offering still decides whether it is
-                    // shown at all, so untracked is not the same as always visible.
-                }
-                case BINARY -> {
-                    if (!Boolean.TRUE.equals(item.binaryAvailable())) {
-                        blocked.add(Unavailable.soldOut(variantId));
-                    }
-                }
-                case QUANTITY -> {
-                    // Resolved at most once per call, not once per item: every
-                    // QUANTITY item in one request shares the same tenant, so the
-                    // flag can only ever answer the same way for all of them.
-                    if (quantityLogicOn == null) {
-                        quantityLogicOn = useStockLogicEnabled(tenantId);
-                    }
-                    if (!quantityLogicOn) {
-                        // catalog.use_stock_logic is off: this item behaves exactly
-                        // like UNTRACKED (TrackingMode.QUANTITY's own doc).
-                        continue;
-                    }
-                    BigDecimal requested = BigDecimal.valueOf(entry.getValue());
-                    BigDecimal remaining = item.remainingQuantity();
-                    if (remaining.compareTo(requested) < 0) {
-                        blocked.add(Unavailable.soldOut(variantId));
-                        continue;
-                    }
-                    if (channelSystemType != null) {
-                        store.findChannelStopThreshold(tenantId, item.stockItemId(), channelSystemType)
-                                .filter(threshold -> remaining.compareTo(threshold) <= 0)
-                                .ifPresent(threshold -> blocked.add(Unavailable.channelStopped(variantId)));
-                    }
-                }
-            }
-        }
-
-        return blocked.isEmpty() ? AvailabilityDecision.allAvailable() : AvailabilityDecision.blockedBy(blocked);
+            UUID tenantId, UUID locationId, Map<UUID, Integer> quantitiesByVariant, ChannelContext channel) {
+        return resolver.evaluate(tenantId, locationId, quantitiesByVariant, channel, clock.instant())
+                .decision();
     }
 
     /** A kitchen marking a dish sold out, or back on. */
@@ -371,6 +471,25 @@ public class InventoryService implements InventoryReservationPort {
             boolean available,
             String reasonCode,
             @Nullable UUID actorId) {
+        setAvailability(tenantId, locationId, variantId, available, reasonCode, actorId, StopSource.OPERATOR);
+    }
+
+    /**
+     * {@link #setAvailability(UUID, UUID, UUID, boolean, String, UUID)} recording who
+     * said so: the movement's {@code source_type} is the true {@link StopSource}
+     * ({@code OPERATOR} or {@code BOT}) rather than {@code OPERATOR} whoever caused it
+     * (ADR 0141, Phase 0). The stop list reads it from there instead of parsing a
+     * reason string.
+     */
+    @Transactional
+    public void setAvailability(
+            UUID tenantId,
+            UUID locationId,
+            UUID variantId,
+            boolean available,
+            String reasonCode,
+            @Nullable UUID actorId,
+            StopSource source) {
         rls.bindTenant(tenantId);
 
         StockItemRow item = store.findStockItem(tenantId, locationId, variantId)
@@ -407,6 +526,7 @@ public class InventoryService implements InventoryReservationPort {
                 reasonCode,
                 actorId == null ? "SERVICE" : "USER",
                 actorId,
+                source.name(),
                 clock.instant());
 
         log.info("Variant {} at location {} marked {}", variantId, locationId, available ? "available" : "unavailable");
@@ -448,15 +568,71 @@ public class InventoryService implements InventoryReservationPort {
     @Transactional
     public boolean setAvailabilityAudited(
             UUID tenantId, UUID locationId, UUID variantId, boolean available, String reasonCode, String actorSubject) {
+        return setAvailabilityAudited(
+                tenantId, locationId, variantId, available, reasonCode, actorSubject, StopSource.OPERATOR);
+    }
+
+    /**
+     * The 86 toggle from a named source (ADR 0141 Decision 4): {@code OPERATOR} for the
+     * console, {@code BOT} for the Telegram {@code /86} command.
+     *
+     * <p>A {@code BINARY} item is toggled exactly as it always was — the position
+     * boolean, its movement and its audit fact — and the movement now carries the true
+     * source. An item that is not {@code BINARY} can no longer be refused with "only a
+     * BINARY item": it is stopped with a {@code LOCATION} stop from the same source, and
+     * "back on sale" ends that source's own {@code LOCATION} stops and nothing else.
+     * Where the stop service is absent (a fixture built before stops existed) or creation
+     * is frozen, the old refusal stands.
+     *
+     * <p>Going back on sale also ends the source's own {@code LOCATION} stop on a
+     * {@code BINARY} item, so the operator's "back on sale" is one gesture whichever
+     * mechanism stopped the dish.
+     */
+    @Transactional
+    public boolean setAvailabilityAudited(
+            UUID tenantId,
+            UUID locationId,
+            UUID variantId,
+            boolean available,
+            String reasonCode,
+            String actorSubject,
+            StopSource source) {
         rls.bindTenant(tenantId);
         StockItemRow before = store.findStockItem(tenantId, locationId, variantId)
                 .orElseThrow(() ->
                         new IllegalArgumentException("Variant " + variantId + " is not stocked at this location"));
 
-        setAvailability(tenantId, locationId, variantId, available, reasonCode, parseActorId(actorSubject));
+        if (before.trackingMode() != TrackingMode.BINARY) {
+            if (stopService == null) {
+                throw new IllegalStateException(
+                        "Availability can only be set on a BINARY item; this one is " + before.trackingMode());
+            }
+            try {
+                return stopService.toggleLocationStop(
+                        tenantId, before.brandId(), locationId, variantId, available, reasonCode, actorSubject, source);
+            } catch (AvailabilityStopService.StopsFrozenException frozen) {
+                // Frozen: the position boolean is the only mechanism left, and this item has
+                // none -- the pre-stops answer, which the console words as "scope stops are paused".
+                throw new IllegalStateException(
+                        "Availability can only be set on a BINARY item; this one is " + before.trackingMode()
+                                + " and new stops are paused",
+                        frozen);
+            }
+        }
 
-        if (Boolean.valueOf(available).equals(before.binaryAvailable())) {
+        setAvailability(tenantId, locationId, variantId, available, reasonCode, parseActorId(actorSubject), source);
+
+        boolean changed = !Boolean.valueOf(available).equals(before.binaryAvailable());
+        if (available && stopService != null) {
+            changed |= stopService.liftOwn(tenantId, locationId, variantId, source, null, reasonCode, actorSubject);
+        }
+        if (!changed) {
             return false;
+        }
+        if (Boolean.valueOf(available).equals(before.binaryAvailable())) {
+            // Only a stop was lifted; the position did not move, so there is no position
+            // fact to audit -- the stop service has already audited the lift.
+            return true;
         }
 
         audit.record(AuditFact.of("inventory.availability.set", AuditClass.BUSINESS)
@@ -519,6 +695,24 @@ public class InventoryService implements InventoryReservationPort {
             UUID quoteId,
             Instant quoteExpiresAt,
             Map<UUID, Integer> quantitiesByVariant) {
+        return reserveForQuote(tenantId, brandId, locationId, quoteId, quoteExpiresAt, quantitiesByVariant, null);
+    }
+
+    /**
+     * {@link #reserveForQuote(UUID, UUID, UUID, UUID, Instant, Map)} on a named channel:
+     * refused with {@code ON_STOP} where a stop covers a line on that channel here (ADR
+     * 0141 Decision 6). A per-channel-type threshold still does not refuse a hold.
+     */
+    @Override
+    @Transactional
+    public ReservationResult reserveForQuote(
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            UUID quoteId,
+            Instant quoteExpiresAt,
+            Map<UUID, Integer> quantitiesByVariant,
+            @Nullable UUID channelId) {
         rls.bindTenant(tenantId);
 
         // ADR 0024 forbids a historical import from changing inventory, and this
@@ -534,7 +728,8 @@ public class InventoryService implements InventoryReservationPort {
         // the live checkout path instead of importing a snapshot.
         ImportSuppression.refuse(ExternalEffect.INVENTORY_MOVEMENT, "reserve stock for a quote");
 
-        AvailabilityDecision decision = evaluateAvailability(tenantId, locationId, quantitiesByVariant, null);
+        AvailabilityDecision decision =
+                evaluateAvailability(tenantId, locationId, quantitiesByVariant, ChannelContext.ofChannel(channelId));
         if (!decision.available()) {
             return ReservationResult.refused(decision);
         }

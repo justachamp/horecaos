@@ -102,6 +102,18 @@ public enum Capability {
      */
     INVENTORY_AVAILABILITY_MANAGE("inventory.availability.manage", "inventory", "availability.manage"),
 
+    /**
+     * ADR 0141: stopping a dish for a whole brand, a menu or a channel, and lifting
+     * such a stop. Held at {@code BRAND} scope and above.
+     *
+     * <p>Separate from {@link #INVENTORY_AVAILABILITY_MANAGE}, which a location
+     * manager holds at {@code LOCATION}: a branch manager must not be able to take a
+     * dish off sale across the brand, and one endpoint can declare only one scope.
+     * The location-path routes keep the narrower capability, so the two reaches are
+     * two grants rather than one grant checked twice.
+     */
+    INVENTORY_STOP_MANAGE("inventory.stop.manage", "inventory", "stop.manage"),
+
     PRICING_READ("pricing.read", "pricing", "read"),
     PRICING_AUTHOR("pricing.author", "pricing", "author"),
     PRICING_ACTIVATE("pricing.activate", "pricing", "activate"),

@@ -25,6 +25,9 @@ import {
   DataTableColumn,
 } from '../../shared/ui/data-table/data-table-types';
 import { describeApiError } from '../orders/order-errors';
+import { StopPropagationBanner } from './stop-propagation-banner';
+import { StopInForce, StopScope, StopsApi } from './stop-scope-api';
+import { StopApplied, StopScopePanel } from './stop-scope-panel';
 
 type StopTab = 'ALL' | 'AVAILABLE' | 'ON_STOP';
 
@@ -79,10 +82,19 @@ interface VariantAvailabilityResponse {
   readonly category?: string | null;
   readonly available: boolean;
   readonly trackingMode?: string | null;
-  /** `MANUAL` | `POS` | `UNKNOWN`. */
+  /**
+   * Who last touched the position, read from the movement's own source (ADR 0141, Phase 0):
+   * `OPERATOR` | `BOT` | `POS` | `UNKNOWN`. A response from before that change said `MANUAL`
+   * for what is now `OPERATOR`; both read as the kitchen.
+   */
   readonly stopSource: string;
   readonly stopReasonCode?: string | null;
   readonly stopChangedAt?: string | null;
+  /**
+   * The stops in force on this dish at this branch (ADR 0141), each with its own scope, source
+   * and end. Absent on a response from before stops existed.
+   */
+  readonly stops?: readonly StopInForce[];
 }
 
 /** Mirrors `CatalogAuthoringController.VariantAvailabilityCountsResponse` — the tab badges, exact over the whole catalog. */
@@ -129,16 +141,22 @@ interface BulkAvailabilityResponse {
  * kitchen stop from a POS push instead of only a boolean and a free-text
  * reason.
  *
- * **Not built, honestly**: stop scope beyond LOCATION (menu/terminal/brand
- * fan-out — `INVENTORY_ADJUST`/`INVENTORY_AVAILABILITY_MANAGE` are
- * LOCATION-scoped only, and a stop set here never reaches an aggregator
- * channel); the digest-cadence settings screen (the digest itself is built —
- * see `InventoryStopDigestSweeper` — but no console screen lets a manager
- * choose the chat or the cadence).
+ * **ADR 0141 closed the scope half.** A stop has a scope (this branch, one channel, a menu,
+ * the whole brand), a source (kitchen, bot, POS) and an optional end, and a row shows every
+ * stop in force on it with its own lift. The panel over the selected rows makes them; the
+ * propagation banner says what each connected marketplace has and has not been told — and,
+ * for a provider with no availability write API, that it is not propagated automatically.
+ * An `UNTRACKED` or `QUANTITY` dish can be stopped too.
+ *
+ * **Not built, honestly**: the digest-cadence settings screen (the digest itself is built —
+ * see `InventoryStopDigestSweeper` — but no console screen lets a manager choose the chat or
+ * the cadence); a `TERMINAL` scope (the platform refuses the name until a device registry
+ * exists — stop the channel the device runs on); and, for a stop-list row whose supply is
+ * counted stock, the badge still reads `QUANTITY` as not available, as it always has.
  */
 @Component({
   selector: 'q-stop-list-page',
-  imports: [TPipe, DataTable, QCellDef],
+  imports: [TPipe, DataTable, QCellDef, StopScopePanel, StopPropagationBanner],
   templateUrl: './stop-list-page.html',
   styleUrl: './stop-list-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -146,6 +164,7 @@ interface BulkAvailabilityResponse {
 export class StopListPage implements OnInit {
   private readonly api = inject(ApiClient);
   private readonly location = inject(CurrentLocation);
+  private readonly stopsApi = inject(StopsApi);
   protected readonly i18n = inject(I18n);
 
   protected readonly columns = computed<readonly DataTableColumn[]>(() => {
@@ -154,6 +173,7 @@ export class StopListPage implements OnInit {
       { key: 'product', header: this.i18n.t('kitchen.stopList.column.product') },
       { key: 'category', header: this.i18n.t('kitchen.stopList.column.category') },
       { key: 'status', header: this.i18n.t('kitchen.stopList.column.status') },
+      { key: 'scope', header: this.i18n.t('kitchen.stopList.column.scope') },
       { key: 'source', header: this.i18n.t('kitchen.stopList.column.source') },
       { key: 'toggle', header: '', hideable: false },
     ];
@@ -202,6 +222,12 @@ export class StopListPage implements OnInit {
   protected readonly busyVariantIds = signal<ReadonlySet<string>>(new Set());
   protected readonly bulkReason = signal('');
   protected readonly notice = signal<string | null>(null);
+
+  /** The scope picker (ADR 0141) is opened over the selected rows. */
+  protected readonly scopePanelOpen = signal(false);
+  protected readonly selectedList = computed<readonly string[]>(() => [...this.selectedIds()]);
+  /** Bumped after every stop made or lifted, so the propagation banner re-reads what the marketplaces have been told. */
+  protected readonly propagationKey = signal(0);
 
   async ngOnInit(): Promise<void> {
     await this.location.ensureLoaded();
@@ -396,13 +422,101 @@ export class StopListPage implements OnInit {
       return null;
     }
     switch (item.stopSource) {
+      case 'OPERATOR':
       case 'MANUAL':
         return this.i18n.t('kitchen.stopList.source.manual');
+      case 'BOT':
+        return this.i18n.t('kitchen.stopList.source.bot');
       case 'POS':
         return this.i18n.t('kitchen.stopList.source.pos');
       default:
         return this.i18n.t('kitchen.stopList.source.unknown');
     }
+  }
+
+  // ------------------------------------------------- ADR 0141: stops with a scope
+
+  protected stopsOf(item: VariantAvailabilityResponse): readonly StopInForce[] {
+    return item.stops ?? [];
+  }
+
+  /** A dish that still sells somewhere, because every stop on it names only some channels here. */
+  protected isPartlyStopped(item: VariantAvailabilityResponse): boolean {
+    const stops = this.stopsOf(item);
+    return item.available && stops.length > 0 && stops.every((stop) => !stop.everyChannel);
+  }
+
+  /** One literal `t` key per scope, so a typo in a template is a build error. */
+  protected scopeLabel(scope: StopScope): string {
+    switch (scope) {
+      case 'LOCATION':
+        return this.i18n.t('kitchen.stopList.scope.location');
+      case 'BRAND':
+        return this.i18n.t('kitchen.stopList.scope.brand');
+      case 'MENU':
+        return this.i18n.t('kitchen.stopList.scope.menu');
+      case 'CHANNEL':
+        return this.i18n.t('kitchen.stopList.scope.channel');
+    }
+  }
+
+  protected stopSourceName(stop: StopInForce): string {
+    switch (stop.source) {
+      case 'OPERATOR':
+        return this.i18n.t('kitchen.stopList.source.manual');
+      case 'BOT':
+        return this.i18n.t('kitchen.stopList.source.bot');
+      case 'POS':
+        return this.i18n.t('kitchen.stopList.source.pos');
+      default:
+        return this.i18n.t('kitchen.stopList.source.unknown');
+    }
+  }
+
+  /** The reveal-on-hover explainer for one stop: who, why, until when. */
+  protected stopDetail(stop: StopInForce): string {
+    const who = this.stopSourceName(stop);
+    const until = stop.endsAt
+      ? this.i18n.t('kitchen.stopList.stop.until', {
+          when: formatDateTime(new Date(stop.endsAt), PLACEHOLDER_TIME_ZONE),
+        })
+      : this.i18n.t('kitchen.stopList.stop.indefinite');
+    return `${who} · ${stop.reasonCode} · ${until}`;
+  }
+
+  protected toggleScopePanel(): void {
+    this.scopePanelOpen.update((open) => !open);
+  }
+
+  /** A scoped stop landed: re-read the rows, the badges and what the marketplaces have been told. */
+  protected async onScopeApplied(event: StopApplied): Promise<void> {
+    this.notice.set(
+      event.response.failedCount > 0
+        ? this.i18n.t('kitchen.stopList.bulk.partial', { failed: event.response.failedCount })
+        : this.i18n.t('kitchen.stopList.bulk.done', { count: event.response.appliedCount }),
+    );
+    this.scopePanelOpen.set(false);
+    this.selectedIds.set(new Set());
+    await this.load(firstPage(50));
+    void this.loadCounts();
+    this.propagationKey.update((key) => key + 1);
+  }
+
+  /** Lifts one stop (`If-Match` quotes the version the row showed), then re-reads, because a lifted brand stop frees many rows. */
+  protected async liftStop(stop: StopInForce): Promise<void> {
+    const scope = this.location.scope();
+    if (!scope) {
+      return;
+    }
+    try {
+      await this.stopsApi.lift(scope, stop);
+      this.notice.set(this.i18n.t('kitchen.stopList.stop.lifted'));
+    } catch (error) {
+      this.notice.set(this.describe(error));
+    }
+    await this.load(firstPage(50));
+    void this.loadCounts();
+    this.propagationKey.update((key) => key + 1);
   }
 
   /** The reveal-on-hover detail: the raw reason code and when it happened — never shown as the primary label, only as a title attribute. */
@@ -432,19 +546,26 @@ export class StopListPage implements OnInit {
           command({ available: !item.available, reasonCode: SINGLE_TOGGLE_REASON }),
         ),
       );
-      this.items.update((current) =>
-        current.map((row) =>
-          row.variantId === item.variantId
-            ? {
-                ...row,
-                available: !row.available,
-                stopSource: 'MANUAL',
-                stopReasonCode: SINGLE_TOGGLE_REASON,
-              }
-            : row,
-        ),
-      );
+      if (this.stopsOf(item).length > 0) {
+        // A stop of another reach (or another source) may still cover this dish after the
+        // toggle: the row's truth is the server's, not a local flip.
+        await this.load(firstPage(50));
+      } else {
+        this.items.update((current) =>
+          current.map((row) =>
+            row.variantId === item.variantId
+              ? {
+                  ...row,
+                  available: !row.available,
+                  stopSource: 'OPERATOR',
+                  stopReasonCode: SINGLE_TOGGLE_REASON,
+                }
+              : row,
+          ),
+        );
+      }
       void this.loadCounts();
+      this.propagationKey.update((key) => key + 1);
     } catch (error) {
       this.notice.set(this.describe(error));
     } finally {
@@ -500,7 +621,7 @@ export class StopListPage implements OnInit {
       this.items.update((current) =>
         current.map((row) =>
           appliedIds.has(row.variantId)
-            ? { ...row, available: !toStop, stopSource: 'MANUAL', stopReasonCode: reasonCode }
+            ? { ...row, available: !toStop, stopSource: 'OPERATOR', stopReasonCode: reasonCode }
             : row,
         ),
       );
@@ -510,6 +631,7 @@ export class StopListPage implements OnInit {
           : this.i18n.t('kitchen.stopList.bulk.done', { count: result.appliedCount }),
       );
       void this.loadCounts();
+      this.propagationKey.update((key) => key + 1);
     } catch (error) {
       this.notice.set(this.describe(error));
     } finally {

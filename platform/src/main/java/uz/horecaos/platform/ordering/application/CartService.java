@@ -1062,10 +1062,11 @@ public class CartService {
      */
     /**
      * Rows 4.4c/4.4d, storefront half: the same "can I sell one of this"
-     * check {@code ACTIVATION_SMOKE_TEST} and {@code
-     * CheckoutReservationStep}'s own {@code reserveForQuote} use (via {@link
-     * InventoryReservationPort#checkAvailability}) — quantity one each, no
-     * channel context, real stock exhaustion only. A per-channel-type stop
+     * check {@code CheckoutReservationStep}'s own {@code reserveForQuote}
+     * uses (via {@link InventoryReservationPort#checkAvailabilityOnChannel})
+     * — quantity one each, on the cart's own channel (ADR 0141 Decision 6),
+     * so a stop covering that channel here refuses with {@code ON_STOP} at
+     * the cart exactly as checkout will. A per-channel-type stop
      * threshold (gap map row 4.4c) is deliberately not consulted here: it is
      * a projection-only cutoff the reservation path itself never refuses on
      * (see {@code AvailabilityDecision.Unavailable#channelStopped}'s own
@@ -1074,14 +1075,15 @@ public class CartService {
      * still have sold.
      *
      * <p>Refuses with the first blocked variant's own reason code — {@code
-     * SOLD_OUT}, {@code NOT_STOCKED_AT_LOCATION}, or the rarer {@code
-     * RESERVATION_NO_LONGER_HELD} — the same codes the operator console and
+     * SOLD_OUT}, {@code ON_STOP}, {@code NOT_STOCKED_AT_LOCATION}, or the
+     * rarer {@code RESERVATION_NO_LONGER_HELD} — the same codes the operator console and
      * {@code CheckoutReservationStep}'s own {@code ItemsUnavailable} already
      * use, so a client need not learn a second vocabulary for "this dish is
      * gone".
      */
     private void requireAvailable(UUID tenantId, CartRow cart, java.util.Set<UUID> variantIds) {
-        AvailabilityDecision decision = inventory.checkAvailability(tenantId, cart.locationId(), variantIds);
+        AvailabilityDecision decision =
+                inventory.checkAvailabilityOnChannel(tenantId, cart.locationId(), variantIds, cart.channelId());
         if (!decision.available()) {
             AvailabilityDecision.Unavailable first = decision.unavailableItems().get(0);
             throw new CartRefusedException(

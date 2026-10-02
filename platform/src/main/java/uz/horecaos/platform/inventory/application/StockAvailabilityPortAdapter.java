@@ -3,6 +3,7 @@ package uz.horecaos.platform.inventory.application;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
 import uz.horecaos.platform.inventory.api.StockAvailabilityPort;
+import uz.horecaos.platform.inventory.api.StopSource;
 
 /**
  * The {@code inventory.api} face of {@link InventoryService#setAvailabilityAudited}
@@ -22,6 +23,10 @@ public class StockAvailabilityPortAdapter implements StockAvailabilityPort {
     @Override
     public void toggle(
             UUID tenantId, UUID locationId, UUID variantId, boolean available, String reasonCode, String actorSubject) {
-        inventory.setAvailabilityAudited(tenantId, locationId, variantId, available, reasonCode, actorSubject);
+        // The Telegram /86 command is this port's one caller (the POS poll writes its own
+        // stops through AvailabilityStopPort), so the source is BOT: the movement says so, and
+        // a BOT stop on an UNTRACKED or QUANTITY dish is lifted by the same command.
+        inventory.setAvailabilityAudited(
+                tenantId, locationId, variantId, available, reasonCode, actorSubject, StopSource.BOT);
     }
 }

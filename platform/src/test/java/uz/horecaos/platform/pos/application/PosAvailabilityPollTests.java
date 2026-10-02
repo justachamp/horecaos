@@ -10,6 +10,7 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterAll;
@@ -26,16 +27,22 @@ import uz.horecaos.platform.catalog.application.CatalogAuthoringService;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.OfferingStatus;
 import uz.horecaos.platform.catalog.domain.FiscalClassification;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
+import uz.horecaos.platform.configuration.rls.TenantRlsSession;
 import uz.horecaos.platform.integration.api.provider.ProviderOutcome;
+import uz.horecaos.platform.inventory.api.StopScopeType;
+import uz.horecaos.platform.inventory.api.StopSource;
 import uz.horecaos.platform.inventory.api.TrackingMode;
+import uz.horecaos.platform.inventory.application.AvailabilityStopService;
+import uz.horecaos.platform.inventory.application.AvailabilityStopService.CreateStop;
 import uz.horecaos.platform.inventory.application.InventoryService;
-import uz.horecaos.platform.inventory.application.StockAvailabilityPortAdapter;
+import uz.horecaos.platform.inventory.infrastructure.persistence.JdbcAvailabilityStopStore;
 import uz.horecaos.platform.inventory.infrastructure.persistence.JdbcInventoryStore;
 import uz.horecaos.platform.pos.FakePosAdapter;
 import uz.horecaos.platform.pos.domain.CatalogSnapshot;
 import uz.horecaos.platform.pos.infrastructure.persistence.JdbcPosBindingConfiguration;
 import uz.horecaos.platform.pos.infrastructure.persistence.JdbcPosLiveAvailabilityStore;
 import uz.horecaos.platform.support.CommercialDefaults;
+import uz.horecaos.platform.support.FakeConfigurationResolver;
 import uz.horecaos.platform.support.TestDatabase;
 
 /**
@@ -65,6 +72,7 @@ class PosAvailabilityPollTests {
 
     private JdbcClient jdbc;
     private InventoryService inventory;
+    private AvailabilityStopService stopService;
     private FakePosAdapter fakeAdapter;
     private PosAvailabilityPoll poll;
     private UUID variantId;
@@ -97,7 +105,7 @@ class PosAvailabilityPollTests {
         jdbc.sql("TRUNCATE TABLE integration.pos_live_availability, integration.provider_entity_mappings, "
                         + "integration.binding_capabilities, integration.bindings, integration.installations CASCADE")
                 .update();
-        jdbc.sql("TRUNCATE TABLE inventory.reservation_lines, inventory.reservations, "
+        jdbc.sql("TRUNCATE TABLE inventory.availability_stops, inventory.reservation_lines, inventory.reservations, "
                         + "inventory.movements, inventory.positions, inventory.stock_items CASCADE")
                 .update();
         jdbc.sql("TRUNCATE TABLE catalog.location_offerings, catalog.translations, "
@@ -157,12 +165,31 @@ class PosAvailabilityPollTests {
                 Clock.systemUTC());
 
         JdbcInventoryStore inventoryStore = new JdbcInventoryStore(jdbc);
+        JdbcAvailabilityStopStore stopStore = new JdbcAvailabilityStopStore(jdbc);
+        JdbcAuditRecorder audit =
+                new JdbcAuditRecorder(jdbc, JsonMapper.builder().build());
+        Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
+        TenantRlsSession noRls = new TenantRlsSession() {
+            @Override
+            public void bindTenant(UUID tenantId) {}
+
+            @Override
+            public void bindPlatform() {}
+        };
+        stopService = new AvailabilityStopService(
+                stopStore, event -> {}, clock, audit, noRls, new FakeConfigurationResolver());
         inventory = new InventoryService(
                 inventoryStore,
                 event -> {},
-                Clock.fixed(NOW, ZoneOffset.UTC),
-                new JdbcAuditRecorder(jdbc, JsonMapper.builder().build()));
-        StockAvailabilityPortAdapter stockAvailability = new StockAvailabilityPortAdapter(inventory);
+                clock,
+                audit,
+                noRls,
+                new FakeConfigurationResolver(),
+                (tenantId, at) -> at.atZone(ZoneOffset.UTC).toLocalDate(),
+                stopStore,
+                null,
+                null,
+                stopService);
 
         UUID catalogId = authoring.createCatalog(TENANT, BRAND, "MAIN", "Main menu", LOCALE);
         var plov = authoring.createProduct(
@@ -209,7 +236,7 @@ class PosAvailabilityPollTests {
                 configuration,
                 adapters,
                 pollService,
-                stockAvailability,
+                stopService,
                 Clock.fixed(NOW, ZoneOffset.UTC),
                 new SimpleMeterRegistry());
     }
@@ -217,24 +244,82 @@ class PosAvailabilityPollTests {
     @Test
     @DisplayName("a stop-list reading reaches the customer: 86'd, then un-86'd when the provider drops the constraint")
     void aStopListReadingReachesInventoryInBothDirections() {
-        assertThat(binaryAvailable()).as("sanity: the variant starts available").isTrue();
+        assertThat(sellable()).as("sanity: the variant starts sellable").isTrue();
 
         fakeAdapter.scriptAvailability(
                 List.of(new CatalogSnapshot.Availability(EXTERNAL_PRODUCT_ID, BigDecimal.ZERO, NOW, Map.of())));
         poll.pollDueBindings();
 
-        assertThat(binaryAvailable())
-                .as("a stop-list limit of zero must reach the same inventory fact the storefront reads")
+        assertThat(sellable())
+                .as("a stop-list limit of zero must reach the same availability the storefront reads")
                 .isFalse();
+        assertThat(binaryAvailable())
+                .as("ADR 0141 Decision 4: the poll writes its own POS stop and no longer flips the position "
+                        + "boolean an operator also flips")
+                .isTrue();
+        assertThat(activeStopSources()).containsExactly("POS");
 
         // Absence means unconstrained: the provider no longer names this
         // product on the stop list at all.
         fakeAdapter.scriptAvailability(List.of());
         poll.pollDueBindings();
 
-        assertThat(binaryAvailable())
-                .as("dropping off the stop list must flip the variant back to available, not leave it 86'd forever")
+        assertThat(sellable())
+                .as("dropping off the stop list must end the POS stop, not leave the dish 86'd forever")
                 .isTrue();
+        assertThat(activeStopSources()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("a POS back-in-stock reading ends only the POS stop: a stop an operator made by hand survives it")
+    void aPosBackInStockDoesNotLiftAnOperatorsStop() {
+        stopService.stop(new CreateStop(
+                TENANT,
+                BRAND,
+                variantId,
+                StopScopeType.LOCATION,
+                LOCATION,
+                null,
+                null,
+                StopSource.OPERATOR,
+                null,
+                "FRYER_DOWN",
+                null,
+                null,
+                CREATE_ACTOR.toString(),
+                null));
+
+        fakeAdapter.scriptAvailability(
+                List.of(new CatalogSnapshot.Availability(EXTERNAL_PRODUCT_ID, BigDecimal.ZERO, NOW, Map.of())));
+        poll.pollDueBindings();
+        assertThat(activeStopSources()).containsExactlyInAnyOrder("OPERATOR", "POS");
+
+        fakeAdapter.scriptAvailability(List.of());
+        poll.pollDueBindings();
+
+        assertThat(activeStopSources())
+                .as("the POS reading back in stock ended the POS stop and nothing else: before ADR 0141 it "
+                        + "set the one shared boolean and un-86'd a dish the kitchen had stopped on purpose")
+                .containsExactly("OPERATOR");
+        assertThat(sellable()).as("the operator's stop still holds").isFalse();
+    }
+
+    @Test
+    @DisplayName("an UNTRACKED dish the till reports out is stopped too, where the position boolean never reached it")
+    void aPosStopCoversADishThePositionBooleanCannotReach() {
+        jdbc.sql("UPDATE inventory.stock_items SET tracking_mode = 'UNTRACKED' WHERE variant_id = :v")
+                .param("v", variantId)
+                .update();
+        jdbc.sql("UPDATE inventory.positions SET binary_available = NULL WHERE tenant_id = :t")
+                .param("t", TENANT)
+                .update();
+
+        fakeAdapter.scriptAvailability(
+                List.of(new CatalogSnapshot.Availability(EXTERNAL_PRODUCT_ID, BigDecimal.ZERO, NOW, Map.of())));
+        poll.pollDueBindings();
+
+        assertThat(sellable()).isFalse();
+        assertThat(activeStopSources()).containsExactly("POS");
     }
 
     @Test
@@ -243,13 +328,13 @@ class PosAvailabilityPollTests {
         fakeAdapter.scriptAvailability(
                 List.of(new CatalogSnapshot.Availability(EXTERNAL_PRODUCT_ID, BigDecimal.ZERO, NOW, Map.of())));
         poll.pollDueBindings();
-        assertThat(binaryAvailable()).isFalse();
+        assertThat(sellable()).isFalse();
 
         fakeAdapter.failNextAvailabilityReadWith(
                 ProviderOutcome.retryable("TIMEOUT", "read timed out", Duration.ofSeconds(5)));
         poll.pollDueBindings();
 
-        assertThat(binaryAvailable())
+        assertThat(sellable())
                 .as("a provider timeout must never look like the menu emptying out -- the product stays 86'd, "
                         + "the last thing anybody actually observed, rather than silently becoming sellable again")
                 .isFalse();
@@ -278,5 +363,21 @@ class PosAvailabilityPollTests {
                 .param("variantId", variantId)
                 .query(Boolean.class)
                 .single();
+    }
+
+    private boolean sellable() {
+        return inventory.checkAvailability(TENANT, LOCATION, Set.of(variantId)).available();
+    }
+
+    private List<String> activeStopSources() {
+        return jdbc.sql("""
+                        SELECT source FROM inventory.availability_stops
+                         WHERE tenant_id = :t AND variant_id = :v AND status = 'ACTIVE'
+                         ORDER BY source
+                        """)
+                .param("t", TENANT)
+                .param("v", variantId)
+                .query(String.class)
+                .list();
     }
 }

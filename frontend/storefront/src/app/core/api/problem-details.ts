@@ -240,6 +240,11 @@ const REASON_MESSAGE_KEYS: Readonly<Record<string, string>> = {
   // ItemsUnavailable already use, so a customer sees one honest sentence
   // regardless of which of the two ways a dish became unavailable.
   SOLD_OUT: 'errors.reason.itemUnavailable',
+  // ADR 0141: a stop (an operator's, the bot's or the POS's) covers this dish on this channel at
+  // this branch. The customer's sentence is the same honest one -- the dish cannot be ordered
+  // right now -- whichever way it became unavailable; which of them it was is the kitchen's
+  // business, not the customer's.
+  ON_STOP: 'errors.reason.itemUnavailable',
   NOT_STOCKED_AT_LOCATION: 'errors.reason.itemUnavailable',
   RESERVATION_NO_LONGER_HELD: 'errors.reason.holdExpired',
   NOT_SERVICEABLE: 'errors.reason.notServiceable',

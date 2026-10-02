@@ -1664,6 +1664,7 @@ public class JdbcCatalogStore {
                        lo.status AS offering_status,
                        lo.fulfillment_modes AS fulfillment_modes,
                        last_movement.reason_code AS stop_reason_code,
+                       last_movement.source_type AS stop_source_type,
                        last_movement.occurred_at AS stop_changed_at
                 FROM catalog.variants v
                 JOIN catalog.products p
@@ -1706,7 +1707,7 @@ public class JdbcCatalogStore {
                 -- who last touched it — ix_movements_by_item (V0019) already
                 -- keys on exactly (stock_item_id, sequence_number DESC).
                 LEFT JOIN LATERAL (
-                    SELECT m.reason_code, m.occurred_at
+                    SELECT m.reason_code, m.source_type, m.occurred_at
                     FROM inventory.movements m
                     WHERE m.stock_item_id = si.id AND m.tenant_id = si.tenant_id
                       AND m.movement_type = 'AVAILABILITY_CHANGE'
@@ -1750,6 +1751,7 @@ public class JdbcCatalogStore {
                     }
                     String fulfillmentModesRaw = row.getString("fulfillment_modes");
                     String stopReasonCode = row.getString("stop_reason_code");
+                    String stopSourceType = row.getString("stop_source_type");
                     OffsetDateTime stopChangedAtRaw = row.getObject("stop_changed_at", OffsetDateTime.class);
                     return new VariantAvailabilityRow(
                             row.getObject("variant_id", UUID.class),
@@ -1759,29 +1761,34 @@ public class JdbcCatalogStore {
                             trackingMode,
                             row.getString("offering_status"),
                             fulfillmentModesRaw == null ? List.of() : List.of(fulfillmentModesRaw.split(",")),
-                            stopSourceOf(stopReasonCode),
+                            stopSourceOf(stopSourceType, stopReasonCode),
                             stopReasonCode,
-                            stopChangedAtRaw == null ? null : stopChangedAtRaw.toInstant());
+                            stopChangedAtRaw == null ? null : stopChangedAtRaw.toInstant(),
+                            List.of());
                 })
                 .list();
     }
 
     /**
-     * The gap map row 2.5b explainer's own three-way classification, off the
-     * one signal already distinguishing the two real sources today: {@code
-     * PosAvailabilityPoll}'s own fixed {@code POS_STOP_LIST} reason code
-     * (that class's own constant) against every other reason a human toggle
-     * sends, single or bulk (the console's {@code
-     * OPERATIONS_STOP_LIST_TOGGLE} and whatever an operator types on a bulk
-     * stop alike). {@code UNKNOWN} is not a fourth source; it is "never
-     * toggled since listed", which is the honest answer when no movement
-     * exists to read a source off at all.
+     * Who last touched the position, read from the movement's own {@code source_type}
+     * (ADR 0141, Phase 0) rather than parsed out of its free-text reason: {@code
+     * OPERATOR}, {@code BOT} or {@code POS}. {@code UNKNOWN} is not a source; it is
+     * "never toggled since listed", the honest answer when no movement exists to read
+     * one off at all.
+     *
+     * <p>One legacy shape is still read by its reason: before the POS poll wrote its own
+     * {@code POS} stop it toggled the position through the operator's door, so its
+     * movements carry {@code source_type = OPERATOR} and the fixed {@code POS_STOP_LIST}
+     * reason. Those rows are history and stay readable as what they were.
      */
-    private static String stopSourceOf(@Nullable String reasonCode) {
-        if (reasonCode == null) {
+    private static String stopSourceOf(@Nullable String sourceType, @Nullable String reasonCode) {
+        if (sourceType == null) {
             return "UNKNOWN";
         }
-        return "POS_STOP_LIST".equals(reasonCode) ? "POS" : "MANUAL";
+        if ("OPERATOR".equals(sourceType) && "POS_STOP_LIST".equals(reasonCode)) {
+            return "POS";
+        }
+        return sourceType;
     }
 
     /**
@@ -1812,13 +1819,30 @@ public class JdbcCatalogStore {
      */
     public VariantAvailabilityCountsRow variantAvailabilityCounts(
             UUID tenantId, UUID brandId, UUID locationId, List<String> nameLocales, @Nullable String search) {
+        return variantAvailabilityCounts(tenantId, brandId, locationId, nameLocales, search, java.util.Set.of());
+    }
+
+    /**
+     * The badges with ADR 0141's stops subtracted: a variant a stop covers on every channel
+     * here is on stop whatever its supply says, so it leaves "available" exactly as the
+     * row's own {@code available} does. The stopped ids come from inventory through
+     * {@code StopOverlayLookup}, not from a join on a table this module does not own.
+     */
+    public VariantAvailabilityCountsRow variantAvailabilityCounts(
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            List<String> nameLocales,
+            @Nullable String search,
+            java.util.Set<UUID> stoppedVariantIds) {
         String searchPattern = search == null || search.isBlank() ? null : "%" + search.trim() + "%";
         return jdbc.sql("""
                 SELECT
                     COUNT(*) AS total,
                     COUNT(*) FILTER (WHERE
-                        si.tracking_mode = 'UNTRACKED'
-                        OR (si.tracking_mode = 'BINARY' AND pos.binary_available = true)
+                        (si.tracking_mode = 'UNTRACKED'
+                         OR (si.tracking_mode = 'BINARY' AND pos.binary_available = true))
+                        AND NOT (v.id = ANY (CAST(:stoppedIds AS uuid[])))
                     ) AS available
                 FROM catalog.variants v
                 JOIN catalog.products p
@@ -1845,6 +1869,7 @@ public class JdbcCatalogStore {
                 .param("locationId", locationId)
                 .param("nameLocales", nameLocales.toArray(String[]::new))
                 .param("search", searchPattern)
+                .param("stoppedIds", stoppedVariantIds.toArray(UUID[]::new))
                 .query((row, number) -> {
                     long total = row.getLong("total");
                     long available = row.getLong("available");
@@ -2742,15 +2767,16 @@ public class JdbcCatalogStore {
      *                         — empty when no offering row exists here at all
      */
     /**
-     * @param stopSource {@code MANUAL} | {@code POS} | {@code UNKNOWN} — gap
-     *                   map row 2.5b's explainer, derived from {@code
-     *                   inventory.movements}' own reason code rather than a
-     *                   new column: {@code POS_STOP_LIST} is {@code
-     *                   PosAvailabilityPoll}'s own reason, every other
-     *                   non-null reason is a human toggle (the console's own
-     *                   single/bulk stop both send one), and {@code UNKNOWN}
-     *                   means the item has never been toggled since it was
-     *                   listed — its current state is the untouched default.
+     * @param stopSource {@code OPERATOR} | {@code BOT} | {@code POS} | {@code
+     *                   UNKNOWN} — gap map row 2.5b's explainer, read from the
+     *                   latest position movement's own {@code source_type} (ADR
+     *                   0141, Phase 0), no longer parsed out of its reason;
+     *                   {@code UNKNOWN} means the item has never been toggled
+     *                   since it was listed — its current state is the untouched
+     *                   default. The stops in force are {@code stops}, each with
+     *                   its own source.
+     * @param stops      ADR 0141: the stops in force that touch this dish at
+     *                   this branch, newest first; empty until a stop exists
      * @param stopReasonCode the raw reason on that same latest movement, for
      *                       an operator who wants more than the three-way
      *                       classification
@@ -2766,7 +2792,28 @@ public class JdbcCatalogStore {
             List<String> fulfillmentModes,
             String stopSource,
             @Nullable String stopReasonCode,
-            @Nullable Instant stopChangedAt) {}
+            @Nullable Instant stopChangedAt,
+            List<uz.horecaos.platform.catalog.api.StopOverlayLookup.StopFact> stops) {
+
+        /** The same row with the stops in force laid over it (ADR 0141); a stop on every channel makes it unavailable. */
+        public VariantAvailabilityRow withStops(
+                List<uz.horecaos.platform.catalog.api.StopOverlayLookup.StopFact> inForce) {
+            boolean stoppedEverywhere = inForce.stream()
+                    .anyMatch(uz.horecaos.platform.catalog.api.StopOverlayLookup.StopFact::everyChannel);
+            return new VariantAvailabilityRow(
+                    variantId,
+                    productName,
+                    categoryName,
+                    available && !stoppedEverywhere,
+                    trackingMode,
+                    offeringStatus,
+                    fulfillmentModes,
+                    stopSource,
+                    stopReasonCode,
+                    stopChangedAt,
+                    List.copyOf(inForce));
+        }
+    }
 
     /** {@link #variantAvailabilityCounts}'s own aggregate. */
     public record VariantAvailabilityCountsRow(long total, long available, long onStop) {}

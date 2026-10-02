@@ -2888,6 +2888,40 @@ export const messagesRu: MessageCatalogue = {
   'kitchen.stopList.action.stop': 'Стоп',
   'kitchen.stopList.action.unstop': 'Снять со стопа',
   'kitchen.stopList.empty': 'В этом филиале пока нет товаров',
+  'kitchen.stopList.column.scope': 'Охват',
+  'kitchen.stopList.status.partial': 'Частично на стопе',
+  'kitchen.stopList.source.bot': 'Бот',
+  'kitchen.stopList.scope.location': 'Этот филиал',
+  'kitchen.stopList.scope.brand': 'Весь бренд',
+  'kitchen.stopList.scope.menu': 'Меню',
+  'kitchen.stopList.scope.channel': 'Один канал',
+  'kitchen.stopList.stop.until': 'до {when}',
+  'kitchen.stopList.stop.indefinite': 'пока не снимут',
+  'kitchen.stopList.stop.lift': 'Снять этот стоп',
+  'kitchen.stopList.stop.lifted': 'Стоп снят',
+  'kitchen.stopList.panel.open': 'Стоп с охватом…',
+  'kitchen.stopList.panel.title': 'Стоп с охватом',
+  'kitchen.stopList.panel.scope': 'Насколько широко действует стоп',
+  'kitchen.stopList.panel.union':
+    'Все стопы, которые касаются блюда, действуют вместе. Филиал не может отменить стоп всего бренда.',
+  'kitchen.stopList.panel.channelPlaceholder': 'Выберите канал',
+  'kitchen.stopList.panel.channelHere': 'Только этот филиал',
+  'kitchen.stopList.panel.menuPlaceholder': 'Выберите меню',
+  'kitchen.stopList.panel.duration': 'До',
+  'kitchen.stopList.panel.duration.indefinite': 'Пока я не сниму',
+  'kitchen.stopList.panel.duration.endOfDay': 'Конца торгового дня',
+  'kitchen.stopList.panel.duration.until': 'Заданного времени',
+  'kitchen.stopList.panel.reason.recall': 'Отзыв продукции',
+  'kitchen.stopList.panel.apply': 'Поставить на стоп',
+  'kitchen.stopList.panel.frozen':
+    'Новые стопы с охватом приостановлены для этой компании. Уже поставленные стопы действуют и их можно снять.',
+  'kitchen.stopList.propagation.manual':
+    '{name}: автоматически не передаётся — обновите партнёрский кабинет вручную',
+  'kitchen.stopList.propagation.suspended':
+    '{name}: передача партнёру приостановлена — обновите партнёрский кабинет вручную',
+  'kitchen.stopList.propagation.pending':
+    '{name}: {count} позиций не подтверждены с {since} — обновите в партнёрском кабинете',
+  'kitchen.stopList.propagation.inSync': '{name}: синхронизировано',
 
   // Мощность и настройки буфера (2.6) — волна 43
   'kitchen.capacity.title': 'Мощность и настройки буфера',

@@ -3,7 +3,9 @@ package uz.horecaos.platform.notifications.application;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
+import uz.horecaos.platform.inventory.api.InventoryStopChanged;
 import uz.horecaos.platform.inventory.api.ItemAvailabilityChanged;
+import uz.horecaos.platform.inventory.api.StopScopeType;
 import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcInventoryStopDigestStore;
 
 /**
@@ -50,6 +52,31 @@ public class InventoryOperationsAlertTrigger {
                 event.locationId(),
                 event.variantId(),
                 event.available(),
+                event.reasonCode(),
+                event.eventId(),
+                event.occurredAt());
+    }
+
+    /**
+     * ADR 0141: a stop made or ended at one branch is the same notice a toggle was. Only a
+     * {@code LOCATION} stop names a branch to post to; a brand-wide, menu or all-branches
+     * channel stop touches many and is announced to none of them from here (the console's own
+     * stop list, and the {@code STOP_LIST} realtime channel, show it).
+     *
+     * <p>{@code active} is the direction: a stop going on is "86'd", the same stop ending —
+     * lifted by hand or expired — is "back on".
+     */
+    @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
+    public void onStopChanged(InventoryStopChanged event) {
+        if (event.scopeType() != StopScopeType.LOCATION || event.locationId() == null) {
+            return;
+        }
+        digestQueue.enqueue(
+                event.tenantId(),
+                event.brandId(),
+                event.locationId(),
+                event.variantId(),
+                !event.active(),
                 event.reasonCode(),
                 event.eventId(),
                 event.occurredAt());

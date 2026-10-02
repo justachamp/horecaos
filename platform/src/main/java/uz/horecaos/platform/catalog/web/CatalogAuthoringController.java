@@ -1389,8 +1389,8 @@ public class CatalogAuthoringController {
      * @param fulfillmentModes empty when {@code offeringStatus} is null
      */
     /**
-     * @param stopSource     gap map row 2.5b's explainer: {@code MANUAL} |
-     *                       {@code POS} | {@code UNKNOWN} — see {@link
+     * @param stopSource     gap map row 2.5b's explainer: {@code OPERATOR} | {@code
+     *                       BOT} | {@code POS} | {@code UNKNOWN} — see {@link
      *                       JdbcCatalogStore.VariantAvailabilityRow}'s own doc
      * @param stopReasonCode the raw reason behind {@code stopSource}, from
      *                       the same latest {@code inventory.movements} row
@@ -1406,7 +1406,8 @@ public class CatalogAuthoringController {
             List<String> fulfillmentModes,
             String stopSource,
             @Nullable String stopReasonCode,
-            @Nullable Instant stopChangedAt) {
+            @Nullable Instant stopChangedAt,
+            List<StopInForceResponse> stops) {
 
         static VariantAvailabilityResponse of(JdbcCatalogStore.VariantAvailabilityRow row) {
             return new VariantAvailabilityResponse(
@@ -1419,7 +1420,43 @@ public class CatalogAuthoringController {
                     row.fulfillmentModes(),
                     row.stopSource(),
                     row.stopReasonCode(),
-                    row.stopChangedAt());
+                    row.stopChangedAt(),
+                    row.stops().stream().map(StopInForceResponse::of).toList());
+        }
+    }
+
+    /**
+     * One stop in force on a dish at this branch (ADR 0141): its scope, who made it, until
+     * when, and the {@code version} a lift quotes in {@code If-Match}. {@code everyChannel}
+     * false means a partial stop — the dish still sells on the channels it does not name.
+     * {@code reasonCode} is an enumerated code, never free text (ADR 0029).
+     */
+    public record StopInForceResponse(
+            UUID stopId,
+            String scopeType,
+            String source,
+            String reasonCode,
+            @Nullable Instant endsAt,
+            Instant createdAt,
+            @Nullable UUID locationId,
+            @Nullable UUID menuId,
+            @Nullable UUID channelId,
+            boolean everyChannel,
+            int version) {
+
+        static StopInForceResponse of(uz.horecaos.platform.catalog.api.StopOverlayLookup.StopFact fact) {
+            return new StopInForceResponse(
+                    fact.stopId(),
+                    fact.scopeType(),
+                    fact.source(),
+                    fact.reasonCode(),
+                    fact.endsAt(),
+                    fact.createdAt(),
+                    fact.locationId(),
+                    fact.menuId(),
+                    fact.channelId(),
+                    fact.everyChannel(),
+                    fact.version());
         }
     }
 

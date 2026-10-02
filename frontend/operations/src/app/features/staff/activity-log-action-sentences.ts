@@ -800,6 +800,26 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       ru: 'Склад остаток установлено',
       'uz-Latn': 'Ombor qoldiq oʻrnatildi',
     },
+    'inventory.stop.created': {
+      en: 'Dish stopped',
+      ru: 'Блюдо поставлено на стоп',
+      'uz-Latn': 'Taom stopga qoʻyildi',
+    },
+    'inventory.stop.expired': {
+      en: 'Dish stop expired',
+      ru: 'Стоп блюда истёк',
+      'uz-Latn': 'Taom stopining muddati tugadi',
+    },
+    'inventory.stop.lifted': {
+      en: 'Dish stop lifted',
+      ru: 'Стоп блюда снят',
+      'uz-Latn': 'Taom stopi olib tashlandi',
+    },
+    'inventory.stop.revised': {
+      en: 'Dish stop changed',
+      ru: 'Стоп блюда изменён',
+      'uz-Latn': 'Taom stopi oʻzgartirildi',
+    },
     'kitchen.device.enrolled': {
       en: 'Kitchen device enrolled',
       ru: 'Кухня устройство зарегистрировано',

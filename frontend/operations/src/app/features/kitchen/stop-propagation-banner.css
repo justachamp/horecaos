@@ -1,0 +1,16 @@
+.propagation {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--q-hairline);
+}
+
+.propagation__line {
+  margin: 0;
+  color: var(--q-ink-muted);
+}
+
+.propagation__line--attention {
+  color: var(--q-warning-text, var(--q-ink));
+}
