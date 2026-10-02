@@ -883,6 +883,32 @@ class ComboOrderFlowEndToEndTests {
     }
 
     @Test
+    @DisplayName("an amended combo is sent to the till as its live component lines, not also as the rows it closed")
+    void anAmendedComboIsExportedAsItsLiveLines() throws Exception {
+        UUID cart = openCart(FulfillmentMode.PICKUP);
+        put(cart, "lunch", lunchVariant, 1, List.of(pick(burgerInLunch, 1), pick(colaInLunch, 1)));
+        tx(() -> carts.price(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart)));
+        UUID orderId = checkOut(cart);
+        amend(orderId, "amend-grow-combo-before-export", """
+                {"type":"CHANGE_LINE_QUANTITY","orderLineId":"%s","quantity":3}""".formatted(
+                        orderLines(orderId).get(0).lineId()));
+
+        PosAdapter.OrderExport exported = exportToTheTill(orderId, Set.of());
+
+        assertThat(exported.lines())
+                .as("two components, three of each; the two rows the amendment closed are history")
+                .extracting(PosAdapter.OrderExport.Line::quantity)
+                .containsExactly(3, 3);
+        assertThat(exported.lines())
+                .extracting(PosAdapter.OrderExport.Line::externalProductId)
+                .containsExactly("ext-" + burgerVariant, "ext-" + colaVariant);
+        assertThat(exported.lines())
+                .extracting(PosAdapter.OrderExport.Line::comboId)
+                .containsOnly(Objects.requireNonNull(orderLines(orderId).get(0).selectionId())
+                        .toString());
+    }
+
+    @Test
     @DisplayName("a rewritten line keeps its hidden box on a DELIVERY order and its choices on any order")
     void aRewrittenLineKeepsWhatWasAttachedToIt() throws Exception {
         UUID cart = openCart(FulfillmentMode.DELIVERY);
