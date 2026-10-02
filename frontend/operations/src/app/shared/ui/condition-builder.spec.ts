@@ -7,6 +7,7 @@ import { ConditionBuilder } from './condition-builder';
 import {
   ConditionGroup,
   ConditionTypeDescriptor,
+  conditionRowIsWorkable,
   emptyConditionRow,
   newConditionGroup,
 } from './condition-types';
@@ -56,6 +57,35 @@ const CATALOGUE: readonly ConditionTypeDescriptor[] = [
     type: 'DELIVERY_DAY',
     labelKey: 'customers.segments.predicate.type.RECENCY_DAYS',
     valueKind: 'DAY_OF_WEEK_SET',
+  },
+  {
+    type: 'LUNCH_WINDOW',
+    labelKey: 'customers.segments.predicate.type.RECENCY_DAYS',
+    valueKind: 'TIME_RANGE',
+  },
+  {
+    type: 'IS_FIRST',
+    labelKey: 'customers.segments.predicate.type.ORDER_COUNT',
+    valueKind: 'FLAG',
+  },
+  {
+    type: 'BASKET_AT_LEAST',
+    labelKey: 'customers.segments.predicate.type.NET_SPEND_MINOR',
+    valueKind: 'MONEY_MINOR',
+    operators: ['AT_LEAST'],
+  },
+  {
+    type: 'PRODUCTS',
+    labelKey: 'customers.segments.predicate.type.PREFERRED_LOCALE',
+    valueKind: 'REFERENCE',
+    operators: ['IN', 'NOT_IN'],
+    searchable: true,
+    fixedValues: [
+      { value: 'p-osh', label: 'Osh' },
+      { value: 'p-lagman', label: 'Lagman' },
+      { value: 'p-manti', label: 'Manti' },
+      { value: 'p-shashlik', label: 'Shashlik' },
+    ],
   },
 ];
 
@@ -281,6 +311,96 @@ describe('ConditionBuilder', () => {
 
       expect(fixture.componentInstance.groups()).toHaveLength(1);
       expect(host.querySelector('.condition-group__header .predicate-row__remove')).toBeNull();
+    });
+  });
+
+  describe('descriptor-level extensions used by the promotions screen', () => {
+    function pick(type: string): void {
+      typeSelect().value = type;
+      typeSelect().dispatchEvent(new Event('change'));
+      fixture.detectChanges();
+    }
+
+    it('offers only the operators a descriptor lists, and locks the select when there is just one', () => {
+      pick('BASKET_AT_LEAST');
+      const options = [...operatorSelect().querySelectorAll('option')].map((o) => o.value);
+      expect(options).toEqual(['AT_LEAST']);
+      expect(operatorSelect().disabled).toBe(true);
+      expect(fixture.componentInstance.groups()[0].rows[0].operator).toBe('AT_LEAST');
+
+      pick('PRODUCTS');
+      expect([...operatorSelect().querySelectorAll('option')].map((o) => o.value)).toEqual([
+        'IN',
+        'NOT_IN',
+      ]);
+      expect(operatorSelect().disabled).toBe(false);
+    });
+
+    it('edits a TIME_RANGE as two clock times held as minutes of the day', () => {
+      pick('LUNCH_WINDOW');
+      const [from, to] = [...host.querySelectorAll<HTMLInputElement>('input[type="time"]')];
+      from.value = '12:00';
+      from.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+      to.value = '15:30';
+      to.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+
+      const row = fixture.componentInstance.groups()[0].rows[0];
+      expect(row.numericLow).toBe('720');
+      expect(row.numericHigh).toBe('930');
+      expect([...host.querySelectorAll<HTMLInputElement>('input[type="time"]')][1].value).toBe(
+        '15:30',
+      );
+    });
+
+    it('renders no operator or value editor for a FLAG, which is workable as it stands', () => {
+      pick('IS_FIRST');
+      expect(host.querySelector('.predicate-row__operator')).toBeNull();
+      expect(host.querySelector('.predicate-row__value')).toBeNull();
+      expect(conditionRowIsWorkable(fixture.componentInstance.groups()[0].rows[0], 'FLAG')).toBe(
+        true,
+      );
+    });
+
+    it('shows a searchable list as a filter box plus only the selected chips until something is typed', () => {
+      pick('PRODUCTS');
+      expect(host.querySelector('.chip-filter')).not.toBeNull();
+      expect(host.querySelectorAll('.fixed-chips .dow-chip')).toHaveLength(0);
+
+      const filter = host.querySelector<HTMLInputElement>('.chip-filter')!;
+      filter.value = 'la';
+      filter.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+      expect(
+        [...host.querySelectorAll('.fixed-chips .dow-chip')].map((c) => c.textContent?.trim()),
+      ).toEqual(['Lagman']);
+
+      host.querySelector<HTMLButtonElement>('.fixed-chips .dow-chip')!.click();
+      fixture.detectChanges();
+      expect(fixture.componentInstance.groups()[0].rows[0].textValues).toBe('p-lagman');
+
+      // Clearing the filter keeps the selection visible rather than hiding what the rule holds.
+      filter.value = '';
+      filter.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+      expect(
+        [...host.querySelectorAll('.fixed-chips .dow-chip')].map((c) => c.textContent?.trim()),
+      ).toEqual(['Lagman']);
+    });
+
+    it('keeps a selected value the catalogue no longer lists visible under its raw value', () => {
+      pick('PRODUCTS');
+      fixture.componentInstance.groups.update((groups) => [
+        {
+          ...groups[0],
+          rows: [{ ...groups[0].rows[0], textValues: 'p-archived-1234' }],
+        },
+      ]);
+      fixture.detectChanges();
+      expect(
+        [...host.querySelectorAll('.fixed-chips .dow-chip')].map((c) => c.textContent?.trim()),
+      ).toEqual(['p-archived-1234']);
     });
   });
 

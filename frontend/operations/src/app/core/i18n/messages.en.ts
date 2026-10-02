@@ -5998,6 +5998,10 @@ export const messagesEn = {
   'ui.conditionBuilder.operator.EQUALS': 'is',
   'ui.conditionBuilder.operator.IN': 'is one of',
   'ui.conditionBuilder.operator.NOT_IN': 'is not one of',
+  'ui.conditionBuilder.timeFrom': 'From',
+  'ui.conditionBuilder.timeTo': 'Until',
+  'ui.conditionBuilder.filterPlaceholder': 'Type to find…',
+  'ui.conditionBuilder.moreMatches': '{count} more match — narrow the search',
   'ui.dayOfWeek.MON': 'Mon',
   'ui.dayOfWeek.TUE': 'Tue',
   'ui.dayOfWeek.WED': 'Wed',
@@ -6018,6 +6022,7 @@ export const messagesEn = {
   'ui.ruleSimulator.disabledRule': 'Disabled — never evaluated',
   'ui.ruleSimulator.outcome': 'What happens',
   'ui.ruleSimulator.noRules': 'No rules to simulate.',
+  'ui.ruleSimulator.reason': 'Why',
   // The chart family (wave T09, IA X.19) — line/bar/stacked-bar/donut/
   // histogram/heatmap all share this handful of strings via `q-chart-frame`.
   'ui.charts.table.show': 'Show as table',

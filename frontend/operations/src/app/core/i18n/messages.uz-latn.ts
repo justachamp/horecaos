@@ -6005,6 +6005,10 @@ export const messagesUzLatn: MessageCatalogue = {
   'ui.conditionBuilder.operator.EQUALS': 'teng',
   'ui.conditionBuilder.operator.IN': 'shulardan biri',
   'ui.conditionBuilder.operator.NOT_IN': 'shulardan hech biri emas',
+  'ui.conditionBuilder.timeFrom': 'Dan',
+  'ui.conditionBuilder.timeTo': 'Gacha',
+  'ui.conditionBuilder.filterPlaceholder': 'Topish uchun yozing…',
+  'ui.conditionBuilder.moreMatches': 'Yana {count} ta mos keladi — qidiruvni aniqlashtiring',
   'ui.dayOfWeek.MON': 'Dush',
   'ui.dayOfWeek.TUE': 'Sesh',
   'ui.dayOfWeek.WED': 'Chor',
@@ -6025,6 +6029,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'ui.ruleSimulator.disabledRule': 'Oʻchirilgan — tekshirilmaydi',
   'ui.ruleSimulator.outcome': 'Nima sodir boʻladi',
   'ui.ruleSimulator.noRules': 'Tekshirish uchun qoidalar yoʻq.',
+  'ui.ruleSimulator.reason': 'Sababi',
   // Diagrammalar oilasi (T09 toʻlqini, IA X.19) — chiziqli/ustunli/qatlamli
   // ustunli/donut/gistogramma/issiqlik xaritasi `q-chart-frame` orqali shu
   // bir nechta satrni baham koʻradi.

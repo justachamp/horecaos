@@ -5960,6 +5960,10 @@ export const messagesRu: MessageCatalogue = {
   'ui.conditionBuilder.operator.EQUALS': 'равно',
   'ui.conditionBuilder.operator.IN': 'один из',
   'ui.conditionBuilder.operator.NOT_IN': 'ни один из',
+  'ui.conditionBuilder.timeFrom': 'С',
+  'ui.conditionBuilder.timeTo': 'До',
+  'ui.conditionBuilder.filterPlaceholder': 'Начните вводить…',
+  'ui.conditionBuilder.moreMatches': 'Ещё {count} совпадений — уточните поиск',
   'ui.dayOfWeek.MON': 'Пн',
   'ui.dayOfWeek.TUE': 'Вт',
   'ui.dayOfWeek.WED': 'Ср',
@@ -5980,6 +5984,7 @@ export const messagesRu: MessageCatalogue = {
   'ui.ruleSimulator.disabledRule': 'Отключено — не проверяется',
   'ui.ruleSimulator.outcome': 'Что произойдёт',
   'ui.ruleSimulator.noRules': 'Нет правил для проверки.',
+  'ui.ruleSimulator.reason': 'Почему',
   // Семейство графиков (волна T09, IA X.19) — эти несколько строк общие
   // для линии/столбцов/составных столбцов/донат/гистограммы/теплокарты
   // через `q-chart-frame`.
