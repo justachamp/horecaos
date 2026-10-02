@@ -307,9 +307,7 @@ describe('ProductComponent: no orderable variant (row 4.2g, product-id fallback)
     // "every variant is unorderable" (the platform never publishes a product
     // with a genuinely empty `variants` array -- see
     // `StorefrontCatalogQuery.menuFor`'s own `variants.isEmpty()` continue).
-    menuService.item.mockResolvedValue(
-      menuItem({ variants: [onSaleVariant({ active: false })] }),
-    );
+    menuService.item.mockResolvedValue(menuItem({ variants: [onSaleVariant({ active: false })] }));
     const cartService = new FakeUiCartService();
     cartService.cartData.mockReturnValue({});
     const { fixture, comp } = await render({ menuService, cartService });
@@ -317,9 +315,7 @@ describe('ProductComponent: no orderable variant (row 4.2g, product-id fallback)
 
     expect(comp.variantId()).toBeNull();
 
-    const addButton = host.querySelector<HTMLButtonElement>(
-      '[data-testid="product-add-to-cart"]',
-    );
+    const addButton = host.querySelector<HTMLButtonElement>('[data-testid="product-add-to-cart"]');
     expect(addButton).not.toBeNull();
     expect(addButton!.disabled).toBe(true);
 
@@ -415,7 +411,10 @@ describe('ProductComponent: GA4 ecommerce events (row 10.8e)', () => {
 
     comp.increaseVariant('item-1');
 
-    const events = (window.dataLayer ?? []) as Array<{ event: string; ecommerce: { items: unknown[] } }>;
+    const events = (window.dataLayer ?? []) as Array<{
+      event: string;
+      ecommerce: { items: unknown[] };
+    }>;
     const addToCart = events.find((e) => e.event === 'add_to_cart');
     expect(addToCart?.ecommerce.items).toEqual([
       { item_id: 'item-1', item_name: 'Osh', price: 32_000, quantity: 1 },
@@ -433,5 +432,200 @@ describe('ProductComponent: GA4 ecommerce events (row 10.8e)', () => {
     const events = (window.dataLayer ?? []) as Array<{ event: string }>;
     expect(events.some((e) => e.event === 'add_to_cart')).toBe(false);
     expect(navigateSpy).toHaveBeenCalledWith(['/auth/login']);
+  });
+});
+
+describe('ProductComponent: a combo (ADR 0136)', () => {
+  const component = (
+    id: string,
+    name: string,
+    amountMinor: number | null,
+    overrides: Partial<NonNullable<MenuItem['comboGroups']>[number]['components'][number]> = {},
+  ) => ({
+    id,
+    name,
+    variantName: null,
+    defaultQuantity: 1,
+    active: true,
+    amountMinor,
+    ...overrides,
+  });
+
+  const comboItem = (groups?: MenuItem['comboGroups']) =>
+    menuItem({
+      id: 'item-1',
+      name: 'Lunch box',
+      price: 22_000,
+      variants: [onSaleVariant({ id: 'v-lunch', price: 22_000 })],
+      modifierGroups: [
+        {
+          id: 'g-mod',
+          name: 'Extras',
+          required: false,
+          minimumSelections: 0,
+          maximumSelections: 2,
+          allowSameOptionMultipleTimes: false,
+          options: [],
+        },
+      ],
+      comboGroups: groups ?? [
+        {
+          id: 'g-main',
+          name: 'Main',
+          minimumSelections: 1,
+          maximumSelections: 1,
+          allowSameComponentMultipleTimes: false,
+          components: [
+            component('c-burger', 'Burger', 25_000),
+            component('c-wrap', 'Wrap', 22_000),
+          ],
+        },
+        {
+          id: 'g-drink',
+          name: 'Drink',
+          minimumSelections: 0,
+          maximumSelections: 1,
+          allowSameComponentMultipleTimes: false,
+          components: [component('c-cola', 'Cola', 3_000)],
+        },
+      ],
+    });
+
+  async function renderCombo(groups?: MenuItem['comboGroups'], lines: CartResponseItem[] = []) {
+    const menuService = new FakeMenuService();
+    menuService.item.mockResolvedValue(comboItem(groups));
+    const cartService = new FakeUiCartService();
+    cartService.cartData.mockReturnValue({});
+    cartService.items.mockReturnValue(lines);
+    return { ...(await render({ menuService, cartService })), cartService };
+  }
+
+  it('asks for the combo’s choices, and not for modifiers the container carries', async () => {
+    const { fixture, comp } = await renderCombo();
+    const host: HTMLElement = fixture.nativeElement;
+
+    expect(comp.isCombo()).toBe(true);
+    expect(host.querySelector('[data-testid="product-combo"]')).not.toBeNull();
+    expect(host.querySelectorAll('[data-testid="combo-group"]')).toHaveLength(2);
+    expect(comp.modifierGroups()).toEqual([]);
+    expect(host.textContent).not.toContain('Extras');
+  });
+
+  it('will not add the container until every choice is within its range', async () => {
+    const { fixture, comp, cartService } = await renderCombo();
+    const host: HTMLElement = fixture.nativeElement;
+
+    comp.add();
+    expect(cartService.add).not.toHaveBeenCalled();
+    expect(host.querySelector('[data-testid="product-combo-incomplete"]')).not.toBeNull();
+
+    comp.setComboPicks({ 'c-burger': 1 });
+    fixture.detectChanges();
+    expect(host.querySelector('[data-testid="product-combo-incomplete"]')).toBeNull();
+    expect(comp.modifiersValid()).toBe(true);
+  });
+
+  it('adds the container with the picks made, never the components as lines of their own', async () => {
+    const { fixture, comp, cartService } = await renderCombo();
+
+    comp.setComboPicks({ 'c-wrap': 1, 'c-cola': 1 });
+    fixture.detectChanges();
+    comp.add();
+
+    expect(cartService.add).toHaveBeenCalledWith(
+      'v-lunch',
+      1,
+      undefined,
+      [],
+      [],
+      [
+        { componentId: 'c-cola', quantity: 1 },
+        { componentId: 'c-wrap', quantity: 1 },
+      ],
+    );
+  });
+
+  it('reads the add button as what this combo costs once complete, and as the least it costs before', async () => {
+    const { fixture, comp } = await renderCombo();
+    const variant = comp.variants()[0];
+
+    expect(comp.variantPriceLabel(variant)).toContain('product.fromPrice');
+
+    comp.setComboPicks({ 'c-burger': 1, 'c-cola': 1 });
+    fixture.detectChanges();
+
+    expect(comp.variantPriceLabel(variant)).toContain('28');
+  });
+
+  it('says a picked component with no price has none, rather than showing a smaller total', async () => {
+    const { fixture, comp } = await renderCombo([
+      {
+        id: 'g-main',
+        name: 'Main',
+        minimumSelections: 1,
+        maximumSelections: 1,
+        allowSameComponentMultipleTimes: false,
+        components: [component('c-burger', 'Burger', null)],
+      },
+    ]);
+
+    comp.setComboPicks({ 'c-burger': 1 });
+    fixture.detectChanges();
+
+    expect(comp.variantPriceLabel(comp.variants()[0])).toBe('product.comboNotPriced');
+  });
+
+  it('bumps the line with exactly these picks and no other: another choice is another line', async () => {
+    const line: CartResponseItem = cartLine({
+      variant_id: 'v-lunch',
+      item_id: 'v-lunchcabc',
+      quantity: 1,
+      comboPicks: [{ componentId: 'c-burger', quantity: 1 }],
+    });
+    const { fixture, comp, cartService } = await renderCombo(undefined, [line]);
+
+    comp.setComboPicks({ 'c-burger': 1 });
+    fixture.detectChanges();
+    comp.add();
+    expect(cartService.increaseQuantity).toHaveBeenCalledWith(line);
+    expect(cartService.add).not.toHaveBeenCalled();
+
+    comp.setComboPicks({ 'c-wrap': 1 });
+    fixture.detectChanges();
+    comp.add();
+    expect(cartService.add).toHaveBeenCalledWith(
+      'v-lunch',
+      1,
+      undefined,
+      [],
+      [],
+      [{ componentId: 'c-wrap', quantity: 1 }],
+    );
+  });
+
+  it('cannot be added while a choice has nothing orderable to fill it, and says so', async () => {
+    const { fixture, comp, cartService } = await renderCombo([
+      {
+        id: 'g-main',
+        name: 'Main',
+        minimumSelections: 1,
+        maximumSelections: 1,
+        allowSameComponentMultipleTimes: false,
+        components: [component('c-burger', 'Burger', 25_000, { active: false })],
+      },
+    ]);
+    const host: HTMLElement = fixture.nativeElement;
+
+    expect(comp.comboUnavailable()).toBe(true);
+    expect(host.querySelector('[data-testid="product-combo-unavailable"]')).not.toBeNull();
+    comp.add();
+    expect(cartService.add).not.toHaveBeenCalled();
+  });
+
+  it('starts a fresh product with nothing picked', async () => {
+    const { comp } = await renderCombo();
+
+    expect(comp.comboPicks()).toEqual({});
+    expect(comp.comboTouched()).toBe(false);
   });
 });

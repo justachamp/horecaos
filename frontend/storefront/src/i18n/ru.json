@@ -126,7 +126,11 @@
     "recipientRequired": "Укажите имя и телефон получателя для доставки.",
     "deliveryChooseAddress": "Выберите адрес, чтобы рассчитать стоимость доставки.",
     "pickupLocation": "Пункт самовывоза",
-    "pickupLocationHint": "Вы заберёте заказ в этом филиале."
+    "pickupLocationHint": "Вы заберёте заказ в этом филиале.",
+    "hiddenCharge": {
+      "title": "Добавлено автоматически, уже входит в итог",
+      "fallbackLabel": "Дополнительная плата"
+    }
   },
   "orders": {
     "title": "Заказы",
@@ -271,7 +275,17 @@
     "modifiersIncomplete": "Выберите обязательные опции выше, прежде чем добавить в корзину.",
     "presetsTitle": "Комментарии",
     "outOfSaleWindow": "Эта позиция сейчас не продаётся.",
-    "lowStock": "Осталось всего {{count}} шт."
+    "lowStock": "Осталось всего {{count}} шт.",
+    "comboTitle": "Соберите комбо",
+    "comboPickExactly": "Выберите {{min}}",
+    "comboPickBetween": "Выберите от {{min}} до {{max}}",
+    "comboPickUpTo": "Выберите до {{max}}",
+    "comboIncluded": "Включено",
+    "comboNotPriced": "Цена недоступна",
+    "comboSoldOut": "Нет в наличии",
+    "comboIncomplete": "Сделайте выбор в каждой обязательной группе выше, прежде чем добавить в корзину.",
+    "comboUnavailable": "Это комбо сейчас нельзя заказать.",
+    "fromPrice": "от {{price}}"
   },
   "terms": {
     "agreementTitle": "Договор публичной оферты",
@@ -314,7 +328,9 @@
     "roundAttachRetry": "Заказ отправлен на кухню, но пока не попал в счёт стола. Нажмите «Повторить».",
     "roundPending": "Ваш последний заказ уже на кухне, но ещё не попал в счёт стола.",
     "roundRetry": "Повторить",
-    "roundAttachFailed": "Заказ на кухне, но добавить его в счёт стола не удалось. Сообщите сотруднику."
+    "roundAttachFailed": "Заказ на кухне, но добавить его в счёт стола не удалось. Сообщите сотруднику.",
+    "comboChoose": "Выберите комбо",
+    "comboChooseAction": "Выбрать"
   },
   "action": {
     "yourAddress": "Ваш адрес",

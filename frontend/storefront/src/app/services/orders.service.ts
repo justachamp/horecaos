@@ -62,9 +62,7 @@ export class OrdersService {
    */
   getOrders(statuses: string[], limit = 50): Observable<ApiOrder[]> {
     const wanted = new Set(statuses.flatMap((token) => PLATFORM_STATUSES[token] ?? []));
-    return from(
-      this.api.list<OrderSummaryResponse>(`${this.brandPath}/orders`, { limit }),
-    ).pipe(
+    return from(this.api.list<OrderSummaryResponse>(`${this.brandPath}/orders`, { limit })).pipe(
       map((page: Page<OrderSummaryResponse>) => {
         for (const row of page.items) {
           this.versions.set(row.orderId, row.version);
@@ -205,6 +203,9 @@ export class OrdersService {
         price: line.unitAmountMinor,
         image: null,
         note: null,
+        comboSelectionId: line.comboSelectionId ?? null,
+        comboName: line.comboName ?? null,
+        autoSelectedCharges: line.autoSelectedCharges ?? [],
       })),
       // The destination is a sub-resource with its own purposed reveal, and is
       // not on the order. Showing "no address" beats fetching a doorstep to
@@ -307,6 +308,20 @@ export interface OrderLineResponse {
   readonly finalAmountMinor: number;
   readonly modifiers: readonly string[];
   readonly modifierOptionIds: readonly string[];
+  /** ADR 0136: set on each component line of a combo; the component lines of one purchase share it. Null on every other line. */
+  readonly comboSelectionId?: string | null;
+  /** ADR 0136: the combo's name as it was sold, set exactly when `comboSelectionId` is. */
+  readonly comboName?: string | null;
+  /** ADR 0136: the names, within `modifiers`, of the options the server applied for this order's fulfilment mode. */
+  readonly autoSelectedModifiers?: readonly string[];
+  /** ADR 0136: the same options with what each cost for the whole line -- already inside `finalAmountMinor`. */
+  readonly autoSelectedCharges?: readonly AutoSelectedCharge[];
+}
+
+/** `StorefrontOrderingController.AutoSelectedChargeResponse`, transcribed. */
+export interface AutoSelectedCharge {
+  readonly name: string;
+  readonly amountMinor: number;
 }
 
 /**
@@ -329,11 +344,7 @@ export interface ReorderPlanResponse {
 export type ReorderVerdict = 'READY' | 'PARTIAL' | 'UNAVAILABLE';
 
 export type ReorderLineStatus =
-  | 'AVAILABLE'
-  | 'SOLD_OUT'
-  | 'WITHDRAWN'
-  | 'UNPRICED'
-  | 'MODIFIERS_WITHDRAWN';
+  'AVAILABLE' | 'SOLD_OUT' | 'WITHDRAWN' | 'UNPRICED' | 'MODIFIERS_WITHDRAWN';
 
 export interface ReorderLineResponse {
   readonly lineNumber: number;
@@ -346,6 +357,12 @@ export interface ReorderLineResponse {
   readonly status: ReorderLineStatus;
   readonly unitAmountMinor: number | null;
   readonly originalUnitAmountMinor: number;
+  /**
+   * ADR 0136: set on a combo, whose `variantId` is then its container and whose `quantity` counts
+   * combos. Sent back as the cart line's `comboPicks`. A combo has no price of its own, so its
+   * `unitAmountMinor` is null.
+   */
+  readonly comboPicks?: readonly { readonly componentId: string; readonly quantity: number }[];
 }
 
 export interface OrderResponse {
@@ -390,6 +407,12 @@ export interface ApiOrderLineItem {
   price?: number;
   image?: string | null;
   note?: string | null;
+  /** ADR 0136: the component lines of one combo purchase share this id. */
+  comboSelectionId?: string | null;
+  /** ADR 0136: the combo's name as it was sold. */
+  comboName?: string | null;
+  /** ADR 0136: options the server added to this line by itself, with what each cost. */
+  autoSelectedCharges?: readonly AutoSelectedCharge[];
   [key: string]: unknown;
 }
 

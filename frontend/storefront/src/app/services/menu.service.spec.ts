@@ -171,3 +171,263 @@ describe('MenuService.item: row 10.12 comment preset wording', () => {
     ]);
   });
 });
+
+describe('MenuService: composite products (ADR 0136)', () => {
+  const component = (componentId: string, name: string, amountMinor: number | null) => ({
+    componentId,
+    variantId: `${componentId}-variant`,
+    productId: null,
+    name,
+    variantName: null,
+    defaultQuantity: 1,
+    sortOrder: 0,
+    orderable: true,
+    amountMinor,
+  });
+
+  function comboMenu(): PublishedMenu {
+    return {
+      ...emptyMenu(),
+      products: [
+        {
+          productId: 'p-lunch',
+          code: 'LUNCH',
+          name: 'Lunch box',
+          description: null,
+          mediaAssetIds: [],
+          imageUrls: [],
+          variants: [
+            {
+              variantId: 'v-lunch',
+              sku: null,
+              unitCode: null,
+              isDefault: true,
+              orderable: true,
+              amountMinor: null,
+              onSaleNow: true,
+              remainingQuantity: null,
+            },
+          ],
+          modifierGroupIds: [],
+          commentPresets: [],
+          comboGroupIds: ['g-main', 'g-drink'],
+        },
+      ],
+      comboGroups: [
+        {
+          comboGroupId: 'g-main',
+          containerVariantId: 'v-lunch',
+          code: 'MAIN',
+          name: 'Main',
+          minimumSelections: 1,
+          maximumSelections: 1,
+          allowSameComponentMultipleTimes: false,
+          sortOrder: 0,
+          components: [
+            component('c-burger', 'Burger', 25_000),
+            component('c-wrap', 'Wrap', 22_000),
+          ],
+        },
+        {
+          comboGroupId: 'g-drink',
+          containerVariantId: 'v-lunch',
+          code: 'DRINK',
+          name: 'Drink',
+          minimumSelections: 0,
+          maximumSelections: 1,
+          allowSameComponentMultipleTimes: false,
+          sortOrder: 1,
+          components: [component('c-cola', 'Cola', 3_000)],
+        },
+      ],
+    };
+  }
+
+  it('projects a combo product with its choices, each component with its own price inside the combo', async () => {
+    const { service, api } = setUp();
+    api.get.mockResolvedValue(comboMenu());
+
+    const item = await service.item('p-lunch', 'uz');
+
+    expect(item?.comboGroups?.map((group) => group.name)).toEqual(['Main', 'Drink']);
+    expect(item?.comboGroups?.[0].components).toEqual([
+      {
+        id: 'c-burger',
+        name: 'Burger',
+        variantName: null,
+        defaultQuantity: 1,
+        active: true,
+        amountMinor: 25_000,
+      },
+      {
+        id: 'c-wrap',
+        name: 'Wrap',
+        variantName: null,
+        defaultQuantity: 1,
+        active: true,
+        amountMinor: 22_000,
+      },
+    ]);
+  });
+
+  it('prices a combo at the least it can cost, since its own variant has none', async () => {
+    const { service, api } = setUp();
+    api.get.mockResolvedValue(comboMenu());
+
+    const item = await service.item('p-lunch', 'uz');
+
+    expect(item?.price).toBe(22_000);
+    expect(item?.variants[0].price).toBe(22_000);
+  });
+
+  it('shows a combo with an unpriced needed component as having no price, never as the sum of the rest', async () => {
+    const { service, api } = setUp();
+    const menu = comboMenu();
+    api.get.mockResolvedValue({
+      ...menu,
+      comboGroups: [
+        {
+          ...menu.comboGroups![0],
+          components: [component('c-burger', 'Burger', null), component('c-wrap', 'Wrap', 22_000)],
+        },
+      ],
+    });
+
+    const item = await service.item('p-lunch', 'uz');
+
+    expect(item?.price).toBe(0);
+  });
+
+  it('a product that is no combo has no choices and keeps its own price', async () => {
+    const { service, api } = setUp();
+    const menu = comboMenu();
+    api.get.mockResolvedValue({
+      ...menu,
+      products: [
+        {
+          ...menu.products[0],
+          comboGroupIds: undefined,
+          variants: [{ ...menu.products[0].variants[0], amountMinor: 30_000 }],
+        },
+      ],
+    });
+
+    const item = await service.item('p-lunch', 'uz');
+
+    expect(item?.comboGroups).toEqual([]);
+    expect(item?.price).toBe(30_000);
+  });
+
+  it('replaces a shared group’s required, minimum and maximum with this product’s own published rule', async () => {
+    const { service, api } = setUp();
+    api.get.mockResolvedValue({
+      ...emptyMenu(),
+      products: [
+        {
+          productId: 'p-1',
+          code: 'BURGER',
+          name: 'Burger',
+          description: null,
+          mediaAssetIds: [],
+          imageUrls: [],
+          variants: [],
+          modifierGroupIds: ['g-sauce'],
+          commentPresets: [],
+          modifierGroupPolicies: [
+            {
+              modifierGroupId: 'g-sauce',
+              required: true,
+              minimumSelections: 1,
+              maximumSelections: 2,
+            },
+          ],
+        },
+        {
+          productId: 'p-2',
+          code: 'WRAP',
+          name: 'Wrap',
+          description: null,
+          mediaAssetIds: [],
+          imageUrls: [],
+          variants: [],
+          modifierGroupIds: ['g-sauce'],
+          commentPresets: [],
+        },
+      ],
+      modifierGroups: [
+        {
+          modifierGroupId: 'g-sauce',
+          code: 'SAUCE',
+          name: 'Sauce',
+          required: false,
+          minimumSelections: 0,
+          maximumSelections: 3,
+          allowSameOptionMultipleTimes: false,
+          options: [],
+        },
+      ],
+    } satisfies PublishedMenu);
+
+    const burger = await service.item('p-1', 'uz');
+    const wrap = await service.item('p-2', 'uz');
+
+    expect(burger?.modifierGroups[0]).toMatchObject({
+      required: true,
+      minimumSelections: 1,
+      maximumSelections: 2,
+    });
+    expect(wrap?.modifierGroups[0]).toMatchObject({
+      required: false,
+      minimumSelections: 0,
+      maximumSelections: 3,
+    });
+  });
+
+  it('labels an option by its name where the menu carries one, and by its code where it does not', async () => {
+    const { service, api } = setUp();
+    api.get.mockResolvedValue({
+      ...emptyMenu(),
+      products: [
+        {
+          productId: 'p-1',
+          code: 'BURGER',
+          name: 'Burger',
+          description: null,
+          mediaAssetIds: [],
+          imageUrls: [],
+          variants: [],
+          modifierGroupIds: ['g-sauce'],
+          commentPresets: [],
+        },
+      ],
+      modifierGroups: [
+        {
+          modifierGroupId: 'g-sauce',
+          code: 'SAUCE',
+          name: 'Sauce',
+          required: false,
+          minimumSelections: 0,
+          maximumSelections: 3,
+          allowSameOptionMultipleTimes: false,
+          options: [
+            {
+              optionId: 'o-1',
+              code: 'MAYO',
+              maximumQuantity: 1,
+              amountMinor: 0,
+              name: 'Mayonnaise',
+            },
+            { optionId: 'o-2', code: 'BBQ', maximumQuantity: 1, amountMinor: 0 },
+          ],
+        },
+      ],
+    } satisfies PublishedMenu);
+
+    const item = await service.item('p-1', 'uz');
+
+    expect(item?.modifierGroups[0].options.map((option) => option.label)).toEqual([
+      'Mayonnaise',
+      'BBQ',
+    ]);
+  });
+});

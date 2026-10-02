@@ -3,7 +3,7 @@ import { Component, OnInit, effect, signal, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
-import { UiCartService } from '../../../services/ui-cart.service';
+import { type HiddenChargeRow, UiCartService } from '../../../services/ui-cart.service';
 import { DeliverySelectionService } from '../../../services/delivery-selection.service';
 import { OrdersService } from '../../../services/orders.service';
 import { PaymentSessionService } from '../../../services/payment-session.service';
@@ -331,6 +331,14 @@ export class CartConfirmationComponent implements OnInit {
 
   get totalWithDelivery(): string {
     return this.cart.totalWithDelivery();
+  }
+
+  /**
+   * ADR 0136: what the server added by itself for this order -- a delivery box the customer never
+   * chose -- itemised, each already inside the total above. Empty when nothing was added.
+   */
+  get hiddenCharges(): readonly HiddenChargeRow[] {
+    return this.cart.hiddenCharges();
   }
 
   /**

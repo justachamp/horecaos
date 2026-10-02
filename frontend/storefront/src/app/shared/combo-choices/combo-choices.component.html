@@ -1,0 +1,84 @@
+<div class="flex flex-col gap-4" data-testid="combo-choices">
+  @for (group of groups(); track group.id) {
+    <div data-testid="combo-group">
+      <div class="mb-2 flex items-center justify-between gap-2">
+        <span class="text-[13px] font-medium text-text-primary">{{ group.name }}</span>
+        <span class="shrink-0 text-[11px] text-zinc-400">{{
+          rangeOf(group).key | t: rangeOf(group).params
+        }}</span>
+      </div>
+      <div class="flex flex-col gap-2">
+        @for (component of group.components; track component.id) {
+          <div
+            class="flex items-center justify-between gap-2 rounded-xl bg-surface-base px-3 py-2.5 text-text-primary"
+            [class.opacity-50]="!component.active"
+            data-testid="combo-component"
+          >
+            @if (hasStepper(group) && !isSingle(group)) {
+              <span class="min-w-0 flex-1 truncate text-[13px]">{{ label(component) }}</span>
+              <div class="flex shrink-0 items-center gap-2">
+                <button
+                  type="button"
+                  class="flex h-8 w-8 items-center justify-center rounded-full bg-surface-raised-2 text-lg leading-none disabled:opacity-40"
+                  [disabled]="!component.active || quantityOf(component) <= 0"
+                  [attr.aria-label]="'common.decrease' | t"
+                  (click)="setQuantity(group, component, quantityOf(component) - 1)"
+                  data-testid="combo-decrease"
+                >
+                  −
+                </button>
+                <span
+                  class="min-w-[1.25rem] text-center text-[13px]"
+                  data-testid="combo-quantity"
+                  >{{ quantityOf(component) }}</span
+                >
+                <button
+                  type="button"
+                  class="flex h-8 w-8 items-center justify-center rounded-full bg-surface-raised-2 text-lg leading-none disabled:opacity-40"
+                  [disabled]="
+                    !component.active || quantityOf(component) >= ceiling(group, component)
+                  "
+                  [attr.aria-label]="'common.increase' | t"
+                  (click)="setQuantity(group, component, quantityOf(component) + 1)"
+                  data-testid="combo-increase"
+                >
+                  +
+                </button>
+              </div>
+            } @else {
+              <label class="flex min-w-0 flex-1 cursor-pointer items-center gap-2 text-[13px]">
+                <input
+                  [type]="isSingle(group) ? 'radio' : 'checkbox'"
+                  [attr.name]="'combo-group-' + group.id"
+                  [checked]="quantityOf(component) > 0"
+                  [disabled]="!component.active"
+                  (click)="toggle(group, component)"
+                  class="h-4 w-4 shrink-0 accent-brand-accent"
+                  [attr.data-testid]="isSingle(group) ? 'combo-radio' : 'combo-checkbox'"
+                />
+                <span class="truncate">{{ label(component) }}</span>
+              </label>
+            }
+            <span
+              class="shrink-0 text-[12px]"
+              [class.text-zinc-400]="component.active && component.amountMinor !== null"
+              [class.text-amber-400]="component.active && component.amountMinor === null"
+              [attr.data-testid]="'combo-price'"
+            >
+              @if (component.active) {
+                {{ priceText(component) }}
+              } @else {
+                <span data-testid="combo-sold-out">{{ 'product.comboSoldOut' | t }}</span>
+              }
+            </span>
+          </div>
+        }
+      </div>
+      @if (isUnmet(group)) {
+        <p class="mt-1 text-[12px] text-red-400" data-testid="combo-group-unmet">
+          {{ 'product.comboIncomplete' | t }}
+        </p>
+      }
+    </div>
+  }
+</div>

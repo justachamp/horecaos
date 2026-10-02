@@ -1,7 +1,7 @@
 import { Component, OnInit, signal, computed, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { OrderDetail, OrderLineItem } from '../../pages/orders/orders.data';
+import { OrderDetail, OrderLineItem, orderLineRows } from '../../pages/orders/orders.data';
 import {
   OrdersService,
   type ApiOrderDetail,
@@ -58,6 +58,9 @@ import {
 })
 export class OrderDetailComponent implements OnInit {
   order = signal<OrderDetail | null>(null);
+
+  /** ADR 0136: the order's lines with a header ahead of each combo's components. */
+  readonly lineRows = computed(() => orderLineRows(this.order()?.lineItems ?? []));
   loading = signal(true);
   error = signal<string | null>(null);
   cancelling = signal(false);
@@ -204,8 +207,22 @@ export class OrderDetailComponent implements OnInit {
         quantity: qty,
         unitPrice: format(price),
         variantId: i.variant_id,
+        ...(i.comboSelectionId
+          ? { comboSelectionId: i.comboSelectionId, comboName: i.comboName ?? '' }
+          : {}),
       };
     });
+    // ADR 0136: one row per option the server applied, its charge summed over the lines it went on.
+    const hidden = new Map<string, number>();
+    for (const line of rawItems) {
+      for (const charge of line.autoSelectedCharges ?? []) {
+        hidden.set(charge.name, (hidden.get(charge.name) ?? 0) + charge.amountMinor);
+      }
+    }
+    const hiddenCharges = [...hidden.entries()].map(([label, amountMinor]) => ({
+      label,
+      amount: format(amountMinor),
+    }));
     const totalVal = this.extractPrice(api.total);
     const subtotalVal = api.subtotal != null ? this.extractPrice(api.subtotal) : totalVal;
     const taxVal = this.extractPrice(api.tax);
@@ -223,6 +240,7 @@ export class OrderDetailComponent implements OnInit {
       locationId: api.locationId,
       fulfillmentMode: api.fulfillmentMode,
       lineItems,
+      ...(hiddenCharges.length > 0 ? { hiddenCharges } : {}),
       subtotal: format(subtotalVal),
       // `OrdersService.toApiOrderDetail` now carries the real
       // OrderResponse.taxMinor/feeMinor -- zero for PICKUP/DINE_IN or a
@@ -289,7 +307,19 @@ export class OrderDetailComponent implements OnInit {
     this.repeatError.set(null);
     try {
       for (const line of plan.lines) {
-        await this.cart.add(line.variantId, line.quantity, undefined, line.modifierOptionIds);
+        // ADR 0136: a combo repeats as a combo -- its container with the picks the order named.
+        if (line.comboPicks && line.comboPicks.length > 0) {
+          await this.cart.add(
+            line.variantId,
+            line.quantity,
+            undefined,
+            line.modifierOptionIds,
+            undefined,
+            line.comboPicks,
+          );
+        } else {
+          await this.cart.add(line.variantId, line.quantity, undefined, line.modifierOptionIds);
+        }
       }
       this.notification.show(
         this.translate.getWithParams('orders.repeatAddedAll', { count: plan.lines.length }),

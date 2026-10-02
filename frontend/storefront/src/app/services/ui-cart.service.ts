@@ -4,6 +4,7 @@ import { APP_CONFIG } from '../core/config/app-config';
 import { reasonMessageKey } from '../core/api/problem-details';
 import type {
   CartResponse,
+  CartResponseComboComponent,
   CartResponseCommentPresetSelection,
   CartResponseItem,
   CartResponseModifierSelection,
@@ -17,6 +18,7 @@ import {
   type PlatformCart,
   type PricedCart,
 } from './cart.service';
+import type { ComboPickWire } from '../utils/combo-selection';
 import {
   MenuService,
   type PublishedCommentPreset,
@@ -32,6 +34,15 @@ function isDeliveryFeeUsable(outcome: string): boolean {
 }
 
 const FALLBACK_IMAGE = '/assets/logo/Logo-sq.png';
+
+/** ADR 0136: one charge the server added by itself, for display. */
+export interface HiddenChargeRow {
+  readonly optionId: string;
+  /** What the option is called, in the customer's language. */
+  readonly label: string;
+  readonly amountMinor: number;
+  readonly amount: string;
+}
 
 /** U+2014. Shown where the platform has not answered, so a zero is never read as free. */
 const UNRESOLVED = '—';
@@ -185,6 +196,34 @@ export class UiCartService {
 
   readonly totalWithDelivery = computed(() => this.totalAmount());
 
+  /** Option id to what the customer reads on it (its name, else its code), read off the menu as the basket was last projected. */
+  private readonly optionLabels = signal<ReadonlyMap<string, string>>(new Map());
+
+  /**
+   * ADR 0136: what the server added to this order by itself -- a delivery box the customer never
+   * chose -- itemised, one row per option with the amount summed over the lines it was applied to.
+   *
+   * Already inside the lines and the total above, never on top of them: this is the disclosure the
+   * record asks the storefront to carry, so the total can be read against what was chosen. Empty for
+   * a cart of another fulfilment mode, which the server adds nothing to. The wording around it is
+   * product and legal's to settle (the record's open input), so the screen states only what is
+   * true: what it is called, what it costs, and that it is already counted.
+   */
+  readonly hiddenCharges = computed<readonly HiddenChargeRow[]>(() => {
+    this.translate.current();
+    const byOption = new Map<string, number>();
+    for (const charge of this.priced()?.hiddenCharges ?? []) {
+      byOption.set(charge.optionId, (byOption.get(charge.optionId) ?? 0) + charge.amountMinor);
+    }
+    const labels = this.optionLabels();
+    return [...byOption.entries()].map(([optionId, amountMinor]) => ({
+      optionId,
+      label: labels.get(optionId) || this.translate.get('cart.hiddenCharge.fallbackLabel'),
+      amountMinor,
+      amount: this.formatPrice(amountMinor),
+    }));
+  });
+
   /**
    * The ADR 0037 delivery charge, straight from the priced cart's own
    * `delivery` block -- never from a separate coordinate-bearing preview
@@ -324,6 +363,8 @@ export class UiCartService {
         // switch rebuilds every line from scratch and must not drop what the
         // customer already picked.
         commentPresetCodes: line.commentPresetCodes,
+        // ADR 0136: and a combo's picks, or its container would be put back with nothing chosen.
+        ...(line.comboPicks && line.comboPicks.length > 0 ? { comboPicks: line.comboPicks } : {}),
       })) ?? [];
 
     this.fulfillmentModeDefault.set(mode);
@@ -343,6 +384,7 @@ export class UiCartService {
           quantity: line.quantity,
           modifierOptionIds: line.modifierOptionIds,
           commentPresetCodes: line.commentPresetCodes,
+          ...('comboPicks' in line ? { comboPicks: line.comboPicks } : {}),
         });
       }
       await this.project(this.carts.cart());
@@ -387,6 +429,9 @@ export class UiCartService {
    *        preset for the same variant and modifiers replaces the line's
    *        presets the same way a second note replaces the first (`CartService
    *        .putLine`'s own doc).
+   * @param comboPicks ADR 0136: what the customer picked inside a combo, set exactly when
+   *        `variantId` is a combo's container. Part of the line's identity, like the modifiers: the
+   *        same combo with other picks is another line.
    */
   async add(
     variantId: string,
@@ -394,6 +439,7 @@ export class UiCartService {
     note?: string,
     modifierOptionIds?: readonly string[],
     commentPresetCodes?: readonly string[],
+    comboPicks?: readonly ComboPickWire[],
   ): Promise<void> {
     this.updating.set(true);
     this.error.set(null);
@@ -405,6 +451,7 @@ export class UiCartService {
         customerNote: note,
         modifierOptionIds,
         commentPresetCodes,
+        comboPicks,
       });
       await this.project(cart);
     } catch {
@@ -440,6 +487,8 @@ export class UiCartService {
               quantity,
               modifierOptionIds: item.modifierOptionIds,
               commentPresetCodes: item.commentPresetCodes,
+              // ADR 0136: resent whole, or a quantity change would strip a combo's picks.
+              comboPicks: item.comboPicks,
             });
       await this.project(cart);
     } catch {
@@ -661,9 +710,33 @@ export class UiCartService {
       for (const option of group.options) {
         modifierOptionsById.set(option.optionId, {
           groupName: group.name,
-          // Not a name: the wire's MenuModifierOption carries no name field.
-          label: option.code ?? '',
+          // The option's name in the customer's language when the menu carries one (ADR 0136),
+          // else the authoring code a menu published before options were named still sends.
+          label: option.name || option.code || '',
           amountMinor: option.amountMinor,
+        });
+      }
+    }
+    this.optionLabels.set(
+      new Map([...modifierOptionsById].map(([optionId, option]) => [optionId, option.label])),
+    );
+    // ADR 0136: a combo component, by the id a pick names.
+    const comboComponentsById = new Map<
+      string,
+      {
+        name: string;
+        variantName: string | null;
+        defaultQuantity: number;
+        amountMinor: number | null;
+      }
+    >();
+    for (const group of menu.comboGroups ?? []) {
+      for (const component of group.components) {
+        comboComponentsById.set(component.componentId, {
+          name: component.name,
+          variantName: component.variantName ?? null,
+          defaultQuantity: component.defaultQuantity,
+          amountMinor: component.amountMinor,
         });
       }
     }
@@ -698,6 +771,25 @@ export class UiCartService {
         const commentPresets: CartResponseCommentPresetSelection[] = line.commentPresetCodes
           .map((code) => presetsByCode.get(code))
           .filter((preset): preset is PublishedCommentPreset => preset !== undefined);
+        // ADR 0136: a combo line's price is what one combo costs, the sum of what its picks cost
+        // inside it; the container has no price of its own. A pick the menu no longer carries has
+        // no price to add, and an unpriced one makes the combo unpriced (shown as such) rather
+        // than cheaper.
+        const comboPicks = line.comboPicks ?? [];
+        const comboComponents: CartResponseComboComponent[] = comboPicks.map((pick) => {
+          const component = comboComponentsById.get(pick.componentId);
+          return {
+            componentId: pick.componentId,
+            name: component?.name ?? '',
+            variantName: component?.variantName ?? null,
+            quantity: pick.quantity * (component?.defaultQuantity ?? 1),
+            amountMinor: component?.amountMinor ?? null,
+          };
+        });
+        const comboPrice = comboComponents.reduce(
+          (sum, component) => sum + (component.amountMinor ?? 0) * component.quantity,
+          0,
+        );
         const projected: CartResponseItem = {
           variant_id: line.variantId,
           // The line key, which is what an update or a removal addresses. The
@@ -706,7 +798,7 @@ export class UiCartService {
           item_id: line.lineKey,
           name: known.name,
           image: known.image ?? FALLBACK_IMAGE,
-          price: known.price,
+          price: comboPicks.length > 0 ? comboPrice : known.price,
           active: true,
           quantity: line.quantity,
           // Write-only on the platform; only its existence is reported.
@@ -715,6 +807,8 @@ export class UiCartService {
           modifiers,
           commentPresetCodes: line.commentPresetCodes,
           commentPresets,
+          comboPicks,
+          comboComponents,
         };
         return projected;
       })

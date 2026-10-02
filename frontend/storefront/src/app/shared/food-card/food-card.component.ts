@@ -65,10 +65,14 @@ export class FoodCardComponent {
     return d || null;
   });
 
-  /** Formatted unit price */
+  /** ADR 0136: a combo asks the customer to choose before it can be added, so the card sends them to its page. */
+  readonly isCombo = computed(() => (this.item().comboGroups ?? []).length > 0);
+
+  /** Formatted unit price; for a combo, the least it can cost, since its own variant has no price. */
   priceLabel = computed(() => {
     this.translate.current();
-    return this.formatMoney(this.item().price);
+    const price = this.formatMoney(this.item().price);
+    return this.isCombo() ? this.translate.getWithParams('product.fromPrice', { price }) : price;
   });
 
   /** Image URL */
@@ -100,12 +104,12 @@ export class FoodCardComponent {
     // Optimistic: the heart flips at once and is put back if the platform
     // refuses, so the screen never keeps a state the server rejected.
     const marked = this.isFavourite();
-    const change = marked
-      ? this.favourites.remove(id)
-      : this.favourites.add(id);
-    change.catch(() => {
-      // Reported by the error interceptor; the flip has already been undone.
-    }).finally(() => this.favouriting.set(false));
+    const change = marked ? this.favourites.remove(id) : this.favourites.add(id);
+    change
+      .catch(() => {
+        // Reported by the error interceptor; the flip has already been undone.
+      })
+      .finally(() => this.favouriting.set(false));
   }
 
   increase(event: Event): void {
@@ -113,6 +117,12 @@ export class FoodCardComponent {
     event.stopPropagation();
     const vid = this.variantId();
     if (!vid || this.cart.updating()) return;
+    // ADR 0136: a combo cannot be added blind -- its choices are what the product page asks about.
+    // A combo already in the basket is bumped like any line (same picks, same line).
+    if (this.isCombo() && !this.cartLine()) {
+      this.router.navigate(['/product', this.item().id]).catch(() => {});
+      return;
+    }
     // The platform has no anonymous-cart capability: POST /carts requires a
     // session (see app.routes.ts's own comment on /cart). Caught here, at
     // the actual point of intent, rather than letting the first line an

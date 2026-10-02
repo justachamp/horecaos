@@ -126,7 +126,11 @@
     "recipientRequired": "Yetkazib berish uchun qabul qiluvchining ismi va telefonini kiriting.",
     "deliveryChooseAddress": "Yetkazib berish narxini hisoblash uchun manzil tanlang.",
     "pickupLocation": "Olib ketish filiali",
-    "pickupLocationHint": "Buyurtmangizni ushbu filialdan olib ketasiz."
+    "pickupLocationHint": "Buyurtmangizni ushbu filialdan olib ketasiz.",
+    "hiddenCharge": {
+      "title": "Avtomatik qo'shilgan, jami summaga kiritilgan",
+      "fallbackLabel": "Qo'shimcha to'lov"
+    }
   },
   "orders": {
     "title": "Buyurtmalar",
@@ -271,7 +275,17 @@
     "modifiersIncomplete": "Savatga qo'shishdan oldin yuqoridagi majburiy variantlarni tanlang.",
     "presetsTitle": "Izohlar",
     "outOfSaleWindow": "Bu taom hozir sotuvda emas.",
-    "lowStock": "Faqat {{count}} ta qoldi"
+    "lowStock": "Faqat {{count}} ta qoldi",
+    "comboTitle": "Kombongizni yig'ing",
+    "comboPickExactly": "{{min}} ta tanlang",
+    "comboPickBetween": "{{min}} dan {{max}} gacha tanlang",
+    "comboPickUpTo": "{{max}} tagacha tanlang",
+    "comboIncluded": "Kiritilgan",
+    "comboNotPriced": "Narx mavjud emas",
+    "comboSoldOut": "Tugagan",
+    "comboIncomplete": "Savatga qo'shishdan oldin yuqoridagi har bir majburiy guruhdan tanlang.",
+    "comboUnavailable": "Bu kombo hozir buyurtma qilib bo'lmaydi.",
+    "fromPrice": "{{price}} dan"
   },
   "terms": {
     "agreementTitle": "Ommaviy oferta bo'yicha shartnoma",
@@ -314,7 +328,9 @@
     "roundAttachRetry": "Buyurtma oshxonaga yuborildi, lekin hali stol hisobida yo'q. «Qayta urinish» tugmasini bosing.",
     "roundPending": "Oxirgi buyurtmangiz oshxonada, lekin hali stol hisobiga qo'shilmadi.",
     "roundRetry": "Qayta urinish",
-    "roundAttachFailed": "Buyurtma oshxonada, lekin uni stol hisobiga qo'shib bo'lmadi. Xodimga ayting."
+    "roundAttachFailed": "Buyurtma oshxonada, lekin uni stol hisobiga qo'shib bo'lmadi. Xodimga ayting.",
+    "comboChoose": "Kombongizni tanlang",
+    "comboChooseAction": "Tanlash"
   },
   "action": {
     "yourAddress": "Sizning manzil",

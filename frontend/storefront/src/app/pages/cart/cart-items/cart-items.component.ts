@@ -6,7 +6,7 @@ import { UiCartService } from '../../../services/ui-cart.service';
 import { TranslateService } from '../../../services/translate.service';
 import { LangService } from '../../../services/lang.service';
 import { TranslatePipe } from '../../../shared/translate/translate.pipe';
-import type { CartResponseItem } from '../../../types/cart.types';
+import type { CartResponseComboComponent, CartResponseItem } from '../../../types/cart.types';
 import { presetLabelFor } from '../../../utils/preset-label';
 
 @Component({
@@ -34,6 +34,14 @@ export class CartItemsComponent implements OnInit {
   /** The chosen modifiers for one line, as a single readable row. */
   modifiersSummary(item: CartResponseItem): string {
     return item.modifiers.map((m) => m.label || m.groupName).join(', ');
+  }
+
+  /** ADR 0136: one component of a combo line, as `Cola 0.5 L ×2` -- the units the line puts on the order for one combo. */
+  comboComponentLabel(component: CartResponseComboComponent): string {
+    const name = component.variantName
+      ? `${component.name} ${component.variantName}`
+      : component.name;
+    return component.quantity > 1 ? `${name} ×${component.quantity}` : name;
   }
 
   /** Row 2.1b: the line's checked comment presets, in the customer's own language. */

@@ -173,3 +173,92 @@ describe('FoodCardComponent: favourites, signed in', () => {
     expect(favourites.add).toHaveBeenCalledWith('product-1');
   });
 });
+
+describe('FoodCardComponent: a combo (ADR 0136)', () => {
+  beforeEach(() => localStorage.clear());
+
+  const comboItem = () =>
+    menuItem({
+      id: 'product-lunch',
+      price: 22_000,
+      variants: [
+        {
+          id: 'v-lunch',
+          name: '',
+          active: true,
+          preparation_time: 0,
+          price: 22_000,
+          price_without_discount: 22_000,
+          onSaleNow: true,
+          remainingQuantity: null,
+        },
+      ],
+      comboGroups: [
+        {
+          id: 'g-main',
+          name: 'Main',
+          minimumSelections: 1,
+          maximumSelections: 1,
+          allowSameComponentMultipleTimes: false,
+          components: [
+            {
+              id: 'c-1',
+              name: 'Burger',
+              variantName: null,
+              defaultQuantity: 1,
+              active: true,
+              amountMinor: 22_000,
+            },
+          ],
+        },
+      ],
+    });
+
+  it('sends a tap on "+" to the product page, where its choices are made, and never adds the bare container', async () => {
+    const { fixture, comp, cart, navigateSpy, session } = setUp();
+    fixture.componentRef.setInput('item', comboItem());
+    signIn(session);
+
+    comp.increase(clickEvent());
+    await Promise.resolve();
+
+    expect(navigateSpy).toHaveBeenCalledWith(['/product', 'product-lunch']);
+    expect(cart.add).not.toHaveBeenCalled();
+  });
+
+  it('reads its price as the least it can cost', () => {
+    const { fixture, comp } = setUp();
+    fixture.componentRef.setInput('item', comboItem());
+
+    expect(comp.priceLabel()).toContain('product.fromPrice');
+  });
+
+  it('bumps a combo already in the basket like any line: the same picks, one more', async () => {
+    const { fixture, comp, cart, navigateSpy, session } = setUp();
+    fixture.componentRef.setInput('item', comboItem());
+    cart.items.set([
+      {
+        variant_id: 'v-lunch',
+        price: 22_000,
+        item_id: 'v-lunchcabc',
+        name: 'Lunch box',
+        active: true,
+        image: null,
+        quantity: 1,
+        note: null,
+        modifierOptionIds: [],
+        modifiers: [],
+        commentPresetCodes: [],
+        commentPresets: [],
+      },
+    ]);
+    cart.cartData.set({});
+    signIn(session);
+
+    comp.increase(clickEvent());
+    await Promise.resolve();
+
+    expect(navigateSpy).not.toHaveBeenCalled();
+    expect(cart.increaseQuantity).toHaveBeenCalledTimes(1);
+  });
+});
