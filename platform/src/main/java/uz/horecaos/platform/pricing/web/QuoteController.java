@@ -192,7 +192,7 @@ public class QuoteController {
                                     line.unitAmount().minor(),
                                     line.finalAmount().minor(),
                                     line.taxAmount().minor(),
-                                    CatchweightResponse.of(line.catchweight())))
+                                    QuoteLineCatchweightResponse.of(line.catchweight())))
                             .toList(),
                     quote.adjustments().stream()
                             .map(a -> new AdjustmentResponse(
@@ -218,7 +218,7 @@ public class QuoteController {
             long unitAmountMinor,
             long finalAmountMinor,
             long taxAmountMinor,
-            @Nullable CatchweightResponse catchweight) {}
+            @Nullable QuoteLineCatchweightResponse catchweight) {}
 
     /**
      * ADR 0137: present on a line sold by weight, and what tells a client that the
@@ -228,17 +228,17 @@ public class QuoteController {
      * @param provisional          true until a weight has been captured at handover; the
      *                             line's amounts were computed against {@code nominalGramsPerUnit}
      */
-    public record CatchweightResponse(
+    public record QuoteLineCatchweightResponse(
             int quantumGrams,
             int nominalGramsPerUnit,
             long pricePerQuantumMinor,
             boolean provisional,
             @Nullable Integer actualWeightGrams) {
 
-        static @Nullable CatchweightResponse of(Quote.@Nullable Catchweight catchweight) {
+        static @Nullable QuoteLineCatchweightResponse of(Quote.@Nullable Catchweight catchweight) {
             return catchweight == null
                     ? null
-                    : new CatchweightResponse(
+                    : new QuoteLineCatchweightResponse(
                             catchweight.quantumGrams(),
                             catchweight.nominalGramsPerUnit(),
                             catchweight.pricePerQuantumMinor(),

@@ -2149,6 +2149,35 @@ export interface PendingErasure {
   tenantId?: string;
 }
 
+export interface PhysicalAttributesRequest {
+  caloriesKcalPer100?: number;
+  carbohydratesGramsPer100?: number;
+  catchweight?: boolean;
+  catchweightNominalGrams?: number;
+  catchweightQuantumGrams?: number;
+  fatGramsPer100?: number;
+  netVolumeMillilitres?: number;
+  netWeightGrams?: number;
+  portionSize?: number;
+  proteinGramsPer100?: number;
+  splittable?: boolean;
+}
+
+export interface PhysicalAttributesResponse {
+  caloriesKcalPer100?: number;
+  carbohydratesGramsPer100?: number;
+  catchweight?: boolean;
+  catchweightNominalGrams?: number;
+  catchweightQuantumGrams?: number;
+  fatGramsPer100?: number;
+  netVolumeMillilitres?: number;
+  netWeightGrams?: number;
+  portionSize?: number;
+  proteinGramsPer100?: number;
+  splittable?: boolean;
+  version?: number;
+}
+
 export interface PlanResponse {
   code?: string;
   name?: string;
@@ -3652,6 +3681,8 @@ export interface Operations {
   "setOffering": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/variants/{variantId}/location-offerings/{locationId}"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string; variantId: string } }; body: SetOfferingRequest }; responses: { "200": unknown } };
   "itemSaleSchedule": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/variants/{variantId}/location-offerings/{locationId}/sale-schedule"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string; variantId: string } } }; responses: { "200": ItemSaleScheduleResponse } };
   "replaceItemSaleSchedule": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/variants/{variantId}/location-offerings/{locationId}/sale-schedule"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string; variantId: string } }; body: ItemSaleScheduleRequest }; responses: { "200": ItemSaleScheduleResponse } };
+  "physicalAttributes": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/variants/{variantId}/physical-attributes"; request: { parameters: { path: { brandId: string; tenantId: string; variantId: string } } }; responses: { "200": PhysicalAttributesResponse } };
+  "setPhysicalAttributes": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/variants/{variantId}/physical-attributes"; request: { parameters: { path: { brandId: string; tenantId: string; variantId: string } }; body: PhysicalAttributesRequest }; responses: { "200": PhysicalAttributesResponse } };
   "list_16": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/conversations/flows"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<FlowDocumentResponse> } };
   "author_1": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/conversations/flows/{flowKey}"; request: { parameters: { path: { brandId: string; flowKey: string; tenantId: string } }; body: AuthorFlowDocumentRequest }; responses: { "200": FlowDocumentResponse } };
   "list_11": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/delivery-tariffs"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<TariffSummaryResponse> } };

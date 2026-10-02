@@ -83,6 +83,22 @@ export interface ActiveVersionResponse {
   version?: number;
 }
 
+export interface ActualWeightRequest {
+  actualWeightGrams: number;
+}
+
+export interface ActualWeightResponse {
+  actualWeightGrams?: number;
+  changed?: boolean;
+  deltaTotalMinor?: number;
+  lineFinalAmountMinor?: number;
+  lineId?: string;
+  orderId?: string;
+  orderVersion?: number;
+  revision?: number;
+  totalMinor?: number;
+}
+
 export interface AddAddressRequest {
   coordinateSource: "NOT_GEOCODED" | "LANDMARK_ONLY" | "GEOCODER" | "CUSTOMER_PIN" | "OPERATOR_PIN" | "LEGACY_UNSOURCED";
   deliveryInstructions?: string;
@@ -3092,6 +3108,7 @@ export interface OperationsOrderControllerDestinationRequest {
 }
 
 export interface OperationsOrderControllerLineResponse {
+  catchweight?: OrderLineCatchweightResponse;
   commentPresets?: Array<CommentPresetChip>;
   finalAmountMinor?: number;
   hasNote?: boolean;
@@ -3343,6 +3360,14 @@ export interface OrderDetailResponse {
 
 export interface OrderLatenessResponse {
   level?: string;
+}
+
+export interface OrderLineCatchweightResponse {
+  actualWeightGrams?: number;
+  nominalGramsPerUnit?: number;
+  pricePerQuantumMinor?: number;
+  provisional?: boolean;
+  quantumGrams?: number;
 }
 
 export interface OrderLineRequest {
@@ -3887,6 +3912,7 @@ export interface QuoteControllerAdjustmentResponse {
 }
 
 export interface QuoteControllerLineResponse {
+  catchweight?: QuoteLineCatchweightResponse;
   description?: string;
   finalAmountMinor?: number;
   lineId?: string;
@@ -3894,6 +3920,14 @@ export interface QuoteControllerLineResponse {
   taxAmountMinor?: number;
   unitAmountMinor?: number;
   variantId?: string;
+}
+
+export interface QuoteLineCatchweightResponse {
+  actualWeightGrams?: number;
+  nominalGramsPerUnit?: number;
+  pricePerQuantumMinor?: number;
+  provisional?: boolean;
+  quantumGrams?: number;
 }
 
 export interface QuoteRequestBody {
@@ -5946,6 +5980,7 @@ export interface Operations {
   "revealAddress": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}/customer/address"; request: { parameters: { path: { brandId: string; locationId: string; orderId: string; tenantId: string }; query: { purpose: string } } }; responses: { "200": OperationsOrderControllerAddressResponse } };
   "revealPhone": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}/customer/phone"; request: { parameters: { path: { brandId: string; locationId: string; orderId: string; tenantId: string }; query: { purpose: string } } }; responses: { "200": PhoneRevealResponse } };
   "decisions": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}/decisions"; request: { parameters: { path: { brandId: string; locationId: string; orderId: string; tenantId: string } } }; responses: { "200": Array<ApprovalDecisionResponse> } };
+  "captureActualWeight": { method: "PUT"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}/lines/{lineId}/actual-weight"; request: { parameters: { path: { brandId: string; lineId: string; locationId: string; orderId: string; tenantId: string } }; body: ActualWeightRequest }; responses: { "200": ActualWeightResponse } };
   "revealNote": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}/lines/{lineId}/note"; request: { parameters: { path: { brandId: string; lineId: string; locationId: string; orderId: string; tenantId: string }; query: { purpose: string } } }; responses: { "200": NoteResponse } };
   "revisions": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}/revisions"; request: { parameters: { path: { brandId: string; locationId: string; orderId: string; tenantId: string } } }; responses: { "200": Array<RevisionResponse> } };
   "stateAction_1": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}/state-actions"; request: { parameters: { path: { brandId: string; locationId: string; orderId: string; tenantId: string } }; body: OperationsOrderControllerStateActionRequest }; responses: { "200": OperationsOrderControllerDecisionResponse } };

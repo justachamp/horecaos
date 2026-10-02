@@ -101,6 +101,14 @@ export interface CartResponse {
   version?: number;
 }
 
+export interface CatchweightLineResponse {
+  actualWeightGrams?: number;
+  nominalGramsPerUnit?: number;
+  pricePerQuantumMinor?: number;
+  provisional?: boolean;
+  quantumGrams?: number;
+}
+
 export interface ChallengeResponse {
   attemptsAllowed?: number;
   challengeId?: string;
@@ -319,6 +327,7 @@ export interface MenuVariant {
   isDefault?: boolean;
   onSaleNow?: boolean;
   orderable?: boolean;
+  physical?: PhysicalFacts;
   remainingQuantity?: number;
   sku?: string;
   unitCode?: string;
@@ -338,7 +347,15 @@ export interface MyReferralResponse {
   redeemedAs?: ReferralStorefrontControllerRedemptionResponse;
 }
 
+export interface NutritionPer100 {
+  caloriesKcalPer100?: number;
+  carbohydratesGramsPer100?: number;
+  fatGramsPer100?: number;
+  proteinGramsPer100?: number;
+}
+
 export interface OrderLineResponse {
+  catchweight?: CatchweightLineResponse;
   finalAmountMinor?: number;
   lineNumber?: number;
   modifierOptionIds?: Array<string>;
@@ -408,6 +425,17 @@ export interface PaymentSessionRequest {
   presentation?: string;
   pushRecipient?: string;
   returnUrl?: string;
+}
+
+export interface PhysicalFacts {
+  catchweight?: boolean;
+  catchweightNominalGrams?: number;
+  catchweightQuantumGrams?: number;
+  netVolumeMillilitres?: number;
+  netWeightGrams?: number;
+  nutrition?: NutritionPer100;
+  portionSize?: number;
+  splittable?: boolean;
 }
 
 export interface PickupLocation {

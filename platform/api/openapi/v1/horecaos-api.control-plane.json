@@ -6680,6 +6680,98 @@
         },
         "type" : "object"
       },
+      "PhysicalAttributesRequest" : {
+        "properties" : {
+          "caloriesKcalPer100" : {
+            "type" : "number"
+          },
+          "carbohydratesGramsPer100" : {
+            "type" : "number"
+          },
+          "catchweight" : {
+            "type" : "boolean"
+          },
+          "catchweightNominalGrams" : {
+            "exclusiveMinimum" : 0,
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "catchweightQuantumGrams" : {
+            "exclusiveMinimum" : 0,
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "fatGramsPer100" : {
+            "type" : "number"
+          },
+          "netVolumeMillilitres" : {
+            "exclusiveMinimum" : 0,
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "netWeightGrams" : {
+            "exclusiveMinimum" : 0,
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "portionSize" : {
+            "type" : "number"
+          },
+          "proteinGramsPer100" : {
+            "type" : "number"
+          },
+          "splittable" : {
+            "type" : "boolean"
+          }
+        },
+        "type" : "object"
+      },
+      "PhysicalAttributesResponse" : {
+        "properties" : {
+          "caloriesKcalPer100" : {
+            "type" : "number"
+          },
+          "carbohydratesGramsPer100" : {
+            "type" : "number"
+          },
+          "catchweight" : {
+            "type" : "boolean"
+          },
+          "catchweightNominalGrams" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "catchweightQuantumGrams" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "fatGramsPer100" : {
+            "type" : "number"
+          },
+          "netVolumeMillilitres" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "netWeightGrams" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "portionSize" : {
+            "type" : "number"
+          },
+          "proteinGramsPer100" : {
+            "type" : "number"
+          },
+          "splittable" : {
+            "type" : "boolean"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
       "PlanResponse" : {
         "properties" : {
           "code" : {
@@ -16909,6 +17001,104 @@
           }
         },
         "summary" : "Replaces one variant's weekly sale windows at one location",
+        "tags" : [ "Catalog authoring" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/variants/{variantId}/physical-attributes" : {
+      "get" : {
+        "description" : "ADR 0137. A variant with none of it reads as version 0 with every field empty -- the row is optional, so the editor renders empty fields rather than a row that has to exist to be absent. The ETag is the version to quote in If-Match when writing.",
+        "operationId" : "physicalAttributes",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "variantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PhysicalAttributesResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "A variant's weight, catchweight, portions and КБЖУ",
+        "tags" : [ "Catalog authoring" ]
+      },
+      "put" : {
+        "description" : "ADR 0137. One upsert of the whole set under If-Match (0 when the variant has no row yet); an empty set clears the row. A catchweight variant's price is per catchweightQuantumGrams, and a decimal portionSize makes the variant orderable by the portion. The marking exclusion (a marked good cannot be catchweight or splittable) is a publication blocker, not a write refusal -- the fiscal classification it is checked against is authored on another screen.",
+        "operationId" : "setPhysicalAttributes",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "variantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PhysicalAttributesRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PhysicalAttributesResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Set a variant's weight, catchweight, portions and КБЖУ",
         "tags" : [ "Catalog authoring" ]
       }
     },

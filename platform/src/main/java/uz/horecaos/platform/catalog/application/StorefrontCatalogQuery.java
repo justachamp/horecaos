@@ -788,10 +788,10 @@ public class StorefrontCatalogQuery {
             @Nullable Integer catchweightNominalGrams,
             boolean splittable,
             @Nullable BigDecimal portionSize,
-            @Nullable Nutrition nutrition) {
+            @Nullable NutritionPer100 nutrition) {
 
         /** @param caloriesKcalPer100 calories, kcal per 100 g (or mL) */
-        public record Nutrition(
+        public record NutritionPer100(
                 @Nullable BigDecimal caloriesKcalPer100,
                 @Nullable BigDecimal proteinGramsPer100,
                 @Nullable BigDecimal fatGramsPer100,
@@ -802,9 +802,9 @@ public class StorefrontCatalogQuery {
             if (!(raw instanceof Map<?, ?> block)) {
                 return null;
             }
-            Nutrition nutrition = null;
+            NutritionPer100 nutrition = null;
             if (block.get("nutrition") instanceof Map<?, ?> published) {
-                nutrition = new Nutrition(
+                nutrition = new NutritionPer100(
                         decimal(published.get("caloriesKcalPer100")),
                         decimal(published.get("proteinGramsPer100")),
                         decimal(published.get("fatGramsPer100")),

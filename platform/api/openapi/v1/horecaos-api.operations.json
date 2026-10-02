@@ -239,6 +239,58 @@
         },
         "type" : "object"
       },
+      "ActualWeightRequest" : {
+        "properties" : {
+          "actualWeightGrams" : {
+            "exclusiveMinimum" : 0,
+            "format" : "int32",
+            "maximum" : 10000000,
+            "type" : "integer"
+          }
+        },
+        "required" : [ "actualWeightGrams" ],
+        "type" : "object"
+      },
+      "ActualWeightResponse" : {
+        "properties" : {
+          "actualWeightGrams" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "changed" : {
+            "type" : "boolean"
+          },
+          "deltaTotalMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "lineFinalAmountMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "lineId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "orderId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "orderVersion" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "revision" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "totalMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
       "AddAddressRequest" : {
         "properties" : {
           "coordinateSource" : {
@@ -465,9 +517,8 @@
           },
           "quantity" : {
             "exclusiveMinimum" : 0,
-            "format" : "int32",
             "maximum" : 999,
-            "type" : "integer"
+            "type" : "number"
           },
           "unitAmountMinor" : {
             "format" : "int64",
@@ -3167,8 +3218,7 @@
             "type" : "string"
           },
           "quantityTotal" : {
-            "format" : "int32",
-            "type" : "integer"
+            "type" : "number"
           },
           "revenueGrossSom" : {
             "format" : "int64",
@@ -7654,8 +7704,7 @@
             "type" : "string"
           },
           "quantity" : {
-            "format" : "int32",
-            "type" : "integer"
+            "type" : "number"
           },
           "routedBy" : {
             "type" : "string"
@@ -8050,9 +8099,8 @@
           },
           "quantity" : {
             "exclusiveMinimum" : 0,
-            "format" : "int32",
             "maximum" : 999,
-            "type" : "integer"
+            "type" : "number"
           },
           "variantId" : {
             "format" : "uuid",
@@ -9800,6 +9848,9 @@
       },
       "OperationsOrderControllerLineResponse" : {
         "properties" : {
+          "catchweight" : {
+            "$ref" : "#/components/schemas/OrderLineCatchweightResponse"
+          },
           "commentPresets" : {
             "items" : {
               "$ref" : "#/components/schemas/CommentPresetChip"
@@ -9831,8 +9882,7 @@
             "type" : "string"
           },
           "quantity" : {
-            "format" : "int32",
-            "type" : "integer"
+            "type" : "number"
           },
           "sku" : {
             "type" : "string"
@@ -10612,6 +10662,30 @@
         },
         "type" : "object"
       },
+      "OrderLineCatchweightResponse" : {
+        "properties" : {
+          "actualWeightGrams" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "nominalGramsPerUnit" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "pricePerQuantumMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "provisional" : {
+            "type" : "boolean"
+          },
+          "quantumGrams" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
       "OrderLineRequest" : {
         "properties" : {
           "commentPresetCodes" : {
@@ -10638,9 +10712,8 @@
           },
           "quantity" : {
             "exclusiveMinimum" : 0,
-            "format" : "int32",
             "maximum" : 999,
-            "type" : "integer"
+            "type" : "number"
           },
           "variantId" : {
             "format" : "uuid",
@@ -12292,6 +12365,9 @@
       },
       "QuoteControllerLineResponse" : {
         "properties" : {
+          "catchweight" : {
+            "$ref" : "#/components/schemas/QuoteLineCatchweightResponse"
+          },
           "description" : {
             "type" : "string"
           },
@@ -12303,8 +12379,7 @@
             "type" : "string"
           },
           "quantity" : {
-            "format" : "int32",
-            "type" : "integer"
+            "type" : "number"
           },
           "taxAmountMinor" : {
             "format" : "int64",
@@ -12317,6 +12392,30 @@
           "variantId" : {
             "format" : "uuid",
             "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "QuoteLineCatchweightResponse" : {
+        "properties" : {
+          "actualWeightGrams" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "nominalGramsPerUnit" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "pricePerQuantumMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "provisional" : {
+            "type" : "boolean"
+          },
+          "quantumGrams" : {
+            "format" : "int32",
+            "type" : "integer"
           }
         },
         "type" : "object"
@@ -13556,8 +13655,7 @@
             "type" : "string"
           },
           "quantity" : {
-            "format" : "int32",
-            "type" : "integer"
+            "type" : "number"
           },
           "status" : {
             "type" : "string"
@@ -17301,16 +17399,14 @@
             "type" : "integer"
           },
           "deliveryQuantity" : {
-            "format" : "int32",
-            "type" : "integer"
+            "type" : "number"
           },
           "pickupNetSom" : {
             "format" : "int64",
             "type" : "integer"
           },
           "pickupQuantity" : {
-            "format" : "int32",
-            "type" : "integer"
+            "type" : "number"
           },
           "productName" : {
             "type" : "string"
@@ -17324,8 +17420,7 @@
             "type" : "integer"
           },
           "totalQuantity" : {
-            "format" : "int32",
-            "type" : "integer"
+            "type" : "number"
           },
           "variantId" : {
             "format" : "uuid",
@@ -17348,8 +17443,7 @@
       "VduItemView" : {
         "properties" : {
           "quantity" : {
-            "format" : "int32",
-            "type" : "integer"
+            "type" : "number"
           },
           "stationId" : {
             "format" : "uuid",
@@ -34667,6 +34761,77 @@
         "tags" : [ "Operations orders" ]
       }
     },
+    "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}/lines/{lineId}/actual-weight" : {
+      "put" : {
+        "description" : "ADR 0137. Writes the line's actual weight and corrects the line, the order's totals and, for an order still to be paid at the door, the amount it will collect: the same 'captured late, reconciled before the receipt is final' shape ADR 0038 gave marking codes. The weight is the whole line's, all its units together. Appends an order revision (source CATCHWEIGHT) carrying the signed delta. An order whose payment already runs through a provider is refused when the weight moves its total (PAYMENT_ALREADY_TAKEN) -- an increase or a refund is a provider operation this build does not perform. Until every weighed line of an order is reconciled the order cannot leave the pass (CATCHWEIGHT_NOT_RECONCILED). Capability order.advance: the same hands that hand the food over.",
+        "operationId" : "captureActualWeight",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "orderId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "lineId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ActualWeightRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ActualWeightResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Capture the weighed total of a catchweight line at pick or handover",
+        "tags" : [ "Operations orders" ]
+      }
+    },
     "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/{orderId}/lines/{lineId}/note" : {
       "get" : {
         "description" : "Separate from reading the order and requiring a stated purpose, because the note is the customer's own words about themselves (ADR 0029). A kitchen ticket needs it; an order list does not.",
@@ -42617,8 +42782,7 @@
           "name" : "afterQuantity",
           "required" : false,
           "schema" : {
-            "format" : "int32",
-            "type" : "integer"
+            "type" : "number"
           }
         }, {
           "in" : "query",

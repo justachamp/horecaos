@@ -223,8 +223,7 @@
             "type" : "string"
           },
           "quantity" : {
-            "format" : "int32",
-            "type" : "integer"
+            "type" : "number"
           },
           "variantId" : {
             "format" : "uuid",
@@ -273,6 +272,30 @@
             "type" : "string"
           },
           "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "CatchweightLineResponse" : {
+        "properties" : {
+          "actualWeightGrams" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "nominalGramsPerUnit" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "pricePerQuantumMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "provisional" : {
+            "type" : "boolean"
+          },
+          "quantumGrams" : {
             "format" : "int32",
             "type" : "integer"
           }
@@ -929,6 +952,9 @@
           "orderable" : {
             "type" : "boolean"
           },
+          "physical" : {
+            "$ref" : "#/components/schemas/PhysicalFacts"
+          },
           "remainingQuantity" : {
             "type" : "number"
           },
@@ -976,8 +1002,28 @@
         },
         "type" : "object"
       },
+      "NutritionPer100" : {
+        "properties" : {
+          "caloriesKcalPer100" : {
+            "type" : "number"
+          },
+          "carbohydratesGramsPer100" : {
+            "type" : "number"
+          },
+          "fatGramsPer100" : {
+            "type" : "number"
+          },
+          "proteinGramsPer100" : {
+            "type" : "number"
+          }
+        },
+        "type" : "object"
+      },
       "OrderLineResponse" : {
         "properties" : {
+          "catchweight" : {
+            "$ref" : "#/components/schemas/CatchweightLineResponse"
+          },
           "finalAmountMinor" : {
             "format" : "int64",
             "type" : "integer"
@@ -1007,8 +1053,7 @@
             "type" : "string"
           },
           "quantity" : {
-            "format" : "int32",
-            "type" : "integer"
+            "type" : "number"
           },
           "unitAmountMinor" : {
             "format" : "int64",
@@ -1215,6 +1260,39 @@
         },
         "type" : "object"
       },
+      "PhysicalFacts" : {
+        "properties" : {
+          "catchweight" : {
+            "type" : "boolean"
+          },
+          "catchweightNominalGrams" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "catchweightQuantumGrams" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "netVolumeMillilitres" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "netWeightGrams" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "nutrition" : {
+            "$ref" : "#/components/schemas/NutritionPer100"
+          },
+          "portionSize" : {
+            "type" : "number"
+          },
+          "splittable" : {
+            "type" : "boolean"
+          }
+        },
+        "type" : "object"
+      },
       "PickupLocation" : {
         "properties" : {
           "acceptsScheduledOrders" : {
@@ -1413,9 +1491,8 @@
           },
           "quantity" : {
             "exclusiveMinimum" : 0,
-            "format" : "int32",
             "maximum" : 999,
-            "type" : "integer"
+            "type" : "number"
           },
           "variantId" : {
             "format" : "uuid",
@@ -1503,8 +1580,7 @@
             "type" : "string"
           },
           "quantity" : {
-            "format" : "int32",
-            "type" : "integer"
+            "type" : "number"
           },
           "status" : {
             "type" : "string"

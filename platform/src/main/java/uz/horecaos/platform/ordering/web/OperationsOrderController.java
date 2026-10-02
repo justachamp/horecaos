@@ -2815,7 +2815,7 @@ public class OperationsOrderController {
                                     .toList(),
                             line.line().lineId(),
                             line.line().hasNote(),
-                            CatchweightResponse.of(line.line())))
+                            OrderLineCatchweightResponse.of(line.line())))
                     .toList();
         }
     }
@@ -3052,7 +3052,7 @@ public class OperationsOrderController {
             // ADR 0137: present on a line sold by weight. provisional is true until the
             // kitchen has weighed it, and means finalAmountMinor was computed against
             // the nominal weight.
-            @Nullable CatchweightResponse catchweight) {}
+            @Nullable OrderLineCatchweightResponse catchweight) {}
 
     /**
      * ADR 0137: what makes an order line's amount provisional, for the console's
@@ -3062,18 +3062,18 @@ public class OperationsOrderController {
      * @param provisional          true until a weight has been captured
      * @param actualWeightGrams    the weighed total of the whole line, once captured
      */
-    public record CatchweightResponse(
+    public record OrderLineCatchweightResponse(
             int quantumGrams,
             int nominalGramsPerUnit,
             long pricePerQuantumMinor,
             boolean provisional,
             @Nullable Integer actualWeightGrams) {
 
-        static @Nullable CatchweightResponse of(JdbcOrderStore.OrderLineRow line) {
+        static @Nullable OrderLineCatchweightResponse of(JdbcOrderStore.OrderLineRow line) {
             if (!line.catchweight()) {
                 return null;
             }
-            return new CatchweightResponse(
+            return new OrderLineCatchweightResponse(
                     Objects.requireNonNull(line.catchweightQuantumGrams()),
                     Objects.requireNonNull(line.catchweightNominalGrams()),
                     Objects.requireNonNull(line.catchweightPricePerQuantumMinor()),

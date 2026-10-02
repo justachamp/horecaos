@@ -351,7 +351,10 @@ class OpenApiContractTests {
         JsonNode newResolved = resolve(newSchema, generated, new HashSet<>(visitedReferences));
         String oldType = oldResolved.path("type").asText();
         String newType = newResolved.path("type").asText();
-        if (!oldType.isBlank() || !newType.isBlank()) {
+        if ((!oldType.isBlank() || !newType.isBlank())
+                && !AcceptedContractWidenings.permits(context, oldType, newType)) {
+            // The one exception is a change an Accepted ADR made on purpose (ADR 0137's
+            // quantity), named and kept narrow in AcceptedContractWidenings.
             assertThat(newType)
                     .as("type for %s cannot narrow or change", context)
                     .isEqualTo(oldType);
