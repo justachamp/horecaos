@@ -1,10 +1,24 @@
 # ADR 0137: Physical and nutritional product attributes
 
 - Decision status: Accepted
-- Implementation status: Not started — no column named in this record exists
-  on any `catalog` table. `catalog.variants.unit_code` (ADR 0016) is the only
-  physical fact a variant carries today, and it is a fiscal/display unit
-  (`PIECE`, etc.), not a weight, a portion count, or a nutrition figure.
+- Implementation status: Partial — the backend is built (operations batch 17,
+  step 1): V0448 `catalog.variant_physical_attributes` with
+  `GET`/`PUT .../variants/{variantId}/physical-attributes` under `catalog.author`,
+  published inside the variant's publication payload and served on the storefront
+  menu; V0449 widens the line quantity to `numeric(10,3)` through the cart, quote,
+  order, kitchen ticket and reporting facts, with every reader of it carrying the
+  decimal; V0450 snapshots catchweight facts on quote and order lines, and
+  `PUT .../orders/{orderId}/lines/{lineId}/actual-weight` (`order.advance`)
+  reconciles the charge at pick/handover with an order revision of source
+  `CATCHWEIGHT`; `PHYSICAL_ATTRIBUTES_CONFLICT_WITH_MARKING` blocks publication and
+  `CATCHWEIGHT_NOT_RECONCILED` blocks handover. Not built: the operator console's
+  product-editor fields and weighing screen and the storefront's rendering of КБЖУ,
+  price per quantum and the portion stepper (step 2); the till is told the
+  nominal-weight amount at confirmation and never the weighed one; an order already
+  paid through a provider refuses a weight that moves its total, because an
+  incremental charge or partial refund is not performed; fiscal receipt lines are
+  not yet built from order lines, so Payme/Click integer counts are untouched; a
+  fractional stock reservation stays out of scope as the record says.
 - Date proposed: 2026-09-25
 - Date decided: 2026-10-01
 - Deciders: proposed by Claude (wave batch 12, w2-catalog-adrs) from
@@ -328,22 +342,24 @@ type itself is not rolled back once live orders may hold a fractional value.
 
 ## Implementation checklist
 
-- [ ] `catalog.variant_physical_attributes` (Flyway; number reserved by the
+- [x] `catalog.variant_physical_attributes` (Flyway; number reserved by the
       wave that picks this up).
-- [ ] `ordering.order_lines.quantity` widened to `numeric(10,3)` and
+- [x] `ordering.order_lines.quantity` widened to `numeric(10,3)` and
       `ordering.order_lines.actual_weight_grams` added (pending the Open
       input's sign-off).
-- [ ] `PUT …/variants/{id}/physical-attributes` on `CatalogAuthoringController`.
-- [ ] Mark-capture-adjacent endpoint for `actual_weight_grams`.
-- [ ] `CatalogValidator` rules listed in Specification.
-- [ ] `PricingEngine` catchweight quantum resolution and post-fulfilment
+- [x] `PUT …/variants/{id}/physical-attributes` on `CatalogAuthoringController`.
+- [x] Mark-capture-adjacent endpoint for `actual_weight_grams` (no mark-capture endpoint exists
+      yet, so it sits with the other `order.advance` writes:
+      `PUT .../orders/{orderId}/lines/{lineId}/actual-weight`).
+- [x] `CatalogValidator` rules listed in Specification.
+- [x] `PricingEngine` catchweight quantum resolution and post-fulfilment
       correction of `final_amount_minor`.
-- [ ] Every reader of `order_lines.quantity` (kitchen tickets, POS export,
+- [x] Every reader of `order_lines.quantity` (kitchen tickets, POS export,
       reporting counts, `AggregatorOrderIntakeService`) reviewed for the
       widened type.
 - [ ] Product editor tab 1 fields: weight/volume, catchweight, splittable,
       portion size, КБЖУ; storefront product-page rendering.
-- [ ] Domain, PostgreSQL, and API tests: the weight/volume exclusion, the
+- [x] Domain, PostgreSQL, and API tests: the weight/volume exclusion, the
       marking/catchweight exclusion, catchweight quote-vs-reconciled-total,
       decimal-quantity pricing arithmetic, and a golden test that an
       integer-quantity order's total is byte-identical before and after the

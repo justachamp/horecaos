@@ -129,6 +129,14 @@ Two edges are conditional on the order rather than on the actor.
 `READY -> FULFILLING` is delivery only and `READY -> COMPLETED` is pickup and
 dine-in only, so a pickup order cannot enter a courier state nobody will advance.
 
+One more guard sits in the application and not in the table. An order does not leave the
+pass -- `READY -> FULFILLING` and `READY -> COMPLETED` -- while a line sold by weight is
+still priced against its nominal weight (ADR 0137, `CATCHWEIGHT_NOT_RECONCILED`). The
+weight is captured at `CONFIRMED`, `PREPARING` or `READY` by
+`PUT .../orders/{orderId}/lines/{lineId}/actual-weight`, which corrects the order's money and
+appends an order revision with source `CATCHWEIGHT`. The kitchen's own proposal of the same
+edge is refused the same way, and an order with no weighed lines is unaffected.
+
 Every edge into `CANCELLED` from `CONFIRMED` onward is modelled here but gated
 by the application, not by this table (ADR 0039, wave P09/gap map `1.2k`). A
 reasonless cancellation — `OrderStateService.cancel`'s two-argument overload,

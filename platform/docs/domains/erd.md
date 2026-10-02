@@ -39,6 +39,7 @@ erDiagram
     CATALOG ||--o{ CATEGORY : contains
     BRAND ||--o{ PRODUCT : owns
     PRODUCT ||--|{ PRODUCT_VARIANT : contains
+    PRODUCT_VARIANT ||--o| VARIANT_PHYSICAL_ATTRIBUTES : describes
     CATEGORY ||--o{ CATALOG_ITEM : contains
     PRODUCT ||--o{ CATALOG_ITEM : publishes
 
@@ -62,6 +63,12 @@ erDiagram
     PRODUCT ||--o{ PRODUCT_MEDIA : displays
     MEDIA_ASSET ||--o{ PRODUCT_MEDIA : supplies
 ```
+
+`VARIANT_PHYSICAL_ATTRIBUTES` is `catalog.variant_physical_attributes` (V0448, ADR 0137): an
+optional row per variant carrying weight or volume, catchweight with its pricing quantum,
+splittable with a decimal portion size, and КБЖУ per 100 g/mL. A variant with no row is a fixed
+unit sold whole. The marking exclusion (a marked good cannot be catchweight or splittable) is a
+publication blocker in `CatalogValidator`, not a cross-table constraint.
 
 ## Orders, payments, and fulfillment
 
@@ -103,7 +110,7 @@ make the diagram harder to read rather than easier.
 | — | `ordering.cart_fulfillment` | One row per cart at most, of exactly one kind (`ck_cart_fulfillment_one_kind`): a DELIVERY cart's captured destination (V0056), or a DINE_IN cart's `dinein_table_id` (V0435, ADR 0047). The mode travels in the foreign key, so a pickup cart can hold neither |
 | — | `ordering.checkout_attempts` | The transactional checkout idempotency record |
 | `CUSTOMER_ORDER` | `ordering.orders` | One order per accepted quote and per cart, both enforced by unique constraints |
-| `ORDER_ITEM` | `ordering.order_lines` | Snapshotted names and amounts; `SELECT`/`INSERT` only |
+| `ORDER_ITEM` | `ordering.order_lines` | Snapshotted names and amounts; `quantity` is `numeric(10,3)` since V0449 (ADR 0137: a half portion, a weighed unit). `SELECT`/`INSERT`, plus column-scoped `UPDATE` on `revision_to` (V0394) and on `actual_weight_grams` and the three amount columns (V0450), which only the catchweight reconciliation writes |
 | `ORDER_ITEM_MODIFIER` | `ordering.order_line_modifiers` | |
 | — | `ordering.order_adjustments` | Every step that made up the total, copied from the quote |
 | `ORDER_ADDRESS_SNAPSHOT` | `ordering.order_customer_snapshots` | Encrypted per ADR 0029; `UPDATE` granted only for crypto-shredding |
