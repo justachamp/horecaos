@@ -24,6 +24,11 @@
             {{ 'orders.newOrder.basket.remove' | t }}
           </button>
         </div>
+        @if (line.combo) {
+          <p class="q-caption new-order__modifiers" data-testid="new-order-line-combo">
+            {{ line.comboText }}
+          </p>
+        }
         @if (line.modifiers.length > 0) {
           <p class="q-caption new-order__modifiers">{{ line.modifierText }}</p>
         }

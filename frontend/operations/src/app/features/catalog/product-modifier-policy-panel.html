@@ -1,0 +1,186 @@
+<div class="policy" data-testid="modifier-policy-panel">
+  <h3 class="q-body-sm">{{ 'catalog.editor.policy.title' | t }}</h3>
+  <p class="q-caption">{{ 'catalog.editor.policy.hint' | t }}</p>
+
+  @if (attached().length === 0) {
+    <p class="q-caption" data-testid="policy-empty">{{ 'catalog.editor.policy.empty' | t }}</p>
+  }
+
+  @for (group of attached(); track group.groupId) {
+    <section class="policy__group" data-testid="policy-group">
+      <header class="policy__head">
+        <span class="q-body-sm" data-testid="policy-group-name">{{
+          groupName(group.groupId)
+        }}</span>
+        @if (isHidden(group)) {
+          <span class="policy__chip" data-testid="policy-hidden-chip">{{
+            'catalog.editor.policy.visibility.HIDDEN_AUTO_SELECT' | t
+          }}</span>
+        }
+      </header>
+
+      @if (groupValues(group.groupId); as own) {
+        <p class="q-caption" data-testid="policy-group-values">
+          {{
+            'catalog.editor.policy.groupValues'
+              | t
+                : {
+                    required: own.required
+                      ? ('catalog.editor.policy.required.yes' | t)
+                      : ('catalog.editor.policy.required.no' | t),
+                    min: own.min,
+                    max: own.max,
+                  }
+          }}
+        </p>
+      }
+
+      <label class="policy__field">
+        <span class="q-caption">{{ 'catalog.editor.policy.visibility' | t }}</span>
+        <select
+          #visibilitySelect
+          [value]="visibilityOf(group)"
+          (change)="setVisibility(group, visibilitySelect.value)"
+          data-testid="policy-visibility"
+        >
+          <option value="VISIBLE" [selected]="!isHidden(group)">
+            {{ 'catalog.editor.policy.visibility.VISIBLE' | t }}
+          </option>
+          <option value="HIDDEN_AUTO_SELECT" [selected]="isHidden(group)">
+            {{ 'catalog.editor.policy.visibility.HIDDEN_AUTO_SELECT' | t }}
+          </option>
+        </select>
+      </label>
+
+      @if (isHidden(group)) {
+        <p class="q-caption">{{ 'catalog.editor.policy.hiddenHint' | t }}</p>
+        <fieldset class="policy__modes" data-testid="policy-modes">
+          <legend class="q-caption">{{ 'catalog.editor.policy.modes' | t }}</legend>
+          @for (mode of modes; track mode) {
+            <label class="policy__mode">
+              <input
+                type="checkbox"
+                [checked]="modesOf(group).includes(mode)"
+                (change)="toggleMode(group, mode)"
+                [attr.data-testid]="'policy-mode-' + mode"
+              />
+              <span class="q-body-sm">{{ modeLabel(mode) }}</span>
+            </label>
+          }
+        </fieldset>
+        @if (hasNoMode(group)) {
+          <p class="q-caption policy__warning" data-testid="policy-no-mode">
+            {{ 'catalog.editor.policy.modesNone' | t }}
+          </p>
+        }
+        @if (hiddenIsAmbiguous(group)) {
+          <p class="q-caption policy__warning" data-testid="policy-ambiguous">
+            {{ 'catalog.editor.policy.hiddenNeedsOne' | t }}
+          </p>
+        }
+      }
+
+      <div class="policy__override">
+        <p class="q-caption">{{ 'catalog.editor.policy.overrideTitle' | t }}</p>
+        <p class="q-caption">{{ 'catalog.editor.policy.overrideHint' | t }}</p>
+        <div class="policy__override-fields">
+          <label class="policy__field">
+            <span class="q-caption">{{ 'catalog.editor.policy.requiredOverride' | t }}</span>
+            <select #requiredSelect data-testid="policy-required">
+              <option value="own" [selected]="requiredText(group) === 'own'">
+                {{ 'catalog.editor.policy.groupOwn' | t }}
+              </option>
+              <option value="yes" [selected]="requiredText(group) === 'yes'">
+                {{ 'catalog.editor.policy.requiredOverride.yes' | t }}
+              </option>
+              <option value="no" [selected]="requiredText(group) === 'no'">
+                {{ 'catalog.editor.policy.requiredOverride.no' | t }}
+              </option>
+            </select>
+          </label>
+          <label class="policy__field">
+            <span class="q-caption">{{ 'catalog.editor.combo.minimum' | t }}</span>
+            <input
+              #minInput
+              type="number"
+              min="0"
+              class="policy__number"
+              [value]="group.minimumSelectionsOverride ?? ''"
+              [placeholder]="'catalog.editor.policy.groupOwn' | t"
+              data-testid="policy-minimum"
+            />
+          </label>
+          <label class="policy__field">
+            <span class="q-caption">{{ 'catalog.editor.combo.maximum' | t }}</span>
+            <input
+              #maxInput
+              type="number"
+              min="1"
+              class="policy__number"
+              [value]="group.maximumSelectionsOverride ?? ''"
+              [placeholder]="'catalog.editor.policy.groupOwn' | t"
+              data-testid="policy-maximum"
+            />
+          </label>
+        </div>
+      </div>
+
+      <button
+        type="button"
+        [disabled]="saving() === 'policy:' + group.groupId || hasNoMode(group)"
+        (click)="save(group, requiredSelect.value, minInput.value, maxInput.value)"
+        data-testid="policy-save"
+      >
+        {{ 'catalog.editor.save' | t }}
+      </button>
+    </section>
+  }
+
+  <h3 class="q-body-sm">{{ 'catalog.editor.nested.title' | t }}</h3>
+  <p class="q-caption">{{ 'catalog.editor.nested.hint' | t }}</p>
+  @for (variant of product().variants; track variant.variantId) {
+    <section class="policy__group" data-testid="nested-variant">
+      <header class="policy__head">
+        <span class="q-body-sm">{{ variantLabel(variant.variantId) }}</span>
+      </header>
+      @if (attachmentsOfVariant(variant.variantId).length === 0) {
+        <p class="q-caption" data-testid="nested-none">{{ 'catalog.editor.nested.none' | t }}</p>
+      } @else {
+        <ul class="policy__chips">
+          @for (
+            attachment of attachmentsOfVariant(variant.variantId);
+            track attachment.modifierGroupId
+          ) {
+            <li class="policy__chip" data-testid="nested-attached">
+              {{ groupName(attachment.modifierGroupId) }}
+            </li>
+          }
+        </ul>
+      }
+      <div class="policy__attach">
+        <select
+          #nestedSelect
+          [attr.aria-label]="'catalog.editor.nested.choose' | t"
+          data-testid="nested-select"
+        >
+          <option value="">{{ 'catalog.editor.nested.choose' | t }}</option>
+          @for (group of attachableTo(variant.variantId); track group.groupId) {
+            <option [value]="group.groupId">{{ group.name }}</option>
+          }
+        </select>
+        <button
+          type="button"
+          [disabled]="saving() === 'variant:' + variant.variantId"
+          (click)="attachToVariant(variant.variantId, nestedSelect.value)"
+          data-testid="nested-attach"
+        >
+          {{ 'catalog.editor.nested.attach' | t }}
+        </button>
+      </div>
+    </section>
+  }
+
+  @if (message(); as text) {
+    <p class="q-caption policy__error" role="alert" data-testid="policy-error">{{ text }}</p>
+  }
+</div>

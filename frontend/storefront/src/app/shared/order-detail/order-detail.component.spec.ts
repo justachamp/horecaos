@@ -14,7 +14,10 @@ import { NotificationService } from '../../services/notification.service';
 import { NavigationHistoryService } from '../../services/navigation-history.service';
 import { TranslateService } from '../../services/translate.service';
 import { UiCartService } from '../../services/ui-cart.service';
-import { LocationProfileService, type LocationProfile } from '../../services/location-profile.service';
+import {
+  LocationProfileService,
+  type LocationProfile,
+} from '../../services/location-profile.service';
 
 class FakeTranslateService {
   get(key: string): string {
@@ -105,7 +108,9 @@ function setUp(
       provideRouter([]),
       {
         provide: ActivatedRoute,
-        useValue: { snapshot: { paramMap: { get: (key: string) => (key === 'id' ? orderId : null) } } },
+        useValue: {
+          snapshot: { paramMap: { get: (key: string) => (key === 'id' ? orderId : null) } },
+        },
       },
       { provide: OrdersService, useValue: ordersService },
       { provide: NotificationService, useValue: { show: vi.fn() } },
@@ -190,7 +195,12 @@ describe('OrderDetailComponent: names the pickup branch (2026-09-21 audit follow
       'o1',
       apiOrderDetail({ fulfillmentMode: 'PICKUP', locationId: 'loc-1' }),
       of(plan('READY')),
-      branch({ displayName: 'Central kitchen', addressLine: '1 Demo Street', district: 'Shaykhontohur', city: 'Tashkent' }),
+      branch({
+        displayName: 'Central kitchen',
+        addressLine: '1 Demo Street',
+        district: 'Shaykhontohur',
+        city: 'Tashkent',
+      }),
     );
 
     fixture.detectChanges();
@@ -242,7 +252,7 @@ describe('OrderDetailComponent: names the pickup branch (2026-09-21 audit follow
 });
 
 describe('OrderDetailComponent: the header shows the real order number, not "Order N: NaN"', () => {
-  it('carries the platform\'s own public order number through as-is, and never coerces it to NaN', async () => {
+  it("carries the platform's own public order number through as-is, and never coerces it to NaN", async () => {
     // `order_number` is `OrderResponse.publicOrderNumber` -- a string like
     // "0922-001" -- force-cast to `number` by OrdersService.toApiOrderDetail
     // (see ApiOrderDetail's own field note, and OrdersComponent's list,
@@ -298,7 +308,12 @@ describe("OrderDetailComponent.repeat -- driven by the platform's plan (ADR 0074
       apiOrderDetail(),
       of(
         plan('READY', [
-          planLine({ lineNumber: 1, variantId: 'v1', quantity: 3, modifierOptionIds: ['m1', 'm2'] }),
+          planLine({
+            lineNumber: 1,
+            variantId: 'v1',
+            quantity: 3,
+            modifierOptionIds: ['m1', 'm2'],
+          }),
           planLine({ lineNumber: 2, variantId: 'v2', quantity: 1 }),
         ]),
       ),
@@ -346,7 +361,11 @@ describe("OrderDetailComponent.repeat -- driven by the platform's plan (ADR 0074
     const { fixture } = setUp(
       'o1',
       apiOrderDetail(),
-      of(plan('UNAVAILABLE', [planLine({ status: 'WITHDRAWN', productId: null, unitAmountMinor: null })])),
+      of(
+        plan('UNAVAILABLE', [
+          planLine({ status: 'WITHDRAWN', productId: null, unitAmountMinor: null }),
+        ]),
+      ),
     );
 
     fixture.detectChanges();
@@ -357,7 +376,11 @@ describe("OrderDetailComponent.repeat -- driven by the platform's plan (ADR 0074
   });
 
   it('shows no repeat button when the plan request fails, rather than one that would fail too', async () => {
-    const { fixture, comp } = setUp('o1', apiOrderDetail(), throwError(() => new Error('network')));
+    const { fixture, comp } = setUp(
+      'o1',
+      apiOrderDetail(),
+      throwError(() => new Error('network')),
+    );
 
     fixture.detectChanges();
     await fixture.whenStable();
@@ -373,12 +396,139 @@ describe("OrderDetailComponent.repeat -- driven by the platform's plan (ADR 0074
   it('never offers the button from a plan that answers about a different order', async () => {
     // The guard is the id, not "a plan arrived" -- a stale or mismatched
     // response must not arm a button on an order it is not about.
-    const { fixture } = setUp('o1', apiOrderDetail(), of(plan('READY', [planLine()], 'someone-else')));
+    const { fixture } = setUp(
+      'o1',
+      apiOrderDetail(),
+      of(plan('READY', [planLine()], 'someone-else')),
+    );
 
     fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();
 
     expect(fixture.nativeElement.querySelector('.repeat-btn')).toBeNull();
+  });
+});
+
+describe('OrderDetailComponent: combos and what the server added (ADR 0136)', () => {
+  const COMBO = 'sel-1';
+
+  function comboOrder(): ApiOrderDetail {
+    return apiOrderDetail({
+      items: [
+        { name: 'Salad', quantity: 1, price: 20_000, image: null },
+        {
+          name: 'Burger',
+          quantity: 2,
+          price: 25_000,
+          image: null,
+          comboSelectionId: COMBO,
+          comboName: 'Lunch box',
+        },
+        {
+          name: 'Cola 0.5 L',
+          quantity: 2,
+          price: 3_000,
+          image: null,
+          comboSelectionId: COMBO,
+          comboName: 'Lunch box',
+        },
+      ],
+    });
+  }
+
+  async function render(detail: ApiOrderDetail, reorder = of(plan('READY'))) {
+    const harness = setUp('o1', detail, reorder);
+    harness.fixture.detectChanges();
+    await harness.fixture.whenStable();
+    harness.fixture.detectChanges();
+    return harness;
+  }
+
+  it('shows a combo as one header with its components beneath, and an ordinary line as it always was', async () => {
+    const { fixture } = await render(comboOrder());
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(host.querySelectorAll('[data-testid="order-combo"]')).toHaveLength(1);
+    expect(host.querySelector('[data-testid="order-combo-name"]')?.textContent?.trim()).toBe(
+      'Lunch box',
+    );
+    const names = [...host.querySelectorAll('[data-testid="order-line"] h2')].map((h) =>
+      h.textContent?.trim(),
+    );
+    expect(names).toEqual(['Salad', 'Burger', 'Cola 0.5 L']);
+  });
+
+  it('draws no header for an order with no combo', async () => {
+    const { fixture } = await render(
+      apiOrderDetail({ items: [{ name: 'Salad', quantity: 1, price: 20_000, image: null }] }),
+    );
+
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('[data-testid="order-combo"]'),
+    ).toBeNull();
+  });
+
+  it('itemises what the server added by itself, one row per option, each already in the total', async () => {
+    const { fixture, comp } = await render(
+      apiOrderDetail({
+        items: [
+          {
+            name: 'Salad',
+            quantity: 1,
+            price: 22_000,
+            image: null,
+            autoSelectedCharges: [{ name: 'Delivery box', amountMinor: 2_000 }],
+          },
+          {
+            name: 'Soup',
+            quantity: 1,
+            price: 12_000,
+            image: null,
+            autoSelectedCharges: [{ name: 'Delivery box', amountMinor: 2_000 }],
+          },
+        ],
+      }),
+    );
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(comp.order()?.hiddenCharges).toHaveLength(1);
+    const rows = host.querySelectorAll('[data-testid="order-hidden-charge"]');
+    expect(rows).toHaveLength(1);
+    expect(rows[0].textContent).toContain('Delivery box');
+    expect(rows[0].textContent).toMatch(/4.000/);
+    expect(host.querySelector('[data-testid="order-hidden-charges"]')?.textContent).toContain(
+      'cart.hiddenCharge.title',
+    );
+  });
+
+  it('shows nothing of the kind for an order the server added nothing to', async () => {
+    const { fixture, comp } = await render(apiOrderDetail());
+
+    expect(comp.order()?.hiddenCharges).toBeUndefined();
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('[data-testid="order-hidden-charges"]'),
+    ).toBeNull();
+  });
+
+  it('repeats a combo as a combo: its container with the picks the order named', async () => {
+    const picks = [
+      { componentId: 'c-1', quantity: 1 },
+      { componentId: 'c-2', quantity: 2 },
+    ];
+    const { fixture, cartAdd } = await render(
+      apiOrderDetail(),
+      of(
+        plan('READY', [
+          planLine({ variantId: 'v-lunch', quantity: 2, unitAmountMinor: null, comboPicks: picks }),
+        ]),
+      ),
+    );
+
+    (fixture.nativeElement.querySelector('.repeat-btn') as HTMLButtonElement).click();
+    await fixture.whenStable();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(cartAdd).toHaveBeenCalledWith('v-lunch', 2, undefined, [], undefined, picks);
   });
 });

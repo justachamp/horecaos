@@ -284,6 +284,37 @@ public class PriceAuthoringController {
                 request.amountMinor())));
     }
 
+    @PutMapping("/price-books/{priceBookId}/combo-component-prices/{componentId}")
+    @RequiresCapability(value = Capability.PRICING_AUTHOR, scope = ScopeType.BRAND, mutating = true)
+    @Operation(
+            summary = "Set what a variant costs inside one combo (ADR 0136)",
+            description = "Keyed to the combo component -- the pairing of a group with a variant -- "
+                    + "and not to the variant, so the same drink can be free in one combo and "
+                    + "3,000 som in another. Per unit of the component: the order line reads "
+                    + "quantity x this price, which is also what gives each component its own "
+                    + "ИКПУ line on the receipt. Integer minor units, zero allowed (free with the "
+                    + "box). The combo's container variant is never priced. `If-Match` is optional, "
+                    + "as on variant prices: given, it is checked against this row's own price "
+                    + "version, `0` for a component not yet priced in this book.")
+    public ResponseEntity<PriceBookResponse> setComboComponentPrice(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID priceBookId,
+            @PathVariable UUID componentId,
+            @Valid @RequestBody PriceRequest request,
+            HttpServletRequest httpRequest) {
+
+        Long expectedVersion = AggregateVersion.fromIfMatch(httpRequest).orElse(null);
+        return respond(guarded(() -> authoring.setPrice(
+                tenantId,
+                brandId,
+                priceBookId,
+                PriceableType.COMBO_COMPONENT,
+                componentId,
+                request.amountMinor(),
+                expectedVersion)));
+    }
+
     @PostMapping("/price-books/{priceBookId}/prices/bulk-apply")
     @RequiresCapability(value = Capability.PRICING_AUTHOR, scope = ScopeType.BRAND, mutating = true)
     @Operation(

@@ -5,6 +5,7 @@ import java.util.Objects;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.fulfillment.api.PricingAuthority;
+import uz.horecaos.platform.tenancy.api.FulfillmentMode;
 import uz.horecaos.platform.tenancy.api.GeoPoint;
 
 /**
@@ -29,6 +30,41 @@ public interface CartPricingPort {
      *         rather than a zero: a cart silently priced at nothing is a free meal
      */
     QuoteSnapshot priceCart(PricingCommand command);
+
+    /**
+     * Checks one cart line's composite selection without pricing it (ADR 0136).
+     *
+     * <p>The cart is what the customer is looking at, and a combo with a group left
+     * unanswered or a nested choice that its option does not offer is a basket nobody
+     * can be charged for: discovering that when the cart is priced is a step too late
+     * for the screen that could have said which group needs another pick. This runs
+     * the very selection rules {@link #priceCart} runs, over the very same facts, so
+     * the two cannot disagree about what a valid selection is.
+     *
+     * <p>A line that is not composite is accepted as it is, and the answer says so.
+     *
+     * @return the variants this line puts on the order: the picked components for a
+     *         combo, whose container is never sold, and the line's own variant
+     *         otherwise. The cart checks stock and sale windows on these
+     * @throws PricingRefusedException with the rule's own stable code
+     *         ({@code COMBO_GROUP_MINIMUM_NOT_MET}, {@code
+     *         MODIFIER_NESTING_DEPTH_EXCEEDED}, ...) when the selection is not allowed
+     */
+    SelectionCheck checkSelection(UUID tenantId, UUID brandId, PricingCommand.Item item);
+
+    /**
+     * What a valid selection puts on the order.
+     *
+     * @param combo true when the line is a combo, whose container has no stock, no
+     *              price and no line of its own
+     * @param soldVariantIds the variants stock and sale windows are checked on
+     */
+    record SelectionCheck(boolean combo, java.util.Set<UUID> soldVariantIds) {
+
+        public SelectionCheck {
+            soldVariantIds = java.util.Set.copyOf(soldVariantIds);
+        }
+    }
 
     /**
      * Everything a cart's total depends on, handed from ordering to pricing.
@@ -59,6 +95,11 @@ public interface CartPricingPort {
      *                    destination type, so this is pricing's own shape
      *                    ({@link GeoPoint} plus {@link PricingAuthority}, the
      *                    same pair {@code QuoteRequest.Delivery} carries)
+     * @param fulfillmentMode ADR 0136: how the order leaves the location. It decides
+     *                    which hidden auto-selected modifier groups pricing applies, so
+     *                    a dine-in cart has to say so -- nothing else distinguishes it
+     *                    from a collection. Null keeps the meaning a command has always
+     *                    had: delivery when a destination is carried, pickup otherwise
      */
     record PricingCommand(
             UUID tenantId,
@@ -70,7 +111,8 @@ public interface CartPricingPort {
             String idempotencyKey,
             @Nullable String presentedCouponCode,
             @Nullable Delivery delivery,
-            @Nullable UUID carriedRedemptionOrderId) {
+            @Nullable UUID carriedRedemptionOrderId,
+            @Nullable FulfillmentMode fulfillmentMode) {
 
         public PricingCommand {
             Objects.requireNonNull(tenantId, "A tenant id is required");
@@ -80,6 +122,32 @@ public interface CartPricingPort {
             if (items.isEmpty()) {
                 throw new IllegalArgumentException("A cart with no items has nothing to price");
             }
+        }
+
+        /** Every call site that predates ADR 0136's fulfilment mode. */
+        public PricingCommand(
+                UUID tenantId,
+                UUID brandId,
+                UUID locationId,
+                @Nullable UUID customerAccountId,
+                String channelCode,
+                List<Item> items,
+                String idempotencyKey,
+                @Nullable String presentedCouponCode,
+                @Nullable Delivery delivery,
+                @Nullable UUID carriedRedemptionOrderId) {
+            this(
+                    tenantId,
+                    brandId,
+                    locationId,
+                    customerAccountId,
+                    channelCode,
+                    items,
+                    idempotencyKey,
+                    presentedCouponCode,
+                    delivery,
+                    carriedRedemptionOrderId,
+                    null);
         }
 
         /** Every call site that predates a repricing carrying an order's own redemption. */
@@ -171,13 +239,37 @@ public interface CartPricingPort {
          *
          * @param lineKey stable within the cart, so a re-quote can be compared line
          *                by line rather than by position
+         * @param comboPicks ADR 0136: what the customer chose inside a combo. Non-empty
+         *                exactly when {@code variantId} is a combo's container, which
+         *                is never priced or sold on its own
+         * @param nestedModifiers ADR 0136: second-level selections, each naming the
+         *                first-level option whose linked variant offers it
          */
-        public record Item(String lineKey, UUID variantId, int quantity, List<UUID> modifierOptionIds) {
+        public record Item(
+                String lineKey,
+                UUID variantId,
+                int quantity,
+                List<UUID> modifierOptionIds,
+                List<ComboPick> comboPicks,
+                List<NestedModifier> nestedModifiers) {
 
             public Item {
                 modifierOptionIds = modifierOptionIds == null ? List.of() : List.copyOf(modifierOptionIds);
+                comboPicks = comboPicks == null ? List.of() : List.copyOf(comboPicks);
+                nestedModifiers = nestedModifiers == null ? List.of() : List.copyOf(nestedModifiers);
+            }
+
+            /** An ordinary line, which is every line before ADR 0136. */
+            public Item(String lineKey, UUID variantId, int quantity, List<UUID> modifierOptionIds) {
+                this(lineKey, variantId, quantity, modifierOptionIds, List.of(), List.of());
             }
         }
+
+        /** One pick inside a combo: the combo component chosen, and how many times. */
+        public record ComboPick(UUID componentId, int quantity) {}
+
+        /** A second-level modifier selection, naming the first-level option that offers it. */
+        public record NestedModifier(UUID parentOptionId, UUID optionId) {}
     }
 
     /**

@@ -118,7 +118,27 @@ public class OperatorOrderingService {
             // and the same offered-subset check a customer's own cart line
             // goes through in CartService.putLine.
             List<String> commentPresetCodes,
-            @Nullable String customerNote) {}
+            @Nullable String customerNote,
+            // ADR 0136: what the operator picked inside a combo and any second-level
+            // modifier selections, through the same cart path a customer's go through.
+            List<CartService.ComboPick> comboPicks,
+            List<CartService.NestedModifier> nestedModifiers) {
+
+        public OrderLine {
+            comboPicks = comboPicks == null ? List.of() : List.copyOf(comboPicks);
+            nestedModifiers = nestedModifiers == null ? List.of() : List.copyOf(nestedModifiers);
+        }
+
+        /** Every line that predates ADR 0136's combos and nested modifiers. */
+        public OrderLine(
+                UUID variantId,
+                int quantity,
+                List<UUID> modifierOptionIds,
+                List<String> commentPresetCodes,
+                @Nullable String customerNote) {
+            this(variantId, quantity, modifierOptionIds, commentPresetCodes, customerNote, List.of(), List.of());
+        }
+    }
 
     /**
      * Where a delivery order is going — a saved address of the resolved
@@ -326,6 +346,8 @@ public class OperatorOrderingService {
                     line.quantity(),
                     line.modifierOptionIds(),
                     line.commentPresetCodes(),
+                    line.comboPicks(),
+                    line.nestedModifiers(),
                     line.customerNote());
             version = view.cart().version();
         }

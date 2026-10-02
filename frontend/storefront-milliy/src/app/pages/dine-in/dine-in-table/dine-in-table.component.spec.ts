@@ -134,20 +134,25 @@ class FakeCartService {
     return create ? this.open([]) : null;
   });
 
+  /** What the platform's quote says it added by itself (ADR 0136); empty unless a test sets it. */
+  hiddenCharges: { lineKey: string; optionId: string; amountMinor: number }[] = [];
+
   putLine = vi.fn(
     async (input: {
       variantId: string;
       quantity: number;
       modifierOptionIds?: readonly string[];
+      comboPicks?: readonly { componentId: string; quantity: number }[];
     }) => {
       // Keyed as the real service keys it: the variant and its exact selection.
-      const lineKey = lineKeyFor(input.variantId, input.modifierOptionIds ?? []);
+      const lineKey = lineKeyFor(input.variantId, input.modifierOptionIds ?? [], input.comboPicks);
       const held = this.cart()?.lines ?? [];
       const line: PlatformCartLine = {
         lineKey,
         variantId: input.variantId,
         quantity: input.quantity,
         hasCustomerNote: false,
+        ...(input.comboPicks ? { comboPicks: input.comboPicks } : {}),
       };
       this.version++;
       return this.open(
@@ -177,6 +182,7 @@ class FakeCartService {
       totalMinor: 45_000 * count,
       expiresAt: new Date(Date.now() + 60_000).toISOString(),
       discountMinor: 0,
+      ...(this.hiddenCharges.length > 0 ? { hiddenCharges: this.hiddenCharges } : {}),
     };
   });
 
@@ -249,6 +255,7 @@ function chosenLine(
 
 class FakeMenuService {
   readonly currency = signal<string | null>('UZS');
+  readonly optionLabels = signal<ReadonlyMap<string, string>>(new Map());
   home = vi.fn<(...args: unknown[]) => Promise<CustomerUiResponse>>();
 }
 
@@ -1996,6 +2003,148 @@ describe('DineInTableComponent', () => {
  * what goes over the wire when that second call is lost -- and that the guest
  * token goes nowhere but its header.
  */
+describe('DineInTableComponent -- combos at the table (ADR 0136)', () => {
+  const component = (id: string, name: string, amountMinor: number | null, active = true) => ({
+    id,
+    name,
+    variantName: null,
+    defaultQuantity: 1,
+    active,
+    amountMinor,
+  });
+  const combo = (): MenuItem => ({
+    ...dish('p-lunch', 'Lunch box', [variant({ id: 'v-lunch', price: 22_000 })]),
+    comboGroups: [
+      {
+        id: 'g-main',
+        name: 'Main',
+        minimumSelections: 1,
+        maximumSelections: 1,
+        allowSameComponentMultipleTimes: false,
+        components: [component('c-burger', 'Burger', 25_000), component('c-wrap', 'Wrap', 22_000)],
+      },
+    ],
+  });
+
+  beforeEach(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+  });
+
+  async function seated() {
+    const view = setUp();
+    view.dineIn.seed(admission());
+    view.menuService.home.mockResolvedValue(menu([combo()]));
+    await settle(view.fixture);
+    return view;
+  }
+
+  it('offers a combo as a choice to make, never as a dish added with a plus', async () => {
+    const view = await seated();
+
+    expect(view.q('dine-in-add')).toBeNull();
+    expect(view.q('dine-in-choose')).not.toBeNull();
+  });
+
+  it('opens the combo’s choices and refuses to add until the minimum is met, writing nothing', async () => {
+    const view = await seated();
+    await view.click('dine-in-choose');
+
+    expect(view.q('picker-combo')).not.toBeNull();
+    expect((view.q('modifier-picker-add') as HTMLButtonElement).disabled).toBe(true);
+
+    await view.click('modifier-picker-add');
+
+    expect(view.carts.putLine).not.toHaveBeenCalled();
+  });
+
+  it('adds the container with the picks made, keyed by the container and a hash of the picks', async () => {
+    const view = await seated();
+    await view.click('dine-in-choose');
+
+    view.all('combo-component')[1].click();
+    view.fixture.detectChanges();
+    await view.click('modifier-picker-add');
+
+    const picks = [{ componentId: 'c-wrap', quantity: 1 }];
+    expect(view.carts.putLine).toHaveBeenCalledWith({
+      variantId: 'v-lunch',
+      quantity: 1,
+      modifierOptionIds: [],
+      comboPicks: picks,
+    });
+    expect(view.carts.cart()?.lines.map((entry) => entry.lineKey)).toEqual([
+      lineKeyFor('v-lunch', [], picks),
+    ]);
+  });
+
+  it('lists the line with the components it will become, and raises the same combo rather than adding another', async () => {
+    const view = await seated();
+    for (let round = 0; round < 2; round++) {
+      await view.click('dine-in-choose');
+      view.all('combo-component')[1].click();
+      view.fixture.detectChanges();
+      await view.click('modifier-picker-add');
+    }
+
+    expect(view.all('dine-in-custom-line').length).toBe(1);
+    expect(view.q('dine-in-custom-line')?.textContent).toContain('Lunch box');
+    expect(view.q('dine-in-custom-line-options')?.textContent).toContain('Wrap');
+    expect(view.q('dine-in-custom-quantity')?.textContent).toContain('2');
+    expect(view.carts.putLine).toHaveBeenLastCalledWith(
+      expect.objectContaining({ variantId: 'v-lunch', quantity: 2 }),
+    );
+  });
+
+  it('resends a held combo’s picks when its quantity is stepped, or the step would strip them', async () => {
+    const view = await seated();
+    await view.click('dine-in-choose');
+    view.all('combo-component')[0].click();
+    view.fixture.detectChanges();
+    await view.click('modifier-picker-add');
+
+    await view.click('dine-in-custom-increase');
+
+    expect(view.carts.putLine).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        variantId: 'v-lunch',
+        quantity: 2,
+        comboPicks: [{ componentId: 'c-burger', quantity: 1 }],
+      }),
+    );
+  });
+
+  it('itemises a charge the server added to the table’s basket, named from the menu, among the totals', async () => {
+    const view = setUp();
+    view.dineIn.seed(admission());
+    view.menuService.home.mockResolvedValue(menu([combo()]));
+    view.menuService.optionLabels.set(new Map([['o-box', 'Table service']]));
+    view.carts.hiddenCharges = [
+      { lineKey: 'v-lunchcabc~0', optionId: 'o-box', amountMinor: 2_000 },
+      { lineKey: 'v-lunchcabc~1', optionId: 'o-box', amountMinor: 2_000 },
+    ];
+    view.carts.preload([line('variant-1', 1)]);
+
+    await settle(view.fixture);
+
+    const charges = view.all('dine-in-hidden-charge');
+    expect(charges).toHaveLength(1);
+    expect(charges[0].textContent).toContain('Table service');
+    // One row per option, the amount summed over the lines it was applied to.
+    expect(charges[0].textContent).toMatch(/4.000/);
+  });
+
+  it('says nothing of the kind when the server added nothing', async () => {
+    const view = setUp();
+    view.dineIn.seed(admission());
+    view.carts.preload([line('variant-1', 1)]);
+
+    await settle(view.fixture);
+
+    expect(view.q('dine-in-hidden-charges')).toBeNull();
+  });
+});
+
 describe('DineInTableComponent -- against the real DineInService', () => {
   const ADMISSION_KEY = 'horecaos_dinein_admission';
   const ROUNDS_PATH = `/storefront/dine-in/sessions/${SESSION}/rounds`;

@@ -126,7 +126,11 @@
     "recipientRequired": "Yetkazib berish uchun qabul qiluvchining ismi va telefonini kiriting.",
     "deliveryChooseAddress": "Yetkazib berish narxini hisoblash uchun manzil tanlang.",
     "pickupLocation": "Olib ketish filiali",
-    "pickupLocationHint": "Buyurtmangizni ushbu filialdan olib ketasiz."
+    "pickupLocationHint": "Buyurtmangizni ushbu filialdan olib ketasiz.",
+    "hiddenCharge": {
+      "title": "Avtomatik qo'shilgan, jami summaga kiritilgan",
+      "fallbackLabel": "Qo'shimcha to'lov"
+    }
   },
   "orders": {
     "title": "Buyurtmalar",
@@ -271,7 +275,17 @@
     "modifiersIncomplete": "Savatga qo'shishdan oldin yuqoridagi majburiy variantlarni tanlang.",
     "presetsTitle": "Izohlar",
     "outOfSaleWindow": "Bu taom hozir sotuvda emas.",
-    "lowStock": "Faqat {{count}} ta qoldi"
+    "lowStock": "Faqat {{count}} ta qoldi",
+    "comboTitle": "Kombongizni yig'ing",
+    "comboPickExactly": "{{min}} ta tanlang",
+    "comboPickBetween": "{{min}} dan {{max}} gacha tanlang",
+    "comboPickUpTo": "{{max}} tagacha tanlang",
+    "comboIncluded": "Kiritilgan",
+    "comboNotPriced": "Narx mavjud emas",
+    "comboSoldOut": "Tugagan",
+    "comboIncomplete": "Savatga qo'shishdan oldin yuqoridagi har bir majburiy guruhdan tanlang.",
+    "comboUnavailable": "Bu kombo hozir buyurtma qilib bo'lmaydi.",
+    "fromPrice": "{{price}} dan"
   },
   "terms": {
     "agreementTitle": "Ommaviy oferta bo'yicha shartnoma",
@@ -328,7 +342,9 @@
     "claimEnding": "Stolni ushlab turish muddati tugayapti. Qoldirish uchun hozir buyurtma bering.",
     "tableNotAvailable": "Bu stolni bu yerdan band qilib boʻlmaydi. Xodimdan sizni oʻtqazishini soʻrang.",
     "tooManyForTable": "Bu stolda {{seats}} oʻrin bor. Xodimdan kattaroq stol soʻrang.",
-    "seatRateLimited": "Urinishlar juda koʻp. Biroz kuting va qayta urinib koʻring."
+    "seatRateLimited": "Urinishlar juda koʻp. Biroz kuting va qayta urinib koʻring.",
+    "comboChoose": "Kombongizni tanlang",
+    "comboChooseAction": "Tanlash"
   },
   "action": {
     "yourAddress": "Sizning manzil",

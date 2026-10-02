@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { I18n } from '../../core/i18n/i18n';
 import { OrderLine } from './order-detail';
-import { OrderChangeQuantityDialog } from './order-change-quantity-dialog';
+import { OrderChangeQuantityDialog, QuantitySubmission } from './order-change-quantity-dialog';
 
 function line(overrides: Partial<OrderLine> = {}): OrderLine {
   return {
@@ -124,5 +124,69 @@ describe('OrderChangeQuantityDialog', () => {
     dismissButton.click();
 
     expect(dismissed).toBe(true);
+  });
+
+  // ------------------------------------------------------------ ADR 0136
+
+  const combo = {
+    selectionId: 'sel-1',
+    containerVariantId: 'cv-1',
+    name: 'Lunch box',
+    quantity: 2,
+  };
+
+  it('offers a combo once, counted in combos, however many components it has', () => {
+    const { fixture } = render([
+      line({ lineId: 'a', productName: 'Burger', quantity: 2, combo }),
+      line({ lineId: 'b', productName: 'Cola', quantity: 2, combo }),
+      line({ lineId: 'c', productName: 'Soup', quantity: 1 }),
+    ]);
+    const host: HTMLElement = fixture.nativeElement;
+
+    const options = [
+      ...host.querySelectorAll('[data-testid="order-change-quantity-dialog-line"] option'),
+    ].map((option) => option.textContent?.replace(/\s+/g, ' ').trim());
+    expect(options).toEqual(['Lunch box (combos: 2)', 'Soup (Qty: 1)']);
+    expect(
+      (
+        host.querySelector(
+          '[data-testid="order-change-quantity-dialog-quantity"]',
+        ) as HTMLInputElement
+      ).value,
+    ).toBe('3');
+  });
+
+  it('sends a whole number of combos as the units that many combos put on the component line', () => {
+    const { fixture } = render([
+      // Two units of this component per combo: a quantity of 4 on the line is two combos.
+      line({ lineId: 'a', productName: 'Wings', quantity: 4, combo }),
+      line({ lineId: 'b', productName: 'Cola', quantity: 2, combo }),
+    ]);
+    const host: HTMLElement = fixture.nativeElement;
+    const submissions: QuantitySubmission[] = [];
+    fixture.componentInstance.confirm.subscribe((value) => submissions.push(value));
+
+    (
+      host.querySelector(
+        '[data-testid="order-change-quantity-dialog-confirm"]',
+      ) as HTMLButtonElement
+    ).click();
+
+    expect(submissions).toEqual([{ orderLineId: 'a', quantity: 6 }]);
+  });
+
+  it('sends an ordinary line’s quantity as it always did', () => {
+    const { fixture } = render([line({ lineId: 'c', productName: 'Soup', quantity: 1 })]);
+    const host: HTMLElement = fixture.nativeElement;
+    const submissions: QuantitySubmission[] = [];
+    fixture.componentInstance.confirm.subscribe((value) => submissions.push(value));
+
+    (
+      host.querySelector(
+        '[data-testid="order-change-quantity-dialog-confirm"]',
+      ) as HTMLButtonElement
+    ).click();
+
+    expect(submissions).toEqual([{ orderLineId: 'c', quantity: 2 }]);
   });
 });

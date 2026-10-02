@@ -370,7 +370,8 @@ class OrderAmendmentAndOutcomeTests {
                 UNWIRED_PAYMENTS,
                 protection,
                 new FakeConfigurationResolver(),
-                new PromoCodeRedemptionService(promoCodeStore, clock));
+                new PromoCodeRedemptionService(promoCodeStore, clock),
+                catalogSnapshot);
         bulkActions = new OrderBulkActionService(
                 orderStore, new JdbcBulkOperationStore(jdbc), orderState, outcomes, auditRecorder, clock);
 

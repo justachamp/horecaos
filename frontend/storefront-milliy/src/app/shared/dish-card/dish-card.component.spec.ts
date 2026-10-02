@@ -6,6 +6,7 @@ import { DishCardComponent } from './dish-card.component';
 import { TranslateService } from '../../services/translate.service';
 import type {
   MenuItem,
+  MenuItemComboGroup,
   MenuItemModifierGroup,
   MenuItemModifierOption,
   MenuItemVariant,
@@ -413,6 +414,65 @@ describe('DishCardComponent -- ordering at a table (ADR 0047)', () => {
 
       view.q('dine-in-decrease')!.click();
       expect(view.changes).toEqual([{ variantId: 'v1', quantity: 0 }]);
+    });
+  });
+
+  describe('a combo (ADR 0136)', () => {
+    const comboGroup = (overrides: Partial<MenuItemComboGroup> = {}): MenuItemComboGroup => ({
+      id: 'g-main',
+      name: 'Main',
+      minimumSelections: 1,
+      maximumSelections: 1,
+      allowSameComponentMultipleTimes: false,
+      components: [
+        {
+          id: 'c-burger',
+          name: 'Burger',
+          variantName: null,
+          defaultQuantity: 1,
+          active: true,
+          amountMinor: 25_000,
+        },
+      ],
+      ...overrides,
+    });
+    const combo = (groups: MenuItemComboGroup[] = [comboGroup()]): MenuItem => ({
+      ...dish([variant({ price: 22_000 })]),
+      comboGroups: groups,
+    });
+
+    it('offers to choose, never a plain add of a container that is not sold on its own', () => {
+      const item = combo();
+      const view = render({ item });
+
+      expect(view.q('dine-in-add')).toBeNull();
+      expect(view.q('dine-in-needs-staff')).toBeNull();
+
+      view.q('dine-in-choose')!.click();
+
+      expect(view.chooses).toEqual([{ item, variantId: 'v1' }]);
+      expect(view.changes).toEqual([]);
+    });
+
+    it('reads its price as the least it can cost, not as a price it has', () => {
+      const view = render({ item: combo() });
+
+      expect(view.host.querySelector('.dish__price')?.textContent).toContain('dish.fromPrice');
+    });
+
+    it('keeps a dish that is no combo priced exactly as before', () => {
+      const view = render({ item: dish() });
+
+      expect(view.host.querySelector('.dish__price')?.textContent).not.toContain('dish.fromPrice');
+    });
+
+    it('says only staff can put it in when a choice has too few components to reach its minimum', () => {
+      const view = render({
+        item: combo([comboGroup({ minimumSelections: 2, maximumSelections: 2 })]),
+      });
+
+      expect(view.q('dine-in-choose')).toBeNull();
+      expect(view.q('dine-in-needs-staff')).not.toBeNull();
     });
   });
 });

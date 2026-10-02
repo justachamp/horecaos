@@ -7,6 +7,7 @@ import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -32,12 +33,14 @@ import uz.horecaos.platform.catalog.domain.CatalogEntities.Product;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.PublicationItem;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.Status;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.Variant;
+import uz.horecaos.platform.catalog.domain.CompositeProducts.Visibility;
 import uz.horecaos.platform.catalog.domain.FiscalClassification;
 import uz.horecaos.platform.catalog.domain.FiscalClassification.MarkingScheme;
 import uz.horecaos.platform.catalog.domain.ItemSaleSchedule;
 import uz.horecaos.platform.catalog.domain.PublicationStatus;
 import uz.horecaos.platform.catalog.domain.ValidationFinding;
 import uz.horecaos.platform.configuration.Ids;
+import uz.horecaos.platform.tenancy.api.FulfillmentMode;
 
 /**
  * Catalog persistence (ADR 0016).
@@ -51,10 +54,24 @@ public class JdbcCatalogStore {
 
     private final JdbcClient jdbc;
     private final ObjectMapper objectMapper;
+    private final JdbcCompositeCatalogStore composite;
 
     public JdbcCatalogStore(JdbcClient jdbc, ObjectMapper objectMapper) {
         this.jdbc = jdbc;
         this.objectMapper = objectMapper;
+        this.composite = new JdbcCompositeCatalogStore(jdbc);
+    }
+
+    /**
+     * Composite products' persistence (ADR 0136): combo groups and the modifier
+     * attachments' policy.
+     *
+     * <p>Reached through the store the publication loader already holds rather than
+     * injected beside it, so the loader's several callers -- and the tests that
+     * construct one by hand -- keep building it from the same four arguments.
+     */
+    public JdbcCompositeCatalogStore composite() {
+        return composite;
     }
 
     // ---------------------------------------------------------------- authoring
@@ -421,6 +438,55 @@ public class JdbcCatalogStore {
     }
 
     /**
+     * Copies a product's modifier attachments, policy and all, to another product
+     * (ADR 0136).
+     *
+     * <p>Visibility and overrides travel with the attachment: a duplicate that kept
+     * the group but dropped a hidden packaging policy would be a dish that quietly
+     * stops charging for its box. The copy starts at version 1, like any new row.
+     */
+    public void copyProductModifierAttachments(UUID tenantId, UUID brandId, UUID fromProductId, UUID toProductId) {
+        jdbc.sql("""
+                INSERT INTO catalog.product_modifier_groups (
+                    tenant_id, brand_id, product_id, modifier_group_id, sort_order, visibility,
+                    applicable_fulfillment_modes, required_override, minimum_selections_override,
+                    maximum_selections_override)
+                SELECT tenant_id, brand_id, :toProductId, modifier_group_id, sort_order, visibility,
+                       applicable_fulfillment_modes, required_override, minimum_selections_override,
+                       maximum_selections_override
+                FROM catalog.product_modifier_groups
+                WHERE tenant_id = :tenantId AND brand_id = :brandId AND product_id = :fromProductId
+                ON CONFLICT (product_id, modifier_group_id) DO NOTHING
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("fromProductId", fromProductId)
+                .param("toProductId", toProductId)
+                .update();
+    }
+
+    /** {@link #copyProductModifierAttachments}, for the attachments a variant carries itself. */
+    public void copyVariantModifierAttachments(UUID tenantId, UUID brandId, UUID fromVariantId, UUID toVariantId) {
+        jdbc.sql("""
+                INSERT INTO catalog.variant_modifier_groups (
+                    tenant_id, brand_id, variant_id, modifier_group_id, sort_order, visibility,
+                    applicable_fulfillment_modes, required_override, minimum_selections_override,
+                    maximum_selections_override)
+                SELECT tenant_id, brand_id, :toVariantId, modifier_group_id, sort_order, visibility,
+                       applicable_fulfillment_modes, required_override, minimum_selections_override,
+                       maximum_selections_override
+                FROM catalog.variant_modifier_groups
+                WHERE tenant_id = :tenantId AND brand_id = :brandId AND variant_id = :fromVariantId
+                ON CONFLICT (variant_id, modifier_group_id) DO NOTHING
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("fromVariantId", fromVariantId)
+                .param("toVariantId", toVariantId)
+                .update();
+    }
+
+    /**
      * Whether this entity exists in this tenant and brand.
      *
      * <p>{@code catalog.translations.entity_id} is polymorphic across six tables
@@ -442,6 +508,10 @@ public class JdbcCatalogStore {
                     case VARIANT -> "SELECT 1 FROM catalog.variants";
                     case MODIFIER_GROUP -> "SELECT 1 FROM catalog.modifier_groups";
                     case MODIFIER_OPTION -> "SELECT 1 FROM catalog.modifier_options";
+                    case COMBO_GROUP -> "SELECT 1 FROM catalog.combo_groups";
+                    // ADR 0136: a pairing is named by the variant it offers; it has no
+                    // translations of its own to write against.
+                    case COMBO_COMPONENT -> null;
                     // ADR 0038: a fee reaches a receipt as a line without being a catalog
                     // item. It has no row anywhere, and no translations, so there is
                     // nothing to resolve and nothing that may be written against it.
@@ -1965,9 +2035,11 @@ public class JdbcCatalogStore {
     /**
      * Which modifier groups a product offers.
      *
-     * <p>Product-level only. {@code variant_modifier_groups} exists in V0016 and
-     * nothing writes it, so a variant-level read here would return an empty map
-     * on every catalog and quietly suggest the feature works.
+     * <p>Product-level, customer-facing attachments only. A {@code
+     * HIDDEN_AUTO_SELECT} attachment (ADR 0136) is a charge the quote applies
+     * server-side and is never a choice a customer is shown, so it is not a
+     * member of the list a client renders; publishing it here would put the
+     * delivery box on the storefront's option screen.
      */
     public Map<UUID, List<UUID>> modifierGroupIdsByProduct(UUID tenantId, UUID brandId, UUID catalogId) {
         return membership(jdbc.sql("""
@@ -1980,6 +2052,7 @@ public class JdbcCatalogStore {
                  AND mg.brand_id = pmg.brand_id
                 WHERE pmg.tenant_id = :tenantId AND pmg.brand_id = :brandId
                   AND link.catalog_id = :catalogId
+                  AND pmg.visibility = 'VISIBLE'
                 ORDER BY pmg.sort_order
                 """)
                 .param("tenantId", tenantId)
@@ -1987,18 +2060,43 @@ public class JdbcCatalogStore {
                 .param("catalogId", catalogId));
     }
 
-    /** Which modifier groups one product has attached, with their sort order. */
+    /**
+     * Which modifier groups one product has attached, with their sort order and
+     * (ADR 0136) the visibility and overrides each attachment carries.
+     */
     public List<AttachedGroup> modifierGroupsForProduct(UUID tenantId, UUID brandId, UUID productId) {
         return jdbc.sql("""
-                SELECT modifier_group_id, sort_order FROM catalog.product_modifier_groups
+                SELECT modifier_group_id, sort_order, visibility, applicable_fulfillment_modes,
+                       required_override, minimum_selections_override, maximum_selections_override, version
+                FROM catalog.product_modifier_groups
                 WHERE tenant_id = :tenantId AND brand_id = :brandId AND product_id = :productId
                 ORDER BY sort_order
                 """)
                 .param("tenantId", tenantId)
                 .param("brandId", brandId)
                 .param("productId", productId)
-                .query((row, number) ->
-                        new AttachedGroup(row.getObject("modifier_group_id", UUID.class), row.getInt("sort_order")))
+                .query((row, number) -> {
+                    java.sql.Array modes = row.getArray("applicable_fulfillment_modes");
+                    Set<FulfillmentMode> parsed = null;
+                    if (modes != null) {
+                        parsed = java.util.EnumSet.noneOf(FulfillmentMode.class);
+                        for (Object element : (Object[]) modes.getArray()) {
+                            parsed.add(FulfillmentMode.valueOf(String.valueOf(element)));
+                        }
+                    }
+                    Object required = row.getObject("required_override");
+                    Object minimum = row.getObject("minimum_selections_override");
+                    Object maximum = row.getObject("maximum_selections_override");
+                    return new AttachedGroup(
+                            row.getObject("modifier_group_id", UUID.class),
+                            row.getInt("sort_order"),
+                            Visibility.valueOf(row.getString("visibility")),
+                            parsed,
+                            required == null ? null : (Boolean) required,
+                            minimum == null ? null : ((Number) minimum).intValue(),
+                            maximum == null ? null : ((Number) maximum).intValue(),
+                            row.getInt("version"));
+                })
                 .list();
     }
 
@@ -2031,6 +2129,39 @@ public class JdbcCatalogStore {
                 .param("groupIds", groupIds.toArray(UUID[]::new))
                 .query(JdbcCatalogStore::mapModifierOption)
                 .list();
+    }
+
+    /**
+     * The names of some entities of one type, by entity and then by locale -- for a screen that
+     * reads a handful of entities and has no use for the brand's whole translation table.
+     */
+    public Map<UUID, Map<String, String>> namesFor(
+            UUID tenantId, UUID brandId, EntityType entityType, Collection<UUID> entityIds) {
+        if (entityIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, Map<String, String>> names = new LinkedHashMap<>();
+        for (TranslationRow row : jdbc.sql("""
+                        SELECT entity_id, locale, name
+                        FROM catalog.translations
+                        WHERE tenant_id = :tenantId AND brand_id = :brandId
+                          AND entity_type = :entityType AND entity_id = ANY(:ids)
+                        ORDER BY locale
+                        """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("entityType", entityType.name())
+                .param("ids", entityIds.toArray(UUID[]::new))
+                .query((row, number) -> new TranslationRow(
+                        entityType,
+                        row.getObject("entity_id", UUID.class),
+                        row.getString("locale"),
+                        row.getString("name"),
+                        null))
+                .list()) {
+            names.computeIfAbsent(row.entityId(), id -> new LinkedHashMap<>()).put(row.locale(), row.name());
+        }
+        return names;
     }
 
     public List<TranslationRow> translations(UUID tenantId, UUID brandId) {
@@ -2838,8 +2969,21 @@ public class JdbcCatalogStore {
     /** One row of {@link #productsInCatalogPage}. */
     public record ProductRow(UUID id, String code, String status, int version) {}
 
-    /** One row of {@link #modifierGroupsForProduct}: a group a product has attached, and where. */
-    public record AttachedGroup(UUID groupId, int sortOrder) {}
+    /**
+     * One row of {@link #modifierGroupsForProduct}: a group a product has attached,
+     * where, and how it is offered (ADR 0136).
+     *
+     * @param modes null = every fulfilment mode
+     */
+    public record AttachedGroup(
+            UUID groupId,
+            int sortOrder,
+            Visibility visibility,
+            @Nullable Set<FulfillmentMode> modes,
+            @Nullable Boolean requiredOverride,
+            @Nullable Integer minimumOverride,
+            @Nullable Integer maximumOverride,
+            int version) {}
 
     /**
      * Every offered priceable node a brand has, with whether ADR 0038's four

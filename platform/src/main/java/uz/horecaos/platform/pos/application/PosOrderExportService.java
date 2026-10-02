@@ -872,13 +872,28 @@ public class PosOrderExportService {
                                     "A comment preset on line %s has no provider mapping".formatted(line.lineId()))))
                     .forEach(modifiers::add);
 
+            // ADR 0136: a combo's components are exported as the ordinary lines they are, each
+            // mapped, priced and classified as its own variant. What the combo adds is the key
+            // that groups them and, when the till has the combo itself, its identifier.
+            // Resolved for the combo's container and never required: the container is not a
+            // line, so an unmapped combo is a flat export, not a refused one.
+            String comboExternalId = line.comboContainerVariantId() == null
+                    ? null
+                    : mappings.externalIdFor(binding.bindingId(), VARIANT_ENTITY, line.comboContainerVariantId())
+                            .orElse(null);
+
             lines.add(new OrderExport.Line(
                     externalId,
                     displayName(line),
                     line.quantity(),
                     line.unitAmountMinor(),
                     modifiers,
-                    lineClassifications.get(line.sourceVariantId())));
+                    lineClassifications.get(line.sourceVariantId()),
+                    line.comboSelectionId() == null
+                            ? null
+                            : line.comboSelectionId().toString(),
+                    line.comboName(),
+                    comboExternalId));
             fingerprintLines.add(new LineFingerprint.Line(externalId, line.quantity(), line.unitAmountMinor()));
         }
 

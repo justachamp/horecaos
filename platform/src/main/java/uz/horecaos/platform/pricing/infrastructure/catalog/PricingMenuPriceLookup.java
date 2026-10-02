@@ -43,6 +43,18 @@ public class PricingMenuPriceLookup implements MenuPriceLookup {
             String channelCode,
             Set<UUID> variantIds,
             Set<UUID> modifierOptionIds) {
+        return pricesFor(tenantId, brandId, locationId, channelCode, variantIds, modifierOptionIds, Set.of());
+    }
+
+    @Override
+    public Optional<MenuPrices> pricesFor(
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            String channelCode,
+            Set<UUID> variantIds,
+            Set<UUID> modifierOptionIds,
+            Set<UUID> comboComponentIds) {
 
         var now = clock.instant();
 
@@ -58,6 +70,11 @@ public class PricingMenuPriceLookup implements MenuPriceLookup {
                 .map(book -> new MenuPrices(
                         book.currency(),
                         store.pricesFor(book.id(), "VARIANT", variantIds, now),
-                        store.pricesFor(book.id(), "MODIFIER_OPTION", modifierOptionIds, now)));
+                        store.pricesFor(book.id(), "MODIFIER_OPTION", modifierOptionIds, now),
+                        // ADR 0136: a component's price is a row of the same book, found the
+                        // same way, so the number on the combo is the number the quote charges.
+                        comboComponentIds.isEmpty()
+                                ? java.util.Map.of()
+                                : store.pricesFor(book.id(), "COMBO_COMPONENT", comboComponentIds, now)));
     }
 }

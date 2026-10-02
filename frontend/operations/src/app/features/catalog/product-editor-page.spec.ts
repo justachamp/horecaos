@@ -15,6 +15,7 @@ import { MediaUploader } from '../../shared/ui/media-uploader';
 import { CapacityApi } from '../kitchen/capacity-api';
 import { ActivityLogApi } from '../staff/activity-log-api';
 import { CatalogApi } from './catalog-api';
+import { CompositeApi } from './composite-api';
 import { InventoryApi } from './inventory-api';
 import { MediaApi } from './media-api';
 import { PricingApi } from './pricing-api';
@@ -132,6 +133,16 @@ function configure(
         provide: PricingApi,
         useValue: {
           resolvedVariantPrices: () => of({ priceBookId: null, currency: null, amountsMinor: {} }),
+          resolvedComponentPrices: () =>
+            of({ priceBookId: null, currency: null, amountsMinor: {} }),
+        },
+      },
+      {
+        // ADR 0136's tabs: nothing attached to a variant, no combo group.
+        provide: CompositeApi,
+        useValue: {
+          variantAttachments: () => of([]),
+          comboGroupsOf: () => of([]),
         },
       },
       { provide: MediaApi, useValue: mediaApi },

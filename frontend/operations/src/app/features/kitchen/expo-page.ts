@@ -20,6 +20,7 @@ import { OrderDetailResponse, OrderLine } from '../orders/order-detail';
 import { ChallengeState } from '../orders/order-handover-api';
 import { OrderHandoverPanel } from '../orders/order-handover-panel';
 import { KitchenApi, StationResponse, TicketItemView, TicketResponse } from './kitchen-api';
+import { TicketItemRow, ticketItemRows } from './kitchen-ticket';
 
 /** One department's own ready count on one ticket — the roll-up gap map row 2.3 asks for. */
 export interface DepartmentRollupRow {
@@ -175,6 +176,11 @@ export class ExpoPage implements OnInit {
 
   protected lineFor(ticket: TicketResponse, item: TicketItemView): OrderLine | null {
     return this.orderLinesByOrderId().get(ticket.orderId)?.get(item.orderLineId) ?? null;
+  }
+
+  /** The ticket's items with a header ahead of each combo's components (ADR 0136). */
+  protected itemRows(ticket: TicketResponse): readonly TicketItemRow<TicketItemView>[] {
+    return ticketItemRows(ticket.items, (item) => this.lineFor(ticket, item)?.combo?.name ?? null);
   }
 
   protected stationLabel(stationId: string): string {

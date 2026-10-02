@@ -10,6 +10,8 @@ export interface BasketLineView extends BasketLine {
   readonly modifierText: string;
   /** The checked comment presets, in the console's own language. */
   readonly presetText: string;
+  /** `Burger, Cola×2` — what a combo line will become on the order; empty on every other line. */
+  readonly comboText?: string;
 }
 
 /**

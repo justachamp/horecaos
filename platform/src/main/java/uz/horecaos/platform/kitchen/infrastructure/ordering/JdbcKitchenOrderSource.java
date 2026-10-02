@@ -71,7 +71,8 @@ public class JdbcKitchenOrderSource implements KitchenOrderSource {
         }
 
         List<OrderLineForKitchen> lines = jdbc.sql("""
-                SELECT id, line_number, source_product_id, source_variant_id, quantity
+                SELECT id, line_number, source_product_id, source_variant_id, quantity,
+                       combo_selection_id, combo_container_variant_id
                 FROM ordering.order_lines
                 WHERE tenant_id = :tenantId AND order_id = :orderId
                 ORDER BY line_number
@@ -84,7 +85,9 @@ public class JdbcKitchenOrderSource implements KitchenOrderSource {
                         // Nullable in V0022: a line may name only a variant.
                         row.getObject("source_product_id", UUID.class),
                         row.getObject("source_variant_id", UUID.class),
-                        row.getInt("quantity")))
+                        row.getInt("quantity"),
+                        row.getObject("combo_selection_id", UUID.class),
+                        row.getObject("combo_container_variant_id", UUID.class)))
                 .list();
 
         Header found = header.get();

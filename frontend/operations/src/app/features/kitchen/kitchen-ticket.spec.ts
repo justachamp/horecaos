@@ -8,6 +8,7 @@ import {
   computeTicketSeverity,
   isKitchenTabId,
   isKitchenTabMember,
+  ticketItemRows,
 } from './kitchen-ticket';
 
 const POLICY = PLATFORM_DEFAULT_LATENESS_POLICY; // at_risk 300s, late_after 0s, no_promise_fallback 2700s
@@ -166,5 +167,50 @@ describe('availableItemActions', () => {
   it('offers nothing for a cancelled line or an unrecognised status', () => {
     expect(availableItemActions('CANCELLED', 'FIRED')).toEqual([]);
     expect(availableItemActions('SOMETHING_NEW', 'FIRED')).toEqual([]);
+  });
+});
+
+describe('ticketItemRows (ADR 0136)', () => {
+  const item = (itemId: string, comboSelectionId: string | null = null) => ({
+    itemId,
+    comboSelectionId,
+  });
+
+  it('puts a header ahead of each combo and keeps its components together, in the order they were ordered', () => {
+    const rows = ticketItemRows(
+      [item('a'), item('b', 'sel-1'), item('c'), item('d', 'sel-1'), item('e', 'sel-2')],
+      (it) => (it.comboSelectionId === 'sel-1' ? 'Lunch box' : 'Family box'),
+    );
+
+    expect(rows.map((row) => (row.kind === 'combo' ? `[${row.name}]` : row.item.itemId))).toEqual([
+      'a',
+      '[Lunch box]',
+      'b',
+      'd',
+      'c',
+      '[Family box]',
+      'e',
+    ]);
+    expect(rows.filter((row) => row.kind === 'item' && row.inCombo)).toHaveLength(3);
+  });
+
+  it('leaves an ordinary ticket exactly as it was: no header', () => {
+    const rows = ticketItemRows([item('a'), item('b')], () => null);
+
+    expect(rows.map((row) => row.kind)).toEqual(['item', 'item']);
+  });
+
+  it('keeps the grouping, without a name, when the line the item points at cannot be resolved', () => {
+    const rows = ticketItemRows([item('a', 'sel-1')], () => null);
+
+    expect(rows[0]).toEqual({ kind: 'combo', key: 'combo:sel-1', name: null });
+  });
+
+  it('takes the name from whichever component resolves', () => {
+    const rows = ticketItemRows([item('a', 'sel-1'), item('b', 'sel-1')], (it) =>
+      it.itemId === 'b' ? 'Lunch box' : null,
+    );
+
+    expect(rows[0]).toMatchObject({ kind: 'combo', name: 'Lunch box' });
   });
 });

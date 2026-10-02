@@ -242,6 +242,18 @@
           <span class="order__total" data-testid="dine-in-cart-total">{{ totalLabel() }}</span>
         </div>
 
+        @if (hiddenCharges().length > 0) {
+          <div class="order__hidden" data-testid="dine-in-hidden-charges">
+            <p class="order__hidden-title">{{ 'cart.hiddenCharge.title' | t }}</p>
+            @for (charge of hiddenCharges(); track charge.optionId) {
+              <p class="order__hidden-row" data-testid="dine-in-hidden-charge">
+                <span>{{ charge.label }}</span>
+                <span>{{ charge.amount }}</span>
+              </p>
+            }
+          </div>
+        }
+
         @if (paymentOptions().length > 1) {
           <div class="order__methods" data-testid="dine-in-payment-options">
             @for (code of paymentOptions(); track code) {

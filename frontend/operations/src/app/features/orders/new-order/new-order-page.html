@@ -764,6 +764,16 @@
     />
   }
 
+  @if (pendingCombo(); as combo) {
+    <q-combo-picker-dialog
+      [productName]="combo.product.name"
+      [groups]="combo.groups"
+      [currency]="menu()?.currency ?? null"
+      (confirm)="onComboConfirm($event)"
+      (dismiss)="onComboDismiss()"
+    />
+  }
+
   @if (pendingModifiers(); as pending) {
     <q-item-modifier-dialog
       [productName]="pending.product.name"

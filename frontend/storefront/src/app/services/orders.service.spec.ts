@@ -303,14 +303,17 @@ describe('OrdersService: cancel action reflects the real state-machine guard', (
     expect(detail.actions).toContain('cancel');
   });
 
-  it.each(NOT_CANCELLABLE)('offers no cancel on an order detail read at status %s', async (status) => {
-    const { service, api } = setUp();
-    api.get.mockResolvedValue(orderResponse('o1', 1, status));
+  it.each(NOT_CANCELLABLE)(
+    'offers no cancel on an order detail read at status %s',
+    async (status) => {
+      const { service, api } = setUp();
+      api.get.mockResolvedValue(orderResponse('o1', 1, status));
 
-    const detail = await firstValueFrom(service.getOrderDetail('o1'));
+      const detail = await firstValueFrom(service.getOrderDetail('o1'));
 
-    expect(detail.actions).not.toContain('cancel');
-  });
+      expect(detail.actions).not.toContain('cancel');
+    },
+  );
 });
 
 describe('OrdersService.cancelOrder (single retry)', () => {
@@ -484,5 +487,65 @@ describe('OrdersService.poll', () => {
     expect(source).toHaveBeenCalledTimes(2);
     expect(errors).toEqual([]);
     expect(emissions).toEqual(['tick 2 ok']);
+  });
+});
+
+describe('OrdersService.getOrderDetail: combos and what the server added (ADR 0136)', () => {
+  const line = (
+    overrides: Partial<OrderResponse['lines'][number]> = {},
+  ): OrderResponse['lines'][number] => ({
+    lineNumber: 1,
+    productName: 'Burger',
+    variantName: '',
+    productId: 'p1',
+    variantId: 'v1',
+    quantity: 1,
+    unitAmountMinor: 25_000,
+    finalAmountMinor: 25_000,
+    modifiers: [],
+    modifierOptionIds: [],
+    ...overrides,
+  });
+
+  async function detailOf(lines: OrderResponse['lines']) {
+    const { service, api } = setUp();
+    api.get.mockResolvedValue({ ...orderResponse('o1', 1), lines });
+    return firstValueFrom(service.getOrderDetail('o1'));
+  }
+
+  it('carries a combo line’s selection id and the name it was sold under to the screen', async () => {
+    const detail = await detailOf([
+      line({ comboSelectionId: 'sel-1', comboName: 'Lunch box' }),
+      line({
+        lineNumber: 2,
+        productName: 'Cola',
+        comboSelectionId: 'sel-1',
+        comboName: 'Lunch box',
+      }),
+      line({ lineNumber: 3, productName: 'Soup' }),
+    ]);
+
+    expect(detail.items?.map((item) => item.comboSelectionId)).toEqual(['sel-1', 'sel-1', null]);
+    expect(detail.items?.[0].comboName).toBe('Lunch box');
+  });
+
+  it('carries each option the server applied by itself, with what it cost', async () => {
+    const detail = await detailOf([
+      line({
+        autoSelectedModifiers: ['Delivery box'],
+        autoSelectedCharges: [{ name: 'Delivery box', amountMinor: 2_000 }],
+      }),
+    ]);
+
+    expect(detail.items?.[0].autoSelectedCharges).toEqual([
+      { name: 'Delivery box', amountMinor: 2_000 },
+    ]);
+  });
+
+  it('reads an order from a platform that predates both: no combo, no charges', async () => {
+    const detail = await detailOf([line()]);
+
+    expect(detail.items?.[0].comboSelectionId).toBeNull();
+    expect(detail.items?.[0].autoSelectedCharges).toEqual([]);
   });
 });

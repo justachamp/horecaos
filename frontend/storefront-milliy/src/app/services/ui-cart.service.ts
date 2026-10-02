@@ -4,7 +4,12 @@ import { ApiClient } from '../core/api/api-client';
 import { APP_CONFIG } from '../core/config/app-config';
 import { CustomerApi } from '../core/api/customer-api';
 import { HorecaOSApiError, messageKeyFor, reasonMessageKey } from '../core/api/problem-details';
-import type { CartResponse, CartResponseItem, CartResponseModifierSelection } from '../types/cart.types';
+import type {
+  CartResponse,
+  CartResponseComboComponent,
+  CartResponseItem,
+  CartResponseModifierSelection,
+} from '../types/cart.types';
 import {
   CartService,
   modifierOptionIdsFromLineKey,
@@ -17,9 +22,19 @@ import { MenuService, type PublishedModifierGroup } from './menu.service';
 import { LangService } from './lang.service';
 import { DeliverySelectionService } from './delivery-selection.service';
 import { TranslateService } from './translate.service';
+import type { ComboPickWire } from '../utils/combo-selection';
 import { variantAvailability } from '../utils/item-availability';
 
 const FALLBACK_IMAGE = '/assets/logo/Logo-sq.png';
+
+/** ADR 0136: one charge the server added by itself, for display. */
+export interface HiddenChargeRow {
+  readonly optionId: string;
+  /** What the option is called, in the customer's language. */
+  readonly label: string;
+  readonly amountMinor: number;
+  readonly amount: string;
+}
 
 /** U+2014. Shown where the platform has not answered, so a zero is never read as free. */
 const UNRESOLVED = '—';
@@ -145,6 +160,34 @@ export class UiCartService {
   readonly priceRefusalKey = signal<string | null>(null);
 
   readonly totalWithDelivery = computed(() => this.totalAmount());
+
+  /** Option id to what the customer reads on it (its name, else its code), read off the menu as the basket was last projected. */
+  private readonly optionLabels = signal<ReadonlyMap<string, string>>(new Map());
+
+  /**
+   * ADR 0136: what the server added to this order by itself -- a delivery box the customer never
+   * chose -- itemised, one row per option with the amount summed over the lines it was applied to.
+   *
+   * Already inside the lines and the total above, never on top of them: the disclosure the record
+   * asks the storefront to carry, so the total can be read against what was chosen. Empty for a cart
+   * of another fulfilment mode. The wording around it is product and legal's to settle (the
+   * record's open input), so the screen states only what is true: what it is called, what it
+   * costs, and that it is already counted.
+   */
+  readonly hiddenCharges = computed<readonly HiddenChargeRow[]>(() => {
+    this.translate.current();
+    const byOption = new Map<string, number>();
+    for (const charge of this.priced()?.hiddenCharges ?? []) {
+      byOption.set(charge.optionId, (byOption.get(charge.optionId) ?? 0) + charge.amountMinor);
+    }
+    const labels = this.optionLabels();
+    return [...byOption.entries()].map(([optionId, amountMinor]) => ({
+      optionId,
+      label: labels.get(optionId) || this.translate.get('cart.hiddenCharge.fallbackLabel'),
+      amountMinor,
+      amount: this.formatPrice(amountMinor),
+    }));
+  });
 
   /**
    * The code applied to the cart right now, ADR 0072, or null.
@@ -290,6 +333,8 @@ export class UiCartService {
         variantId: line.variantId,
         quantity: line.quantity,
         modifierOptionIds: modifierOptionIdsFromLineKey(line.lineKey, line.variantId),
+        // ADR 0136: and a combo's picks, or its container would be put back with nothing chosen.
+        ...(line.comboPicks && line.comboPicks.length > 0 ? { comboPicks: line.comboPicks } : {}),
       })) ?? [];
 
     this.fulfillmentMode.set(mode);
@@ -308,6 +353,7 @@ export class UiCartService {
           variantId: line.variantId,
           quantity: line.quantity,
           modifierOptionIds: line.modifierOptionIds,
+          ...('comboPicks' in line ? { comboPicks: line.comboPicks } : {}),
         });
       }
       await this.project(this.carts.cart());
@@ -346,6 +392,9 @@ export class UiCartService {
    *        (`CartService.lineKeyFor`), so "osh" and "osh with extra meat" are
    *        two lines and never one whose modifiers depend on which request
    *        landed last.
+   * @param comboPicks ADR 0136: what the customer picked inside a combo, set exactly when
+   *        `variantId` is a combo's container. Part of the line's identity, like the modifiers: the
+   *        same combo with other picks is another line.
    * @returns whether the platform took the line. On false, {@link errorKey}
    *          names why -- a sale-window or sold-out refusal, an expired basket,
    *          a dropped connection -- so the caller can say so instead of
@@ -356,6 +405,7 @@ export class UiCartService {
     quantity = 1,
     note?: string,
     modifierOptionIds?: readonly string[],
+    comboPicks?: readonly ComboPickWire[],
   ): Promise<boolean> {
     this.updating.set(true);
     this.errorKey.set(null);
@@ -366,6 +416,7 @@ export class UiCartService {
         quantity,
         customerNote: note,
         modifierOptionIds,
+        comboPicks,
       });
       await this.project(cart);
       return true;
@@ -401,6 +452,8 @@ export class UiCartService {
               variantId: item.variant_id,
               quantity,
               modifierOptionIds: item.modifierOptionIds,
+              // ADR 0136: resent whole, or a quantity change would strip a combo's picks.
+              comboPicks: item.comboPicks,
             });
       await this.project(cart);
     } catch (failure) {
@@ -641,9 +694,33 @@ export class UiCartService {
       for (const option of group.options) {
         modifierOptionsById.set(option.optionId, {
           groupName: group.name,
-          // Not a name: the wire's MenuModifierOption carries no name field.
-          label: option.code ?? '',
+          // The option's name in the customer's language when the menu carries one (ADR 0136),
+          // else the authoring code a menu published before options were named still sends.
+          label: option.name || option.code || '',
           amountMinor: option.amountMinor,
+        });
+      }
+    }
+    this.optionLabels.set(
+      new Map([...modifierOptionsById].map(([optionId, option]) => [optionId, option.label])),
+    );
+    // ADR 0136: a combo component, by the id a pick names.
+    const comboComponentsById = new Map<
+      string,
+      {
+        name: string;
+        variantName: string | null;
+        defaultQuantity: number;
+        amountMinor: number | null;
+      }
+    >();
+    for (const group of menu.comboGroups ?? []) {
+      for (const component of group.components) {
+        comboComponentsById.set(component.componentId, {
+          name: component.name,
+          variantName: component.variantName ?? null,
+          defaultQuantity: component.defaultQuantity,
+          amountMinor: component.amountMinor,
         });
       }
     }
@@ -659,7 +736,12 @@ export class UiCartService {
           .map((optionId) => {
             const resolved = modifierOptionsById.get(optionId);
             return resolved
-              ? { optionId, groupName: resolved.groupName, label: resolved.label, amountMinor: resolved.amountMinor }
+              ? {
+                  optionId,
+                  groupName: resolved.groupName,
+                  label: resolved.label,
+                  amountMinor: resolved.amountMinor,
+                }
               : null;
           })
           .filter((selection): selection is CartResponseModifierSelection => selection !== null);
@@ -671,6 +753,23 @@ export class UiCartService {
           active: known.orderable,
           onSaleNow: known.onSaleNow,
         });
+        // ADR 0136: a combo line's price is what one combo costs, the sum of what its picks cost
+        // inside it; the container has no price of its own. An unpriced pick has no price to add.
+        const comboPicks = line.comboPicks ?? [];
+        const comboComponents: CartResponseComboComponent[] = comboPicks.map((pick) => {
+          const component = comboComponentsById.get(pick.componentId);
+          return {
+            componentId: pick.componentId,
+            name: component?.name ?? '',
+            variantName: component?.variantName ?? null,
+            quantity: pick.quantity * (component?.defaultQuantity ?? 1),
+            amountMinor: component?.amountMinor ?? null,
+          };
+        });
+        const comboPrice = comboComponents.reduce(
+          (sum, component) => sum + (component.amountMinor ?? 0) * component.quantity,
+          0,
+        );
         const projected: CartResponseItem = {
           variant_id: line.variantId,
           // The line key, which is what an update or a removal addresses. The
@@ -679,7 +778,7 @@ export class UiCartService {
           item_id: line.lineKey,
           name: known.name,
           image: known.image ?? FALLBACK_IMAGE,
-          price: known.price,
+          price: comboPicks.length > 0 ? comboPrice : known.price,
           active: availability === 'AVAILABLE',
           ...(availability === 'AVAILABLE' ? {} : { unavailableReason: availability }),
           quantity: line.quantity,
@@ -687,6 +786,8 @@ export class UiCartService {
           note: null,
           modifierOptionIds,
           modifiers,
+          comboPicks,
+          comboComponents,
         };
         return projected;
       })
@@ -700,7 +801,15 @@ export class UiCartService {
       total: { price: this.priced()?.totalMinor ?? 0, discount: 0 },
       delivery: zero,
       packaging: zero,
-      vendor: { id: '', name: '', phone: '', active: true, pre_order: false, start: '', finish: '' },
+      vendor: {
+        id: '',
+        name: '',
+        phone: '',
+        active: true,
+        pre_order: false,
+        start: '',
+        finish: '',
+      },
       address: null,
       delivery_time: null,
       delivery_distance: 0,

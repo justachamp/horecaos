@@ -1,10 +1,20 @@
 # ADR 0136: Composite products — combo groups and modifier depth
 
 - Decision status: Accepted
-- Implementation status: Not started — none of the tables, pricing rule, or
-  authoring/cart/kitchen/export flow below exists. `catalog.variant_modifier_groups`
-  (ADR 0016, `V0016`) exists and is unwritten by any code path; nothing else here
-  has a column, a table, or a caller.
+- Implementation status: Partial — an operator can author a combo (groups, member variants, a
+  price per component, min/max, nested level, hidden auto-select modifiers by fulfilment mode and
+  per-product required/min/max overrides; V0443–V0447), publish it to the menu (COMBO_GROUP items,
+  product comboGroupIds, option names, live component prices), sell it from the New Order composer,
+  both storefronts and the cart/order API as one ordinary order line per picked component sharing
+  `combo_selection_id`, and read it as its components on the order detail, the kitchen board and
+  the expo screen; a hidden charge is itemised on the priced cart and the order. Not built: the
+  console's add-lines amendment dialog cannot choose a combo's picks (the server accepts them); the
+  fiscal receipt-line builder per component, reporting by `combo_selection_id` and the Clopos wire
+  fields; storefront modifier groups below the first level, modifiers on a combo container and
+  variant-level overrides are not published or enforced; the guest dine-in bill carries no lines;
+  duplicating a product does not copy its combo groups; the cart and quote read combo structure
+  from the live authoring rows, not the publication; the customer-facing wording that discloses a
+  hidden charge is a neutral placeholder pending product and legal.
 - Date proposed: 2026-09-25
 - Date decided: 2026-10-01
 - Deciders: proposed by Claude (wave batch 12, w2-catalog-adrs) from

@@ -158,11 +158,12 @@ public class ChannelPreviewService {
                     itemsOf(mediaPlan.items(), EntityType.CATEGORY),
                     itemsOf(mediaPlan.items(), EntityType.PRODUCT),
                     itemsOf(mediaPlan.items(), EntityType.MODIFIER_GROUP),
+                    itemsOf(mediaPlan.items(), EntityType.COMBO_GROUP),
                     authority == PriceAuthority.EXTERNAL));
         } else {
             // The channel does not sell at this branch: it would receive nothing,
             // and computing a menu for it would preview a fiction.
-            menu = new AssembledMenu(null, List.of(), List.of(), List.of());
+            menu = new AssembledMenu(null, List.of(), List.of(), List.of(), List.of());
         }
 
         List<MenuProduct> products = menu.products().stream()

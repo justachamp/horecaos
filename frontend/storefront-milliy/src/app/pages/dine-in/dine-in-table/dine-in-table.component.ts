@@ -47,6 +47,7 @@ import type {
   MenuItemVariant,
 } from '../../../types/home.types';
 import { variantAvailability } from '../../../utils/item-availability';
+import { type ComboPicks, comboValid } from '../../../utils/combo-selection';
 import { unsatisfiedGroupsFor } from '../../../utils/modifier-selection';
 
 /** How often the claim's countdown moves; a minute is the finest thing it says, so this is plenty. */
@@ -319,10 +320,28 @@ export class DineInTableComponent implements OnInit {
         };
       }
       const chosen = new Set(modifierOptionIdsFromLineKey(line.lineKey, line.variantId));
-      const options = found.item.modifierGroups
+      const modifierNames = found.item.modifierGroups
         .flatMap((group) => group.options)
         .filter((option) => chosen.has(option.id))
         .map((option) => option.label || this.translate.get('dineIn.pickerOptionUnnamed'));
+      // ADR 0136: a combo line is read back as the components it will become on the order, named
+      // from the menu this screen already holds, with the units a combo puts on the order.
+      const componentsById = new Map(
+        (found.item.comboGroups ?? []).flatMap((group) =>
+          group.components.map((component) => [component.id, component] as const),
+        ),
+      );
+      const comboNames = (line.comboPicks ?? []).map((pick) => {
+        const component = componentsById.get(pick.componentId);
+        const label = component
+          ? component.variantName
+            ? `${component.name} ${component.variantName}`
+            : component.name
+          : this.translate.get('dineIn.pickerOptionUnnamed');
+        const units = pick.quantity * (component?.defaultQuantity ?? 1);
+        return units > 1 ? `${label} ×${units}` : label;
+      });
+      const options = [...comboNames, ...modifierNames];
       return {
         lineKey: line.lineKey,
         name: found.item.name,
@@ -332,6 +351,25 @@ export class DineInTableComponent implements OnInit {
         available: variantAvailability(found.variant) === 'AVAILABLE',
       };
     });
+  });
+
+  /**
+   * ADR 0136: what the server added to the table's basket by itself -- a charge the guest never
+   * chose -- itemised, one row per option, each already inside the total. Named from the menu's
+   * options, which include the groups a screen never offers.
+   */
+  protected readonly hiddenCharges = computed(() => {
+    this.translate.current();
+    const labels = this.menuService.optionLabels();
+    const byOption = new Map<string, number>();
+    for (const charge of this.priced()?.hiddenCharges ?? []) {
+      byOption.set(charge.optionId, (byOption.get(charge.optionId) ?? 0) + charge.amountMinor);
+    }
+    return [...byOption.entries()].map(([optionId, amountMinor]) => ({
+      optionId,
+      label: labels.get(optionId) || this.translate.get('cart.hiddenCharge.fallbackLabel'),
+      amount: this.formatMinor(amountMinor, this.priced()?.currency ?? 'UZS'),
+    }));
   });
 
   protected readonly cartCount = computed(
@@ -577,11 +615,22 @@ export class DineInTableComponent implements OnInit {
       this.signIn();
       return;
     }
-    if (unsatisfiedGroupsFor(request.item.modifierGroups, selection.modifierOptionIds).length > 0) {
+    // ADR 0136: a combo's own choices are its components, and the container's modifier groups are
+    // never asked about; the rule is applied again here before any request, like the modifiers'.
+    const comboPicks = selection.comboPicks ?? [];
+    const comboGroups = request.item.comboGroups ?? [];
+    const pickRecord: ComboPicks = Object.fromEntries(
+      comboPicks.map((pick) => [pick.componentId, pick.quantity]),
+    );
+    if (
+      comboGroups.length > 0
+        ? !comboValid(comboGroups, pickRecord)
+        : unsatisfiedGroupsFor(request.item.modifierGroups, selection.modifierOptionIds).length > 0
+    ) {
       this.basketErrorKey.set('dineIn.chooseRequired');
       return;
     }
-    const lineKey = lineKeyFor(selection.variantId, selection.modifierOptionIds);
+    const lineKey = lineKeyFor(selection.variantId, selection.modifierOptionIds, comboPicks);
     const written = await this.writeBasket(async () => {
       await this.carts.ensure(
         admission.locationId,
@@ -600,6 +649,7 @@ export class DineInTableComponent implements OnInit {
         variantId: selection.variantId,
         quantity: (held?.quantity ?? 0) + selection.quantity,
         modifierOptionIds: selection.modifierOptionIds,
+        ...(comboPicks.length > 0 ? { comboPicks } : {}),
       });
     });
     if (written) {
@@ -625,6 +675,8 @@ export class DineInTableComponent implements OnInit {
           variantId: held.variantId,
           quantity: change.quantity,
           modifierOptionIds: modifierOptionIdsFromLineKey(held.lineKey, held.variantId),
+          // ADR 0136: resent whole, or a quantity change would strip a combo's picks.
+          ...(held.comboPicks && held.comboPicks.length > 0 ? { comboPicks: held.comboPicks } : {}),
         });
       }
     });

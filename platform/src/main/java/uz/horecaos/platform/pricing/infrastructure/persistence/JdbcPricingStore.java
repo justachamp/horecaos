@@ -136,7 +136,20 @@ public class JdbcPricingStore {
 
     /** Which of these variants have an active price anywhere in the brand. */
     public Set<UUID> pricedVariants(UUID tenantId, UUID brandId, Set<UUID> variantIds, Instant at) {
-        if (variantIds.isEmpty()) {
+        return pricedAnywhere(tenantId, brandId, "VARIANT", variantIds, at);
+    }
+
+    /**
+     * Which of these combo components (ADR 0136) have an active price in any active
+     * price book of the brand -- {@link #pricedVariants}' question, asked of the
+     * fourth priceable type.
+     */
+    public Set<UUID> pricedComboComponents(UUID tenantId, UUID brandId, Set<UUID> componentIds, Instant at) {
+        return pricedAnywhere(tenantId, brandId, "COMBO_COMPONENT", componentIds, at);
+    }
+
+    private Set<UUID> pricedAnywhere(UUID tenantId, UUID brandId, String type, Set<UUID> ids, Instant at) {
+        if (ids.isEmpty()) {
             return Set.of();
         }
         return Set.copyOf(jdbc.sql("""
@@ -144,13 +157,14 @@ public class JdbcPricingStore {
                 FROM pricing.prices p
                 JOIN pricing.price_books pb ON pb.id = p.price_book_id
                 WHERE p.tenant_id = :tenantId AND p.brand_id = :brandId
-                  AND p.priceable_type = 'VARIANT' AND p.priceable_id = ANY(:ids)
+                  AND p.priceable_type = :type AND p.priceable_id = ANY(:ids)
                   AND pb.status = 'ACTIVE'
                   AND p.valid_from <= :at AND (p.valid_until IS NULL OR p.valid_until > :at)
                 """)
                 .param("tenantId", tenantId)
                 .param("brandId", brandId)
-                .param("ids", variantIds.toArray(UUID[]::new))
+                .param("type", type)
+                .param("ids", ids.toArray(UUID[]::new))
                 .param("at", OffsetDateTime.ofInstant(at, ZoneOffset.UTC))
                 .query(UUID.class)
                 .list());
@@ -216,14 +230,25 @@ public class JdbcPricingStore {
             lineParams.put("base", line.baseAmount().minor());
             lineParams.put("finalAmount", line.finalAmount().minor());
             lineParams.put("tax", line.taxAmount().minor());
+            // ADR 0136. Null on every line that is not a combo component; a HashMap
+            // for the same reason variantId is one.
+            lineParams.put("comboSelectionId", line.comboSelectionId());
+            lineParams.put("comboContainerVariantId", line.comboContainerVariantId());
+            lineParams.put("comboComponentId", line.comboComponentId());
+            lineParams.put("comboQuantity", line.comboQuantity());
+            lineParams.put("comboPickQuantity", line.comboPickQuantity());
 
             jdbc.sql("""
                     INSERT INTO pricing.quote_lines (
                         quote_id, line_id, tenant_id, line_type, source_variant_id, quantity,
                         description_snapshot, unit_amount_minor, base_amount_minor,
-                        final_amount_minor, tax_amount_minor)
+                        final_amount_minor, tax_amount_minor,
+                        combo_selection_id, combo_container_variant_id,
+                        combo_component_id, combo_quantity, combo_pick_quantity)
                     VALUES (:quoteId, :lineId, :tenantId, :lineType, :variantId, :quantity,
-                        :description, :unit, :base, :finalAmount, :tax)
+                        :description, :unit, :base, :finalAmount, :tax,
+                        :comboSelectionId, :comboContainerVariantId,
+                        :comboComponentId, :comboQuantity, :comboPickQuantity)
                     """).params(lineParams).update();
         }
 
@@ -328,10 +353,19 @@ public class JdbcPricingStore {
         // fiscal receipt, and is not this change.
         List<QuoteSnapshot.Line> lines = jdbc.sql("""
                 SELECT line_id, source_variant_id, quantity, description_snapshot,
-                       unit_amount_minor, base_amount_minor, final_amount_minor, tax_amount_minor
+                       unit_amount_minor, base_amount_minor, final_amount_minor, tax_amount_minor,
+                       combo_selection_id, combo_container_variant_id,
+                       combo_component_id, combo_quantity, combo_pick_quantity
                 FROM pricing.quote_lines
                 WHERE quote_id = :quoteId AND tenant_id = :tenantId AND line_type = 'ITEM'
-                ORDER BY line_id
+                -- A combo's component lines are the cart line's key, a tilde and a position
+                -- (PricingEngine). Compared as text, position 10 would sort before position 2
+                -- and an order would list a combo's components out of the order they were
+                -- priced in; the position is compared as the number it is.
+                ORDER BY split_part(line_id, '~', 1),
+                         CASE WHEN split_part(line_id, '~', 2) ~ '^[0-9]{1,9}$'
+                              THEN split_part(line_id, '~', 2)::integer ELSE 0 END,
+                         line_id
                 """)
                 .param("quoteId", quoteId)
                 .param("tenantId", tenantId)
@@ -343,7 +377,12 @@ public class JdbcPricingStore {
                         row.getLong("unit_amount_minor"),
                         row.getLong("base_amount_minor"),
                         row.getLong("final_amount_minor"),
-                        row.getLong("tax_amount_minor")))
+                        row.getLong("tax_amount_minor"),
+                        row.getObject("combo_selection_id", UUID.class),
+                        row.getObject("combo_container_variant_id", UUID.class),
+                        row.getObject("combo_component_id", UUID.class),
+                        row.getObject("combo_quantity", Integer.class),
+                        row.getObject("combo_pick_quantity", Integer.class)))
                 .list();
 
         List<QuoteSnapshot.Adjustment> adjustments = jdbc.sql("""

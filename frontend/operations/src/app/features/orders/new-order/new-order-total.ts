@@ -28,9 +28,44 @@
 export interface BasketModifierSelection {
   readonly optionId: string;
   readonly code: string;
+  /** What the customer reads on the option, when the menu names it; the code is shown otherwise. */
+  readonly name?: string | null;
   readonly quantity: number;
   /** Null means unpriced — see this module's own doc for why that is never treated as zero. */
   readonly amountMinor: number | null;
+}
+
+/** ADR 0136: one component picked inside a combo, with what one unit of it costs in this combo. */
+export interface BasketComboPick {
+  readonly componentId: string;
+  readonly name: string;
+  /** How many times the component was picked within its group. */
+  readonly pickQuantity: number;
+  /** Units one pick puts on the order; the price below is per unit. */
+  readonly unitQuantity: number;
+  /** Null means unpriced — see this module's own doc for why that is never treated as zero. */
+  readonly amountMinor: number | null;
+}
+
+/** ADR 0136: what a combo line was built from. */
+export interface BasketCombo {
+  readonly picks: readonly BasketComboPick[];
+}
+
+/**
+ * One combo's price: every pick's component price per unit, times units per pick, times how many
+ * times it was picked. Null when any component is unpriced — the combo has no price of its own to
+ * fall back on, so a missing component price is a missing price, never a smaller total.
+ */
+export function comboAmountMinor(combo: BasketCombo): number | null {
+  let total = 0;
+  for (const pick of combo.picks) {
+    if (pick.amountMinor === null) {
+      return null;
+    }
+    total += pick.amountMinor * pick.unitQuantity * pick.pickQuantity;
+  }
+  return total;
 }
 
 export interface BasketLine {
@@ -39,7 +74,10 @@ export interface BasketLine {
   readonly variantId: string;
   readonly productName: string;
   readonly quantity: number;
+  /** For a combo line, {@link comboAmountMinor} of {@link combo}: the container itself is never priced. */
   readonly unitAmountMinor: number | null;
+  /** ADR 0136: set exactly when this line is a combo; `variantId` is then its container and `quantity` counts combos. */
+  readonly combo?: BasketCombo;
   readonly modifiers: readonly BasketModifierSelection[];
   /** Row 2.1b: the coded presets the operator checked when this line was added. */
   readonly commentPresetCodes: readonly string[];

@@ -172,3 +172,13 @@
   height: 48px;
   background: var(--q-surface-1);
 }
+
+/* ADR 0136: a combo's header row, and its component items indented beneath it. */
+.ticket__combo-head td {
+  background: var(--q-surface-1);
+  font-weight: 600;
+}
+
+.ticket__item--component td:first-child {
+  padding-left: 20px;
+}

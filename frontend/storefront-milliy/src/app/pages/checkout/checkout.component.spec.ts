@@ -3,7 +3,7 @@ import { Router, provideRouter } from '@angular/router';
 import { Component, signal } from '@angular/core';
 
 import { CheckoutComponent } from './checkout.component';
-import { UiCartService } from '../../services/ui-cart.service';
+import { UiCartService, type HiddenChargeRow } from '../../services/ui-cart.service';
 import { DeliverySelectionService } from '../../services/delivery-selection.service';
 import { AddressBookService } from '../../services/address-book.service';
 import { PaymentSessionService } from '../../services/payment-session.service';
@@ -92,6 +92,7 @@ class FakeUiCartService {
   appliedPromoCode = (): string | null => null;
   deliveryTimeDisplay = (): string | null => null;
   deliveryUnresolvedMessage = (): string | null => null;
+  hiddenCharges = (): readonly HiddenChargeRow[] => [];
 
   load = vi.fn(async () => {});
   paymentMethods = vi.fn(async (): Promise<readonly string[]> => ['CASH']);
@@ -565,5 +566,25 @@ describe('CheckoutComponent -- a basket the platform would not price on arrival'
     expect(
       fixture.nativeElement.querySelector('[data-testid="checkout-pricing-error"]'),
     ).toBeNull();
+  });
+});
+
+describe('CheckoutComponent -- what the server added by itself (ADR 0136)', () => {
+  it('itemises a charge the customer never chose beside the totals, which already include it', async () => {
+    const { fixture } = await setUp((cart) => {
+      cart.hiddenCharges = () => [
+        { optionId: 'o-box', label: 'Delivery box', amountMinor: 2_000, amount: '2 000 so‘m' },
+      ];
+    });
+
+    const rows = [...fixture.nativeElement.querySelectorAll('[data-testid="hidden-charge"]')];
+    expect(rows).toHaveLength(1);
+    expect((rows[0] as HTMLElement).textContent).toContain('Delivery box');
+  });
+
+  it('draws no such block for an order the server added nothing to', async () => {
+    const { fixture } = await setUp();
+
+    expect(fixture.nativeElement.querySelector('[data-testid="hidden-charges"]')).toBeNull();
   });
 });

@@ -1341,3 +1341,264 @@ describe('DineInTableComponent -- sitting down at a free table (ADR 0143)', () =
     });
   });
 });
+
+describe('DineInTableComponent -- combos at the table (ADR 0136)', () => {
+  const comboMenu = (): PublishedMenu => {
+    const base = menu();
+    return {
+      ...base,
+      categories: [{ ...base.categories[0], productIds: ['prod-lunch'] }],
+      products: [
+        {
+          ...base.products[0],
+          productId: 'prod-lunch',
+          name: 'Lunch box',
+          variants: [{ ...base.products[0].variants[0], variantId: 'v-lunch', amountMinor: null }],
+          comboGroupIds: ['g-main'],
+        },
+      ],
+      comboGroups: [
+        {
+          comboGroupId: 'g-main',
+          containerVariantId: 'v-lunch',
+          code: 'MAIN',
+          name: 'Main',
+          minimumSelections: 1,
+          maximumSelections: 1,
+          allowSameComponentMultipleTimes: false,
+          sortOrder: 0,
+          components: [
+            {
+              componentId: 'c-burger',
+              variantId: 'burger-v',
+              productId: null,
+              name: 'Burger',
+              variantName: null,
+              defaultQuantity: 1,
+              sortOrder: 0,
+              orderable: true,
+              amountMinor: 25_000,
+            },
+            {
+              componentId: 'c-wrap',
+              variantId: 'wrap-v',
+              productId: null,
+              name: 'Wrap',
+              variantName: null,
+              defaultQuantity: 1,
+              sortOrder: 1,
+              orderable: true,
+              amountMinor: 22_000,
+            },
+          ],
+        },
+      ],
+      modifierGroups: [
+        {
+          modifierGroupId: 'g-box',
+          code: 'BOX',
+          name: 'Box',
+          required: true,
+          minimumSelections: 1,
+          maximumSelections: 1,
+          allowSameOptionMultipleTimes: false,
+          options: [
+            {
+              optionId: 'o-box',
+              code: 'BOX',
+              maximumQuantity: 1,
+              amountMinor: 2_000,
+              name: 'Table service',
+            },
+          ],
+        },
+      ],
+    };
+  };
+
+  async function seated() {
+    const harness = setUp();
+    harness.dineIn.seed(admission());
+    harness.dineIn.bill.mockResolvedValue(bill());
+    harness.menuService.menu.mockResolvedValue(comboMenu());
+    harness.fixture.detectChanges();
+    await flush();
+    harness.fixture.detectChanges();
+    return harness;
+  }
+
+  it('offers a combo as a choice to make, not as a dish with a price and a plus', async () => {
+    const { fixture } = await seated();
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(host.querySelector('[data-testid="dine-in-combo-choose"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="dine-in-add"]')).toBeNull();
+    expect(host.querySelector('.table__item-price')?.textContent).toContain('dineIn.comboChoose');
+  });
+
+  it('opens the combo’s choices, and adds the container with the picks once they are complete', async () => {
+    const { fixture, cartService } = await seated();
+    const host = fixture.nativeElement as HTMLElement;
+    cartService.cart.set({
+      cartId: 'cart-1',
+      locationId: 'location-1',
+      status: 'OPEN',
+      currency: 'UZS',
+      fulfillmentMode: 'DINE_IN',
+      version: 1,
+      quoteId: null,
+      contextHash: null,
+      expiresAt: null,
+      lines: [],
+    });
+    cartService.ensure.mockResolvedValue(cartService.cart());
+    cartService.putLine.mockResolvedValue(cartService.cart());
+
+    (host.querySelector('[data-testid="dine-in-combo-choose"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    const add = () => host.querySelector('[data-testid="dine-in-combo-add"]') as HTMLButtonElement;
+    expect(add().disabled).toBe(true);
+
+    (host.querySelectorAll('[data-testid="combo-radio"]')[1] as HTMLInputElement).click();
+    fixture.detectChanges();
+    expect(add().disabled).toBe(false);
+    add().click();
+    await flush();
+
+    expect(cartService.putLine).toHaveBeenCalledWith({
+      variantId: 'v-lunch',
+      quantity: 1,
+      comboPicks: [{ componentId: 'c-wrap', quantity: 1 }],
+    });
+  });
+
+  it('adds one more of a combo already in the basket with the same picks', async () => {
+    const { fixture, cartService } = await seated();
+    const host = fixture.nativeElement as HTMLElement;
+    const withLine = {
+      cartId: 'cart-1',
+      locationId: 'location-1',
+      status: 'OPEN',
+      currency: 'UZS',
+      fulfillmentMode: 'DINE_IN' as const,
+      version: 2,
+      quoteId: null,
+      contextHash: null,
+      expiresAt: null,
+      lines: [
+        {
+          lineKey: 'v-lunchcabc',
+          variantId: 'v-lunch',
+          quantity: 2,
+          commentPresetCodes: [],
+          hasCustomerNote: false,
+          comboPicks: [{ componentId: 'c-wrap', quantity: 1 }],
+        },
+      ],
+    };
+    cartService.cart.set(withLine);
+    cartService.ensure.mockResolvedValue(withLine);
+    cartService.putLine.mockResolvedValue(withLine);
+
+    (host.querySelector('[data-testid="dine-in-combo-choose"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    (host.querySelectorAll('[data-testid="combo-radio"]')[1] as HTMLInputElement).click();
+    fixture.detectChanges();
+    (host.querySelector('[data-testid="dine-in-combo-add"]') as HTMLButtonElement).click();
+    await flush();
+
+    expect(cartService.putLine).toHaveBeenCalledWith(
+      expect.objectContaining({ variantId: 'v-lunch', quantity: 3 }),
+    );
+  });
+
+  it('lists the basket’s lines and, under a combo, the components it will become', async () => {
+    const { fixture, cartService } = await seated();
+    cartService.cart.set({
+      cartId: 'cart-1',
+      locationId: 'location-1',
+      status: 'OPEN',
+      currency: 'UZS',
+      fulfillmentMode: 'DINE_IN',
+      version: 2,
+      quoteId: null,
+      contextHash: null,
+      expiresAt: null,
+      lines: [
+        {
+          lineKey: 'v-lunchcabc',
+          variantId: 'v-lunch',
+          quantity: 2,
+          commentPresetCodes: [],
+          hasCustomerNote: false,
+          comboPicks: [{ componentId: 'c-wrap', quantity: 1 }],
+        },
+      ],
+    });
+    fixture.detectChanges();
+    await flush();
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+
+    const line = host.querySelector('[data-testid="dine-in-basket-line"]') as HTMLElement;
+    expect(line.textContent).toContain('Lunch box');
+    expect(line.textContent).toContain('×2');
+    expect(host.querySelector('[data-testid="dine-in-basket-combo"]')?.textContent).toContain(
+      'Wrap',
+    );
+  });
+
+  it('itemises a charge the server added to the table’s basket, named from the menu, already in the total', async () => {
+    const { fixture, cartService } = await seated();
+    const cart = {
+      cartId: 'cart-1',
+      locationId: 'location-1',
+      status: 'OPEN',
+      currency: 'UZS',
+      fulfillmentMode: 'DINE_IN' as const,
+      version: 3,
+      quoteId: null,
+      contextHash: null,
+      expiresAt: null,
+      lines: [
+        {
+          lineKey: 'v-lunchcabc',
+          variantId: 'v-lunch',
+          quantity: 1,
+          commentPresetCodes: [],
+          hasCustomerNote: false,
+          comboPicks: [{ componentId: 'c-wrap', quantity: 1 }],
+        },
+      ],
+    };
+    cartService.price.mockResolvedValue({
+      cartId: 'cart-1',
+      cartVersion: 3,
+      quoteId: 'q',
+      contextHash: 'h',
+      currency: 'UZS',
+      subtotalMinor: 22_000,
+      taxMinor: 0,
+      discountMinor: 0,
+      feeMinor: 0,
+      totalMinor: 24_000,
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+      delivery: null,
+      hiddenCharges: [
+        { lineKey: 'v-lunchcabc~0', optionId: 'o-box', amountMinor: 2_000 },
+        { lineKey: 'v-lunchcabc~1', optionId: 'o-box', amountMinor: 2_000 },
+      ],
+    });
+    cartService.cart.set(cart);
+    fixture.detectChanges();
+    await flush();
+    fixture.detectChanges();
+
+    const charge = (fixture.nativeElement as HTMLElement).querySelector(
+      '[data-testid="dine-in-hidden-charge"]',
+    );
+    expect(charge?.textContent).toContain('Table service');
+    // One row per option, the amount summed over the lines it was applied to.
+    expect(charge?.textContent).toMatch(/4.000/);
+  });
+});

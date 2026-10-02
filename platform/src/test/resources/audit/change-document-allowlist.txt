@@ -15,7 +15,7 @@
 # .changed(...); both call sites (release-override, recall) now build it
 # through ChangeDocuments.diff/created, but the helper's own line still
 # resolves as a bare identifier to the scan.
-uz/horecaos/platform/kitchen/application/KitchenTicketService.java:1143
+uz/horecaos/platform/kitchen/application/KitchenTicketService.java:1154
 
 # --- migration ---
 # MigrationAudit#record and #recordRefusal forward their `changes`

@@ -1,0 +1,46 @@
+.combo-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.combo-panel__variant,
+.combo-panel__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.combo-panel__field--check {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+}
+
+.combo-panel__form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.combo-panel__form input[type='text'],
+.combo-panel__variant select {
+  padding: 6px 8px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  font-size: var(--q-type-body-sm);
+}
+
+.combo-panel__number {
+  width: 72px;
+  padding: 6px 8px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  font-size: var(--q-type-body-sm);
+}
+
+.combo-panel__error {
+  color: var(--q-error-text);
+}

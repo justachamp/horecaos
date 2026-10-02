@@ -11,6 +11,7 @@ import {
   variantAvailability,
   type ItemAvailability,
 } from '../../utils/item-availability';
+import { canBeSatisfied as comboGroupCanBeSatisfied } from '../../utils/combo-selection';
 import { canBeSatisfied, isMandatory } from '../../utils/modifier-selection';
 import { TranslatePipe } from '../translate/translate.pipe';
 
@@ -107,15 +108,32 @@ export class DishCardComponent {
     return preferredSellableVariant(this.item())?.remainingQuantity ?? null;
   });
 
-  /** The groups the guest must choose from before this dish can be ordered. */
-  private readonly mandatoryGroups = computed(() => this.item().modifierGroups.filter(isMandatory));
+  /**
+   * ADR 0136: a combo is a dish whose container is never sold on its own -- what goes in the basket
+   * is the components the guest picks from its groups -- so it always has a choice to make, and its
+   * price is the least it can cost.
+   */
+  protected readonly isCombo = computed(() => (this.item().comboGroups ?? []).length > 0);
 
-  /** True when the dish cannot be added plain: a group the guest must choose from. */
-  protected readonly needsChoice = computed(() => this.mandatoryGroups().length > 0);
+  /** The groups the guest must choose from before this dish can be ordered; none on a combo, whose choices are its components. */
+  private readonly mandatoryGroups = computed(() =>
+    this.isCombo() ? [] : this.item().modifierGroups.filter(isMandatory),
+  );
 
-  /** The guest can make the choice here: every mandatory group offers enough options to satisfy it. */
+  /** True when the dish cannot be added plain: a group the guest must choose from, or a combo. */
+  protected readonly needsChoice = computed(
+    () => this.mandatoryGroups().length > 0 || this.isCombo(),
+  );
+
+  /**
+   * The guest can make the choice here: every mandatory group offers enough options to satisfy it,
+   * and every choice of a combo has enough orderable components to reach its minimum.
+   */
   protected readonly choosable = computed(
-    () => this.needsChoice() && this.mandatoryGroups().every(canBeSatisfied),
+    () =>
+      this.needsChoice() &&
+      this.mandatoryGroups().every(canBeSatisfied) &&
+      (this.item().comboGroups ?? []).every(comboGroupCanBeSatisfied),
   );
 
   /** The dish must be chosen from and cannot be: only a member of staff can put it in. */
@@ -196,6 +214,8 @@ export class DishCardComponent {
   protected readonly priceLabel = computed(() => {
     this.translate.current();
     const unit = this.translate.get('common.currency') || "so'm";
-    return formatMoney(money(this.item().price, this.currency() ?? 'UZS'), unit);
+    const price = formatMoney(money(this.item().price, this.currency() ?? 'UZS'), unit);
+    // A combo's own variant has no price: this is the least a guest can pay for it.
+    return this.isCombo() ? this.translate.getWithParams('dish.fromPrice', { price }) : price;
   });
 }

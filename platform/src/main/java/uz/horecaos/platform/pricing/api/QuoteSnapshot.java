@@ -88,7 +88,26 @@ public record QuoteSnapshot(
     /**
      * One item line of a priced cart.
      *
-     * @param lineKey the cart's stable line key, so lines match up without relying on order
+     * @param lineKey the cart's stable line key, so lines match up without relying on order.
+     *                A combo's component lines carry the cart line's key followed by
+     *                {@code ~} and a position, so each is stable on its own and all of them
+     *                sort next to the line they came from
+     * @param comboSelectionId ADR 0136: groups the component lines of one combo purchase,
+     *                null on every other line. An order copies it onto each component
+     *                order line, and a report counts distinct values to know how many
+     *                combos were sold
+     * @param comboContainerVariantId the combo this component was bought as part of, set
+     *                exactly when {@code comboSelectionId} is. Display and receipt-header
+     *                metadata: the container is never a line and never has an amount
+     * @param comboComponentId the {@code catalog.combo_components} pairing the line was
+     *                priced from, set exactly when {@code comboSelectionId} is. An order
+     *                keeps it so that repricing after an amendment prices the same
+     *                component at the same combo price
+     * @param comboQuantity how many combos the customer bought on the cart line, the same
+     *                on every component line of one selection
+     * @param comboPickQuantity how many times the customer picked this component inside
+     *                one combo; {@code quantity} is the product of {@code comboQuantity},
+     *                the pairing's default quantity and this
      */
     public record Line(
             String lineKey,
@@ -98,7 +117,59 @@ public record QuoteSnapshot(
             long unitAmountMinor,
             long baseAmountMinor,
             long finalAmountMinor,
-            long taxAmountMinor) {}
+            long taxAmountMinor,
+            @Nullable UUID comboSelectionId,
+            @Nullable UUID comboContainerVariantId,
+            @Nullable UUID comboComponentId,
+            @Nullable Integer comboQuantity,
+            @Nullable Integer comboPickQuantity) {
+
+        public Line {
+            if ((comboSelectionId == null) != (comboContainerVariantId == null)
+                    || (comboSelectionId == null) != (comboComponentId == null)
+                    || (comboSelectionId == null) != (comboQuantity == null)
+                    || (comboSelectionId == null) != (comboPickQuantity == null)) {
+                throw new IllegalArgumentException(
+                        "A combo component line carries its selection, container, pairing and quantities, or none");
+            }
+        }
+
+        /**
+         * The cart line this component belongs to: {@code lineKey} without the position
+         * suffix a combo's component lines carry, and {@code lineKey} itself on every
+         * other line. Ordering reads the cart line's notes and presets through it.
+         */
+        public String cartLineKey() {
+            int tilde = lineKey.lastIndexOf('~');
+            return comboSelectionId != null && tilde > 0 ? lineKey.substring(0, tilde) : lineKey;
+        }
+
+        /** A line that is not part of a combo, which is every line before ADR 0136. */
+        public Line(
+                String lineKey,
+                UUID variantId,
+                int quantity,
+                String descriptionSnapshot,
+                long unitAmountMinor,
+                long baseAmountMinor,
+                long finalAmountMinor,
+                long taxAmountMinor) {
+            this(
+                    lineKey,
+                    variantId,
+                    quantity,
+                    descriptionSnapshot,
+                    unitAmountMinor,
+                    baseAmountMinor,
+                    finalAmountMinor,
+                    taxAmountMinor,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null);
+        }
+    }
 
     /**
      * One step of the calculation, in the order it was applied.
@@ -115,5 +186,14 @@ public record QuoteSnapshot(
             UUID sourceId,
             @Nullable Integer sourceVersion,
             long amountMinor,
-            String descriptionCode) {}
+            String descriptionCode) {
+
+        /**
+         * The {@code sourceType} of an adjustment for a hidden auto-selected modifier option
+         * (ADR 0136), whose {@code sourceId} is the option itself. An order reads these to learn
+         * which options the server selected for the customer, so the string is the contract
+         * between pricing and ordering rather than either module's private spelling.
+         */
+        public static final String HIDDEN_MODIFIER_SOURCE = "HIDDEN_MODIFIER_OPTION";
+    }
 }

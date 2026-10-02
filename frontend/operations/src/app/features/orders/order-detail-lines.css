@@ -77,3 +77,18 @@
   color: var(--q-ink-muted);
   font-size: var(--q-type-caption);
 }
+
+/* ADR 0136: a combo's header row and the component lines indented beneath it. */
+.pane__combo-head td {
+  background: var(--q-surface-1);
+  font-weight: 600;
+}
+
+.pane__line--component td:nth-child(2) {
+  padding-left: 20px;
+}
+
+.pane__line-auto {
+  list-style: none;
+  padding-left: 0;
+}

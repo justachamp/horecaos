@@ -116,9 +116,27 @@
                     @if (product.description) {
                       <p class="table__item-description">{{ product.description }}</p>
                     }
-                    <p class="table__item-price">{{ formatPrice(variant.amountMinor) }}</p>
+                    <p class="table__item-price">
+                      @if (isCombo(product)) {
+                        {{ 'dineIn.comboChoose' | t }}
+                      } @else {
+                        {{ formatPrice(variant.amountMinor) }}
+                      }
+                    </p>
                   </div>
-                  @if (canOrder() && isSeated()) {
+                  @if (canOrder() && isSeated() && isCombo(product)) {
+                    <div class="table__item-actions">
+                      <button
+                        type="button"
+                        class="table__add"
+                        data-testid="dine-in-combo-choose"
+                        [disabled]="!variant.orderable || comboUnavailable(product)"
+                        (click)="toggleCombo(product.productId)"
+                      >
+                        {{ 'dineIn.comboChooseAction' | t }}
+                      </button>
+                    </div>
+                  } @else if (canOrder() && isSeated()) {
                     <div class="table__item-actions">
                       @if (quantityOf(variant.variantId) === 0) {
                         <button
@@ -156,6 +174,25 @@
                     </div>
                   }
                 </div>
+                @if (isCombo(product) && openComboProductId() === product.productId) {
+                  <div class="table__combo" data-testid="dine-in-combo">
+                    <app-combo-choices
+                      [groups]="comboGroupsOf(product)"
+                      [picks]="comboPicksOf(product.productId)"
+                      [showUnmet]="true"
+                      (picksChange)="setComboPicks(product.productId, $event)"
+                    />
+                    <button
+                      type="button"
+                      class="table__add"
+                      data-testid="dine-in-combo-add"
+                      [disabled]="!comboReady(product)"
+                      (click)="addCombo(product, variant.variantId)"
+                    >
+                      {{ 'common.add' | t }}
+                    </button>
+                  </div>
+                }
               }
             }
           </section>
@@ -182,6 +219,33 @@
               }}</span>
               <span data-testid="dine-in-cart-total">{{ totalFormatted }}</span>
             </div>
+
+            <ul class="table__lines" data-testid="dine-in-basket-lines">
+              @for (line of basketLines(); track line.lineKey) {
+                <li data-testid="dine-in-basket-line">
+                  <span>{{ line.name }} ×{{ line.quantity }}</span>
+                  @if (line.components.length > 0) {
+                    <ul class="table__line-parts" data-testid="dine-in-basket-combo">
+                      @for (component of line.components; track $index) {
+                        <li>{{ component }}</li>
+                      }
+                    </ul>
+                  }
+                </li>
+              }
+            </ul>
+
+            @if (hiddenCharges().length > 0) {
+              <div class="table__hidden" data-testid="dine-in-hidden-charges">
+                <p class="table__hidden-title">{{ 'cart.hiddenCharge.title' | t }}</p>
+                @for (charge of hiddenCharges(); track charge.optionId) {
+                  <p class="table__hidden-row" data-testid="dine-in-hidden-charge">
+                    <span>{{ charge.label }}</span>
+                    <span>{{ charge.amount }}</span>
+                  </p>
+                }
+              </div>
+            }
 
             @if (paymentOptions().length > 1) {
               <div class="table__payment-options" data-testid="dine-in-payment-options">

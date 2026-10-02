@@ -185,7 +185,12 @@ describe("OrdersComponent.repeat -- driven by the platform's plan (ADR 0074)", (
       orders.getReorderPlan.mockReturnValue(
         of(
           plan('READY', [
-            planLine({ lineNumber: 1, variantId: 'v1', quantity: 3, modifierOptionIds: ['o1', 'o2'] }),
+            planLine({
+              lineNumber: 1,
+              variantId: 'v1',
+              quantity: 3,
+              modifierOptionIds: ['o1', 'o2'],
+            }),
             planLine({ lineNumber: 2, variantId: 'v2', quantity: 1 }),
           ]),
         ),
@@ -202,6 +207,37 @@ describe("OrdersComponent.repeat -- driven by the platform's plan (ADR 0074)", (
     expect(cart.add).toHaveBeenCalledWith('v1', 3, undefined, ['o1', 'o2']);
     expect(cart.add).toHaveBeenCalledWith('v2', 1, undefined, []);
     expect(navigateSpy).toHaveBeenCalledWith(['/cart']);
+  });
+
+  it('repeats a combo as a combo: its container with the picks the order named, and an ordinary line unchanged (ADR 0136)', async () => {
+    const picks = [
+      { componentId: 'c-burger', quantity: 1 },
+      { componentId: 'c-cola', quantity: 2 },
+    ];
+    const { fixture, cart } = await setUp((orders) => {
+      orders.getOrders.mockReturnValue(of([completed()]));
+      orders.getReorderPlan.mockReturnValue(
+        of(
+          plan('READY', [
+            planLine({
+              lineNumber: 1,
+              variantId: 'v-lunch',
+              quantity: 2,
+              unitAmountMinor: null,
+              comboPicks: picks,
+            }),
+            planLine({ lineNumber: 2, variantId: 'v2', quantity: 1 }),
+          ]),
+        ),
+      );
+    });
+
+    (fixture.nativeElement.querySelector('.repeat-btn') as HTMLButtonElement).click();
+    await fixture.whenStable();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(cart.add).toHaveBeenCalledWith('v-lunch', 2, undefined, [], picks);
+    expect(cart.add).toHaveBeenCalledWith('v2', 1, undefined, []);
   });
 
   it('shows no button at all when the plan is PARTIAL', async () => {
@@ -227,7 +263,11 @@ describe("OrdersComponent.repeat -- driven by the platform's plan (ADR 0074)", (
     const { fixture } = await setUp((orders) => {
       orders.getOrders.mockReturnValue(of([completed()]));
       orders.getReorderPlan.mockReturnValue(
-        of(plan('UNAVAILABLE', [planLine({ status: 'WITHDRAWN', productId: null, unitAmountMinor: null })])),
+        of(
+          plan('UNAVAILABLE', [
+            planLine({ status: 'WITHDRAWN', productId: null, unitAmountMinor: null }),
+          ]),
+        ),
       );
     });
 
@@ -318,10 +358,12 @@ describe('OrdersComponent.repeat -- a refused line stops the repeat and says why
 
   it('does not announce "added all" or go to the basket when a dish was refused', async () => {
     const { fixture, cart, router } = await setUpRepeat((cart) => {
-      cart.add.mockImplementationOnce(async () => true).mockImplementationOnce(async () => {
-        cart.errorKey.set('errors.reason.itemOutOfSaleWindow');
-        return false;
-      });
+      cart.add
+        .mockImplementationOnce(async () => true)
+        .mockImplementationOnce(async () => {
+          cart.errorKey.set('errors.reason.itemOutOfSaleWindow');
+          return false;
+        });
     });
     const navigateSpy = vi.spyOn(router, 'navigate');
 

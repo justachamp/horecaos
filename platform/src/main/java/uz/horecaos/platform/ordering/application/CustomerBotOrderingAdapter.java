@@ -143,6 +143,11 @@ public class CustomerBotOrderingAdapter implements CustomerBotOrderingPort {
                         line.variantId(),
                         line.quantity(),
                         line.modifierOptionIds(),
+                        null,
+                        // ADR 0136: a combo is repeated as the container and what was picked
+                        // in it, a second-level choice as the first-level option it hangs off.
+                        line.comboPicks(),
+                        line.nestedModifiers(),
                         null);
                 version = view.cart().version();
             }

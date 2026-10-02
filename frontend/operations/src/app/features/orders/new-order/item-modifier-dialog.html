@@ -26,11 +26,11 @@
                 (change)="chooseSingle(group, option)"
                 data-testid="item-modifier-radio"
               />
-              <span class="q-body-sm">{{ option.code }}</span>
+              <span class="q-body-sm">{{ optionLabel(option) }}</span>
             </label>
           } @else if (isStepper(group, option)) {
             <div class="modifier-dialog__stepper-row">
-              <span class="q-body-sm">{{ option.code }}</span>
+              <span class="q-body-sm">{{ optionLabel(option) }}</span>
               <q-number-stepper
                 [value]="quantityOf(option.optionId)"
                 [min]="0"
@@ -46,7 +46,7 @@
                 (change)="toggleCheckbox(group, option)"
                 data-testid="item-modifier-checkbox"
               />
-              <span class="q-body-sm">{{ option.code }}</span>
+              <span class="q-body-sm">{{ optionLabel(option) }}</span>
             </label>
           }
           @if (formattedPrice(option.amountMinor); as price) {

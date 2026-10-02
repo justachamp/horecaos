@@ -4,6 +4,7 @@ import { ApiClient } from '../core/api/api-client';
 import { APP_CONFIG } from '../core/config/app-config';
 import { newIdempotencyKey } from '../core/api/idempotency';
 import { HorecaOSApiError, isNotFound } from '../core/api/problem-details';
+import { type ComboPickWire, comboKeyHash } from '../utils/combo-selection';
 
 /**
  * The platform cart, which is a different thing from the legacy one.
@@ -126,9 +127,15 @@ export class CartService {
     modifierOptionIds?: readonly string[];
     /** Row 2.1b: the coded presets the customer picked, resent on every write like `modifierOptionIds` — see this method's own doc. */
     commentPresetCodes?: readonly string[];
+    /**
+     * ADR 0136: what the customer picked inside a combo, set exactly when `variantId` is a combo's
+     * container (which is never sold on its own). `quantity` then counts combos. Resent whole on
+     * every write, for the same reason `modifierOptionIds` is.
+     */
+    comboPicks?: readonly ComboPickWire[];
     customerNote?: string;
   }): Promise<PlatformCart> {
-    const lineKey = lineKeyFor(input.variantId, input.modifierOptionIds ?? []);
+    const lineKey = lineKeyFor(input.variantId, input.modifierOptionIds ?? [], input.comboPicks);
     return this.withVersion((cart, version) =>
       this.api.mutate<PlatformCart>(
         'PUT',
@@ -140,6 +147,9 @@ export class CartService {
             modifierOptionIds: input.modifierOptionIds ?? [],
             commentPresetCodes: input.commentPresetCodes ?? [],
             customerNote: input.customerNote,
+            ...(input.comboPicks && input.comboPicks.length > 0
+              ? { comboPicks: input.comboPicks }
+              : {}),
           },
           expectedVersion: version,
           idempotencyKey: newIdempotencyKey(),
@@ -375,7 +385,18 @@ export class CartService {
  * Without the modifiers in it, adding "osh with extra meat" to a cart already
  * holding plain osh would replace the plain one.
  */
-export function lineKeyFor(variantId: string, modifierOptionIds: readonly string[]): string {
+export function lineKeyFor(
+  variantId: string,
+  modifierOptionIds: readonly string[],
+  comboPicks: readonly ComboPickWire[] = [],
+): string {
+  if (comboPicks.length > 0) {
+    // ADR 0136: the platform limits a combo line's key to sixty characters and a container's id
+    // is thirty-six, so the picks (and any modifiers) are hashed into a short suffix rather than
+    // spelled out. The cart reports a combo line's picks on the line itself, so nothing needs to
+    // read them back out of the key.
+    return `${variantId}c${comboKeyHash(comboPicks, modifierOptionIds)}`;
+  }
   return modifierOptionIds.length === 0
     ? variantId
     : `${variantId}+${[...modifierOptionIds].sort().join('.')}`;
@@ -445,6 +466,8 @@ export interface PlatformCartLine {
   readonly commentPresetCodes: readonly string[];
   /** Whether a note exists. Never the note itself. */
   readonly hasCustomerNote: boolean;
+  /** ADR 0136: what was picked inside a combo; absent or empty on every other line. */
+  readonly comboPicks?: readonly ComboPickWire[];
 }
 
 export interface PlatformCart {
@@ -510,6 +533,23 @@ export interface PricedCart {
   readonly totalMinor: number;
   readonly expiresAt: string;
   readonly delivery: DeliveryCharge | null;
+  /**
+   * ADR 0136: what the server added by itself for this cart's fulfilment mode -- a delivery box the
+   * customer never chose -- itemised so the total can be read against the lines. Each is already
+   * inside its line's price and `totalMinor`, never added on top. Absent from a platform that
+   * adds nothing.
+   */
+  readonly hiddenCharges?: readonly HiddenCharge[];
+}
+
+/** `StorefrontOrderingController.HiddenChargeResponse`, transcribed. */
+export interface HiddenCharge {
+  /** The cart line it was applied to; for a combo component, that line's key followed by its position. */
+  readonly lineKey: string;
+  /** The modifier option, which the published menu names. */
+  readonly optionId: string;
+  /** For the whole line, zero when the option is free. */
+  readonly amountMinor: number;
 }
 
 export interface PaymentMethods {

@@ -1,0 +1,92 @@
+<q-modal
+  [title]="'orders.newOrder.combo.title' | t: { product: productName() }"
+  [dismissible]="true"
+  (dismiss)="close()"
+  data-testid="combo-picker-dialog"
+>
+  @for (group of groups(); track group.comboGroupId) {
+    <fieldset class="combo-dialog__group" data-testid="combo-dialog-group">
+      <legend class="q-body-sm combo-dialog__legend">
+        {{ group.name }}
+        <span class="q-caption combo-dialog__range">{{
+          rangeKey(group).key | t: rangeKey(group).values
+        }}</span>
+      </legend>
+
+      @for (component of group.components; track component.componentId) {
+        <div class="combo-dialog__option" data-testid="combo-dialog-component">
+          @if (hasStepper(group) && !isSingle(group)) {
+            <div class="combo-dialog__stepper-row">
+              <span class="q-body-sm">{{ componentLabel(component) }}</span>
+              <q-number-stepper
+                [value]="quantityOf(component)"
+                [min]="0"
+                [max]="component.orderable ? ceiling(group, component) : 0"
+                (valueChange)="setQuantity(group, component, $event)"
+              />
+            </div>
+          } @else {
+            <label class="combo-dialog__option-label">
+              <input
+                [type]="isSingle(group) ? 'radio' : 'checkbox'"
+                [attr.name]="'combo-group-' + group.comboGroupId"
+                [checked]="quantityOf(component) > 0"
+                [disabled]="!component.orderable"
+                (click)="toggle(group, component)"
+                [attr.data-testid]="
+                  isSingle(group) ? 'combo-dialog-radio' : 'combo-dialog-checkbox'
+                "
+              />
+              <span class="q-body-sm">{{ componentLabel(component) }}</span>
+            </label>
+          }
+          @if (!component.orderable) {
+            <span class="q-caption combo-dialog__stopped" data-testid="combo-dialog-stopped">{{
+              'orders.newOrder.menu.stopped' | t
+            }}</span>
+          } @else {
+            <span
+              class="q-caption combo-dialog__price"
+              [class.combo-dialog__price--missing]="component.amountMinor === null"
+              >{{ priceText(component) }}</span
+            >
+          }
+        </div>
+      }
+
+      @if (isUnmet(group)) {
+        <p class="q-caption combo-dialog__error" data-testid="combo-dialog-group-error">
+          {{ 'orders.newOrder.combo.pickAtLeast' | t: { min: group.minimumSelections } }}
+        </p>
+      }
+    </fieldset>
+  }
+
+  @if (impossible().length > 0) {
+    <p class="q-caption combo-dialog__error" data-testid="combo-dialog-impossible">
+      {{ 'orders.newOrder.combo.cannotBeFilled' | t }}
+    </p>
+  }
+
+  <p class="q-body-sm combo-dialog__total" data-testid="combo-dialog-total">
+    @if (totalText(); as total) {
+      {{ 'orders.newOrder.combo.total' | t: { total: total } }}
+    } @else {
+      {{ 'orders.newOrder.combo.totalPending' | t }}
+    }
+  </p>
+
+  <ng-container qModalActions>
+    <button type="button" class="combo-dialog__dismiss q-body-sm" (click)="close()">
+      {{ 'orders.newOrder.modifiers.cancel' | t }}
+    </button>
+    <button
+      type="button"
+      class="combo-dialog__confirm q-body-sm"
+      (click)="submit()"
+      data-testid="combo-dialog-confirm"
+    >
+      {{ 'orders.newOrder.modifiers.confirm' | t }}
+    </button>
+  </ng-container>
+</q-modal>

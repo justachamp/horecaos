@@ -61,10 +61,12 @@ import {
   KITCHEN_TAB_DEFINITIONS,
   KitchenItemAction,
   KitchenTabId,
+  TicketItemRow,
   availableItemActions,
   computeTicketSeverity,
   isKitchenTabId,
   isKitchenTabMember,
+  ticketItemRows,
 } from './kitchen-ticket';
 
 /**
@@ -538,6 +540,11 @@ export class KitchenQueuePage implements OnInit {
 
   protected lineFor(ticket: TicketResponse, item: TicketItemView): OrderLine | null {
     return this.orderLinesByOrderId().get(ticket.orderId)?.get(item.orderLineId) ?? null;
+  }
+
+  /** The ticket's items with a header ahead of each combo's components (ADR 0136). */
+  protected itemRows(ticket: TicketResponse): readonly TicketItemRow<TicketItemView>[] {
+    return ticketItemRows(ticket.items, (item) => this.lineFor(ticket, item)?.combo?.name ?? null);
   }
 
   protected kitchenNoteFor(ticket: TicketResponse): string | null {

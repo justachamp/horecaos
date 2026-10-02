@@ -22,7 +22,7 @@
     <!-- Scrollable: items list + comment + bottom actions -->
     <div #scrollContainer class="min-h-0 w-full flex-1 overflow-x-hidden overflow-y-auto">
       <div class="flex w-full flex-col gap-4">
-        @for (item of cart.items(); track item.variant_id) {
+        @for (item of cart.items(); track item.item_id) {
           <article class="flex items-start gap-3">
             <div class="relative shrink-0">
               <div
@@ -41,6 +41,16 @@
               <h2 class="pr-1 text-[15px] font-bold leading-snug text-text-primary">
                 {{ item.name }}
               </h2>
+              @if (item.comboComponents && item.comboComponents.length > 0) {
+                <ul
+                  class="list-none space-y-0.5 pr-1 text-[12px] leading-snug text-zinc-400"
+                  data-testid="cart-line-combo"
+                >
+                  @for (component of item.comboComponents; track component.componentId) {
+                    <li>{{ comboComponentLabel(component) }}</li>
+                  }
+                </ul>
+              }
               @if (item.modifiers.length > 0) {
                 <p class="pr-1 text-[12px] leading-snug text-zinc-400">
                   {{ modifiersSummary(item) }}

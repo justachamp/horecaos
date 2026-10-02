@@ -88,6 +88,72 @@ describe('ExpoPage', () => {
     fixture.detectChanges();
   }
 
+  it('ADR 0136: the pass shows a combo as one header over its parts, so the packer sees the whole box', async () => {
+    const part = (itemId: string, orderLineId: string, comboSelectionId: string | null) => ({
+      itemId,
+      orderLineId,
+      stationId: 'station-1',
+      quantity: 1,
+      routedBy: 'LOCATION_VARIANT',
+      status: 'READY',
+      version: 1,
+      comboSelectionId,
+    });
+    const board: BoardResponse = {
+      tickets: [
+        ready({
+          items: [
+            part('i-1', 'line-burger', 'sel-1'),
+            part('i-2', 'line-cola', 'sel-1'),
+            part('i-3', 'line-soup', null),
+          ],
+        }),
+      ],
+      warnings: [],
+    };
+    const line = (lineId: string, productName: string, combo: object | null) => ({
+      lineNumber: 1,
+      productName,
+      quantity: 1,
+      finalAmountMinor: 1000,
+      modifiers: [],
+      commentPresets: [],
+      lineId,
+      hasNote: false,
+      combo,
+    });
+    const combo = {
+      selectionId: 'sel-1',
+      containerVariantId: 'cv-1',
+      name: 'Lunch box',
+      quantity: 1,
+    };
+    await render({ board: () => Promise.resolve(board), stations: () => Promise.resolve([]) }, {
+      get: () =>
+        of({
+          value: {
+            lines: [
+              line('line-burger', 'Burger', combo),
+              line('line-cola', 'Cola', combo),
+              line('line-soup', 'Soup', null),
+            ],
+            kitchenNote: null,
+          },
+          version: null,
+        }),
+    } as unknown as Partial<ApiClient>);
+
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelectorAll('[data-testid="expo-combo-head"]')).toHaveLength(1);
+    const rows = [...host.querySelectorAll('.ticket__items tbody tr')].map((row) =>
+      row.textContent?.replace(/\s+/g, ' ').trim(),
+    );
+    expect(rows[0]).toContain('Lunch box');
+    expect(rows[1]).toContain('Burger');
+    expect(rows[2]).toContain('Cola');
+    expect(rows[3]).toContain('Soup');
+  });
+
   it('renders the ready queue with each line’s station', async () => {
     const board: BoardResponse = { tickets: [ready({})], warnings: [] };
     await render({ board: () => Promise.resolve(board), stations: () => Promise.resolve([]) });

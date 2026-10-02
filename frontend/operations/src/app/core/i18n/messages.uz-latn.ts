@@ -270,6 +270,7 @@ export const messagesUzLatn: MessageCatalogue = {
 
   'orders.dialog.changeQuantity.line': 'Pozitsiya',
   'orders.dialog.changeQuantity.newQuantity': 'Yangi miqdor (kamida {min})',
+  'orders.dialog.changeQuantity.comboOption': '{name} (kombo: {count})',
 
   'orders.dialog.changeAddress.line2': 'Manzil, 2-qator',
   'orders.dialog.changeAddress.city': 'Shahar',
@@ -325,6 +326,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'orders.detail.lines.column.name': 'Nomi',
   'orders.detail.lines.column.quantity': 'Soni',
   'orders.detail.lines.column.amount': 'Summa',
+  'orders.detail.lines.combo.caption': 'Kombo',
+  'orders.detail.lines.autoAdded': 'avtomatik qoʻshilgan',
   'orders.detail.lines.snapshotNotice': 'Nomlar va narxlar buyurtma berilgan paytda qayd etilgan.',
   'orders.detail.lines.note.hidden': '💬 izoh bor',
   'orders.detail.lines.note.empty': 'izoh yoʻq',
@@ -2362,6 +2365,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'catalog.editor.tab.basic': 'Asosiy',
   'catalog.editor.tab.variants': 'Variantlar',
   'catalog.editor.tab.modifiers': 'Modifikatorlar',
+  'catalog.editor.tab.combo': 'Kombo',
   'catalog.editor.tab.photos': 'Rasmlar',
   'catalog.editor.tab.fiscal': 'Fiskal maʻlumotlar',
   'catalog.editor.tab.availability': 'Mavjudlik',
@@ -2511,6 +2515,86 @@ export const messagesUzLatn: MessageCatalogue = {
   'catalog.editor.finding.FISCAL_CLASSIFICATION_NOT_ENFORCED':
     'IKPUsiz {count} ta pozitsiya — agregatorlar menyuni rad etadi',
   'catalog.editor.finding.PRICING_VALIDATION_NOT_WIRED': 'Narx tekshiruvi bajarilmadi',
+  'catalog.editor.finding.COMBO_COMPONENT_HAS_NO_ACTIVE_PRICE': 'Kombo komponentining narxi yoʻq',
+  'catalog.editor.finding.COMBO_HAS_NO_PRICED_COMPONENTS': 'Kombo tarkibida narxli komponent yoʻq',
+  'catalog.editor.finding.COMBO_GROUP_MINIMUM_UNSATISFIABLE':
+    'Kombo guruhi komponentlar bera oladiganidan koʻproq talab qiladi',
+  'catalog.editor.finding.COMBO_COMPONENT_LINKS_INACTIVE_VARIANT':
+    'Kombo komponenti nofaol variantga ishora qiladi',
+  'catalog.editor.finding.HIDDEN_MODIFIER_GROUP_AMBIGUOUS_DEFAULT':
+    'Yashirin guruh majburiy boʻlishi va aynan bitta faol variantga ega boʻlishi kerak',
+  'catalog.editor.finding.MODIFIER_NESTING_DEPTH_EXCEEDED':
+    'Modifikatorlar bir darajadan chuqurroq ichma-ich joylashgan',
+  'catalog.editor.finding.MODIFIER_ATTACHMENT_OVERRIDE_CONTRADICTS':
+    'Mahsulotning guruh uchun qoidasi bajarib boʻlmaydi',
+  'catalog.editor.combo.hint':
+    'Kombo — varianti konteyner vazifasini bajaradigan mahsulot. Mehmon quyidagi guruhlardan komponentlarni tanlaydi, har bir komponent narxi shu yerda alohida belgilanadi. Komboning oʻzi narxga ega emas, shuning uchun har bir komponent chekda alohida fiskal qatorga tushadi.',
+  'catalog.editor.combo.container': 'Konteyner varianti',
+  'catalog.editor.combo.loading': 'Kombo yuklanmoqda…',
+  'catalog.editor.combo.loadFailed': 'Kombo guruhlarini yuklab boʻlmadi.',
+  'catalog.editor.combo.empty':
+    'Bu variant hali kombo emas. Quyida tanlov guruhini qoʻshing — u kombo boʻladi.',
+  'catalog.editor.combo.create': 'Tanlov guruhini qoʻshish',
+  'catalog.editor.combo.minimum': 'Kamida',
+  'catalog.editor.combo.maximum': 'Koʻpi bilan',
+  'catalog.editor.combo.allowRepeat': 'Bir komponentni bir necha marta tanlash mumkin',
+  'catalog.editor.combo.status': 'Holati',
+  'catalog.editor.combo.range': '{min} dan {max} gacha tanlash',
+  'catalog.editor.combo.unsatisfiable':
+    'Guruh kamida {min} ta talab qiladi, faol komponentlar esa faqat {capacity} ta beradi. Nashr bloklanadi.',
+  'catalog.editor.combo.noComponents':
+    'Komponentlar hali yoʻq. Mehmon tanlashi mumkin boʻlgan taom va ichimliklarni qoʻshing.',
+  'catalog.editor.combo.column.component': 'Komponent',
+  'catalog.editor.combo.column.quantity': 'Tanlovdagi soni',
+  'catalog.editor.combo.column.price': 'Ushbu kombodagi narxi',
+  'catalog.editor.combo.column.status': 'Holati',
+  'catalog.editor.combo.notPriced': 'Narxi belgilanmagan',
+  'catalog.editor.combo.addComponent': 'Komponent qoʻshish',
+  'catalog.editor.combo.addComponent.placeholder': 'Taom yoki ichimlik qidirish',
+  'catalog.editor.combo.refusal.COMBO_NESTING_FORBIDDEN':
+    'Kombo boshqa kombini oʻz ichiga ola olmaydi, kombo tarkibidagi taom esa kombo boʻla olmaydi.',
+  'catalog.editor.combo.refusal.COMBO_GROUP_RANGE_INVALID':
+    'Oraliq mumkin emas: minimum maksimumdan katta.',
+  'catalog.editor.combo.refusal.COMBO_COMPONENT_ALREADY_IN_GROUP':
+    'Bu taom allaqachon shu guruhda bor.',
+  'catalog.editor.combo.refusal.COMBO_COMPONENT_VARIANT_NOT_ACTIVE':
+    'Arxivlangan taomni kombo tarkibida taklif qilib boʻlmaydi.',
+  'catalog.editor.policy.title': 'Mahsulot har bir guruhni qanday taklif qiladi',
+  'catalog.editor.policy.hint':
+    'Bu sozlamalar faqat shu mahsulotga tegishli. Umumiy guruh oʻzgarmaydi, uni ishlatadigan boshqa mahsulotlarga taʻsir qilmaydi.',
+  'catalog.editor.policy.empty':
+    'Taklif qilinishini sozlash uchun yuqorida modifikator guruhini biriktiring.',
+  'catalog.editor.policy.visibility': 'Qanday taklif qilinadi',
+  'catalog.editor.policy.visibility.VISIBLE': 'Mehmon tanlovi',
+  'catalog.editor.policy.visibility.HIDDEN_AUTO_SELECT':
+    'Avtomatik qoʻshiladi, mehmonga koʻrsatilmaydi',
+  'catalog.editor.policy.hiddenHint':
+    'Uning yagona varianti quyidagi turdagi har bir buyurtmada mehmon ishtirokisiz hisoblanadi va buyurtmada alohida qator sifatida koʻrinadi.',
+  'catalog.editor.policy.hiddenNeedsOne':
+    'Yashirin guruh majburiy boʻlishi va aynan bitta faol variantga ega boʻlishi kerak, aks holda nashr bloklanadi.',
+  'catalog.editor.policy.modes': 'Quyidagi buyurtmalarga qoʻllanadi',
+  'catalog.editor.policy.mode.DELIVERY': 'Yetkazib berish',
+  'catalog.editor.policy.mode.PICKUP': 'Olib ketish',
+  'catalog.editor.policy.mode.DINE_IN': 'Zalda',
+  'catalog.editor.policy.modesNone': 'Kamida bitta buyurtma turini tanlang.',
+  'catalog.editor.policy.groupValues':
+    'Guruhning oʻzi: {required}, kamida {min}, koʻpi bilan {max}',
+  'catalog.editor.policy.required.yes': 'majburiy',
+  'catalog.editor.policy.required.no': 'ixtiyoriy',
+  'catalog.editor.policy.overrideTitle': 'Shu mahsulot uchun oʻzgartirish',
+  'catalog.editor.policy.overrideHint':
+    'Guruh qiymatidan foydalanish uchun maydonni «guruhniki» holatida qoldiring.',
+  'catalog.editor.policy.groupOwn': 'Guruhniki',
+  'catalog.editor.policy.requiredOverride': 'Majburiylik',
+  'catalog.editor.policy.requiredOverride.yes': 'Majburiy',
+  'catalog.editor.policy.requiredOverride.no': 'Ixtiyoriy',
+  'catalog.editor.nested.title':
+    'Variant modifikator sifatida tanlanganda taklif qilinadigan tanlovlar',
+  'catalog.editor.nested.hint':
+    'Boshqa mahsulot guruhining varianti shu mahsulotning varianti boʻlsa, uning ostida bu yerga biriktirilgan guruhlar taklif qilinadi. Faqat bir daraja: uchinchi daraja nashrda rad etiladi.',
+  'catalog.editor.nested.none': 'Variantga guruhlar biriktirilmagan',
+  'catalog.editor.nested.attach': 'Guruh biriktirish',
+  'catalog.editor.nested.choose': 'Guruhni tanlang',
 
   'catalog.publish.action': 'Chop etish',
   'catalog.publish.title': 'Katalogni chop etish',
@@ -2893,6 +2977,8 @@ export const messagesUzLatn: MessageCatalogue = {
   'kitchen.item.column.quantity': 'Soni',
   'kitchen.item.column.status': 'Holati',
   'kitchen.item.lineUnresolved': 'Qator —',
+  'kitchen.item.combo': 'Kombo',
+  'kitchen.item.comboCaption': 'har bir qism oʻz stansiyasiga boradi',
   'kitchen.item.status.QUEUED': 'Navbatda',
   'kitchen.item.status.STARTED': 'Ishda',
   'kitchen.item.status.READY': 'Tayyor',
@@ -6155,6 +6241,16 @@ export const messagesUzLatn: MessageCatalogue = {
   'orders.newOrder.modifiers.selectAtLeast': 'Kamida {min} tani tanlang',
   'orders.newOrder.modifiers.confirm': 'Buyurtmaga qoʻshish',
   'orders.newOrder.modifiers.cancel': 'Bekor qilish',
+  'orders.newOrder.combo.title': '«{product}» ni yigʻing',
+  'orders.newOrder.combo.pickExactly': '{min} ta tanlang',
+  'orders.newOrder.combo.pickBetween': '{min} dan {max} gacha tanlang',
+  'orders.newOrder.combo.pickAtLeast': 'Kamida {min} ta tanlang',
+  'orders.newOrder.combo.notPriced': 'narxi belgilanmagan',
+  'orders.newOrder.combo.included': 'kiritilgan',
+  'orders.newOrder.combo.cannotBeFilled':
+    'Bu kombo hozir yigʻib boʻlmaydi: guruhlardan birida mavjud mahsulot yoʻq.',
+  'orders.newOrder.combo.total': 'Kombo jami: {total}',
+  'orders.newOrder.combo.totalPending': 'Jami aniqlanmadi: tanlangan komponentning narxi yoʻq',
   'orders.newOrder.presets.title': 'Izohlar',
   'orders.newOrder.basket.title': 'Savat',
   'orders.newOrder.basket.empty': 'Hozircha boʻsh',

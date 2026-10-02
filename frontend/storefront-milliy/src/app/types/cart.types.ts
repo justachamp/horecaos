@@ -41,6 +41,19 @@ export interface CartResponseModifierSelection {
   readonly amountMinor: number | null;
 }
 
+/**
+ * ADR 0136: one component of a combo line, resolved against the menu for display. `quantity` is the
+ * units this line puts on the order for the component (picks times units per pick), per combo.
+ */
+export interface CartResponseComboComponent {
+  readonly componentId: string;
+  readonly name: string;
+  readonly variantName: string | null;
+  readonly quantity: number;
+  /** Per unit; null when the component is no longer priced, which the screen shows as unpriced. */
+  readonly amountMinor: number | null;
+}
+
 /** Cart item from GET /customers/carts/ response */
 export interface CartResponseItem {
   variant_id: string;
@@ -65,6 +78,14 @@ export interface CartResponseItem {
   modifierOptionIds: readonly string[];
   /** The same selections, resolved against the menu for display. */
   modifiers: readonly CartResponseModifierSelection[];
+  /**
+   * ADR 0136: what was picked inside a combo, straight off the platform's `CartLineResponse`.
+   * Resent whole on every write to this line, like `modifierOptionIds`. Empty on every line that is
+   * no combo, and `variant_id` is then the combo's container: never sold on its own.
+   */
+  comboPicks?: readonly { readonly componentId: string; readonly quantity: number }[];
+  /** The same picks, resolved against the menu for display; `price` is then what one combo costs. */
+  comboComponents?: readonly CartResponseComboComponent[];
 }
 
 /** Vendor from cart response */

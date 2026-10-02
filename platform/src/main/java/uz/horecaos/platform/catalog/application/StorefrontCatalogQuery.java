@@ -149,6 +149,7 @@ public class StorefrontCatalogQuery {
                 store.publicationItems(publication, EntityType.CATEGORY),
                 store.publicationItems(publication, EntityType.PRODUCT),
                 store.publicationItems(publication, EntityType.MODIFIER_GROUP),
+                store.publicationItems(publication, EntityType.COMBO_GROUP),
                 false));
         return Optional.of(new StorefrontMenu(
                 publication,
@@ -156,7 +157,8 @@ public class StorefrontCatalogQuery {
                 assembled.currency(),
                 assembled.categories(),
                 assembled.products(),
-                assembled.modifierGroups()));
+                assembled.modifierGroups(),
+                assembled.comboGroups()));
     }
 
     /**
@@ -206,6 +208,9 @@ public class StorefrontCatalogQuery {
         List<PublicationItem> categoryItems = input.categoryItems();
         List<PublicationItem> productItems = input.productItems();
         List<PublicationItem> groupItems = input.groupItems();
+        // ADR 0136: empty on a publication that carries no combo, which is every one written
+        // before the kind existed and every brand that has authored none.
+        List<PublicationItem> comboItems = input.comboItems();
 
         // Row 2.1b: which presets each product offers, read live for the same
         // reason offeringByVariant is — see CommentPresetLookup's own doc.
@@ -251,7 +256,9 @@ public class StorefrontCatalogQuery {
                     commentPresetsOf(
                             presetsByProduct.getOrDefault(item.entityId(), List.of()),
                             presetTranslations,
-                            presetPreference)));
+                            presetPreference),
+                    idList(item.content(), "comboGroupIds"),
+                    policiesOf(item.content())));
         }
 
         // A product the location does not offer was dropped above. Its id must
@@ -287,7 +294,7 @@ public class StorefrontCatalogQuery {
                         intOf(item.content(), "minimumSelections"),
                         intOf(item.content(), "maximumSelections"),
                         Boolean.TRUE.equals(item.content().get("allowSameOptionMultipleTimes")),
-                        optionsOf(item)))
+                        optionsOf(item, namePreference)))
                 .toList();
 
         // ADR 0018. Resolved against the same price book the quote will use, on
@@ -304,27 +311,40 @@ public class StorefrontCatalogQuery {
                 .map(MenuModifierOption::optionId)
                 .collect(Collectors.toUnmodifiableSet());
 
+        List<MenuComboGroup> comboGroups = combosOf(comboItems, namePreference);
+        Set<UUID> componentIds = comboGroups.stream()
+                .flatMap(group -> group.components().stream())
+                .map(MenuComboComponent::componentId)
+                .collect(Collectors.toUnmodifiableSet());
+
         // ADR 0138: an externally priced channel's number is set by the
         // aggregator, not by a price book, so a preview of it carries none at
         // all rather than implying one. A customer-facing read never asks for
         // this (the flag is false there); asking for it is a preview's choice.
         Optional<MenuPriceLookup.MenuPrices> resolved = input.externallyPriced()
                 ? Optional.empty()
-                : prices.pricesFor(tenantId, brandId, locationId, channelCode, variantIds, optionIds);
+                : prices.pricesFor(tenantId, brandId, locationId, channelCode, variantIds, optionIds, componentIds);
 
         String currency = resolved.map(MenuPriceLookup.MenuPrices::currency).orElse(null);
         Map<UUID, Long> variantPrices =
                 resolved.map(MenuPriceLookup.MenuPrices::variantPrices).orElse(Map.of());
         Map<UUID, Long> optionPrices =
                 resolved.map(MenuPriceLookup.MenuPrices::modifierOptionPrices).orElse(Map.of());
+        Map<UUID, Long> componentPrices =
+                resolved.map(MenuPriceLookup.MenuPrices::comboComponentPrices).orElse(Map.of());
 
         // Rows 4.4c/4.4d, storefront half: one batched read for the whole
         // page, keyed by the caller's own channel exactly as prices.pricesFor
         // above is, so a QUANTITY item at zero remaining or a stopped BINARY
         // item stops rendering orderable here instead of only at checkout's
         // own inventory hold.
+        // ADR 0136: stock is held on a combo's components, not on its container, so the
+        // components' variants are asked about too.
+        Set<UUID> availabilityVariantIds = new java.util.HashSet<>(variantIds);
+        comboGroups.forEach(
+                group -> group.components().forEach(component -> availabilityVariantIds.add(component.variantId())));
         Map<UUID, VariantAvailability> availabilityByVariant =
-                availability.availabilityFor(tenantId, brandId, locationId, channelCode, variantIds);
+                availability.availabilityFor(tenantId, brandId, locationId, channelCode, availabilityVariantIds);
 
         List<MenuProduct> pricedProducts = products.stream()
                 .map(product -> product.withPrices(variantPrices))
@@ -334,7 +354,132 @@ public class StorefrontCatalogQuery {
                 .map(group -> group.withPrices(optionPrices))
                 .toList();
 
-        return new AssembledMenu(currency, categories, pricedProducts, pricedGroups);
+        // A component is shown when the location offers it at all, and orderable only when
+        // everything that makes a variant orderable says so -- the same four reads a product's
+        // own variants go through above. One the location does not offer is absent, like a
+        // product it does not serve.
+        List<MenuComboGroup> pricedCombos = comboGroups.stream()
+                .map(group -> group.withComponents(group.components().stream()
+                        .filter(component ->
+                                isOffered(component.variantId(), offeringByVariant, channelExcludedVariantIds))
+                        .map(component -> component.priced(
+                                componentPrices.get(component.componentId()),
+                                offeringByVariant.get(component.variantId()) == OfferingStatus.AVAILABLE
+                                        && !outOfWindowVariantIds.contains(component.variantId())
+                                        && orderableByInventory(availabilityByVariant, component.variantId())))
+                        .toList()))
+                .toList();
+        // A combo cannot be sold while one of its groups can no longer collect its minimum from
+        // what is orderable, whatever the container's own offering says: shown as unavailable
+        // rather than let a customer fill a basket the cart then refuses by name.
+        Set<UUID> unsatisfiableContainers = pricedCombos.stream()
+                .filter(group -> !group.satisfiable())
+                .map(MenuComboGroup::containerVariantId)
+                .collect(Collectors.toUnmodifiableSet());
+        List<MenuProduct> comboAwareProducts = unsatisfiableContainers.isEmpty()
+                ? pricedProducts
+                : pricedProducts.stream()
+                        .map(product -> product.withoutOrderable(unsatisfiableContainers))
+                        .toList();
+
+        return new AssembledMenu(currency, categories, comboAwareProducts, pricedGroups, pricedCombos);
+    }
+
+    private static boolean isOffered(
+            UUID variantId, Map<UUID, OfferingStatus> offeringByVariant, Set<UUID> channelExcludedVariantIds) {
+        OfferingStatus offering = offeringByVariant.get(variantId);
+        return offering != null && offering != OfferingStatus.HIDDEN && !channelExcludedVariantIds.contains(variantId);
+    }
+
+    private static boolean orderableByInventory(Map<UUID, VariantAvailability> byVariant, UUID variantId) {
+        VariantAvailability decision = byVariant.get(variantId);
+        return decision == null || decision.orderable();
+    }
+
+    /**
+     * Every combo group of the publication, resolved into the customer's language. Prices and
+     * availability are attached after the whole menu is read, as they are for a variant.
+     */
+    @SuppressWarnings("unchecked")
+    private static List<MenuComboGroup> combosOf(List<PublicationItem> items, List<String> preference) {
+        List<MenuComboGroup> groups = new ArrayList<>();
+        for (PublicationItem item : items) {
+            Map<String, Object> content = item.content();
+            List<MenuComboComponent> components = new ArrayList<>();
+            if (content.get("components") instanceof List<?> published) {
+                for (Object element : published) {
+                    Map<String, Object> component = (Map<String, Object>) element;
+                    String dish = nameIn(component.get("productNames"), preference);
+                    String size = nameIn(component.get("variantNames"), preference);
+                    String productId = string(component, "productId");
+                    components.add(new MenuComboComponent(
+                            UUID.fromString(String.valueOf(component.get("componentId"))),
+                            UUID.fromString(String.valueOf(component.get("variantId"))),
+                            productId == null ? null : UUID.fromString(productId),
+                            // A component with no wording at all is the empty string rather than
+                            // "null": the same "odd label beats a failed menu" choice name() makes.
+                            dish != null ? dish : size != null ? size : "",
+                            dish != null ? size : null,
+                            Math.max(1, intOf(component, "defaultQuantity")),
+                            intOf(component, "sortOrder"),
+                            false,
+                            null));
+                }
+            }
+            groups.add(new MenuComboGroup(
+                    item.entityId(),
+                    UUID.fromString(String.valueOf(content.get("containerVariantId"))),
+                    code(content),
+                    name(content, preference),
+                    intOf(content, "minimumSelections"),
+                    intOf(content, "maximumSelections"),
+                    Boolean.TRUE.equals(content.get("allowSameComponentMultipleTimes")),
+                    intOf(content, "sortOrder"),
+                    components));
+        }
+        groups.sort(java.util.Comparator.comparingInt(MenuComboGroup::sortOrder));
+        return List.copyOf(groups);
+    }
+
+    /** A published {@code locale -> {name}} map resolved in the first preferred locale that has one, else any. */
+    @SuppressWarnings("unchecked")
+    private static @Nullable String nameIn(@Nullable Object rawNames, List<String> preference) {
+        if (!(rawNames instanceof Map<?, ?> names) || names.isEmpty()) {
+            return null;
+        }
+        Map<String, Map<String, String>> byLocale = (Map<String, Map<String, String>>) names;
+        for (String wanted : preference) {
+            Map<String, String> entry = byLocale.get(wanted);
+            if (entry != null && entry.get("name") != null) {
+                return entry.get("name");
+            }
+        }
+        return byLocale.values().stream()
+                .map(entry -> entry.get("name"))
+                .filter(java.util.Objects::nonNull)
+                .findFirst()
+                .orElse(null);
+    }
+
+    /**
+     * The product's own use of its attached groups where it overrides the shared group's rules
+     * (ADR 0136), already resolved to the effective values.
+     */
+    private static List<MenuModifierGroupPolicy> policiesOf(Map<String, Object> content) {
+        if (!(content.get("modifierGroupPolicies") instanceof List<?> published)) {
+            return List.of();
+        }
+        List<MenuModifierGroupPolicy> policies = new ArrayList<>();
+        for (Object element : published) {
+            if (element instanceof Map<?, ?> policy) {
+                policies.add(new MenuModifierGroupPolicy(
+                        UUID.fromString(String.valueOf(policy.get("groupId"))),
+                        Boolean.TRUE.equals(policy.get("required")),
+                        policy.get("minimumSelections") instanceof Number min ? min.intValue() : 0,
+                        policy.get("maximumSelections") instanceof Number max ? max.intValue() : 1));
+            }
+        }
+        return List.copyOf(policies);
     }
 
     /**
@@ -485,7 +630,7 @@ public class StorefrontCatalogQuery {
     }
 
     @SuppressWarnings("unchecked")
-    private static List<MenuModifierOption> optionsOf(PublicationItem item) {
+    private static List<MenuModifierOption> optionsOf(PublicationItem item, List<String> preference) {
         Object raw = item.content().get("options");
         if (!(raw instanceof List<?> list)) {
             return List.of();
@@ -497,7 +642,8 @@ public class StorefrontCatalogQuery {
                     UUID.fromString(String.valueOf(option.get("optionId"))),
                     code(option),
                     intOf(option, "maximumQuantity"),
-                    null));
+                    null,
+                    nameIn(option.get("names"), preference)));
         }
         return options;
     }
@@ -649,6 +795,7 @@ public class StorefrontCatalogQuery {
             List<PublicationItem> categoryItems,
             List<PublicationItem> productItems,
             List<PublicationItem> groupItems,
+            List<PublicationItem> comboItems,
             boolean externallyPriced) {}
 
     /** A menu as {@link #assemble} leaves it: {@link StorefrontMenu} without the publication it came from. */
@@ -656,7 +803,9 @@ public class StorefrontCatalogQuery {
             @Nullable String currency,
             List<MenuCategory> categories,
             List<MenuProduct> products,
-            List<MenuModifierGroup> modifierGroups) {}
+            List<MenuModifierGroup> modifierGroups,
+            // ADR 0136: the choices every combo asks for, empty when the menu sells none.
+            List<MenuComboGroup> comboGroups) {}
 
     /**
      * One location's live menu, exactly as a customer is shown it.
@@ -673,7 +822,103 @@ public class StorefrontCatalogQuery {
             @Nullable String currency,
             List<MenuCategory> categories,
             List<MenuProduct> products,
-            List<MenuModifierGroup> modifierGroups) {}
+            List<MenuModifierGroup> modifierGroups,
+            // ADR 0136: the choices every combo asks for, empty when the menu sells none. A
+            // combo's container is the product variant a group names as its container; the
+            // customer never buys it directly, only picks from these.
+            List<MenuComboGroup> comboGroups) {}
+
+    /**
+     * One choice a combo asks the customer to make (ADR 0136).
+     *
+     * @param containerVariantId the sellable "Комбо №1" variant. It has no price of its own
+     * @param minimumSelections how many picks the group needs before the combo can be ordered
+     * @param maximumSelections how many it takes
+     * @param allowSameComponentMultipleTimes whether one component may be picked more than once
+     */
+    public record MenuComboGroup(
+            UUID comboGroupId,
+            UUID containerVariantId,
+            String code,
+            String name,
+            int minimumSelections,
+            int maximumSelections,
+            boolean allowSameComponentMultipleTimes,
+            int sortOrder,
+            List<MenuComboComponent> components) {
+
+        MenuComboGroup withComponents(List<MenuComboComponent> next) {
+            return new MenuComboGroup(
+                    comboGroupId,
+                    containerVariantId,
+                    code,
+                    name,
+                    minimumSelections,
+                    maximumSelections,
+                    allowSameComponentMultipleTimes,
+                    sortOrder,
+                    next);
+        }
+
+        /**
+         * Whether the orderable components can still fill the group's minimum. A group that
+         * repeats a component fills from one; one that does not needs as many components as
+         * the minimum names.
+         */
+        boolean satisfiable() {
+            long orderable =
+                    components.stream().filter(MenuComboComponent::orderable).count();
+            if (minimumSelections <= 0) {
+                return true;
+            }
+            return allowSameComponentMultipleTimes ? orderable > 0 : orderable >= minimumSelections;
+        }
+    }
+
+    /**
+     * One real dish or drink offered inside a combo group.
+     *
+     * @param componentId the pairing of the group with the variant: what a pick names, and
+     *     what the price below is keyed to
+     * @param name the dish's own name in the customer's language
+     * @param variantName the size or form, when the variant carries wording of its own
+     * @param defaultQuantity units one pick puts on the order
+     * @param orderable false means shown as sold out rather than hidden
+     * @param amountMinor what one unit costs as part of this combo, per unit; null when no
+     *     active price resolves, which is never read as free
+     */
+    public record MenuComboComponent(
+            UUID componentId,
+            UUID variantId,
+            @Nullable UUID productId,
+            String name,
+            @Nullable String variantName,
+            int defaultQuantity,
+            int sortOrder,
+            boolean orderable,
+            @Nullable Long amountMinor) {
+
+        MenuComboComponent priced(@Nullable Long price, boolean isOrderable) {
+            return new MenuComboComponent(
+                    componentId,
+                    variantId,
+                    productId,
+                    name,
+                    variantName,
+                    defaultQuantity,
+                    sortOrder,
+                    isOrderable,
+                    price);
+        }
+    }
+
+    /**
+     * How one product uses a modifier group it attaches, where that differs from the shared
+     * group (ADR 0136). The three values are the effective ones, so a client replaces the
+     * group's own outright.
+     */
+    public record MenuModifierGroupPolicy(
+            UUID modifierGroupId, boolean required, int minimumSelections, int maximumSelections) {}
 
     /**
      * One shelf of the menu, holding only what this location serves.
@@ -710,7 +955,13 @@ public class StorefrontCatalogQuery {
             // Row 2.1b: the coded kitchen-instruction presets this product
             // offers on a line, in display order — read live, not from the
             // publication; see CommentPresetLookup's own doc for why.
-            List<CommentPresetOption> commentPresets) {
+            List<CommentPresetOption> commentPresets,
+            // ADR 0136: the combo groups whose container is one of this product's variants,
+            // in the author's order. Empty on every product that is not a combo.
+            List<UUID> comboGroupIds,
+            // ADR 0136: this product's own min/max/required for a group it attaches, for the
+            // groups where it overrides the shared one.
+            List<MenuModifierGroupPolicy> modifierGroupPolicies) {
 
         MenuProduct withPrices(Map<UUID, Long> variantPrices) {
             return new MenuProduct(
@@ -724,7 +975,29 @@ public class StorefrontCatalogQuery {
                             .map(variant -> variant.withPrice(variantPrices.get(variant.variantId())))
                             .toList(),
                     modifierGroupIds,
-                    commentPresets);
+                    commentPresets,
+                    comboGroupIds,
+                    modifierGroupPolicies);
+        }
+
+        /** A combo whose group can no longer be filled is shown, as sold out, never hidden. */
+        MenuProduct withoutOrderable(Set<UUID> variantIds) {
+            return new MenuProduct(
+                    productId,
+                    code,
+                    name,
+                    description,
+                    mediaAssetIds,
+                    imageUrls,
+                    variants.stream()
+                            .map(variant -> variantIds.contains(variant.variantId())
+                                    ? variant.withAvailability(false, variant.remainingQuantity())
+                                    : variant)
+                            .toList(),
+                    modifierGroupIds,
+                    commentPresets,
+                    comboGroupIds,
+                    modifierGroupPolicies);
         }
 
         /**
@@ -750,7 +1023,9 @@ public class StorefrontCatalogQuery {
                             })
                             .toList(),
                     modifierGroupIds,
-                    commentPresets);
+                    commentPresets,
+                    comboGroupIds,
+                    modifierGroupPolicies);
         }
     }
 
@@ -861,10 +1136,13 @@ public class StorefrontCatalogQuery {
             UUID optionId,
             String code,
             int maximumQuantity,
-            @Nullable Long amountMinor) {
+            @Nullable Long amountMinor,
+            // What the customer reads, in their language then the brand's. Null when nobody
+            // named the option, and a client then shows the code as it always has.
+            @Nullable String name) {
 
         MenuModifierOption withPrice(@Nullable Long price) {
-            return new MenuModifierOption(optionId, code, maximumQuantity, price);
+            return new MenuModifierOption(optionId, code, maximumQuantity, price, name);
         }
     }
 }

@@ -346,12 +346,69 @@ describe('modifierOptionIdsFromLineKey (inverse of lineKeyFor)', () => {
         'dddddddd-0000-0000-0000-000000000002',
       ],
     ],
-  ] as const)('round-trips variant %s with selection %j through encode -> decode', (variantId, ids) => {
-    const key = lineKeyFor(variantId, ids);
-    const decoded = modifierOptionIdsFromLineKey(key, variantId);
+  ] as const)(
+    'round-trips variant %s with selection %j through encode -> decode',
+    (variantId, ids) => {
+      const key = lineKeyFor(variantId, ids);
+      const decoded = modifierOptionIdsFromLineKey(key, variantId);
 
-    // The key sorts, so the round trip is compared against a sorted copy --
-    // decode does not (and cannot) recover the original selection order.
-    expect(decoded).toEqual([...ids].sort());
+      // The key sorts, so the round trip is compared against a sorted copy --
+      // decode does not (and cannot) recover the original selection order.
+      expect(decoded).toEqual([...ids].sort());
+    },
+  );
+});
+
+describe('combo lines (ADR 0136)', () => {
+  const VARIANT = '3f2b8c1e-0000-4000-8000-000000000001';
+  const picks = [
+    { componentId: 'c-1', quantity: 1 },
+    { componentId: 'c-2', quantity: 2 },
+  ];
+
+  it('keys a combo line by its container and a short hash, within the sixty characters the platform allows', () => {
+    const key = lineKeyFor(VARIANT, [], picks);
+
+    expect(key.startsWith(`${VARIANT}c`)).toBe(true);
+    expect(key.length).toBeLessThanOrEqual(60);
+    expect(key).not.toContain('~');
+  });
+
+  it('gives the same combo the same key in any order, and another choice another key', () => {
+    const reordered = [...picks].reverse();
+
+    expect(lineKeyFor(VARIANT, [], reordered)).toBe(lineKeyFor(VARIANT, [], picks));
+    expect(lineKeyFor(VARIANT, [], [{ componentId: 'c-1', quantity: 1 }])).not.toBe(
+      lineKeyFor(VARIANT, [], picks),
+    );
+  });
+
+  it('leaves the key of a line with no picks exactly as it was', () => {
+    expect(lineKeyFor(VARIANT, [])).toBe(VARIANT);
+    expect(lineKeyFor(VARIANT, ['m1'])).toBe(`${VARIANT}+m1`);
+    expect(lineKeyFor(VARIANT, [], [])).toBe(VARIANT);
+  });
+
+  it('puts a combo with its picks: the container as the variant, the picks in the body, the hashed key in the path', async () => {
+    const { service, api } = setUp();
+    service.cart.set(baseCart({ version: 1 }));
+    api.mutate.mockResolvedValue(baseCart({ version: 2 }));
+
+    await service.putLine({ variantId: VARIANT, quantity: 2, comboPicks: picks });
+
+    const [method, path, options] = api.mutate.mock.calls[0];
+    expect(method).toBe('PUT');
+    expect(path).toContain(encodeURIComponent(lineKeyFor(VARIANT, [], picks)));
+    expect(options.body).toMatchObject({ variantId: VARIANT, quantity: 2, comboPicks: picks });
+  });
+
+  it('sends no comboPicks at all for an ordinary line', async () => {
+    const { service, api } = setUp();
+    service.cart.set(baseCart({ version: 1 }));
+    api.mutate.mockResolvedValue(baseCart({ version: 2 }));
+
+    await service.putLine({ variantId: 'v1', quantity: 1 });
+
+    expect(api.mutate.mock.calls[0][2].body).not.toHaveProperty('comboPicks');
   });
 });

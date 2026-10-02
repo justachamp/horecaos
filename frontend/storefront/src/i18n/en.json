@@ -126,7 +126,11 @@
     "recipientRequired": "Add a recipient name and phone for this delivery.",
     "deliveryChooseAddress": "Choose an address to calculate the delivery fee.",
     "pickupLocation": "Pickup location",
-    "pickupLocationHint": "You'll pick up your order from this branch."
+    "pickupLocationHint": "You'll pick up your order from this branch.",
+    "hiddenCharge": {
+      "title": "Added automatically, already in the total",
+      "fallbackLabel": "Added charge"
+    }
   },
   "orders": {
     "title": "Orders",
@@ -271,7 +275,17 @@
     "modifiersIncomplete": "Choose the required options above before adding to cart.",
     "presetsTitle": "Comments",
     "outOfSaleWindow": "This item is not on sale right now.",
-    "lowStock": "Only {{count}} left"
+    "lowStock": "Only {{count}} left",
+    "comboTitle": "Build your combo",
+    "comboPickExactly": "Choose {{min}}",
+    "comboPickBetween": "Choose {{min}} to {{max}}",
+    "comboPickUpTo": "Choose up to {{max}}",
+    "comboIncluded": "Included",
+    "comboNotPriced": "Price unavailable",
+    "comboSoldOut": "Sold out",
+    "comboIncomplete": "Choose from every required group above before adding to cart.",
+    "comboUnavailable": "This combo cannot be ordered right now.",
+    "fromPrice": "from {{price}}"
   },
   "terms": {
     "agreementTitle": "Public offer agreement",
@@ -328,7 +342,9 @@
     "claimEnding": "Your hold on this table is ending. Place an order now to keep it.",
     "tableNotAvailable": "This table cannot be taken from here. Please ask a member of staff to seat you.",
     "tooManyForTable": "This table seats {{seats}}. Please ask a member of staff for a larger table.",
-    "seatRateLimited": "Too many tries. Please wait a moment and try again."
+    "seatRateLimited": "Too many tries. Please wait a moment and try again.",
+    "comboChoose": "Choose your combo",
+    "comboChooseAction": "Choose"
   },
   "action": {
     "yourAddress": "Your address",

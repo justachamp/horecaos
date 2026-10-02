@@ -42,6 +42,28 @@ public interface MenuPriceLookup {
             Set<UUID> modifierOptionIds);
 
     /**
+     * The same read with the prices of combo components alongside (ADR 0136).
+     *
+     * <p>Defaulted so a lookup that predates composite products keeps answering for
+     * variants and options and reports no component price, which a menu renders as an
+     * unpriced component rather than a free one. Pricing overrides it: a component's
+     * price is a {@code COMBO_COMPONENT} row on the very price book the other two
+     * resolve against.
+     *
+     * @param comboComponentIds {@code catalog.combo_components} ids, not variant ids
+     */
+    default Optional<MenuPrices> pricesFor(
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            String channelCode,
+            Set<UUID> variantIds,
+            Set<UUID> modifierOptionIds,
+            Set<UUID> comboComponentIds) {
+        return pricesFor(tenantId, brandId, locationId, channelCode, variantIds, modifierOptionIds);
+    }
+
+    /**
      * The published prices for one location on one channel.
      *
      * @param currency the price book's own currency. Every amount below is in its
@@ -49,12 +71,24 @@ public interface MenuPriceLookup {
      *        hundred.
      * @param variantPrices a variant absent from this map has no active price and
      *        is reported to the customer as unpriced rather than as free.
+     * @param comboComponentPrices what a variant costs as offered inside one combo,
+     *        keyed by the component and not by the variant (ADR 0136). Per unit.
      */
-    record MenuPrices(String currency, Map<UUID, Long> variantPrices, Map<UUID, Long> modifierOptionPrices) {
+    record MenuPrices(
+            String currency,
+            Map<UUID, Long> variantPrices,
+            Map<UUID, Long> modifierOptionPrices,
+            Map<UUID, Long> comboComponentPrices) {
 
         public MenuPrices {
             variantPrices = variantPrices == null ? Map.of() : Map.copyOf(variantPrices);
             modifierOptionPrices = modifierOptionPrices == null ? Map.of() : Map.copyOf(modifierOptionPrices);
+            comboComponentPrices = comboComponentPrices == null ? Map.of() : Map.copyOf(comboComponentPrices);
+        }
+
+        /** Prices with no combo component among them, which is every caller that predates ADR 0136. */
+        public MenuPrices(String currency, Map<UUID, Long> variantPrices, Map<UUID, Long> modifierOptionPrices) {
+            this(currency, variantPrices, modifierOptionPrices, Map.of());
         }
     }
 }

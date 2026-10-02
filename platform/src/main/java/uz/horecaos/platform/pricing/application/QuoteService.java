@@ -6,6 +6,7 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoField;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -18,8 +19,10 @@ import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import uz.horecaos.platform.configuration.Ids;
 import uz.horecaos.platform.fulfillment.api.DeliveryFeeOutcome;
 import uz.horecaos.platform.fulfillment.api.DeliveryFeePort;
 import uz.horecaos.platform.fulfillment.api.DeliveryFeeQuery;
@@ -38,6 +41,7 @@ import uz.horecaos.platform.pricing.domain.QuoteRequest;
 import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPricingStore;
 import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPromoCodeStore;
 import uz.horecaos.platform.tenancy.api.ConfigurationResolver;
+import uz.horecaos.platform.tenancy.api.FulfillmentMode;
 import uz.horecaos.platform.tenancy.api.SalesChannel;
 import uz.horecaos.platform.tenancy.api.SalesChannelLookup;
 
@@ -83,7 +87,14 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
     private final PromoCodeEligibilityService promoCodeEligibility;
     private final Clock clock;
     private final ConfigurationResolver configuration;
+    private final CompositeProductsLookup composites;
 
+    /**
+     * A service that prices ordinary carts only: nothing it prices is a combo, nothing
+     * is auto-selected, and a nested selection finds no facts to be valid against.
+     * Kept for the many tests that build the service by hand and have no composite
+     * product to say anything about.
+     */
     @SuppressWarnings("checkstyle:ParameterNumber")
     public QuoteService(
             JdbcPricingStore store,
@@ -95,6 +106,32 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
             PromoCodeEligibilityService promoCodeEligibility,
             Clock clock,
             ConfigurationResolver configuration) {
+        this(
+                store,
+                engine,
+                catalog,
+                channels,
+                deliveryFees,
+                promoCodes,
+                promoCodeEligibility,
+                clock,
+                configuration,
+                CompositeProductsLookup.none());
+    }
+
+    @Autowired
+    @SuppressWarnings("checkstyle:ParameterNumber")
+    public QuoteService(
+            JdbcPricingStore store,
+            PricingEngine engine,
+            CatalogPricingContext catalog,
+            SalesChannelLookup channels,
+            DeliveryFeePort deliveryFees,
+            JdbcPromoCodeStore promoCodes,
+            PromoCodeEligibilityService promoCodeEligibility,
+            Clock clock,
+            ConfigurationResolver configuration,
+            CompositeProductsLookup composites) {
         this.store = store;
         this.engine = engine;
         this.catalog = catalog;
@@ -104,6 +141,7 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
         this.promoCodeEligibility = promoCodeEligibility;
         this.clock = clock;
         this.configuration = configuration;
+        this.composites = composites;
     }
 
     /**
@@ -165,29 +203,108 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
         var taxProfile = store.resolveTaxProfile(request.tenantId(), request.brandId(), DEFAULT_JURISDICTION, now)
                 .orElseThrow(() -> new NoTaxProfileException(request.brandId()));
 
-        Set<UUID> variantIds =
+        Set<UUID> lineVariantIds =
                 request.lines().stream().map(QuoteRequest.Line::variantId).collect(Collectors.toUnmodifiableSet());
-        Set<UUID> modifierIds = request.lines().stream()
-                .flatMap(line -> line.modifierOptionIds().stream())
+
+        // ADR 0136. Everything composite is resolved here, before the engine runs, for
+        // the reason the price book is: the engine stays a function of its inputs.
+        CompositeProductsLookup.ComboCatalog combos =
+                composites.comboCatalog(request.tenantId(), request.brandId(), lineVariantIds);
+
+        Set<UUID> pickedComponentIds = request.lines().stream()
+                .flatMap(line -> line.comboPicks().stream())
+                .map(QuoteRequest.ComboPick::componentId)
+                .collect(Collectors.toUnmodifiableSet());
+        Set<UUID> componentVariantIds = pickedComponentIds.stream()
+                .map(combos.components()::get)
+                .filter(Objects::nonNull)
+                .map(CompositePricing.ComboComponentFact::componentVariantId)
                 .collect(Collectors.toUnmodifiableSet());
 
-        Map<UUID, Long> variantPrices = store.pricesFor(priceBook.id(), "VARIANT", variantIds, now);
-        Map<UUID, Long> modifierPrices = store.pricesFor(priceBook.id(), "MODIFIER_OPTION", modifierIds, now);
+        // A container is never priced and has no line, so it is not looked up as an
+        // ordinary variant: an unpriced container is the correct state of a combo.
+        Set<UUID> pricedVariantIds = new HashSet<>(lineVariantIds);
+        pricedVariantIds.removeAll(combos.groupIdsByContainer().keySet());
+        pricedVariantIds.addAll(componentVariantIds);
 
-        // ADR 0037. The delivery charge is resolved here, before the engine runs,
-        // for the same reason the price book is: everything that could differ
-        // between two runs — geometry, a clock, a routing provider — happens in
-        // this method, and nothing that decides an amount happens anywhere but the
-        // engine. The resolved charge enters the context hash, so a zone edit
-        // invalidates an in-flight quote exactly as a price change does.
+        FulfillmentMode mode = request.effectiveFulfillmentMode();
+        Map<UUID, List<CompositePricing.HiddenCharge>> hiddenCharges =
+                composites.hiddenCharges(request.tenantId(), request.brandId(), pricedVariantIds, mode);
+
+        Set<UUID> firstLevelOptionIds = request.lines().stream()
+                .flatMap(line -> line.modifierOptionIds().stream())
+                .collect(Collectors.toUnmodifiableSet());
+        Set<UUID> nestedOptionIds = request.lines().stream()
+                .flatMap(line -> line.nestedModifiers().stream())
+                .flatMap(nested -> java.util.stream.Stream.of(nested.parentOptionId(), nested.optionId()))
+                .collect(Collectors.toUnmodifiableSet());
+        Set<UUID> selectedOptionIds = new HashSet<>(firstLevelOptionIds);
+        selectedOptionIds.addAll(nestedOptionIds);
+        CompositeProductsLookup.NestedCatalog nestedCatalog =
+                composites.nestedCatalog(request.tenantId(), request.brandId(), selectedOptionIds);
+
+        Set<UUID> modifierIds = new HashSet<>(selectedOptionIds);
+        hiddenCharges.values().forEach(charges -> charges.forEach(charge -> modifierIds.add(charge.optionId())));
+
+        Map<UUID, Long> variantPrices = store.pricesFor(priceBook.id(), "VARIANT", pricedVariantIds, now);
+        Map<UUID, Long> modifierPrices = store.pricesFor(priceBook.id(), "MODIFIER_OPTION", modifierIds, now);
+        Map<UUID, Long> componentPrices = store.pricesFor(priceBook.id(), "COMBO_COMPONENT", pickedComponentIds, now);
+
+        // One id per combo cart line, shared by every component line it becomes. Minted
+        // here and not in the engine, which must stay a function of its inputs; it is not
+        // part of the context hash, because it prices nothing.
+        Map<String, UUID> selectionIds = new HashMap<>();
+        for (QuoteRequest.Line line : request.lines()) {
+            if (combos.groupIdsByContainer().containsKey(line.variantId())) {
+                selectionIds.put(line.lineId(), Ids.newId());
+            }
+        }
+
+        var composite = new CompositePricing.CompositeInputs(
+                combos.groups(),
+                combos.groupIdsByContainer(),
+                combos.components(),
+                componentPrices,
+                hiddenCharges,
+                nestedCatalog.options(),
+                nestedCatalog.groupsByVariant(),
+                selectionIds);
+
+        // ADR 0037. The delivery charge is resolved here, before the engine runs, for
+        // the same reason the price book is: everything that could differ between two
+        // runs -- geometry, a clock, a routing provider -- happens in this method, and
+        // nothing that decides an amount happens anywhere but the engine. The resolved
+        // charge enters the context hash, so a zone edit invalidates an in-flight quote
+        // exactly as a price change does.
         //
-        // The quote id is minted before resolution rather than after, so the
-        // evidence row can name the quote it explains. Resolving first and
-        // stitching the id on afterwards would need an UPDATE against a table that
-        // is deliberately write-once.
+        // The quote id is minted before resolution rather than after, so the evidence
+        // row can name the quote it explains. Resolving first and stitching the id on
+        // afterwards would need an UPDATE against a table that is deliberately
+        // write-once.
+        //
+        // The goods subtotal the resolver is handed is the engine's own, asked of a
+        // draft of the inputs that has no charge yet: the same arithmetic, not a second
+        // copy of it, so a combo's components and a hidden charge count toward a zone's
+        // minimum basket exactly as they will count toward the total.
         UUID quoteId = UUID.randomUUID();
+        Map<UUID, String> descriptions = catalog.descriptions(request.tenantId(), request.brandId(), pricedVariantIds);
+        var draft = new PricingEngine.PricingInputs(
+                priceBook.currency(),
+                publication,
+                priceBook.id(),
+                priceBook.version(),
+                taxProfile.id(),
+                taxProfile.version(),
+                taxProfile.rateBasisPoints(),
+                PricingEngine.TaxMode.valueOf(taxProfile.mode()),
+                variantPrices,
+                modifierPrices,
+                descriptions,
+                null,
+                null,
+                composite);
         ResolvedDeliveryCharge charge = resolveDeliveryCharge(
-                request, quoteId, priceBook.currency(), goodsSubtotal(request, variantPrices, modifierPrices), now);
+                request, quoteId, priceBook.currency(), engine.goodsSubtotal(request, draft), now);
 
         var inputs = new PricingEngine.PricingInputs(
                 priceBook.currency(),
@@ -200,9 +317,10 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
                 PricingEngine.TaxMode.valueOf(taxProfile.mode()),
                 variantPrices,
                 modifierPrices,
-                catalog.descriptions(request.tenantId(), request.brandId(), variantIds),
+                descriptions,
                 charge,
-                resolvePromotionInputs(request, now));
+                resolvePromotionInputs(request, now),
+                composite);
 
         var result = engine.price(request, inputs, now);
 
@@ -370,31 +488,6 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
     }
 
     /**
-     * The basket total, from the same price maps the engine will use.
-     *
-     * <p>Unpriced items are skipped rather than thrown on here. The engine refuses
-     * them a few lines later with the id of the offending item, and throwing first
-     * from a helper whose job is a threshold comparison would move that error to a
-     * place that cannot explain it.
-     */
-    private static long goodsSubtotal(
-            QuoteRequest request, Map<UUID, Long> variantPrices, Map<UUID, Long> modifierPrices) {
-        long subtotal = 0;
-        for (QuoteRequest.Line line : request.lines()) {
-            Long unit = variantPrices.get(line.variantId());
-            if (unit == null) {
-                continue;
-            }
-            long withModifiers = unit;
-            for (UUID optionId : line.modifierOptionIds()) {
-                withModifiers += modifierPrices.getOrDefault(optionId, 0L);
-            }
-            subtotal = Math.addExact(subtotal, Math.multiplyExact(withModifiers, (long) line.quantity()));
-        }
-        return subtotal;
-    }
-
-    /**
      * Accepts a quote at checkout.
      *
      * <p>The context hash must still match. If a price book changed or the menu
@@ -446,10 +539,7 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
                 command.locationId(),
                 command.customerAccountId(),
                 command.channelCode(),
-                command.items().stream()
-                        .map(item -> new QuoteRequest.Line(
-                                item.lineKey(), item.variantId(), item.quantity(), item.modifierOptionIds()))
-                        .toList(),
+                command.items().stream().map(QuoteService::lineOf).toList(),
                 command.idempotencyKey(),
                 // Null for a cart being collected, or a delivery cart that has not
                 // named a destination yet — both are honestly "not priced as a
@@ -460,7 +550,8 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
                                 command.delivery().destination(),
                                 command.delivery().pricingAuthority()),
                 command.presentedCouponCode(),
-                command.carriedRedemptionOrderId());
+                command.carriedRedemptionOrderId(),
+                command.fulfillmentMode());
 
         try {
             Quote quote = quote(request);
@@ -495,6 +586,79 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
                     "NO_TAX_PROFILE",
                     command.brandId(),
                     Objects.requireNonNullElse(noTax.getMessage(), "NO_TAX_PROFILE"));
+        } catch (CompositePricing.CompositeSelectionException selection) {
+            // ADR 0136: a combo or nested selection the catalog does not allow. The
+            // code is the exception's own -- COMBO_GROUP_MINIMUM_NOT_MET and the like
+            // -- so a storefront can say which group needs another pick.
+            throw new PricingRefusedException(
+                    selection.code(),
+                    selection.subjectId(),
+                    Objects.requireNonNullElse(selection.getMessage(), selection.code()));
+        } catch (CompositeProductsLookup.HiddenModifierAmbiguousException ambiguous) {
+            throw new PricingRefusedException(
+                    "HIDDEN_MODIFIER_GROUP_AMBIGUOUS",
+                    ambiguous.groupId(),
+                    Objects.requireNonNullElse(ambiguous.getMessage(), "HIDDEN_MODIFIER_GROUP_AMBIGUOUS"));
+        }
+    }
+
+    private static QuoteRequest.Line lineOf(PricingCommand.Item item) {
+        return new QuoteRequest.Line(
+                item.lineKey(),
+                item.variantId(),
+                item.quantity(),
+                item.modifierOptionIds(),
+                item.comboPicks().stream()
+                        .map(pick -> new QuoteRequest.ComboPick(pick.componentId(), pick.quantity()))
+                        .toList(),
+                item.nestedModifiers().stream()
+                        .map(nested -> new QuoteRequest.NestedModifier(nested.parentOptionId(), nested.optionId()))
+                        .toList());
+    }
+
+    /**
+     * ADR 0136: the selection rules of {@link #priceCart}, over the same facts, without
+     * the price book, the tax profile or a stored quote. Nothing is written.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public SelectionCheck checkSelection(UUID tenantId, UUID brandId, PricingCommand.Item item) {
+        QuoteRequest.Line line = lineOf(item);
+        CompositeProductsLookup.ComboCatalog combos =
+                composites.comboCatalog(tenantId, brandId, Set.of(item.variantId()));
+
+        Set<UUID> optionIds = new HashSet<>(item.modifierOptionIds());
+        item.nestedModifiers().forEach(nested -> {
+            optionIds.add(nested.parentOptionId());
+            optionIds.add(nested.optionId());
+        });
+        CompositeProductsLookup.NestedCatalog nested = composites.nestedCatalog(tenantId, brandId, optionIds);
+
+        var facts = new CompositePricing.CompositeInputs(
+                combos.groups(),
+                combos.groupIdsByContainer(),
+                combos.components(),
+                Map.of(),
+                Map.of(),
+                nested.options(),
+                nested.groupsByVariant(),
+                Map.of());
+        try {
+            List<CompositePricing.ComboLine> combo = CompositePricing.resolveCombo(line, facts);
+            if (combo != null) {
+                return new SelectionCheck(
+                        true,
+                        combo.stream()
+                                .map(pick -> pick.component().componentVariantId())
+                                .collect(Collectors.toUnmodifiableSet()));
+            }
+            CompositePricing.resolveNested(line, facts);
+            return new SelectionCheck(false, Set.of(item.variantId()));
+        } catch (CompositePricing.CompositeSelectionException selection) {
+            throw new PricingRefusedException(
+                    selection.code(),
+                    selection.subjectId(),
+                    Objects.requireNonNullElse(selection.getMessage(), selection.code()));
         }
     }
 
@@ -587,6 +751,8 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
         document.put("taxRateBasisPoints", inputs.taxRateBasisPoints());
         document.put("taxMode", inputs.taxMode().name());
         document.put("channel", request.channel());
+        // ADR 0136: the fulfilment mode hidden auto-selected groups were applied for.
+        document.put("fulfillmentMode", request.effectiveFulfillmentMode().name());
         document.put("contextHash", result.contextHash());
         if (inputs.deliveryCharge() != null) {
             // The normalized columns of fulfillment.delivery_fee_resolutions are

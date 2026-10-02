@@ -16,6 +16,19 @@
       <span>−{{ discount() }}</span>
     </div>
   }
+  @if (hiddenCharges().length > 0) {
+    <div class="summary__hidden" data-testid="hidden-charges">
+      <p class="summary__hidden-title" data-testid="hidden-charges-title">
+        {{ 'cart.hiddenCharge.title' | t }}
+      </p>
+      @for (charge of hiddenCharges(); track charge.optionId) {
+        <div class="summary__row" data-testid="hidden-charge">
+          <span>{{ charge.label }}</span>
+          <span class="summary__value">{{ charge.amount }}</span>
+        </div>
+      }
+    </div>
+  }
   <div class="summary__divider"></div>
   <div class="summary__row summary__row--total">
     <span>{{ 'cart.total' | t }}</span>

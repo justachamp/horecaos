@@ -1,12 +1,16 @@
 @if (loading()) {
   <div class="flex flex-1 items-center justify-center gap-2 py-12">
-    <span class="h-6 w-6 animate-spin rounded-full border-2 border-brand-accent border-t-transparent"></span>
+    <span
+      class="h-6 w-6 animate-spin rounded-full border-2 border-brand-accent border-t-transparent"
+    ></span>
     <span class="text-sm text-zinc-400">{{ 'common.loading' | t }}</span>
   </div>
 } @else if (error()) {
   <div class="px-4 py-8 text-center">
     <p class="text-sm text-red-400">{{ error() }}</p>
-    <a routerLink="/orders" class="mt-4 inline-block text-brand-accent underline">{{ 'orders.backToList' | t }}</a>
+    <a routerLink="/orders" class="mt-4 inline-block text-brand-accent underline">{{
+      'orders.backToList' | t
+    }}</a>
   </div>
 } @else if (order()) {
   <!-- Top handle (e.g. for bottom sheet) -->
@@ -18,7 +22,9 @@
   <header class="flex items-start justify-between gap-4 px-4 py-4">
     <div class="space-y-0.5">
       <h1 class="text-lg font-bold text-text-primary">{{ 'orders.order' | t }}</h1>
-      <p class="text-sm text-zinc-400">{{ 'orders.orderNumberLabel' | t: { number: order()!.orderNumber } }}</p>
+      <p class="text-sm text-zinc-400">
+        {{ 'orders.orderNumberLabel' | t: { number: order()!.orderNumber } }}
+      </p>
     </div>
     <button
       type="button"
@@ -27,7 +33,12 @@
       [attr.aria-label]="'common.close' | t"
     >
       <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          d="M6 18L18 6M6 6l12 12"
+        />
       </svg>
     </button>
   </header>
@@ -38,12 +49,30 @@
        renders nothing here rather than a placeholder. -->
   @if (order()!.fulfillmentMode === 'PICKUP' && pickupBranch(); as branch) {
     <div class="mx-4 mb-2 flex items-start gap-2 rounded-lg bg-surface-raised px-3 py-2.5">
-      <svg class="mt-0.5 h-4 w-4 shrink-0 text-brand-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a2 2 0 01-2.828 0l-4.243-4.243a8 8 0 1111.314 0z" />
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+      <svg
+        class="mt-0.5 h-4 w-4 shrink-0 text-brand-accent"
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
+        aria-hidden="true"
+      >
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          d="M17.657 16.657L13.414 20.9a2 2 0 01-2.828 0l-4.243-4.243a8 8 0 1111.314 0z"
+        />
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
+        />
       </svg>
       <div class="min-w-0">
-        <p class="text-sm font-semibold text-text-primary">{{ 'orders.pickupBranch' | t }}: {{ branch.displayName }}</p>
+        <p class="text-sm font-semibold text-text-primary">
+          {{ 'orders.pickupBranch' | t }}: {{ branch.displayName }}
+        </p>
         <p class="text-sm text-zinc-400">{{ pickupBranchAddress() }}</p>
       </div>
     </div>
@@ -51,26 +80,40 @@
 
   <!-- Ordered items list -->
   <div class="divide-y divide-zinc-700 px-4">
-    @for (item of order()!.lineItems; track item.variantId ?? item.name) {
-      <article class="flex items-center gap-3 py-4 first:pt-0">
-      <img
-        [src]="item.image"
-        [alt]="item.name"
-        class="h-14 w-14 shrink-0 rounded-lg object-cover"
-      />
-      <div class="min-w-0 flex-1">
-        <h2 class="text-sm font-semibold text-text-primary">{{ item.name }}</h2>
-        <p class="mt-0.5 text-sm text-text-primary">
-          {{ item.quantity }} {{ 'common.itemsUnit' | t }} {{ 'common.times' | t }}
-          <span class="font-semibold text-brand-accent">{{ item.unitPrice }}</span>
-        </p>
-      </div>
-      </article>
+    @for (row of lineRows(); track row.key) {
+      @if (row.kind === 'combo') {
+        <div class="py-3 first:pt-0" data-testid="order-combo">
+          <h2 class="text-sm font-bold text-text-primary" data-testid="order-combo-name">
+            {{ row.name }}
+          </h2>
+        </div>
+      } @else {
+        <article
+          class="flex items-center gap-3 py-4 first:pt-0"
+          [class.pl-4]="row.inCombo"
+          data-testid="order-line"
+        >
+          <img
+            [src]="row.item.image"
+            [alt]="row.item.name"
+            class="h-14 w-14 shrink-0 rounded-lg object-cover"
+          />
+          <div class="min-w-0 flex-1">
+            <h2 class="text-sm font-semibold text-text-primary">{{ row.item.name }}</h2>
+            <p class="mt-0.5 text-sm text-text-primary">
+              {{ row.item.quantity }} {{ 'common.itemsUnit' | t }} {{ 'common.times' | t }}
+              <span class="font-semibold text-brand-accent">{{ row.item.unitPrice }}</span>
+            </p>
+          </div>
+        </article>
+      }
     }
   </div>
 
   <!-- Payment summary (golden box) -->
-  <div class="mx-4 mt-4 rounded-xl bg-gradient-to-r from-brand-accent-deep to-brand-accent p-4 text-white">
+  <div
+    class="mx-4 mt-4 rounded-xl bg-gradient-to-r from-brand-accent-deep to-brand-accent p-4 text-white"
+  >
     <div class="flex items-center justify-between font-bold text-white">
       <span>{{ 'cart.paymentAmount' | t }}</span>
       <span>{{ order()!.total }}</span>
@@ -95,6 +138,20 @@
       <div class="mt-1 flex items-center justify-between text-sm text-white">
         <span>{{ 'cart.packaging' | t }}</span>
         <span>{{ order()!.packaging }}</span>
+      </div>
+    }
+    @if (order()!.hiddenCharges?.length) {
+      <div class="mt-2 border-t border-white/20 pt-2" data-testid="order-hidden-charges">
+        <p class="text-xs text-white/80">{{ 'cart.hiddenCharge.title' | t }}</p>
+        @for (charge of order()!.hiddenCharges; track charge.label) {
+          <div
+            class="mt-1 flex items-center justify-between text-sm text-white"
+            data-testid="order-hidden-charge"
+          >
+            <span>{{ charge.label }}</span>
+            <span>{{ charge.amount }}</span>
+          </div>
+        }
       </div>
     }
   </div>
@@ -141,6 +198,8 @@
 } @else {
   <div class="px-4 py-8 text-center text-zinc-400">
     <p>{{ 'orders.orderNotFound' | t }}</p>
-    <a routerLink="/orders" class="mt-4 inline-block text-brand-accent underline">{{ 'orders.backToList' | t }}</a>
+    <a routerLink="/orders" class="mt-4 inline-block text-brand-accent underline">{{
+      'orders.backToList' | t
+    }}</a>
   </div>
 }

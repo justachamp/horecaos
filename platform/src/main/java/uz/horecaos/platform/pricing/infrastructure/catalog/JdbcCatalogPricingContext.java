@@ -126,6 +126,11 @@ public class JdbcCatalogPricingContext implements CatalogPricingContext {
                     WHERE tenant_id = :tenantId AND brand_id = :brandId AND id = :id
                       AND status <> 'ARCHIVED'
                     """;
+                    case COMBO_COMPONENT -> """
+                    SELECT count(*) FROM catalog.combo_components
+                    WHERE tenant_id = :tenantId AND brand_id = :brandId AND id = :id
+                      AND status <> 'ARCHIVED'
+                    """;
                 };
         return jdbc.sql(sql)
                         .param("tenantId", tenantId)

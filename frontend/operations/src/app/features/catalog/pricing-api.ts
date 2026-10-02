@@ -88,6 +88,45 @@ export class PricingApi {
   }
 
   /**
+   * ADR 0136: what each combo component costs in the book that applies at a
+   * location, keyed by component id. The same resolution {@link resolvedVariantPrices}
+   * runs, with `COMBO_COMPONENT` as the priceable type — a component with no
+   * price is simply absent from the map, never zero.
+   */
+  resolvedComponentPrices(
+    scope: BrandScope,
+    locationId: string,
+    componentIds: readonly string[],
+  ): Observable<ResolvedPrices> {
+    return this.api
+      .get<ResolvedPrices>(pricingPaths.resolvedPrices(scope), {
+        params: { locationId, priceableType: 'COMBO_COMPONENT', ids: componentIds },
+      })
+      .pipe(map((result) => result.value));
+  }
+
+  /**
+   * ADR 0136: what one variant costs as offered inside one combo — per unit,
+   * in minor units, zero allowed ("free with the box"). The price belongs to
+   * the pairing and not to the variant, so the same drink can be free in one
+   * combo and 3 000 in another. `expectedVersion` is optional here exactly as
+   * it is on {@link setVariantPrice}.
+   */
+  setComboComponentPrice(
+    scope: BrandScope,
+    priceBookId: string,
+    componentId: string,
+    amountMinor: number,
+    expectedVersion?: number,
+  ): Observable<PriceBookSummary> {
+    return this.api.put<PriceRequest, PriceBookSummary>(
+      pricingPaths.comboComponentPrice(scope, priceBookId, componentId),
+      command({ amountMinor }),
+      expectedVersion === undefined ? {} : { expectedVersion },
+    );
+  }
+
+  /**
    * Row 4.8a — every variant in the brand's draft catalog, this book's price
    * for it, the brand's live base price and the delta, cursor-paginated by
    * variant id. `categoryId` and `differsFromBase` are server-side filters;

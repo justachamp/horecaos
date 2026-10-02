@@ -148,7 +148,8 @@ public class JdbcCartStore {
         return jdbc.sql("""
                 SELECT id, line_key, variant_id, quantity,
                        selected_modifier_snapshot::text AS modifiers, comment_preset_codes,
-                       customer_note_encrypted
+                       customer_note_encrypted,
+                       combo_picks::text AS combo_picks, nested_modifiers::text AS nested_modifiers
                 FROM ordering.cart_lines
                 WHERE tenant_id = :tenantId AND cart_id = :cartId
                 ORDER BY line_key
@@ -162,7 +163,9 @@ public class JdbcCartStore {
                         row.getInt("quantity"),
                         row.getString("modifiers"),
                         commentPresetCodes(row.getArray("comment_preset_codes")),
-                        row.getString("customer_note_encrypted")))
+                        row.getString("customer_note_encrypted"),
+                        row.getString("combo_picks"),
+                        row.getString("nested_modifiers")))
                 .list();
     }
 
@@ -201,18 +204,53 @@ public class JdbcCartStore {
             List<String> commentPresetCodes,
             @Nullable String noteEncrypted,
             Instant now) {
+        upsertLine(
+                lineId,
+                tenantId,
+                cartId,
+                lineKey,
+                variantId,
+                quantity,
+                modifiersJson,
+                commentPresetCodes,
+                "[]",
+                "[]",
+                noteEncrypted,
+                now);
+    }
+
+    /**
+     * The same upsert, carrying the two ADR 0136 documents: what the customer picked
+     * inside a combo, and the second-level modifier selections.
+     */
+    public void upsertLine(
+            UUID lineId,
+            UUID tenantId,
+            UUID cartId,
+            String lineKey,
+            UUID variantId,
+            int quantity,
+            String modifiersJson,
+            List<String> commentPresetCodes,
+            String comboPicksJson,
+            String nestedModifiersJson,
+            @Nullable String noteEncrypted,
+            Instant now) {
         jdbc.sql("""
                 INSERT INTO ordering.cart_lines (
                     id, tenant_id, cart_id, line_key, variant_id, quantity,
-                    selected_modifier_snapshot, comment_preset_codes, customer_note_encrypted, version,
-                    created_at, updated_at)
+                    selected_modifier_snapshot, comment_preset_codes, combo_picks, nested_modifiers,
+                    customer_note_encrypted, version, created_at, updated_at)
                 VALUES (:id, :tenantId, :cartId, :lineKey, :variantId, :quantity,
-                    CAST(:modifiers AS jsonb), :presetCodes, :note, 1, :now, :now)
+                    CAST(:modifiers AS jsonb), :presetCodes, CAST(:comboPicks AS jsonb),
+                    CAST(:nestedModifiers AS jsonb), :note, 1, :now, :now)
                 ON CONFLICT (cart_id, line_key) DO UPDATE
                 SET variant_id = EXCLUDED.variant_id,
                     quantity = EXCLUDED.quantity,
                     selected_modifier_snapshot = EXCLUDED.selected_modifier_snapshot,
                     comment_preset_codes = EXCLUDED.comment_preset_codes,
+                    combo_picks = EXCLUDED.combo_picks,
+                    nested_modifiers = EXCLUDED.nested_modifiers,
                     customer_note_encrypted = EXCLUDED.customer_note_encrypted,
                     version = ordering.cart_lines.version + 1,
                     updated_at = EXCLUDED.updated_at
@@ -225,6 +263,8 @@ public class JdbcCartStore {
                 .param("quantity", quantity)
                 .param("modifiers", modifiersJson)
                 .param("presetCodes", commentPresetCodes.toArray(String[]::new))
+                .param("comboPicks", comboPicksJson)
+                .param("nestedModifiers", nestedModifiersJson)
                 .param("note", noteEncrypted)
                 .param("now", utc(now))
                 .update();
@@ -696,6 +736,9 @@ public class JdbcCartStore {
      *
      * @param selectedModifiersJson the chosen options, stored whole and read whole
      * @param customerNoteEncrypted null when the customer left no note on this line
+     * @param comboPicksJson ADR 0136: {@code [{componentId, quantity}]}, non-empty exactly
+     *                       when {@code variantId} is a combo's container
+     * @param nestedModifiersJson ADR 0136: {@code [{parentOptionId, optionId}]}
      */
     public record CartLineRow(
             UUID lineId,
@@ -704,7 +747,9 @@ public class JdbcCartStore {
             int quantity,
             String selectedModifiersJson,
             List<String> commentPresetCodes,
-            @Nullable String customerNoteEncrypted) {}
+            @Nullable String customerNoteEncrypted,
+            String comboPicksJson,
+            String nestedModifiersJson) {}
 
     /**
      * A cart's destination as it is stored: four ciphertexts and a point.

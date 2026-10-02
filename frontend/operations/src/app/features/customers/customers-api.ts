@@ -255,6 +255,12 @@ export interface ReorderPlanLine {
   readonly status: 'AVAILABLE' | 'SOLD_OUT' | 'WITHDRAWN' | 'UNPRICED' | 'MODIFIERS_WITHDRAWN';
   readonly unitAmountMinor: number | null;
   readonly originalUnitAmountMinor: number;
+  /**
+   * ADR 0136: set on a combo, whose `variantId` is then its container and whose `quantity` counts
+   * combos. A combo has no price of its own (`unitAmountMinor` is null), so a repeat is priced from
+   * the components the picks name.
+   */
+  readonly comboPicks?: readonly { readonly componentId: string; readonly quantity: number }[];
 }
 
 // ---------------------------------------------------------------------- cashback

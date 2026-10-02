@@ -1,0 +1,90 @@
+.policy {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.policy__group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+}
+
+.policy__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.policy__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.policy__field select,
+.policy__number,
+.policy__attach select {
+  padding: 6px 8px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  font-size: var(--q-type-body-sm);
+}
+
+.policy__number {
+  width: 110px;
+}
+
+.policy__modes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  border: none;
+  padding: 0;
+  margin: 0;
+}
+
+.policy__mode {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.policy__override-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.policy__attach {
+  display: flex;
+  gap: 8px;
+}
+
+.policy__warning {
+  color: var(--q-warning-text);
+}
+
+.policy__error {
+  color: var(--q-error-text);
+}
+
+.policy__chips {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.policy__chip {
+  display: inline-block;
+  padding: 2px 6px;
+  background: var(--q-surface-1);
+  border-radius: var(--q-radius);
+  font-size: var(--q-type-caption);
+}

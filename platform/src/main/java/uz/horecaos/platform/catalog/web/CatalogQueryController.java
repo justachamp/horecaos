@@ -14,9 +14,11 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import uz.horecaos.platform.catalog.application.CatalogQueryService;
+import uz.horecaos.platform.catalog.domain.CompositeProducts.Visibility;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
+import uz.horecaos.platform.tenancy.api.FulfillmentMode;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
 import uz.horecaos.platform.web.api.Page;
@@ -431,10 +433,34 @@ public class CatalogQueryController {
         }
     }
 
-    public record AttachedModifierGroupView(UUID groupId, int sortOrder) {
+    /**
+     * An attached modifier group and how the product offers it (ADR 0136).
+     *
+     * @param applicableFulfillmentModes null = every mode
+     * @param version the attachment's own version, for the overrides write's {@code If-Match}
+     */
+    public record AttachedModifierGroupView(
+            UUID groupId,
+            int sortOrder,
+            Visibility visibility,
+            @Nullable List<FulfillmentMode> applicableFulfillmentModes,
+            @Nullable Boolean requiredOverride,
+            @Nullable Integer minimumSelectionsOverride,
+            @Nullable Integer maximumSelectionsOverride,
+            int version) {
 
         static AttachedModifierGroupView of(CatalogQueryService.AttachedModifierGroup group) {
-            return new AttachedModifierGroupView(group.groupId(), group.sortOrder());
+            return new AttachedModifierGroupView(
+                    group.groupId(),
+                    group.sortOrder(),
+                    group.visibility(),
+                    group.modes() == null
+                            ? null
+                            : group.modes().stream().sorted().toList(),
+                    group.requiredOverride(),
+                    group.minimumSelectionsOverride(),
+                    group.maximumSelectionsOverride(),
+                    group.version());
         }
     }
 

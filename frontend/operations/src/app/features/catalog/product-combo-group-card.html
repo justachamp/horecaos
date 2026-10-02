@@ -1,0 +1,205 @@
+<section class="combo-group" data-testid="combo-group">
+  <header class="combo-group__head">
+    <div>
+      <h3 class="q-body-sm" data-testid="combo-group-title">{{ title() }}</h3>
+      <span class="q-caption q-mono">{{ group().code }}</span>
+      @if (group().status !== 'ACTIVE') {
+        <span class="combo-group__chip" data-testid="combo-group-status">{{
+          statusLabel(group().status)
+        }}</span>
+      }
+    </div>
+    <p class="q-caption" data-testid="combo-group-range">
+      {{
+        'catalog.editor.combo.range'
+          | t: { min: group().minimumSelections, max: group().maximumSelections }
+      }}
+    </p>
+  </header>
+
+  <div class="combo-group__settings">
+    <label class="combo-group__field">
+      <span class="q-caption">{{ 'catalog.editor.combo.minimum' | t }}</span>
+      <input
+        #minInput
+        type="number"
+        min="0"
+        max="100"
+        [value]="group().minimumSelections"
+        data-testid="combo-group-minimum"
+      />
+    </label>
+    <label class="combo-group__field">
+      <span class="q-caption">{{ 'catalog.editor.combo.maximum' | t }}</span>
+      <input
+        #maxInput
+        type="number"
+        min="1"
+        max="100"
+        [value]="group().maximumSelections"
+        data-testid="combo-group-maximum"
+      />
+    </label>
+    <label class="combo-group__field combo-group__field--check">
+      <input
+        #repeatInput
+        type="checkbox"
+        [checked]="group().allowSameComponentMultipleTimes"
+        data-testid="combo-group-repeat"
+      />
+      <span class="q-caption">{{ 'catalog.editor.combo.allowRepeat' | t }}</span>
+    </label>
+    <label class="combo-group__field">
+      <span class="q-caption">{{ 'catalog.editor.combo.status' | t }}</span>
+      <select #statusSelect [value]="group().status" data-testid="combo-group-status-select">
+        @for (status of statuses; track status) {
+          <option [value]="status" [selected]="status === group().status">
+            {{ statusLabel(status) }}
+          </option>
+        }
+      </select>
+    </label>
+    <button
+      type="button"
+      [disabled]="saving() === 'group:' + group().comboGroupId"
+      (click)="saveGroup(minInput.value, maxInput.value, repeatInput.checked, statusSelect.value)"
+      data-testid="combo-group-save"
+    >
+      {{ 'catalog.editor.save' | t }}
+    </button>
+  </div>
+
+  @if (unsatisfiable()) {
+    <p class="q-caption combo-group__warning" data-testid="combo-group-unsatisfiable">
+      {{
+        'catalog.editor.combo.unsatisfiable'
+          | t: { min: group().minimumSelections, capacity: capacity() }
+      }}
+    </p>
+  }
+
+  @if (group().components.length === 0) {
+    <p class="q-caption" data-testid="combo-group-no-components">
+      {{ 'catalog.editor.combo.noComponents' | t }}
+    </p>
+  } @else {
+    <table class="combo-group__table">
+      <thead>
+        <tr>
+          <th>{{ 'catalog.editor.combo.column.component' | t }}</th>
+          <th>{{ 'catalog.editor.combo.column.quantity' | t }}</th>
+          <th>{{ 'catalog.editor.combo.column.price' | t }}</th>
+          <th>{{ 'catalog.editor.combo.column.status' | t }}</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (component of group().components; track component.componentId) {
+          <tr data-testid="combo-component">
+            <td data-testid="combo-component-name">{{ componentName(component) }}</td>
+            <td>
+              <input
+                #qtyInput
+                type="number"
+                min="1"
+                max="100"
+                class="combo-group__quantity"
+                [value]="component.defaultQuantity"
+                data-testid="combo-component-quantity"
+              />
+            </td>
+            <td class="q-mono q-tnum">
+              <span
+                [class.combo-group__price--missing]="isUnpriced(component)"
+                data-testid="combo-component-price"
+                >{{ priceText(component) }}</span
+              >
+              @if (priceBook()) {
+                <div class="combo-group__price-edit">
+                  <q-money-input
+                    [valueMinor]="priceOf(component) ?? 0"
+                    [ariaLabel]="'catalog.editor.combo.column.price' | t"
+                    (valueMinorChange)="setDraft(component, $event)"
+                  />
+                  <button
+                    type="button"
+                    [disabled]="
+                      saving() === 'price:' + component.componentId ||
+                      priceDrafts()[component.componentId] === undefined
+                    "
+                    (click)="setPrice(component)"
+                    data-testid="combo-component-set-price"
+                  >
+                    {{ 'catalog.editor.variants.setPrice' | t }}
+                  </button>
+                </div>
+              }
+            </td>
+            <td>
+              <select #componentStatus [value]="component.status">
+                @for (status of statuses; track status) {
+                  <option [value]="status" [selected]="status === component.status">
+                    {{ statusLabel(status) }}
+                  </option>
+                }
+              </select>
+            </td>
+            <td>
+              <button
+                type="button"
+                [disabled]="saving() === 'component:' + component.componentId"
+                (click)="saveComponent(component, qtyInput.value, componentStatus.value)"
+                data-testid="combo-component-save"
+              >
+                {{ 'catalog.editor.save' | t }}
+              </button>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+    @if (!priceBook()) {
+      <p class="q-caption" data-testid="combo-no-price-book">
+        {{ 'catalog.editor.variants.noPriceBook' | t }}
+      </p>
+    }
+  }
+
+  <div class="combo-group__add">
+    <q-combobox
+      [query]="pickerQuery()"
+      [options]="pickerOptions()"
+      [loading]="pickerLoading()"
+      [placeholder]="'catalog.editor.combo.addComponent.placeholder' | t"
+      [ariaLabel]="'catalog.editor.combo.addComponent.placeholder' | t"
+      (queryChange)="pickerQuery.set($event)"
+      (search)="searchVariants($event)"
+      (optionSelected)="pick($event)"
+      data-testid="combo-add-component-picker"
+    />
+    <input
+      #addQty
+      type="number"
+      min="1"
+      max="100"
+      value="1"
+      class="combo-group__quantity"
+      [attr.aria-label]="'catalog.editor.combo.column.quantity' | t"
+      data-testid="combo-add-component-quantity"
+    />
+    <button
+      type="button"
+      [disabled]="picked() === null || saving() === 'add:' + group().comboGroupId"
+      (click)="addComponent(addQty.value)"
+      data-testid="combo-add-component"
+    >
+      {{ 'catalog.editor.combo.addComponent' | t }}
+    </button>
+  </div>
+
+  @if (message(); as text) {
+    <p class="q-caption combo-group__error" role="alert" data-testid="combo-group-error">
+      {{ text }}
+    </p>
+  }
+</section>

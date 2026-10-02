@@ -46,3 +46,16 @@
     font: 800 20px/1 var(--font-display);
   }
 }
+
+/* ADR 0136: a charge the server added by itself, itemised and already in the figures above. */
+.summary__hidden {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font: 400 12px/1.4 var(--font-ui);
+  color: var(--text-secondary);
+}
+
+.summary__hidden-title {
+  margin: 0;
+}

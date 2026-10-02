@@ -13,6 +13,7 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 import uz.horecaos.platform.fulfillment.api.ResolvedDeliveryCharge;
+import uz.horecaos.platform.pricing.api.QuoteSnapshot;
 import uz.horecaos.platform.pricing.domain.Money;
 import uz.horecaos.platform.pricing.domain.Promotion;
 import uz.horecaos.platform.pricing.domain.Quote;
@@ -77,59 +78,20 @@ public class PricingEngine {
         long grossTotal = 0;
 
         for (QuoteRequest.Line line : request.lines()) {
-            Long unit = inputs.variantPrices().get(line.variantId());
-            if (unit == null) {
-                throw new UnpricedItemException(line.variantId());
-            }
-
-            // Modifiers are priced individually and folded into the unit price,
-            // so "extra cheese" is visible as its own adjustment rather than
-            // disappearing into a single number.
-            long modifierTotal = 0;
-            for (UUID optionId : line.modifierOptionIds()) {
-                Long modifierPrice = inputs.modifierPrices().get(optionId);
-                if (modifierPrice == null) {
-                    throw new UnpricedItemException(optionId);
-                }
-                modifierTotal += modifierPrice;
-            }
-
-            long unitWithModifiers = Math.addExact(unit, modifierTotal);
-            long lineGross = Math.multiplyExact(unitWithModifiers, (long) line.quantity());
-            grossTotal = Math.addExact(grossTotal, lineGross);
-
-            adjustments.add(new Adjustment(
-                    ++sequence,
-                    line.lineId(),
-                    Adjustment.Type.BASE_PRICE,
-                    "PRICE_BOOK",
-                    inputs.priceBookId(),
-                    inputs.priceBookVersion(),
-                    Money.of(Math.multiplyExact(unit, (long) line.quantity()), currency),
-                    "BASE_PRICE"));
-
-            if (modifierTotal > 0) {
+            PricedLine priced = priceLine(line, inputs, true);
+            grossTotal = Math.addExact(grossTotal, priced.grossMinor());
+            for (AdjustmentDraft draft : priced.adjustments()) {
                 adjustments.add(new Adjustment(
                         ++sequence,
-                        line.lineId(),
-                        Adjustment.Type.MODIFIER,
-                        "PRICE_BOOK",
-                        inputs.priceBookId(),
-                        inputs.priceBookVersion(),
-                        Money.of(Math.multiplyExact(modifierTotal, (long) line.quantity()), currency),
-                        "MODIFIERS"));
+                        draft.lineId(),
+                        draft.type(),
+                        draft.sourceType(),
+                        draft.sourceId(),
+                        draft.sourceVersion(),
+                        Money.of(draft.amountMinor(), currency),
+                        draft.descriptionCode()));
             }
-
-            lines.add(Quote.QuoteLine.item(
-                    line.lineId(),
-                    line.variantId(),
-                    line.quantity(),
-                    inputs.descriptions()
-                            .getOrDefault(line.variantId(), line.variantId().toString()),
-                    Money.of(unitWithModifiers, currency),
-                    Money.of(lineGross, currency),
-                    Money.of(lineGross, currency),
-                    Money.zero(currency)));
+            lines.addAll(priced.lines());
         }
 
         // Stages 3 and 4 (ADR 0018). Promotions reduce the gross *before* tax is
@@ -148,18 +110,10 @@ public class PricingEngine {
                     continue;
                 }
                 lineDiscountTotal = Math.addExact(lineDiscountTotal, off);
-                discounted.add(Quote.QuoteLine.item(
-                        line.lineId(),
-                        // Every element of `lines` here was built by item() a few
-                        // lines above and is therefore an ITEM line, which
-                        // QuoteLine's own constructor guarantees carries a variant.
-                        Objects.requireNonNull(line.variantId(), "an ITEM line always carries a variant"),
-                        line.quantity(),
-                        line.descriptionSnapshot(),
-                        line.unitAmount(),
-                        line.baseAmount(),
-                        Money.of(Math.subtractExact(line.finalAmount().minor(), off), currency),
-                        Money.zero(currency)));
+                // withAmounts keeps the combo grouping key: a discounted component is
+                // still a component of the combo it was bought in.
+                discounted.add(line.withAmounts(
+                        Money.of(Math.subtractExact(line.finalAmount().minor(), off), currency), Money.zero(currency)));
             }
             lines = discounted;
 
@@ -243,17 +197,7 @@ public class PricingEngine {
         List<Quote.QuoteLine> taxedLines = new ArrayList<>(lines.size());
         for (int i = 0; i < lines.size(); i++) {
             Quote.QuoteLine line = lines.get(i);
-            taxedLines.add(Quote.QuoteLine.item(
-                    line.lineId(),
-                    // Every element of `lines` is an ITEM line built by item(),
-                    // which QuoteLine's own constructor guarantees carries a variant.
-                    Objects.requireNonNull(line.variantId(), "an ITEM line always carries a variant"),
-                    line.quantity(),
-                    line.descriptionSnapshot(),
-                    line.unitAmount(),
-                    line.baseAmount(),
-                    line.finalAmount(),
-                    Money.of(lineTaxes[i], currency)));
+            taxedLines.add(line.withAmounts(line.finalAmount(), Money.of(lineTaxes[i], currency)));
         }
 
         adjustments.add(new Adjustment(
@@ -320,6 +264,293 @@ public class PricingEngine {
                 List.copyOf(adjustments),
                 delivery.shortfallMinor(),
                 contextHash(request, inputs));
+    }
+
+    /**
+     * The goods subtotal this request prices to, before promotions and delivery.
+     *
+     * <p>Exists so the delivery resolver can be handed the figure stages 7 and 8
+     * compare against the zone's minimum and threshold <em>before</em> the engine
+     * runs, without a second copy of the arithmetic to drift from this one: it is the
+     * same {@link #priceLine} the pricing pass uses. An item with no price is skipped
+     * rather than thrown on, because the pricing pass refuses it a moment later with
+     * the id of the offending item, and a helper whose job is a threshold comparison
+     * is the wrong place to report it.
+     */
+    public long goodsSubtotal(QuoteRequest request, PricingInputs inputs) {
+        long subtotal = 0;
+        for (QuoteRequest.Line line : request.lines()) {
+            subtotal = Math.addExact(subtotal, priceLine(line, inputs, false).grossMinor());
+        }
+        return subtotal;
+    }
+
+    /**
+     * Stages 1 and 2 for one request line: what it costs and the evidence for it.
+     *
+     * <p>An ordinary line is the variant's price plus its modifiers, folded into one
+     * unit price so "extra cheese" is visible as its own adjustment rather than
+     * disappearing into a number. ADR 0136 adds three things to that, each a value
+     * resolved before the engine ran: second-level modifier selections priced the way
+     * first-level ones are, the hidden auto-selected charges that apply to this
+     * variant on this order's fulfilment mode, and -- for a combo's container -- one
+     * quote line per picked component at that component's own price.
+     *
+     * @param strict whether a missing price is an error. The pricing pass is strict;
+     *        {@link #goodsSubtotal} is not
+     */
+    private PricedLine priceLine(QuoteRequest.Line line, PricingInputs inputs, boolean strict) {
+        CompositePricing.CompositeInputs composite =
+                inputs.composite() == null ? CompositePricing.CompositeInputs.none() : inputs.composite();
+
+        List<CompositePricing.ComboLine> combo = CompositePricing.resolveCombo(line, composite);
+        if (combo != null) {
+            return priceComboLine(line, combo, inputs, composite, strict);
+        }
+
+        String currency = inputs.currency();
+        Long unit = inputs.variantPrices().get(line.variantId());
+        if (unit == null) {
+            if (strict) {
+                throw new UnpricedItemException(line.variantId());
+            }
+            return PricedLine.empty();
+        }
+
+        List<AdjustmentDraft> drafts = new ArrayList<>();
+
+        long modifierTotal = 0;
+        for (UUID optionId : line.modifierOptionIds()) {
+            Long modifierPrice = inputs.modifierPrices().get(optionId);
+            if (modifierPrice == null) {
+                if (strict) {
+                    throw new UnpricedItemException(optionId);
+                }
+                continue;
+            }
+            modifierTotal = Math.addExact(modifierTotal, modifierPrice);
+        }
+
+        // The second level (ADR 0136): validated against the facts, then priced exactly
+        // as a first-level option is. A selection the facts do not allow never gets here.
+        long nestedTotal = 0;
+        for (UUID optionId : CompositePricing.resolveNested(line, composite)) {
+            Long nestedPrice = inputs.modifierPrices().get(optionId);
+            if (nestedPrice == null) {
+                if (strict) {
+                    throw new UnpricedItemException(optionId);
+                }
+                continue;
+            }
+            nestedTotal = Math.addExact(nestedTotal, nestedPrice);
+        }
+
+        HiddenTotal hidden = hiddenCharges(line.variantId(), inputs, composite, strict);
+
+        long unitWithModifiers =
+                Math.addExact(Math.addExact(Math.addExact(unit, modifierTotal), nestedTotal), hidden.totalMinor());
+        long lineGross = Math.multiplyExact(unitWithModifiers, (long) line.quantity());
+
+        drafts.add(new AdjustmentDraft(
+                line.lineId(),
+                Adjustment.Type.BASE_PRICE,
+                "PRICE_BOOK",
+                inputs.priceBookId(),
+                inputs.priceBookVersion(),
+                Math.multiplyExact(unit, (long) line.quantity()),
+                "BASE_PRICE"));
+        if (modifierTotal > 0) {
+            drafts.add(new AdjustmentDraft(
+                    line.lineId(),
+                    Adjustment.Type.MODIFIER,
+                    "PRICE_BOOK",
+                    inputs.priceBookId(),
+                    inputs.priceBookVersion(),
+                    Math.multiplyExact(modifierTotal, (long) line.quantity()),
+                    "MODIFIERS"));
+        }
+        if (nestedTotal > 0) {
+            drafts.add(new AdjustmentDraft(
+                    line.lineId(),
+                    Adjustment.Type.MODIFIER,
+                    "PRICE_BOOK",
+                    inputs.priceBookId(),
+                    inputs.priceBookVersion(),
+                    Math.multiplyExact(nestedTotal, (long) line.quantity()),
+                    "NESTED_MODIFIERS"));
+        }
+        addHiddenDrafts(drafts, line.lineId(), hidden, line.quantity());
+
+        Quote.QuoteLine quoteLine = Quote.QuoteLine.item(
+                line.lineId(),
+                line.variantId(),
+                line.quantity(),
+                inputs.descriptions()
+                        .getOrDefault(line.variantId(), line.variantId().toString()),
+                Money.of(unitWithModifiers, currency),
+                Money.of(lineGross, currency),
+                Money.of(lineGross, currency),
+                Money.zero(currency));
+        return new PricedLine(List.of(quoteLine), drafts, lineGross);
+    }
+
+    /**
+     * A combo order, as the several ordinary lines it is (ADR 0136).
+     *
+     * <p>There is no line for the container and no parent line: an order for a combo
+     * is arithmetically an order for its components separately, so the quote total,
+     * the order total and every reader that sums lines are correct without learning
+     * that a combo exists. Each component carries its own price (the {@code
+     * COMBO_COMPONENT} price map, keyed to the pairing and not the variant), its own
+     * tax share in stage 7, and -- because it is a variant -- its own ИКПУ on the
+     * receipt. Only the shared selection id says they were one purchase.
+     *
+     * <p>A component's quantity is the cart line's quantity times the units one pick of
+     * it puts on the order times how many times it was picked, so two lunch boxes with
+     * a six-piece wings pick are twelve wings, priced per wing.
+     */
+    private PricedLine priceComboLine(
+            QuoteRequest.Line line,
+            List<CompositePricing.ComboLine> combo,
+            PricingInputs inputs,
+            CompositePricing.CompositeInputs composite,
+            boolean strict) {
+
+        String currency = inputs.currency();
+        UUID selectionId = composite.comboSelectionIds().get(line.lineId());
+        if (selectionId == null) {
+            // The caller mints it so this class stays a function of its inputs. Missing
+            // is a bug in the caller, not a cart the customer can fix.
+            throw new IllegalStateException("No combo selection id was supplied for line " + line.lineId());
+        }
+
+        List<Quote.QuoteLine> lines = new ArrayList<>();
+        List<AdjustmentDraft> drafts = new ArrayList<>();
+        long gross = 0;
+        int position = 0;
+        for (CompositePricing.ComboLine pick : combo) {
+            CompositePricing.ComboComponentFact component = pick.component();
+            Long componentPrice = composite.comboComponentPrices().get(component.id());
+            if (componentPrice == null) {
+                if (strict) {
+                    throw new UnpricedItemException(component.id());
+                }
+                continue;
+            }
+            HiddenTotal hidden = hiddenCharges(component.componentVariantId(), inputs, composite, strict);
+
+            long units = Math.multiplyExact((long) line.quantity(), (long) pick.unitsPerCombo());
+            if (units > Integer.MAX_VALUE) {
+                throw new ArithmeticException("combo component quantity overflows an order line");
+            }
+            long unit = Math.addExact(componentPrice, hidden.totalMinor());
+            long lineGross = Math.multiplyExact(unit, units);
+            gross = Math.addExact(gross, lineGross);
+
+            // Stable per position within the sorted components, and short enough that
+            // the cart's own key plus this suffix still fits quote_lines.line_id.
+            String childId = line.lineId() + "~" + (++position);
+            lines.add(Quote.QuoteLine.comboComponent(
+                    childId,
+                    component.componentVariantId(),
+                    (int) units,
+                    inputs.descriptions()
+                            .getOrDefault(
+                                    component.componentVariantId(),
+                                    component.componentVariantId().toString()),
+                    Money.of(unit, currency),
+                    Money.of(lineGross, currency),
+                    Money.of(lineGross, currency),
+                    Money.zero(currency),
+                    selectionId,
+                    line.variantId(),
+                    component.id(),
+                    line.quantity(),
+                    pick.pickQuantity()));
+            drafts.add(new AdjustmentDraft(
+                    childId,
+                    Adjustment.Type.BASE_PRICE,
+                    "PRICE_BOOK",
+                    inputs.priceBookId(),
+                    inputs.priceBookVersion(),
+                    Math.multiplyExact(componentPrice, units),
+                    "COMBO_COMPONENT_PRICE"));
+            addHiddenDrafts(drafts, childId, hidden, units);
+        }
+        return new PricedLine(lines, drafts, gross);
+    }
+
+    /**
+     * The hidden auto-selected charges that apply to one priced variant (ADR 0136),
+     * each at its {@code MODIFIER_OPTION} price.
+     *
+     * <p>A hidden option with no price refuses the cart, as any modifier with no price
+     * does: pricing it at zero because nobody wrote a number is a free box nobody
+     * agreed to give.
+     */
+    private HiddenTotal hiddenCharges(
+            UUID variantId, PricingInputs inputs, CompositePricing.CompositeInputs composite, boolean strict) {
+        List<HiddenApplied> applied = new ArrayList<>();
+        long total = 0;
+        for (CompositePricing.HiddenCharge charge : composite.hiddenChargesOf(variantId)) {
+            Long price = inputs.modifierPrices().get(charge.optionId());
+            if (price == null) {
+                if (strict) {
+                    throw new UnpricedItemException(charge.optionId());
+                }
+                continue;
+            }
+            applied.add(new HiddenApplied(charge.optionId(), price));
+            total = Math.addExact(total, price);
+        }
+        return new HiddenTotal(total, applied);
+    }
+
+    /**
+     * One adjustment per hidden option, even at a price of zero.
+     *
+     * <p>"The box was applied, free" is a fact: it is what tells the order which
+     * option to snapshot, and an adjustment that vanished at zero would make a free
+     * hidden option indistinguishable from none.
+     */
+    private static void addHiddenDrafts(List<AdjustmentDraft> drafts, String lineId, HiddenTotal hidden, long units) {
+        for (HiddenApplied charge : hidden.applied()) {
+            drafts.add(new AdjustmentDraft(
+                    lineId,
+                    Adjustment.Type.MODIFIER,
+                    HIDDEN_MODIFIER_SOURCE,
+                    charge.optionId(),
+                    null,
+                    Math.multiplyExact(charge.priceMinor(), units),
+                    "HIDDEN_MODIFIER"));
+        }
+    }
+
+    /**
+     * The {@code source_type} of an adjustment for a hidden option, whose {@code
+     * source_id} is the option itself: the evidence an order reads to learn which
+     * option the server selected for the customer.
+     */
+    public static final String HIDDEN_MODIFIER_SOURCE = QuoteSnapshot.Adjustment.HIDDEN_MODIFIER_SOURCE;
+
+    private record HiddenApplied(UUID optionId, long priceMinor) {}
+
+    private record HiddenTotal(long totalMinor, List<HiddenApplied> applied) {}
+
+    private record AdjustmentDraft(
+            @Nullable String lineId,
+            Adjustment.Type type,
+            String sourceType,
+            @Nullable UUID sourceId,
+            @Nullable Integer sourceVersion,
+            long amountMinor,
+            String descriptionCode) {}
+
+    private record PricedLine(List<Quote.QuoteLine> lines, List<AdjustmentDraft> adjustments, long grossMinor) {
+
+        static PricedLine empty() {
+            return new PricedLine(List.of(), List.of(), 0L);
+        }
     }
 
     /**
@@ -638,6 +869,24 @@ public class PricingEngine {
                     .forEach(entry -> canonical.append(entry).append(","));
         }
 
+        // ADR 0136. Only written when there is something to say, so a cart with no
+        // combo, no nested choice and no hidden charge hashes exactly as it did before
+        // the record existed. The hidden charges are in the hash because they are in the
+        // total: a packaging option switched on for DELIVERY while the customer was
+        // choosing a payment method must invalidate the quote like any other price
+        // change. The fulfilment mode is named only alongside them, since it changes
+        // nothing a quote contains until a hidden group reads it.
+        CompositePricing.CompositeInputs composite = inputs.composite();
+        if (composite != null && !composite.hiddenChargesByVariant().isEmpty()) {
+            canonical.append("|mode=").append(request.effectiveFulfillmentMode());
+            composite.hiddenChargesByVariant().entrySet().stream()
+                    .sorted(java.util.Map.Entry.comparingByKey())
+                    .forEach(entry -> entry.getValue().stream()
+                            .map(charge -> entry.getKey() + ">" + charge.groupId() + ":" + charge.optionId())
+                            .sorted()
+                            .forEach(charged -> canonical.append("|hidden=").append(charged)));
+        }
+
         // Sorted by line id, so the same cart in a different order hashes the
         // same. Otherwise re-ordering a basket would look like a changed cart.
         request.lines().stream()
@@ -654,6 +903,17 @@ public class PricingEngine {
                             .map(UUID::toString)
                             .sorted()
                             .forEach(option -> canonical.append("+").append(option));
+                    line.nestedModifiers().stream()
+                            .map(nested -> nested.parentOptionId() + ">" + nested.optionId())
+                            .sorted()
+                            .forEach(nested -> canonical.append("+nested=").append(nested));
+                    // A pick is its component, its count, and what that component
+                    // costs and how many units it puts on the order -- so a price or a
+                    // default quantity changed under an in-flight quote changes the hash.
+                    line.comboPicks().stream()
+                            .map(pick -> pick.componentId() + "*" + pick.quantity() + "@" + comboTerms(composite, pick))
+                            .sorted()
+                            .forEach(pick -> canonical.append("+combo=").append(pick));
                 });
 
         try {
@@ -662,6 +922,20 @@ public class PricingEngine {
         } catch (NoSuchAlgorithmException impossible) {
             throw new IllegalStateException("SHA-256 is required", impossible);
         }
+    }
+
+    /** What a combo pick costs and delivers, for the hash: its unit price and units per pick. */
+    private static String comboTerms(
+            CompositePricing.@Nullable CompositeInputs composite, QuoteRequest.ComboPick pick) {
+        if (composite == null) {
+            return "-";
+        }
+        CompositePricing.ComboComponentFact component =
+                composite.comboComponents().get(pick.componentId());
+        Long price = composite.comboComponentPrices().get(pick.componentId());
+        return (price == null ? "unpriced" : price.toString())
+                + "x"
+                + (component == null ? "-" : Integer.toString(component.defaultQuantity()));
     }
 
     public enum TaxMode {
@@ -697,7 +971,45 @@ public class PricingEngine {
              * ADR 0018 stages 3 and 4, or null when nothing is on offer. Resolved
              * before the engine runs, like everything else here.
              */
-            @Nullable PromotionInputs promotions) {
+            @Nullable PromotionInputs promotions,
+            /*
+             * ADR 0136: combos, hidden auto-selected charges and nested modifier
+             * facts, or null when the cart has none of them -- every cart before the
+             * record, and every test with nothing to say about composite products.
+             */
+            CompositePricing.@Nullable CompositeInputs composite) {
+
+        /** A cart with no composite products, and every call site that predates ADR 0136. */
+        public PricingInputs(
+                String currency,
+                UUID catalogPublicationId,
+                UUID priceBookId,
+                int priceBookVersion,
+                UUID taxProfileId,
+                int taxProfileVersion,
+                int taxRateBasisPoints,
+                TaxMode taxMode,
+                Map<UUID, Long> variantPrices,
+                Map<UUID, Long> modifierPrices,
+                Map<UUID, String> descriptions,
+                @Nullable ResolvedDeliveryCharge deliveryCharge,
+                @Nullable PromotionInputs promotions) {
+            this(
+                    currency,
+                    catalogPublicationId,
+                    priceBookId,
+                    priceBookVersion,
+                    taxProfileId,
+                    taxProfileVersion,
+                    taxRateBasisPoints,
+                    taxMode,
+                    variantPrices,
+                    modifierPrices,
+                    descriptions,
+                    deliveryCharge,
+                    promotions,
+                    null);
+        }
 
         /** A cart with no promotions in play, and every call site that predates them. */
         public PricingInputs(

@@ -28,10 +28,21 @@ import {
   MenuService,
   type PublishedMenu,
   type PublishedProduct,
+  comboGroupsOfProduct,
 } from '../../../services/menu.service';
 import { NotificationService } from '../../../services/notification.service';
 import { TranslateService } from '../../../services/translate.service';
+import { ComboChoicesComponent } from '../../../shared/combo-choices/combo-choices.component';
 import { TranslatePipe } from '../../../shared/translate/translate.pipe';
+import type { MenuItemComboGroup } from '../../../types/home.types';
+import {
+  type ComboPickWire,
+  type ComboPicks,
+  canBeSatisfied,
+  comboValid,
+  picksOnTheWire,
+  samePicks,
+} from '../../../utils/combo-selection';
 
 /** How often the claim's countdown moves; a minute is the finest thing it says, so this is plenty. */
 const CLAIM_CLOCK_MS = 15_000;
@@ -85,7 +96,7 @@ interface MenuRow {
 @Component({
   selector: 'app-dine-in-table',
   standalone: true,
-  imports: [CommonModule, RouterLink, TranslatePipe],
+  imports: [CommonModule, RouterLink, ComboChoicesComponent, TranslatePipe],
   templateUrl: './dine-in-table.component.html',
   styleUrl: './dine-in-table.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -344,6 +355,150 @@ export class DineInTableComponent implements OnInit {
   quantityOf(variantId: string): number {
     return this.carts.cart()?.lines.find((line) => line.variantId === variantId)?.quantity ?? 0;
   }
+
+  // ------------------------------------------------------------ ADR 0136: combos
+
+  /** The combo product whose choices are open, if any. */
+  readonly openComboProductId = signal<string | null>(null);
+  private readonly comboPickState = signal<Readonly<Record<string, ComboPicks>>>({});
+
+  /** The choices a product's combo asks for; empty when the product is no combo. */
+  comboGroupsOf(product: PublishedProduct): readonly MenuItemComboGroup[] {
+    const menu = this.menu();
+    return menu ? comboGroupsOfProduct(menu, product) : [];
+  }
+
+  isCombo(product: PublishedProduct): boolean {
+    return (product.comboGroupIds ?? []).length > 0;
+  }
+
+  /** A group no orderable component can fill makes the combo unorderable for now. */
+  comboUnavailable(product: PublishedProduct): boolean {
+    return this.comboGroupsOf(product).some((group) => !canBeSatisfied(group));
+  }
+
+  toggleCombo(productId: string): void {
+    this.openComboProductId.update((open) => (open === productId ? null : productId));
+  }
+
+  comboPicksOf(productId: string): ComboPicks {
+    return this.comboPickState()[productId] ?? {};
+  }
+
+  setComboPicks(productId: string, picks: ComboPicks): void {
+    this.comboPickState.update((state) => ({ ...state, [productId]: picks }));
+  }
+
+  comboReady(product: PublishedProduct): boolean {
+    return comboValid(this.comboGroupsOf(product), this.comboPicksOf(product.productId));
+  }
+
+  /**
+   * Adds one of this combo with the picks made: a line of its own, so the same combo with other
+   * picks is another line, and the same picks again is one more of it.
+   */
+  async addCombo(product: PublishedProduct, variantId: string): Promise<void> {
+    const groups = this.comboGroupsOf(product);
+    const picks = picksOnTheWire(groups, this.comboPicksOf(product.productId));
+    if (picks.length === 0 || !comboValid(groups, this.comboPicksOf(product.productId))) {
+      return;
+    }
+    const admission = this.admission();
+    if (!admission) {
+      return;
+    }
+    if (!this.session.isAuthenticated()) {
+      this.signIn();
+      return;
+    }
+    try {
+      await this.carts.ensure(
+        admission.locationId,
+        'DINE_IN',
+        true,
+        admission.channelCode ?? undefined,
+      );
+      await this.bindCartToTable(admission);
+      const held = this.carts
+        .cart()
+        ?.lines.find(
+          (line) => line.variantId === variantId && samePicks(line.comboPicks ?? [], picks),
+        );
+      await this.carts.putLine({
+        variantId,
+        quantity: (held?.quantity ?? 0) + 1,
+        comboPicks: picks,
+      });
+      this.setComboPicks(product.productId, {});
+      this.openComboProductId.set(null);
+    } catch (failure) {
+      if (this.dineIn.isGuestSessionEnded(failure)) {
+        this.dineIn.clear();
+        return;
+      }
+      this.notification.show(this.translate.get('errors.generic'));
+    }
+  }
+
+  /**
+   * The basket as the guest reads it back: each line by name and quantity, and under a combo the
+   * components it will become on the order. Named from the menu document this screen already holds.
+   */
+  readonly basketLines = computed(() => {
+    const menu = this.menu();
+    const cart = this.carts.cart();
+    if (!menu || !cart) {
+      return [];
+    }
+    const productByVariant = new Map<string, PublishedProduct>();
+    for (const product of menu.products) {
+      for (const variant of product.variants) {
+        productByVariant.set(variant.variantId, product);
+      }
+    }
+    const componentById = new Map(
+      (menu.comboGroups ?? []).flatMap((group) =>
+        group.components.map((component) => [component.componentId, component] as const),
+      ),
+    );
+    return cart.lines.map((line) => ({
+      lineKey: line.lineKey,
+      name: productByVariant.get(line.variantId)?.name ?? '',
+      quantity: line.quantity,
+      components: (line.comboPicks ?? []).map((pick: ComboPickWire) => {
+        const component = componentById.get(pick.componentId);
+        const label = component
+          ? component.variantName
+            ? `${component.name} ${component.variantName}`
+            : component.name
+          : '';
+        const units = pick.quantity * (component?.defaultQuantity ?? 1);
+        return units > 1 ? `${label} ×${units}` : label;
+      }),
+    }));
+  });
+
+  /**
+   * What the server added by itself to this basket for a dine-in order -- a charge the guest never
+   * chose -- itemised, each already inside the total. Named from the menu's modifier options.
+   */
+  readonly hiddenCharges = computed(() => {
+    const menu = this.menu();
+    const names = new Map(
+      (menu?.modifierGroups ?? []).flatMap((group) =>
+        group.options.map((option) => [option.optionId, option.name || option.code || ''] as const),
+      ),
+    );
+    const byOption = new Map<string, number>();
+    for (const charge of this.priced()?.hiddenCharges ?? []) {
+      byOption.set(charge.optionId, (byOption.get(charge.optionId) ?? 0) + charge.amountMinor);
+    }
+    return [...byOption.entries()].map(([optionId, amountMinor]) => ({
+      optionId,
+      label: names.get(optionId) || this.translate.get('cart.hiddenCharge.fallbackLabel'),
+      amount: this.formatPrice(amountMinor),
+    }));
+  });
 
   readonly cartCount = computed(
     () => this.carts.cart()?.lines.reduce((sum, line) => sum + line.quantity, 0) ?? 0,

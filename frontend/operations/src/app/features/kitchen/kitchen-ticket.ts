@@ -166,3 +166,56 @@ export function availableItemActions(
       return [];
   }
 }
+
+/**
+ * One row of a ticket's items table: a combo's header or an item (ADR 0136).
+ *
+ * A combo is several ordinary ticket items sharing a selection id, each routed by its own variant
+ * to its own station — so the header is display only, derived here, and never an item a station
+ * can start or finish.
+ */
+export type TicketItemRow<Item> =
+  | { readonly kind: 'combo'; readonly key: string; readonly name: string | null }
+  | { readonly kind: 'item'; readonly key: string; readonly item: Item; readonly inCombo: boolean };
+
+/**
+ * The items in order, with a header ahead of the first component of each combo and the rest of that
+ * combo's components kept together beneath it.
+ *
+ * @param nameOf the combo's name for an item, resolved by the screen from the order line the item
+ *   points at (ADR 0041 keeps names off kitchen rows); null when the line cannot be resolved, which
+ *   draws the header without a name rather than hiding the grouping.
+ */
+export function ticketItemRows<
+  Item extends { readonly itemId: string; readonly comboSelectionId?: string | null },
+>(items: readonly Item[], nameOf: (item: Item) => string | null): readonly TicketItemRow<Item>[] {
+  const members = new Map<string, Item[]>();
+  for (const item of items) {
+    if (item.comboSelectionId) {
+      members.set(item.comboSelectionId, [...(members.get(item.comboSelectionId) ?? []), item]);
+    }
+  }
+  const rows: TicketItemRow<Item>[] = [];
+  const placed = new Set<string>();
+  for (const item of items) {
+    const selection = item.comboSelectionId;
+    if (!selection) {
+      rows.push({ kind: 'item', key: item.itemId, item, inCombo: false });
+      continue;
+    }
+    if (placed.has(selection)) {
+      continue;
+    }
+    placed.add(selection);
+    const group = members.get(selection) ?? [];
+    rows.push({
+      kind: 'combo',
+      key: `combo:${selection}`,
+      name: group.map(nameOf).find((name) => name !== null) ?? null,
+    });
+    for (const member of group) {
+      rows.push({ kind: 'item', key: member.itemId, item: member, inCombo: true });
+    }
+  }
+  return rows;
+}

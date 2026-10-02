@@ -19,14 +19,35 @@
   cursor: pointer;
 }
 
-.head__chevron { font: 700 20px/1 var(--font-display); margin-top: -2px; }
+.head__chevron {
+  font: 700 20px/1 var(--font-display);
+  margin-top: -2px;
+}
 
-.head__titles { flex: 1; min-width: 0; }
-.head__title { margin: 0; font: 800 26px/1.1 var(--font-display); letter-spacing: -0.02em; }
-.head__sub { margin: 2px 0 0; color: var(--text-secondary); font: 400 12px/1.4 var(--font-ui); }
+.head__titles {
+  flex: 1;
+  min-width: 0;
+}
+.head__title {
+  margin: 0;
+  font: 800 26px/1.1 var(--font-display);
+  letter-spacing: -0.02em;
+}
+.head__sub {
+  margin: 2px 0 0;
+  color: var(--text-secondary);
+  font: 400 12px/1.4 var(--font-ui);
+}
 
-.state { padding: 32px 24px; color: var(--text-muted); font: 400 14px/1.5 var(--font-ui); }
-.state__detail { margin: 6px 0 0; color: var(--status-error); }
+.state {
+  padding: 32px 24px;
+  color: var(--text-muted);
+  font: 400 14px/1.5 var(--font-ui);
+}
+.state__detail {
+  margin: 6px 0 0;
+  color: var(--status-error);
+}
 
 .btn {
   margin-top: 12px;
@@ -49,8 +70,17 @@
   color: var(--brand-accent-deep);
 }
 
-.empty__title { margin: 0; font: 800 22px/1.2 var(--font-display); color: var(--text-primary); }
-.empty__sub { margin: 0; max-width: 230px; color: var(--text-secondary); font: 400 13px/1.6 var(--font-ui); }
+.empty__title {
+  margin: 0;
+  font: 800 22px/1.2 var(--font-display);
+  color: var(--text-primary);
+}
+.empty__sub {
+  margin: 0;
+  max-width: 230px;
+  color: var(--text-secondary);
+  font: 400 13px/1.6 var(--font-ui);
+}
 
 .lines {
   display: flex;
@@ -84,23 +114,42 @@
   gap: 3px;
 }
 
-.line__name { font: 700 16px/1.2 var(--font-display); color: var(--text-primary); }
-.line__addons { font: 500 13px/1.35 var(--font-ui); color: var(--brand-accent-deep); }
-.line__price { margin-top: 2px; font: 800 15px/1.2 var(--font-display); color: var(--text-primary); }
+.line__name {
+  font: 700 16px/1.2 var(--font-display);
+  color: var(--text-primary);
+}
+.line__addons {
+  font: 500 13px/1.35 var(--font-ui);
+  color: var(--brand-accent-deep);
+}
+.line__price {
+  margin-top: 2px;
+  font: 800 15px/1.2 var(--font-display);
+  color: var(--text-primary);
+}
 
 /* A line the menu no longer lets the customer buy: kept, dimmed, and explained. */
-.line.is-unavailable { border-color: var(--status-error); }
+.line.is-unavailable {
+  border-color: var(--status-error);
+}
 .line.is-unavailable .line__img,
 .line.is-unavailable .line__name,
-.line.is-unavailable .line__price { opacity: 0.55; }
-.line__unavailable { font: 600 12px/1.35 var(--font-ui); color: var(--status-error); }
+.line.is-unavailable .line__price {
+  opacity: 0.55;
+}
+.line__unavailable {
+  font: 600 12px/1.35 var(--font-ui);
+  color: var(--status-error);
+}
 
 .hint {
   margin: 14px 24px 0;
   font: 400 13px/1.5 var(--font-ui);
   color: var(--text-muted);
 
-  &--error { color: var(--status-error); }
+  &--error {
+    color: var(--status-error);
+  }
 }
 
 .qty {
@@ -120,7 +169,10 @@
   font: 700 19px/1 var(--font-display);
   cursor: pointer;
 
-  &--add { background: var(--brand-accent); color: var(--text-on-accent); }
+  &--add {
+    background: var(--brand-accent);
+    color: var(--text-on-accent);
+  }
 }
 
 .qty__value {
@@ -148,21 +200,35 @@
   color: var(--text-secondary);
 }
 
-.summary__value { font: 600 13px/1.4 var(--font-ui); color: var(--text-primary); }
+.summary__value {
+  font: 600 13px/1.4 var(--font-ui);
+  color: var(--text-primary);
+}
 
-.summary__row--discount { color: var(--brand-accent-deep); }
+.summary__row--discount {
+  color: var(--brand-accent-deep);
+}
 
 /* Why the delivery line above is a dash rather than a price. */
-.summary__note { margin: -4px 0 0; font: 500 12px/1.45 var(--font-ui); color: var(--status-error); }
+.summary__note {
+  margin: -4px 0 0;
+  font: 500 12px/1.45 var(--font-ui);
+  color: var(--status-error);
+}
 
-.summary__divider { height: 1px; background: var(--line-subtle); }
+.summary__divider {
+  height: 1px;
+  background: var(--line-subtle);
+}
 
 .summary__row--total {
   align-items: baseline;
   font: 700 16px/1 var(--font-display);
   color: var(--text-primary);
 
-  span:last-child { font: 800 20px/1 var(--font-display); }
+  span:last-child {
+    font: 800 20px/1 var(--font-display);
+  }
 }
 
 .foot {
@@ -186,5 +252,17 @@
   cursor: pointer;
   box-shadow: 0 16px 30px -14px rgba(149, 203, 56, 0.9);
 
-  &:disabled { background: var(--line-default); color: var(--text-muted); box-shadow: none; cursor: not-allowed; }
+  &:disabled {
+    background: var(--line-default);
+    color: var(--text-muted);
+    box-shadow: none;
+    cursor: not-allowed;
+  }
+}
+
+/* ADR 0136: a charge the server added by itself, itemised and already in the figures above. */
+.summary__hidden {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
