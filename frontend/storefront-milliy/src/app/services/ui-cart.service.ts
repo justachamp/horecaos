@@ -19,6 +19,11 @@ import {
   type PricedCart,
 } from './cart.service';
 import { MenuService, type PublishedModifierGroup } from './menu.service';
+import {
+  discountLines as discountLinesOf,
+  noteLines as noteLinesOf,
+  promoOutcomeKey as promoOutcomeKeyOf,
+} from './applied-promotions';
 import { LangService } from './lang.service';
 import { DeliverySelectionService } from './delivery-selection.service';
 import { TranslateService } from './translate.service';
@@ -246,6 +251,57 @@ export class UiCartService {
     this.translate.current();
     return this.formatPrice(this.discountMinor());
   });
+
+  /**
+   * The discounts behind {@link discountMinor}, one line per kind, each with the
+   * platform's own amount (ADR 0140). Their sum is the discount. A discount the
+   * platform reports without saying where it came from (an answer that predates
+   * the breakdown) is one line, labelled by whether the customer has a code on the
+   * cart, so the total is never left with an unexplained gap.
+   */
+  readonly discountRows = computed<readonly PromotionRow[]>(() => {
+    this.translate.current();
+    const code = this.appliedPromoCode();
+    const lines = discountLinesOf(this.priced()?.appliedPromotions);
+    if (lines.length === 0) {
+      return this.hasDiscount()
+        ? [
+            {
+              labelKey: code ? 'cart.promoCode' : 'cart.offerDiscount',
+              code,
+              amount: this.discountFormatted(),
+            },
+          ]
+        : [];
+    }
+    return lines.map((line) => ({
+      labelKey: line.labelKey,
+      code: line.source === 'PROMO_CODE' ? code : null,
+      amount: this.formatPrice(line.amountMinor),
+    }));
+  });
+
+  /**
+   * Benefits already inside the delivery price or the goods (a delivery offer, a
+   * surcharge), as captions with the platform's amount. Not added to the sum.
+   */
+  readonly promotionNotes = computed<readonly PromotionNote[]>(() => {
+    this.translate.current();
+    return noteLinesOf(this.priced()?.appliedPromotions).map((line) => ({
+      labelKey: line.labelKey,
+      amount: this.formatPrice(line.amountMinor),
+    }));
+  });
+
+  /**
+   * The sentence for a code on the cart that did not move the price, or null: no
+   * code, or one that applied. Read from the platform's verdict, never guessed from
+   * the total (ADR 0140: a code never combines with an automatic offer, so a smaller
+   * code can lose to one and the customer is owed the reason).
+   */
+  readonly promoOutcomeKey = computed(() =>
+    this.appliedPromoCode() ? promoOutcomeKeyOf(this.priced()?.promoCodeOutcome) : null,
+  );
 
   /**
    * A preview of what delivery will cost, from `POST .../delivery-fee`
@@ -917,6 +973,23 @@ export class UiCartService {
     // Minor units, and for UZS that is whole som -- nothing divides by a hundred.
     return `${value.toLocaleString('uz-UZ')} ${currency}`;
   }
+}
+
+/**
+ * One discount line of the money block: the translation key of its label, the
+ * customer's own code when the line is theirs to remove, and the amount as the
+ * platform reported it, already formatted.
+ */
+export interface PromotionRow {
+  readonly labelKey: string;
+  readonly code: string | null;
+  readonly amount: string;
+}
+
+/** A benefit already inside the delivery price or the goods, to be read as a caption. */
+export interface PromotionNote {
+  readonly labelKey: string;
+  readonly amount: string;
 }
 
 /**

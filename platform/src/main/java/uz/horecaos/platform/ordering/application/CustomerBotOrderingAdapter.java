@@ -290,6 +290,10 @@ public class CustomerBotOrderingAdapter implements CustomerBotOrderingPort {
 
         CartService.PricedCart priced;
         try {
+            // ADR 0140: the bot pays in cash, and a payment-method promotion must see that
+            // when it prices the cart rather than be refused PRICE_CHANGED at checkout.
+            cart = carts.setPaymentMethod(tenantId, brandId, customerAccountId, cartId, cart.version(), CASH)
+                    .cart();
             // Priced again here, in the same transaction as the checkout, rather
             // than trusting the total the card just showed: ADR 0018 binds a quote
             // to a cart version, and the seconds between rendering a confirm

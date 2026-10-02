@@ -14,6 +14,8 @@ import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcCartStore;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcCheckoutAttemptStore;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore;
 import uz.horecaos.platform.pricing.api.PromoCodeRedemptionPort;
+import uz.horecaos.platform.pricing.api.PromotionQueryPort;
+import uz.horecaos.platform.pricing.api.PromotionRedemptionPort;
 import uz.horecaos.platform.pricing.api.QuoteAcceptancePort;
 import uz.horecaos.platform.tenancy.api.ConfigurationResolver;
 import uz.horecaos.platform.tenancy.api.LocationCapacityPort;
@@ -64,7 +66,9 @@ public final class CheckoutServiceTestFactory {
             CustomerBlacklistPort blacklist,
             ConfigurationResolver configuration,
             CartSaleWindowRules saleWindows,
-            CommentPresetLookup commentPresets) {
+            CommentPresetLookup commentPresets,
+            PromotionRedemptionPort promotions,
+            PromotionQueryPort promotionQuery) {
         return new CheckoutService(
                 new CheckoutAttemptLedger(attempts, orders, carts, payments, settlements),
                 new CheckoutEligibilityGuard(
@@ -80,8 +84,9 @@ public final class CheckoutServiceTestFactory {
                         blacklist,
                         configuration,
                         tenancy,
-                        saleWindows),
-                new CheckoutReservationStep(inventory, capacity, quotes, promoCodes),
+                        saleWindows,
+                        promotionQuery),
+                new CheckoutReservationStep(inventory, capacity, quotes, promoCodes, promotions),
                 new CheckoutOrderWriter(
                         orders,
                         acceptancePolicies,

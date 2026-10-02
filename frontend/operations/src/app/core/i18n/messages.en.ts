@@ -5134,6 +5134,27 @@ export const messagesEn = {
   'marketing.promoCodes.reveal.hint':
     'Shown once, now — the code is stored only as a hash, so this is the only time it can be read back. Write it down before dismissing this.',
   'marketing.promoCodes.reveal.dismiss': 'Got it',
+  // Promotion condition names, shown by q-condition-builder (ADR 0140, row 6.1). The rest of
+  // the Promotions screen's text is a lazy table: features/marketing/promotions/promotion-texts.ts.
+  'marketing.promotions.condition.SUBTOTAL_AT_LEAST': 'Basket subtotal',
+  'marketing.promotions.condition.QUANTITY_AT_LEAST': 'Number of matching items',
+  'marketing.promotions.condition.PRODUCT': 'Product',
+  'marketing.promotions.condition.CATEGORY': 'Category (with its sub-categories)',
+  'marketing.promotions.condition.VARIANT': 'Variant (size, portion)',
+  'marketing.promotions.condition.CHANNEL': 'Sales channel',
+  'marketing.promotions.condition.CHANNEL_TYPE': 'Kind of channel',
+  'marketing.promotions.condition.LOCATION': 'Branch',
+  'marketing.promotions.condition.FULFILLMENT_MODE': 'Order type',
+  'marketing.promotions.condition.PAYMENT_METHOD': 'Payment method',
+  'marketing.promotions.condition.DELIVERY_ZONE': 'Delivery zone',
+  'marketing.promotions.condition.CUSTOMER_SEGMENT': 'Customer segment',
+  'marketing.promotions.condition.DAY_OF_WEEK': 'Weekday',
+  'marketing.promotions.condition.TIME_OF_DAY': 'Time of day (branch time)',
+  'marketing.promotions.condition.FIRST_ORDER': 'The customer’s first order',
+  'marketing.promotions.condition.ORDER_FIRST_CHANNEL':
+    'The customer’s first order through this channel',
+  'marketing.promotions.condition.ORDER_NTH': 'The customer’s order number',
+  'marketing.promotions.condition.ORDER_EVERY_NTH': 'Every n-th order of the customer',
   'marketing.promoCodes.form.name': 'Name (internal, for this list)',
   'marketing.promoCodes.form.code': 'Code a customer types',
   'marketing.promoCodes.form.code.hint': '4-32 letters or digits. Shown once after saving.',
@@ -5665,8 +5686,9 @@ export const messagesEn = {
   'reports.marketing.title': 'Marketing reports',
   'reports.marketing.tab.discounts': 'Customer discounts',
   'reports.marketing.tab.campaigns': 'Campaigns',
-  'reports.marketing.promoSummaryNotBuilt':
-    'Promo-code summary and per-code redemption detail are not shown: they need reporting.fact_promotion_redemption, which needs a promotions ADR that does not exist yet (ADR 0023).',
+  // Promotion report tab name (ADR 0140, row 7.9); the report's other text is in promotion-texts.ts
+  'reports.marketing.tab.promotions': 'Promotions',
+  // end: Promotion report tab name (ADR 0140, row 7.9); the report's other text is in promotion-texts.ts
 
   'reports.marketing.discounts.intro':
     'How much a customer has been discounted, across every brand — the check to run before granting another goodwill code.',
@@ -6098,6 +6120,9 @@ export const messagesEn = {
   'staff.approvals.action.integrationFailureResolve': 'Integration failure resolution',
   'staff.approvals.action.loyaltyBalanceAdjust': 'Loyalty balance adjustment',
   'staff.approvals.action.customerPiiExport': 'Customer data export',
+  // Promotion activation approval (ADR 0140)
+  'staff.approvals.action.pricingPromotionActivate': 'Promotion activation',
+  // end: Promotion activation approval (ADR 0140)
   'staff.approvals.tab.pending': 'Waiting',
   'staff.approvals.tab.decided': 'Decided',
   'staff.approvals.column.status': 'Outcome',
@@ -6552,6 +6577,10 @@ export const messagesEn = {
   'ui.conditionBuilder.operator.EQUALS': 'is',
   'ui.conditionBuilder.operator.IN': 'is one of',
   'ui.conditionBuilder.operator.NOT_IN': 'is not one of',
+  'ui.conditionBuilder.timeFrom': 'From',
+  'ui.conditionBuilder.timeTo': 'Until',
+  'ui.conditionBuilder.filterPlaceholder': 'Type to find…',
+  'ui.conditionBuilder.moreMatches': '{count} more not shown — keep typing',
   'ui.dayOfWeek.MON': 'Mon',
   'ui.dayOfWeek.TUE': 'Tue',
   'ui.dayOfWeek.WED': 'Wed',
@@ -6572,6 +6601,7 @@ export const messagesEn = {
   'ui.ruleSimulator.disabledRule': 'Disabled — never evaluated',
   'ui.ruleSimulator.outcome': 'What happens',
   'ui.ruleSimulator.noRules': 'No rules to simulate.',
+  'ui.ruleSimulator.reason': 'Why',
   // The chart family (wave T09, IA X.19) — line/bar/stacked-bar/donut/
   // histogram/heatmap all share this handful of strings via `q-chart-frame`.
   'ui.charts.table.show': 'Show as table',

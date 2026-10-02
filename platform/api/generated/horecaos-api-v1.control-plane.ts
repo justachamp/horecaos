@@ -547,6 +547,11 @@ export interface CatalogImportSubmitResponse {
   status?: string;
 }
 
+export interface CatalogPublicationControllerValidationResponse {
+  findings?: Array<FindingView>;
+  publishable?: boolean;
+}
+
 export interface CatalogSummaryResponse {
   catalogId?: string;
   code?: string;
@@ -2610,7 +2615,7 @@ export interface PublicationResponse {
   contentHash?: string;
   publicationId?: string;
   status?: "VALIDATING" | "READY" | "REJECTED" | "PUBLISHED" | "RETIRED";
-  validation?: ValidationResponse;
+  validation?: CatalogPublicationControllerValidationResponse;
 }
 
 export interface QuarantineBacklogView {
@@ -3520,11 +3525,6 @@ export interface ValidationOutcome {
   checks?: Array<ValidationResult>;
 }
 
-export interface ValidationResponse {
-  findings?: Array<FindingView>;
-  publishable?: boolean;
-}
-
 export interface ValidationResult {
   advisory?: boolean;
   detail?: string;
@@ -3773,7 +3773,7 @@ export interface Operations {
   "createProduct": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/catalogs/{catalogId}/products"; request: { parameters: { path: { brandId: string; catalogId: string; tenantId: string } }; body: CreateProductRequest }; responses: { "200": ProductResponse } };
   "removeProductFromCatalog": { method: "DELETE"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/catalogs/{catalogId}/products/{productId}"; request: { parameters: { path: { brandId: string; catalogId: string; productId: string; tenantId: string } } }; responses: { "200": unknown } };
   "publish_1": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/catalogs/{catalogId}/publications"; request: { parameters: { path: { brandId: string; catalogId: string; tenantId: string }; query: { channel?: string } } }; responses: { "200": PublicationResponse } };
-  "validate_1": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/catalogs/{catalogId}/validation"; request: { parameters: { path: { brandId: string; catalogId: string; tenantId: string } } }; responses: { "200": ValidationResponse } };
+  "validate_1": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/catalogs/{catalogId}/validation"; request: { parameters: { path: { brandId: string; catalogId: string; tenantId: string } } }; responses: { "200": CatalogPublicationControllerValidationResponse } };
   "removeProductFromCategory": { method: "DELETE"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/categories/{categoryId}/products/{productId}"; request: { parameters: { path: { brandId: string; categoryId: string; productId: string; tenantId: string } } }; responses: { "200": unknown } };
   "placeInCategory": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/categories/{categoryId}/products/{productId}"; request: { parameters: { path: { brandId: string; categoryId: string; productId: string; tenantId: string } }; body: SortOrderRequest }; responses: { "200": unknown } };
   "channelExclusions": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/channels/{channelId}/exclusions"; request: { parameters: { path: { brandId: string; channelId: string; tenantId: string }; query: { locationId: string } } }; responses: { "200": ChannelExclusionsResponse } };

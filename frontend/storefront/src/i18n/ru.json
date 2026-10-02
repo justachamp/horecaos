@@ -130,7 +130,10 @@
     "hiddenCharge": {
       "title": "Добавлено автоматически, уже входит в итог",
       "fallbackLabel": "Дополнительная плата"
-    }
+    },
+    "offerDiscount": "Акция",
+    "deliveryOfferNote": "Включая скидку на доставку {{amount}}",
+    "surchargeNote": "Включая наценку {{amount}}"
   },
   "orders": {
     "title": "Заказы",

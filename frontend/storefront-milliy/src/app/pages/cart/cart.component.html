@@ -111,10 +111,10 @@
         @if (cart.deliveryUnresolvedMessage(); as unresolved) {
           <p class="summary__note" data-testid="delivery-unresolved">{{ unresolved }}</p>
         }
-        @if (cart.hasDiscount()) {
-          <div class="summary__row summary__row--discount">
-            <span>{{ 'cart.promoCode' | t }} {{ cart.appliedPromoCode() }}</span>
-            <span>−{{ cart.discountFormatted() }}</span>
+        @for (row of cart.discountRows(); track $index) {
+          <div class="summary__row summary__row--discount" data-testid="discount-row">
+            <span>{{ row.labelKey | t }}{{ row.code ? ' ' + row.code : '' }}</span>
+            <span>−{{ row.amount }}</span>
           </div>
         }
         @if (cart.hiddenCharges().length > 0) {
@@ -129,6 +129,11 @@
               </div>
             }
           </div>
+        }
+        @for (note of cart.promotionNotes(); track $index) {
+          <p class="summary__note" data-testid="promotion-note">
+            {{ note.labelKey | t: { amount: note.amount } }}
+          </p>
         }
         <div class="summary__divider"></div>
         <div class="summary__row summary__row--total">

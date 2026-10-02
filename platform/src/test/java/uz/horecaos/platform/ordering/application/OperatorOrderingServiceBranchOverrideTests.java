@@ -125,6 +125,33 @@ class OperatorOrderingServiceBranchOverrideTests {
     }
 
     @Test
+    void theOperatorsPaymentMethodIsOnTheCartBeforeTheCartIsPriced() {
+        stubHappyCartPath(PROPOSED_LOCATION);
+        stubResolvedProposal(PROPOSED_LOCATION);
+        when(checkout.checkout(any())).thenReturn(created(ORDER_ID));
+
+        service.place(commandFor(PROPOSED_LOCATION, PROPOSED_LOCATION, null, null));
+
+        var inOrder = org.mockito.Mockito.inOrder(carts);
+        inOrder.verify(carts).setPaymentMethod(eq(TENANT), eq(BRAND), eq(CUSTOMER), eq(CART_ID), anyInt(), eq("CASH"));
+        inOrder.verify(carts).price(eq(TENANT), eq(BRAND), eq(CUSTOMER), eq(CART_ID), anyInt());
+    }
+
+    @Test
+    void aMethodTheChannelDoesNotOfferIsLeftForCheckoutToRefuse() {
+        stubHappyCartPath(PROPOSED_LOCATION);
+        stubResolvedProposal(PROPOSED_LOCATION);
+        when(carts.setPaymentMethod(eq(TENANT), eq(BRAND), eq(CUSTOMER), eq(CART_ID), anyInt(), eq("CASH")))
+                .thenThrow(new CartService.CartRefusedException("PAYMENT_METHOD_UNAVAILABLE", "not offered"));
+        when(checkout.checkout(any())).thenReturn(created(ORDER_ID));
+
+        service.place(commandFor(PROPOSED_LOCATION, PROPOSED_LOCATION, null, null));
+
+        verify(carts).price(eq(TENANT), eq(BRAND), eq(CUSTOMER), eq(CART_ID), anyInt());
+        verify(checkout).checkout(any());
+    }
+
+    @Test
     void theResolverProposingNothingAtAllIsNeverAnOverride() {
         stubHappyCartPath(CHOSEN_LOCATION);
         stubResolvedProposal(null);
@@ -410,6 +437,9 @@ class OperatorOrderingServiceBranchOverrideTests {
                         any(),
                         any(),
                         any()))
+                .thenReturn(new CartService.CartView(lined, List.<CartLineRow>of()));
+        // ADR 0140: the operator's payment method goes on the cart before it is priced.
+        when(carts.setPaymentMethod(eq(TENANT), eq(BRAND), eq(CUSTOMER), eq(CART_ID), anyInt(), eq("CASH")))
                 .thenReturn(new CartService.CartView(lined, List.<CartLineRow>of()));
         when(carts.price(eq(TENANT), eq(BRAND), eq(CUSTOMER), eq(CART_ID), anyInt()))
                 .thenReturn(new CartService.PricedCart(CART_ID, 1, quote(locationId)));

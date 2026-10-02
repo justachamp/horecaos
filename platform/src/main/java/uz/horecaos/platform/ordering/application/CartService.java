@@ -985,7 +985,12 @@ public class CartService {
                 // ADR 0136: the hidden auto-selected modifier groups pricing applies are the
                 // ones that name this mode, and a dine-in cart is told apart from a pickup one
                 // by nothing but this. The cart knows its mode for its whole life.
-                cart.fulfillmentMode()));
+                cart.fulfillmentMode(),
+                // ADR 0140: what only the cart knows and a promotion may read -- how the
+                // customer means to pay and whether this is a delivery, a pickup or a
+                // table. The instant stays null: on the cart path it is the clock.
+                new CartPricingPort.PricingCommand.PromotionFrame(
+                        null, cart.paymentMethodCode(), cart.fulfillmentMode().name(), null, null)));
 
         if (!carts.attachQuote(
                 tenantId,
@@ -997,7 +1002,7 @@ public class CartService {
                 clock.instant())) {
             throw new StaleCartException(cart.version(), cart.version());
         }
-        return new PricedCart(cart.cartId(), cart.version(), quote);
+        return new PricedCart(cart.cartId(), cart.version(), quote, cart.appliedCouponCode());
     }
 
     /**
@@ -1068,6 +1073,43 @@ public class CartService {
             throw new StaleCartException(expectedVersion, cart.version());
         }
         log.debug("Cart {} applied promo code", cartId);
+        return view(tenantId, brandId, callerAccountId, cartId).orElseThrow();
+    }
+
+    /**
+     * ADR 0140: selects the money method the customer means to pay by, or clears
+     * the selection with a null code.
+     *
+     * <p>The method is an input to the price whenever a promotion reads it, so it
+     * lives on the cart and invalidates the attached quote exactly as a line edit
+     * does; checkout then refuses a method different from the one the cart was priced
+     * with when a payment-method promotion exists ({@code PRICE_CHANGED}), which is
+     * the re-quote the record names as its checkout friction. Refused unless the
+     * cart's channel sells the method, for the same reason checkout refuses it.
+     */
+    @Transactional
+    public CartView setPaymentMethod(
+            UUID tenantId,
+            UUID brandId,
+            UUID callerAccountId,
+            UUID cartId,
+            int expectedVersion,
+            @Nullable String rawCode) {
+        CartRow cart = requireEditable(tenantId, brandId, callerAccountId, cartId);
+        if (cart.version() != expectedVersion) {
+            throw new StaleCartException(expectedVersion, cart.version());
+        }
+        String normalized =
+                rawCode == null || rawCode.isBlank() ? null : rawCode.trim().toUpperCase(Locale.ROOT);
+        if (normalized != null
+                && !channels.enabledPaymentMethodCodes(tenantId, cart.channelId())
+                        .contains(normalized)) {
+            throw new CartRefusedException("PAYMENT_METHOD_UNAVAILABLE", "This channel does not offer " + normalized);
+        }
+        if (!carts.setPaymentMethodAndInvalidatePricing(
+                tenantId, cartId, expectedVersion, normalized, clock.instant())) {
+            throw new StaleCartException(expectedVersion, cart.version());
+        }
         return view(tenantId, brandId, callerAccountId, cartId).orElseThrow();
     }
 
@@ -1690,8 +1732,20 @@ public class CartService {
      * A cart, freshly priced.
      *
      * @param cartVersion the version after the quote was attached
+     * @param presentedCouponCode the code applied to the cart when it was priced, so a
+     *        reader can ask what became of it (ADR 0140). The raw code is the customer's
+     *        own input and is never echoed in a response.
      */
-    public record PricedCart(UUID cartId, int cartVersion, QuoteSnapshot quote) {}
+    public record PricedCart(
+            UUID cartId,
+            int cartVersion,
+            QuoteSnapshot quote,
+            @Nullable String presentedCouponCode) {
+
+        public PricedCart(UUID cartId, int cartVersion, QuoteSnapshot quote) {
+            this(cartId, cartVersion, quote, null);
+        }
+    }
 
     /** A cart operation refused for a business reason, with a stable code. */
     public static class CartRefusedException extends RuntimeException {

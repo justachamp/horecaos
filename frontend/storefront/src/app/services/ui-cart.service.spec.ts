@@ -721,6 +721,70 @@ describe('UiCartService delivery charge (from the priced cart, never a coordinat
   });
 });
 
+describe('UiCartService promotions behind the price (ADR 0140)', () => {
+  async function priceWith(overrides: Partial<PricedCart>): Promise<UiCartService> {
+    const { service, carts, menu } = setUp();
+    const cart = baseCart({
+      lines: [
+        {
+          lineKey: 'v-known',
+          variantId: 'v-known',
+          quantity: 1,
+          commentPresetCodes: [],
+          hasCustomerNote: false,
+        },
+      ],
+    });
+    carts.ensure.mockResolvedValue(cart);
+    carts.price.mockResolvedValue(pricedFor(cart, overrides));
+    menu.menu.mockResolvedValue(emptyMenu());
+    await service.load();
+    return service;
+  }
+
+  it("prints each discount as its own line with the platform's amount, an offer apart from a typed code", async () => {
+    const service = await priceWith({
+      discountMinor: 6_000,
+      appliedPromotions: [
+        { source: 'AUTOMATIC', effect: 'DISCOUNT', amountMinor: 4_000 },
+        { source: 'PROMO_CODE', effect: 'DISCOUNT', amountMinor: 2_000 },
+      ],
+    });
+
+    expect(service.discountRows()).toEqual([
+      { labelKey: 'cart.offerDiscount', amount: fmt(4_000) },
+      { labelKey: 'cart.promoCode', amount: fmt(2_000) },
+    ]);
+  });
+
+  it('keeps a discount the platform did not break down as one generic line rather than a gap in the total', async () => {
+    const service = await priceWith({ discountMinor: 5_000 });
+
+    expect(service.discountRows()).toEqual([{ labelKey: 'cart.discount', amount: fmt(5_000) }]);
+  });
+
+  it('has no discount line when nothing was discounted', async () => {
+    const service = await priceWith({ discountMinor: 0, appliedPromotions: [] });
+
+    expect(service.discountRows()).toEqual([]);
+  });
+
+  it('explains a delivery offer and a surcharge as captions and never as lines', async () => {
+    const service = await priceWith({
+      appliedPromotions: [
+        { source: 'AUTOMATIC', effect: 'DELIVERY_DISCOUNT', amountMinor: 5_000 },
+        { source: 'AUTOMATIC', effect: 'SURCHARGE', amountMinor: 1_500 },
+      ],
+    });
+
+    expect(service.discountRows()).toEqual([]);
+    expect(service.promotionNotes()).toEqual([
+      { labelKey: 'cart.deliveryOfferNote', amount: fmt(5_000) },
+      { labelKey: 'cart.surchargeNote', amount: fmt(1_500) },
+    ]);
+  });
+});
+
 describe('UiCartService.fulfillmentMode reflects the loaded cart, not a stale default', () => {
   // A reload-style construction -- a fresh injection with nothing else having
   // called `switchFulfillmentMode` first, exactly what a full page load of

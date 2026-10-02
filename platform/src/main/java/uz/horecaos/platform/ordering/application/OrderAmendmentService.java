@@ -65,6 +65,8 @@ import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore.O
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore.RevisionRow;
 import uz.horecaos.platform.pricing.api.CartPricingPort;
 import uz.horecaos.platform.pricing.api.PromoCodeRedemptionPort;
+import uz.horecaos.platform.pricing.api.PromotionQueryPort;
+import uz.horecaos.platform.pricing.api.PromotionRedemptionPort;
 import uz.horecaos.platform.pricing.api.QuoteAcceptance;
 import uz.horecaos.platform.pricing.api.QuoteAcceptancePort;
 import uz.horecaos.platform.pricing.api.QuoteSnapshot;
@@ -140,6 +142,8 @@ public class OrderAmendmentService {
     private final ConfigurationResolver configuration;
     private final PromoCodeRedemptionPort promoCodes;
     private final OrderCatalogSnapshot catalog;
+    private final PromotionRedemptionPort promotions;
+    private final PromotionQueryPort promotionQuery;
 
     @SuppressWarnings("checkstyle:ParameterNumber")
     public OrderAmendmentService(
@@ -159,7 +163,9 @@ public class OrderAmendmentService {
             FieldProtection protection,
             ConfigurationResolver configuration,
             PromoCodeRedemptionPort promoCodes,
-            OrderCatalogSnapshot catalog) {
+            OrderCatalogSnapshot catalog,
+            PromotionRedemptionPort promotions,
+            PromotionQueryPort promotionQuery) {
         this.orders = orders;
         this.amendments = amendments;
         this.audit = audit;
@@ -176,6 +182,8 @@ public class OrderAmendmentService {
         this.configuration = configuration;
         this.promoCodes = promoCodes;
         this.catalog = catalog;
+        this.promotions = promotions;
+        this.promotionQuery = promotionQuery;
         // A second template for the one write that has to outlive the exception it
         // accompanies, exactly as PaymentAttemptService needs for the same reason:
         // apply() settles an expired amendment and then refuses the application, and
@@ -249,8 +257,9 @@ public class OrderAmendmentService {
         long deltaTotalMinor = 0L;
         boolean requiresApproval = false;
         UUID quoteId = null;
-        if (decoded.basket().needsReprice()) {
-            QuoteSnapshot quote = repriceFor(order, decoded.basket(), command.idempotencyKey() + ":quote");
+        if (repricesOrder(order, decoded)) {
+            QuoteSnapshot quote = repriceFor(
+                    order, decoded.basket(), decoded.paymentMethodCode(), command.idempotencyKey() + ":quote");
             quoteId = quote.quoteId();
             deltaTotalMinor = quote.totalMinor() - order.totalMinor();
 
@@ -476,7 +485,7 @@ public class OrderAmendmentService {
         long feeMinor = previous.feeMinor();
         long totalMinor = previous.totalMinor();
 
-        if (decoded.basket().needsReprice()) {
+        if (repricesOrder(order, decoded)) {
             UUID storedQuoteId = Objects.requireNonNull(
                     amendment.quoteId(), "A repricing amendment always priced a quote at propose time");
             QuoteSnapshot quote = quoteAcceptance
@@ -505,6 +514,13 @@ public class OrderAmendmentService {
             // repriced basket only changes how much discount that redemption
             // stands for. Never a second redemption (see repriceFor).
             promoCodes.restateForOrder(tenantId, orderId, storedQuoteId);
+            // ADR 0140: the same for the automatic promotions. The order keeps one ledger
+            // row per promotion and moves it in place to the quote behind this revision; a
+            // promotion that stopped applying is released and one that newly applies gets
+            // a row. An amendment never claims a slot.
+            promotions.restateForOrder(
+                    tenantId, order.brandId(), orderId, storedQuoteId, newRevision, order.customerAccountId(), now);
+            orders.setLoyaltyFlags(tenantId, orderId, quote.loyaltyAccrualAllowed(), quote.loyaltyRedemptionAllowed());
 
             quoteId = quote.quoteId();
             contextHash = quote.contextHash();
@@ -532,7 +548,7 @@ public class OrderAmendmentService {
                 decoded.orderFields().promisedAt(),
                 decoded.orderFields().promiseBasis(),
                 paymentProjectionPatch,
-                decoded.basket().needsReprice()
+                repricesOrder(order, decoded)
                         ? new JdbcOrderStore.RevisionTotals(
                                 subtotalMinor, taxMinor, discountMinor, feeMinor, totalMinor)
                         : null);
@@ -1172,7 +1188,8 @@ public class OrderAmendmentService {
      * QuoteService#resolvePromotionInputs}); no second redemption is taken
      * here or in {@link #apply}, which only restates the existing row's amount.
      */
-    private QuoteSnapshot repriceFor(OrderRow order, FinancialIntent intent, String idempotencyKey) {
+    private QuoteSnapshot repriceFor(
+            OrderRow order, FinancialIntent intent, @Nullable String paymentMethodOverride, String idempotencyKey) {
         List<OrderLineRow> liveLines = orders.lines(order.tenantId(), order.orderId());
         Map<UUID, List<JdbcOrderStore.OrderModifierRow>> modifiersByLine =
                 orders.lineModifiers(order.tenantId(), order.orderId()).stream()
@@ -1210,6 +1227,22 @@ public class OrderAmendmentService {
                 ? null
                 : new CartPricingPort.PricingCommand.Delivery(destinationPoint, PricingAuthority.HORECAOS);
 
+        // ADR 0140. The order was bought once, at one instant, by one method, and that is
+        // what it is repriced under. Pricing starts from the promotion inputs recorded on
+        // the quote behind the order's current revision and this frame overrides only what
+        // the amendment itself changes: the basket and delivery point above, and the
+        // payment method when the amendment changes it. The clock is never an override, so
+        // a "lunch 12:00 to 15:00" promotion that priced the order at 12:30 still holds
+        // when a line is added at 15:05. An order priced before calculation version 3
+        // recorded none, and falls back to its own creation time and fulfilment mode.
+        UUID currentQuoteId = orders.revisions(order.tenantId(), order.orderId()).stream()
+                .filter(revision -> revision.revision() == order.currentRevision())
+                .map(RevisionRow::pricingQuoteId)
+                .findFirst()
+                .orElse(order.pricingQuoteId());
+        var frame = new CartPricingPort.PricingCommand.PromotionFrame(
+                null, paymentMethodOverride, order.fulfillmentMode().name(), currentQuoteId, order.createdAt());
+
         try {
             return pricing.priceCart(new CartPricingPort.PricingCommand(
                     order.tenantId(),
@@ -1225,11 +1258,26 @@ public class OrderAmendmentService {
                     // ADR 0136: which hidden auto-selected modifier groups apply is decided by the
                     // order's own mode, and a dine-in order is told apart from a pickup one by
                     // nothing else.
-                    order.fulfillmentMode()));
+                    order.fulfillmentMode(),
+                    frame));
         } catch (CartPricingPort.PricingRefusedException refused) {
             throw new AmendmentRefusedException(
                     refused.code(), Objects.requireNonNullElse(refused.getMessage(), refused.code()));
         }
+    }
+
+    /**
+     * Whether this batch reprices the order. A new line, a larger quantity or a new
+     * address always does; a payment-method change does only when the method can move
+     * the total (ADR 0140), that is when the brand has a payment-method promotion or
+     * the order holds one -- so switching to cash drops a "5% off with Click" promotion
+     * and switching back restores it, the way checkout behaves.
+     */
+    private boolean repricesOrder(OrderRow order, DecodedAmendment decoded) {
+        return decoded.basket().needsReprice()
+                || (decoded.paymentMethodCode() != null
+                        && promotionQuery.paymentMethodChangesTheTotal(
+                                order.tenantId(), order.brandId(), order.orderId()));
     }
 
     private static final String SNAPSHOT_TABLE = "ordering.order_customer_snapshots";

@@ -2817,6 +2817,24 @@ public class JdbcOrderStore {
      *                           a leaderboard a later action can rewrite measures
      *                           nothing
      */
+    /**
+     * ADR 0140: records that an applied promotion suppresses loyalty accrual or
+     * blocks spending points. Set once at checkout from the accepted quote and again
+     * when an amendment reprices the order under a different set of promotions.
+     */
+    public void setLoyaltyFlags(UUID tenantId, UUID orderId, boolean accrualAllowed, boolean redemptionAllowed) {
+        jdbc.sql("""
+                UPDATE ordering.orders
+                SET loyalty_accrual_allowed = :accrual, loyalty_redemption_allowed = :redemption
+                WHERE tenant_id = :tenantId AND id = :orderId
+                """)
+                .param("tenantId", tenantId)
+                .param("orderId", orderId)
+                .param("accrual", accrualAllowed)
+                .param("redemption", redemptionAllowed)
+                .update();
+    }
+
     public record NewOrder(
             UUID orderId,
             String publicOrderNumber,

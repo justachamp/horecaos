@@ -134,7 +134,10 @@
     "hiddenCharge": {
       "title": "Added automatically, already in the total",
       "fallbackLabel": "Added charge"
-    }
+    },
+    "offerDiscount": "Special offer",
+    "deliveryOfferNote": "Includes a delivery offer of {{amount}}",
+    "surchargeNote": "Includes a surcharge of {{amount}}"
   },
   "checkout": {
     "title": "Checkout",
@@ -159,7 +162,11 @@
     "emptyCartTitle": "There is nothing in your cart to check out",
     "emptyCartSubtitle": "Add some dishes to your cart first.",
     "loadError": "The checkout page could not be loaded",
-    "onlinePaymentFailed": "The payment page could not be opened. Check your orders."
+    "onlinePaymentFailed": "The payment page could not be opened. Check your orders.",
+    "promoCodeLabel": "Code {{code}}",
+    "promoOffersBetter": "Your current offers are already better than this code, so it was not applied.",
+    "promoNotApplicable": "This code does not apply to this order.",
+    "promoNoLongerValid": "This code is no longer valid."
   },
   "orders": {
     "title": "Orders",

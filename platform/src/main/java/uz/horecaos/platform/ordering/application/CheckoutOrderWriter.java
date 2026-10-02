@@ -172,6 +172,14 @@ class CheckoutOrderWriter {
                 command.actorId(),
                 now));
 
+        // ADR 0140: what the quote's applied promotions say about loyalty. The defaults are
+        // the permissive values, so only an order carrying a restricting promotion
+        // writes anything here.
+        if (!quote.loyaltyAccrualAllowed() || !quote.loyaltyRedemptionAllowed()) {
+            orders.setLoyaltyFlags(
+                    command.tenantId(), orderId, quote.loyaltyAccrualAllowed(), quote.loyaltyRedemptionAllowed());
+        }
+
         // ADR 0039 revision 1: the ADR 0019 checkout snapshot, written before the
         // lines that belong to it. A report pinned here must still reconcile to
         // the original total after ten amendments, which it can only do if the

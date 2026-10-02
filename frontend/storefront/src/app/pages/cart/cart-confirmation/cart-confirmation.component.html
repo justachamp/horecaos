@@ -217,10 +217,13 @@
           <span>{{ deliveryFee }}</span>
         </div>
       }
-      @if (discountAmount) {
-        <div class="flex items-center justify-between pt-1 text-sm text-white">
-          <span>{{ 'cart.discount' | t }}</span>
-          <span>-{{ discountAmount }}</span>
+      @for (row of discountRows; track $index) {
+        <div
+          class="flex items-center justify-between pt-1 text-sm text-white"
+          data-testid="discount-row"
+        >
+          <span>{{ row.labelKey | t }}</span>
+          <span>-{{ row.amount }}</span>
         </div>
       }
       @if (hiddenCharges.length > 0) {
@@ -238,6 +241,11 @@
             </div>
           }
         </div>
+      }
+      @for (note of promotionNotes; track $index) {
+        <p class="pt-1 text-xs text-white/80" data-testid="promotion-note">
+          {{ note.labelKey | t: { amount: note.amount } }}
+        </p>
       }
       @if (cart.cartData()?.packaging?.price) {
         <div class="flex items-center justify-between pt-1 text-sm text-white">

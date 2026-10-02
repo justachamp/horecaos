@@ -1817,7 +1817,14 @@ public class OperationsOrderController {
                 List<UUID> modifierOptionIds,
                 List<String> commentPresetCodes,
                 @Nullable String customerNote) {
-            this(variantId, BigDecimal.valueOf(quantity), modifierOptionIds, commentPresetCodes, customerNote, null, null);
+            this(
+                    variantId,
+                    BigDecimal.valueOf(quantity),
+                    modifierOptionIds,
+                    commentPresetCodes,
+                    customerNote,
+                    null,
+                    null);
         }
 
         OperatorOrderingService.OrderLine toLine() {

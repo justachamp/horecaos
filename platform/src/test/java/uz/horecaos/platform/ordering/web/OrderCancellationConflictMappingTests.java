@@ -143,7 +143,8 @@ class OrderCancellationConflictMappingTests {
                 orderState,
                 mock(ReorderPlanService.class),
                 currentCustomer,
-                currentActor);
+                currentActor,
+                mock(uz.horecaos.platform.pricing.api.AppliedPromotionPort.class));
 
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.addHeader("If-Match", "\"1\"");

@@ -422,8 +422,7 @@ class CartCheckoutAndOrderTests {
                 new JdbcCatalogPricingContext(jdbc, "uz"),
                 channelStore,
                 deliveryFees,
-                promoCodeStore,
-                new PromoCodeEligibilityService(promoCodeStore),
+                uz.horecaos.platform.pricing.PromotionTestSupport.resolver(jdbc, promoCodeStore),
                 clock,
                 new FakeConfigurationResolver());
         var serviceability = new ServiceabilityService(serviceabilityStore, clock);
@@ -603,7 +602,13 @@ class CartCheckoutAndOrderTests {
                 customerBlacklist,
                 orderingConfig,
                 saleWindowRules,
-                commentPresetLookup);
+                commentPresetLookup,
+                new uz.horecaos.platform.pricing.application.PromotionRedemptionService(
+                        new uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPromotionStore(
+                                jdbc, objectMapper)),
+                new uz.horecaos.platform.pricing.application.PromotionRedemptionService(
+                        new uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPromotionStore(
+                                jdbc, objectMapper)));
 
         checkout = checkoutWith.apply(UNWIRED_PAYMENTS);
         // ADR 0075's port over the same services, so a bot repeat and a

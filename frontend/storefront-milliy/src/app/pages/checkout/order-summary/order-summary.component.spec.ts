@@ -2,6 +2,7 @@ import { TestBed } from '@angular/core/testing';
 
 import { TranslateService } from '../../../services/translate.service';
 import type { HiddenChargeRow } from '../../../services/ui-cart.service';
+import type { PromotionNote, PromotionRow } from '../../../services/ui-cart.service';
 import { OrderSummaryComponent } from './order-summary.component';
 
 class FakeTranslateService {
@@ -14,8 +15,8 @@ interface Inputs {
   subtotal: string;
   deliveryFee: string;
   unresolvedMessage: string | null;
-  hasDiscount: boolean;
-  discount: string;
+  discountRows: readonly PromotionRow[];
+  notes: readonly PromotionNote[];
   total: string;
   hiddenCharges: readonly HiddenChargeRow[];
   provisional: boolean;
@@ -30,8 +31,8 @@ function setUp(overrides: Partial<Inputs> = {}) {
     subtotal: '25 000 so‘m',
     deliveryFee: '7 000 so‘m',
     unresolvedMessage: null,
-    hasDiscount: false,
-    discount: '',
+    discountRows: [],
+    notes: [],
     total: '32 000 so‘m',
     hiddenCharges: [],
     provisional: false,
@@ -64,16 +65,40 @@ describe('OrderSummaryComponent', () => {
     ]);
   });
 
-  it('adds a discount line only when the cart has a discount', () => {
-    const { rows } = setUp({ hasDiscount: true, discount: '5 000 so‘m' });
+  it("adds one line per discount, each with the platform's amount and the code only on the code line", () => {
+    const { rows } = setUp({
+      discountRows: [
+        { labelKey: 'cart.offerDiscount', code: null, amount: '4 000 so‘m' },
+        { labelKey: 'cart.promoCode', code: 'OSH2026', amount: '1 000 so‘m' },
+      ],
+    });
 
     expect(rows().map((row) => row[0])).toEqual([
       'cart.subtotalLabel',
       'cart.delivery',
-      'cart.promoCode',
+      'cart.offerDiscount',
+      'cart.promoCode OSH2026',
       'cart.total',
     ]);
-    expect(rows()[2][1]).toBe('−5 000 so‘m');
+    expect(rows()[2][1]).toBe('−4 000 so‘m');
+    expect(rows()[3][1]).toBe('−1 000 so‘m');
+  });
+
+  it('adds no discount line when nothing was discounted', () => {
+    const { host } = setUp();
+
+    expect(host.querySelector('[data-testid="discount-row"]')).toBeNull();
+  });
+
+  it('explains a delivery offer or a surcharge as a caption, not as a line to add', () => {
+    const { host, rows } = setUp({
+      notes: [{ labelKey: 'cart.deliveryOfferNote', amount: '5 000 so‘m' }],
+    });
+
+    expect(host.querySelector('[data-testid="promotion-note"]')?.textContent?.trim()).toBe(
+      'cart.deliveryOfferNote',
+    );
+    expect(rows()).toHaveLength(3);
   });
 
   it('says why the delivery fee is a dash when the platform could not resolve it', () => {

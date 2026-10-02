@@ -3,6 +3,7 @@ import { Component, OnInit, effect, signal, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
+import type { PromotionRow } from '../../../services/applied-promotions';
 import { type HiddenChargeRow, UiCartService } from '../../../services/ui-cart.service';
 import { DeliverySelectionService } from '../../../services/delivery-selection.service';
 import { OrdersService } from '../../../services/orders.service';
@@ -324,9 +325,14 @@ export class CartConfirmationComponent implements OnInit {
     return this.cart.taxFormatted();
   }
 
-  /** `null` hides the row: nothing was discounted. */
-  get discountAmount(): string | null {
-    return this.cart.discountFormatted();
+  /** One row per kind of discount, with the platform's amount; empty when nothing was discounted. */
+  get discountRows(): readonly PromotionRow[] {
+    return this.cart.discountRows();
+  }
+
+  /** Benefits already inside the delivery price or the goods, shown as captions. */
+  get promotionNotes(): readonly PromotionRow[] {
+    return this.cart.promotionNotes();
   }
 
   get totalWithDelivery(): string {

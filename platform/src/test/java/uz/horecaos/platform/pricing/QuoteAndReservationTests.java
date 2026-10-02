@@ -25,7 +25,6 @@ import uz.horecaos.platform.inventory.api.TrackingMode;
 import uz.horecaos.platform.inventory.application.InventoryService;
 import uz.horecaos.platform.inventory.infrastructure.persistence.JdbcInventoryStore;
 import uz.horecaos.platform.pricing.application.PricingEngine;
-import uz.horecaos.platform.pricing.application.PromoCodeEligibilityService;
 import uz.horecaos.platform.pricing.application.QuoteService;
 import uz.horecaos.platform.pricing.domain.QuoteRequest;
 import uz.horecaos.platform.pricing.infrastructure.catalog.JdbcCatalogPricingContext;
@@ -121,8 +120,7 @@ class QuoteAndReservationTests {
                 new JdbcCatalogPricingContext(jdbc, "uz"),
                 channelStore,
                 deliveryFees,
-                promoCodeStore,
-                new PromoCodeEligibilityService(promoCodeStore),
+                uz.horecaos.platform.pricing.PromotionTestSupport.resolver(jdbc, promoCodeStore),
                 clock,
                 new FakeConfigurationResolver());
 
@@ -151,8 +149,7 @@ class QuoteAndReservationTests {
                 new JdbcCatalogPricingContext(jdbc, "uz"),
                 channelStore,
                 deliveryFees,
-                promoCodeStore,
-                new PromoCodeEligibilityService(promoCodeStore),
+                uz.horecaos.platform.pricing.PromotionTestSupport.resolver(jdbc, promoCodeStore),
                 clock,
                 configuration);
     }

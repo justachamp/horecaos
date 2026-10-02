@@ -264,6 +264,34 @@ stateDiagram-v2
     DELETION_PENDING --> DELETED
 ```
 
+## Promotion
+
+ADR 0140. An automatic promotion (and a promo code's discount, which is the same rule with
+`requires_coupon`) moves through authoring states; only `ACTIVE` takes part in pricing.
+
+```mermaid
+stateDiagram-v2
+    [*] --> DRAFT: create
+    DRAFT --> VALIDATED: validate (rule checker passes)
+    DRAFT --> DRAFT: validate (refusals returned)
+    VALIDATED --> DRAFT: edit
+    VALIDATED --> ACTIVE: activate
+    VALIDATED --> VALIDATED: activate above a threshold (pending ADR 0027 approval)
+    ACTIVE --> SUSPENDED: suspend
+    SUSPENDED --> ACTIVE: resume
+    SUSPENDED --> DRAFT: edit
+    DRAFT --> ARCHIVED
+    VALIDATED --> ARCHIVED
+    ACTIVE --> ARCHIVED
+    SUSPENDED --> ARCHIVED
+```
+
+An active promotion is never edited in place. Validating records the definition in the
+append-only `promotion_definition_versions` history; an order that holds a redemption is
+repriced under the definition version it was placed under, not the current one. Activating
+a markup, or a discount above the ADR 0030 thresholds, waits for a second person through the
+`pricing.promotion.activate` approval action.
+
 ## Planned state extensions
 
 The following ADRs contain lifecycles that must be copied into this canonical

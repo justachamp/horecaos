@@ -690,6 +690,25 @@ public class OrderQueryService implements OrderCountsQuery {
         return orders.revisions(tenantId, orderId);
     }
 
+    /**
+     * The quote the order is priced by right now: the one behind its current revision.
+     *
+     * <p>Not {@code order.pricingQuoteId()}. The order row keeps the quote checkout
+     * accepted, because that is what cancellation releases a redemption by, and an
+     * amendment appends a revision with its own quote and moves the totals onto it.
+     * Anything that explains the order's present price (which promotions are behind
+     * it, ADR 0140) has to read the revision's quote, or it would describe the price
+     * the order had before it was amended.
+     */
+    @Transactional(readOnly = true)
+    public UUID currentPricingQuoteId(JdbcOrderStore.OrderRow order) {
+        return orders.revisions(order.tenantId(), order.orderId()).stream()
+                .filter(revision -> revision.revision() == order.currentRevision())
+                .map(JdbcOrderStore.RevisionRow::pricingQuoteId)
+                .findFirst()
+                .orElse(order.pricingQuoteId());
+    }
+
     /** The one terminal outcome, once the order has ended. */
     @Transactional(readOnly = true)
     public Optional<JdbcOrderStore.OutcomeRow> outcome(UUID tenantId, UUID orderId) {

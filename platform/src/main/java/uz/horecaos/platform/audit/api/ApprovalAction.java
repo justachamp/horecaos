@@ -126,7 +126,22 @@ public enum ApprovalAction {
      * code, which only ever gets asked once the row count clears the
      * threshold in the first place.
      */
-    CUSTOMER_PII_EXPORT("customer.pii.export", MissingPolicyMode.ALLOW_WITHOUT_APPROVAL);
+    CUSTOMER_PII_EXPORT("customer.pii.export", MissingPolicyMode.ALLOW_WITHOUT_APPROVAL),
+
+    /**
+     * ADR 0140 / ADR 0018: activating a markup, or a promotion whose largest
+     * percentage or fixed amount crosses the thresholds read through ADR 0030
+     * ({@code pricing.promotion.approval.*}), is a decision to change what
+     * customers pay or to give the tenant's money away, and ADR 0018 requires
+     * four-eyes "above configured risk thresholds". The service asks only when a
+     * threshold is crossed, so a small promotion still activates directly.
+     *
+     * <p>Fail-closed, like {@link #WALLET_ADJUSTMENT}: governed from the first day
+     * by the platform-scope policy {@code V0461} seeds, and a deployment that
+     * deleted it should stop large promotions rather than let one person decide
+     * them alone.
+     */
+    PRICING_PROMOTION_ACTIVATE("pricing.promotion.activate", MissingPolicyMode.REQUIRE_CONFIGURED_POLICY);
 
     /** What an action does when no valid policy resolves at the requested scope. */
     public enum MissingPolicyMode {

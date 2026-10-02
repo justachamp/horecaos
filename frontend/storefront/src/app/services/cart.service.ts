@@ -5,6 +5,7 @@ import { APP_CONFIG } from '../core/config/app-config';
 import { newIdempotencyKey } from '../core/api/idempotency';
 import { HorecaOSApiError, isNotFound } from '../core/api/problem-details';
 import { type ComboPickWire, comboKeyHash } from '../utils/combo-selection';
+import type { AppliedPromotion } from './applied-promotions';
 
 /**
  * The platform cart, which is a different thing from the legacy one.
@@ -550,6 +551,12 @@ export interface HiddenCharge {
   readonly optionId: string;
   /** For the whole line, zero when the option is free. */
   readonly amountMinor: number;
+  /**
+   * ADR 0140. The kinds of promotion behind the price, in the platform's words:
+   * whether the customer asked for each by typing a code, what it did to the total
+   * and how much. Names no promotion. Absent from an answer that predates it.
+   */
+  readonly appliedPromotions?: readonly AppliedPromotion[];
 }
 
 export interface PaymentMethods {

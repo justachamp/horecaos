@@ -8,8 +8,10 @@ import {
   ConditionTypeDescriptor,
   ConditionValueKind,
   DAY_OF_WEEK_KEYS,
+  clockToMinutes,
   descriptorFor,
   evaluateConditionGroups,
+  minutesToClock,
 } from './condition-types';
 
 /** One rule to preview a candidate against — already priority-ordered by the host, the same order a `q-rule-list` would show it in. */
@@ -22,9 +24,26 @@ export interface SimulatedRule {
   readonly outcome: string;
 }
 
+/**
+ * One rule's verdict as a host that ran the *real* engine reports it — the
+ * promotions screen's `POST .../promotions/simulate` (ADR 0140), whose decision
+ * trace says for every promotion whether it applied or why it did not.
+ */
+export interface ExternalRuleResult {
+  readonly id: string;
+  readonly label: string;
+  readonly state: 'matched' | 'unmatched' | 'disabled';
+  /** Already translated: what the rule gave ("−9 000 so'm") when matched, why it did not apply otherwise ("Lost to LUNCH-10"). */
+  readonly detail: string;
+}
+
 type RuleResult =
-  | { readonly rule: SimulatedRule; readonly state: 'disabled' }
-  | { readonly rule: SimulatedRule; readonly state: 'matched' | 'unmatched' };
+  | { readonly rule: SimulatedRule; readonly state: 'disabled'; readonly detail?: undefined }
+  | {
+      readonly rule: SimulatedRule;
+      readonly state: 'matched' | 'unmatched';
+      readonly detail?: string;
+    };
 
 /**
  * The dry-run every rule engine in this console needs before a rule goes live
@@ -48,6 +67,13 @@ type RuleResult =
  * **No backend, on purpose.** "must not read live orders" is the row's own
  * constraint — a dry run that touches production data is the host screen's
  * own capability (a real snapshot, a real estimate), out of scope here.
+ *
+ * **Engine mode.** A host whose engine can answer the question itself (the
+ * promotions screen: ADR 0140's simulator is the real `PricingEngine` over a
+ * synthetic cart) passes {@link externalResults}. The component then renders
+ * those verdicts in the same priority-ordered list and hides its own candidate
+ * form, because the host already asked the authoritative evaluator; it still
+ * makes no request of its own.
  */
 @Component({
   selector: 'q-rule-simulator',
@@ -62,6 +88,8 @@ export class RuleSimulator {
   readonly catalogue = input.required<readonly ConditionTypeDescriptor[]>();
   /** Already priority-ordered — array order is evaluation order, exactly what `q-rule-list` shows. */
   readonly rules = input.required<readonly SimulatedRule[]>();
+  /** When non-null, the verdicts an engine already produced: shown instead of evaluating `rules` locally, and the candidate form is hidden. */
+  readonly externalResults = input<readonly ExternalRuleResult[] | null>(null);
 
   protected readonly days = [1, 2, 3, 4, 5, 6, 7] as const;
 
@@ -91,16 +119,31 @@ export class RuleSimulator {
     return values;
   });
 
-  protected readonly results = computed<readonly RuleResult[]>(() =>
-    this.rules().map((rule) => {
+  protected readonly results = computed<readonly RuleResult[]>(() => {
+    const external = this.externalResults();
+    if (external !== null) {
+      return external.map((result): RuleResult => {
+        const rule: SimulatedRule = {
+          id: result.id,
+          label: result.label,
+          enabled: result.state !== 'disabled',
+          groups: [],
+          outcome: result.detail,
+        };
+        return result.state === 'disabled'
+          ? { rule, state: 'disabled' }
+          : { rule, state: result.state, detail: result.detail };
+      });
+    }
+    return this.rules().map((rule): RuleResult => {
       if (!rule.enabled) {
         return { rule, state: 'disabled' as const };
       }
       const matched = evaluateConditionGroups(rule.groups, this.catalogue(), this.candidate());
       const state: 'matched' | 'unmatched' = matched ? 'matched' : 'unmatched';
       return { rule, state };
-    }),
-  );
+    });
+  });
 
   protected typeLabel(type: string): string {
     return this.i18n.t(descriptorFor(this.catalogue(), type).labelKey);
@@ -124,6 +167,19 @@ export class RuleSimulator {
 
   protected valueOf(type: string): string {
     return this.candidateDraft()[type] ?? '';
+  }
+
+  /** A `TIME_RANGE` candidate is typed as a clock time and held as its minute of the day. */
+  protected setClock(type: string, clock: string): void {
+    this.setValue(type, clockToMinutes(clock));
+  }
+
+  protected clockOf(type: string): string {
+    return minutesToClock(this.valueOf(type));
+  }
+
+  protected setFlag(type: string, on: boolean): void {
+    this.setValue(type, on ? '1' : '');
   }
 }
 
@@ -154,5 +210,12 @@ function toCandidateValue(
       const day = Number(raw);
       return Number.isNaN(day) ? null : [day];
     }
+    case 'TIME_RANGE': {
+      // The candidate's clock time, stored as its minute of the day.
+      const minute = Number(raw);
+      return Number.isNaN(minute) ? null : minute;
+    }
+    case 'FLAG':
+      return raw;
   }
 }

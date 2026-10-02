@@ -84,6 +84,7 @@
 
 .rule-list__row--selected {
   border-color: var(--q-ink);
+  background: var(--q-surface-1);
 }
 
 .rule-list__body--selectable {

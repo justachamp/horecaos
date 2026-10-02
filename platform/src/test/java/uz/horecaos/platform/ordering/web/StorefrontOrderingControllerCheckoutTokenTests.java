@@ -63,7 +63,8 @@ class StorefrontOrderingControllerCheckoutTokenTests {
                 mock(OrderStateService.class),
                 mock(ReorderPlanService.class),
                 customer,
-                actor);
+                actor,
+                mock(uz.horecaos.platform.pricing.api.AppliedPromotionPort.class));
     }
 
     private static StorefrontOrderingController.CheckoutRequest body() {

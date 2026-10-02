@@ -134,7 +134,10 @@
     "hiddenCharge": {
       "title": "Добавлено автоматически, уже входит в итог",
       "fallbackLabel": "Дополнительная плата"
-    }
+    },
+    "offerDiscount": "Акция",
+    "deliveryOfferNote": "Включая скидку на доставку {{amount}}",
+    "surchargeNote": "Включая наценку {{amount}}"
   },
   "checkout": {
     "title": "Оплата",
@@ -159,7 +162,11 @@
     "emptyCartTitle": "В корзине нечего оформлять",
     "emptyCartSubtitle": "Сначала добавьте блюда в корзину.",
     "loadError": "Не удалось загрузить страницу оплаты",
-    "onlinePaymentFailed": "Не удалось открыть страницу оплаты. Проверьте раздел «Заказы»."
+    "onlinePaymentFailed": "Не удалось открыть страницу оплаты. Проверьте раздел «Заказы».",
+    "promoCodeLabel": "Код {{code}}",
+    "promoOffersBetter": "Ваши текущие акции выгоднее этого промокода, поэтому он не применён.",
+    "promoNotApplicable": "Этот промокод не подходит к этому заказу.",
+    "promoNoLongerValid": "Этот промокод больше не действует."
   },
   "orders": {
     "title": "Заказы",

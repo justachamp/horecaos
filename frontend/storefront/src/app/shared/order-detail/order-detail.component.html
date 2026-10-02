@@ -173,6 +173,20 @@
         }
       </div>
     }
+    @for (row of order()!.discountRows ?? []; track $index) {
+      <div
+        class="mt-1 flex items-center justify-between text-sm text-white"
+        data-testid="discount-row"
+      >
+        <span>{{ row.labelKey | t }}</span>
+        <span>-{{ row.amount }}</span>
+      </div>
+    }
+    @for (note of order()!.promotionNotes ?? []; track $index) {
+      <p class="mt-1 text-xs text-white/80" data-testid="promotion-note">
+        {{ note.labelKey | t: { amount: note.amount } }}
+      </p>
+    }
   </div>
 
   @if (canRepeat()) {

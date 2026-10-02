@@ -5143,6 +5143,27 @@ export const messagesUzLatn: MessageCatalogue = {
   'marketing.promoCodes.reveal.hint':
     'Faqat hozir, bir marta koʻrsatiladi — kod faqat xesh sifatida saqlanadi, shuning uchun uni keyin qayta oʻqib boʻlmaydi. Ushbu xabarni yopishdan oldin yozib oling.',
   'marketing.promoCodes.reveal.dismiss': 'Tushunarli',
+  // Promotion condition names, shown by q-condition-builder (ADR 0140, row 6.1). The rest of
+  // the Promotions screen's text is a lazy table: features/marketing/promotions/promotion-texts.ts.
+  'marketing.promotions.condition.SUBTOTAL_AT_LEAST': 'Savat summasi',
+  'marketing.promotions.condition.QUANTITY_AT_LEAST': 'Mos pozitsiyalar soni',
+  'marketing.promotions.condition.PRODUCT': 'Mahsulot',
+  'marketing.promotions.condition.CATEGORY': 'Kategoriya (ichki kategoriyalari bilan)',
+  'marketing.promotions.condition.VARIANT': 'Variant (oʻlcham, porsiya)',
+  'marketing.promotions.condition.CHANNEL': 'Savdo kanali',
+  'marketing.promotions.condition.CHANNEL_TYPE': 'Kanal turi',
+  'marketing.promotions.condition.LOCATION': 'Filial',
+  'marketing.promotions.condition.FULFILLMENT_MODE': 'Buyurtma turi',
+  'marketing.promotions.condition.PAYMENT_METHOD': 'Toʻlov usuli',
+  'marketing.promotions.condition.DELIVERY_ZONE': 'Yetkazib berish hududi',
+  'marketing.promotions.condition.CUSTOMER_SEGMENT': 'Mijozlar segmenti',
+  'marketing.promotions.condition.DAY_OF_WEEK': 'Hafta kuni',
+  'marketing.promotions.condition.TIME_OF_DAY': 'Kun vaqti (filial vaqti boʻyicha)',
+  'marketing.promotions.condition.FIRST_ORDER': 'Mijozning birinchi buyurtmasi',
+  'marketing.promotions.condition.ORDER_FIRST_CHANNEL':
+    'Mijozning shu kanal orqali birinchi buyurtmasi',
+  'marketing.promotions.condition.ORDER_NTH': 'Mijozning buyurtma tartib raqami',
+  'marketing.promotions.condition.ORDER_EVERY_NTH': 'Mijozning har n-chi buyurtmasi',
   'marketing.promoCodes.form.name': 'Nomi (ushbu roʻyxat uchun)',
   'marketing.promoCodes.form.code': 'Mijoz kiritadigan kod',
   'marketing.promoCodes.form.code.hint':
@@ -5684,8 +5705,9 @@ export const messagesUzLatn: MessageCatalogue = {
   'reports.marketing.title': 'Marketing hisobotlari',
   'reports.marketing.tab.discounts': 'Mijoz chegirmalari',
   'reports.marketing.tab.campaigns': 'Kampaniyalar',
-  'reports.marketing.promoSummaryNotBuilt':
-    'Promokod boʻyicha umumiy hisobot va har bir kod boʻyicha tafsilot koʻrsatilmaydi: buning uchun reporting.fact_promotion_redemption va u uchun hali mavjud boʻlmagan aksiyalar ADR kerak (ADR 0023).',
+  // Promotion report tab name (ADR 0140, row 7.9); the report's other text is in promotion-texts.ts
+  'reports.marketing.tab.promotions': 'Aksiyalar',
+  // end: Promotion report tab name (ADR 0140, row 7.9); the report's other text is in promotion-texts.ts
 
   'reports.marketing.discounts.intro':
     'Mijoz barcha brendlar boʻyicha qancha chegirma olganini koʻrsatadi — yana bir izzat-hurmat promokodi berishdan oldin oʻtkaziladigan tekshiruv.',
@@ -6124,6 +6146,9 @@ export const messagesUzLatn: MessageCatalogue = {
   'staff.approvals.action.integrationFailureResolve': 'Integratsiya xatosini hal qilish',
   'staff.approvals.action.loyaltyBalanceAdjust': 'Sodiqlik balansini tuzatish',
   'staff.approvals.action.customerPiiExport': 'Mijozlar maʻlumotlarini eksport qilish',
+  // Promotion activation approval (ADR 0140)
+  'staff.approvals.action.pricingPromotionActivate': 'Aksiyani ishga tushirish',
+  // end: Promotion activation approval (ADR 0140)
   'staff.approvals.tab.pending': 'Kutilmoqda',
   'staff.approvals.tab.decided': 'Hal qilingan',
   'staff.approvals.column.status': 'Qaror',
@@ -6571,6 +6596,10 @@ export const messagesUzLatn: MessageCatalogue = {
   'ui.conditionBuilder.operator.EQUALS': 'teng',
   'ui.conditionBuilder.operator.IN': 'shulardan biri',
   'ui.conditionBuilder.operator.NOT_IN': 'shulardan hech biri emas',
+  'ui.conditionBuilder.timeFrom': 'Dan',
+  'ui.conditionBuilder.timeTo': 'Gacha',
+  'ui.conditionBuilder.filterPlaceholder': 'Topish uchun yozing…',
+  'ui.conditionBuilder.moreMatches': 'Yana {count} ta koʻrsatilmadi — soʻrovni aniqlashtiring',
   'ui.dayOfWeek.MON': 'Dush',
   'ui.dayOfWeek.TUE': 'Sesh',
   'ui.dayOfWeek.WED': 'Chor',
@@ -6591,6 +6620,7 @@ export const messagesUzLatn: MessageCatalogue = {
   'ui.ruleSimulator.disabledRule': 'Oʻchirilgan — tekshirilmaydi',
   'ui.ruleSimulator.outcome': 'Nima sodir boʻladi',
   'ui.ruleSimulator.noRules': 'Tekshirish uchun qoidalar yoʻq.',
+  'ui.ruleSimulator.reason': 'Sababi',
   // Diagrammalar oilasi (T09 toʻlqini, IA X.19) — chiziqli/ustunli/qatlamli
   // ustunli/donut/gistogramma/issiqlik xaritasi `q-chart-frame` orqali shu
   // bir nechta satrni baham koʻradi.

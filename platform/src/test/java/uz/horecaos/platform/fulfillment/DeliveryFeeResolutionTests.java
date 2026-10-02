@@ -52,7 +52,6 @@ import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcServiceZo
 import uz.horecaos.platform.iam.api.AuthenticatedActor;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.pricing.application.PricingEngine;
-import uz.horecaos.platform.pricing.application.PromoCodeEligibilityService;
 import uz.horecaos.platform.pricing.application.QuoteService;
 import uz.horecaos.platform.pricing.domain.Quote;
 import uz.horecaos.platform.pricing.domain.QuoteRequest;
@@ -177,8 +176,7 @@ class DeliveryFeeResolutionTests {
                 new JdbcCatalogPricingContext(jdbc, "uz"),
                 new JdbcSalesChannelStore(jdbc),
                 resolver,
-                promoCodeStore,
-                new PromoCodeEligibilityService(promoCodeStore),
+                uz.horecaos.platform.pricing.PromotionTestSupport.resolver(jdbc, promoCodeStore),
                 clock,
                 new FakeConfigurationResolver());
 

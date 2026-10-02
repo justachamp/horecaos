@@ -189,6 +189,69 @@ describe('OrderDetailComponent: the placed order reconciles total against subtot
   });
 });
 
+describe('OrderDetailComponent: the promotions behind the price (ADR 0140)', () => {
+  async function render(overrides: Partial<ApiOrderDetail>) {
+    const { fixture, comp } = setUp('o1', apiOrderDetail(overrides));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    return { host: fixture.nativeElement as HTMLElement, comp };
+  }
+
+  const rowsOf = (host: HTMLElement) =>
+    [...host.querySelectorAll('[data-testid="discount-row"]')].map((row) =>
+      [...row.querySelectorAll('span')].map((cell) => cell.textContent?.trim()),
+    );
+
+  it('shows each kind of discount as its own line, so subtotal + tax + delivery - discount is the total', async () => {
+    const { host } = await render({
+      subtotal: { price: 45_000, discount: 0 },
+      discount: { price: 9_000, discount: 0 },
+      total: { price: 36_000, discount: 0 },
+      promotions: [{ source: 'AUTOMATIC', effect: 'DISCOUNT', amountMinor: 9_000 }],
+    });
+
+    expect(rowsOf(host)).toEqual([['cart.offerDiscount', expect.stringMatching(/^-9.000 /)]]);
+  });
+
+  it("labels the customer's typed code as a code, apart from an offer", async () => {
+    const { host } = await render({
+      discount: { price: 6_000, discount: 0 },
+      promotions: [
+        { source: 'AUTOMATIC', effect: 'DISCOUNT', amountMinor: 4_000 },
+        { source: 'PROMO_CODE', effect: 'DISCOUNT', amountMinor: 2_000 },
+      ],
+    });
+
+    expect(rowsOf(host).map((row) => row[0])).toEqual(['cart.offerDiscount', 'cart.promoCode']);
+  });
+
+  it('keeps a discount the platform did not break down as one generic line', async () => {
+    const { host } = await render({ discount: { price: 5_000, discount: 0 } });
+
+    expect(rowsOf(host).map((row) => row[0])).toEqual(['cart.discount']);
+  });
+
+  it('draws nothing for an order that was not discounted', async () => {
+    const { host } = await render({});
+
+    expect(host.querySelector('[data-testid="discount-row"]')).toBeNull();
+    expect(host.querySelector('[data-testid="promotion-note"]')).toBeNull();
+  });
+
+  it('explains a delivery offer as a caption beside the delivery fee, not as a line to subtract', async () => {
+    const { host } = await render({
+      delivery: { price: 7_000, discount: 0 },
+      promotions: [{ source: 'AUTOMATIC', effect: 'DELIVERY_DISCOUNT', amountMinor: 3_000 }],
+    });
+
+    expect(host.querySelector('[data-testid="promotion-note"]')?.textContent?.trim()).toBe(
+      'cart.deliveryOfferNote',
+    );
+    expect(host.querySelector('[data-testid="discount-row"]')).toBeNull();
+  });
+});
+
 describe('OrderDetailComponent: names the pickup branch (2026-09-21 audit follow-up (d))', () => {
   it("asks for and shows the branch's name and address on a PICKUP order", async () => {
     const { fixture, comp, locationProfileService } = setUp(

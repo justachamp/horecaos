@@ -14,19 +14,17 @@ import java.util.UUID;
  * what a completeness test would enumerate to prove that requirement actually
  * reaches every publishable pricing event.
  *
- * <p>ADR 0018 names six pricing facts (this one, {@code PromotionActivated},
- * {@code PromotionSuspended}, {@code PricingQuoteCreated}, {@code
- * PricingQuoteAccepted}, and the coupon/benefit lifecycle events). Only {@link
- * PriceBookActivated} is published today, because it is the only one with a
- * producer: there is no promotion-activation flow, no benefit grant, and
- * quote creation/acceptance are high-volume per-request facts whose payload
- * shape and retention deserve their own decision rather than riding along with
- * a once-a-day control-plane activation. Inventing a payload for an event with
- * no producer would be exactly the unreviewed contract ADR 0032 exists to
- * prevent — see this catalogue's own restraint on {@code MediaAssetAvailable}'s
- * unpublished siblings for the same reasoning applied first.
+ * <p>ADR 0018 names six pricing facts. Three are published today, each because it
+ * has a producer: {@link PriceBookActivated}, and (ADR 0140, with the
+ * promotion lifecycle that produces them) {@link PromotionActivated} and {@link
+ * PromotionSuspended}. The rest -- {@code PricingQuoteCreated}, {@code
+ * PricingQuoteAccepted} and the coupon/benefit lifecycle events -- are still
+ * unpublished: quote creation and acceptance are high-volume per-request facts
+ * whose payload shape and retention deserve their own decision, and inventing a
+ * payload for an event with no producer would be exactly the unreviewed contract
+ * ADR 0032 exists to prevent.
  */
-public sealed interface PricingEvent permits PriceBookActivated {
+public sealed interface PricingEvent permits PriceBookActivated, PromotionActivated, PromotionSuspended {
 
     UUID eventId();
 
@@ -36,17 +34,12 @@ public sealed interface PricingEvent permits PriceBookActivated {
 
     UUID tenantId();
 
-    UUID priceBookId();
-
     Instant occurredAt();
 
     Object payload();
 
-    default String aggregateType() {
-        return "PriceBook";
-    }
+    /** The kind of aggregate the fact is about; the outbox partitions by its id. */
+    String aggregateType();
 
-    default UUID aggregateId() {
-        return priceBookId();
-    }
+    UUID aggregateId();
 }

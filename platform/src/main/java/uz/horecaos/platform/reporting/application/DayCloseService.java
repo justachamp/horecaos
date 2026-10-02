@@ -14,8 +14,10 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import uz.horecaos.platform.pricing.api.PromotionRedemptionSource;
 import uz.horecaos.platform.reporting.application.ReportingFacts.BranchDayAggregate;
 import uz.horecaos.platform.reporting.application.ReportingFacts.BranchDayKey;
 import uz.horecaos.platform.reporting.application.ReportingFacts.CallHourFact;
@@ -61,13 +63,30 @@ public class DayCloseService {
     private final BusinessDayService businessDays;
     private final SubjectPseudonym pseudonym;
     private final Clock clock;
+    private final @Nullable PromotionRedemptionSource promotionRedemptions;
 
     public DayCloseService(
             JdbcReportingStore store, BusinessDayService businessDays, SubjectPseudonym pseudonym, Clock clock) {
+        this(store, businessDays, pseudonym, clock, null);
+    }
+
+    /**
+     * @param promotionRedemptions ADR 0140: where the redemption fact (7.9) comes from, read
+     *        through the {@code pricing.api} port and never from pricing's tables (ADR 0023);
+     *        null builds no promotion facts, which is what a close with no pricing wired does
+     */
+    @Autowired
+    public DayCloseService(
+            JdbcReportingStore store,
+            BusinessDayService businessDays,
+            SubjectPseudonym pseudonym,
+            Clock clock,
+            @Nullable PromotionRedemptionSource promotionRedemptions) {
         this.store = store;
         this.businessDays = businessDays;
         this.pseudonym = pseudonym;
         this.clock = clock;
+        this.promotionRedemptions = promotionRedemptions;
     }
 
     /**
@@ -124,12 +143,16 @@ public class DayCloseService {
         // for the same "a day is written whole or not at all" reason.
         derived.feeResolutions().forEach(store::insertTariffFeeResolutionFact);
         derived.externalDeliveryCosts().forEach(store::insertExternalDeliveryCostFact);
+        // ADR 0140 (7.9): the promotion redemption fact, in the same transaction for the
+        // same "a day is written whole or not at all" reason.
+        derived.promotionRedemptions().forEach(store::insertPromotionRedemptionFact);
 
         store.completeRun(runId, derived.orders().size(), derived.lines().size(), 0, clock.instant());
 
         log.info(
                 "Closed business day {} for tenant {}: {} orders, {} lines, {} tenders, {} refunds, "
-                        + "{} call-hours, {} deliveries, {} fee resolutions, {} external-delivery costs",
+                        + "{} call-hours, {} deliveries, {} fee resolutions, {} external-delivery costs, "
+                        + "{} promotion redemptions",
                 businessDate,
                 tenantId,
                 derived.orders().size(),
@@ -139,7 +162,8 @@ public class DayCloseService {
                 derived.callHours().size(),
                 derived.deliveries().size(),
                 derived.feeResolutions().size(),
-                derived.externalDeliveryCosts().size());
+                derived.externalDeliveryCosts().size(),
+                derived.promotionRedemptions().size());
 
         return new CloseResult(
                 runId,
@@ -393,6 +417,38 @@ public class DayCloseService {
                                         source.deliveredAt()))
                         .toList();
 
+        // ADR 0140 (7.9): same instant range as every source read above, against the
+        // ledger's own redeemed_at. The customer becomes the ADR 0029 keyed pseudonym here
+        // and never travels as an account id; a coupon redemption's word never crosses the
+        // port at all.
+        List<uz.horecaos.platform.reporting.application.ReportingFacts.PromotionRedemptionFact> promotionFacts =
+                promotionRedemptions == null
+                        ? List.of()
+                        : promotionRedemptions.redeemedBetween(tenantId, from, to).stream()
+                                .map(source ->
+                                        new uz.horecaos.platform.reporting.application.ReportingFacts
+                                                .PromotionRedemptionFact(
+                                                tenantId,
+                                                source.redemptionId(),
+                                                businessDate,
+                                                boundary.version(),
+                                                MetricRegistry.CALCULATION_VERSION,
+                                                source.brandId(),
+                                                source.promotionId(),
+                                                source.promotionCode(),
+                                                source.definitionVersion(),
+                                                source.kind().name(),
+                                                source.couponId(),
+                                                source.orderId(),
+                                                source.customerAccountId() == null
+                                                        ? null
+                                                        : pseudonym.of(tenantId, source.customerAccountId()),
+                                                source.discountMinor(),
+                                                source.markupMinor(),
+                                                source.currency(),
+                                                source.redeemedAt()))
+                                .toList();
+
         return new DerivedDay(
                 orders,
                 lines,
@@ -403,7 +459,8 @@ public class DayCloseService {
                 callHours,
                 deliveries,
                 feeResolutions,
-                externalDeliveryCosts);
+                externalDeliveryCosts,
+                promotionFacts);
     }
 
     /**
@@ -587,7 +644,9 @@ public class DayCloseService {
             List<uz.horecaos.platform.reporting.application.ReportingFacts.DeliveryFact> deliveries,
             List<uz.horecaos.platform.reporting.application.ReportingFacts.TariffFeeResolutionFact> feeResolutions,
             List<uz.horecaos.platform.reporting.application.ReportingFacts.ExternalDeliveryCostFact>
-                    externalDeliveryCosts) {}
+                    externalDeliveryCosts,
+            List<uz.horecaos.platform.reporting.application.ReportingFacts.PromotionRedemptionFact>
+                    promotionRedemptions) {}
 
     /**
      * One slice whose re-derived figure disagrees with the stored one.

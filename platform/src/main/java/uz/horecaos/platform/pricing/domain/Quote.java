@@ -280,6 +280,30 @@ public record Quote(
         }
 
         /**
+         * The same line carrying a new unit, base and final amount (ADR 0140's markup stage
+         * uplifts all three), with its tax share still to be extracted and everything that
+         * identifies it -- its combo grouping and catchweight facts included -- kept.
+         */
+        public QuoteLine repriced(Money newUnitAmount, Money newBaseAmount, Money newFinalAmount) {
+            return new QuoteLine(
+                    lineId,
+                    type,
+                    variantId,
+                    quantity,
+                    descriptionSnapshot,
+                    newUnitAmount,
+                    newBaseAmount,
+                    newFinalAmount,
+                    taxAmount,
+                    comboSelectionId,
+                    comboContainerVariantId,
+                    comboComponentId,
+                    comboQuantity,
+                    comboPickQuantity,
+                    catchweight);
+        }
+
+        /**
          * The same line with its amounts replaced, keeping everything that identifies it,
          * its combo grouping and its catchweight facts included.
          */
@@ -394,7 +418,15 @@ public record Quote(
              * and they answer to different owners — the waiver to a zone, this to a
              * rate table.
              */
-            DELIVERY_TARIFF_DISCOUNT
+            DELIVERY_TARIFF_DISCOUNT,
+            /**
+             * ADR 0140 stage 2b. A markup promotion's per-unit uplift on a line,
+             * recorded as a positive adjustment beside the base price it raises.
+             * Applied before any discount, so a discount is computed on the marked-up
+             * price, and part of {@code subtotal}: it never touches {@code
+             * discount_minor}, which stays non-negative.
+             */
+            ITEM_MARKUP
         }
     }
 }

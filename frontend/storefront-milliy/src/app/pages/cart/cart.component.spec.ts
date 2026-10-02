@@ -3,7 +3,12 @@ import { Router, provideRouter } from '@angular/router';
 import { signal } from '@angular/core';
 
 import { CartComponent } from './cart.component';
-import { UiCartService, type HiddenChargeRow } from '../../services/ui-cart.service';
+import {
+  UiCartService,
+  type HiddenChargeRow,
+  type PromotionNote,
+  type PromotionRow,
+} from '../../services/ui-cart.service';
 import { TranslateService } from '../../services/translate.service';
 import type { CartResponseItem } from '../../types/cart.types';
 
@@ -44,6 +49,8 @@ class FakeUiCartService {
   discountFormatted = () => "0 so'm";
   appliedPromoCode = (): string | null => null;
   hiddenCharges = (): readonly HiddenChargeRow[] => [];
+  discountRows = (): PromotionRow[] => [];
+  promotionNotes = (): PromotionNote[] => [];
   load = vi.fn(async () => {});
   increaseQuantity = vi.fn();
   decreaseQuantity = vi.fn();
@@ -121,13 +128,53 @@ describe('CartComponent', () => {
   it('shows the applied promo discount only when the platform actually priced one', async () => {
     const fake = new FakeUiCartService();
     fake.items.set([line()]);
-    fake.hasDiscount = () => true;
-    fake.appliedPromoCode = () => 'OSH2026';
-    fake.discountFormatted = () => "5 000 so'm";
+    fake.discountRows = () => [
+      { labelKey: 'cart.promoCode', code: 'OSH2026', amount: "5 000 so'm" },
+    ];
     const { fixture } = await setUp(fake);
 
     expect(fixture.nativeElement.textContent).toContain('OSH2026');
     expect(fixture.nativeElement.textContent).toContain('5 000');
+  });
+
+  it('names an automatic offer as an offer, with no code beside it, and each discount on its own line', async () => {
+    const fake = new FakeUiCartService();
+    fake.items.set([line()]);
+    fake.discountRows = () => [
+      { labelKey: 'cart.offerDiscount', code: null, amount: "4 000 so'm" },
+      { labelKey: 'cart.promoCode', code: 'OSH2026', amount: "2 000 so'm" },
+    ];
+    const { fixture } = await setUp(fake);
+
+    const rows = [...fixture.nativeElement.querySelectorAll('[data-testid="discount-row"]')].map(
+      (row) =>
+        [...(row as HTMLElement).querySelectorAll('span')].map((cell) => cell.textContent?.trim()),
+    );
+    expect(rows).toEqual([
+      ['cart.offerDiscount', "−4 000 so'm"],
+      ['cart.promoCode OSH2026', "−2 000 so'm"],
+    ]);
+  });
+
+  it('draws no discount line when nothing was discounted', async () => {
+    const fake = new FakeUiCartService();
+    fake.items.set([line()]);
+    const { fixture } = await setUp(fake);
+
+    expect(fixture.nativeElement.querySelector('[data-testid="discount-row"]')).toBeNull();
+    expect(fixture.nativeElement.querySelector('[data-testid="promotion-note"]')).toBeNull();
+  });
+
+  it("explains a delivery offer as a caption with the platform's amount", async () => {
+    const fake = new FakeUiCartService();
+    fake.items.set([line()]);
+    fake.promotionNotes = () => [{ labelKey: 'cart.deliveryOfferNote', amount: "5 000 so'm" }];
+    const { fixture } = await setUp(fake);
+
+    const note = fixture.nativeElement.querySelector(
+      '[data-testid="promotion-note"]',
+    ) as HTMLElement;
+    expect(note.textContent?.trim()).toBe('cart.deliveryOfferNote');
   });
 
   it('does not offer a checkout button over an empty basket', async () => {

@@ -43,6 +43,7 @@
           [attr.role]="selectable() ? 'button' : null"
           [attr.tabindex]="selectable() ? 0 : null"
           [attr.aria-pressed]="selectable() ? item.id === selectedId() : null"
+          [attr.aria-current]="selectable() && item.id === selectedId() ? 'true' : null"
           (click)="onSelect(item)"
           (keydown.enter)="onSelect(item)"
           (keydown.space)="onSelect(item); $event.preventDefault()"

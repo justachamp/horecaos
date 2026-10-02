@@ -5095,6 +5095,26 @@ export const messagesRu: MessageCatalogue = {
   'marketing.promoCodes.reveal.hint':
     'Показан один раз, сейчас — код хранится только в виде хеша, поэтому прочитать его снова будет нельзя. Запишите его, прежде чем закрыть это сообщение.',
   'marketing.promoCodes.reveal.dismiss': 'Понятно',
+  // Promotion condition names, shown by q-condition-builder (ADR 0140, row 6.1). The rest of
+  // the Promotions screen's text is a lazy table: features/marketing/promotions/promotion-texts.ts.
+  'marketing.promotions.condition.SUBTOTAL_AT_LEAST': 'Сумма корзины',
+  'marketing.promotions.condition.QUANTITY_AT_LEAST': 'Количество подходящих позиций',
+  'marketing.promotions.condition.PRODUCT': 'Товар',
+  'marketing.promotions.condition.CATEGORY': 'Категория (с подкатегориями)',
+  'marketing.promotions.condition.VARIANT': 'Вариант (размер, порция)',
+  'marketing.promotions.condition.CHANNEL': 'Канал продаж',
+  'marketing.promotions.condition.CHANNEL_TYPE': 'Тип канала',
+  'marketing.promotions.condition.LOCATION': 'Филиал',
+  'marketing.promotions.condition.FULFILLMENT_MODE': 'Тип заказа',
+  'marketing.promotions.condition.PAYMENT_METHOD': 'Способ оплаты',
+  'marketing.promotions.condition.DELIVERY_ZONE': 'Зона доставки',
+  'marketing.promotions.condition.CUSTOMER_SEGMENT': 'Сегмент клиентов',
+  'marketing.promotions.condition.DAY_OF_WEEK': 'День недели',
+  'marketing.promotions.condition.TIME_OF_DAY': 'Время суток (по времени филиала)',
+  'marketing.promotions.condition.FIRST_ORDER': 'Первый заказ клиента',
+  'marketing.promotions.condition.ORDER_FIRST_CHANNEL': 'Первый заказ клиента через этот канал',
+  'marketing.promotions.condition.ORDER_NTH': 'Порядковый номер заказа клиента',
+  'marketing.promotions.condition.ORDER_EVERY_NTH': 'Каждый n-й заказ клиента',
   'marketing.promoCodes.form.name': 'Название (для этого списка)',
   'marketing.promoCodes.form.code': 'Код, который вводит клиент',
   'marketing.promoCodes.form.code.hint':
@@ -5634,8 +5654,9 @@ export const messagesRu: MessageCatalogue = {
   'reports.marketing.title': 'Маркетинговые отчёты',
   'reports.marketing.tab.discounts': 'Скидки клиента',
   'reports.marketing.tab.campaigns': 'Рассылки',
-  'reports.marketing.promoSummaryNotBuilt':
-    'Сводка по промокодам и детализация по кодам не показаны: нужна reporting.fact_promotion_redemption, а для неё — ADR по промоакциям, которого пока нет (ADR 0023).',
+  // Promotion report tab name (ADR 0140, row 7.9); the report's other text is in promotion-texts.ts
+  'reports.marketing.tab.promotions': 'Акции',
+  // end: Promotion report tab name (ADR 0140, row 7.9); the report's other text is in promotion-texts.ts
 
   'reports.marketing.discounts.intro':
     'На сколько клиент уже был проскидкован, по всем брендам сразу — проверка, которую стоит выполнить перед выдачей ещё одного компенсационного промокода.',
@@ -6070,6 +6091,9 @@ export const messagesRu: MessageCatalogue = {
   'staff.approvals.action.integrationFailureResolve': 'Разрешение сбоя интеграции',
   'staff.approvals.action.loyaltyBalanceAdjust': 'Корректировка баланса лояльности',
   'staff.approvals.action.customerPiiExport': 'Экспорт данных клиентов',
+  // Promotion activation approval (ADR 0140)
+  'staff.approvals.action.pricingPromotionActivate': 'Запуск акции',
+  // end: Promotion activation approval (ADR 0140)
   'staff.approvals.tab.pending': 'Ожидают',
   'staff.approvals.tab.decided': 'Решённые',
   'staff.approvals.column.status': 'Решение',
@@ -6511,6 +6535,10 @@ export const messagesRu: MessageCatalogue = {
   'ui.conditionBuilder.operator.EQUALS': 'равно',
   'ui.conditionBuilder.operator.IN': 'один из',
   'ui.conditionBuilder.operator.NOT_IN': 'ни один из',
+  'ui.conditionBuilder.timeFrom': 'С',
+  'ui.conditionBuilder.timeTo': 'До',
+  'ui.conditionBuilder.filterPlaceholder': 'Начните вводить…',
+  'ui.conditionBuilder.moreMatches': 'Ещё {count} не показано — уточните запрос',
   'ui.dayOfWeek.MON': 'Пн',
   'ui.dayOfWeek.TUE': 'Вт',
   'ui.dayOfWeek.WED': 'Ср',
@@ -6531,6 +6559,7 @@ export const messagesRu: MessageCatalogue = {
   'ui.ruleSimulator.disabledRule': 'Отключено — не проверяется',
   'ui.ruleSimulator.outcome': 'Что произойдёт',
   'ui.ruleSimulator.noRules': 'Нет правил для проверки.',
+  'ui.ruleSimulator.reason': 'Почему',
   // Семейство графиков (волна T09, IA X.19) — эти несколько строк общие
   // для линии/столбцов/составных столбцов/донат/гистограммы/теплокарты
   // через `q-chart-frame`.

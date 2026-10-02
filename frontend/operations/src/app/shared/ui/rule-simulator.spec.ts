@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { I18n } from '../../core/i18n/i18n';
 import { ConditionGroup, ConditionRow, ConditionTypeDescriptor } from './condition-types';
-import { RuleSimulator, SimulatedRule } from './rule-simulator';
+import { ExternalRuleResult, RuleSimulator, SimulatedRule } from './rule-simulator';
 
 const CATALOGUE: readonly ConditionTypeDescriptor[] = [
   {
@@ -123,6 +123,64 @@ class RuleSimulatorHost {
 })
 class RuleSimulatorEmptyHost {
   readonly catalogue = CATALOGUE;
+}
+
+@Component({
+  selector: 'q-rule-simulator-engine-host',
+  imports: [RuleSimulator],
+  template: `<q-rule-simulator [catalogue]="catalogue" [rules]="[]" [externalResults]="results" />`,
+})
+class RuleSimulatorEngineHost {
+  readonly catalogue = CATALOGUE;
+  readonly results: readonly ExternalRuleResult[] = [
+    { id: 'a', label: 'LUNCH-5', state: 'matched', detail: 'Took 9 000' },
+    { id: 'b', label: 'SAVE10', state: 'unmatched', detail: 'Lost to LUNCH-10' },
+    { id: 'c', label: 'OLD', state: 'disabled', detail: '' },
+  ];
+}
+
+const KIND_CATALOGUE: readonly ConditionTypeDescriptor[] = [
+  {
+    type: 'LUNCH',
+    labelKey: 'customers.segments.predicate.type.RECENCY_DAYS',
+    valueKind: 'TIME_RANGE',
+  },
+  {
+    type: 'FIRST',
+    labelKey: 'customers.segments.predicate.type.ORDER_COUNT',
+    valueKind: 'FLAG',
+  },
+];
+
+@Component({
+  selector: 'q-rule-simulator-kinds-host',
+  imports: [RuleSimulator],
+  template: `<q-rule-simulator [catalogue]="catalogue" [rules]="rules" />`,
+})
+class RuleSimulatorKindsHost {
+  readonly catalogue = KIND_CATALOGUE;
+  readonly rules: readonly SimulatedRule[] = [
+    {
+      id: 'lunch',
+      label: 'Lunch offer',
+      enabled: true,
+      groups: [
+        group({
+          rows: [
+            row({ type: 'LUNCH', operator: 'BETWEEN', numericLow: '720', numericHigh: '900' }),
+          ],
+        }),
+      ],
+      outcome: '10% off',
+    },
+    {
+      id: 'first',
+      label: 'First order',
+      enabled: true,
+      groups: [group({ rows: [row({ type: 'FIRST', operator: 'EQUALS' })] })],
+      outcome: 'Free dessert',
+    },
+  ];
 }
 
 describe('RuleSimulator', () => {
@@ -246,5 +304,49 @@ describe('RuleSimulator', () => {
     const emptyFixture = TestBed.createComponent(RuleSimulatorEmptyHost);
     emptyFixture.detectChanges();
     expect(emptyFixture.nativeElement.textContent).toContain('No rules to simulate.');
+  });
+
+  it("renders an engine host's verdicts instead of evaluating locally, and hides the candidate form", () => {
+    const engineFixture = TestBed.createComponent(RuleSimulatorEngineHost);
+    engineFixture.detectChanges();
+    const engineHost: HTMLElement = engineFixture.nativeElement;
+
+    expect(engineHost.querySelector('.candidate')).toBeNull();
+    const engineRows = [...engineHost.querySelectorAll<HTMLLIElement>('.result-row')];
+    expect(engineRows).toHaveLength(3);
+    expect(engineRows[0].textContent).toContain('Matched');
+    expect(engineRows[0].textContent).toContain('What happens: Took 9 000');
+    expect(engineRows[1].textContent).toContain('Not matched');
+    expect(engineRows[1].textContent).toContain('Why: Lost to LUNCH-10');
+    expect(engineRows[2].textContent).toContain('Disabled');
+  });
+
+  it('keeps the local candidate form when no engine verdicts are given', () => {
+    expect(host.querySelector('.candidate')).not.toBeNull();
+  });
+
+  it('asks for a clock time and a yes/no for the two new kinds, and judges the rule against them', () => {
+    const kindFixture = TestBed.createComponent(RuleSimulatorKindsHost);
+    kindFixture.detectChanges();
+    const kindHost: HTMLElement = kindFixture.nativeElement;
+    const rowsOf = () => [...kindHost.querySelectorAll<HTMLLIElement>('.result-row')];
+
+    const time = kindHost.querySelector<HTMLInputElement>('input[type="time"]')!;
+    time.value = '13:00';
+    time.dispatchEvent(new Event('input'));
+    kindFixture.detectChanges();
+    expect(rowsOf()[0].textContent).toContain('Matched');
+
+    time.value = '16:00';
+    time.dispatchEvent(new Event('input'));
+    kindFixture.detectChanges();
+    expect(rowsOf()[0].textContent).toContain('Not matched');
+
+    const flag = kindHost.querySelector<HTMLInputElement>('input[type="checkbox"]')!;
+    expect(rowsOf()[1].textContent).toContain('Not matched');
+    flag.checked = true;
+    flag.dispatchEvent(new Event('change'));
+    kindFixture.detectChanges();
+    expect(rowsOf()[1].textContent).toContain('Matched');
   });
 });

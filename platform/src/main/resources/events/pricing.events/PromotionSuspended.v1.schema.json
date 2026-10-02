@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.horecaos.uz/events/pricing.events/PromotionSuspended.v1.schema.json",
+  "title": "PromotionSuspended v1 payload",
+  "description": "A promotion was taken out of front of customers (ADR 0140, ADR 0018). New orders stop receiving it; an order that already holds it keeps it under the definition version it was priced with. Ids, the version, scope and kind only.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["promotionId", "brandId", "definitionVersion", "scope", "kind"],
+  "properties": {
+    "promotionId": { "type": "string", "format": "uuid" },
+    "brandId": { "type": "string", "format": "uuid" },
+    "definitionVersion": { "type": "integer", "minimum": 1 },
+    "scope": { "type": "string", "enum": ["ITEM", "ORDER", "DELIVERY"] },
+    "kind": { "type": "string", "enum": ["DISCOUNT", "MARKUP"] }
+  }
+}

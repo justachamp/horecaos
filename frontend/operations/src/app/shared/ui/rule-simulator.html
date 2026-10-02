@@ -1,69 +1,87 @@
 <div class="simulator">
-  <div class="candidate">
-    <span class="q-caption">{{ 'ui.ruleSimulator.candidate' | t }}</span>
-    @for (descriptor of typesInUse(); track descriptor.type) {
-      <label class="candidate-field">
-        <span class="q-caption">{{ typeLabel(descriptor.type) }}</span>
-        @switch (descriptor.valueKind) {
-          @case ('DAY_OF_WEEK_SET') {
-            <div class="dow-chips">
-              @for (day of days; track day) {
-                <button
-                  type="button"
-                  class="dow-chip"
-                  [class.dow-chip--active]="isDayActive(descriptor.type, day)"
-                  [attr.aria-pressed]="isDayActive(descriptor.type, day)"
-                  (click)="setDay(descriptor.type, day)"
-                >
-                  {{ dayLabel(day) }}
-                </button>
-              }
-            </div>
+  @if (externalResults() === null) {
+    <div class="candidate">
+      <span class="q-caption">{{ 'ui.ruleSimulator.candidate' | t }}</span>
+      @for (descriptor of typesInUse(); track descriptor.type) {
+        <label class="candidate-field">
+          <span class="q-caption">{{ typeLabel(descriptor.type) }}</span>
+          @switch (descriptor.valueKind) {
+            @case ('DAY_OF_WEEK_SET') {
+              <div class="dow-chips">
+                @for (day of days; track day) {
+                  <button
+                    type="button"
+                    class="dow-chip"
+                    [class.dow-chip--active]="isDayActive(descriptor.type, day)"
+                    [attr.aria-pressed]="isDayActive(descriptor.type, day)"
+                    (click)="setDay(descriptor.type, day)"
+                  >
+                    {{ dayLabel(day) }}
+                  </button>
+                }
+              </div>
+            }
+            @case ('TIME_RANGE') {
+              <input
+                type="time"
+                class="candidate-input"
+                [value]="clockOf(descriptor.type)"
+                (input)="setClock(descriptor.type, $any($event.target).value)"
+              />
+            }
+            @case ('FLAG') {
+              <input
+                type="checkbox"
+                class="candidate-flag"
+                [checked]="valueOf(descriptor.type) === '1'"
+                (change)="setFlag(descriptor.type, $any($event.target).checked)"
+              />
+            }
+            @case ('DATE') {
+              <input
+                type="date"
+                class="candidate-input"
+                [value]="valueOf(descriptor.type)"
+                (input)="setValue(descriptor.type, $any($event.target).value)"
+              />
+            }
+            @case ('DATE_RANGE') {
+              <input
+                type="date"
+                class="candidate-input"
+                [value]="valueOf(descriptor.type)"
+                (input)="setValue(descriptor.type, $any($event.target).value)"
+              />
+            }
+            @case ('TEXT_SET') {
+              <input
+                type="text"
+                class="candidate-input"
+                [value]="valueOf(descriptor.type)"
+                (input)="setValue(descriptor.type, $any($event.target).value)"
+              />
+            }
+            @case ('REFERENCE') {
+              <input
+                type="text"
+                class="candidate-input"
+                [value]="valueOf(descriptor.type)"
+                (input)="setValue(descriptor.type, $any($event.target).value)"
+              />
+            }
+            @default {
+              <input
+                type="number"
+                class="candidate-input"
+                [value]="valueOf(descriptor.type)"
+                (input)="setValue(descriptor.type, $any($event.target).value)"
+              />
+            }
           }
-          @case ('DATE') {
-            <input
-              type="date"
-              class="candidate-input"
-              [value]="valueOf(descriptor.type)"
-              (input)="setValue(descriptor.type, $any($event.target).value)"
-            />
-          }
-          @case ('DATE_RANGE') {
-            <input
-              type="date"
-              class="candidate-input"
-              [value]="valueOf(descriptor.type)"
-              (input)="setValue(descriptor.type, $any($event.target).value)"
-            />
-          }
-          @case ('TEXT_SET') {
-            <input
-              type="text"
-              class="candidate-input"
-              [value]="valueOf(descriptor.type)"
-              (input)="setValue(descriptor.type, $any($event.target).value)"
-            />
-          }
-          @case ('REFERENCE') {
-            <input
-              type="text"
-              class="candidate-input"
-              [value]="valueOf(descriptor.type)"
-              (input)="setValue(descriptor.type, $any($event.target).value)"
-            />
-          }
-          @default {
-            <input
-              type="number"
-              class="candidate-input"
-              [value]="valueOf(descriptor.type)"
-              (input)="setValue(descriptor.type, $any($event.target).value)"
-            />
-          }
-        }
-      </label>
-    }
-  </div>
+        </label>
+      }
+    </div>
+  }
 
   <div class="results">
     @if (results().length === 0) {
@@ -89,6 +107,10 @@
             @if (result.state === 'matched') {
               <span class="result-row__outcome q-caption">
                 {{ 'ui.ruleSimulator.outcome' | t }}: {{ result.rule.outcome }}
+              </span>
+            } @else if (result.detail) {
+              <span class="result-row__outcome q-caption">
+                {{ 'ui.ruleSimulator.reason' | t }}: {{ result.detail }}
               </span>
             }
           </li>

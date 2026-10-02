@@ -130,7 +130,10 @@
     "hiddenCharge": {
       "title": "Avtomatik qo'shilgan, jami summaga kiritilgan",
       "fallbackLabel": "Qo'shimcha to'lov"
-    }
+    },
+    "offerDiscount": "Aksiya",
+    "deliveryOfferNote": "Yetkazib berish chegirmasi {{amount}} hisobga olingan",
+    "surchargeNote": "Ustama {{amount}} hisobga olingan"
   },
   "orders": {
     "title": "Buyurtmalar",

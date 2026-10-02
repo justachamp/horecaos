@@ -1661,6 +1661,20 @@
         },
         "type" : "object"
       },
+      "CatalogPublicationControllerValidationResponse" : {
+        "properties" : {
+          "findings" : {
+            "items" : {
+              "$ref" : "#/components/schemas/FindingView"
+            },
+            "type" : "array"
+          },
+          "publishable" : {
+            "type" : "boolean"
+          }
+        },
+        "type" : "object"
+      },
       "CatalogSummaryResponse" : {
         "properties" : {
           "catalogId" : {
@@ -8102,7 +8116,7 @@
             "type" : "string"
           },
           "validation" : {
-            "$ref" : "#/components/schemas/ValidationResponse"
+            "$ref" : "#/components/schemas/CatalogPublicationControllerValidationResponse"
           }
         },
         "type" : "object"
@@ -10904,20 +10918,6 @@
               "$ref" : "#/components/schemas/ValidationResult"
             },
             "type" : "array"
-          }
-        },
-        "type" : "object"
-      },
-      "ValidationResponse" : {
-        "properties" : {
-          "findings" : {
-            "items" : {
-              "$ref" : "#/components/schemas/FindingView"
-            },
-            "type" : "array"
-          },
-          "publishable" : {
-            "type" : "boolean"
           }
         },
         "type" : "object"
@@ -14766,7 +14766,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/ValidationResponse"
+                  "$ref" : "#/components/schemas/CatalogPublicationControllerValidationResponse"
                 }
               }
             },

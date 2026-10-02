@@ -43,7 +43,6 @@ import uz.horecaos.platform.inventory.infrastructure.persistence.JdbcInventorySt
 import uz.horecaos.platform.media.infrastructure.persistence.JdbcMediaAssetStore;
 import uz.horecaos.platform.ordering.application.onboarding.OrderingOnboardingStepHandlers;
 import uz.horecaos.platform.pricing.application.PricingEngine;
-import uz.horecaos.platform.pricing.application.PromoCodeEligibilityService;
 import uz.horecaos.platform.pricing.application.QuoteService;
 import uz.horecaos.platform.pricing.infrastructure.catalog.JdbcCatalogPricingContext;
 import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPricingStore;
@@ -662,8 +661,7 @@ class OnboardingFullRunIntegrationTests {
                 new JdbcCatalogPricingContext(jdbc, "uz"),
                 channels,
                 deliveryFees,
-                promoCodeStore,
-                new PromoCodeEligibilityService(promoCodeStore),
+                uz.horecaos.platform.pricing.PromotionTestSupport.resolver(jdbc, promoCodeStore),
                 CLOCK,
                 new FakeConfigurationResolver());
 

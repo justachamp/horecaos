@@ -1,6 +1,7 @@
 package uz.horecaos.platform.pricing.api;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -90,6 +91,11 @@ public interface CartPricingPort {
      *                    does not re-check the coupon's caps or window for it;
      *                    the promotion's own conditions are still evaluated on
      *                    the new basket
+     * @param frame       ADR 0140: the promotion inputs ordering fixes rather than
+     *                    lets pricing read from the clock, or null. On the cart path
+     *                    the cart's payment method and fulfilment mode; on an
+     *                    amendment, what the order was placed under (see {@link
+     *                    PricingCommand.PromotionFrame})
      * @param delivery    ADR 0037: where the order is going, and who prices the
      *                    delivery leg, or null for a cart being collected. A
      *                    coordinate rather than an address — pricing has no use
@@ -114,7 +120,8 @@ public interface CartPricingPort {
             @Nullable String presentedCouponCode,
             @Nullable Delivery delivery,
             @Nullable UUID carriedRedemptionOrderId,
-            @Nullable FulfillmentMode fulfillmentMode) {
+            @Nullable FulfillmentMode fulfillmentMode,
+            @Nullable PromotionFrame frame) {
 
         public PricingCommand {
             Objects.requireNonNull(tenantId, "A tenant id is required");
@@ -126,7 +133,7 @@ public interface CartPricingPort {
             }
         }
 
-        /** Every call site that predates ADR 0136's fulfilment mode. */
+        /** Every call site that predates ADR 0136's fulfilment mode and the promotion frame (ADR 0140). */
         public PricingCommand(
                 UUID tenantId,
                 UUID brandId,
@@ -149,7 +156,64 @@ public interface CartPricingPort {
                     presentedCouponCode,
                     delivery,
                     carriedRedemptionOrderId,
+                    null,
                     null);
+        }
+
+        /** Every call site that predates the promotion frame (ADR 0140): the cart's fulfilment mode, no frame. */
+        public PricingCommand(
+                UUID tenantId,
+                UUID brandId,
+                UUID locationId,
+                @Nullable UUID customerAccountId,
+                String channelCode,
+                List<Item> items,
+                String idempotencyKey,
+                @Nullable String presentedCouponCode,
+                @Nullable Delivery delivery,
+                @Nullable UUID carriedRedemptionOrderId,
+                @Nullable FulfillmentMode fulfillmentMode) {
+            this(
+                    tenantId,
+                    brandId,
+                    locationId,
+                    customerAccountId,
+                    channelCode,
+                    items,
+                    idempotencyKey,
+                    presentedCouponCode,
+                    delivery,
+                    carriedRedemptionOrderId,
+                    fulfillmentMode,
+                    null);
+        }
+
+        /** Every call site that predates ADR 0136's fulfilment mode: a promotion frame, no stated mode. */
+        public PricingCommand(
+                UUID tenantId,
+                UUID brandId,
+                UUID locationId,
+                @Nullable UUID customerAccountId,
+                String channelCode,
+                List<Item> items,
+                String idempotencyKey,
+                @Nullable String presentedCouponCode,
+                @Nullable Delivery delivery,
+                @Nullable UUID carriedRedemptionOrderId,
+                @Nullable PromotionFrame frame) {
+            this(
+                    tenantId,
+                    brandId,
+                    locationId,
+                    customerAccountId,
+                    channelCode,
+                    items,
+                    idempotencyKey,
+                    presentedCouponCode,
+                    delivery,
+                    carriedRedemptionOrderId,
+                    null,
+                    frame);
         }
 
         /** Every call site that predates a repricing carrying an order's own redemption. */
@@ -173,6 +237,8 @@ public interface CartPricingPort {
                     idempotencyKey,
                     presentedCouponCode,
                     delivery,
+                    null,
+                    null,
                     null);
         }
 
@@ -193,6 +259,8 @@ public interface CartPricingPort {
                     channelCode,
                     items,
                     idempotencyKey,
+                    null,
+                    null,
                     null,
                     null,
                     null);
@@ -218,8 +286,31 @@ public interface CartPricingPort {
                     idempotencyKey,
                     presentedCouponCode,
                     null,
+                    null,
+                    null,
                     null);
         }
+
+        /**
+         * The promotion inputs ordering fixes (ADR 0140).
+         *
+         * <p>On the cart path: {@code paymentMethodCode} and {@code fulfillmentMode}
+         * from the cart, the rest null (the instant is the clock). On the amendment
+         * path: {@code inheritFromQuoteId} is the quote behind the order's current
+         * revision, whose recorded {@code promotionInputs} pricing starts from;
+         * {@code paymentMethodCode} is non-null only when the amendment changes the
+         * method; {@code fulfillmentMode} and {@code placedAt} come from the order and
+         * serve an order priced before calculation version 3, which recorded none.
+         * The clock is never an override: the service instant stays the one the order
+         * was placed under, so a promotion that priced the order at 12:30 still holds
+         * when a line is added at 15:05.
+         */
+        public record PromotionFrame(
+                @Nullable Instant serviceInstant,
+                @Nullable String paymentMethodCode,
+                @Nullable String fulfillmentMode,
+                @Nullable UUID inheritFromQuoteId,
+                @Nullable Instant placedAt) {}
 
         /**
          * Where a delivery cart is going, and who prices it (ADR 0037).

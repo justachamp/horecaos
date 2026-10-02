@@ -10,6 +10,11 @@ import { AnalyticsInjector } from '../../../core/analytics/analytics-injector';
 import { pushEcommerceEvent } from '../../../core/analytics/ecommerce-events';
 import { money, toMajorUnits } from '../../../core/money/money';
 import { LangService } from '../../../services/lang.service';
+import {
+  discountRowsFor,
+  noteRowsFor,
+  type PromotionRow,
+} from '../../../services/applied-promotions';
 import type {
   ApiOrderDetail,
   ApiOrderLineItem,
@@ -224,6 +229,19 @@ export class CartOrderStatusComponent implements OnInit, OnDestroy {
 
   totalFormatted(): string {
     return this.formatPrice(this.priceOf(this.order()?.total));
+  }
+
+  /** ADR 0140: one row per kind of discount, with the platform's own amount. */
+  discountRows(): readonly PromotionRow[] {
+    const order = this.order();
+    return discountRowsFor(order?.promotions, this.priceOf(order?.discount), (minor) =>
+      this.formatPrice(minor),
+    );
+  }
+
+  /** ADR 0140: benefits already inside the delivery fee or the goods, as captions. */
+  promotionNotes(): readonly PromotionRow[] {
+    return noteRowsFor(this.order()?.promotions, (minor) => this.formatPrice(minor));
   }
 
   close(): void {

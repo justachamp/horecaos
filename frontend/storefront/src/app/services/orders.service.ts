@@ -7,6 +7,7 @@ import { APP_CONFIG } from '../core/config/app-config';
 import { newIdempotencyKey } from '../core/api/idempotency';
 import { HorecaOSApiError } from '../core/api/problem-details';
 import type { Page } from '../core/api/page';
+import type { AppliedPromotion } from './applied-promotions';
 
 /**
  * The customer's own orders.
@@ -218,6 +219,10 @@ export class OrdersService {
       payment: undefined,
       subtotal: { price: order.subtotalMinor, discount: 0 },
       tax: { price: order.taxMinor, discount: 0 },
+      // ADR 0140: the discount the order was priced with, and which kinds of
+      // promotion gave it. Without it a discounted order never reconciles.
+      discount: { price: order.discountMinor ?? 0, discount: 0 },
+      promotions: order.appliedPromotions ?? [],
       // The ADR 0037 delivery charge -- zero for PICKUP/DINE_IN and for a
       // waived fee, never absent. `OrderDetailComponent.mapToOrderDetail`
       // hides the row only when this is actually zero, not because the
@@ -396,6 +401,12 @@ export interface OrderResponse {
   readonly currency: string;
   readonly subtotalMinor: number;
   readonly taxMinor: number;
+  /**
+   * ADR 0140. What promotions took off the goods; the order's total is `subtotalMinor
+   * + taxMinor + feeMinor - discountMinor`, so without this a discounted order's own
+   * screen never reconciles. Zero when nothing was discounted, never absent.
+   */
+  readonly discountMinor: number;
   /** The ADR 0037 delivery charge, already folded into `totalMinor` but
    * carried separately -- see JdbcOrderStore's doc comment on the field --
    * so an order placed with one can show it instead of a total that never
@@ -408,6 +419,13 @@ export interface OrderResponse {
   readonly confirmedAt: string | null;
   readonly lines: readonly OrderLineResponse[];
   readonly warnings: readonly string[];
+  /**
+   * ADR 0140. The kinds of promotion behind the price, in the platform's words:
+   * whether the customer asked for each by typing a code, what it did to the total
+   * and how much. Names no promotion. Read from the quote behind the order's current
+   * revision, so an amended order shows what it is now priced with.
+   */
+  readonly appliedPromotions: readonly AppliedPromotion[];
 }
 
 export interface OrderStateResponse {
@@ -457,6 +475,10 @@ export interface ApiOrderDetail {
   payment?: { id: number; name: string; status?: string };
   subtotal?: ApiPriceObject | number;
   tax?: ApiPriceObject | number;
+  /** ADR 0140: what promotions took off the goods. */
+  discount?: ApiPriceObject | number;
+  /** ADR 0140: the kinds of promotion behind the price. */
+  promotions?: readonly AppliedPromotion[];
   delivery?: ApiPriceObject | number;
   packaging?: ApiPriceObject | number;
   total?: ApiPriceObject | number;

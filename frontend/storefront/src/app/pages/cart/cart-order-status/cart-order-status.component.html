@@ -90,6 +90,17 @@
           <span>{{ 'cart.order' | t }}</span>
           <span>{{ subtotalFormatted() }}</span>
         </div>
+        @for (row of discountRows(); track $index) {
+          <div class="flex items-center justify-between text-zinc-400" data-testid="discount-row">
+            <span>{{ row.labelKey | t }}</span>
+            <span>-{{ row.amount }}</span>
+          </div>
+        }
+        @for (note of promotionNotes(); track $index) {
+          <p class="text-xs text-zinc-500" data-testid="promotion-note">
+            {{ note.labelKey | t: { amount: note.amount } }}
+          </p>
+        }
         <div class="flex items-center justify-between text-base font-bold text-text-primary">
           <span>{{ 'cart.totalAmount' | t }}</span>
           <span>{{ totalFormatted() }}</span>

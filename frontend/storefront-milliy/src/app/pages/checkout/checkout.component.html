@@ -91,12 +91,19 @@
       <h2 class="block__title">{{ 'checkout.promoTitle' | t }}</h2>
       @if (cart.appliedPromoCode(); as applied) {
         <div class="promo-applied">
-          <span class="promo-applied__check">✓</span>
+          <span class="promo-applied__check">{{ cart.promoOutcomeKey() ? 'i' : '✓' }}</span>
           <div class="promo-applied__body">
             <span class="promo-applied__code">{{
-              'checkout.promoApplied' | t: { code: applied }
+              (cart.promoOutcomeKey() ? 'checkout.promoCodeLabel' : 'checkout.promoApplied')
+                | t: { code: applied }
             }}</span>
-            @if (cart.hasDiscount()) {
+            @if (cart.promoOutcomeKey(); as outcomeKey) {
+              <!-- The code stays on the cart but did not move the price: the platform's
+                   own reason, never a guess from the total (ADR 0140). -->
+              <span class="promo-applied__sub" role="status" data-testid="promo-outcome">{{
+                outcomeKey | t
+              }}</span>
+            } @else if (cart.hasDiscount()) {
               <span class="promo-applied__sub">−{{ cart.discountFormatted() }}</span>
             }
           </div>
@@ -146,8 +153,8 @@
       [subtotal]="cart.subtotalFormatted()"
       [deliveryFee]="cart.deliveryFee()"
       [unresolvedMessage]="cart.deliveryUnresolvedMessage()"
-      [hasDiscount]="cart.hasDiscount()"
-      [discount]="cart.discountFormatted()"
+      [discountRows]="cart.discountRows()"
+      [notes]="cart.promotionNotes()"
       [total]="cart.totalAmount()"
       [hiddenCharges]="cart.hiddenCharges()"
       [provisional]="cart.hasProvisionalLines()"

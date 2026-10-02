@@ -546,6 +546,117 @@ describe('UiCartService.applyPromoCode / removePromoCode (ADR 0072)', () => {
   });
 });
 
+describe('UiCartService promotions behind the price (ADR 0140)', () => {
+  function cartWith(promoCode: string | null): PlatformCart {
+    return baseCart({
+      lines: [{ lineKey: 'v-known', variantId: 'v-known', quantity: 1, hasCustomerNote: false }],
+      appliedPromoCode: promoCode,
+    });
+  }
+
+  async function priceWith(
+    overrides: Partial<PricedCart>,
+    promoCode: string | null = null,
+  ): Promise<UiCartService> {
+    const { service, carts, menu } = setUp();
+    const cart = cartWith(promoCode);
+    carts.ensure.mockResolvedValue(cart);
+    carts.price.mockResolvedValue({ ...pricedFor(cart), ...overrides });
+    menu.menu.mockResolvedValue(emptyMenu());
+    await service.load();
+    return service;
+  }
+
+  it("prints each discount as its own line with the platform's amount, and the customer's code only on a code line", async () => {
+    const service = await priceWith(
+      {
+        discountMinor: 6_000,
+        appliedPromotions: [
+          { source: 'AUTOMATIC', effect: 'DISCOUNT', amountMinor: 4_000 },
+          { source: 'PROMO_CODE', effect: 'DISCOUNT', amountMinor: 2_000 },
+        ],
+        promoCodeOutcome: 'APPLIED',
+      },
+      'OSH2026',
+    );
+
+    expect(service.discountRows()).toEqual([
+      { labelKey: 'cart.offerDiscount', code: null, amount: expect.stringContaining('4') },
+      { labelKey: 'cart.promoCode', code: 'OSH2026', amount: expect.stringContaining('2') },
+    ]);
+  });
+
+  it('labels an automatic discount as an offer, never as a promo code the customer did not type', async () => {
+    const service = await priceWith({
+      discountMinor: 4_000,
+      appliedPromotions: [{ source: 'AUTOMATIC', effect: 'DISCOUNT', amountMinor: 4_000 }],
+    });
+
+    expect(service.discountRows().map((row) => row.labelKey)).toEqual(['cart.offerDiscount']);
+    expect(service.discountRows()[0].code).toBeNull();
+  });
+
+  it('keeps a discount the platform did not break down as one line rather than a gap in the total, labelled a code when the cart has one', async () => {
+    const service = await priceWith({ discountMinor: 5_000 }, 'OSH2026');
+
+    expect(service.discountRows()).toEqual([
+      { labelKey: 'cart.promoCode', code: 'OSH2026', amount: expect.stringContaining('5') },
+    ]);
+  });
+
+  it('labels an unexplained discount an offer when the cart has no code', async () => {
+    const service = await priceWith({ discountMinor: 5_000 });
+
+    expect(service.discountRows().map((row) => row.labelKey)).toEqual(['cart.offerDiscount']);
+  });
+
+  it('has no discount line when nothing was discounted', async () => {
+    const service = await priceWith({ discountMinor: 0, appliedPromotions: [] });
+
+    expect(service.discountRows()).toEqual([]);
+  });
+
+  it('explains a delivery offer and a surcharge as captions, not as lines that would be added twice', async () => {
+    const service = await priceWith({
+      appliedPromotions: [
+        { source: 'AUTOMATIC', effect: 'DELIVERY_DISCOUNT', amountMinor: 5_000 },
+        { source: 'AUTOMATIC', effect: 'SURCHARGE', amountMinor: 1_500 },
+      ],
+    });
+
+    expect(service.discountRows()).toEqual([]);
+    expect(service.promotionNotes()).toEqual([
+      { labelKey: 'cart.deliveryOfferNote', amount: expect.stringContaining('5') },
+      { labelKey: 'cart.surchargeNote', amount: expect.stringContaining('1') },
+    ]);
+  });
+
+  it("says why a code on the cart did not move the price, from the platform's verdict", async () => {
+    const service = await priceWith(
+      {
+        discountMinor: 18_000,
+        appliedPromotions: [{ source: 'AUTOMATIC', effect: 'DISCOUNT', amountMinor: 18_000 }],
+        promoCodeOutcome: 'OFFERS_ARE_BETTER',
+      },
+      'SMALL5',
+    );
+
+    expect(service.promoOutcomeKey()).toBe('checkout.promoOffersBetter');
+  });
+
+  it('says nothing about a code that applied', async () => {
+    const service = await priceWith({ promoCodeOutcome: 'APPLIED' }, 'BIG30');
+
+    expect(service.promoOutcomeKey()).toBeNull();
+  });
+
+  it('says nothing about a code when the cart carries none', async () => {
+    const service = await priceWith({ promoCodeOutcome: null });
+
+    expect(service.promoOutcomeKey()).toBeNull();
+  });
+});
+
 /** A platform refusal the way `ApiClient` normalises it: code plus a business `reason`. */
 function refusal(reason: string, code = 'RESOURCE_CONFLICT', status = 409): HorecaOSApiError {
   return new HorecaOSApiError({

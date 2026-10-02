@@ -49,6 +49,16 @@ public record PriceBookActivated(
     }
 
     @Override
+    public String aggregateType() {
+        return "PriceBook";
+    }
+
+    @Override
+    public UUID aggregateId() {
+        return priceBookId;
+    }
+
+    @Override
     public Object payload() {
         return new Payload(priceBookId, brandId, version, currency);
     }

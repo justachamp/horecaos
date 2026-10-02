@@ -542,17 +542,25 @@ export const routes: Routes = [
         // neither is its own IA row. The other five route to the shared
         // `NotBuiltPage`: §6.1/6.2 have a schema (V0093) and no authoring
         // service or controller above it; §6.5/6.7/6.8 have neither schema
-        // nor service. See `marketing-shell.ts`'s own doc.
+        // nor service. See `marketing-shell.ts`'s own doc. (6.1 and 6.2 have
+        // both since: ADR 0140 and ADR 0072.)
         path: 'marketing',
         loadComponent: () =>
           import('./features/marketing/marketing-shell').then((m) => m.MarketingShell),
         children: [
           { path: '', pathMatch: 'full', redirectTo: 'campaigns' },
+          // 6.1 Promotions (ADR 0140, gap-map row 6.1): automatic discounts and
+          // markups in the closed rule vocabulary, over `PromotionController` —
+          // `q-condition-builder` for the conditions, `q-rule-list` for the
+          // priority order per stacking group, `q-rule-simulator` over the real
+          // engine, and activation that asks a second person above the ADR 0030
+          // thresholds. Promo codes (6.2) are the coupon-gated face of the same row.
           {
             path: 'promotions',
             loadComponent: () =>
-              import('./features/not-built/not-built-page').then((m) => m.NotBuiltPage),
-            data: { spec: 'frontend-information-architecture.md §6.1 (Promotions)' },
+              import('./features/marketing/promotions/promotions-page').then(
+                (m) => m.PromotionsPage,
+              ),
           },
           // 6.2 Promo codes (ADR 0072, wave 60): a marketer's own promo
           // codes, through the new `PromoCodeController` over V0093's
@@ -823,12 +831,10 @@ export const routes: Routes = [
               ),
           },
           // 7.9 Marketing reports (T15): 7.9a per-customer discount history and
-          // 7.9b campaign delivery counts are real this wave — see
-          // `marketing-report-page.ts`'s own doc. 7.9's promo-code summary and
-          // per-code redemption detail stay named-not-built inline on the same
-          // page: ADR 0023 forbids `reporting` reading `pricing` directly, so
-          // they need `reporting.fact_promotion_redemption`, whose grain needs
-          // a promotions ADR that does not exist yet (statistics.md §7).
+          // 7.9b campaign delivery counts, and (ADR 0140) the Promotions tab: the
+          // summary per promotion and the redemption log, both over
+          // `reporting.fact_promotion_redemption`, which day close builds so that
+          // ADR 0023 holds — see `marketing-report-page.ts`'s own doc.
           {
             path: 'marketing',
             loadComponent: () =>

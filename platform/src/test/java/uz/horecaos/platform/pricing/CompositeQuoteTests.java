@@ -37,7 +37,6 @@ import uz.horecaos.platform.pricing.api.QuoteSnapshot;
 import uz.horecaos.platform.pricing.application.PriceAuthoringService;
 import uz.horecaos.platform.pricing.application.PriceableType;
 import uz.horecaos.platform.pricing.application.PricingEngine;
-import uz.horecaos.platform.pricing.application.PromoCodeEligibilityService;
 import uz.horecaos.platform.pricing.application.QuoteService;
 import uz.horecaos.platform.pricing.domain.QuoteRequest;
 import uz.horecaos.platform.pricing.infrastructure.catalog.JdbcCatalogPricingContext;
@@ -159,8 +158,7 @@ class CompositeQuoteTests {
                 catalogContext,
                 channelStore,
                 deliveryFees,
-                promoCodeStore,
-                new PromoCodeEligibilityService(promoCodeStore),
+                PromotionTestSupport.resolver(jdbc, promoCodeStore),
                 clock,
                 new FakeConfigurationResolver(),
                 new JdbcCompositeProductsLookup(jdbc));

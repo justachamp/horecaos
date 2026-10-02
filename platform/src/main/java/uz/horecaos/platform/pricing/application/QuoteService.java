@@ -3,8 +3,6 @@ package uz.horecaos.platform.pricing.application;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.ZoneOffset;
-import java.time.temporal.ChronoField;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -14,6 +12,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
@@ -30,17 +29,14 @@ import uz.horecaos.platform.fulfillment.api.ResolvedDeliveryCharge;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.pricing.api.CartPricingPort;
 import uz.horecaos.platform.pricing.api.PricingConfigurationKeys;
-import uz.horecaos.platform.pricing.api.PromoCodeQueryPort;
 import uz.horecaos.platform.pricing.api.QuoteAcceptance;
 import uz.horecaos.platform.pricing.api.QuoteAcceptancePort;
 import uz.horecaos.platform.pricing.api.QuoteSnapshot;
 import uz.horecaos.platform.pricing.domain.CatchweightFacts;
 import uz.horecaos.platform.pricing.domain.Money;
-import uz.horecaos.platform.pricing.domain.Promotion;
 import uz.horecaos.platform.pricing.domain.Quote;
 import uz.horecaos.platform.pricing.domain.QuoteRequest;
 import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPricingStore;
-import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPromoCodeStore;
 import uz.horecaos.platform.tenancy.api.ConfigurationResolver;
 import uz.horecaos.platform.tenancy.api.FulfillmentMode;
 import uz.horecaos.platform.tenancy.api.SalesChannel;
@@ -84,8 +80,7 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
     private final CatalogPricingContext catalog;
     private final SalesChannelLookup channels;
     private final DeliveryFeePort deliveryFees;
-    private final JdbcPromoCodeStore promoCodes;
-    private final PromoCodeEligibilityService promoCodeEligibility;
+    private final PromotionInputResolver promotionInputs;
     private final Clock clock;
     private final ConfigurationResolver configuration;
     private final CompositeProductsLookup composites;
@@ -103,8 +98,7 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
             CatalogPricingContext catalog,
             SalesChannelLookup channels,
             DeliveryFeePort deliveryFees,
-            JdbcPromoCodeStore promoCodes,
-            PromoCodeEligibilityService promoCodeEligibility,
+            PromotionInputResolver promotionInputs,
             Clock clock,
             ConfigurationResolver configuration) {
         this(
@@ -113,8 +107,7 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
                 catalog,
                 channels,
                 deliveryFees,
-                promoCodes,
-                promoCodeEligibility,
+                promotionInputs,
                 clock,
                 configuration,
                 CompositeProductsLookup.none());
@@ -128,8 +121,7 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
             CatalogPricingContext catalog,
             SalesChannelLookup channels,
             DeliveryFeePort deliveryFees,
-            JdbcPromoCodeStore promoCodes,
-            PromoCodeEligibilityService promoCodeEligibility,
+            PromotionInputResolver promotionInputs,
             Clock clock,
             ConfigurationResolver configuration,
             CompositeProductsLookup composites) {
@@ -138,8 +130,7 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
         this.catalog = catalog;
         this.channels = channels;
         this.deliveryFees = deliveryFees;
-        this.promoCodes = promoCodes;
-        this.promoCodeEligibility = promoCodeEligibility;
+        this.promotionInputs = promotionInputs;
         this.clock = clock;
         this.configuration = configuration;
         this.composites = composites;
@@ -186,6 +177,79 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
                         .orElseThrow(() -> new IllegalStateException("Quote vanished mid-transaction"));
             }
         }
+
+        // The quote id is minted before resolution rather than after, so the
+        // evidence row can name the quote it explains. Resolving first and
+        // stitching the id on afterwards would need an UPDATE against a table that
+        // is deliberately write-once.
+        UUID quoteId = UUID.randomUUID();
+        Priced priced = price(request, quoteId, now, null);
+        var inputs = priced.inputs();
+        var result = priced.result();
+
+        Duration ttl = quoteTtl(request.tenantId(), request.brandId(), request.locationId());
+        Quote quote = new Quote(
+                quoteId,
+                request.tenantId(),
+                request.brandId(),
+                request.locationId(),
+                request.customerAccountId(),
+                priced.currency(),
+                Quote.Status.ACTIVE,
+                priced.publicationId(),
+                PricingEngine.CALCULATION_VERSION,
+                result.contextHash(),
+                result.subtotal(),
+                result.tax(),
+                result.fees(),
+                result.discount(),
+                result.total(),
+                result.lines(),
+                result.adjustments(),
+                now.plus(ttl),
+                now,
+                inputs.deliveryCharge() == null ? null : inputs.deliveryCharge().outcome(),
+                result.deliveryShortfallMinor(),
+                inputs.deliveryCharge() == null ? null : inputs.deliveryCharge().minBasketMinor(),
+                inputs.deliveryCharge() == null ? null : inputs.deliveryCharge().freeDeliveryFromMinor());
+
+        store.insertQuote(
+                quote,
+                request.idempotencyKey(),
+                evidence(request, inputs, result, priced.recorded()),
+                result.loyaltyAccrualAllowed(),
+                result.loyaltyRedemptionAllowed());
+        return quote;
+    }
+
+    /**
+     * Prices a request and writes nothing: the simulator's entry point (ADR 0140).
+     *
+     * <p>The identical path a real quote takes -- the same price book, tax profile,
+     * delivery resolution, input resolution and engine -- with the customer facts
+     * supplied as {@link PromotionInputResolver.Overrides} instead of read from an
+     * account, and the delivery resolution run without a quote to pin it to. It is
+     * the reason a test can assert that the simulator and a real quote agree on
+     * totals, adjustments and hash: there is no second implementation to drift.
+     */
+    @Transactional(readOnly = true)
+    public Priced simulate(QuoteRequest request, PromotionInputResolver.Overrides overrides) {
+        return price(request, null, clock.instant(), overrides);
+    }
+
+    /** The result of pricing one request, with everything a quote or a simulation reports about it. */
+    public record Priced(
+            String currency,
+            UUID publicationId,
+            PricingEngine.PricingInputs inputs,
+            PricingEngine.Result result,
+            RecordedPromotionInputs recorded) {}
+
+    private Priced price(
+            QuoteRequest request,
+            @Nullable UUID quoteId,
+            Instant now,
+            PromotionInputResolver.@Nullable Overrides overrides) {
 
         // ADR 0036: the cart's channel decides both the menu and the price plane.
         // An unregistered channel code resolves to no channel rather than to a
@@ -281,16 +345,13 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
         // charge enters the context hash, so a zone edit invalidates an in-flight quote
         // exactly as a price change does.
         //
-        // The quote id is minted before resolution rather than after, so the evidence
-        // row can name the quote it explains. Resolving first and stitching the id on
-        // afterwards would need an UPDATE against a table that is deliberately
-        // write-once.
+        // The quote id arrives minted (see quote()) so the evidence row can name the quote
+        // it explains; a simulation has none.
         //
         // The goods subtotal the resolver is handed is the engine's own, asked of a
         // draft of the inputs that has no charge yet: the same arithmetic, not a second
         // copy of it, so a combo's components and a hidden charge count toward a zone's
         // minimum basket exactly as they will count toward the total.
-        UUID quoteId = UUID.randomUUID();
         Map<UUID, String> descriptions = catalog.descriptions(request.tenantId(), request.brandId(), pricedVariantIds);
         var draft = new PricingEngine.PricingInputs(
                 priceBook.currency(),
@@ -311,6 +372,9 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
         ResolvedDeliveryCharge charge = resolveDeliveryCharge(
                 request, quoteId, priceBook.currency(), engine.goodsSubtotal(request, draft), now);
 
+        PromotionInputResolver.Resolved resolved =
+                promotionInputs.resolve(request, now, channel, charge, pricedVariantIds, overrides);
+
         var inputs = new PricingEngine.PricingInputs(
                 priceBook.currency(),
                 publication,
@@ -324,40 +388,29 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
                 modifierPrices,
                 descriptions,
                 charge,
-                resolvePromotionInputs(request, now),
+                resolved.inputs(),
                 composite,
                 catchweight);
 
         var result = engine.price(request, inputs, now);
 
-        Duration ttl = quoteTtl(request.tenantId(), request.brandId(), request.locationId());
-        Quote quote = new Quote(
-                quoteId,
-                request.tenantId(),
-                request.brandId(),
-                request.locationId(),
-                request.customerAccountId(),
+        // What actually applied is recorded beside what it was priced with, so an
+        // amendment can inherit both and a later reader can name the definition
+        // version each promotion was evaluated at.
+        List<RecordedPromotionInputs.AppliedRef> applied = result.adjustments().stream()
+                .filter(adjustment -> "PROMOTION".equals(adjustment.sourceType()) && adjustment.sourceId() != null)
+                .map(adjustment -> new RecordedPromotionInputs.AppliedRef(
+                        Objects.requireNonNull(adjustment.sourceId()),
+                        Objects.requireNonNullElse(adjustment.sourceVersion(), 1)))
+                .distinct()
+                .sorted(java.util.Comparator.comparing(RecordedPromotionInputs.AppliedRef::promotionId))
+                .toList();
+        return new Priced(
                 priceBook.currency(),
-                Quote.Status.ACTIVE,
                 publication,
-                PricingEngine.CALCULATION_VERSION,
-                result.contextHash(),
-                result.subtotal(),
-                result.tax(),
-                result.fees(),
-                result.discount(),
-                result.total(),
-                result.lines(),
-                result.adjustments(),
-                now.plus(ttl),
-                now,
-                inputs.deliveryCharge() == null ? null : inputs.deliveryCharge().outcome(),
-                result.deliveryShortfallMinor(),
-                inputs.deliveryCharge() == null ? null : inputs.deliveryCharge().minBasketMinor(),
-                inputs.deliveryCharge() == null ? null : inputs.deliveryCharge().freeDeliveryFromMinor());
-
-        store.insertQuote(quote, request.idempotencyKey(), evidence(request, inputs, result));
-        return quote;
+                inputs,
+                result,
+                resolved.recorded().withApplied(applied));
     }
 
     /**
@@ -377,7 +430,7 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
      * customer sees their basket and the reason together instead of an error page.
      */
     private @Nullable ResolvedDeliveryCharge resolveDeliveryCharge(
-            QuoteRequest request, UUID quoteId, String currency, long goodsSubtotal, Instant now) {
+            QuoteRequest request, @Nullable UUID quoteId, String currency, long goodsSubtotal, Instant now) {
 
         if (request.delivery() == null) {
             return null;
@@ -398,99 +451,6 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
             log.info("Delivery fee not resolved for location {}: {}", request.locationId(), charge.outcome());
         }
         return charge;
-    }
-
-    /**
-     * ADR 0072 stages 3 and 4's input: every promotion this brand could apply,
-     * and whether a presented promo code is eligible right now.
-     *
-     * <p>Both reads are fresh — the brand's {@code ACTIVE} promotion list and
-     * the coupon's own limits and window — never cached across calls, per ADR
-     * 0072's "neither check trusts the other's earlier answer". A code that
-     * was eligible when the customer applied it and has since been exhausted
-     * by another checkout simply produces no
-     * {@code presentedCouponPromotionIds} entry: {@code PromotionEvaluator}
-     * then skips its promotion (which {@code requiresCoupon}) and this price
-     * carries no discount for it, changing the context hash exactly as a
-     * changed price book would.
-     */
-    private PricingEngine.PromotionInputs resolvePromotionInputs(QuoteRequest request, Instant now) {
-        List<Promotion> promotions =
-                promoCodes.listActivePromotionsForPricing(request.tenantId(), request.brandId(), now);
-
-        Set<UUID> presentedCouponPromotionIds = Set.of();
-        if (request.presentedCouponCode() != null
-                && !request.presentedCouponCode().isBlank()) {
-            PromoCodeQueryPort.Eligibility eligibility = promoCodeEligibility.check(
-                    request.tenantId(),
-                    request.brandId(),
-                    request.presentedCouponCode(),
-                    request.customerAccountId(),
-                    now);
-            if (eligibility.isEligible()) {
-                presentedCouponPromotionIds = Set.of(Objects.requireNonNull(
-                        eligibility.promotionId(), "an OK eligibility always names a promotion"));
-            }
-        }
-
-        // A repricing of an order that already exists (an amendment) carries the
-        // redemption that order's own checkout took. That redemption holds its
-        // slot: the coupon's consumed_count and the customer's usage row already
-        // include this very order, so re-running the eligibility check above would
-        // read "limit reached" for a coupon whose last slot is this order's own --
-        // which is the ordinary state of a one-per-customer code -- and quietly
-        // drop the discount the customer was promised. The promotion is therefore
-        // presented as recorded, loaded by id because a later expiry, suspension
-        // or retirement of the code is not a reason to take a redemption off an
-        // order that still exists (ADR 0072: a redemption is final once checkout
-        // commits). What is not carried over is any exemption from the promotion's
-        // own conditions -- minimum basket, channel, location, the discount cap --
-        // which PromotionEvaluator still evaluates on the new basket.
-        if (request.carriedRedemptionOrderId() != null) {
-            Optional<JdbcPromoCodeStore.HeldRedemption> held =
-                    promoCodes.findRedemptionHeldByOrder(request.tenantId(), request.carriedRedemptionOrderId());
-            if (held.isPresent() && held.get().brandId().equals(request.brandId())) {
-                UUID heldPromotionId = held.get().promotionId();
-                List<Promotion> heldPromotions = promoCodes.promotionsForPricingByIds(
-                        request.tenantId(), request.brandId(), List.of(heldPromotionId));
-                if (!heldPromotions.isEmpty()) {
-                    // Replaces the same promotion if the active list already had it,
-                    // so it is never priced twice, and stays in force past the close
-                    // of a window the order redeemed inside.
-                    List<Promotion> withHeld = new ArrayList<>(promotions.stream()
-                            .filter(p -> !p.promotionId().equals(heldPromotionId))
-                            .toList());
-                    heldPromotions.forEach(p -> withHeld.add(p.heldPastItsWindow()));
-                    promotions = withHeld;
-                    Set<UUID> presented = new HashSet<>(presentedCouponPromotionIds);
-                    presented.add(heldPromotionId);
-                    presentedCouponPromotionIds = Set.copyOf(presented);
-                }
-            }
-        }
-
-        // firstOrder and customerSegments are always the same neutral value:
-        // no condition this ADR's authoring surface writes ever reads either
-        // (FIRST_ORDER and CUSTOMER_SEGMENT are outside the closed condition
-        // set — see ADR 0072), so there is nothing here to resolve correctly
-        // yet. localDayOfWeek/localMinuteOfDay are UTC-derived rather than
-        // resolved from the location's own IANA timezone for the identical
-        // reason (DAY_OF_WEEK/TIME_OF_DAY are likewise outside the closed
-        // set) — ADR 0072 records this explicitly as a negative consequence,
-        // not a silent gap: the day either of those conditions is authored
-        // through any surface, this becomes a real defect.
-        var utcNow = now.atZone(ZoneOffset.UTC);
-        var context = new PromotionEvaluator.PromotionContext(
-                request.channel(),
-                request.locationId(),
-                request.delivery() != null ? "DELIVERY" : "PICKUP",
-                false,
-                Set.of(),
-                presentedCouponPromotionIds,
-                utcNow.getDayOfWeek().getValue(),
-                utcNow.get(ChronoField.MINUTE_OF_DAY));
-
-        return new PricingEngine.PromotionInputs(promotions, context, Map.of());
     }
 
     /**
@@ -557,7 +517,15 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
                                 command.delivery().pricingAuthority()),
                 command.presentedCouponCode(),
                 command.carriedRedemptionOrderId(),
-                command.fulfillmentMode());
+                command.fulfillmentMode(),
+                command.frame() == null
+                        ? null
+                        : new QuoteRequest.Frame(
+                                command.frame().serviceInstant(),
+                                command.frame().paymentMethodCode(),
+                                command.frame().fulfillmentMode(),
+                                command.frame().inheritFromQuoteId(),
+                                command.frame().placedAt()));
 
         try {
             Quote quote = quote(request);
@@ -754,7 +722,10 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
 
     /** The calculation inputs, stored as evidence beside the normalized columns. */
     private static Map<String, Object> evidence(
-            QuoteRequest request, PricingEngine.PricingInputs inputs, PricingEngine.Result result) {
+            QuoteRequest request,
+            PricingEngine.PricingInputs inputs,
+            PricingEngine.Result result,
+            RecordedPromotionInputs recorded) {
         Map<String, Object> document = new LinkedHashMap<>();
         document.put("calculationVersion", PricingEngine.CALCULATION_VERSION);
         document.put("priceBookId", String.valueOf(inputs.priceBookId()));
@@ -783,6 +754,34 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
         }
         if (result.deliveryShortfallMinor() != null) {
             document.put("deliveryShortfallMinor", result.deliveryShortfallMinor());
+        }
+        // ADR 0140: the promotion inputs this quote was priced with, which an
+        // amendment's reprice starts from.
+        document.put("promotionInputs", recorded.toDocument());
+        // What the engine decided about the coupon-gated promotions the cart
+        // presented, so a storefront can say why a typed code did not move the
+        // total (a better automatic offer, or a condition that did not hold). Kept
+        // on the quote rather than recomputed: an idempotent replay returns this
+        // row without running the engine.
+        Set<UUID> presented = inputs.promotions() == null
+                ? Set.of()
+                : inputs.promotions().context().presentedCouponPromotionIds();
+        if (!presented.isEmpty()) {
+            List<Map<String, Object>> verdicts = new ArrayList<>();
+            for (UUID promotionId : new TreeSet<>(presented)) {
+                result.promotionTrace().stream()
+                        .filter(entry -> entry.promotionId().equals(promotionId))
+                        .findFirst()
+                        .ifPresent(entry -> {
+                            Map<String, Object> verdict = new LinkedHashMap<>();
+                            verdict.put("promotionId", promotionId.toString());
+                            verdict.put("verdict", entry.verdict().name());
+                            verdicts.add(verdict);
+                        });
+            }
+            if (!verdicts.isEmpty()) {
+                document.put("couponVerdicts", verdicts);
+            }
         }
         return document;
     }

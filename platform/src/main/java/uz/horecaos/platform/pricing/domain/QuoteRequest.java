@@ -1,6 +1,7 @@
 package uz.horecaos.platform.pricing.domain;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -42,6 +43,11 @@ import uz.horecaos.platform.web.api.Quantities;
  *                          {@code PICKUP} otherwise -- see {@link
  *                          #effectiveFulfillmentMode()}. Dine-in has to be said,
  *                          because nothing else in the request tells it from pickup
+ * @param frame ADR 0140: the promotion inputs a caller fixes rather than lets pricing
+ *                          read from the clock -- the cart's payment method and
+ *                          fulfilment mode, or, for an amendment, what the order
+ *                          was placed under. Null prices as the cart path always
+ *                          did
  */
 public record QuoteRequest(
         UUID tenantId,
@@ -54,7 +60,8 @@ public record QuoteRequest(
         @Nullable Delivery delivery,
         @Nullable String presentedCouponCode,
         @Nullable UUID carriedRedemptionOrderId,
-        @Nullable FulfillmentMode fulfillmentMode) {
+        @Nullable FulfillmentMode fulfillmentMode,
+        @Nullable Frame frame) {
 
     public QuoteRequest {
         Objects.requireNonNull(tenantId, "A tenant id is required");
@@ -68,7 +75,7 @@ public record QuoteRequest(
         lines = List.copyOf(lines);
     }
 
-    /** Every call site that predates ADR 0136's fulfilment mode, which is to say all but the cart's. */
+    /** Every call site that predates ADR 0136's fulfilment mode and the promotion frame (ADR 0140). */
     public QuoteRequest(
             UUID tenantId,
             UUID brandId,
@@ -91,7 +98,64 @@ public record QuoteRequest(
                 delivery,
                 presentedCouponCode,
                 carriedRedemptionOrderId,
+                null,
                 null);
+    }
+
+    /** Every call site that predates the promotion frame (ADR 0140): the cart's fulfilment mode, no frame. */
+    public QuoteRequest(
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            @Nullable UUID customerAccountId,
+            String channel,
+            List<Line> lines,
+            @Nullable String idempotencyKey,
+            @Nullable Delivery delivery,
+            @Nullable String presentedCouponCode,
+            @Nullable UUID carriedRedemptionOrderId,
+            @Nullable FulfillmentMode fulfillmentMode) {
+        this(
+                tenantId,
+                brandId,
+                locationId,
+                customerAccountId,
+                channel,
+                lines,
+                idempotencyKey,
+                delivery,
+                presentedCouponCode,
+                carriedRedemptionOrderId,
+                fulfillmentMode,
+                null);
+    }
+
+    /** Every call site that predates ADR 0136's fulfilment mode: a promotion frame, no stated mode. */
+    public QuoteRequest(
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            @Nullable UUID customerAccountId,
+            String channel,
+            List<Line> lines,
+            @Nullable String idempotencyKey,
+            @Nullable Delivery delivery,
+            @Nullable String presentedCouponCode,
+            @Nullable UUID carriedRedemptionOrderId,
+            @Nullable Frame frame) {
+        this(
+                tenantId,
+                brandId,
+                locationId,
+                customerAccountId,
+                channel,
+                lines,
+                idempotencyKey,
+                delivery,
+                presentedCouponCode,
+                carriedRedemptionOrderId,
+                null,
+                frame);
     }
 
     /**
@@ -130,6 +194,8 @@ public record QuoteRequest(
                 idempotencyKey,
                 delivery,
                 presentedCouponCode,
+                null,
+                null,
                 null);
     }
 
@@ -156,6 +222,31 @@ public record QuoteRequest(
             @Nullable String idempotencyKey,
             @Nullable Delivery delivery) {
         this(tenantId, brandId, locationId, customerAccountId, channel, lines, idempotencyKey, delivery, null);
+    }
+
+    /**
+     * The promotion inputs a caller fixes (ADR 0140).
+     *
+     * <p>On the cart path the caller is {@code CartService}: the payment method and
+     * the fulfilment mode come from the cart and the instant is null, which means
+     * the clock. On the amendment path ({@code inheritFromQuoteId} set) pricing
+     * starts from the {@code promotionInputs} recorded on that quote, the quote
+     * behind the order's current revision, and overrides only what the amendment
+     * itself changes: the basket, the delivery point and, when {@code
+     * paymentMethodCode} is set, the payment method. The clock is never an
+     * override. {@code placedAt} is the fallback service instant for an order
+     * priced before calculation version 3, which recorded none.
+     */
+    public record Frame(
+            @Nullable Instant serviceInstant,
+            @Nullable String paymentMethodCode,
+            @Nullable String fulfillmentMode,
+            @Nullable UUID inheritFromQuoteId,
+            @Nullable Instant placedAt) {
+
+        public boolean isAmendment() {
+            return inheritFromQuoteId != null;
+        }
     }
 
     /**
