@@ -27,6 +27,7 @@ import uz.horecaos.platform.reporting.application.ProductClassificationService;
 import uz.horecaos.platform.reporting.domain.ClassificationRun;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
+import uz.horecaos.platform.web.api.Quantities;
 import uz.horecaos.platform.web.authorization.RequiresCapability;
 
 /**
@@ -173,6 +174,11 @@ public class ProductClassificationController {
             double stddevQuantityPerBucket,
             int coefficientOfVariationBasisPoints,
             String xyzClass) {
+
+        /** Written as {@code 12}, not {@code 12.000}: see {@link ReportingController.VariantSalesRowResponse}. */
+        public ClassificationRowResponse {
+            quantityTotal = Quantities.normalise(quantityTotal);
+        }
 
         static ClassificationRowResponse of(ClassificationRun.Row row) {
             return new ClassificationRowResponse(
