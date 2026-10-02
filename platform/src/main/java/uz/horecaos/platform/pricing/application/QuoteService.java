@@ -3,12 +3,14 @@ package uz.horecaos.platform.pricing.application;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
@@ -576,6 +578,31 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
         // ADR 0140: the promotion inputs this quote was priced with, which an
         // amendment's reprice starts from.
         document.put("promotionInputs", recorded.toDocument());
+        // What the engine decided about the coupon-gated promotions the cart
+        // presented, so a storefront can say why a typed code did not move the
+        // total (a better automatic offer, or a condition that did not hold). Kept
+        // on the quote rather than recomputed: an idempotent replay returns this
+        // row without running the engine.
+        Set<UUID> presented = inputs.promotions() == null
+                ? Set.of()
+                : inputs.promotions().context().presentedCouponPromotionIds();
+        if (!presented.isEmpty()) {
+            List<Map<String, Object>> verdicts = new ArrayList<>();
+            for (UUID promotionId : new TreeSet<>(presented)) {
+                result.promotionTrace().stream()
+                        .filter(entry -> entry.promotionId().equals(promotionId))
+                        .findFirst()
+                        .ifPresent(entry -> {
+                            Map<String, Object> verdict = new LinkedHashMap<>();
+                            verdict.put("promotionId", promotionId.toString());
+                            verdict.put("verdict", entry.verdict().name());
+                            verdicts.add(verdict);
+                        });
+            }
+            if (!verdicts.isEmpty()) {
+                document.put("couponVerdicts", verdicts);
+            }
+        }
         return document;
     }
 

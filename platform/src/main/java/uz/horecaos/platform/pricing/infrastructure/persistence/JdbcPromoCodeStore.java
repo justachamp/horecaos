@@ -434,6 +434,26 @@ public class JdbcPromoCodeStore {
     }
 
     /**
+     * Which of these promotions apply only to a presented code. One narrow column,
+     * for a caller that needs to tell "the customer typed it" from "it applied by
+     * itself" and has no use for the rest of the rule.
+     */
+    public java.util.Set<UUID> couponGatedPromotionIds(UUID tenantId, Collection<UUID> promotionIds) {
+        if (promotionIds.isEmpty()) {
+            return java.util.Set.of();
+        }
+        return java.util.Set.copyOf(jdbc.sql("""
+                SELECT id
+                FROM pricing.promotions
+                WHERE tenant_id = :tenantId AND id = ANY(:ids) AND requires_coupon
+                """)
+                .param("tenantId", tenantId)
+                .param("ids", promotionIds.toArray(UUID[]::new))
+                .query((row, n) -> row.getObject("id", UUID.class))
+                .list());
+    }
+
+    /**
      * The named promotions of this brand, in whatever state they are in now --
      * {@code ACTIVE} or not, inside their window or not.
      *

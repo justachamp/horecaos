@@ -1138,6 +1138,21 @@
         },
         "type" : "object"
       },
+      "AppliedPromotionResponse" : {
+        "properties" : {
+          "amountMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "effect" : {
+            "type" : "string"
+          },
+          "source" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "ApplyItemView" : {
         "properties" : {
           "action" : {
@@ -16408,6 +16423,12 @@
       },
       "OrderResponse" : {
         "properties" : {
+          "appliedPromotions" : {
+            "items" : {
+              "$ref" : "#/components/schemas/AppliedPromotionResponse"
+            },
+            "type" : "array"
+          },
           "confirmedAt" : {
             "format" : "date-time",
             "type" : "string"
@@ -16418,6 +16439,10 @@
           },
           "currency" : {
             "type" : "string"
+          },
+          "discountMinor" : {
+            "format" : "int64",
+            "type" : "integer"
           },
           "feeMinor" : {
             "format" : "int64",
@@ -19097,6 +19122,12 @@
       },
       "PricedCartResponse" : {
         "properties" : {
+          "appliedPromotions" : {
+            "items" : {
+              "$ref" : "#/components/schemas/AppliedPromotionResponse"
+            },
+            "type" : "array"
+          },
           "cartId" : {
             "format" : "uuid",
             "type" : "string"
@@ -19125,6 +19156,9 @@
           "feeMinor" : {
             "format" : "int64",
             "type" : "integer"
+          },
+          "promoCodeOutcome" : {
+            "type" : "string"
           },
           "quoteId" : {
             "format" : "uuid",

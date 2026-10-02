@@ -65,6 +65,12 @@ export interface ApiMoney {
   currency?: string;
 }
 
+export interface AppliedPromotionResponse {
+  amountMinor?: number;
+  effect?: string;
+  source?: string;
+}
+
 export interface ApplyPromoCodeRequest {
   code: string;
 }
@@ -353,9 +359,11 @@ export interface OrderLineResponse {
 }
 
 export interface OrderResponse {
+  appliedPromotions?: Array<AppliedPromotionResponse>;
   confirmedAt?: string;
   createdAt?: string;
   currency?: string;
+  discountMinor?: number;
   feeMinor?: number;
   fulfillmentMode?: string;
   lines?: Array<OrderLineResponse>;
@@ -437,6 +445,7 @@ export interface PickupLocations {
 }
 
 export interface PricedCartResponse {
+  appliedPromotions?: Array<AppliedPromotionResponse>;
   cartId?: string;
   cartVersion?: number;
   contextHash?: string;
@@ -445,6 +454,7 @@ export interface PricedCartResponse {
   discountMinor?: number;
   expiresAt?: string;
   feeMinor?: number;
+  promoCodeOutcome?: string;
   quoteId?: string;
   subtotalMinor?: number;
   taxMinor?: number;

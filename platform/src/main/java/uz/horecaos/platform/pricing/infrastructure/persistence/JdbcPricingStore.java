@@ -280,6 +280,41 @@ public class JdbcPricingStore {
                         json, new tools.jackson.core.type.TypeReference<Map<String, Object>>() {}));
     }
 
+    /**
+     * What the engine decided about each coupon-gated promotion the cart presented,
+     * as recorded in the quote's calculation document when it was priced (ADR 0140):
+     * the promotion id and the {@code PromotionEvaluator.Verdict} name. Empty for a
+     * quote that presented no code, and for one priced before the verdict was
+     * recorded, which the caller then reads from the adjustments instead.
+     *
+     * <p>Read from the stored document rather than re-derived because an
+     * idempotent replay returns the existing quote and never runs the engine, so a
+     * verdict held only in memory would vanish on the first page reload.
+     */
+    public Map<UUID, String> findCouponVerdicts(UUID tenantId, UUID quoteId) {
+        return jdbc.sql("""
+                SELECT (calculation_document -> 'couponVerdicts')::text
+                FROM pricing.quotes
+                WHERE tenant_id = :tenantId AND id = :id AND (calculation_document -> 'couponVerdicts') IS NOT NULL
+                """)
+                .param("tenantId", tenantId)
+                .param("id", quoteId)
+                .query(String.class)
+                .optional()
+                .map(json -> {
+                    List<Map<String, Object>> entries = objectMapper.readValue(
+                            json, new tools.jackson.core.type.TypeReference<List<Map<String, Object>>>() {});
+                    Map<UUID, String> verdicts = new java.util.LinkedHashMap<>();
+                    for (Map<String, Object> entry : entries) {
+                        verdicts.put(
+                                UUID.fromString(String.valueOf(entry.get("promotionId"))),
+                                String.valueOf(entry.get("verdict")));
+                    }
+                    return Map.copyOf(verdicts);
+                })
+                .orElse(Map.of());
+    }
+
     public Optional<QuoteRow> findQuote(UUID tenantId, UUID quoteId) {
         return jdbc.sql("""
                 SELECT id, status, context_hash, total_minor, currency, expires_at,

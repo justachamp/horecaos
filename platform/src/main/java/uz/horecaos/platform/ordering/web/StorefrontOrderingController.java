@@ -38,6 +38,8 @@ import uz.horecaos.platform.ordering.application.OrderStateService;
 import uz.horecaos.platform.ordering.application.ReorderPlanService;
 import uz.horecaos.platform.ordering.domain.OrderStatus;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore;
+import uz.horecaos.platform.pricing.api.AppliedPromotionPort;
+import uz.horecaos.platform.pricing.api.AppliedPromotions;
 import uz.horecaos.platform.pricing.api.QuoteSnapshot;
 import uz.horecaos.platform.tenancy.api.FulfillmentMode;
 import uz.horecaos.platform.web.api.AggregateVersion;
@@ -101,6 +103,7 @@ public class StorefrontOrderingController {
     private final ReorderPlanService reorderPlans;
     private final CurrentCustomer currentCustomer;
     private final CurrentActor currentActor;
+    private final AppliedPromotionPort appliedPromotions;
 
     @SuppressWarnings("checkstyle:ParameterNumber")
     public StorefrontOrderingController(
@@ -111,7 +114,9 @@ public class StorefrontOrderingController {
             OrderStateService orderState,
             ReorderPlanService reorderPlans,
             CurrentCustomer currentCustomer,
-            CurrentActor currentActor) {
+            CurrentActor currentActor,
+            AppliedPromotionPort appliedPromotions) {
+        this.appliedPromotions = appliedPromotions;
         this.carts = carts;
         this.checkout = checkout;
         this.paymentOptions = paymentOptions;
@@ -363,7 +368,9 @@ public class StorefrontOrderingController {
         try {
             long expected = AggregateVersion.requireIfMatch(request);
             var priced = carts.price(tenantId, brandId, accountId(tenantId, brandId), cartId, (int) expected);
-            return ResponseEntity.ok(PricedCartResponse.of(priced));
+            return ResponseEntity.ok(PricedCartResponse.of(
+                    priced,
+                    appliedPromotions.describe(tenantId, priced.quote().quoteId(), priced.presentedCouponCode())));
         } catch (CartService.StaleCartException stale) {
             throw ApiException.staleVersion(stale.expected(), stale.actual());
         } catch (CartService.CartRefusedException refused) {
@@ -550,7 +557,17 @@ public class StorefrontOrderingController {
                 .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such order"));
         return ResponseEntity.ok()
                 .eTag(AggregateVersion.toETag(detail.order().version()))
-                .body(OrderResponse.of(detail));
+                .body(OrderResponse.of(detail, describePromotions(tenantId, detail)));
+    }
+
+    /**
+     * The promotions behind the order's current revision, read from the quote that
+     * priced it (an amendment moves the order onto its new quote). A quote that has
+     * since been pruned answers none, and the order's discount is still on the
+     * response beside it.
+     */
+    private AppliedPromotions describePromotions(UUID tenantId, OrderQueryService.OrderDetail detail) {
+        return appliedPromotions.describe(tenantId, detail.order().pricingQuoteId(), null);
     }
 
     @GetMapping("/orders")
@@ -1039,9 +1056,11 @@ public class StorefrontOrderingController {
             long feeMinor,
             long totalMinor,
             Instant expiresAt,
-            @Nullable DeliveryChargeResponse delivery) {
+            @Nullable DeliveryChargeResponse delivery,
+            List<AppliedPromotionResponse> appliedPromotions,
+            @Nullable String promoCodeOutcome) {
 
-        static PricedCartResponse of(CartService.PricedCart priced) {
+        static PricedCartResponse of(CartService.PricedCart priced, AppliedPromotions promotions) {
             QuoteSnapshot quote = priced.quote();
             return new PricedCartResponse(
                     priced.cartId(),
@@ -1055,7 +1074,37 @@ public class StorefrontOrderingController {
                     quote.feeMinor(),
                     quote.totalMinor(),
                     quote.expiresAt(),
-                    DeliveryChargeResponse.of(quote));
+                    DeliveryChargeResponse.of(quote),
+                    AppliedPromotionResponse.of(promotions),
+                    promotions.couponOutcome() == null
+                            ? null
+                            : promotions.couponOutcome().name());
+        }
+    }
+
+    /**
+     * One kind of benefit (or surcharge) the price carries, in words a customer may
+     * be shown (ADR 0140).
+     *
+     * <p>Deliberately no promotion name, code or id: the operator's name for a
+     * promotion is internal, and a customer-facing title is not yet a field of the
+     * promotion. {@code source} says whether the customer asked for it by typing a
+     * code; {@code effect} says what it did to the total.
+     *
+     * @param source      {@code AUTOMATIC} or {@code PROMO_CODE}
+     * @param effect      {@code DISCOUNT} (taken off the goods, part of {@code
+     *                    discountMinor}), {@code DELIVERY_DISCOUNT} (taken off the
+     *                    delivery charge, already in {@code feeMinor}) or {@code
+     *                    SURCHARGE} (added to the goods, already in the subtotal)
+     * @param amountMinor always positive; the direction is the effect's
+     */
+    public record AppliedPromotionResponse(String source, String effect, long amountMinor) {
+
+        static List<AppliedPromotionResponse> of(AppliedPromotions promotions) {
+            return promotions.applied().stream()
+                    .map(entry -> new AppliedPromotionResponse(
+                            entry.source().name(), entry.effect().name(), entry.amountMinor()))
+                    .toList();
         }
     }
 
@@ -1147,15 +1196,21 @@ public class StorefrontOrderingController {
             String currency,
             long subtotalMinor,
             long taxMinor,
+            long discountMinor,
             long feeMinor,
             long totalMinor,
             int version,
             Instant createdAt,
             @Nullable Instant confirmedAt,
             List<OrderLineResponse> lines,
-            List<String> warnings) {
+            List<String> warnings,
+            List<AppliedPromotionResponse> appliedPromotions) {
 
         static OrderResponse of(OrderQueryService.OrderDetail detail) {
+            return of(detail, AppliedPromotions.none());
+        }
+
+        static OrderResponse of(OrderQueryService.OrderDetail detail, AppliedPromotions promotions) {
             var order = detail.order();
             return new OrderResponse(
                     order.orderId(),
@@ -1166,6 +1221,7 @@ public class StorefrontOrderingController {
                     order.currency(),
                     order.subtotalMinor(),
                     order.taxMinor(),
+                    order.discountMinor(),
                     order.feeMinor(),
                     order.totalMinor(),
                     order.version(),
@@ -1188,7 +1244,8 @@ public class StorefrontOrderingController {
                                             .map(m -> m.sourceOptionId())
                                             .toList()))
                             .toList(),
-                    detail.warnings());
+                    detail.warnings(),
+                    AppliedPromotionResponse.of(promotions));
         }
     }
 

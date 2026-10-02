@@ -797,7 +797,7 @@ public class CartService {
                 clock.instant())) {
             throw new StaleCartException(cart.version(), cart.version());
         }
-        return new PricedCart(cart.cartId(), cart.version(), quote);
+        return new PricedCart(cart.cartId(), cart.version(), quote, cart.appliedCouponCode());
     }
 
     /**
@@ -1328,8 +1328,20 @@ public class CartService {
      * A cart, freshly priced.
      *
      * @param cartVersion the version after the quote was attached
+     * @param presentedCouponCode the code applied to the cart when it was priced, so a
+     *        reader can ask what became of it (ADR 0140). The raw code is the customer's
+     *        own input and is never echoed in a response.
      */
-    public record PricedCart(UUID cartId, int cartVersion, QuoteSnapshot quote) {}
+    public record PricedCart(
+            UUID cartId,
+            int cartVersion,
+            QuoteSnapshot quote,
+            @Nullable String presentedCouponCode) {
+
+        public PricedCart(UUID cartId, int cartVersion, QuoteSnapshot quote) {
+            this(cartId, cartVersion, quote, null);
+        }
+    }
 
     /** A cart operation refused for a business reason, with a stable code. */
     public static class CartRefusedException extends RuntimeException {
