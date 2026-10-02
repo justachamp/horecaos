@@ -80,9 +80,11 @@ export interface BalanceResponse {
 }
 
 export interface CartLineResponse {
+  comboPicks?: Array<ComboPickResponse>;
   commentPresetCodes?: Array<string>;
   hasCustomerNote?: boolean;
   lineKey?: string;
+  nestedModifiers?: Array<NestedModifierResponse>;
   quantity?: number;
   variantId?: string;
 }
@@ -124,6 +126,16 @@ export interface CheckoutResponse {
   status?: string;
   version?: number;
   warnings?: Array<string>;
+}
+
+export interface ComboPickRequest {
+  componentId: string;
+  quantity?: number;
+}
+
+export interface ComboPickResponse {
+  componentId?: string;
+  quantity?: number;
 }
 
 export interface CommentPresetOption {
@@ -338,7 +350,20 @@ export interface MyReferralResponse {
   redeemedAs?: ReferralStorefrontControllerRedemptionResponse;
 }
 
+export interface NestedModifierRequest {
+  optionId: string;
+  parentOptionId: string;
+}
+
+export interface NestedModifierResponse {
+  optionId?: string;
+  parentOptionId?: string;
+}
+
 export interface OrderLineResponse {
+  autoSelectedModifiers?: Array<string>;
+  comboName?: string;
+  comboSelectionId?: string;
   finalAmountMinor?: number;
   lineNumber?: number;
   modifierOptionIds?: Array<string>;
@@ -466,9 +491,11 @@ export interface ProfileResponse {
 }
 
 export interface PutLineRequest {
+  comboPicks?: Array<ComboPickRequest>;
   commentPresetCodes?: Array<string>;
   customerNote?: string;
   modifierOptionIds?: Array<string>;
+  nestedModifiers?: Array<NestedModifierRequest>;
   quantity?: number;
   variantId: string;
 }
@@ -494,8 +521,10 @@ export interface RegistrationResponse {
 }
 
 export interface ReorderLineResponse {
+  comboPicks?: Array<ComboPickResponse>;
   lineNumber?: number;
   modifierOptionIds?: Array<string>;
+  nestedModifiers?: Array<NestedModifierResponse>;
   originalUnitAmountMinor?: number;
   productId?: string;
   productName?: string;

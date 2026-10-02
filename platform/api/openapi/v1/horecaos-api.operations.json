@@ -309,6 +309,14 @@
       },
       "AddLineRequest" : {
         "properties" : {
+          "comboPicks" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ComboPickRequest"
+            },
+            "maxItems" : 40,
+            "minItems" : 0,
+            "type" : "array"
+          },
           "modifierOptionIds" : {
             "items" : {
               "format" : "uuid",
@@ -3424,6 +3432,55 @@
           }
         },
         "required" : [ "componentId" ],
+        "type" : "object"
+      },
+      "ComboPickRequest" : {
+        "properties" : {
+          "componentId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "quantity" : {
+            "exclusiveMinimum" : 0,
+            "format" : "int32",
+            "maximum" : 99,
+            "type" : "integer"
+          }
+        },
+        "required" : [ "componentId" ],
+        "type" : "object"
+      },
+      "ComboPickResponse" : {
+        "properties" : {
+          "componentId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "quantity" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "ComboResponse" : {
+        "properties" : {
+          "containerVariantId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "quantity" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "selectionId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
         "type" : "object"
       },
       "CommentPresetChip" : {
@@ -7661,6 +7718,14 @@
       },
       "ItemView" : {
         "properties" : {
+          "comboContainerVariantId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "comboSelectionId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
           "itemId" : {
             "format" : "uuid",
             "type" : "string"
@@ -9117,6 +9182,33 @@
         "required" : [ "optionId", "parentOptionId" ],
         "type" : "object"
       },
+      "NestedModifierRequest" : {
+        "properties" : {
+          "optionId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "parentOptionId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "required" : [ "optionId", "parentOptionId" ],
+        "type" : "object"
+      },
+      "NestedModifierResponse" : {
+        "properties" : {
+          "optionId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "parentOptionId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "NewRateCardRequest" : {
         "properties" : {
           "brandId" : {
@@ -9846,6 +9938,15 @@
       },
       "OperationsOrderControllerLineResponse" : {
         "properties" : {
+          "autoSelectedModifiers" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "combo" : {
+            "$ref" : "#/components/schemas/ComboResponse"
+          },
           "commentPresets" : {
             "items" : {
               "$ref" : "#/components/schemas/CommentPresetChip"
@@ -10660,6 +10761,14 @@
       },
       "OrderLineRequest" : {
         "properties" : {
+          "comboPicks" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ComboPickRequest"
+            },
+            "maxItems" : 40,
+            "minItems" : 0,
+            "type" : "array"
+          },
           "commentPresetCodes" : {
             "items" : {
               "type" : "string"
@@ -10677,6 +10786,14 @@
             "items" : {
               "format" : "uuid",
               "type" : "string"
+            },
+            "maxItems" : 20,
+            "minItems" : 0,
+            "type" : "array"
+          },
+          "nestedModifiers" : {
+            "items" : {
+              "$ref" : "#/components/schemas/NestedModifierRequest"
             },
             "maxItems" : 20,
             "minItems" : 0,
@@ -13591,6 +13708,12 @@
       },
       "ReorderLineResponse" : {
         "properties" : {
+          "comboPicks" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ComboPickResponse"
+            },
+            "type" : "array"
+          },
           "lineNumber" : {
             "format" : "int32",
             "type" : "integer"
@@ -13599,6 +13722,12 @@
             "items" : {
               "format" : "uuid",
               "type" : "string"
+            },
+            "type" : "array"
+          },
+          "nestedModifiers" : {
+            "items" : {
+              "$ref" : "#/components/schemas/NestedModifierResponse"
             },
             "type" : "array"
           },
@@ -17405,6 +17534,10 @@
       },
       "VduItemView" : {
         "properties" : {
+          "comboSelectionId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
           "quantity" : {
             "format" : "int32",
             "type" : "integer"

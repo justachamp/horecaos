@@ -210,6 +210,12 @@
       },
       "CartLineResponse" : {
         "properties" : {
+          "comboPicks" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ComboPickResponse"
+            },
+            "type" : "array"
+          },
           "commentPresetCodes" : {
             "items" : {
               "type" : "string"
@@ -221,6 +227,12 @@
           },
           "lineKey" : {
             "type" : "string"
+          },
+          "nestedModifiers" : {
+            "items" : {
+              "$ref" : "#/components/schemas/NestedModifierResponse"
+            },
+            "type" : "array"
           },
           "quantity" : {
             "format" : "int32",
@@ -358,6 +370,35 @@
               "type" : "string"
             },
             "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
+      "ComboPickRequest" : {
+        "properties" : {
+          "componentId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "quantity" : {
+            "exclusiveMinimum" : 0,
+            "format" : "int32",
+            "maximum" : 99,
+            "type" : "integer"
+          }
+        },
+        "required" : [ "componentId" ],
+        "type" : "object"
+      },
+      "ComboPickResponse" : {
+        "properties" : {
+          "componentId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "quantity" : {
+            "format" : "int32",
+            "type" : "integer"
           }
         },
         "type" : "object"
@@ -976,8 +1017,48 @@
         },
         "type" : "object"
       },
+      "NestedModifierRequest" : {
+        "properties" : {
+          "optionId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "parentOptionId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "required" : [ "optionId", "parentOptionId" ],
+        "type" : "object"
+      },
+      "NestedModifierResponse" : {
+        "properties" : {
+          "optionId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "parentOptionId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "OrderLineResponse" : {
         "properties" : {
+          "autoSelectedModifiers" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "comboName" : {
+            "type" : "string"
+          },
+          "comboSelectionId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
           "finalAmountMinor" : {
             "format" : "int64",
             "type" : "integer"
@@ -1389,6 +1470,14 @@
       },
       "PutLineRequest" : {
         "properties" : {
+          "comboPicks" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ComboPickRequest"
+            },
+            "maxItems" : 40,
+            "minItems" : 0,
+            "type" : "array"
+          },
           "commentPresetCodes" : {
             "items" : {
               "type" : "string"
@@ -1406,6 +1495,14 @@
             "items" : {
               "format" : "uuid",
               "type" : "string"
+            },
+            "maxItems" : 20,
+            "minItems" : 0,
+            "type" : "array"
+          },
+          "nestedModifiers" : {
+            "items" : {
+              "$ref" : "#/components/schemas/NestedModifierRequest"
             },
             "maxItems" : 20,
             "minItems" : 0,
@@ -1480,6 +1577,12 @@
       },
       "ReorderLineResponse" : {
         "properties" : {
+          "comboPicks" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ComboPickResponse"
+            },
+            "type" : "array"
+          },
           "lineNumber" : {
             "format" : "int32",
             "type" : "integer"
@@ -1488,6 +1591,12 @@
             "items" : {
               "format" : "uuid",
               "type" : "string"
+            },
+            "type" : "array"
+          },
+          "nestedModifiers" : {
+            "items" : {
+              "$ref" : "#/components/schemas/NestedModifierResponse"
             },
             "type" : "array"
           },

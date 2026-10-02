@@ -104,6 +104,7 @@ export interface AddContactRequest {
 }
 
 export interface AddLineRequest {
+  comboPicks?: Array<ComboPickRequest>;
   modifierOptionIds?: Array<string>;
   quantity?: number;
   variantId: string;
@@ -1065,6 +1066,23 @@ export interface CohortResponse {
 export interface ComboPickBody {
   componentId: string;
   quantity?: number;
+}
+
+export interface ComboPickRequest {
+  componentId: string;
+  quantity?: number;
+}
+
+export interface ComboPickResponse {
+  componentId?: string;
+  quantity?: number;
+}
+
+export interface ComboResponse {
+  containerVariantId?: string;
+  name?: string;
+  quantity?: number;
+  selectionId?: string;
 }
 
 export interface CommentPresetChip {
@@ -2403,6 +2421,8 @@ export interface ItemResponse {
 }
 
 export interface ItemView {
+  comboContainerVariantId?: string;
+  comboSelectionId?: string;
   itemId?: string;
   orderLineId?: string;
   quantity?: number;
@@ -2878,6 +2898,16 @@ export interface NestedModifierBody {
   parentOptionId: string;
 }
 
+export interface NestedModifierRequest {
+  optionId: string;
+  parentOptionId: string;
+}
+
+export interface NestedModifierResponse {
+  optionId?: string;
+  parentOptionId?: string;
+}
+
 export interface NewRateCardRequest {
   brandId: string;
   cardVersion?: number;
@@ -3104,6 +3134,8 @@ export interface OperationsOrderControllerDestinationRequest {
 }
 
 export interface OperationsOrderControllerLineResponse {
+  autoSelectedModifiers?: Array<string>;
+  combo?: ComboResponse;
   commentPresets?: Array<CommentPresetChip>;
   finalAmountMinor?: number;
   hasNote?: boolean;
@@ -3358,9 +3390,11 @@ export interface OrderLatenessResponse {
 }
 
 export interface OrderLineRequest {
+  comboPicks?: Array<ComboPickRequest>;
   commentPresetCodes?: Array<string>;
   customerNote?: string;
   modifierOptionIds?: Array<string>;
+  nestedModifiers?: Array<NestedModifierRequest>;
   quantity?: number;
   variantId: string;
 }
@@ -4267,8 +4301,10 @@ export interface RenameZoneRequest {
 }
 
 export interface ReorderLineResponse {
+  comboPicks?: Array<ComboPickResponse>;
   lineNumber?: number;
   modifierOptionIds?: Array<string>;
+  nestedModifiers?: Array<NestedModifierResponse>;
   originalUnitAmountMinor?: number;
   productId?: string;
   productName?: string;
@@ -5506,6 +5542,7 @@ export interface VduBoardResponse {
 }
 
 export interface VduItemView {
+  comboSelectionId?: string;
   quantity?: number;
   stationId?: string;
   status?: string;
