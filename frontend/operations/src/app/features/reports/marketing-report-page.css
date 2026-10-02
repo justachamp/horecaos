@@ -180,3 +180,19 @@
   border-radius: var(--q-radius);
   cursor: pointer;
 }
+
+.promotions-tab .table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.promotions-tab .table .num {
+  text-align: right;
+}
+
+.log-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 8px 0 0;
+}

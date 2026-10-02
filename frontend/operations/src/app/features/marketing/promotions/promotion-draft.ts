@@ -1,4 +1,5 @@
 import { MessageKey } from '../../../core/i18n/messages.en';
+import { PromotionTextKey } from './promotion-texts';
 import {
   ConditionFixedValue,
   ConditionGroup,
@@ -779,31 +780,31 @@ export function bodyFromDraft(draft: PromotionDraft): PromotionBody {
   };
 }
 
-/** The reasons a draft cannot be saved yet, as message keys: only what the form itself can know. The server's validator owns the rest. */
-export function draftProblems(draft: PromotionDraft): readonly MessageKey[] {
-  const problems: MessageKey[] = [];
+/** The reasons a draft cannot be saved yet, as promotion text keys: only what the form itself can know. The server's validator owns the rest. */
+export function draftProblems(draft: PromotionDraft): readonly PromotionTextKey[] {
+  const problems: PromotionTextKey[] = [];
   if (draft.name.trim().length === 0) {
-    problems.push('marketing.promotions.problem.name');
+    problems.push('problem.name');
   }
   if (!/^[A-Za-z0-9][A-Za-z0-9_-]{1,63}$/.test(draft.code.trim())) {
-    problems.push('marketing.promotions.problem.code');
+    problems.push('problem.code');
   }
   if (draft.stackingGroup.trim().length === 0) {
-    problems.push('marketing.promotions.problem.group');
+    problems.push('problem.group');
   }
   if (draft.actions.length === 0) {
-    problems.push('marketing.promotions.problem.action');
+    problems.push('problem.action');
   }
   if (
     draft.actions.some((action) => action.type === 'FREE_ITEM' && action.variantIds.length === 0)
   ) {
-    problems.push('marketing.promotions.problem.gift');
+    problems.push('problem.gift');
   }
   const unfinished = draft.conditions.some((group) =>
     group.rows.some((row) => ruleFromRow(row) === null),
   );
   if (unfinished) {
-    problems.push('marketing.promotions.problem.condition');
+    problems.push('problem.condition');
   }
   return problems;
 }

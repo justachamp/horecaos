@@ -555,11 +555,11 @@ describe('what the form can already tell is wrong', () => {
       conditions: [andGroup([row('SUBTOTAL_AT_LEAST', { numericLow: '' })])],
     });
     expect(problems).toEqual([
-      'marketing.promotions.problem.name',
-      'marketing.promotions.problem.code',
-      'marketing.promotions.problem.group',
-      'marketing.promotions.problem.action',
-      'marketing.promotions.problem.condition',
+      'problem.name',
+      'problem.code',
+      'problem.group',
+      'problem.action',
+      'problem.condition',
     ]);
   });
 
@@ -572,7 +572,7 @@ describe('what the form can already tell is wrong', () => {
         scope: 'ITEM',
         actions: [emptyAction('FREE_ITEM')],
       }),
-    ).toEqual(['marketing.promotions.problem.gift']);
+    ).toEqual(['problem.gift']);
   });
 
   it('accepts a complete draft, including one with no condition at all', () => {

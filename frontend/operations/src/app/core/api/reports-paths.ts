@@ -23,6 +23,16 @@ export const reportsPaths = {
     return `${TENANT_REPORTING(tenantId)}/queries`;
   },
 
+  /** Report 7.9 (ADR 0140): one row per promotion over a closed date range, from `reporting.fact_promotion_redemption`. */
+  promotionSummary(tenantId: string): string {
+    return `${TENANT_REPORTING(tenantId)}/promotions/summary`;
+  },
+
+  /** Report 7.9 (ADR 0140): the redemption log, newest first, at most 500 rows, the customer as a pseudonym. */
+  promotionRedemptions(tenantId: string): string {
+    return `${TENANT_REPORTING(tenantId)}/promotions/redemptions`;
+  },
+
   /** The fixed six-bucket SLA distribution, per branch. */
   slaBuckets(tenantId: string): string {
     return `${TENANT_REPORTING(tenantId)}/sla-buckets`;

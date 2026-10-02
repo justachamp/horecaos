@@ -8,28 +8,43 @@ import { I18n } from '../../core/i18n/i18n';
 import { MessageKey } from '../../core/i18n/messages.en';
 import { TPipe } from '../../core/i18n/t.pipe';
 import { Combobox, ComboboxOption } from '../../shared/ui/combobox';
+import { DateRange, DateRangePicker } from '../../shared/ui/date-range-picker';
 import { CustomerSummary, CustomersApi } from '../customers/customers-api';
 import { customerStatusLabel } from '../customers/customer-status';
 import { CampaignView, MarketingApi, RecipientCountsView } from '../marketing/marketing-api';
-import { CustomerDiscountHistory, MarketingReportApi } from './marketing-report-api';
+import { orderStatusLabel } from '../orders/order-status';
+import {
+  CustomerDiscountHistory,
+  MarketingReportApi,
+  PromotionRedemptionRow,
+  PromotionSummaryRow,
+} from './marketing-report-api';
+import {
+  PromotionTextKey,
+  PromotionTextPipe,
+  promotionText,
+} from '../marketing/promotions/promotion-texts';
+import { ProvenanceBanner } from './provenance-banner';
+import { ReportRange, defaultPromotionRange } from './promotion-report-range';
 import { REPORTS_PLACEHOLDER_TIME_ZONE } from './reports-filter-state';
+import { ProvenanceResponse } from './reporting-api';
 
-type Tab = 'discounts' | 'campaigns';
+type Tab = 'discounts' | 'campaigns' | 'promotions';
 type LoadState = 'idle' | 'loading' | 'ready' | 'denied' | 'error';
 
 const TAB_DEFINITIONS: readonly { readonly id: Tab; readonly labelKey: MessageKey }[] = [
   { id: 'discounts', labelKey: 'reports.marketing.tab.discounts' },
   { id: 'campaigns', labelKey: 'reports.marketing.tab.campaigns' },
+  { id: 'promotions', labelKey: 'reports.marketing.tab.promotions' },
 ];
 
 /**
  * 7.9 Marketing reports (`frontend-information-architecture.md` §7.9) — tier
- * 2. Two of the screen's four owned facts ship this wave: 7.9a per-customer
- * discount history and 7.9b campaign delivery counts. The other two —
- * promo-code summary and per-code redemption detail — stay named-not-built:
- * ADR 0023 forbids `reporting` reading `pricing` directly, so 7.9 needs
- * `reporting.fact_promotion_redemption`, whose grain needs a promotions ADR
- * that does not exist yet (`statistics.md` §7).
+ * 2. Three of the screen's facts: 7.9a per-customer discount history, 7.9b
+ * campaign delivery counts, and (ADR 0140) the promotion summary with its
+ * per-promotion redemption log, read from `reporting.fact_promotion_redemption`
+ * alone — ADR 0023 forbids `reporting` reading `pricing` directly, so the fact
+ * is built at day close and the report lags by up to a business day.
  *
  * **7.9a — "how much has this customer been discounted".** The abuse check a
  * marketer runs before granting another goodwill code. `q-combobox` plus
@@ -54,7 +69,7 @@ const TAB_DEFINITIONS: readonly { readonly id: Tab; readonly labelKey: MessageKe
  */
 @Component({
   selector: 'q-marketing-report-page',
-  imports: [TPipe, Combobox],
+  imports: [TPipe, PromotionTextPipe, Combobox, DateRangePicker, ProvenanceBanner],
   templateUrl: './marketing-report-page.html',
   styleUrl: './marketing-report-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -106,6 +121,17 @@ export class MarketingReportPage {
   protected readonly countsState = signal<LoadState>('idle');
   protected readonly counts = signal<RecipientCountsView | null>(null);
 
+  // ---------------------------------------------------- 7.9 promotion report
+
+  protected readonly promoRange = signal<ReportRange>(defaultPromotionRange(new Date()));
+  protected readonly promoState = signal<LoadState>('idle');
+  protected readonly promoSummary = signal<readonly PromotionSummaryRow[]>([]);
+  protected readonly promoProvenance = signal<ProvenanceResponse | null>(null);
+  /** The promotion whose redemptions the log shows; `null` is every promotion. */
+  protected readonly promoSelected = signal<PromotionSummaryRow | null>(null);
+  protected readonly promoLogState = signal<LoadState>('idle');
+  protected readonly promoLog = signal<readonly PromotionRedemptionRow[]>([]);
+
   constructor() {
     void this.init();
   }
@@ -123,6 +149,9 @@ export class MarketingReportPage {
 
   protected selectTab(tab: Tab): void {
     this.activeTab.set(tab);
+    if (tab === 'promotions' && this.promoState() === 'idle') {
+      void this.loadPromotions();
+    }
   }
 
   // ------------------------------------------------------------------ 7.9a
@@ -260,5 +289,94 @@ export class MarketingReportPage {
 
   protected campaignStatusLabelKey(status: string): MessageKey {
     return `marketing.campaign.status.${status}` as MessageKey;
+  }
+
+  // ---------------------------------------------------------------- 7.9 promotions
+
+  protected onPromoRange(range: DateRange): void {
+    this.promoRange.set({ from: range.start, to: range.end });
+    this.promoSelected.set(null);
+    void this.loadPromotions();
+  }
+
+  /** The summary and the log for the chosen range, in step: the log follows the selected promotion, if any. */
+  protected async loadPromotions(): Promise<void> {
+    const scope = this.location.scope();
+    if (!scope) {
+      this.promoState.set('error');
+      return;
+    }
+    this.promoState.set('loading');
+    try {
+      const summary = await this.discountApi.promotionSummary(
+        scope.tenantId,
+        this.promoRange(),
+        scope.brandId,
+      );
+      this.promoSummary.set(summary.rows);
+      this.promoProvenance.set(summary.provenance);
+      this.promoState.set('ready');
+    } catch {
+      this.promoState.set('error');
+      return;
+    }
+    await this.loadPromotionLog();
+  }
+
+  private async loadPromotionLog(): Promise<void> {
+    const scope = this.location.scope();
+    if (!scope) {
+      this.promoLogState.set('error');
+      return;
+    }
+    this.promoLogState.set('loading');
+    try {
+      const log = await this.discountApi.promotionRedemptions(
+        scope.tenantId,
+        this.promoRange(),
+        this.promoSelected()?.promotionId ?? null,
+        200,
+      );
+      this.promoLog.set(log.rows);
+      this.promoLogState.set('ready');
+    } catch {
+      this.promoLogState.set('error');
+    }
+  }
+
+  protected selectPromotion(row: PromotionSummaryRow | null): void {
+    this.promoSelected.set(row);
+    void this.loadPromotionLog();
+  }
+
+  protected retryPromotions(): void {
+    void this.loadPromotions();
+  }
+
+  protected sourceLabelKey(kind: string): PromotionTextKey {
+    return `report.source.${kind}` as PromotionTextKey;
+  }
+
+  protected orderStatus(status: string | null): string {
+    return status === null
+      ? promotionText(this.i18n.locale(), 'report.status.none')
+      : orderStatusLabel(status, (key) => this.i18n.t(key));
+  }
+
+  /** The platform stores whole som for UZS (ADR 0018); the fact's `...Som` columns are that amount. */
+  protected som(amount: number): string {
+    return formatMoney({ amountMinor: amount, currency: 'UZS' }, this.i18n.locale(), {
+      withUnit: true,
+    });
+  }
+
+  /** `—` for an average over no orders, never a zero that reads as a figure. */
+  protected somOrDash(amount: number | null): string {
+    return amount === null ? '—' : this.som(amount);
+  }
+
+  /** A pseudonym is long and opaque; the first characters tell two apart, the full value stays in the tooltip. */
+  protected shortSubject(subject: string | null): string {
+    return subject === null ? '—' : subject.slice(0, 10);
   }
 }

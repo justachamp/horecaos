@@ -1,8 +1,8 @@
 <div class="promotions">
   <div class="promotions__toolbar">
     <div>
-      <h1 class="q-subhead">{{ 'marketing.promotions.title' | t }}</h1>
-      <p class="q-body-sm promotions__intro">{{ 'marketing.promotions.intro' | t }}</p>
+      <h1 class="q-subhead">{{ 'title' | pt }}</h1>
+      <p class="q-body-sm promotions__intro">{{ 'intro' | pt }}</p>
     </div>
     @if (!loading() && !denied()) {
       <button
@@ -11,20 +11,20 @@
         (click)="startCreate()"
         data-testid="promotions-create"
       >
-        {{ 'marketing.promotions.create' | t }}
+        {{ 'create' | pt }}
       </button>
     }
   </div>
 
   @if (loading()) {
-    <div class="promotions__skeleton" [attr.aria-label]="'marketing.promotions.loading' | t">
+    <div class="promotions__skeleton" [attr.aria-label]="'loading' | pt">
       @for (i of [1, 2, 3]; track i) {
         <div class="promotions__skeleton-row"></div>
       }
     </div>
   } @else if (denied()) {
     <div class="promotions__denied" data-testid="promotions-denied">
-      <p class="q-body-sm">{{ 'marketing.promotions.denied' | t }}</p>
+      <p class="q-body-sm">{{ 'denied' | pt }}</p>
     </div>
   } @else {
     @if (loadError(); as error) {
@@ -47,7 +47,7 @@
         role="status"
         data-testid="promotions-notice"
       >
-        <span class="q-body-sm">{{ key | t }}</span>
+        <span class="q-body-sm">{{ key | pt }}</span>
       </div>
     }
     @if (pendingApprovalId(); as requestId) {
@@ -56,18 +56,16 @@
         role="status"
         data-testid="promotions-pending"
       >
-        <span class="q-body-sm">{{ 'marketing.promotions.pending' | t: { id: requestId } }}</span>
-        <a class="q-body-sm" [routerLink]="approvalsLink">{{
-          'marketing.promotions.pending.link' | t
-        }}</a>
+        <span class="q-body-sm">{{ 'pending' | pt: { id: requestId } }}</span>
+        <a class="q-body-sm" [routerLink]="approvalsLink">{{ 'pending.link' | pt }}</a>
       </div>
     }
 
     <div class="promotions__layout">
-      <aside class="promotions__list" [attr.aria-label]="'marketing.promotions.list' | t">
+      <aside class="promotions__list" [attr.aria-label]="'list' | pt">
         @if (promotions().length === 0) {
           <p class="q-body-sm promotions__empty" data-testid="promotions-empty">
-            {{ 'marketing.promotions.empty' | t }}
+            {{ 'empty' | pt }}
           </p>
         }
 
@@ -75,7 +73,7 @@
           @for (group of groups(); track group.name) {
             <section class="group" data-testid="promotion-group">
               <h2 class="q-caption group__title">
-                {{ 'marketing.promotions.group' | t: { name: group.name } }}
+                {{ 'group' | pt: { name: group.name } }}
               </h2>
               <q-rule-list
                 [items]="group.items"
@@ -90,13 +88,13 @@
         }
 
         @if (groups().length > 0) {
-          <p class="q-caption promotions__hint">{{ 'marketing.promotions.list.hint' | t }}</p>
+          <p class="q-caption promotions__hint">{{ 'list.hint' | pt }}</p>
         }
 
         @if (archived().length > 0) {
           <details class="group group--archived">
             <summary class="q-caption">
-              {{ 'marketing.promotions.archived' | t: { count: archived().length } }}
+              {{ 'archived' | pt: { count: archived().length } }}
             </summary>
             <ul class="archived-list">
               @for (promotion of archived(); track promotion.promotionId) {
@@ -119,13 +117,13 @@
       <section class="promotions__detail">
         @if (!hasOpenRule()) {
           <p class="q-body-sm promotions__empty" data-testid="promotions-nothing-open">
-            {{ 'marketing.promotions.nothingOpen' | t }}
+            {{ 'nothingOpen' | pt }}
           </p>
         } @else {
           <header class="detail__header">
             <div class="detail__title">
               <h2 class="q-subhead">
-                {{ creating() ? ('marketing.promotions.newTitle' | t) : detail()?.name }}
+                {{ creating() ? ('newTitle' | pt) : detail()?.name }}
               </h2>
               @if (detail(); as open) {
                 <span class="q-caption detail__code">{{ open.code }}</span>
@@ -134,7 +132,7 @@
                   [class.status-badge--live]="open.status === 'ACTIVE'"
                   data-testid="promotion-status"
                 >
-                  {{ statusLabelKey(open.status) | t }}
+                  {{ statusLabelKey(open.status) | pt }}
                 </span>
               }
             </div>
@@ -147,7 +145,7 @@
                   (click)="validate()"
                   data-testid="promotion-validate"
                 >
-                  {{ 'marketing.promotions.action.validate' | t }}
+                  {{ 'action.validate' | pt }}
                 </button>
               }
               @if (canActivate()) {
@@ -158,7 +156,7 @@
                   (click)="openActivation()"
                   data-testid="promotion-activate"
                 >
-                  {{ 'marketing.promotions.action.activate' | t }}
+                  {{ 'action.activate' | pt }}
                 </button>
               }
               @if (canSuspend()) {
@@ -168,7 +166,7 @@
                   (click)="suspend()"
                   data-testid="promotion-suspend"
                 >
-                  {{ 'marketing.promotions.action.suspend' | t }}
+                  {{ 'action.suspend' | pt }}
                 </button>
               }
               @if (canResume()) {
@@ -179,7 +177,7 @@
                   (click)="resume()"
                   data-testid="promotion-resume"
                 >
-                  {{ 'marketing.promotions.action.resume' | t }}
+                  {{ 'action.resume' | pt }}
                 </button>
               }
               @if (canArchive()) {
@@ -189,18 +187,18 @@
                   (click)="openArchive()"
                   data-testid="promotion-archive"
                 >
-                  {{ 'marketing.promotions.action.archive' | t }}
+                  {{ 'action.archive' | pt }}
                 </button>
               }
               <button type="button" class="detail__close" (click)="close()">
-                {{ 'marketing.promotions.action.close' | t }}
+                {{ 'action.close' | pt }}
               </button>
             </div>
           </header>
 
           @if (dirty() && detail() !== null) {
             <p class="q-caption promotions__hint" data-testid="promotion-dirty">
-              {{ 'marketing.promotions.dirty' | t }}
+              {{ 'dirty' | pt }}
             </p>
           }
 
@@ -211,12 +209,7 @@
               data-testid="promotion-validation"
             >
               <p class="q-body-sm validation__verdict">
-                {{
-                  (result.valid
-                    ? 'marketing.promotions.validation.ok'
-                    : 'marketing.promotions.validation.refused'
-                  ) | t
-                }}
+                {{ (result.valid ? 'validation.ok' : 'validation.refused') | pt }}
               </p>
               @if (result.refusals.length > 0) {
                 <ul class="validation__list">
@@ -259,7 +252,7 @@
                 (click)="selectPane(item.id)"
                 [attr.data-testid]="'promotion-pane-' + item.id"
               >
-                {{ item.labelKey | t }}
+                {{ item.labelKey | pt }}
               </button>
             }
           </div>
@@ -305,19 +298,19 @@
               @if (detail(); as open) {
                 @if (open.versions.length === 0) {
                   <p class="q-body-sm promotions__empty">
-                    {{ 'marketing.promotions.history.empty' | t }}
+                    {{ 'history.empty' | pt }}
                   </p>
                 } @else {
                   <p class="q-body-sm promotions__hint">
-                    {{ 'marketing.promotions.history.intro' | t }}
+                    {{ 'history.intro' | pt }}
                   </p>
                   <table class="table" data-testid="promotion-history">
                     <thead>
                       <tr>
-                        <th class="q-caption">{{ 'marketing.promotions.history.version' | t }}</th>
-                        <th class="q-caption">{{ 'marketing.promotions.history.reason' | t }}</th>
-                        <th class="q-caption">{{ 'marketing.promotions.history.by' | t }}</th>
-                        <th class="q-caption">{{ 'marketing.promotions.history.when' | t }}</th>
+                        <th class="q-caption">{{ 'history.version' | pt }}</th>
+                        <th class="q-caption">{{ 'history.reason' | pt }}</th>
+                        <th class="q-caption">{{ 'history.by' | pt }}</th>
+                        <th class="q-caption">{{ 'history.when' | pt }}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -338,8 +331,8 @@
                 @if (open.activatedAt) {
                   <p class="q-caption promotions__hint">
                     {{
-                      'marketing.promotions.history.activated'
-                        | t: { by: open.activatedBy ?? '—', when: formatWhen(open.activatedAt) }
+                      'history.activated'
+                        | pt: { by: open.activatedBy ?? '—', when: formatWhen(open.activatedAt) }
                     }}
                   </p>
                 }
@@ -348,34 +341,34 @@
             @case ('redemptions') {
               @switch (redemptionsState()) {
                 @case ('loading') {
-                  <p class="q-body-sm">{{ 'marketing.promotions.redemptions.loading' | t }}</p>
+                  <p class="q-body-sm">{{ 'redemptions.loading' | pt }}</p>
                 }
                 @case ('ready') {
                   @if (redemptions().length === 0) {
                     <p class="q-body-sm promotions__empty">
-                      {{ 'marketing.promotions.redemptions.empty' | t }}
+                      {{ 'redemptions.empty' | pt }}
                     </p>
                   } @else {
                     <p class="q-body-sm promotions__hint">
-                      {{ 'marketing.promotions.redemptions.intro' | t }}
+                      {{ 'redemptions.intro' | pt }}
                     </p>
                     <table class="table" data-testid="promotion-redemptions">
                       <thead>
                         <tr>
                           <th class="q-caption">
-                            {{ 'marketing.promotions.redemptions.order' | t }}
+                            {{ 'redemptions.order' | pt }}
                           </th>
                           <th class="q-caption">
-                            {{ 'marketing.promotions.redemptions.version' | t }}
+                            {{ 'redemptions.version' | pt }}
                           </th>
                           <th class="q-caption num">
-                            {{ 'marketing.promotions.redemptions.discount' | t }}
+                            {{ 'redemptions.discount' | pt }}
                           </th>
                           <th class="q-caption num">
-                            {{ 'marketing.promotions.redemptions.markup' | t }}
+                            {{ 'redemptions.markup' | pt }}
                           </th>
                           <th class="q-caption">
-                            {{ 'marketing.promotions.redemptions.status' | t }}
+                            {{ 'redemptions.status' | pt }}
                           </th>
                         </tr>
                       </thead>
@@ -398,7 +391,7 @@
                   }
                 }
                 @case ('error') {
-                  <p class="q-body-sm">{{ 'marketing.promotions.redemptions.error' | t }}</p>
+                  <p class="q-body-sm">{{ 'redemptions.error' | pt }}</p>
                 }
                 @default {}
               }
@@ -418,10 +411,10 @@
         (click)="$event.stopPropagation()"
         data-testid="promotion-activation-dialog"
       >
-        <h2 class="q-subhead">{{ 'marketing.promotions.activate.title' | t }}</h2>
-        <p class="q-body-sm">{{ 'marketing.promotions.activate.body' | t }}</p>
+        <h2 class="q-subhead">{{ 'activate.title' | pt }}</h2>
+        <p class="q-body-sm">{{ 'activate.body' | pt }}</p>
         <label class="q-field">
-          <span class="q-caption">{{ 'marketing.promotions.activate.reason' | t }}</span>
+          <span class="q-caption">{{ 'activate.reason' | pt }}</span>
           <textarea
             rows="3"
             maxlength="500"
@@ -432,14 +425,14 @@
         </label>
         <div class="q-modal__actions">
           <button type="button" (click)="closeActivation()">
-            {{ 'marketing.promotions.dialog.cancel' | t }}
+            {{ 'dialog.cancel' | pt }}
           </button>
           <button
             type="button"
             (click)="confirmActivation()"
             data-testid="promotion-activation-confirm"
           >
-            {{ 'marketing.promotions.activate.confirm' | t }}
+            {{ 'activate.confirm' | pt }}
           </button>
         </div>
       </div>
@@ -448,10 +441,10 @@
 
   @if (archiveOpen()) {
     <q-confirm-dialog
-      [title]="'marketing.promotions.archive.title' | t"
-      [body]="'marketing.promotions.archive.body' | t"
-      [confirmLabel]="'marketing.promotions.action.archive' | t"
-      [cancelLabel]="'marketing.promotions.dialog.cancel' | t"
+      [title]="'archive.title' | pt"
+      [body]="'archive.body' | pt"
+      [confirmLabel]="'action.archive' | pt"
+      [cancelLabel]="'dialog.cancel' | pt"
       tone="destructive"
       (confirm)="confirmArchive()"
       (cancel)="closeArchive()"
@@ -460,10 +453,10 @@
 
   @if (discardOpen()) {
     <q-confirm-dialog
-      [title]="'marketing.promotions.discard.title' | t"
-      [body]="'marketing.promotions.discard.body' | t"
-      [confirmLabel]="'marketing.promotions.discard.confirm' | t"
-      [cancelLabel]="'marketing.promotions.discard.keep' | t"
+      [title]="'discard.title' | pt"
+      [body]="'discard.body' | pt"
+      [confirmLabel]="'discard.confirm' | pt"
+      [cancelLabel]="'discard.keep' | pt"
       tone="destructive"
       (confirm)="confirmDiscard()"
       (cancel)="cancelDiscard()"

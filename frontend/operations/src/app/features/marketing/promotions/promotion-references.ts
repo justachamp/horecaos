@@ -4,7 +4,6 @@ import { firstValueFrom } from 'rxjs';
 import { BrandScope } from '../../../core/api/catalog-paths';
 import { CursorState, Page, firstPage, nextPage } from '../../../core/api/page';
 import { I18n } from '../../../core/i18n/i18n';
-import { MessageKey } from '../../../core/i18n/messages.en';
 import { ConditionFixedValue } from '../../../shared/ui/condition-types';
 import { CatalogApi, fetchAllVariantsAtLocation } from '../../catalog/catalog-api';
 import {
@@ -18,6 +17,7 @@ import { LocationView, LocationsApi } from '../../settings/locations/locations-a
 import { PaymentMethodsApi } from '../../settings/payment-methods/payment-methods-api';
 import { ChannelView, SalesChannelsApi } from '../../settings/sales-channels/sales-channels-api';
 import { CHANNEL_TYPES, FULFILLMENT_MODES, PromotionLookups } from './promotion-draft';
+import { PromotionTextKey, promotionText } from './promotion-texts';
 
 /** A generous cap, not a limit a real menu reaches: a brand's dishes, fetched 200 a page. */
 const MAX_PRODUCT_PAGES = 10;
@@ -76,7 +76,7 @@ export class PromotionReferences {
       })),
       channelTypes: CHANNEL_TYPES.map((type) => ({
         value: type,
-        label: this.i18n.t(`marketing.promotions.channelType.${type}` as MessageKey),
+        label: promotionText(this.i18n.locale(), `channelType.${type}` as PromotionTextKey),
       })),
       locations: this.locations().map((location) => ({
         value: location.id,
@@ -84,7 +84,7 @@ export class PromotionReferences {
       })),
       fulfillmentModes: FULFILLMENT_MODES.map((mode) => ({
         value: mode,
-        label: this.i18n.t(`marketing.promotions.fulfillment.${mode}` as MessageKey),
+        label: promotionText(this.i18n.locale(), `fulfillment.${mode}` as PromotionTextKey),
       })),
       paymentMethods: this.paymentMethods().map((method) => ({
         value: method.code,

@@ -2,13 +2,12 @@ import { BrandScope } from './catalog-paths';
 
 /**
  * A brand's automatic promotions and markups (`PromotionController`, ADR 0140,
- * operations §6.1 Promotions) and the 7.9 promotion reports.
+ * operations §6.1 Promotions).
  *
- * The authoring surface is brand-scoped on the ADR 0031 `/api/v1/operations/**`
- * prefix, beside `promo-codes-paths.ts` (ADR 0072's coupon-gated face of the same
- * `pricing.promotions` row). The two reporting reads are tenant-scoped under the
- * reporting prefix, because a report spans brands and reads
- * `reporting.fact_promotion_redemption` alone (ADR 0023).
+ * Brand-scoped on the ADR 0031 `/api/v1/operations/**` prefix, beside
+ * `promo-codes-paths.ts` (ADR 0072's coupon-gated face of the same
+ * `pricing.promotions` row). The 7.9 promotion reports are tenant-scoped reads and
+ * live in `reports-paths.ts`.
  */
 const OPERATIONS = '/api/v1/operations';
 
@@ -59,15 +58,5 @@ export const promotionPaths = {
   /** `POST`, no writes: the real engine over a synthetic cart, with the decision trace. */
   simulate(scope: BrandScope): string {
     return `${this.base(scope)}/simulate`;
-  },
-
-  /** Report 7.9: one row per promotion over a closed date range (`REPORTING_READ`). */
-  reportSummary(tenantId: string): string {
-    return `/api/v1/tenants/${encodeURIComponent(tenantId)}/reporting/promotions/summary`;
-  },
-
-  /** Report 7.9: the redemption log, newest first, at most 500 rows. */
-  reportRedemptions(tenantId: string): string {
-    return `/api/v1/tenants/${encodeURIComponent(tenantId)}/reporting/promotions/redemptions`;
   },
 } as const;

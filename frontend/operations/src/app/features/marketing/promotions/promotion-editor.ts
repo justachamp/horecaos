@@ -9,8 +9,6 @@ import {
 } from '@angular/core';
 
 import { I18n } from '../../../core/i18n/i18n';
-import { MessageKey } from '../../../core/i18n/messages.en';
-import { TPipe } from '../../../core/i18n/t.pipe';
 import { ConditionBuilder } from '../../../shared/ui/condition-builder';
 import {
   ConditionFixedValue,
@@ -20,6 +18,7 @@ import {
 import { MoneyInput } from '../../../shared/ui/money-input';
 import { PercentInput } from '../../../shared/ui/percent-input';
 import { PromotionChipPicker } from './chip-picker';
+import { PromotionTextKey, PromotionTextPipe } from './promotion-texts';
 import {
   ActionDraft,
   PromotionActionType,
@@ -75,7 +74,7 @@ function shapeOf(type: PromotionActionType): ActionShape {
  */
 @Component({
   selector: 'q-promotion-editor',
-  imports: [TPipe, ConditionBuilder, MoneyInput, PercentInput, PromotionChipPicker],
+  imports: [PromotionTextPipe, ConditionBuilder, MoneyInput, PercentInput, PromotionChipPicker],
   templateUrl: './promotion-editor.html',
   styleUrl: './promotion-editor.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -123,24 +122,24 @@ export class PromotionEditor {
     return shapeOf(type);
   }
 
-  protected kindLabelKey(kind: PromotionKind): MessageKey {
-    return `marketing.promotions.kind.${kind}` as MessageKey;
+  protected kindLabelKey(kind: PromotionKind): PromotionTextKey {
+    return `kind.${kind}` as PromotionTextKey;
   }
 
-  protected scopeLabelKey(scope: PromotionScope): MessageKey {
-    return `marketing.promotions.scope.${scope}` as MessageKey;
+  protected scopeLabelKey(scope: PromotionScope): PromotionTextKey {
+    return `scope.${scope}` as PromotionTextKey;
   }
 
-  protected actionLabelKey(type: PromotionActionType): MessageKey {
-    return `marketing.promotions.action.${type}` as MessageKey;
+  protected actionLabelKey(type: PromotionActionType): PromotionTextKey {
+    return `action.${type}` as PromotionTextKey;
   }
 
-  protected accrualLabelKey(value: LoyaltyAccrual): MessageKey {
-    return `marketing.promotions.loyalty.accrual.${value}` as MessageKey;
+  protected accrualLabelKey(value: LoyaltyAccrual): PromotionTextKey {
+    return `loyalty.accrual.${value}` as PromotionTextKey;
   }
 
-  protected redemptionLabelKey(value: LoyaltyRedemption): MessageKey {
-    return `marketing.promotions.loyalty.redemption.${value}` as MessageKey;
+  protected redemptionLabelKey(value: LoyaltyRedemption): PromotionTextKey {
+    return `loyalty.redemption.${value}` as PromotionTextKey;
   }
 
   protected patch(change: Partial<PromotionDraft>): void {

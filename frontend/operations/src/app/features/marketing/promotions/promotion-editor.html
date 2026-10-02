@@ -2,7 +2,7 @@
   @if (unsupported().length > 0) {
     <div class="editor__notice" role="alert" data-testid="promotion-unsupported">
       <span class="q-body-sm">{{
-        'marketing.promotions.editor.unsupported' | t: { types: unsupported().join(', ') }
+        'editor.unsupported' | pt: { types: unsupported().join(', ') }
       }}</span>
     </div>
   }
@@ -14,10 +14,10 @@
   }
 
   <fieldset class="editor__section" [disabled]="readOnly()">
-    <legend class="q-caption">{{ 'marketing.promotions.editor.basics' | t }}</legend>
+    <legend class="q-caption">{{ 'editor.basics' | pt }}</legend>
 
     <label class="q-field">
-      <span class="q-caption">{{ 'marketing.promotions.editor.name' | t }}</span>
+      <span class="q-caption">{{ 'editor.name' | pt }}</span>
       <input
         type="text"
         maxlength="200"
@@ -28,7 +28,7 @@
     </label>
 
     <label class="q-field">
-      <span class="q-caption">{{ 'marketing.promotions.editor.code' | t }}</span>
+      <span class="q-caption">{{ 'editor.code' | pt }}</span>
       <input
         type="text"
         maxlength="64"
@@ -36,38 +36,38 @@
         (input)="patch({ code: $any($event.target).value })"
         data-testid="promotion-code"
       />
-      <span class="q-caption editor__hint">{{ 'marketing.promotions.editor.code.hint' | t }}</span>
+      <span class="q-caption editor__hint">{{ 'editor.code.hint' | pt }}</span>
     </label>
 
     <div class="editor__row">
       <label class="q-field">
-        <span class="q-caption">{{ 'marketing.promotions.editor.kind' | t }}</span>
+        <span class="q-caption">{{ 'editor.kind' | pt }}</span>
         <select
           [value]="draft().kind"
           (change)="setKind($any($event.target).value)"
           data-testid="promotion-kind"
         >
           @for (kind of kinds; track kind) {
-            <option [value]="kind">{{ kindLabelKey(kind) | t }}</option>
+            <option [value]="kind">{{ kindLabelKey(kind) | pt }}</option>
           }
         </select>
       </label>
 
       <label class="q-field">
-        <span class="q-caption">{{ 'marketing.promotions.editor.scope' | t }}</span>
+        <span class="q-caption">{{ 'editor.scope' | pt }}</span>
         <select
           [value]="draft().scope"
           (change)="setScope($any($event.target).value)"
           data-testid="promotion-scope"
         >
           @for (scope of scopes(); track scope) {
-            <option [value]="scope">{{ scopeLabelKey(scope) | t }}</option>
+            <option [value]="scope">{{ scopeLabelKey(scope) | pt }}</option>
           }
         </select>
       </label>
 
       <label class="q-field">
-        <span class="q-caption">{{ 'marketing.promotions.editor.currency' | t }}</span>
+        <span class="q-caption">{{ 'editor.currency' | pt }}</span>
         <input
           type="text"
           maxlength="3"
@@ -79,11 +79,11 @@
     </div>
 
     @if (draft().kind === 'MARKUP') {
-      <p class="q-caption editor__hint">{{ 'marketing.promotions.editor.markupNote' | t }}</p>
+      <p class="q-caption editor__hint">{{ 'editor.markupNote' | pt }}</p>
     }
 
     <label class="q-field">
-      <span class="q-caption">{{ 'marketing.promotions.editor.group' | t }}</span>
+      <span class="q-caption">{{ 'editor.group' | pt }}</span>
       <input
         type="text"
         maxlength="64"
@@ -97,7 +97,7 @@
           <option [value]="group"></option>
         }
       </datalist>
-      <span class="q-caption editor__hint">{{ 'marketing.promotions.editor.group.hint' | t }}</span>
+      <span class="q-caption editor__hint">{{ 'editor.group.hint' | pt }}</span>
     </label>
 
     @if (draft().kind === 'DISCOUNT') {
@@ -108,19 +108,17 @@
           (change)="patch({ exclusive: $any($event.target).checked })"
           data-testid="promotion-exclusive"
         />
-        <span class="q-caption">{{ 'marketing.promotions.editor.exclusive' | t }}</span>
+        <span class="q-caption">{{ 'editor.exclusive' | pt }}</span>
       </label>
-      <span class="q-caption editor__hint">{{
-        'marketing.promotions.editor.exclusive.hint' | t
-      }}</span>
+      <span class="q-caption editor__hint">{{ 'editor.exclusive.hint' | pt }}</span>
     }
   </fieldset>
 
   <fieldset class="editor__section" [disabled]="readOnly()">
-    <legend class="q-caption">{{ 'marketing.promotions.editor.window' | t }}</legend>
+    <legend class="q-caption">{{ 'editor.window' | pt }}</legend>
     <div class="editor__row">
       <label class="q-field">
-        <span class="q-caption">{{ 'marketing.promotions.editor.validFrom' | t }}</span>
+        <span class="q-caption">{{ 'editor.validFrom' | pt }}</span>
         <input
           type="datetime-local"
           [value]="draft().validFrom"
@@ -129,7 +127,7 @@
         />
       </label>
       <label class="q-field">
-        <span class="q-caption">{{ 'marketing.promotions.editor.validUntil' | t }}</span>
+        <span class="q-caption">{{ 'editor.validUntil' | pt }}</span>
         <input
           type="datetime-local"
           [value]="draft().validUntil"
@@ -138,16 +136,16 @@
         />
       </label>
     </div>
-    <span class="q-caption editor__hint">{{ 'marketing.promotions.editor.window.hint' | t }}</span>
+    <span class="q-caption editor__hint">{{ 'editor.window.hint' | pt }}</span>
   </fieldset>
 
   <fieldset class="editor__section" [disabled]="readOnly()">
-    <legend class="q-caption">{{ 'marketing.promotions.editor.conditions' | t }}</legend>
-    <p class="q-caption editor__hint">{{ 'marketing.promotions.editor.conditions.hint' | t }}</p>
+    <legend class="q-caption">{{ 'editor.conditions' | pt }}</legend>
+    <p class="q-caption editor__hint">{{ 'editor.conditions.hint' | pt }}</p>
 
     @if (locations().length > 0) {
       <label class="q-field editor__menu-branch">
-        <span class="q-caption">{{ 'marketing.promotions.editor.menuBranch' | t }}</span>
+        <span class="q-caption">{{ 'editor.menuBranch' | pt }}</span>
         <select
           [value]="menuLocationId() ?? ''"
           (change)="menuLocationChange.emit($any($event.target).value)"
@@ -158,9 +156,7 @@
           }
         </select>
         @if (menuLoading()) {
-          <span class="q-caption editor__hint">{{
-            'marketing.promotions.editor.menuLoading' | t
-          }}</span>
+          <span class="q-caption editor__hint">{{ 'editor.menuLoading' | pt }}</span>
         }
       </label>
     }
@@ -174,26 +170,26 @@
   </fieldset>
 
   <fieldset class="editor__section" [disabled]="readOnly()">
-    <legend class="q-caption">{{ 'marketing.promotions.editor.actions' | t }}</legend>
+    <legend class="q-caption">{{ 'editor.actions' | pt }}</legend>
 
     @for (action of draft().actions; track action.id; let i = $index) {
       <div class="action-row" data-testid="promotion-action">
         <div class="action-row__head">
           <select
             class="action-row__type"
-            [attr.aria-label]="'marketing.promotions.editor.actionType' | t"
+            [attr.aria-label]="'editor.actionType' | pt"
             [value]="action.type"
             (change)="updateAction(i, { type: $any($event.target).value })"
             data-testid="promotion-action-type"
           >
             @for (type of actionTypes(); track type) {
-              <option [value]="type">{{ actionLabelKey(type) | t }}</option>
+              <option [value]="type">{{ actionLabelKey(type) | pt }}</option>
             }
           </select>
           <button
             type="button"
             class="action-row__remove"
-            [attr.aria-label]="'marketing.promotions.editor.removeAction' | t"
+            [attr.aria-label]="'editor.removeAction' | pt"
             [disabled]="draft().actions.length <= 1"
             (click)="removeAction(i)"
           >
@@ -204,10 +200,10 @@
         @switch (shape(action.type)) {
           @case ('PERCENT') {
             <label class="q-field">
-              <span class="q-caption">{{ 'marketing.promotions.editor.percent' | t }}</span>
+              <span class="q-caption">{{ 'editor.percent' | pt }}</span>
               <q-percent-input
                 [basisPoints]="action.basisPoints"
-                [ariaLabel]="'marketing.promotions.editor.percent' | t"
+                [ariaLabel]="'editor.percent' | pt"
                 (basisPointsChange)="updateAction(i, { basisPoints: $event })"
               />
             </label>
@@ -215,14 +211,11 @@
           @case ('AMOUNT') {
             <label class="q-field">
               <span class="q-caption">{{
-                (action.type === 'ITEM_FIXED_PRICE'
-                  ? 'marketing.promotions.editor.unitPrice'
-                  : 'marketing.promotions.editor.amount'
-                ) | t
+                (action.type === 'ITEM_FIXED_PRICE' ? 'editor.unitPrice' : 'editor.amount') | pt
               }}</span>
               <q-money-input
                 [valueMinor]="action.amountMinor"
-                [ariaLabel]="'marketing.promotions.editor.amount' | t"
+                [ariaLabel]="'editor.amount' | pt"
                 (valueMinorChange)="updateAction(i, { amountMinor: $event })"
               />
             </label>
@@ -230,34 +223,34 @@
           @case ('REDUCED') {
             <div class="editor__row">
               <label class="q-field">
-                <span class="q-caption">{{ 'marketing.promotions.editor.reduceBy' | t }}</span>
+                <span class="q-caption">{{ 'editor.reduceBy' | pt }}</span>
                 <select
                   [value]="action.reduceBy"
                   (change)="updateAction(i, { reduceBy: $any($event.target).value })"
                 >
                   <option value="PERCENT">
-                    {{ 'marketing.promotions.editor.reduceBy.PERCENT' | t }}
+                    {{ 'editor.reduceBy.PERCENT' | pt }}
                   </option>
                   <option value="AMOUNT">
-                    {{ 'marketing.promotions.editor.reduceBy.AMOUNT' | t }}
+                    {{ 'editor.reduceBy.AMOUNT' | pt }}
                   </option>
                 </select>
               </label>
               @if (action.reduceBy === 'PERCENT') {
                 <label class="q-field">
-                  <span class="q-caption">{{ 'marketing.promotions.editor.percent' | t }}</span>
+                  <span class="q-caption">{{ 'editor.percent' | pt }}</span>
                   <q-percent-input
                     [basisPoints]="action.basisPoints"
-                    [ariaLabel]="'marketing.promotions.editor.percent' | t"
+                    [ariaLabel]="'editor.percent' | pt"
                     (basisPointsChange)="updateAction(i, { basisPoints: $event })"
                   />
                 </label>
               } @else {
                 <label class="q-field">
-                  <span class="q-caption">{{ 'marketing.promotions.editor.amount' | t }}</span>
+                  <span class="q-caption">{{ 'editor.amount' | pt }}</span>
                   <q-money-input
                     [valueMinor]="action.amountMinor"
-                    [ariaLabel]="'marketing.promotions.editor.amount' | t"
+                    [ariaLabel]="'editor.amount' | pt"
                     (valueMinorChange)="updateAction(i, { amountMinor: $event })"
                   />
                 </label>
@@ -266,7 +259,7 @@
           }
           @case ('GIFT') {
             <div class="q-field">
-              <span class="q-caption">{{ 'marketing.promotions.editor.gift' | t }}</span>
+              <span class="q-caption">{{ 'editor.gift' | pt }}</span>
               <q-promotion-chip-picker
                 [options]="lookups().variants"
                 [selected]="action.variantIds"
@@ -275,7 +268,7 @@
             </div>
             <div class="editor__row">
               <label class="q-field">
-                <span class="q-caption">{{ 'marketing.promotions.editor.giftQuantity' | t }}</span>
+                <span class="q-caption">{{ 'editor.giftQuantity' | pt }}</span>
                 <input
                   type="number"
                   min="1"
@@ -285,23 +278,23 @@
                 />
               </label>
               <label class="q-field">
-                <span class="q-caption">{{ 'marketing.promotions.editor.giftMode' | t }}</span>
+                <span class="q-caption">{{ 'editor.giftMode' | pt }}</span>
                 <select
                   [value]="action.mode"
                   (change)="updateAction(i, { mode: $any($event.target).value })"
                   data-testid="promotion-gift-mode"
                 >
                   <option value="ONCE">
-                    {{ 'marketing.promotions.editor.giftMode.ONCE' | t }}
+                    {{ 'editor.giftMode.ONCE' | pt }}
                   </option>
                   <option value="PER_MULTIPLE">
-                    {{ 'marketing.promotions.editor.giftMode.PER_MULTIPLE' | t }}
+                    {{ 'editor.giftMode.PER_MULTIPLE' | pt }}
                   </option>
                 </select>
               </label>
               @if (action.mode === 'PER_MULTIPLE') {
                 <label class="q-field">
-                  <span class="q-caption">{{ 'marketing.promotions.editor.giftTrigger' | t }}</span>
+                  <span class="q-caption">{{ 'editor.giftTrigger' | pt }}</span>
                   <input
                     type="number"
                     min="1"
@@ -311,21 +304,19 @@
                 </label>
               }
             </div>
-            <span class="q-caption editor__hint">{{
-              'marketing.promotions.editor.gift.hint' | t
-            }}</span>
+            <span class="q-caption editor__hint">{{ 'editor.gift.hint' | pt }}</span>
           }
         }
       </div>
     }
 
     <button type="button" class="secondary" (click)="addAction()">
-      {{ 'marketing.promotions.editor.addAction' | t }}
+      {{ 'editor.addAction' | pt }}
     </button>
   </fieldset>
 
   <fieldset class="editor__section" [disabled]="readOnly()">
-    <legend class="q-caption">{{ 'marketing.promotions.editor.limits' | t }}</legend>
+    <legend class="q-caption">{{ 'editor.limits' | pt }}</legend>
 
     @if (draft().kind === 'DISCOUNT') {
       <label class="q-field q-field--checkbox">
@@ -334,14 +325,14 @@
           [checked]="draft().hasCap"
           (change)="patch({ hasCap: $any($event.target).checked })"
         />
-        <span class="q-caption">{{ 'marketing.promotions.editor.hasCap' | t }}</span>
+        <span class="q-caption">{{ 'editor.hasCap' | pt }}</span>
       </label>
       @if (draft().hasCap) {
         <label class="q-field">
-          <span class="q-caption">{{ 'marketing.promotions.editor.cap' | t }}</span>
+          <span class="q-caption">{{ 'editor.cap' | pt }}</span>
           <q-money-input
             [valueMinor]="draft().maximumDiscountMinor"
-            [ariaLabel]="'marketing.promotions.editor.cap' | t"
+            [ariaLabel]="'editor.cap' | pt"
             (valueMinorChange)="patch({ maximumDiscountMinor: $event })"
           />
         </label>
@@ -355,11 +346,11 @@
         (change)="patch({ hasTotalLimit: $any($event.target).checked })"
         data-testid="promotion-has-total-limit"
       />
-      <span class="q-caption">{{ 'marketing.promotions.editor.hasTotalLimit' | t }}</span>
+      <span class="q-caption">{{ 'editor.hasTotalLimit' | pt }}</span>
     </label>
     @if (draft().hasTotalLimit) {
       <label class="q-field">
-        <span class="q-caption">{{ 'marketing.promotions.editor.totalLimit' | t }}</span>
+        <span class="q-caption">{{ 'editor.totalLimit' | pt }}</span>
         <input
           type="number"
           min="1"
@@ -376,11 +367,11 @@
         (change)="patch({ hasCustomerLimit: $any($event.target).checked })"
         data-testid="promotion-has-customer-limit"
       />
-      <span class="q-caption">{{ 'marketing.promotions.editor.hasCustomerLimit' | t }}</span>
+      <span class="q-caption">{{ 'editor.hasCustomerLimit' | pt }}</span>
     </label>
     @if (draft().hasCustomerLimit) {
       <label class="q-field">
-        <span class="q-caption">{{ 'marketing.promotions.editor.customerLimit' | t }}</span>
+        <span class="q-caption">{{ 'editor.customerLimit' | pt }}</span>
         <input
           type="number"
           min="1"
@@ -389,33 +380,33 @@
         />
       </label>
     }
-    <span class="q-caption editor__hint">{{ 'marketing.promotions.editor.limits.hint' | t }}</span>
+    <span class="q-caption editor__hint">{{ 'editor.limits.hint' | pt }}</span>
   </fieldset>
 
   <fieldset class="editor__section" [disabled]="readOnly()">
-    <legend class="q-caption">{{ 'marketing.promotions.editor.loyalty' | t }}</legend>
+    <legend class="q-caption">{{ 'editor.loyalty' | pt }}</legend>
     <div class="editor__row">
       <label class="q-field">
-        <span class="q-caption">{{ 'marketing.promotions.editor.loyaltyAccrual' | t }}</span>
+        <span class="q-caption">{{ 'editor.loyaltyAccrual' | pt }}</span>
         <select
           [value]="draft().loyaltyAccrual"
           (change)="patch({ loyaltyAccrual: $any($event.target).value })"
           data-testid="promotion-loyalty-accrual"
         >
           @for (choice of accrualChoices; track choice) {
-            <option [value]="choice">{{ accrualLabelKey(choice) | t }}</option>
+            <option [value]="choice">{{ accrualLabelKey(choice) | pt }}</option>
           }
         </select>
       </label>
       <label class="q-field">
-        <span class="q-caption">{{ 'marketing.promotions.editor.loyaltyRedemption' | t }}</span>
+        <span class="q-caption">{{ 'editor.loyaltyRedemption' | pt }}</span>
         <select
           [value]="draft().loyaltyRedemption"
           (change)="patch({ loyaltyRedemption: $any($event.target).value })"
           data-testid="promotion-loyalty-redemption"
         >
           @for (choice of redemptionChoices; track choice) {
-            <option [value]="choice">{{ redemptionLabelKey(choice) | t }}</option>
+            <option [value]="choice">{{ redemptionLabelKey(choice) | pt }}</option>
           }
         </select>
       </label>
@@ -425,7 +416,7 @@
   @if (!readOnly() && problems().length > 0) {
     <ul class="editor__problems" data-testid="promotion-problems">
       @for (problem of problems(); track problem) {
-        <li class="q-body-sm">{{ problem | t }}</li>
+        <li class="q-body-sm">{{ problem | pt }}</li>
       }
     </ul>
   }
@@ -433,12 +424,10 @@
   @if (!readOnly()) {
     <div class="editor__actions">
       <button type="button" class="secondary" (click)="cancel.emit()">
-        {{ 'marketing.promotions.editor.cancel' | t }}
+        {{ 'editor.cancel' | pt }}
       </button>
       <button type="submit" class="primary" [disabled]="!canSave()" data-testid="promotion-save">
-        {{
-          (saving() ? 'marketing.promotions.editor.saving' : 'marketing.promotions.editor.save') | t
-        }}
+        {{ (saving() ? 'editor.saving' : 'editor.save') | pt }}
       </button>
     </div>
   }

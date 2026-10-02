@@ -12,13 +12,12 @@ import { ApiError } from '../../../core/api/problem-details';
 import { BrandScope } from '../../../core/api/catalog-paths';
 import { formatMoney } from '../../../core/format/money';
 import { I18n } from '../../../core/i18n/i18n';
-import { MessageKey } from '../../../core/i18n/messages.en';
-import { TPipe } from '../../../core/i18n/t.pipe';
 import { Combobox, ComboboxOption } from '../../../shared/ui/combobox';
 import { ConditionFixedValue, ConditionTypeDescriptor } from '../../../shared/ui/condition-types';
 import { ExternalRuleResult, RuleSimulator } from '../../../shared/ui/rule-simulator';
 import { describeApiError } from '../../orders/order-errors';
 import { FULFILLMENT_MODES, localInputToIso } from './promotion-draft';
+import { PromotionTextKey, PromotionTextPipe, promotionText } from './promotion-texts';
 import {
   PromotionBody,
   PromotionsApi,
@@ -66,7 +65,7 @@ export interface ReplayChoice {
  */
 @Component({
   selector: 'q-promotion-simulator',
-  imports: [TPipe, Combobox, RuleSimulator],
+  imports: [PromotionTextPipe, Combobox, RuleSimulator],
   templateUrl: './promotion-simulator.html',
   styleUrl: './promotion-simulator.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -157,35 +156,39 @@ export class PromotionSimulator {
 
   protected adjustmentLabel(adjustment: { type: string; promotionId: string | null }): string {
     const code = adjustment.promotionId ? this.traceLabels().get(adjustment.promotionId) : null;
-    const type = this.i18n.t(`marketing.promotions.adjustment.${adjustment.type}` as MessageKey);
+    const type = this.text(`adjustment.${adjustment.type}` as PromotionTextKey);
     return code ? `${type} · ${code}` : type;
   }
 
-  protected modeLabelKey(mode: string): MessageKey {
-    return `marketing.promotions.fulfillment.${mode}` as MessageKey;
+  protected modeLabelKey(mode: string): PromotionTextKey {
+    return `fulfillment.${mode}` as PromotionTextKey;
+  }
+
+  private text(key: PromotionTextKey, values?: Record<string, string | number>): string {
+    return promotionText(this.i18n.locale(), key, values);
   }
 
   private describeVerdict(entry: TraceEntry, currency: string): string {
-    const t = (key: MessageKey, values?: Record<string, string | number>): string =>
-      this.i18n.t(key, values);
+    const t = (key: PromotionTextKey, values?: Record<string, string | number>): string =>
+      this.text(key, values);
     const names = entry.lostTo.map((id) => this.traceLabels().get(id) ?? id).join(', ');
     switch (entry.verdict) {
       case 'APPLIED':
-        return t('marketing.promotions.verdict.APPLIED', {
+        return t('verdict.APPLIED', {
           amount: formatMoney({ amountMinor: entry.benefitMinor, currency }, this.i18n.locale(), {
             withUnit: true,
           }),
         });
       case 'CONDITION_FAILED':
         return entry.conditionSequence === null
-          ? t('marketing.promotions.verdict.CONDITION_FAILED.any')
-          : t('marketing.promotions.verdict.CONDITION_FAILED', { n: entry.conditionSequence });
+          ? t('verdict.CONDITION_FAILED.any')
+          : t('verdict.CONDITION_FAILED', { n: entry.conditionSequence });
       case 'LOST_TO':
-        return t('marketing.promotions.verdict.LOST_TO', { others: names });
+        return t('verdict.LOST_TO', { others: names });
       case 'SUPPRESSED_BY_EXCLUSIVE':
-        return t('marketing.promotions.verdict.SUPPRESSED_BY_EXCLUSIVE', { others: names });
+        return t('verdict.SUPPRESSED_BY_EXCLUSIVE', { others: names });
       default:
-        return t(`marketing.promotions.verdict.${entry.verdict}` as MessageKey);
+        return t(`verdict.${entry.verdict}` as PromotionTextKey);
     }
   }
 

@@ -279,9 +279,189 @@
             }
           </section>
         }
-      }
+        @case ('promotions') {
+          <section class="panel promotions-tab" data-testid="marketing-report-promotions">
+            <p class="q-body-sm intro">{{ 'report.intro' | pt }}</p>
 
-      <p class="q-body-sm not-built-note">{{ 'reports.marketing.promoSummaryNotBuilt' | t }}</p>
+            <q-date-range-picker
+              [start]="promoRange().from"
+              [end]="promoRange().to"
+              (rangeChange)="onPromoRange($event)"
+            />
+
+            @switch (promoState()) {
+              @case ('loading') {
+                <p class="q-body-sm">{{ 'report.loading' | pt }}</p>
+              }
+              @case ('error') {
+                <div class="error-band" role="alert">
+                  <span class="q-body-sm">{{ 'reports.error.generic' | t }}</span>
+                  <button type="button" class="secondary" (click)="retryPromotions()">
+                    {{ 'reports.error.retry' | t }}
+                  </button>
+                </div>
+              }
+              @case ('ready') {
+                <q-provenance-banner
+                  [provenance]="promoProvenance()"
+                  [requestedTo]="promoRange().to"
+                />
+
+                @if (promoSummary().length === 0) {
+                  <p class="q-body-sm muted" data-testid="promotion-summary-empty">
+                    {{ 'report.empty' | pt }}
+                  </p>
+                } @else {
+                  <table class="table" data-testid="promotion-summary">
+                    <thead>
+                      <tr>
+                        <th class="q-caption">
+                          {{ 'report.column.promotion' | pt }}
+                        </th>
+                        <th class="q-caption">
+                          {{ 'report.column.source' | pt }}
+                        </th>
+                        <th class="q-caption num">
+                          {{ 'report.column.redemptions' | pt }}
+                        </th>
+                        <th class="q-caption num">
+                          {{ 'report.column.customers' | pt }}
+                        </th>
+                        <th class="q-caption num">
+                          {{ 'report.column.discount' | pt }}
+                        </th>
+                        <th class="q-caption num">
+                          {{ 'report.column.markup' | pt }}
+                        </th>
+                        <th class="q-caption num">
+                          {{ 'report.column.revenue' | pt }}
+                        </th>
+                        <th class="q-caption num">
+                          {{ 'report.column.checkWith' | pt }}
+                        </th>
+                        <th class="q-caption num">
+                          {{ 'report.column.checkWithout' | pt }}
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (row of promoSummary(); track row.promotionId + row.sourceKind) {
+                        <tr
+                          class="campaign-row"
+                          [class.campaign-row--selected]="
+                            promoSelected()?.promotionId === row.promotionId
+                          "
+                          (click)="selectPromotion(row)"
+                          data-testid="promotion-summary-row"
+                        >
+                          <td class="q-body-sm">{{ row.promotionCode }}</td>
+                          <td class="q-body-sm">{{ sourceLabelKey(row.sourceKind) | pt }}</td>
+                          <td class="q-body-sm q-tnum num">{{ row.redemptions }}</td>
+                          <td class="q-body-sm q-tnum num">{{ row.uniqueCustomers }}</td>
+                          <td class="q-body-sm q-tnum num">{{ som(row.discountSom) }}</td>
+                          <td class="q-body-sm q-tnum num">{{ som(row.markupSom) }}</td>
+                          <td class="q-body-sm q-tnum num">{{ som(row.revenueWithSom) }}</td>
+                          <td class="q-body-sm q-tnum num">
+                            {{ somOrDash(row.averageCheckWithSom) }}
+                          </td>
+                          <td class="q-body-sm q-tnum num">
+                            {{ somOrDash(row.averageCheckWithoutSom) }}
+                          </td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                  <p class="q-caption muted">{{ 'report.comparison' | pt }}</p>
+                }
+
+                <h2 class="q-body-sm log-title">
+                  @if (promoSelected(); as chosen) {
+                    {{ 'report.log.forPromotion' | pt: { code: chosen.promotionCode } }}
+                    <button type="button" class="secondary" (click)="selectPromotion(null)">
+                      {{ 'report.log.all' | pt }}
+                    </button>
+                  } @else {
+                    {{ 'report.log.title' | pt }}
+                  }
+                </h2>
+
+                @switch (promoLogState()) {
+                  @case ('loading') {
+                    <p class="q-body-sm">{{ 'report.loading' | pt }}</p>
+                  }
+                  @case ('error') {
+                    <div class="error-band" role="alert">
+                      <span class="q-body-sm">{{ 'reports.error.generic' | t }}</span>
+                    </div>
+                  }
+                  @case ('ready') {
+                    @if (promoLog().length === 0) {
+                      <p class="q-body-sm muted">
+                        {{ 'report.log.empty' | pt }}
+                      </p>
+                    } @else {
+                      <p class="q-caption muted">
+                        {{ 'report.log.intro' | pt }}
+                      </p>
+                      <table class="table" data-testid="promotion-log">
+                        <thead>
+                          <tr>
+                            <th class="q-caption">
+                              {{ 'report.log.date' | pt }}
+                            </th>
+                            <th class="q-caption">
+                              {{ 'report.column.promotion' | pt }}
+                            </th>
+                            <th class="q-caption">
+                              {{ 'report.log.order' | pt }}
+                            </th>
+                            <th class="q-caption">
+                              {{ 'report.log.customer' | pt }}
+                            </th>
+                            <th class="q-caption num">
+                              {{ 'report.column.discount' | pt }}
+                            </th>
+                            <th class="q-caption num">
+                              {{ 'report.column.markup' | pt }}
+                            </th>
+                            <th class="q-caption">
+                              {{ 'report.log.status' | pt }}
+                            </th>
+                            <th class="q-caption">
+                              {{ 'report.log.channel' | pt }}
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          @for (row of promoLog(); track row.redemptionId) {
+                            <tr data-testid="promotion-log-row">
+                              <td class="q-body-sm q-tnum">{{ formatWhen(row.redeemedAt) }}</td>
+                              <td class="q-body-sm">
+                                {{ row.promotionCode }}
+                                <span class="q-caption muted">v{{ row.definitionVersion }}</span>
+                              </td>
+                              <td class="q-body-sm q-tnum">{{ row.orderId }}</td>
+                              <td class="q-body-sm q-tnum" [attr.title]="row.customerSubject">
+                                {{ shortSubject(row.customerSubject) }}
+                              </td>
+                              <td class="q-body-sm q-tnum num">{{ som(row.discountSom) }}</td>
+                              <td class="q-body-sm q-tnum num">{{ som(row.markupSom) }}</td>
+                              <td class="q-body-sm">{{ orderStatus(row.orderStatus) }}</td>
+                              <td class="q-body-sm">{{ row.channelCode ?? '—' }}</td>
+                            </tr>
+                          }
+                        </tbody>
+                      </table>
+                    }
+                  }
+                  @default {}
+                }
+              }
+              @default {}
+            }
+          </section>
+        }
+      }
     }
   }
 </div>

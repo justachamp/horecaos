@@ -14,8 +14,6 @@ import { CurrentBrand } from '../../../core/auth/current-brand';
 import { formatDateTime } from '../../../core/format/datetime';
 import { formatMoney } from '../../../core/format/money';
 import { I18n } from '../../../core/i18n/i18n';
-import { MessageKey } from '../../../core/i18n/messages.en';
-import { TPipe } from '../../../core/i18n/t.pipe';
 import { ConfirmDialog } from '../../../shared/ui/confirm-dialog';
 import {
   RuleEnabledChange,
@@ -35,6 +33,12 @@ import {
 } from './promotion-draft';
 import { PromotionEditor } from './promotion-editor';
 import { PromotionReferences } from './promotion-references';
+import {
+  PROMOTION_TEXTS,
+  PromotionTextKey,
+  PromotionTextPipe,
+  promotionText,
+} from './promotion-texts';
 import { PromotionSimulator, ReplayChoice } from './promotion-simulator';
 import {
   PromotionRedemption,
@@ -84,7 +88,14 @@ interface GroupView {
  */
 @Component({
   selector: 'q-promotions-page',
-  imports: [TPipe, RuleList, PromotionEditor, PromotionSimulator, ConfirmDialog, RouterLink],
+  imports: [
+    PromotionTextPipe,
+    RuleList,
+    PromotionEditor,
+    PromotionSimulator,
+    ConfirmDialog,
+    RouterLink,
+  ],
   providers: [PromotionReferences],
   templateUrl: './promotions-page.html',
   styleUrl: './promotions-page.css',
@@ -118,7 +129,7 @@ export class PromotionsPage implements OnInit {
   protected readonly saving = signal(false);
   protected readonly acting = signal<string | null>(null);
   protected readonly actionError = signal<string | null>(null);
-  protected readonly notice = signal<MessageKey | null>(null);
+  protected readonly notice = signal<PromotionTextKey | null>(null);
   protected readonly validation = signal<ValidationResult | null>(null);
   protected readonly pendingApprovalId = signal<string | null>(null);
 
@@ -177,9 +188,9 @@ export class PromotionsPage implements OnInit {
 
   protected readonly lockedHint = computed(() =>
     this.status() === 'ACTIVE'
-      ? this.i18n.t('marketing.promotions.locked.active')
+      ? this.text('locked.active')
       : this.status() === 'ARCHIVED'
-        ? this.i18n.t('marketing.promotions.locked.archived')
+        ? this.text('locked.archived')
         : null,
   );
 
@@ -211,12 +222,13 @@ export class PromotionsPage implements OnInit {
     () => this.detail() !== null && this.status() !== 'ARCHIVED',
   );
 
-  protected readonly panes: readonly { readonly id: Pane; readonly labelKey: MessageKey }[] = [
-    { id: 'rule', labelKey: 'marketing.promotions.pane.rule' },
-    { id: 'simulate', labelKey: 'marketing.promotions.pane.simulate' },
-    { id: 'history', labelKey: 'marketing.promotions.pane.history' },
-    { id: 'redemptions', labelKey: 'marketing.promotions.pane.redemptions' },
-  ];
+  protected readonly panes: readonly { readonly id: Pane; readonly labelKey: PromotionTextKey }[] =
+    [
+      { id: 'rule', labelKey: 'pane.rule' },
+      { id: 'simulate', labelKey: 'pane.simulate' },
+      { id: 'history', labelKey: 'pane.history' },
+      { id: 'redemptions', labelKey: 'pane.redemptions' },
+    ];
 
   async ngOnInit(): Promise<void> {
     await this.load();
@@ -262,38 +274,40 @@ export class PromotionsPage implements OnInit {
 
   // --------------------------------------------------------------- rendering
 
-  protected statusLabelKey(status: string): MessageKey {
-    return `marketing.promotions.status.${status}` as MessageKey;
+  protected statusLabelKey(status: string): PromotionTextKey {
+    return `status.${status}` as PromotionTextKey;
   }
 
-  protected scopeLabelKey(scope: string): MessageKey {
-    return `marketing.promotions.scope.${scope}` as MessageKey;
+  protected scopeLabelKey(scope: string): PromotionTextKey {
+    return `scope.${scope}` as PromotionTextKey;
   }
 
-  protected kindLabelKey(kind: string): MessageKey {
-    return `marketing.promotions.kind.${kind}` as MessageKey;
+  protected kindLabelKey(kind: string): PromotionTextKey {
+    return `kind.${kind}` as PromotionTextKey;
+  }
+
+  /** One of this screen's own strings, in the operator's language. */
+  private text(key: PromotionTextKey, values?: Record<string, string | number>): string {
+    return promotionText(this.i18n.locale(), key, values);
   }
 
   private describe(promotion: PromotionView): string {
-    return this.i18n.t('marketing.promotions.row.description', {
+    return this.text('row.description', {
       code: promotion.code,
-      status: this.i18n.t(this.statusLabelKey(promotion.status)),
-      scope: this.i18n.t(this.scopeLabelKey(promotion.scope)),
+      status: this.text(this.statusLabelKey(promotion.status)),
+      scope: this.text(this.scopeLabelKey(promotion.scope)),
     });
   }
 
   protected issueText(issue: ValidationIssue): string {
-    const key = `marketing.promotions.issue.${issue.code}` as MessageKey;
-    const text = this.i18n.t(key);
-    // Unknown to this build (a newer server): the catalogue has no entry, so `t` answers with
-    // nothing at all (or, cold, the raw key). The server's own sentence, in English, beats both.
-    return !text || text === key ? issue.message : text;
+    const key = `issue.${issue.code}` as PromotionTextKey;
+    // Unknown to this build (a newer server): the table has no entry, so there is no
+    // sentence to show; the server's own, in English, beats a raw key.
+    return Object.hasOwn(PROMOTION_TEXTS[this.i18n.locale()], key) ? this.text(key) : issue.message;
   }
 
   protected issuePlace(issue: ValidationIssue): string | null {
-    return issue.sequence === null
-      ? null
-      : this.i18n.t('marketing.promotions.issue.place', { n: issue.sequence });
+    return issue.sequence === null ? null : this.text('issue.place', { n: issue.sequence });
   }
 
   protected formatWhen(iso: string): string {
@@ -445,7 +459,7 @@ export class PromotionsPage implements OnInit {
         : await this.api.create(scope, body);
       this.creating.set(false);
       this.show(await this.api.detail(scope, saved.promotionId));
-      this.notice.set('marketing.promotions.notice.saved');
+      this.notice.set('notice.saved');
       await this.reloadList();
     } catch (error) {
       this.actionError.set(this.describeError(error));
@@ -502,11 +516,7 @@ export class PromotionsPage implements OnInit {
       const result = await this.api.validate(scope, open.promotionId, open.version);
       this.validation.set(result);
       this.show(await this.api.detail(scope, open.promotionId));
-      this.notice.set(
-        result.valid
-          ? 'marketing.promotions.notice.validated'
-          : 'marketing.promotions.notice.refused',
-      );
+      this.notice.set(result.valid ? 'notice.validated' : 'notice.refused');
       await this.reloadList();
     });
   }
@@ -532,10 +542,10 @@ export class PromotionsPage implements OnInit {
       );
       if (result.outcome === 'PENDING_APPROVAL') {
         this.pendingApprovalId.set(result.approvalRequestId);
-        this.notice.set('marketing.promotions.notice.pending');
+        this.notice.set('notice.pending');
       } else {
         this.pendingApprovalId.set(null);
-        this.notice.set('marketing.promotions.notice.activated');
+        this.notice.set('notice.activated');
       }
       this.show(await this.api.detail(scope, open.promotionId));
       await this.reloadList();
@@ -546,7 +556,7 @@ export class PromotionsPage implements OnInit {
     return this.lifecycle('suspend', async (scope, open) => {
       await this.api.suspend(scope, open.promotionId, open.version);
       this.show(await this.api.detail(scope, open.promotionId));
-      this.notice.set('marketing.promotions.notice.suspended');
+      this.notice.set('notice.suspended');
       await this.reloadList();
     });
   }
@@ -555,7 +565,7 @@ export class PromotionsPage implements OnInit {
     return this.lifecycle('resume', async (scope, open) => {
       await this.api.resume(scope, open.promotionId, open.version);
       this.show(await this.api.detail(scope, open.promotionId));
-      this.notice.set('marketing.promotions.notice.resumed');
+      this.notice.set('notice.resumed');
       await this.reloadList();
     });
   }
@@ -573,7 +583,7 @@ export class PromotionsPage implements OnInit {
     await this.lifecycle('archive', async (scope, open) => {
       await this.api.archive(scope, open.promotionId, open.version);
       this.show(await this.api.detail(scope, open.promotionId));
-      this.notice.set('marketing.promotions.notice.archived');
+      this.notice.set('notice.archived');
       await this.reloadList();
     });
   }
@@ -589,7 +599,7 @@ export class PromotionsPage implements OnInit {
     this.notice.set(null);
     try {
       await this.api.reorder(scope, group.name, order);
-      this.notice.set('marketing.promotions.notice.reordered');
+      this.notice.set('notice.reordered');
     } catch (error) {
       this.actionError.set(this.describeError(error));
     }
@@ -628,7 +638,7 @@ export class PromotionsPage implements OnInit {
     this.notice.set(null);
     if (this.dirty() && this.selectedId() !== target.promotionId) {
       // Opening the other promotion would throw the edits away without asking.
-      this.actionError.set(this.i18n.t('marketing.promotions.error.unsaved'));
+      this.actionError.set(this.text('error.unsaved'));
       this.listEpoch.update((value) => value + 1);
       return;
     }
@@ -646,11 +656,7 @@ export class PromotionsPage implements OnInit {
       await this.suspend();
     } else {
       this.actionError.set(
-        this.i18n.t(
-          change.enabled
-            ? 'marketing.promotions.error.toggleNeedsValidation'
-            : 'marketing.promotions.error.toggleNotLive',
-        ),
+        this.text(change.enabled ? 'error.toggleNeedsValidation' : 'error.toggleNotLive'),
       );
     }
     this.listEpoch.update((value) => value + 1);
