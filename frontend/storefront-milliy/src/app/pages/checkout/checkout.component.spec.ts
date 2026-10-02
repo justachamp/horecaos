@@ -3,7 +3,12 @@ import { Router, provideRouter } from '@angular/router';
 import { Component, signal } from '@angular/core';
 
 import { CheckoutComponent } from './checkout.component';
-import { UiCartService, type HiddenChargeRow, type PromotionNote, type PromotionRow } from '../../services/ui-cart.service';
+import {
+  UiCartService,
+  type HiddenChargeRow,
+  type PromotionNote,
+  type PromotionRow,
+} from '../../services/ui-cart.service';
 import { DeliverySelectionService } from '../../services/delivery-selection.service';
 import { AddressBookService } from '../../services/address-book.service';
 import { PaymentSessionService } from '../../services/payment-session.service';

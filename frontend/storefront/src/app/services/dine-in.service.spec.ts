@@ -201,7 +201,7 @@ describe('DineInService', () => {
       expect(bill.totalMinor).toBe(45000);
     });
 
-    it('does not mark the call anonymous, so the caller\'s own signed-in session is sent too', async () => {
+    it("does not mark the call anonymous, so the caller's own signed-in session is sent too", async () => {
       const { service, api } = setUp();
       api.mutate.mockResolvedValueOnce(admission());
       await service.exchange('printed-table-token');
@@ -260,7 +260,7 @@ describe('DineInService', () => {
     });
   });
 
-  describe('queued rounds -- an order that still has to reach its table\'s bill', () => {
+  describe("queued rounds -- an order that still has to reach its table's bill", () => {
     const PENDING_KEY = 'horecaos_dinein_pending_rounds';
     const billAfter = (orderIds: string[]) => ({
       sessionId: 'session-1',
@@ -271,7 +271,11 @@ describe('DineInService', () => {
       orderIds,
     });
     const offline = () =>
-      new HorecaOSApiError({ status: 0, code: 'NETWORK_UNREACHABLE', detail: 'The request did not reach the platform.' });
+      new HorecaOSApiError({
+        status: 0,
+        code: 'NETWORK_UNREACHABLE',
+        detail: 'The request did not reach the platform.',
+      });
 
     function seated(): { service: DineInService; api: FakeApiClient } {
       localStorage.setItem('horecaos_dinein_admission', JSON.stringify(admission()));
@@ -314,7 +318,11 @@ describe('DineInService', () => {
       localStorage.setItem(
         PENDING_KEY,
         JSON.stringify([
-          { sessionId: 'session-1', orderId: 'order-old', queuedAt: Date.now() - 25 * 60 * 60 * 1000 },
+          {
+            sessionId: 'session-1',
+            orderId: 'order-old',
+            queuedAt: Date.now() - 25 * 60 * 60 * 1000,
+          },
           { sessionId: 'session-1', orderId: 'order-new', queuedAt: Date.now() - 60 * 1000 },
         ]),
       );
@@ -364,7 +372,11 @@ describe('DineInService', () => {
     });
 
     it.each([
-      ['a 401, because the guest token or the customer session can be renewed', 401, 'UNAUTHENTICATED'],
+      [
+        'a 401, because the guest token or the customer session can be renewed',
+        401,
+        'UNAUTHENTICATED',
+      ],
       ['a 429', 429, 'RATE_LIMIT_EXCEEDED'],
       ['a 503', 503, 'INTERNAL_ERROR'],
     ])('keeps a round queued after %s', async (_label, status, code) => {
@@ -392,7 +404,9 @@ describe('DineInService', () => {
       service.queueRound('session-1', 'order-1');
       service.queueRound('session-1', 'order-2');
       api.mutate
-        .mockRejectedValueOnce(new HorecaOSApiError({ status: 409, code: 'RESOURCE_CONFLICT', detail: 'closed' }))
+        .mockRejectedValueOnce(
+          new HorecaOSApiError({ status: 409, code: 'RESOURCE_CONFLICT', detail: 'closed' }),
+        )
         .mockResolvedValueOnce(billAfter(['order-2']));
 
       const flush = await service.flushPendingRounds('session-1');
@@ -402,7 +416,7 @@ describe('DineInService', () => {
       expect(service.pendingRoundCount('session-1')).toBe(0);
     });
 
-    it('leaves another session\'s rounds alone', async () => {
+    it("leaves another session's rounds alone", async () => {
       const { service, api } = seated();
       service.queueRound('session-2', 'order-elsewhere');
 
@@ -418,7 +432,10 @@ describe('DineInService', () => {
       service.queueRound('session-1', 'order-1');
       api.mutate.mockResolvedValue(billAfter(['order-1']));
 
-      await Promise.all([service.flushPendingRounds('session-1'), service.flushPendingRounds('session-1')]);
+      await Promise.all([
+        service.flushPendingRounds('session-1'),
+        service.flushPendingRounds('session-1'),
+      ]);
 
       expect(api.mutate).toHaveBeenCalledTimes(1);
     });
@@ -433,7 +450,10 @@ describe('DineInService', () => {
       const flush = await service.flushPendingRounds('session-1');
       await running;
 
-      expect(api.mutate.mock.calls.map((call) => call[2].body.orderId)).toEqual(['order-1', 'order-2']);
+      expect(api.mutate.mock.calls.map((call) => call[2].body.orderId)).toEqual([
+        'order-1',
+        'order-2',
+      ]);
       expect(flush.pending).toBe(0);
     });
 

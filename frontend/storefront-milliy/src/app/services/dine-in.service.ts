@@ -155,7 +155,9 @@ export class DineInService {
 
   private guestToken: string | null = null;
   private readonly admissionSignal = signal<DineInAdmission | null>(null);
-  private readonly pendingRoundsSignal = signal<readonly PendingRound[]>(this.restorePendingRounds());
+  private readonly pendingRoundsSignal = signal<readonly PendingRound[]>(
+    this.restorePendingRounds(),
+  );
   private readonly flushesInFlight = new Map<string, Promise<RoundFlush>>();
 
   constructor() {
@@ -361,7 +363,9 @@ export class DineInService {
     const kept = this.pendingRoundsSignal().filter(
       (round) => !(round.sessionId === sessionId && round.orderId === orderId),
     );
-    this.setPendingRounds([...kept, { sessionId, orderId, queuedAt: Date.now() }].slice(-PENDING_ROUND_LIMIT));
+    this.setPendingRounds(
+      [...kept, { sessionId, orderId, queuedAt: Date.now() }].slice(-PENDING_ROUND_LIMIT),
+    );
   }
 
   /**
@@ -395,7 +399,9 @@ export class DineInService {
     if (running) {
       return running.then(() => this.flushPendingRounds(sessionId));
     }
-    const pass = this.attachQueuedRounds(sessionId).finally(() => this.flushesInFlight.delete(sessionId));
+    const pass = this.attachQueuedRounds(sessionId).finally(() =>
+      this.flushesInFlight.delete(sessionId),
+    );
     this.flushesInFlight.set(sessionId, pass);
     return pass;
   }
