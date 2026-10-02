@@ -824,12 +824,10 @@ export const routes: Routes = [
               ),
           },
           // 7.9 Marketing reports (T15): 7.9a per-customer discount history and
-          // 7.9b campaign delivery counts are real this wave — see
-          // `marketing-report-page.ts`'s own doc. 7.9's promo-code summary and
-          // per-code redemption detail stay named-not-built inline on the same
-          // page: ADR 0023 forbids `reporting` reading `pricing` directly, so
-          // they need `reporting.fact_promotion_redemption`, whose grain needs
-          // a promotions ADR that does not exist yet (statistics.md §7).
+          // 7.9b campaign delivery counts, and (ADR 0140) the Promotions tab: the
+          // summary per promotion and the redemption log, both over
+          // `reporting.fact_promotion_redemption`, which day close builds so that
+          // ADR 0023 holds — see `marketing-report-page.ts`'s own doc.
           {
             path: 'marketing',
             loadComponent: () =>
