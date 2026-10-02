@@ -22,6 +22,7 @@ import {
   type PublishedCommentPreset,
   type PublishedModifierGroup,
 } from './menu.service';
+import { discountRowsFor, noteRowsFor, type PromotionRow } from './applied-promotions';
 import { LangService } from './lang.service';
 import { DeliverySelectionService } from './delivery-selection.service';
 import { TranslateService } from './translate.service';
@@ -181,6 +182,30 @@ export class UiCartService {
     this.translate.current();
     const discount = this.priced()?.discountMinor;
     return discount ? this.formatPrice(discount) : null;
+  });
+
+  /**
+   * The discounts behind {@link discountFormatted}, one line per kind, each with
+   * the platform's own amount (ADR 0140). Their sum is the discount. A discount the
+   * platform reports without saying where it came from (an answer that predates the
+   * breakdown) is one generic line, so the total is never left with an unexplained gap.
+   */
+  readonly discountRows = computed<readonly PromotionRow[]>(() => {
+    this.translate.current();
+    return discountRowsFor(
+      this.priced()?.appliedPromotions,
+      this.priced()?.discountMinor ?? 0,
+      (minor) => this.formatPrice(minor),
+    );
+  });
+
+  /**
+   * Benefits already inside the delivery price or the goods (a delivery offer, a
+   * surcharge), as captions with the platform's amount. Not added to the sum.
+   */
+  readonly promotionNotes = computed<readonly PromotionRow[]>(() => {
+    this.translate.current();
+    return noteRowsFor(this.priced()?.appliedPromotions, (minor) => this.formatPrice(minor));
   });
 
   readonly totalWithDelivery = computed(() => this.totalAmount());

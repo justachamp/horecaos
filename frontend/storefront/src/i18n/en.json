@@ -126,7 +126,10 @@
     "recipientRequired": "Add a recipient name and phone for this delivery.",
     "deliveryChooseAddress": "Choose an address to calculate the delivery fee.",
     "pickupLocation": "Pickup location",
-    "pickupLocationHint": "You'll pick up your order from this branch."
+    "pickupLocationHint": "You'll pick up your order from this branch.",
+    "offerDiscount": "Special offer",
+    "deliveryOfferNote": "Includes a delivery offer of {{amount}}",
+    "surchargeNote": "Includes a surcharge of {{amount}}"
   },
   "orders": {
     "title": "Orders",

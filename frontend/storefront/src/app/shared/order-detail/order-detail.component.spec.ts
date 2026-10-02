@@ -14,7 +14,10 @@ import { NotificationService } from '../../services/notification.service';
 import { NavigationHistoryService } from '../../services/navigation-history.service';
 import { TranslateService } from '../../services/translate.service';
 import { UiCartService } from '../../services/ui-cart.service';
-import { LocationProfileService, type LocationProfile } from '../../services/location-profile.service';
+import {
+  LocationProfileService,
+  type LocationProfile,
+} from '../../services/location-profile.service';
 
 class FakeTranslateService {
   get(key: string): string {
@@ -105,7 +108,9 @@ function setUp(
       provideRouter([]),
       {
         provide: ActivatedRoute,
-        useValue: { snapshot: { paramMap: { get: (key: string) => (key === 'id' ? orderId : null) } } },
+        useValue: {
+          snapshot: { paramMap: { get: (key: string) => (key === 'id' ? orderId : null) } },
+        },
       },
       { provide: OrdersService, useValue: ordersService },
       { provide: NotificationService, useValue: { show: vi.fn() } },
@@ -184,13 +189,81 @@ describe('OrderDetailComponent: the placed order reconciles total against subtot
   });
 });
 
+describe('OrderDetailComponent: the promotions behind the price (ADR 0140)', () => {
+  async function render(overrides: Partial<ApiOrderDetail>) {
+    const { fixture, comp } = setUp('o1', apiOrderDetail(overrides));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    return { host: fixture.nativeElement as HTMLElement, comp };
+  }
+
+  const rowsOf = (host: HTMLElement) =>
+    [...host.querySelectorAll('[data-testid="discount-row"]')].map((row) =>
+      [...row.querySelectorAll('span')].map((cell) => cell.textContent?.trim()),
+    );
+
+  it('shows each kind of discount as its own line, so subtotal + tax + delivery - discount is the total', async () => {
+    const { host } = await render({
+      subtotal: { price: 45_000, discount: 0 },
+      discount: { price: 9_000, discount: 0 },
+      total: { price: 36_000, discount: 0 },
+      promotions: [{ source: 'AUTOMATIC', effect: 'DISCOUNT', amountMinor: 9_000 }],
+    });
+
+    expect(rowsOf(host)).toEqual([['cart.offerDiscount', expect.stringMatching(/^-9.000 /)]]);
+  });
+
+  it("labels the customer's typed code as a code, apart from an offer", async () => {
+    const { host } = await render({
+      discount: { price: 6_000, discount: 0 },
+      promotions: [
+        { source: 'AUTOMATIC', effect: 'DISCOUNT', amountMinor: 4_000 },
+        { source: 'PROMO_CODE', effect: 'DISCOUNT', amountMinor: 2_000 },
+      ],
+    });
+
+    expect(rowsOf(host).map((row) => row[0])).toEqual(['cart.offerDiscount', 'cart.promoCode']);
+  });
+
+  it('keeps a discount the platform did not break down as one generic line', async () => {
+    const { host } = await render({ discount: { price: 5_000, discount: 0 } });
+
+    expect(rowsOf(host).map((row) => row[0])).toEqual(['cart.discount']);
+  });
+
+  it('draws nothing for an order that was not discounted', async () => {
+    const { host } = await render({});
+
+    expect(host.querySelector('[data-testid="discount-row"]')).toBeNull();
+    expect(host.querySelector('[data-testid="promotion-note"]')).toBeNull();
+  });
+
+  it('explains a delivery offer as a caption beside the delivery fee, not as a line to subtract', async () => {
+    const { host } = await render({
+      delivery: { price: 7_000, discount: 0 },
+      promotions: [{ source: 'AUTOMATIC', effect: 'DELIVERY_DISCOUNT', amountMinor: 3_000 }],
+    });
+
+    expect(host.querySelector('[data-testid="promotion-note"]')?.textContent?.trim()).toBe(
+      'cart.deliveryOfferNote',
+    );
+    expect(host.querySelector('[data-testid="discount-row"]')).toBeNull();
+  });
+});
+
 describe('OrderDetailComponent: names the pickup branch (2026-09-21 audit follow-up (d))', () => {
   it("asks for and shows the branch's name and address on a PICKUP order", async () => {
     const { fixture, comp, locationProfileService } = setUp(
       'o1',
       apiOrderDetail({ fulfillmentMode: 'PICKUP', locationId: 'loc-1' }),
       of(plan('READY')),
-      branch({ displayName: 'Central kitchen', addressLine: '1 Demo Street', district: 'Shaykhontohur', city: 'Tashkent' }),
+      branch({
+        displayName: 'Central kitchen',
+        addressLine: '1 Demo Street',
+        district: 'Shaykhontohur',
+        city: 'Tashkent',
+      }),
     );
 
     fixture.detectChanges();
@@ -242,7 +315,7 @@ describe('OrderDetailComponent: names the pickup branch (2026-09-21 audit follow
 });
 
 describe('OrderDetailComponent: the header shows the real order number, not "Order N: NaN"', () => {
-  it('carries the platform\'s own public order number through as-is, and never coerces it to NaN', async () => {
+  it("carries the platform's own public order number through as-is, and never coerces it to NaN", async () => {
     // `order_number` is `OrderResponse.publicOrderNumber` -- a string like
     // "0922-001" -- force-cast to `number` by OrdersService.toApiOrderDetail
     // (see ApiOrderDetail's own field note, and OrdersComponent's list,
@@ -298,7 +371,12 @@ describe("OrderDetailComponent.repeat -- driven by the platform's plan (ADR 0074
       apiOrderDetail(),
       of(
         plan('READY', [
-          planLine({ lineNumber: 1, variantId: 'v1', quantity: 3, modifierOptionIds: ['m1', 'm2'] }),
+          planLine({
+            lineNumber: 1,
+            variantId: 'v1',
+            quantity: 3,
+            modifierOptionIds: ['m1', 'm2'],
+          }),
           planLine({ lineNumber: 2, variantId: 'v2', quantity: 1 }),
         ]),
       ),
@@ -346,7 +424,11 @@ describe("OrderDetailComponent.repeat -- driven by the platform's plan (ADR 0074
     const { fixture } = setUp(
       'o1',
       apiOrderDetail(),
-      of(plan('UNAVAILABLE', [planLine({ status: 'WITHDRAWN', productId: null, unitAmountMinor: null })])),
+      of(
+        plan('UNAVAILABLE', [
+          planLine({ status: 'WITHDRAWN', productId: null, unitAmountMinor: null }),
+        ]),
+      ),
     );
 
     fixture.detectChanges();
@@ -357,7 +439,11 @@ describe("OrderDetailComponent.repeat -- driven by the platform's plan (ADR 0074
   });
 
   it('shows no repeat button when the plan request fails, rather than one that would fail too', async () => {
-    const { fixture, comp } = setUp('o1', apiOrderDetail(), throwError(() => new Error('network')));
+    const { fixture, comp } = setUp(
+      'o1',
+      apiOrderDetail(),
+      throwError(() => new Error('network')),
+    );
 
     fixture.detectChanges();
     await fixture.whenStable();
@@ -373,7 +459,11 @@ describe("OrderDetailComponent.repeat -- driven by the platform's plan (ADR 0074
   it('never offers the button from a plan that answers about a different order', async () => {
     // The guard is the id, not "a plan arrived" -- a stale or mismatched
     // response must not arm a button on an order it is not about.
-    const { fixture } = setUp('o1', apiOrderDetail(), of(plan('READY', [planLine()], 'someone-else')));
+    const { fixture } = setUp(
+      'o1',
+      apiOrderDetail(),
+      of(plan('READY', [planLine()], 'someone-else')),
+    );
 
     fixture.detectChanges();
     await fixture.whenStable();

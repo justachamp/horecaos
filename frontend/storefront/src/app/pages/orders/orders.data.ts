@@ -1,3 +1,4 @@
+import type { PromotionRow } from '../../services/applied-promotions';
 export interface OrderItem {
   id: string;
   title: string;
@@ -151,6 +152,14 @@ export interface OrderDetail {
    * is already handled.
    */
   deliveryFee?: string;
+  /**
+   * ADR 0140: one row per kind of discount (an offer, a typed code), each with the
+   * platform's own amount. Their sum is what the order's total is short of
+   * `subtotal + tax + deliveryFee`. Empty when nothing was discounted.
+   */
+  discountRows?: readonly PromotionRow[];
+  /** ADR 0140: benefits already inside the delivery fee or the goods, shown as captions. */
+  promotionNotes?: readonly PromotionRow[];
   total: string;
   /** Packaging fee when > 0 */
   packaging?: string;

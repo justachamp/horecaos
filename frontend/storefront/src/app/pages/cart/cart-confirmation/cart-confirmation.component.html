@@ -35,7 +35,10 @@
 
     <!-- Olib ketish: no address step, the branch itself is the destination -->
     <div *ngIf="pickingUp" class="flex w-full items-center gap-3 border-b border-zinc-700/80 py-4">
-      <span class="flex h-9 w-9 shrink-0 items-center justify-center text-brand-accent" aria-hidden="true">
+      <span
+        class="flex h-9 w-9 shrink-0 items-center justify-center text-brand-accent"
+        aria-hidden="true"
+      >
         <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path
             stroke-linecap="round"
@@ -102,7 +105,12 @@
           <p class="text-sm font-medium text-text-primary">{{ 'cart.paymentMethod' | t }}</p>
           <p class="mt-0.5 text-xs text-zinc-400">{{ paymentMethod }}</p>
         </div>
-        <svg class="h-5 w-5 shrink-0 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg
+          class="h-5 w-5 shrink-0 text-zinc-400"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
         </svg>
       </button>
@@ -123,19 +131,37 @@
                 <span class="flex shrink-0 items-center justify-center text-text-primary">
                   @if (opt.icon === 'cash') {
                     <svg class="h-11 w-11" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v2m2 4h10m-10 4h10m-10-6h10" />
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v2m2 4h10m-10 4h10m-10-6h10"
+                      />
                     </svg>
                   }
                   @if (opt.icon === 'card') {
                     <svg class="h-11 w-11" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"
+                      />
                     </svg>
                   }
                   @if (opt.icon === 'click') {
-                    <img src="/assets/logo/click.svg" alt="Click" class="h-11 w-11 object-contain" />
+                    <img
+                      src="/assets/logo/click.svg"
+                      alt="Click"
+                      class="h-11 w-11 object-contain"
+                    />
                   }
                   @if (opt.icon === 'payme') {
-                    <img src="/assets/logo/payme.jpeg" alt="Payme" class="h-11 w-11 rounded object-contain" />
+                    <img
+                      src="/assets/logo/payme.jpeg"
+                      alt="Payme"
+                      class="h-11 w-11 rounded object-contain"
+                    />
                   }
                 </span>
                 <div class="min-w-0 flex-1">
@@ -145,23 +171,23 @@
                   }
                 </div>
                 <span class="flex h-9 w-9 shrink-0 items-center justify-center">
-              <span
-                class="inline-block h-5 w-5 rounded-full border-2 transition-colors"
-                [class.border-brand-accent]="selectedPaymentId === opt.id"
-                [class.bg-brand-accent]="selectedPaymentId === opt.id"
-                [class.border-zinc-500]="selectedPaymentId !== opt.id"
-                [class.bg-transparent]="selectedPaymentId !== opt.id"
-              ></span>
-            </span>
-            <input
-              type="radio"
-              name="paymentMethod"
-              [value]="opt.id"
-              [ngModel]="selectedPaymentId"
-              (ngModelChange)="selectedPaymentId = $event"
-              [id]="'payment-' + opt.id"
-              class="sr-only"
-            />
+                  <span
+                    class="inline-block h-5 w-5 rounded-full border-2 transition-colors"
+                    [class.border-brand-accent]="selectedPaymentId === opt.id"
+                    [class.bg-brand-accent]="selectedPaymentId === opt.id"
+                    [class.border-zinc-500]="selectedPaymentId !== opt.id"
+                    [class.bg-transparent]="selectedPaymentId !== opt.id"
+                  ></span>
+                </span>
+                <input
+                  type="radio"
+                  name="paymentMethod"
+                  [value]="opt.id"
+                  [ngModel]="selectedPaymentId"
+                  (ngModelChange)="selectedPaymentId = $event"
+                  [id]="'payment-' + opt.id"
+                  class="sr-only"
+                />
               </label>
             }
           </div>
@@ -191,11 +217,19 @@
           <span>{{ deliveryFee }}</span>
         </div>
       }
-      @if (discountAmount) {
-        <div class="flex items-center justify-between pt-1 text-sm text-white">
-          <span>{{ 'cart.discount' | t }}</span>
-          <span>-{{ discountAmount }}</span>
+      @for (row of discountRows; track $index) {
+        <div
+          class="flex items-center justify-between pt-1 text-sm text-white"
+          data-testid="discount-row"
+        >
+          <span>{{ row.labelKey | t }}</span>
+          <span>-{{ row.amount }}</span>
         </div>
+      }
+      @for (note of promotionNotes; track $index) {
+        <p class="pt-1 text-xs text-white/80" data-testid="promotion-note">
+          {{ note.labelKey | t: { amount: note.amount } }}
+        </p>
       }
       @if (cart.cartData()?.packaging?.price) {
         <div class="flex items-center justify-between pt-1 text-sm text-white">
@@ -226,7 +260,13 @@
       type="button"
       data-testid="place-order-button"
       (click)="submitOrder()"
-      [disabled]="submitting() || !cart.cartData() || !selectedPaymentId || noPaymentMethods() || !canPlaceOrder"
+      [disabled]="
+        submitting() ||
+        !cart.cartData() ||
+        !selectedPaymentId ||
+        noPaymentMethods() ||
+        !canPlaceOrder
+      "
       class="flex w-full items-center justify-center rounded-xl bg-brand-accent py-3.5 text-base font-bold text-white transition-opacity hover:opacity-95 disabled:opacity-50"
     >
       @if (submitting()) {
@@ -235,6 +275,5 @@
         {{ 'cart.placeOrder' | t }}
       }
     </button>
-
   </div>
 </div>

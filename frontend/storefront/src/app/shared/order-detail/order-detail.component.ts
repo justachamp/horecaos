@@ -2,6 +2,7 @@ import { Component, OnInit, signal, computed, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { OrderDetail, OrderLineItem } from '../../pages/orders/orders.data';
+import { discountRowsFor, noteRowsFor } from '../../services/applied-promotions';
 import {
   OrdersService,
   type ApiOrderDetail,
@@ -211,6 +212,7 @@ export class OrderDetailComponent implements OnInit {
     const taxVal = this.extractPrice(api.tax);
     const deliveryVal = this.extractPrice(api.delivery);
     const packagingVal = this.extractPrice(api.packaging);
+    const discountVal = this.extractPrice(api.discount);
     return {
       id: String(api.id),
       // `order_number` carries `OrderResponse.publicOrderNumber` -- a string
@@ -231,6 +233,10 @@ export class OrderDetailComponent implements OnInit {
       // the same choice already made for `packaging` below.
       tax: taxVal > 0 ? format(taxVal) : undefined,
       deliveryFee: deliveryVal > 0 ? format(deliveryVal) : undefined,
+      // ADR 0140: the discount the order was priced with, so the total is explained
+      // by `subtotal + tax + delivery - discount` instead of sitting a gap below it.
+      discountRows: discountRowsFor(api.promotions, discountVal, format),
+      promotionNotes: noteRowsFor(api.promotions, format),
       total: format(totalVal),
       packaging: packagingVal > 0 ? format(packagingVal) : undefined,
       actions: api.actions ?? [],

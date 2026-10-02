@@ -2,13 +2,17 @@ import { TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
 
 import { CartConfirmationComponent } from './cart-confirmation.component';
+import type { PromotionRow } from '../../../services/applied-promotions';
 import { UiCartService } from '../../../services/ui-cart.service';
 import { OrdersService } from '../../../services/orders.service';
 import { PaymentSessionService } from '../../../services/payment-session.service';
 import { NotificationService } from '../../../services/notification.service';
 import { TranslateService } from '../../../services/translate.service';
 import { DeliverySelectionService } from '../../../services/delivery-selection.service';
-import { LocationProfileService, type LocationProfile } from '../../../services/location-profile.service';
+import {
+  LocationProfileService,
+  type LocationProfile,
+} from '../../../services/location-profile.service';
 import type { CheckoutResult, PricedCart } from '../../../services/cart.service';
 import type { CartResponse } from '../../../types/cart.types';
 import { HorecaOSApiError } from '../../../core/api/problem-details';
@@ -24,11 +28,13 @@ class FakeUiCartService {
   checkout = vi.fn();
   discard = vi.fn();
   deliveryAddress = vi.fn(() => '');
-  subtotalFormatted = vi.fn(() => '10 000 so\'m');
-  deliveryFee = vi.fn(() => '5 000 so\'m');
+  subtotalFormatted = vi.fn(() => "10 000 so'm");
+  deliveryFee = vi.fn(() => "5 000 so'm");
   taxFormatted = vi.fn<() => string | null>(() => null);
   discountFormatted = vi.fn<() => string | null>(() => null);
-  totalWithDelivery = vi.fn(() => '15 000 so\'m');
+  discountRows = vi.fn<() => readonly PromotionRow[]>(() => []);
+  promotionNotes = vi.fn<() => readonly PromotionRow[]>(() => []);
+  totalWithDelivery = vi.fn(() => "15 000 so'm");
   deliveryUnresolvedMessage = vi.fn<() => string | null>(() => null);
   canPlaceOrder = vi.fn(() => true);
 }
@@ -226,7 +232,7 @@ describe('CartConfirmationComponent: the pickup screen names the actual branch',
     };
   }
 
-  it('shows the branch\'s own name and address once the profile read resolves, for the configured location', async () => {
+  it("shows the branch's own name and address once the profile read resolves, for the configured location", async () => {
     const { comp, fixture, locations } = await setUp(
       ['CASH'],
       (cart) => {
@@ -260,6 +266,49 @@ describe('CartConfirmationComponent: the pickup screen names the actual branch',
     const { locations } = await setUp(['CASH']);
 
     expect(locations.profile).not.toHaveBeenCalled();
+  });
+});
+
+describe('CartConfirmationComponent: the promotions behind the price (ADR 0140)', () => {
+  const rowsOf = (host: HTMLElement) =>
+    [...host.querySelectorAll('[data-testid="discount-row"]')].map((row) =>
+      [...row.querySelectorAll('span')].map((cell) => cell.textContent?.trim()),
+    );
+
+  it("prints one line per kind of discount, with the platform's own amount", async () => {
+    const { fixture } = await setUp(['CASH'], (cart) => {
+      cart.discountRows.mockReturnValue([
+        { labelKey: 'cart.offerDiscount', amount: "4 000 so'm" },
+        { labelKey: 'cart.promoCode', amount: "2 000 so'm" },
+      ]);
+    });
+
+    expect(rowsOf(fixture.nativeElement as HTMLElement)).toEqual([
+      ['cart.offerDiscount', "-4 000 so'm"],
+      ['cart.promoCode', "-2 000 so'm"],
+    ]);
+  });
+
+  it('draws no discount line and no caption when nothing was discounted', async () => {
+    const { fixture } = await setUp();
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(host.querySelector('[data-testid="discount-row"]')).toBeNull();
+    expect(host.querySelector('[data-testid="promotion-note"]')).toBeNull();
+  });
+
+  it('explains a delivery offer or a surcharge as a caption, not as a line that would be added twice', async () => {
+    const { fixture } = await setUp(['CASH'], (cart) => {
+      cart.promotionNotes.mockReturnValue([
+        { labelKey: 'cart.deliveryOfferNote', amount: "5 000 so'm" },
+      ]);
+    });
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(host.querySelector('[data-testid="promotion-note"]')?.textContent?.trim()).toBe(
+      'cart.deliveryOfferNote',
+    );
+    expect(host.querySelector('[data-testid="discount-row"]')).toBeNull();
   });
 });
 
@@ -613,7 +662,11 @@ describe('CartConfirmationComponent: CLICK opens a payment session and redirects
   });
 
   afterEach(() => {
-    Object.defineProperty(window, 'location', { configurable: true, value: realLocation, writable: true });
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: realLocation,
+      writable: true,
+    });
   });
 
   it('opens the payment session and sends the browser to checkoutUrl, without an Angular navigation', async () => {

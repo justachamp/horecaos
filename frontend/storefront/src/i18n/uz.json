@@ -126,7 +126,10 @@
     "recipientRequired": "Yetkazib berish uchun qabul qiluvchining ismi va telefonini kiriting.",
     "deliveryChooseAddress": "Yetkazib berish narxini hisoblash uchun manzil tanlang.",
     "pickupLocation": "Olib ketish filiali",
-    "pickupLocationHint": "Buyurtmangizni ushbu filialdan olib ketasiz."
+    "pickupLocationHint": "Buyurtmangizni ushbu filialdan olib ketasiz.",
+    "offerDiscount": "Aksiya",
+    "deliveryOfferNote": "Yetkazib berish chegirmasi {{amount}} hisobga olingan",
+    "surchargeNote": "Ustama {{amount}} hisobga olingan"
   },
   "orders": {
     "title": "Buyurtmalar",

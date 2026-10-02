@@ -126,7 +126,10 @@
     "recipientRequired": "Укажите имя и телефон получателя для доставки.",
     "deliveryChooseAddress": "Выберите адрес, чтобы рассчитать стоимость доставки.",
     "pickupLocation": "Пункт самовывоза",
-    "pickupLocationHint": "Вы заберёте заказ в этом филиале."
+    "pickupLocationHint": "Вы заберёте заказ в этом филиале.",
+    "offerDiscount": "Акция",
+    "deliveryOfferNote": "Включая скидку на доставку {{amount}}",
+    "surchargeNote": "Включая наценку {{amount}}"
   },
   "orders": {
     "title": "Заказы",
