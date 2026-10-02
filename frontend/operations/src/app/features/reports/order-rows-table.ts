@@ -123,8 +123,9 @@ export class OrderRowsTable {
   /**
    * «Оператор»: a staff Keycloak subject, or `channel:CODE` for a machine
    * channel (`OperatorAttribution`'s own scheme, reimplemented on the
-   * `ordering` side for the CRM log). No staff name until the staff-identity
-   * ADR lands, the same limitation `operator-leaderboard`'s own column states.
+   * `ordering` side for the CRM log). The CRM log's response carries the subject
+   * alone: ADR 0139's directory names the leaderboards, the order detail, the
+   * activity log and the live band, and does not yet name this column.
    */
   protected operatorLabel(row: OrderRowResponse): string {
     const operator = this.crmRow(row)?.operatorPrincipalId;

@@ -55,13 +55,12 @@ interface PaymentMixSlice {
  * not discharge it, and does not pretend to by rendering a settings store with
  * nothing in it.
  *
- * **Why this page can exist at all when the live board's own operator
- * leaderboard (`0.1d`) cannot.** Every other actor-facing read needs a
- * staff person record to turn a Keycloak subject into a name — the
- * dependency `0.1d`, `9.2` and a dozen other rows share. This page needs no
- * such lookup: `0.2a` asks "how many orders did *I* take today", which the
- * console can answer from the token's own subject with nobody's name
- * printed at all, staff directory or not.
+ * **Why this page needs no name lookup.** The live board's operator band
+ * (`0.1d`) turns a Keycloak subject into a name through the tenant's own
+ * staff record (ADR 0139). This page asks a different question — `0.2a` is
+ * "how many orders did *I* take today", which the console answers from the
+ * token's own subject with nobody's name printed at all, staff directory or
+ * not.
  *
  * **The two bands are gated independently, not as one page-level state.**
  * `0.2a` reads `ORDER_READ`, which every operator this page is for already
