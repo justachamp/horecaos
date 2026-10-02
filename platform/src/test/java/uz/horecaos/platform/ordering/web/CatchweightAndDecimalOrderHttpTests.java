@@ -348,6 +348,29 @@ class CatchweightAndDecimalOrderHttpTests {
                 .satisfies(bucket -> assertThat(bucket.quantity()).isEqualByComparingTo("0.5"));
     }
 
+    // ------------------------------------------------ the wire form of a whole quantity
+
+    @Test
+    @DisplayName("a whole quantity is written on the wire as the integer it was before the column widened")
+    void aWholeQuantityIsWrittenAsTheIntegerItWas() throws Exception {
+        UUID cart = openCart();
+        putLine(cart, "plov", plovVariant, "2");
+        putLine(cart, "soda", sodaVariant, "20");
+        tx(() -> carts.price(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart)));
+        UUID orderId = checkoutCart(cart, "whole-quantities-1");
+
+        MvcResult result =
+                mvc.perform(get(orderPath(orderId)).with(tokenFor(OPERATOR))).andReturn();
+        String wire = result.getResponse().getContentAsString();
+
+        // numeric(10,3) hands back 2.000 and 20.000; a client that read 2 and 20 yesterday reads them today.
+        assertThat(wire)
+                .contains("\"quantity\":2,")
+                .contains("\"quantity\":20,")
+                .doesNotContain("\"quantity\":2.0")
+                .doesNotContain("\"quantity\":20.0");
+    }
+
     // -------------------------------------------------------- the weighed cake
 
     @Test
