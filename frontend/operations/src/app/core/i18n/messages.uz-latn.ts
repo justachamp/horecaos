@@ -2512,7 +2512,7 @@ export const messagesUzLatn: MessageCatalogue = {
     'Arxivlangan taomni kombo tarkibida taklif qilib boʻlmaydi.',
   'catalog.editor.policy.title': 'Mahsulot har bir guruhni qanday taklif qiladi',
   'catalog.editor.policy.hint':
-    'Bu sozlamalar faqat shu mahsulotga tegishli. Umumiy guruh oʻzgarmaydi, uni ishlatadigan boshqa mahsulotlarga taʼsir qilmaydi.',
+    'Bu sozlamalar faqat shu mahsulotga tegishli. Umumiy guruh oʻzgarmaydi, uni ishlatadigan boshqa mahsulotlarga taʻsir qilmaydi.',
   'catalog.editor.policy.empty':
     'Taklif qilinishini sozlash uchun yuqorida modifikator guruhini biriktiring.',
   'catalog.editor.policy.visibility': 'Qanday taklif qilinadi',

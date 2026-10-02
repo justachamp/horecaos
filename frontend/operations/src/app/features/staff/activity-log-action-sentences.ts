@@ -160,6 +160,26 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       ru: 'Каталог канал предложение установлено',
       'uz-Latn': 'Katalog kanal taklif oʻrnatildi',
     },
+    'catalog.comboComponent.added': {
+      en: 'Combo component added',
+      ru: 'Компонент комбо добавлен',
+      'uz-Latn': 'Kombo tarkibi qoʻshildi',
+    },
+    'catalog.comboComponent.updated': {
+      en: 'Combo component updated',
+      ru: 'Компонент комбо обновлён',
+      'uz-Latn': 'Kombo tarkibi yangilandi',
+    },
+    'catalog.comboGroup.created': {
+      en: 'Combo group created',
+      ru: 'Группа комбо создана',
+      'uz-Latn': 'Kombo guruhi yaratildi',
+    },
+    'catalog.comboGroup.updated': {
+      en: 'Combo group updated',
+      ru: 'Группа комбо обновлена',
+      'uz-Latn': 'Kombo guruhi yangilandi',
+    },
     'catalog.comment-preset.attached': {
       en: 'Catalog comment preset attached',
       ru: 'Каталог комментарий шаблон прикреплено',
@@ -230,6 +250,11 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       ru: 'Каталог меню обновлено',
       'uz-Latn': 'Katalog menyu yangilandi',
     },
+    'catalog.modifierAttachment.policySet': {
+      en: 'Modifier group attachment policy set',
+      ru: 'Правила подключения группы модификаторов заданы',
+      'uz-Latn': 'Modifier guruhini biriktirish qoidalari oʻrnatildi',
+    },
     'catalog.offering.bulkSet': {
       en: 'Catalog offering bulk set',
       ru: 'Каталог предложение массовое установлено',
@@ -249,6 +274,11 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       en: 'Catalog product stopped everywhere',
       ru: 'Каталог товар остановлено везде',
       'uz-Latn': 'Katalog mahsulot toʻxtatildi hammasida',
+    },
+    'catalog.variantModifierGroup.attached': {
+      en: 'Modifier group attached to a variant',
+      ru: 'Группа модификаторов подключена к варианту',
+      'uz-Latn': 'Modifier guruhi variantga biriktirildi',
     },
     'catalog.recommendation.attached': {
       en: 'Catalog recommendation attached',
