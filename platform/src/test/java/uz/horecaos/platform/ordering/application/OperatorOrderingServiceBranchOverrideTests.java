@@ -402,6 +402,10 @@ class OperatorOrderingServiceBranchOverrideTests {
                         eq(1),
                         any(),
                         any(),
+                        // ADR 0136: the combo picks and the second-level selections an operator
+                        // line carries, empty for the plain dish this suite orders.
+                        any(),
+                        any(),
                         any()))
                 .thenReturn(new CartService.CartView(lined, List.<CartLineRow>of()));
         when(carts.price(eq(TENANT), eq(BRAND), eq(CUSTOMER), eq(CART_ID), anyInt()))
