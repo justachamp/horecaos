@@ -2121,6 +2121,12 @@
             "format" : "int32",
             "type" : "integer"
           },
+          "names" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "type" : "object"
+          },
           "sortOrder" : {
             "format" : "int32",
             "type" : "integer"

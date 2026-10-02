@@ -690,6 +690,7 @@ export interface ComboGroupResponse {
   containerVariantId?: string;
   maximumSelections?: number;
   minimumSelections?: number;
+  names?: { [key: string]: string };
   sortOrder?: number;
   status?: "DRAFT" | "ACTIVE" | "ARCHIVED";
   version?: number;

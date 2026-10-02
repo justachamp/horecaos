@@ -9826,6 +9826,18 @@
         },
         "type" : "object"
       },
+      "OperationsOrderControllerAutoSelectedChargeResponse" : {
+        "properties" : {
+          "amountMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "name" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "OperationsOrderControllerCancelRequest" : {
         "properties" : {
           "note" : {
@@ -9938,6 +9950,12 @@
       },
       "OperationsOrderControllerLineResponse" : {
         "properties" : {
+          "autoSelectedCharges" : {
+            "items" : {
+              "$ref" : "#/components/schemas/OperationsOrderControllerAutoSelectedChargeResponse"
+            },
+            "type" : "array"
+          },
           "autoSelectedModifiers" : {
             "items" : {
               "type" : "string"

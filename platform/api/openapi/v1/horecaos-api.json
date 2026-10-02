@@ -5241,6 +5241,12 @@
             "format" : "int32",
             "type" : "integer"
           },
+          "names" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "type" : "object"
+          },
           "sortOrder" : {
             "format" : "int32",
             "type" : "integer"
@@ -11525,6 +11531,22 @@
         "required" : [ "outcome" ],
         "type" : "object"
       },
+      "HiddenChargeResponse" : {
+        "properties" : {
+          "amountMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "lineKey" : {
+            "type" : "string"
+          },
+          "optionId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "Holiday" : {
         "properties" : {
           "countryCode" : {
@@ -13693,6 +13715,84 @@
         },
         "type" : "object"
       },
+      "MenuComboComponent" : {
+        "properties" : {
+          "amountMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "componentId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "defaultQuantity" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "orderable" : {
+            "type" : "boolean"
+          },
+          "productId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "sortOrder" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "variantId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "variantName" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "MenuComboGroup" : {
+        "properties" : {
+          "allowSameComponentMultipleTimes" : {
+            "type" : "boolean"
+          },
+          "code" : {
+            "type" : "string"
+          },
+          "comboGroupId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "components" : {
+            "items" : {
+              "$ref" : "#/components/schemas/MenuComboComponent"
+            },
+            "type" : "array"
+          },
+          "containerVariantId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "maximumSelections" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "minimumSelections" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "sortOrder" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
       "MenuItemRequest" : {
         "properties" : {
           "availabilityDefault" : {
@@ -13773,6 +13873,26 @@
         },
         "type" : "object"
       },
+      "MenuModifierGroupPolicy" : {
+        "properties" : {
+          "maximumSelections" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "minimumSelections" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "modifierGroupId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "required" : {
+            "type" : "boolean"
+          }
+        },
+        "type" : "object"
+      },
       "MenuModifierOption" : {
         "properties" : {
           "amountMinor" : {
@@ -13786,6 +13906,9 @@
             "format" : "int32",
             "type" : "integer"
           },
+          "name" : {
+            "type" : "string"
+          },
           "optionId" : {
             "format" : "uuid",
             "type" : "string"
@@ -13797,6 +13920,13 @@
         "properties" : {
           "code" : {
             "type" : "string"
+          },
+          "comboGroupIds" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
           },
           "commentPresets" : {
             "items" : {
@@ -13823,6 +13953,12 @@
             "items" : {
               "format" : "uuid",
               "type" : "string"
+            },
+            "type" : "array"
+          },
+          "modifierGroupPolicies" : {
+            "items" : {
+              "$ref" : "#/components/schemas/MenuModifierGroupPolicy"
             },
             "type" : "array"
           },
@@ -15397,6 +15533,18 @@
         },
         "type" : "object"
       },
+      "OperationsOrderControllerAutoSelectedChargeResponse" : {
+        "properties" : {
+          "amountMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "name" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "OperationsOrderControllerCancelRequest" : {
         "properties" : {
           "note" : {
@@ -15509,6 +15657,12 @@
       },
       "OperationsOrderControllerLineResponse" : {
         "properties" : {
+          "autoSelectedCharges" : {
+            "items" : {
+              "$ref" : "#/components/schemas/OperationsOrderControllerAutoSelectedChargeResponse"
+            },
+            "type" : "array"
+          },
           "autoSelectedModifiers" : {
             "items" : {
               "type" : "string"
@@ -16410,6 +16564,12 @@
       },
       "OrderLineResponse" : {
         "properties" : {
+          "autoSelectedCharges" : {
+            "items" : {
+              "$ref" : "#/components/schemas/StorefrontOrderingControllerAutoSelectedChargeResponse"
+            },
+            "type" : "array"
+          },
           "autoSelectedModifiers" : {
             "items" : {
               "type" : "string"
@@ -19469,6 +19629,12 @@
           "feeMinor" : {
             "format" : "int64",
             "type" : "integer"
+          },
+          "hiddenCharges" : {
+            "items" : {
+              "$ref" : "#/components/schemas/HiddenChargeResponse"
+            },
+            "type" : "array"
           },
           "quoteId" : {
             "format" : "uuid",
@@ -25425,6 +25591,12 @@
             },
             "type" : "array"
           },
+          "comboGroups" : {
+            "items" : {
+              "$ref" : "#/components/schemas/MenuComboGroup"
+            },
+            "type" : "array"
+          },
           "currency" : {
             "type" : "string"
           },
@@ -25445,6 +25617,18 @@
           },
           "publicationId" : {
             "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "StorefrontOrderingControllerAutoSelectedChargeResponse" : {
+        "properties" : {
+          "amountMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "name" : {
             "type" : "string"
           }
         },

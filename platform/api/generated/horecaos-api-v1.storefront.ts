@@ -260,6 +260,12 @@ export interface GuestBillResponse {
   totalMinor?: number;
 }
 
+export interface HiddenChargeResponse {
+  amountMinor?: number;
+  lineKey?: string;
+  optionId?: string;
+}
+
 export interface HostnameLookupView {
   channelId?: string;
   tenantId?: string;
@@ -296,6 +302,30 @@ export interface MenuCategory {
   sortOrder?: number;
 }
 
+export interface MenuComboComponent {
+  amountMinor?: number;
+  componentId?: string;
+  defaultQuantity?: number;
+  name?: string;
+  orderable?: boolean;
+  productId?: string;
+  sortOrder?: number;
+  variantId?: string;
+  variantName?: string;
+}
+
+export interface MenuComboGroup {
+  allowSameComponentMultipleTimes?: boolean;
+  code?: string;
+  comboGroupId?: string;
+  components?: Array<MenuComboComponent>;
+  containerVariantId?: string;
+  maximumSelections?: number;
+  minimumSelections?: number;
+  name?: string;
+  sortOrder?: number;
+}
+
 export interface MenuModifierGroup {
   allowSameOptionMultipleTimes?: boolean;
   code?: string;
@@ -307,20 +337,30 @@ export interface MenuModifierGroup {
   required?: boolean;
 }
 
+export interface MenuModifierGroupPolicy {
+  maximumSelections?: number;
+  minimumSelections?: number;
+  modifierGroupId?: string;
+  required?: boolean;
+}
+
 export interface MenuModifierOption {
   amountMinor?: number;
   code?: string;
   maximumQuantity?: number;
+  name?: string;
   optionId?: string;
 }
 
 export interface MenuProduct {
   code?: string;
+  comboGroupIds?: Array<string>;
   commentPresets?: Array<CommentPresetOption>;
   description?: string;
   imageUrls?: Array<string>;
   mediaAssetIds?: Array<string>;
   modifierGroupIds?: Array<string>;
+  modifierGroupPolicies?: Array<MenuModifierGroupPolicy>;
   name?: string;
   productId?: string;
   variants?: Array<MenuVariant>;
@@ -361,6 +401,7 @@ export interface NestedModifierResponse {
 }
 
 export interface OrderLineResponse {
+  autoSelectedCharges?: Array<StorefrontOrderingControllerAutoSelectedChargeResponse>;
   autoSelectedModifiers?: Array<string>;
   comboName?: string;
   comboSelectionId?: string;
@@ -469,6 +510,7 @@ export interface PricedCartResponse {
   discountMinor?: number;
   expiresAt?: string;
   feeMinor?: number;
+  hiddenCharges?: Array<HiddenChargeResponse>;
   quoteId?: string;
   subtotalMinor?: number;
   taxMinor?: number;
@@ -627,11 +669,17 @@ export interface StorefrontCustomerControllerUpdateProfileRequest {
 
 export interface StorefrontMenu {
   categories?: Array<MenuCategory>;
+  comboGroups?: Array<MenuComboGroup>;
   currency?: string;
   locale?: string;
   modifierGroups?: Array<MenuModifierGroup>;
   products?: Array<MenuProduct>;
   publicationId?: string;
+}
+
+export interface StorefrontOrderingControllerAutoSelectedChargeResponse {
+  amountMinor?: number;
+  name?: string;
 }
 
 export interface StorefrontOrderingControllerCancelRequest {

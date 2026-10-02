@@ -3099,6 +3099,11 @@ export interface OperationsOrderControllerAddressResponse {
   postalCode?: string;
 }
 
+export interface OperationsOrderControllerAutoSelectedChargeResponse {
+  amountMinor?: number;
+  name?: string;
+}
+
 export interface OperationsOrderControllerCancelRequest {
   note?: string;
   reasonCode: string;
@@ -3134,6 +3139,7 @@ export interface OperationsOrderControllerDestinationRequest {
 }
 
 export interface OperationsOrderControllerLineResponse {
+  autoSelectedCharges?: Array<OperationsOrderControllerAutoSelectedChargeResponse>;
   autoSelectedModifiers?: Array<string>;
   combo?: ComboResponse;
   commentPresets?: Array<CommentPresetChip>;
