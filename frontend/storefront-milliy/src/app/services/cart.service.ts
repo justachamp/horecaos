@@ -247,20 +247,16 @@ export class CartService {
     deliveryNote?: string;
   }): Promise<PlatformCart> {
     return this.withVersion((cart, version) =>
-      this.api.mutate<PlatformCart>(
-        'PUT',
-        `${this.brandPath}/carts/${cart.cartId}/destination`,
-        {
-          body: {
-            addressId: input.addressId,
-            recipientName: input.recipientName,
-            recipientPhone: input.recipientPhone,
-            deliveryNote: input.deliveryNote,
-          },
-          expectedVersion: version,
-          idempotencyKey: newIdempotencyKey(),
+      this.api.mutate<PlatformCart>('PUT', `${this.brandPath}/carts/${cart.cartId}/destination`, {
+        body: {
+          addressId: input.addressId,
+          recipientName: input.recipientName,
+          recipientPhone: input.recipientPhone,
+          deliveryNote: input.deliveryNote,
         },
-      ),
+        expectedVersion: version,
+        idempotencyKey: newIdempotencyKey(),
+      }),
     );
   }
 
@@ -284,11 +280,11 @@ export class CartService {
    */
   async applyPromoCode(code: string): Promise<PlatformCart> {
     return this.withVersion((cart, version) =>
-      this.api.mutate<PlatformCart>(
-        'POST',
-        `${this.brandPath}/carts/${cart.cartId}/promo-code`,
-        { body: { code }, expectedVersion: version, idempotencyKey: newIdempotencyKey() },
-      ),
+      this.api.mutate<PlatformCart>('POST', `${this.brandPath}/carts/${cart.cartId}/promo-code`, {
+        body: { code },
+        expectedVersion: version,
+        idempotencyKey: newIdempotencyKey(),
+      }),
     );
   }
 
@@ -298,11 +294,10 @@ export class CartService {
    */
   async removePromoCode(): Promise<PlatformCart> {
     return this.withVersion((cart, version) =>
-      this.api.mutate<PlatformCart>(
-        'DELETE',
-        `${this.brandPath}/carts/${cart.cartId}/promo-code`,
-        { expectedVersion: version, idempotencyKey: newIdempotencyKey() },
-      ),
+      this.api.mutate<PlatformCart>('DELETE', `${this.brandPath}/carts/${cart.cartId}/promo-code`, {
+        expectedVersion: version,
+        idempotencyKey: newIdempotencyKey(),
+      }),
     );
   }
 
