@@ -2325,6 +2325,7 @@ export const messagesEn = {
   'catalog.editor.tab.basic': 'Basic',
   'catalog.editor.tab.variants': 'Variants',
   'catalog.editor.tab.modifiers': 'Modifiers',
+  'catalog.editor.tab.combo': 'Combo',
   'catalog.editor.tab.photos': 'Photos',
   'catalog.editor.tab.fiscal': 'Fiscal data',
   'catalog.editor.tab.availability': 'Availability',
@@ -2473,6 +2474,82 @@ export const messagesEn = {
   'catalog.editor.finding.FISCAL_CLASSIFICATION_NOT_ENFORCED':
     '{count} items with no ИКПУ — aggregators will reject the menu',
   'catalog.editor.finding.PRICING_VALIDATION_NOT_WIRED': 'Price validation did not run',
+  'catalog.editor.finding.COMBO_COMPONENT_HAS_NO_ACTIVE_PRICE': 'A combo component has no price',
+  'catalog.editor.finding.COMBO_HAS_NO_PRICED_COMPONENTS': 'The combo has no priced components',
+  'catalog.editor.finding.COMBO_GROUP_MINIMUM_UNSATISFIABLE':
+    'A combo choice asks for more than its components can supply',
+  'catalog.editor.finding.COMBO_COMPONENT_LINKS_INACTIVE_VARIANT':
+    'A combo component points at an inactive variant',
+  'catalog.editor.finding.HIDDEN_MODIFIER_GROUP_AMBIGUOUS_DEFAULT':
+    'A hidden group must be required and have exactly one active option',
+  'catalog.editor.finding.MODIFIER_NESTING_DEPTH_EXCEEDED':
+    'Modifiers are nested more than one level deep',
+  'catalog.editor.finding.MODIFIER_ATTACHMENT_OVERRIDE_CONTRADICTS':
+    'A product’s rule for a group cannot be completed',
+  'catalog.editor.combo.hint':
+    'A combo is a product whose variant is a container. The customer picks components from the choices below and each component is priced on its own here. The combo itself has no price, which is what gives every component its own fiscal line on the receipt.',
+  'catalog.editor.combo.container': 'Container variant',
+  'catalog.editor.combo.loading': 'Loading the combo…',
+  'catalog.editor.combo.loadFailed': 'Could not load the combo groups.',
+  'catalog.editor.combo.empty':
+    'This variant is not a combo yet. Adding a choice below makes it one.',
+  'catalog.editor.combo.create': 'Add a choice',
+  'catalog.editor.combo.minimum': 'At least',
+  'catalog.editor.combo.maximum': 'At most',
+  'catalog.editor.combo.allowRepeat': 'The same component may be picked more than once',
+  'catalog.editor.combo.status': 'Status',
+  'catalog.editor.combo.range': 'Pick {min} to {max}',
+  'catalog.editor.combo.unsatisfiable':
+    'This choice asks for at least {min}, but its active components can supply only {capacity}. Publication will be blocked.',
+  'catalog.editor.combo.noComponents':
+    'No components yet. Add the dishes and drinks the customer can pick from.',
+  'catalog.editor.combo.column.component': 'Component',
+  'catalog.editor.combo.column.quantity': 'Quantity per pick',
+  'catalog.editor.combo.column.price': 'Price in this combo',
+  'catalog.editor.combo.column.status': 'Status',
+  'catalog.editor.combo.notPriced': 'Not priced',
+  'catalog.editor.combo.addComponent': 'Add component',
+  'catalog.editor.combo.addComponent.placeholder': 'Find a dish or drink',
+  'catalog.editor.combo.refusal.COMBO_NESTING_FORBIDDEN':
+    'A combo cannot contain another combo, and a dish that is already inside a combo cannot become one.',
+  'catalog.editor.combo.refusal.COMBO_GROUP_RANGE_INVALID':
+    'The range cannot be completed: the minimum is above the maximum.',
+  'catalog.editor.combo.refusal.COMBO_COMPONENT_ALREADY_IN_GROUP':
+    'That dish is already offered in this choice.',
+  'catalog.editor.combo.refusal.COMBO_COMPONENT_VARIANT_NOT_ACTIVE':
+    'An archived dish cannot be offered in a combo.',
+  'catalog.editor.policy.title': 'How this product offers each group',
+  'catalog.editor.policy.hint':
+    'These settings belong to this product only. The shared group is never changed, and other products that use it are unaffected.',
+  'catalog.editor.policy.empty': 'Attach a modifier group above to set how it is offered.',
+  'catalog.editor.policy.visibility': 'Offered as',
+  'catalog.editor.policy.visibility.VISIBLE': 'A choice the customer makes',
+  'catalog.editor.policy.visibility.HIDDEN_AUTO_SELECT': 'Added automatically, never shown',
+  'catalog.editor.policy.hiddenHint':
+    'Its single option is charged on every order of the types below with no step for the customer, and appears on the order as an itemised charge.',
+  'catalog.editor.policy.hiddenNeedsOne':
+    'A hidden group must be required and have exactly one active option, or publication is blocked.',
+  'catalog.editor.policy.modes': 'Applies to orders',
+  'catalog.editor.policy.mode.DELIVERY': 'Delivery',
+  'catalog.editor.policy.mode.PICKUP': 'Pickup',
+  'catalog.editor.policy.mode.DINE_IN': 'Dine-in',
+  'catalog.editor.policy.modesNone': 'Pick at least one order type.',
+  'catalog.editor.policy.groupValues':
+    'The group itself: {required}, at least {min}, at most {max}',
+  'catalog.editor.policy.required.yes': 'required',
+  'catalog.editor.policy.required.no': 'optional',
+  'catalog.editor.policy.overrideTitle': 'Override for this product',
+  'catalog.editor.policy.overrideHint': 'Leave a field on “group’s own” to use the group’s value.',
+  'catalog.editor.policy.groupOwn': 'Group’s own',
+  'catalog.editor.policy.requiredOverride': 'Required',
+  'catalog.editor.policy.requiredOverride.yes': 'Required',
+  'catalog.editor.policy.requiredOverride.no': 'Optional',
+  'catalog.editor.nested.title': 'Choices offered when a variant is picked as a modifier',
+  'catalog.editor.nested.hint':
+    'When an option of another product’s group is one of this product’s variants, the groups attached here are offered under it. One level only: a third level is refused at publication.',
+  'catalog.editor.nested.none': 'No groups attached to this variant',
+  'catalog.editor.nested.attach': 'Attach a group',
+  'catalog.editor.nested.choose': 'Choose a group',
 
   'catalog.publish.action': 'Publish',
   'catalog.publish.title': 'Publish the catalog',

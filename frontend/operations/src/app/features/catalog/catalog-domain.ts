@@ -170,6 +170,16 @@ export interface VariantDetail {
 export interface AttachedModifierGroup {
   readonly groupId: string;
   readonly sortOrder: number;
+  /** ADR 0136: a choice the customer makes (the default), or a charge the server applies by order type. */
+  readonly visibility?: 'VISIBLE' | 'HIDDEN_AUTO_SELECT';
+  /** Which order types a hidden group applies to; absent or `null` means every one. */
+  readonly applicableFulfillmentModes?: readonly ('DELIVERY' | 'PICKUP' | 'DINE_IN')[] | null;
+  /** This product's own rule for the group; `null` falls back to the shared group's value. */
+  readonly requiredOverride?: boolean | null;
+  readonly minimumSelectionsOverride?: number | null;
+  readonly maximumSelectionsOverride?: number | null;
+  /** The attachment's own version — the `If-Match` a settings write carries. */
+  readonly version?: number;
 }
 
 /** The universal channel: no per-aggregator override, every channel without one of its own falls back to this. */

@@ -1,0 +1,113 @@
+<div class="combo-panel" data-testid="combo-panel">
+  <p class="q-caption">{{ 'catalog.editor.combo.hint' | t }}</p>
+
+  @if (variants().length > 1) {
+    <label class="combo-panel__variant">
+      <span class="q-caption">{{ 'catalog.editor.combo.container' | t }}</span>
+      <select
+        #variantSelect
+        [value]="container()?.variantId"
+        (change)="selectVariant(variantSelect.value)"
+        data-testid="combo-container-select"
+      >
+        @for (variant of variants(); track variant.variantId) {
+          <option
+            [value]="variant.variantId"
+            [selected]="variant.variantId === container()?.variantId"
+          >
+            {{ variantLabel(variant.variantId) }}
+          </option>
+        }
+      </select>
+    </label>
+  }
+
+  @if (loading()) {
+    <p class="q-caption" data-testid="combo-loading">{{ 'catalog.editor.combo.loading' | t }}</p>
+  } @else if (loadFailed()) {
+    <p class="q-caption combo-panel__error" role="alert" data-testid="combo-load-failed">
+      {{ 'catalog.editor.combo.loadFailed' | t }}
+    </p>
+  } @else {
+    @if (groups().length === 0) {
+      <p class="q-caption" data-testid="combo-empty">{{ 'catalog.editor.combo.empty' | t }}</p>
+    }
+
+    @for (group of groups(); track group.comboGroupId) {
+      <q-product-combo-group-card
+        [group]="group"
+        [locale]="locale()"
+        [variantNames]="variantNames()"
+        [priceBook]="priceBook()"
+        [prices]="prices()"
+        (groupChanged)="onGroupChanged($event)"
+        (priceChanged)="onPriceChanged($event)"
+        (variantNamed)="onVariantNamed($event)"
+      />
+    }
+
+    <details class="combo-panel__create" [open]="groups().length === 0">
+      <summary class="q-caption">{{ 'catalog.editor.combo.create' | t }}</summary>
+      <div class="combo-panel__form">
+        <label class="combo-panel__field">
+          <span class="q-caption">{{ 'catalog.categories.form.name' | t }}</span>
+          <input #nameInput type="text" data-testid="combo-new-name" />
+        </label>
+        <label class="combo-panel__field">
+          <span class="q-caption">{{ 'catalog.categories.form.code' | t }}</span>
+          <input #codeInput type="text" class="q-mono" data-testid="combo-new-code" />
+        </label>
+        <label class="combo-panel__field">
+          <span class="q-caption">{{ 'catalog.editor.combo.minimum' | t }}</span>
+          <input
+            #minInput
+            type="number"
+            min="0"
+            max="100"
+            value="1"
+            class="combo-panel__number"
+            data-testid="combo-new-minimum"
+          />
+        </label>
+        <label class="combo-panel__field">
+          <span class="q-caption">{{ 'catalog.editor.combo.maximum' | t }}</span>
+          <input
+            #maxInput
+            type="number"
+            min="1"
+            max="100"
+            value="1"
+            class="combo-panel__number"
+            data-testid="combo-new-maximum"
+          />
+        </label>
+        <label class="combo-panel__field combo-panel__field--check">
+          <input #repeatInput type="checkbox" data-testid="combo-new-repeat" />
+          <span class="q-caption">{{ 'catalog.editor.combo.allowRepeat' | t }}</span>
+        </label>
+        <button
+          type="button"
+          [disabled]="creating()"
+          (click)="
+            createGroup(
+              codeInput.value,
+              nameInput.value,
+              minInput.value,
+              maxInput.value,
+              repeatInput.checked
+            )
+          "
+          data-testid="combo-create-group"
+        >
+          {{ 'catalog.editor.combo.create' | t }}
+        </button>
+      </div>
+    </details>
+
+    @if (message(); as text) {
+      <p class="q-caption combo-panel__error" role="alert" data-testid="combo-error">
+        {{ text }}
+      </p>
+    }
+  }
+</div>

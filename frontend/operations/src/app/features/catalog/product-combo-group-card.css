@@ -1,0 +1,99 @@
+.combo-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+}
+
+.combo-group__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.combo-group__settings {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.combo-group__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.combo-group__field--check {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+}
+
+.combo-group__field input[type='number'],
+.combo-group__field select,
+.combo-group__quantity {
+  width: 72px;
+  padding: 6px 8px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  font-size: var(--q-type-body-sm);
+}
+
+.combo-group__table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.combo-group__table th {
+  text-align: left;
+  padding: 6px 8px;
+  font-size: var(--q-type-caption);
+  color: var(--q-ink-subtle);
+  border-bottom: 1px solid var(--q-hairline);
+}
+
+.combo-group__table td {
+  padding: 6px 8px;
+  font-size: var(--q-type-body-sm);
+  border-bottom: 1px solid var(--q-hairline);
+  vertical-align: top;
+}
+
+.combo-group__price--missing,
+.combo-group__warning {
+  color: var(--q-warning-text);
+}
+
+.combo-group__price-edit {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.combo-group__add {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.combo-group__add q-combobox {
+  flex: 1;
+  min-width: 0;
+}
+
+.combo-group__error {
+  color: var(--q-error-text);
+}
+
+.combo-group__chip {
+  display: inline-block;
+  padding: 2px 6px;
+  background: var(--q-surface-1);
+  border-radius: var(--q-radius);
+  font-size: var(--q-type-caption);
+}

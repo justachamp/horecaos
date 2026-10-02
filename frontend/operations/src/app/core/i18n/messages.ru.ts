@@ -2291,6 +2291,7 @@ export const messagesRu: MessageCatalogue = {
   'catalog.editor.tab.basic': 'Основное',
   'catalog.editor.tab.variants': 'Варианты',
   'catalog.editor.tab.modifiers': 'Модификаторы',
+  'catalog.editor.tab.combo': 'Комбо',
   'catalog.editor.tab.photos': 'Фото',
   'catalog.editor.tab.fiscal': 'Фискальные данные',
   'catalog.editor.tab.availability': 'Наличие',
@@ -2440,6 +2441,83 @@ export const messagesRu: MessageCatalogue = {
   'catalog.editor.finding.FISCAL_CLASSIFICATION_NOT_ENFORCED':
     '{count} позиций без ИКПУ — агрегаторы отклонят меню',
   'catalog.editor.finding.PRICING_VALIDATION_NOT_WIRED': 'Проверка цен не выполнялась',
+  'catalog.editor.finding.COMBO_COMPONENT_HAS_NO_ACTIVE_PRICE': 'У компонента комбо нет цены',
+  'catalog.editor.finding.COMBO_HAS_NO_PRICED_COMPONENTS': 'В комбо нет компонентов с ценой',
+  'catalog.editor.finding.COMBO_GROUP_MINIMUM_UNSATISFIABLE':
+    'Группа комбо требует больше, чем могут дать её компоненты',
+  'catalog.editor.finding.COMBO_COMPONENT_LINKS_INACTIVE_VARIANT':
+    'Компонент комбо ссылается на неактивный вариант',
+  'catalog.editor.finding.HIDDEN_MODIFIER_GROUP_AMBIGUOUS_DEFAULT':
+    'Скрытая группа должна быть обязательной и иметь ровно одну активную опцию',
+  'catalog.editor.finding.MODIFIER_NESTING_DEPTH_EXCEEDED':
+    'Модификаторы вложены глубже одного уровня',
+  'catalog.editor.finding.MODIFIER_ATTACHMENT_OVERRIDE_CONTRADICTS':
+    'Правило товара для группы невыполнимо',
+  'catalog.editor.combo.hint':
+    'Комбо — это товар, вариант которого служит контейнером. Гость выбирает компоненты из групп ниже, а цена каждого компонента задаётся здесь отдельно. У самого комбо цены нет, поэтому каждый компонент попадает в чек отдельной фискальной строкой.',
+  'catalog.editor.combo.container': 'Вариант-контейнер',
+  'catalog.editor.combo.loading': 'Загружаем комбо…',
+  'catalog.editor.combo.loadFailed': 'Не удалось загрузить группы комбо.',
+  'catalog.editor.combo.empty':
+    'Этот вариант пока не комбо. Добавьте группу выбора ниже, и он им станет.',
+  'catalog.editor.combo.create': 'Добавить группу выбора',
+  'catalog.editor.combo.minimum': 'Не меньше',
+  'catalog.editor.combo.maximum': 'Не больше',
+  'catalog.editor.combo.allowRepeat': 'Один компонент можно выбрать несколько раз',
+  'catalog.editor.combo.status': 'Статус',
+  'catalog.editor.combo.range': 'Выбрать от {min} до {max}',
+  'catalog.editor.combo.unsatisfiable':
+    'Группа требует минимум {min}, а активные компоненты дают только {capacity}. Публикация будет заблокирована.',
+  'catalog.editor.combo.noComponents':
+    'Компонентов пока нет. Добавьте блюда и напитки, из которых выбирает гость.',
+  'catalog.editor.combo.column.component': 'Компонент',
+  'catalog.editor.combo.column.quantity': 'Кол-во за выбор',
+  'catalog.editor.combo.column.price': 'Цена в этом комбо',
+  'catalog.editor.combo.column.status': 'Статус',
+  'catalog.editor.combo.notPriced': 'Цена не задана',
+  'catalog.editor.combo.addComponent': 'Добавить компонент',
+  'catalog.editor.combo.addComponent.placeholder': 'Найти блюдо или напиток',
+  'catalog.editor.combo.refusal.COMBO_NESTING_FORBIDDEN':
+    'Комбо не может содержать другое комбо, а блюдо, уже входящее в комбо, не может стать комбо.',
+  'catalog.editor.combo.refusal.COMBO_GROUP_RANGE_INVALID':
+    'Диапазон невозможен: минимум больше максимума.',
+  'catalog.editor.combo.refusal.COMBO_COMPONENT_ALREADY_IN_GROUP':
+    'Это блюдо уже есть в этой группе.',
+  'catalog.editor.combo.refusal.COMBO_COMPONENT_VARIANT_NOT_ACTIVE':
+    'Архивное блюдо нельзя предложить в комбо.',
+  'catalog.editor.policy.title': 'Как товар предлагает каждую группу',
+  'catalog.editor.policy.hint':
+    'Эти настройки относятся только к этому товару. Общая группа не меняется, другие товары с ней не затронуты.',
+  'catalog.editor.policy.empty': 'Прикрепите группу модификаторов выше, чтобы настроить её показ.',
+  'catalog.editor.policy.visibility': 'Как предлагается',
+  'catalog.editor.policy.visibility.VISIBLE': 'Выбор гостя',
+  'catalog.editor.policy.visibility.HIDDEN_AUTO_SELECT':
+    'Добавляется автоматически, гостю не показывается',
+  'catalog.editor.policy.hiddenHint':
+    'Её единственная опция начисляется в каждом заказе выбранных типов без участия гостя и отображается в заказе отдельной строкой.',
+  'catalog.editor.policy.hiddenNeedsOne':
+    'Скрытая группа должна быть обязательной и иметь ровно одну активную опцию, иначе публикация будет заблокирована.',
+  'catalog.editor.policy.modes': 'Применяется к заказам',
+  'catalog.editor.policy.mode.DELIVERY': 'Доставка',
+  'catalog.editor.policy.mode.PICKUP': 'Самовывоз',
+  'catalog.editor.policy.mode.DINE_IN': 'В зале',
+  'catalog.editor.policy.modesNone': 'Выберите хотя бы один тип заказа.',
+  'catalog.editor.policy.groupValues': 'Сама группа: {required}, не меньше {min}, не больше {max}',
+  'catalog.editor.policy.required.yes': 'обязательная',
+  'catalog.editor.policy.required.no': 'необязательная',
+  'catalog.editor.policy.overrideTitle': 'Переопределить для этого товара',
+  'catalog.editor.policy.overrideHint':
+    'Оставьте поле «как у группы», чтобы использовать значение группы.',
+  'catalog.editor.policy.groupOwn': 'Как у группы',
+  'catalog.editor.policy.requiredOverride': 'Обязательность',
+  'catalog.editor.policy.requiredOverride.yes': 'Обязательная',
+  'catalog.editor.policy.requiredOverride.no': 'Необязательная',
+  'catalog.editor.nested.title': 'Выбор, когда вариант выбирают как модификатор',
+  'catalog.editor.nested.hint':
+    'Когда опция группы другого товара — это вариант данного товара, под ней предлагаются прикреплённые здесь группы. Только один уровень: третий уровень блокируется при публикации.',
+  'catalog.editor.nested.none': 'К варианту не прикреплены группы',
+  'catalog.editor.nested.attach': 'Прикрепить группу',
+  'catalog.editor.nested.choose': 'Выберите группу',
 
   'catalog.publish.action': 'Опубликовать',
   'catalog.publish.title': 'Публикация каталога',

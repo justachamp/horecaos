@@ -420,6 +420,21 @@
                     </button>
                   </details>
                 </div>
+                <q-product-modifier-policy-panel
+                  [product]="product"
+                  [library]="modifierLibrary()"
+                  [locale]="editingLocale()"
+                  (changed)="onCompositeSaved()"
+                />
+              </div>
+            }
+            @case ('COMBO') {
+              <div class="editor__section">
+                <q-product-combo-panel
+                  [product]="product"
+                  [locale]="editingLocale()"
+                  (saved)="onCompositeSaved()"
+                />
               </div>
             }
             @case ('PHOTOS') {
